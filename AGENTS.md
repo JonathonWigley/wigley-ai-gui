@@ -8,7 +8,8 @@
 - **Dev quirks** — the startup reload and the unwired ACP adapter and mock agent.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
-vim, app-owned Cmd keys, a global summon shortcut, and an ACP client driving an agent process over stdio.
+vim, app-owned Cmd keys, a global summon shortcut, and an ACP client, built but not yet wired, for driving an agent
+process over stdio.
 
 ## Architecture
 

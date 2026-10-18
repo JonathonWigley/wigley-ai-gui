@@ -813,7 +813,7 @@ describe('fingerprint', () => {
         {
           title: 'Naming été \u{1F680}',
           context:
-            'Line one\nline "two"\twith a tab, a backslash \\ and a bell \u0007 and  ',
+            'Line one\nline "two"\twith a tab, a backslash \\ and a bell \u0007 and \u2028',
           question: 'Which name should win?',
           choices: ['module_a', 'module_b — newer'],
           recommend: 2,
