@@ -129,7 +129,11 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
           focus: () => view.focus(),
           blur: () => view.contentDOM.blur(),
           destroy: () => {
-            hosted.splice(hosted.indexOf(entry), 1);
+            const index = hosted.indexOf(entry);
+            if (index < 0) {
+              return;
+            }
+            hosted.splice(index, 1);
             view.destroy();
           },
         },

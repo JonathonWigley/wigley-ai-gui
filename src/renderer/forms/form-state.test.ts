@@ -718,6 +718,10 @@ describe('focusRound', () => {
   it('ignores a round that is not open', () => {
     expect(apply(two, { type: 'focusRound', roundId: 'gone' })).toBe(two);
   });
+
+  it('changes nothing for the round already shown in the forms view', () => {
+    expect(apply(two, { type: 'focusRound', roundId: 'r1' })).toBe(two);
+  });
 });
 
 describe('folds', () => {
@@ -748,6 +752,39 @@ describe('folds', () => {
       false,
       false,
     ]);
+  });
+});
+
+describe('folds with nothing to change', () => {
+  it('unfoldAll leaves state as it is when nothing is folded', () => {
+    const state = mixedRound();
+    expect(apply(state, { type: 'unfoldAll' })).toBe(state);
+  });
+
+  it('foldAll leaves state as it is when everything is folded', () => {
+    const state = apply(mixedRound(), { type: 'foldAll' });
+    expect(apply(state, { type: 'foldAll' })).toBe(state);
+  });
+});
+
+describe('item actions outside the forms view', () => {
+  const inReview = apply(mixedRound(), { type: 'openReview' });
+
+  it('leave the review state as it is', () => {
+    expect(apply(inReview, { type: 'choose', choice: 1 })).toBe(inReview);
+    expect(apply(inReview, { type: 'toggleNotApplicable' })).toBe(inReview);
+    expect(apply(inReview, { type: 'nextItem' })).toBe(inReview);
+  });
+
+  it('still update the round note text in the review', () => {
+    const edited = apply(inReview, {
+      type: 'setText',
+      roundId: 'r1',
+      target: { field: 'note' },
+      value: 'typed',
+    });
+    expect(edited.view).toBe('review');
+    expect(active(edited).note).toBe('typed');
   });
 });
 

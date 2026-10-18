@@ -52,7 +52,7 @@ export function mountFormsView(deps: FormsViewDeps): MountedFormsView {
   const help = buildHelp(deps.keymap, deps.run);
   const confirm = buildConfirm(deps.run);
   const toastLayer = element('div', 'toasts');
-  root.append(switcher, workspace, status.element, help, confirm, toastLayer);
+  root.append(switcher, workspace, status.element, confirm, help, toastLayer);
   const toasts = createToasts(toastLayer, deps.timers);
   const roundViews = new Map<string, RoundView>();
   const dispatch = (action: FormsAction) => store.dispatch(action);

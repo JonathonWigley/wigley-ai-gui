@@ -127,7 +127,8 @@ export function initialState(rounds: PresentedRound[]): FormsState {
   );
 }
 
-// Returns `state` itself when the action changes nothing.
+// Returns `state` itself when the action changes nothing. Item actions apply
+// only in the forms view.
 export function apply(state: FormsState, action: FormsAction): FormsState {
   switch (action.type) {
     case 'roundShown':
@@ -180,9 +181,11 @@ export function apply(state: FormsState, action: FormsAction): FormsState {
         finishSave(round, action.revision, action.ok),
       );
     default:
-      return updateRound(state, state.activeRoundId, (round) =>
-        applyItemAction(round, action),
-      );
+      return state.view === 'forms'
+        ? updateRound(state, state.activeRoundId, (round) =>
+            applyItemAction(round, action),
+          )
+        : state;
   }
 }
 
@@ -335,7 +338,11 @@ function closeRound(state: FormsState, roundId: string | null): FormsState {
 
 function focusRound(state: FormsState, roundId: string): FormsState {
   const isOpen = state.rounds.some((round) => round.roundId === roundId);
-  return isOpen ? { ...state, activeRoundId: roundId, view: 'forms' } : state;
+  const isAlreadyShown =
+    state.activeRoundId === roundId && state.view === 'forms';
+  return isOpen && !isAlreadyShown
+    ? { ...state, activeRoundId: roundId, view: 'forms' }
+    : state;
 }
 
 function stepRound(state: FormsState, step: number): FormsState {
@@ -448,10 +455,16 @@ function applyItemAction(round: RoundState, action: ItemAction): RoundState {
         ),
       };
     case 'unfoldAll':
-      return { ...round, folded: round.folded.map(() => false) };
+      return setAllFolded(round, false);
     case 'foldAll':
-      return { ...round, folded: round.folded.map(() => true) };
+      return setAllFolded(round, true);
   }
+}
+
+function setAllFolded(round: RoundState, folded: boolean): RoundState {
+  return round.folded.every((current) => current === folded)
+    ? round
+    : { ...round, folded: round.folded.map(() => folded) };
 }
 
 function moveFocus(round: RoundState, step: number): RoundState {
