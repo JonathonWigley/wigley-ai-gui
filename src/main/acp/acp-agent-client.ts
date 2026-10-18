@@ -1,19 +1,23 @@
 import { spawn } from 'node:child_process';
 import { Readable, Writable } from 'node:stream';
 import * as acp from '@agentclientprotocol/sdk';
+import type { AgentClient, StopReason } from '../../contracts/agent';
 
-// Runs one prompt against an ACP agent spawned as a child process over stdio,
-// the way the app will drive the harness, and reports each text chunk.
-export async function promptAgentProcess(
-  command: string,
-  args: string[],
-  env: NodeJS.ProcessEnv,
+// How to start the agent executable the client speaks ACP to over stdio.
+export interface AcpAgentLaunch {
+  command: string;
+  args: string[];
+  env: NodeJS.ProcessEnv;
+}
+
+async function promptAgentProcess(
+  launch: AcpAgentLaunch,
   text: string,
   onChunk: (chunk: string) => void,
-): Promise<string> {
-  const agentProcess = spawn(command, args, {
+): Promise<StopReason> {
+  const agentProcess = spawn(launch.command, launch.args, {
     stdio: ['pipe', 'pipe', 'inherit'],
-    env,
+    env: launch.env,
   });
   const stream = acp.ndJsonStream(
     Writable.toWeb(agentProcess.stdin),
@@ -49,4 +53,11 @@ export async function promptAgentProcess(
   } finally {
     agentProcess.kill();
   }
+}
+
+// Spawns the agent for each turn and ends it after, until sessions outlive a turn.
+export function createAcpAgentClient(launch: AcpAgentLaunch): AgentClient {
+  return {
+    prompt: (text, onChunk) => promptAgentProcess(launch, text, onChunk),
+  };
 }

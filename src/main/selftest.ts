@@ -15,17 +15,17 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { keys: [' ', 'j'], expect: '[vim] focused box 2' },
-  { keys: [' ', 'k'], expect: '[vim] focused box 1' },
-  { keys: ['i', 'a', 'b', 'j', 'k', ' ', 'j'], expect: '[vim] focused box 2' },
-  { keys: [' ', 'k'], expect: '[vim] focused box 1' },
-  { keys: [' ', ' '], expect: '[acp] turn ended: end_turn' },
-  { keys: [' ', 'q'], expect: '[vim] :leave dropped focus to the page' },
-  { keys: ['i'], expect: '[page] i focused box 1' },
+  { keys: [' ', 'j'], expect: '[box] focused box 2' },
+  { keys: [' ', 'k'], expect: '[box] focused box 1' },
+  { keys: ['i', 'a', 'b', 'j', 'k', ' ', 'j'], expect: '[box] focused box 2' },
+  { keys: [' ', 'k'], expect: '[box] focused box 1' },
+  { keys: [' ', ' '], expect: '[agent] turn ended: end_turn' },
+  { keys: [' ', 'q'], expect: '[box] left the box for the page' },
+  { keys: ['i'], expect: '[page] i ran box.focusFirst' },
   {
     keys: ['Tab'],
     modifiers: ['control'],
-    expect: '[input] Ctrl+Tab caught before the page',
+    expect: '[input] Control+Tab caught before the page',
   },
 ];
 
@@ -52,10 +52,16 @@ function readLog(window: BrowserWindow): Promise<string[]> {
   );
 }
 
-async function waitForLogLine(window: BrowserWindow, line: string) {
+// Waits for the line among those logged after `seen` lines; the log is newest first.
+async function waitForNewLogLine(
+  window: BrowserWindow,
+  line: string,
+  seen: number,
+) {
   const deadline = Date.now() + STEP_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if ((await readLog(window)).includes(line)) {
+    const lines = await readLog(window);
+    if (lines.slice(0, lines.length - seen).includes(line)) {
       return true;
     }
     await wait(50);
@@ -72,6 +78,7 @@ async function runStep(
   step: Step,
   isCurrent: () => boolean,
 ): Promise<boolean> {
+  const seen = (await readLog(window)).length;
   for (const key of step.keys) {
     if (!isCurrent()) {
       return false;
@@ -79,7 +86,7 @@ async function runStep(
     press(window, key, step.modifiers);
     await wait(30);
   }
-  const passed = await waitForLogLine(window, step.expect);
+  const passed = await waitForNewLogLine(window, step.expect, seen);
   if (isCurrent()) {
     const keys = step.keys.join('').replaceAll(' ', '␣');
     console.log(

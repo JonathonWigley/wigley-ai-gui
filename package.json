@@ -17,8 +17,8 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "release": "electron-forge release",
-    "lint": "oxlint && oxfmt --check",
-    "lint:fix": "oxlint --fix && oxfmt --write",
+    "lint": "node scripts/check-layers.mts && oxlint && oxfmt --check",
+    "lint:fix": "oxlint --fix && oxfmt --write && node scripts/check-layers.mts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

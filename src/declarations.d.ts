@@ -2,5 +2,5 @@
 declare module '*.css';
 
 interface Window {
-  proof: import('./proof-api').ProofApi;
+  wigley: import('./contracts/bridge').Bridge;
 }

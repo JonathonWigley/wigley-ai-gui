@@ -1,0 +1,115 @@
+import { basicSetup, EditorView } from 'codemirror';
+import { getCM, Vim, vim } from '@replit/codemirror-vim';
+import type { CommandId } from '../../contracts/commands';
+import type { CreateEditorHost, TextEditor } from '../../contracts/editor';
+import type { EditorKeymap, EditorMode } from '../../contracts/keymap';
+
+type VimEditor = Parameters<typeof Vim.handleEx>[0];
+
+interface HostedEditor {
+  view: EditorView;
+  editor: TextEditor;
+}
+
+const MAP_PREFIX: Record<EditorMode, string> = { normal: 'n', insert: 'i' };
+
+// Ex command names are letters only.
+function exCommandName(command: CommandId): string {
+  return command.replace(/[^a-zA-Z]/g, '').toLowerCase();
+}
+
+// The engine runs a complete bind at once instead of waiting for a longer one,
+// so the leader's own default bind is unmapped before the binds that use it. A
+// bind to an ex command ends in <CR>, or its keys only type into the prompt.
+function vimrcLines(keymap: EditorKeymap): string[] {
+  const withLeader = (keys: string) =>
+    keys.replaceAll('<Leader>', keymap.leader);
+  return [
+    `unmap ${keymap.leader}`,
+    ...keymap.remaps.map(
+      (remap) =>
+        `${MAP_PREFIX[remap.mode]}noremap ${withLeader(remap.keys)} ${remap.to}`,
+    ),
+    ...keymap.binds.map(
+      (bind) =>
+        `nnoremap ${withLeader(bind.keys)} :${exCommandName(bind.command)}<CR>`,
+    ),
+  ];
+}
+
+function textEditorOver(view: EditorView): TextEditor {
+  return {
+    text: () => view.state.doc.toString(),
+    focus: () => view.focus(),
+    blur: () => view.contentDOM.blur(),
+  };
+}
+
+function vimEditorOf(view: EditorView): VimEditor {
+  const cm = getCM(view);
+  if (!cm?.state.vim) {
+    throw new Error('Editor has no vim extension to apply the keymap to');
+  }
+  return cm as VimEditor;
+}
+
+// The editor an ex command ran in, from the cm vim hands the command: focus
+// state is unreliable, since view.hasFocus is false while the window is not.
+function hostedEditorOf(cm: VimEditor, hosted: HostedEditor[]): TextEditor {
+  const match = hosted.find((entry) => getCM(entry.view) === cm);
+  if (!match) {
+    throw new Error('Ex command ran in an editor this host did not create');
+  }
+  return match.editor;
+}
+
+function defineExCommands(
+  keymap: EditorKeymap,
+  hosted: HostedEditor[],
+  run: (command: CommandId, editor: TextEditor) => void,
+) {
+  const commandsByName = new Map<string, CommandId>();
+  for (const { command } of keymap.binds) {
+    const name = exCommandName(command);
+    const claimant = commandsByName.get(name);
+    if (claimant && claimant !== command) {
+      throw new Error(
+        `Commands "${claimant}" and "${command}" share the ex name :${name}`,
+      );
+    }
+    commandsByName.set(name, command);
+  }
+  for (const [name, command] of commandsByName) {
+    Vim.defineEx(name, name, (cm: VimEditor) =>
+      run(command, hostedEditorOf(cm, hosted)),
+    );
+  }
+}
+
+// Vim keymaps are global to the engine; they are applied once, through the
+// first editor, since applying them needs an editor instance.
+export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
+  const hosted: HostedEditor[] = [];
+  defineExCommands(keymap, hosted, run);
+
+  return {
+    create(parent, doc) {
+      const view = new EditorView({
+        doc,
+        extensions: [vim({ status: true }), basicSetup],
+        parent,
+      });
+      if (hosted.length === 0) {
+        const cm = vimEditorOf(view);
+        for (const line of vimrcLines(keymap)) {
+          Vim.handleEx(cm, line);
+        }
+      }
+      const editor = textEditorOver(view);
+      hosted.push({ view, editor });
+      return editor;
+    },
+    contains: (element) =>
+      hosted.some(({ view }) => view.dom.contains(element)),
+  };
+};
