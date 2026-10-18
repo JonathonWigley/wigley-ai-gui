@@ -35,7 +35,8 @@ export function createWindowPresenter(
   ipcMain.handle(BRIDGE_CHANNELS.openRounds, () =>
     [...open.values()].map((entry) => entry.round),
   );
-  ipcMain.on(
+  // A failed write throws out of the listener, which rejects the page's invoke.
+  ipcMain.handle(
     BRIDGE_CHANNELS.draft,
     (_event, roundId: string, body: FormBody) => {
       const entry = open.get(roundId);

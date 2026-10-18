@@ -67,12 +67,21 @@ interface SessionContext {
   store: RoundStore;
   open: OpenRound | null;
   lastFinished: FinishedRound | null;
+  // Settles once every ask_round already called has returned; null when none
+  // is pending.
+  askTurn: Promise<void> | null;
 }
+
+// setTimeout fires at once for a delay above a signed 32-bit millisecond count.
+const MAX_TIMER_SECONDS = (2 ** 31 - 1) / 1000;
 
 function deadlineSeconds(info: SessionInfo, defaultSeconds: number): number {
   const hostSeconds = info.deadlineSeconds;
   const hostNamedOne =
-    hostSeconds !== null && Number.isFinite(hostSeconds) && hostSeconds > 0;
+    hostSeconds !== null &&
+    Number.isFinite(hostSeconds) &&
+    hostSeconds > 0 &&
+    hostSeconds <= MAX_TIMER_SECONDS;
   return hostNamedOne ? hostSeconds : defaultSeconds;
 }
 
@@ -249,6 +258,7 @@ function roundListener(
         return;
       }
       open.latestBody = readFormBody(open.round, body);
+      // Throws when the disk write fails, so the page shows the draft unsaved.
       session.store.saveBody(open.record, open.latestBody);
     },
     finish: (end) => {
@@ -343,6 +353,29 @@ async function askRound(
   return presentOpen(session, opened, session.deadlineSeconds, signal);
 }
 
+// One ask_round at a time per session: a second call waits until the first has
+// returned, so each call's round is shown and settled before the next replaces it.
+function askRoundInTurn(
+  session: SessionContext,
+  args: unknown,
+  toolUseId: string | null,
+  signal: AbortSignal,
+): Promise<AnswersPayload> {
+  const earlier = session.askTurn;
+  const asking =
+    earlier === null
+      ? askRound(session, args, toolUseId, signal)
+      : earlier.then(() => askRound(session, args, toolUseId, signal));
+  const endTurn = () => {
+    if (session.askTurn === turn) {
+      session.askTurn = null;
+    }
+  };
+  const turn = asking.then(endTurn, endTurn);
+  session.askTurn = turn;
+  return asking;
+}
+
 async function collectLastRound(
   session: SessionContext,
   wait: boolean,
@@ -371,10 +404,11 @@ function startSession(info: SessionInfo, deps: FormsServiceDeps): FormsSession {
     store: deps.store,
     open: null,
     lastFinished: null,
+    askTurn: null,
   };
   return {
     askRound: (args, toolUseId, signal) =>
-      askRound(session, args, toolUseId, signal),
+      askRoundInTurn(session, args, toolUseId, signal),
     collectLastRound: (wait, signal) => collectLastRound(session, wait, signal),
     end: () => closeOpenRound(session),
   };

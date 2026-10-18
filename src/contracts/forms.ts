@@ -97,6 +97,7 @@ export interface SessionInfo {
 // One connected session; the app keeps at most one open round per session.
 export interface FormsSession {
   // `args` is the raw tool input; invalid input rejects with a RoundError message.
+  // A call made while another is pending runs once that one has returned.
   askRound(
     args: unknown,
     toolUseId: string | null,
@@ -135,6 +136,8 @@ export interface PresentedRound {
 export type RoundEnd = { kind: 'submitted' | 'cancelled'; body: FormBody };
 
 export interface RoundListener {
+  // Throws an Error with the reason when the draft could not be saved; a round
+  // no longer open ignores the draft.
   draft(body: FormBody): void;
   finish(end: RoundEnd): void;
 }

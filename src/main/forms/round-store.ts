@@ -44,7 +44,8 @@ export type FinishedSavedRound = SavedRound & { outcome: FinishedOutcome };
 
 // The saved-round folder: every draft and every finish, so a round's answers
 // outlive a deadline, a replacing round and an app restart. A disk failure is
-// logged and never thrown: losing the copy must not cost the live round.
+// logged and never thrown, losing the copy must not cost the live round —
+// except a draft's, which saveBody throws so the page can show it unsaved.
 export interface RoundStore {
   create(
     owner: RoundOwner,
@@ -54,6 +55,7 @@ export interface RoundStore {
     toolUseId: string | null,
   ): SavedRound;
   // A finished round keeps the body it finished with: a late draft is dropped.
+  // Throws an Error naming the round and the disk's reason when the write fails.
   saveBody(record: SavedRound, body: FormBody): void;
   finish(record: SavedRound, outcome: FinishedOutcome, body: FormBody): void;
   markReturned(record: SavedRound): void;
@@ -175,12 +177,11 @@ function newestUpdated<T extends SavedRound>(records: T[]): T | null {
 }
 
 // Rewrites the whole file through a temp file and a rename, so a crash
-// mid-write leaves the previous file intact.
+// mid-write leaves the previous file intact. Throws when the write fails.
 function writeRecord(
   roundsDir: string,
   record: SavedRound,
   clock: Clock,
-  log: Log,
 ): void {
   record.updated = clock.now() / 1000;
   const filePath = path.join(roundsDir, `${record.id}${ROUND_FILE_SUFFIX}`);
@@ -190,7 +191,22 @@ function writeRecord(
     writeFileSync(temporaryPath, JSON.stringify(record), 'utf8');
     renameSync(temporaryPath, filePath);
   } catch (error) {
-    log('forms', `could not save round ${record.id}: ${errorText(error)}`);
+    throw new Error(`could not save round ${record.id}: ${errorText(error)}`, {
+      cause: error,
+    });
+  }
+}
+
+function writeRecordOrLog(
+  roundsDir: string,
+  record: SavedRound,
+  clock: Clock,
+  log: Log,
+): void {
+  try {
+    writeRecord(roundsDir, record, clock);
+  } catch (error) {
+    log('forms', errorText(error));
   }
 }
 
@@ -227,7 +243,7 @@ export function createRoundStore(deps: {
 }): RoundStore {
   const { roundsDir, clock, randomHex, log } = deps;
   const write = (record: SavedRound) =>
-    writeRecord(roundsDir, record, clock, log);
+    writeRecordOrLog(roundsDir, record, clock, log);
   return {
     create: (owner, fingerprint, args, body, toolUseId) => {
       const now = clock.now() / 1000;
@@ -253,7 +269,7 @@ export function createRoundStore(deps: {
         return;
       }
       record.body = body;
-      write(record);
+      writeRecord(roundsDir, record, clock);
     },
     finish: (record, outcome, body) => {
       record.body = body;

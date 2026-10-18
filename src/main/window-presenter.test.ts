@@ -98,7 +98,17 @@ function setUp() {
     ipc.handlers.get(BRIDGE_CHANNELS.openRounds)?.({}) as PresentedRound[];
   const fromPage = (channel: string, ...args: unknown[]) =>
     ipc.listeners.get(channel)?.({}, ...args);
-  return { page, attention, logged, presenter, openRounds, fromPage };
+  const saveDraft = (roundId: string, body: FormBody) =>
+    ipc.handlers.get(BRIDGE_CHANNELS.draft)?.({}, roundId, body);
+  return {
+    page,
+    attention,
+    logged,
+    presenter,
+    openRounds,
+    fromPage,
+    saveDraft,
+  };
 }
 
 beforeEach(() => {
@@ -135,24 +145,44 @@ describe('createWindowPresenter', () => {
   });
 
   it('serves open rounds with their latest draft and passes drafts on', () => {
-    const { presenter, openRounds, fromPage } = setUp();
+    const { presenter, openRounds, saveDraft } = setUp();
     const { listener, drafts } = fakeListener();
     presenter.show(ROUND, listener);
 
-    fromPage(BRIDGE_CHANNELS.draft, 'round-1', BODY);
+    saveDraft('round-1', BODY);
 
     expect(drafts).toEqual([BODY]);
     expect(openRounds()).toEqual([{ ...ROUND, draft: BODY }]);
   });
 
+  it("throws a draft's failed save out of the handler, so the page's invoke rejects", () => {
+    const { presenter, saveDraft } = setUp();
+    presenter.show(ROUND, {
+      draft: () => {
+        throw new Error('could not save round round-1: EACCES');
+      },
+      finish: () => {},
+    });
+
+    expect(() => saveDraft('round-1', BODY)).toThrow(
+      'could not save round round-1: EACCES',
+    );
+  });
+
+  it('answers a draft for a round no longer open without passing it on', () => {
+    const { saveDraft } = setUp();
+
+    expect(saveDraft('round-gone', BODY)).toBeUndefined();
+  });
+
   it('ends a round the page finishes and drops what arrives after', () => {
-    const { attention, presenter, openRounds, fromPage } = setUp();
+    const { attention, presenter, openRounds, fromPage, saveDraft } = setUp();
     const { listener, drafts, finishes } = fakeListener();
     presenter.show(ROUND, listener);
     const end: RoundEnd = { kind: 'submitted', body: BODY };
 
     fromPage(BRIDGE_CHANNELS.finish, 'round-1', end);
-    fromPage(BRIDGE_CHANNELS.draft, 'round-1', BODY);
+    saveDraft('round-1', BODY);
     fromPage(BRIDGE_CHANNELS.finish, 'round-1', end);
 
     expect(finishes).toEqual([end]);

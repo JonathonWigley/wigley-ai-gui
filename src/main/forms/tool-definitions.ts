@@ -29,7 +29,12 @@ const ASK_ROUND_DESCRIPTION =
   "'dont_ask_reason' when the user gave one: the user pressed Don't ask me " +
   'this, so settle that kind of question yourself for the rest of the ' +
   "session and show each such decision as a 'Decided' notice. The choice on " +
-  'that answer still counts.';
+  "that answer still counts. Outcome 'needs_manual_open' means the relay " +
+  'could not start the app and no round exists: send the same round again ' +
+  'with ask_round once, which tries the start again; if it comes back a ' +
+  "second time, tell the user the reason in its 'summary' and ask the " +
+  "round's questions in your reply. collect_last_round is never the answer " +
+  'to it.';
 
 const QUESTION_CONTEXT_DESCRIPTION =
   'What the user needs to know to decide. Markdown. Open with the quick ' +
@@ -73,8 +78,8 @@ const NOTICES_DESCRIPTION =
 const COLLECT_LAST_ROUND_DESCRIPTION =
   'Re-attach to the round already open in the app and wait for the answers, ' +
   "or return the last finished round's answers again. Takes no required " +
-  "arguments. Call this after ask_round returns outcome 'draft' or " +
-  "'needs_manual_open', and after any failure that lost the answers. " +
+  "arguments. Call this after ask_round returns outcome 'draft', and after " +
+  'any failure that lost the answers. ' +
   "Outcome 'no_round' means nothing is open or saved: send the round again " +
   "with ask_round, and the user's saved answers fill in.";
 

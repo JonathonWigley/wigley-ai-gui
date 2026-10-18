@@ -334,4 +334,15 @@ describe('RoundStore', () => {
     );
     expect(store.newestFor('fp')).toBeNull();
   });
+
+  it("throws a draft's failed write with the disk's reason", () => {
+    const blocker = path.join(root, 'blocker');
+    writeFileSync(blocker, 'a file where the folder should be', 'utf8');
+    const store = storeIn(path.join(blocker, 'rounds'));
+    const record = store.create(MINE, 'fp', ARGS, null, null);
+
+    expect(() => store.saveBody(record, withNote('half'))).toThrow(
+      `could not save round ${record.id}: `,
+    );
+  });
 });

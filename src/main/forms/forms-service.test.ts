@@ -245,6 +245,40 @@ describe('askRound', () => {
     expect(savedFile(second).tool_use_id).toBeNull();
   });
 
+  it('runs a second call in the session only once the first has returned', async () => {
+    const session = startSession();
+    const first = session.askRound(NAMING_ARGS, null, live());
+    const second = session.askRound(PLACEMENT_ARGS, null, live());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(presenter.shown).toHaveLength(1);
+    const naming = presenter.latest();
+
+    presenter.submit(naming.roundId, oneAnswer({ choice: 1 }));
+    expect(await first).toEqual(
+      answersPayload(
+        parseRound(NAMING_ARGS),
+        'submitted',
+        oneAnswer({ choice: 1 }),
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(presenter.shown).toHaveLength(2);
+    expect(presenter.latest().round).toEqual(parseRound(PLACEMENT_ARGS));
+    presenter.submit(presenter.latest().roundId, oneAnswer({ choice: 2 }));
+    expect((await second).answers[0].choice).toBe(2);
+  });
+
+  it('runs the next call after one that rejected', async () => {
+    const session = startSession();
+    const malformed = session.askRound({ heading: 'H' }, null, live());
+    void session.askRound(NAMING_ARGS, null, live());
+
+    await expect(malformed).rejects.toBeInstanceOf(RoundError);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(presenter.shown).toHaveLength(1);
+  });
+
   it('closes the round in the window once the user cancels it', async () => {
     const pending = startSession().askRound(NAMING_ARGS, null, live());
     const shown = presenter.latest();
@@ -285,7 +319,8 @@ describe('the soft deadline', () => {
     expect((await pending).outcome).toBe('draft');
   });
 
-  it.each([0, -5])(
+  // 2_147_484 s is past setTimeout's 2**31-1 ms limit.
+  it.each([0, -5, 2_147_484])(
     'uses the default for a deadline of %d',
     async (deadlineSeconds) => {
       const pending = startSession({ deadlineSeconds }).askRound(
@@ -343,6 +378,7 @@ describe('collectLastRound', () => {
   });
 
   it('wakes two calls waiting on one round with the same answers, marking the file returned once', async () => {
+    const markReturned = vi.spyOn(store, 'markReturned');
     const session = startSession();
     const asking = session.askRound(NAMING_ARGS, null, live());
     const collecting = session.collectLastRound(true, live());
@@ -357,6 +393,7 @@ describe('collectLastRound', () => {
     expect(newestSaved(fingerprint(parseRound(NAMING_ARGS))).returned).toBe(
       true,
     );
+    expect(markReturned).toHaveBeenCalledTimes(1);
     expect(presenter.closed).toEqual([shown.roundId]);
   });
 
@@ -545,16 +582,22 @@ describe('a new round over an open draft', () => {
     expect(savedFile(naming.roundId).outcome).toBe('open');
   });
 
-  it("answers a call still waiting on the replaced round with that round's draft", async () => {
+  it('replaces the round only once the call waiting on it has returned its draft', async () => {
     const session = startSession();
     const waiting = session.askRound(NAMING_ARGS, null, live());
-    presenter.draft(presenter.latest().roundId, oneAnswer({ choice: 2 }));
+    const naming = presenter.latest();
+    presenter.draft(naming.roundId, oneAnswer({ choice: 2 }));
 
     void session.askRound(PLACEMENT_ARGS, null, live());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(presenter.closed).toEqual([]);
+    await expireDeadline();
     const payload = await waiting;
 
     expect(payload.outcome).toBe('draft');
     expect(payload.answers[0].choice).toBe(2);
+    expect(presenter.closed).toEqual([naming.roundId]);
+    expect(presenter.shown).toHaveLength(2);
   });
 });
 
@@ -731,6 +774,21 @@ describe("the user's answers on disk", () => {
       body: { note: 'submit' },
     });
     expect(presenter.closed).toEqual([shown.roundId]);
+  });
+
+  it("throws a draft's failed write to the caller and keeps the draft for the reply", async () => {
+    const pending = startSession().askRound(NAMING_ARGS, null, live());
+    const shown = presenter.latest();
+    vi.spyOn(store, 'saveBody').mockImplementation(() => {
+      throw new Error('could not save round r: EACCES');
+    });
+
+    expect(() =>
+      presenter.draft(shown.roundId, oneAnswer({ choice: 2 }, 'half')),
+    ).toThrow('could not save round r: EACCES');
+    await expireDeadline();
+
+    expect(await pending).toMatchObject({ outcome: 'draft', note: 'half' });
   });
 
   it('drops a draft that arrives after the finish', async () => {

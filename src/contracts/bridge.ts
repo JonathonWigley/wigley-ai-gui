@@ -23,6 +23,8 @@ export interface Bridge {
   onRoundClosed(listener: (roundId: string) => void): void;
   // A notification click asked to show this round.
   onFocusRound(listener: (roundId: string) => void): void;
-  saveDraft(roundId: string, body: FormBody): void;
+  // Resolves once main has written the draft, or at once for a round no longer
+  // open; rejects with main's own error text when the write failed.
+  saveDraft(roundId: string, body: FormBody): Promise<void>;
   finishRound(roundId: string, end: RoundEnd): void;
 }

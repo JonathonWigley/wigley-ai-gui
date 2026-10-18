@@ -34,6 +34,10 @@ function schemaOf(name: string): Record<string, unknown> {
   return tool.inputSchema;
 }
 
+function descriptionOf(name: string): string {
+  return FORMS_TOOLS.find((each) => each.name === name)?.description ?? '';
+}
+
 const askRound = schemaOf('ask_round') as unknown as AskRoundSchema;
 const collectLastRound = schemaOf(
   'collect_last_round',
@@ -74,6 +78,15 @@ describe('FORMS_TOOLS', () => {
   it('caps questions at 20 and notices at 50', () => {
     expect(askRound.properties.questions.maxItems).toBe(20);
     expect(askRound.properties.notices.maxItems).toBe(50);
+  });
+
+  it('sends needs_manual_open back to ask_round, never collect_last_round', () => {
+    expect(descriptionOf('ask_round')).toContain(
+      "Outcome 'needs_manual_open' means the relay could not start the app",
+    );
+    expect(descriptionOf('collect_last_round')).not.toContain(
+      'needs_manual_open',
+    );
   });
 
   it('gives collect_last_round one optional wait flag defaulting to true', () => {
