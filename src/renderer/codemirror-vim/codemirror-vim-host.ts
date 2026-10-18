@@ -3,6 +3,7 @@ import { getCM, Vim, vim } from '@replit/codemirror-vim';
 import type { CommandId } from '../../contracts/commands';
 import type { CreateEditorHost, TextEditor } from '../../contracts/editor';
 import type { EditorKeymap, EditorMode } from '../../contracts/keymap';
+import { exCommandName } from './ex-command-name';
 
 type VimEditor = Parameters<typeof Vim.handleEx>[0];
 
@@ -12,11 +13,6 @@ interface HostedEditor {
 }
 
 const MAP_PREFIX: Record<EditorMode, string> = { normal: 'n', insert: 'i' };
-
-// Ex command names are letters only.
-function exCommandName(command: CommandId): string {
-  return command.replace(/[^a-zA-Z]/g, '').toLowerCase();
-}
 
 // The engine runs a complete bind at once instead of waiting for a longer one,
 // so the leader's own default bind is unmapped before the binds that use it. A
