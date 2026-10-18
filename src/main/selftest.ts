@@ -136,6 +136,8 @@ function report(passed: boolean, what: string) {
 // a fresh run and a run that a reload interrupted stands down.
 let latestRun = 0;
 let session: FormsSession | null = null;
+// Chromium drops input that reaches a page before the page's first frame.
+let hasPaintedSinceNavigation = false;
 
 async function runStep(
   window: BrowserWindow,
@@ -161,13 +163,19 @@ async function runStep(
 async function runAllSteps(window: BrowserWindow, forms: FormsService) {
   const run = ++latestRun;
   const isCurrent = () => run === latestRun;
-  session?.end();
-  if (!(await waitFor(() => isPageReady(window))) || !isCurrent()) {
+  const isReadyForKeys = async () =>
+    hasPaintedSinceNavigation && (await isPageReady(window));
+  if (!(await waitFor(isReadyForKeys)) || !isCurrent()) {
     return;
   }
   window.webContents.focus();
 
   const seen = (await readLog(window)).length;
+  // A later run may have begun while the log was read.
+  if (!isCurrent()) {
+    return;
+  }
+  session?.end();
   session = forms.startSession({
     sessionId: `selftest-${run}`,
     projectDir: 'selftest',
@@ -203,6 +211,12 @@ async function runAllSteps(window: BrowserWindow, forms: FormsService) {
 }
 
 export function startSelfTest(window: BrowserWindow, forms: FormsService) {
+  window.webContents.on('did-navigate', () => {
+    hasPaintedSinceNavigation = false;
+  });
+  window.webContents.on('paint', () => {
+    hasPaintedSinceNavigation = true;
+  });
   window.webContents.on(
     'did-finish-load',
     () => void runAllSteps(window, forms),
