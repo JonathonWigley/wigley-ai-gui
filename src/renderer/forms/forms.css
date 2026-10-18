@@ -1,25 +1,28 @@
 /* Layout: switcher, work area, status line. Rows are placed explicitly so a
-   hidden switcher leaves its row empty instead of shifting the others. */
+   hidden switcher leaves its row empty instead of shifting the others. The
+   one column never grows past the window, so content wraps to fit it; long
+   unbroken words break anywhere. */
 #app {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100vh;
+  overflow-wrap: anywhere;
 }
 
 .switcher {
   background: var(--wg-bg-deep);
   border-bottom: 1px solid var(--wg-border);
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
   grid-row: 1;
-  overflow-x: auto;
   padding: 0.35rem 0.75rem;
 }
 
 .workspace {
   grid-row: 2;
   min-height: 0;
-  overflow: hidden;
 }
 
 .status-line {
@@ -32,9 +35,17 @@
   height: 100%;
 }
 
-@media (max-width: 800px) {
+/* Narrow windows stack the rail above the item, as a short scrolling list. */
+@media (max-width: 640px) {
   .round {
-    grid-template-columns: 11rem minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .rail {
+    border-bottom: 1px solid var(--wg-border);
+    border-right: 0;
+    max-height: min(8rem, 25vh);
   }
 }
 
@@ -70,7 +81,8 @@
   cursor: pointer;
   display: flex;
   gap: 0.5rem;
-  max-width: 20rem;
+  max-width: min(20rem, 100%);
+  min-width: 0;
   padding: 0.15rem 0.7rem;
 }
 
@@ -85,6 +97,7 @@
 }
 
 .switcher-label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -170,6 +183,7 @@
 }
 
 .rail-title {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -322,6 +336,7 @@
 
 .choice-text {
   flex: 1;
+  min-width: 0;
 }
 
 .choices.is-locked {
@@ -521,6 +536,7 @@
 .review-actions,
 .dialog-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 1rem;
 }
@@ -568,17 +584,17 @@
   font-size: 1.3rem;
 }
 
-/* Status line */
+/* Status line: its parts and key hints wrap onto more lines when narrow. */
 .status-line {
   align-items: center;
   background: var(--wg-bg-deep);
   border-top: 1px solid var(--wg-border);
   display: flex;
+  flex-wrap: wrap;
   font-family: var(--wg-font-mono);
   font-size: var(--wg-font-mono-size);
-  gap: 1rem;
+  gap: 0.2rem 1rem;
   padding: 0.2rem 0.75rem;
-  white-space: nowrap;
 }
 
 .status-mode {
@@ -599,21 +615,16 @@
 
 .status-error {
   color: var(--wg-error);
-  max-width: 40%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .status-keys {
   color: var(--wg-text-muted);
-  flex: 1;
+  column-gap: 0.9rem;
+  display: flex;
+  flex: 1 1 12rem;
+  flex-wrap: wrap;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.key-hint + .key-hint {
-  margin-left: 0.9rem;
 }
 
 .status-help {
@@ -656,7 +667,7 @@
 .help-sections {
   display: grid;
   gap: 1rem 1.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
   margin-bottom: 1rem;
 }
 
@@ -694,7 +705,7 @@
   border: 1px solid var(--wg-border);
   border-left: 3px solid var(--wg-info);
   border-radius: 0.5rem;
-  max-width: 24rem;
+  max-width: min(24rem, calc(100vw - 2rem));
   padding: 0.5rem 0.9rem;
 }
 
@@ -765,10 +776,13 @@
   padding: 0.05em 0.3em;
 }
 
+/* Code wraps at spaces but keeps an unbroken token whole, and a table keeps
+   its columns; either scrolls in its own box when wider than the pane. */
 .md pre {
   background: var(--wg-bg-deep);
   border: 1px solid var(--wg-border);
   border-radius: 0.4rem;
+  overflow-wrap: normal;
   overflow-x: auto;
   padding: 0.6em 0.8em;
   white-space: pre-wrap;
@@ -788,6 +802,7 @@
 
 .md table {
   border-collapse: collapse;
+  overflow-wrap: normal;
   display: block;
   max-width: 100%;
   overflow-x: auto;

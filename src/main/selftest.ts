@@ -6,9 +6,9 @@ import type {
 } from '../contracts/forms';
 
 // Opens a fixture round through FormsService, drives keys into the page
-// through Electron's input pipeline, and checks the lines the page logs and
-// the answers the round returns. Run with `npm run selftest`; exits non-zero
-// on failure.
+// through Electron's input pipeline, and checks the lines the page logs, that
+// the page fits the window's minimum width, and the answers the round
+// returns. Run with `npm run selftest`; exits non-zero on failure.
 
 const KEY_CODES: Record<string, string> = { ' ': 'Space' };
 const STEP_TIMEOUT_MS = 5000;
@@ -18,27 +18,43 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 interface Step {
   keys: string[];
   expect: string;
+  // After the step, the window shrinks to its minimum width and the page
+  // must fit it without cutting anything off.
+  checksFit?: true;
 }
 
+// An unbroken run of letters wider than any pane; no j, which would start jk.
+const LONG_WORD = 'unbroken'.repeat(14);
+
 // Starting on the notice: Space then j replays j to question 1, pick 2; a
-// types "ab" at once (INSERT), jk then Space j to its why box, Esc out; a
-// again types "c" after "ab"; j to question 2 and mark it not applicable;
-// g t switches rounds; review, Enter jumps back to the question, review again
-// and Space Enter submits.
+// types "ab" at once (INSERT), jk then Space j to its why box, A appends a
+// long word, Esc out; a again types "c" after "ab"; j to question 2 and mark
+// it not applicable; g t switches rounds; review, ? opens and closes help, C
+// opens and n dismisses the cancel prompt, Enter jumps back to the question,
+// review again and Space Enter submits.
 const STEPS: Step[] = [
-  { keys: [' ', 'j'], expect: '[page] j ran forms.nextItem' },
+  { keys: [' ', 'j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   { keys: ['a'], expect: '[forms] focused what on question 1' },
   {
     keys: ['a', 'b', 'j', 'k', ' ', 'j'],
     expect: '[forms] focused why on question 1',
+    checksFit: true,
   },
-  { keys: ['Escape'], expect: '[forms] left the box' },
+  {
+    keys: ['A', ...LONG_WORD, 'j', 'k', 'Escape'],
+    expect: '[forms] left the box',
+    checksFit: true,
+  },
   { keys: ['a'], expect: '[forms] focused what on question 1' },
   { keys: ['c', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
   { keys: ['j', 'x'], expect: '[forms] not applicable on question 2' },
-  { keys: ['g', 't'], expect: '[page] t ran forms.nextRound' },
-  { keys: [' ', ' '], expect: '[forms] review opened' },
+  { keys: ['g', 't'], expect: '[page] gt ran forms.nextRound' },
+  { keys: [' ', ' '], expect: '[forms] review opened', checksFit: true },
+  { keys: ['?'], expect: '[page] ? ran help.toggle', checksFit: true },
+  { keys: ['?'], expect: '[page] ? ran help.close' },
+  { keys: ['C'], expect: '[page] C ran forms.askCancel', checksFit: true },
+  { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
   { keys: ['Enter'], expect: '[page] Enter ran forms.reviewJump' },
   { keys: [' ', ' '], expect: '[forms] review opened' },
   { keys: [' ', 'Enter'], expect: '[forms] submitted' },
@@ -59,10 +75,20 @@ function fixtureRound(run: number) {
     ],
     questions: [
       {
-        title: 'First question',
-        context: '- a fact',
-        question: 'Pick one.',
-        choices: ['One', 'Two', 'Three'],
+        title: `First question titled ${LONG_WORD}`,
+        context: [
+          `- a fact naming ${LONG_WORD}`,
+          '',
+          `| ${Array.from({ length: 12 }, (_, column) => `column ${column}`).join(' | ')} |`,
+          `|${' --- |'.repeat(12)}`,
+          `|${' cell |'.repeat(12)}`,
+          '',
+          '```',
+          `code ${LONG_WORD}`,
+          '```',
+        ].join('\n'),
+        question: `Pick one of ${LONG_WORD}.`,
+        choices: ['One', `Two ${LONG_WORD}`, 'Three'],
         recommend: 1,
         rationale: 'The first is simplest.',
       },
@@ -98,11 +124,13 @@ function payloadProblems(payload: AnswersPayload): string[] {
 
 function press(window: BrowserWindow, key: string) {
   const keyCode = KEY_CODES[key] ?? key;
-  window.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+  // A capital letter's key event says Shift, as the keyboard's does.
+  const modifiers = /^[A-Z]$/.test(key) ? ['shift' as const] : [];
+  window.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
   if (key.length === 1) {
     window.webContents.sendInputEvent({ type: 'char', keyCode: key });
   }
-  window.webContents.sendInputEvent({ type: 'keyUp', keyCode });
+  window.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
 }
 
 function readLog(window: BrowserWindow): Promise<string[]> {
@@ -116,6 +144,37 @@ function isPageReady(window: BrowserWindow): Promise<boolean> {
     `document.body.dataset.ready === 'true'`,
   );
 }
+
+// Lists what the page cuts off on the right: an element whose content is wider
+// than its box, or that ends past the window. Code and tables scroll in their
+// own box, and rail and switcher titles end in an ellipsis, their full text in
+// the item heading and the tooltip.
+const CUT_OFF_SCRIPT = `(() => {
+  const scrollsItself = '.md pre, .md table, .rail-title, .switcher-label';
+  const name = (node) => [node.tagName.toLowerCase(), ...node.classList].join('.');
+  const problems = [];
+  const page = document.documentElement;
+  if (page.scrollWidth > innerWidth) {
+    problems.push('page is ' + page.scrollWidth + 'px wide');
+  }
+  for (const node of document.querySelectorAll('#app *')) {
+    const right = node.getBoundingClientRect().right;
+    const isInScroller = node.parentElement.closest(scrollsItself) !== null;
+    if (isInScroller || node.getClientRects().length === 0) {
+      continue;
+    }
+    const isOverfull =
+      node.clientWidth > 0 &&
+      node.scrollWidth > node.clientWidth + 1 &&
+      !node.matches(scrollsItself);
+    if (isOverfull) {
+      problems.push(name(node) + ' holds ' + node.scrollWidth + 'px in ' + node.clientWidth + 'px');
+    } else if (right > innerWidth + 1) {
+      problems.push(name(node) + ' ends at ' + Math.round(right) + 'px');
+    }
+  }
+  return problems;
+})()`;
 
 async function waitFor(check: () => Promise<boolean>): Promise<boolean> {
   const deadline = Date.now() + STEP_TIMEOUT_MS;
@@ -138,6 +197,29 @@ function waitForNewLogLine(window: BrowserWindow, line: string, seen: number) {
 
 function report(passed: boolean, what: string) {
   console.log(`[selftest] ${passed ? 'PASS' : 'FAIL'} ${what}`);
+}
+
+function waitForPageWidth(window: BrowserWindow, width: number) {
+  return waitFor(async () => {
+    const pageWidth: number =
+      await window.webContents.executeJavaScript('innerWidth');
+    return pageWidth === width;
+  });
+}
+
+// Shrinks the window to its minimum width, lists what the page cuts off
+// there, and restores the window's size.
+async function cutOffAtMinimumWidth(window: BrowserWindow): Promise<string[]> {
+  const [width, height] = window.getSize();
+  const [minimumWidth] = window.getMinimumSize();
+  window.setSize(minimumWidth, height);
+  const [narrowWidth] = window.getContentSize();
+  const problems = (await waitForPageWidth(window, narrowWidth))
+    ? await window.webContents.executeJavaScript(CUT_OFF_SCRIPT)
+    : [`the page never narrowed to ${narrowWidth}px`];
+  window.setSize(width, height);
+  await waitForPageWidth(window, window.getContentSize()[0]);
+  return problems;
 }
 
 // Forge's dev server can reload the page once at startup, so every load starts
@@ -163,11 +245,21 @@ async function runStep(
     await wait(30);
   }
   const passed = await waitForNewLogLine(window, step.expect, seen);
+  const keys = step.keys.join('').replaceAll(' ', '␣');
   if (isCurrent()) {
-    const keys = step.keys.join('').replaceAll(' ', '␣');
     report(passed, `${keys} -> ${step.expect}`);
   }
-  return passed;
+  if (!passed || !step.checksFit) {
+    return passed;
+  }
+  const cutOff = await cutOffAtMinimumWidth(window);
+  if (isCurrent()) {
+    report(
+      cutOff.length === 0,
+      `${keys} fits the minimum width: ${cutOff.join('; ') || 'nothing cut off'}`,
+    );
+  }
+  return cutOff.length === 0;
 }
 
 // `cleanUp` runs before every exit, since app.exit skips quit handlers.

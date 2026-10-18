@@ -2,7 +2,13 @@ import type { Keymap } from './keymap';
 import type { ThemeChoice } from './theme';
 
 export interface Settings {
-  window: { width: number; height: number };
+  // `minWidth` and `minHeight` are the smallest size the user can drag to.
+  window: {
+    width: number;
+    height: number;
+    minWidth: number;
+    minHeight: number;
+  };
   // A theme `name`, built-in or from the user's themes folder.
   theme: string;
   // `uiSize` and `monoSize` are CSS pixels.

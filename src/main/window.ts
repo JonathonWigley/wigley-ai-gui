@@ -14,6 +14,8 @@ export function createMainWindow(
   const window = new BrowserWindow({
     width: settings.width,
     height: settings.height,
+    minWidth: settings.minWidth,
+    minHeight: settings.minHeight,
     backgroundColor,
     show: !offscreen,
     webPreferences: {
