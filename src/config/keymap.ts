@@ -13,7 +13,6 @@ export const defaultKeymap: Keymap = {
     leader: '<Space>',
     remaps: [{ mode: 'insert', keys: 'jk', to: '<Esc>' }],
     binds: [
-      { keys: '<Leader><Leader>', command: 'agent.submit' },
       { keys: '<Leader>j', command: 'box.next' },
       { keys: '<Leader>k', command: 'box.prev' },
       { keys: '<Leader>q', command: 'box.leave' },

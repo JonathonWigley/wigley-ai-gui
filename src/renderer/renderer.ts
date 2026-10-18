@@ -2,7 +2,6 @@
 // wires features to them.
 import './index.css';
 import { CommandRegistry } from '../shared/command-registry';
-import { registerAgentCommands } from './agent-commands';
 import { registerBoxCommands } from './boxes';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
 import { createLogView } from './log-view';
@@ -28,7 +27,6 @@ async function start() {
   );
 
   registerBoxCommands(commands, boxes, log);
-  registerAgentCommands(commands, bridge, log);
   commands.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
   );

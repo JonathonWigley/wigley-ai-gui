@@ -7,7 +7,6 @@ import {
   ipcMain,
   type WebContents,
 } from 'electron';
-import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { defaultKeymap } from '../config/keymap';
 import { defaultSettings } from '../config/settings';
@@ -15,10 +14,6 @@ import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { Log } from '../contracts/log';
 import type { AppConfig } from '../contracts/settings';
 import { CommandRegistry } from '../shared/command-registry';
-import {
-  type AcpAgentLaunch,
-  createAcpAgentClient,
-} from './acp/acp-agent-client';
 import {
   installWindowKeybindings,
   type MainCommands,
@@ -39,24 +34,11 @@ const isSelfTest = Boolean(process.env.PROOF_SELFTEST);
 
 const config: AppConfig = { settings: defaultSettings, keymap: defaultKeymap };
 
-// In dev the mock agent runs on Electron's own Node; the packaged app's
-// RunAsNode fuse is off, so this launch is dev-only.
-const mockAgentLaunch: AcpAgentLaunch = {
-  command: process.execPath,
-  args: [path.join(__dirname, 'mock-agent.cjs')],
-  env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-};
-
-const agent = createAcpAgentClient(mockAgentLaunch);
-
 function pageLog(page: WebContents): Log {
   return (source, message) => page.send(BRIDGE_CHANNELS.log, source, message);
 }
 
 ipcMain.handle(BRIDGE_CHANNELS.config, () => config);
-ipcMain.handle(BRIDGE_CHANNELS.prompt, (event, text: string) =>
-  agent.prompt(text, (chunk) => pageLog(event.sender)('acp', chunk)),
-);
 
 const createWindow = () => {
   const window = createMainWindow(config.settings.window, isSelfTest);

@@ -77,5 +77,6 @@ lands in both repos together.
 
 - Under `electron-forge start` the page loads twice at startup, the second load triggered by the dev server. Code
   that acts on page load runs on every load, as the self-test does.
-- The mock agent runs on Electron's own Node through `ELECTRON_RUN_AS_NODE`. The packaged app's `RunAsNode` fuse is
-  off, so the ACP round trip works only in dev until the real harness executable replaces the mock.
+- Nothing in the app calls the ACP adapter or the mock agent; both still build for the harness work. The mock agent
+  runs on Electron's own Node through `ELECTRON_RUN_AS_NODE`, and the packaged app's `RunAsNode` fuse is off, so an
+  ACP round trip works only in dev until the real harness executable replaces the mock.

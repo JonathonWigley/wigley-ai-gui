@@ -19,7 +19,6 @@ const STEPS: Step[] = [
   { keys: [' ', 'k'], expect: '[box] focused box 1' },
   { keys: ['i', 'a', 'b', 'j', 'k', ' ', 'j'], expect: '[box] focused box 2' },
   { keys: [' ', 'k'], expect: '[box] focused box 1' },
-  { keys: [' ', ' '], expect: '[agent] turn ended: end_turn' },
   { keys: [' ', 'q'], expect: '[box] left the box for the page' },
   { keys: ['i'], expect: '[page] i ran box.focusFirst' },
   {
