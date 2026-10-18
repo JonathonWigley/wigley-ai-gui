@@ -634,10 +634,11 @@ describe('a call made while another round is open', () => {
 
     expect(payload.outcome).toBe('draft');
     expect(payload.summary).toBe(
-      "This round, 'Placement decisions', was not shown: another round is " +
-        'still open in the app.',
+      "This round, 'Placement decisions', was not shown: the round 'Naming " +
+        "decisions' is still open in the app.",
     );
     expect(payload.next).toContain('Send this round again with ask_round');
+    expect(payload.next).toContain('earlier_heading');
     expect(payload.earlier_heading).toBeUndefined();
     expect(payload.answers[0].status).toBe('untouched');
     expect(presenter.shown).toHaveLength(1);
@@ -737,6 +738,80 @@ describe('a call made while another round is open', () => {
     const answered = await fresh;
     expect(answered.outcome).toBe('submitted');
     expect(answered.answers[0].choice).toBe(2);
+  });
+
+  it('hands back the open draft to a fresh call woken by its submit, then opens the fresh round on a re-send', async () => {
+    const session = startSession();
+    const naming = await leaveOpenDraft(session);
+    const fresh = session.askRound(PLACEMENT_ARGS, null, live());
+
+    presenter.submit(naming.roundId, oneAnswer({ choice: 1 }));
+    const handed = await fresh;
+
+    expect(handed.outcome).toBe('submitted');
+    expect(handed.earlier_heading).toBe('Naming decisions');
+    expect(presenter.shown).toHaveLength(1);
+    expect(savedFile(naming.roundId).returned).toBe(true);
+    void session.askRound(PLACEMENT_ARGS, null, live());
+    expect(presenter.shown).toHaveLength(2);
+    expect(presenter.latest().round).toEqual(parseRound(PLACEMENT_ARGS));
+  });
+
+  it('returns the open draft, not a not-shown draft, to a re-send of the open round whose deadline passes while queued', async () => {
+    const session = startSession();
+    void session.askRound(NAMING_ARGS, null, live());
+    const resent = session.askRound(NAMING_ARGS, null, live());
+    presenter.draft(presenter.latest().roundId, oneAnswer({ choice: 2 }));
+
+    // Fires the open call's deadline and the re-send's in one step, so the
+    // re-send's passes before the open call's turn ends.
+    vi.advanceTimersByTime(DEFAULT_DEADLINE_SECONDS * 1000);
+    const payload = await resent;
+
+    expect(payload.outcome).toBe('draft');
+    expect(payload.summary).not.toContain('was not shown');
+    expect(payload.answers[0].choice).toBe(2);
+    expect(presenter.shown).toHaveLength(1);
+  });
+
+  it('opens at most one round when one submit wakes calls queued behind aborted ones', async () => {
+    const TESTING_ARGS = {
+      heading: 'Testing decisions',
+      overview: 'Tidying modules. This round: tests.',
+      questions: [question({ title: 'Tests', question: 'What covers it?' })],
+    };
+    const session = startSession();
+    const first = session.askRound(NAMING_ARGS, null, live());
+    const naming = presenter.latest();
+    const hostB1 = new AbortController();
+    const b1 = session.askRound(SCOPE_ARGS, null, hostB1.signal);
+    const placement = session.askRound(PLACEMENT_ARGS, null, live());
+    const hostB2 = new AbortController();
+    const b2 = session.askRound(SCOPE_ARGS, null, hostB2.signal);
+    const testing = session.askRound(TESTING_ARGS, null, live());
+    const testingCall = watch(testing);
+
+    hostB1.abort();
+    hostB2.abort();
+    await expect(b1).rejects.toThrow('ask_round was cancelled before it ran.');
+    await expect(b2).rejects.toThrow('ask_round was cancelled before it ran.');
+    presenter.submit(naming.roundId, oneAnswer({ choice: 1 }));
+    expect((await first).outcome).toBe('submitted');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(presenter.shown).toHaveLength(2);
+    expect(presenter.latest().round).toEqual(parseRound(PLACEMENT_ARGS));
+    expect(testingCall.settled).toBe(false);
+    expect(savedFile(naming.roundId).returned).toBe(true);
+    presenter.submit(presenter.latest().roundId, oneAnswer({ choice: 2 }));
+    expect((await placement).answers[0].choice).toBe(2);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(presenter.shown).toHaveLength(3);
+    expect(presenter.latest().round).toEqual(parseRound(TESTING_ARGS));
+    presenter.submit(presenter.latest().roundId, oneAnswer({ choice: 1 }));
+    const answered = await testing;
+    expect(answered.outcome).toBe('submitted');
+    expect(answered.earlier_heading).toBeUndefined();
   });
 
   it('makes a re-send wait when two queued calls were refused behind one open draft', async () => {

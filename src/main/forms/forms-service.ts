@@ -311,19 +311,28 @@ function openNewRound(
   return open;
 }
 
-// The draft a queued call returns when its deadline passes while another round
-// is still open: its own round was never shown, so its answers are blank.
-function roundNotShownPayload(round: Round): AnswersPayload {
+// The draft a call returns when its round was never shown, so its answers are
+// blank; it names the blocking round, when one is open, for the agent to point
+// the user at.
+function roundNotShownPayload(
+  round: Round,
+  blocking: Round | null,
+): AnswersPayload {
+  const other =
+    blocking === null ? 'another round' : `the round '${blocking.heading}'`;
   const payload = answersPayload(round, 'draft', readFormBody(round, {}));
   payload.summary =
-    `This round, '${round.heading}', was not shown: another round is still ` +
-    `open in the app.`;
+    `This round, '${round.heading}', was not shown: ${other} is still open ` +
+    `in the app.`;
   payload.next =
-    `The user is still answering another round in the app, so this round ` +
-    `was not opened and has no answers. Send this round again with ` +
-    `ask_round, and again after every draft like this one: it opens once the ` +
-    `user finishes the other round. Do not call collect_last_round for it: ` +
-    `that returns the other round's answers.`;
+    `The user has not finished ${other} in the app, so this round was not ` +
+    `opened and has no answers. Send this round again with ask_round, and ` +
+    `again after every draft like this one. Once the user finishes ${other}, ` +
+    `a send may return that round's answers instead, marked with ` +
+    `earlier_heading: act on them, then send this round again. If ${other} ` +
+    `is no longer needed, ask the user to cancel it in the app. Do not call ` +
+    `collect_last_round for this round: that returns the other round's ` +
+    `answers.`;
   return payload;
 }
 
@@ -368,6 +377,11 @@ async function askParsedRound(
     }
     handed.handedBack = true;
     return handedBackFinishedPayload(handed);
+  }
+  // One open round per session: an unfinished round is never replaced.
+  const unfinished = session.open;
+  if (unfinished !== null) {
+    return roundNotShownPayload(round, unfinished.round);
   }
   session.lastFinished = null;
   const opened = openNewRound(
@@ -427,10 +441,25 @@ async function waitForOtherRoundToFinish(
   }
 }
 
-// Opens this call's round only once the earlier calls have returned and the
+// A queued call whose deadline passed before it ran: the open round's answers
+// so far when that round is its own, or else a not-shown draft naming the open
+// round. Neither waits again.
+function queuedDeadlinePayload(
+  session: SessionContext,
+  round: Round,
+  roundFingerprint: string,
+): AnswersPayload {
+  const open = session.open;
+  if (open !== null && open.record.fingerprint === roundFingerprint) {
+    return openRoundPayload(session, open);
+  }
+  return roundNotShownPayload(round, open?.round ?? null);
+}
+
+// Opens this call's round only once every earlier call has returned and the
 // round the user is answering has finished. Its own deadline bounds the whole
-// call: passing before its round opens returns a not-shown draft and leaves the
-// open round be.
+// call: passing first returns without opening a round and leaves the open
+// round be.
 async function askRoundWhenFree(
   session: SessionContext,
   earlier: Promise<void>,
@@ -456,7 +485,7 @@ async function askRoundWhenFree(
     const deadlinePassed =
       deadline.signal.aborted && !signal.aborted && !session.ended;
     if (deadlinePassed) {
-      return roundNotShownPayload(round);
+      return queuedDeadlinePayload(session, round, roundFingerprint);
     }
     return await askParsedRound(
       session,
@@ -507,26 +536,45 @@ async function askRoundQueuedOrNow(
   );
 }
 
-// Each call is the turn the next call queues behind until it returns.
+// Runs `end` and resolves once `asking` and `earlier` have both settled, in
+// the same tick as the later of the two, so a caller awaiting `asking` sees
+// its turn already over.
+function endOnceBothSettle(
+  earlier: Promise<void> | null,
+  asking: Promise<unknown>,
+  end: () => void,
+): Promise<void> {
+  return new Promise((resolve) => {
+    let pending = earlier === null ? 1 : 2;
+    const settleOne = () => {
+      pending -= 1;
+      if (pending === 0) {
+        end();
+        resolve();
+      }
+    };
+    void asking.then(settleOne, settleOne);
+    void earlier?.then(settleOne);
+  });
+}
+
+// Each call's turn ends once it and every earlier call have returned, so at
+// most one call is ever past its wait: a call that returns early, aborted or
+// not shown, never frees a later call while an earlier one is pending.
 function askRoundInTurn(
   session: SessionContext,
   args: unknown,
   toolUseId: string | null,
   signal: AbortSignal,
 ): Promise<AnswersPayload> {
-  const asking = askRoundQueuedOrNow(
-    session,
-    session.askTurn,
-    args,
-    toolUseId,
-    signal,
-  );
+  const earlier = session.askTurn;
+  const asking = askRoundQueuedOrNow(session, earlier, args, toolUseId, signal);
   const endTurn = () => {
     if (session.askTurn === turn) {
       session.askTurn = null;
     }
   };
-  const turn = asking.then(endTurn, endTurn);
+  const turn = endOnceBothSettle(earlier, asking, endTurn);
   session.askTurn = turn;
   return asking;
 }
