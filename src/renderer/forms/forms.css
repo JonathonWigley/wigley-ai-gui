@@ -35,6 +35,18 @@
   height: 100%;
 }
 
+.rail {
+  background: var(--wg-bg-pane);
+  border-right: 1px solid var(--wg-border);
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.round-main {
+  overflow-y: auto;
+  padding: 1rem 1.5rem 2rem;
+}
+
 /* Narrow windows stack the rail above the item, as a short scrolling list. */
 @media (max-width: 640px) {
   .round {
@@ -47,18 +59,6 @@
     border-right: 0;
     max-height: min(8rem, 25vh);
   }
-}
-
-.rail {
-  background: var(--wg-bg-pane);
-  border-right: 1px solid var(--wg-border);
-  overflow-y: auto;
-  padding: 0.5rem 0;
-}
-
-.round-main {
-  overflow-y: auto;
-  padding: 1rem 1.5rem 2rem;
 }
 
 .round-main > * {
