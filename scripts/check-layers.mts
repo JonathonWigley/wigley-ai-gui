@@ -1,6 +1,7 @@
 // Fails when a source file imports across a layer boundary LAYERS does not allow.
 // A file belongs to the layer with the longest matching path; imports inside a
-// file's own layer are always allowed.
+// file's own layer are always allowed, and a `.test.ts` file may also import the
+// test packages.
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -24,6 +25,14 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts'],
     packages: ['@agentclientprotocol/sdk', 'node:'],
   },
+  'src/main/forms': { layers: ['src/contracts'], packages: ['node:'] },
+  'src/main/mcp': {
+    layers: ['src/contracts'],
+    packages: ['@modelcontextprotocol/server', 'node:'],
+  },
+  'src/main/relay': { layers: ['src/contracts'], packages: ['node:'] },
+  'src/main/themes': { layers: ['src/contracts'], packages: ['node:'] },
+  'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/main.ts': {
     layers: [
       'src/contracts',
@@ -31,13 +40,22 @@ const LAYERS: Record<string, LayerRule> = {
       'src/config',
       'src/main',
       'src/main/acp',
+      'src/main/forms',
+      'src/main/mcp',
+      'src/main/relay',
+      'src/main/themes',
+      'src/main/alerts',
     ],
     packages: ['electron', 'electron-squirrel-startup', 'node:'],
   },
   'src/renderer': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/renderer/codemirror-vim': {
-    layers: ['src/contracts'],
+    layers: ['src/contracts', 'src/shared'],
     packages: ['codemirror', '@replit/codemirror-vim'],
+  },
+  'src/renderer/markdown-it': {
+    layers: ['src/contracts'],
+    packages: ['markdown-it'],
   },
   'src/renderer/renderer.ts': {
     layers: [
@@ -45,6 +63,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared',
       'src/renderer',
       'src/renderer/codemirror-vim',
+      'src/renderer/markdown-it',
     ],
     packages: [],
   },
@@ -55,6 +74,8 @@ const LAYERS: Record<string, LayerRule> = {
 };
 
 const IMPORT_PATTERN = /(?:\bfrom|\bimport)\s*\(?\s*['"]([^'"]+)['"]/g;
+
+const TEST_PACKAGES = ['vitest'];
 
 function layerOf(file: string): string | undefined {
   return Object.keys(LAYERS)
@@ -76,12 +97,14 @@ function importViolations(file: string): string[] {
     return [`${file}: no layer in LAYERS covers this file`];
   }
   const rule = LAYERS[layer];
+  const isTestFile = file.endsWith('.test.ts');
   const violations: string[] = [];
   for (const [, specifier] of readFileSync(file, 'utf8').matchAll(
     IMPORT_PATTERN,
   )) {
     if (!specifier.startsWith('.')) {
-      if (!allowsPackage(rule, specifier)) {
+      const isTestPackage = isTestFile && TEST_PACKAGES.includes(specifier);
+      if (!isTestPackage && !allowsPackage(rule, specifier)) {
         violations.push(`${file}: layer ${layer} may not import ${specifier}`);
       }
       continue;
