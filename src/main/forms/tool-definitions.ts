@@ -1,5 +1,12 @@
 import type { ToolDefinition } from '../../contracts/forms';
-import { MAX_CHOICES, MAX_NOTICES, MAX_QUESTIONS, MIN_CHOICES } from './round';
+import {
+  DEFAULT_NOTICE_BADGE,
+  MAX_CHOICES,
+  MAX_NOTICES,
+  MAX_QUESTIONS,
+  MIN_CHOICES,
+  NOTICE_BADGES,
+} from './round';
 
 const ASK_ROUND_DESCRIPTION =
   'Ask the user a whole round of interview questions in the wigley-ai-gui ' +
@@ -156,8 +163,8 @@ export const FORMS_TOOLS: ToolDefinition[] = [
               },
               badge: {
                 type: 'string',
-                enum: ['Applied', 'Dispatched', 'Decided'],
-                default: 'Applied',
+                enum: [...NOTICE_BADGES],
+                default: DEFAULT_NOTICE_BADGE,
                 description: NOTICE_BADGE_DESCRIPTION,
               },
             },

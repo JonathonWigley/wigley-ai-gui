@@ -19,12 +19,12 @@ export const MAX_CHOICES = 10;
 export const MAX_QUESTIONS = 20;
 export const MAX_NOTICES = 50;
 
-const NOTICE_BADGES: readonly NoticeBadge[] = [
+export const NOTICE_BADGES: readonly NoticeBadge[] = [
   'Applied',
   'Dispatched',
   'Decided',
 ];
-const DEFAULT_NOTICE_BADGE: NoticeBadge = 'Applied';
+export const DEFAULT_NOTICE_BADGE: NoticeBadge = 'Applied';
 
 const ROUND_FIELDS = ['heading', 'overview', 'questions', 'notices'];
 const QUESTION_FIELDS = [

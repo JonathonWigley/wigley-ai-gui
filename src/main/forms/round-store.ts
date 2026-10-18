@@ -62,11 +62,14 @@ export interface RoundStore {
   newestFor(fingerprint: string): SavedRound | null;
   // The newest finished round of this owner that no tool reply has carried.
   newestUnreturnedFinished(owner: RoundOwner): FinishedSavedRound | null;
-  // Deletes every file last written more than RETENTION_SECONDS ago.
+  // Deletes every round file, and any temp file a crash left, last written more
+  // than RETENTION_SECONDS ago.
   prune(): void;
 }
 
 const ROUND_FILE_SUFFIX = '.json';
+// What a crash between the write and the rename leaves behind.
+const TEMPORARY_FILE_SUFFIX = '.tmp';
 
 function isFinished(record: SavedRound): record is FinishedSavedRound {
   return record.outcome !== 'open';
@@ -181,7 +184,7 @@ function writeRecord(
 ): void {
   record.updated = clock.now() / 1000;
   const filePath = path.join(roundsDir, `${record.id}${ROUND_FILE_SUFFIX}`);
-  const temporaryPath = `${filePath}.tmp`;
+  const temporaryPath = `${filePath}${TEMPORARY_FILE_SUFFIX}`;
   try {
     mkdirSync(roundsDir, { recursive: true });
     writeFileSync(temporaryPath, JSON.stringify(record), 'utf8');
@@ -191,8 +194,20 @@ function writeRecord(
   }
 }
 
+function pruneFileNames(roundsDir: string): string[] {
+  try {
+    return readdirSync(roundsDir).filter(
+      (name) =>
+        name.endsWith(ROUND_FILE_SUFFIX) ||
+        name.endsWith(`${ROUND_FILE_SUFFIX}${TEMPORARY_FILE_SUFFIX}`),
+    );
+  } catch {
+    return [];
+  }
+}
+
 function pruneOlderThan(roundsDir: string, cutoffMs: number, log: Log): void {
-  for (const name of roundFileNames(roundsDir)) {
+  for (const name of pruneFileNames(roundsDir)) {
     try {
       const filePath = path.join(roundsDir, name);
       if (statSync(filePath).mtimeMs < cutoffMs) {

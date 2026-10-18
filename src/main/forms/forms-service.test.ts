@@ -295,7 +295,9 @@ describe('the soft deadline', () => {
       );
       const call = watch(pending);
 
-      await expireDeadline();
+      await vi.advanceTimersByTimeAsync(DEFAULT_DEADLINE_SECONDS * 1000 - 1);
+      expect(call.settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
 
       expect(call.settled).toBe(true);
       expect((await pending).outcome).toBe('draft');
@@ -338,6 +340,24 @@ describe('collectLastRound', () => {
 
     expect((await second).outcome).toBe('submitted');
     expect(presenter.shown).toHaveLength(1);
+  });
+
+  it('wakes two calls waiting on one round with the same answers, marking the file returned once', async () => {
+    const session = startSession();
+    const asking = session.askRound(NAMING_ARGS, null, live());
+    const collecting = session.collectLastRound(true, live());
+    const shown = presenter.latest();
+
+    presenter.submit(shown.roundId, oneAnswer({ choice: 1 }));
+    const [fromAsk, fromCollect] = await Promise.all([asking, collecting]);
+
+    expect(fromAsk.outcome).toBe('submitted');
+    expect(fromCollect.outcome).toBe('submitted');
+    expect(fromCollect.answers).toEqual(fromAsk.answers);
+    expect(newestSaved(fingerprint(parseRound(NAMING_ARGS))).returned).toBe(
+      true,
+    );
+    expect(presenter.closed).toEqual([shown.roundId]);
   });
 
   it('replays the last submitted answers', async () => {

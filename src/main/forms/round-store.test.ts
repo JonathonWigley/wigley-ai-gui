@@ -237,6 +237,32 @@ describe('RoundStore', () => {
     expect(roundFiles()).toEqual([`${recent.id}.json`]);
   });
 
+  it('retains saved rounds for at least the 90 days retro backfills', () => {
+    // retro (the marketplace's scripts/retro, ledger.STALE_DAYS) backfills 90
+    // days and reads these files, so pruning sooner would starve it.
+    expect(RETENTION_SECONDS).toBeGreaterThanOrEqual(90 * 24 * 60 * 60);
+  });
+
+  it('prunes a temp file a crash left, by the same age rule', () => {
+    nowMs = 2_000_000_000_000;
+    const store = storeIn(roundsDir);
+    store.create(MINE, 'fp', ARGS, null, null);
+    const nowSeconds = nowMs / 1000;
+    const staleSeconds = nowSeconds - RETENTION_SECONDS - 60;
+    const staleTemp = path.join(roundsDir, 'stale.json.tmp');
+    const freshTemp = path.join(roundsDir, 'fresh.json.tmp');
+    writeFileSync(staleTemp, '{', 'utf8');
+    writeFileSync(freshTemp, '{', 'utf8');
+    utimesSync(staleTemp, staleSeconds, staleSeconds);
+    utimesSync(freshTemp, nowSeconds, nowSeconds);
+
+    store.prune();
+
+    expect(readdirSync(roundsDir).filter((n) => n.endsWith('.tmp'))).toEqual([
+      'fresh.json.tmp',
+    ]);
+  });
+
   it('skips a corrupt file and a file that is not an object', () => {
     const store = storeIn(roundsDir);
     const record = store.create(MINE, 'fp', ARGS, null, null);
