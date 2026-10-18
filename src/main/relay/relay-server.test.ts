@@ -181,6 +181,8 @@ describe('startRelayServer', () => {
     await new Promise<void>((resolve) =>
       socket.write(hello.slice(0, half), () => resolve()),
     );
+    // The server has no signal for a partial read; the pause lets it read the first half alone.
+    await new Promise((resolve) => setTimeout(resolve, 20));
     socket.write(hello.slice(half));
 
     expect(JSON.parse(await nextLine())).toEqual({ ok: true });

@@ -8,8 +8,9 @@
 - **Dev quirks** — the startup reload and the unwired ACP adapter and mock agent.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
-vim, app-owned Cmd keys, a global summon shortcut, and an ACP client, built but not yet wired, for driving an agent
-process over stdio.
+vim, app-owned Cmd keys and a global summon shortcut. Its one live job: it is the only client of the `wigley-forms`
+tools, receiving agents' review rounds and showing them in its forms view for the user to answer. An ACP client, built
+but not yet wired, is for driving an agent process over stdio.
 
 ## Architecture
 
@@ -38,8 +39,7 @@ src/renderer/    renderer features; renderer.ts is its composition root
 src/mock-agent/  a separate executable the ACP adapter spawns in dev
 ```
 
-The app is the only client of the `wigley-forms` MCP tools. Each Claude Code or Codex
-session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
+Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
 wigley-ai-marketplace, whose README states the tool contract, the saved-round file format
 the `retro` skill reads, and the relay's side of the channel). A change to either contract
 lands in both repos together.

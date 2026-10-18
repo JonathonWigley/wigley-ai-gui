@@ -189,8 +189,16 @@ export function chooseTheme(
     throw new Error(`No built-in theme is named "${FALLBACK_THEME}"`);
   }
 
+  let fileNames: string[];
+  try {
+    fileNames = themeFileNames(userDir);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { theme: fallback, error: new ThemeError(userDir, reason).message };
+  }
+
   let problem: string | null = null;
-  for (const fileName of themeFileNames(userDir)) {
+  for (const fileName of fileNames) {
     const file = readUserTheme(path.join(userDir, fileName));
     if (file.kind === 'theme') {
       themes.set(file.theme.name, file.theme);

@@ -59,7 +59,12 @@ export function createElectronAlerts(window: BrowserWindow, log: Log): Alerts {
         shown.delete(notification);
         onClick();
       });
-      notification.on('close', () => shown.delete(notification));
+      // On Windows a toast that times out moves to the Action Center, where it can still be clicked.
+      notification.on('close', (event) => {
+        if (event.reason !== 'timedOut') {
+          shown.delete(notification);
+        }
+      });
       notification.on('failed', (_event, error) => {
         shown.delete(notification);
         log('alerts', `notification failed: ${error}`);

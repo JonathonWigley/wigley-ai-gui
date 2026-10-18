@@ -185,6 +185,17 @@ describe('chooseTheme', () => {
     expect(choice.error).toBeNull();
   });
 
+  it('falls back to Mocha with the error when the themes folder cannot be read', () => {
+    const notAFolder = path.join(dir, 'themes');
+    writeFileSync(notAFolder, 'a file where the folder should be');
+
+    const choice = chooseTheme('nord', [mocha], notAFolder);
+
+    expect(choice.theme.name).toBe('catppuccin-mocha');
+    expect(choice.error).toContain(notAFolder);
+    expect(choice.error).toContain('ENOTDIR');
+  });
+
   it('throws when no built-in is the Mocha fallback', () => {
     expect(() => chooseTheme('nord', [themeJson('nord')], dir)).toThrow(
       'No built-in theme is named "catppuccin-mocha"',

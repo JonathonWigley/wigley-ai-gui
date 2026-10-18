@@ -4,6 +4,7 @@
 // test packages.
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import ts from 'typescript';
 
 interface LayerRule {
   layers: string[];
@@ -73,14 +74,18 @@ const LAYERS: Record<string, LayerRule> = {
   },
 };
 
-const IMPORT_PATTERN = /(?:\bfrom|\bimport)\s*\(?\s*['"]([^'"]+)['"]/g;
-
 const TEST_PACKAGES = ['vitest'];
 
 function layerOf(file: string): string | undefined {
   return Object.keys(LAYERS)
     .filter((layer) => file === layer || file.startsWith(`${layer}/`))
     .sort((a, b) => b.length - a.length)[0];
+}
+
+// An extensionless import of a single-file layer (a composition root) names that file.
+function layerOfImport(target: string): string | undefined {
+  const asFile = `${target}.ts`;
+  return layerOf(asFile in LAYERS ? asFile : target);
 }
 
 function allowsPackage(rule: LayerRule, specifier: string): boolean {
@@ -99,9 +104,8 @@ function importViolations(file: string): string[] {
   const rule = LAYERS[layer];
   const isTestFile = file.endsWith('.test.ts');
   const violations: string[] = [];
-  for (const [, specifier] of readFileSync(file, 'utf8').matchAll(
-    IMPORT_PATTERN,
-  )) {
+  const imports = ts.preProcessFile(readFileSync(file, 'utf8'), true, true);
+  for (const { fileName: specifier } of imports.importedFiles) {
     if (!specifier.startsWith('.')) {
       const isTestPackage = isTestFile && TEST_PACKAGES.includes(specifier);
       if (!isTestPackage && !allowsPackage(rule, specifier)) {
@@ -110,7 +114,7 @@ function importViolations(file: string): string[] {
       continue;
     }
     const target = path.join(path.dirname(file), specifier);
-    const targetLayer = layerOf(target);
+    const targetLayer = layerOfImport(target);
     const isAllowed =
       targetLayer === layer ||
       (targetLayer !== undefined && rule.layers.includes(targetLayer));
