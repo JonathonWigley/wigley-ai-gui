@@ -34,13 +34,12 @@ const ASK_ROUND_DESCRIPTION =
   'with ask_round once, which tries the start again; if it comes back a ' +
   "second time, tell the user the reason in its 'summary' and ask the " +
   "round's questions in your reply. collect_last_round is never the answer " +
-  'to it. A call made while an earlier ask_round of this session is still ' +
-  'waiting waits until the user finishes the open round; if its deadline ' +
-  "passes first, it returns a 'draft' whose 'next' says the round was not " +
-  'opened: send it again with ask_round, not collect_last_round. That ' +
-  're-send waits the same way while the round that blocked it is still ' +
-  'unfinished. Any other new round closes a round left open as a draft; ' +
-  'its answers stay saved.';
+  'to it. While the user is still answering another round of this session, ' +
+  'an ask_round for a different round waits until the user submits or ' +
+  'cancels that round in the app; if its deadline passes first, it returns a ' +
+  "'draft' whose 'next' says the round was not opened: send it again with " +
+  'ask_round, not collect_last_round. A new round never closes an ' +
+  'unfinished one: the user cancels a round you abandon.';
 
 const QUESTION_CONTEXT_DESCRIPTION =
   'What the user needs to know to decide. Markdown. Open with the quick ' +

@@ -97,11 +97,10 @@ export interface SessionInfo {
 // One connected session; the app keeps at most one open round per session.
 export interface FormsSession {
   // `args` is the raw tool input; invalid input rejects with a RoundError message.
-  // A call made while another is pending opens its round only once the round
-  // the user is answering finishes; its own deadline passing first returns a
-  // draft that opens nothing. A re-send of that refused round waits the same
-  // way while the round that blocked it is unfinished; any other new round
-  // closes an open draft.
+  // A call for a round other than the one the user is answering opens its round
+  // only once that round finishes, and only after every earlier call has
+  // returned; its own deadline passing first returns a draft that opens nothing.
+  // A new round never closes an unfinished one.
   askRound(
     args: unknown,
     toolUseId: string | null,

@@ -40,8 +40,7 @@ interface OpenRound {
   latestBody: FormBody;
   // The user's first submit or cancel; later ones are ignored.
   end: RoundFinish | null;
-  // Left the window: the user finished it, a new round replaced it, or its
-  // session ended.
+  // Left the window: the user finished it or its session ended.
   closed: boolean;
   // One per call waiting on this round, woken when it ends or closes.
   waiters: Set<() => void>;
@@ -59,13 +58,6 @@ interface FinishedRound {
   handedBack: boolean;
 }
 
-// A queued round whose deadline passed while another round was still open,
-// and that round.
-interface RefusedRound {
-  fingerprint: string;
-  blocker: OpenRound;
-}
-
 // One connected session: at most one open round, and the last finished one.
 interface SessionContext {
   info: SessionInfo;
@@ -77,9 +69,6 @@ interface SessionContext {
   // Settles once every ask_round already called has returned; null when none
   // is pending.
   askTurn: Promise<void> | null;
-  // The last round refused with a not-shown draft; null once its blocker
-  // leaves the window or finishes.
-  refused: RefusedRound | null;
   // The relay disconnected; no call opens a round after this.
   ended: boolean;
 }
@@ -380,9 +369,7 @@ async function askParsedRound(
     handed.handedBack = true;
     return handedBackFinishedPayload(handed);
   }
-  closeOpenRound(session);
   session.lastFinished = null;
-  session.refused = null;
   const opened = openNewRound(
     session,
     round,
@@ -440,29 +427,10 @@ async function waitForOtherRoundToFinish(
   }
 }
 
-// True when this round was refused with a not-shown draft and the round that
-// blocked it is still open and unfinished; forgets a refusal whose blocker
-// finished.
-function refusedRoundStillBlocked(
-  session: SessionContext,
-  roundFingerprint: string,
-): boolean {
-  const refused = session.refused;
-  if (refused === null) {
-    return false;
-  }
-  const blocker = refused.blocker;
-  const blockerStillOpen = session.open === blocker && blocker.end === null;
-  if (!blockerStillOpen) {
-    session.refused = null;
-    return false;
-  }
-  return refused.fingerprint === roundFingerprint;
-}
-
-// A queued call opens its round only once the round the user is answering has
-// finished. Its own deadline bounds the whole call: passing before its round
-// opens returns a draft, leaves the open round be, and records the refusal.
+// Opens this call's round only once the earlier calls have returned and the
+// round the user is answering has finished. Its own deadline bounds the whole
+// call: passing before its round opens returns a not-shown draft and leaves the
+// open round be.
 async function askRoundWhenFree(
   session: SessionContext,
   earlier: Promise<void>,
@@ -488,9 +456,6 @@ async function askRoundWhenFree(
     const deadlinePassed =
       deadline.signal.aborted && !signal.aborted && !session.ended;
     if (deadlinePassed) {
-      const blocker = otherUnfinishedRound(session, roundFingerprint);
-      session.refused =
-        blocker === null ? null : { fingerprint: roundFingerprint, blocker };
       return roundNotShownPayload(round);
     }
     return await askParsedRound(
@@ -506,9 +471,9 @@ async function askRoundWhenFree(
   }
 }
 
-// Queues a call made while another is pending, or a re-send of a round refused
-// while the round that blocked it is still unfinished; any other call runs at
-// once, and a new round closes an open draft.
+// Runs a call at once only when no earlier call is pending and no other round
+// is unfinished; any other call waits for both, so a new round never replaces
+// a round the user has not submitted or cancelled.
 async function askRoundQueuedOrNow(
   session: SessionContext,
   earlier: Promise<void> | null,
@@ -518,11 +483,10 @@ async function askRoundQueuedOrNow(
 ): Promise<AnswersPayload> {
   const round = parseRound(args);
   const roundFingerprint = fingerprint(round);
-  const resendsRefusedRound = refusedRoundStillBlocked(
-    session,
-    roundFingerprint,
-  );
-  if (earlier === null && !resendsRefusedRound) {
+  const runsNow =
+    earlier === null &&
+    otherUnfinishedRound(session, roundFingerprint) === null;
+  if (runsNow) {
     return askParsedRound(
       session,
       round,
@@ -596,7 +560,6 @@ function startSession(info: SessionInfo, deps: FormsServiceDeps): FormsSession {
     open: null,
     lastFinished: null,
     askTurn: null,
-    refused: null,
     ended: false,
   };
   return {
@@ -605,7 +568,6 @@ function startSession(info: SessionInfo, deps: FormsServiceDeps): FormsSession {
     collectLastRound: (wait, signal) => collectLastRound(session, wait, signal),
     end: () => {
       session.ended = true;
-      session.refused = null;
       closeOpenRound(session);
     },
   };

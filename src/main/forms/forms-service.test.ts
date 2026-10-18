@@ -564,27 +564,22 @@ describe('hand-back', () => {
   });
 });
 
-describe('a new round over an open draft', () => {
-  it('closes the open draft and keeps its file', async () => {
-    const session = startSession();
+describe('a call made while another round is open', () => {
+  const PLACEMENT_FINGERPRINT = fingerprint(parseRound(PLACEMENT_ARGS));
+  const SCOPE_ARGS = {
+    heading: 'Scope decisions',
+    overview: 'Tidying modules. This round: scope.',
+    questions: [question({ title: 'Scope', question: 'What does it cover?' })],
+  };
+
+  // A naming round left open past its only call's deadline draft.
+  async function leaveOpenDraft(session: FormsSession) {
     const first = session.askRound(NAMING_ARGS, null, live());
     const naming = presenter.latest();
     await expireDeadline();
-    await first;
-
-    void session.askRound(PLACEMENT_ARGS, null, live());
-
-    expect(presenter.shown).toHaveLength(2);
-    expect(presenter.closed).toEqual([naming.roundId]);
-    expect(newestSaved(fingerprint(parseRound(NAMING_ARGS))).id).toBe(
-      naming.roundId,
-    );
-    expect(savedFile(naming.roundId).outcome).toBe('open');
-  });
-});
-
-describe('a call made while another round is open', () => {
-  const PLACEMENT_FINGERPRINT = fingerprint(parseRound(PLACEMENT_ARGS));
+    expect((await first).outcome).toBe('draft');
+    return naming;
+  }
 
   // A naming round left open past its first call's deadline draft, and a
   // placement call queued behind it 100 s after the first.
@@ -703,22 +698,69 @@ describe('a call made while another round is open', () => {
     expect(answered.answers[0].choice).toBe(2);
   });
 
-  it('lets a different round replace the open draft after a refusal', async () => {
+  it('makes a fresh call wait behind an open draft and return a not-shown draft at its deadline', async () => {
     const session = startSession();
-    const naming = await refuseBehindOpenDraft(session);
-    const scopeArgs = {
-      heading: 'Scope decisions',
-      overview: 'Tidying modules. This round: scope.',
-      questions: [
-        question({ title: 'Scope', question: 'What does it cover?' }),
-      ],
-    };
+    const naming = await leaveOpenDraft(session);
 
-    void session.askRound(scopeArgs, null, live());
+    const fresh = session.askRound(PLACEMENT_ARGS, null, live());
+    const settled = watch(fresh);
+    await vi.advanceTimersByTimeAsync(1000);
 
+    expect(settled.settled).toBe(false);
+    expect(presenter.shown).toHaveLength(1);
+    expect(presenter.closed).toEqual([]);
+    await expireDeadline();
+    const payload = await fresh;
+    expect(payload.outcome).toBe('draft');
+    expect(payload.summary).toContain('was not shown');
+    expect(presenter.shown).toHaveLength(1);
+    expect(presenter.closed).toEqual([]);
+    expect(store.newestFor(PLACEMENT_FINGERPRINT)).toBeNull();
+    expect(savedFile(naming.roundId).outcome).toBe('open');
+  });
+
+  it("opens a fresh call's round once the user submits the open draft", async () => {
+    const session = startSession();
+    const naming = await leaveOpenDraft(session);
+    const fresh = session.askRound(PLACEMENT_ARGS, null, live());
+
+    presenter.submit(naming.roundId, oneAnswer({ choice: 1 }));
+    // Collected in the submit's own tick, before the woken call runs, so the
+    // call opens its round instead of handing this one back.
+    const collected = await session.collectLastRound(true, live());
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(collected.outcome).toBe('submitted');
     expect(presenter.shown).toHaveLength(2);
-    expect(presenter.closed).toEqual([naming.roundId]);
-    expect(presenter.latest().round).toEqual(parseRound(scopeArgs));
+    expect(presenter.latest().round).toEqual(parseRound(PLACEMENT_ARGS));
+    presenter.submit(presenter.latest().roundId, oneAnswer({ choice: 2 }));
+    const answered = await fresh;
+    expect(answered.outcome).toBe('submitted');
+    expect(answered.answers[0].choice).toBe(2);
+  });
+
+  it('makes a re-send wait when two queued calls were refused behind one open draft', async () => {
+    const session = startSession();
+    const first = session.askRound(NAMING_ARGS, null, live());
+    const naming = presenter.latest();
+    const placement = session.askRound(PLACEMENT_ARGS, null, live());
+    const scope = session.askRound(SCOPE_ARGS, null, live());
+    await expireDeadline();
+    expect((await first).outcome).toBe('draft');
+    expect((await placement).summary).toContain('was not shown');
+    expect((await scope).summary).toContain('was not shown');
+
+    const resent = session.askRound(PLACEMENT_ARGS, null, live());
+    const settled = watch(resent);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(settled.settled).toBe(false);
+    expect(presenter.shown).toHaveLength(1);
+    expect(presenter.closed).toEqual([]);
+    expect(savedFile(naming.roundId).outcome).toBe('open');
+    await expireDeadline();
+    expect((await resent).summary).toContain('was not shown');
+    expect(presenter.closed).toEqual([]);
   });
 
   it('rejects and opens nothing once its session ends', async () => {

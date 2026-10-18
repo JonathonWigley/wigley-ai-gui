@@ -43,7 +43,7 @@ export interface SavedRound {
 export type FinishedSavedRound = SavedRound & { outcome: FinishedOutcome };
 
 // The saved-round folder: every draft and every finish, so a round's answers
-// outlive a deadline, a replacing round and an app restart. A disk failure is
+// outlive a deadline, the next round and an app restart. A disk failure is
 // logged and never thrown, losing the copy must not cost the live round —
 // except a draft's, which saveBody throws so the page can show it unsaved.
 export interface RoundStore {
