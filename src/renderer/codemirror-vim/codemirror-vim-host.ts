@@ -1,8 +1,9 @@
-import { basicSetup, EditorView } from 'codemirror';
+import { EditorView, minimalSetup } from 'codemirror';
 import { getCM, Vim, vim } from '@replit/codemirror-vim';
 import type { CommandId } from '../../contracts/commands';
 import type { CreateEditorHost, TextEditor } from '../../contracts/editor';
 import type { EditorKeymap, EditorMode } from '../../contracts/keymap';
+import { editorTheme } from './editor-theme';
 import { exCommandName } from './ex-command-name';
 
 type VimEditor = Parameters<typeof Vim.handleEx>[0];
@@ -90,9 +91,15 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
 
   return {
     create(parent, doc) {
+      // Answer boxes are prose: no gutters, brackets or completion; lines wrap.
       const view = new EditorView({
         doc,
-        extensions: [vim({ status: true }), basicSetup],
+        extensions: [
+          vim({ status: true }),
+          minimalSetup,
+          EditorView.lineWrapping,
+          editorTheme,
+        ],
         parent,
       });
       if (hosted.length === 0) {
