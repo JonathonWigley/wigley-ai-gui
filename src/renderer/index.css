@@ -1,23 +1,57 @@
+/* Author display rules would otherwise beat the hidden attribute. */
+[hidden] {
+  display: none !important;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
 body {
   background: var(--wg-bg-base);
   color: var(--wg-text);
   font-family: var(--wg-font-ui);
   font-size: var(--wg-font-ui-size);
-  margin: auto;
-  max-width: 50rem;
-  padding: 2rem;
+  line-height: 1.5;
+  margin: 0;
+  overflow: hidden;
+  scrollbar-color: var(--wg-surface-hover) transparent;
 }
 
 ::selection {
   background: var(--wg-selection);
 }
 
-.box {
-  border: 1px solid var(--wg-border);
-  margin-bottom: 1rem;
+h1,
+h2,
+h3,
+p {
+  margin: 0;
 }
 
-#log {
+button {
+  color: inherit;
+  font: inherit;
+}
+
+kbd {
+  background: var(--wg-surface);
+  border: 1px solid var(--wg-border);
+  border-radius: 0.25rem;
+  color: var(--wg-text);
   font-family: var(--wg-font-mono);
-  font-size: 0.85rem;
+  font-size: var(--wg-font-mono-size);
+  padding: 0 0.3em;
+}
+
+:focus-visible {
+  outline: 1px solid var(--wg-border-focus);
+  outline-offset: 2px;
 }
