@@ -2,8 +2,8 @@
 
 **Contents**
 
-- **Architecture** — build every change for extensibility with `wigley:codebase-design`; the layers, where a new
-  key, setting, feature or third-party tool goes, and the layer check.
+- **Architecture** — build every change for extensibility with `wigley:codebase-design`; the layers, the forms relay, and
+  where a new key, setting, theme, round source, feature or third-party tool goes, and the layer check.
 - **Running and testing** — Node version, the self-test the agent may run any time, and the visible run that is the user's.
 - **Dev quirks** — the startup reload and the dev-only mock agent.
 
@@ -19,19 +19,38 @@ composition root.
 
 ```
 src/contracts/   interfaces and records crossing a seam; imports nothing
-src/config/      default keymap and settings, as data      → read only by main.ts
+src/config/      default keymap and settings, and the built-in themes, as data  → read only by main
 src/shared/      implementation both processes use (CommandRegistry)
 src/main/        main process; main.ts is its composition root
-  acp/           ACP adapter behind AgentClient            → the only client-side @agentclientprotocol/sdk import
+  forms/         round logic behind FormsService: validation, re-send, deadline, saved rounds
+  mcp/           MCP adapter feeding FormsService           → the only @modelcontextprotocol import
+  relay/         the local channel the marketplace's relay.py connects to
+  acp/           ACP adapter behind AgentClient             → the only client-side @agentclientprotocol/sdk import
 src/preload/     the Bridge, exposed as window.wigley
 src/renderer/    renderer features; renderer.ts is its composition root
-  codemirror-vim/ editor adapter behind EditorHost         → the only codemirror / @replit import
+  forms/         the forms view; form-state.ts holds the answers as a pure module
+  markdown-it/   markdown adapter                           → the only markdown-it import
+  codemirror-vim/ editor adapter behind EditorHost          → the only codemirror / @replit import
 src/mock-agent/  a separate executable the ACP adapter spawns in dev
 ```
 
+The app is the only client of the `wigley-forms` MCP tools. Each Claude Code or Codex
+session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
+wigley-ai-marketplace, whose README states the tool contract, the saved-round file format
+the `retro` skill reads, and the relay's side of the channel). A change to either contract
+lands in both repos together.
+
 - **A key** is a line in `src/config/keymap.ts` naming a command id. Keys never call code directly: a feature
   registers the command, and the keymap binds keys to it, so rebinding never touches a feature and a feature never
-  knows its keys. Each process checks at startup that every command its keymap names is registered.
+  knows its keys. A page key also names the view scope it fires in. Each process checks at startup that every
+  command its keymap names is registered, and that no key is bound twice in one scope.
+- **A theme** is a JSON file of a `palette` and semantic `tokens` (a token names a palette entry or gives a hex).
+  Built-in themes live in `src/config/themes/`; the user's own live in the `themes` folder of Electron's per-user
+  data folder and override a built-in of the same name. Views read tokens as CSS variables and never name a
+  colour. A broken theme falls back to Catppuccin Mocha and shows its error.
+- **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
+  reaches the round store, the deadline or the window directly.
+- **An ambient service** — the clock, ids, the home folder — is passed in from the composition root.
 - **A setting** goes in `src/contracts/settings.ts` (its type) and `src/config/settings.ts` (its default). Main owns
   the config and serves it to the renderer over the Bridge, so a user config file later lands in `main.ts` alone.
 - **A feature** is a module that registers commands and receives what it uses as parameters; the composition root
@@ -45,6 +64,8 @@ src/mock-agent/  a separate executable the ACP adapter spawns in dev
 
 - Node is pinned in `.nvmrc`. A shell that started on another version runs commands as
   `source ~/.nvm/nvm.sh && nvm use && npm run …`.
+- `npm test` runs the Vitest suite: every module whose correctness follows from inputs and outputs — round
+  logic, saved rounds, answer state, markdown, theme loading, the keymap — is tested there, without Electron.
 - `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. It renders the window
   offscreen as an accessory app, so it never takes the user's foreground; it drives keys with `sendInputEvent`, checks
   the lines each step adds to the page's log, and exits non-zero on a failure. A key behaviour the agent adds or fixes
