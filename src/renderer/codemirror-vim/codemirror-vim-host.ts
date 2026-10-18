@@ -103,6 +103,35 @@ function focusEditor(
   }
 }
 
+// A key goes through the editor's own keydown handling, so vim runs it in
+// any mode and CodeMirror's keymap takes Enter or Backspace. A key event
+// built in script types no text, so a character neither handles in insert
+// mode is inserted here, as the browser inserts a typed one.
+function typeKey(view: EditorView, cm: VimEditor, key: string) {
+  const event = new KeyboardEvent('keydown', {
+    key,
+    bubbles: true,
+    cancelable: true,
+  });
+  const isUnhandled = view.contentDOM.dispatchEvent(event);
+  const typesText = isUnhandled && key.length === 1 && cm.state.vim.insertMode;
+  if (typesText) {
+    view.dispatch({
+      ...view.state.replaceSelection(key),
+      userEvent: 'input.type',
+      scrollIntoView: true,
+    });
+  }
+}
+
+function hostedViewOf(element: Element, hosted: HostedEditor[]): EditorView {
+  const match = hosted.find(({ view }) => view.dom.contains(element));
+  if (!match) {
+    throw new Error('Keys typed into an element outside every hosted editor');
+  }
+  return match.view;
+}
+
 // Answer boxes are prose: no gutters, brackets or completion; lines wrap.
 function editorExtensions(events: EditorEvents) {
   return [
@@ -170,5 +199,12 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
     },
     contains: (element) =>
       hosted.some(({ view }) => view.dom.contains(element)),
+    typeInto(element, keys) {
+      const view = hostedViewOf(element, hosted);
+      const cm = vimEditorOf(view);
+      for (const key of keys) {
+        typeKey(view, cm, key);
+      }
+    },
   };
 };

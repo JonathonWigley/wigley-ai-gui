@@ -18,17 +18,20 @@ export interface PageKeyTarget {
   scope(): ViewScope;
   editorHasFocus(): boolean;
   run(bind: PageBind): void;
+  // Types keys into the editor that has focus.
+  typeIntoEditor(keys: string[]): void;
 }
 
 // Feeds `key`, then each key a bind it ran left to replay, as vim feeds
-// typeahead: each key reaches the scope and focus the commands before it left.
-// The keys still to feed when an editor takes focus are returned for it.
+// typeahead: each key reaches the scope and focus the commands before it left,
+// so the keys still to feed when an editor takes focus are typed into it.
+// Returns whether the page consumed `key`.
 export function feedPageKey(
   matcher: SequenceMatcher,
   key: string,
   now: number,
   target: PageKeyTarget,
-): { isConsumed: boolean; forEditor: string[] } {
+): boolean {
   const queue = [key];
   let isConsumed = false;
   while (queue.length > 0) {
@@ -42,10 +45,11 @@ export function feedPageKey(
     const isLeftForEditor = queue.length > 0 && target.editorHasFocus();
     if (isLeftForEditor) {
       matcher.reset();
-      return { isConsumed, forEditor: queue };
+      target.typeIntoEditor(queue);
+      return isConsumed;
     }
   }
-  return { isConsumed, forEditor: [] };
+  return isConsumed;
 }
 
 // Keys for when no editor has focus; a bind fires only in its view's scope.
@@ -66,28 +70,22 @@ export function installPageKeys(
     if (!isPageKey(event)) {
       return;
     }
-    const { isConsumed, forEditor } = feedPageKey(
-      matcher,
-      event.key,
-      event.timeStamp,
-      {
-        scope: currentScope,
-        editorHasFocus: () =>
-          document.activeElement !== null &&
-          editors.contains(document.activeElement),
-        run: (bind) => {
-          log('page', `${bind.keys.join('')} ran ${bind.command}`);
-          commands.run(bind.command, {});
-        },
+    const isConsumed = feedPageKey(matcher, event.key, event.timeStamp, {
+      scope: currentScope,
+      editorHasFocus: () =>
+        document.activeElement !== null &&
+        editors.contains(document.activeElement),
+      run: (bind) => {
+        log('page', `${bind.keys.join('')} ran ${bind.command}`);
+        commands.run(bind.command, {});
       },
-    );
-    if (!isConsumed) {
-      return;
-    }
-    event.preventDefault();
-    // EditorHost has no way to type keys into an editor yet.
-    if (forEditor.length > 0) {
-      log('page', `dropped ${forEditor.join('')}: an editor took focus`);
+      typeIntoEditor: (keys) => {
+        log('page', `typed ${keys.join('')} into the editor`);
+        editors.typeInto(document.activeElement!, keys);
+      },
+    });
+    if (isConsumed) {
+      event.preventDefault();
     }
   });
 }

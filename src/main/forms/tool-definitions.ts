@@ -34,7 +34,10 @@ const ASK_ROUND_DESCRIPTION =
   'with ask_round once, which tries the start again; if it comes back a ' +
   "second time, tell the user the reason in its 'summary' and ask the " +
   "round's questions in your reply. collect_last_round is never the answer " +
-  'to it.';
+  'to it. A call made while another round of this session is still open ' +
+  'waits until the user finishes that round; if its deadline passes first, ' +
+  "it returns a 'draft' whose 'next' says the round was not opened: send it " +
+  'again with ask_round, not collect_last_round.';
 
 const QUESTION_CONTEXT_DESCRIPTION =
   'What the user needs to know to decide. Markdown. Open with the quick ' +

@@ -89,6 +89,12 @@ describe('FORMS_TOOLS', () => {
     );
   });
 
+  it('sends a round queued past its deadline back to ask_round', () => {
+    expect(descriptionOf('ask_round')).toContain(
+      'the round was not opened: send it again with ask_round, not collect_last_round.',
+    );
+  });
+
   it('gives collect_last_round one optional wait flag defaulting to true', () => {
     expect(collectLastRound.required).toBeUndefined();
     expect(collectLastRound.properties.wait).toMatchObject({

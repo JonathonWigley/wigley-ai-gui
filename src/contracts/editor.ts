@@ -36,6 +36,10 @@ export interface EditorHost {
   create(parent: HTMLElement, doc: string, events: EditorEvents): TextEditor;
   // Whether the element sits inside an editor this host created.
   contains(element: Element): boolean;
+  // Delivers `keys`, named as KeyboardEvent.key names them, to the editor
+  // holding `element` as typed keys: each runs in the vim mode the keys before
+  // it left, so in insert mode a character types itself.
+  typeInto(element: Element, keys: string[]): void;
 }
 
 // Every editor the host creates follows the keymap; a bound key runs its

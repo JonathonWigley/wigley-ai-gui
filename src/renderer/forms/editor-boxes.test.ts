@@ -43,6 +43,7 @@ function fakeHost() {
       return editor;
     },
     contains: () => false,
+    typeInto: () => {},
   };
   return { host, created };
 }

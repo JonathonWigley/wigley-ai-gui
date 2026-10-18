@@ -29,7 +29,8 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // Starting on the notice: Space then j replays j to question 1, pick 2; a
 // types "ab" at once (INSERT), jk then Space j to its why box, A appends a
 // long word, Esc out; a again types "c" after "ab"; j to question 2 and mark
-// it not applicable; g t switches rounds; review, ? opens and closes help, C
+// it not applicable; o types "note" into the note box at once (INSERT), Esc
+// out; g t switches rounds; review, ? opens and closes help, C
 // opens and n dismisses the cancel prompt, Enter jumps back to the question,
 // review again and Space Enter submits.
 const STEPS: Step[] = [
@@ -49,6 +50,10 @@ const STEPS: Step[] = [
   { keys: ['a'], expect: '[forms] focused what on question 1' },
   { keys: ['c', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
   { keys: ['j', 'x'], expect: '[forms] not applicable on question 2' },
+  {
+    keys: ['o', 'n', 'o', 't', 'e', 'j', 'k', 'Escape'],
+    expect: '[forms] left the box',
+  },
   { keys: ['g', 't'], expect: '[page] gt ran forms.nextRound' },
   { keys: [' ', ' '], expect: '[forms] review opened', checksFit: true },
   { keys: ['?'], expect: '[page] ? ran help.toggle', checksFit: true },
@@ -117,6 +122,8 @@ function payloadProblems(payload: AnswersPayload): string[] {
       second?.status === 'not_applicable',
       `question 2 status ${second?.status}`,
     ],
+    // "note" proves o entered INSERT at once, keys typed straight after it.
+    [payload.note === 'note', `note ${JSON.stringify(payload.note)}`],
     [payload.notices.length === 1, `${payload.notices.length} notices`],
   ];
   return checks.filter(([passed]) => !passed).map(([, problem]) => problem);
