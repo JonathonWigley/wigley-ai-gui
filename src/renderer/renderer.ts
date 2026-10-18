@@ -114,6 +114,8 @@ async function start() {
   if (theme.error !== null) {
     view.toast(`Theme error: ${theme.error}`, 'error');
   }
+  // The self-test opens its round only once the page listens.
+  document.body.dataset.ready = 'true';
 }
 
 void start();
