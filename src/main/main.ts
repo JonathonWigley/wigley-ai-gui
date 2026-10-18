@@ -2,25 +2,47 @@
 // and config, and wires them to each other.
 import {
   app,
-  BrowserWindow,
+  type BrowserWindow,
   globalShortcut,
   ipcMain,
   type WebContents,
 } from 'electron';
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { defaultKeymap } from '../config/keymap';
 import { defaultSettings } from '../config/settings';
+import { builtInThemes } from '../config/themes';
+import type { Alerts } from '../contracts/alerts';
+import type { Clock, RandomHex } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
+import type { FormsService } from '../contracts/forms';
 import type { Log } from '../contracts/log';
+import { RELAY_PROTOCOL } from '../contracts/relay';
 import type { AppConfig } from '../contracts/settings';
 import { CommandRegistry } from '../shared/command-registry';
+import { createElectronAlerts } from './alerts/electron-alerts';
+import { silentAlerts } from './alerts/silent-alerts';
+import { createFormsService } from './forms/forms-service';
+import { createRoundStore } from './forms/round-store';
+import { FORMS_TOOLS } from './forms/tool-definitions';
 import {
   installWindowKeybindings,
   type MainCommands,
   registerGlobalShortcuts,
 } from './keybindings';
-import { registerProofCommands } from './proof-commands';
+import { serveMcp } from './mcp/mcp-server';
+import {
+  channelPath,
+  launchCommand,
+  writeEndpointFiles,
+} from './relay/endpoint';
+import { startRelayServer } from './relay/relay-server';
 import { startSelfTest } from './selftest';
+import { chooseTheme } from './themes/theme-loader';
+import { createWindowPresenter } from './window-presenter';
 import { createMainWindow, registerWindowCommands } from './window';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -32,7 +54,27 @@ if (started) {
 // user's foreground.
 const isSelfTest = Boolean(process.env.PROOF_SELFTEST);
 
-const config: AppConfig = { settings: defaultSettings, keymap: defaultKeymap };
+const config: AppConfig = {
+  settings: defaultSettings,
+  keymap: defaultKeymap,
+  theme: chooseTheme(
+    defaultSettings.theme,
+    builtInThemes,
+    path.join(app.getPath('userData'), 'themes'),
+  ),
+};
+
+const DEFAULT_DEADLINE_SECONDS = 240;
+const clock: Clock = { now: () => Date.now() };
+const randomHex: RandomHex = () => randomBytes(4).toString('hex');
+const agentsDir = path.join(os.homedir(), '.agents');
+// The self-test saves its rounds in a fresh temp folder, never the user's.
+const roundsDir = isSelfTest
+  ? mkdtempSync(path.join(os.tmpdir(), 'wigley-forms-selftest-'))
+  : path.join(agentsDir, 'wigley-forms', 'rounds');
+
+let mainWindow: BrowserWindow | null = null;
+let isQuitting = false;
 
 function pageLog(page: WebContents): Log {
   return (source, message) => page.send(BRIDGE_CHANNELS.log, source, message);
@@ -40,50 +82,110 @@ function pageLog(page: WebContents): Log {
 
 ipcMain.handle(BRIDGE_CHANNELS.config, () => config);
 
-const createWindow = () => {
-  const window = createMainWindow(config.settings.window, isSelfTest);
+function createForms(
+  window: BrowserWindow,
+  alerts: Alerts,
+  log: Log,
+): FormsService {
+  const store = createRoundStore({ roundsDir, clock, randomHex, log });
+  store.prune();
+  return createFormsService({
+    presenter: createWindowPresenter(window, alerts, log),
+    store,
+    defaultDeadlineSeconds: DEFAULT_DEADLINE_SECONDS,
+  });
+}
+
+// Opens the channel relay.py connects to, and tells relays where it is and
+// how to start the app.
+function openRelayChannel(forms: FormsService, log: Log) {
+  const channel = channelPath(
+    process.platform,
+    os.homedir(),
+    os.userInfo().username,
+  );
+  const relay = startRelayServer({
+    channel,
+    forms,
+    serve: (streams, session) => serveMcp(streams, session, FORMS_TOOLS),
+    log,
+  });
+  writeEndpointFiles(
+    path.join(agentsDir, 'wigley-ai-gui'),
+    {
+      protocol: RELAY_PROTOCOL,
+      channel,
+      launch: launchCommand(process.env, process.execPath, process.cwd()),
+    },
+    FORMS_TOOLS,
+  );
+  app.on('will-quit', () => void relay.close());
+}
+
+function createWindow() {
+  const window = createMainWindow(
+    config.settings.window,
+    config.theme.theme.tokens['bg.base'],
+    isSelfTest,
+  );
+  mainWindow = window;
   const log = pageLog(window.webContents);
 
   const commands: MainCommands = new CommandRegistry<string>();
-  registerProofCommands(commands, log);
   registerWindowCommands(commands, window, log);
   installWindowKeybindings(window, config.keymap, commands);
-
-  if (isSelfTest) {
-    startSelfTest(window);
-  } else {
-    window.webContents.once('did-finish-load', () =>
-      registerGlobalShortcuts(config.keymap.global, commands, log),
-    );
-  }
   window.on('closed', () => {
     globalShortcut.unregisterAll();
   });
-};
 
-if (isSelfTest && process.platform === 'darwin') {
-  app.setActivationPolicy('accessory');
-}
-
-app.whenReady().then(() => {
-  createWindow();
-
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+  const alerts = isSelfTest ? silentAlerts : createElectronAlerts(window, log);
+  const forms = createForms(window, alerts, log);
+  if (isSelfTest) {
+    startSelfTest(window, forms);
+    return;
+  }
+  openRelayChannel(forms, log);
+  window.webContents.once('did-finish-load', () =>
+    registerGlobalShortcuts(config.keymap.global, commands, log),
+  );
+  // The window holds every open round, so on macOS closing it hides it
+  // until the app quits.
+  window.on('close', (event) => {
+    if (process.platform === 'darwin' && !isQuitting) {
+      event.preventDefault();
+      window.hide();
     }
   });
-});
+}
 
-app.on('will-quit', () => globalShortcut.unregisterAll());
-
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
+function startApp() {
+  if (process.platform === 'win32') {
+    // Windows shows a toast only for an app with an AppUserModelID.
+    app.setAppUserModelId(process.execPath);
   }
-});
+  if (isSelfTest && process.platform === 'darwin') {
+    app.setActivationPolicy('accessory');
+  }
+  app.on('second-instance', () => mainWindow?.show());
+  app.on('before-quit', () => {
+    isQuitting = true;
+  });
+  app.whenReady().then(() => {
+    createWindow();
+    app.on('activate', () => mainWindow?.show());
+  });
+  app.on('will-quit', () => globalShortcut.unregisterAll());
+  // Quit when the window closes, except on macOS, where closing hides it.
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
+}
+
+// The self-test runs beside the user's own app, so it takes no lock.
+if (isSelfTest || app.requestSingleInstanceLock()) {
+  startApp();
+} else {
+  app.quit();
+}

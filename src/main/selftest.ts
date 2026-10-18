@@ -1,4 +1,5 @@
 import { app, type BrowserWindow } from 'electron';
+import type { FormsService } from '../contracts/forms';
 
 // Drives keys into the page through Electron's input pipeline and checks the
 // lines the page logs. Run with `npm run selftest`; exits non-zero on failure.
@@ -21,11 +22,6 @@ const STEPS: Step[] = [
   { keys: [' ', 'k'], expect: '[box] focused box 1' },
   { keys: [' ', 'q'], expect: '[box] left the box for the page' },
   { keys: ['i'], expect: '[page] i ran box.focusFirst' },
-  {
-    keys: ['Tab'],
-    modifiers: ['control'],
-    expect: '[input] Control+Tab caught before the page',
-  },
 ];
 
 function press(
@@ -114,6 +110,6 @@ async function runAllSteps(window: BrowserWindow) {
   app.exit(failures === 0 ? 0 : 1);
 }
 
-export function startSelfTest(window: BrowserWindow) {
+export function startSelfTest(window: BrowserWindow, _forms: FormsService) {
   window.webContents.on('did-finish-load', () => void runAllSteps(window));
 }

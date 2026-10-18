@@ -1,4 +1,5 @@
 import type { Keymap } from './keymap';
+import type { ThemeChoice } from './theme';
 
 export interface Settings {
   window: { width: number; height: number };
@@ -14,4 +15,5 @@ export interface Settings {
 export interface AppConfig {
   settings: Settings;
   keymap: Keymap;
+  theme: ThemeChoice;
 }

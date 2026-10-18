@@ -1,12 +1,4 @@
-import type { AcceleratorBind, Keymap } from '../contracts/keymap';
-
-// Chords a browser tab never hands to the page; the app menu claims them.
-const claimedChords: AcceleratorBind[] = ['W', 'T', 'N', 'L', '1'].map(
-  (key) => ({
-    accelerator: `CommandOrControl+${key}`,
-    command: 'proof.logClaim',
-  }),
-);
+import type { Keymap } from '../contracts/keymap';
 
 export const defaultKeymap: Keymap = {
   editor: {
@@ -19,7 +11,7 @@ export const defaultKeymap: Keymap = {
     ],
   },
   page: [{ keys: ['i'], scope: 'forms', command: 'box.focusFirst' }],
-  app: claimedChords,
-  intercept: [{ key: 'Tab', control: true, command: 'proof.logIntercept' }],
+  app: [],
+  intercept: [],
   global: [{ accelerator: 'Control+Alt+Command+W', command: 'window.summon' }],
 };

@@ -4,14 +4,17 @@ import type { Log } from '../contracts/log';
 import type { Settings } from '../contracts/settings';
 import type { MainCommands } from './keybindings';
 
-// `offscreen` renders without showing the window or taking focus.
+// `offscreen` renders without showing the window or taking focus;
+// `backgroundColor` shows before the page paints.
 export function createMainWindow(
   settings: Settings['window'],
+  backgroundColor: string,
   offscreen: boolean,
 ): BrowserWindow {
   const window = new BrowserWindow({
     width: settings.width,
     height: settings.height,
+    backgroundColor,
     show: !offscreen,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
