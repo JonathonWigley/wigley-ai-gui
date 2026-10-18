@@ -21,9 +21,19 @@ export interface EditorKeymap {
   binds: EditorBind[];
 }
 
-// A key pressed while no editor has focus; `key` is a KeyboardEvent.key value.
+// The view a page key fires in; `any` fires in every view.
+export type ViewScope =
+  | 'forms'
+  | 'review'
+  | 'confirm'
+  | 'help'
+  | 'idle'
+  | 'any';
+
+// Keys pressed in order while no editor has focus; each is a KeyboardEvent.key value.
 export interface PageBind {
-  key: string;
+  keys: string[];
+  scope: ViewScope;
   command: CommandId;
 }
 

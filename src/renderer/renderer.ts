@@ -15,7 +15,7 @@ async function start() {
   const bridge = window.wigley;
   const log = createLogView(document.getElementById('log') as HTMLOListElement);
   bridge.onLog(log);
-  const { keymap } = await bridge.config();
+  const { keymap, settings } = await bridge.config();
 
   const commands: RendererCommands =
     new CommandRegistry<RendererCommandContext>();
@@ -30,7 +30,14 @@ async function start() {
   commands.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
   );
-  installPageKeys(keymap.page, editors, commands, log);
+  installPageKeys(
+    keymap.page,
+    settings.keySequenceTimeoutMs,
+    () => 'forms',
+    editors,
+    commands,
+    log,
+  );
   boxes[0].focus();
 }
 

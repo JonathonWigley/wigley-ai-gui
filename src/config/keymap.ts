@@ -18,7 +18,7 @@ export const defaultKeymap: Keymap = {
       { keys: '<Leader>q', command: 'box.leave' },
     ],
   },
-  page: [{ key: 'i', command: 'box.focusFirst' }],
+  page: [{ keys: ['i'], scope: 'forms', command: 'box.focusFirst' }],
   app: claimedChords,
   intercept: [{ key: 'Tab', control: true, command: 'proof.logIntercept' }],
   global: [{ accelerator: 'Control+Alt+Command+W', command: 'window.summon' }],

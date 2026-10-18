@@ -1,22 +1,44 @@
 import type { EditorHost } from '../contracts/editor';
-import type { PageBind } from '../contracts/keymap';
+import type { PageBind, ViewScope } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
+import { createSequenceMatcher } from './key-sequences';
 import type { RendererCommands } from './renderer-commands';
 
-// Keys for when no editor has focus.
+const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
+
+// Chords holding Control, Alt or Meta belong to the app and intercept keymaps.
+function isPageKey(event: KeyboardEvent): boolean {
+  const isModifierAlone = MODIFIER_KEYS.has(event.key);
+  const isChord = event.ctrlKey || event.altKey || event.metaKey;
+  return !isModifierAlone && !isChord;
+}
+
+// Keys for when no editor has focus; a bind fires only in its view's scope.
 export function installPageKeys(
   binds: PageBind[],
+  timeoutMs: number,
+  currentScope: () => ViewScope,
   editors: EditorHost,
   commands: RendererCommands,
   log: Log,
 ) {
+  const matcher = createSequenceMatcher(binds, timeoutMs);
   document.addEventListener('keydown', (event) => {
-    const bind = binds.find((candidate) => candidate.key === event.key);
-    if (!bind || editors.contains(event.target as Element)) {
+    if (editors.contains(event.target as Element)) {
+      matcher.reset();
+      return;
+    }
+    if (!isPageKey(event)) {
+      return;
+    }
+    const result = matcher.feed(event.key, currentScope(), event.timeStamp);
+    if (result.kind === 'none') {
       return;
     }
     event.preventDefault();
-    log('page', `${bind.key} ran ${bind.command}`);
-    commands.run(bind.command, {});
+    if (result.kind === 'run') {
+      log('page', `${event.key} ran ${result.command}`);
+      commands.run(result.command, {});
+    }
   });
 }
