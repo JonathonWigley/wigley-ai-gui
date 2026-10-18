@@ -116,8 +116,13 @@
   width: 100%;
 }
 
-.rail-item:hover {
+.rail-item:hover:not(:disabled) {
   background: var(--wg-surface-hover);
+}
+
+.rail-item:disabled {
+  color: inherit;
+  cursor: default;
 }
 
 .rail-entry.is-focused .rail-item {

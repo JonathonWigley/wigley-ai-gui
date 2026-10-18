@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandId } from '../../contracts/commands';
+import type { FocusOptions } from '../../contracts/editor';
 import type { RoundEnd } from '../../contracts/forms';
 import { CommandRegistry } from '../../shared/command-registry';
 import type {
@@ -63,6 +64,7 @@ function setup() {
     ]),
   );
   const focused: BoxRef[] = [];
+  const focusOptions: (FocusOptions | undefined)[] = [];
   let active: BoxRef | null = null;
   let leaves = 0;
   const finished: { roundId: string; end: RoundEnd }[] = [];
@@ -73,8 +75,9 @@ function setup() {
   registerFormsCommands(commands, {
     store,
     boxes: {
-      focus: (box) => {
+      focus: (box, options) => {
         focused.push(box);
+        focusOptions.push(options);
         active = box;
       },
       leave: () => {
@@ -102,6 +105,7 @@ function setup() {
     run,
     round,
     focused,
+    focusOptions,
     finished,
     toasts,
     logs,
@@ -188,6 +192,30 @@ describe('registerFormsCommands', () => {
     expect(focused).toEqual([
       { roundId: 'r1', target: { field: 'comment', notice: 1 } },
     ]);
+  });
+
+  it('starts the answer and note boxes typing at the end, as vim A', () => {
+    const { run, focusOptions } = setup();
+
+    run('forms.editWhat');
+    run('forms.editNote');
+
+    expect(focusOptions).toEqual([
+      { insertAtEnd: true },
+      { insertAtEnd: true },
+    ]);
+  });
+
+  it('focuses the why box in the mode it was left in', () => {
+    const { run, focused, focusOptions } = setup();
+    run('forms.nextItem');
+
+    run('forms.editWhy');
+
+    expect(focused).toEqual([
+      { roundId: 'r1', target: { field: 'why', question: 1 } },
+    ]);
+    expect(focusOptions).toEqual([undefined]);
   });
 
   it('focuses no why box on a notice', () => {

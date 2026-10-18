@@ -4,6 +4,7 @@ import type { CommandId } from '../../contracts/commands';
 import type {
   CreateEditorHost,
   EditorEvents,
+  FocusOptions,
   TextEditor,
 } from '../../contracts/editor';
 import type { EditorKeymap, EditorMode } from '../../contracts/keymap';
@@ -79,6 +80,29 @@ function defineExCommands(
   }
 }
 
+// Vim's `GA` from any mode: leaves visual mode, puts the cursor after the
+// last character, and enters insert mode there. `:startinsert!` is vim's `A`.
+function insertAtEnd(view: EditorView, cm: VimEditor) {
+  if (cm.state.vim.visualMode) {
+    Vim.exitVisualMode(cm);
+  }
+  view.dispatch({ selection: { anchor: view.state.doc.length } });
+  if (!cm.state.vim.insertMode) {
+    Vim.handleEx(cm, 'startinsert!');
+  }
+}
+
+function focusEditor(
+  view: EditorView,
+  cm: VimEditor,
+  options: FocusOptions | undefined,
+) {
+  view.focus();
+  if (options?.insertAtEnd) {
+    insertAtEnd(view, cm);
+  }
+}
+
 // Answer boxes are prose: no gutters, brackets or completion; lines wrap.
 function editorExtensions(events: EditorEvents) {
   return [
@@ -119,14 +143,17 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
         }
         isKeymapApplied = true;
       }
-      cm.on('vim-mode-change', (change: { mode: string }) =>
-        events.modeChanged(change.mode),
+      cm.on('vim-mode-change', (change: { mode: string; subMode?: string }) =>
+        events.modeChanged({
+          mode: change.mode,
+          subMode: change.subMode ?? '',
+        }),
       );
       const entry: HostedEditor = {
         view,
         editor: {
           text: () => view.state.doc.toString(),
-          focus: () => view.focus(),
+          focus: (options) => focusEditor(view, cm, options),
           blur: () => view.contentDOM.blur(),
           destroy: () => {
             const index = hosted.indexOf(entry);

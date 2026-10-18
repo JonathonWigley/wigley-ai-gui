@@ -6,7 +6,8 @@ import type { Timers } from './timers';
 
 export interface AutosaveDeps {
   store: FormsStore;
-  save(roundId: string, body: FormBody): void;
+  // Resolves once main has written the draft; rejects with main's error.
+  save(roundId: string, body: FormBody): Promise<void>;
   delayMs: number;
   timers: Timers;
   log: Log;
@@ -18,8 +19,9 @@ interface PendingSave {
   handle: number | null;
 }
 
-// Saves a round's answers once its edits pause for `delayMs`. `save` hands the
-// body to main and returns, so a save has finished when it returns.
+// Saves a round's answers once its edits pause for `delayMs`. A save is in
+// flight until `save` settles; a failed one leaves the round unsaved with its
+// message, and the next edit schedules a save again.
 export function startAutosave(deps: AutosaveDeps): void {
   const pending = new Map<string, PendingSave>();
   deps.store.subscribe(() => {
@@ -42,7 +44,7 @@ export function startAutosave(deps: AutosaveDeps): void {
       }
       const { roundId } = round;
       const handle = deps.timers.set(
-        () => saveRound(deps, pending, roundId),
+        () => void saveRound(deps, pending, roundId),
         deps.delayMs,
       );
       pending.set(roundId, { revision: round.revision, handle });
@@ -50,7 +52,7 @@ export function startAutosave(deps: AutosaveDeps): void {
   });
 }
 
-function saveRound(
+async function saveRound(
   deps: AutosaveDeps,
   pending: Map<string, PendingSave>,
   roundId: string,
@@ -64,15 +66,25 @@ function saveRound(
   }
   const { revision } = round;
   deps.store.dispatch({ type: 'saveStarted', roundId, revision });
-  let ok = true;
   try {
-    deps.save(roundId, buildBody(round));
+    await deps.save(roundId, buildBody(round));
   } catch (error) {
-    ok = false;
-    pending.set(roundId, { revision, handle: null });
-    deps.log('forms', `draft not saved for ${roundId}: ${messageOf(error)}`);
+    const message = messageOf(error);
+    // An edit made during the save has its own save scheduled already.
+    if (!pending.has(roundId)) {
+      pending.set(roundId, { revision, handle: null });
+    }
+    deps.log('forms', `draft not saved for ${roundId}: ${message}`);
+    deps.store.dispatch({
+      type: 'saveFinished',
+      roundId,
+      revision,
+      ok: false,
+      error: message,
+    });
+    return;
   }
-  deps.store.dispatch({ type: 'saveFinished', roundId, revision, ok });
+  deps.store.dispatch({ type: 'saveFinished', roundId, revision, ok: true });
 }
 
 function cancel(timers: Timers, entry: PendingSave) {

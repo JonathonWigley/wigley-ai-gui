@@ -67,7 +67,7 @@ export function mountFormsView(deps: FormsViewDeps): MountedFormsView {
       roundView.element.hidden = roundId !== shown?.roundId;
     }
     if (shown !== null) {
-      roundViews.get(shown.roundId)?.update(shown, view);
+      roundViews.get(shown.roundId)?.update(shown, view, state.view === 'help');
     }
     idle.hidden = view !== 'idle';
     help.hidden = state.view !== 'help';
@@ -183,7 +183,8 @@ function buildStatusLine(deps: FormsViewDeps): {
       mode.textContent = modeLabel(deps.boxes.activeMode());
       const round = activeRound(state);
       const roundSave = round === null ? null : saveState(round);
-      save.textContent = roundSave === null ? '' : saveLabel(roundSave);
+      save.textContent =
+        round === null ? '' : saveLabel(saveState(round), round.saveError);
       save.dataset.state = roundSave ?? '';
       const isInBox = deps.boxes.active() !== null;
       const hints = isInBox

@@ -8,7 +8,7 @@ import {
   type WebContents,
 } from 'electron';
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
@@ -68,7 +68,8 @@ const DEFAULT_DEADLINE_SECONDS = 240;
 const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const agentsDir = path.join(os.homedir(), '.agents');
-// The self-test saves its rounds in a fresh temp folder, never the user's.
+// The self-test saves its rounds in a fresh temp folder, never the user's,
+// and deletes it before it exits.
 const roundsDir = isSelfTest
   ? mkdtempSync(path.join(os.tmpdir(), 'wigley-forms-selftest-'))
   : path.join(agentsDir, 'wigley-forms', 'rounds');
@@ -141,7 +142,9 @@ function createWindow() {
   const alerts = isSelfTest ? silentAlerts : createElectronAlerts(window, log);
   const forms = createForms(window, alerts, log);
   if (isSelfTest) {
-    startSelfTest(window, forms);
+    startSelfTest(window, forms, () =>
+      rmSync(roundsDir, { recursive: true, force: true }),
+    );
     return;
   }
   openRelayChannel(forms, log);
@@ -166,7 +169,9 @@ function startApp() {
   if (isSelfTest && process.platform === 'darwin') {
     app.setActivationPolicy('accessory');
   }
-  app.on('second-instance', () => mainWindow?.show());
+  // A second start (a relay starting the app) shows the window without
+  // taking the user's focus.
+  app.on('second-instance', () => mainWindow?.showInactive());
   app.on('before-quit', () => {
     isQuitting = true;
   });

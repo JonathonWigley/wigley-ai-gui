@@ -20,21 +20,28 @@ interface Step {
   expect: string;
 }
 
-// Starting on the notice: j to question 1, pick 2, type "ab" in its answer
-// box, Space j to its why box, Esc out, j to question 2 and mark it not
-// applicable, then review and submit.
+// Starting on the notice: Space then j replays j to question 1, pick 2; a
+// types "ab" at once (INSERT), jk then Space j to its why box, Esc out; a
+// again types "c" after "ab"; j to question 2 and mark it not applicable;
+// g t switches rounds; review, Enter jumps back to the question, review again
+// and Space Enter submits.
 const STEPS: Step[] = [
-  { keys: ['j'], expect: '[page] j ran forms.nextItem' },
+  { keys: [' ', 'j'], expect: '[page] j ran forms.nextItem' },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   { keys: ['a'], expect: '[forms] focused what on question 1' },
   {
-    keys: ['i', 'a', 'b', 'j', 'k', ' ', 'j'],
+    keys: ['a', 'b', 'j', 'k', ' ', 'j'],
     expect: '[forms] focused why on question 1',
   },
   { keys: ['Escape'], expect: '[forms] left the box' },
+  { keys: ['a'], expect: '[forms] focused what on question 1' },
+  { keys: ['c', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
   { keys: ['j', 'x'], expect: '[forms] not applicable on question 2' },
+  { keys: ['g', 't'], expect: '[page] t ran forms.nextRound' },
   { keys: [' ', ' '], expect: '[forms] review opened' },
-  { keys: ['Enter'], expect: '[forms] submitted' },
+  { keys: ['Enter'], expect: '[page] Enter ran forms.reviewJump' },
+  { keys: [' ', ' '], expect: '[forms] review opened' },
+  { keys: [' ', 'Enter'], expect: '[forms] submitted' },
 ];
 
 // Each run's fixture differs in one context line, so a later run never opens
@@ -78,7 +85,8 @@ function payloadProblems(payload: AnswersPayload): string[] {
     [payload.outcome === 'submitted', `outcome ${payload.outcome}`],
     [first?.status === 'answered', `question 1 status ${first?.status}`],
     [first?.choice === 2, `question 1 choice ${first?.choice}`],
-    [first?.what === 'ab', `question 1 what ${JSON.stringify(first?.what)}`],
+    // "abc" proves each a entered INSERT with the cursor at the end.
+    [first?.what === 'abc', `question 1 what ${JSON.stringify(first?.what)}`],
     [
       second?.status === 'not_applicable',
       `question 2 status ${second?.status}`,
@@ -162,7 +170,16 @@ async function runStep(
   return passed;
 }
 
-async function runAllSteps(window: BrowserWindow, forms: FormsService) {
+// `cleanUp` runs before every exit, since app.exit skips quit handlers.
+async function runAllSteps(
+  window: BrowserWindow,
+  forms: FormsService,
+  cleanUp: () => void,
+) {
+  const exit = (code: number) => {
+    cleanUp();
+    app.exit(code);
+  };
   const run = ++latestRun;
   const isCurrent = () => run === latestRun;
   const isReadyForKeys = async () =>
@@ -173,7 +190,7 @@ async function runAllSteps(window: BrowserWindow, forms: FormsService) {
   }
   if (!isReady) {
     report(false, 'page ready for keys');
-    app.exit(1);
+    exit(1);
     return;
   }
   window.webContents.focus();
@@ -218,10 +235,16 @@ async function runAllSteps(window: BrowserWindow, forms: FormsService) {
   console.log(
     `[selftest] ${failures === 0 ? 'all passed' : `${failures} failed`}`,
   );
-  app.exit(failures === 0 ? 0 : 1);
+  exit(failures === 0 ? 0 : 1);
 }
 
-export function startSelfTest(window: BrowserWindow, forms: FormsService) {
+// `cleanUp` deletes what the self-test made outside the repo; it runs before
+// the self-test exits.
+export function startSelfTest(
+  window: BrowserWindow,
+  forms: FormsService,
+  cleanUp: () => void,
+) {
   window.webContents.on('did-navigate', () => {
     // A run begun on the previous page stands down before its load finishes.
     latestRun++;
@@ -232,6 +255,6 @@ export function startSelfTest(window: BrowserWindow, forms: FormsService) {
   });
   window.webContents.on(
     'did-finish-load',
-    () => void runAllSteps(window, forms),
+    () => void runAllSteps(window, forms, cleanUp),
   );
 }

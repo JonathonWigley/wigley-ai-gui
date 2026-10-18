@@ -1,10 +1,17 @@
 import type { CommandId } from '../contracts/commands';
 import type { PageBind, ViewScope } from '../contracts/keymap';
 
-export type SequenceResult =
+type MatchResult =
   | { kind: 'run'; command: CommandId }
   | { kind: 'pending' }
   | { kind: 'none' };
+
+// What one key did: the commands it ran, in order, and whether keys now wait
+// for more. A key that breaks a pending sequence can run several commands.
+export interface SequenceResult {
+  run: CommandId[];
+  pending: boolean;
+}
 
 function firesIn(bind: PageBind, scope: ViewScope): boolean {
   return bind.scope === 'any' || bind.scope === scope;
@@ -51,7 +58,7 @@ function matchKeys(
   binds: PageBind[],
   keys: string[],
   scope: ViewScope,
-): SequenceResult {
+): MatchResult {
   const inScope = binds.filter((bind) => firesIn(bind, scope));
   const complete = inScope.find(
     (bind) => bind.keys.length === keys.length && startsWith(bind.keys, keys),
@@ -63,8 +70,38 @@ function matchKeys(
   return continues ? { kind: 'pending' } : { kind: 'none' };
 }
 
+// Matches `keys` from the front as vim does: a bind runs and its keys are
+// used up; keys that begin a bind wait; a sequence the next key breaks runs
+// its first key's own meaning — none, since a key that begins a longer bind
+// cannot be bound alone — and the keys after it are matched again.
+function consumeKeys(
+  binds: PageBind[],
+  keys: string[],
+  scope: ViewScope,
+): { run: CommandId[]; pendingKeys: string[] } {
+  const run: CommandId[] = [];
+  let unmatched = keys;
+  let length = 1;
+  while (length <= unmatched.length) {
+    const result = matchKeys(binds, unmatched.slice(0, length), scope);
+    if (result.kind === 'run') {
+      run.push(result.command);
+      unmatched = unmatched.slice(length);
+      length = 1;
+    } else if (result.kind === 'pending') {
+      length++;
+    } else {
+      unmatched = unmatched.slice(1);
+      length = 1;
+    }
+  }
+  return { run, pendingKeys: unmatched };
+}
+
 // Unambiguous binds make a complete sequence never the start of a longer one,
-// so a match runs at once and only an incomplete sequence waits.
+// so a match runs at once and only an incomplete sequence waits. A pending
+// sequence whose next key comes after the timeout is dropped, as its keys
+// have no meaning of their own.
 export function createSequenceMatcher(
   binds: PageBind[],
   timeoutMs: number,
@@ -77,14 +114,13 @@ export function createSequenceMatcher(
   let lastKeyAt = 0;
 
   return {
-    // As in vim, a key that breaks a pending sequence is dropped with it.
     feed(key, scope, now) {
       const isContinuing = pending.length > 0 && now - lastKeyAt <= timeoutMs;
       const keys = isContinuing ? [...pending, key] : [key];
       lastKeyAt = now;
-      const result = matchKeys(binds, keys, scope);
-      pending = result.kind === 'pending' ? keys : [];
-      return result;
+      const { run, pendingKeys } = consumeKeys(binds, keys, scope);
+      pending = pendingKeys;
+      return { run, pending: pendingKeys.length > 0 };
     },
     reset() {
       pending = [];

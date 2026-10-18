@@ -28,7 +28,7 @@ export interface RoundViewDeps {
 export interface RoundView {
   element: HTMLElement;
   // `view` is the view under any help overlay.
-  update(round: RoundState, view: FormsView): void;
+  update(round: RoundState, view: FormsView, isHelpOpen: boolean): void;
 }
 
 interface ItemView {
@@ -62,10 +62,15 @@ export function createRoundView(
   const head = buildHead(main, round, deps.markdown);
   const itemsPane = element('div', 'items');
   main.append(itemsPane);
+  let shownView: FormsView = 'forms';
+  let isHelpShown = false;
   const railEntries = items.map((item, position) =>
-    buildRailEntry(railList, round, item, () =>
-      deps.dispatch({ type: 'focusItem', item: position }),
-    ),
+    buildRailEntry(railList, round, item, () => {
+      const action = railPickAction(shownView, isHelpShown, item, position);
+      if (action !== null) {
+        deps.dispatch(action);
+      }
+    }),
   );
   const itemViews = items.map((item, position) =>
     item.kind === 'notice'
@@ -88,13 +93,18 @@ export function createRoundView(
   let shownFocus = -1;
   return {
     element: root,
-    update(current, view) {
+    update(current, view, isHelpOpen) {
+      shownView = view;
+      isHelpShown = isHelpOpen;
       const isForms = view === 'forms';
       const isReview = view === 'review' || view === 'confirm';
       head.update(current);
-      railEntries.forEach((entry, position) =>
-        updateRailEntry(entry, current, items[position], position, isReview),
-      );
+      railEntries.forEach((entry, position) => {
+        const item = items[position];
+        updateRailEntry(entry, current, item, position, isReview);
+        const action = railPickAction(view, isHelpOpen, item, position);
+        entry.pick.disabled = action === null;
+      });
       itemsPane.hidden = !isForms;
       itemViews.forEach((itemView, position) => {
         const isShown = isForms && position === current.focus;
@@ -110,7 +120,9 @@ export function createRoundView(
       if (current.focus !== shownFocus) {
         shownFocus = current.focus;
         main.scrollTop = 0;
-        railEntries[current.focus]?.scrollIntoView({ block: 'nearest' });
+        railEntries[current.focus]?.element.scrollIntoView({
+          block: 'nearest',
+        });
       }
     },
   };
@@ -152,12 +164,36 @@ function railNumber(item: RailItem): string {
   return item.kind === 'notice' ? `N${item.index}` : String(item.index);
 }
 
+// What clicking a rail item does: focus it in the forms view, jump to its
+// question in the review, as Enter on its row does; null where the rail is
+// inert, under the confirm and help overlays.
+function railPickAction(
+  view: FormsView,
+  isHelpOpen: boolean,
+  item: RailItem,
+  position: number,
+): FormsAction | null {
+  if (isHelpOpen) {
+    return null;
+  }
+  if (view === 'forms') {
+    return { type: 'focusItem', item: position };
+  }
+  const isReviewQuestion = view === 'review' && item.kind === 'question';
+  return isReviewQuestion ? { type: 'reviewJump', row: item.index - 1 } : null;
+}
+
+interface RailEntry {
+  element: HTMLLIElement;
+  pick: HTMLButtonElement;
+}
+
 function buildRailEntry(
   parent: HTMLElement,
   round: RoundState,
   item: RailItem,
   onClick: () => void,
-): HTMLLIElement {
+): RailEntry {
   const entry = element('li', 'rail-entry');
   const title = itemTitle(round, item);
   const pick = button('rail-item', '', onClick);
@@ -169,12 +205,12 @@ function buildRailEntry(
   );
   entry.append(pick);
   parent.append(entry);
-  return entry;
+  return { element: entry, pick };
 }
 
 // While the review is open, untouched questions are flagged in the rail.
 function updateRailEntry(
-  entry: HTMLLIElement,
+  entry: RailEntry,
   round: RoundState,
   item: RailItem,
   position: number,
@@ -184,9 +220,12 @@ function updateRailEntry(
     item.kind === 'notice'
       ? 'notice'
       : questionStatus(round.answers[item.index - 1]);
-  entry.dataset.status = status;
-  entry.classList.toggle('is-focused', position === round.focus);
-  entry.classList.toggle('is-flagged', isReview && status === 'untouched');
+  entry.element.dataset.status = status;
+  entry.element.classList.toggle('is-focused', position === round.focus);
+  entry.element.classList.toggle(
+    'is-flagged',
+    isReview && status === 'untouched',
+  );
 }
 
 function buildField(

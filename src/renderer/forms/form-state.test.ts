@@ -768,12 +768,33 @@ describe('folds with nothing to change', () => {
 });
 
 describe('item actions outside the forms view', () => {
-  const inReview = apply(mixedRound(), { type: 'openReview' });
+  // A question is focused, so choose and toggleNotApplicable would change an
+  // answer if they applied.
+  const inReview = run(
+    mixedRound(),
+    { type: 'focusItem', item: 1 },
+    { type: 'openReview' },
+  );
+  const helpOverForms = run(
+    mixedRound(),
+    { type: 'focusItem', item: 1 },
+    { type: 'toggleHelp' },
+  );
 
   it('leave the review state as it is', () => {
     expect(apply(inReview, { type: 'choose', choice: 1 })).toBe(inReview);
     expect(apply(inReview, { type: 'toggleNotApplicable' })).toBe(inReview);
     expect(apply(inReview, { type: 'nextItem' })).toBe(inReview);
+  });
+
+  it('leave the state as it is while help is open over forms', () => {
+    expect(apply(helpOverForms, { type: 'choose', choice: 1 })).toBe(
+      helpOverForms,
+    );
+    expect(apply(helpOverForms, { type: 'toggleNotApplicable' })).toBe(
+      helpOverForms,
+    );
+    expect(apply(helpOverForms, { type: 'nextItem' })).toBe(helpOverForms);
   });
 
   it('still update the round note text in the review', () => {
@@ -806,16 +827,27 @@ describe('progress', () => {
             entry(1, { choice: 1 }),
             entry(2, { choice: 2, not_applicable: true }),
             entry(3, { what: 'text but no pick' }),
+            entry(4, { why: '  ' }),
           ],
         }),
       ),
     ]);
     expect(progress(active(state))).toEqual({
-      answered: 1,
+      answered: 2,
       notApplicable: 1,
-      untouched: 2,
+      untouched: 1,
       total: 4,
     });
+  });
+
+  it('counts why text alone as an answer', () => {
+    const state = apply(mixedRound(), {
+      type: 'setText',
+      roundId: 'r1',
+      target: { field: 'why', question: 2 },
+      value: 'because',
+    });
+    expect(progress(active(state)).answered).toBe(1);
   });
 });
 
@@ -861,9 +893,58 @@ describe('saveState', () => {
     const state = run(
       edited,
       { type: 'saveStarted', roundId: 'r1', revision },
-      { type: 'saveFinished', roundId: 'r1', revision, ok: false },
+      {
+        type: 'saveFinished',
+        roundId: 'r1',
+        revision,
+        ok: false,
+        error: 'disk full',
+      },
     );
     expect(saveState(active(state))).toBe('unsaved');
+    expect(active(state).saveError).toBe('disk full');
+  });
+
+  it('clears a failed save message when the next save starts', () => {
+    const failed = run(
+      edited,
+      { type: 'saveStarted', roundId: 'r1', revision },
+      {
+        type: 'saveFinished',
+        roundId: 'r1',
+        revision,
+        ok: false,
+        error: 'disk full',
+      },
+    );
+    const retried = apply(failed, {
+      type: 'saveStarted',
+      roundId: 'r1',
+      revision,
+    });
+    expect(active(retried).saveError).toBeNull();
+  });
+
+  it('a save start that changes nothing leaves state as it is', () => {
+    const saving = apply(edited, {
+      type: 'saveStarted',
+      roundId: 'r1',
+      revision,
+    });
+    expect(
+      apply(saving, { type: 'saveStarted', roundId: 'r1', revision }),
+    ).toBe(saving);
+  });
+
+  it('a save finish that changes nothing leaves state as it is', () => {
+    const saved = run(
+      edited,
+      { type: 'saveStarted', roundId: 'r1', revision },
+      { type: 'saveFinished', roundId: 'r1', revision, ok: true },
+    );
+    expect(
+      apply(saved, { type: 'saveFinished', roundId: 'r1', revision, ok: true }),
+    ).toBe(saved);
   });
 
   it('navigation, folds and views are not edits', () => {

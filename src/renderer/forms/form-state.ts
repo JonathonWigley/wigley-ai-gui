@@ -44,6 +44,8 @@ export interface RoundState {
   revision: number;
   savingRevision: number | null;
   savedRevision: number;
+  // The last failed save's message; cleared when a save starts or succeeds.
+  saveError: string | null;
 }
 
 export interface FormsState {
@@ -102,7 +104,14 @@ export type FormsAction =
   | { type: 'closeHelp' }
   | { type: 'setText'; roundId: string; target: TextTarget; value: string }
   | { type: 'saveStarted'; roundId: string; revision: number }
-  | { type: 'saveFinished'; roundId: string; revision: number; ok: boolean };
+  | { type: 'saveFinished'; roundId: string; revision: number; ok: true }
+  | {
+      type: 'saveFinished';
+      roundId: string;
+      revision: number;
+      ok: false;
+      error: string;
+    };
 
 const EMPTY_STATE: FormsState = {
   rounds: [],
@@ -172,13 +181,12 @@ export function apply(state: FormsState, action: FormsAction): FormsState {
         setText(round, action.target, action.value),
       );
     case 'saveStarted':
-      return updateRound(state, action.roundId, (round) => ({
-        ...round,
-        savingRevision: action.revision,
-      }));
+      return updateRound(state, action.roundId, (round) =>
+        startSave(round, action.revision),
+      );
     case 'saveFinished':
       return updateRound(state, action.roundId, (round) =>
-        finishSave(round, action.revision, action.ok),
+        finishSave(round, action.revision, action.ok ? null : action.error),
       );
     default:
       return state.view === 'forms'
@@ -211,11 +219,14 @@ export function focusedItem(round: RoundState): RailItem | null {
   return railItems(round.round)[round.focus] ?? null;
 }
 
+// A choice, or written what or why text, answers a question.
 export function questionStatus(answer: QuestionAnswer): AnswerStatus {
   if (answer.notApplicable) {
     return 'not_applicable';
   }
-  return answer.choice >= 1 ? 'answered' : 'untouched';
+  const hasChoice = answer.choice >= 1;
+  const hasText = answer.what.trim() !== '' || answer.why.trim() !== '';
+  return hasChoice || hasText ? 'answered' : 'untouched';
 }
 
 export function progress(round: RoundState): Progress {
@@ -281,6 +292,7 @@ function restoreRound(presented: PresentedRound): RoundState {
     revision: 0,
     savingRevision: null,
     savedRevision: 0,
+    saveError: null,
   };
 }
 
@@ -560,17 +572,31 @@ function setText(
   }
 }
 
+function startSave(round: RoundState, revision: number): RoundState {
+  const isUnchanged =
+    round.savingRevision === revision && round.saveError === null;
+  return isUnchanged
+    ? round
+    : { ...round, savingRevision: revision, saveError: null };
+}
+
+// `error` is null for a save that succeeded.
 function finishSave(
   round: RoundState,
   revision: number,
-  ok: boolean,
+  error: string | null,
 ): RoundState {
-  return {
-    ...round,
-    savingRevision:
-      round.savingRevision === revision ? null : round.savingRevision,
-    savedRevision: ok
+  const savingRevision =
+    round.savingRevision === revision ? null : round.savingRevision;
+  const savedRevision =
+    error === null
       ? Math.max(round.savedRevision, revision)
-      : round.savedRevision,
-  };
+      : round.savedRevision;
+  const isUnchanged =
+    savingRevision === round.savingRevision &&
+    savedRevision === round.savedRevision &&
+    error === round.saveError;
+  return isUnchanged
+    ? round
+    : { ...round, savingRevision, savedRevision, saveError: error };
 }

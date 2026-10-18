@@ -1,9 +1,22 @@
 import type { CommandId } from './commands';
 import type { EditorKeymap } from './keymap';
 
+// `insertAtEnd` focuses in insert mode with the cursor after the last
+// character, as vim's `GA` does; otherwise the editor keeps its mode.
+export interface FocusOptions {
+  insertAtEnd?: boolean;
+}
+
+// A vim mode, e.g. `insert` or `visual`; `subMode` names a visual mode's kind
+// (`linewise` or `blockwise`) and is empty otherwise.
+export interface VimMode {
+  mode: string;
+  subMode: string;
+}
+
 export interface TextEditor {
   text(): string;
-  focus(): void;
+  focus(options?: FocusOptions): void;
   blur(): void;
   // Removes the editor from the page; the host forgets it.
   destroy(): void;
@@ -15,8 +28,8 @@ export interface EditorEvents {
   changed(text: string): void;
   focused(): void;
   blurred(): void;
-  // The vim mode the editor entered, e.g. `insert` or `visual`.
-  modeChanged(mode: string): void;
+  // The vim mode the editor entered.
+  modeChanged(mode: VimMode): void;
 }
 
 export interface EditorHost {

@@ -1,4 +1,5 @@
 import type { CommandId } from '../../contracts/commands';
+import type { FocusOptions } from '../../contracts/editor';
 import type { RoundEnd } from '../../contracts/forms';
 import type { Log } from '../../contracts/log';
 import type {
@@ -40,6 +41,8 @@ type DescribeChange = (answer: QuestionAnswer, question: number) => string;
 const CHOICE_COMMANDS = 9;
 
 const ANSWER_FIELDS: BoxField[] = ['what', 'comment'];
+
+const APPEND: FocusOptions = { insertAtEnd: true };
 
 // Commands that apply their form-state action and nothing more.
 const PLAIN_ACTIONS: [CommandId, FormsAction][] = [
@@ -110,9 +113,14 @@ export function registerFormsCommands(
       focusShownBox(deps, ['dontAskReason']);
     }
   });
-  commands.register('forms.editWhat', () => focusShownBox(deps, ANSWER_FIELDS));
+  // As vim's `A`: `a` and `o` start typing after the box's text.
+  commands.register('forms.editWhat', () =>
+    focusShownBox(deps, ANSWER_FIELDS, APPEND),
+  );
   commands.register('forms.editWhy', () => focusShownBox(deps, ['why']));
-  commands.register('forms.editNote', () => focusShownBox(deps, ['note']));
+  commands.register('forms.editNote', () =>
+    focusShownBox(deps, ['note'], APPEND),
+  );
   commands.register('forms.nextBox', (context) => stepFocus(deps, context, 1));
   commands.register('forms.prevBox', (context) => stepFocus(deps, context, -1));
   commands.register('forms.leaveBox', () => {
@@ -181,10 +189,14 @@ function changeAnswer(
   return after.answer;
 }
 
-function focusShownBox(deps: FormsCommandDeps, fields: BoxField[]) {
+function focusShownBox(
+  deps: FormsCommandDeps,
+  fields: BoxField[],
+  options?: FocusOptions,
+) {
   const box = shownBox(deps.store.get(), fields);
   if (box !== null) {
-    deps.boxes.focus(box);
+    deps.boxes.focus(box, options);
   }
 }
 

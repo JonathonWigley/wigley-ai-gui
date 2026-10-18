@@ -1,3 +1,4 @@
+import type { VimMode } from '../../contracts/editor';
 import type { AnswerStatus } from '../../contracts/forms';
 import {
   type FormsState,
@@ -38,6 +39,12 @@ const SAVE_LABELS: Record<SaveState, string> = {
   unsaved: 'Unsaved',
 };
 
+// How vim's status line names a visual mode's kind.
+const VISUAL_KINDS: Partial<Record<string, string>> = {
+  linewise: 'line',
+  blockwise: 'block',
+};
+
 export function reviewRows(round: RoundState): ReviewRow[] {
   return round.round.questions.map((question, row): ReviewRow => {
     const answer = round.answers[row];
@@ -76,11 +83,19 @@ export function statusLabel(status: AnswerStatus): string {
   return STATUS_LABELS[status];
 }
 
-export function saveLabel(state: SaveState): string {
-  return SAVE_LABELS[state];
+// `error` is the last failed save's message, shown while the round is unsaved.
+export function saveLabel(state: SaveState, error: string | null): string {
+  const hasError = state === 'unsaved' && error !== null;
+  return hasError ? `${SAVE_LABELS[state]} — ${error}` : SAVE_LABELS[state];
 }
 
-// The status line's mode: the focused box's vim mode, or PAGE outside every box.
-export function modeLabel(mode: string | null): string {
-  return mode === null ? 'PAGE' : mode.toUpperCase();
+// The status line's mode: the focused box's vim mode as vim shows it, e.g.
+// VISUAL LINE, or PAGE outside every box.
+export function modeLabel(mode: VimMode | null): string {
+  if (mode === null) {
+    return 'PAGE';
+  }
+  const kind = VISUAL_KINDS[mode.subMode];
+  const label = kind === undefined ? mode.mode : `${mode.mode} ${kind}`;
+  return label.toUpperCase();
 }

@@ -19,42 +19,42 @@ describe('createSequenceMatcher', () => {
   it('runs a one-key bind in its scope', () => {
     const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
     expect(matcher.feed('j', 'forms', 0)).toEqual({
-      kind: 'run',
-      command: 'test.down',
+      run: ['test.down'],
+      pending: false,
     });
   });
 
   it('runs the current scope bind when two scopes share a key', () => {
     const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
     expect(matcher.feed('j', 'review', 0)).toEqual({
-      kind: 'run',
-      command: 'test.reviewDown',
+      run: ['test.reviewDown'],
+      pending: false,
     });
   });
 
   it('runs an any-scope bind in every view', () => {
     const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
     expect(matcher.feed('?', 'forms', 0)).toEqual({
-      kind: 'run',
-      command: 'test.help',
+      run: ['test.help'],
+      pending: false,
     });
     expect(matcher.feed('?', 'confirm', 10)).toEqual({
-      kind: 'run',
-      command: 'test.help',
+      run: ['test.help'],
+      pending: false,
     });
   });
 
   it('ignores a key with no bind in the current scope', () => {
     const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
-    expect(matcher.feed('j', 'idle', 0)).toEqual({ kind: 'none' });
+    expect(matcher.feed('j', 'idle', 0)).toEqual({ run: [], pending: false });
   });
 
   it('waits on the first key of a sequence and runs on the last', () => {
     const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
-    expect(matcher.feed(' ', 'forms', 0)).toEqual({ kind: 'pending' });
+    expect(matcher.feed(' ', 'forms', 0)).toEqual({ run: [], pending: true });
     expect(matcher.feed(' ', 'forms', 500)).toEqual({
-      kind: 'run',
-      command: 'test.open',
+      run: ['test.open'],
+      pending: false,
     });
   });
 
@@ -62,24 +62,63 @@ describe('createSequenceMatcher', () => {
     const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
     matcher.feed('z', 'forms', 0);
     expect(matcher.feed('a', 'forms', 1000)).toEqual({
-      kind: 'run',
-      command: 'test.fold',
+      run: ['test.fold'],
+      pending: false,
     });
   });
 
   it('drops a sequence whose next key comes after the timeout', () => {
     const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
     matcher.feed('z', 'forms', 0);
-    expect(matcher.feed('a', 'forms', 1001)).toEqual({ kind: 'none' });
+    expect(matcher.feed('a', 'forms', 1001)).toEqual({
+      run: [],
+      pending: false,
+    });
   });
 
-  it('drops a key that breaks a sequence, with the sequence', () => {
+  it('replays a key that breaks a sequence on its own', () => {
     const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
     matcher.feed('z', 'forms', 0);
-    expect(matcher.feed('j', 'forms', 100)).toEqual({ kind: 'none' });
+    expect(matcher.feed('j', 'forms', 100)).toEqual({
+      run: ['test.down'],
+      pending: false,
+    });
+  });
+
+  it('replays a key that breaks a sequence into a new sequence', () => {
+    const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
+    matcher.feed(' ', 'forms', 0);
+    expect(matcher.feed('z', 'forms', 100)).toEqual({
+      run: [],
+      pending: true,
+    });
+    expect(matcher.feed('a', 'forms', 200)).toEqual({
+      run: ['test.fold'],
+      pending: false,
+    });
+  });
+
+  it('replays the keys after a longer broken sequence in order', () => {
+    const longBinds: PageBind[] = [
+      { keys: ['g', 'u', 'x'], scope: 'forms', command: 'test.long' },
+      { keys: ['u'], scope: 'forms', command: 'test.undo' },
+      { keys: ['j'], scope: 'forms', command: 'test.down' },
+    ];
+    const matcher = createSequenceMatcher(longBinds, TIMEOUT_MS);
+    matcher.feed('g', 'forms', 0);
+    matcher.feed('u', 'forms', 100);
     expect(matcher.feed('j', 'forms', 200)).toEqual({
-      kind: 'run',
-      command: 'test.down',
+      run: ['test.undo', 'test.down'],
+      pending: false,
+    });
+  });
+
+  it('ignores a key that breaks a sequence and has no bind of its own', () => {
+    const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
+    matcher.feed('z', 'forms', 0);
+    expect(matcher.feed('q', 'forms', 100)).toEqual({
+      run: [],
+      pending: false,
     });
   });
 
@@ -87,7 +126,10 @@ describe('createSequenceMatcher', () => {
     const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
     matcher.feed('z', 'forms', 0);
     matcher.reset();
-    expect(matcher.feed('a', 'forms', 100)).toEqual({ kind: 'none' });
+    expect(matcher.feed('a', 'forms', 100)).toEqual({
+      run: [],
+      pending: false,
+    });
   });
 
   it('throws when built from ambiguous binds', () => {

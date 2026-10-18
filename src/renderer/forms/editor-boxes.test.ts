@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   EditorEvents,
   EditorHost,
+  FocusOptions,
   TextEditor,
 } from '../../contracts/editor';
 import type { BoxRef } from './boxes';
@@ -9,6 +10,7 @@ import { createEditorBoxes } from './editor-boxes';
 
 interface FakeEditor extends TextEditor {
   focusCalls: number;
+  focusOptions: (FocusOptions | undefined)[];
   blurCalls: number;
   isDestroyed: boolean;
 }
@@ -20,11 +22,13 @@ function fakeHost() {
     create(_parent, doc, events) {
       const editor: FakeEditor = {
         focusCalls: 0,
+        focusOptions: [],
         blurCalls: 0,
         isDestroyed: false,
         text: () => doc,
-        focus: () => {
+        focus: (options) => {
           editor.focusCalls++;
+          editor.focusOptions.push(options);
           events.focused();
         },
         blur: () => {
@@ -79,6 +83,14 @@ describe('createEditorBoxes', () => {
     expect(logs).toEqual(['focused what on question 1']);
   });
 
+  it('hands the focus options to the editor', () => {
+    const { boxes, created } = setup();
+
+    boxes.focus(what, { insertAtEnd: true });
+
+    expect(created[0].editor.focusOptions).toEqual([{ insertAtEnd: true }]);
+  });
+
   it('activates a box whose editor took focus from a click', () => {
     const { boxes, created, activated } = setup();
 
@@ -106,16 +118,16 @@ describe('createEditorBoxes', () => {
     boxes.focus(what);
     const callsAfterFocus = calls;
 
-    created[0].events.modeChanged('insert');
+    created[0].events.modeChanged({ mode: 'visual', subMode: 'linewise' });
 
-    expect(boxes.activeMode()).toBe('insert');
+    expect(boxes.activeMode()).toEqual({ mode: 'visual', subMode: 'linewise' });
     expect(calls).toBe(callsAfterFocus + 1);
   });
 
   it('starts every box in normal mode', () => {
     const { boxes } = setup();
     boxes.focus(why);
-    expect(boxes.activeMode()).toBe('normal');
+    expect(boxes.activeMode()).toEqual({ mode: 'normal', subMode: '' });
   });
 
   it('forwards a text change with its box', () => {

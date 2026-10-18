@@ -1,4 +1,9 @@
-import type { EditorHost, TextEditor } from '../../contracts/editor';
+import type {
+  EditorHost,
+  FocusOptions,
+  TextEditor,
+  VimMode,
+} from '../../contracts/editor';
 import type { Log } from '../../contracts/log';
 import { type BoxRef, boxDescription, boxKey } from './boxes';
 
@@ -13,12 +18,12 @@ export interface EditorBoxes {
   mount(parent: HTMLElement, box: BoxRef, text: string): void;
   boxOf(editor: TextEditor): BoxRef | undefined;
   // Focuses the box's editor; the box counts as focused at once.
-  focus(box: BoxRef): void;
+  focus(box: BoxRef, options?: FocusOptions): void;
   // Blurs the focused box, if any.
   leave(): void;
   active(): BoxRef | null;
   // The focused box's vim mode, or null outside every box.
-  activeMode(): string | null;
+  activeMode(): VimMode | null;
   destroyRound(roundId: string): void;
   // Runs after the focused box, or its vim mode, changes.
   onChange(listener: () => void): void;
@@ -29,7 +34,7 @@ interface MountedBox {
   editor: TextEditor;
 }
 
-const STARTING_MODE = 'normal';
+const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 
 export function createEditorBoxes(
   host: EditorHost,
@@ -37,7 +42,7 @@ export function createEditorBoxes(
   log: Log,
 ): EditorBoxes {
   const mounted = new Map<string, MountedBox>();
-  const modes = new Map<string, string>();
+  const modes = new Map<string, VimMode>();
   const listeners: (() => void)[] = [];
   let activeKey: string | null = null;
 
@@ -87,13 +92,13 @@ export function createEditorBoxes(
       return [...mounted.values()].find((entry) => entry.editor === editor)
         ?.box;
     },
-    focus(box) {
+    focus(box, options) {
       const key = boxKey(box);
       const entry = mounted.get(key);
       if (entry === undefined) {
         throw new Error(`No box is mounted as ${key}`);
       }
-      entry.editor.focus();
+      entry.editor.focus(options);
       activate(key, box);
     },
     leave() {

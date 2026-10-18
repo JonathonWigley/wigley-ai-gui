@@ -32,13 +32,14 @@ export function installPageKeys(
       return;
     }
     const result = matcher.feed(event.key, currentScope(), event.timeStamp);
-    if (result.kind === 'none') {
+    const isConsumed = result.pending || result.run.length > 0;
+    if (!isConsumed) {
       return;
     }
     event.preventDefault();
-    if (result.kind === 'run') {
-      log('page', `${event.key} ran ${result.command}`);
-      commands.run(result.command, {});
+    for (const command of result.run) {
+      log('page', `${event.key} ran ${command}`);
+      commands.run(command, {});
     }
   });
 }

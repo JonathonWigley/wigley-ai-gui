@@ -8,7 +8,13 @@ import {
   type RoundState,
 } from './form-state';
 import { presentedRound, question } from './test-rounds';
-import { baseView, modeLabel, progressText, reviewRows } from './view-model';
+import {
+  baseView,
+  modeLabel,
+  progressText,
+  reviewRows,
+  saveLabel,
+} from './view-model';
 
 // Questions Alpha (recommend 2), Beta (recommend 2), Gamma; no notices, so
 // rail position = question position.
@@ -40,6 +46,23 @@ describe('reviewRows', () => {
       choice: 2,
       choiceText: 'second',
       tookRecommendation: true,
+    });
+  });
+
+  it('lists a question answered only in writing as answered, with no choice', () => {
+    const [alpha] = reviewRows(
+      roundAfter({
+        type: 'setText',
+        roundId: 'r1',
+        target: { field: 'what', question: 1 },
+        value: 'my own answer',
+      }),
+    );
+    expect(alpha).toMatchObject({
+      status: 'answered',
+      choice: 0,
+      choiceText: '',
+      what: 'my own answer',
     });
   });
 
@@ -123,7 +146,29 @@ describe('modeLabel', () => {
   });
 
   it("reads the box's vim mode in capitals", () => {
-    expect(modeLabel('insert')).toBe('INSERT');
+    expect(modeLabel({ mode: 'insert', subMode: '' })).toBe('INSERT');
+  });
+
+  it('names a visual mode by its kind, as vim does', () => {
+    expect(modeLabel({ mode: 'visual', subMode: '' })).toBe('VISUAL');
+    expect(modeLabel({ mode: 'visual', subMode: 'linewise' })).toBe(
+      'VISUAL LINE',
+    );
+    expect(modeLabel({ mode: 'visual', subMode: 'blockwise' })).toBe(
+      'VISUAL BLOCK',
+    );
+  });
+});
+
+describe('saveLabel', () => {
+  it('shows the failed save message while unsaved', () => {
+    expect(saveLabel('unsaved', 'disk full')).toBe('Unsaved — disk full');
+  });
+
+  it('shows the plain state without a message', () => {
+    expect(saveLabel('unsaved', null)).toBe('Unsaved');
+    expect(saveLabel('saving', null)).toBe('Saving…');
+    expect(saveLabel('saved', null)).toBe('Saved');
   });
 });
 
