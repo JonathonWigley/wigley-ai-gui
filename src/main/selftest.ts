@@ -4,6 +4,7 @@ import type {
   FormsService,
   FormsSession,
 } from '../contracts/forms';
+import type { PageBind } from '../contracts/keymap';
 
 // Opens a fixture round through FormsService, drives keys into the page
 // through Electron's input pipeline, and checks the lines the page logs, that
@@ -22,6 +23,13 @@ interface Step {
   // must fit it without cutting anything off.
   checksFit?: true;
 }
+
+// Exists only for the self-test, which adds it to the keymap main serves; it
+// is never in the user's keymap. No step completes it: `q a x` then `b` breaks
+// it, so `a` runs forms.editWhat and `x b` are typed into the What box.
+export const SELF_TEST_PAGE_BINDS: PageBind[] = [
+  { keys: ['q', 'a', 'x', 'y'], scope: 'forms', command: 'forms.nextItem' },
+];
 
 // An unbroken run of letters wider than any pane; no j, which would start jk.
 const LONG_WORD = 'unbroken'.repeat(14);
@@ -49,7 +57,12 @@ const STEPS: Step[] = [
   },
   { keys: ['a'], expect: '[forms] focused what on question 1' },
   { keys: ['c', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
-  { keys: ['j', 'x'], expect: '[forms] not applicable on question 2' },
+  {
+    keys: ['j', 'q', 'a', 'x', 'b'],
+    expect: '[page] typed xb into the editor',
+  },
+  { keys: ['j', 'k', 'Escape'], expect: '[forms] left the box' },
+  { keys: ['x'], expect: '[forms] not applicable on question 2' },
   {
     keys: ['o', 'n', 'o', 't', 'e', 'j', 'k', 'Escape'],
     expect: '[forms] left the box',
@@ -118,6 +131,9 @@ function payloadProblems(payload: AnswersPayload): string[] {
     [first?.choice === 2, `question 1 choice ${first?.choice}`],
     // "abc" proves each a entered INSERT with the cursor at the end.
     [first?.what === 'abc', `question 1 what ${JSON.stringify(first?.what)}`],
+    // "xb" proves the keys a broken sequence left over were typed into the
+    // box its command focused, in INSERT.
+    [second?.what === 'xb', `question 2 what ${JSON.stringify(second?.what)}`],
     [
       second?.status === 'not_applicable',
       `question 2 status ${second?.status}`,

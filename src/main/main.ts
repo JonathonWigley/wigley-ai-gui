@@ -40,7 +40,7 @@ import {
   writeEndpointFiles,
 } from './relay/endpoint';
 import { startRelayServer } from './relay/relay-server';
-import { startSelfTest } from './selftest';
+import { SELF_TEST_PAGE_BINDS, startSelfTest } from './selftest';
 import { chooseTheme } from './themes/theme-loader';
 import { createWindowPresenter } from './window-presenter';
 import { createMainWindow, registerWindowCommands } from './window';
@@ -56,7 +56,12 @@ const isSelfTest = Boolean(process.env.PROOF_SELFTEST);
 
 const config: AppConfig = {
   settings: defaultSettings,
-  keymap: defaultKeymap,
+  keymap: isSelfTest
+    ? {
+        ...defaultKeymap,
+        page: [...defaultKeymap.page, ...SELF_TEST_PAGE_BINDS],
+      }
+    : defaultKeymap,
   theme: chooseTheme(
     defaultSettings.theme,
     builtInThemes,
