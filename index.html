@@ -6,30 +6,11 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:*"
     />
-    <title>wigley-ai-gui proof</title>
+    <title>wigley-ai-gui</title>
   </head>
   <body>
-    <h1>Tool proof</h1>
-    <ul class="checks">
-      <li>
-        <kbd>Cmd+W</kbd> <kbd>Cmd+T</kbd> <kbd>Cmd+N</kbd> <kbd>Cmd+L</kbd>
-        <kbd>Cmd+1</kbd> — app menu claims them
-      </li>
-      <li><kbd>Ctrl+Tab</kbd> — caught before the page</li>
-      <li>
-        <kbd>Ctrl+Opt+Cmd+W</kbd> — global summon (hide with
-        <kbd>Cmd+H</kbd> first)
-      </li>
-      <li><kbd>jk</kbd> leaves insert</li>
-      <li>
-        <kbd>Space j</kbd> / <kbd>Space k</kbd> switch boxes;
-        <kbd>Space q</kbd> leaves; <kbd>i</kbd> comes back
-      </li>
-    </ul>
-    <div class="box"></div>
-    <div class="box"></div>
-    <h2>Log</h2>
-    <ol id="log"></ol>
+    <div id="app"></div>
+    <ol id="log" hidden></ol>
     <script type="module" src="/src/renderer/renderer.ts"></script>
   </body>
 </html>
