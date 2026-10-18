@@ -5,7 +5,7 @@
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the layers, the forms relay, and
   where a new key, setting, theme, round source, feature or third-party tool goes, and the layer check.
 - **Running and testing** — Node version, the self-test the agent may run any time, and the visible run that is the user's.
-- **Dev quirks** — the startup reload and the dev-only mock agent.
+- **Dev quirks** — the startup reload and the unwired ACP adapter and mock agent.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
 vim, app-owned Cmd keys, a global summon shortcut, and an ACP client driving an agent process over stdio.
@@ -20,11 +20,14 @@ composition root.
 ```
 src/contracts/   interfaces and records crossing a seam; imports nothing
 src/config/      default keymap and settings, and the built-in themes, as data  → read only by main
-src/shared/      implementation both processes use (CommandRegistry)
+src/shared/      implementation both processes use (CommandRegistry, the theme-variable names)
 src/main/        main process; main.ts is its composition root
   forms/         round logic behind FormsService: validation, re-send, deadline, saved rounds
   mcp/           MCP adapter feeding FormsService           → the only @modelcontextprotocol import
   relay/         the local channel the marketplace's relay.py connects to
+  themes/        theme loader: parses and chooses the built-in or user theme
+  alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts
+  window-presenter.ts  RoundPresenter over IPC: opens each round in the window
   acp/           ACP adapter behind AgentClient             → the only client-side @agentclientprotocol/sdk import
 src/preload/     the Bridge, exposed as window.wigley
 src/renderer/    renderer features; renderer.ts is its composition root
@@ -67,9 +70,10 @@ lands in both repos together.
 - `npm test` runs the Vitest suite: every module whose correctness follows from inputs and outputs — round
   logic, saved rounds, answer state, markdown, theme loading, the keymap — is tested there, without Electron.
 - `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. It renders the window
-  offscreen as an accessory app, so it never takes the user's foreground; it drives keys with `sendInputEvent`, checks
-  the lines each step adds to the page's log, and exits non-zero on a failure. A key behaviour the agent adds or fixes
-  gets a step in `STEPS` (`src/main/selftest.ts`).
+  offscreen as an accessory app, so it never takes the user's foreground; it opens a fixture round through
+  `FormsService`, drives keys with `sendInputEvent`, checks the lines each step adds to the page's log and the answers
+  the round returns, and exits non-zero on a failure. A key behaviour the agent adds or fixes gets a step in `STEPS`
+  (`src/main/selftest.ts`).
 - A visible `npm start` takes the user's foreground and keyboard, so that run is the user's: the agent gives the user
   the steps to try. The global shortcut needs it — macOS keys reach a global shortcut only from the real keyboard.
 
@@ -77,6 +81,4 @@ lands in both repos together.
 
 - Under `electron-forge start` the page loads twice at startup, the second load triggered by the dev server. Code
   that acts on page load runs on every load, as the self-test does.
-- Nothing in the app calls the ACP adapter or the mock agent; both still build for the harness work. The mock agent
-  runs on Electron's own Node through `ELECTRON_RUN_AS_NODE`, and the packaged app's `RunAsNode` fuse is off, so an
-  ACP round trip works only in dev until the real harness executable replaces the mock.
+- Nothing in the app calls the ACP adapter or the mock agent; both still build for the harness work.
