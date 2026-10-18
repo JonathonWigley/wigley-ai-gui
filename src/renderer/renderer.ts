@@ -1,6 +1,7 @@
 // Composition root for the renderer: the one module that picks adapters and
 // wires features to them.
 import './index.css';
+import type { EditorEvents } from '../contracts/editor';
 import { CommandRegistry } from '../shared/command-registry';
 import { registerBoxCommands } from './boxes';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
@@ -10,6 +11,13 @@ import type {
   RendererCommandContext,
   RendererCommands,
 } from './renderer-commands';
+
+const ignoreEvents: EditorEvents = {
+  changed: () => {},
+  focused: () => {},
+  blurred: () => {},
+  modeChanged: () => {},
+};
 
 async function start() {
   const bridge = window.wigley;
@@ -23,7 +31,7 @@ async function start() {
     commands.run(command, { editor }),
   );
   const boxes = [...document.querySelectorAll<HTMLElement>('.box')].map(
-    (parent, index) => editors.create(parent, `box ${index + 1}`),
+    (parent, index) => editors.create(parent, `box ${index + 1}`, ignoreEvents),
   );
 
   registerBoxCommands(commands, boxes, log);

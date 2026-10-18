@@ -1,7 +1,11 @@
 import { EditorView, minimalSetup } from 'codemirror';
 import { getCM, Vim, vim } from '@replit/codemirror-vim';
 import type { CommandId } from '../../contracts/commands';
-import type { CreateEditorHost, TextEditor } from '../../contracts/editor';
+import type {
+  CreateEditorHost,
+  EditorEvents,
+  TextEditor,
+} from '../../contracts/editor';
 import type { EditorKeymap, EditorMode } from '../../contracts/keymap';
 import { editorTheme } from './editor-theme';
 import { exCommandName } from './ex-command-name';
@@ -32,14 +36,6 @@ function vimrcLines(keymap: EditorKeymap): string[] {
         `nnoremap ${withLeader(bind.keys)} :${exCommandName(bind.command)}<CR>`,
     ),
   ];
-}
-
-function textEditorOver(view: EditorView): TextEditor {
-  return {
-    text: () => view.state.doc.toString(),
-    focus: () => view.focus(),
-    blur: () => view.contentDOM.blur(),
-  };
 }
 
 function vimEditorOf(view: EditorView): VimEditor {
@@ -83,34 +79,63 @@ function defineExCommands(
   }
 }
 
+// Answer boxes are prose: no gutters, brackets or completion; lines wrap.
+function editorExtensions(events: EditorEvents) {
+  return [
+    vim({ status: true }),
+    minimalSetup,
+    EditorView.lineWrapping,
+    editorTheme,
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged) {
+        events.changed(update.state.doc.toString());
+      }
+    }),
+    EditorView.domEventHandlers({
+      focus: () => events.focused(),
+      blur: () => events.blurred(),
+    }),
+  ];
+}
+
 // Vim keymaps are global to the engine; they are applied once, through the
 // first editor, since applying them needs an editor instance.
 export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
   const hosted: HostedEditor[] = [];
+  let isKeymapApplied = false;
   defineExCommands(keymap, hosted, run);
 
   return {
-    create(parent, doc) {
-      // Answer boxes are prose: no gutters, brackets or completion; lines wrap.
+    create(parent, doc, events) {
       const view = new EditorView({
         doc,
-        extensions: [
-          vim({ status: true }),
-          minimalSetup,
-          EditorView.lineWrapping,
-          editorTheme,
-        ],
+        extensions: editorExtensions(events),
         parent,
       });
-      if (hosted.length === 0) {
-        const cm = vimEditorOf(view);
+      const cm = vimEditorOf(view);
+      if (!isKeymapApplied) {
         for (const line of vimrcLines(keymap)) {
           Vim.handleEx(cm, line);
         }
+        isKeymapApplied = true;
       }
-      const editor = textEditorOver(view);
-      hosted.push({ view, editor });
-      return editor;
+      cm.on('vim-mode-change', (change: { mode: string }) =>
+        events.modeChanged(change.mode),
+      );
+      const entry: HostedEditor = {
+        view,
+        editor: {
+          text: () => view.state.doc.toString(),
+          focus: () => view.focus(),
+          blur: () => view.contentDOM.blur(),
+          destroy: () => {
+            hosted.splice(hosted.indexOf(entry), 1);
+            view.destroy();
+          },
+        },
+      };
+      hosted.push(entry);
+      return entry.editor;
     },
     contains: (element) =>
       hosted.some(({ view }) => view.dom.contains(element)),

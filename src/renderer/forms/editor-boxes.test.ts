@@ -1,0 +1,152 @@
+import { describe, expect, it } from 'vitest';
+import type {
+  EditorEvents,
+  EditorHost,
+  TextEditor,
+} from '../../contracts/editor';
+import type { BoxRef } from './boxes';
+import { createEditorBoxes } from './editor-boxes';
+
+interface FakeEditor extends TextEditor {
+  focusCalls: number;
+  blurCalls: number;
+  isDestroyed: boolean;
+}
+
+// Focus and blur fire their events, as a real editor's DOM focus does.
+function fakeHost() {
+  const created: { events: EditorEvents; editor: FakeEditor }[] = [];
+  const host: EditorHost = {
+    create(_parent, doc, events) {
+      const editor: FakeEditor = {
+        focusCalls: 0,
+        blurCalls: 0,
+        isDestroyed: false,
+        text: () => doc,
+        focus: () => {
+          editor.focusCalls++;
+          events.focused();
+        },
+        blur: () => {
+          editor.blurCalls++;
+          events.blurred();
+        },
+        destroy: () => {
+          editor.isDestroyed = true;
+        },
+      };
+      created.push({ events, editor });
+      return editor;
+    },
+    contains: () => false,
+  };
+  return { host, created };
+}
+
+const parent = {} as HTMLElement;
+const what: BoxRef = { roundId: 'r1', target: { field: 'what', question: 1 } };
+const why: BoxRef = { roundId: 'r1', target: { field: 'why', question: 1 } };
+const other: BoxRef = { roundId: 'r2', target: { field: 'note' } };
+
+function setup() {
+  const { host, created } = fakeHost();
+  const changes: { box: BoxRef; text: string }[] = [];
+  const activated: BoxRef[] = [];
+  const logs: string[] = [];
+  const boxes = createEditorBoxes(
+    host,
+    {
+      changed: (box, text) => changes.push({ box, text }),
+      activated: (box) => activated.push(box),
+    },
+    (_source, message) => logs.push(message),
+  );
+  boxes.mount(parent, what, '');
+  boxes.mount(parent, why, '');
+  boxes.mount(parent, other, '');
+  return { boxes, created, changes, activated, logs };
+}
+
+describe('createEditorBoxes', () => {
+  it('activates a focused box once, logging it, despite its focus event', () => {
+    const { boxes, created, activated, logs } = setup();
+
+    boxes.focus(what);
+
+    expect(created[0].editor.focusCalls).toBe(1);
+    expect(boxes.active()).toEqual(what);
+    expect(activated).toEqual([what]);
+    expect(logs).toEqual(['focused what on question 1']);
+  });
+
+  it('activates a box whose editor took focus from a click', () => {
+    const { boxes, created, activated } = setup();
+
+    created[1].events.focused();
+
+    expect(boxes.active()).toEqual(why);
+    expect(activated).toEqual([why]);
+  });
+
+  it('blurs the focused box on leave and reports no box', () => {
+    const { boxes, created } = setup();
+    boxes.focus(what);
+
+    boxes.leave();
+
+    expect(created[0].editor.blurCalls).toBe(1);
+    expect(boxes.active()).toBeNull();
+    expect(boxes.activeMode()).toBeNull();
+  });
+
+  it("reports the focused box's vim mode and tells its listeners", () => {
+    const { boxes, created } = setup();
+    let calls = 0;
+    boxes.onChange(() => calls++);
+    boxes.focus(what);
+    const callsAfterFocus = calls;
+
+    created[0].events.modeChanged('insert');
+
+    expect(boxes.activeMode()).toBe('insert');
+    expect(calls).toBe(callsAfterFocus + 1);
+  });
+
+  it('starts every box in normal mode', () => {
+    const { boxes } = setup();
+    boxes.focus(why);
+    expect(boxes.activeMode()).toBe('normal');
+  });
+
+  it('forwards a text change with its box', () => {
+    const { created, changes } = setup();
+
+    created[1].events.changed('because');
+
+    expect(changes).toEqual([{ box: why, text: 'because' }]);
+  });
+
+  it("finds a box by its editor, and destroys only one round's editors", () => {
+    const { boxes, created } = setup();
+    boxes.focus(what);
+
+    boxes.destroyRound('r1');
+
+    expect(created.map((entry) => entry.editor.isDestroyed)).toEqual([
+      true,
+      true,
+      false,
+    ]);
+    expect(boxes.boxOf(created[0].editor)).toBeUndefined();
+    expect(boxes.boxOf(created[2].editor)).toEqual(other);
+    expect(boxes.active()).toBeNull();
+  });
+
+  it('refuses a box mounted twice, and focusing a box never mounted', () => {
+    const { boxes } = setup();
+    expect(() => boxes.mount(parent, what, '')).toThrow(/r1\/what\/1/);
+    expect(() =>
+      boxes.focus({ roundId: 'r9', target: { field: 'note' } }),
+    ).toThrow(/r9\/note/);
+  });
+});
