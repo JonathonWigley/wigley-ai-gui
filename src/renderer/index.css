@@ -1,22 +1,23 @@
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
+  background: var(--wg-bg-base);
+  color: var(--wg-text);
+  font-family: var(--wg-font-ui);
+  font-size: var(--wg-font-ui-size);
   margin: auto;
   max-width: 50rem;
   padding: 2rem;
 }
 
+::selection {
+  background: var(--wg-selection);
+}
+
 .box {
-  border: 1px solid #ccc;
+  border: 1px solid var(--wg-border);
   margin-bottom: 1rem;
 }
 
-.box .cm-editor.cm-focused {
-  outline: 2px solid #4a7dff;
-}
-
 #log {
-  font-family: ui-monospace, Menlo, monospace;
+  font-family: var(--wg-font-mono);
   font-size: 0.85rem;
 }
