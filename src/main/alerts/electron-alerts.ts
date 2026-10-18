@@ -59,6 +59,7 @@ export function createElectronAlerts(window: BrowserWindow, log: Log): Alerts {
         shown.delete(notification);
         onClick();
       });
+      notification.on('close', () => shown.delete(notification));
       notification.on('failed', (_event, error) => {
         shown.delete(notification);
         log('alerts', `notification failed: ${error}`);

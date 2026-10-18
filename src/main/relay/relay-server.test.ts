@@ -171,6 +171,38 @@ describe('startRelayServer', () => {
     expect(started).toEqual([]);
   });
 
+  it('answers a hello that arrives in two chunks', async () => {
+    const { forms, started } = fakeForms();
+    const channel = start(echoServe().serve, forms);
+    const { socket, nextLine } = await open(channel);
+    const hello = helloLine(HELLO);
+    const half = Math.floor(hello.length / 2);
+
+    await new Promise<void>((resolve) =>
+      socket.write(hello.slice(0, half), () => resolve()),
+    );
+    socket.write(hello.slice(half));
+
+    expect(JSON.parse(await nextLine())).toEqual({ ok: true });
+    expect(started).toHaveLength(1);
+  });
+
+  it('refuses a first line that is not JSON and starts no session', async () => {
+    const { forms, started } = fakeForms();
+    const channel = start(echoServe().serve, forms);
+    const { socket, nextLine } = await open(channel);
+    const ended = once(socket, 'end');
+
+    socket.write('not json\n');
+
+    expect(JSON.parse(await nextLine())).toEqual({
+      ok: false,
+      error: 'the first line was not a relay hello',
+    });
+    await ended;
+    expect(started).toEqual([]);
+  });
+
   it('ends the session and its server when the relay disconnects', async () => {
     const fake = fakeForms();
     const echo = echoServe();

@@ -137,6 +137,8 @@ function report(passed: boolean, what: string) {
 let latestRun = 0;
 let session: FormsSession | null = null;
 // Chromium drops input that reaches a page before the page's first frame.
+// `paint` fires only for an offscreen window, and self-test windows are
+// offscreen (window.ts), so a visible-window self-test would time out here.
 let hasPaintedSinceNavigation = false;
 
 async function runStep(
@@ -165,7 +167,13 @@ async function runAllSteps(window: BrowserWindow, forms: FormsService) {
   const isCurrent = () => run === latestRun;
   const isReadyForKeys = async () =>
     hasPaintedSinceNavigation && (await isPageReady(window));
-  if (!(await waitFor(isReadyForKeys)) || !isCurrent()) {
+  const isReady = await waitFor(isReadyForKeys);
+  if (!isCurrent()) {
+    return;
+  }
+  if (!isReady) {
+    report(false, 'page ready for keys');
+    app.exit(1);
     return;
   }
   window.webContents.focus();
@@ -188,17 +196,20 @@ async function runAllSteps(window: BrowserWindow, forms: FormsService) {
   );
   const shown = '[forms] round shown: selftest · Self-test round';
   let failures = (await waitForNewLogLine(window, shown, seen)) ? 0 : 1;
-  report(failures === 0, shown);
+  if (isCurrent()) {
+    report(failures === 0, shown);
+  }
 
   for (const step of STEPS) {
     if (!(await runStep(window, step, isCurrent))) {
       failures++;
     }
   }
+  const payload = await answers;
   if (!isCurrent()) {
     return;
   }
-  const problems = payloadProblems(await answers);
+  const problems = payloadProblems(payload);
   report(
     problems.length === 0,
     `payload ${problems.join(', ') || 'as expected'}`,
@@ -212,6 +223,8 @@ async function runAllSteps(window: BrowserWindow, forms: FormsService) {
 
 export function startSelfTest(window: BrowserWindow, forms: FormsService) {
   window.webContents.on('did-navigate', () => {
+    // A run begun on the previous page stands down before its load finishes.
+    latestRun++;
     hasPaintedSinceNavigation = false;
   });
   window.webContents.on('paint', () => {
