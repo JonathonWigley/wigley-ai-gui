@@ -36,10 +36,11 @@ const LONG_WORD = 'unbroken'.repeat(14);
 
 // Starting on the notice: Space then j replays j to question 1, pick 2; a
 // types "ab" at once (INSERT), jk then Space j to its why box, A appends a
-// long word, Esc out; a again types "c" after "ab"; j to question 2 and mark
-// it not applicable; o types "note" into the note box at once (INSERT), Esc
-// out; g t switches rounds; review, ? opens and closes help, C
-// opens and n dismisses the cancel prompt, Enter jumps back to the question,
+// long word, Esc out; a again types "c" after "ab"; j to question 2, where
+// q a x then b breaks the self-test bind, so a opens the what box and "xb" is
+// typed into it; jk Esc out and x marks question 2 not applicable; o types
+// "note" into the note box at once (INSERT), Esc out; g t switches rounds;
+// review, ? opens and closes help, C opens and n dismisses the cancel prompt, Enter jumps back to the question,
 // review again and Space Enter submits.
 const STEPS: Step[] = [
   { keys: [' ', 'j'], expect: '[page] j ran forms.nextItem', checksFit: true },
