@@ -245,7 +245,7 @@ describe('askRound', () => {
     expect(savedFile(second).tool_use_id).toBeNull();
   });
 
-  it('runs a second call in the session only once the first has returned', async () => {
+  it("opens a second call's round only once the user finishes the first", async () => {
     const session = startSession();
     const first = session.askRound(NAMING_ARGS, null, live());
     const second = session.askRound(PLACEMENT_ARGS, null, live());
@@ -581,23 +581,124 @@ describe('a new round over an open draft', () => {
     );
     expect(savedFile(naming.roundId).outcome).toBe('open');
   });
+});
 
-  it('replaces the round only once the call waiting on it has returned its draft', async () => {
-    const session = startSession();
-    const waiting = session.askRound(NAMING_ARGS, null, live());
+describe('a call made while another round is open', () => {
+  const PLACEMENT_FINGERPRINT = fingerprint(parseRound(PLACEMENT_ARGS));
+
+  // A naming round left open past its first call's deadline draft, and a
+  // placement call queued behind it 100 s after the first.
+  async function queueBehindOpenDraft(session: FormsSession) {
+    const first = session.askRound(NAMING_ARGS, null, live());
     const naming = presenter.latest();
     presenter.draft(naming.roundId, oneAnswer({ choice: 2 }));
+    await vi.advanceTimersByTimeAsync(100_000);
+    const queued = session.askRound(PLACEMENT_ARGS, null, live());
+    await expireDeadline(DEFAULT_DEADLINE_SECONDS - 100);
+    return { firstDraft: await first, naming, queued };
+  }
 
-    void session.askRound(PLACEMENT_ARGS, null, live());
-    await vi.advanceTimersByTimeAsync(0);
+  it("keeps waiting past the first call's deadline draft while the round is still open", async () => {
+    const session = startSession();
+    const { firstDraft, naming, queued } = await queueBehindOpenDraft(session);
+
+    expect(firstDraft.outcome).toBe('draft');
+    expect(firstDraft.answers[0].choice).toBe(2);
+    expect(watch(queued).settled).toBe(false);
+    expect(presenter.shown).toHaveLength(1);
     expect(presenter.closed).toEqual([]);
-    await expireDeadline();
-    const payload = await waiting;
+    expect(savedFile(naming.roundId).outcome).toBe('open');
+  });
+
+  it('opens its round once the user submits the open one', async () => {
+    const session = startSession();
+    const { naming, queued } = await queueBehindOpenDraft(session);
+    const collecting = session.collectLastRound(true, live());
+
+    presenter.submit(naming.roundId, oneAnswer({ choice: 1 }));
+    const collected = await collecting;
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(collected.outcome).toBe('submitted');
+    expect(presenter.shown).toHaveLength(2);
+    expect(presenter.latest().round).toEqual(parseRound(PLACEMENT_ARGS));
+    presenter.submit(presenter.latest().roundId, oneAnswer({ choice: 2 }));
+    const answered = await queued;
+    expect(answered.outcome).toBe('submitted');
+    expect(answered.earlier_heading).toBeUndefined();
+    expect(answered.answers[0].choice).toBe(2);
+  });
+
+  it('returns a draft at its own deadline without opening its round or replacing the open one', async () => {
+    const session = startSession();
+    const { naming, queued } = await queueBehindOpenDraft(session);
+
+    await expireDeadline(100);
+    const payload = await queued;
 
     expect(payload.outcome).toBe('draft');
-    expect(payload.answers[0].choice).toBe(2);
-    expect(presenter.closed).toEqual([naming.roundId]);
-    expect(presenter.shown).toHaveLength(2);
+    expect(payload.summary).toBe(
+      "This round, 'Placement decisions', was not shown: another round is " +
+        'still open in the app.',
+    );
+    expect(payload.next).toContain('Send this round again with ask_round');
+    expect(payload.earlier_heading).toBeUndefined();
+    expect(payload.answers[0].status).toBe('untouched');
+    expect(presenter.shown).toHaveLength(1);
+    expect(presenter.closed).toEqual([]);
+    expect(store.newestFor(PLACEMENT_FINGERPRINT)).toBeNull();
+    const stillOpen = await session.collectLastRound(false, live());
+    expect(stillOpen.outcome).toBe('draft');
+    expect(stillOpen.answers[0].title).toBe('Naming');
+    expect(savedFile(naming.roundId).outcome).toBe('open');
+  });
+
+  it('rejects and opens nothing once its session ends', async () => {
+    const session = startSession();
+    const first = session.askRound(NAMING_ARGS, null, live());
+    const queued = session.askRound(PLACEMENT_ARGS, null, live());
+    const settled = watch(first);
+
+    session.end();
+    await expect(queued).rejects.toThrow(
+      'The session ended before this ask_round ran.',
+    );
+
+    expect(settled.settled).toBe(true);
+    expect(presenter.shown).toHaveLength(1);
+    expect(store.newestFor(PLACEMENT_FINGERPRINT)).toBeNull();
+  });
+
+  it('rejects and opens nothing once its signal aborts while queued', async () => {
+    const session = startSession();
+    void session.askRound(NAMING_ARGS, null, live());
+    const host = new AbortController();
+    const queued = session.askRound(PLACEMENT_ARGS, null, host.signal);
+
+    host.abort();
+    await expect(queued).rejects.toThrow(
+      'ask_round was cancelled before it ran.',
+    );
+
+    expect(presenter.shown).toHaveLength(1);
+    expect(presenter.closed).toEqual([]);
+    expect(store.newestFor(PLACEMENT_FINGERPRINT)).toBeNull();
+  });
+
+  it('rejects a call whose signal is already aborted and replaces nothing', async () => {
+    const session = startSession();
+    void session.askRound(NAMING_ARGS, null, live());
+    await expireDeadline();
+    const host = new AbortController();
+    host.abort();
+
+    await expect(
+      session.askRound(PLACEMENT_ARGS, null, host.signal),
+    ).rejects.toThrow('ask_round was cancelled before it ran.');
+
+    expect(presenter.shown).toHaveLength(1);
+    expect(presenter.closed).toEqual([]);
+    expect(store.newestFor(PLACEMENT_FINGERPRINT)).toBeNull();
   });
 });
 

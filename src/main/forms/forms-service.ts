@@ -70,6 +70,8 @@ interface SessionContext {
   // Settles once every ask_round already called has returned; null when none
   // is pending.
   askTurn: Promise<void> | null;
+  // The relay disconnected; no call opens a round after this.
+  ended: boolean;
 }
 
 // setTimeout fires at once for a delay above a signed 32-bit millisecond count.
@@ -310,6 +312,33 @@ function openNewRound(
   return open;
 }
 
+// The draft a queued call returns when its deadline passes while another round
+// is still open: its own round was never shown, so its answers are blank.
+function roundNotShownPayload(round: Round): AnswersPayload {
+  const payload = answersPayload(round, 'draft', readFormBody(round, {}));
+  payload.summary =
+    `This round, '${round.heading}', was not shown: another round is still ` +
+    `open in the app.`;
+  payload.next =
+    `The user is still answering another round in the app, so this round ` +
+    `was not opened and has no answers. Send this round again with ` +
+    `ask_round, and again after every draft like this one: it opens once the ` +
+    `user finishes the other round. Do not call collect_last_round for it: ` +
+    `that returns the other round's answers.`;
+  return payload;
+}
+
+// Rejects a call whose caller is gone, so its round never opens in the window
+// with no one to answer it.
+function requireLiveCaller(session: SessionContext, signal: AbortSignal): void {
+  if (session.ended) {
+    throw new Error('The session ended before this ask_round ran.');
+  }
+  if (signal.aborted) {
+    throw new Error('ask_round was cancelled before it ran.');
+  }
+}
+
 async function askRound(
   session: SessionContext,
   args: unknown,
@@ -317,7 +346,25 @@ async function askRound(
   signal: AbortSignal,
 ): Promise<AnswersPayload> {
   const round = parseRound(args);
-  const roundFingerprint = fingerprint(round);
+  return askParsedRound(
+    session,
+    round,
+    fingerprint(round),
+    args,
+    toolUseId,
+    signal,
+  );
+}
+
+async function askParsedRound(
+  session: SessionContext,
+  round: Round,
+  roundFingerprint: string,
+  args: unknown,
+  toolUseId: string | null,
+  signal: AbortSignal,
+): Promise<AnswersPayload> {
+  requireLiveCaller(session, signal);
   const open = session.open;
   if (open !== null && open.record.fingerprint === roundFingerprint) {
     return presentOpen(session, open, session.deadlineSeconds, signal);
@@ -353,8 +400,97 @@ async function askRound(
   return presentOpen(session, opened, session.deadlineSeconds, signal);
 }
 
-// One ask_round at a time per session: a second call waits until the first has
-// returned, so each call's round is shown and settled before the next replaces it.
+// The round the user is still answering, when it is not this call's own round.
+function otherUnfinishedRound(
+  session: SessionContext,
+  roundFingerprint: string,
+): OpenRound | null {
+  const open = session.open;
+  const blocks =
+    open !== null &&
+    open.end === null &&
+    open.record.fingerprint !== roundFingerprint;
+  return blocks ? open : null;
+}
+
+function settledOrAborted(
+  earlier: Promise<void>,
+  signal: AbortSignal,
+): Promise<void> {
+  if (signal.aborted) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const wake = () => {
+      signal.removeEventListener('abort', wake);
+      resolve();
+    };
+    signal.addEventListener('abort', wake);
+    void earlier.then(wake);
+  });
+}
+
+// Waits for the earlier calls to return, then for any other round still open
+// to finish: the user's submit or cancel, or the session ending.
+async function waitForOtherRoundToFinish(
+  session: SessionContext,
+  earlier: Promise<void>,
+  roundFingerprint: string,
+  signal: AbortSignal,
+): Promise<void> {
+  await settledOrAborted(earlier, signal);
+  let other = otherUnfinishedRound(session, roundFingerprint);
+  while (other !== null && !signal.aborted && !session.ended) {
+    await waitForEndOrDeadline(other, session.deadlineSeconds, signal);
+    other = otherUnfinishedRound(session, roundFingerprint);
+  }
+}
+
+// A call made while another is pending opens its round only once the round
+// the user is answering has finished. Its own deadline bounds the whole call:
+// passing before its round opens returns a draft and leaves the open round be.
+async function askRoundWhenFree(
+  session: SessionContext,
+  earlier: Promise<void>,
+  args: unknown,
+  toolUseId: string | null,
+  signal: AbortSignal,
+): Promise<AnswersPayload> {
+  const round = parseRound(args);
+  const roundFingerprint = fingerprint(round);
+  const deadline = new AbortController();
+  const timer = setTimeout(
+    () => deadline.abort(),
+    session.deadlineSeconds * 1000,
+  );
+  const callSignal = AbortSignal.any([signal, deadline.signal]);
+  try {
+    await waitForOtherRoundToFinish(
+      session,
+      earlier,
+      roundFingerprint,
+      callSignal,
+    );
+    const deadlinePassed =
+      deadline.signal.aborted && !signal.aborted && !session.ended;
+    if (deadlinePassed) {
+      return roundNotShownPayload(round);
+    }
+    return await askParsedRound(
+      session,
+      round,
+      roundFingerprint,
+      args,
+      toolUseId,
+      callSignal,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// One ask_round at a time per session, so a later call never replaces a round
+// the user is still answering; the first call runs at once.
 function askRoundInTurn(
   session: SessionContext,
   args: unknown,
@@ -365,7 +501,7 @@ function askRoundInTurn(
   const asking =
     earlier === null
       ? askRound(session, args, toolUseId, signal)
-      : earlier.then(() => askRound(session, args, toolUseId, signal));
+      : askRoundWhenFree(session, earlier, args, toolUseId, signal);
   const endTurn = () => {
     if (session.askTurn === turn) {
       session.askTurn = null;
@@ -405,12 +541,16 @@ function startSession(info: SessionInfo, deps: FormsServiceDeps): FormsSession {
     open: null,
     lastFinished: null,
     askTurn: null,
+    ended: false,
   };
   return {
     askRound: (args, toolUseId, signal) =>
       askRoundInTurn(session, args, toolUseId, signal),
     collectLastRound: (wait, signal) => collectLastRound(session, wait, signal),
-    end: () => closeOpenRound(session),
+    end: () => {
+      session.ended = true;
+      closeOpenRound(session);
+    },
   };
 }
 

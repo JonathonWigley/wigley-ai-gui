@@ -97,14 +97,17 @@ export interface SessionInfo {
 // One connected session; the app keeps at most one open round per session.
 export interface FormsSession {
   // `args` is the raw tool input; invalid input rejects with a RoundError message.
-  // A call made while another is pending runs once that one has returned.
+  // A call made while another is pending opens its round only once the round
+  // the user is answering finishes; its own deadline passing first returns a
+  // draft that opens nothing.
   askRound(
     args: unknown,
     toolUseId: string | null,
     signal: AbortSignal,
   ): Promise<AnswersPayload>;
   collectLastRound(wait: boolean, signal: AbortSignal): Promise<AnswersPayload>;
-  // The session disconnected: its open round closes; answers stay saved.
+  // The session disconnected: its open round closes and calls still waiting to
+  // open one reject; answers stay saved.
   end(): void;
 }
 
