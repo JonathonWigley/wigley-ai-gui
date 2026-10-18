@@ -99,7 +99,9 @@ export interface FormsSession {
   // `args` is the raw tool input; invalid input rejects with a RoundError message.
   // A call made while another is pending opens its round only once the round
   // the user is answering finishes; its own deadline passing first returns a
-  // draft that opens nothing.
+  // draft that opens nothing. A re-send of that refused round waits the same
+  // way while the round that blocked it is unfinished; any other new round
+  // closes an open draft.
   askRound(
     args: unknown,
     toolUseId: string | null,

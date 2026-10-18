@@ -613,10 +613,11 @@ describe('a call made while another round is open', () => {
   it('opens its round once the user submits the open one', async () => {
     const session = startSession();
     const { naming, queued } = await queueBehindOpenDraft(session);
-    const collecting = session.collectLastRound(true, live());
 
     presenter.submit(naming.roundId, oneAnswer({ choice: 1 }));
-    const collected = await collecting;
+    // Collected in the submit's own tick, before the woken queued call runs,
+    // so the queued call opens its round instead of handing this one back.
+    const collected = await session.collectLastRound(true, live());
     await vi.advanceTimersByTimeAsync(0);
 
     expect(collected.outcome).toBe('submitted');
@@ -651,6 +652,73 @@ describe('a call made while another round is open', () => {
     expect(stillOpen.outcome).toBe('draft');
     expect(stillOpen.answers[0].title).toBe('Naming');
     expect(savedFile(naming.roundId).outcome).toBe('open');
+  });
+
+  // The placement call's not-shown draft, returned at its own deadline.
+  async function refuseBehindOpenDraft(session: FormsSession) {
+    const { naming, queued } = await queueBehindOpenDraft(session);
+    await expireDeadline(100);
+    const refused = await queued;
+    expect(refused.summary).toContain('was not shown');
+    return naming;
+  }
+
+  it('makes a re-send of its refused round wait too, without closing the open round', async () => {
+    const session = startSession();
+    const naming = await refuseBehindOpenDraft(session);
+
+    const resent = session.askRound(PLACEMENT_ARGS, null, live());
+    const settled = watch(resent);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(settled.settled).toBe(false);
+    expect(presenter.shown).toHaveLength(1);
+    expect(presenter.closed).toEqual([]);
+    expect(savedFile(naming.roundId).outcome).toBe('open');
+    await expireDeadline();
+    const again = await resent;
+    expect(again.outcome).toBe('draft');
+    expect(again.summary).toContain('was not shown');
+    expect(presenter.closed).toEqual([]);
+    expect(store.newestFor(PLACEMENT_FINGERPRINT)).toBeNull();
+  });
+
+  it('opens a re-sent refused round once the user submits the open one', async () => {
+    const session = startSession();
+    const naming = await refuseBehindOpenDraft(session);
+    const resent = session.askRound(PLACEMENT_ARGS, null, live());
+
+    presenter.submit(naming.roundId, oneAnswer({ choice: 1 }));
+    // Collected in the submit's own tick, before the woken re-send runs, so
+    // the re-send opens its round instead of handing this one back.
+    const collected = await session.collectLastRound(true, live());
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(collected.outcome).toBe('submitted');
+    expect(presenter.shown).toHaveLength(2);
+    expect(presenter.latest().round).toEqual(parseRound(PLACEMENT_ARGS));
+    presenter.submit(presenter.latest().roundId, oneAnswer({ choice: 2 }));
+    const answered = await resent;
+    expect(answered.outcome).toBe('submitted');
+    expect(answered.answers[0].choice).toBe(2);
+  });
+
+  it('lets a different round replace the open draft after a refusal', async () => {
+    const session = startSession();
+    const naming = await refuseBehindOpenDraft(session);
+    const scopeArgs = {
+      heading: 'Scope decisions',
+      overview: 'Tidying modules. This round: scope.',
+      questions: [
+        question({ title: 'Scope', question: 'What does it cover?' }),
+      ],
+    };
+
+    void session.askRound(scopeArgs, null, live());
+
+    expect(presenter.shown).toHaveLength(2);
+    expect(presenter.closed).toEqual([naming.roundId]);
+    expect(presenter.latest().round).toEqual(parseRound(scopeArgs));
   });
 
   it('rejects and opens nothing once its session ends', async () => {
