@@ -19,7 +19,8 @@
     "release": "electron-forge release",
     "lint": "node scripts/check-layers.mts && oxlint && oxfmt --check",
     "lint:fix": "oxlint --fix && oxfmt --write && node scripts/check-layers.mts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@electron-forge/cli": "^8.0.1",
@@ -36,12 +37,15 @@
     "oxfmt": "^0.73.0",
     "oxlint": "^1.88.0",
     "typescript": "^6.0.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "vitest": "5.0.5"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.9.0",
+    "@modelcontextprotocol/server": "2.3.1",
     "@replit/codemirror-vim": "^6.4.0",
     "codemirror": "^6.0.2",
-    "electron-squirrel-startup": "^1.0.1"
+    "electron-squirrel-startup": "^1.0.1",
+    "markdown-it": "15.0.3"
   }
 }
