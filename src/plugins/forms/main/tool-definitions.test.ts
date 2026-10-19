@@ -6,7 +6,14 @@ interface ItemsSchema {
   additionalProperties: boolean;
   properties: Record<
     string,
-    { type?: string; enum?: string[]; default?: unknown }
+    {
+      type?: string;
+      enum?: string[];
+      default?: unknown;
+      minItems?: number;
+      maxItems?: number;
+      items?: ItemsSchema;
+    }
   >;
 }
 
@@ -18,7 +25,11 @@ interface ArraySchema {
 
 interface AskRoundSchema {
   required: string[];
-  properties: { questions: ArraySchema; notices: ArraySchema };
+  properties: {
+    questions: ArraySchema;
+    findings: ArraySchema;
+    notices: ArraySchema;
+  };
 }
 
 interface CollectLastRoundSchema {
@@ -75,9 +86,44 @@ describe('FORMS_TOOLS', () => {
     expect(notices.items.required).not.toContain('badge');
   });
 
-  it('caps questions at 20 and notices at 50', () => {
+  it('declares findings with five required fields and nothing else allowed', () => {
+    const findings = askRound.properties.findings;
+
+    expect(findings.type).toBe('array');
+    expect(findings.items.required).toEqual([
+      'title',
+      'finding',
+      'proof',
+      'choices',
+      'recommend',
+    ]);
+    expect(findings.items.additionalProperties).toBe(false);
+  });
+
+  it('declares each finding choice as a strict text and reason pair', () => {
+    const choices = askRound.properties.findings.items.properties.choices;
+
+    expect(choices.minItems).toBe(2);
+    expect(choices.maxItems).toBe(10);
+    expect(choices.items?.required).toEqual(['text', 'reason']);
+    expect(choices.items?.additionalProperties).toBe(false);
+  });
+
+  it('caps questions and findings at 20 and notices at 50', () => {
     expect(askRound.properties.questions.maxItems).toBe(20);
+    expect(askRound.properties.findings.maxItems).toBe(20);
     expect(askRound.properties.notices.maxItems).toBe(50);
+  });
+
+  it('describes the Notes box, never the what and why boxes', () => {
+    expect(descriptionOf('ask_round')).toContain('the Notes box');
+    expect(descriptionOf('ask_round')).not.toContain("'what'");
+  });
+
+  it('sends review findings that need a decision to findings', () => {
+    expect(descriptionOf('ask_round')).toContain(
+      "Use 'findings' for review findings that need the user's decision",
+    );
   });
 
   it('sends needs_manual_open back to ask_round, never collect_last_round', () => {

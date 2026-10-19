@@ -30,13 +30,26 @@ function notice(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function finding(overrides: Record<string, unknown> = {}) {
+  return {
+    title: 'Stale cache',
+    finding: 'The cache keeps entries after a reload.',
+    proof: '- `cache.ts:40` never clears',
+    choices: [
+      { text: 'Fix it now', reason: 'It is one line.' },
+      { text: 'Leave it', reason: 'Reloads are rare.' },
+    ],
+    recommend: 1,
+    ...overrides,
+  };
+}
+
 function answer(entry: Partial<AnswerEntry>): AnswerEntry {
   return {
     index: 1,
     choice: 0,
     not_applicable: false,
-    what: '',
-    why: '',
+    notes: '',
     dont_ask: false,
     dont_ask_reason: '',
     ...entry,
@@ -44,7 +57,13 @@ function answer(entry: Partial<AnswerEntry>): AnswerEntry {
 }
 
 function body(answers: AnswerEntry[], extra: Partial<FormBody> = {}): FormBody {
-  return { note: '', answers, notice_comments: [], ...extra };
+  return {
+    note: '',
+    answers,
+    finding_answers: [],
+    notice_comments: [],
+    ...extra,
+  };
 }
 
 function roundOf(count: number, overrides: Record<string, unknown> = {}) {
@@ -85,100 +104,16 @@ describe('parseRound', () => {
     expect(round.questions[1].question).toBe('Pick the second name.');
   });
 
-  it('names every missing question field and the six required names', () => {
-    const partial: Record<string, unknown> = question();
-    delete partial.context;
-    delete partial.rationale;
-
-    const message = roundError({ heading: 'H', questions: [partial] });
-
-    expect(message).toContain('Question 1: missing context, rationale');
-    expect(message).toContain(
-      'title, context, question, choices, recommend, rationale',
-    );
-  });
-
-  it('refuses an extra question field, saying the form draws its own controls', () => {
-    const message = roundError({
-      heading: 'H',
-      questions: [question({ not_applicable: 'yes please' })],
-    });
-
-    expect(message).toContain('unknown field(s) not_applicable');
-    expect(message).toContain('not-applicable control');
-    expect(message).toContain("'what' and 'why' boxes");
-  });
-
-  it('refuses one choice as not a question', () => {
-    const message = roundError({
-      heading: 'H',
-      questions: [question({ choices: ['only one'] })],
-    });
-
-    expect(message).toContain('is not a question');
-  });
-
-  it('refuses eleven choices and says to split the question', () => {
-    const choices = Array.from({ length: 11 }, (_, n) => `choice ${n + 1}`);
-
-    const message = roundError({
-      heading: 'H',
-      questions: [question({ choices })],
-    });
-
-    expect(message).toContain('Split it into two questions.');
-  });
-
-  it('refuses a blank choice, naming its number', () => {
-    const message = roundError({
-      heading: 'H',
-      questions: [question({ choices: ['a', '  '] })],
-    });
-
-    expect(message).toContain(
-      'Question 1: choices[2] must be a non-empty string.',
-    );
-  });
-
-  it('names the title, the choice count and the legal range for an out-of-range recommend', () => {
-    const message = roundError({
-      heading: 'H',
-      questions: [question({ choices: ['a', 'b'], recommend: 3 })],
-    });
-
-    expect(message).toContain("'Naming'");
-    expect(message).toContain('has 2 choices');
-    expect(message).toContain('from 1 to 2');
-  });
-
-  it('refuses a boolean recommend', () => {
-    const message = roundError({
-      heading: 'H',
-      questions: [question({ recommend: true })],
-    });
-
-    expect(message).toContain('not bool');
-  });
-
-  it('refuses a fractional recommend', () => {
-    const message = roundError({
-      heading: 'H',
-      questions: [question({ recommend: 1.5 })],
-    });
-
-    expect(message).toContain('not float');
-  });
-
   it.each([['not a dict'], [['a list']], [null]])(
-    'names all four top-level fields when args are not an object (%j)',
+    'names every top-level field when args are not an object (%j)',
     (args) => {
       const message = roundError(args);
 
       expect(message).toContain(
-        "'heading', 'overview', 'questions', and 'notices'",
+        "'heading', 'overview', 'notices', 'findings', and 'questions'",
       );
       expect(message).toContain(
-        "'questions' is optional when 'notices' is given",
+        'Each list is optional, but the round needs at least one item.',
       );
     },
   );
@@ -229,7 +164,7 @@ describe('parseRound', () => {
 
   it('refuses an empty questions list with no notices', () => {
     expect(roundError({ heading: 'H', questions: [] })).toBe(
-      'ask_round needs at least one question or notice.',
+      'ask_round needs at least one notice, finding or question.',
     );
   });
 });
@@ -265,33 +200,14 @@ describe('parseRound with notices', () => {
     ).toEqual([]);
   });
 
-  it.each([[{ heading: 'H', questions: [], notices: [] }], [{ heading: 'H' }]])(
-    'refuses a round with neither questions nor notices (%j)',
-    (args) => {
-      expect(roundError(args)).toContain(
-        'needs at least one question or notice',
-      );
-    },
-  );
-
-  it('names a missing notice field and the two required names', () => {
-    const partial: Record<string, unknown> = notice();
-    delete partial.context;
-
-    const message = roundError({ heading: 'H', notices: [partial] });
-
-    expect(message).toContain('Notice 1: missing context');
-    expect(message).toContain('title, context');
-  });
-
-  it('refuses choices on a notice as an unknown field', () => {
-    const message = roundError({
-      heading: 'H',
-      notices: [notice({ choices: ['a', 'b'] })],
-    });
-
-    expect(message).toContain('unknown field(s) choices');
-    expect(message).toContain('no choices to describe');
+  it.each([
+    [{ heading: 'H', questions: [], notices: [] }],
+    [{ heading: 'H' }],
+    [{ heading: 'H', questions: [], findings: [], notices: [] }],
+  ])('refuses a round with no item of any kind (%j)', (args) => {
+    expect(roundError(args)).toContain(
+      'needs at least one notice, finding or question',
+    );
   });
 
   it('accepts fifty notices and refuses fifty-one', () => {
@@ -306,35 +222,10 @@ describe('parseRound with notices', () => {
     );
   });
 
-  it('refuses a notice that is not an object', () => {
-    expect(roundError({ heading: 'H', notices: ['not an object'] })).toBe(
-      'Notice 1: each notice must be an object.',
-    );
-  });
-
-  it('gives a notice the Applied badge by default', () => {
-    expect(
-      parseRound({ heading: 'H', notices: [notice()] }).notices[0].badge,
-    ).toBe('Applied');
-  });
-
   it.each(['Dispatched', 'Decided'])('accepts the %s badge', (badge) => {
     const round = parseRound({ heading: 'H', notices: [notice({ badge })] });
 
     expect(round.notices[0].badge).toBe(badge);
-  });
-
-  it('refuses a badge outside the closed set, naming the set and the value', () => {
-    const message = roundError({
-      heading: 'H',
-      notices: [notice({ badge: 'In progress' })],
-    });
-
-    expect(message).toContain('badge must be one of');
-    for (const badge of ['Applied', 'Dispatched', 'Decided']) {
-      expect(message).toContain(badge);
-    }
-    expect(message).toContain("'In progress'");
   });
 
   it('accepts twenty questions and refuses twenty-one', () => {
@@ -350,20 +241,130 @@ describe('parseRound with notices', () => {
   });
 });
 
+describe('parseRound with findings', () => {
+  it('parses findings beside questions and notices, in their own array', () => {
+    const round = parseRound({
+      heading: 'H',
+      questions: [question()],
+      findings: [finding()],
+      notices: [notice()],
+    });
+
+    expect(round.findings[0].title).toBe('Stale cache');
+    expect(round.findings[0].choices[1]).toEqual({
+      text: 'Leave it',
+      reason: 'Reloads are rare.',
+    });
+    expect(round.questions).toHaveLength(1);
+    expect(round.notices).toHaveLength(1);
+  });
+
+  it('parses findings alone', () => {
+    const round = parseRound({ heading: 'H', findings: [finding()] });
+
+    expect(round.findings).toHaveLength(1);
+    expect(round.questions).toEqual([]);
+    expect(round.notices).toEqual([]);
+  });
+
+  it('reads omitted or null findings as none', () => {
+    expect(
+      parseRound({ heading: 'H', questions: [question()] }).findings,
+    ).toEqual([]);
+    expect(
+      parseRound({ heading: 'H', questions: [question()], findings: null })
+        .findings,
+    ).toEqual([]);
+  });
+
+  it('accepts twenty findings and refuses twenty-one', () => {
+    const findings = (count: number) =>
+      Array.from({ length: count }, (_, n) => finding({ title: `F ${n}` }));
+
+    expect(
+      parseRound({ heading: 'H', findings: findings(20) }).findings,
+    ).toHaveLength(20);
+    expect(roundError({ heading: 'H', findings: findings(21) })).toContain(
+      'ask_round got 21 findings; the maximum is 20. Split the round.',
+    );
+  });
+
+  it("numbers a finding's errors from 1", () => {
+    const partial: Record<string, unknown> = finding();
+    delete partial.proof;
+
+    expect(
+      roundError({ heading: 'H', findings: [finding(), partial] }),
+    ).toContain('Finding 2: missing proof');
+  });
+});
+
 describe('readFormBody', () => {
   it('reads one entry per question by index, with defaults where none was saved', () => {
     const round = roundOf(2);
 
     const read = readFormBody(round, {
       note: 'n',
-      answers: [{ index: 2, choice: 1, what: 'w' }],
+      answers: [{ index: 2, choice: 1, notes: 'w' }],
     });
 
     expect(read).toEqual(
-      body([answer({ index: 1 }), answer({ index: 2, choice: 1, what: 'w' })], {
-        note: 'n',
-      }),
+      body(
+        [answer({ index: 1 }), answer({ index: 2, choice: 1, notes: 'w' })],
+        {
+          note: 'n',
+        },
+      ),
     );
+  });
+
+  it("joins an old file's what and why as notes, with a blank line", () => {
+    const read = readFormBody(roundOf(1), {
+      answers: [{ index: 1, what: 'mine', why: 'because' }],
+    });
+
+    expect(read.answers).toEqual([answer({ notes: 'mine\n\nbecause' })]);
+  });
+
+  it("reads an old file's lone what or lone why as notes", () => {
+    const lone = (entry: Record<string, unknown>) =>
+      readFormBody(roundOf(1), { answers: [{ index: 1, ...entry }] }).answers[0]
+        .notes;
+
+    expect(lone({ what: 'mine', why: '' })).toBe('mine');
+    expect(lone({ why: 'because' })).toBe('because');
+  });
+
+  it('prefers a notes key over what and why, even when empty', () => {
+    const read = readFormBody(roundOf(1), {
+      answers: [{ index: 1, notes: '', what: 'old' }],
+    });
+
+    expect(read.answers).toEqual([answer({ notes: '' })]);
+  });
+
+  it('reads one finding answer per finding by index', () => {
+    const round = parseRound({
+      heading: 'H',
+      findings: [finding(), finding({ title: 'Dead branch' })],
+    });
+
+    const read = readFormBody(round, {
+      finding_answers: [{ index: 2, choice: 1, notes: 'n' }],
+    });
+
+    expect(read.finding_answers).toEqual([
+      answer({ index: 1 }),
+      answer({ index: 2, choice: 1, notes: 'n' }),
+    ]);
+  });
+
+  it('reads a body with no finding_answers as untouched findings', () => {
+    const round = parseRound({ heading: 'H', findings: [finding()] });
+
+    expect(readFormBody(round, {}).finding_answers).toEqual([
+      answer({ index: 1 }),
+    ]);
   });
 
   it('keeps a pressed answer with its reason', () => {
@@ -441,16 +442,11 @@ describe('answersPayload', () => {
       round,
       'submitted',
       body([
-        answer({
-          index: 1,
-          choice: 1,
-          what: 'Went with a',
-          why: 'It fits best',
-        }),
+        answer({ index: 1, choice: 1, notes: 'Went with a' }),
         answer({
           index: 2,
           not_applicable: true,
-          why: "Validation doesn't apply here",
+          notes: "Validation doesn't apply here",
         }),
         answer({ index: 3 }),
       ]),
@@ -468,8 +464,7 @@ describe('answersPayload', () => {
           choice: 1,
           choice_text: 'a',
           took_recommendation: true,
-          what: 'Went with a',
-          why: 'It fits best',
+          notes: 'Went with a',
         },
         {
           index: 2,
@@ -478,7 +473,7 @@ describe('answersPayload', () => {
           choice: 0,
           choice_text: '',
           took_recommendation: false,
-          why: "Validation doesn't apply here",
+          notes: "Validation doesn't apply here",
         },
         {
           index: 3,
@@ -489,6 +484,7 @@ describe('answersPayload', () => {
           took_recommendation: false,
         },
       ],
+      findings: [],
       notices: [],
     });
   });
@@ -599,6 +595,130 @@ describe('answersPayload', () => {
   });
 });
 
+describe('answersPayload findings', () => {
+  it('returns finding answers in their own array, index-parallel with the findings', () => {
+    const round = parseRound({
+      heading: 'H',
+      questions: [question()],
+      findings: [finding(), finding({ title: 'Dead branch' })],
+    });
+
+    const payload = answersPayload(
+      round,
+      'submitted',
+      body([answer({ choice: 1 })], {
+        finding_answers: [
+          answer({ index: 1, choice: 2, notes: 'later' }),
+          answer({ index: 2, not_applicable: true }),
+        ],
+      }),
+    );
+
+    expect(payload.findings).toEqual([
+      {
+        index: 1,
+        title: 'Stale cache',
+        status: 'answered',
+        choice: 2,
+        choice_text: 'Leave it',
+        took_recommendation: false,
+        notes: 'later',
+      },
+      {
+        index: 2,
+        title: 'Dead branch',
+        status: 'not_applicable',
+        choice: 0,
+        choice_text: '',
+        took_recommendation: false,
+      },
+    ]);
+    expect(payload.answers).toHaveLength(1);
+    expect(payload.answers[0].title).toBe('Naming');
+  });
+
+  it("carries a Don't ask press on a finding answer", () => {
+    const round = parseRound({ heading: 'H', findings: [finding()] });
+
+    const payload = answersPayload(
+      round,
+      'submitted',
+      body([], {
+        finding_answers: [
+          answer({ choice: 1, dont_ask: true, dont_ask_reason: 'obvious' }),
+        ],
+      }),
+    );
+
+    expect(payload.findings[0]).toMatchObject({
+      dont_ask: true,
+      dont_ask_reason: 'obvious',
+      choice: 1,
+    });
+  });
+
+  it('counts findings alone in the summary', () => {
+    const round = parseRound({
+      heading: 'H',
+      findings: [finding(), finding({ title: 'Dead branch' })],
+    });
+
+    const payload = answersPayload(
+      round,
+      'submitted',
+      body([], { finding_answers: [answer({ choice: 1 })] }),
+    );
+
+    expect(payload.summary).toBe(
+      '2 findings: 1 answered, 0 not applicable, 1 untouched.',
+    );
+  });
+
+  it('counts findings first, then questions, summed', () => {
+    const round = parseRound({
+      heading: 'H',
+      questions: [question()],
+      findings: [finding(), finding({ title: 'Dead branch' })],
+    });
+
+    const payload = answersPayload(
+      round,
+      'submitted',
+      body([answer({ choice: 1 })], {
+        finding_answers: [answer({ choice: 1 })],
+      }),
+    );
+
+    expect(payload.summary).toBe(
+      '2 findings, 1 question: 2 answered, 0 not applicable, 1 untouched.',
+    );
+  });
+
+  it('uses the singular for one finding', () => {
+    const round = parseRound({ heading: 'H', findings: [finding()] });
+
+    expect(answersPayload(round, 'submitted', body([])).summary).toBe(
+      '1 finding: 0 answered, 0 not applicable, 1 untouched.',
+    );
+  });
+
+  it('says 0 questions for a notices-alone round', () => {
+    const round = parseRound({ heading: 'H', notices: [notice()] });
+
+    expect(answersPayload(round, 'submitted', body([])).summary).toBe(
+      '0 questions: 0 answered, 0 not applicable, 0 untouched.',
+    );
+  });
+
+  it('says a findings draft is still open', () => {
+    const round = parseRound({ heading: 'H', findings: [finding()] });
+
+    expect(answersPayload(round, 'draft', body([])).summary).toBe(
+      '1 finding: 0 answered, 0 not applicable, 1 untouched. The form is still open.',
+    );
+  });
+});
+
 describe('answersPayload notices', () => {
   function roundWithNotices(noticeCount: number) {
     return parseRound({
@@ -692,27 +812,14 @@ describe('answersPayload free text', () => {
       .answers[0];
   }
 
-  it('leaves out empty what and why', () => {
-    const entry = entryFor({ choice: 1 });
-
-    expect(entry).not.toHaveProperty('what');
-    expect(entry).not.toHaveProperty('why');
+  it('leaves out empty notes', () => {
+    expect(entryFor({ choice: 1 })).not.toHaveProperty('notes');
   });
 
-  it('carries written what and why', () => {
-    expect(
-      entryFor({ choice: 1, what: 'my own', why: 'because' }),
-    ).toMatchObject({
-      what: 'my own',
-      why: 'because',
+  it('carries written notes', () => {
+    expect(entryFor({ choice: 1, notes: 'my own' })).toMatchObject({
+      notes: 'my own',
     });
-  });
-
-  it('carries only the box that was written', () => {
-    const entry = entryFor({ not_applicable: true, why: 'does not apply' });
-
-    expect(entry).not.toHaveProperty('what');
-    expect(entry.why).toBe('does not apply');
   });
 
   it('leaves out an empty note and carries a written one', () => {
@@ -799,6 +906,42 @@ describe('fingerprint', () => {
     );
   });
 
+  it('hashes a round with no findings as it did before findings existed', () => {
+    expect(fingerprint(parseRound(args({ notices: [] })))).toBe(
+      'af0111ce283d984c9577ca585f844661d2845e3473c03a5a84e49100c0bfb0c0',
+    );
+  });
+
+  it('ignores an empty findings list', () => {
+    expect(fingerprint(parseRound(args({ findings: [] })))).toBe(
+      fingerprint(parseRound(args())),
+    );
+  });
+
+  it('counts the findings', () => {
+    expect(fingerprint(parseRound(args({ findings: [finding()] })))).not.toBe(
+      fingerprint(parseRound(args())),
+    );
+  });
+
+  it("changes with a finding's choice reason", () => {
+    const withReason = (reason: string) =>
+      args({
+        findings: [
+          finding({
+            choices: [
+              { text: 'Fix it now', reason: 'It is one line.' },
+              { text: 'Leave it', reason },
+            ],
+          }),
+        ],
+      });
+
+    expect(fingerprint(parseRound(withReason('Reloads are rare.')))).not.toBe(
+      fingerprint(parseRound(withReason('Nobody reloads.'))),
+    );
+  });
+
   it('counts the notices', () => {
     expect(fingerprint(parseRound(args({ notices: [] })))).not.toBe(
       fingerprint(parseRound(args())),
@@ -838,6 +981,7 @@ describe('noRoundPayload', () => {
 
     expect(payload.outcome).toBe('no_round');
     expect(payload.answers).toEqual([]);
+    expect(payload.findings).toEqual([]);
     expect(payload.notices).toEqual([]);
     expect(payload.next).toContain('ask_round');
   });

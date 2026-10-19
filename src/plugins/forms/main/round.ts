@@ -1,42 +1,32 @@
 import { createHash } from 'node:crypto';
 import type {
+  AnswerableKind,
   AnswerEntry,
   AnswerResult,
   AnswerStatus,
   AnswersPayload,
   FormBody,
   Notice,
-  NoticeBadge,
   NoticeResult,
-  Question,
   Round,
   RoundEnd,
 } from '../contract';
+import {
+  fieldsOutside,
+  isObject,
+  type JsonObject,
+  requireText,
+} from './kinds/fields';
+import { ANSWERABLE_KINDS, FORMATS, ITEM_KINDS } from './kinds/formats';
+import type {
+  AnswerSubject,
+  ItemFormat,
+  PythonJsonValue,
+} from './kinds/item-format';
 import { RoundError } from './round-error';
 
-export const MIN_CHOICES = 2;
-export const MAX_CHOICES = 10;
-export const MAX_QUESTIONS = 20;
-export const MAX_NOTICES = 50;
-
-export const NOTICE_BADGES: readonly NoticeBadge[] = [
-  'Applied',
-  'Dispatched',
-  'Decided',
-];
-export const DEFAULT_NOTICE_BADGE: NoticeBadge = 'Applied';
-
-const ROUND_FIELDS = ['heading', 'overview', 'questions', 'notices'];
-const QUESTION_FIELDS = [
-  'title',
-  'context',
-  'question',
-  'choices',
-  'recommend',
-  'rationale',
-];
-const NOTICE_REQUIRED_FIELDS = ['title', 'context'];
-const NOTICE_FIELDS = [...NOTICE_REQUIRED_FIELDS, 'badge'];
+const ITEM_FIELDS = ITEM_KINDS.map((kind) => FORMATS[kind].argsKey);
+const ROUND_FIELDS = ['heading', 'overview', ...ITEM_FIELDS];
 
 export type FinishedOutcome = RoundEnd['kind'];
 
@@ -53,210 +43,35 @@ const NEXT_ON_NO_ROUND =
   "same round again with ask_round: the user's saved answers fill in. Do not " +
   'move the questions into the reply.';
 
-type JsonObject = Record<string, unknown>;
-
-type PythonJsonValue =
-  | string
-  | number
-  | PythonJsonValue[]
-  | { [key: string]: PythonJsonValue };
-
-function isObject(value: unknown): value is JsonObject {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+// 'a', 'b', and 'c'
+function quotedList(names: string[]): string {
+  const quoted = names.map((name) => `'${name}'`);
+  return `${quoted.slice(0, -1).join(', ')}, and ${quoted.at(-1)}`;
 }
 
-// Python's type names, so messages read as they did from the Python server.
-function pythonTypeName(value: unknown): string {
-  if (value === null || value === undefined) {
-    return 'NoneType';
-  }
-  if (typeof value === 'boolean') {
-    return 'bool';
-  }
-  if (typeof value === 'number') {
-    return Number.isInteger(value) ? 'int' : 'float';
-  }
-  if (typeof value === 'string') {
-    return 'str';
-  }
-  return Array.isArray(value) ? 'list' : 'dict';
+// a, b or c
+function eitherList(names: string[]): string {
+  return `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`;
 }
 
-// Python's repr for the values a badge can hold.
-function pythonRepr(value: unknown): string {
-  if (typeof value === 'string') {
-    return `'${value}'`;
-  }
-  if (value === null || value === undefined) {
-    return 'None';
-  }
-  if (typeof value === 'boolean') {
-    return value ? 'True' : 'False';
-  }
-  return JSON.stringify(value);
+function capitalised(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function requireText(value: unknown, field: string, where: string): string {
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new RoundError(
-      `${where}${field} must be a non-empty string. Give it the text you ` +
-        `would have written in the reply.`,
-    );
-  }
-  return value;
-}
-
-function fieldsMissing(item: JsonObject, required: string[]): string[] {
-  return required.filter((field) => !Object.hasOwn(item, field)).sort();
-}
-
-function fieldsOutside(item: JsonObject, allowed: string[]): string[] {
-  return Object.keys(item)
-    .filter((field) => !allowed.includes(field))
-    .sort();
-}
-
-function isNoticeBadge(value: unknown): value is NoticeBadge {
-  return (NOTICE_BADGES as readonly unknown[]).includes(value);
-}
-
-function parseNotice(item: unknown, where: string): Notice {
-  if (!isObject(item)) {
-    throw new RoundError(`${where}each notice must be an object.`);
-  }
-  const missing = fieldsMissing(item, NOTICE_REQUIRED_FIELDS);
-  if (missing.length > 0) {
-    throw new RoundError(
-      `${where}missing ${missing.join(', ')}. Both fields are ` +
-        `required: title, context.`,
-    );
-  }
-  const extra = fieldsOutside(item, NOTICE_FIELDS);
-  if (extra.length > 0) {
-    throw new RoundError(
-      `${where}unknown field(s) ${extra.join(', ')}. A notice takes ` +
-        `only title, context, and the optional badge; the form draws its own ` +
-        `comment box, and a notice has no choices to describe.`,
-    );
-  }
-  const title = requireText(item.title, 'title', where);
-  const context = requireText(item.context, 'context', where);
-  const badge = Object.hasOwn(item, 'badge')
-    ? item.badge
-    : DEFAULT_NOTICE_BADGE;
-  if (!isNoticeBadge(badge)) {
-    throw new RoundError(
-      `${where}badge must be one of ${NOTICE_BADGES.join(', ')}, not ` +
-        `${pythonRepr(badge)}. Use 'Applied' for a fix already landed, ` +
-        `'Dispatched' for one still in flight, and 'Decided' for a ` +
-        `decision you took alone.`,
-    );
-  }
-  return { title, context, badge };
-}
-
-function parseNotices(raw: unknown): Notice[] {
+function parseItems<Item>(format: ItemFormat<Item>, raw: unknown): Item[] {
   if (!Array.isArray(raw)) {
-    throw new RoundError("ask_round's notices must be a list of objects.");
-  }
-  if (raw.length > MAX_NOTICES) {
     throw new RoundError(
-      `ask_round got ${raw.length} notices; the maximum is ${MAX_NOTICES}. ` +
-        `Split the round.`,
+      `ask_round's ${format.argsKey} must be a list of objects.`,
     );
   }
-  return raw.map((item, i) => parseNotice(item, `Notice ${i + 1}: `));
-}
-
-function parseChoices(raw: unknown, where: string): string[] {
-  if (!Array.isArray(raw)) {
-    throw new RoundError(`${where}choices must be a list of strings.`);
-  }
-  if (raw.length < MIN_CHOICES) {
+  if (raw.length > format.maxItems) {
     throw new RoundError(
-      `${where}has ${raw.length} choice(s). A question with fewer than ` +
-        `${MIN_CHOICES} is not a question — give at least ${MIN_CHOICES}.`,
+      `ask_round got ${raw.length} ${format.argsKey}; the maximum is ` +
+        `${format.maxItems}. Split the round.`,
     );
   }
-  if (raw.length > MAX_CHOICES) {
-    throw new RoundError(
-      `${where}has ${raw.length} choices; the maximum is ${MAX_CHOICES}. ` +
-        `Split it into two questions.`,
-    );
-  }
-  return raw.map((choice, i) =>
-    requireText(choice, `choices[${i + 1}]`, where),
-  );
-}
-
-function parseRecommend(
-  raw: unknown,
-  title: string,
-  choiceCount: number,
-  where: string,
-): number {
-  if (typeof raw !== 'number' || !Number.isInteger(raw)) {
-    throw new RoundError(
-      `${where}recommend must be the 1-based number of the recommended ` +
-        `choice, not ${pythonTypeName(raw)}.`,
-    );
-  }
-  if (raw < 1 || raw > choiceCount) {
-    throw new RoundError(
-      `${where}'${title}' has ${choiceCount} choices; recommend was ` +
-        `${raw}. Use a number from 1 to ${choiceCount}.`,
-    );
-  }
-  return raw;
-}
-
-function parseQuestion(item: unknown, where: string): Question {
-  if (!isObject(item)) {
-    throw new RoundError(`${where}each question must be an object.`);
-  }
-  const missing = fieldsMissing(item, QUESTION_FIELDS);
-  if (missing.length > 0) {
-    throw new RoundError(
-      `${where}missing ${missing.join(', ')}. All six fields are ` +
-        `required: title, context, question, choices, recommend, rationale.`,
-    );
-  }
-  const extra = fieldsOutside(item, QUESTION_FIELDS);
-  if (extra.length > 0) {
-    throw new RoundError(
-      `${where}unknown field(s) ${extra.join(', ')}. The form draws ` +
-        `the not-applicable control and the 'what' and 'why' boxes itself; ` +
-        `do not describe them.`,
-    );
-  }
-  const title = requireText(item.title, 'title', where);
-  const context = requireText(item.context, 'context', where);
-  const question = requireText(item.question, 'question', where);
-  const rationale = requireText(item.rationale, 'rationale', where);
-  const choices = parseChoices(item.choices, where);
-  const recommend = parseRecommend(
-    item.recommend,
-    title,
-    choices.length,
-    where,
-  );
-  return { title, context, question, choices, recommend, rationale };
-}
-
-function parseQuestions(raw: unknown, noticeCount: number): Question[] {
-  if (!Array.isArray(raw)) {
-    throw new RoundError("ask_round's questions must be a list.");
-  }
-  if (raw.length === 0 && noticeCount === 0) {
-    throw new RoundError('ask_round needs at least one question or notice.');
-  }
-  if (raw.length > MAX_QUESTIONS) {
-    throw new RoundError(
-      `ask_round got ${raw.length} questions; the maximum is ${MAX_QUESTIONS}. ` +
-        `Split the round.`,
-    );
-  }
-  return raw.map((item, i) => parseQuestion(item, `Question ${i + 1}: `));
+  const noun = capitalised(format.noun);
+  return raw.map((item, i) => format.parse(item, `${noun} ${i + 1}: `));
 }
 
 // Every error fires here, before anything is shown, so a malformed round
@@ -264,15 +79,15 @@ function parseQuestions(raw: unknown, noticeCount: number): Question[] {
 export function parseRound(args: unknown): Round {
   if (!isObject(args)) {
     throw new RoundError(
-      "ask_round takes an object with 'heading', 'overview', 'questions', " +
-        "and 'notices'. 'questions' is optional when 'notices' is given.",
+      `ask_round takes an object with ${quotedList(ROUND_FIELDS)}. Each list ` +
+        `is optional, but the round needs at least one item.`,
     );
   }
   const unknownFields = fieldsOutside(args, ROUND_FIELDS);
   if (unknownFields.length > 0) {
     throw new RoundError(
       `ask_round got unknown field(s): ${unknownFields.join(', ')}. ` +
-        `It takes 'heading', 'overview', 'questions', and 'notices'.`,
+        `It takes ${quotedList(ROUND_FIELDS)}.`,
     );
   }
   const heading = requireText(args.heading, 'heading', '');
@@ -282,9 +97,29 @@ export function parseRound(args: unknown): Round {
   if (typeof overview !== 'string') {
     throw new RoundError("ask_round's overview must be a string.");
   }
-  const notices = parseNotices(args.notices ?? []);
-  const questions = parseQuestions(args.questions ?? [], notices.length);
-  return { heading, overview: overview.trim(), questions, notices };
+  const notices = parseItems(
+    FORMATS.notice,
+    args[FORMATS.notice.argsKey] ?? [],
+  );
+  const findings = parseItems(
+    FORMATS.finding,
+    args[FORMATS.finding.argsKey] ?? [],
+  );
+  const questions = parseItems(
+    FORMATS.question,
+    args[FORMATS.question.argsKey] ?? [],
+  );
+  if (notices.length + findings.length + questions.length === 0) {
+    const nouns = ITEM_KINDS.map((kind) => FORMATS[kind].noun);
+    throw new RoundError(`ask_round needs at least one ${eitherList(nouns)}.`);
+  }
+  return {
+    heading,
+    overview: overview.trim(),
+    questions,
+    notices,
+    findings,
+  };
 }
 
 function textOrEmpty(value: unknown): string {
@@ -304,30 +139,44 @@ function entriesByIndex(list: unknown): Map<number, JsonObject> {
   return byIndex;
 }
 
+// A file written before the Notes box held its text in 'what' and 'why'.
+function oldFileNotes(entry: JsonObject): string {
+  return [textOrEmpty(entry.what), textOrEmpty(entry.why)]
+    .filter((text) => text !== '')
+    .join('\n\n');
+}
+
 function readAnswerEntry(index: number, entry: JsonObject): AnswerEntry {
   return {
     index,
     choice: Number.isInteger(entry.choice) ? (entry.choice as number) : 0,
     not_applicable: entry.not_applicable === true,
-    what: textOrEmpty(entry.what),
-    why: textOrEmpty(entry.why),
+    notes: Object.hasOwn(entry, 'notes')
+      ? textOrEmpty(entry.notes)
+      : oldFileNotes(entry),
     dont_ask: entry.dont_ask === true,
     dont_ask_reason: textOrEmpty(entry.dont_ask_reason),
   };
 }
 
+function readAnswerEntries(
+  items: readonly unknown[],
+  saved: unknown,
+): AnswerEntry[] {
+  const entries = entriesByIndex(saved);
+  return items.map((_, i) => readAnswerEntry(i + 1, entries.get(i + 1) ?? {}));
+}
+
 // Any body — from the window or from a file another version wrote — as one
-// answer per question and one comment per notice, in order. Never throws: a
-// field of the wrong type reads as its empty value.
+// answer per question and per finding and one comment per notice, in order.
+// Never throws: a field of the wrong type reads as its empty value.
 export function readFormBody(round: Round, raw: unknown): FormBody {
   const body = isObject(raw) ? raw : {};
-  const answers = entriesByIndex(body.answers);
   const comments = entriesByIndex(body.notice_comments);
   return {
     note: textOrEmpty(body.note),
-    answers: round.questions.map((_, i) =>
-      readAnswerEntry(i + 1, answers.get(i + 1) ?? {}),
-    ),
+    answers: readAnswerEntries(round.questions, body.answers),
+    finding_answers: readAnswerEntries(round.findings, body.finding_answers),
     notice_comments: round.notices.map((_, i) => ({
       index: i + 1,
       comment: textOrEmpty(comments.get(i + 1)?.comment),
@@ -335,9 +184,12 @@ export function readFormBody(round: Round, raw: unknown): FormBody {
   };
 }
 
-function answerResult(question: Question, entry: AnswerEntry): AnswerResult {
+function answerResult(
+  subject: AnswerSubject,
+  entry: AnswerEntry,
+): AnswerResult {
   const choiceIsInRange =
-    entry.choice >= 1 && entry.choice <= question.choices.length;
+    entry.choice >= 1 && entry.choice <= subject.choiceTexts.length;
   const answered = !entry.not_applicable && choiceIsInRange;
   let status: AnswerStatus = 'untouched';
   if (entry.not_applicable) {
@@ -347,17 +199,14 @@ function answerResult(question: Question, entry: AnswerEntry): AnswerResult {
   }
   const result: AnswerResult = {
     index: entry.index,
-    title: question.title,
+    title: subject.title,
     status,
     choice: answered ? entry.choice : 0,
-    choice_text: answered ? question.choices[entry.choice - 1] : '',
-    took_recommendation: answered && entry.choice === question.recommend,
+    choice_text: answered ? subject.choiceTexts[entry.choice - 1] : '',
+    took_recommendation: answered && entry.choice === subject.recommend,
   };
-  if (entry.what) {
-    result.what = entry.what;
-  }
-  if (entry.why) {
-    result.why = entry.why;
+  if (entry.notes) {
+    result.notes = entry.notes;
   }
   if (entry.dont_ask) {
     result.dont_ask = true;
@@ -384,20 +233,35 @@ function noticeResult(
   return result;
 }
 
+function countOf(n: number, noun: string): string {
+  return `${n} ${noun}${n !== 1 ? 's' : ''}`;
+}
+
 // Counted from the same statuses the answers carry, so the two never disagree.
-function summarise(statuses: AnswerStatus[], stillOpen: boolean): string {
+function summarise(
+  results: Record<AnswerableKind, AnswerResult[]>,
+  stillOpen: boolean,
+): string {
+  const counted = ANSWERABLE_KINDS.filter((kind) => results[kind].length > 0);
+  const parts = counted.map((kind) =>
+    countOf(results[kind].length, FORMATS[kind].noun),
+  );
+  const items =
+    parts.length > 0 ? parts.join(', ') : countOf(0, FORMATS.question.noun);
+  const statuses = ANSWERABLE_KINDS.flatMap((kind) =>
+    results[kind].map((result) => result.status),
+  );
   const count = (status: AnswerStatus) =>
     statuses.filter((each) => each === status).length;
-  const n = statuses.length;
   const line =
-    `${n} question${n !== 1 ? 's' : ''}: ${count('answered')} answered, ` +
+    `${items}: ${count('answered')} answered, ` +
     `${count('not_applicable')} not applicable, ${count('untouched')} untouched.`;
   return stillOpen ? `${line} The form is still open.` : line;
 }
 
-// The tool result for a round that ran. `answers` and `notices` are
-// index-parallel with the round's questions and notices; free text appears
-// only when the user wrote some; `dont_ask` only on a pressed answer.
+// The tool result for a round that ran. `answers`, `findings` and `notices`
+// are index-parallel with the round's questions, findings and notices; notes
+// appear only when the user wrote some; `dont_ask` only on a pressed answer.
 export function answersPayload(
   round: Round,
   outcome: RoundOutcome,
@@ -405,7 +269,13 @@ export function answersPayload(
 ): AnswersPayload {
   const read = readFormBody(round, body);
   const answers = round.questions.map((question, i) =>
-    answerResult(question, read.answers[i]),
+    answerResult(FORMATS.question.answerSubject(question), read.answers[i]),
+  );
+  const findings = round.findings.map((finding, i) =>
+    answerResult(
+      FORMATS.finding.answerSubject(finding),
+      read.finding_answers[i],
+    ),
   );
   const notices = round.notices.map((notice, i) =>
     noticeResult(notice, i + 1, read.notice_comments[i].comment),
@@ -413,12 +283,10 @@ export function answersPayload(
   const stillOpen = outcome === 'draft';
   const payload: AnswersPayload = {
     outcome,
-    summary: summarise(
-      answers.map((answer) => answer.status),
-      stillOpen,
-    ),
+    summary: summarise({ finding: findings, question: answers }, stillOpen),
     next: stillOpen ? NEXT_ON_DRAFT : '',
     answers,
+    findings,
     notices,
   };
   if (read.note) {
@@ -450,6 +318,7 @@ export function noRoundPayload(): AnswersPayload {
     summary: 'No round is open.',
     next: NEXT_ON_NO_ROUND,
     answers: [],
+    findings: [],
     notices: [],
   };
 }
@@ -472,28 +341,24 @@ function pythonJsonDumps(value: PythonJsonValue): string {
   return `{${members.join(', ')}}`;
 }
 
-function questionContent(question: Question): PythonJsonValue {
-  return {
-    title: question.title,
-    context: question.context,
-    question: question.question,
-    choices: question.choices,
-    recommend: question.recommend,
-    rationale: question.rationale,
-  };
-}
-
-function noticeContent(notice: Notice): PythonJsonValue {
-  return { title: notice.title, context: notice.context, badge: notice.badge };
-}
-
-// What a re-sent round is matched on: every field of its questions and
-// notices, never the heading or overview, which a re-send may reword. Equal to
-// the Python server's fingerprint, so its saved rounds still match.
+// What a re-sent round is matched on: every field of its questions, notices
+// and findings, never the heading or overview, which a re-send may reword.
+// Findings join the text only when the round has some, so a round without
+// them equals the Python server's fingerprint and its saved rounds still match.
 export function fingerprint(round: Round): string {
-  const text = pythonJsonDumps({
-    questions: round.questions.map(questionContent),
-    notices: round.notices.map(noticeContent),
-  });
+  const content: Record<string, PythonJsonValue> = {
+    questions: round.questions.map((question) =>
+      FORMATS.question.fingerprintContent(question),
+    ),
+    notices: round.notices.map((notice) =>
+      FORMATS.notice.fingerprintContent(notice),
+    ),
+  };
+  if (round.findings.length > 0) {
+    content.findings = round.findings.map((finding) =>
+      FORMATS.finding.fingerprintContent(finding),
+    );
+  }
+  const text = pythonJsonDumps(content);
   return createHash('sha256').update(text, 'utf8').digest('hex');
 }

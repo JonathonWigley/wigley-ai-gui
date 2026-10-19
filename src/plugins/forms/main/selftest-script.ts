@@ -182,10 +182,16 @@ function payloadProblems(payload: AnswersPayload): string[] {
     [first?.status === 'answered', `question 1 status ${first?.status}`],
     [first?.choice === 2, `question 1 choice ${first?.choice}`],
     // "abc" proves each a entered INSERT with the cursor at the end.
-    [first?.what === 'abc', `question 1 what ${JSON.stringify(first?.what)}`],
+    [
+      first?.notes === 'abc',
+      `question 1 notes ${JSON.stringify(first?.notes)}`,
+    ],
     // "xb" proves the keys a broken sequence left over were typed into the
     // box its command focused, in INSERT.
-    [second?.what === 'xb', `question 2 what ${JSON.stringify(second?.what)}`],
+    [
+      second?.notes === 'xb',
+      `question 2 notes ${JSON.stringify(second?.notes)}`,
+    ],
     [
       second?.status === 'not_applicable',
       `question 2 status ${second?.status}`,

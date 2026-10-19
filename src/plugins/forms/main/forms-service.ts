@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { AgentSession, SessionInfo } from '../../sessions/contract';
 import type {
+  AnswerEntry,
   AnswersPayload,
   FormBody,
   FormsService,
@@ -99,6 +100,10 @@ function roundLabel(projectDir: string | null, heading: string): string {
     : `${path.basename(projectDir)} · ${heading}`;
 }
 
+function withoutDontAsk(answer: AnswerEntry): AnswerEntry {
+  return { ...answer, dont_ask: false, dont_ask_reason: '' };
+}
+
 // A press belongs to the round it was made in, so a finished round's copy
 // drops it; an open draft's copy keeps it, since retro reads finished rounds only.
 function prefillDraft(round: Round, saved: SavedRound | null): FormBody | null {
@@ -111,11 +116,8 @@ function prefillDraft(round: Round, saved: SavedRound | null): FormBody | null {
   }
   return {
     ...body,
-    answers: body.answers.map((answer) => ({
-      ...answer,
-      dont_ask: false,
-      dont_ask_reason: '',
-    })),
+    answers: body.answers.map(withoutDontAsk),
+    finding_answers: body.finding_answers.map(withoutDontAsk),
   };
 }
 

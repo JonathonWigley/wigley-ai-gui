@@ -3,6 +3,10 @@ import type { AgentSession } from '../sessions/contract';
 
 export type NoticeBadge = 'Applied' | 'Dispatched' | 'Decided';
 
+export type ItemKind = 'notice' | 'finding' | 'question';
+// The kinds the user answers with a choice.
+export type AnswerableKind = Exclude<ItemKind, 'notice'>;
+
 export interface Question {
   title: string;
   context: string;
@@ -19,21 +23,35 @@ export interface Notice {
   badge: NoticeBadge;
 }
 
+export interface FindingChoice {
+  text: string;
+  reason: string;
+}
+
+export interface Finding {
+  title: string;
+  finding: string;
+  proof: string;
+  choices: FindingChoice[];
+  // 1-based.
+  recommend: number;
+}
+
 // A validated ask_round call.
 export interface Round {
   heading: string;
   overview: string;
   questions: Question[];
   notices: Notice[];
+  findings: Finding[];
 }
 
-// The user's answers as last saved; field names are the saved-round file format.
+// One question's or finding's answer as last saved; field names are the saved-round file format.
 export interface AnswerEntry {
   index: number;
   choice: number;
   not_applicable: boolean;
-  what: string;
-  why: string;
+  notes: string;
   dont_ask: boolean;
   dont_ask_reason: string;
 }
@@ -46,6 +64,7 @@ export interface NoticeComment {
 export interface FormBody {
   note: string;
   answers: AnswerEntry[];
+  finding_answers: AnswerEntry[];
   notice_comments: NoticeComment[];
 }
 
@@ -65,8 +84,7 @@ export interface AnswerResult {
   choice: number;
   choice_text: string;
   took_recommendation: boolean;
-  what?: string;
-  why?: string;
+  notes?: string;
   dont_ask?: true;
   dont_ask_reason?: string;
 }
@@ -84,6 +102,7 @@ export interface AnswersPayload {
   summary: string;
   next: string;
   answers: AnswerResult[];
+  findings: AnswerResult[];
   notices: NoticeResult[];
   note?: string;
   earlier_heading?: string;

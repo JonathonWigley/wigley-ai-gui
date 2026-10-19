@@ -37,7 +37,7 @@ function storeIn(dir: string): RoundStore {
 }
 
 function withNote(note: string): FormBody {
-  return { note, answers: [], notice_comments: [] };
+  return { note, answers: [], finding_answers: [], notice_comments: [] };
 }
 
 function roundFiles(): string[] {
@@ -89,7 +89,12 @@ describe('RoundStore', () => {
       id: '1000-00000001',
       fingerprint: 'fp',
       args: { heading: 'h' },
-      body: { note: 'n', answers: [], notice_comments: [] },
+      body: {
+        note: 'n',
+        answers: [],
+        finding_answers: [],
+        notice_comments: [],
+      },
       outcome: 'open',
       returned: false,
       session_id: 's1',

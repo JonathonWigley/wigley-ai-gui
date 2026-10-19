@@ -22,6 +22,7 @@ const ROUND: PresentedRound = {
     notices: [
       { title: 'Mocha is built in', context: 'Done.', badge: 'Applied' },
     ],
+    findings: [],
   },
   draft: null,
 };
@@ -29,6 +30,7 @@ const ROUND: PresentedRound = {
 const BODY: FormBody = {
   note: 'looks right',
   answers: [],
+  finding_answers: [],
   notice_comments: [{ index: 1, comment: 'thanks' }],
 };
 

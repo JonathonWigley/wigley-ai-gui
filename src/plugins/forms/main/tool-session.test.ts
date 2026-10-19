@@ -9,6 +9,7 @@ const PAYLOAD: AnswersPayload = {
   summary: '1 of 1 answered.',
   next: 'Act on the answers.',
   answers: [],
+  findings: [],
   notices: [],
 };
 

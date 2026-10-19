@@ -55,6 +55,23 @@ const PLACEMENT_ARGS = {
   ],
 };
 
+const FINDING_ARGS = {
+  heading: 'Review findings',
+  overview: 'Reviewing the cache. This round: one finding.',
+  findings: [
+    {
+      title: 'Stale cache',
+      finding: 'The cache keeps entries after a reload.',
+      proof: '- `cache.ts:40` never clears',
+      choices: [
+        { text: 'Fix it now', reason: 'It is one line.' },
+        { text: 'Leave it', reason: 'Reloads are rare.' },
+      ],
+      recommend: 1,
+    },
+  ],
+};
+
 const NOTICE_ARGS = {
   ...NAMING_ARGS,
   notices: [{ title: 'Renamed the helper', context: 'No behaviour changed.' }],
@@ -65,8 +82,7 @@ function answer(entry: Partial<AnswerEntry>): AnswerEntry {
     index: 1,
     choice: 0,
     not_applicable: false,
-    what: '',
-    why: '',
+    notes: '',
     dont_ask: false,
     dont_ask_reason: '',
     ...entry,
@@ -74,10 +90,15 @@ function answer(entry: Partial<AnswerEntry>): AnswerEntry {
 }
 
 function oneAnswer(entry: Partial<AnswerEntry>, note = ''): FormBody {
-  return { note, answers: [answer(entry)], notice_comments: [] };
+  return {
+    note,
+    answers: [answer(entry)],
+    finding_answers: [],
+    notice_comments: [],
+  };
 }
 
-const HALF_BODY = oneAnswer({ choice: 2, what: 'half done' });
+const HALF_BODY = oneAnswer({ choice: 2, notes: 'half done' });
 
 let roundsDir: string;
 let hexCount: number;
@@ -235,7 +256,7 @@ describe('askRound', () => {
 
     await expect(rejection).rejects.toBeInstanceOf(RoundError);
     await expect(rejection).rejects.toThrow(
-      'ask_round needs at least one question or notice.',
+      'ask_round needs at least one notice, finding or question.',
     );
     expect(presenter.shown).toEqual([]);
   });
@@ -349,14 +370,14 @@ describe('the soft deadline', () => {
     const pending = startSession().askRound(NAMING_ARGS, null, live());
     presenter.draft(
       presenter.latest().roundId,
-      oneAnswer({ choice: 2, what: 'w' }),
+      oneAnswer({ choice: 2, notes: 'w' }),
     );
 
     await expireDeadline();
     const payload = await pending;
 
     expect(payload.outcome).toBe('draft');
-    expect(payload.answers[0]).toMatchObject({ choice: 2, what: 'w' });
+    expect(payload.answers[0]).toMatchObject({ choice: 2, notes: 'w' });
   });
 });
 
@@ -672,7 +693,7 @@ describe('re-sending a round', () => {
   it('opens a fresh round pre-filled from the round just cancelled', async () => {
     const session = startSession();
     const cancelledBody = oneAnswer(
-      { choice: 2, what: 'half done' },
+      { choice: 2, notes: 'half done' },
       'stop here',
     );
     const pending = session.askRound(NAMING_ARGS, null, live());
@@ -1105,7 +1126,7 @@ describe('saved rounds from an earlier app run', () => {
     const second = await session.collectLastRound(true, live());
 
     expect(first.outcome).toBe('submitted');
-    expect(first.answers[0]).toMatchObject({ choice: 2, what: 'half done' });
+    expect(first.answers[0]).toMatchObject({ choice: 2, notes: 'half done' });
     expect(second).toEqual(first);
     expect(newestSaved(earlier.fingerprint).returned).toBe(true);
   });
@@ -1174,7 +1195,7 @@ describe('pre-fill', () => {
   it("drops a finished round's Don't ask presses", () => {
     const pressed = oneAnswer({
       choice: 2,
-      what: 'half done',
+      notes: 'half done',
       dont_ask: true,
       dont_ask_reason: 'obvious',
     });
@@ -1183,8 +1204,46 @@ describe('pre-fill', () => {
     void startSession().askRound(NAMING_ARGS, null, live());
 
     expect(latestDraft().answers).toEqual([
-      answer({ choice: 2, what: 'half done' }),
+      answer({ choice: 2, notes: 'half done' }),
     ]);
+  });
+
+  it("drops a finished round's Don't ask presses on finding answers", () => {
+    const pressed: FormBody = {
+      note: '',
+      answers: [],
+      finding_answers: [
+        answer({
+          choice: 2,
+          notes: 'half done',
+          dont_ask: true,
+          dont_ask_reason: 'obvious',
+        }),
+      ],
+      notice_comments: [],
+    };
+    store.markReturned(saveEarlier(FINDING_ARGS, 'submitted', pressed));
+
+    void startSession().askRound(FINDING_ARGS, null, live());
+
+    expect(latestDraft().finding_answers).toEqual([
+      answer({ choice: 2, notes: 'half done' }),
+    ]);
+  });
+
+  it("pre-fills an old file's what and why as joined notes", () => {
+    const oldBody = {
+      note: '',
+      answers: [{ index: 1, choice: 2, what: 'half', why: 'done' }],
+      notice_comments: [],
+    };
+    saveEarlier(NAMING_ARGS, 'open', oldBody as unknown as FormBody);
+
+    void startSession().askRound(NAMING_ARGS, null, live());
+
+    const [entry] = latestDraft().answers;
+    expect(entry.notes).toBe('half\n\ndone');
+    expect(entry).not.toHaveProperty('what');
   });
 
   it("keeps an open draft's Don't ask presses", () => {
