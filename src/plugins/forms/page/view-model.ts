@@ -27,8 +27,9 @@ export interface ReviewRow {
   // A finding's action while answered; '' otherwise, and on a question.
   action: FindingAction | '';
   actionLabel: string;
-  // 0 unless answered; a not-applicable item's kept choice, and the solution
-  // a finding left alone keeps, do not count.
+  // 0 unless answered; a not-applicable item's kept choice, the solution a
+  // finding left alone keeps, and the solution of a finding answered by notes
+  // with no action do not count.
   choice: number;
   choiceText: string;
   tookRecommendation: boolean;
@@ -61,8 +62,9 @@ export function reviewRows(round: RoundState): ReviewRow[] {
     const answer = itemAnswer(round, item);
     const status = answerStatus(round, item);
     const action = status === 'answered' ? findingActionOf(round, item) : '';
-    const choice =
-      status === 'answered' && action !== 'leave_it' ? answer.choice : 0;
+    const choiceCounts =
+      action !== 'leave_it' && (item.kind === 'question' || action !== '');
+    const choice = status === 'answered' && choiceCounts ? answer.choice : 0;
     return {
       row,
       kind: item.kind,

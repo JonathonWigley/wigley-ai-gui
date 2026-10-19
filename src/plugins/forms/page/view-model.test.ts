@@ -247,6 +247,27 @@ describe('reviewRows', () => {
     });
   });
 
+  it('drops the solution from a finding answered by notes with no action', () => {
+    const [delta] = reviewRows(
+      mixedRoundAfter(
+        {
+          type: 'setText',
+          roundId: 'r1',
+          target: { field: 'notes', item: { kind: 'finding', index: 1 } },
+          value: 'my own fix',
+        },
+        { type: 'choose', choice: 2 },
+      ),
+    );
+    expect(delta).toMatchObject({
+      status: 'answered',
+      choice: 0,
+      choiceText: '',
+      actionLabel: '',
+      tookRecommendation: false,
+    });
+  });
+
   it('gives a question row no action and no missing pick', () => {
     const [, alpha] = reviewRows(mixedRoundAfter());
     expect(alpha).toMatchObject({
