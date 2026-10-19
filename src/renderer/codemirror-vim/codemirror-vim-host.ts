@@ -162,7 +162,8 @@ function requireKeyBuffer(cm: VimEditor) {
 }
 
 // Which editor holds the reported pending keys, and the listeners that hear
-// them; a report from any editor replaces the last.
+// them; a report from any editor replaces the last. Keys never outlive their
+// editor's focus, so the holder is always the editor that last reported.
 class PendingKeys {
   private readonly listeners: ((keys: string[]) => void)[] = [];
   private reported: string[] = [];
@@ -183,13 +184,17 @@ class PendingKeys {
     }
   }
 
-  // Esc after an empty or count-only buffer would run the bind on Esc, so it
-  // is sent only while the holder reports keys; vim's command-done reports `[]`.
   cancel() {
-    const { holder } = this;
-    const isPending = holder !== undefined && pendingKeysOf(holder).length > 0;
-    if (isPending) {
-      Vim.handleKey(holder, '<Esc>', 'user');
+    if (this.holder) {
+      this.discardIn(this.holder);
+    }
+  }
+
+  // Esc after an empty or count-only buffer would run the bind on Esc, so it
+  // is sent only while `cm` reports keys; vim's command-done reports `[]`.
+  discardIn(cm: VimEditor) {
+    if (pendingKeysOf(cm).length > 0) {
+      Vim.handleKey(cm, '<Esc>', 'user');
     }
   }
 
@@ -217,7 +222,12 @@ function hostedViewOf(element: Element, hosted: HostedEditor[]): EditorView {
 }
 
 // Answer boxes are prose: no gutters, brackets or completion; lines wrap.
-function editorExtensions(events: EditorEvents) {
+// `leaving` runs on blur before the editor reports it, so a box the user
+// leaves drops its unfinished keys before any other box reports.
+function editorExtensions(
+  events: EditorEvents,
+  leaving: (view: EditorView) => void,
+) {
   return [
     vim({ status: true }),
     minimalSetup,
@@ -230,7 +240,10 @@ function editorExtensions(events: EditorEvents) {
     }),
     EditorView.domEventHandlers({
       focus: () => events.focused(),
-      blur: () => events.blurred(),
+      blur: (_event, view) => {
+        leaving(view);
+        events.blurred();
+      },
     }),
   ];
 }
@@ -247,7 +260,9 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
     create(parent, doc, events) {
       const view = new EditorView({
         doc,
-        extensions: editorExtensions(events),
+        extensions: editorExtensions(events, (left) =>
+          pendingKeys.discardIn(vimEditorOf(left)),
+        ),
         parent,
       });
       const cm = vimEditorOf(view);
