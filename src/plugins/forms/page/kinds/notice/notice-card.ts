@@ -1,10 +1,5 @@
 import { element } from '../../../../../shared/page/dom';
-import {
-  buildField,
-  buildItemHead,
-  buildSection,
-  labelFor,
-} from '../card-parts';
+import { buildField, buildItemHead, buildSection } from '../card-parts';
 import type { ItemFormat } from '../item-format';
 
 export const noticeFormat: ItemFormat = {
@@ -14,11 +9,7 @@ export const noticeFormat: ItemFormat = {
     const notice = round.round.notices[index - 1];
     const article = element('article', 'item notice');
     parent.append(article);
-    const badge = buildItemHead(
-      article,
-      labelFor(noticeFormat.railPrefix, index),
-      notice.title,
-    );
+    const badge = buildItemHead(article, 'Notice');
     badge.className = 'badge badge-notice';
     badge.dataset.badge = notice.badge;
     badge.textContent = notice.badge;

@@ -38,24 +38,17 @@ export function labelFor(railPrefix: string, index: number): string {
   return `${railPrefix}${index}`;
 }
 
-// The item's label and title; returns the status slot after the title.
-export function buildItemHead(
-  parent: HTMLElement,
-  label: string,
-  title: string,
-): HTMLElement {
+// The label naming the item's kind; returns the status slot after it.
+export function buildItemHead(parent: HTMLElement, kind: string): HTMLElement {
   const head = element('header', 'item-head');
   const status = element('span', 'item-status');
-  head.append(
-    element('span', 'item-number', label),
-    element('h2', 'item-title', title),
-    status,
-  );
+  head.append(element('span', 'item-kind', kind), status);
   parent.append(head);
   return status;
 }
 
-// A labelled block of markdown; nothing for blank text.
+// A labelled block of markdown, classed by its label (`context-proof`);
+// nothing for blank text.
 export function buildSection(
   parent: HTMLElement,
   label: string,
@@ -65,12 +58,27 @@ export function buildSection(
   if (text.trim() === '') {
     return;
   }
-  const section = element('section', 'context');
+  const section = element('section', `context context-${label.toLowerCase()}`);
   section.append(
     element('div', 'context-label', label),
     markdownElement('div', 'context-body md', markdown.block(text)),
   );
   parent.append(section);
+}
+
+// The labelled reason under a choice: why one would pick it, or why it is
+// recommended.
+export function buildChoiceReason(
+  label: string,
+  text: string,
+  markdown: MarkdownRenderer,
+): HTMLElement {
+  const reason = element('div', 'choice-reason');
+  reason.append(
+    element('div', 'choice-reason-label', label),
+    markdownElement('div', 'choice-reason-body md', markdown.block(text)),
+  );
+  return reason;
 }
 
 export function buildField(
@@ -183,8 +191,8 @@ function showAnswer(parts: AnswerParts, answer: ItemAnswer) {
   parts.choiceList.classList.toggle('is-locked', answer.notApplicable);
 }
 
-// The choice list and answer controls under an answerable card's sections,
-// and the card's update; `choices` takes a kind's extras.
+// The answer area under an answerable card's sections: its choice list and
+// answer controls, and the card's update; `choices` takes a kind's extras.
 export function buildAnswerableCard(
   article: HTMLElement,
   statusChip: HTMLElement,
@@ -194,8 +202,10 @@ export function buildAnswerableCard(
   position: number,
   deps: CardDeps,
 ): { card: ItemCard; choices: HTMLLIElement[] } {
+  const answerArea = element('div', 'answer');
   const choiceList = element('ol', 'choices');
-  article.append(choiceList);
+  answerArea.append(element('div', 'answer-label', 'Your answer'), choiceList);
+  article.append(answerArea);
   const choices = buildChoiceList(
     choiceList,
     format.choiceTexts(round.round, item.index),
@@ -206,7 +216,7 @@ export function buildAnswerableCard(
     },
     deps.markdown,
   );
-  const controls = buildAnswerControls(article, round, item, position, deps);
+  const controls = buildAnswerControls(answerArea, round, item, position, deps);
   const parts = { card: article, statusChip, choiceList, choices };
   return {
     card: {

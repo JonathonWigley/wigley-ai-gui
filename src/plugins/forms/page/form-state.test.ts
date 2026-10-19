@@ -119,6 +119,11 @@ function findingRound(body: FormBody | null = null): FormsState {
   );
 }
 
+// Focuses rail position 0, the round's first notice.
+function onNotice(state: FormsState): FormsState {
+  return apply(state, { type: 'focusItem', item: 0 });
+}
+
 const untouched = {
   choice: 0,
   notApplicable: false,
@@ -150,11 +155,23 @@ describe('initialState', () => {
     expect(state.view).toBe('idle');
   });
 
-  it('focuses the first rail item', () => {
+  it('focuses the first finding or question, past the notices', () => {
     expect(focusedItem(active(mixedRound()))).toEqual({
-      kind: 'notice',
+      kind: 'question',
       index: 1,
     });
+    expect(focusedItem(active(findingRound()))).toEqual({
+      kind: 'finding',
+      index: 1,
+    });
+  });
+
+  it('focuses the first notice when the round has nothing to answer', () => {
+    const state = initialState(
+      [presented('r1', { notices: [notice('N1')], questions: [] })],
+      'r1-session',
+    );
+    expect(focusedItem(active(state))).toEqual({ kind: 'notice', index: 1 });
   });
 });
 
@@ -290,7 +307,7 @@ describe('choose', () => {
   });
 
   it('does nothing on a notice', () => {
-    const state = mixedRound();
+    const state = onNotice(mixedRound());
     expect(apply(state, { type: 'choose', choice: 1 })).toBe(state);
   });
 
@@ -355,7 +372,7 @@ describe('toggleNotApplicable', () => {
   });
 
   it('does nothing on a notice', () => {
-    const state = mixedRound();
+    const state = onNotice(mixedRound());
     expect(apply(state, { type: 'toggleNotApplicable' })).toBe(state);
   });
 });
@@ -397,7 +414,7 @@ describe('toggleDontAsk', () => {
   });
 
   it('does nothing on a notice', () => {
-    const state = mixedRound();
+    const state = onNotice(mixedRound());
     expect(apply(state, { type: 'toggleDontAsk' })).toBe(state);
   });
 });
@@ -439,7 +456,7 @@ describe('setText', () => {
         edit({ field: 'notes', item: { kind: 'question', index: 2 } }),
       ),
     ).toEqual({
-      kind: 'notice',
+      kind: 'finding',
       index: 1,
     });
   });
@@ -485,7 +502,7 @@ describe('setText', () => {
 
 describe('item navigation', () => {
   it('moves one rail item at a time and stops at both ends', () => {
-    const start = mixedRound();
+    const start = onNotice(mixedRound());
     expect(apply(start, { type: 'prevItem' })).toBe(start);
 
     const end = run(
@@ -924,14 +941,20 @@ describe('unansweredItem', () => {
 
   it('runs from the first or last question with a notice focused', () => {
     const round = active(
-      initialState(
-        [
-          presented('r1', {
-            notices: [notice('N1')],
-            questions: [question('Alpha'), question('Beta'), question('Gamma')],
-          }),
-        ],
-        'r1-session',
+      onNotice(
+        initialState(
+          [
+            presented('r1', {
+              notices: [notice('N1')],
+              questions: [
+                question('Alpha'),
+                question('Beta'),
+                question('Gamma'),
+              ],
+            }),
+          ],
+          'r1-session',
+        ),
       ),
     );
     expect(unansweredItem(round, 1)).toEqual({
@@ -958,15 +981,17 @@ describe('unansweredItem', () => {
 
   it('searches findings before questions', () => {
     const round = active(
-      initialState(
-        [
-          presented('r1', {
-            notices: [notice('N1')],
-            findings: [finding('F1')],
-            questions: [question('Q1')],
-          }),
-        ],
-        'r1-session',
+      onNotice(
+        initialState(
+          [
+            presented('r1', {
+              notices: [notice('N1')],
+              findings: [finding('F1')],
+              questions: [question('Q1')],
+            }),
+          ],
+          'r1-session',
+        ),
       ),
     );
     expect(unansweredItem(round, 1)).toEqual({ kind: 'finding', index: 1 });

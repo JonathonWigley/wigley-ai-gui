@@ -1,9 +1,9 @@
-import { element, markdownElement } from '../../../../../shared/page/dom';
+import { element } from '../../../../../shared/page/dom';
 import {
   buildAnswerableCard,
+  buildChoiceReason,
   buildItemHead,
   buildSection,
-  labelFor,
 } from '../card-parts';
 import type { AnswerableFormat } from '../item-format';
 
@@ -18,11 +18,7 @@ export const findingFormat: AnswerableFormat = {
     const item = { kind: 'finding', index } as const;
     const article = element('article', 'item finding');
     parent.append(article);
-    const statusChip = buildItemHead(
-      article,
-      labelFor(findingFormat.railPrefix, index),
-      finding.title,
-    );
+    const statusChip = buildItemHead(article, 'Finding');
     buildSection(article, 'Finding', finding.finding, deps.markdown);
     buildSection(article, 'Proof', finding.proof, deps.markdown);
     const { card, choices } = buildAnswerableCard(
@@ -35,13 +31,7 @@ export const findingFormat: AnswerableFormat = {
       deps,
     );
     finding.choices.forEach((choice, i) =>
-      choices[i].append(
-        markdownElement(
-          'div',
-          'choice-reason md',
-          deps.markdown.block(choice.reason),
-        ),
-      ),
+      choices[i].append(buildChoiceReason('Why', choice.reason, deps.markdown)),
     );
     return card;
   },

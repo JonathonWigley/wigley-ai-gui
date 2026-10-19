@@ -22,7 +22,8 @@ const PAGE_BINDS: PageBind[] = [
 // An unbroken run of letters wider than any pane; no j, which would start jk.
 const LONG_WORD = 'unbroken'.repeat(14);
 
-// Starting on the notice: Space then j replays j to the finding, pick 2; a
+// Opening on the finding: Space then k replays k to the notice, j back to the
+// finding, pick 2; a
 // types "agreed" at once (INSERT), Esc out. j to question 1, pick 2; a types
 // "ab" at once, Esc out; d focuses its reason box, A appends a long word and
 // Ctrl+k still in INSERT moves back to its notes box, Esc out; a again types
@@ -38,7 +39,8 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // the Round note at once (INSERT), Esc out, Enter jumps back to the finding,
 // review again and Space Enter submits.
 const STEPS: SelfTestStep[] = [
-  { keys: [' ', 'j'], expect: '[page] j ran forms.nextItem', checksFit: true },
+  { keys: [' ', 'k'], expect: '[page] k ran forms.prevItem', checksFit: true },
+  { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: ['2'], expect: '[forms] chose 2 on finding 1' },
   { keys: ['a'], expect: '[forms] focused notes on finding 1' },
   {

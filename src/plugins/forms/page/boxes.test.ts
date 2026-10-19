@@ -32,6 +32,7 @@ function stateAfter(...actions: FormsAction[]): FormsState {
   return actions.reduce(apply, start);
 }
 
+const onNotice: FormsAction = { type: 'focusItem', item: 0 };
 const onAlpha: FormsAction = { type: 'focusItem', item: 2 };
 
 const note: BoxRef = { roundId: 'r1', target: { field: 'note' } };
@@ -54,7 +55,7 @@ const findingNotes: BoxRef = {
 
 describe('shownBoxes', () => {
   it('shows the focused notice comment and no note', () => {
-    expect(shownBoxes(stateAfter())).toEqual([comment]);
+    expect(shownBoxes(stateAfter(onNotice))).toEqual([comment]);
   });
 
   it("shows a question's notes box and no note", () => {
@@ -116,7 +117,9 @@ describe('stepBox', () => {
 describe('shownBox', () => {
   it('finds the first shown box editing one of the fields', () => {
     const dontAskOn = stateAfter(onAlpha, { type: 'toggleDontAsk' });
-    expect(shownBox(stateAfter(), ['notes', 'comment'])).toEqual(comment);
+    expect(shownBox(stateAfter(onNotice), ['notes', 'comment'])).toEqual(
+      comment,
+    );
     expect(shownBox(dontAskOn, ['dontAskReason'])).toEqual(reason1);
     expect(shownBox(stateAfter(), ['note'])).toBeNull();
   });

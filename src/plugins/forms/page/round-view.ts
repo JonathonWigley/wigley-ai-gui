@@ -97,6 +97,7 @@ export function createRoundView(
       isHelpShown = isHelpOpen;
       const isForms = view === 'forms';
       const isReview = view === 'review' || view === 'confirm';
+      head.element.hidden = !isReview;
       head.update(current);
       railEntries.forEach((entry, position) => {
         const item = items[position];
@@ -136,7 +137,7 @@ function buildHead(
   parent: HTMLElement,
   round: RoundState,
   markdown: MarkdownRenderer,
-): { update(round: RoundState): void } {
+): { element: HTMLElement; update(round: RoundState): void } {
   const head = element('header', 'round-head');
   head.append(element('h1', 'round-heading', round.round.heading));
   if (round.round.overview.trim() !== '') {
@@ -152,6 +153,7 @@ function buildHead(
   head.append(progressLine);
   parent.append(head);
   return {
+    element: head,
     update(current) {
       progressLine.textContent = progressText(progress(current));
     },

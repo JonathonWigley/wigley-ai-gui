@@ -22,8 +22,15 @@ const QUESTION_FIELDS = [
   'rationale',
 ];
 
+const QUESTIONS_DESCRIPTION =
+  'Open decisions that are not review findings — one object per question. ' +
+  'Each draws as its own card after the findings: the question, its ' +
+  'context, then the choices, the recommended one with its rationale under ' +
+  'it.';
+
 const QUESTION_CONTEXT_DESCRIPTION =
-  'What the user needs to know to decide. Markdown. Open with the quick ' +
+  'Why the question is being asked, and everything the user needs to ' +
+  'answer it. Markdown. Open with the quick ' +
   'read: a plain bullet list of the facts the decision rests on. When the ' +
   'question is about concrete changes (a diff to review, edits to approve), ' +
   'open instead with a `:::changes` block (one line per change, starting ' +
@@ -110,7 +117,8 @@ export const questionFormat: AnswerableFormat<Question> = {
         },
         question: {
           type: 'string',
-          description: 'The question itself.',
+          description:
+            'What is being decided, in one plain sentence. Markdown.',
         },
         choices: {
           type: 'array',
@@ -132,6 +140,7 @@ export const questionFormat: AnswerableFormat<Question> = {
         },
       },
     },
+    description: QUESTIONS_DESCRIPTION,
   },
   parse: parseQuestion,
   fingerprintContent: (question) => ({

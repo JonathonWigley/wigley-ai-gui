@@ -359,6 +359,13 @@ function answerEntry(answer: ItemAnswer, i: number): AnswerEntry {
   };
 }
 
+// Where a round opens: its first finding or question, past the notices; the
+// first notice when it has nothing to answer.
+function firstAnswerablePosition(round: Round): number {
+  const first = answerableItems(round)[0];
+  return first === undefined ? 0 : railPosition(round, first);
+}
+
 function restoreRound(presented: PresentedRound): RoundState {
   const { roundId, sessionId, label, round, draft } = presented;
   return {
@@ -377,7 +384,7 @@ function restoreRound(presented: PresentedRound): RoundState {
           ?.comment ?? '',
     ),
     note: draft?.note ?? '',
-    focus: 0,
+    focus: firstAnswerablePosition(round),
     reviewRow: 0,
     revision: 0,
     savingRevision: null,

@@ -120,7 +120,6 @@ const reason1: BoxRef = {
 describe('formsCommandHandlers', () => {
   it('picks a choice on the focused question, and the same number clears it', () => {
     const { run, round, logs } = setup();
-    run('nextItem');
 
     run('choose2');
     expect(round().answers[0].choice).toBe(2);
@@ -135,7 +134,6 @@ describe('formsCommandHandlers', () => {
 
   it('picks a choice on the focused finding and logs it', () => {
     const { run, round, logs } = setup([finding('Leak')]);
-    run('nextItem');
 
     run('choose2');
 
@@ -155,13 +153,13 @@ describe('formsCommandHandlers', () => {
 
   it('logs nothing when a pick changes nothing', () => {
     const { run, logs } = setup();
+    run('prevItem');
     run('choose1');
     expect(logs).toEqual([]);
   });
 
   it('toggles not applicable and logs it', () => {
     const { run, round, logs } = setup();
-    run('nextItem');
 
     run('toggleNotApplicable');
 
@@ -171,7 +169,6 @@ describe('formsCommandHandlers', () => {
 
   it("focuses the reason box when Don't ask turns on", () => {
     const { run, focused } = setup();
-    run('nextItem');
 
     run('toggleDontAsk');
 
@@ -180,7 +177,6 @@ describe('formsCommandHandlers', () => {
 
   it("focuses nothing when Don't ask turns off", () => {
     const { run, focused } = setup();
-    run('nextItem');
     run('toggleDontAsk');
 
     run('toggleDontAsk');
@@ -190,6 +186,7 @@ describe('formsCommandHandlers', () => {
 
   it("focuses a notice's comment box for the notes key", () => {
     const { run, focused } = setup();
+    run('prevItem');
 
     run('editNotes');
 
@@ -219,7 +216,6 @@ describe('formsCommandHandlers', () => {
 
   it('steps to the next box from the box it fired in', () => {
     const { run, focused } = setup();
-    run('nextItem');
     run('toggleDontAsk');
     focused.length = 0;
 
@@ -250,7 +246,6 @@ describe('formsCommandHandlers', () => {
 
   it('acts on the active box when a chord fires with no editor', () => {
     const { run, focused, setActive } = setup();
-    run('nextItem');
     setActive(notes1);
 
     run('nextItem', {});
@@ -364,7 +359,6 @@ describe('formsCommandHandlers', () => {
 
   it('hands main the body on submit, then closes the round', () => {
     const { run, round, store, finished, toasts, logs } = setup();
-    run('nextItem');
     run('choose3');
     run('openReview');
     const body = buildBody(round());
