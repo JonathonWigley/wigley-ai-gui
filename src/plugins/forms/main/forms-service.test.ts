@@ -1266,23 +1266,6 @@ describe("the user's answers on disk", () => {
     expect(await pending).toMatchObject({ outcome: 'draft', note: 'half' });
   });
 
-  it("closes the round and wakes the call when the finish's write fails, naming the failure", async () => {
-    const pending = startSession().askRound(NAMING_ARGS, null, live());
-    const shown = presenter.latest();
-    vi.spyOn(store, 'finish').mockImplementation(() => {
-      throw new Error('could not save round r: EACCES');
-    });
-
-    expect(() =>
-      presenter.submit(shown.roundId, oneAnswer({ choice: 1 })),
-    ).toThrow('could not save round r: EACCES');
-    const payload = await pending;
-
-    expect(presenter.closed).toEqual([shown.roundId]);
-    expect(payload.outcome).toBe('submitted');
-    expect(payload.summary).toContain('could not save round r: EACCES');
-  });
-
   it('drops a draft that arrives after the finish', async () => {
     const pending = startSession().askRound(NAMING_ARGS, null, live());
     const shown = presenter.latest();

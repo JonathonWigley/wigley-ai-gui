@@ -1,5 +1,4 @@
 import path from 'node:path';
-import { errorText } from '../../../shared/error-text';
 import type { AgentSession, SessionInfo } from '../../sessions/contract';
 import type {
   AnswersPayload,
@@ -32,8 +31,6 @@ export interface FormsServiceDeps {
 interface RoundFinish {
   kind: FinishedOutcome;
   body: FormBody;
-  // Why the store's finish threw; null when it did not.
-  saveFailure: string | null;
 }
 
 // A round shown in the window that no tool reply has settled yet.
@@ -64,7 +61,6 @@ interface FinishedRound {
   // An ask_round for another round returned it with `earlier_heading`, so a
   // replay keeps that framing.
   handedBack: boolean;
-  saveFailure: string | null;
 }
 
 // One connected session: at most one open round, and the last finished one.
@@ -123,32 +119,12 @@ function prefillDraft(round: Round, saved: SavedRound | null): FormBody | null {
   };
 }
 
-// Finished answers whose disk write failed still stand; the summary says the
-// saved rounds lack them.
-function withSaveFailure(
-  payload: AnswersPayload,
-  saveFailure: string | null,
-): AnswersPayload {
-  if (saveFailure !== null) {
-    payload.summary +=
-      ` The app could not save these answers to its saved rounds ` +
-      `(${saveFailure}); they stand as given here.`;
-  }
-  return payload;
-}
-
 function finishedPayload(finished: FinishedRound): AnswersPayload {
-  return withSaveFailure(
-    answersPayload(finished.round, finished.outcome, finished.body),
-    finished.saveFailure,
-  );
+  return answersPayload(finished.round, finished.outcome, finished.body);
 }
 
 function handedBackFinishedPayload(finished: FinishedRound): AnswersPayload {
-  return withSaveFailure(
-    handedBackPayload(finished.round, finished.outcome, finished.body),
-    finished.saveFailure,
-  );
+  return handedBackPayload(finished.round, finished.outcome, finished.body);
 }
 
 function roundFromRecord(record: SavedRound): Round | null {
@@ -186,7 +162,6 @@ function settle(
     body: end.body,
     fingerprint: open.record.fingerprint,
     handedBack: false,
-    saveFailure: end.saveFailure,
   };
   session.lastFinished = finished;
   session.open = null;
@@ -205,10 +180,7 @@ function openRoundPayload(
   if (session.open === open) {
     settle(session, open, end);
   }
-  return withSaveFailure(
-    answersPayload(open.round, end.kind, end.body),
-    end.saveFailure,
-  );
+  return answersPayload(open.round, end.kind, end.body);
 }
 
 function waitForEndOrDeadline(
@@ -297,7 +269,6 @@ function takeUnreturnedFinished(session: SessionContext): FinishedRound | null {
     body: readFormBody(round, record.body),
     fingerprint: record.fingerprint,
     handedBack: false,
-    saveFailure: null,
   };
   return session.lastFinished;
 }
@@ -327,26 +298,18 @@ function roundListener(
       // Throws when the disk write fails, so the page shows the draft unsaved.
       session.store.saveBody(open.record, open.latestBody);
     },
-    // The store logs a failed finish write rather than throwing; a store
-    // whose finish throws still closes the round and wakes its waiting calls,
-    // with the failure named, then rethrows.
+    // The store logs a failed finish write rather than throwing, so the
+    // answers still reach the waiting calls.
     finish: (end) => {
       if (open.end !== null || open.closed) {
         return;
       }
       const body = readFormBody(open.round, end.body);
-      const finish: RoundFinish = { kind: end.kind, body, saveFailure: null };
-      open.end = finish;
+      open.end = { kind: end.kind, body };
       open.latestBody = body;
-      try {
-        session.store.finish(open.record, end.kind, body);
-      } catch (error) {
-        finish.saveFailure = errorText(error);
-        throw error;
-      } finally {
-        closeInWindow(open, session.presenter);
-        wakeWaiters(open);
-      }
+      session.store.finish(open.record, end.kind, body);
+      closeInWindow(open, session.presenter);
+      wakeWaiters(open);
     },
   };
 }
