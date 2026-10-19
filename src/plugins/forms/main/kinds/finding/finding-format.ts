@@ -124,7 +124,7 @@ export const findingFormat: AnswerableFormat<Finding> = {
     items: {
       type: 'object',
       additionalProperties: false,
-      required: FINDING_FIELDS,
+      required: [...FINDING_FIELDS],
       properties: {
         title: {
           type: 'string',
@@ -142,7 +142,7 @@ export const findingFormat: AnswerableFormat<Finding> = {
           items: {
             type: 'object',
             additionalProperties: false,
-            required: CHOICE_FIELDS,
+            required: [...CHOICE_FIELDS],
             properties: {
               text: { type: 'string', description: CHOICE_TEXT_DESCRIPTION },
               reason: {

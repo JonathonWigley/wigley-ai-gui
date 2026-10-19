@@ -30,6 +30,22 @@ function parseError(raw: unknown): string {
 }
 
 describe('findingFormat.parse', () => {
+  it('keeps checking its own field lists when a caller grows the published schema', () => {
+    const items = findingFormat.arraySchema.items as {
+      required: string[];
+      properties: { choices: { items: { required: string[] } } };
+    };
+    const choiceItems = items.properties.choices.items;
+    items.required.push('owner');
+    choiceItems.required.push('cost');
+    try {
+      expect(findingFormat.parse(finding(), 'Finding 1: ')).toEqual(finding());
+    } finally {
+      items.required.pop();
+      choiceItems.required.pop();
+    }
+  });
+
   it("parses a finding with its five fields and each choice's reason", () => {
     expect(findingFormat.parse(finding(), 'Finding 1: ')).toEqual(finding());
   });

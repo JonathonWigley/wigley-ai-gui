@@ -28,6 +28,18 @@ function parseError(raw: unknown): string {
 }
 
 describe('questionFormat.parse', () => {
+  it('keeps checking its own field list when a caller grows the published schema', () => {
+    const items = questionFormat.arraySchema.items as { required: string[] };
+    items.required.push('owner');
+    try {
+      expect(questionFormat.parse(question(), 'Question 1: ')).toEqual(
+        question(),
+      );
+    } finally {
+      items.required.pop();
+    }
+  });
+
   it('names every missing question field and the six required names', () => {
     const partial: Record<string, unknown> = question();
     delete partial.context;

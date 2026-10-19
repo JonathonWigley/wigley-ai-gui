@@ -24,6 +24,18 @@ function parseError(raw: unknown): string {
 }
 
 describe('noticeFormat.parse', () => {
+  it('keeps checking its own field list when a caller grows the published schema', () => {
+    const items = noticeFormat.arraySchema.items as { required: string[] };
+    items.required.push('owner');
+    try {
+      expect(noticeFormat.parse(notice(), 'Notice 1: ').title).toBe(
+        notice().title,
+      );
+    } finally {
+      items.required.pop();
+    }
+  });
+
   it('names a missing notice field and the two required names', () => {
     const partial: Record<string, unknown> = notice();
     delete partial.context;

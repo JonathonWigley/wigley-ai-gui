@@ -98,7 +98,7 @@ export const questionFormat: AnswerableFormat<Question> = {
     items: {
       type: 'object',
       additionalProperties: false,
-      required: QUESTION_FIELDS,
+      required: [...QUESTION_FIELDS],
       properties: {
         title: {
           type: 'string',

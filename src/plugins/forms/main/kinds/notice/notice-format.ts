@@ -105,7 +105,7 @@ export const noticeFormat: ItemFormat<Notice> = {
     items: {
       type: 'object',
       additionalProperties: false,
-      required: NOTICE_REQUIRED_FIELDS,
+      required: [...NOTICE_REQUIRED_FIELDS],
       properties: {
         title: { type: 'string', description: NOTICE_TITLE_DESCRIPTION },
         context: {
