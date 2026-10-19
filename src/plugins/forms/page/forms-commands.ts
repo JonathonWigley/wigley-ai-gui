@@ -73,8 +73,9 @@ export function formsCommandHandlers(
           : `cleared the choice on ${itemName(item)}`,
       );
 
-  // Acts only on a focused finding, so a question logs nothing. A finding whose
-  // card lacks the action logs that and keeps its answer.
+  // Acts only on a focused finding in the forms view, so a question or another
+  // view logs nothing. A finding whose card lacks the action logs that and keeps
+  // its answer.
   const act =
     (action: FindingAction): Handler =>
     (context) => {
@@ -249,12 +250,13 @@ function defectActionWord(action: FindingAction): string {
   return actionLabel('caused', action) ?? action;
 }
 
-// The focused finding when its card does not offer `action`; null otherwise.
+// The focused finding when the forms view shows it and its card does not offer
+// `action`; null otherwise.
 function findingLackingAction(
   state: FormsState,
   action: FindingAction,
 ): AnswerableItem | null {
-  const focused = focusedAnswer(state);
+  const focused = state.view === 'forms' ? focusedAnswer(state) : null;
   const isLacking =
     focused?.item.kind === 'finding' &&
     findingActionWord(state, focused.item, action) === null;

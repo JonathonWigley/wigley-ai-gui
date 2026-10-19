@@ -191,6 +191,18 @@ describe('formsCommandHandlers', () => {
     expect(logs).toEqual(['finding 1 offers no follow-up']);
   });
 
+  it('logs nothing for a Nit lacking the action outside the forms view', () => {
+    const { run, store, logs } = setup([nit('Typo')]);
+    run('openReview');
+    logs.length = 0;
+    const before = store.get();
+
+    run('actFollowUp');
+
+    expect(store.get()).toBe(before);
+    expect(logs).toEqual([]);
+  });
+
   it('accepts the recommendation on the focused question and logs it', () => {
     const { run, round, logs } = setup(
       [],
