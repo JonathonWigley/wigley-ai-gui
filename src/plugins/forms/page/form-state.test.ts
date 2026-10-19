@@ -13,6 +13,7 @@ import {
   answerStatus,
   apply,
   buildBody,
+  changeShows,
   focusedItem,
   initialState,
   progress,
@@ -23,7 +24,7 @@ import {
   type RoundState,
   unansweredItem,
 } from './form-state';
-import { finding } from './test-rounds';
+import { finding, nit } from './test-rounds';
 
 function question(title: string, choiceCount = 3): Question {
   return {
@@ -536,6 +537,104 @@ describe('chooseAction', () => {
     expect(apply(state, { type: 'chooseAction', action: 'fix_now' })).toBe(
       state,
     );
+  });
+});
+
+describe('chooseAction by origin', () => {
+  it('does nothing for an action the nit does not offer', () => {
+    const state = initialState(
+      [presented('r1', { findings: [nit('N1')] })],
+      'r1-session',
+    );
+    expect(apply(state, { type: 'chooseAction', action: 'follow_up' })).toBe(
+      state,
+    );
+  });
+});
+
+describe('acceptRecommendation', () => {
+  it("picks the focused question's recommended choice", () => {
+    const state = initialState(
+      [presented('r1', { questions: [{ ...question('Q1'), recommend: 2 }] })],
+      'r1-session',
+    );
+    const accepted = apply(state, { type: 'acceptRecommendation' });
+    expect(active(accepted).answers[0].choice).toBe(2);
+  });
+
+  it("sets the focused finding's recommended action and solution, as an answer edit", () => {
+    // F1 recommends solution 2 with fix_now.
+    const onF1 = apply(findingRound(), { type: 'focusItem', item: 1 });
+    const accepted = apply(onF1, { type: 'acceptRecommendation' });
+    expect(active(accepted).findingAnswers[0]).toMatchObject({
+      action: 'fix_now',
+      choice: 2,
+    });
+    expect(active(accepted).revision).toBe(1);
+  });
+
+  it('does nothing when the answer already holds the recommended pick', () => {
+    const onF1 = apply(findingRound(), { type: 'focusItem', item: 1 });
+    const accepted = apply(onF1, { type: 'acceptRecommendation' });
+    expect(apply(accepted, { type: 'acceptRecommendation' })).toBe(accepted);
+  });
+
+  it('does nothing while not applicable', () => {
+    const state = apply(mixedRound(), { type: 'toggleNotApplicable' });
+    expect(apply(state, { type: 'acceptRecommendation' })).toBe(state);
+  });
+});
+
+describe('Change…', () => {
+  // Focuses the round's only finding, F1, restored from `body`.
+  function oneFindingRound(
+    overrides: Parameters<typeof finding>[1] = {},
+    body: FormBody | null = null,
+  ): FormsState {
+    return initialState(
+      [presented('r1', { findings: [finding('F1', overrides)] }, body)],
+      'r1-session',
+    );
+  }
+
+  it('toggleChange opens and closes Change… on the focused finding', () => {
+    const opened = apply(oneFindingRound(), { type: 'toggleChange' });
+    expect(changeShows(active(opened), 1)).toBe(true);
+
+    const closed = apply(opened, { type: 'toggleChange' });
+    expect(active(closed).changeOpen).toEqual([false]);
+    expect(changeShows(active(closed), 1)).toBe(false);
+  });
+
+  it('toggleChange leaves the revision and save state alone', () => {
+    const state = apply(oneFindingRound(), { type: 'toggleChange' });
+    expect(active(state).revision).toBe(0);
+    expect(saveState(active(state))).toBe('saved');
+  });
+
+  it('shows for a restored action that differs from the recommended one', () => {
+    const state = oneFindingRound(
+      { recommend_action: 'fix_now' },
+      draft({ finding_answers: [findingEntry(1, { action: 'leave_it' })] }),
+    );
+    expect(active(state).changeOpen).toEqual([false]);
+    expect(changeShows(active(state), 1)).toBe(true);
+  });
+
+  it('hides for a recommended leave_it answered leave_it with no solution', () => {
+    const state = oneFindingRound(
+      { recommend_action: 'leave_it' },
+      draft({ finding_answers: [findingEntry(1, { action: 'leave_it' })] }),
+    );
+    expect(changeShows(active(state), 1)).toBe(false);
+  });
+
+  it('shows for a solution picked with no action', () => {
+    const state = oneFindingRound(
+      {},
+      draft({ finding_answers: [findingEntry(1, { choice: 2 })] }),
+    );
+    expect(changeShows(active(state), 1)).toBe(true);
   });
 });
 

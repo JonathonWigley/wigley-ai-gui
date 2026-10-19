@@ -3,12 +3,14 @@ import type {
   AnswerEntry,
   AnswerStatus,
   FindingAction,
+  Finding,
   FindingAnswerEntry,
   FormBody,
   ItemKind,
   PresentedRound,
   Round,
 } from '../contract';
+import { actionLabel } from '../finding-origins';
 import { findingPickIsComplete, isFindingAction } from '../finding-pick';
 
 export type FormsView = 'forms' | 'review' | 'confirm' | 'idle';
@@ -48,6 +50,9 @@ export interface RoundState {
   findingAnswers: FindingAnswer[];
   // One per notice, in order.
   noticeComments: string[];
+  // One per finding, in order: whether the user opened Change… on it. Page
+  // state only: never saved, and not an answer edit.
+  changeOpen: boolean[];
   note: string;
   // A position in railItems(round).
   focus: number;
@@ -100,8 +105,14 @@ export type ItemAction =
   // Clears only the solution on a finding; its action stays. Keeps a
   // one-solution finding's solution while its action is fix_now or follow_up.
   | { type: 'clearChoice' }
-  // On a finding: picking the action it holds clears it.
+  // On a finding: picking the action it holds clears it; an action the
+  // finding's origin does not offer changes nothing.
   | { type: 'chooseAction'; action: FindingAction }
+  // Sets the recommended choice on a question, or the recommended action and
+  // solution on a finding.
+  | { type: 'acceptRecommendation' }
+  // Opens or closes Change… on the focused finding.
+  | { type: 'toggleChange' }
   | { type: 'toggleNotApplicable' }
   | { type: 'toggleDontAsk' };
 
@@ -398,6 +409,29 @@ export function saveState(round: RoundState): SaveState {
   return round.savingRevision === round.revision ? 'saving' : 'unsaved';
 }
 
+// Whether finding `index` (1-based) shows its Change… options: the user
+// opened them, or its answer differs from the recommended pick.
+export function changeShows(round: RoundState, index: number): boolean {
+  const answer = round.findingAnswers[index - 1];
+  const finding = round.round.findings[index - 1];
+  return round.changeOpen[index - 1] || !matchesRecommendation(answer, finding);
+}
+
+// An untouched answer matches; leave_it keeps whatever solution is held, so
+// its solution is not compared.
+function matchesRecommendation(
+  answer: FindingAnswer,
+  finding: Finding,
+): boolean {
+  const isUntouched = answer.action === '' && answer.choice === 0;
+  if (isUntouched) {
+    return true;
+  }
+  const isSolutionMatched =
+    answer.action === 'leave_it' || answer.choice === finding.recommend;
+  return answer.action === finding.recommend_action && isSolutionMatched;
+}
+
 // The saved-round body; a not-applicable answer keeps its choice.
 export function buildBody(round: RoundState): FormBody {
   return {
@@ -460,6 +494,7 @@ function restoreRound(presented: PresentedRound): RoundState {
         draft?.notice_comments.find((comment) => comment.index === i + 1)
           ?.comment ?? '',
     ),
+    changeOpen: round.findings.map(() => false),
     note: draft?.note ?? '',
     focus: firstAnswerablePosition(round),
     reviewRow: 0,
@@ -674,9 +709,13 @@ function applyItemAction(round: RoundState, action: ItemAction): RoundState {
           : { ...answer, choice: 0 },
       );
     case 'chooseAction':
-      return updateFocusedFinding(round, (answer, solutionCount) =>
-        chooseAction(answer, solutionCount, action.action),
+      return updateFocusedFinding(round, (answer, finding) =>
+        chooseAction(answer, finding, action.action),
       );
+    case 'acceptRecommendation':
+      return acceptRecommendation(round);
+    case 'toggleChange':
+      return toggleChange(round);
     case 'toggleNotApplicable':
       return updateFocusedAnswer(round, (answer) => ({
         ...answer,
@@ -717,19 +756,21 @@ function choose<Answer extends ItemAnswer>(
 }
 
 // Same action again clears it, leaving the solution; locked while not
-// applicable. Fixing or following up a one-solution finding picks that
-// solution.
+// applicable, and an action the finding's origin does not offer changes
+// nothing. Fixing or following up a one-solution finding picks that solution.
 function chooseAction(
   answer: FindingAnswer,
-  solutionCount: number,
+  finding: Finding,
   action: FindingAction,
 ): FindingAnswer {
-  if (answer.notApplicable) {
+  const isOffered = actionLabel(finding.origin, action) !== null;
+  if (answer.notApplicable || !isOffered) {
     return answer;
   }
   if (answer.action === action) {
     return { ...answer, action: '' };
   }
+  const solutionCount = finding.choices.length;
   const choice = pinsLoneSolution(action, solutionCount) ? 1 : answer.choice;
   return { ...answer, action, choice };
 }
@@ -760,17 +801,84 @@ function holdsPinnedSolution(round: RoundState): boolean {
 // it was given.
 function updateFocusedFinding(
   round: RoundState,
-  change: (answer: FindingAnswer, solutionCount: number) => FindingAnswer,
+  change: (answer: FindingAnswer, finding: Finding) => FindingAnswer,
 ): RoundState {
   const focused = focusedItem(round);
   if (focused === null || focused.kind !== 'finding') {
     return round;
   }
+  const finding = ROUND_ITEMS.finding(round.round)[focused.index - 1];
   return updateItemAnswer(
     round,
     { kind: 'finding', index: focused.index },
-    change,
+    (answer) => change(answer, finding),
   );
+}
+
+// Writes the recommended pick onto an answer, or returns the answer itself
+// when it already holds that pick. `index` is 1-based.
+type RecommendedPick<K extends AnswerableKind> = (
+  round: RoundState,
+  index: number,
+  answer: AnswerOf[K],
+) => AnswerOf[K];
+
+// A mapped type, not `satisfies`: indexing it by a generic kind keeps the
+// kind's answer type. A finding's solution is set even when its recommended
+// action is leave_it, which keeps a solution.
+const RECOMMENDED_PICKS: { [K in AnswerableKind]: RecommendedPick<K> } = {
+  question: (round, index, answer) => {
+    const { recommend } = round.round.questions[index - 1];
+    return answer.choice === recommend
+      ? answer
+      : { ...answer, choice: recommend };
+  },
+  finding: (round, index, answer) => {
+    const { recommend, recommend_action } = round.round.findings[index - 1];
+    const holdsPick =
+      answer.action === recommend_action && answer.choice === recommend;
+    return holdsPick
+      ? answer
+      : { ...answer, action: recommend_action, choice: recommend };
+  },
+};
+
+// A no-op on a notice, while not applicable, or when the focused answer
+// already holds the recommended pick.
+function acceptRecommendation(round: RoundState): RoundState {
+  const focused = focusedItem(round);
+  if (focused === null || focused.kind === 'notice') {
+    return round;
+  }
+  return acceptRecommendationOn(round, {
+    kind: focused.kind,
+    index: focused.index,
+  });
+}
+
+function acceptRecommendationOn<K extends AnswerableKind>(
+  round: RoundState,
+  item: KindItem<K>,
+): RoundState {
+  const pick: RecommendedPick<K> = RECOMMENDED_PICKS[item.kind];
+  return updateItemAnswer(round, item, (answer) =>
+    answer.notApplicable ? answer : pick(round, item.index, answer),
+  );
+}
+
+// A no-op unless a finding is focused. Leaves the revision alone, since
+// changeOpen is never saved.
+function toggleChange(round: RoundState): RoundState {
+  const focused = focusedItem(round);
+  if (focused === null || focused.kind !== 'finding') {
+    return round;
+  }
+  return {
+    ...round,
+    changeOpen: round.changeOpen.map((open, i) =>
+      i === focused.index - 1 ? !open : open,
+    ),
+  };
 }
 
 // A no-op when a notice is focused or `change` returns the answer it was given.
