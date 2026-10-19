@@ -49,3 +49,58 @@
 .which-key-label.is-prefix {
   color: var(--wg-whichKey-prefix);
 }
+
+/* Help: every bound key, in a dialog over the shared backdrop. */
+.keys-help-sections {
+  display: grid;
+  gap: 1rem 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+  margin-bottom: 1rem;
+}
+
+.keys-help-title {
+  color: var(--wg-text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+
+.keys-help-list {
+  column-gap: 0.75rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  margin: 0;
+  row-gap: 0.2rem;
+}
+
+.keys-help-list dd {
+  margin: 0;
+}
+
+/* The key list continues the status line before it: it takes the row's spare
+   width, so the two read as one strip, takes a row of its own when it no
+   longer fits beside it, and its hints wrap onto more lines when narrow. */
+.keys-bar {
+  align-items: center;
+  background: var(--wg-bg-deep);
+  border-top: 1px solid var(--wg-border);
+  color: var(--wg-text-muted);
+  column-gap: 0.9rem;
+  display: flex;
+  flex: 999 1 12rem;
+  flex-wrap: wrap;
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-font-mono-size);
+  min-width: 0;
+  padding: 0.2rem 0.75rem;
+  row-gap: 0.2rem;
+}
+
+.keys-bar-help {
+  background: transparent;
+  border: 1px solid var(--wg-border);
+  border-radius: 0.25rem;
+  /* Reads in the text colour, not the list's muted one. */
+  color: var(--wg-text);
+  cursor: pointer;
+  padding: 0 0.5rem;
+}

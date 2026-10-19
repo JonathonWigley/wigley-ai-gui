@@ -1,6 +1,12 @@
+import '../../../shared/page/dialog.css';
 import './keys.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
+import { qualify } from '../../../shared/plugin-manifests';
 import { keysManifest } from '../manifest';
+import { helpSections } from './help-sections';
+import { mountHelpView } from './help-view';
+import { barHints } from './key-bar';
+import { mountKeyBarView } from './key-bar-view';
 import { whichKeyModel } from './which-key';
 import { startWhichKey } from './which-key-controller';
 import { mountWhichKeyView } from './which-key-view';
@@ -11,7 +17,9 @@ type KeysApi = PageApi<
   { invoke: Record<never, never>; messages: Record<never, never> }
 >;
 
-// Shows which-key over every pending key sequence, on the page and in a box.
+// Shows which-key over every pending key sequence, on the page and in a box;
+// the help overlay over the `help` scope while it is open; and the keys that
+// fire now, leader sequences aside, in the status bar.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
@@ -28,6 +36,41 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       timeoutMs: settings.whichKeyTimeoutMs,
       log: services.log,
     });
-    return { commands: {} };
+
+    const help = mountHelpView(
+      api.areas.overlay,
+      helpSections(keys.keymap, keys.scopes, keys.label),
+      () => api.commands.run(qualify(keysManifest.id, 'closeHelp')),
+    );
+    // The pushed `help` scope while help is open, `null` while it is closed.
+    let helpScope: { pop(): void } | null = null;
+    const closeHelp = () => {
+      helpScope?.pop();
+      helpScope = null;
+      help.hide();
+    };
+
+    mountKeyBarView(api.areas.statusBar, {
+      hints: (isInBox) =>
+        barHints(keys.keymap, keys.scope(), isInBox, keys.label),
+      isInBox: (element) => services.editor.contains(element),
+      onScopeChanged: (listener) => keys.onScopeChanged(listener),
+      openHelp: () => api.commands.run(qualify(keysManifest.id, 'toggleHelp')),
+    });
+
+    return {
+      commands: {
+        toggleHelp(context) {
+          if (helpScope !== null) {
+            closeHelp();
+            return;
+          }
+          helpScope = keys.pushScope('help');
+          context.editor?.blur();
+          help.show();
+        },
+        closeHelp,
+      },
+    };
   },
 };
