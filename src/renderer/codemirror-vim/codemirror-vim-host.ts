@@ -165,6 +165,21 @@ function requireKeyBuffer(cm: VimEditor) {
   }
 }
 
+// Any part of a command vim is still waiting to finish, in any mode: the key
+// buffer (an insert remap prefix such as `j` of `jk` included), a count, an
+// operator, a register, or a literal character it expects next.
+function holdsUnfinishedInput(cm: VimEditor): boolean {
+  const { vim } = cm.state;
+  const { inputState } = vim;
+  const hasKeys = inputState.keyBuffer.length > 0;
+  const hasCount =
+    inputState.prefixRepeat.length > 0 || inputState.motionRepeat.length > 0;
+  const hasOperator = inputState.operator !== null;
+  const hasRegister = inputState.registerName !== undefined;
+  const expectsLiteral = vim.expectLiteralNext === true;
+  return hasKeys || hasCount || hasOperator || hasRegister || expectsLiteral;
+}
+
 // Which editor holds the reported pending keys, and the listeners that hear
 // them; a report from any editor replaces the last. Keys never outlive their
 // editor's focus, so the holder is always the editor that last reported.
@@ -196,9 +211,12 @@ class PendingKeys {
 
   // Vim clears its whole input state — buffer, count, operator, register — on
   // a key no command matches, and runs nothing; Esc would run the bind on Esc
-  // in normal mode. Vim's command-done then reports `[]`.
+  // in normal mode. Vim's command-done then reports `[]`. A recording macro
+  // logs that key, so it is sent only when vim holds unfinished input.
   discardIn(cm: VimEditor) {
-    Vim.handleKey(cm, UNMATCHED_KEY, 'user');
+    if (holdsUnfinishedInput(cm)) {
+      Vim.handleKey(cm, UNMATCHED_KEY, 'user');
+    }
   }
 
   private report(cm: VimEditor, keys: string[]) {
