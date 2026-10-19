@@ -135,14 +135,20 @@ function redrawCursorOnResize(view: EditorView): ResizeObserver {
   return observer;
 }
 
+// Vim's own test for a buffer holding only a count; `0` alone is a motion.
+const COUNT_ONLY = /^[1-9]\d*$/;
+
 // The keys of an unfinished sequence vim is waiting on. Insert and visual
-// mode report none, so a pending insert remap such as `jk` stays unseen.
+// mode report none, so a pending insert remap such as `jk` stays unseen, and
+// neither does a count with no key after it, which vim keeps on Esc.
 function pendingKeysOf(cm: VimEditor): string[] {
   const { vim } = cm.state;
-  if (vim.insertMode || vim.visualMode) {
+  const keyBuffer: string[] = vim.inputState.keyBuffer;
+  const isCountOnly = COUNT_ONLY.test(keyBuffer.join(''));
+  if (vim.insertMode || vim.visualMode || isCountOnly) {
     return [];
   }
-  return [...vim.inputState.keyBuffer];
+  return [...keyBuffer];
 }
 
 // Vim replaces its input state on every cleared sequence, so the buffer is
@@ -177,8 +183,8 @@ class PendingKeys {
     }
   }
 
-  // Esc with nothing pending would run the bind on Esc, so it is sent only
-  // while the holder's buffer holds keys; vim's command-done reports `[]`.
+  // Esc after an empty or count-only buffer would run the bind on Esc, so it
+  // is sent only while the holder reports keys; vim's command-done reports `[]`.
   cancel() {
     const { holder } = this;
     const isPending = holder !== undefined && pendingKeysOf(holder).length > 0;
