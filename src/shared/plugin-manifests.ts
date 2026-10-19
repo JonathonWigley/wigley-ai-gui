@@ -7,7 +7,8 @@ import type {
   PluginManifest,
 } from '../contracts/plugin';
 
-function qualify(pluginId: string, short: string): string {
+// `<pluginId>.<short>`: a plugin's command or scope under its qualified name.
+export function qualify(pluginId: string, short: string): string {
   return `${pluginId}.${short}`;
 }
 

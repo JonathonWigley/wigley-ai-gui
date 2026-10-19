@@ -1,6 +1,5 @@
-import type { Timers } from './timers';
-
-export type ToastTone = 'success' | 'info' | 'error';
+import type { Timers } from '../contracts/ambient';
+import type { ToastTone } from '../contracts/plugin';
 
 const TOAST_MS = 4000;
 

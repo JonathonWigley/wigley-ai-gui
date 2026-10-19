@@ -2,6 +2,7 @@ import type { CommandId } from '../../contracts/commands';
 import type { FocusOptions } from '../../contracts/editor';
 import type { RoundEnd } from '../../contracts/forms';
 import type { Log } from '../../contracts/log';
+import type { ToastTone } from '../../contracts/plugin';
 import type {
   RendererCommandContext,
   RendererCommands,
@@ -24,7 +25,6 @@ import {
   type QuestionAnswer,
 } from './form-state';
 import type { FormsStore } from './forms-store';
-import type { ToastTone } from './toasts';
 
 export interface FormsCommandDeps {
   store: FormsStore;

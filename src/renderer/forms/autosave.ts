@@ -1,8 +1,8 @@
+import type { Timers } from '../../contracts/ambient';
 import type { FormBody } from '../../contracts/forms';
 import type { Log } from '../../contracts/log';
 import { buildBody, saveState } from './form-state';
 import type { FormsStore } from './forms-store';
-import type { Timers } from './timers';
 
 export interface AutosaveDeps {
   store: FormsStore;

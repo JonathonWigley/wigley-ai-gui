@@ -695,34 +695,6 @@
   margin: 0;
 }
 
-/* Toasts sit above the status line. */
-.toasts {
-  bottom: 2.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  position: fixed;
-  right: 1rem;
-  z-index: 20;
-}
-
-.toast {
-  background: var(--wg-surface);
-  border: 1px solid var(--wg-border);
-  border-left: 3px solid var(--wg-info);
-  border-radius: 0.5rem;
-  max-width: min(24rem, calc(100vw - 2rem));
-  padding: 0.5rem 0.9rem;
-}
-
-.toast[data-tone='success'] {
-  border-left-color: var(--wg-success);
-}
-
-.toast[data-tone='error'] {
-  border-left-color: var(--wg-error);
-}
-
 /* Markdown (class names from markdown-it-renderer.ts) */
 .md {
   max-width: 80ch;

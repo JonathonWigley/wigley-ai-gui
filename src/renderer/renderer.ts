@@ -2,6 +2,8 @@
 // wires features to them.
 import './index.css';
 import './forms/forms.css';
+import './shell/shell.css';
+import type { Timers } from '../contracts/ambient';
 import { CommandRegistry } from '../shared/command-registry';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
 import { startAutosave } from './forms/autosave';
@@ -11,7 +13,6 @@ import { initialState } from './forms/form-state';
 import { registerFormsCommands } from './forms/forms-commands';
 import { createFormsStore } from './forms/forms-store';
 import { mountFormsView } from './forms/forms-view';
-import type { Timers } from './forms/timers';
 import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { installPageKeys } from './page-keys';

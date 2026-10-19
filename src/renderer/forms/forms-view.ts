@@ -1,6 +1,9 @@
+import type { Timers } from '../../contracts/ambient';
 import type { CommandId } from '../../contracts/commands';
 import type { Keymap } from '../../contracts/keymap';
 import type { MarkdownRenderer } from '../../contracts/markdown';
+import type { ToastTone } from '../../contracts/plugin';
+import { createToasts } from '../toasts';
 import { isBoxShown } from './boxes';
 import { button, element } from './dom';
 import type { EditorBoxes } from './editor-boxes';
@@ -19,8 +22,6 @@ import {
   pageHints,
 } from './key-hints';
 import { createRoundView, type RoundView } from './round-view';
-import type { Timers } from './timers';
-import { createToasts, type ToastTone } from './toasts';
 import { baseView, modeLabel, saveLabel } from './view-model';
 
 export interface FormsViewDeps {

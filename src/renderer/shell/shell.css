@@ -1,0 +1,91 @@
+/* Layout: activity bar and side bar down the left, main with the panel under
+   it, status bar across the bottom. Areas are placed by name so a hidden area
+   leaves its track empty instead of shifting the others. The main column never
+   grows past the window, so content wraps to fit it; long unbroken words break
+   anywhere. */
+.shell {
+  display: grid;
+  grid-template-areas:
+    'activity side main'
+    'activity side panel'
+    'status status status';
+  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  height: 100vh;
+  overflow-wrap: anywhere;
+}
+
+.shell-activity-bar {
+  background: var(--wg-bg-deep);
+  border-right: 1px solid var(--wg-border);
+  grid-area: activity;
+  overflow-y: auto;
+  width: 3rem;
+}
+
+.shell-side-bar {
+  background: var(--wg-bg-pane);
+  border-right: 1px solid var(--wg-border);
+  grid-area: side;
+  min-height: 0;
+  overflow-y: auto;
+  width: 16rem;
+}
+
+.shell-main {
+  grid-area: main;
+  min-height: 0;
+  min-width: 0;
+}
+
+.shell-panel {
+  border-top: 1px solid var(--wg-border);
+  grid-area: panel;
+  min-width: 0;
+}
+
+.shell-status-bar {
+  grid-area: status;
+  min-width: 0;
+}
+
+/* Over everything, with no hit area of its own: only what is drawn in it
+   takes the pointer. */
+.shell-overlay {
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: 10;
+}
+
+.shell-overlay > * {
+  pointer-events: auto;
+}
+
+/* Toasts sit above the status line. */
+.toasts {
+  bottom: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: fixed;
+  right: 1rem;
+  z-index: 20;
+}
+
+.toast {
+  background: var(--wg-surface);
+  border: 1px solid var(--wg-border);
+  border-left: 3px solid var(--wg-info);
+  border-radius: 0.5rem;
+  max-width: min(24rem, calc(100vw - 2rem));
+  padding: 0.5rem 0.9rem;
+}
+
+.toast[data-tone='success'] {
+  border-left-color: var(--wg-success);
+}
+
+.toast[data-tone='error'] {
+  border-left-color: var(--wg-error);
+}
