@@ -30,15 +30,18 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // question 1, pick 2; a types
 // "ab" at once, Esc out; d focuses its reason box, A appends a long word and
 // Ctrl+k still in INSERT moves back to its notes box, Esc out; a again types
-// "c" after "ab". j to question 2, where q a x then b breaks the self-test
+// "c" after "ab". a once more, jk to NORMAL, where Space opens which-key and
+// Esc closes it without leaving the box (vim drops its pending input), and a
+// second Esc leaves. j to question 2, where q a x then b breaks the self-test
 // bind, so a opens the notes box and "xb" is typed into it; jk Esc out and x
 // marks question 2 not applicable. Ctrl+h goes back to question 1, Space a 2
 // clears its choice and picks it again, Space 2 jumps to question 2, and
-// Space e n finds no unanswered item. Option+o moves to the second session's
+// Space e n finds no unanswered item. Space opens which-key, a moves it into
+// the Space a group, and Esc cancels the sequence and closes it. Option+o moves to the second session's
 // tab; Cmd+W there asks to cancel its round, Esc keeps it and returns to its
 // form, where j moves to its question 2 and Space e p finds its untouched
-// question 1; Option+i moves back to the first tab. Then review, ? opens and
-// closes help, C opens and n dismisses the cancel prompt, o types "note" into
+// question 1; Option+i moves back to the first tab. Then review, Space ? opens
+// help and Esc closes it, back in the review's scope, where C opens and n dismisses the cancel prompt, o types "note" into
 // the Round note at once (INSERT), Esc out, Enter jumps back to the finding,
 // review again and Space Enter submits.
 const STEPS: SelfTestStep[] = [
@@ -69,6 +72,10 @@ const STEPS: SelfTestStep[] = [
   { keys: ['Escape'], expect: '[forms] left the box' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   { keys: ['c', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
+  { keys: ['a'], expect: '[forms] focused notes on question 1' },
+  { keys: ['j', 'k', ' '], expect: '[keys] which-key shows Space' },
+  { keys: ['Escape'], expect: '[keys] which-key closed' },
+  { keys: ['Escape'], expect: '[forms] left the box' },
   {
     keys: ['j', 'q', 'a', 'x', 'b'],
     expect: '[page] typed xb into the editor',
@@ -83,6 +90,9 @@ const STEPS: SelfTestStep[] = [
   { keys: [' ', 'a', '2'], expect: '[forms] chose 2 on question 1' },
   { keys: [' ', '2'], expect: '[forms] jumped to question 2' },
   { keys: [' ', 'e', 'n'], expect: '[forms] no unanswered item' },
+  { keys: [' '], expect: '[keys] which-key shows Space', checksFit: true },
+  { keys: ['a'], expect: '[keys] which-key shows Space a' },
+  { keys: ['Escape'], expect: '[keys] which-key closed' },
   {
     keys: ['<A-o>'],
     expect: '[sessions] activated selftest 2',
@@ -98,8 +108,12 @@ const STEPS: SelfTestStep[] = [
   { keys: [' ', 'e', 'p'], expect: '[forms] jumped to question 1' },
   { keys: ['<A-i>'], expect: '[sessions] activated selftest' },
   { keys: [' ', ' '], expect: '[forms] review opened', checksFit: true },
-  { keys: ['?'], expect: '[page] ? ran forms.toggleHelp', checksFit: true },
-  { keys: ['?'], expect: '[page] ? ran forms.closeHelp' },
+  {
+    keys: [' ', '?'],
+    expect: '[page]  ? ran keys.toggleHelp',
+    checksFit: true,
+  },
+  { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
   { keys: ['C'], expect: '[page] C ran forms.askCancel', checksFit: true },
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
   {
