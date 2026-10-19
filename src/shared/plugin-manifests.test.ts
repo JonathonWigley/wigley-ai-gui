@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Keymap } from '../contracts/keymap';
 import type { PluginManifest } from '../contracts/plugin';
-import { commandInfos, mergeKeymap, pluginSettings } from './plugin-manifests';
+import {
+  commandInfos,
+  mergeKeymap,
+  pluginSettings,
+  requireListed,
+} from './plugin-manifests';
 
 const NO_KEYS: PluginManifest['keys'] = {
   page: [],
@@ -175,5 +180,24 @@ describe('pluginSettings', () => {
     ]);
 
     expect(settings).toEqual({ p: { a: 1 }, q: {} });
+  });
+});
+
+describe('requireListed', () => {
+  it('accepts parts whose manifests are listed', () => {
+    const listed = manifest('p');
+
+    expect(() => requireListed([{ manifest: listed }], [listed])).not.toThrow();
+  });
+
+  it('names a part whose manifest is not listed', () => {
+    const listed = manifest('p');
+
+    expect(() =>
+      requireListed(
+        [{ manifest: listed }, { manifest: manifest('q') }],
+        [listed],
+      ),
+    ).toThrow('built-in manifests list: q');
   });
 });

@@ -15,7 +15,7 @@ export function qualify(pluginId: string, short: string): string {
 // Every manifest's binds from `select`, each naming its qualified command.
 function qualifiedBinds<Bind extends { command: string }>(
   manifests: readonly PluginManifest[],
-  select: (keys: PluginKeys<string, string>) => readonly Bind[],
+  select: (keys: PluginKeys<string, string, string>) => readonly Bind[],
 ): Bind[] {
   return manifests.flatMap((manifest) =>
     select(manifest.keys).map((bind) => ({
@@ -92,4 +92,20 @@ export function pluginSettings(
   return Object.fromEntries(
     manifests.map((manifest) => [manifest.id, manifest.settings]),
   );
+}
+
+// Throws naming each part whose manifest is not in `listed`, the manifests the
+// served config was built from: that part would get no keys, labels or settings.
+export function requireListed(
+  parts: readonly { manifest: PluginManifest }[],
+  listed: readonly PluginManifest[],
+): void {
+  const unlisted = parts
+    .filter((part) => !listed.includes(part.manifest))
+    .map((part) => part.manifest.id);
+  if (unlisted.length > 0) {
+    throw new Error(
+      `Plugin parts with no manifest in the built-in manifests list: ${unlisted.join(', ')}`,
+    );
+  }
 }

@@ -41,11 +41,11 @@ function isPageReady(window: BrowserWindow): Promise<boolean> {
 }
 
 // Lists what the page cuts off on the right: an element whose content is wider
-// than its box, or that ends past the window. Code and tables scroll in their
-// own box, and rail and switcher titles end in an ellipsis, their full text in
-// the item heading and the tooltip.
-const CUT_OFF_SCRIPT = `(() => {
-  const scrollsItself = '.md pre, .md table, .rail-title, .switcher-label';
+// than its box, or that ends past the window, skipping the elements the
+// `scrollsItself` selector matches and everything inside them.
+function cutOffScript(scrollsItself: string): string {
+  return `(() => {
+  const scrollsItself = ${JSON.stringify(scrollsItself)};
   const name = (node) => [node.tagName.toLowerCase(), ...node.classList].join('.');
   const problems = [];
   const page = document.documentElement;
@@ -70,6 +70,7 @@ const CUT_OFF_SCRIPT = `(() => {
   }
   return problems;
 })()`;
+}
 
 async function waitFor(check: () => Promise<boolean>): Promise<boolean> {
   const deadline = Date.now() + STEP_TIMEOUT_MS;
@@ -110,13 +111,16 @@ function waitForPageWidth(window: BrowserWindow, width: number) {
 
 // Shrinks the window to its minimum width, lists what the page cuts off
 // there, and restores the window's size.
-async function cutOffAtMinimumWidth(window: BrowserWindow): Promise<string[]> {
+async function cutOffAtMinimumWidth(
+  window: BrowserWindow,
+  scrollsItself: string,
+): Promise<string[]> {
   const [width, height] = window.getSize();
   const [minimumWidth] = window.getMinimumSize();
   window.setSize(minimumWidth, height);
   const [narrowWidth] = window.getContentSize();
   const problems = (await waitForPageWidth(window, narrowWidth))
-    ? await window.webContents.executeJavaScript(CUT_OFF_SCRIPT)
+    ? await window.webContents.executeJavaScript(cutOffScript(scrollsItself))
     : [`the page never narrowed to ${narrowWidth}px`];
   window.setSize(width, height);
   await waitForPageWidth(window, window.getContentSize()[0]);
@@ -134,6 +138,7 @@ let hasPaintedSinceNavigation = false;
 async function runStep(
   window: BrowserWindow,
   step: SelfTestStep,
+  scrollsItself: string,
   isCurrent: () => boolean,
 ): Promise<boolean> {
   const seen = (await readLog(window)).length;
@@ -152,7 +157,7 @@ async function runStep(
   if (!passed || !step.checksFit) {
     return passed;
   }
-  const cutOff = await cutOffAtMinimumWidth(window);
+  const cutOff = await cutOffAtMinimumWidth(window, scrollsItself);
   if (isCurrent()) {
     report(
       cutOff.length === 0,
@@ -195,7 +200,7 @@ async function runAllSteps(
   }
 
   for (const step of script.steps) {
-    if (!(await runStep(window, step, isCurrent))) {
+    if (!(await runStep(window, step, script.scrollsItself, isCurrent))) {
       failures++;
     }
   }

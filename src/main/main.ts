@@ -27,6 +27,7 @@ import type {
 } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { mainParts } from '../plugins/main';
+import { manifests } from '../plugins/manifests';
 import { CommandRegistry } from '../shared/command-registry';
 import { startPlugins } from '../shared/plugin-host';
 import {
@@ -34,6 +35,7 @@ import {
   mergeKeymap,
   pluginSettings,
   qualify,
+  requireListed,
 } from '../shared/plugin-manifests';
 import { createElectronAlerts } from './alerts/electron-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
@@ -66,7 +68,8 @@ const theme = chooseTheme(
   builtInThemes,
   path.join(app.getPath('userData'), 'themes'),
 );
-const manifests = mainParts.map((part) => part.manifest);
+requireListed(mainParts, manifests);
+const settingsByPlugin = pluginSettings(manifests);
 const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 // The self-test gives plugins a fresh temp folder as the home folder, never
@@ -93,7 +96,7 @@ function buildConfig(selfTestBinds: PageBind[]): AppConfig {
     settings: defaultSettings,
     keymap,
     commands: commandInfos(coreCommands, manifests),
-    pluginSettings: pluginSettings(manifests),
+    pluginSettings: settingsByPlugin,
     theme,
   };
 }
@@ -107,12 +110,11 @@ function startMainParts(
   onStarted: (part: MainStart<PluginManifest>) => void,
 ) {
   const channels = createPluginChannels(ipcMain, () => window.webContents);
-  const settings = pluginSettings(manifests);
   return startPlugins(mainParts, (part, dependency) => {
     const started = part.start(
       createMainApi(part.manifest, {
         channels,
-        settings: settings[part.manifest.id],
+        settings: settingsByPlugin[part.manifest.id],
         services,
         dependency,
       }),

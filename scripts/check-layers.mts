@@ -40,6 +40,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/main/themes',
       'src/main/alerts',
       'src/plugins/main.ts',
+      'src/plugins/manifests.ts',
     ],
     packages: ['electron', 'electron-squirrel-startup', 'node:'],
   },
@@ -78,6 +79,10 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/forms/main',
       'src/plugins/forms/main/mcp',
     ],
+    packages: [],
+  },
+  'src/plugins/manifests.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/forms'],
     packages: [],
   },
   'src/plugins/page.ts': {

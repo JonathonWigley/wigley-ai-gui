@@ -14,8 +14,12 @@ const manifest = definePlugin({
     quit: { label: 'Quit', group: 'App', runsIn: 'main' },
   },
   scopes: ['view'],
-  keys: { ...NO_KEYS, page: [{ keys: ['g'], scope: 'view', command: 'go' }] },
-  settings: {},
+  keys: {
+    ...NO_KEYS,
+    page: [{ keys: ['g'], scope: 'view', command: 'go' }],
+    app: [{ accelerator: 'CommandOrControl+Q', command: 'quit' }],
+  },
+  settings: { delayMs: 400 },
 });
 
 describe('definePlugin', () => {
@@ -40,6 +44,39 @@ describe('definePlugin', () => {
     });
 
     expect(defined.id).toBe('p');
+  });
+
+  it('a page bind naming a main command is a type error', () => {
+    const defined = definePlugin({
+      ...manifest,
+      keys: {
+        ...NO_KEYS,
+        // @ts-expect-error -- `quit` runs in main, not the page
+        page: [{ keys: ['q'], scope: 'view', command: 'quit' }],
+      },
+    });
+
+    expect(defined.id).toBe('p');
+  });
+
+  it('an app bind naming a page command is a type error', () => {
+    const defined = definePlugin({
+      ...manifest,
+      keys: {
+        ...NO_KEYS,
+        // @ts-expect-error -- `go` runs in the page, not main
+        app: [{ accelerator: 'CommandOrControl+G', command: 'go' }],
+      },
+    });
+
+    expect(defined.id).toBe('p');
+  });
+
+  it('settings keep plain types, not their literal defaults', () => {
+    // Compiles only while `delayMs` is a number rather than the literal 400.
+    const changed: (typeof manifest)['settings'] = { delayMs: 5 };
+
+    expect(changed.delayMs).toBe(5);
   });
 
   it('a page bind naming an undeclared scope is a type error', () => {

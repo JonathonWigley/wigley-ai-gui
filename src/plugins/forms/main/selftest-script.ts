@@ -61,6 +61,10 @@ const STEPS: SelfTestStep[] = [
   { keys: [' ', 'Enter'], expect: '[forms] submitted' },
 ];
 
+// Code and tables scroll in their own box, and rail and switcher titles end
+// in an ellipsis, their full text in the item heading and the tooltip.
+const SCROLLS_ITSELF = '.md pre, .md table, .rail-title, .switcher-label';
+
 // Each run's fixture differs in one context line, so a later run never opens
 // pre-filled from an earlier run's saved draft.
 function fixtureRound(run: number) {
@@ -134,6 +138,7 @@ export function formsSelfTestScript(forms: FormsService): SelfTestScript {
   let session: FormsSession | null = null;
   return {
     pageBinds: PAGE_BINDS,
+    scrollsItself: SCROLLS_ITSELF,
     open(run) {
       session?.end();
       session = forms.startSession({

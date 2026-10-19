@@ -41,6 +41,18 @@ function contributeThemeError(statusBar: Area, error: string | null) {
   statusBar.contribute(item);
 }
 
+// Throws for a page part main served nothing for: its manifest is missing from
+// the built-in manifests list, so it would get no keys, labels or settings.
+function servedSettings(config: AppConfig, pluginId: string): object {
+  const settings = config.pluginSettings[pluginId];
+  if (settings === undefined) {
+    throw new Error(
+      `Plugin "${pluginId}" has a page part but its manifest is not in the built-in manifests list`,
+    );
+  }
+  return settings;
+}
+
 function commandLabel(config: AppConfig, id: CommandId): string {
   return config.commands[id]?.label ?? id;
 }
@@ -85,7 +97,7 @@ async function start() {
         },
         keymap,
         label: (command) => commandLabel(config, command),
-        settings: config.pluginSettings[id],
+        settings: servedSettings(config, id),
         services,
         run,
         dependency,

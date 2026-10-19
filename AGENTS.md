@@ -39,7 +39,8 @@ src/renderer/    core page; renderer.ts is its composition root
   plugins/       the page-side plugin API
   markdown-it/   markdown adapter                           → the only markdown-it import
   codemirror-vim/ editor adapter behind EditorHost          → the only codemirror / @replit import
-src/plugins/     every plugin, one folder each; main.ts and page.ts list the built-in parts each root starts
+src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, main.ts and page.ts the
+                 parts each root starts
   forms/         manifest.ts, contract.ts, main/ (round logic, saved rounds, MCP adapter, relay), page/ (the view)
 src/mock-agent/  a separate executable the ACP adapter spawns in dev
 ```
@@ -54,8 +55,11 @@ lands in both repos together.
   `page/` each export a part, the manifest with a start function that receives that process's plugin API and
   returns the handlers for the manifest's commands that run in that process, plus the `exports` its dependents read
   (and, in main, a `dispose`). The compiler checks every command that runs in a process has a handler there and
-  every key names a declared command. A built-in plugin joins the lists in `src/plugins/main.ts` and
-  `src/plugins/page.ts`. A main part starts once; a page part starts on every page load.
+  every key names a declared command running in the key's process (page and editor keys a page command; app,
+  global and intercept keys a main one). A built-in plugin's manifest joins `src/plugins/manifests.ts`, which main
+  builds the served keymap, labels and settings from, and its parts join `src/plugins/main.ts` and
+  `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts once;
+  a page part starts on every page load.
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on. A plugin imports only
   `src/contracts`, `src/shared` and its own folder.

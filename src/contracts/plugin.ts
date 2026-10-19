@@ -22,13 +22,19 @@ export interface CommandInfo extends CommandDecl {
   plugin: string;
 }
 
-// A plugin's default keys, naming its short command ids `C` and scopes `S`.
-export interface PluginKeys<C extends string, S extends string> {
-  page: { keys: string[]; scope: S | 'any'; command: C }[];
-  editor: { keys: string; command: C }[];
-  app: { accelerator: string; command: C }[];
-  global: { accelerator: string; command: C }[];
-  intercept: (Omit<InterceptBind, 'command'> & { command: C })[];
+// A plugin's default keys, naming its scopes `S` and its short command ids:
+// page and editor keys name commands `PageC`, run in the page; app, global and
+// intercept keys name commands `MainC`, run in main.
+export interface PluginKeys<
+  PageC extends string,
+  MainC extends string,
+  S extends string,
+> {
+  page: { keys: string[]; scope: S | 'any'; command: PageC }[];
+  editor: { keys: string; command: PageC }[];
+  app: { accelerator: string; command: MainC }[];
+  global: { accelerator: string; command: MainC }[];
+  intercept: (Omit<InterceptBind, 'command'> & { command: MainC })[];
 }
 
 // `settings` holds the plugin's settings with their defaults; `dependsOn`
@@ -42,15 +48,24 @@ export interface PluginManifest<
   dependsOn: readonly string[];
   commands: Record<C, CommandDecl>;
   scopes: readonly S[];
-  keys: PluginKeys<C, S>;
+  keys: PluginKeys<C, C, S>;
   settings: T;
 }
 
-// The short ids of `M`'s commands that run in process `P`.
-export type CommandsRunIn<M extends PluginManifest, P extends ProcessName> = {
-  [K in keyof M['commands']]: M['commands'][K]['runsIn'] extends P ? K : never;
-}[keyof M['commands']] &
+// The short ids of the commands in `Cmds` that run in process `P`.
+export type CommandsDeclaredIn<
+  Cmds extends Record<string, CommandDecl>,
+  P extends ProcessName,
+> = {
+  [K in keyof Cmds]: Cmds[K]['runsIn'] extends P ? K : never;
+}[keyof Cmds] &
   string;
+
+// The short ids of `M`'s commands that run in process `P`.
+export type CommandsRunIn<
+  M extends PluginManifest,
+  P extends ProcessName,
+> = CommandsDeclaredIn<M['commands'], P>;
 
 // A plugin's channel between its two parts: the methods its page part invokes
 // on its main part, and the messages main sends the page with their data.
@@ -154,11 +169,14 @@ export interface SelfTestStep {
 
 // `open` starts the fixture for run `run`, returning the line the page logs
 // once it shows and the result the script checks with `problems`, which lists
-// what was wrong, empty when nothing was.
+// what was wrong, empty when nothing was. `scrollsItself` is a CSS selector
+// list of the elements a fit check lets scroll or clip in their own box rather
+// than wrap; nothing inside them is checked either.
 export interface SelfTestScript {
   pageBinds: PageBind[];
   open(run: number): { shownLine: string; result: Promise<unknown> };
   steps: SelfTestStep[];
+  scrollsItself: string;
   problems(result: unknown): string[];
 }
 
