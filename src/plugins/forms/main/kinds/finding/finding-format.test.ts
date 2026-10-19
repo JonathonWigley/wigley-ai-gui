@@ -18,6 +18,12 @@ function finding(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// The finding the parser returns for a six-field wire finding, which carries
+// no origin, severity or impact.
+function parsedFinding(wire: Record<string, unknown>) {
+  return { ...wire, origin: 'caused', severity: 'important', impact: '' };
+}
+
 // The message of the RoundError the finding format throws for this item.
 function parseError(raw: unknown): string {
   try {
@@ -41,7 +47,9 @@ describe('findingFormat.parse', () => {
     items.required.push('owner');
     choiceItems.required.push('cost');
     try {
-      expect(findingFormat.parse(finding(), 'Finding 1: ')).toEqual(finding());
+      expect(findingFormat.parse(finding(), 'Finding 1: ')).toEqual(
+        parsedFinding(finding()),
+      );
     } finally {
       items.required.pop();
       choiceItems.required.pop();
@@ -49,7 +57,9 @@ describe('findingFormat.parse', () => {
   });
 
   it("parses a finding with its six fields and each choice's reason", () => {
-    expect(findingFormat.parse(finding(), 'Finding 1: ')).toEqual(finding());
+    expect(findingFormat.parse(finding(), 'Finding 1: ')).toEqual(
+      parsedFinding(finding()),
+    );
   });
 
   it('names every missing finding field and the six required names', () => {
@@ -138,7 +148,9 @@ describe('findingFormat.parse', () => {
   it('accepts a single solution', () => {
     const lone = finding({ choices: [{ text: 'a', reason: 'r' }] });
 
-    expect(findingFormat.parse(lone, 'Finding 1: ')).toEqual(lone);
+    expect(findingFormat.parse(lone, 'Finding 1: ')).toEqual(
+      parsedFinding(lone),
+    );
   });
 
   it('refuses zero choices and eleven choices', () => {

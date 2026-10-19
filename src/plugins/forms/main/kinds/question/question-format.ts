@@ -1,10 +1,9 @@
-import type { Question } from '../../../contract';
+import { MAX_CHOICES, type Question } from '../../../contract';
 import { RoundError } from '../../round-error';
 import {
   fieldsMissing,
   fieldsOutside,
   isObject,
-  MAX_CHOICES,
   MIN_CHOICES,
   parseRecommend,
   requireText,

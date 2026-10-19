@@ -38,16 +38,58 @@ export const FINDING_ACTIONS: readonly FindingAction[] = [
   'leave_it',
 ];
 
-export interface Finding {
+// The most choices a question or finding may offer.
+export const MAX_CHOICES = 10;
+
+// Where a finding comes from; it sets the card the finding draws as and the
+// fields it takes.
+export type FindingOrigin = 'caused' | 'pre_existing' | 'design' | 'nit';
+
+export const FINDING_ORIGINS: readonly FindingOrigin[] = [
+  'caused',
+  'pre_existing',
+  'design',
+  'nit',
+];
+
+export type Severity = 'critical' | 'important' | 'minor';
+
+export const SEVERITIES: readonly Severity[] = [
+  'critical',
+  'important',
+  'minor',
+];
+
+export type FindingCard = 'defect' | 'decision' | 'nit';
+
+interface FindingFields {
   title: string;
+  origin: FindingOrigin;
+  // One plain sentence: what goes wrong, and for whom.
+  impact: string;
   finding: string;
   proof: string;
-  // The solutions.
+  // A Defect's solutions, a Decision's options, a Nit's one fix.
   choices: FindingChoice[];
   // 1-based.
   recommend: number;
   recommend_action: FindingAction;
 }
+
+export interface DefectFinding extends FindingFields {
+  origin: 'caused' | 'pre_existing';
+  severity: Severity;
+}
+
+export interface DecisionFinding extends FindingFields {
+  origin: 'design';
+}
+
+export interface NitFinding extends FindingFields {
+  origin: 'nit';
+}
+
+export type Finding = DefectFinding | DecisionFinding | NitFinding;
 
 // A validated ask_round call.
 export interface Round {

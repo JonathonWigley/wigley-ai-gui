@@ -1,7 +1,6 @@
 import { RoundError } from '../round-error';
 
 export const MIN_CHOICES = 2;
-export const MAX_CHOICES = 10;
 
 export type JsonObject = Record<string, unknown>;
 

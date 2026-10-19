@@ -1,5 +1,6 @@
 import {
   FINDING_ACTIONS,
+  MAX_CHOICES,
   type Finding,
   type FindingAction,
   type FindingChoice,
@@ -10,7 +11,6 @@ import {
   fieldsMissing,
   fieldsOutside,
   isObject,
-  MAX_CHOICES,
   parseRecommend,
   quotedList,
   requireText,
@@ -140,7 +140,18 @@ function parseFinding(item: unknown, where: string): Finding {
     where,
   );
   const recommend_action = parseRecommendAction(item.recommend_action, where);
-  return { title, finding, proof, choices, recommend, recommend_action };
+  // The six fields parsed carry no origin, severity or impact.
+  return {
+    title,
+    origin: 'caused',
+    severity: 'important',
+    impact: '',
+    finding,
+    proof,
+    choices,
+    recommend,
+    recommend_action,
+  };
 }
 
 export const findingFormat: AnswerableFormat<Finding> = {
