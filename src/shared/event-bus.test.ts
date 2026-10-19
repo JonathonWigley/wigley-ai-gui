@@ -80,8 +80,9 @@ describe('pluginEvents', () => {
   it("lets a plugin hear another plugin's event", () => {
     const bus = createEventBus();
     const heard: number[] = [];
-    pluginEvents(bus, 'forms').on<number>('sessions.connected', (data) =>
-      heard.push(data),
+    pluginEvents<EventShape, { 'sessions.connected': number }>(bus, 'forms').on(
+      'sessions.connected',
+      (data) => heard.push(data),
     );
 
     pluginEvents(bus, 'sessions').emit('connected', 1);
@@ -121,12 +122,15 @@ describe('pluginEvents', () => {
     expect(heard).toEqual(['a']);
   });
 
-  it('an unqualified name is a type error on an untyped on', () => {
-    const events = pluginEvents(createEventBus(), 'forms');
+  it('a part declaring no heard events can name none', () => {
+    const bus = createEventBus();
+    const heard: unknown[] = [];
+    const events = pluginEvents<EventShape, Record<never, never>>(bus, 'forms');
 
-    // @ts-expect-error -- a heard event names its publisher
-    events.on('connected', () => {});
+    // @ts-expect-error -- this part hears no events
+    events.on('sessions.connected', (data) => heard.push(data));
+    bus.emit('sessions.connected', 1);
 
-    expect(events).toBeDefined();
+    expect(heard).toEqual([1]);
   });
 });

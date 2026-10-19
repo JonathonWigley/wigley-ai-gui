@@ -103,7 +103,8 @@ export interface MainChannel<Ch extends ChannelShape> {
 export type EventShape = { [K in never]: unknown };
 
 // Events whose names and payloads the type system does not know: what the
-// core hands every part, which narrows them with its own contracts.
+// core's untyped bus hands every part, which narrows them with its own
+// contracts through the `any` its `start` takes.
 export type UntypedEvents = Record<string, unknown>;
 
 // Publisher `Id`'s events `Ev` under their qualified names, `<Id>.<event>`:
@@ -114,26 +115,20 @@ export type QualifiedEvents<Id extends string, Ev extends EventShape> = {
 
 // `emit` publishes one of the plugin's own events `Ev` under its qualified
 // name (`<pluginId>.<event>`), rejecting an undeclared name or a wrong
-// payload. `on` hears any plugin's event by its qualified name: a part that
-// declares `Heard` (built with `QualifiedEvents` from each publisher's
-// contract) may name only those events, its listener typed from them; one
-// that declares none names any qualified name and types the payload itself.
-// Listeners run before `emit` returns, and a listener's throw reaches the
-// emitter.
+// payload. `on` hears another plugin's event by its qualified name, naming
+// only an event in `Heard` (built with `QualifiedEvents` from each
+// publisher's contract), its listener typed from it; a part that declares no
+// `Heard` hears nothing. Listeners run before `emit` returns, and a
+// listener's throw reaches the emitter.
 export interface PluginEvents<
   Ev extends EventShape,
-  Heard extends EventShape = UntypedEvents,
+  Heard extends EventShape = Record<never, never>,
 > {
   emit<K extends keyof Ev & string>(event: K, data: Ev[K]): void;
-  on: string extends keyof Heard
-    ? <D>(
-        qualifiedEvent: `${string}.${string}`,
-        listener: (data: D) => void,
-      ) => void
-    : <K extends keyof Heard & string>(
-        qualifiedEvent: K,
-        listener: (data: Heard[K]) => void,
-      ) => void;
+  on<K extends keyof Heard & string>(
+    qualifiedEvent: K,
+    listener: (data: Heard[K]) => void,
+  ): void;
 }
 
 export type AreaName =
@@ -169,12 +164,12 @@ export interface PageServices {
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` is the
 // plugin's own events and `Heard` the other plugins' events it hears, as
-// `PluginEvents` takes them.
+// `PluginEvents` takes them; a part that declares no `Heard` hears nothing.
 export interface PageApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
   Ev extends EventShape = Record<never, never>,
-  Heard extends EventShape = UntypedEvents,
+  Heard extends EventShape = Record<never, never>,
 > {
   areas: Record<AreaName, Area>;
   channel: PageChannel<Ch>;
@@ -252,7 +247,7 @@ export interface MainApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
   Ev extends EventShape = Record<never, never>,
-  Heard extends EventShape = UntypedEvents,
+  Heard extends EventShape = Record<never, never>,
 > {
   channel: MainChannel<Ch>;
   events: PluginEvents<Ev, Heard>;

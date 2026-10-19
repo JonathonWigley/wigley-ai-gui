@@ -21,7 +21,7 @@ export interface MainApiDeps {
 export function createMainApi(
   manifest: PluginManifest,
   deps: MainApiDeps,
-): MainApi<PluginManifest, ChannelShape, UntypedEvents> {
+): MainApi<PluginManifest, ChannelShape, UntypedEvents, UntypedEvents> {
   return {
     channel: deps.channels.forPlugin(manifest.id),
     events: pluginEvents(deps.bus, manifest.id),

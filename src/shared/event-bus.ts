@@ -34,16 +34,15 @@ export function createEventBus(): EventBus {
 }
 
 // One plugin's view of `bus`: it emits its events `Ev` under its own id and
-// hears any plugin's event by its qualified name, `Heard` listing those it may
-// name. The bus itself is untyped, so the types are the caller's word.
+// hears the events `Heard` lists by their qualified names. The bus itself is
+// untyped, so the types are the caller's word.
 export function pluginEvents<
   Ev extends EventShape = UntypedEvents,
   Heard extends EventShape = UntypedEvents,
 >(bus: EventBus, pluginId: string): PluginEvents<Ev, Heard> {
-  const on = (qualifiedEvent: string, listener: Listener) =>
-    bus.on(qualifiedEvent, listener);
   return {
     emit: (event, data) => bus.emit(qualify(pluginId, event), data),
-    on: on as PluginEvents<Ev, Heard>['on'],
+    on: (qualifiedEvent, listener) =>
+      bus.on(qualifiedEvent, listener as Listener),
   };
 }

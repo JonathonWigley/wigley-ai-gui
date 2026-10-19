@@ -1,5 +1,9 @@
 import './forms.css';
-import type { PageApi, PagePart } from '../../../contracts/plugin';
+import type {
+  PageApi,
+  PagePart,
+  QualifiedEvents,
+} from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type {
   SessionsPageEvents,
@@ -15,7 +19,12 @@ import { formsCommandHandlers, guardClose } from './forms-commands';
 import { createFormsStore, type FormsStore } from './forms-store';
 import { mountFormsView } from './forms-view';
 
-type FormsApi = PageApi<typeof formsManifest, FormsChannel>;
+type FormsApi = PageApi<
+  typeof formsManifest,
+  FormsChannel,
+  Record<never, never>,
+  QualifiedEvents<'sessions', SessionsPageEvents>
+>;
 
 // Each box's edits reach the store, and a box taking focus focuses its item.
 function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes {
@@ -51,9 +60,8 @@ function listenForRounds(api: FormsApi, store: FormsStore) {
   api.channel.on('roundClosed', (roundId) =>
     store.dispatch({ type: 'roundClosed', roundId }),
   );
-  api.events.on<SessionsPageEvents['activeChanged']>(
-    'sessions.activeChanged',
-    ({ sessionId }) => store.dispatch({ type: 'sessionActivated', sessionId }),
+  api.events.on('sessions.activeChanged', ({ sessionId }) =>
+    store.dispatch({ type: 'sessionActivated', sessionId }),
   );
   void api.channel
     .invoke('openRounds')

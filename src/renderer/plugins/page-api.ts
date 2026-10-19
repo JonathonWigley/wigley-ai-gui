@@ -35,7 +35,7 @@ export interface PageApiDeps {
 export function createPageApi(
   manifest: PluginManifest,
   deps: PageApiDeps,
-): PageApi<PluginManifest, ChannelShape, UntypedEvents> {
+): PageApi<PluginManifest, ChannelShape, UntypedEvents, UntypedEvents> {
   return {
     areas: deps.areas,
     channel: {
