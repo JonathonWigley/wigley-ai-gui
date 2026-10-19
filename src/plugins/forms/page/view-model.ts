@@ -1,6 +1,7 @@
 import type { VimMode } from '../../../contracts/editor';
-import type { AnswerableKind, AnswerStatus } from '../contract';
+import type { AnswerableKind, AnswerStatus, FindingAction } from '../contract';
 import {
+  type AnswerableItem,
   answerableItems,
   answerStatus,
   itemAnswer,
@@ -9,6 +10,7 @@ import {
   type RoundState,
   type SaveState,
 } from './form-state';
+import { FINDING_ACTION_LABELS } from './kinds/finding/action-labels';
 import { FORMATS, itemLabel } from './kinds/formats';
 
 // One question or finding as the review lists it.
@@ -21,10 +23,18 @@ export interface ReviewRow {
   label: string;
   title: string;
   status: AnswerStatus;
-  // 0 unless answered; a not-applicable item's kept choice does not count.
+  // A finding's action while answered; '' otherwise, and on a question.
+  action: FindingAction | '';
+  actionLabel: string;
+  // 0 unless answered; a not-applicable item's kept choice, and the solution
+  // a finding left alone keeps, do not count.
   choice: number;
   choiceText: string;
   tookRecommendation: boolean;
+  tookActionRecommendation: boolean;
+  // What an untouched finding's picks still lack; null when it lacks both,
+  // and on every question.
+  missing: 'solution' | 'action' | null;
   notes: string;
   dontAsk: boolean;
   dontAskReason: string;
@@ -49,7 +59,9 @@ export function reviewRows(round: RoundState): ReviewRow[] {
     const format = FORMATS[item.kind];
     const answer = itemAnswer(round, item);
     const status = answerStatus(round, item);
-    const choice = status === 'answered' ? answer.choice : 0;
+    const action = status === 'answered' ? findingActionOf(round, item) : '';
+    const choice =
+      status === 'answered' && action !== 'leave_it' ? answer.choice : 0;
     return {
       row,
       kind: item.kind,
@@ -57,6 +69,8 @@ export function reviewRows(round: RoundState): ReviewRow[] {
       label: itemLabel(item),
       title: format.title(round.round, item.index),
       status,
+      action,
+      actionLabel: action === '' ? '' : FINDING_ACTION_LABELS[action],
       choice,
       choiceText:
         choice > 0
@@ -64,12 +78,45 @@ export function reviewRows(round: RoundState): ReviewRow[] {
           : '',
       tookRecommendation:
         choice > 0 && choice === format.recommend(round.round, item.index),
+      tookActionRecommendation:
+        action !== '' &&
+        action === round.round.findings[item.index - 1].recommend_action,
+      missing: status === 'untouched' ? missingPick(round, item) : null,
       notes: answer.notes,
       dontAsk: answer.dontAsk,
       dontAskReason: answer.dontAskReason,
       isCursor: row === round.reviewRow,
     };
   });
+}
+
+// The action picked on a finding; '' on a question.
+export function findingActionOf(
+  round: RoundState,
+  item: AnswerableItem,
+): FindingAction | '' {
+  return item.kind === 'finding'
+    ? round.findingAnswers[item.index - 1].action
+    : '';
+}
+
+// What an untouched item's picks lack: a solution among several for an
+// action that needs one, or an action for a picked solution.
+function missingPick(
+  round: RoundState,
+  item: AnswerableItem,
+): ReviewRow['missing'] {
+  if (item.kind !== 'finding') {
+    return null;
+  }
+  const answer = round.findingAnswers[item.index - 1];
+  const solutionCount = round.round.findings[item.index - 1].choices.length;
+  const actionNeedsSolution =
+    answer.action === 'fix_now' || answer.action === 'follow_up';
+  if (actionNeedsSolution && solutionCount >= 2 && answer.choice === 0) {
+    return 'solution';
+  }
+  return answer.choice > 0 && answer.action === '' ? 'action' : null;
 }
 
 // The round's title on its session's tab: its heading and how many of its

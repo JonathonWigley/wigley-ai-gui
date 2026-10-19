@@ -195,7 +195,8 @@ function showAnswer(
 }
 
 // The answer area under an answerable card's sections: its choice list and
-// answer controls, and the card's update; `choices` takes a kind's extras.
+// answer controls, and the card's update; `choices` takes a kind's extras,
+// and a kind's own controls go right after `choiceList`.
 export function buildAnswerableCard(
   article: HTMLElement,
   statusChip: HTMLElement,
@@ -204,7 +205,7 @@ export function buildAnswerableCard(
   item: AnswerableItem,
   position: number,
   deps: CardDeps,
-): { card: ItemCard; choices: HTMLLIElement[] } {
+): { card: ItemCard; choices: HTMLLIElement[]; choiceList: HTMLElement } {
   const answerArea = element('div', 'answer');
   const choiceList = element('ol', 'choices');
   answerArea.append(element('div', 'answer-label', 'Your answer'), choiceList);
@@ -231,5 +232,6 @@ export function buildAnswerableCard(
       },
     },
     choices,
+    choiceList,
   };
 }

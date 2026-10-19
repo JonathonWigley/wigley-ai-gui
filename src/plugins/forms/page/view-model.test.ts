@@ -181,6 +181,83 @@ describe('reviewRows', () => {
     expect(delta.tookRecommendation).toBe(false);
   });
 
+  it('flags a fixed finding with no solution among several as missing one', () => {
+    const [delta] = reviewRows(
+      mixedRoundAfter({ type: 'chooseAction', action: 'fix_now' }),
+    );
+    expect(delta).toMatchObject({
+      status: 'untouched',
+      action: '',
+      actionLabel: '',
+      missing: 'solution',
+    });
+  });
+
+  it('flags a finding with a solution and no action as missing an action', () => {
+    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 2 }));
+    expect(delta).toMatchObject({ status: 'untouched', missing: 'action' });
+  });
+
+  it('answers a fixed one-solution finding with no missing pick', () => {
+    const start = initialState(
+      [
+        presentedRound('r1', {
+          questions: [],
+          findings: [
+            finding('Solo', { choices: [{ text: 'only', reason: 'why' }] }),
+          ],
+        }),
+      ],
+      'r1-session',
+    );
+    const round = activeRound(
+      apply(start, { type: 'chooseAction', action: 'fix_now' }),
+    );
+    if (round === null) {
+      throw new Error('The test round is not active');
+    }
+    const [solo] = reviewRows(round);
+    expect(solo).toMatchObject({
+      status: 'answered',
+      action: 'fix_now',
+      actionLabel: 'Fix now',
+      choice: 1,
+      choiceText: 'only',
+      tookActionRecommendation: true,
+      missing: null,
+    });
+  });
+
+  it('drops the kept solution from a finding left alone', () => {
+    const [delta] = reviewRows(
+      mixedRoundAfter(
+        { type: 'choose', choice: 2 },
+        { type: 'chooseAction', action: 'leave_it' },
+      ),
+    );
+    expect(delta).toMatchObject({
+      status: 'answered',
+      action: 'leave_it',
+      actionLabel: 'Leave it',
+      choice: 0,
+      choiceText: '',
+      tookRecommendation: false,
+      tookActionRecommendation: false,
+      missing: null,
+    });
+  });
+
+  it('gives a question row no action and no missing pick', () => {
+    const [, alpha] = reviewRows(mixedRoundAfter());
+    expect(alpha).toMatchObject({
+      kind: 'question',
+      action: '',
+      actionLabel: '',
+      tookActionRecommendation: false,
+      missing: null,
+    });
+  });
+
   it('marks the row under the review cursor', () => {
     const rows = reviewRows(
       roundAfter({ type: 'openReview' }, { type: 'reviewNext' }),

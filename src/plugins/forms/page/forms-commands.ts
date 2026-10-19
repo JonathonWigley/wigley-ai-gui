@@ -5,7 +5,7 @@ import type {
   PageStart,
   ToastTone,
 } from '../../../contracts/plugin';
-import type { RoundEnd } from '../contract';
+import type { FindingAction, RoundEnd } from '../contract';
 import type { formsManifest } from '../manifest';
 import {
   type BoxField,
@@ -30,6 +30,8 @@ import {
   unansweredItem,
 } from './form-state';
 import type { FormsStore } from './forms-store';
+import { FINDING_ACTION_LABELS } from './kinds/finding/action-labels';
+import { findingActionOf } from './view-model';
 
 export interface FormsCommandDeps {
   store: FormsStore;
@@ -71,6 +73,20 @@ export function formsCommandHandlers(
           : `cleared the choice on ${itemName(item)}`,
       );
 
+  // Acts only on a focused finding, so a question logs nothing.
+  const act =
+    (action: FindingAction): Handler =>
+    (context) =>
+      changeAnswer(
+        deps,
+        context,
+        { type: 'chooseAction', action },
+        (_, item) =>
+          findingAction(deps.store.get(), item) === action
+            ? `chose ${FINDING_ACTION_LABELS[action]} on ${itemName(item)}`
+            : `cleared the action on ${itemName(item)}`,
+      );
+
   const jumpTo =
     (question: number): Handler =>
     (context) =>
@@ -102,6 +118,9 @@ export function formsCommandHandlers(
         { type: 'clearChoice' },
         (_answer, item) => `cleared the choice on ${itemName(item)}`,
       ),
+    actFixNow: act('fix_now'),
+    actFollowUp: act('follow_up'),
+    actLeaveIt: act('leave_it'),
     toggleNotApplicable: (context) =>
       changeAnswer(
         deps,
@@ -186,6 +205,15 @@ function focusBoxItem(store: FormsStore, box: BoxRef | undefined) {
 // How a log line names an item, e.g. `finding 2`.
 function itemName(item: RailItem): string {
   return `${item.kind} ${item.index}`;
+}
+
+// The active round's action on `item`; '' on a question.
+function findingAction(
+  state: FormsState,
+  item: AnswerableItem,
+): FindingAction | '' {
+  const round = activeRound(state);
+  return round === null ? '' : findingActionOf(round, item);
 }
 
 function focusedAnswer(

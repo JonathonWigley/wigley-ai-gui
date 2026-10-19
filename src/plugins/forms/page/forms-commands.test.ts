@@ -141,6 +141,35 @@ describe('formsCommandHandlers', () => {
     expect(logs).toEqual(['chose 2 on finding 1']);
   });
 
+  it.each([
+    ['actFixNow', 'fix_now', 'Fix now'],
+    ['actFollowUp', 'follow_up', 'Follow-up'],
+    ['actLeaveIt', 'leave_it', 'Leave it'],
+  ] as const)(
+    '%s picks its action on the focused finding, and again clears it',
+    (command, action, label) => {
+      const { run, round, logs } = setup([finding('Leak')]);
+
+      run(command);
+      expect(round().findingAnswers[0].action).toBe(action);
+      run(command);
+
+      expect(round().findingAnswers[0].action).toBe('');
+      expect(logs).toEqual([
+        `chose ${label} on finding 1`,
+        'cleared the action on finding 1',
+      ]);
+    },
+  );
+
+  it('logs nothing when an action command runs on a question', () => {
+    const { run, logs } = setup();
+
+    run('actFixNow');
+
+    expect(logs).toEqual([]);
+  });
+
   it("acts on the box's question when fired in a box", () => {
     const { run, round, logs } = setup();
 

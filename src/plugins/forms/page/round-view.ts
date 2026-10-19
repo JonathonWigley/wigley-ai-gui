@@ -280,6 +280,25 @@ function buildReview(
   };
 }
 
+const MISSING_HINTS: Record<NonNullable<ReviewRow['missing']>, string> = {
+  solution: 'needs a solution',
+  action: 'needs an action',
+};
+
+// A finding's row earns the badge for its action, and for its solution unless
+// it is left alone; a question's for its choice.
+function tookEveryRecommendation(row: ReviewRow): boolean {
+  if (row.action === 'leave_it') {
+    return row.tookActionRecommendation;
+  }
+  if (row.action === '') {
+    return row.kind === 'question' && row.tookRecommendation;
+  }
+  return row.tookRecommendation && row.tookActionRecommendation;
+}
+
+// An answered finding reads as its action, then its solution; an untouched
+// one missing half its pick names the missing half in place of its status.
 function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
   const entry = element('li', 'review-row');
   entry.dataset.status = row.status;
@@ -288,6 +307,12 @@ function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
     deps.dispatch({ type: 'reviewJump', row: row.row }),
   );
   const answer = element('span', 'review-answer');
+  if (row.actionLabel !== '') {
+    answer.append(element('span', 'review-action', row.actionLabel));
+    if (row.choice > 0) {
+      answer.append(element('span', 'review-separator', '—'));
+    }
+  }
   if (row.choice > 0) {
     answer.append(
       element('span', 'choice-number', String(row.choice)),
@@ -297,11 +322,16 @@ function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
         deps.markdown.inline(row.choiceText),
       ),
     );
-    if (row.tookRecommendation) {
-      answer.append(element('span', 'badge badge-recommend', 'Recommended'));
-    }
-  } else {
-    answer.textContent = statusLabel(row.status);
+  }
+  if (tookEveryRecommendation(row)) {
+    answer.append(element('span', 'badge badge-recommend', 'Recommended'));
+  }
+  const showsPick = row.actionLabel !== '' || row.choice > 0;
+  if (!showsPick) {
+    answer.textContent =
+      row.missing === null
+        ? statusLabel(row.status)
+        : MISSING_HINTS[row.missing];
   }
   pick.append(
     element('span', 'review-number', row.label),

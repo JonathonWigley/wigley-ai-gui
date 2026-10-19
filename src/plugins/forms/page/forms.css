@@ -276,6 +276,55 @@
   pointer-events: none;
 }
 
+/* A finding left alone keeps its solution, shown dimmed. */
+.choices.is-dimmed {
+  opacity: 0.55;
+}
+
+/* A finding's Action row, under its solutions. */
+.finding-actions {
+  margin-top: 0.9rem;
+}
+
+.action-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.action-pick {
+  align-items: baseline;
+  background: transparent;
+  border: 1px solid var(--wg-border);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.4rem;
+  padding: 0.2rem 0.75rem;
+}
+
+.action-pick:hover {
+  background: var(--wg-surface-hover);
+}
+
+.action-pick.is-recommended {
+  border-color: var(--wg-recommend);
+}
+
+.action-pick.is-selected {
+  background: var(--wg-accent);
+  border-color: var(--wg-accent);
+  color: var(--wg-text-onAccent);
+}
+
+.action-picks.is-locked {
+  opacity: 0.55;
+}
+
+.action-picks.is-locked .action-pick {
+  pointer-events: none;
+}
+
 .choice-reason {
   color: var(--wg-text-muted);
   font-size: 0.92rem;
@@ -466,6 +515,11 @@
   display: inline-flex;
   gap: 0.4rem;
   margin-left: auto;
+}
+
+.review-action {
+  color: var(--wg-text);
+  font-weight: 600;
 }
 
 .review-detail {
