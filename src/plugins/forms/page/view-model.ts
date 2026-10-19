@@ -1,5 +1,6 @@
 import type { VimMode } from '../../../contracts/editor';
 import type { AnswerableKind, AnswerStatus, FindingAction } from '../contract';
+import { findingPickIsComplete } from '../finding-pick';
 import {
   type AnswerableItem,
   answerableItems,
@@ -24,12 +25,12 @@ export interface ReviewRow {
   label: string;
   title: string;
   status: AnswerStatus;
-  // A finding's action while answered; '' otherwise, and on a question.
+  // A finding's action while its pick is complete and it applies; '' otherwise,
+  // whatever its notes, and on a question.
   action: FindingAction | '';
   actionLabel: string;
-  // 0 unless answered; a not-applicable item's kept choice, the solution a
-  // finding left alone keeps, and the solution of a finding answered by notes
-  // with no action do not count.
+  // The choice while the item's pick is complete and it applies, else 0; the
+  // solution a finding left alone keeps does not count.
   choice: number;
   choiceText: string;
   tookRecommendation: boolean;
@@ -37,8 +38,9 @@ export interface ReviewRow {
   // Whether the row earns its Recommended badge: a finding's for its action,
   // and for its solution unless left alone; a question's for its choice.
   recommended: boolean;
-  // What an untouched finding's picks still lack; null when it lacks both,
-  // and on every question.
+  // What an applicable finding's incomplete pick still lacks, whatever its
+  // notes; null when it lacks both, when the pick is complete, and on every
+  // question.
   missing: 'solution' | 'action' | null;
   notes: string;
   dontAsk: boolean;
@@ -64,10 +66,10 @@ export function reviewRows(round: RoundState): ReviewRow[] {
     const format = FORMATS[item.kind];
     const answer = itemAnswer(round, item);
     const status = answerStatus(round, item);
-    const action = status === 'answered' ? findingActionOf(round, item) : '';
-    const choiceCounts =
-      action !== 'leave_it' && (item.kind === 'question' || action !== '');
-    const choice = status === 'answered' && choiceCounts ? answer.choice : 0;
+    const isApplicable = status !== 'not_applicable';
+    const pickCounts = isApplicable && pickIsComplete(round, item);
+    const action = pickCounts ? findingActionOf(round, item) : '';
+    const choice = pickCounts && action !== 'leave_it' ? answer.choice : 0;
     const tookRecommendation =
       choice > 0 && choice === format.recommend(round.round, item.index);
     const tookActionRecommendation =
@@ -95,7 +97,7 @@ export function reviewRows(round: RoundState): ReviewRow[] {
         tookRecommendation,
         tookActionRecommendation,
       ),
-      missing: status === 'untouched' ? missingPick(round, item) : null,
+      missing: isApplicable && !pickCounts ? missingPick(round, item) : null,
       notes: answer.notes,
       dontAsk: answer.dontAsk,
       dontAskReason: answer.dontAskReason,
@@ -121,9 +123,19 @@ function tookEveryRecommendation(
   return tookRecommendation && tookActionRecommendation;
 }
 
-// What an untouched item's picks lack. Untouched means the finding's pick is
-// incomplete (finding-pick.ts), so an action there still needs a solution,
-// and a solution with no action needs an action.
+// Whether the item's picks alone answer it, notes aside: a choice on a
+// question, a complete pick of action and solution on a finding.
+function pickIsComplete(round: RoundState, item: AnswerableItem): boolean {
+  if (item.kind === 'question') {
+    return round.answers[item.index - 1].choice >= 1;
+  }
+  const answer = round.findingAnswers[item.index - 1];
+  const solutionCount = round.round.findings[item.index - 1].choices.length;
+  return findingPickIsComplete(solutionCount, answer.choice, answer.action);
+}
+
+// What an item's incomplete pick lacks: on a finding, an action still needs a
+// solution, and a solution with no action needs an action.
 function missingPick(
   round: RoundState,
   item: AnswerableItem,

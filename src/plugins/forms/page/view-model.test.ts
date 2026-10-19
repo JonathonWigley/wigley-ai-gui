@@ -257,7 +257,7 @@ describe('reviewRows', () => {
     });
   });
 
-  it('drops the solution from a finding answered by notes with no action', () => {
+  it('drops the solution from a finding answered by notes with no action, and flags the action', () => {
     const [delta] = reviewRows(
       mixedRoundAfter(
         {
@@ -275,6 +275,30 @@ describe('reviewRows', () => {
       choiceText: '',
       actionLabel: '',
       tookRecommendation: false,
+      missing: 'action',
+    });
+  });
+
+  it('drops the action from a finding with notes, fix now and no solution among several, and flags the solution', () => {
+    const [delta] = reviewRows(
+      mixedRoundAfter(
+        {
+          type: 'setText',
+          roundId: 'r1',
+          target: { field: 'notes', item: { kind: 'finding', index: 1 } },
+          value: 'my own fix',
+        },
+        { type: 'chooseAction', action: 'fix_now' },
+      ),
+    );
+    expect(delta).toMatchObject({
+      status: 'answered',
+      action: '',
+      actionLabel: '',
+      choice: 0,
+      tookActionRecommendation: false,
+      recommended: false,
+      missing: 'solution',
     });
   });
 

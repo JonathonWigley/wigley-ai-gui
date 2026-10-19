@@ -285,8 +285,8 @@ const MISSING_HINTS: Record<NonNullable<ReviewRow['missing']>, string> = {
   action: 'needs an action',
 };
 
-// An answered finding reads as its action, then its solution; an untouched
-// one missing half its pick names the missing half in place of its status.
+// A finding with a complete pick reads as its action, then its solution; one
+// missing half its pick names the missing half in place of its status.
 function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
   const entry = element('li', 'review-row');
   entry.dataset.status = row.status;
