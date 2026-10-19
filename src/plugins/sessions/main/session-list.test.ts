@@ -135,6 +135,16 @@ describe('createSessionList', () => {
     ).toThrow('Two tool contributions both name the tool "a"');
   });
 
+  it('throws on a tool name one contribution lists twice', () => {
+    const { list } = setUp();
+    list.contributeTools([tool('x')], fakeContribution().start);
+
+    expect(() =>
+      list.contributeTools([tool('a'), tool('a')], fakeContribution().start),
+    ).toThrow('One tool contribution names the tool "a" twice');
+    expect(list.tools().map((each) => each.name)).toEqual(['x']);
+  });
+
   it('lists contributed tools in contribution order', () => {
     const { list } = setUp();
     list.contributeTools([tool('a'), tool('b')], fakeContribution().start);

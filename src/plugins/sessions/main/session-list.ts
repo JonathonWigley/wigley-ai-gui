@@ -176,12 +176,19 @@ export function createSessionList(deps: SessionListDeps): SessionList {
 
   return {
     contributeTools(tools, start) {
+      const namesInThisContribution = new Set<string>();
       for (const tool of tools) {
         if (toolNames.has(tool.name)) {
           throw new Error(
             `Two tool contributions both name the tool "${tool.name}"`,
           );
         }
+        if (namesInThisContribution.has(tool.name)) {
+          throw new Error(
+            `One tool contribution names the tool "${tool.name}" twice`,
+          );
+        }
+        namesInThisContribution.add(tool.name);
       }
       for (const tool of tools) {
         toolNames.add(tool.name);

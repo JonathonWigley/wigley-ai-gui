@@ -70,7 +70,7 @@ export interface ConnectedSession extends ToolSession {
 export interface SessionsMainExports {
   // A contribution reaches only sessions that connect after it, so a plugin
   // contributes during its start. Throws on a tool name another contribution
-  // already holds.
+  // already holds, or one this contribution lists twice.
   contributeTools(
     tools: ToolDefinition[],
     start: (session: AgentSession) => ToolSession,
