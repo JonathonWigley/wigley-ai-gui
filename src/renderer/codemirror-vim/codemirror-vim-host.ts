@@ -138,9 +138,13 @@ function redrawCursorOnResize(view: EditorView): ResizeObserver {
 // Vim's own test for a buffer holding only a count; `0` alone is a motion.
 const COUNT_ONLY = /^[1-9]\d*$/;
 
+// A key name no vim command or keymap bind starts with.
+const UNMATCHED_KEY = '<Nop>';
+
 // The keys of an unfinished sequence vim is waiting on. Insert and visual
 // mode report none, so a pending insert remap such as `jk` stays unseen, and
-// neither does a count with no key after it, which vim keeps on Esc.
+// neither does a count with no key after it, which vim keeps on Esc, nor an
+// operator, which vim holds outside the buffer once typed.
 function pendingKeysOf(cm: VimEditor): string[] {
   const { vim } = cm.state;
   const keyBuffer: string[] = vim.inputState.keyBuffer;
@@ -190,12 +194,11 @@ class PendingKeys {
     }
   }
 
-  // Esc after an empty or count-only buffer would run the bind on Esc, so it
-  // is sent only while `cm` reports keys; vim's command-done reports `[]`.
+  // Vim clears its whole input state — buffer, count, operator, register — on
+  // a key no command matches, and runs nothing; Esc would run the bind on Esc
+  // in normal mode. Vim's command-done then reports `[]`.
   discardIn(cm: VimEditor) {
-    if (pendingKeysOf(cm).length > 0) {
-      Vim.handleKey(cm, '<Esc>', 'user');
-    }
+    Vim.handleKey(cm, UNMATCHED_KEY, 'user');
   }
 
   private report(cm: VimEditor, keys: string[]) {
@@ -210,6 +213,22 @@ class PendingKeys {
     for (const listener of this.listeners) {
       listener([...keys]);
     }
+  }
+}
+
+// The window may hold no focus while the host moves it between editors, and
+// the browser fires no blur then, so the editor focus leaves drops its
+// unfinished command here as well as on blur.
+function leaveFocusedEditor(
+  target: EditorView,
+  hosted: HostedEditor[],
+  pendingKeys: PendingKeys,
+) {
+  const focused = hosted.find(({ view }) =>
+    view.dom.contains(document.activeElement),
+  );
+  if (focused && focused.view !== target) {
+    pendingKeys.discardIn(vimEditorOf(focused.view));
   }
 }
 
@@ -286,8 +305,14 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
         view,
         editor: {
           text: () => view.state.doc.toString(),
-          focus: (options) => focusEditor(view, cm, options),
-          blur: () => view.contentDOM.blur(),
+          focus: (options) => {
+            leaveFocusedEditor(view, hosted, pendingKeys);
+            focusEditor(view, cm, options);
+          },
+          blur: () => {
+            pendingKeys.discardIn(cm);
+            view.contentDOM.blur();
+          },
           destroy: () => {
             const index = hosted.indexOf(entry);
             if (index < 0) {

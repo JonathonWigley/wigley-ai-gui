@@ -38,7 +38,9 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // pending input); Space opens it again and, with no key pressed, the which-key
 // timeout closes it, and Esc then leaves the box, so the box kept focus and its
 // pending Space was dropped. a back in, jk, Space opens which-key, and Ctrl+j
-// moving to the reason box closes it; jk Esc out. j to question 2, where q a x
+// moving to the reason box closes it; jk Esc out. a, jk and d, then Ctrl+j to
+// the reason box and Ctrl+k back; w and Esc leave the box, and w deleted
+// nothing, since leaving dropped the pending d. j to question 2, where q a x
 // then b breaks the self-test bind, so a opens the notes box and "xb" is typed
 // into it; jk Esc out and x marks question 2 not applicable. Ctrl+h goes back
 // to question 1, where Space opens which-key and the timeout closes it, so 2
@@ -92,6 +94,13 @@ const STEPS: SelfTestStep[] = [
   { keys: ['j', 'k', ' '], expect: '[keys] which-key shows Space' },
   { keys: ['<C-j>'], expect: '[keys] which-key closed' },
   { keys: ['j', 'k', 'Escape'], expect: '[forms] left the box' },
+  { keys: ['a'], expect: '[forms] focused notes on question 1' },
+  {
+    keys: ['j', 'k', 'd', '<C-j>'],
+    expect: '[forms] focused dontAskReason on question 1',
+  },
+  { keys: ['<C-k>'], expect: '[forms] focused notes on question 1' },
+  { keys: ['w', 'Escape'], expect: '[forms] left the box' },
   {
     keys: ['j', 'q', 'a', 'x', 'b'],
     expect: '[page] typed xb into the editor',
@@ -297,7 +306,8 @@ function payloadProblems(payload: AnswersPayload): string[] {
     ],
     [first?.status === 'answered', `question 1 status ${first?.status}`],
     [first?.choice === 2, `question 1 choice ${first?.choice}`],
-    // "abc" proves each a entered INSERT with the cursor at the end.
+    // "abc" proves each a entered INSERT with the cursor at the end, and that
+    // a d left pending in the box deleted nothing once the box was left.
     [
       first?.notes === 'abc',
       `question 1 notes ${JSON.stringify(first?.notes)}`,

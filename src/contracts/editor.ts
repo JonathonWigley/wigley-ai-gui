@@ -43,9 +43,10 @@ export interface EditorHost {
   // Hears the keys of an unfinished normal-mode sequence in any editor this
   // host created or will create, as vim names them (`['<Space>', 'a']`), each
   // time they change; `[]` once the sequence ends or the editor leaves normal
-  // mode. A count with no key after it (`3`) is no sequence and reports `[]`.
-  // An editor losing focus discards its unfinished sequence, as Esc does, and
-  // reports `[]` before any other editor reports.
+  // mode. A count with no key after it (`3`) and an operator waiting for its
+  // motion (`d`) are no sequence and report `[]`. An editor losing focus
+  // discards every unfinished command, count, operator and register included,
+  // and reports `[]` before any other editor reports.
   onPendingKeys(listener: (keys: string[]) => void): void;
   // Discards the unfinished sequence, as Esc does, without running the bind
   // on Esc; does nothing when no keys are pending.
