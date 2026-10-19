@@ -44,6 +44,8 @@ function fakeHost() {
     },
     contains: () => false,
     typeInto: () => {},
+    onPendingKeys: () => {},
+    cancelPendingKeys: () => {},
   };
   return { host, created };
 }
