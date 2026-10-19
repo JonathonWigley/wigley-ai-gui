@@ -30,8 +30,11 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // finding; Space a f sets Fix now, 2 picks solution 2, Space a f again clears
 // the action and Space a s sets Leave it. a types "agreed" at once (INSERT), jk
 // to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out. j to
-// finding 2, whose one solution Space a u alone answers with Follow-up. j to
-// question 1, pick 2; a types "ab" at once, Esc out; d focuses its reason box,
+// finding 2, a Nit: Space a u is refused, since a Nit offers no follow-up, and
+// Space a f alone answers its one solution with Fix anyway. j to finding 3, a
+// Decision: Space a u sets Plan it, c opens and c closes its other choices,
+// and Enter accepts its recommendation. j to question 1, where Enter accepts
+// its recommendation and 2 then picks 2; a types "ab" at once, Esc out; d focuses its reason box,
 // A appends a long word and Ctrl+k still in INSERT moves back to its notes box,
 // Esc out; a again types "c" after "ab". a once more, jk to NORMAL, where Space
 // opens which-key and Esc closes it without leaving the box (vim drops its
@@ -55,7 +58,7 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // where C opens and n dismisses the cancel prompt; Space ? opens help again,
 // Cmd+W opens the cancel prompt, which closes help, so n dismisses the prompt.
 // o types "note" into the Round note at once (INSERT), Esc out, Enter jumps
-// back to the finding, review again and Space Enter submits.
+// back to finding 1, review again and Space Enter submits.
 const STEPS: SelfTestStep[] = [
   { keys: [' ', 'k'], expect: '[page] k ran forms.prevItem', checksFit: true },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
@@ -70,8 +73,21 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[forms] left the box' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
-  { keys: [' ', 'a', 'u'], expect: '[forms] chose Follow-up on finding 2' },
+  { keys: [' ', 'a', 'u'], expect: '[forms] finding 2 offers no follow-up' },
+  { keys: [' ', 'a', 'f'], expect: '[forms] chose Fix anyway on finding 2' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
+  { keys: [' ', 'a', 'u'], expect: '[forms] chose Plan it on finding 3' },
+  { keys: ['c'], expect: '[forms] opened other choices on finding 3' },
+  { keys: ['c'], expect: '[forms] closed other choices on finding 3' },
+  {
+    keys: ['Enter'],
+    expect: '[forms] accepted the recommendation on finding 3',
+  },
+  { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
+  {
+    keys: ['Enter'],
+    expect: '[forms] accepted the recommendation on question 1',
+  },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   { keys: ['a', 'b', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
@@ -203,14 +219,26 @@ function fixtureRound(run: number) {
       },
       {
         title: 'A one-solution finding',
-        origin: 'caused',
-        severity: 'minor',
+        origin: 'nit',
         impact: 'Every call pays for a second check.',
         finding: '- the code repeats a check',
         proof: '`check()` runs twice.',
         choices: [{ text: 'Drop one', reason: 'One check is enough.' }],
         recommend: 1,
         recommend_action: 'fix_now',
+      },
+      {
+        title: 'A design finding',
+        origin: 'design',
+        impact: 'Settings either follow the user or the machine.',
+        finding: '- settings have no owner',
+        proof: '`settings.json` sits beside the app.',
+        choices: [
+          { text: 'Per user', reason: 'Each user keeps their own.' },
+          { text: 'Shared', reason: 'One file is simpler.' },
+        ],
+        recommend: 2,
+        recommend_action: 'follow_up',
       },
     ],
     questions: [
@@ -273,13 +301,13 @@ function toolResultProblems(result: ToolResult): string[] {
 
 // What the fixture's answers must come back as after STEPS.
 function payloadProblems(payload: AnswersPayload): string[] {
-  const [finding, oneSolution] = payload.findings;
+  const [finding, nit, design] = payload.findings;
   const [first, second] = payload.answers;
   const checks: [boolean, string][] = [
     [payload.outcome === 'submitted', `outcome ${payload.outcome}`],
     [
       payload.summary ===
-        '2 findings, 2 questions: 3 answered, 1 not applicable, 0 untouched.',
+        '3 findings, 2 questions: 4 answered, 1 not applicable, 0 untouched.',
       `summary ${JSON.stringify(payload.summary)}`,
     ],
     [finding?.status === 'answered', `finding 1 status ${finding?.status}`],
@@ -297,18 +325,23 @@ function payloadProblems(payload: AnswersPayload): string[] {
       finding?.notes === 'agreed',
       `finding 1 notes ${JSON.stringify(finding?.notes)}`,
     ],
+    [nit?.status === 'answered', `finding 2 status ${nit?.status}`],
+    [nit?.choice === 1, `finding 2 choice ${nit?.choice}`],
+    [nit?.action === 'fix_now', `finding 2 action ${nit?.action}`],
     [
-      oneSolution?.status === 'answered',
-      `finding 2 status ${oneSolution?.status}`,
+      nit?.took_action_recommendation === true,
+      `finding 2 took_action_recommendation ${nit?.took_action_recommendation}`,
     ],
-    [oneSolution?.choice === 1, `finding 2 choice ${oneSolution?.choice}`],
+    [design?.status === 'answered', `finding 3 status ${design?.status}`],
+    [design?.choice === 2, `finding 3 choice ${design?.choice}`],
     [
-      oneSolution?.action === 'follow_up',
-      `finding 2 action ${oneSolution?.action}`,
+      design?.took_recommendation === true,
+      `finding 3 took_recommendation ${design?.took_recommendation}`,
     ],
+    [design?.action === 'follow_up', `finding 3 action ${design?.action}`],
     [
-      oneSolution?.took_action_recommendation === false,
-      `finding 2 took_action_recommendation ${oneSolution?.took_action_recommendation}`,
+      design?.took_action_recommendation === true,
+      `finding 3 took_action_recommendation ${design?.took_action_recommendation}`,
     ],
     [first?.status === 'answered', `question 1 status ${first?.status}`],
     [first?.choice === 2, `question 1 choice ${first?.choice}`],
