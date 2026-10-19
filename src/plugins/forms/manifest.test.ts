@@ -49,6 +49,12 @@ const EXPECTED_PAGE: PageBind[] = [
   { keys: ['x'], scope: 'forms.forms', command: 'forms.toggleNotApplicable' },
   { keys: ['d'], scope: 'forms.forms', command: 'forms.toggleDontAsk' },
   { keys: ['a'], scope: 'forms.forms', command: 'forms.editNotes' },
+  {
+    keys: ['Enter'],
+    scope: 'forms.forms',
+    command: 'forms.acceptRecommendation',
+  },
+  { keys: ['c'], scope: 'forms.forms', command: 'forms.toggleChange' },
   ...DIGITS.map((digit) => ({
     keys: [' ', digit],
     scope: 'forms.forms',

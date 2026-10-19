@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FocusOptions, TextEditor } from '../../../contracts/editor';
 import type { PageCommandContext } from '../../../contracts/plugin';
-import type { Finding, RoundEnd } from '../contract';
+import type { Finding, Question, RoundEnd } from '../contract';
 import type { BoxRef } from './boxes';
 import {
   activeRound,
@@ -11,7 +11,14 @@ import {
 } from './form-state';
 import { formsCommandHandlers, guardClose } from './forms-commands';
 import { createFormsStore } from './forms-store';
-import { finding, notice, presentedRound, question } from './test-rounds';
+import {
+  decision,
+  finding,
+  nit,
+  notice,
+  presentedRound,
+  question,
+} from './test-rounds';
 
 type FormsCommand = keyof ReturnType<typeof formsCommandHandlers>;
 
@@ -29,16 +36,19 @@ function editorOf(box: BoxRef): TextEditor {
   return editor;
 }
 
-// Rail: notice 1 (position 0), then `findings`, then questions Alpha and Beta
-// (1 and 2 with no findings).
-function setup(findings: Finding[] = []) {
+// Rail: notice 1 (position 0), then `findings`, then `questions`, by default
+// Alpha and Beta (1 and 2 with no findings).
+function setup(
+  findings: Finding[] = [],
+  questions: Question[] = [question('Alpha'), question('Beta')],
+) {
   const store = createFormsStore(
     initialState(
       [
         presentedRound('r1', {
           notices: [notice('Heads up')],
           findings,
-          questions: [question('Alpha'), question('Beta')],
+          questions,
         }),
       ],
       'r1-session',
@@ -161,6 +171,69 @@ describe('formsCommandHandlers', () => {
       ]);
     },
   );
+
+  it('logs the card word of the action it chose on a Decision', () => {
+    const { run, round, logs } = setup([decision('Shape')]);
+
+    run('actFixNow');
+
+    expect(round().findingAnswers[0].action).toBe('fix_now');
+    expect(logs).toEqual(['chose Decide now on finding 1']);
+  });
+
+  it('logs that a Nit offers no follow-up and keeps its answer', () => {
+    const { run, store, logs } = setup([nit('Typo')]);
+    const before = store.get();
+
+    run('actFollowUp');
+
+    expect(store.get()).toBe(before);
+    expect(logs).toEqual(['finding 1 offers no follow-up']);
+  });
+
+  it('accepts the recommendation on the focused question and logs it', () => {
+    const { run, round, logs } = setup(
+      [],
+      [question('Alpha', { recommend: 1 })],
+    );
+
+    run('acceptRecommendation');
+
+    expect(round().answers[0].choice).toBe(1);
+    expect(logs).toEqual(['accepted the recommendation on question 1']);
+  });
+
+  it('logs nothing when the recommendation is already held', () => {
+    const { run, logs } = setup([], [question('Alpha', { recommend: 1 })]);
+    run('choose1');
+    logs.length = 0;
+
+    run('acceptRecommendation');
+
+    expect(logs).toEqual([]);
+  });
+
+  it('opens and closes other choices on the focused finding', () => {
+    const { run, round, logs } = setup([finding('Leak')]);
+
+    run('toggleChange');
+    expect(round().changeOpen).toEqual([true]);
+    run('toggleChange');
+
+    expect(round().changeOpen).toEqual([false]);
+    expect(logs).toEqual([
+      'opened other choices on finding 1',
+      'closed other choices on finding 1',
+    ]);
+  });
+
+  it('logs nothing when other choices toggle on a question', () => {
+    const { run, logs } = setup();
+
+    run('toggleChange');
+
+    expect(logs).toEqual([]);
+  });
 
   it('logs nothing when an action command runs on a question', () => {
     const { run, logs } = setup();

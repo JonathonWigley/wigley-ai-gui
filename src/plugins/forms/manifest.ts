@@ -76,9 +76,32 @@ export const formsManifest = definePlugin({
       group: 'choices',
       runsIn: 'page',
     },
-    actFixNow: { label: 'fix now', group: 'choices', runsIn: 'page' },
-    actFollowUp: { label: 'follow-up', group: 'choices', runsIn: 'page' },
-    actLeaveIt: { label: 'leave it', group: 'choices', runsIn: 'page' },
+    acceptRecommendation: {
+      label: 'accept the recommendation',
+      group: 'choices',
+      runsIn: 'page',
+    },
+    toggleChange: {
+      label: 'show or hide other choices',
+      group: 'choices',
+      runsIn: 'page',
+    },
+    // Each label names every card's word for the action.
+    actFixNow: {
+      label: 'fix now · decide now · fix anyway',
+      group: 'choices',
+      runsIn: 'page',
+    },
+    actFollowUp: {
+      label: 'follow-up · plan it',
+      group: 'choices',
+      runsIn: 'page',
+    },
+    actLeaveIt: {
+      label: 'leave it · drop it',
+      group: 'choices',
+      runsIn: 'page',
+    },
     toggleNotApplicable: {
       label: 'not applicable',
       group: 'answer',
@@ -151,6 +174,8 @@ export const formsManifest = definePlugin({
       { keys: ['x'], scope: 'forms', command: 'toggleNotApplicable' },
       { keys: ['d'], scope: 'forms', command: 'toggleDontAsk' },
       { keys: ['a'], scope: 'forms', command: 'editNotes' },
+      { keys: ['Enter'], scope: 'forms', command: 'acceptRecommendation' },
+      { keys: ['c'], scope: 'forms', command: 'toggleChange' },
       ...pageJumpBinds,
       { keys: [' ', 'e', 'n'], scope: 'forms', command: 'nextUnanswered' },
       { keys: [' ', 'e', 'p'], scope: 'forms', command: 'prevUnanswered' },

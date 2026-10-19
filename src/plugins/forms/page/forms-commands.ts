@@ -73,19 +73,30 @@ export function formsCommandHandlers(
           : `cleared the choice on ${itemName(item)}`,
       );
 
-  // Acts only on a focused finding, so a question logs nothing.
+  // Acts only on a focused finding, so a question logs nothing. A finding whose
+  // card lacks the action logs that and keeps its answer.
   const act =
     (action: FindingAction): Handler =>
-    (context) =>
+    (context) => {
+      focusBoxItem(store, boxIn(deps, context));
+      const lacking = findingLackingAction(store.get(), action);
+      if (lacking !== null) {
+        log(
+          'forms',
+          `${itemName(lacking)} offers no ${defectActionWord(action).toLowerCase()}`,
+        );
+        return;
+      }
       changeAnswer(
         deps,
         context,
         { type: 'chooseAction', action },
         (_, item) =>
-          findingAction(deps.store.get(), item) === action
-            ? `chose ${findingActionWord(deps.store.get(), item, action)} on ${itemName(item)}`
+          findingAction(store.get(), item) === action
+            ? `chose ${findingActionWord(store.get(), item, action)} on ${itemName(item)}`
             : `cleared the action on ${itemName(item)}`,
       );
+    };
 
   const jumpTo =
     (question: number): Handler =>
@@ -116,6 +127,14 @@ export function formsCommandHandlers(
         { type: 'clearChoice' },
         (_answer, item) => `cleared the choice on ${itemName(item)}`,
       ),
+    acceptRecommendation: (context) =>
+      changeAnswer(
+        deps,
+        context,
+        { type: 'acceptRecommendation' },
+        (_answer, item) => `accepted the recommendation on ${itemName(item)}`,
+      ),
+    toggleChange: (context) => toggleChangeOnFocused(deps, context),
     actFixNow: act('fix_now'),
     actFollowUp: act('follow_up'),
     actLeaveIt: act('leave_it'),
@@ -223,6 +242,56 @@ function findingActionWord(
   const round = activeRound(state);
   const origin = round?.round.findings[item.index - 1].origin;
   return origin === undefined ? null : actionLabel(origin, action);
+}
+
+// The Defect card's word for `action`, which offers every action.
+function defectActionWord(action: FindingAction): string {
+  return actionLabel('caused', action) ?? action;
+}
+
+// The focused finding when its card does not offer `action`; null otherwise.
+function findingLackingAction(
+  state: FormsState,
+  action: FindingAction,
+): AnswerableItem | null {
+  const focused = focusedAnswer(state);
+  const isLacking =
+    focused?.item.kind === 'finding' &&
+    findingActionWord(state, focused.item, action) === null;
+  return isLacking ? focused.item : null;
+}
+
+// The focused finding and whether its Change… is open; null when no finding
+// is focused.
+function focusedChange(
+  state: FormsState,
+): { item: AnswerableItem; open: boolean } | null {
+  const round = activeRound(state);
+  const focused = round === null ? null : focusedItem(round);
+  if (round === null || focused?.kind !== 'finding') {
+    return null;
+  }
+  return {
+    item: { kind: 'finding', index: focused.index },
+    open: round.changeOpen[focused.index - 1],
+  };
+}
+
+// Logs every flip of the focused finding's Change… state, whether or not the
+// card shows Change… for another reason.
+function toggleChangeOnFocused(
+  deps: FormsCommandDeps,
+  context: PageCommandContext,
+) {
+  focusBoxItem(deps.store, boxIn(deps, context));
+  const before = focusedChange(deps.store.get());
+  deps.store.dispatch({ type: 'toggleChange' });
+  const after = focusedChange(deps.store.get());
+  if (before === null || after === null || after.open === before.open) {
+    return;
+  }
+  const verb = after.open ? 'opened' : 'closed';
+  deps.log('forms', `${verb} other choices on ${itemName(after.item)}`);
 }
 
 function focusedAnswer(
