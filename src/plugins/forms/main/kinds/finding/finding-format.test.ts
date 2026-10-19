@@ -184,6 +184,17 @@ describe('findingFormat.parse', () => {
     );
   });
 
+  it('refuses an action word after leading spaces and in any case, naming it as the table spells it', () => {
+    const raw = finding({
+      choices: [{ text: '  fix NOW: share the rule', reason: 'r' }],
+    });
+
+    expect(parseError(raw)).toBe(
+      'Finding 1: choices[1].text opens with "Fix now", an action. A choice ' +
+        'names a solution; the card draws its own action control.',
+    );
+  });
+
   it('refuses a choice opening with an action word before punctuation', () => {
     const raw = finding({
       choices: [{ text: 'Leave it: keep the guard', reason: 'r' }],
