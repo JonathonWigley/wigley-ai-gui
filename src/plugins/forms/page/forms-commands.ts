@@ -266,7 +266,13 @@ function jumpToQuestion(
   }
   const item = round.round.notices.length + question - 1;
   moveItem(deps, context, { type: 'focusItem', item });
-  deps.log('forms', `jumped to question ${question}`);
+  const moved = round.focus !== item;
+  deps.log(
+    'forms',
+    moved
+      ? `jumped to question ${question}`
+      : `already on question ${question}`,
+  );
 }
 
 function jumpToUnanswered(
@@ -285,12 +291,19 @@ function jumpToUnanswered(
     deps.log('forms', 'no unanswered question');
     return;
   }
+  const focused = focusedItem(round);
+  const isFocusedQuestion =
+    focused?.kind === 'question' && focused.index === question;
+  if (isFocusedQuestion) {
+    deps.log('forms', 'no other unanswered question');
+    return;
+  }
   jumpToQuestion(deps, context, question);
 }
 
-// A session's tab closes only once its round is gone: with an open round it
-// asks to cancel the round, and confirming closes the tab. Every close names
-// the active session, so a background round keeps its tab with no prompt.
+// A session's tab closes only once its round is gone: with its round active it
+// asks to cancel the round, and confirming closes the tab. A round open in the
+// background keeps its tab with no prompt, and the refusal is logged.
 export function guardClose(
   deps: Pick<FormsCommandDeps, 'store' | 'log'>,
   sessionId: string,
@@ -301,6 +314,13 @@ export function guardClose(
     .rounds.find((candidate) => candidate.sessionId === sessionId);
   if (round === undefined) {
     return true;
+  }
+  if (round.roundId !== store.get().activeRoundId) {
+    deps.log(
+      'forms',
+      `tab close kept: ${round.label} is open in the background`,
+    );
+    return false;
   }
   const wasConfirm = store.get().view === 'confirm';
   store.dispatch({ type: 'askClose', sessionId });

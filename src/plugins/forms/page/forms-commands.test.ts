@@ -283,7 +283,7 @@ describe('formsCommandHandlers', () => {
     });
   });
 
-  it('jumps to the next unanswered question, wrapping', () => {
+  it('stays on the focused question when it is the only unanswered one', () => {
     const { run, round, logs } = setup();
     run('jumpTo1');
     run('choose1');
@@ -293,7 +293,7 @@ describe('formsCommandHandlers', () => {
     run('nextUnanswered');
 
     expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
-    expect(logs).toEqual(['jumped to question 2']);
+    expect(logs).toEqual(['no other unanswered question']);
 
     run('choose1');
     logs.length = 0;
@@ -301,6 +301,28 @@ describe('formsCommandHandlers', () => {
 
     expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
     expect(logs).toEqual(['no unanswered question']);
+  });
+
+  it('jumps to the next unanswered question, wrapping', () => {
+    const { run, round, logs } = setup();
+    run('jumpTo2');
+    logs.length = 0;
+
+    run('nextUnanswered');
+
+    expect(focusedItem(round())).toEqual({ kind: 'question', index: 1 });
+    expect(logs).toEqual(['jumped to question 1']);
+  });
+
+  it('logs a jump to the focused question as no move', () => {
+    const { run, round, logs } = setup();
+    run('jumpTo2');
+    logs.length = 0;
+
+    run('jumpTo2');
+
+    expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
+    expect(logs).toEqual(['already on question 2']);
   });
 
   it('jumps to the previous unanswered question', () => {
@@ -402,6 +424,19 @@ describe('formsCommandHandlers', () => {
     expect(guardClose('r1-session')).toBe(false);
 
     expect(logs).toHaveLength(1);
+  });
+
+  it("the close guard keeps a background round's tab and logs the refusal", () => {
+    const { store, logs, guardClose } = setup();
+    store.dispatch({ type: 'roundShown', round: presentedRound('r2') });
+    const before = store.get();
+
+    expect(guardClose('r2-session')).toBe(false);
+
+    expect(store.get()).toBe(before);
+    expect(logs).toEqual([
+      'tab close kept: project · r2 is open in the background',
+    ]);
   });
 
   it('confirming a close prompt cancels the round, then closes its tab', () => {
