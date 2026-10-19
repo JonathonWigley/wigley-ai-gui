@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
 import type { Keymap, PageBind } from '../../../contracts/keymap';
-import {
-  type CommandLabel,
-  editorHints,
-  formatKeys,
-  helpSections,
-  pageHints,
-} from './key-hints';
+import type { CommandLabel } from '../../../shared/key-hints';
+import { helpSections } from './key-hints';
 
 const CHOICE_LABEL = 'pick a choice';
 
@@ -51,52 +46,6 @@ const keymap: Keymap = {
   intercept: [{ key: 'Tab', control: true, command: 'test.intercept' }],
   global: [{ accelerator: 'Control+Alt+Command+W', command: 'test.summon' }],
 };
-
-describe('formatKeys', () => {
-  it('names Space and Escape and spaces a sequence', () => {
-    expect(formatKeys([' ', ' '])).toBe('Space Space');
-    expect(formatKeys(['Escape'])).toBe('Esc');
-    expect(formatKeys(['z', 'a'])).toBe('z a');
-  });
-});
-
-describe('pageHints', () => {
-  it("lists the view's binds and the any-scope binds, in keymap order", () => {
-    expect(
-      pageHints(keymap.page, 'forms.forms', label).map((hint) => hint.keys),
-    ).toEqual(['j', '1–3', 'Space Space', 'F1']);
-  });
-
-  it('lists the review binds with their labels, leaving out other views', () => {
-    expect(pageHints(keymap.page, 'forms.review', label)).toEqual([
-      { keys: 'Esc', label: 'back to the form' },
-      { keys: 'F1', label: 'test.anywhere' },
-    ]);
-  });
-
-  it('merges a run of digits with one label into a range', () => {
-    expect(pageHints(keymap.page, 'forms.forms', label)[1]).toEqual({
-      keys: '1–3',
-      label: CHOICE_LABEL,
-    });
-  });
-
-  it('joins other neighbours with one label', () => {
-    expect(pageHints(keymap.page, 'forms.help', label)[0]).toEqual({
-      keys: '? / Esc',
-      label: 'test.close',
-    });
-  });
-});
-
-describe('editorHints', () => {
-  it('spells the leader and merges the digit binds', () => {
-    expect(editorHints(keymap.editor, label)).toEqual([
-      { keys: '<Space>j', label: 'test.nextBox' },
-      { keys: '<Space>1–3', label: CHOICE_LABEL },
-    ]);
-  });
-});
 
 describe('helpSections', () => {
   it('lists a section per scope with binds, the editor keys and the chords', () => {

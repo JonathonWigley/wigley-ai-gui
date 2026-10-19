@@ -2,6 +2,12 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Keymap } from '../../../contracts/keymap';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Area, AreaName } from '../../../contracts/plugin';
+import {
+  type CommandLabel,
+  editorHints,
+  type KeyHint,
+  pageHints,
+} from '../../../shared/key-hints';
 import { button, element } from '../../../shared/page/dom';
 import type { SessionsPageExports } from '../../sessions/contract';
 import { formsCommand, formsScope } from '../ids';
@@ -16,13 +22,7 @@ import {
   saveState,
 } from './form-state';
 import type { FormsStore } from './forms-store';
-import {
-  type CommandLabel,
-  editorHints,
-  helpSections,
-  type KeyHint,
-  pageHints,
-} from './key-hints';
+import { helpSections } from './key-hints';
 import { createRoundView, type RoundView } from './round-view';
 import { modeLabel, saveLabel, sessionTitle } from './view-model';
 
