@@ -10,7 +10,7 @@ import { formsCommand, formsScope } from '../ids';
 
 // Exists only for the self-test, which adds it to the keymap main serves; it
 // is never in the user's keymap. No step completes it: `q a x` then `b` breaks
-// it, so `a` runs forms.editWhat and `x b` are typed into the What box.
+// it, so `a` runs forms.editNotes and `x b` are typed into the Notes box.
 const PAGE_BINDS: PageBind[] = [
   {
     keys: ['q', 'a', 'x', 'y'],
@@ -22,35 +22,41 @@ const PAGE_BINDS: PageBind[] = [
 // An unbroken run of letters wider than any pane; no j, which would start jk.
 const LONG_WORD = 'unbroken'.repeat(14);
 
-// Starting on the notice: Space then j replays j to question 1, pick 2; a
-// types "ab" at once (INSERT), Ctrl+j still in INSERT moves to its why box, A
-// appends a long word, Esc out; a again types "c" after "ab"; j to question
-// 2, where q a x then b breaks the self-test bind, so a opens the what box and
-// "xb" is typed into it; jk Esc out and x marks question 2 not applicable; o
-// types "note" into the note box at once (INSERT), Esc out. Ctrl+h goes back
-// to question 1, Space a 2 clears its choice and picks it again, Space 2
-// jumps to question 2, and Space e n finds no unanswered question. Option+o
-// moves to the second session's tab; Cmd+W there asks to cancel its round,
-// Esc keeps it and returns to its form, where j moves to its question 2 and
-// Space e p finds its untouched question 1; Option+i moves back to the first
-// tab. Then review, ? opens and closes help, C opens and n dismisses the
-// cancel prompt, Enter jumps back to the question, review again and Space
-// Enter submits.
+// Starting on the notice: Space then j replays j to the finding, pick 2; a
+// types "agreed" at once (INSERT), Esc out. j to question 1, pick 2; a types
+// "ab" at once, Esc out; d focuses its reason box, A appends a long word and
+// Ctrl+k still in INSERT moves back to its notes box, Esc out; a again types
+// "c" after "ab". j to question 2, where q a x then b breaks the self-test
+// bind, so a opens the notes box and "xb" is typed into it; jk Esc out and x
+// marks question 2 not applicable. Ctrl+h goes back to question 1, Space a 2
+// clears its choice and picks it again, Space 2 jumps to question 2, and
+// Space e n finds no unanswered item. Option+o moves to the second session's
+// tab; Cmd+W there asks to cancel its round, Esc keeps it and returns to its
+// form, where j moves to its question 2 and Space e p finds its untouched
+// question 1; Option+i moves back to the first tab. Then review, ? opens and
+// closes help, C opens and n dismisses the cancel prompt, o types "note" into
+// the Round note at once (INSERT), Esc out, Enter jumps back to the finding,
+// review again and Space Enter submits.
 const STEPS: SelfTestStep[] = [
   { keys: [' ', 'j'], expect: '[page] j ran forms.nextItem', checksFit: true },
-  { keys: ['2'], expect: '[forms] chose 2 on question 1' },
-  { keys: ['a'], expect: '[forms] focused what on question 1' },
+  { keys: ['2'], expect: '[forms] chose 2 on finding 1' },
+  { keys: ['a'], expect: '[forms] focused notes on finding 1' },
   {
-    keys: ['a', 'b', '<C-j>'],
-    expect: '[forms] focused why on question 1',
-    checksFit: true,
-  },
-  {
-    keys: ['A', ...LONG_WORD, 'j', 'k', 'Escape'],
+    keys: [...'agreed', 'j', 'k', 'Escape'],
     expect: '[forms] left the box',
+  },
+  { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
+  { keys: ['2'], expect: '[forms] chose 2 on question 1' },
+  { keys: ['a'], expect: '[forms] focused notes on question 1' },
+  { keys: ['a', 'b', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
+  { keys: ['d'], expect: '[forms] focused dontAskReason on question 1' },
+  {
+    keys: ['A', ...LONG_WORD, '<C-k>'],
+    expect: '[forms] focused notes on question 1',
     checksFit: true,
   },
-  { keys: ['a'], expect: '[forms] focused what on question 1' },
+  { keys: ['Escape'], expect: '[forms] left the box' },
+  { keys: ['a'], expect: '[forms] focused notes on question 1' },
   { keys: ['c', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
   {
     keys: ['j', 'q', 'a', 'x', 'b'],
@@ -58,10 +64,6 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['j', 'k', 'Escape'], expect: '[forms] left the box' },
   { keys: ['x'], expect: '[forms] not applicable on question 2' },
-  {
-    keys: ['o', 'n', 'o', 't', 'e', 'j', 'k', 'Escape'],
-    expect: '[forms] left the box',
-  },
   { keys: ['<C-h>'], expect: '[page] <C-h> ran forms.prevItem' },
   {
     keys: [' ', 'a', '2'],
@@ -69,7 +71,7 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: [' ', 'a', '2'], expect: '[forms] chose 2 on question 1' },
   { keys: [' ', '2'], expect: '[forms] jumped to question 2' },
-  { keys: [' ', 'e', 'n'], expect: '[forms] no unanswered question' },
+  { keys: [' ', 'e', 'n'], expect: '[forms] no unanswered item' },
   {
     keys: ['<A-o>'],
     expect: '[sessions] activated selftest 2',
@@ -89,6 +91,11 @@ const STEPS: SelfTestStep[] = [
   { keys: ['?'], expect: '[page] ? ran forms.closeHelp' },
   { keys: ['C'], expect: '[page] C ran forms.askCancel', checksFit: true },
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
+  {
+    keys: ['o', 'n', 'o', 't', 'e', 'j', 'k', 'Escape'],
+    expect: '[forms] left the box',
+    checksFit: true,
+  },
   { keys: ['Enter'], expect: '[page] Enter ran forms.reviewJump' },
   { keys: [' ', ' '], expect: '[forms] review opened' },
   { keys: [' ', 'Enter'], expect: '[forms] submitted' },
@@ -114,6 +121,21 @@ function fixtureRound(run: number) {
         title: 'A settled point',
         context: `Run ${run}: nothing to decide here.`,
         badge: 'Decided',
+      },
+    ],
+    findings: [
+      {
+        title: `A finding titled ${LONG_WORD}`,
+        finding: `- the code calls ${LONG_WORD}`,
+        proof: ['```', `proof ${LONG_WORD}`, '```'].join('\n'),
+        choices: [
+          { text: 'Fix it', reason: 'It is a small change.' },
+          {
+            text: `Leave it ${LONG_WORD}`,
+            reason: `Because ${LONG_WORD} is used.`,
+          },
+        ],
+        recommend: 1,
       },
     ],
     questions: [
@@ -176,15 +198,36 @@ function toolResultProblems(result: ToolResult): string[] {
 
 // What the fixture's answers must come back as after STEPS.
 function payloadProblems(payload: AnswersPayload): string[] {
+  const [finding] = payload.findings;
   const [first, second] = payload.answers;
   const checks: [boolean, string][] = [
     [payload.outcome === 'submitted', `outcome ${payload.outcome}`],
+    [
+      payload.summary ===
+        '1 finding, 2 questions: 2 answered, 1 not applicable, 0 untouched.',
+      `summary ${JSON.stringify(payload.summary)}`,
+    ],
+    [finding?.status === 'answered', `finding 1 status ${finding?.status}`],
+    [finding?.choice === 2, `finding 1 choice ${finding?.choice}`],
+    [
+      finding?.took_recommendation === false,
+      `finding 1 took_recommendation ${finding?.took_recommendation}`,
+    ],
+    [
+      finding?.notes === 'agreed',
+      `finding 1 notes ${JSON.stringify(finding?.notes)}`,
+    ],
     [first?.status === 'answered', `question 1 status ${first?.status}`],
     [first?.choice === 2, `question 1 choice ${first?.choice}`],
     // "abc" proves each a entered INSERT with the cursor at the end.
     [
       first?.notes === 'abc',
       `question 1 notes ${JSON.stringify(first?.notes)}`,
+    ],
+    [first?.dont_ask === true, `question 1 dont_ask ${first?.dont_ask}`],
+    [
+      first?.dont_ask_reason === LONG_WORD,
+      `question 1 dont_ask_reason ${JSON.stringify(first?.dont_ask_reason)}`,
     ],
     // "xb" proves the keys a broken sequence left over were typed into the
     // box its command focused, in INSERT.
