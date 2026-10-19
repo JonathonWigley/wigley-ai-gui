@@ -482,7 +482,7 @@ function restoreRound(presented: PresentedRound): RoundState {
     answers: restoreAnswers(
       round.questions,
       draft?.answers ?? [],
-      restoreAnswer,
+      (entry, question) => restoreAnswer(entry, question.choices.length),
     ),
     findingAnswers: restoreAnswers(
       round.findings,
@@ -506,29 +506,33 @@ function restoreRound(presented: PresentedRound): RoundState {
 }
 
 // One answer per item, from the entry carrying its 1-based index.
-function restoreAnswers<Entry extends AnswerEntry, Answer>(
-  items: { choices: unknown[] }[],
+function restoreAnswers<Item, Entry extends AnswerEntry, Answer>(
+  items: Item[],
   entries: Entry[],
-  restore: (entry: Entry | undefined, choiceCount: number) => Answer,
+  restore: (entry: Entry | undefined, item: Item) => Answer,
 ): Answer[] {
   return items.map((item, i) =>
     restore(
       entries.find((entry) => entry.index === i + 1),
-      item.choices.length,
+      item,
     ),
   );
 }
 
-// A missing or unknown action restores as none; an action that pins a lone
-// solution restores it picked.
+// A missing or unknown action, or one the finding's origin does not offer,
+// restores as none; an action that pins a lone solution restores it picked.
 function restoreFindingAnswer(
   entry: FindingAnswerEntry | undefined,
-  choiceCount: number,
+  finding: Finding,
 ): FindingAnswer {
   if (entry === undefined) {
     return UNTOUCHED_FINDING;
   }
-  const action = isFindingAction(entry.action) ? entry.action : '';
+  const isOffered =
+    isFindingAction(entry.action) &&
+    actionLabel(finding.origin, entry.action) !== null;
+  const action = isOffered ? entry.action : '';
+  const choiceCount = finding.choices.length;
   const answer = restoreAnswer(entry, choiceCount);
   const choice = pinsLoneSolution(action, choiceCount) ? 1 : answer.choice;
   return { ...answer, action, choice };

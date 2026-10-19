@@ -326,6 +326,27 @@ describe('restoring a draft', () => {
     expect(round.findingAnswers[0].action).toBe('');
   });
 
+  it("restores an action the finding's origin does not offer as none", () => {
+    const state = initialState(
+      [
+        presented(
+          'r1',
+          { findings: [nit('N1')] },
+          draft({
+            finding_answers: [
+              findingEntry(1, { choice: 1, action: 'follow_up' }),
+            ],
+          }),
+        ),
+      ],
+      'r1-session',
+    );
+    expect(active(state).findingAnswers[0]).toMatchObject({
+      action: '',
+      choice: 1,
+    });
+  });
+
   it('ignores an entry whose index names no question', () => {
     const round = active(
       mixedRound(draft({ answers: [entry(5, { choice: 1 })] })),
