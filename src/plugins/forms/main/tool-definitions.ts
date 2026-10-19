@@ -5,11 +5,13 @@ const ASK_ROUND_DESCRIPTION =
   'Ask the user a whole round of interview questions and review findings in ' +
   'the wigley-ai-gui app and wait for the answers. Send every item whose ' +
   'prerequisites are already settled in one call. The app draws the ' +
-  "not-applicable control, the Notes box, the round note and the Don't ask " +
-  'me this control by itself — do not describe them as questions or ' +
-  "choices. Use 'findings' for review findings that need the user's " +
-  'decision: each draws as a Finding section, a brief Proof section, then ' +
-  "its choices, each with its reason under it. Use 'questions' for any " +
+  "not-applicable control, the Notes box, the round note, the Don't ask me " +
+  "this control and a finding's action control (Fix now, Follow-up, Leave " +
+  'it) by itself — do not describe them as questions or choices. Use ' +
+  "'findings' for review findings that need the user's decision: each draws " +
+  'as a Finding section, a brief Proof section, then its solutions, each ' +
+  'with its reason under it, and the action control under them. Use ' +
+  "'questions' for any " +
   "other open decision. Pass 'notices' for anything already fixed, " +
   'dispatched, decided by you alone, or otherwise settled before this round ' +
   'opened: each one draws as its own card before the findings and ' +
