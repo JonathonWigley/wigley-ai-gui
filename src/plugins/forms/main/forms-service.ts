@@ -8,7 +8,7 @@ import type {
   RoundListener,
   RoundPresenter,
   SessionInfo,
-} from '../../contracts/forms';
+} from '../contract';
 import {
   answersPayload,
   type FinishedOutcome,

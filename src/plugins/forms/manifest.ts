@@ -1,0 +1,146 @@
+import { definePlugin } from '../../shared/define-plugin';
+
+const CHOICE_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+type ChoiceCommand = `choose${(typeof CHOICE_DIGITS)[number]}`;
+
+const CHOICE_LABEL = 'pick a choice (again clears)';
+
+const choiceCommands = Object.fromEntries(
+  CHOICE_DIGITS.map((digit) => [
+    `choose${digit}`,
+    { label: CHOICE_LABEL, group: 'choices', runsIn: 'page' },
+  ]),
+) as Record<ChoiceCommand, { label: string; group: 'choices'; runsIn: 'page' }>;
+
+const pageChoiceBinds = CHOICE_DIGITS.map((digit) => ({
+  keys: [digit],
+  scope: 'forms' as const,
+  command: `choose${digit}` as const,
+}));
+
+const editorChoiceBinds = CHOICE_DIGITS.map((digit) => ({
+  keys: `<Leader>${digit}`,
+  command: `choose${digit}` as const,
+}));
+
+// `?` opens help from every view; inside help it closes help instead.
+const helpBinds = (['forms', 'review', 'confirm', 'idle'] as const).map(
+  (scope) => ({ keys: ['?'], scope, command: 'toggleHelp' as const }),
+);
+
+// Forms' scopes are its view names.
+export const formsManifest = definePlugin({
+  id: 'forms',
+  dependsOn: [],
+  commands: {
+    nextItem: { label: 'next item', group: 'questions', runsIn: 'page' },
+    prevItem: { label: 'previous item', group: 'questions', runsIn: 'page' },
+    ...choiceCommands,
+    clearChoice: {
+      label: 'clear the choice',
+      group: 'choices',
+      runsIn: 'page',
+    },
+    toggleNotApplicable: {
+      label: 'not applicable',
+      group: 'answer',
+      runsIn: 'page',
+    },
+    toggleDontAsk: {
+      label: "don't ask me this",
+      group: 'answer',
+      runsIn: 'page',
+    },
+    editWhat: { label: 'answer box', group: 'boxes', runsIn: 'page' },
+    editWhy: { label: 'why box', group: 'boxes', runsIn: 'page' },
+    editNote: { label: 'round note', group: 'boxes', runsIn: 'page' },
+    nextBox: { label: 'next box', group: 'boxes', runsIn: 'page' },
+    prevBox: { label: 'previous box', group: 'boxes', runsIn: 'page' },
+    leaveBox: { label: 'leave the box', group: 'boxes', runsIn: 'page' },
+    nextRound: { label: 'next round', group: 'rounds', runsIn: 'page' },
+    prevRound: { label: 'previous round', group: 'rounds', runsIn: 'page' },
+    openReview: { label: 'review', group: 'review', runsIn: 'page' },
+    closeReview: {
+      label: 'back to the form',
+      group: 'review',
+      runsIn: 'page',
+    },
+    reviewNext: { label: 'next row', group: 'review', runsIn: 'page' },
+    reviewPrev: { label: 'previous row', group: 'review', runsIn: 'page' },
+    reviewJump: {
+      label: 'go to the question',
+      group: 'review',
+      runsIn: 'page',
+    },
+    submit: { label: 'submit', group: 'review', runsIn: 'page' },
+    askCancel: { label: 'cancel the round', group: 'review', runsIn: 'page' },
+    confirmCancel: {
+      label: 'yes, cancel the round',
+      group: 'confirm',
+      runsIn: 'page',
+    },
+    dismissConfirm: {
+      label: 'keep the round',
+      group: 'confirm',
+      runsIn: 'page',
+    },
+    toggleFold: {
+      label: 'fold the context',
+      group: 'context',
+      runsIn: 'page',
+    },
+    unfoldAll: { label: 'unfold all', group: 'context', runsIn: 'page' },
+    foldAll: { label: 'fold all', group: 'context', runsIn: 'page' },
+    toggleHelp: { label: 'help', group: 'help', runsIn: 'page' },
+    closeHelp: { label: 'close help', group: 'help', runsIn: 'page' },
+  },
+  scopes: ['forms', 'review', 'confirm', 'help', 'idle'],
+  keys: {
+    editor: [
+      { keys: '<Leader>j', command: 'nextBox' },
+      { keys: '<Leader>k', command: 'prevBox' },
+      { keys: '<Leader>n', command: 'nextItem' },
+      { keys: '<Leader>p', command: 'prevItem' },
+      { keys: '<Leader>x', command: 'toggleNotApplicable' },
+      { keys: '<Leader>c', command: 'clearChoice' },
+      ...editorChoiceBinds,
+      { keys: '<Leader><Leader>', command: 'openReview' },
+      { keys: '<Esc>', command: 'leaveBox' },
+    ],
+    page: [
+      { keys: ['j'], scope: 'forms', command: 'nextItem' },
+      { keys: ['k'], scope: 'forms', command: 'prevItem' },
+      ...pageChoiceBinds,
+      { keys: ['x'], scope: 'forms', command: 'toggleNotApplicable' },
+      { keys: ['d'], scope: 'forms', command: 'toggleDontAsk' },
+      { keys: ['a'], scope: 'forms', command: 'editWhat' },
+      { keys: ['w'], scope: 'forms', command: 'editWhy' },
+      { keys: ['o'], scope: 'forms', command: 'editNote' },
+      { keys: ['g', 't'], scope: 'forms', command: 'nextRound' },
+      { keys: ['g', 'T'], scope: 'forms', command: 'prevRound' },
+      { keys: [' ', ' '], scope: 'forms', command: 'openReview' },
+      { keys: ['z', 'a'], scope: 'forms', command: 'toggleFold' },
+      { keys: ['z', 'R'], scope: 'forms', command: 'unfoldAll' },
+      { keys: ['z', 'M'], scope: 'forms', command: 'foldAll' },
+      { keys: [' ', 'Enter'], scope: 'review', command: 'submit' },
+      { keys: ['Escape'], scope: 'review', command: 'closeReview' },
+      { keys: ['j'], scope: 'review', command: 'reviewNext' },
+      { keys: ['k'], scope: 'review', command: 'reviewPrev' },
+      { keys: ['Enter'], scope: 'review', command: 'reviewJump' },
+      { keys: ['C'], scope: 'review', command: 'askCancel' },
+      { keys: ['o'], scope: 'review', command: 'editNote' },
+      { keys: ['g', 't'], scope: 'review', command: 'nextRound' },
+      { keys: ['g', 'T'], scope: 'review', command: 'prevRound' },
+      { keys: ['y'], scope: 'confirm', command: 'confirmCancel' },
+      { keys: ['n'], scope: 'confirm', command: 'dismissConfirm' },
+      { keys: ['Escape'], scope: 'confirm', command: 'dismissConfirm' },
+      ...helpBinds,
+      { keys: ['?'], scope: 'help', command: 'closeHelp' },
+      { keys: ['Escape'], scope: 'help', command: 'closeHelp' },
+    ],
+    app: [],
+    global: [],
+    intercept: [],
+  },
+  settings: { autosaveDelayMs: 400, deadlineSeconds: 240 },
+});

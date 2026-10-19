@@ -8,7 +8,7 @@ import type {
   FormBody,
   FormsSession,
   SessionInfo,
-} from '../../contracts/forms';
+} from '../contract';
 import { createFormsService } from './forms-service';
 import { answersPayload, fingerprint, parseRound } from './round';
 import { RoundError } from './round-error';

@@ -33,6 +33,17 @@ export function createMainWindow(
   return window;
 }
 
+// Plugins' window service: shows the window and gives it focus, for a user's
+// own act such as clicking a notification.
+export function windowService(window: BrowserWindow): { show(): void } {
+  return {
+    show: () => {
+      window.show();
+      window.focus();
+    },
+  };
+}
+
 export function registerWindowCommands(
   commands: MainCommands,
   window: BrowserWindow,

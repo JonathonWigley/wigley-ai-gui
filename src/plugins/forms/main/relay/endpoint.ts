@@ -1,7 +1,6 @@
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { ToolDefinition } from '../../contracts/forms';
-import type { RelayEndpoint } from '../../contracts/relay';
+import type { RelayEndpoint, ToolDefinition } from '../../contract';
 
 // Where the app listens for relays: a per-user named pipe on Windows, a Unix
 // socket in the agents folder elsewhere.

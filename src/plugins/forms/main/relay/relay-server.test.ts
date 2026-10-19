@@ -5,12 +5,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type {
-  AnswersPayload,
-  FormsService,
-  SessionInfo,
-} from '../../contracts/forms';
-import { RELAY_PROTOCOL, type RelayHello } from '../../contracts/relay';
+import {
+  type AnswersPayload,
+  type FormsService,
+  RELAY_PROTOCOL,
+  type RelayHello,
+  type SessionInfo,
+} from '../../contract';
 import { type ServeSession, startRelayServer } from './relay-server';
 
 const PAYLOAD: AnswersPayload = {

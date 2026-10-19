@@ -8,9 +8,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
-import type { Clock, RandomHex } from '../../contracts/ambient';
-import type { FormBody, SessionInfo } from '../../contracts/forms';
-import type { Log } from '../../contracts/log';
+import type { Clock, RandomHex } from '../../../contracts/ambient';
+import type { FormBody, SessionInfo } from '../contract';
+import type { Log } from '../../../contracts/log';
 import type { FinishedOutcome } from './round';
 
 // retro's backfill reaches back 90 days (scripts/retro/ledger.py STALE_DAYS).

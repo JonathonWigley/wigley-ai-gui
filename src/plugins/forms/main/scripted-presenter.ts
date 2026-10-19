@@ -3,7 +3,7 @@ import type {
   PresentedRound,
   RoundListener,
   RoundPresenter,
-} from '../../contracts/forms';
+} from '../contract';
 
 // The test adapter: records what the service shows and closes, and plays the
 // user's side through each shown round's listener.

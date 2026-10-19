@@ -6,7 +6,7 @@ import {
   type FormsSession,
   ROUND_ERROR_NAME,
   type ToolDefinition,
-} from '../../contracts/forms';
+} from '../../contract';
 
 // The `_meta` key Claude Code sends a tools/call's calling tool_use id under.
 const TOOL_USE_ID_META_KEY = 'claudecode/toolUseId';

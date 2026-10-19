@@ -2,17 +2,15 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { createServer, type Socket } from 'node:net';
 import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
-import type {
-  FormsService,
-  FormsSession,
-  SessionInfo,
-} from '../../contracts/forms';
-import type { Log } from '../../contracts/log';
+import type { Log } from '../../../../contracts/log';
 import {
+  type FormsService,
+  type FormsSession,
   RELAY_PROTOCOL,
   type RelayHello,
   type RelayHelloReply,
-} from '../../contracts/relay';
+  type SessionInfo,
+} from '../../contract';
 
 // Serves MCP for one session; `input` arrives paused, holding any bytes the
 // relay sent after its hello, and `serve` resumes it.

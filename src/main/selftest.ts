@@ -1,150 +1,20 @@
 import { app, type BrowserWindow } from 'electron';
 import type {
-  AnswersPayload,
-  FormsService,
-  FormsSession,
-} from '../contracts/forms';
-import type { PageBind } from '../contracts/keymap';
+  SelfTestHost,
+  SelfTestScript,
+  SelfTestStep,
+} from '../contracts/plugin';
 
-// Opens a fixture round through FormsService, drives keys into the page
-// through Electron's input pipeline, and checks the lines the page logs, that
-// the page fits the window's minimum width, and the answers the round
-// returns. Run with `npm run selftest`; exits non-zero on failure.
+// Runs a plugin's self-test script on every page load: opens its fixture,
+// drives its keys into the page through Electron's input pipeline, and checks
+// the lines the page logs, that the page fits the window's minimum width, and
+// the result the script checks. Run with `npm run selftest`; exits non-zero on
+// failure.
 
 const KEY_CODES: Record<string, string> = { ' ': 'Space' };
 const STEP_TIMEOUT_MS = 5000;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-interface Step {
-  keys: string[];
-  expect: string;
-  // After the step, the window shrinks to its minimum width and the page
-  // must fit it without cutting anything off.
-  checksFit?: true;
-}
-
-// Exists only for the self-test, which adds it to the keymap main serves; it
-// is never in the user's keymap. No step completes it: `q a x` then `b` breaks
-// it, so `a` runs forms.editWhat and `x b` are typed into the What box.
-export const SELF_TEST_PAGE_BINDS: PageBind[] = [
-  { keys: ['q', 'a', 'x', 'y'], scope: 'forms', command: 'forms.nextItem' },
-];
-
-// An unbroken run of letters wider than any pane; no j, which would start jk.
-const LONG_WORD = 'unbroken'.repeat(14);
-
-// Starting on the notice: Space then j replays j to question 1, pick 2; a
-// types "ab" at once (INSERT), jk then Space j to its why box, A appends a
-// long word, Esc out; a again types "c" after "ab"; j to question 2, where
-// q a x then b breaks the self-test bind, so a opens the what box and "xb" is
-// typed into it; jk Esc out and x marks question 2 not applicable; o types
-// "note" into the note box at once (INSERT), Esc out; g t switches rounds;
-// review, ? opens and closes help, C opens and n dismisses the cancel prompt, Enter jumps back to the question,
-// review again and Space Enter submits.
-const STEPS: Step[] = [
-  { keys: [' ', 'j'], expect: '[page] j ran forms.nextItem', checksFit: true },
-  { keys: ['2'], expect: '[forms] chose 2 on question 1' },
-  { keys: ['a'], expect: '[forms] focused what on question 1' },
-  {
-    keys: ['a', 'b', 'j', 'k', ' ', 'j'],
-    expect: '[forms] focused why on question 1',
-    checksFit: true,
-  },
-  {
-    keys: ['A', ...LONG_WORD, 'j', 'k', 'Escape'],
-    expect: '[forms] left the box',
-    checksFit: true,
-  },
-  { keys: ['a'], expect: '[forms] focused what on question 1' },
-  { keys: ['c', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
-  {
-    keys: ['j', 'q', 'a', 'x', 'b'],
-    expect: '[page] typed xb into the editor',
-  },
-  { keys: ['j', 'k', 'Escape'], expect: '[forms] left the box' },
-  { keys: ['x'], expect: '[forms] not applicable on question 2' },
-  {
-    keys: ['o', 'n', 'o', 't', 'e', 'j', 'k', 'Escape'],
-    expect: '[forms] left the box',
-  },
-  { keys: ['g', 't'], expect: '[page] gt ran forms.nextRound' },
-  { keys: [' ', ' '], expect: '[forms] review opened', checksFit: true },
-  { keys: ['?'], expect: '[page] ? ran help.toggle', checksFit: true },
-  { keys: ['?'], expect: '[page] ? ran help.close' },
-  { keys: ['C'], expect: '[page] C ran forms.askCancel', checksFit: true },
-  { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
-  { keys: ['Enter'], expect: '[page] Enter ran forms.reviewJump' },
-  { keys: [' ', ' '], expect: '[forms] review opened' },
-  { keys: [' ', 'Enter'], expect: '[forms] submitted' },
-];
-
-// Each run's fixture differs in one context line, so a later run never opens
-// pre-filled from an earlier run's saved draft.
-function fixtureRound(run: number) {
-  return {
-    heading: 'Self-test round',
-    overview: 'Drives the forms view offscreen.',
-    notices: [
-      {
-        title: 'A settled point',
-        context: `Run ${run}: nothing to decide here.`,
-        badge: 'Decided',
-      },
-    ],
-    questions: [
-      {
-        title: `First question titled ${LONG_WORD}`,
-        context: [
-          `- a fact naming ${LONG_WORD}`,
-          '',
-          `| ${Array.from({ length: 12 }, (_, column) => `column ${column}`).join(' | ')} |`,
-          `|${' --- |'.repeat(12)}`,
-          `|${' cell |'.repeat(12)}`,
-          '',
-          '```',
-          `code ${LONG_WORD}`,
-          '```',
-        ].join('\n'),
-        question: `Pick one of ${LONG_WORD}.`,
-        choices: ['One', `Two ${LONG_WORD}`, 'Three'],
-        recommend: 1,
-        rationale: 'The first is simplest.',
-      },
-      {
-        title: 'Second question',
-        context: '- another fact',
-        question: 'Pick one.',
-        choices: ['Yes', 'No'],
-        recommend: 1,
-        rationale: 'Yes is the default.',
-      },
-    ],
-  };
-}
-
-// What the fixture's answers must come back as after STEPS.
-function payloadProblems(payload: AnswersPayload): string[] {
-  const [first, second] = payload.answers;
-  const checks: [boolean, string][] = [
-    [payload.outcome === 'submitted', `outcome ${payload.outcome}`],
-    [first?.status === 'answered', `question 1 status ${first?.status}`],
-    [first?.choice === 2, `question 1 choice ${first?.choice}`],
-    // "abc" proves each a entered INSERT with the cursor at the end.
-    [first?.what === 'abc', `question 1 what ${JSON.stringify(first?.what)}`],
-    // "xb" proves the keys a broken sequence left over were typed into the
-    // box its command focused, in INSERT.
-    [second?.what === 'xb', `question 2 what ${JSON.stringify(second?.what)}`],
-    [
-      second?.status === 'not_applicable',
-      `question 2 status ${second?.status}`,
-    ],
-    // "note" proves o entered INSERT at once, keys typed straight after it.
-    [payload.note === 'note', `note ${JSON.stringify(payload.note)}`],
-    [payload.notices.length === 1, `${payload.notices.length} notices`],
-  ];
-  return checks.filter(([passed]) => !passed).map(([, problem]) => problem);
-}
 
 function press(window: BrowserWindow, key: string) {
   const keyCode = KEY_CODES[key] ?? key;
@@ -249,7 +119,6 @@ async function cutOffAtMinimumWidth(window: BrowserWindow): Promise<string[]> {
 // Forge's dev server can reload the page once at startup, so every load starts
 // a fresh run and a run that a reload interrupted stands down.
 let latestRun = 0;
-let session: FormsSession | null = null;
 // Chromium drops input that reaches a page before the page's first frame.
 // `paint` fires only for an offscreen window, and self-test windows are
 // offscreen (window.ts), so a visible-window self-test would time out here.
@@ -257,7 +126,7 @@ let hasPaintedSinceNavigation = false;
 
 async function runStep(
   window: BrowserWindow,
-  step: Step,
+  step: SelfTestStep,
   isCurrent: () => boolean,
 ): Promise<boolean> {
   const seen = (await readLog(window)).length;
@@ -289,7 +158,7 @@ async function runStep(
 // `cleanUp` runs before every exit, since app.exit skips quit handlers.
 async function runAllSteps(
   window: BrowserWindow,
-  forms: FormsService,
+  script: SelfTestScript,
   cleanUp: () => void,
 ) {
   const exit = (code: number) => {
@@ -316,36 +185,25 @@ async function runAllSteps(
   if (!isCurrent()) {
     return;
   }
-  session?.end();
-  session = forms.startSession({
-    sessionId: `selftest-${run}`,
-    projectDir: 'selftest',
-    deadlineSeconds: 120,
-  });
-  const answers = session.askRound(
-    fixtureRound(run),
-    null,
-    new AbortController().signal,
-  );
-  const shown = '[forms] round shown: selftest · Self-test round';
-  let failures = (await waitForNewLogLine(window, shown, seen)) ? 0 : 1;
+  const { shownLine, result } = script.open(run);
+  let failures = (await waitForNewLogLine(window, shownLine, seen)) ? 0 : 1;
   if (isCurrent()) {
-    report(failures === 0, shown);
+    report(failures === 0, shownLine);
   }
 
-  for (const step of STEPS) {
+  for (const step of script.steps) {
     if (!(await runStep(window, step, isCurrent))) {
       failures++;
     }
   }
-  const payload = await answers;
+  const outcome = await result;
   if (!isCurrent()) {
     return;
   }
-  const problems = payloadProblems(payload);
+  const problems = script.problems(outcome);
   report(
     problems.length === 0,
-    `payload ${problems.join(', ') || 'as expected'}`,
+    `result ${problems.join(', ') || 'as expected'}`,
   );
   failures += problems.length === 0 ? 0 : 1;
   console.log(
@@ -355,12 +213,11 @@ async function runAllSteps(
 }
 
 // `cleanUp` deletes what the self-test made outside the repo; it runs before
-// the self-test exits.
+// the self-test exits. The returned host runs the script a plugin hands it.
 export function startSelfTest(
   window: BrowserWindow,
-  forms: FormsService,
   cleanUp: () => void,
-) {
+): SelfTestHost {
   window.webContents.on('did-navigate', () => {
     // A run begun on the previous page stands down before its load finishes.
     latestRun++;
@@ -369,8 +226,12 @@ export function startSelfTest(
   window.webContents.on('paint', () => {
     hasPaintedSinceNavigation = true;
   });
-  window.webContents.on(
-    'did-finish-load',
-    () => void runAllSteps(window, forms, cleanUp),
-  );
+  return {
+    run(script) {
+      window.webContents.on(
+        'did-finish-load',
+        () => void runAllSteps(window, script, cleanUp),
+      );
+    },
+  };
 }

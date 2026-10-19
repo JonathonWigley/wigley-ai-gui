@@ -1,30 +1,14 @@
-import type { BrowserWindow } from 'electron';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Alerts } from '../contracts/alerts';
-import { BRIDGE_CHANNELS } from '../contracts/bridge';
+import { describe, expect, it } from 'vitest';
+import type { Alerts } from '../../../contracts/alerts';
+import type { MainChannel } from '../../../contracts/plugin';
 import type {
   FormBody,
+  FormsChannel,
   PresentedRound,
   RoundEnd,
   RoundListener,
-} from '../contracts/forms';
-import { createWindowPresenter } from './window-presenter';
-
-type Handler = (event: object, ...args: unknown[]) => unknown;
-
-const ipc = vi.hoisted(() => ({
-  handlers: new Map<string, Handler>(),
-  listeners: new Map<string, Handler>(),
-}));
-
-vi.mock('electron', () => ({
-  ipcMain: {
-    handle: (channel: string, handler: Handler) =>
-      ipc.handlers.set(channel, handler),
-    on: (channel: string, listener: Handler) =>
-      ipc.listeners.set(channel, listener),
-  },
-}));
+} from '../contract';
+import { createChannelPresenter } from './channel-presenter';
 
 const ROUND: PresentedRound = {
   roundId: 'round-1',
@@ -46,22 +30,34 @@ const BODY: FormBody = {
   notice_comments: [{ index: 1, comment: 'thanks' }],
 };
 
-function fakeWindow() {
+type Invoke = FormsChannel['invoke'];
+
+// Records what the presenter sends and lets the test invoke its handlers as
+// the page would.
+function fakeChannel() {
+  const handlers: Partial<Invoke> = {};
   const sent: [string, unknown][] = [];
+  const channel: MainChannel<FormsChannel> = {
+    handle: (method, handler) => {
+      handlers[method] = handler;
+    },
+    send: (message, data) => sent.push([message, data]),
+  };
+  const invoke = <K extends keyof Invoke>(
+    method: K,
+    ...args: Parameters<Invoke[K]>
+  ) => (handlers[method] as (...args: unknown[]) => unknown)(...args);
+  return { channel, sent, invoke };
+}
+
+function fakeWindow() {
   let shown = 0;
-  let focused = 0;
   const window = {
     show: () => {
       shown++;
     },
-    focus: () => {
-      focused++;
-    },
-    webContents: {
-      send: (channel: string, value: unknown) => sent.push([channel, value]),
-    },
-  } as unknown as BrowserWindow;
-  return { window, sent, shown: () => shown, focused: () => focused };
+  };
+  return { window, shown: () => shown };
 }
 
 function fakeAlerts() {
@@ -86,43 +82,40 @@ function fakeListener() {
 }
 
 function setUp() {
-  const page = fakeWindow();
+  const page = fakeChannel();
+  const window = fakeWindow();
   const attention = fakeAlerts();
   const logged: string[] = [];
-  const presenter = createWindowPresenter(
-    page.window,
+  const presenter = createChannelPresenter(
+    page.channel,
     attention.alerts,
+    window.window,
     (source, message) => logged.push(`[${source}] ${message}`),
   );
-  const openRounds = () =>
-    ipc.handlers.get(BRIDGE_CHANNELS.openRounds)?.({}) as PresentedRound[];
-  const fromPage = (channel: string, ...args: unknown[]) =>
-    ipc.listeners.get(channel)?.({}, ...args);
+  const openRounds = () => page.invoke('openRounds') as PresentedRound[];
+  const finish = (roundId: string, end: RoundEnd) =>
+    page.invoke('finish', roundId, end);
   const saveDraft = (roundId: string, body: FormBody) =>
-    ipc.handlers.get(BRIDGE_CHANNELS.draft)?.({}, roundId, body);
+    page.invoke('draft', roundId, body);
   return {
     page,
+    window,
     attention,
     logged,
     presenter,
     openRounds,
-    fromPage,
+    finish,
     saveDraft,
   };
 }
 
-beforeEach(() => {
-  ipc.handlers.clear();
-  ipc.listeners.clear();
-});
-
-describe('createWindowPresenter', () => {
+describe('createChannelPresenter', () => {
   it('shows a round on the page and announces it without showing the window', () => {
-    const { page, attention, logged, presenter } = setUp();
+    const { page, window, attention, logged, presenter } = setUp();
 
     presenter.show(ROUND, fakeListener().listener);
 
-    expect(page.sent).toEqual([[BRIDGE_CHANNELS.roundShown, ROUND]]);
+    expect(page.sent).toEqual([['roundShown', ROUND]]);
     expect(attention.announced.map(({ title, body }) => [title, body])).toEqual(
       [['New review round', 'wigley-ai-gui · Pick a theme']],
     );
@@ -130,18 +123,17 @@ describe('createWindowPresenter', () => {
     expect(logged).toEqual([
       '[forms] round shown: wigley-ai-gui · Pick a theme',
     ]);
-    expect(page.shown()).toBe(0);
+    expect(window.shown()).toBe(0);
   });
 
   it('brings the window forward on the round when the announcement is clicked', () => {
-    const { page, attention, presenter } = setUp();
+    const { page, window, attention, presenter } = setUp();
     presenter.show(ROUND, fakeListener().listener);
 
     attention.announced[0].onClick();
 
-    expect(page.shown()).toBe(1);
-    expect(page.focused()).toBe(1);
-    expect(page.sent.at(-1)).toEqual([BRIDGE_CHANNELS.focusRound, 'round-1']);
+    expect(window.shown()).toBe(1);
+    expect(page.sent.at(-1)).toEqual(['focusRound', 'round-1']);
   });
 
   it('serves open rounds with their latest draft and passes drafts on', () => {
@@ -176,14 +168,14 @@ describe('createWindowPresenter', () => {
   });
 
   it('ends a round the page finishes and drops what arrives after', () => {
-    const { attention, presenter, openRounds, fromPage, saveDraft } = setUp();
+    const { attention, presenter, openRounds, finish, saveDraft } = setUp();
     const { listener, drafts, finishes } = fakeListener();
     presenter.show(ROUND, listener);
     const end: RoundEnd = { kind: 'submitted', body: BODY };
 
-    fromPage(BRIDGE_CHANNELS.finish, 'round-1', end);
+    finish('round-1', end);
     saveDraft('round-1', BODY);
-    fromPage(BRIDGE_CHANNELS.finish, 'round-1', end);
+    finish('round-1', end);
 
     expect(finishes).toEqual([end]);
     expect(drafts).toEqual([]);
@@ -192,16 +184,16 @@ describe('createWindowPresenter', () => {
   });
 
   it('sends no close to the page for a round its own finish closes', () => {
-    const { page, presenter, fromPage } = setUp();
+    const { page, presenter, finish } = setUp();
     const end: RoundEnd = { kind: 'cancelled', body: BODY };
     presenter.show(ROUND, {
       draft: () => {},
       finish: () => presenter.close('round-1'),
     });
 
-    fromPage(BRIDGE_CHANNELS.finish, 'round-1', end);
+    finish('round-1', end);
 
-    expect(page.sent).toEqual([[BRIDGE_CHANNELS.roundShown, ROUND]]);
+    expect(page.sent).toEqual([['roundShown', ROUND]]);
   });
 
   it('closes an open round on the page, and ignores a round already gone', () => {
@@ -211,9 +203,7 @@ describe('createWindowPresenter', () => {
     presenter.close('round-1');
     presenter.close('round-1');
 
-    expect(page.sent.slice(1)).toEqual([
-      [BRIDGE_CHANNELS.roundClosed, 'round-1'],
-    ]);
+    expect(page.sent.slice(1)).toEqual([['roundClosed', 'round-1']]);
     expect(attention.counts).toEqual([1, 0]);
     expect(openRounds()).toEqual([]);
   });

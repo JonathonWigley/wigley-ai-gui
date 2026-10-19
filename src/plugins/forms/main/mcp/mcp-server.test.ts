@@ -6,10 +6,10 @@ import {
   type FormsSession,
   ROUND_ERROR_NAME,
   type ToolDefinition,
-} from '../../contracts/forms';
+} from '../../contract';
 import { serveMcp } from './mcp-server';
 
-// Stands in for src/main/forms' RoundError, which this layer may not import;
+// Stands in for src/plugins/forms/main's RoundError, which this layer may not import;
 // the adapter knows it by its contract name.
 class RoundError extends Error {
   constructor(message: string) {

@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '../../contracts/forms';
+import type { ToolDefinition } from '../contract';
 import {
   DEFAULT_NOTICE_BADGE,
   MAX_CHOICES,

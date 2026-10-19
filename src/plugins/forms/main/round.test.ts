@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AnswerEntry, FormBody } from '../../contracts/forms';
+import type { AnswerEntry, FormBody } from '../contract';
 import {
   answersPayload,
   fingerprint,

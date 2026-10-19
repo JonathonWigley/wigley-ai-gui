@@ -26,12 +26,6 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts'],
     packages: ['@agentclientprotocol/sdk', 'node:'],
   },
-  'src/main/forms': { layers: ['src/contracts'], packages: ['node:'] },
-  'src/main/mcp': {
-    layers: ['src/contracts'],
-    packages: ['@modelcontextprotocol/server', 'node:'],
-  },
-  'src/main/relay': { layers: ['src/contracts'], packages: ['node:'] },
   'src/main/themes': { layers: ['src/contracts'], packages: ['node:'] },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/main.ts': {
@@ -41,13 +35,41 @@ const LAYERS: Record<string, LayerRule> = {
       'src/config',
       'src/main',
       'src/main/acp',
-      'src/main/forms',
-      'src/main/mcp',
-      'src/main/relay',
+      'src/main/plugins',
       'src/main/themes',
       'src/main/alerts',
+      'src/plugins/main.ts',
     ],
     packages: ['electron', 'electron-squirrel-startup', 'node:'],
+  },
+  'src/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
+  // Re-exports src/contracts' forms and relay contracts through contract.ts.
+  'src/plugins/forms': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
+  'src/plugins/forms/main': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/forms',
+      'src/plugins/forms/main/mcp',
+    ],
+    packages: ['node:'],
+  },
+  'src/plugins/forms/main/mcp': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/forms'],
+    packages: ['@modelcontextprotocol/server', 'node:'],
+  },
+  'src/plugins/main.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/forms',
+      'src/plugins/forms/main',
+      'src/plugins/forms/main/mcp',
+    ],
+    packages: [],
   },
   'src/renderer': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/renderer/codemirror-vim': {

@@ -11,7 +11,7 @@ import type {
   Question,
   Round,
   RoundEnd,
-} from '../../contracts/forms';
+} from '../contract';
 import { RoundError } from './round-error';
 
 export const MIN_CHOICES = 2;

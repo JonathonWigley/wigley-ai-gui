@@ -2,8 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ToolDefinition } from '../../contracts/forms';
-import type { RelayEndpoint } from '../../contracts/relay';
+import type { RelayEndpoint, ToolDefinition } from '../../contract';
 import { channelPath, launchCommand, writeEndpointFiles } from './endpoint';
 
 const folders: string[] = [];

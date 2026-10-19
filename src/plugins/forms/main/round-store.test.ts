@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { FormBody } from '../../contracts/forms';
+import type { FormBody } from '../contract';
 import {
   createRoundStore,
   RETENTION_SECONDS,
