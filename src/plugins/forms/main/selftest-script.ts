@@ -186,12 +186,15 @@ function fixtureRound(run: number) {
     findings: [
       {
         title: `A finding titled ${LONG_WORD}`,
+        origin: 'caused',
+        severity: 'important',
+        impact: `Callers of ${LONG_WORD} see the wrong result.`,
         finding: `- the code calls ${LONG_WORD}`,
         proof: ['```', `proof ${LONG_WORD}`, '```'].join('\n'),
         choices: [
           { text: 'Fix it', reason: 'It is a small change.' },
           {
-            text: `Leave it ${LONG_WORD}`,
+            text: `Keep ${LONG_WORD}`,
             reason: `Because ${LONG_WORD} is used.`,
           },
         ],
@@ -200,6 +203,9 @@ function fixtureRound(run: number) {
       },
       {
         title: 'A one-solution finding',
+        origin: 'caused',
+        severity: 'minor',
+        impact: 'Every call pays for a second check.',
         finding: '- the code repeats a check',
         proof: '`check()` runs twice.',
         choices: [{ text: 'Drop one', reason: 'One check is enough.' }],

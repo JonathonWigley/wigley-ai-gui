@@ -86,12 +86,14 @@ describe('FORMS_TOOLS', () => {
     expect(notices.items.required).not.toContain('badge');
   });
 
-  it('declares findings with six required fields and nothing else allowed', () => {
+  it('declares findings with every field but severity required and nothing else allowed', () => {
     const findings = askRound.properties.findings;
 
     expect(findings.type).toBe('array');
     expect(findings.items.required).toEqual([
       'title',
+      'origin',
+      'impact',
       'finding',
       'proof',
       'choices',
@@ -99,6 +101,22 @@ describe('FORMS_TOOLS', () => {
       'recommend_action',
     ]);
     expect(findings.items.additionalProperties).toBe(false);
+  });
+
+  it('declares origin and severity as enums', () => {
+    const properties = askRound.properties.findings.items.properties;
+
+    expect(properties.origin.enum).toEqual([
+      'caused',
+      'pre_existing',
+      'design',
+      'nit',
+    ]);
+    expect(properties.severity.enum).toEqual([
+      'critical',
+      'important',
+      'minor',
+    ]);
   });
 
   it('declares each finding choice as a strict text and reason pair', () => {

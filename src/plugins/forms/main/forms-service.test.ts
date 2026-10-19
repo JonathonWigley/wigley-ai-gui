@@ -61,11 +61,14 @@ const FINDING_ARGS = {
   findings: [
     {
       title: 'Stale cache',
+      origin: 'caused',
+      severity: 'important',
+      impact: 'Users see stale data after a reload.',
       finding: 'The cache keeps entries after a reload.',
       proof: '- `cache.ts:40` never clears',
       choices: [
         { text: 'Fix it now', reason: 'It is one line.' },
-        { text: 'Leave it', reason: 'Reloads are rare.' },
+        { text: 'Keep the cache', reason: 'Reloads are rare.' },
       ],
       recommend: 1,
       recommend_action: 'fix_now',

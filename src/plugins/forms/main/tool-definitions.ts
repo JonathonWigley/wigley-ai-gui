@@ -6,12 +6,15 @@ const ASK_ROUND_DESCRIPTION =
   'the wigley-ai-gui app and wait for the answers. Send every item whose ' +
   'prerequisites are already settled in one call. The app draws the ' +
   "not-applicable control, the Notes box, the round note, the Don't ask me " +
-  "this control and a finding's action control (Fix now, Follow-up, Leave " +
-  'it) by itself — do not describe them as questions or choices. Use ' +
-  "'findings' for review findings that need the user's decision: each draws " +
-  'as a Finding section, a brief Proof section, then its solutions, each ' +
-  'with its reason under it, and the action control under them. Use ' +
-  "'questions' for any " +
+  "this control and each finding card's action control by itself — do not " +
+  'describe them as questions or choices. Use ' +
+  "'findings' for review findings that need the user's decision: a " +
+  "finding's origin sets its card — a Defect (caused or pre_existing; " +
+  'actions Fix now, Follow-up, Leave it), a Decision (design; Decide now, ' +
+  'Plan it, Drop it) or a Nit (nit; Fix anyway, Leave it) — which shows ' +
+  'the finding, a brief proof, then its choices, each with its reason ' +
+  'under it, and the action control under them. A choice never opens with ' +
+  "an action's label. Use 'questions' for any " +
   "other open decision. Pass 'notices' for anything already fixed, " +
   'dispatched, decided by you alone, or otherwise settled before this round ' +
   'opened: each one draws as its own card before the findings and ' +

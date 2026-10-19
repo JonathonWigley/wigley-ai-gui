@@ -33,11 +33,14 @@ function notice(overrides: Record<string, unknown> = {}) {
 function finding(overrides: Record<string, unknown> = {}) {
   return {
     title: 'Stale cache',
+    origin: 'caused',
+    severity: 'important',
+    impact: 'Users see stale data after a reload.',
     finding: 'The cache keeps entries after a reload.',
     proof: '- `cache.ts:40` never clears',
     choices: [
       { text: 'Fix it now', reason: 'It is one line.' },
-      { text: 'Leave it', reason: 'Reloads are rare.' },
+      { text: 'Keep the cache', reason: 'Reloads are rare.' },
     ],
     recommend: 1,
     recommend_action: 'fix_now',
@@ -266,7 +269,7 @@ describe('parseRound with findings', () => {
 
     expect(round.findings[0].title).toBe('Stale cache');
     expect(round.findings[0].choices[1]).toEqual({
-      text: 'Leave it',
+      text: 'Keep the cache',
       reason: 'Reloads are rare.',
     });
     expect(round.questions).toHaveLength(1);
@@ -665,7 +668,7 @@ describe('answersPayload findings', () => {
         title: 'Stale cache',
         status: 'answered',
         choice: 2,
-        choice_text: 'Leave it',
+        choice_text: 'Keep the cache',
         took_recommendation: false,
         action: 'follow_up',
         took_action_recommendation: false,
@@ -1066,7 +1069,7 @@ describe('fingerprint', () => {
           finding({
             choices: [
               { text: 'Fix it now', reason: 'It is one line.' },
-              { text: 'Leave it', reason },
+              { text: 'Keep the cache', reason },
             ],
           }),
         ],
