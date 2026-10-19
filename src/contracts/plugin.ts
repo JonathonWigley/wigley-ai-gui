@@ -97,6 +97,18 @@ export interface MainChannel<Ch extends ChannelShape> {
   ): void;
 }
 
+// A plugin's events: each name it publishes, with its payload.
+export type EventShape = Record<string, unknown>;
+
+// `emit` publishes one of the plugin's own events under its qualified name
+// (`<pluginId>.<event>`); `on` hears any plugin's event by its qualified name,
+// its payload typed by the caller from the publisher's contract. Listeners run
+// before `emit` returns, and a listener's throw reaches the emitter.
+export interface PluginEvents<Ev extends EventShape> {
+  emit<K extends keyof Ev & string>(event: K, data: Ev[K]): void;
+  on<D>(qualifiedEvent: string, listener: (data: D) => void): void;
+}
+
 export type AreaName =
   | 'activityBar'
   | 'sideBar'
@@ -129,9 +141,14 @@ export interface PageServices {
 // `keys.label` falls back to the id for a command with no label.
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract.
-export interface PageApi<M extends PluginManifest, Ch extends ChannelShape> {
+export interface PageApi<
+  M extends PluginManifest,
+  Ch extends ChannelShape,
+  Ev extends EventShape = Record<never, never>,
+> {
   areas: Record<AreaName, Area>;
   channel: PageChannel<Ch>;
+  events: PluginEvents<Ev>;
   keys: {
     setScope(scope: M['scopes'][number]): void;
     keymap: Keymap;
@@ -155,8 +172,8 @@ export interface PageStart<M extends PluginManifest> {
 // Starts on every page load.
 export interface PagePart<M extends PluginManifest = PluginManifest> {
   manifest: M;
-  // `any`: one parts list holds parts with different channels.
-  start(api: PageApi<M, any>): PageStart<M>;
+  // `any`: one parts list holds parts with different channels and events.
+  start(api: PageApi<M, any, any>): PageStart<M>;
 }
 
 // `expect` is a line the page logs once the keys have run; `checksFit` also
@@ -200,8 +217,13 @@ export interface MainServices {
 
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract.
-export interface MainApi<M extends PluginManifest, Ch extends ChannelShape> {
+export interface MainApi<
+  M extends PluginManifest,
+  Ch extends ChannelShape,
+  Ev extends EventShape = Record<never, never>,
+> {
   channel: MainChannel<Ch>;
+  events: PluginEvents<Ev>;
   settings: M['settings'];
   services: MainServices;
   dependency<E>(pluginId: string): E;
@@ -218,6 +240,6 @@ export interface MainStart<M extends PluginManifest> {
 // Starts once, at launch.
 export interface MainPart<M extends PluginManifest = PluginManifest> {
   manifest: M;
-  // `any`: one parts list holds parts with different channels.
-  start(api: MainApi<M, any>): MainStart<M>;
+  // `any`: one parts list holds parts with different channels and events.
+  start(api: MainApi<M, any, any>): MainStart<M>;
 }

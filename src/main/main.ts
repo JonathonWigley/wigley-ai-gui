@@ -30,6 +30,7 @@ import type { AppConfig } from '../contracts/settings';
 import { mainParts } from '../plugins/main';
 import { manifests } from '../plugins/manifests';
 import { CommandRegistry } from '../shared/command-registry';
+import { createEventBus } from '../shared/event-bus';
 import { startPlugins } from '../shared/plugin-host';
 import {
   commandInfos,
@@ -134,7 +135,7 @@ function buildConfig(
 }
 
 // Starts every plugin's main part, each with its own API over one plugin
-// channel router to the window's page. `onStarted` sees each part as it
+// channel router to the window's page and one event bus. `onStarted` sees each part as it
 // starts, so a part is known even when a later start throws.
 function startMainParts(
   window: BrowserWindow,
@@ -143,6 +144,7 @@ function startMainParts(
   onStarted: (part: MainStart<PluginManifest>) => void,
 ) {
   const channels = createPluginChannels(ipcMain, () => window.webContents);
+  const bus = createEventBus();
   return startPlugins(mainParts, (part, dependency) => {
     const started = part.start(
       createMainApi(part.manifest, {
@@ -150,6 +152,7 @@ function startMainParts(
         settings: settingsByPlugin[part.manifest.id],
         services,
         dependency,
+        bus,
       }),
     );
     onStarted(started);

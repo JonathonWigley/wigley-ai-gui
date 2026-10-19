@@ -5,6 +5,7 @@ import type {
   PageServices,
   PluginManifest,
 } from '../../contracts/plugin';
+import { createEventBus } from '../../shared/event-bus';
 import { createPageApi, type PageApiDeps } from './page-api';
 
 const manifest: PluginManifest = {
@@ -48,6 +49,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
     services: {} as PageServices,
     run: () => {},
     dependency: <E>() => undefined as E,
+    bus: createEventBus(),
     ...overrides,
   };
 }
@@ -79,5 +81,20 @@ describe('createPageApi', () => {
     expect(invoked).toEqual([['p', 'save', [1, 2]]]);
     expect(result).toBe('done');
     expect(listeners).toEqual([['p', 'shown', shown]]);
+  });
+
+  it('gives the plugin events under its id', () => {
+    const bus = createEventBus();
+    const emitted: unknown[] = [];
+    const heard: unknown[] = [];
+    bus.on('p.x', (data) => emitted.push(data));
+    const api = createPageApi(manifest, deps({ bus }));
+    api.events.on('q.y', (data) => heard.push(data));
+
+    api.events.emit('x', 3);
+    bus.emit('q.y', 4);
+
+    expect(emitted).toEqual([3]);
+    expect(heard).toEqual([4]);
   });
 });

@@ -5,15 +5,18 @@ import type {
   Area,
   AreaName,
   ChannelShape,
+  EventShape,
   PageApi,
   PageCommandContext,
   PageServices,
   PluginManifest,
 } from '../../contracts/plugin';
+import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { qualify } from '../../shared/plugin-manifests';
 
 // What the page core shares with every plugin's API. `setScope` takes a
-// qualified scope; `keymap` is the merged keymap.
+// qualified scope; `keymap` is the merged keymap; `bus` is the page load's
+// event bus.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   bridge: Bridge;
@@ -24,14 +27,15 @@ export interface PageApiDeps {
   services: PageServices;
   run(id: CommandId, context?: PageCommandContext): void;
   dependency<E>(pluginId: string): E;
+  bus: EventBus;
 }
 
-// One plugin's page API: its channel runs under the manifest's id, and the
-// scopes it sets are qualified by it.
+// One plugin's page API: its channel and its events run under the manifest's
+// id, and the scopes it sets are qualified by it.
 export function createPageApi(
   manifest: PluginManifest,
   deps: PageApiDeps,
-): PageApi<PluginManifest, ChannelShape> {
+): PageApi<PluginManifest, ChannelShape, EventShape> {
   return {
     areas: deps.areas,
     channel: {
@@ -40,6 +44,7 @@ export function createPageApi(
       on: (message, listener) =>
         deps.bridge.onMessage(manifest.id, message, listener),
     },
+    events: pluginEvents(deps.bus, manifest.id),
     keys: {
       setScope: (scope) => deps.setScope(qualify(manifest.id, scope)),
       keymap: deps.keymap,

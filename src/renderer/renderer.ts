@@ -12,6 +12,7 @@ import type {
 import type { AppConfig } from '../contracts/settings';
 import { pageParts } from '../plugins/page';
 import { CommandRegistry } from '../shared/command-registry';
+import { createEventBus } from '../shared/event-bus';
 import { startPlugins } from '../shared/plugin-host';
 import { qualify } from '../shared/plugin-manifests';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
@@ -85,6 +86,7 @@ async function start() {
   let scope = INITIAL_SCOPE;
   const run = (id: CommandId, context: PageCommandContext = {}) =>
     commands.run(id, context);
+  const bus = createEventBus();
   startPlugins(pageParts, (part, dependency) => {
     const { id } = part.manifest;
     const started = part.start(
@@ -100,6 +102,7 @@ async function start() {
         services,
         run,
         dependency,
+        bus,
       }),
     );
     const handlers: Record<string, (context: PageCommandContext) => void> =
