@@ -47,6 +47,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (session tabs and the
                  session view)
   forms/         manifest.ts, contract.ts, main/ (round logic, saved rounds, its MCP tools), page/ (the round view)
+  keys/          manifest.ts, page/ (which-key, the help overlay, the status bar's key list); no main part
 src/mock-agent/  a separate executable the ACP adapter spawns in dev
 ```
 
@@ -59,7 +60,8 @@ disconnects or the user closes the tab. A plugin's close guard (`addCloseGuard`)
 plugin still has something open there (forms: an open round), since main, not the page, decides.
 
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
-  and the process it runs in), key scopes, default keys, settings and the plugins it depends on; `main/` and
+  and the process it runs in), key scopes (each with the title help shows over its keys), default keys, settings
+  and the plugins it depends on; `main/` and
   `page/` each export a part, the manifest with a start function that receives that process's plugin API and
   returns the handlers for the manifest's commands that run in that process, plus the `exports` its dependents read
   (and, in main, a `dispose`). The compiler checks every command that runs in a process has a handler there and
@@ -82,7 +84,14 @@ plugin still has something open there (forms: an open round), since main, not th
   the user's overrides land. Each process checks at startup that every key it owns names a registered command, and
   the page also rejects a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
   `<D-w>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
-  too, in every vim mode, ahead of the editor.
+  too, in every vim mode, ahead of the editor. Esc while a sequence waits cancels it and runs nothing.
+- **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
+  scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
+  modal view never fights the plugin under it for the scope.
+- **Key hints** belong to the `keys` plugin, which reads the merged keymap: which-key after a pending prefix, help on
+  `Space ?` (`<Leader>?` in a box), and the status bar's keys that don't start with the leader. A plugin declares
+  its keys, labels, groups and scope titles, and draws no key hints of its own. The core and the editor host report
+  a pending prefix through `api.keys`; the editor host reads it from vim's pending input, behind `EditorHost`.
 - **A theme** is a JSON file of a `palette` and semantic `tokens` (a token names a palette entry or gives a hex).
   Built-in themes live in `src/config/themes/`; the user's own live in the `themes` folder of Electron's per-user
   data folder and override a built-in of the same name. Views read tokens as CSS variables and never name a
@@ -126,7 +135,8 @@ plugin still has something open there (forms: an open round), since main, not th
   through `FormsService` — drives keys with
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
-  (`src/plugins/forms/main/selftest-script.ts` for forms).
+  (`src/plugins/forms/main/selftest-script.ts` for forms). Only one script runs, so the keys plugin's steps live in
+  forms' script, whose fixture gives them scopes full of binds and a box to type in.
 - A visible `npm start` takes the user's foreground and keyboard, so that run is the user's: the agent gives the user
   the steps to try. The global shortcut needs it — macOS keys reach a global shortcut only from the real keyboard.
 
