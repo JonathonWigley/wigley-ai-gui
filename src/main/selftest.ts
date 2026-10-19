@@ -172,8 +172,19 @@ function waitForPageWidth(window: BrowserWindow, width: number) {
   });
 }
 
+// Resolves after three of the page's frames: a resize reaches the editors'
+// ResizeObserver in the first, which asks vim to redraw its cursor in the
+// next, and the third starts after that redraw.
+function waitForResizeRedraw(window: BrowserWindow): Promise<void> {
+  return window.webContents.executeJavaScript(`new Promise((resolve) => {
+  const frames = (left) => left === 0 ? resolve() : requestAnimationFrame(() => frames(left - 1));
+  frames(3);
+})`);
+}
+
 // Shrinks the window to its minimum width, lists what the page cuts off
-// there, and restores the window's size.
+// there once the page has redrawn at that width, and restores the window's
+// size.
 async function cutOffAtMinimumWidth(
   window: BrowserWindow,
   scrollsItself: string[],
@@ -182,7 +193,11 @@ async function cutOffAtMinimumWidth(
   const [minimumWidth] = window.getMinimumSize();
   window.setSize(minimumWidth, height);
   const [narrowWidth] = window.getContentSize();
-  const problems = (await waitForPageWidth(window, narrowWidth))
+  const hasNarrowed = await waitForPageWidth(window, narrowWidth);
+  if (hasNarrowed) {
+    await waitForResizeRedraw(window);
+  }
+  const problems = hasNarrowed
     ? await window.webContents.executeJavaScript(cutOffScript(scrollsItself))
     : [`the page never narrowed to ${narrowWidth}px`];
   window.setSize(width, height);

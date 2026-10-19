@@ -124,6 +124,17 @@ function typeKey(view: EditorView, cm: VimEditor, key: string) {
   }
 }
 
+// CodeMirror skips measuring an editor scrolled out of view, so after a
+// resize vim's block cursor keeps the spot the old line wrap gave it, past the
+// editor's edge. Setting the same selection makes vim redraw it.
+function redrawCursorOnResize(view: EditorView): ResizeObserver {
+  const observer = new ResizeObserver(() =>
+    view.dispatch({ selection: view.state.selection }),
+  );
+  observer.observe(view.scrollDOM);
+  return observer;
+}
+
 function hostedViewOf(element: Element, hosted: HostedEditor[]): EditorView {
   const match = hosted.find(({ view }) => view.dom.contains(element));
   if (!match) {
@@ -166,6 +177,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
         parent,
       });
       const cm = vimEditorOf(view);
+      const cursorRedraw = redrawCursorOnResize(view);
       if (!isKeymapApplied) {
         for (const line of vimrcLines(keymap)) {
           Vim.handleEx(cm, line);
@@ -190,6 +202,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
               return;
             }
             hosted.splice(index, 1);
+            cursorRedraw.disconnect();
             view.destroy();
           },
         },
