@@ -6,6 +6,7 @@ import type {
   AnswerStatus,
   AnswersPayload,
   FormBody,
+  ItemKind,
   Notice,
   NoticeResult,
   Round,
@@ -341,23 +342,46 @@ function pythonJsonDumps(value: PythonJsonValue): string {
   return `{${members.join(', ')}}`;
 }
 
-// What a re-sent round is matched on: every field of its questions, notices
-// and findings, never the heading or overview, which a re-send may reword.
-// Findings join the text only when the round has some, so a round without
-// them equals the Python server's fingerprint and its saved rounds still match.
+interface FingerprintList {
+  // The Python server's fingerprint holds this list even when it is empty.
+  joinsWhenEmpty: boolean;
+  content(round: Round): PythonJsonValue[];
+}
+
+const FINGERPRINT_LISTS = {
+  notice: {
+    joinsWhenEmpty: true,
+    content: (round) =>
+      round.notices.map((notice) => FORMATS.notice.fingerprintContent(notice)),
+  },
+  finding: {
+    joinsWhenEmpty: false,
+    content: (round) =>
+      round.findings.map((finding) =>
+        FORMATS.finding.fingerprintContent(finding),
+      ),
+  },
+  question: {
+    joinsWhenEmpty: true,
+    content: (round) =>
+      round.questions.map((question) =>
+        FORMATS.question.fingerprintContent(question),
+      ),
+  },
+} satisfies Record<ItemKind, FingerprintList>;
+
+// What a re-sent round is matched on: every field of its items, keyed by each
+// kind's ask_round field, never the heading or overview, which a re-send may
+// reword. An empty list joins only for a kind the Python server's fingerprint
+// holds, so a round it could send hashes the same and its saved rounds match.
 export function fingerprint(round: Round): string {
-  const content: Record<string, PythonJsonValue> = {
-    questions: round.questions.map((question) =>
-      FORMATS.question.fingerprintContent(question),
-    ),
-    notices: round.notices.map((notice) =>
-      FORMATS.notice.fingerprintContent(notice),
-    ),
-  };
-  if (round.findings.length > 0) {
-    content.findings = round.findings.map((finding) =>
-      FORMATS.finding.fingerprintContent(finding),
-    );
+  const content: Record<string, PythonJsonValue> = {};
+  for (const kind of ITEM_KINDS) {
+    const list = FINGERPRINT_LISTS[kind];
+    const items = list.content(round);
+    if (list.joinsWhenEmpty || items.length > 0) {
+      content[FORMATS[kind].argsKey] = items;
+    }
   }
   const text = pythonJsonDumps(content);
   return createHash('sha256').update(text, 'utf8').digest('hex');

@@ -93,11 +93,11 @@ plugin still has something open there (forms: an open round), since main, not th
   the forms contract's `ItemKind` (and in `AnswerableKind`'s exclusion when it takes no answer), its item type, and
   its `ItemOf` entry in main's `kinds/item-format.ts`; from there the compiler flags each of the rest missing: that
   folder pair, its table entries, its array in the contract's `Round`, `FormBody` and `AnswersPayload`, `round.ts`'s
-  fixed keys (`parseRound`, `readFormBody`, the answers payload) and the per-kind records in `page/form-state.ts`
-  (`ROUND_ITEMS`, plus `ANSWER_ARRAYS` for an answerable kind). The order lists (`ITEM_KINDS` and
-  `ANSWERABLE_KINDS` in main's `formats.ts`, `RAIL_ORDER` in `form-state.ts`), `fingerprint` in `round.ts` and
-  `prefillDraft` in `forms-service.ts` name each kind in code the compiler cannot check: a new kind is added to
-  each by hand.
+  fixed keys (`parseRound`, `readFormBody`, the answers payload) and the per-kind records: `FINGERPRINT_LISTS` in
+  `round.ts`, `ROUND_ITEMS` in `page/form-state.ts`, and for an answerable kind `ANSWER_LISTS` in
+  `forms-service.ts` and `ANSWER_ARRAYS` in `form-state.ts`. The order lists are plain arrays the compiler cannot
+  check: `formats.test.ts` fails when main's `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind, and `RAIL_ORDER` in
+  `form-state.ts` is added to by hand.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { AgentSession, SessionInfo } from '../../sessions/contract';
 import type {
+  AnswerableKind,
   AnswerEntry,
   AnswersPayload,
   FormBody,
@@ -104,6 +105,11 @@ function withoutDontAsk(answer: AnswerEntry): AnswerEntry {
   return { ...answer, dont_ask: false, dont_ask_reason: '' };
 }
 
+const ANSWER_LISTS: Record<AnswerableKind, 'answers' | 'finding_answers'> = {
+  question: 'answers',
+  finding: 'finding_answers',
+};
+
 // A press belongs to the round it was made in, so a finished round's copy
 // drops it; an open draft's copy keeps it, since retro reads finished rounds only.
 function prefillDraft(round: Round, saved: SavedRound | null): FormBody | null {
@@ -114,11 +120,11 @@ function prefillDraft(round: Round, saved: SavedRound | null): FormBody | null {
   if (saved.outcome === 'open') {
     return body;
   }
-  return {
-    ...body,
-    answers: body.answers.map(withoutDontAsk),
-    finding_answers: body.finding_answers.map(withoutDontAsk),
-  };
+  const stripped: FormBody = { ...body };
+  for (const key of Object.values(ANSWER_LISTS)) {
+    stripped[key] = body[key].map(withoutDontAsk);
+  }
+  return stripped;
 }
 
 function finishedPayload(finished: FinishedRound): AnswersPayload {
