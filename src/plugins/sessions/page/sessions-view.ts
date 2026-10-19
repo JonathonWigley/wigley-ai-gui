@@ -1,7 +1,7 @@
 import type { Area } from '../../../contracts/plugin';
 import { button, element } from '../../../shared/dom';
 import type { SessionsState, SessionTab, SessionView } from '../contract';
-import { tabText } from './tabs';
+import { keepsPane, showsIdleText, tabText, tabTitle } from './tabs';
 
 // What fills a session's view, with the title it last set.
 interface Fill {
@@ -60,13 +60,13 @@ export function mountSessionsView(
     }
     for (const [sessionId, pane] of panes) {
       const hasTab = state.tabs.some((tab) => tab.sessionId === sessionId);
-      if (!hasTab && pane.fills.length === 0) {
+      if (!keepsPane(hasTab, pane.fills.length)) {
         pane.element.remove();
         panes.delete(sessionId);
         continue;
       }
       pane.element.hidden = sessionId !== state.activeSessionId;
-      pane.idle.hidden = pane.fills.length > 0;
+      pane.idle.hidden = !showsIdleText(pane.fills.length);
     }
     strip.hidden = !hasTabs;
     views.hidden = !hasTabs;
@@ -76,7 +76,9 @@ export function mountSessionsView(
         buildTab(
           tab,
           state.activeSessionId,
-          titleOf(panes.get(tab.sessionId)),
+          tabTitle(
+            panes.get(tab.sessionId)?.fills.map((fill) => fill.title) ?? [],
+          ),
           activate,
         ),
       ),
@@ -110,12 +112,6 @@ export function mountSessionsView(
     fillsOf: (sessionId) =>
       panes.get(sessionId)?.fills.map((fill) => fill.view) ?? [],
   };
-}
-
-// The last non-empty title among the session's fills, or null.
-function titleOf(pane: SessionPane | undefined): string | null {
-  const titled = pane?.fills.filter((fill) => fill.title !== '') ?? [];
-  return titled.at(-1)?.title ?? null;
 }
 
 function buildTab(

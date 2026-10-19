@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionsState } from '../contract';
-import { mayClose, stepTab, tabText } from './tabs';
+import {
+  keepsPane,
+  mayClose,
+  showsIdleText,
+  stepTab,
+  tabText,
+  tabTitle,
+} from './tabs';
 
 function stateOf(
   sessionIds: string[],
@@ -34,6 +41,30 @@ describe('tabs', () => {
     expect(tabText('proj', null)).toBe('proj');
     expect(tabText('proj', '')).toBe('proj');
     expect(tabText('proj', 'Heading 1/2')).toBe('proj · Heading 1/2');
+  });
+
+  it('tabTitle is the last non-empty fill title, else null', () => {
+    expect(tabTitle([])).toBeNull();
+    expect(tabTitle(['', ''])).toBeNull();
+    expect(tabTitle(['first', 'second'])).toBe('second');
+    expect(tabTitle(['first', ''])).toBe('first');
+  });
+
+  it('keepsPane keeps a pane for a fill that arrives before its tab', () => {
+    expect(keepsPane(false, 1)).toBe(true);
+  });
+
+  it('keepsPane keeps a pane with a tab and no fill', () => {
+    expect(keepsPane(true, 0)).toBe(true);
+  });
+
+  it('keepsPane drops a pane once its last fill leaves with no tab', () => {
+    expect(keepsPane(false, 0)).toBe(false);
+  });
+
+  it('showsIdleText only while nothing fills the pane', () => {
+    expect(showsIdleText(0)).toBe(true);
+    expect(showsIdleText(1)).toBe(false);
   });
 
   it('mayClose stops at the first guard that keeps the tab', () => {

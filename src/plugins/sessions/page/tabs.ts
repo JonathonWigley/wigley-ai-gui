@@ -18,6 +18,23 @@ export function tabText(label: string, title: string | null): string {
   return title === null || title === '' ? label : `${label} · ${title}`;
 }
 
+// A tab's title: the last non-empty title among its session's fills, in fill
+// order, or null.
+export function tabTitle(fillTitles: readonly string[]): string | null {
+  return fillTitles.findLast((title) => title !== '') ?? null;
+}
+
+// Whether a session's pane stays: it does while the session has a tab or a
+// fill, so a fill that arrives before its tab already has its pane.
+export function keepsPane(hasTab: boolean, fillCount: number): boolean {
+  return hasTab || fillCount > 0;
+}
+
+// Whether a session's pane shows its idle text: only while nothing fills it.
+export function showsIdleText(fillCount: number): boolean {
+  return fillCount === 0;
+}
+
 // Asks each view in order whether its tab may close, stopping at the first
 // that says no.
 export function mayClose(
