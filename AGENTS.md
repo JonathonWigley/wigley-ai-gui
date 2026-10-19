@@ -3,14 +3,14 @@
 **Contents**
 
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the core and its plugins, the
-  layers, the forms relay, and where a new plugin, key, setting, theme, round source or third-party tool goes, and
-  the layer check.
+  layers, the relay and agent sessions, and where a new plugin, key, event, setting, theme, round source, MCP tool or
+  third-party tool goes, and the layer check.
 - **Running and testing** — Node version, the self-test the agent may run any time, and the visible run that is the user's.
 - **Dev quirks** — the startup reload and the unwired ACP adapter and mock agent.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
 vim, app-owned Cmd keys and a global summon shortcut. Its one live job: it is the only client of the `wigley-forms`
-tools, receiving agents' review rounds and showing them in its forms view for the user to answer. An ACP client, built
+tools, receiving agents' review rounds and showing each in its agent session's tab for the user to answer. An ACP client, built
 but not yet wired, is for driving an agent process over stdio.
 
 ## Architecture
@@ -27,7 +27,8 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 ```
 src/contracts/   interfaces and records crossing a seam, the plugin API among them; imports nothing
 src/config/      core keymap (leader, remaps, app chords) and settings, and the built-in themes  → read only by main
-src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, theme variables)
+src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
+                 theme variables)
 src/main/        core main process; main.ts is its composition root
   plugins/       the main-side plugin API: per-plugin channel routing and services
   themes/        theme loader: parses and chooses the built-in or user theme
@@ -41,14 +42,18 @@ src/renderer/    core page; renderer.ts is its composition root
   codemirror-vim/ editor adapter behind EditorHost          → the only codemirror / @replit import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, main.ts and page.ts the
                  parts each root starts
-  forms/         manifest.ts, contract.ts, main/ (round logic, saved rounds, MCP adapter, relay), page/ (the view)
+  sessions/      manifest.ts, contract.ts, main/ (relay, endpoint files, MCP adapter → the only
+                 @modelcontextprotocol import), page/ (session tabs and the session view)
+  forms/         manifest.ts, contract.ts, main/ (round logic, saved rounds, its MCP tools), page/ (the round view)
 src/mock-agent/  a separate executable the ACP adapter spawns in dev
 ```
 
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
 wigley-ai-marketplace, whose README states the tool contract, the saved-round file format
 the `retro` skill reads, and the relay's side of the channel). A change to either contract
-lands in both repos together.
+lands in both repos together. Each relay connection is one agent session, owned by the `sessions` plugin; a session
+gets a tab once a plugin shows something in it (forms, when the session sends a round), and keeps it until it
+disconnects or the user closes the tab.
 
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
   and the process it runs in), key scopes, default keys, settings and the plugins it depends on; `main/` and
@@ -61,19 +66,29 @@ lands in both repos together.
   `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts once;
   a page part starts on every page load.
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
-  another plugin through the exported API of a plugin its manifest depends on. A plugin imports only
-  `src/contracts`, `src/shared` and its own folder.
+  another plugin through the exported API of a plugin its manifest depends on, or through events. A plugin imports
+  only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
+  which types that plugin's exports and events.
+- **An event** is published with `api.events.emit` under the publishing plugin's id (`activeChanged` in plugin
+  `sessions` is `sessions.activeChanged`) and heard with `api.events.on` by any plugin; its payload type lives in
+  the publisher's `contract.ts`. Each process has its own bus, and nothing crosses processes on it: a plugin's own
+  channel does that.
 - **A key** is a default bind in its plugin's manifest naming that plugin's command; the core qualifies both, so
   `nextItem` in plugin `forms` runs as `forms.nextItem`, and its scope `review` is `forms.review`. Keys never call
   code directly, so rebinding never touches a handler. `src/config/keymap.ts` holds only the core's keys and is where
   the user's overrides land. Each process checks at startup that every key it owns names a registered command, and
-  the page also rejects a key bound twice in one scope.
+  the page also rejects a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
+  `<D-w>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
+  too, in every vim mode, ahead of the editor.
 - **A theme** is a JSON file of a `palette` and semantic `tokens` (a token names a palette entry or gives a hex).
   Built-in themes live in `src/config/themes/`; the user's own live in the `themes` folder of Electron's per-user
   data folder and override a built-in of the same name. Views read tokens as CSS variables and never name a
   colour. A broken theme falls back to Catppuccin Mocha and shows its error.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly.
+- **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
+  sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
+  names no tool.
 - **An ambient service** — the clock, ids, the home folder — reaches a plugin through `api.services`, filled in by
   the composition root.
 - **A setting** is a core setting in `src/contracts/settings.ts` and `src/config/settings.ts`, or a plugin's own in
@@ -93,7 +108,8 @@ lands in both repos together.
   logic, saved rounds, answer state, markdown, theme loading, the keymap — is tested there, without Electron.
 - `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. It renders the window
   offscreen as an accessory app, so it never takes the user's foreground; the core's driver (`src/main/selftest.ts`) runs
-  the script a plugin hands it — the forms plugin's opens a fixture round through `FormsService` — drives keys with
+  the script a plugin hands it — the forms plugin's opens fixture sessions through `sessions` and their rounds
+  through `FormsService` — drives keys with
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms).
