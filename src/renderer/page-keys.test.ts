@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { Timers } from '../contracts/ambient';
 import type { PageBind, ViewScope } from '../contracts/keymap';
 import { createChordMatcher, createSequenceMatcher } from './key-sequences';
-import { createPendingTimeout, feedChordKey, feedPageKey } from './page-keys';
+import {
+  createPendingTimeout,
+  dropPendingKeys,
+  feedChordKey,
+  feedPageKey,
+} from './page-keys';
 
 const TIMEOUT_MS = 1000;
 
@@ -178,6 +183,30 @@ describe('feedChordKey', () => {
     feedPageKey(matcher, 'u', 100, target);
     feedPageKey(matcher, 'x', 200, target);
     expect(page.ran).toEqual(['test.long']);
+  });
+});
+
+describe('dropPendingKeys', () => {
+  it('drops held keys so the next key starts a new sequence', () => {
+    const matcher = createSequenceMatcher(leaderBinds, TIMEOUT_MS);
+    const { page, target } = fakePage();
+    feedPageKey(matcher, ' ', 0, target);
+    matcher.hold();
+
+    dropPendingKeys(matcher, target.report);
+    feedPageKey(matcher, '2', 100, target);
+
+    expect(page.ran).toEqual([]);
+    expect(page.reports).toEqual([[' '], []]);
+  });
+
+  it('reports nothing when no keys were pending', () => {
+    const matcher = createSequenceMatcher(leaderBinds, TIMEOUT_MS);
+    const reports: string[][] = [];
+
+    dropPendingKeys(matcher, (keys) => reports.push(keys));
+
+    expect(reports).toEqual([]);
   });
 });
 

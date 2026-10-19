@@ -106,13 +106,14 @@ export function feedChordKey(
   if (!bind) {
     return false;
   }
-  resetReporting(sequences, target.report);
+  dropPendingKeys(sequences, target.report);
   target.run(bind);
   return true;
 }
 
-// Drops the pending keys, reporting `[]` when there were any.
-function resetReporting(
+// Drops the pending keys, held ones included, reporting `[]` when there were
+// any.
+export function dropPendingKeys(
   matcher: SequenceMatcher,
   report: (keys: string[]) => void,
 ) {
@@ -155,8 +156,9 @@ export function createPendingTimeout(
 }
 
 // Non-chord keys fire when no editor has focus; chord binds fire everywhere,
-// inside an editor too, ahead of it. A bind fires only in the scope
-// `currentScope` reads. `report` hears the pending page keys each time they
+// inside an editor too, ahead of it. Focus entering an editor drops the
+// pending page keys, held ones included, so no page sequence outlives a move
+// into a box. A bind fires only in the scope `currentScope` reads. `report` hears the pending page keys each time they
 // change, `[]` once none are, with the scope in force as it reports. The
 // returned `hold` keeps the pending keys past the timeout until they end, and
 // `cancel` drops them, running nothing.
@@ -178,6 +180,15 @@ export function installPageKeys(
     log('page', `${bind.keys.join('')} ran ${bind.command}`);
     commands.run(bind.command, {});
   };
+  const dropForEditor = () => {
+    dropPendingKeys(matcher, reportKeys);
+    timeout.arm();
+  };
+  document.addEventListener('focusin', (event) => {
+    if (editors.contains(event.target as Element)) {
+      dropForEditor();
+    }
+  });
   document.addEventListener(
     'keydown',
     (event) => {
@@ -196,8 +207,7 @@ export function installPageKeys(
   );
   document.addEventListener('keydown', (event) => {
     if (editors.contains(event.target as Element)) {
-      resetReporting(matcher, reportKeys);
-      timeout.arm();
+      dropForEditor();
       return;
     }
     if (!isPageKey(event)) {
