@@ -58,6 +58,8 @@
     "editor.activeLine": "#cdd6f41a",
     "editor.gutter": "overlay1",
     "editor.selection": "#9399b240",
-    "editor.cursor": "rosewater"
+    "editor.cursor": "rosewater",
+    "whichKey.command": "green",
+    "whichKey.prefix": "mauve"
   }
 }

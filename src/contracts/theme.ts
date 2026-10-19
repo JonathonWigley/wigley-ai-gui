@@ -29,6 +29,8 @@ export const THEME_TOKENS = [
   'editor.gutter',
   'editor.selection',
   'editor.cursor',
+  'whichKey.command',
+  'whichKey.prefix',
 ] as const;
 
 export type ThemeToken = (typeof THEME_TOKENS)[number];
