@@ -105,13 +105,20 @@ plugin still has something open there (forms: an open round), since main, not th
   folder pair, its table entries, its array in the contract's `Round`, `FormBody` and `AnswersPayload`, `round.ts`'s
   fixed keys (`parseRound`, `readFormBody`, the answers payload) and the per-kind records: `FINGERPRINT_LISTS` in
   `round.ts`, `ROUND_ITEMS` in `page/form-state.ts`, and for an answerable kind `ANSWER_LISTS` in
-  `forms-service.ts`, and `ANSWER_ARRAYS`, `PICK_ANSWERS` and `RECOMMENDED_PICKS` (what Enter accepts) in `form-state.ts`. The order lists are plain arrays
-  the compiler cannot check: `formats.test.ts` fails when main's `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind,
-  and `RAIL_ORDER` in `form-state.ts` is added to by hand.
+  `forms-service.ts`, and `ANSWER_ARRAYS`, `PICK_ANSWERS` and `RECOMMENDED_PICKS` (what Enter accepts) in
+  `form-state.ts`. The order lists are plain arrays the compiler cannot check: `formats.test.ts` fails when main's
+  `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind, and `RAIL_ORDER` in `form-state.ts` is added to by hand.
 - **A finding origin** — `caused`, `pre_existing`, `design`, `nit` — is an entry in
   `src/plugins/forms/finding-origins.ts`: the card it draws as (Defect, Decision, Nit), the fields it requires and
   forbids, its choice bounds, and the actions it offers with the card's word for each. Main's parser (which rejects a
-  choice opening with one of those words) and the page's card both read that table, so a new origin is one entry.
+  choice opening with one of those words) and the page's card both read that table. A new origin starts as its name
+  in the forms contract's `FindingOrigin` and its variant in the `Finding` union (and in `DefectFinding`'s origin when
+  it takes severity); the compiler then flags its table entry and its chip text in `ORIGIN_CHIPS` in
+  `page/kinds/finding/verdict.ts`, and a new card its `CARD_TEXT` in `finding-card.ts`. The rest it cannot check:
+  the `FINDING_ORIGINS` list in the contract, an `origin.*` theme token in `THEME_TOKENS` and every built-in theme
+  with its `.badge-origin` rule in `forms.css`, the origin prose in `finding-format.ts`'s `ORIGIN_DESCRIPTION` and
+  `ASK_ROUND_DESCRIPTION` in `main/tool-definitions.ts`, and retro's `ORIGIN_ACTION_LABELS` in the marketplace's
+  `answers.py`, which otherwise labels the new origin's actions with the Defect words.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;

@@ -32,33 +32,34 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out. j to
 // finding 2, a Nit: Space a u is refused, since a Nit offers no follow-up, and
 // Space a f alone answers its one solution with Fix anyway. j to finding 3, a
-// Decision: Space a u sets Plan it, c opens and c closes its other choices,
-// and Enter accepts its recommendation. j to question 1, where Enter accepts
-// its recommendation and 2 then picks 2; a types "ab" at once, Esc out; d focuses its reason box,
-// A appends a long word and Ctrl+k still in INSERT moves back to its notes box,
-// Esc out; a again types "c" after "ab". a once more, jk to NORMAL, where Space
-// opens which-key and Esc closes it without leaving the box (vim drops its
-// pending input); Space opens it again and, with no key pressed, the which-key
-// timeout closes it, and Esc then leaves the box, so the box kept focus and its
-// pending Space was dropped. a back in, jk, Space opens which-key, and Ctrl+j
-// moving to the reason box closes it; jk Esc out. a, jk and d, then Ctrl+j to
-// the reason box and Ctrl+k back; w and Esc leave the box, and w deleted
-// nothing, since leaving dropped the pending d. j to question 2, where q a x
-// then b breaks the self-test bind, so a opens the notes box and "xb" is typed
-// into it; jk Esc out and x marks question 2 not applicable. Ctrl+h goes back
-// to question 1, where Space opens which-key and the timeout closes it, so 2
-// starts a fresh sequence and clears the choice (Space 2 would jump), 2 picks
-// it again; Space a 2 clears it and picks it again, Space 2 jumps to question
-// 2, and Space e n finds no unanswered item. Space opens which-key, a moves it
-// into the Space a group, and Esc cancels the sequence and closes it. Option+o
-// moves to the second session's tab; Cmd+W there asks to cancel its round, Esc
-// keeps it and returns to its form, where j moves to its question 2 and Space e
-// p finds its untouched question 1; Option+i moves back to the first tab. Then
-// review, Space ? opens help and Esc closes it, back in the review's scope,
-// where C opens and n dismisses the cancel prompt; Space ? opens help again,
-// Cmd+W opens the cancel prompt, which closes help, so n dismisses the prompt.
-// o types "note" into the Round note at once (INSERT), Esc out, Enter jumps
-// back to finding 1, review again and Space Enter submits.
+// Decision: Space a u sets Plan it, c opens and c closes its other choices, and
+// Enter accepts its recommendation. j to question 1, where Enter accepts its
+// recommendation and 2 then picks 2; a types "ab" at once, Esc out; d focuses
+// its reason box, A appends a long word and Ctrl+k still in INSERT moves back
+// to its notes box, Esc out; a again types "c" after "ab". a once more, jk to
+// NORMAL, where Space opens which-key and Esc closes it without leaving the box
+// (vim drops its pending input); Space opens it again and, with no key pressed,
+// the which-key timeout closes it, and Esc then leaves the box, so the box kept
+// focus and its pending Space was dropped. a back in, jk, Space opens
+// which-key, and Ctrl+j moving to the reason box closes it; jk Esc out. a, jk
+// and d, then Ctrl+j to the reason box and Ctrl+k back; w and Esc leave the
+// box, and w deleted nothing, since leaving dropped the pending d. j to
+// question 2, where q a x then b breaks the self-test bind, so a opens the
+// notes box and "xb" is typed into it; jk Esc out and x marks question 2 not
+// applicable. Ctrl+h goes back to question 1, where Space opens which-key and
+// the timeout closes it, so 2 starts a fresh sequence and clears the choice
+// (Space 2 would jump), 2 picks it again; Space a 2 clears it and picks it
+// again, Space 2 jumps to question 2, and Space e n finds no unanswered item.
+// Space opens which-key, a moves it into the Space a group, and Esc cancels the
+// sequence and closes it. Option+o moves to the second session's tab; Cmd+W
+// there asks to cancel its round, Esc keeps it and returns to its form, where j
+// moves to its question 2 and Space e p finds its untouched question 1;
+// Option+i moves back to the first tab. Then review, Space ? opens help and Esc
+// closes it, back in the review's scope, where C opens and n dismisses the
+// cancel prompt; Space ? opens help again, Cmd+W opens the cancel prompt, which
+// closes help, so n dismisses the prompt. o types "note" into the Round note at
+// once (INSERT), Esc out, Enter jumps back to finding 1, review again and Space
+// Enter submits.
 const STEPS: SelfTestStep[] = [
   { keys: [' ', 'k'], expect: '[page] k ran forms.prevItem', checksFit: true },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
