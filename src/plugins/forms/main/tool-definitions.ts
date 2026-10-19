@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '../contract';
+import type { ToolDefinition } from '../../sessions/contract';
 import {
   DEFAULT_NOTICE_BADGE,
   MAX_CHOICES,

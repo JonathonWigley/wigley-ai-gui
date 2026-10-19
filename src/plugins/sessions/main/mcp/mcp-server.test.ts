@@ -1,22 +1,13 @@
 import { createInterface } from 'node:readline';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  type AnswersPayload,
-  type FormsSession,
-  ROUND_ERROR_NAME,
-  type ToolDefinition,
+import type {
+  ToolCallContext,
+  ToolDefinition,
+  ToolResult,
+  ToolSession,
 } from '../../contract';
 import { serveMcp } from './mcp-server';
-
-// Stands in for src/plugins/forms/main's RoundError, which this layer may not import;
-// the adapter knows it by its contract name.
-class RoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = ROUND_ERROR_NAME;
-  }
-}
 
 interface RpcResponse {
   id: number;
@@ -29,10 +20,10 @@ interface RpcResponse {
   error?: { code: number; message: string };
 }
 
-interface AskCall {
+interface ToolCall {
+  name: string;
   args: unknown;
-  toolUseId: string | null;
-  signal: AbortSignal;
+  context: ToolCallContext;
 }
 
 const TOOLS: ToolDefinition[] = [
@@ -51,12 +42,9 @@ const TOOLS: ToolDefinition[] = [
   },
 ];
 
-const PAYLOAD: AnswersPayload = {
-  outcome: 'submitted',
-  summary: '1 of 1 answered.',
-  next: 'Act on the answers.',
-  answers: [],
-  notices: [],
+const DONE: ToolResult = {
+  content: [{ type: 'text', text: 'done' }],
+  structuredContent: { ok: true },
 };
 
 const INITIALIZE = {
@@ -73,23 +61,18 @@ const INITIALIZE = {
 const INITIALIZED = { jsonrpc: '2.0', method: 'notifications/initialized' };
 
 function fakeSession(
-  ask: (call: AskCall) => Promise<AnswersPayload> = async () => PAYLOAD,
+  answer: (call: ToolCall) => Promise<ToolResult> = async () => DONE,
 ) {
-  const asks: AskCall[] = [];
-  const collects: boolean[] = [];
-  const session: FormsSession = {
-    askRound: (args, toolUseId, signal) => {
-      const call = { args, toolUseId, signal };
-      asks.push(call);
-      return ask(call);
-    },
-    collectLastRound: async (wait) => {
-      collects.push(wait);
-      return PAYLOAD;
+  const calls: ToolCall[] = [];
+  const session: ToolSession = {
+    call: (name, args, context) => {
+      const call = { name, args, context };
+      calls.push(call);
+      return answer(call);
     },
     end: () => {},
   };
-  return { session, asks, collects };
+  return { session, calls };
 }
 
 const servers: { close(): Promise<void> }[] = [];
@@ -100,7 +83,7 @@ afterEach(async () => {
 
 // `before` is written to a paused input ahead of the server, as the relay
 // hands over a socket holding bytes sent with the hello.
-function connect(session: FormsSession, before: object[] = []) {
+function connect(session: ToolSession, before: object[] = []) {
   const input = new PassThrough();
   const output = new PassThrough();
   const answered = new Map<number, (response: RpcResponse) => void>();
@@ -146,8 +129,8 @@ describe('serveMcp', () => {
     expect((await reply).result?.tools).toEqual(TOOLS);
   });
 
-  it('sends ask_round to the session with its arguments and tool-use id', async () => {
-    const { session, asks } = fakeSession();
+  it('calls the session with the tool name, arguments and tool-use id', async () => {
+    const { session, calls } = fakeSession();
     const client = connect(session);
     await initialized(client);
 
@@ -157,29 +140,29 @@ describe('serveMcp', () => {
       _meta: { 'claudecode/toolUseId': 'toolu_01' },
     });
 
-    expect(asks).toHaveLength(1);
-    expect(asks[0].args).toEqual({ heading: 'Pick a theme' });
-    expect(asks[0].toolUseId).toBe('toolu_01');
-    expect(reply.result?.structuredContent).toEqual(PAYLOAD);
-    expect(reply.result?.content).toEqual([
-      { type: 'text', text: JSON.stringify(PAYLOAD, null, 2) },
-    ]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].name).toBe('ask_round');
+    expect(calls[0].args).toEqual({ heading: 'Pick a theme' });
+    expect(calls[0].context.toolUseId).toBe('toolu_01');
+    expect(reply.result).toEqual(DONE);
   });
 
   it('passes a null tool-use id when the host sends none', async () => {
-    const { session, asks } = fakeSession();
+    const { session, calls } = fakeSession();
     const client = connect(session);
     await initialized(client);
 
     await callTool(client, 2, { name: 'ask_round', arguments: {} });
 
-    expect(asks[0].toolUseId).toBeNull();
+    expect(calls[0].context.toolUseId).toBeNull();
   });
 
-  it('returns a RoundError as a tool error carrying its message alone', async () => {
-    const { session } = fakeSession(async () => {
-      throw new RoundError('questions must hold at most 20 items');
-    });
+  it('passes an error result from the session through unchanged', async () => {
+    const failed: ToolResult = {
+      content: [{ type: 'text', text: 'bad round' }],
+      isError: true,
+    };
+    const { session } = fakeSession(async () => failed);
     const client = connect(session);
     await initialized(client);
 
@@ -188,13 +171,10 @@ describe('serveMcp', () => {
       arguments: {},
     });
 
-    expect(reply.result?.isError).toBe(true);
-    expect(reply.result?.content).toEqual([
-      { type: 'text', text: 'questions must hold at most 20 items' },
-    ]);
+    expect(reply.result).toEqual(failed);
   });
 
-  it('returns any other error as a tool error naming its type', async () => {
+  it('returns a thrown error as a tool error naming its type', async () => {
     const { session } = fakeSession(async () => {
       throw new TypeError('body is not an object');
     });
@@ -207,29 +187,14 @@ describe('serveMcp', () => {
     });
 
     expect(reply.result?.isError).toBe(true);
-    expect(reply.result?.content?.[0].text).toBe(
-      'TypeError: body is not an object',
-    );
-  });
-
-  it('collects with wait true unless the host sends wait false', async () => {
-    const { session, collects } = fakeSession();
-    const client = connect(session);
-    await initialized(client);
-
-    await callTool(client, 2, { name: 'collect_last_round', arguments: {} });
-    await callTool(client, 3, {
-      name: 'collect_last_round',
-      arguments: { wait: false },
-    });
-    const reply = await callTool(client, 4, { name: 'collect_last_round' });
-
-    expect(collects).toEqual([true, false, true]);
-    expect(reply.result?.structuredContent).toEqual(PAYLOAD);
+    expect(reply.result?.content).toEqual([
+      { type: 'text', text: 'TypeError: body is not an object' },
+    ]);
   });
 
   it('answers an unknown tool with a tool error naming the valid tools', async () => {
-    const client = connect(fakeSession().session);
+    const { session, calls } = fakeSession();
+    const client = connect(session);
     await initialized(client);
 
     const reply = await callTool(client, 2, { name: 'ask', arguments: {} });
@@ -238,10 +203,11 @@ describe('serveMcp', () => {
     expect(reply.result?.content?.[0].text).toBe(
       'Unknown tool: ask. Valid tools are ask_round, collect_last_round.',
     );
+    expect(calls).toEqual([]);
   });
 
   it('aborts the session call when the host cancels the request', async () => {
-    const { session, asks } = fakeSession(() => new Promise(() => {}));
+    const { session, calls } = fakeSession(() => new Promise(() => {}));
     const client = connect(session);
     await initialized(client);
 
@@ -251,14 +217,14 @@ describe('serveMcp', () => {
       method: 'tools/call',
       params: { name: 'ask_round', arguments: {} },
     });
-    await vi.waitFor(() => expect(asks).toHaveLength(1));
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
     client.send({
       jsonrpc: '2.0',
       method: 'notifications/cancelled',
       params: { requestId: 2, reason: 'the user stopped the call' },
     });
 
-    await vi.waitFor(() => expect(asks[0].signal.aborted).toBe(true));
+    await vi.waitFor(() => expect(calls[0].context.signal.aborted).toBe(true));
   });
 
   it('reads messages written to a paused input before it connected', async () => {

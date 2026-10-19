@@ -1,4 +1,5 @@
 import type { ChannelShape } from '../../contracts/plugin';
+import type { AgentSession } from '../sessions/contract';
 
 export type NoticeBadge = 'Applied' | 'Dispatched' | 'Decided';
 
@@ -88,14 +89,6 @@ export interface AnswersPayload {
   earlier_heading?: string;
 }
 
-// What a round source knows about the session it serves.
-export interface SessionInfo {
-  sessionId: string | null;
-  projectDir: string | null;
-  // The host's soft deadline; null means the default.
-  deadlineSeconds: number | null;
-}
-
 // One connected session; the app keeps at most one open round per session.
 export interface FormsSession {
   // `args` is the raw tool input; invalid input rejects with a RoundError message.
@@ -122,19 +115,14 @@ export const ROUND_ERROR_NAME = 'RoundError';
 
 // Round sources (MCP now, the wigley harness next) reach round logic only here.
 export interface FormsService {
-  startSession(info: SessionInfo): FormsSession;
-}
-
-// A tool a round source exposes, as MCP `tools/list` describes it.
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
+  startSession(session: AgentSession): FormsSession;
 }
 
 // One round as the window shows it.
 export interface PresentedRound {
   roundId: string;
+  // The app's id for the session the round belongs to.
+  sessionId: string;
   // `project · heading`, or the heading alone without a project.
   label: string;
   round: Round;
@@ -154,27 +142,6 @@ export interface RoundListener {
 export interface RoundPresenter {
   show(round: PresentedRound, listener: RoundListener): void;
   close(roundId: string): void;
-}
-
-export const RELAY_PROTOCOL = 1;
-
-// The first line the relay sends, before any MCP message.
-export interface RelayHello {
-  protocol: number;
-  session_id: string | null;
-  project_dir: string | null;
-  deadline_seconds: number | null;
-}
-
-// The app's one-line answer to a hello; MCP follows only after `ok: true`.
-export type RelayHelloReply = { ok: true } | { ok: false; error: string };
-
-// `~/.agents/wigley-ai-gui/endpoint.json`.
-export interface RelayEndpoint {
-  protocol: number;
-  // A Unix socket path (macOS) or a named pipe path (Windows).
-  channel: string;
-  launch: { command: string[]; cwd: string };
 }
 
 // The forms page part invokes `openRounds` on load, `draft` as the user types

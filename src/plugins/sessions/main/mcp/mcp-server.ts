@@ -1,40 +1,15 @@
 import type { Readable, Writable } from 'node:stream';
 import { Server } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
-import {
-  type AnswersPayload,
-  type FormsSession,
-  ROUND_ERROR_NAME,
-  type ToolDefinition,
-} from '../../contract';
+import type { ToolDefinition, ToolResult, ToolSession } from '../../contract';
 
 // The `_meta` key Claude Code sends a tools/call's calling tool_use id under.
 const TOOL_USE_ID_META_KEY = 'claudecode/toolUseId';
 
 const SERVER_INFO = { name: 'wigley-forms', version: '1.0.0' };
 
-// A type alias, not an interface: the SDK's result type has a string index signature.
-type ToolResult = {
-  content: { type: 'text'; text: string }[];
-  structuredContent?: Record<string, unknown>;
-  isError?: boolean;
-};
-
-function payloadResult(payload: AnswersPayload): ToolResult {
-  return {
-    content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
-    structuredContent: { ...payload },
-  };
-}
-
 function errorResult(message: string): ToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
-}
-
-function sessionErrorText(error: Error): string {
-  return error.name === ROUND_ERROR_NAME
-    ? error.message
-    : `${error.name}: ${error.message}`;
 }
 
 function toolUseId(meta: Record<string, unknown> | undefined): string | null {
@@ -42,39 +17,40 @@ function toolUseId(meta: Record<string, unknown> | undefined): string | null {
   return typeof value === 'string' && value !== '' ? value : null;
 }
 
-// Only an explicit `wait: false` returns the draft at once.
-function waitArgument(args: unknown): boolean {
-  return (args as { wait?: unknown } | undefined)?.wait !== false;
-}
-
+// A name outside `tools` never reaches the session; a thrown Error becomes an
+// error result naming its type.
 async function callTool(
-  session: FormsSession,
+  session: ToolSession,
   toolNames: string[],
   name: string,
   args: unknown,
   meta: Record<string, unknown> | undefined,
   signal: AbortSignal,
 ): Promise<ToolResult> {
-  if (name === 'ask_round') {
-    return payloadResult(
-      await session.askRound(args ?? {}, toolUseId(meta), signal),
+  if (!toolNames.includes(name)) {
+    return errorResult(
+      `Unknown tool: ${name}. Valid tools are ${toolNames.join(', ')}.`,
     );
   }
-  if (name === 'collect_last_round') {
-    return payloadResult(
-      await session.collectLastRound(waitArgument(args), signal),
-    );
+  try {
+    return await session.call(name, args, {
+      toolUseId: toolUseId(meta),
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      return errorResult(`${error.name}: ${error.message}`);
+    }
+    throw error;
   }
-  return errorResult(
-    `Unknown tool: ${name}. Valid tools are ${toolNames.join(', ')}.`,
-  );
 }
 
-// One MCP server for one connection; `input` may arrive paused, holding bytes
-// sent before the server existed.
+// One MCP server for one connection, listing `tools` and sending each call of
+// one of them to `session`; `input` may arrive paused, holding bytes sent
+// before the server existed.
 export function serveMcp(
   streams: { input: Readable; output: Writable },
-  session: FormsSession,
+  session: ToolSession,
   tools: ToolDefinition[],
 ): { close(): Promise<void> } {
   const server = new Server(SERVER_INFO, { capabilities: { tools: {} } });
@@ -88,21 +64,17 @@ export function serveMcp(
   }));
   server.setRequestHandler('tools/call', async (request, ctx) => {
     const { name, arguments: args, _meta: meta } = request.params;
-    try {
-      return await callTool(
+    // The SDK's result type has a string index signature, which an interface lacks.
+    return {
+      ...(await callTool(
         session,
         toolNames,
         name,
         args,
         meta,
         ctx.mcpReq.signal,
-      );
-    } catch (error) {
-      if (error instanceof Error) {
-        return errorResult(sessionErrorText(error));
-      }
-      throw error;
-    }
+      )),
+    };
   });
   const connected = server
     .connect(new StdioServerTransport(streams.input, streams.output))

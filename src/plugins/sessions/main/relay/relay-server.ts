@@ -4,8 +4,7 @@ import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 import type { Log } from '../../../../contracts/log';
 import {
-  type FormsService,
-  type FormsSession,
+  type ConnectedSession,
   RELAY_PROTOCOL,
   type RelayHello,
   type RelayHelloReply,
@@ -16,12 +15,13 @@ import {
 // relay sent after its hello, and `serve` resumes it.
 export type ServeSession = (
   streams: { input: Readable; output: Writable },
-  session: FormsSession,
+  session: ConnectedSession,
 ) => { close(): Promise<void> };
 
+// `connect` opens the app's session for each relay that said hello.
 export interface RelayServerDeps {
   channel: string;
-  forms: FormsService;
+  connect(info: SessionInfo): ConnectedSession;
   serve: ServeSession;
   log: Log;
 }
@@ -63,7 +63,7 @@ function startSession(socket: Socket, line: string, deps: RelayServerDeps) {
     return;
   }
   socket.write(replyLine({ ok: true }));
-  const session = deps.forms.startSession(sessionInfo(parsed.hello));
+  const session = deps.connect(sessionInfo(parsed.hello));
   const served = deps.serve({ input: socket, output: socket }, session);
   socket.on('close', () => {
     session.end();
@@ -95,7 +95,7 @@ function acceptConnection(socket: Socket, deps: RelayServerDeps) {
   socket.on('data', onData);
 }
 
-// Listens for relay.py connections on the channel, one FormsSession each.
+// Listens for relay.py connections on the channel, one connected session each.
 export function startRelayServer(deps: RelayServerDeps): {
   close(): Promise<void>;
 } {

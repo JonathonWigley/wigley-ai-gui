@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Alerts } from '../../../contracts/alerts';
 import type { MainChannel } from '../../../contracts/plugin';
+import type { SessionsMainExports } from '../../sessions/contract';
 import type {
   FormBody,
   FormsChannel,
@@ -12,6 +13,7 @@ import { createChannelPresenter } from './channel-presenter';
 
 const ROUND: PresentedRound = {
   roundId: 'round-1',
+  sessionId: 'app-1',
   label: 'wigley-ai-gui · Pick a theme',
   round: {
     heading: 'Pick a theme',
@@ -32,16 +34,19 @@ const BODY: FormBody = {
 
 type Invoke = FormsChannel['invoke'];
 
-// Records what the presenter sends and lets the test invoke its handlers as
-// the page would.
-function fakeChannel() {
+// Records what the presenter sends, into `calls` too, and lets the test invoke
+// its handlers as the page would.
+function fakeChannel(calls: string[]) {
   const handlers: Partial<Invoke> = {};
   const sent: [string, unknown][] = [];
   const channel: MainChannel<FormsChannel> = {
     handle: (method, handler) => {
       handlers[method] = handler;
     },
-    send: (message, data) => sent.push([message, data]),
+    send: (message, data) => {
+      sent.push([message, data]);
+      calls.push(`send ${message}`);
+    },
   };
   const invoke = <K extends keyof Invoke>(
     method: K,
@@ -71,6 +76,21 @@ function fakeAlerts() {
   return { alerts, announced, counts };
 }
 
+// Records tab calls into `calls`; the presenter never contributes tools or
+// connects a session.
+function fakeSessions(calls: string[]): SessionsMainExports {
+  return {
+    contributeTools: () => {
+      throw new Error('the presenter contributed tools');
+    },
+    connect: () => {
+      throw new Error('the presenter connected a session');
+    },
+    showTab: (sessionId) => calls.push(`showTab ${sessionId}`),
+    activate: (sessionId) => calls.push(`activate ${sessionId}`),
+  };
+}
+
 function fakeListener() {
   const drafts: FormBody[] = [];
   const finishes: RoundEnd[] = [];
@@ -82,7 +102,8 @@ function fakeListener() {
 }
 
 function setUp() {
-  const page = fakeChannel();
+  const calls: string[] = [];
+  const page = fakeChannel(calls);
   const window = fakeWindow();
   const attention = fakeAlerts();
   const logged: string[] = [];
@@ -91,6 +112,7 @@ function setUp() {
     attention.alerts,
     window.window,
     (source, message) => logged.push(`[${source}] ${message}`),
+    fakeSessions(calls),
   );
   const openRounds = () => page.invoke('openRounds') as PresentedRound[];
   const finish = (roundId: string, end: RoundEnd) =>
@@ -98,6 +120,7 @@ function setUp() {
   const saveDraft = (roundId: string, body: FormBody) =>
     page.invoke('draft', roundId, body);
   return {
+    calls,
     page,
     window,
     attention,
@@ -111,10 +134,11 @@ function setUp() {
 
 describe('createChannelPresenter', () => {
   it('shows a round on the page and announces it without showing the window', () => {
-    const { page, window, attention, logged, presenter } = setUp();
+    const { calls, page, window, attention, logged, presenter } = setUp();
 
     presenter.show(ROUND, fakeListener().listener);
 
+    expect(calls).toEqual(['showTab app-1', 'send roundShown']);
     expect(page.sent).toEqual([['roundShown', ROUND]]);
     expect(attention.announced.map(({ title, body }) => [title, body])).toEqual(
       [['New review round', 'wigley-ai-gui · Pick a theme']],
@@ -127,11 +151,14 @@ describe('createChannelPresenter', () => {
   });
 
   it('brings the window forward on the round when the announcement is clicked', () => {
-    const { page, window, attention, presenter } = setUp();
+    const { calls, page, window, attention, presenter } = setUp();
     presenter.show(ROUND, fakeListener().listener);
 
     attention.announced[0].onClick();
 
+    expect(calls.filter((call) => call.startsWith('activate'))).toEqual([
+      'activate app-1',
+    ]);
     expect(window.shown()).toBe(1);
     expect(page.sent.at(-1)).toEqual(['focusRound', 'round-1']);
   });

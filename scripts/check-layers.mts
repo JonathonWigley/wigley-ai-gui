@@ -46,7 +46,7 @@ const LAYERS: Record<string, LayerRule> = {
   },
   'src/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/plugins/forms': {
-    layers: ['src/contracts', 'src/shared'],
+    layers: ['src/contracts', 'src/shared', 'src/plugins/sessions/contract.ts'],
     packages: [],
   },
   'src/plugins/forms/main': {
@@ -54,21 +54,53 @@ const LAYERS: Record<string, LayerRule> = {
       'src/contracts',
       'src/shared',
       'src/plugins/forms',
-      'src/plugins/forms/main/mcp',
-      'src/plugins/forms/main/relay',
+      'src/plugins/sessions/contract.ts',
     ],
     packages: ['node:'],
   },
-  'src/plugins/forms/main/relay': {
-    layers: ['src/contracts', 'src/plugins/forms'],
+  'src/plugins/forms/page': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/forms',
+      'src/plugins/sessions/contract.ts',
+    ],
+    packages: [],
+  },
+  'src/plugins/sessions': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/sessions/contract.ts'],
+    packages: [],
+  },
+  'src/plugins/sessions/contract.ts': {
+    layers: ['src/contracts'],
+    packages: [],
+  },
+  'src/plugins/sessions/main': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/sessions',
+      'src/plugins/sessions/contract.ts',
+      'src/plugins/sessions/main/relay',
+      'src/plugins/sessions/main/mcp',
+    ],
     packages: ['node:'],
   },
-  'src/plugins/forms/main/mcp': {
-    layers: ['src/contracts', 'src/shared', 'src/plugins/forms'],
+  'src/plugins/sessions/main/relay': {
+    layers: ['src/contracts', 'src/plugins/sessions/contract.ts'],
+    packages: ['node:'],
+  },
+  'src/plugins/sessions/main/mcp': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/sessions/contract.ts'],
     packages: ['@modelcontextprotocol/server', 'node:'],
   },
-  'src/plugins/forms/page': {
-    layers: ['src/contracts', 'src/shared', 'src/plugins/forms'],
+  'src/plugins/sessions/page': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/sessions',
+      'src/plugins/sessions/contract.ts',
+    ],
     packages: [],
   },
   'src/plugins/main.ts': {
@@ -77,12 +109,18 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared',
       'src/plugins/forms',
       'src/plugins/forms/main',
-      'src/plugins/forms/main/mcp',
+      'src/plugins/sessions',
+      'src/plugins/sessions/main',
     ],
     packages: [],
   },
   'src/plugins/manifests.ts': {
-    layers: ['src/contracts', 'src/shared', 'src/plugins/forms'],
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/forms',
+      'src/plugins/sessions',
+    ],
     packages: [],
   },
   'src/plugins/page.ts': {
@@ -91,6 +129,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared',
       'src/plugins/forms',
       'src/plugins/forms/page',
+      'src/plugins/sessions',
+      'src/plugins/sessions/page',
     ],
     packages: [],
   },

@@ -1,6 +1,7 @@
 import type { Alerts } from '../../../contracts/alerts';
 import type { Log } from '../../../contracts/log';
 import type { MainChannel } from '../../../contracts/plugin';
+import type { SessionsMainExports } from '../../sessions/contract';
 import type {
   FormsChannel,
   PresentedRound,
@@ -13,13 +14,14 @@ interface OpenRound {
   listener: RoundListener;
 }
 
-// Shows rounds on the page over the forms channel; registers its channel
-// handlers once, so it lives as long as the app.
+// Shows rounds on the page over the forms channel, each in its session's tab;
+// registers its channel handlers once, so it lives as long as the app.
 export function createChannelPresenter(
   channel: MainChannel<FormsChannel>,
   alerts: Alerts,
   window: { show(): void },
   log: Log,
+  sessions: SessionsMainExports,
 ): RoundPresenter {
   const open = new Map<string, OpenRound>();
   const updateOpenCount = () => alerts.setOpenCount(open.size);
@@ -49,12 +51,14 @@ export function createChannelPresenter(
   return {
     show(round, listener) {
       open.set(round.roundId, { round, listener });
+      sessions.showTab(round.sessionId);
       channel.send('roundShown', round);
       updateOpenCount();
       log('forms', `round shown: ${round.label}`);
       // A notification click is the user's own act, so the window may come
-      // forward.
+      // forward, on the round's tab.
       alerts.announce('New review round', round.label, () => {
+        sessions.activate(round.sessionId);
         window.show();
         channel.send('focusRound', round.roundId);
       });

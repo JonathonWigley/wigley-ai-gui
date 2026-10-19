@@ -10,7 +10,8 @@ import {
 import path from 'node:path';
 import type { Clock, RandomHex } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
-import type { FormBody, SessionInfo } from '../contract';
+import type { FormBody } from '../contract';
+import type { SessionInfo } from '../../sessions/contract';
 import type { FinishedOutcome } from './round';
 
 // retro's backfill reaches back 90 days (scripts/retro/ledger.py STALE_DAYS).

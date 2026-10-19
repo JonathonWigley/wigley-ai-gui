@@ -46,6 +46,7 @@ function presented(
 ): PresentedRound {
   return {
     roundId,
+    sessionId: `session-${roundId}`,
     label: `project · ${roundId}`,
     round: {
       heading: roundId,

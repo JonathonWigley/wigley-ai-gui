@@ -2,12 +2,12 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SessionInfo } from '../../sessions/contract';
 import type {
   AnswerEntry,
   AnswersPayload,
   FormBody,
   FormsSession,
-  SessionInfo,
 } from '../contract';
 import { createFormsService } from './forms-service';
 import { answersPayload, fingerprint, parseRound } from './round';
@@ -89,7 +89,7 @@ function startSession(info: Partial<SessionInfo> = {}): FormsSession {
     presenter,
     store,
     defaultDeadlineSeconds: DEFAULT_DEADLINE_SECONDS,
-  }).startSession({ ...SESSION, ...info });
+  }).startSession({ id: 'app-1', info: { ...SESSION, ...info } });
 }
 
 function live(): AbortSignal {
@@ -192,6 +192,12 @@ describe('askRound', () => {
       round: parseRound(NAMING_ARGS),
       draft: null,
     });
+  });
+
+  it('names its session on the round it shows', () => {
+    void startSession().askRound(NAMING_ARGS, null, live());
+
+    expect(presenter.latest().sessionId).toBe('app-1');
   });
 
   it('labels a round with its heading alone when the session has no project', () => {

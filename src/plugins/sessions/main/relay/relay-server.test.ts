@@ -6,21 +6,16 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  type AnswersPayload,
-  type FormsService,
+  type ConnectedSession,
   RELAY_PROTOCOL,
   type RelayHello,
   type SessionInfo,
 } from '../../contract';
-import { type ServeSession, startRelayServer } from './relay-server';
-
-const PAYLOAD: AnswersPayload = {
-  outcome: 'no_round',
-  summary: 'No round.',
-  next: 'Send the round with ask_round.',
-  answers: [],
-  notices: [],
-};
+import {
+  type RelayServerDeps,
+  type ServeSession,
+  startRelayServer,
+} from './relay-server';
 
 const HELLO: RelayHello = {
   protocol: RELAY_PROTOCOL,
@@ -37,22 +32,20 @@ afterEach(async () => {
   }
 });
 
-function fakeForms() {
+function fakeSessions() {
   const started: SessionInfo[] = [];
   let ended = 0;
-  const forms: FormsService = {
-    startSession: (info) => {
-      started.push(info);
-      return {
-        askRound: async () => PAYLOAD,
-        collectLastRound: async () => PAYLOAD,
-        end: () => {
-          ended++;
-        },
-      };
-    },
+  const connect = (info: SessionInfo): ConnectedSession => {
+    started.push(info);
+    return {
+      session: { id: `app-${started.length}`, info },
+      call: async () => ({ content: [] }),
+      end: () => {
+        ended++;
+      },
+    };
   };
-  return { forms, started, ended: () => ended };
+  return { connect, started, ended: () => ended };
 }
 
 // Echoes every byte back, so a test sees exactly what reached `serve`.
@@ -71,13 +64,17 @@ function echoServe() {
 }
 
 // macOS caps a socket path near 104 bytes, so the folder name stays short.
-function start(serve: ServeSession, forms: FormsService, leftover = false) {
+function start(
+  serve: ServeSession,
+  connect: RelayServerDeps['connect'],
+  leftover = false,
+) {
   const dir = mkdtempSync(path.join(tmpdir(), 'wr-'));
   const channel = path.join(dir, 's.sock');
   if (leftover) {
     writeFileSync(channel, '');
   }
-  const server = startRelayServer({ channel, forms, serve, log: () => {} });
+  const server = startRelayServer({ channel, connect, serve, log: () => {} });
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
   cleanups.push(() => server.close());
   return channel;
@@ -117,8 +114,8 @@ function helloLine(hello: object): string {
 
 describe('startRelayServer', () => {
   it('answers a hello and hands every later byte to serve', async () => {
-    const { forms, started } = fakeForms();
-    const channel = start(echoServe().serve, forms);
+    const { connect, started } = fakeSessions();
+    const channel = start(echoServe().serve, connect);
     const { socket, nextLine } = await open(channel);
 
     socket.write(`${helloLine(HELLO)}first\n`);
@@ -137,8 +134,8 @@ describe('startRelayServer', () => {
   });
 
   it('starts a session with null fields from a hello that has none', async () => {
-    const { forms, started } = fakeForms();
-    const channel = start(echoServe().serve, forms);
+    const { connect, started } = fakeSessions();
+    const channel = start(echoServe().serve, connect);
     const { socket, nextLine } = await open(channel);
 
     socket.write(
@@ -157,8 +154,8 @@ describe('startRelayServer', () => {
   });
 
   it('refuses a hello of another protocol, naming both versions', async () => {
-    const { forms, started } = fakeForms();
-    const channel = start(echoServe().serve, forms);
+    const { connect, started } = fakeSessions();
+    const channel = start(echoServe().serve, connect);
     const { socket, nextLine } = await open(channel);
     const ended = once(socket, 'end');
 
@@ -173,8 +170,8 @@ describe('startRelayServer', () => {
   });
 
   it('answers a hello that arrives in two chunks', async () => {
-    const { forms, started } = fakeForms();
-    const channel = start(echoServe().serve, forms);
+    const { connect, started } = fakeSessions();
+    const channel = start(echoServe().serve, connect);
     const { socket, nextLine } = await open(channel);
     const hello = helloLine(HELLO);
     const half = Math.floor(hello.length / 2);
@@ -191,8 +188,8 @@ describe('startRelayServer', () => {
   });
 
   it('refuses a first line that is not JSON and starts no session', async () => {
-    const { forms, started } = fakeForms();
-    const channel = start(echoServe().serve, forms);
+    const { connect, started } = fakeSessions();
+    const channel = start(echoServe().serve, connect);
     const { socket, nextLine } = await open(channel);
     const ended = once(socket, 'end');
 
@@ -207,9 +204,9 @@ describe('startRelayServer', () => {
   });
 
   it('ends the session and its server when the relay disconnects', async () => {
-    const fake = fakeForms();
+    const fake = fakeSessions();
     const echo = echoServe();
-    const channel = start(echo.serve, fake.forms);
+    const channel = start(echo.serve, fake.connect);
     const { socket, nextLine } = await open(channel);
     socket.write(helloLine(HELLO));
     await nextLine();
@@ -221,7 +218,7 @@ describe('startRelayServer', () => {
   });
 
   it('listens over a socket file a crashed run left behind', async () => {
-    const channel = start(echoServe().serve, fakeForms().forms, true);
+    const channel = start(echoServe().serve, fakeSessions().connect, true);
     const { socket, nextLine } = await open(channel);
 
     socket.write(helloLine(HELLO));

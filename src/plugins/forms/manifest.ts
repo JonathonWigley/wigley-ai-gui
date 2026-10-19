@@ -31,7 +31,7 @@ const helpBinds = (['forms', 'review', 'confirm', 'idle'] as const).map(
 // Forms' scopes are its view names.
 export const formsManifest = definePlugin({
   id: 'forms',
-  dependsOn: [],
+  dependsOn: ['sessions'],
   commands: {
     nextItem: { label: 'next item', group: 'questions', runsIn: 'page' },
     prevItem: { label: 'previous item', group: 'questions', runsIn: 'page' },

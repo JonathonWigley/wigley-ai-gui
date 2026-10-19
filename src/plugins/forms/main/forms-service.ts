@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { AgentSession, SessionInfo } from '../../sessions/contract';
 import type {
   AnswersPayload,
   FormBody,
@@ -7,7 +8,6 @@ import type {
   Round,
   RoundListener,
   RoundPresenter,
-  SessionInfo,
 } from '../contract';
 import {
   answersPayload,
@@ -60,6 +60,8 @@ interface FinishedRound {
 
 // One connected session: at most one open round, and the last finished one.
 interface SessionContext {
+  // The app's id for the session, which every round it shows carries.
+  sessionId: string;
   info: SessionInfo;
   deadlineSeconds: number;
   presenter: RoundPresenter;
@@ -302,6 +304,7 @@ function openNewRound(
   session.presenter.show(
     {
       roundId: record.id,
+      sessionId: session.sessionId,
       label: roundLabel(session.info.projectDir, round.heading),
       round,
       draft,
@@ -599,8 +602,13 @@ async function collectLastRound(
   return handed === null ? noRoundPayload() : finishedPayload(handed);
 }
 
-function startSession(info: SessionInfo, deps: FormsServiceDeps): FormsSession {
+function startSession(
+  agentSession: AgentSession,
+  deps: FormsServiceDeps,
+): FormsSession {
+  const { info } = agentSession;
   const session: SessionContext = {
+    sessionId: agentSession.id,
     info,
     deadlineSeconds: deadlineSeconds(info, deps.defaultDeadlineSeconds),
     presenter: deps.presenter,
@@ -624,5 +632,5 @@ function startSession(info: SessionInfo, deps: FormsServiceDeps): FormsSession {
 // Round logic every round source reaches: validation, re-send, replay,
 // hand-back, pre-fill, the soft deadline and the saved rounds.
 export function createFormsService(deps: FormsServiceDeps): FormsService {
-  return { startSession: (info) => startSession(info, deps) };
+  return { startSession: (session) => startSession(session, deps) };
 }

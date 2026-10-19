@@ -1,6 +1,11 @@
 import type { PageBind } from '../../../contracts/keymap';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
-import type { AnswersPayload, FormsService, FormsSession } from '../contract';
+import type {
+  ConnectedSession,
+  SessionsMainExports,
+  ToolResult,
+} from '../../sessions/contract';
+import type { AnswersPayload } from '../contract';
 import { formsCommand, formsScope } from '../ids';
 
 // Exists only for the self-test, which adds it to the keymap main serves; it
@@ -115,6 +120,13 @@ function fixtureRound(run: number) {
   };
 }
 
+function toolResultProblems(result: ToolResult): string[] {
+  if (result.isError) {
+    return [`tool error: ${result.content[0].text}`];
+  }
+  return payloadProblems(result.structuredContent as unknown as AnswersPayload);
+}
+
 // What the fixture's answers must come back as after STEPS.
 function payloadProblems(payload: AnswersPayload): string[] {
   const [first, second] = payload.answers;
@@ -138,30 +150,31 @@ function payloadProblems(payload: AnswersPayload): string[] {
   return checks.filter(([passed]) => !passed).map(([, problem]) => problem);
 }
 
-// Opens the fixture round through `forms` in a fresh session each run, ending
-// the previous run's session, and checks the answers the round returns.
-export function formsSelfTestScript(forms: FormsService): SelfTestScript {
-  let session: FormsSession | null = null;
+// Opens the fixture round with an ask_round call in a fresh session each run,
+// ending the previous run's session, and checks the answers the call returns.
+export function formsSelfTestScript(
+  sessions: SessionsMainExports,
+): SelfTestScript {
+  let connected: ConnectedSession | null = null;
   return {
     pageBinds: PAGE_BINDS,
     scrollsItself: SCROLLS_ITSELF,
     open(run) {
-      session?.end();
-      session = forms.startSession({
+      connected?.end();
+      connected = sessions.connect({
         sessionId: `selftest-${run}`,
         projectDir: 'selftest',
         deadlineSeconds: 120,
       });
       return {
         shownLine: '[forms] round shown: selftest · Self-test round',
-        result: session.askRound(
-          fixtureRound(run),
-          null,
-          new AbortController().signal,
-        ),
+        result: connected.call('ask_round', fixtureRound(run), {
+          toolUseId: null,
+          signal: new AbortController().signal,
+        }),
       };
     },
     steps: STEPS,
-    problems: (result) => payloadProblems(result as AnswersPayload),
+    problems: (result) => toolResultProblems(result as ToolResult),
   };
 }
