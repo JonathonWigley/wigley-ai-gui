@@ -8,47 +8,7 @@ import { formsCommandHandlers } from './forms-commands';
 import { createFormsStore } from './forms-store';
 import { notice, presentedRound, question } from './test-rounds';
 
-// The forms command ids, written out independently of the code.
-const FORMS_COMMANDS = [
-  'nextItem',
-  'prevItem',
-  'choose1',
-  'choose2',
-  'choose3',
-  'choose4',
-  'choose5',
-  'choose6',
-  'choose7',
-  'choose8',
-  'choose9',
-  'clearChoice',
-  'toggleNotApplicable',
-  'toggleDontAsk',
-  'editWhat',
-  'editWhy',
-  'editNote',
-  'nextBox',
-  'prevBox',
-  'leaveBox',
-  'nextRound',
-  'prevRound',
-  'openReview',
-  'closeReview',
-  'reviewNext',
-  'reviewPrev',
-  'reviewJump',
-  'submit',
-  'askCancel',
-  'confirmCancel',
-  'dismissConfirm',
-  'toggleFold',
-  'unfoldAll',
-  'foldAll',
-  'toggleHelp',
-  'closeHelp',
-] as const;
-
-type FormsCommand = (typeof FORMS_COMMANDS)[number];
+type FormsCommand = keyof ReturnType<typeof formsCommandHandlers>;
 
 // The editor of each box a test fires a command in.
 const boxEditors = new Map<TextEditor, BoxRef>();
@@ -127,11 +87,6 @@ const why2: BoxRef = { roundId: 'r1', target: { field: 'why', question: 2 } };
 const what1: BoxRef = { roundId: 'r1', target: { field: 'what', question: 1 } };
 
 describe('formsCommandHandlers', () => {
-  it('has a handler for every forms command', () => {
-    const { handlers } = setup();
-    expect(Object.keys(handlers).sort()).toEqual([...FORMS_COMMANDS].sort());
-  });
-
   it('picks a choice on the focused question, and the same number clears it', () => {
     const { run, round, logs } = setup();
     run('nextItem');

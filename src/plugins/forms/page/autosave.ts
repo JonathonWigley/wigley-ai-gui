@@ -1,6 +1,6 @@
 import type { Timers } from '../../../contracts/ambient';
-import type { FormBody } from '../contract';
 import type { Log } from '../../../contracts/log';
+import type { FormBody } from '../contract';
 import { buildBody, saveState } from './form-state';
 import type { FormsStore } from './forms-store';
 

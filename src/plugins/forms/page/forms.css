@@ -591,10 +591,10 @@
   background: var(--wg-bg-deep);
   border-top: 1px solid var(--wg-border);
   display: flex;
+  flex: 1 1 0;
   flex-wrap: wrap;
   font-family: var(--wg-font-mono);
   font-size: var(--wg-font-mono-size);
-  flex: 1 1 0;
   gap: 0.2rem 1rem;
   min-width: 0;
   padding: 0.2rem 0.75rem;

@@ -28,6 +28,7 @@ const LAYERS: Record<string, LayerRule> = {
   },
   'src/main/themes': { layers: ['src/contracts'], packages: ['node:'] },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
+  'src/main/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/main/main.ts': {
     layers: [
       'src/contracts',
@@ -53,7 +54,12 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared',
       'src/plugins/forms',
       'src/plugins/forms/main/mcp',
+      'src/plugins/forms/main/relay',
     ],
+    packages: ['node:'],
+  },
+  'src/plugins/forms/main/relay': {
+    layers: ['src/contracts', 'src/plugins/forms'],
     packages: ['node:'],
   },
   'src/plugins/forms/main/mcp': {

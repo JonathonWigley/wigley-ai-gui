@@ -162,6 +162,8 @@ export interface SelfTestScript {
   problems(result: unknown): string[];
 }
 
+// A part calls `run` once, during its `start`: the script's page binds join
+// the config then, and a self-test with no script never finishes.
 export interface SelfTestHost {
   run(script: SelfTestScript): void;
 }
@@ -187,7 +189,7 @@ export interface MainApi<M extends PluginManifest, Ch extends ChannelShape> {
 }
 
 // `exports` reaches the plugins that depend on this one; `dispose` runs when
-// the app quits.
+// the app quits, which may exit before a returned promise settles.
 export interface MainStart<M extends PluginManifest> {
   commands: Record<CommandsRunIn<M, 'main'>, (chord: string) => void>;
   exports?: unknown;

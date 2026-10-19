@@ -41,17 +41,17 @@ export interface FormsViewDeps {
 // re-renders it; editors live in the round views and survive every render.
 export function mountFormsView(deps: FormsViewDeps) {
   const { areas, store, boxes } = deps;
-  const view = element('div', 'forms-view');
+  const root = element('div', 'forms-view');
   const switcher = element('nav', 'switcher');
   switcher.setAttribute('aria-label', 'Open rounds');
   const workspace = element('main', 'workspace');
   const idle = buildIdle();
   workspace.append(idle);
-  view.append(switcher, workspace);
+  root.append(switcher, workspace);
   const status = buildStatusLine(deps);
   const help = buildHelp(deps);
   const confirm = buildConfirm(deps.run);
-  areas.main.contribute(view);
+  areas.main.contribute(root);
   areas.statusBar.contribute(status.element);
   areas.overlay.contribute(confirm);
   areas.overlay.contribute(help);

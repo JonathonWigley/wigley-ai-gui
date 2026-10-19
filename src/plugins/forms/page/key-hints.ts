@@ -6,6 +6,7 @@ import type {
   PageBind,
   ViewScope,
 } from '../../../contracts/keymap';
+import type { formsManifest } from '../manifest';
 
 export interface KeyHint {
   keys: string;
@@ -31,8 +32,11 @@ const KEY_NAMES: Partial<Record<string, string>> = {
   Escape: 'Esc',
 };
 
-// By qualified scope, in help-overlay order.
-const SCOPE_TITLES: Record<ViewScope, string> = {
+type FormsScope = `forms.${(typeof formsManifest.scopes)[number]}`;
+
+// By qualified scope, in help-overlay order; every forms scope needs a title,
+// or its binds drop out of the help overlay.
+const SCOPE_TITLES: Record<FormsScope | 'any', string> = {
   'forms.forms': 'In the form',
   'forms.review': 'In the review',
   'forms.confirm': 'In the cancel confirmation',
@@ -81,7 +85,7 @@ export function helpSections(
   keymap: Keymap,
   label: CommandLabel,
 ): HelpSection[] {
-  const scopes = Object.keys(SCOPE_TITLES) as ViewScope[];
+  const scopes = Object.keys(SCOPE_TITLES) as (FormsScope | 'any')[];
   const sections: HelpSection[] = [
     ...scopes.map((scope) => ({
       title: SCOPE_TITLES[scope],
