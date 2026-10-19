@@ -1,11 +1,9 @@
 import { element, markdownElement } from '../../../../../shared/page/dom';
-import { itemAnswer } from '../../form-state';
 import {
-  buildAnswerControls,
-  buildChoiceList,
+  buildAnswerableCard,
   buildItemHead,
   buildSection,
-  showAnswer,
+  labelFor,
 } from '../card-parts';
 import type { AnswerableFormat } from '../item-format';
 
@@ -21,24 +19,21 @@ export const questionFormat: AnswerableFormat = {
     parent.append(article);
     const statusChip = buildItemHead(
       article,
-      `${questionFormat.railPrefix}${index}`,
+      labelFor(questionFormat.railPrefix, index),
       question.title,
     );
     buildSection(article, 'Context', question.context, deps.markdown);
     article.append(
       markdownElement('div', 'ask md', deps.markdown.block(question.question)),
     );
-    const choiceList = element('ol', 'choices');
-    article.append(choiceList);
-    const choices = buildChoiceList(
-      choiceList,
-      question.choices,
-      question.recommend,
-      (choice) => {
-        deps.dispatch({ type: 'focusItem', item: position });
-        deps.dispatch({ type: 'choose', choice });
-      },
-      deps.markdown,
+    const { card, choices } = buildAnswerableCard(
+      article,
+      statusChip,
+      questionFormat,
+      round,
+      item,
+      position,
+      deps,
     );
     if (question.rationale.trim() !== '') {
       const rationale = element('div', 'rationale');
@@ -48,15 +43,6 @@ export const questionFormat: AnswerableFormat = {
       );
       choices[question.recommend - 1].append(rationale);
     }
-    const controls = buildAnswerControls(article, round, item, position, deps);
-    const parts = { card: article, statusChip, choiceList, choices };
-    return {
-      element: article,
-      update(current) {
-        const answer = itemAnswer(current, item);
-        showAnswer(parts, answer);
-        controls.update(answer);
-      },
-    };
+    return card;
   },
 };

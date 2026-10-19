@@ -1,4 +1,5 @@
 import type { RailItem } from '../form-state';
+import { labelFor } from './card-parts';
 import { findingFormat } from './finding/finding-card';
 import type { PageFormats } from './item-format';
 import { noticeFormat } from './notice/notice-card';
@@ -13,5 +14,5 @@ export const FORMATS: PageFormats = {
 
 // The item's number as the rail, its card head and the review show it.
 export function itemLabel(item: RailItem): string {
-  return `${FORMATS[item.kind].railPrefix}${item.index}`;
+  return labelFor(FORMATS[item.kind].railPrefix, item.index);
 }

@@ -1,11 +1,9 @@
 import { element, markdownElement } from '../../../../../shared/page/dom';
-import { itemAnswer } from '../../form-state';
 import {
-  buildAnswerControls,
-  buildChoiceList,
+  buildAnswerableCard,
   buildItemHead,
   buildSection,
-  showAnswer,
+  labelFor,
 } from '../card-parts';
 import type { AnswerableFormat } from '../item-format';
 
@@ -22,22 +20,19 @@ export const findingFormat: AnswerableFormat = {
     parent.append(article);
     const statusChip = buildItemHead(
       article,
-      `${findingFormat.railPrefix}${index}`,
+      labelFor(findingFormat.railPrefix, index),
       finding.title,
     );
     buildSection(article, 'Finding', finding.finding, deps.markdown);
     buildSection(article, 'Proof', finding.proof, deps.markdown);
-    const choiceList = element('ol', 'choices');
-    article.append(choiceList);
-    const choices = buildChoiceList(
-      choiceList,
-      finding.choices.map((choice) => choice.text),
-      finding.recommend,
-      (choice) => {
-        deps.dispatch({ type: 'focusItem', item: position });
-        deps.dispatch({ type: 'choose', choice });
-      },
-      deps.markdown,
+    const { card, choices } = buildAnswerableCard(
+      article,
+      statusChip,
+      findingFormat,
+      round,
+      item,
+      position,
+      deps,
     );
     finding.choices.forEach((choice, i) =>
       choices[i].append(
@@ -48,15 +43,6 @@ export const findingFormat: AnswerableFormat = {
         ),
       ),
     );
-    const controls = buildAnswerControls(article, round, item, position, deps);
-    const parts = { card: article, statusChip, choiceList, choices };
-    return {
-      element: article,
-      update(current) {
-        const answer = itemAnswer(current, item);
-        showAnswer(parts, answer);
-        controls.update(answer);
-      },
-    };
+    return card;
   },
 };

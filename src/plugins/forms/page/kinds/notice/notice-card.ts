@@ -1,5 +1,10 @@
 import { element } from '../../../../../shared/page/dom';
-import { buildField, buildItemHead, buildSection } from '../card-parts';
+import {
+  buildField,
+  buildItemHead,
+  buildSection,
+  labelFor,
+} from '../card-parts';
 import type { ItemFormat } from '../item-format';
 
 export const noticeFormat: ItemFormat = {
@@ -11,7 +16,7 @@ export const noticeFormat: ItemFormat = {
     parent.append(article);
     const badge = buildItemHead(
       article,
-      `${noticeFormat.railPrefix}${index}`,
+      labelFor(noticeFormat.railPrefix, index),
       notice.title,
     );
     badge.className = 'badge badge-notice';

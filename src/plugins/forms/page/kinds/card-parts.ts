@@ -8,7 +8,7 @@ import {
   itemAnswer,
   type RoundState,
 } from '../form-state';
-import type { CardDeps } from './item-format';
+import type { AnswerableFormat, CardDeps, ItemCard } from './item-format';
 
 export interface Field {
   element: HTMLElement;
@@ -16,7 +16,7 @@ export interface Field {
 }
 
 // The parts of an answerable card its answer changes.
-export interface AnswerParts {
+interface AnswerParts {
   card: HTMLElement;
   statusChip: HTMLElement;
   choiceList: HTMLElement;
@@ -31,6 +31,11 @@ const STATUS_LABELS: Record<AnswerStatus, string> = {
 
 export function statusLabel(status: AnswerStatus): string {
   return STATUS_LABELS[status];
+}
+
+// An item's number: its kind's rail prefix and its 1-based index.
+export function labelFor(railPrefix: string, index: number): string {
+  return `${railPrefix}${index}`;
 }
 
 // The item's label and title; returns the status slot after the title.
@@ -88,7 +93,7 @@ export function buildField(
 
 // Appends one choice per text to `list`, each inline markdown, the
 // recommended one badged; `pick` gets the clicked choice, 1-based.
-export function buildChoiceList(
+function buildChoiceList(
   list: HTMLElement,
   texts: string[],
   recommend: number,
@@ -118,7 +123,7 @@ export function buildChoiceList(
 // The Notes box, the Not applicable and Don't ask toggles and the reason box,
 // for `item` at rail `position`; `update` shows an answer's toggles and hides
 // the reason box while Don't ask is off.
-export function buildAnswerControls(
+function buildAnswerControls(
   parent: HTMLElement,
   round: RoundState,
   item: AnswerableItem,
@@ -167,7 +172,7 @@ export function buildAnswerControls(
 
 // Shows an answer's status on the card and its chip, its choice selected,
 // and the choices locked while not applicable.
-export function showAnswer(parts: AnswerParts, answer: ItemAnswer) {
+function showAnswer(parts: AnswerParts, answer: ItemAnswer) {
   const status = answerStatus(answer);
   parts.card.dataset.status = status;
   parts.statusChip.textContent =
@@ -176,4 +181,42 @@ export function showAnswer(parts: AnswerParts, answer: ItemAnswer) {
     entry.classList.toggle('is-selected', answer.choice === i + 1),
   );
   parts.choiceList.classList.toggle('is-locked', answer.notApplicable);
+}
+
+// The choice list and answer controls under an answerable card's sections,
+// and the card's update; `choices` takes a kind's extras.
+export function buildAnswerableCard(
+  article: HTMLElement,
+  statusChip: HTMLElement,
+  format: AnswerableFormat,
+  round: RoundState,
+  item: AnswerableItem,
+  position: number,
+  deps: CardDeps,
+): { card: ItemCard; choices: HTMLLIElement[] } {
+  const choiceList = element('ol', 'choices');
+  article.append(choiceList);
+  const choices = buildChoiceList(
+    choiceList,
+    format.choiceTexts(round.round, item.index),
+    format.recommend(round.round, item.index),
+    (choice) => {
+      deps.dispatch({ type: 'focusItem', item: position });
+      deps.dispatch({ type: 'choose', choice });
+    },
+    deps.markdown,
+  );
+  const controls = buildAnswerControls(article, round, item, position, deps);
+  const parts = { card: article, statusChip, choiceList, choices };
+  return {
+    card: {
+      element: article,
+      update(current) {
+        const answer = itemAnswer(current, item);
+        showAnswer(parts, answer);
+        controls.update(answer);
+      },
+    },
+    choices,
+  };
 }
