@@ -88,12 +88,6 @@ const EXPECTED_PAGE: PageBind[] = [
     scope: 'forms.confirm',
     command: 'forms.dismissConfirm',
   },
-  { keys: ['?'], scope: 'forms.forms', command: 'forms.toggleHelp' },
-  { keys: ['?'], scope: 'forms.review', command: 'forms.toggleHelp' },
-  { keys: ['?'], scope: 'forms.confirm', command: 'forms.toggleHelp' },
-  { keys: ['?'], scope: 'forms.idle', command: 'forms.toggleHelp' },
-  { keys: ['?'], scope: 'forms.help', command: 'forms.closeHelp' },
-  { keys: ['Escape'], scope: 'forms.help', command: 'forms.closeHelp' },
 ];
 
 describe('formsManifest', () => {

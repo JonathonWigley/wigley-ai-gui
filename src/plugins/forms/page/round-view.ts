@@ -28,8 +28,7 @@ export interface RoundViewDeps {
 
 export interface RoundView {
   element: HTMLElement;
-  // `view` is the view under any help overlay.
-  update(round: RoundState, view: FormsView, isHelpOpen: boolean): void;
+  update(round: RoundState, view: FormsView): void;
 }
 
 // One open round's DOM, built once with its editors: the rail, every item's
@@ -55,16 +54,10 @@ export function createRoundView(
   const itemsPane = element('div', 'items');
   main.append(itemsPane);
   let shownView: FormsView = 'forms';
-  let isHelpShown = false;
   const reviewRowAt = reviewRowsByRailPosition(round);
   const railEntries = items.map((item, position) =>
     buildRailEntry(railList, round, item, () => {
-      const action = railPickAction(
-        shownView,
-        isHelpShown,
-        position,
-        reviewRowAt[position],
-      );
+      const action = railPickAction(shownView, position, reviewRowAt[position]);
       if (action !== null) {
         deps.dispatch(action);
       }
@@ -91,9 +84,8 @@ export function createRoundView(
   let shownFocus = -1;
   return {
     element: root,
-    update(current, view, isHelpOpen) {
+    update(current, view) {
       shownView = view;
-      isHelpShown = isHelpOpen;
       const isForms = view === 'forms';
       const isReview = view === 'review' || view === 'confirm';
       head.element.hidden = !isReview;
@@ -101,12 +93,7 @@ export function createRoundView(
       railEntries.forEach((entry, position) => {
         const item = items[position];
         updateRailEntry(entry, current, item, position, isReview);
-        const action = railPickAction(
-          view,
-          isHelpOpen,
-          position,
-          reviewRowAt[position],
-        );
+        const action = railPickAction(view, position, reviewRowAt[position]);
         entry.pick.disabled = action === null;
       });
       itemsPane.hidden = !isForms;
@@ -170,16 +157,12 @@ function reviewRowsByRailPosition(round: RoundState): (number | undefined)[] {
 
 // What clicking a rail item does: focus it in the forms view, jump to its
 // row's item in the review, as Enter on the row does; null where the rail is
-// inert, at a notice in the review and under the confirm and help overlays.
+// inert, at a notice in the review and under the confirm overlay.
 function railPickAction(
   view: FormsView,
-  isHelpOpen: boolean,
   position: number,
   reviewRow: number | undefined,
 ): FormsAction | null {
-  if (isHelpOpen) {
-    return null;
-  }
   if (view === 'forms') {
     return { type: 'focusItem', item: position };
   }

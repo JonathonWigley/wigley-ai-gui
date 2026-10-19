@@ -99,8 +99,6 @@ export function formsCommandHandlers(
     reviewJump: plain({ type: 'reviewJump' }),
     askCancel: plain({ type: 'askCancel' }),
     dismissConfirm: plain({ type: 'dismissConfirm' }),
-    toggleHelp: plain({ type: 'toggleHelp' }),
-    closeHelp: plain({ type: 'closeHelp' }),
     // A tenth choice is picked by mouse.
     choose1: choose(1),
     choose2: choose(2),

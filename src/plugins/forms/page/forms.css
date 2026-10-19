@@ -528,46 +528,16 @@
   overflow-wrap: anywhere;
 }
 
-.review-actions,
-.dialog-actions {
+.review-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 1rem;
 }
 
-/* Buttons */
-.button {
-  background: var(--wg-surface);
-  border: 1px solid var(--wg-border);
-  border-radius: 0.4rem;
-  cursor: pointer;
-  padding: 0.35rem 1rem;
-}
-
-.button:hover {
-  background: var(--wg-surface-hover);
-}
-
-.button-primary {
-  background: var(--wg-accent);
-  border-color: var(--wg-accent);
-  color: var(--wg-text-onAccent);
-}
-
-.button-primary:hover {
-  background: var(--wg-accent);
-  opacity: 0.9;
-}
-
-.button-danger {
-  border-color: var(--wg-error);
-  color: var(--wg-error);
-}
-
 /* Status line: it fills the status bar's row, beside a core item when both
-   fit and on a row of its own when not, and its parts and key hints wrap onto
-   more lines when narrow. */
+   fit and on a row of its own when not, and its parts wrap onto more lines
+   when narrow. */
 .status-line {
   align-items: center;
   background: var(--wg-bg-deep);
@@ -596,77 +566,6 @@
 
 .status-save[data-state='unsaved'] {
   color: var(--wg-warning);
-}
-
-.status-keys {
-  color: var(--wg-text-muted);
-  column-gap: 0.9rem;
-  display: flex;
-  flex: 1 1 12rem;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.status-help {
-  background: transparent;
-  border: 1px solid var(--wg-border);
-  border-radius: 0.25rem;
-  cursor: pointer;
-  padding: 0 0.5rem;
-}
-
-/* Overlays */
-.overlay {
-  background: color-mix(in srgb, var(--wg-bg-deep) 75%, transparent);
-  display: grid;
-  inset: 0;
-  place-items: center;
-  position: fixed;
-  z-index: 10;
-}
-
-.dialog {
-  background: var(--wg-bg-pane);
-  border: 1px solid var(--wg-border);
-  border-radius: 0.75rem;
-  max-height: calc(100vh - 4rem);
-  max-width: min(56rem, calc(100vw - 2rem));
-  overflow: auto;
-  padding: 1.25rem 1.5rem;
-}
-
-.dialog-title {
-  font-size: 1.1rem;
-  margin-bottom: 0.75rem;
-}
-
-.dialog-text {
-  color: var(--wg-text-muted);
-}
-
-.help-sections {
-  display: grid;
-  gap: 1rem 1.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
-  margin-bottom: 1rem;
-}
-
-.help-title {
-  color: var(--wg-text-muted);
-  font-size: 0.85rem;
-  margin-bottom: 0.35rem;
-}
-
-.help-list {
-  column-gap: 0.75rem;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  margin: 0;
-  row-gap: 0.2rem;
-}
-
-.help-list dd {
-  margin: 0;
 }
 
 /* Markdown (class names from markdown-it-renderer.ts) */

@@ -77,8 +77,7 @@ describe('shownBoxes', () => {
     expect(shownBoxes(stateAfter({ type: 'openReview' }))).toEqual([note]);
   });
 
-  it('shows no box under help, or with no round open', () => {
-    expect(shownBoxes(stateAfter({ type: 'toggleHelp' }))).toEqual([]);
+  it('shows no box with no round open', () => {
     expect(shownBoxes(initialState([], null))).toEqual([]);
   });
 });

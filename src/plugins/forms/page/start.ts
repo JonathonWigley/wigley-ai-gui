@@ -1,3 +1,4 @@
+import '../../../shared/page/dialog.css';
 import './forms.css';
 import type {
   PageApi,
@@ -106,8 +107,6 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       store,
       boxes,
       markdown: services.markdown,
-      keymap: api.keys.keymap,
-      label: api.keys.label,
       run: (command) => api.commands.run(command),
     });
     store.subscribe(() => api.keys.setScope(store.get().view));

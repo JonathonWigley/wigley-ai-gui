@@ -12,7 +12,6 @@ import {
   activeRound,
   answerStatus,
   apply,
-  baseView,
   buildBody,
   focusedItem,
   initialState,
@@ -771,16 +770,6 @@ describe('sessionActivated', () => {
     expect(state.view).toBe('idle');
   });
 
-  it('keeps help open, returning to the new view', () => {
-    const state = run(
-      two,
-      { type: 'toggleHelp' },
-      { type: 'sessionActivated', sessionId: 'other' },
-    );
-    expect(state.view).toBe('help');
-    expect(state.helpReturnView).toBe('idle');
-  });
-
   it('dismisses a pending cancel prompt', () => {
     const state = run(
       two,
@@ -833,12 +822,6 @@ describe('askClose', () => {
     expect(apply(asked, { type: 'dismissConfirm' }).view).toBe('review');
   });
 
-  it('closes help into the prompt, keeping returning to the form', () => {
-    const asked = run(two, { type: 'toggleHelp' }, askClose);
-    expect(asked.view).toBe('confirm');
-    expect(apply(asked, { type: 'dismissConfirm' }).view).toBe('forms');
-  });
-
   it('does nothing for another session', () => {
     expect(apply(two, { type: 'askClose', sessionId: 'r2-session' })).toBe(two);
   });
@@ -846,20 +829,6 @@ describe('askClose', () => {
   it('does nothing while the prompt is open', () => {
     const asked = apply(two, askClose);
     expect(apply(asked, askClose)).toBe(asked);
-  });
-});
-
-describe('baseView', () => {
-  it('is the view help returns to while help is open', () => {
-    expect(
-      baseView(
-        run(mixedRound(), { type: 'openReview' }, { type: 'toggleHelp' }),
-      ),
-    ).toBe('review');
-  });
-
-  it('is the view itself otherwise', () => {
-    expect(baseView(mixedRound())).toBe('forms');
   });
 });
 
@@ -979,39 +948,6 @@ describe('cancel', () => {
     const state = apply(two, { type: 'openReview' });
     expect(apply(state, { type: 'confirmCancel' })).toBe(state);
   });
-
-  it('help over the confirmation returns to the confirmation', () => {
-    const state = run(
-      two,
-      { type: 'openReview' },
-      { type: 'askCancel' },
-      { type: 'toggleHelp' },
-      { type: 'closeHelp' },
-    );
-    expect(state.view).toBe('confirm');
-    expect(apply(state, { type: 'dismissConfirm' }).view).toBe('review');
-  });
-});
-
-describe('help', () => {
-  it('returns to the view help was opened over', () => {
-    const review = apply(mixedRound(), { type: 'openReview' });
-    const help = apply(review, { type: 'toggleHelp' });
-    expect(help.view).toBe('help');
-    expect(apply(help, { type: 'toggleHelp' }).view).toBe('review');
-    expect(apply(help, { type: 'closeHelp' }).view).toBe('review');
-  });
-
-  it('closeHelp does nothing outside help', () => {
-    const state = mixedRound();
-    expect(apply(state, { type: 'closeHelp' })).toBe(state);
-  });
-
-  it('opens from the idle view', () => {
-    const state = apply(initialState([], null), { type: 'toggleHelp' });
-    expect(state.view).toBe('help');
-    expect(apply(state, { type: 'closeHelp' }).view).toBe('idle');
-  });
 });
 
 describe('roundShown', () => {
@@ -1054,17 +990,6 @@ describe('roundShown', () => {
     });
     expect(state).toBe(chosen);
   });
-
-  it('a round shown under help over the idle view makes help return to it', () => {
-    const state = run(
-      initialState([], 'r1-session'),
-      { type: 'toggleHelp' },
-      { type: 'roundShown', round: presented('r1') },
-    );
-    expect(state.view).toBe('help');
-    expect(state.activeRoundId).toBe('r1');
-    expect(apply(state, { type: 'closeHelp' }).view).toBe('forms');
-  });
 });
 
 describe('roundClosed', () => {
@@ -1090,16 +1015,6 @@ describe('roundClosed', () => {
     expect(state.activeRoundId).toBe('r1');
     expect(state.view).toBe('review');
     expect(state.rounds.map((round) => round.roundId)).toEqual(['r1', 'r3']);
-  });
-
-  it('closing the active round under help keeps help open over idle', () => {
-    const state = run(
-      three,
-      { type: 'toggleHelp' },
-      { type: 'roundClosed', roundId: 'r1' },
-    );
-    expect(state.view).toBe('help');
-    expect(state.helpReturnView).toBe('idle');
   });
 
   it('closing a round that is not open does nothing', () => {
@@ -1247,26 +1162,11 @@ describe('item actions outside the forms view', () => {
     { type: 'focusItem', item: 1 },
     { type: 'openReview' },
   );
-  const helpOverForms = run(
-    mixedRound(),
-    { type: 'focusItem', item: 1 },
-    { type: 'toggleHelp' },
-  );
 
   it('leave the review state as it is', () => {
     expect(apply(inReview, { type: 'choose', choice: 1 })).toBe(inReview);
     expect(apply(inReview, { type: 'toggleNotApplicable' })).toBe(inReview);
     expect(apply(inReview, { type: 'nextItem' })).toBe(inReview);
-  });
-
-  it('leave the state as it is while help is open over forms', () => {
-    expect(apply(helpOverForms, { type: 'choose', choice: 1 })).toBe(
-      helpOverForms,
-    );
-    expect(apply(helpOverForms, { type: 'toggleNotApplicable' })).toBe(
-      helpOverForms,
-    );
-    expect(apply(helpOverForms, { type: 'nextItem' })).toBe(helpOverForms);
   });
 
   it('still update the round note text in the review', () => {
@@ -1442,7 +1342,6 @@ describe('saveState', () => {
       mixedRound(),
       { type: 'nextItem' },
       { type: 'openReview' },
-      { type: 'toggleHelp' },
     );
     expect(saveState(active(state))).toBe('saved');
   });

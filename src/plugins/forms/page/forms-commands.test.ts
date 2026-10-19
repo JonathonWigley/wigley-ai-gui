@@ -477,14 +477,4 @@ describe('formsCommandHandlers', () => {
     ]);
     expect(closedTabs).toEqual([{ sessionId: 'r1-session', roundCount: 0 }]);
   });
-
-  it('toggles help over the current view', () => {
-    const { run, store } = setup();
-
-    run('toggleHelp');
-    expect(store.get().view).toBe('help');
-    run('closeHelp');
-
-    expect(store.get().view).toBe('forms');
-  });
 });

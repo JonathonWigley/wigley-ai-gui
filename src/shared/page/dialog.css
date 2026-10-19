@@ -1,0 +1,64 @@
+/* Overlays */
+.overlay {
+  background: color-mix(in srgb, var(--wg-bg-deep) 75%, transparent);
+  display: grid;
+  inset: 0;
+  place-items: center;
+  position: fixed;
+  z-index: 10;
+}
+
+.dialog {
+  background: var(--wg-bg-pane);
+  border: 1px solid var(--wg-border);
+  border-radius: 0.75rem;
+  max-height: calc(100vh - 4rem);
+  max-width: min(56rem, calc(100vw - 2rem));
+  overflow: auto;
+  padding: 1.25rem 1.5rem;
+}
+
+.dialog-title {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+}
+
+.dialog-text {
+  color: var(--wg-text-muted);
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+/* Buttons */
+.button {
+  background: var(--wg-surface);
+  border: 1px solid var(--wg-border);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  padding: 0.35rem 1rem;
+}
+
+.button:hover {
+  background: var(--wg-surface-hover);
+}
+
+.button-primary {
+  background: var(--wg-accent);
+  border-color: var(--wg-accent);
+  color: var(--wg-text-onAccent);
+}
+
+.button-primary:hover {
+  background: var(--wg-accent);
+  opacity: 0.9;
+}
+
+.button-danger {
+  border-color: var(--wg-error);
+  color: var(--wg-error);
+}

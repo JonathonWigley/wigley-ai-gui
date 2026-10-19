@@ -52,12 +52,7 @@ const editorJumpBinds = DIGITS.map((digit) => ({
   command: `jumpTo${digit}` as const,
 }));
 
-// `?` opens help from every view; inside help it closes help instead.
-const helpBinds = (['forms', 'review', 'confirm', 'idle'] as const).map(
-  (scope) => ({ keys: ['?'], scope, command: 'toggleHelp' as const }),
-);
-
-// Forms' scopes are its view names, each titled for help.
+// Forms' scopes are its view names, each titled for the key help.
 export const formsManifest = definePlugin({
   id: 'forms',
   dependsOn: ['sessions'],
@@ -124,14 +119,11 @@ export const formsManifest = definePlugin({
       group: 'confirm',
       runsIn: 'page',
     },
-    toggleHelp: { label: 'help', group: 'help', runsIn: 'page' },
-    closeHelp: { label: 'close help', group: 'help', runsIn: 'page' },
   },
   scopes: {
     forms: 'In the form',
     review: 'In the review',
     confirm: 'In the cancel confirmation',
-    help: 'In help',
     idle: 'With no round open',
   },
   keys: {
@@ -178,9 +170,6 @@ export const formsManifest = definePlugin({
       { keys: ['y'], scope: 'confirm', command: 'confirmCancel' },
       { keys: ['n'], scope: 'confirm', command: 'dismissConfirm' },
       { keys: ['Escape'], scope: 'confirm', command: 'dismissConfirm' },
-      ...helpBinds,
-      { keys: ['?'], scope: 'help', command: 'closeHelp' },
-      { keys: ['Escape'], scope: 'help', command: 'closeHelp' },
     ],
     app: [],
     global: [],
