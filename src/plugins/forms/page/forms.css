@@ -267,7 +267,8 @@
   pointer-events: none;
 }
 
-.rationale {
+.rationale,
+.choice-reason {
   color: var(--wg-text-muted);
   margin: 0.25rem 0 0 2.85rem;
 }
@@ -365,7 +366,7 @@
   min-height: 2.6em;
 }
 
-.field-note {
+.review .field-note {
   border-top: 1px solid var(--wg-border);
   margin-top: 1.5rem;
   padding-top: 1rem;

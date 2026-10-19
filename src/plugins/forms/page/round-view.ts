@@ -4,20 +4,21 @@ import { formsCommand } from '../ids';
 import { button, element, markdownElement } from '../../../shared/page/dom';
 import type { EditorBoxes } from './editor-boxes';
 import {
+  answerableItems,
+  answerStatus,
   type FormsAction,
   type FormsView,
+  itemAnswer,
   progress,
-  questionStatus,
   type RailItem,
   railItems,
+  railPosition,
   type RoundState,
 } from './form-state';
-import {
-  progressText,
-  type ReviewRow,
-  reviewRows,
-  statusLabel,
-} from './view-model';
+import { buildField, statusLabel } from './kinds/card-parts';
+import { FORMATS, itemLabel } from './kinds/formats';
+import type { CardDeps } from './kinds/item-format';
+import { progressText, type ReviewRow, reviewRows } from './view-model';
 
 export interface RoundViewDeps {
   markdown: MarkdownRenderer;
@@ -32,18 +33,8 @@ export interface RoundView {
   update(round: RoundState, view: FormsView, isHelpOpen: boolean): void;
 }
 
-interface ItemView {
-  element: HTMLElement;
-  update(round: RoundState): void;
-}
-
-interface Field {
-  element: HTMLElement;
-  box: HTMLElement;
-}
-
 // One open round's DOM, built once with its editors: the rail, every item's
-// pane, the review and the round note. A render only updates it. `attach`
+// card, and the review with the round note. A render only updates it. `attach`
 // places the root in the page once, before any editor mounts.
 export function createRoundView(
   attach: (root: HTMLElement) => void,
@@ -66,31 +57,37 @@ export function createRoundView(
   main.append(itemsPane);
   let shownView: FormsView = 'forms';
   let isHelpShown = false;
+  const reviewRowAt = reviewRowsByRailPosition(round);
   const railEntries = items.map((item, position) =>
     buildRailEntry(railList, round, item, () => {
-      const action = railPickAction(shownView, isHelpShown, item, position);
+      const action = railPickAction(
+        shownView,
+        isHelpShown,
+        position,
+        reviewRowAt[position],
+      );
       if (action !== null) {
         deps.dispatch(action);
       }
     }),
   );
-  const itemViews = items.map((item, position) =>
-    item.kind === 'notice'
-      ? buildNotice(itemsPane, round, item.index, deps)
-      : buildQuestion(itemsPane, round, item.index, position, deps),
+  const cardDeps: CardDeps = {
+    markdown: deps.markdown,
+    mountBox: (parent, target, text) =>
+      deps.boxes.mount(parent, { roundId: round.roundId, target }, text),
+    dispatch: deps.dispatch,
+    toggleDontAsk: () => deps.run(formsCommand('toggleDontAsk')),
+  };
+  const itemCards = items.map((item, position) =>
+    FORMATS[item.kind].buildCard(
+      itemsPane,
+      round,
+      item.index,
+      position,
+      cardDeps,
+    ),
   );
-  const review = buildReview(main, deps);
-  const note = buildField(
-    main,
-    'field-note',
-    'Round note',
-    'anything about the round as a whole - optional',
-  );
-  deps.boxes.mount(
-    note.box,
-    { roundId: round.roundId, target: { field: 'note' } },
-    round.note,
-  );
+  const review = buildReview(main, round, deps);
 
   let shownFocus = -1;
   return {
@@ -104,15 +101,20 @@ export function createRoundView(
       railEntries.forEach((entry, position) => {
         const item = items[position];
         updateRailEntry(entry, current, item, position, isReview);
-        const action = railPickAction(view, isHelpOpen, item, position);
+        const action = railPickAction(
+          view,
+          isHelpOpen,
+          position,
+          reviewRowAt[position],
+        );
         entry.pick.disabled = action === null;
       });
       itemsPane.hidden = !isForms;
-      itemViews.forEach((itemView, position) => {
+      itemCards.forEach((card, position) => {
         const isShown = isForms && position === current.focus;
-        itemView.element.hidden = !isShown;
+        card.element.hidden = !isShown;
         if (isShown) {
-          itemView.update(current);
+          card.update(current);
         }
       });
       review.element.hidden = !isReview;
@@ -156,24 +158,23 @@ function buildHead(
   };
 }
 
-function itemTitle(round: RoundState, item: RailItem): string {
-  return item.kind === 'notice'
-    ? round.round.notices[item.index - 1].title
-    : round.round.questions[item.index - 1].title;
-}
-
-function railNumber(item: RailItem): string {
-  return item.kind === 'notice' ? `N${item.index}` : String(item.index);
+// Each rail position's review row; undefined at a notice, which has none.
+function reviewRowsByRailPosition(round: RoundState): (number | undefined)[] {
+  const rows: (number | undefined)[] = [];
+  answerableItems(round.round).forEach((item, row) => {
+    rows[railPosition(round.round, item)] = row;
+  });
+  return rows;
 }
 
 // What clicking a rail item does: focus it in the forms view, jump to its
-// question in the review, as Enter on its row does; null where the rail is
-// inert, under the confirm and help overlays.
+// row's item in the review, as Enter on the row does; null where the rail is
+// inert, at a notice in the review and under the confirm and help overlays.
 function railPickAction(
   view: FormsView,
   isHelpOpen: boolean,
-  item: RailItem,
   position: number,
+  reviewRow: number | undefined,
 ): FormsAction | null {
   if (isHelpOpen) {
     return null;
@@ -181,8 +182,8 @@ function railPickAction(
   if (view === 'forms') {
     return { type: 'focusItem', item: position };
   }
-  const isReviewQuestion = view === 'review' && item.kind === 'question';
-  return isReviewQuestion ? { type: 'reviewJump', row: item.index - 1 } : null;
+  const isReviewItem = view === 'review' && reviewRow !== undefined;
+  return isReviewItem ? { type: 'reviewJump', row: reviewRow } : null;
 }
 
 interface RailEntry {
@@ -197,12 +198,12 @@ function buildRailEntry(
   onClick: () => void,
 ): RailEntry {
   const entry = element('li', 'rail-entry');
-  const title = itemTitle(round, item);
+  const title = FORMATS[item.kind].title(round.round, item.index);
   const pick = button('rail-item', '', onClick);
   pick.title = title;
   pick.append(
     element('span', 'rail-dot'),
-    element('span', 'rail-number', railNumber(item)),
+    element('span', 'rail-number', itemLabel(item)),
     element('span', 'rail-title', title),
   );
   entry.append(pick);
@@ -210,7 +211,7 @@ function buildRailEntry(
   return { element: entry, pick };
 }
 
-// While the review is open, untouched questions are flagged in the rail.
+// While the review is open, untouched items are flagged in the rail.
 function updateRailEntry(
   entry: RailEntry,
   round: RoundState,
@@ -221,7 +222,7 @@ function updateRailEntry(
   const status =
     item.kind === 'notice'
       ? 'notice'
-      : questionStatus(round.answers[item.index - 1]);
+      : answerStatus(itemAnswer(round, { kind: item.kind, index: item.index }));
   entry.element.dataset.status = status;
   entry.element.classList.toggle('is-focused', position === round.focus);
   entry.element.classList.toggle(
@@ -230,206 +231,29 @@ function updateRailEntry(
   );
 }
 
-function buildField(
-  parent: HTMLElement,
-  className: string,
-  label: string,
-  hint: string,
-): Field {
-  const field = element('div', `field ${className}`);
-  const caption = element('div', 'field-label');
-  caption.append(
-    element('span', 'label', label),
-    element('span', 'hint', hint),
-  );
-  const box = element('div', 'box');
-  field.append(caption, box);
-  parent.append(field);
-  return { element: field, box };
-}
-
-// The item's labelled context; nothing when it has no context.
-function buildContext(
-  parent: HTMLElement,
-  text: string,
-  markdown: MarkdownRenderer,
-) {
-  if (text.trim() === '') {
-    return;
-  }
-  const section = element('section', 'context');
-  section.append(
-    element('div', 'context-label', 'Context'),
-    markdownElement('div', 'context-body md', markdown.block(text)),
-  );
-  parent.append(section);
-}
-
-function buildItemHead(
-  parent: HTMLElement,
-  number: string,
-  title: string,
-): HTMLElement {
-  const head = element('header', 'item-head');
-  const status = element('span', 'item-status');
-  head.append(
-    element('span', 'item-number', number),
-    element('h2', 'item-title', title),
-    status,
-  );
-  parent.append(head);
-  return status;
-}
-
-function buildQuestion(
-  parent: HTMLElement,
-  round: RoundState,
-  index: number,
-  position: number,
-  deps: RoundViewDeps,
-): ItemView {
-  const question = round.round.questions[index - 1];
-  const answer = round.answers[index - 1];
-  const { roundId } = round;
-  const focusThis = () => deps.dispatch({ type: 'focusItem', item: position });
-
-  const article = element('article', 'item question');
-  parent.append(article);
-  const statusChip = buildItemHead(article, String(index), question.title);
-  buildContext(article, question.context, deps.markdown);
-  article.append(
-    markdownElement('div', 'ask md', deps.markdown.block(question.question)),
-  );
-  const choiceList = element('ol', 'choices');
-  article.append(choiceList);
-  const choiceEntries = question.choices.map((text, i) => {
-    const choice = i + 1;
-    const entry = element('li', 'choice');
-    const pick = button('choice-pick', '', () => {
-      focusThis();
-      deps.dispatch({ type: 'choose', choice });
-    });
-    pick.append(
-      element('span', 'choice-number', String(choice)),
-      markdownElement('span', 'choice-text', deps.markdown.inline(text)),
-    );
-    entry.append(pick);
-    if (choice === question.recommend) {
-      entry.classList.add('is-recommended');
-      pick.append(element('span', 'badge badge-recommend', 'Recommended'));
-      if (question.rationale.trim() !== '') {
-        const rationale = element('div', 'rationale');
-        rationale.append(
-          element('div', 'rationale-label', 'Why recommended'),
-          markdownElement('div', 'md', deps.markdown.block(question.rationale)),
-        );
-        entry.append(rationale);
-      }
-    }
-    choiceList.append(entry);
-    return entry;
-  });
-
-  const what = buildField(
-    article,
-    'field-what',
-    'Your own answer',
-    'if none of the choices fit - optional',
-  );
-  const why = buildField(
-    article,
-    'field-why',
-    'Why',
-    'optional, carried into the plan',
-  );
-  const toggles = element('div', 'toggles');
-  const notApplicable = button('toggle', 'Not applicable', () => {
-    focusThis();
-    deps.dispatch({ type: 'toggleNotApplicable' });
-  });
-  const dontAsk = button('toggle', "Don't ask me this", () => {
-    focusThis();
-    deps.run(formsCommand('toggleDontAsk'));
-  });
-  toggles.append(notApplicable, dontAsk);
-  article.append(toggles);
-  const reason = buildField(
-    article,
-    'field-reason',
-    'Why not ask this',
-    'sent to the agent with your answer - optional',
-  );
-  deps.boxes.mount(
-    what.box,
-    { roundId, target: { field: 'what', question: index } },
-    answer.what,
-  );
-  deps.boxes.mount(
-    why.box,
-    { roundId, target: { field: 'why', question: index } },
-    answer.why,
-  );
-  deps.boxes.mount(
-    reason.box,
-    { roundId, target: { field: 'dontAskReason', question: index } },
-    answer.dontAskReason,
-  );
-
-  return {
-    element: article,
-    update(current) {
-      const now = current.answers[index - 1];
-      const status = questionStatus(now);
-      article.dataset.status = status;
-      statusChip.textContent =
-        status === 'untouched' ? '' : statusLabel(status);
-      choiceEntries.forEach((entry, i) =>
-        entry.classList.toggle('is-selected', now.choice === i + 1),
-      );
-      choiceList.classList.toggle('is-locked', now.notApplicable);
-      notApplicable.setAttribute('aria-pressed', String(now.notApplicable));
-      dontAsk.setAttribute('aria-pressed', String(now.dontAsk));
-      reason.element.hidden = !now.dontAsk;
-    },
-  };
-}
-
-function buildNotice(
-  parent: HTMLElement,
-  round: RoundState,
-  index: number,
-  deps: RoundViewDeps,
-): ItemView {
-  const notice = round.round.notices[index - 1];
-  const article = element('article', 'item notice');
-  parent.append(article);
-  const badge = buildItemHead(article, `N${index}`, notice.title);
-  badge.className = 'badge badge-notice';
-  badge.dataset.badge = notice.badge;
-  badge.textContent = notice.badge;
-  buildContext(article, notice.context, deps.markdown);
-  const comment = buildField(
-    article,
-    'field-comment',
-    'Comment',
-    'optional - say if this needs a second look',
-  );
-  deps.boxes.mount(
-    comment.box,
-    { roundId: round.roundId, target: { field: 'comment', notice: index } },
-    round.noticeComments[index - 1],
-  );
-  // A notice's view holds nothing the round's state changes.
-  return { element: article, update() {} };
-}
-
+// The review's rows, then the round note, then Submit and Cancel; the note
+// shows only while the review or the cancel prompt does.
 function buildReview(
   parent: HTMLElement,
+  round: RoundState,
   deps: RoundViewDeps,
 ): { element: HTMLElement; update(round: RoundState): void } {
   const section = element('section', 'review');
   const summary = element('p', 'review-summary');
   const list = element('ol', 'review-rows');
+  section.append(element('h2', 'review-title', 'Review'), summary, list);
+  parent.append(section);
+  const note = buildField(
+    section,
+    'field-note',
+    'Round note',
+    'anything about the round as a whole - optional',
+  );
+  deps.boxes.mount(
+    note.box,
+    { roundId: round.roundId, target: { field: 'note' } },
+    round.note,
+  );
   const actions = element('div', 'review-actions');
   actions.append(
     button('button button-primary', 'Submit', () =>
@@ -437,24 +261,18 @@ function buildReview(
     ),
     button('button', 'Cancel round', () => deps.run(formsCommand('askCancel'))),
   );
-  section.append(
-    element('h2', 'review-title', 'Review'),
-    summary,
-    list,
-    actions,
-  );
-  parent.append(section);
+  section.append(actions);
   return {
     element: section,
-    update(round) {
-      const counts = progress(round);
+    update(current) {
+      const counts = progress(current);
       const untouched =
         counts.untouched > 0
           ? ` ${counts.untouched} not answered; they are sent as untouched.`
           : '';
       summary.textContent = `${progressText(counts)}.${untouched}`;
       list.replaceChildren(
-        ...reviewRows(round).map((row) => buildReviewRow(row, deps)),
+        ...reviewRows(current).map((row) => buildReviewRow(row, deps)),
       );
       list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
     },
@@ -485,19 +303,13 @@ function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
     answer.textContent = statusLabel(row.status);
   }
   pick.append(
-    element('span', 'review-number', String(row.number)),
+    element('span', 'review-number', row.label),
     element('span', 'review-question', row.title),
     answer,
   );
   entry.append(pick);
-  const details: [string, string][] = [
-    ['Your own answer', row.what],
-    ['Why', row.why],
-  ];
-  for (const [label, text] of details) {
-    if (text.trim() !== '') {
-      entry.append(element('p', 'review-detail', `${label}: ${text}`));
-    }
+  if (row.notes.trim() !== '') {
+    entry.append(element('p', 'review-detail', `Notes: ${row.notes}`));
   }
   if (row.dontAsk) {
     const reason = row.dontAskReason.trim();

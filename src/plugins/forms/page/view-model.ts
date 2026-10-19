@@ -1,36 +1,35 @@
 import type { VimMode } from '../../../contracts/editor';
-import type { AnswerStatus } from '../contract';
+import type { AnswerableKind, AnswerStatus } from '../contract';
 import {
+  answerableItems,
+  answerStatus,
+  itemAnswer,
   type Progress,
   progress,
-  questionStatus,
   type RoundState,
   type SaveState,
 } from './form-state';
+import { FORMATS, itemLabel } from './kinds/formats';
 
-// One question as the review lists it.
+// One question or finding as the review lists it.
 export interface ReviewRow {
   // 0-based, as `reviewJump` takes it.
   row: number;
+  kind: AnswerableKind;
+  // 1-based within its kind.
   number: number;
+  label: string;
   title: string;
   status: AnswerStatus;
-  // 0 unless answered; a not-applicable question's kept choice does not count.
+  // 0 unless answered; a not-applicable item's kept choice does not count.
   choice: number;
   choiceText: string;
   tookRecommendation: boolean;
-  what: string;
-  why: string;
+  notes: string;
   dontAsk: boolean;
   dontAskReason: string;
   isCursor: boolean;
 }
-
-const STATUS_LABELS: Record<AnswerStatus, string> = {
-  answered: 'Answered',
-  not_applicable: 'Not applicable',
-  untouched: 'Not answered',
-};
 
 const SAVE_LABELS: Record<SaveState, string> = {
   saved: 'Saved',
@@ -44,21 +43,28 @@ const VISUAL_KINDS: Partial<Record<string, string>> = {
   blockwise: 'block',
 };
 
+// Findings, then questions, as answerableItems orders them.
 export function reviewRows(round: RoundState): ReviewRow[] {
-  return round.round.questions.map((question, row): ReviewRow => {
-    const answer = round.answers[row];
-    const status = questionStatus(answer);
+  return answerableItems(round.round).map((item, row): ReviewRow => {
+    const format = FORMATS[item.kind];
+    const answer = itemAnswer(round, item);
+    const status = answerStatus(answer);
     const choice = status === 'answered' ? answer.choice : 0;
     return {
       row,
-      number: row + 1,
-      title: question.title,
+      kind: item.kind,
+      number: item.index,
+      label: itemLabel(item),
+      title: format.title(round.round, item.index),
       status,
       choice,
-      choiceText: choice > 0 ? question.choices[choice - 1] : '',
-      tookRecommendation: choice > 0 && choice === question.recommend,
-      what: answer.what,
-      why: answer.why,
+      choiceText:
+        choice > 0
+          ? format.choiceTexts(round.round, item.index)[choice - 1]
+          : '',
+      tookRecommendation:
+        choice > 0 && choice === format.recommend(round.round, item.index),
+      notes: answer.notes,
       dontAsk: answer.dontAsk,
       dontAskReason: answer.dontAskReason,
       isCursor: row === round.reviewRow,
@@ -67,7 +73,7 @@ export function reviewRows(round: RoundState): ReviewRow[] {
 }
 
 // The round's title on its session's tab: its heading and how many of its
-// questions are answered or not applicable.
+// questions and findings are answered or not applicable.
 export function sessionTitle(round: RoundState): string {
   const counts = progress(round);
   return `${round.round.heading} ${counts.answered + counts.notApplicable}/${counts.total}`;
@@ -78,10 +84,6 @@ export function progressText(progress: Progress): string {
   return progress.notApplicable > 0
     ? `${answered}, ${progress.notApplicable} not applicable`
     : answered;
-}
-
-export function statusLabel(status: AnswerStatus): string {
-  return STATUS_LABELS[status];
 }
 
 // `error` is the last failed save's message, shown while the round is unsaved.

@@ -7,7 +7,7 @@ import {
   initialState,
   type RoundState,
 } from './form-state';
-import { presentedRound, question } from './test-rounds';
+import { finding, presentedRound, question } from './test-rounds';
 import {
   modeLabel,
   progressText,
@@ -23,6 +23,24 @@ function roundAfter(...actions: FormsAction[]): RoundState {
     [
       presentedRound('r1', {
         questions: [question('Alpha'), question('Beta'), question('Gamma')],
+      }),
+    ],
+    'r1-session',
+  );
+  const round = activeRound(actions.reduce(apply, start));
+  if (round === null) {
+    throw new Error('The test round is not active');
+  }
+  return round;
+}
+
+// Question Alpha and finding Delta (recommend 2); the rail runs Delta, Alpha.
+function mixedRoundAfter(...actions: FormsAction[]): RoundState {
+  const start = initialState(
+    [
+      presentedRound('r1', {
+        questions: [question('Alpha')],
+        findings: [finding('Delta')],
       }),
     ],
     'r1-session',
@@ -60,7 +78,7 @@ describe('reviewRows', () => {
       roundAfter({
         type: 'setText',
         roundId: 'r1',
-        target: { field: 'what', question: 1 },
+        target: { field: 'notes', item: { kind: 'question', index: 1 } },
         value: 'my own answer',
       }),
     );
@@ -68,7 +86,7 @@ describe('reviewRows', () => {
       status: 'answered',
       choice: 0,
       choiceText: '',
-      what: 'my own answer',
+      notes: 'my own answer',
     });
   });
 
@@ -99,29 +117,48 @@ describe('reviewRows', () => {
     });
   });
 
-  it("carries the answer, why and Don't-ask text", () => {
+  it("carries the notes and Don't-ask text", () => {
     const [alpha] = reviewRows(
       roundAfter(
         {
           type: 'setText',
           roundId: 'r1',
-          target: { field: 'what', question: 1 },
+          target: { field: 'notes', item: { kind: 'question', index: 1 } },
           value: 'my own',
-        },
-        {
-          type: 'setText',
-          roundId: 'r1',
-          target: { field: 'why', question: 1 },
-          value: 'because',
         },
         { type: 'toggleDontAsk' },
       ),
     );
     expect(alpha).toMatchObject({
-      what: 'my own',
-      why: 'because',
+      notes: 'my own',
       dontAsk: true,
     });
+  });
+
+  it('lists findings before questions', () => {
+    const rows = reviewRows(mixedRoundAfter());
+    expect(rows.map((row) => [row.kind, row.label])).toEqual([
+      ['finding', 'F1'],
+      ['question', '1'],
+    ]);
+    expect(rows.map((row) => row.row)).toEqual([0, 1]);
+  });
+
+  it('lists an answered finding with its choice text', () => {
+    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 2 }));
+    expect(delta).toMatchObject({
+      kind: 'finding',
+      title: 'Delta',
+      status: 'answered',
+      choice: 2,
+      choiceText: 'second',
+      tookRecommendation: true,
+    });
+  });
+
+  it('marks a finding choice other than the recommended one', () => {
+    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 1 }));
+    expect(delta.tookRecommendation).toBe(false);
   });
 
   it('marks the row under the review cursor', () => {
@@ -196,5 +233,17 @@ describe('sessionTitle', () => {
     expect(
       titleAfter(choose, { type: 'nextItem' }, { type: 'toggleNotApplicable' }),
     ).toBe('r1 heading 2/2');
+  });
+
+  it('counts findings with questions', () => {
+    const start = initialState(
+      [presentedRound('r1', { findings: [finding('Delta')] })],
+      'r1-session',
+    );
+    const round = activeRound(apply(start, { type: 'choose', choice: 1 }));
+    if (round === null) {
+      throw new Error('The test round is not active');
+    }
+    expect(sessionTitle(round)).toBe('r1 heading 1/3');
   });
 });
