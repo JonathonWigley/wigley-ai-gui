@@ -23,6 +23,7 @@ import {
   type FormsState,
   type FormsView,
   type QuestionAnswer,
+  unansweredQuestion,
 } from './form-state';
 import type { FormsStore } from './forms-store';
 
@@ -66,10 +67,12 @@ export function formsCommandHandlers(
           : `cleared the choice on question ${n}`,
       );
 
+  const jumpTo =
+    (question: number): Handler =>
+    (context) =>
+      jumpToQuestion(deps, context, question);
+
   return {
-    toggleFold: plain({ type: 'toggleFold' }),
-    unfoldAll: plain({ type: 'unfoldAll' }),
-    foldAll: plain({ type: 'foldAll' }),
     closeReview: plain({ type: 'closeReview' }),
     reviewNext: plain({ type: 'reviewNext' }),
     reviewPrev: plain({ type: 'reviewPrev' }),
@@ -131,6 +134,17 @@ export function formsCommandHandlers(
     },
     nextItem: (context) => moveItem(deps, context, { type: 'nextItem' }),
     prevItem: (context) => moveItem(deps, context, { type: 'prevItem' }),
+    jumpTo1: jumpTo(1),
+    jumpTo2: jumpTo(2),
+    jumpTo3: jumpTo(3),
+    jumpTo4: jumpTo(4),
+    jumpTo5: jumpTo(5),
+    jumpTo6: jumpTo(6),
+    jumpTo7: jumpTo(7),
+    jumpTo8: jumpTo(8),
+    jumpTo9: jumpTo(9),
+    nextUnanswered: (context) => jumpToUnanswered(deps, context, 1),
+    prevUnanswered: (context) => jumpToUnanswered(deps, context, -1),
     openReview: (context) => {
       focusBoxItem(store, boxIn(deps, context));
       const wasForms = store.get().view === 'forms';
@@ -144,13 +158,15 @@ export function formsCommandHandlers(
   };
 }
 
-// The forms box the command's editor edits; a page key fires in no editor.
+// The forms box the command's editor edits. A key with no editor in its
+// context acts on the focused box: a page key never fires while a box has
+// focus, and a chord bind fires inside one without naming the editor.
 function boxIn(
   deps: FormsCommandDeps,
   context: PageCommandContext,
 ): BoxRef | undefined {
   return context.editor === undefined
-    ? undefined
+    ? (deps.boxes.active() ?? undefined)
     : deps.boxes.boxOf(context.editor);
 }
 
@@ -210,7 +226,7 @@ function stepFocus(
   context: PageCommandContext,
   step: number,
 ) {
-  const from = boxIn(deps, context) ?? deps.boxes.active();
+  const from = boxIn(deps, context) ?? null;
   const next = stepBox(deps.store.get(), from, step);
   if (next !== null) {
     deps.boxes.focus(next);
@@ -232,6 +248,44 @@ function moveItem(
   if (box !== undefined && after !== before) {
     focusShownBox(deps, ANSWER_FIELDS);
   }
+}
+
+// Focuses question `question` as moveItem does; nothing when the forms view
+// shows no round with that question.
+function jumpToQuestion(
+  deps: FormsCommandDeps,
+  context: PageCommandContext,
+  question: number,
+) {
+  const state = deps.store.get();
+  const round = activeRound(state);
+  const hasQuestion =
+    round !== null && question >= 1 && question <= round.round.questions.length;
+  if (state.view !== 'forms' || !hasQuestion) {
+    return;
+  }
+  const item = round.round.notices.length + question - 1;
+  moveItem(deps, context, { type: 'focusItem', item });
+  deps.log('forms', `jumped to question ${question}`);
+}
+
+function jumpToUnanswered(
+  deps: FormsCommandDeps,
+  context: PageCommandContext,
+  step: 1 | -1,
+) {
+  focusBoxItem(deps.store, boxIn(deps, context));
+  const state = deps.store.get();
+  const round = activeRound(state);
+  if (state.view !== 'forms' || round === null) {
+    return;
+  }
+  const question = unansweredQuestion(round, step);
+  if (question === null) {
+    deps.log('forms', 'no unanswered question');
+    return;
+  }
+  jumpToQuestion(deps, context, question);
 }
 
 // A session's tab closes only once its round is gone: with an open round it

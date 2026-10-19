@@ -3,7 +3,12 @@ import type { FocusOptions, TextEditor } from '../../../contracts/editor';
 import type { PageCommandContext } from '../../../contracts/plugin';
 import type { RoundEnd } from '../contract';
 import type { BoxRef } from './boxes';
-import { activeRound, buildBody, initialState } from './form-state';
+import {
+  activeRound,
+  buildBody,
+  focusedItem,
+  initialState,
+} from './form-state';
 import { formsCommandHandlers, guardClose } from './forms-commands';
 import { createFormsStore } from './forms-store';
 import { notice, presentedRound, question } from './test-rounds';
@@ -90,6 +95,10 @@ function setup() {
     closedTabs,
     guardClose: (sessionId: string) => guardClose({ store, log }, sessionId),
     leaves: () => leaves,
+    // Focuses a box as the user clicking into it would, outside any command.
+    setActive: (box: BoxRef) => {
+      active = box;
+    },
   };
 }
 
@@ -228,6 +237,79 @@ describe('formsCommandHandlers', () => {
     const { run, focused } = setup();
     run('nextItem');
     expect(focused).toEqual([]);
+  });
+
+  it('acts on the active box when a chord fires with no editor', () => {
+    const { run, focused, setActive } = setup();
+    run('nextItem');
+    setActive(what1);
+
+    run('nextItem', {});
+
+    expect(focused.at(-1)).toEqual({
+      roundId: 'r1',
+      target: { field: 'what', question: 2 },
+    });
+  });
+
+  it('jumps to question N and logs it', () => {
+    const { run, round, logs, focused } = setup();
+
+    run('jumpTo2');
+
+    expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
+    expect(logs).toEqual(['jumped to question 2']);
+    expect(focused).toEqual([]);
+  });
+
+  it('does nothing for a question the round lacks', () => {
+    const { run, store, logs } = setup();
+    const before = store.get();
+
+    run('jumpTo3');
+
+    expect(store.get()).toBe(before);
+    expect(logs).toEqual([]);
+  });
+
+  it("jumps from a box into question N's answer box", () => {
+    const { run, focused } = setup();
+
+    run('jumpTo2', { editor: editorOf(what1) });
+
+    expect(focused.at(-1)).toEqual({
+      roundId: 'r1',
+      target: { field: 'what', question: 2 },
+    });
+  });
+
+  it('jumps to the next unanswered question, wrapping', () => {
+    const { run, round, logs } = setup();
+    run('jumpTo1');
+    run('choose1');
+    run('jumpTo2');
+    logs.length = 0;
+
+    run('nextUnanswered');
+
+    expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
+    expect(logs).toEqual(['jumped to question 2']);
+
+    run('choose1');
+    logs.length = 0;
+    run('nextUnanswered');
+
+    expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
+    expect(logs).toEqual(['no unanswered question']);
+  });
+
+  it('jumps to the previous unanswered question', () => {
+    const { run, round } = setup();
+    run('jumpTo2');
+
+    run('prevUnanswered');
+
+    expect(focusedItem(round())).toEqual({ kind: 'question', index: 1 });
   });
 
   it('leaves the box and logs it', () => {

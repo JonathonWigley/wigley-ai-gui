@@ -76,7 +76,7 @@ export function createRoundView(
   );
   const itemViews = items.map((item, position) =>
     item.kind === 'notice'
-      ? buildNotice(itemsPane, round, item.index, position, deps)
+      ? buildNotice(itemsPane, round, item.index, deps)
       : buildQuestion(itemsPane, round, item.index, position, deps),
   );
   const review = buildReview(main, deps);
@@ -248,28 +248,21 @@ function buildField(
   return { element: field, box };
 }
 
-// The item's context with its fold control; null when it has no context.
+// The item's labelled context; nothing when it has no context.
 function buildContext(
   parent: HTMLElement,
   text: string,
   markdown: MarkdownRenderer,
-  onToggle: () => void,
-): { update(folded: boolean): void } | null {
+) {
   if (text.trim() === '') {
-    return null;
+    return;
   }
   const section = element('section', 'context');
-  const toggle = button('fold-toggle', 'Context', onToggle);
-  const body = markdownElement('div', 'context-body md', markdown.block(text));
-  section.append(toggle, body);
+  section.append(
+    element('div', 'context-label', 'Context'),
+    markdownElement('div', 'context-body md', markdown.block(text)),
+  );
   parent.append(section);
-  return {
-    update(folded) {
-      body.hidden = folded;
-      toggle.setAttribute('aria-expanded', String(!folded));
-      section.classList.toggle('is-folded', folded);
-    },
-  };
 }
 
 function buildItemHead(
@@ -303,10 +296,7 @@ function buildQuestion(
   const article = element('article', 'item question');
   parent.append(article);
   const statusChip = buildItemHead(article, String(index), question.title);
-  const context = buildContext(article, question.context, deps.markdown, () => {
-    focusThis();
-    deps.dispatch({ type: 'toggleFold' });
-  });
+  buildContext(article, question.context, deps.markdown);
   article.append(
     markdownElement('div', 'ask md', deps.markdown.block(question.question)),
   );
@@ -328,9 +318,9 @@ function buildQuestion(
       entry.classList.add('is-recommended');
       pick.append(element('span', 'badge badge-recommend', 'Recommended'));
       if (question.rationale.trim() !== '') {
-        const rationale = element('details', 'rationale');
+        const rationale = element('div', 'rationale');
         rationale.append(
-          element('summary', '', 'Why recommended'),
+          element('div', 'rationale-label', 'Why recommended'),
           markdownElement('div', 'md', deps.markdown.block(question.rationale)),
         );
         entry.append(rationale);
@@ -393,7 +383,6 @@ function buildQuestion(
       article.dataset.status = status;
       statusChip.textContent =
         status === 'untouched' ? '' : statusLabel(status);
-      context?.update(current.folded[position]);
       choiceEntries.forEach((entry, i) =>
         entry.classList.toggle('is-selected', now.choice === i + 1),
       );
@@ -409,7 +398,6 @@ function buildNotice(
   parent: HTMLElement,
   round: RoundState,
   index: number,
-  position: number,
   deps: RoundViewDeps,
 ): ItemView {
   const notice = round.round.notices[index - 1];
@@ -419,10 +407,7 @@ function buildNotice(
   badge.className = 'badge badge-notice';
   badge.dataset.badge = notice.badge;
   badge.textContent = notice.badge;
-  const context = buildContext(article, notice.context, deps.markdown, () => {
-    deps.dispatch({ type: 'focusItem', item: position });
-    deps.dispatch({ type: 'toggleFold' });
-  });
+  buildContext(article, notice.context, deps.markdown);
   const comment = buildField(
     article,
     'field-comment',
@@ -434,12 +419,8 @@ function buildNotice(
     { roundId: round.roundId, target: { field: 'comment', notice: index } },
     round.noticeComments[index - 1],
   );
-  return {
-    element: article,
-    update(current) {
-      context?.update(current.folded[position]);
-    },
-  };
+  // A notice's view holds nothing the round's state changes.
+  return { element: article, update() {} };
 }
 
 function buildReview(

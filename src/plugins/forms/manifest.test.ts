@@ -13,26 +13,31 @@ const EMPTY_CORE: Keymap = {
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-// The forms binds as the central keymap held them before forms became a
-// plugin, with scopes qualified and help's commands renamed.
+// The forms binds, with commands and scopes qualified.
 const EXPECTED_EDITOR: EditorBind[] = [
-  { keys: '<Leader>j', command: 'forms.nextBox' },
-  { keys: '<Leader>k', command: 'forms.prevBox' },
-  { keys: '<Leader>n', command: 'forms.nextItem' },
-  { keys: '<Leader>p', command: 'forms.prevItem' },
   { keys: '<Leader>x', command: 'forms.toggleNotApplicable' },
-  { keys: '<Leader>c', command: 'forms.clearChoice' },
   ...DIGITS.map((digit) => ({
     keys: `<Leader>${digit}`,
+    command: `forms.jumpTo${digit}`,
+  })),
+  { keys: '<Leader>en', command: 'forms.nextUnanswered' },
+  { keys: '<Leader>ep', command: 'forms.prevUnanswered' },
+  ...DIGITS.map((digit) => ({
+    keys: `<Leader>a${digit}`,
     command: `forms.choose${digit}`,
   })),
+  { keys: '<Leader>ac', command: 'forms.clearChoice' },
   { keys: '<Leader><Leader>', command: 'forms.openReview' },
   { keys: '<Esc>', command: 'forms.leaveBox' },
 ];
 
 const EXPECTED_PAGE: PageBind[] = [
   { keys: ['j'], scope: 'forms.forms', command: 'forms.nextItem' },
+  { keys: ['<C-l>'], scope: 'forms.forms', command: 'forms.nextItem' },
   { keys: ['k'], scope: 'forms.forms', command: 'forms.prevItem' },
+  { keys: ['<C-h>'], scope: 'forms.forms', command: 'forms.prevItem' },
+  { keys: ['<C-j>'], scope: 'forms.forms', command: 'forms.nextBox' },
+  { keys: ['<C-k>'], scope: 'forms.forms', command: 'forms.prevBox' },
   ...DIGITS.map((digit) => ({
     keys: [digit],
     scope: 'forms.forms',
@@ -43,10 +48,28 @@ const EXPECTED_PAGE: PageBind[] = [
   { keys: ['a'], scope: 'forms.forms', command: 'forms.editWhat' },
   { keys: ['w'], scope: 'forms.forms', command: 'forms.editWhy' },
   { keys: ['o'], scope: 'forms.forms', command: 'forms.editNote' },
+  ...DIGITS.map((digit) => ({
+    keys: [' ', digit],
+    scope: 'forms.forms',
+    command: `forms.jumpTo${digit}`,
+  })),
+  {
+    keys: [' ', 'e', 'n'],
+    scope: 'forms.forms',
+    command: 'forms.nextUnanswered',
+  },
+  {
+    keys: [' ', 'e', 'p'],
+    scope: 'forms.forms',
+    command: 'forms.prevUnanswered',
+  },
+  ...DIGITS.map((digit) => ({
+    keys: [' ', 'a', digit],
+    scope: 'forms.forms',
+    command: `forms.choose${digit}`,
+  })),
+  { keys: [' ', 'a', 'c'], scope: 'forms.forms', command: 'forms.clearChoice' },
   { keys: [' ', ' '], scope: 'forms.forms', command: 'forms.openReview' },
-  { keys: ['z', 'a'], scope: 'forms.forms', command: 'forms.toggleFold' },
-  { keys: ['z', 'R'], scope: 'forms.forms', command: 'forms.unfoldAll' },
-  { keys: ['z', 'M'], scope: 'forms.forms', command: 'forms.foldAll' },
   { keys: [' ', 'Enter'], scope: 'forms.review', command: 'forms.submit' },
   { keys: ['Escape'], scope: 'forms.review', command: 'forms.closeReview' },
   { keys: ['j'], scope: 'forms.review', command: 'forms.reviewNext' },
@@ -70,7 +93,7 @@ const EXPECTED_PAGE: PageBind[] = [
 ];
 
 describe('formsManifest', () => {
-  it("merges to today's forms binds", () => {
+  it('merges to the forms binds', () => {
     const merged = mergeKeymap(EMPTY_CORE, [formsManifest]);
 
     expect(merged.editor.binds).toEqual(EXPECTED_EDITOR);

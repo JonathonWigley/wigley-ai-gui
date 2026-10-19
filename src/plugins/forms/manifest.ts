@@ -1,26 +1,55 @@
 import { definePlugin } from '../../shared/define-plugin';
 
-const CHOICE_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
-type ChoiceCommand = `choose${(typeof CHOICE_DIGITS)[number]}`;
+const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+type Digit = (typeof DIGITS)[number];
+type ChoiceCommand = `choose${Digit}`;
+type JumpCommand = `jumpTo${Digit}`;
 
 const CHOICE_LABEL = 'pick a choice (again clears)';
+const JUMP_LABEL = 'go to question';
 
 const choiceCommands = Object.fromEntries(
-  CHOICE_DIGITS.map((digit) => [
+  DIGITS.map((digit) => [
     `choose${digit}`,
     { label: CHOICE_LABEL, group: 'choices', runsIn: 'page' },
   ]),
 ) as Record<ChoiceCommand, { label: string; group: 'choices'; runsIn: 'page' }>;
 
-const pageChoiceBinds = CHOICE_DIGITS.map((digit) => ({
+const jumpCommands = Object.fromEntries(
+  DIGITS.map((digit) => [
+    `jumpTo${digit}`,
+    { label: JUMP_LABEL, group: 'questions', runsIn: 'page' },
+  ]),
+) as Record<JumpCommand, { label: string; group: 'questions'; runsIn: 'page' }>;
+
+// A bare digit picks a choice; `Space a` and a digit picks too, as the box's
+// `<Leader>a` and a digit do.
+const pageChoiceBinds = DIGITS.map((digit) => ({
   keys: [digit],
   scope: 'forms' as const,
   command: `choose${digit}` as const,
 }));
 
-const editorChoiceBinds = CHOICE_DIGITS.map((digit) => ({
-  keys: `<Leader>${digit}`,
+const pageLeaderChoiceBinds = DIGITS.map((digit) => ({
+  keys: [' ', 'a', digit],
+  scope: 'forms' as const,
   command: `choose${digit}` as const,
+}));
+
+const editorChoiceBinds = DIGITS.map((digit) => ({
+  keys: `<Leader>a${digit}`,
+  command: `choose${digit}` as const,
+}));
+
+const pageJumpBinds = DIGITS.map((digit) => ({
+  keys: [' ', digit],
+  scope: 'forms' as const,
+  command: `jumpTo${digit}` as const,
+}));
+
+const editorJumpBinds = DIGITS.map((digit) => ({
+  keys: `<Leader>${digit}`,
+  command: `jumpTo${digit}` as const,
 }));
 
 // `?` opens help from every view; inside help it closes help instead.
@@ -35,6 +64,17 @@ export const formsManifest = definePlugin({
   commands: {
     nextItem: { label: 'next item', group: 'questions', runsIn: 'page' },
     prevItem: { label: 'previous item', group: 'questions', runsIn: 'page' },
+    ...jumpCommands,
+    nextUnanswered: {
+      label: 'next unanswered question',
+      group: 'questions',
+      runsIn: 'page',
+    },
+    prevUnanswered: {
+      label: 'previous unanswered question',
+      group: 'questions',
+      runsIn: 'page',
+    },
     ...choiceCommands,
     clearChoice: {
       label: 'clear the choice',
@@ -82,42 +122,40 @@ export const formsManifest = definePlugin({
       group: 'confirm',
       runsIn: 'page',
     },
-    toggleFold: {
-      label: 'fold the context',
-      group: 'context',
-      runsIn: 'page',
-    },
-    unfoldAll: { label: 'unfold all', group: 'context', runsIn: 'page' },
-    foldAll: { label: 'fold all', group: 'context', runsIn: 'page' },
     toggleHelp: { label: 'help', group: 'help', runsIn: 'page' },
     closeHelp: { label: 'close help', group: 'help', runsIn: 'page' },
   },
   scopes: ['forms', 'review', 'confirm', 'help', 'idle'],
   keys: {
     editor: [
-      { keys: '<Leader>j', command: 'nextBox' },
-      { keys: '<Leader>k', command: 'prevBox' },
-      { keys: '<Leader>n', command: 'nextItem' },
-      { keys: '<Leader>p', command: 'prevItem' },
       { keys: '<Leader>x', command: 'toggleNotApplicable' },
-      { keys: '<Leader>c', command: 'clearChoice' },
+      ...editorJumpBinds,
+      { keys: '<Leader>en', command: 'nextUnanswered' },
+      { keys: '<Leader>ep', command: 'prevUnanswered' },
       ...editorChoiceBinds,
+      { keys: '<Leader>ac', command: 'clearChoice' },
       { keys: '<Leader><Leader>', command: 'openReview' },
       { keys: '<Esc>', command: 'leaveBox' },
     ],
     page: [
       { keys: ['j'], scope: 'forms', command: 'nextItem' },
+      { keys: ['<C-l>'], scope: 'forms', command: 'nextItem' },
       { keys: ['k'], scope: 'forms', command: 'prevItem' },
+      { keys: ['<C-h>'], scope: 'forms', command: 'prevItem' },
+      { keys: ['<C-j>'], scope: 'forms', command: 'nextBox' },
+      { keys: ['<C-k>'], scope: 'forms', command: 'prevBox' },
       ...pageChoiceBinds,
       { keys: ['x'], scope: 'forms', command: 'toggleNotApplicable' },
       { keys: ['d'], scope: 'forms', command: 'toggleDontAsk' },
       { keys: ['a'], scope: 'forms', command: 'editWhat' },
       { keys: ['w'], scope: 'forms', command: 'editWhy' },
       { keys: ['o'], scope: 'forms', command: 'editNote' },
+      ...pageJumpBinds,
+      { keys: [' ', 'e', 'n'], scope: 'forms', command: 'nextUnanswered' },
+      { keys: [' ', 'e', 'p'], scope: 'forms', command: 'prevUnanswered' },
+      ...pageLeaderChoiceBinds,
+      { keys: [' ', 'a', 'c'], scope: 'forms', command: 'clearChoice' },
       { keys: [' ', ' '], scope: 'forms', command: 'openReview' },
-      { keys: ['z', 'a'], scope: 'forms', command: 'toggleFold' },
-      { keys: ['z', 'R'], scope: 'forms', command: 'unfoldAll' },
-      { keys: ['z', 'M'], scope: 'forms', command: 'foldAll' },
       { keys: [' ', 'Enter'], scope: 'review', command: 'submit' },
       { keys: ['Escape'], scope: 'review', command: 'closeReview' },
       { keys: ['j'], scope: 'review', command: 'reviewNext' },

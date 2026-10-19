@@ -23,14 +23,17 @@ const PAGE_BINDS: PageBind[] = [
 const LONG_WORD = 'unbroken'.repeat(14);
 
 // Starting on the notice: Space then j replays j to question 1, pick 2; a
-// types "ab" at once (INSERT), jk then Space j to its why box, A appends a
-// long word, Esc out; a again types "c" after "ab"; j to question 2, where
-// q a x then b breaks the self-test bind, so a opens the what box and "xb" is
-// typed into it; jk Esc out and x marks question 2 not applicable; o types
-// "note" into the note box at once (INSERT), Esc out. Option+o moves to the
-// second session's tab; Cmd+W there asks to cancel its round, Esc keeps it
-// and returns to its form, where j moves an item; Option+i moves back to the
-// first tab. Then review, ? opens and closes help, C opens and n dismisses the
+// types "ab" at once (INSERT), Ctrl+j still in INSERT moves to its why box, A
+// appends a long word, Esc out; a again types "c" after "ab"; j to question
+// 2, where q a x then b breaks the self-test bind, so a opens the what box and
+// "xb" is typed into it; jk Esc out and x marks question 2 not applicable; o
+// types "note" into the note box at once (INSERT), Esc out. Ctrl+h goes back
+// to question 1, Space a 2 clears its choice and picks it again, Space 2
+// jumps to question 2, and Space e n finds no unanswered question. Option+o
+// moves to the second session's tab; Cmd+W there asks to cancel its round,
+// Esc keeps it and returns to its form, where j moves to its question 2 and
+// Space e p finds its untouched question 1; Option+i moves back to the first
+// tab. Then review, ? opens and closes help, C opens and n dismisses the
 // cancel prompt, Enter jumps back to the question, review again and Space
 // Enter submits.
 const STEPS: SelfTestStep[] = [
@@ -38,7 +41,7 @@ const STEPS: SelfTestStep[] = [
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   { keys: ['a'], expect: '[forms] focused what on question 1' },
   {
-    keys: ['a', 'b', 'j', 'k', ' ', 'j'],
+    keys: ['a', 'b', '<C-j>'],
     expect: '[forms] focused why on question 1',
     checksFit: true,
   },
@@ -59,6 +62,14 @@ const STEPS: SelfTestStep[] = [
     keys: ['o', 'n', 'o', 't', 'e', 'j', 'k', 'Escape'],
     expect: '[forms] left the box',
   },
+  { keys: ['<C-h>'], expect: '[page] <C-h> ran forms.prevItem' },
+  {
+    keys: [' ', 'a', '2'],
+    expect: '[forms] cleared the choice on question 1',
+  },
+  { keys: [' ', 'a', '2'], expect: '[forms] chose 2 on question 1' },
+  { keys: [' ', '2'], expect: '[forms] jumped to question 2' },
+  { keys: [' ', 'e', 'n'], expect: '[forms] no unanswered question' },
   {
     keys: ['<A-o>'],
     expect: '[sessions] activated selftest 2',
@@ -71,6 +82,7 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[page] Escape ran forms.dismissConfirm' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem' },
+  { keys: [' ', 'e', 'p'], expect: '[forms] jumped to question 1' },
   { keys: ['<A-i>'], expect: '[sessions] activated selftest' },
   { keys: [' ', ' '], expect: '[forms] review opened', checksFit: true },
   { keys: ['?'], expect: '[page] ? ran forms.toggleHelp', checksFit: true },

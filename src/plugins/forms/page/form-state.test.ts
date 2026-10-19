@@ -19,6 +19,7 @@ import {
   type FormsAction,
   type FormsState,
   type RoundState,
+  unansweredQuestion,
 } from './form-state';
 
 function question(title: string, choiceCount = 3): Question {
@@ -745,46 +746,92 @@ describe('roundClosed', () => {
   });
 });
 
-describe('folds', () => {
-  it('toggleFold folds and unfolds the focused item only', () => {
-    const folded = run(
-      mixedRound(),
-      { type: 'focusItem', item: 1 },
-      { type: 'toggleFold' },
+describe('unansweredQuestion', () => {
+  // Rail positions: 0 = Alpha, 1 = Beta, 2 = Gamma.
+  const threeQuestions = (...actions: FormsAction[]) =>
+    active(
+      run(
+        initialState(
+          [
+            presented('r1', {
+              questions: [
+                question('Alpha'),
+                question('Beta'),
+                question('Gamma'),
+              ],
+            }),
+          ],
+          'r1-session',
+        ),
+        ...actions,
+      ),
     );
-    expect(active(folded).folded).toEqual([false, true, false]);
-    expect(active(apply(folded, { type: 'toggleFold' })).folded).toEqual([
-      false,
-      false,
-      false,
-    ]);
+  const betaChosen: FormsAction[] = [
+    { type: 'focusItem', item: 1 },
+    { type: 'choose', choice: 1 },
+  ];
+
+  it('finds the nearest untouched question each way', () => {
+    const round = threeQuestions(...betaChosen);
+    expect(unansweredQuestion(round, 1)).toBe(3);
+    expect(unansweredQuestion(round, -1)).toBe(1);
   });
 
-  it('foldAll and unfoldAll cover every item of the active round only', () => {
-    const two = initialState(
-      [presented('r1', { notices: [notice('N1')] }), presented('r2')],
-      'r1-session',
+  it('wraps past the last question', () => {
+    const round = threeQuestions(...betaChosen, {
+      type: 'focusItem',
+      item: 2,
+    });
+    expect(unansweredQuestion(round, 1)).toBe(1);
+  });
+
+  it('checks the focused question last', () => {
+    const round = threeQuestions(
+      ...betaChosen,
+      { type: 'focusItem', item: 2 },
+      { type: 'choose', choice: 1 },
+      { type: 'focusItem', item: 0 },
     );
-    const folded = apply(two, { type: 'foldAll' });
-    expect(active(folded).folded).toEqual([true, true, true]);
-    expect(folded.rounds[1].folded).toEqual([false, false]);
-    expect(active(apply(folded, { type: 'unfoldAll' })).folded).toEqual([
-      false,
-      false,
-      false,
-    ]);
-  });
-});
-
-describe('folds with nothing to change', () => {
-  it('unfoldAll leaves state as it is when nothing is folded', () => {
-    const state = mixedRound();
-    expect(apply(state, { type: 'unfoldAll' })).toBe(state);
+    expect(unansweredQuestion(round, 1)).toBe(1);
   });
 
-  it('foldAll leaves state as it is when everything is folded', () => {
-    const state = apply(mixedRound(), { type: 'foldAll' });
-    expect(apply(state, { type: 'foldAll' })).toBe(state);
+  it('runs from the first or last question with a notice focused', () => {
+    const round = active(
+      initialState(
+        [
+          presented('r1', {
+            notices: [notice('N1')],
+            questions: [question('Alpha'), question('Beta'), question('Gamma')],
+          }),
+        ],
+        'r1-session',
+      ),
+    );
+    expect(unansweredQuestion(round, 1)).toBe(1);
+    expect(unansweredQuestion(round, -1)).toBe(3);
+  });
+
+  it('counts why text alone as an answer', () => {
+    const round = threeQuestions(
+      ...[1, 2, 3].map((question): FormsAction => ({
+        type: 'setText',
+        roundId: 'r1',
+        target: { field: 'why', question },
+        value: 'because',
+      })),
+    );
+    expect(unansweredQuestion(round, 1)).toBeNull();
+  });
+
+  it('finds none when every question is not applicable', () => {
+    const round = threeQuestions(
+      ...[0, 1, 2].flatMap((item): FormsAction[] => [
+        { type: 'focusItem', item },
+        { type: 'toggleNotApplicable' },
+      ]),
+    );
+    expect(unansweredQuestion(round, 1)).toBeNull();
+    expect(unansweredQuestion(round, -1)).toBeNull();
   });
 });
 
@@ -971,11 +1018,10 @@ describe('saveState', () => {
     ).toBe(saved);
   });
 
-  it('navigation, folds and views are not edits', () => {
+  it('navigation and views are not edits', () => {
     const state = run(
       mixedRound(),
       { type: 'nextItem' },
-      { type: 'toggleFold' },
       { type: 'openReview' },
       { type: 'toggleHelp' },
     );
@@ -1049,7 +1095,7 @@ describe('apply', () => {
     const state = apply(mixedRound(), { type: 'focusItem', item: 1 });
     const before = structuredClone(state);
     apply(state, { type: 'choose', choice: 1 });
-    apply(state, { type: 'toggleFold' });
+    apply(state, { type: 'nextItem' });
     apply(state, { type: 'roundClosed', roundId: 'r1' });
     expect(state).toEqual(before);
   });

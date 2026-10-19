@@ -40,8 +40,6 @@ export interface RoundState {
   focus: number;
   // A question position, 0-based.
   reviewRow: number;
-  // One per rail item; true hides that item's context.
-  folded: boolean[];
   // Counts answer edits; a save carries the revision it sent.
   revision: number;
   savingRevision: number | null;
@@ -88,10 +86,7 @@ export type ItemAction =
   | { type: 'choose'; choice: number }
   | { type: 'clearChoice' }
   | { type: 'toggleNotApplicable' }
-  | { type: 'toggleDontAsk' }
-  | { type: 'toggleFold' }
-  | { type: 'unfoldAll' }
-  | { type: 'foldAll' };
+  | { type: 'toggleDontAsk' };
 
 export type FormsAction =
   | ItemAction
@@ -256,6 +251,29 @@ export function questionStatus(answer: QuestionAnswer): AnswerStatus {
   return hasChoice || hasText ? 'answered' : 'untouched';
 }
 
+// The next question after the focused one, by `step` and wrapping, whose
+// status is untouched; the focused question is checked last. Null when every
+// question is answered or not applicable.
+export function unansweredQuestion(
+  round: RoundState,
+  step: 1 | -1,
+): number | null {
+  const count = round.answers.length;
+  const item = focusedItem(round);
+  // With a notice focused the search starts just outside the questions, so
+  // forward runs 1 … n and backward n … 1.
+  const outside = step === 1 ? 0 : count + 1;
+  const start = item?.kind === 'question' ? item.index : outside;
+  for (let offset = 1; offset <= count; offset++) {
+    const question =
+      ((((start - 1 + step * offset) % count) + count) % count) + 1;
+    if (questionStatus(round.answers[question - 1]) === 'untouched') {
+      return question;
+    }
+  }
+  return null;
+}
+
 export function progress(round: RoundState): Progress {
   const statuses = round.answers.map(questionStatus);
   const count = (status: AnswerStatus) =>
@@ -316,7 +334,6 @@ function restoreRound(presented: PresentedRound): RoundState {
     note: draft?.note ?? '',
     focus: 0,
     reviewRow: 0,
-    folded: railItems(round).map(() => false),
     revision: 0,
     savingRevision: null,
     savedRevision: 0,
@@ -510,34 +527,17 @@ function applyItemAction(round: RoundState, action: ItemAction): RoundState {
         ...answer,
         dontAsk: !answer.dontAsk,
       }));
-    case 'toggleFold':
-      return {
-        ...round,
-        folded: round.folded.map((folded, i) =>
-          i === round.focus ? !folded : folded,
-        ),
-      };
-    case 'unfoldAll':
-      return setAllFolded(round, false);
-    case 'foldAll':
-      return setAllFolded(round, true);
   }
 }
 
-function setAllFolded(round: RoundState, folded: boolean): RoundState {
-  return round.folded.every((current) => current === folded)
-    ? round
-    : { ...round, folded: round.folded.map(() => folded) };
-}
-
 function moveFocus(round: RoundState, step: number): RoundState {
-  const lastItem = Math.max(round.folded.length - 1, 0);
+  const lastItem = Math.max(railItems(round.round).length - 1, 0);
   const focus = Math.min(Math.max(round.focus + step, 0), lastItem);
   return focus === round.focus ? round : { ...round, focus };
 }
 
 function focusAt(round: RoundState, item: number): RoundState {
-  const isRailPosition = item >= 0 && item < round.folded.length;
+  const isRailPosition = item >= 0 && item < railItems(round.round).length;
   return isRailPosition && item !== round.focus
     ? { ...round, focus: item }
     : round;

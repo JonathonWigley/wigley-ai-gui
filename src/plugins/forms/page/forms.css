@@ -187,23 +187,11 @@
   padding: 0.5rem 0.75rem;
 }
 
-.fold-toggle {
-  background: none;
-  border: 0;
+.context-label {
   color: var(--wg-text-muted);
-  cursor: pointer;
   font-size: 0.8rem;
   letter-spacing: 0.04em;
-  padding: 0;
   text-transform: uppercase;
-}
-
-.fold-toggle::before {
-  content: '▾ ';
-}
-
-.context.is-folded .fold-toggle::before {
-  content: '▸ ';
 }
 
 .context-body {
@@ -284,8 +272,7 @@
   margin: 0.25rem 0 0 2.85rem;
 }
 
-.rationale > summary {
-  cursor: pointer;
+.rationale-label {
   font-size: 0.85rem;
 }
 
