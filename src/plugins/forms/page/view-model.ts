@@ -4,6 +4,7 @@ import {
   type AnswerableItem,
   answerableItems,
   answerStatus,
+  findingActionOf,
   itemAnswer,
   type Progress,
   progress,
@@ -90,18 +91,9 @@ export function reviewRows(round: RoundState): ReviewRow[] {
   });
 }
 
-// The action picked on a finding; '' on a question.
-export function findingActionOf(
-  round: RoundState,
-  item: AnswerableItem,
-): FindingAction | '' {
-  return item.kind === 'finding'
-    ? round.findingAnswers[item.index - 1].action
-    : '';
-}
-
-// What an untouched item's picks lack: a solution among several for an
-// action that needs one, or an action for a picked solution.
+// What an untouched item's picks lack. Untouched means the finding's pick is
+// incomplete (finding-pick.ts), so an action there still needs a solution,
+// and a solution with no action needs an action.
 function missingPick(
   round: RoundState,
   item: AnswerableItem,
@@ -110,13 +102,10 @@ function missingPick(
     return null;
   }
   const answer = round.findingAnswers[item.index - 1];
-  const solutionCount = round.round.findings[item.index - 1].choices.length;
-  const actionNeedsSolution =
-    answer.action === 'fix_now' || answer.action === 'follow_up';
-  if (actionNeedsSolution && solutionCount >= 2 && answer.choice === 0) {
+  if (answer.action !== '') {
     return 'solution';
   }
-  return answer.choice > 0 && answer.action === '' ? 'action' : null;
+  return answer.choice > 0 ? 'action' : null;
 }
 
 // The round's title on its session's tab: its heading and how many of its

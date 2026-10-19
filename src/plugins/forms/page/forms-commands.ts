@@ -23,6 +23,7 @@ import {
   type FormsAction,
   type FormsState,
   type FormsView,
+  findingActionOf,
   type ItemAnswer,
   itemAnswer,
   type RailItem,
@@ -31,7 +32,6 @@ import {
 } from './form-state';
 import type { FormsStore } from './forms-store';
 import { FINDING_ACTION_LABELS } from './kinds/finding/action-labels';
-import { findingActionOf } from './view-model';
 
 export interface FormsCommandDeps {
   store: FormsStore;

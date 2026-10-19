@@ -181,7 +181,8 @@ export const findingFormat: AnswerableFormat<Finding> = {
             },
           },
           description:
-            'The solutions, 1 to 10, one object per solution, each a way to ' +
+            `The solutions, ${MIN_SOLUTIONS} to ${MAX_CHOICES}, one object per ` +
+            'solution, each a way to ' +
             'resolve the finding. What to do with the finding — fix now, ' +
             'follow up or leave it — is the action control, never a choice.',
         },

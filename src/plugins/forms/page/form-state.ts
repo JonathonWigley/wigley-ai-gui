@@ -2,7 +2,6 @@ import type {
   AnswerableKind,
   AnswerEntry,
   AnswerStatus,
-  Finding,
   FindingAction,
   FindingAnswerEntry,
   FormBody,
@@ -292,6 +291,16 @@ export function itemAnswer(
   return round[ANSWER_ARRAYS[item.kind]][item.index - 1];
 }
 
+// The action picked on a finding; '' on a question.
+export function findingActionOf(
+  round: RoundState,
+  item: AnswerableItem,
+): FindingAction | '' {
+  return item.kind === 'finding'
+    ? round.findingAnswers[item.index - 1].action
+    : '';
+}
+
 // Whether the item's picks answer it: a choice on a question, a complete
 // pick of action and solution on a finding.
 const PICK_ANSWERS = {
@@ -415,10 +424,15 @@ function restoreRound(presented: PresentedRound): RoundState {
     sessionId,
     label,
     round,
-    answers: restoreAnswers(round.questions, draft?.answers ?? []),
-    findingAnswers: restoreFindingAnswers(
+    answers: restoreAnswers(
+      round.questions,
+      draft?.answers ?? [],
+      restoreAnswer,
+    ),
+    findingAnswers: restoreAnswers(
       round.findings,
       draft?.finding_answers ?? [],
+      restoreFindingAnswer,
     ),
     noticeComments: round.notices.map(
       (_, i) =>
@@ -436,12 +450,13 @@ function restoreRound(presented: PresentedRound): RoundState {
 }
 
 // One answer per item, from the entry carrying its 1-based index.
-function restoreAnswers(
+function restoreAnswers<Entry extends AnswerEntry, Answer>(
   items: { choices: unknown[] }[],
-  entries: AnswerEntry[],
-): ItemAnswer[] {
+  entries: Entry[],
+  restore: (entry: Entry | undefined, choiceCount: number) => Answer,
+): Answer[] {
   return items.map((item, i) =>
-    restoreAnswer(
+    restore(
       entries.find((entry) => entry.index === i + 1),
       item.choices.length,
     ),
@@ -449,21 +464,15 @@ function restoreAnswers(
 }
 
 // A missing or unknown action restores as none.
-function restoreFindingAnswers(
-  findings: Finding[],
-  entries: FindingAnswerEntry[],
-): FindingAnswer[] {
-  return findings.map((finding, i) => {
-    const entry = entries.find((candidate) => candidate.index === i + 1);
-    if (entry === undefined) {
-      return UNTOUCHED_FINDING;
-    }
-    const action = isFindingAction(entry.action) ? entry.action : '';
-    return {
-      ...restoreAnswer(entry, finding.choices.length),
-      action,
-    };
-  });
+function restoreFindingAnswer(
+  entry: FindingAnswerEntry | undefined,
+  choiceCount: number,
+): FindingAnswer {
+  if (entry === undefined) {
+    return UNTOUCHED_FINDING;
+  }
+  const action = isFindingAction(entry.action) ? entry.action : '';
+  return { ...restoreAnswer(entry, choiceCount), action };
 }
 
 function restoreAnswer(
