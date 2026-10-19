@@ -63,7 +63,8 @@ export function mergeKeymap(
 }
 
 // Every command by id: the core's under their own ids with plugin `core`,
-// each plugin's qualified as `<pluginId>.<short>`.
+// each plugin's qualified as `<pluginId>.<short>`. Throws when a plugin's
+// qualified id is one the core already declares.
 export function commandInfos(
   core: Record<CommandId, CommandDecl>,
   manifests: readonly PluginManifest[],
@@ -75,6 +76,9 @@ export function commandInfos(
   for (const manifest of manifests) {
     for (const [short, decl] of Object.entries(manifest.commands)) {
       const id = qualify(manifest.id, short);
+      if (id in infos) {
+        throw new Error(`Command "${id}" is declared twice`);
+      }
       infos[id] = { ...decl, id, plugin: manifest.id };
     }
   }

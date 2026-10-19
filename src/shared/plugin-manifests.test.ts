@@ -150,6 +150,21 @@ describe('commandInfos', () => {
       },
     });
   });
+
+  it('rejects a plugin command whose id a core command already has', () => {
+    const windowPlugin = manifest('window', {
+      commands: { summon: { label: 'Mine', group: 'Window', runsIn: 'page' } },
+    });
+
+    expect(() =>
+      commandInfos(
+        {
+          'window.summon': { label: 'Summon', group: 'Window', runsIn: 'main' },
+        },
+        [windowPlugin],
+      ),
+    ).toThrow('Command "window.summon" is declared twice');
+  });
 });
 
 describe('pluginSettings', () => {

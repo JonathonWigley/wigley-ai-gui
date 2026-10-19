@@ -93,6 +93,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       run: (command) => api.commands.run(command),
     });
     store.subscribe(() => api.keys.setScope(store.get().view));
+    api.keys.setScope(store.get().view);
     startAutosave({
       store,
       save: (roundId, body) => api.channel.invoke('draft', roundId, body),

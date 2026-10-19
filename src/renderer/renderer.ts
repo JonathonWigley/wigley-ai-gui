@@ -23,8 +23,8 @@ import { mountShell } from './shell/shell';
 import { applyTheme } from './theme';
 import { createToasts } from './toasts';
 
-// The scope page keys fire in until a plugin sets its own.
-const INITIAL_SCOPE = 'forms.idle';
+// The scope page keys fire in until a plugin sets one: only `any` binds match.
+const INITIAL_SCOPE = 'any';
 
 const timers: Timers = {
   set: (run, ms) => window.setTimeout(run, ms),
