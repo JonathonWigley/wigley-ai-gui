@@ -28,7 +28,7 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 src/contracts/   interfaces and records crossing a seam, the plugin API among them; imports nothing
 src/config/      core keymap (leader, remaps, app chords) and settings, and the built-in themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
-                 theme variables)
+                 theme variables), and page-only helpers plugins share (DOM builders, `errorText`)
 src/main/        core main process; main.ts is its composition root
   plugins/       the main-side plugin API: per-plugin channel routing and services
   themes/        theme loader: parses and chooses the built-in or user theme
