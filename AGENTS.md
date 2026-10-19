@@ -28,7 +28,7 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 src/contracts/   interfaces and records crossing a seam, the plugin API among them; imports nothing
 src/config/      core keymap (leader, remaps, app chords) and settings, and the built-in themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
-                 theme variables), and page-only helpers plugins share (DOM builders, `errorText`)
+                 theme variables, `errorText`), and page-only DOM builders plugins share
 src/main/        core main process; main.ts is its composition root
   plugins/       the main-side plugin API: per-plugin channel routing and services
   themes/        theme loader: parses and chooses the built-in or user theme
@@ -42,8 +42,9 @@ src/renderer/    core page; renderer.ts is its composition root
   codemirror-vim/ editor adapter behind EditorHost          → the only codemirror / @replit import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, main.ts and page.ts the
                  parts each root starts
-  sessions/      manifest.ts, contract.ts, main/ (relay, endpoint files, MCP adapter → the only
-                 @modelcontextprotocol import), page/ (session tabs and the session view)
+  sessions/      manifest.ts, contract.ts, main/ (the session list — tabs, the active tab, tool routing — relay,
+                 endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (session tabs and the
+                 session view)
   forms/         manifest.ts, contract.ts, main/ (round logic, saved rounds, its MCP tools), page/ (the round view)
 src/mock-agent/  a separate executable the ACP adapter spawns in dev
 ```

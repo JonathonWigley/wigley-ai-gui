@@ -135,8 +135,8 @@ function buildConfig(
 }
 
 // Starts every plugin's main part, each with its own API over one plugin
-// channel router to the window's page and one event bus. `onStarted` sees each part as it
-// starts, so a part is known even when a later start throws.
+// channel router to the window's page and one event bus. `onStarted` sees
+// each part as it starts, so a part is known even when a later start throws.
 function startMainParts(
   window: BrowserWindow,
   settingsByPlugin: StartInputs['settingsByPlugin'],
