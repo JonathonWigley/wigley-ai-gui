@@ -104,6 +104,17 @@ function exitSelfTest(code: number, cleanUp: () => void) {
   app.exit(code);
 }
 
+// Reports `what` as failed with `error`'s text, and exits non-zero.
+export function failSelfTest(
+  what: string,
+  error: unknown,
+  cleanUp: () => void,
+) {
+  const message = error instanceof Error ? error.message : String(error);
+  report(false, `${what}: ${message}`);
+  exitSelfTest(1, cleanUp);
+}
+
 function waitForPageWidth(window: BrowserWindow, width: number) {
   return waitFor(async () => {
     const pageWidth: number =
@@ -173,11 +184,11 @@ async function runStep(
 async function runAllSteps(
   window: BrowserWindow,
   script: SelfTestScript,
+  run: number,
+  isCurrent: () => boolean,
   cleanUp: () => void,
 ) {
   const exit = (code: number) => exitSelfTest(code, cleanUp);
-  const run = ++latestRun;
-  const isCurrent = () => run === latestRun;
   const isReadyForKeys = async () =>
     hasPaintedSinceNavigation && (await isPageReady(window));
   const isReady = await waitFor(isReadyForKeys);
@@ -223,6 +234,22 @@ async function runAllSteps(
   exit(failures === 0 ? 0 : 1);
 }
 
+// Starts a fresh run of the script; a step that throws fails the self-test,
+// unless a reload already interrupted the run.
+function startRun(
+  window: BrowserWindow,
+  script: SelfTestScript,
+  cleanUp: () => void,
+) {
+  const run = ++latestRun;
+  const isCurrent = () => run === latestRun;
+  runAllSteps(window, script, run, isCurrent, cleanUp).catch((error) => {
+    if (isCurrent()) {
+      failSelfTest('the steps run', error, cleanUp);
+    }
+  });
+}
+
 // The host the self-test hands plugins, plus `closeHandover`, which the
 // composition root calls once every part has started.
 export interface SelfTestDriver extends SelfTestHost {
@@ -261,9 +288,8 @@ export function startSelfTest(
         );
       }
       handed = script;
-      window.webContents.on(
-        'did-finish-load',
-        () => void runAllSteps(window, script, cleanUp),
+      window.webContents.on('did-finish-load', () =>
+        startRun(window, script, cleanUp),
       );
     },
     closeHandover() {

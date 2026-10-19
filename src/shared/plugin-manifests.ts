@@ -85,13 +85,18 @@ export function commandInfos(
   return infos;
 }
 
-// Each plugin's settings, by plugin id.
+// Each plugin's settings, by plugin id. Throws when two manifests share an id.
 export function pluginSettings(
   manifests: readonly PluginManifest[],
 ): Record<string, object> {
-  return Object.fromEntries(
-    manifests.map((manifest) => [manifest.id, manifest.settings]),
-  );
+  const settings: Record<string, object> = {};
+  for (const manifest of manifests) {
+    if (manifest.id in settings) {
+      throw new Error(`Plugin "${manifest.id}" is listed twice`);
+    }
+    settings[manifest.id] = manifest.settings;
+  }
+  return settings;
 }
 
 // Throws naming each part whose manifest is not in `listed`, the manifests the

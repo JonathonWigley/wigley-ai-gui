@@ -181,6 +181,15 @@ describe('pluginSettings', () => {
 
     expect(settings).toEqual({ p: { a: 1 }, q: {} });
   });
+
+  it('rejects a plugin id listed twice', () => {
+    expect(() =>
+      pluginSettings([
+        manifest('p', { settings: { a: 1 } }),
+        manifest('p', { settings: { a: 2 } }),
+      ]),
+    ).toThrow('Plugin "p" is listed twice');
+  });
 });
 
 describe('requireListed', () => {

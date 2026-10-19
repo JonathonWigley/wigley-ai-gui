@@ -3,6 +3,7 @@
 import {
   app,
   type BrowserWindow,
+  dialog,
   globalShortcut,
   ipcMain,
   type WebContents,
@@ -46,7 +47,7 @@ import {
 } from './keybindings';
 import { createMainApi } from './plugins/main-api';
 import { createPluginChannels } from './plugins/plugin-channel';
-import { startSelfTest } from './selftest';
+import { failSelfTest, startSelfTest } from './selftest';
 import { chooseTheme } from './themes/theme-loader';
 import {
   createMainWindow,
@@ -70,6 +71,7 @@ const theme = chooseTheme(
 );
 requireListed(mainParts, manifests);
 const settingsByPlugin = pluginSettings(manifests);
+const commandsById = commandInfos(coreCommands, manifests);
 const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 // The self-test gives plugins a fresh temp folder as the home folder, never
@@ -77,6 +79,7 @@ const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const homeDir = isSelfTest
   ? mkdtempSync(path.join(os.tmpdir(), 'wigley-forms-selftest-'))
   : os.homedir();
+const cleanUpSelfTest = () => rmSync(homeDir, { recursive: true, force: true });
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -95,7 +98,7 @@ function buildConfig(selfTestBinds: PageBind[]): AppConfig {
   return {
     settings: defaultSettings,
     keymap,
-    commands: commandInfos(coreCommands, manifests),
+    commands: commandsById,
     pluginSettings: settingsByPlugin,
     theme,
   };
@@ -152,11 +155,7 @@ function createWindow() {
   mainWindow = window;
   const log = pageLog(window.webContents);
 
-  const selfTest = isSelfTest
-    ? startSelfTest(window, () =>
-        rmSync(homeDir, { recursive: true, force: true }),
-      )
-    : null;
+  const selfTest = isSelfTest ? startSelfTest(window, cleanUpSelfTest) : null;
   const selfTestHost: SelfTestHost | null = selfTest && {
     run: (script) => selfTest.run(script),
   };
@@ -206,6 +205,17 @@ function createWindow() {
   });
 }
 
+// Shows why the app could not start, and exits non-zero.
+function failStart(error: unknown) {
+  if (isSelfTest) {
+    failSelfTest('the app starts', error, cleanUpSelfTest);
+    return;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  dialog.showErrorBox('wigley-ai-gui could not start', message);
+  app.exit(1);
+}
+
 function startApp() {
   if (process.platform === 'win32') {
     // Windows shows a toast only for an app with an AppUserModelID.
@@ -220,10 +230,13 @@ function startApp() {
   app.on('before-quit', () => {
     isQuitting = true;
   });
-  app.whenReady().then(() => {
-    createWindow();
-    app.on('activate', () => mainWindow?.show());
-  });
+  app
+    .whenReady()
+    .then(() => {
+      createWindow();
+      app.on('activate', () => mainWindow?.show());
+    })
+    .catch(failStart);
   app.on('will-quit', () => globalShortcut.unregisterAll());
   // Quit when the window closes, except on macOS, where closing hides it.
   app.on('window-all-closed', () => {
