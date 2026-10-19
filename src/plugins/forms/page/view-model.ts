@@ -1,5 +1,6 @@
 import type { VimMode } from '../../../contracts/editor';
 import type { AnswerableKind, AnswerStatus, FindingAction } from '../contract';
+import { findingSolution } from '../finding-pick';
 import {
   type AnswerableItem,
   answerableItems,
@@ -29,8 +30,8 @@ export interface ReviewRow {
   // whatever its notes, and on a question.
   action: FindingAction | '';
   actionLabel: string;
-  // The choice while the item's pick is complete and it applies, else 0; the
-  // solution a finding left alone keeps does not count.
+  // The choice the agent gets while the item's pick is complete and it
+  // applies, else 0: on a finding, the solution findingSolution gives.
   choice: number;
   choiceText: string;
   tookRecommendation: boolean;
@@ -69,7 +70,7 @@ export function reviewRows(round: RoundState): ReviewRow[] {
     const isApplicable = status !== 'not_applicable';
     const pickCounts = isApplicable && pickIsComplete(round, item);
     const action = pickCounts ? findingActionOf(round, item) : '';
-    const choice = pickCounts && action !== 'leave_it' ? answer.choice : 0;
+    const choice = pickCounts ? pickedChoice(round, item) : 0;
     const tookRecommendation =
       choice > 0 && choice === format.recommend(round.round, item.index);
     const tookActionRecommendation =
@@ -104,6 +105,17 @@ export function reviewRows(round: RoundState): ReviewRow[] {
       isCursor: row === round.reviewRow,
     };
   });
+}
+
+// The choice the agent gets for an item whose pick is complete: a question's
+// choice, or a finding's solution.
+function pickedChoice(round: RoundState, item: AnswerableItem): number {
+  if (item.kind === 'question') {
+    return round.answers[item.index - 1].choice;
+  }
+  const answer = round.findingAnswers[item.index - 1];
+  const solutionCount = round.round.findings[item.index - 1].choices.length;
+  return findingSolution(solutionCount, answer.choice, answer.action);
 }
 
 // A finding left alone needs only its action recommendation; one fixed or

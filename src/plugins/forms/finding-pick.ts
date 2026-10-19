@@ -21,3 +21,21 @@ export function findingPickIsComplete(
   const choiceIsInRange = choice >= 1 && choice <= solutionCount;
   return solutionCount === 1 || choiceIsInRange;
 }
+
+// The 1-based solution the caller gets for a finding's pick: 1 on a
+// one-solution finding, whatever `choice` holds; 0 while the pick is
+// incomplete or the action is 'leave_it'. Whether the finding applies is the
+// caller's to check.
+export function findingSolution(
+  solutionCount: number,
+  choice: number,
+  action: FindingAction | '',
+): number {
+  const hasSolution =
+    action !== 'leave_it' &&
+    findingPickIsComplete(solutionCount, choice, action);
+  if (!hasSolution) {
+    return 0;
+  }
+  return solutionCount === 1 ? 1 : choice;
+}

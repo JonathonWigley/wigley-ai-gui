@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { findingPickIsComplete, isFindingAction } from './finding-pick';
+import {
+  findingPickIsComplete,
+  findingSolution,
+  isFindingAction,
+} from './finding-pick';
 
 describe('findingPickIsComplete', () => {
   it('holds for leave_it with no solution picked', () => {
@@ -21,6 +25,29 @@ describe('findingPickIsComplete', () => {
 
   it('fails with no action, whatever the choice', () => {
     expect(findingPickIsComplete(2, 1, '')).toBe(false);
+  });
+});
+
+describe('findingSolution', () => {
+  it('gives the picked solution among several for fix_now and follow_up', () => {
+    expect(findingSolution(3, 2, 'fix_now')).toBe(2);
+    expect(findingSolution(3, 3, 'follow_up')).toBe(3);
+  });
+
+  it('gives solution 1 on a one-solution finding, whatever the choice', () => {
+    expect(findingSolution(1, 0, 'fix_now')).toBe(1);
+    expect(findingSolution(1, 2, 'follow_up')).toBe(1);
+  });
+
+  it('gives none for leave_it, even with a kept solution', () => {
+    expect(findingSolution(3, 2, 'leave_it')).toBe(0);
+    expect(findingSolution(1, 1, 'leave_it')).toBe(0);
+  });
+
+  it('gives none while the pick is incomplete', () => {
+    expect(findingSolution(3, 2, '')).toBe(0);
+    expect(findingSolution(3, 0, 'fix_now')).toBe(0);
+    expect(findingSolution(3, 4, 'fix_now')).toBe(0);
   });
 });
 

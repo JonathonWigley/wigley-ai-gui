@@ -15,7 +15,11 @@ import type {
   Round,
   RoundEnd,
 } from '../contract';
-import { findingPickIsComplete, isFindingAction } from '../finding-pick';
+import {
+  findingPickIsComplete,
+  findingSolution,
+  isFindingAction,
+} from '../finding-pick';
 import {
   fieldsOutside,
   isObject,
@@ -243,9 +247,9 @@ function findingResult(
   } else if (answered) {
     status = 'answered';
   }
-  const hasSolution = answered && entry.action !== 'leave_it';
-  const solution = solutionCount === 1 ? 1 : entry.choice;
-  const choice = hasSolution ? solution : 0;
+  const choice = entry.not_applicable
+    ? 0
+    : findingSolution(solutionCount, entry.choice, entry.action);
   const result: FindingResult = {
     index: entry.index,
     title: subject.title,

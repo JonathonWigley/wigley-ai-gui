@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Finding } from '../contract';
+import type { Finding, PresentedRound } from '../contract';
 import {
   activeRound,
   apply,
@@ -251,6 +251,45 @@ describe('reviewRows', () => {
       choiceText: 'only',
       tookActionRecommendation: true,
       missing: null,
+    });
+  });
+
+  it('gives a fixed one-solution finding restored with no solution picked its one solution', () => {
+    const solo = finding('Solo', {
+      choices: [{ text: 'only', reason: 'why' }],
+      recommend: 1,
+      recommend_action: 'fix_now',
+    });
+    const restored: PresentedRound = {
+      ...presentedRound('r1', { questions: [], findings: [solo] }),
+      draft: {
+        note: '',
+        answers: [],
+        finding_answers: [
+          {
+            index: 1,
+            choice: 0,
+            action: 'fix_now',
+            not_applicable: false,
+            notes: '',
+            dont_ask: false,
+            dont_ask_reason: '',
+          },
+        ],
+        notice_comments: [],
+      },
+    };
+    const round = activeRound(initialState([restored], 'r1-session'));
+    if (round === null) {
+      throw new Error('The test round is not active');
+    }
+    const [row] = reviewRows(round);
+    expect(row).toMatchObject({
+      status: 'answered',
+      action: 'fix_now',
+      choice: 1,
+      choiceText: 'only',
+      recommended: true,
     });
   });
 
