@@ -79,7 +79,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       api.events.emit('activeChanged', { sessionId });
     };
 
-    // A state read that a stateChanged overtook is stale.
+    // A state read that a stateChanged overtook is stale. A failed read is
+    // logged and leaves the view blank, never claiming there are no sessions.
     let hasStateChanged = false;
     api.channel.on('stateChanged', (next) => {
       hasStateChanged = true;

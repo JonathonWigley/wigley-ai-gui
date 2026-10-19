@@ -1,7 +1,7 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import { formsCommand } from '../ids';
-import { button, element, markdownElement } from '../../../shared/dom';
+import { button, element, markdownElement } from '../../../shared/page/dom';
 import type { EditorBoxes } from './editor-boxes';
 import {
   type FormsAction,

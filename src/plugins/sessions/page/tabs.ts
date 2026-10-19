@@ -35,6 +35,12 @@ export function showsIdleText(fillCount: number): boolean {
   return fillCount === 0;
 }
 
+// Whether the page shows its "No sessions" text: only once main's state has
+// arrived (null until then) and it holds no tab.
+export function showsEmptyText(state: SessionsState | null): boolean {
+  return state !== null && state.tabs.length === 0;
+}
+
 // Asks each view in order whether its tab may close, stopping at the first
 // that says no.
 export function mayClose(

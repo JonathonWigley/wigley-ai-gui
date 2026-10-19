@@ -2,7 +2,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Keymap } from '../../../contracts/keymap';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Area, AreaName } from '../../../contracts/plugin';
-import { button, element } from '../../../shared/dom';
+import { button, element } from '../../../shared/page/dom';
 import type { SessionsPageExports } from '../../sessions/contract';
 import { formsCommand, formsScope } from '../ids';
 import { isBoxShown } from './boxes';

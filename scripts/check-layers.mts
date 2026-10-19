@@ -1,7 +1,8 @@
 // Fails when a source file imports across a layer boundary LAYERS does not allow.
 // A file belongs to the layer with the longest matching path; imports inside a
 // file's own layer are always allowed, and a `.test.ts` file may also import the
-// test packages.
+// test packages. An import is allowed when the imported file's own layer is
+// listed exactly: allowing `src/shared` does not admit `src/shared/page`.
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
@@ -16,6 +17,7 @@ const LAYERS: Record<string, LayerRule> = {
   'src/contracts': { layers: [], packages: [] },
   'src/config': { layers: ['src/contracts'], packages: [] },
   'src/shared': { layers: ['src/contracts'], packages: [] },
+  'src/shared/page': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/declarations.d.ts': { layers: ['src/contracts'], packages: [] },
   'src/preload': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main': {
@@ -62,6 +64,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/page',
       'src/plugins/forms',
       'src/plugins/sessions/contract.ts',
     ],
@@ -98,6 +101,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/page',
       'src/plugins/sessions',
       'src/plugins/sessions/contract.ts',
     ],
@@ -127,6 +131,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/page',
       'src/plugins/forms',
       'src/plugins/forms/page',
       'src/plugins/sessions',
@@ -134,7 +139,10 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
-  'src/renderer': { layers: ['src/contracts', 'src/shared'], packages: [] },
+  'src/renderer': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/page'],
+    packages: [],
+  },
   'src/renderer/codemirror-vim': {
     layers: ['src/contracts', 'src/shared'],
     packages: ['codemirror', '@replit/codemirror-vim'],

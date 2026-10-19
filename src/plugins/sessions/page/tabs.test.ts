@@ -3,6 +3,7 @@ import type { SessionsState } from '../contract';
 import {
   keepsPane,
   mayClose,
+  showsEmptyText,
   showsIdleText,
   stepTab,
   tabText,
@@ -65,6 +66,15 @@ describe('tabs', () => {
   it('showsIdleText only while nothing fills the pane', () => {
     expect(showsIdleText(0)).toBe(true);
     expect(showsIdleText(1)).toBe(false);
+  });
+
+  it('showsEmptyText waits for the first state', () => {
+    expect(showsEmptyText(null)).toBe(false);
+  });
+
+  it('showsEmptyText only when the state holds no tab', () => {
+    expect(showsEmptyText(stateOf([], null))).toBe(true);
+    expect(showsEmptyText(stateOf(['a'], 'a'))).toBe(false);
   });
 
   it('mayClose stops at the first guard that keeps the tab', () => {

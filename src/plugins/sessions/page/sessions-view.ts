@@ -1,7 +1,13 @@
 import type { Area } from '../../../contracts/plugin';
-import { button, element } from '../../../shared/dom';
+import { button, element } from '../../../shared/page/dom';
 import type { SessionsState, SessionTab, SessionView } from '../contract';
-import { keepsPane, showsIdleText, tabText, tabTitle } from './tabs';
+import {
+  keepsPane,
+  showsEmptyText,
+  showsIdleText,
+  tabText,
+  tabTitle,
+} from './tabs';
 
 // What fills a session's view, with the title it last set.
 interface Fill {
@@ -27,7 +33,8 @@ export interface SessionsView {
 
 // The tab strip, one view per session holding what other plugins fill it
 // with, and the empty state, in the main area. Only the active session's view
-// shows; a session with no fill shows its idle text.
+// shows; a session with no fill shows its idle text. Until `render` hands
+// it main's first state, it shows no empty state either.
 export function mountSessionsView(
   main: Area,
   activate: (sessionId: string) => void,
@@ -40,7 +47,7 @@ export function mountSessionsView(
   root.append(strip, views, empty);
   main.contribute(root);
   const panes = new Map<string, SessionPane>();
-  let state: SessionsState = { tabs: [], activeSessionId: null };
+  let state: SessionsState | null = null;
 
   const paneOf = (sessionId: string): SessionPane => {
     const existing = panes.get(sessionId);
@@ -54,28 +61,30 @@ export function mountSessionsView(
   };
 
   const render = () => {
-    const hasTabs = state.tabs.length > 0;
-    for (const tab of state.tabs) {
+    const tabs = state?.tabs ?? [];
+    const activeSessionId = state?.activeSessionId ?? null;
+    const hasTabs = tabs.length > 0;
+    for (const tab of tabs) {
       paneOf(tab.sessionId);
     }
     for (const [sessionId, pane] of panes) {
-      const hasTab = state.tabs.some((tab) => tab.sessionId === sessionId);
+      const hasTab = tabs.some((tab) => tab.sessionId === sessionId);
       if (!keepsPane(hasTab, pane.fills.length)) {
         pane.element.remove();
         panes.delete(sessionId);
         continue;
       }
-      pane.element.hidden = sessionId !== state.activeSessionId;
+      pane.element.hidden = sessionId !== activeSessionId;
       pane.idle.hidden = !showsIdleText(pane.fills.length);
     }
     strip.hidden = !hasTabs;
     views.hidden = !hasTabs;
-    empty.hidden = hasTabs;
+    empty.hidden = !showsEmptyText(state);
     strip.replaceChildren(
-      ...state.tabs.map((tab) =>
+      ...tabs.map((tab) =>
         buildTab(
           tab,
-          state.activeSessionId,
+          activeSessionId,
           tabTitle(
             panes.get(tab.sessionId)?.fills.map((fill) => fill.title) ?? [],
           ),
