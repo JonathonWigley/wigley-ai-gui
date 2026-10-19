@@ -1,4 +1,4 @@
-import type { Notice, PresentedRound, Question } from '../contract';
+import type { Finding, Notice, PresentedRound, Question } from '../contract';
 
 export function question(
   title: string,
@@ -19,9 +19,30 @@ export function notice(title: string): Notice {
   return { title, context: `${title} context`, badge: 'Applied' };
 }
 
+export function finding(
+  title: string,
+  overrides: Partial<Finding> = {},
+): Finding {
+  return {
+    title,
+    finding: `${title} finding`,
+    proof: `${title} proof`,
+    choices: ['first', 'second', 'third'].map((text) => ({
+      text,
+      reason: `${text} reason`,
+    })),
+    recommend: 2,
+    ...overrides,
+  };
+}
+
 export function presentedRound(
   roundId: string,
-  parts: { questions?: Question[]; notices?: Notice[] } = {},
+  parts: {
+    questions?: Question[];
+    notices?: Notice[];
+    findings?: Finding[];
+  } = {},
 ): PresentedRound {
   return {
     roundId,
@@ -32,6 +53,7 @@ export function presentedRound(
       overview: '',
       questions: parts.questions ?? [question('Alpha'), question('Beta')],
       notices: parts.notices ?? [],
+      findings: parts.findings ?? [],
     },
     draft: null,
   };

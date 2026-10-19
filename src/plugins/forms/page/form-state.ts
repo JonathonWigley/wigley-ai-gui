@@ -1,7 +1,9 @@
 import type {
+  AnswerableKind,
   AnswerEntry,
   AnswerStatus,
   FormBody,
+  ItemKind,
   PresentedRound,
   Round,
 } from '../contract';
@@ -11,16 +13,16 @@ export type FormsView = 'forms' | 'review' | 'confirm' | 'help' | 'idle';
 export type SaveState = 'saved' | 'saving' | 'unsaved';
 
 // `index` is 1-based within its kind, as the forms contract numbers items.
-export type RailItem =
-  | { kind: 'notice'; index: number }
-  | { kind: 'question'; index: number };
+export type RailItem = { kind: ItemKind; index: number };
 
-export interface QuestionAnswer {
+export type AnswerableItem = { kind: AnswerableKind; index: number };
+
+// A question's or a finding's answer.
+export interface ItemAnswer {
   // 1-based, 0 for none; kept while not applicable.
   choice: number;
   notApplicable: boolean;
-  what: string;
-  why: string;
+  notes: string;
   dontAsk: boolean;
   dontAskReason: string;
 }
@@ -32,13 +34,15 @@ export interface RoundState {
   label: string;
   round: Round;
   // One per question, in order.
-  answers: QuestionAnswer[];
+  answers: ItemAnswer[];
+  // One per finding, in order.
+  findingAnswers: ItemAnswer[];
   // One per notice, in order.
   noticeComments: string[];
   note: string;
   // A position in railItems(round).
   focus: number;
-  // A question position, 0-based.
+  // A position in answerableItems(round).
   reviewRow: number;
   // Counts answer edits; a save carries the revision it sent.
   revision: number;
@@ -71,9 +75,9 @@ export interface Progress {
   total: number;
 }
 
-// `question` and `notice` are 1-based.
+// `item.index` and `notice` are 1-based.
 export type TextTarget =
-  | { field: 'what' | 'why' | 'dontAskReason'; question: number }
+  | { field: 'notes' | 'dontAskReason'; item: AnswerableItem }
   | { field: 'comment'; notice: number }
   | { field: 'note' };
 
@@ -127,13 +131,25 @@ const EMPTY_STATE: FormsState = {
   confirmClosesTab: false,
 };
 
-const UNTOUCHED: QuestionAnswer = {
+const UNTOUCHED: ItemAnswer = {
   choice: 0,
   notApplicable: false,
-  what: '',
-  why: '',
+  notes: '',
   dontAsk: false,
   dontAskReason: '',
+};
+
+const RAIL_ORDER: ItemKind[] = ['notice', 'finding', 'question'];
+
+const ROUND_ITEMS = {
+  notice: (round) => round.notices,
+  finding: (round) => round.findings,
+  question: (round) => round.questions,
+} satisfies Record<ItemKind, (round: Round) => unknown[]>;
+
+const ANSWER_ARRAYS: Record<AnswerableKind, 'answers' | 'findingAnswers'> = {
+  question: 'answers',
+  finding: 'findingAnswers',
 };
 
 export function initialState(
@@ -226,56 +242,81 @@ export function baseView(state: FormsState): FormsView {
 }
 
 export function railItems(round: Round): RailItem[] {
-  const notices = round.notices.map((_, i): RailItem => ({
-    kind: 'notice',
-    index: i + 1,
-  }));
-  const questions = round.questions.map((_, i): RailItem => ({
-    kind: 'question',
-    index: i + 1,
-  }));
-  return [...notices, ...questions];
+  return RAIL_ORDER.flatMap((kind) =>
+    ROUND_ITEMS[kind](round).map((_, i): RailItem => ({ kind, index: i + 1 })),
+  );
+}
+
+// The findings, then the questions, in rail order.
+export function answerableItems(round: Round): AnswerableItem[] {
+  return railItems(round).filter(
+    (item): item is AnswerableItem => item.kind !== 'notice',
+  );
+}
+
+// The item's position in railItems(round), or -1 when the round lacks it.
+export function railPosition(round: Round, item: RailItem): number {
+  return railItems(round).findIndex(
+    (candidate) =>
+      candidate.kind === item.kind && candidate.index === item.index,
+  );
 }
 
 export function focusedItem(round: RoundState): RailItem | null {
   return railItems(round.round)[round.focus] ?? null;
 }
 
-// A choice, or written what or why text, answers a question.
-export function questionStatus(answer: QuestionAnswer): AnswerStatus {
+// Throws when the round has no such item.
+export function itemAnswer(
+  round: RoundState,
+  item: AnswerableItem,
+): ItemAnswer {
+  if (!hasItem(round, item)) {
+    throw new Error(`round ${round.roundId} has no ${item.kind} ${item.index}`);
+  }
+  return round[ANSWER_ARRAYS[item.kind]][item.index - 1];
+}
+
+// A choice, or written notes, answers an item.
+export function answerStatus(answer: ItemAnswer): AnswerStatus {
   if (answer.notApplicable) {
     return 'not_applicable';
   }
   const hasChoice = answer.choice >= 1;
-  const hasText = answer.what.trim() !== '' || answer.why.trim() !== '';
+  const hasText = answer.notes.trim() !== '';
   return hasChoice || hasText ? 'answered' : 'untouched';
 }
 
-// The next question after the focused one, by `step` and wrapping, whose
-// status is untouched; the focused question is checked last. Null when every
-// question is answered or not applicable.
-export function unansweredQuestion(
+// The next answerable item after the focused one, by `step` and wrapping,
+// whose status is untouched; the focused item is checked last. Null when
+// every item is answered or not applicable.
+export function unansweredItem(
   round: RoundState,
   step: 1 | -1,
-): number | null {
-  const count = round.answers.length;
-  const item = focusedItem(round);
-  // With a notice focused the search starts just outside the questions, so
-  // forward runs 1 … n and backward n … 1.
-  const outside = step === 1 ? 0 : count + 1;
-  const start = item?.kind === 'question' ? item.index : outside;
+): AnswerableItem | null {
+  const items = answerableItems(round.round);
+  const count = items.length;
+  const focused = focusedItem(round);
+  const position = items.findIndex(
+    (item) => item.kind === focused?.kind && item.index === focused.index,
+  );
+  // With a notice focused the search starts just outside the items, so
+  // forward runs from the first and backward from the last.
+  const outside = step === 1 ? -1 : count;
+  const start = position < 0 ? outside : position;
   for (let offset = 1; offset <= count; offset++) {
-    const question =
-      ((((start - 1 + step * offset) % count) + count) % count) + 1;
-    if (questionStatus(round.answers[question - 1]) === 'untouched') {
-      return question;
+    const item = items[(((start + step * offset) % count) + count) % count];
+    if (answerStatus(itemAnswer(round, item)) === 'untouched') {
+      return item;
     }
   }
   return null;
 }
 
 export function progress(round: RoundState): Progress {
-  const statuses = round.answers.map(questionStatus);
+  const statuses = answerableItems(round.round).map((item) =>
+    answerStatus(itemAnswer(round, item)),
+  );
   const count = (status: AnswerStatus) =>
     statuses.filter((candidate) => candidate === status).length;
   return {
@@ -297,19 +338,24 @@ export function saveState(round: RoundState): SaveState {
 export function buildBody(round: RoundState): FormBody {
   return {
     note: round.note,
-    answers: round.answers.map((answer, i): AnswerEntry => ({
-      index: i + 1,
-      choice: answer.choice,
-      not_applicable: answer.notApplicable,
-      what: answer.what,
-      why: answer.why,
-      dont_ask: answer.dontAsk,
-      dont_ask_reason: answer.dontAskReason,
-    })),
+    answers: round.answers.map(answerEntry),
+    finding_answers: round.findingAnswers.map(answerEntry),
     notice_comments: round.noticeComments.map((comment, i) => ({
       index: i + 1,
       comment,
     })),
+  };
+}
+
+// `i` is the answer's 0-based position.
+function answerEntry(answer: ItemAnswer, i: number): AnswerEntry {
+  return {
+    index: i + 1,
+    choice: answer.choice,
+    not_applicable: answer.notApplicable,
+    notes: answer.notes,
+    dont_ask: answer.dontAsk,
+    dont_ask_reason: answer.dontAskReason,
   };
 }
 
@@ -320,11 +366,10 @@ function restoreRound(presented: PresentedRound): RoundState {
     sessionId,
     label,
     round,
-    answers: round.questions.map((question, i) =>
-      restoreAnswer(
-        draft?.answers.find((entry) => entry.index === i + 1),
-        question.choices.length,
-      ),
+    answers: restoreAnswers(round.questions, draft?.answers ?? []),
+    findingAnswers: restoreAnswers(
+      round.findings,
+      draft?.finding_answers ?? [],
     ),
     noticeComments: round.notices.map(
       (_, i) =>
@@ -341,10 +386,23 @@ function restoreRound(presented: PresentedRound): RoundState {
   };
 }
 
+// One answer per item, from the entry carrying its 1-based index.
+function restoreAnswers(
+  items: { choices: unknown[] }[],
+  entries: AnswerEntry[],
+): ItemAnswer[] {
+  return items.map((item, i) =>
+    restoreAnswer(
+      entries.find((entry) => entry.index === i + 1),
+      item.choices.length,
+    ),
+  );
+}
+
 function restoreAnswer(
   entry: AnswerEntry | undefined,
   choiceCount: number,
-): QuestionAnswer {
+): ItemAnswer {
   if (entry === undefined) {
     return UNTOUCHED;
   }
@@ -352,8 +410,7 @@ function restoreAnswer(
   return {
     choice: isChoiceInRange ? entry.choice : 0,
     notApplicable: entry.not_applicable,
-    what: entry.what,
-    why: entry.why,
+    notes: entry.notes,
     dontAsk: entry.dont_ask,
     dontAskReason: entry.dont_ask_reason,
   };
@@ -454,7 +511,7 @@ function moveReviewRow(state: FormsState, step: number): FormsState {
     return state;
   }
   return updateRound(state, state.activeRoundId, (round) => {
-    const lastRow = Math.max(round.answers.length - 1, 0);
+    const lastRow = Math.max(answerableItems(round.round).length - 1, 0);
     const row = Math.min(Math.max(round.reviewRow + step, 0), lastRow);
     return row === round.reviewRow ? round : { ...round, reviewRow: row };
   });
@@ -469,14 +526,14 @@ function jumpToReviewRow(
     return state;
   }
   const target = row ?? round.reviewRow;
-  const isQuestionRow = target >= 0 && target < round.answers.length;
-  if (!isQuestionRow) {
+  const item = answerableItems(round.round)[target];
+  if (item === undefined) {
     return state;
   }
   const jumped = updateRound(state, round.roundId, (current) => ({
     ...current,
     reviewRow: target,
-    focus: current.round.notices.length + target,
+    focus: railPosition(current.round, item),
   }));
   return { ...jumped, view: 'forms' };
 }
@@ -545,10 +602,10 @@ function focusAt(round: RoundState, item: number): RoundState {
 
 // Same number again clears; locked while not applicable.
 function choose(
-  answer: QuestionAnswer,
+  answer: ItemAnswer,
   choiceCount: number,
   choice: number,
-): QuestionAnswer {
+): ItemAnswer {
   const isChoiceInRange = choice >= 1 && choice <= choiceCount;
   if (answer.notApplicable || !isChoiceInRange) {
     return answer;
@@ -559,27 +616,35 @@ function choose(
 // A no-op when a notice is focused or `change` returns the answer it was given.
 function updateFocusedAnswer(
   round: RoundState,
-  change: (answer: QuestionAnswer, choiceCount: number) => QuestionAnswer,
+  change: (answer: ItemAnswer, choiceCount: number) => ItemAnswer,
 ): RoundState {
-  const position = round.focus - round.round.notices.length;
-  const isQuestion = position >= 0 && position < round.answers.length;
-  if (!isQuestion) {
+  const focused = focusedItem(round);
+  if (focused === null || focused.kind === 'notice') {
     return round;
   }
-  const answer = round.answers[position];
-  const next = change(answer, round.round.questions[position].choices.length);
-  return next === answer ? round : withAnswer(round, position, next);
+  const item: AnswerableItem = { kind: focused.kind, index: focused.index };
+  const choiceCount = ROUND_ITEMS[item.kind](round.round)[item.index - 1]
+    .choices.length;
+  const answer = itemAnswer(round, item);
+  const next = change(answer, choiceCount);
+  return next === answer ? round : withItemAnswer(round, item, next);
 }
 
-function withAnswer(
+function hasItem(round: RoundState, item: AnswerableItem): boolean {
+  const count = round[ANSWER_ARRAYS[item.kind]].length;
+  return item.index >= 1 && item.index <= count;
+}
+
+function withItemAnswer(
   round: RoundState,
-  position: number,
-  answer: QuestionAnswer,
+  item: AnswerableItem,
+  answer: ItemAnswer,
 ): RoundState {
+  const key = ANSWER_ARRAYS[item.kind];
   return {
     ...round,
-    answers: round.answers.map((current, i) =>
-      i === position ? answer : current,
+    [key]: round[key].map((current, i) =>
+      i === item.index - 1 ? answer : current,
     ),
     revision: round.revision + 1,
   };
@@ -610,14 +675,13 @@ function setText(
       };
     }
     default: {
-      const position = target.question - 1;
-      const isQuestion = position >= 0 && position < round.answers.length;
-      if (!isQuestion || round.answers[position][target.field] === value) {
+      const { item, field } = target;
+      if (!hasItem(round, item) || itemAnswer(round, item)[field] === value) {
         return round;
       }
-      return withAnswer(round, position, {
-        ...round.answers[position],
-        [target.field]: value,
+      return withItemAnswer(round, item, {
+        ...itemAnswer(round, item),
+        [field]: value,
       });
     }
   }

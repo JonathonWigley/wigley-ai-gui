@@ -66,11 +66,11 @@ async function settle() {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-function typeWhat(store: FormsStore, value: string) {
+function typeNotes(store: FormsStore, value: string) {
   store.dispatch({
     type: 'setText',
     roundId: 'r1',
-    target: { field: 'what', question: 1 },
+    target: { field: 'notes', item: { kind: 'question', index: 1 } },
     value,
   });
 }
@@ -91,8 +91,8 @@ describe('startAutosave', () => {
       saves.push({ roundId, body });
     });
 
-    typeWhat(store, 'a');
-    typeWhat(store, 'ab');
+    typeNotes(store, 'a');
+    typeNotes(store, 'ab');
 
     expect([...scheduled.values()].map((timer) => timer.ms)).toEqual([
       DELAY_MS,
@@ -101,7 +101,7 @@ describe('startAutosave', () => {
     await settle();
     expect(saves).toHaveLength(1);
     expect(saves[0].roundId).toBe('r1');
-    expect(saves[0].body.answers[0].what).toBe('ab');
+    expect(saves[0].body.answers[0].notes).toBe('ab');
     expect(saveStateOf(store)).toBe('saved');
   });
 
@@ -109,7 +109,7 @@ describe('startAutosave', () => {
     const { calls, save } = heldSaves();
     const { store, runDue } = setup(save);
 
-    typeWhat(store, 'a');
+    typeNotes(store, 'a');
     runDue();
     expect(saveStateOf(store)).toBe('saving');
 
@@ -131,7 +131,7 @@ describe('startAutosave', () => {
       throw new Error('disk full');
     });
 
-    typeWhat(store, 'a');
+    typeNotes(store, 'a');
     runDue();
     await settle();
 
@@ -139,7 +139,7 @@ describe('startAutosave', () => {
     expect(saveStateOf(store)).toBe('unsaved');
     expect(saveErrorOf(store)).toBe('disk full');
     expect(scheduled.size).toBe(0);
-    typeWhat(store, 'ab');
+    typeNotes(store, 'ab');
     expect(scheduled.size).toBe(1);
   });
 
@@ -149,12 +149,12 @@ describe('startAutosave', () => {
     const { store, runDue } = setup((roundId, body) =>
       shouldFail ? Promise.reject(new Error('disk full')) : save(roundId, body),
     );
-    typeWhat(store, 'a');
+    typeNotes(store, 'a');
     runDue();
     await settle();
     shouldFail = false;
 
-    typeWhat(store, 'ab');
+    typeNotes(store, 'ab');
     runDue();
 
     expect(saveErrorOf(store)).toBeNull();
@@ -166,10 +166,10 @@ describe('startAutosave', () => {
   it('saves an edit made during a save once that edit pauses', async () => {
     const { calls, save } = heldSaves();
     const { store, scheduled, runDue } = setup(save);
-    typeWhat(store, 'a');
+    typeNotes(store, 'a');
     runDue();
 
-    typeWhat(store, 'ab');
+    typeNotes(store, 'ab');
     calls[0].resolve();
     await settle();
 
@@ -178,7 +178,10 @@ describe('startAutosave', () => {
     runDue();
     calls[1].resolve();
     await settle();
-    expect(calls.map((call) => call.body.answers[0].what)).toEqual(['a', 'ab']);
+    expect(calls.map((call) => call.body.answers[0].notes)).toEqual([
+      'a',
+      'ab',
+    ]);
     expect(saveStateOf(store)).toBe('saved');
   });
 
@@ -188,7 +191,7 @@ describe('startAutosave', () => {
       saves++;
     });
 
-    typeWhat(store, 'a');
+    typeNotes(store, 'a');
     store.dispatch({ type: 'roundClosed', roundId: 'r1' });
 
     expect(scheduled.size).toBe(0);

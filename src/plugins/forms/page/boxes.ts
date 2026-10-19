@@ -3,8 +3,9 @@ import {
   focusedItem,
   type FormsAction,
   type FormsState,
+  itemAnswer,
   type RailItem,
-  railItems,
+  railPosition,
   type RoundState,
   type TextTarget,
 } from './form-state';
@@ -25,11 +26,11 @@ export function boxKey(box: BoxRef): string {
     case 'comment':
       return `${roundId}/comment/${target.notice}`;
     default:
-      return `${roundId}/${target.field}/${target.question}`;
+      return `${roundId}/${target.field}/${target.item.kind}/${target.item.index}`;
   }
 }
 
-// How the log names a box, e.g. `what on question 2`.
+// How the log names a box, e.g. `notes on finding 2`.
 export function boxDescription(box: BoxRef): string {
   const { target } = box;
   switch (target.field) {
@@ -38,12 +39,12 @@ export function boxDescription(box: BoxRef): string {
     case 'comment':
       return `comment on notice ${target.notice}`;
     default:
-      return `${target.field} on question ${target.question}`;
+      return `${target.field} on ${target.item.kind} ${target.item.index}`;
   }
 }
 
-// The boxes the user can reach now, in Ctrl+j order: the focused item's
-// boxes, then the round note. The review shows only the note.
+// The boxes the user can reach now, in Ctrl+j order: the forms view shows the
+// focused item's boxes, the review only the round note.
 export function shownBoxes(state: FormsState): BoxRef[] {
   const round = activeRound(state);
   if (round === null) {
@@ -52,7 +53,7 @@ export function shownBoxes(state: FormsState): BoxRef[] {
   const note: BoxRef = { roundId: round.roundId, target: { field: 'note' } };
   switch (state.view) {
     case 'forms':
-      return [...itemBoxes(round), note];
+      return itemBoxes(round);
     case 'review':
       return [note];
     default:
@@ -69,15 +70,15 @@ function itemBoxes(round: RoundState): BoxRef[] {
   if (item.kind === 'notice') {
     return [{ roundId, target: { field: 'comment', notice: item.index } }];
   }
-  const question = item.index;
-  const boxes: BoxRef[] = [
-    { roundId, target: { field: 'what', question } },
-    { roundId, target: { field: 'why', question } },
-  ];
-  const isDontAskOn = round.answers[question - 1].dontAsk;
+  const answerable = { kind: item.kind, index: item.index };
+  const notes: BoxRef = {
+    roundId,
+    target: { field: 'notes', item: answerable },
+  };
+  const isDontAskOn = itemAnswer(round, answerable).dontAsk;
   return isDontAskOn
-    ? [...boxes, { roundId, target: { field: 'dontAskReason', question } }]
-    : boxes;
+    ? [notes, { roundId, target: { field: 'dontAskReason', item: answerable } }]
+    : [notes];
 }
 
 export function isBoxShown(state: FormsState, box: BoxRef): boolean {
@@ -124,10 +125,7 @@ export function focusActionFor(
   const wanted: RailItem =
     target.field === 'comment'
       ? { kind: 'notice', index: target.notice }
-      : { kind: 'question', index: target.question };
-  const item = railItems(round.round).findIndex(
-    (candidate) =>
-      candidate.kind === wanted.kind && candidate.index === wanted.index,
-  );
+      : target.item;
+  const item = railPosition(round.round, wanted);
   return item < 0 ? null : { type: 'focusItem', item };
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FocusOptions, TextEditor } from '../../../contracts/editor';
 import type { PageCommandContext } from '../../../contracts/plugin';
-import type { RoundEnd } from '../contract';
+import type { Finding, RoundEnd } from '../contract';
 import type { BoxRef } from './boxes';
 import {
   activeRound,
@@ -11,7 +11,7 @@ import {
 } from './form-state';
 import { formsCommandHandlers, guardClose } from './forms-commands';
 import { createFormsStore } from './forms-store';
-import { notice, presentedRound, question } from './test-rounds';
+import { finding, notice, presentedRound, question } from './test-rounds';
 
 type FormsCommand = keyof ReturnType<typeof formsCommandHandlers>;
 
@@ -29,13 +29,15 @@ function editorOf(box: BoxRef): TextEditor {
   return editor;
 }
 
-// Rail: notice 1 (position 0), question Alpha (1), question Beta (2).
-function setup() {
+// Rail: notice 1 (position 0), then `findings`, then questions Alpha and Beta
+// (1 and 2 with no findings).
+function setup(findings: Finding[] = []) {
   const store = createFormsStore(
     initialState(
       [
         presentedRound('r1', {
           notices: [notice('Heads up')],
+          findings,
           questions: [question('Alpha'), question('Beta')],
         }),
       ],
@@ -102,8 +104,18 @@ function setup() {
   };
 }
 
-const why2: BoxRef = { roundId: 'r1', target: { field: 'why', question: 2 } };
-const what1: BoxRef = { roundId: 'r1', target: { field: 'what', question: 1 } };
+const notes1: BoxRef = {
+  roundId: 'r1',
+  target: { field: 'notes', item: { kind: 'question', index: 1 } },
+};
+const notes2: BoxRef = {
+  roundId: 'r1',
+  target: { field: 'notes', item: { kind: 'question', index: 2 } },
+};
+const reason1: BoxRef = {
+  roundId: 'r1',
+  target: { field: 'dontAskReason', item: { kind: 'question', index: 1 } },
+};
 
 describe('formsCommandHandlers', () => {
   it('picks a choice on the focused question, and the same number clears it', () => {
@@ -121,10 +133,20 @@ describe('formsCommandHandlers', () => {
     ]);
   });
 
+  it('picks a choice on the focused finding and logs it', () => {
+    const { run, round, logs } = setup([finding('Leak')]);
+    run('nextItem');
+
+    run('choose2');
+
+    expect(round().findingAnswers[0].choice).toBe(2);
+    expect(logs).toEqual(['chose 2 on finding 1']);
+  });
+
   it("acts on the box's question when fired in a box", () => {
     const { run, round, logs } = setup();
 
-    run('choose1', { editor: editorOf(why2) });
+    run('choose1', { editor: editorOf(notes2) });
 
     expect(round().focus).toBe(2);
     expect(round().answers[1].choice).toBe(1);
@@ -153,9 +175,7 @@ describe('formsCommandHandlers', () => {
 
     run('toggleDontAsk');
 
-    expect(focused).toEqual([
-      { roundId: 'r1', target: { field: 'dontAskReason', question: 1 } },
-    ]);
+    expect(focused).toEqual([reason1]);
   });
 
   it("focuses nothing when Don't ask turns off", () => {
@@ -168,20 +188,21 @@ describe('formsCommandHandlers', () => {
     expect(focused).toHaveLength(1);
   });
 
-  it("focuses a notice's comment box for the answer key", () => {
+  it("focuses a notice's comment box for the notes key", () => {
     const { run, focused } = setup();
 
-    run('editWhat');
+    run('editNotes');
 
     expect(focused).toEqual([
       { roundId: 'r1', target: { field: 'comment', notice: 1 } },
     ]);
   });
 
-  it('starts the answer and note boxes typing at the end, as vim A', () => {
+  it('starts the notes and note boxes typing at the end, as vim A', () => {
     const { run, focusOptions } = setup();
 
-    run('editWhat');
+    run('editNotes');
+    run('openReview');
     run('editNote');
 
     expect(focusOptions).toEqual([
@@ -190,36 +211,24 @@ describe('formsCommandHandlers', () => {
     ]);
   });
 
-  it('focuses the why box in the mode it was left in', () => {
-    const { run, focused, focusOptions } = setup();
-    run('nextItem');
-
-    run('editWhy');
-
-    expect(focused).toEqual([
-      { roundId: 'r1', target: { field: 'why', question: 1 } },
-    ]);
-    expect(focusOptions).toEqual([undefined]);
-  });
-
-  it('focuses no why box on a notice', () => {
+  it('focuses no note box in the form', () => {
     const { run, focused } = setup();
-    run('editWhy');
+    run('editNote');
     expect(focused).toEqual([]);
   });
 
   it('steps to the next box from the box it fired in', () => {
     const { run, focused } = setup();
     run('nextItem');
+    run('toggleDontAsk');
+    focused.length = 0;
 
-    run('nextBox', { editor: editorOf(what1) });
+    run('nextBox', { editor: editorOf(notes1) });
 
-    expect(focused).toEqual([
-      { roundId: 'r1', target: { field: 'why', question: 1 } },
-    ]);
+    expect(focused).toEqual([reason1]);
   });
 
-  it("focuses the next item's answer box when moving items from a box", () => {
+  it("focuses the next item's notes box when moving items from a box", () => {
     const { run, round, focused } = setup();
 
     run('nextItem', {
@@ -230,7 +239,7 @@ describe('formsCommandHandlers', () => {
     });
 
     expect(round().focus).toBe(1);
-    expect(focused).toEqual([what1]);
+    expect(focused).toEqual([notes1]);
   });
 
   it('moves items without focusing a box from the page', () => {
@@ -242,21 +251,19 @@ describe('formsCommandHandlers', () => {
   it('acts on the active box when a chord fires with no editor', () => {
     const { run, focused, setActive } = setup();
     run('nextItem');
-    setActive(what1);
+    setActive(notes1);
 
     run('nextItem', {});
 
-    expect(focused.at(-1)).toEqual({
-      roundId: 'r1',
-      target: { field: 'what', question: 2 },
-    });
+    expect(focused.at(-1)).toEqual(notes2);
   });
 
   it('jumps to question N and logs it', () => {
-    const { run, round, logs, focused } = setup();
+    const { run, round, logs, focused } = setup([finding('Leak')]);
 
     run('jumpTo2');
 
+    expect(round().focus).toBe(3);
     expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
     expect(logs).toEqual(['jumped to question 2']);
     expect(focused).toEqual([]);
@@ -272,18 +279,15 @@ describe('formsCommandHandlers', () => {
     expect(logs).toEqual([]);
   });
 
-  it("jumps from a box into question N's answer box", () => {
+  it("jumps from a box into question N's notes box", () => {
     const { run, focused } = setup();
 
-    run('jumpTo2', { editor: editorOf(what1) });
+    run('jumpTo2', { editor: editorOf(notes1) });
 
-    expect(focused.at(-1)).toEqual({
-      roundId: 'r1',
-      target: { field: 'what', question: 2 },
-    });
+    expect(focused.at(-1)).toEqual(notes2);
   });
 
-  it('stays on the focused question when it is the only unanswered one', () => {
+  it('stays on the focused item when it is the only unanswered one', () => {
     const { run, round, logs } = setup();
     run('jumpTo1');
     run('choose1');
@@ -293,25 +297,25 @@ describe('formsCommandHandlers', () => {
     run('nextUnanswered');
 
     expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
-    expect(logs).toEqual(['no other unanswered question']);
+    expect(logs).toEqual(['no other unanswered item']);
 
     run('choose1');
     logs.length = 0;
     run('nextUnanswered');
 
     expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
-    expect(logs).toEqual(['no unanswered question']);
+    expect(logs).toEqual(['no unanswered item']);
   });
 
-  it('jumps to the next unanswered question, wrapping', () => {
-    const { run, round, logs } = setup();
+  it('jumps to the next unanswered item, wrapping', () => {
+    const { run, round, logs } = setup([finding('Leak')]);
     run('jumpTo2');
     logs.length = 0;
 
     run('nextUnanswered');
 
-    expect(focusedItem(round())).toEqual({ kind: 'question', index: 1 });
-    expect(logs).toEqual(['jumped to question 1']);
+    expect(focusedItem(round())).toEqual({ kind: 'finding', index: 1 });
+    expect(logs).toEqual(['jumped to finding 1']);
   });
 
   it('logs a jump to the focused question as no move', () => {

@@ -49,8 +49,14 @@ function fakeHost() {
 }
 
 const parent = {} as HTMLElement;
-const what: BoxRef = { roundId: 'r1', target: { field: 'what', question: 1 } };
-const why: BoxRef = { roundId: 'r1', target: { field: 'why', question: 1 } };
+const notes: BoxRef = {
+  roundId: 'r1',
+  target: { field: 'notes', item: { kind: 'question', index: 1 } },
+};
+const reason: BoxRef = {
+  roundId: 'r1',
+  target: { field: 'dontAskReason', item: { kind: 'question', index: 1 } },
+};
 const other: BoxRef = { roundId: 'r2', target: { field: 'note' } };
 
 function setup() {
@@ -66,8 +72,8 @@ function setup() {
     },
     (_source, message) => logs.push(message),
   );
-  boxes.mount(parent, what, '');
-  boxes.mount(parent, why, '');
+  boxes.mount(parent, notes, '');
+  boxes.mount(parent, reason, '');
   boxes.mount(parent, other, '');
   return { boxes, created, changes, activated, logs };
 }
@@ -76,18 +82,18 @@ describe('createEditorBoxes', () => {
   it('activates a focused box once, logging it, despite its focus event', () => {
     const { boxes, created, activated, logs } = setup();
 
-    boxes.focus(what);
+    boxes.focus(notes);
 
     expect(created[0].editor.focusCalls).toBe(1);
-    expect(boxes.active()).toEqual(what);
-    expect(activated).toEqual([what]);
-    expect(logs).toEqual(['focused what on question 1']);
+    expect(boxes.active()).toEqual(notes);
+    expect(activated).toEqual([notes]);
+    expect(logs).toEqual(['focused notes on question 1']);
   });
 
   it('hands the focus options to the editor', () => {
     const { boxes, created } = setup();
 
-    boxes.focus(what, { insertAtEnd: true });
+    boxes.focus(notes, { insertAtEnd: true });
 
     expect(created[0].editor.focusOptions).toEqual([{ insertAtEnd: true }]);
   });
@@ -97,13 +103,13 @@ describe('createEditorBoxes', () => {
 
     created[1].events.focused();
 
-    expect(boxes.active()).toEqual(why);
-    expect(activated).toEqual([why]);
+    expect(boxes.active()).toEqual(reason);
+    expect(activated).toEqual([reason]);
   });
 
   it('blurs the focused box on leave and reports no box', () => {
     const { boxes, created } = setup();
-    boxes.focus(what);
+    boxes.focus(notes);
 
     boxes.leave();
 
@@ -116,7 +122,7 @@ describe('createEditorBoxes', () => {
     const { boxes, created } = setup();
     let calls = 0;
     boxes.onChange(() => calls++);
-    boxes.focus(what);
+    boxes.focus(notes);
     const callsAfterFocus = calls;
 
     created[0].events.modeChanged({ mode: 'visual', subMode: 'linewise' });
@@ -127,7 +133,7 @@ describe('createEditorBoxes', () => {
 
   it('starts every box in normal mode', () => {
     const { boxes } = setup();
-    boxes.focus(why);
+    boxes.focus(reason);
     expect(boxes.activeMode()).toEqual({ mode: 'normal', subMode: '' });
   });
 
@@ -136,12 +142,12 @@ describe('createEditorBoxes', () => {
 
     created[1].events.changed('because');
 
-    expect(changes).toEqual([{ box: why, text: 'because' }]);
+    expect(changes).toEqual([{ box: reason, text: 'because' }]);
   });
 
   it("finds a box by its editor, and destroys only one round's editors", () => {
     const { boxes, created } = setup();
-    boxes.focus(what);
+    boxes.focus(notes);
 
     boxes.destroyRound('r1');
 
@@ -157,7 +163,9 @@ describe('createEditorBoxes', () => {
 
   it('refuses a box mounted twice, and focusing a box never mounted', () => {
     const { boxes } = setup();
-    expect(() => boxes.mount(parent, what, '')).toThrow(/r1\/what\/1/);
+    expect(() => boxes.mount(parent, notes, '')).toThrow(
+      /r1\/notes\/question\/1/,
+    );
     expect(() =>
       boxes.focus({ roundId: 'r9', target: { field: 'note' } }),
     ).toThrow(/r9\/note/);

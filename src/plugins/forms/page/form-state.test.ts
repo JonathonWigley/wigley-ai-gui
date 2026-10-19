@@ -20,8 +20,9 @@ import {
   type FormsAction,
   type FormsState,
   type RoundState,
-  unansweredQuestion,
+  unansweredItem,
 } from './form-state';
+import { finding } from './test-rounds';
 
 function question(title: string, choiceCount = 3): Question {
   return {
@@ -55,6 +56,7 @@ function presented(
       overview: '',
       questions: [question('Q1'), question('Q2')],
       notices: [],
+      findings: [],
       ...parts,
     },
     draft,
@@ -66,8 +68,7 @@ function entry(index: number, fields: Partial<AnswerEntry>): AnswerEntry {
     index,
     choice: 0,
     not_applicable: false,
-    what: '',
-    why: '',
+    notes: '',
     dont_ask: false,
     dont_ask_reason: '',
     ...fields,
@@ -75,7 +76,13 @@ function entry(index: number, fields: Partial<AnswerEntry>): AnswerEntry {
 }
 
 function draft(fields: Partial<FormBody>): FormBody {
-  return { note: '', answers: [], notice_comments: [], ...fields };
+  return {
+    note: '',
+    answers: [],
+    finding_answers: [],
+    notice_comments: [],
+    ...fields,
+  };
 }
 
 function run(state: FormsState, ...actions: FormsAction[]): FormsState {
@@ -98,11 +105,24 @@ function mixedRound(body: FormBody | null = null): FormsState {
   );
 }
 
+// Rail positions: 0 = notice N1, 1 = finding F1, 2 = question Q1, 3 = question Q2.
+function findingRound(body: FormBody | null = null): FormsState {
+  return initialState(
+    [
+      presented(
+        'r1',
+        { notices: [notice('N1')], findings: [finding('F1')] },
+        body,
+      ),
+    ],
+    'r1-session',
+  );
+}
+
 const untouched = {
   choice: 0,
   notApplicable: false,
-  what: '',
-  why: '',
+  notes: '',
   dontAsk: false,
   dontAskReason: '',
 };
@@ -139,16 +159,18 @@ describe('initialState', () => {
 });
 
 describe('railItems', () => {
-  it('lists notices first, then questions, each numbered from 1 in its kind', () => {
+  it('lists notices, then findings, then questions, each numbered from 1 in its kind', () => {
     const round: Round = {
       heading: 'h',
       overview: '',
       questions: [question('Q1')],
-      notices: [notice('N1'), notice('N2')],
+      notices: [notice('N1')],
+      findings: [finding('F1'), finding('F2')],
     };
     expect(railItems(round)).toEqual([
       { kind: 'notice', index: 1 },
-      { kind: 'notice', index: 2 },
+      { kind: 'finding', index: 1 },
+      { kind: 'finding', index: 2 },
       { kind: 'question', index: 1 },
     ]);
   });
@@ -163,8 +185,7 @@ describe('restoring a draft', () => {
           answers: [
             entry(2, {
               choice: 3,
-              what: 'own answer',
-              why: 'because',
+              notes: 'own answer',
               dont_ask: true,
               dont_ask_reason: 'settled',
             }),
@@ -177,8 +198,7 @@ describe('restoring a draft', () => {
     expect(round.answers[1]).toEqual({
       choice: 3,
       notApplicable: false,
-      what: 'own answer',
-      why: 'because',
+      notes: 'own answer',
       dontAsk: true,
       dontAskReason: 'settled',
     });
@@ -203,6 +223,23 @@ describe('restoring a draft', () => {
     expect(round.answers[0].choice).toBe(0);
   });
 
+  it("restores a finding's answer from finding_answers", () => {
+    const round = active(
+      findingRound(
+        draft({ finding_answers: [entry(1, { choice: 3, notes: 'seen' })] }),
+      ),
+    );
+    expect(round.findingAnswers[0]).toMatchObject({ choice: 3, notes: 'seen' });
+    expect(round.answers).toEqual([untouched, untouched]);
+  });
+
+  it("drops a choice beyond the finding's choices", () => {
+    const round = active(
+      findingRound(draft({ finding_answers: [entry(1, { choice: 4 })] })),
+    );
+    expect(round.findingAnswers[0].choice).toBe(0);
+  });
+
   it('ignores an entry whose index names no question', () => {
     const round = active(
       mixedRound(draft({ answers: [entry(5, { choice: 1 })] })),
@@ -221,6 +258,17 @@ describe('choose', () => {
   it('picks the numbered choice on the focused question', () => {
     const state = apply(onQ1, { type: 'choose', choice: 2 });
     expect(active(state).answers[0].choice).toBe(2);
+  });
+
+  it('picks the numbered choice on the focused finding', () => {
+    const state = run(
+      findingRound(),
+      { type: 'focusItem', item: 1 },
+      { type: 'choose', choice: 2 },
+    );
+    expect(active(state).findingAnswers[0].choice).toBe(2);
+    expect(active(state).answers[0].choice).toBe(0);
+    expect(active(state).revision).toBe(1);
   });
 
   it('clears the choice when the same number is picked again', () => {
@@ -293,6 +341,19 @@ describe('toggleNotApplicable', () => {
     expect(progress(active(unmarked)).answered).toBe(1);
   });
 
+  it('marks the focused finding and keeps its choice', () => {
+    const state = run(
+      findingRound(),
+      { type: 'focusItem', item: 1 },
+      { type: 'choose', choice: 2 },
+      { type: 'toggleNotApplicable' },
+    );
+    expect(active(state).findingAnswers[0]).toMatchObject({
+      choice: 2,
+      notApplicable: true,
+    });
+  });
+
   it('does nothing on a notice', () => {
     const state = mixedRound();
     expect(apply(state, { type: 'toggleNotApplicable' })).toBe(state);
@@ -308,7 +369,10 @@ describe('toggleDontAsk', () => {
       {
         type: 'setText',
         roundId: 'r1',
-        target: { field: 'dontAskReason', question: 2 },
+        target: {
+          field: 'dontAskReason',
+          item: { kind: 'question', index: 2 },
+        },
         value: 'settled',
       },
       { type: 'toggleDontAsk' },
@@ -341,7 +405,7 @@ describe('toggleDontAsk', () => {
 describe('setText', () => {
   function edit(target: Extract<FormsAction, { type: 'setText' }>['target']) {
     return active(
-      apply(mixedRound(), {
+      apply(findingRound(), {
         type: 'setText',
         roundId: 'r1',
         target,
@@ -351,10 +415,17 @@ describe('setText', () => {
   }
 
   it('writes each text field to the item it names', () => {
-    expect(edit({ field: 'what', question: 2 }).answers[1].what).toBe('typed');
-    expect(edit({ field: 'why', question: 2 }).answers[1].why).toBe('typed');
     expect(
-      edit({ field: 'dontAskReason', question: 1 }).answers[0].dontAskReason,
+      edit({ field: 'notes', item: { kind: 'question', index: 2 } }).answers[1]
+        .notes,
+    ).toBe('typed');
+    expect(
+      edit({ field: 'notes', item: { kind: 'finding', index: 1 } })
+        .findingAnswers[0].notes,
+    ).toBe('typed');
+    expect(
+      edit({ field: 'dontAskReason', item: { kind: 'question', index: 1 } })
+        .answers[0].dontAskReason,
     ).toBe('typed');
     expect(edit({ field: 'comment', notice: 1 }).noticeComments).toEqual([
       'typed',
@@ -363,7 +434,11 @@ describe('setText', () => {
   });
 
   it('writes to an item that is not focused', () => {
-    expect(focusedItem(edit({ field: 'what', question: 2 }))).toEqual({
+    expect(
+      focusedItem(
+        edit({ field: 'notes', item: { kind: 'question', index: 2 } }),
+      ),
+    ).toEqual({
       kind: 'notice',
       index: 1,
     });
@@ -381,11 +456,11 @@ describe('setText', () => {
   });
 
   it('ignores an edit naming an item the round does not have', () => {
-    const state = mixedRound();
+    const state = findingRound();
     const next = apply(state, {
       type: 'setText',
       roundId: 'r1',
-      target: { field: 'what', question: 3 },
+      target: { field: 'notes', item: { kind: 'finding', index: 3 } },
       value: 'typed',
     });
     expect(next).toBe(state);
@@ -555,11 +630,36 @@ describe('review', () => {
     expect(active(state).reviewRow).toBe(0);
   });
 
-  it('moves the cursor over the questions and stops at both ends', () => {
-    const opened = apply(mixedRound(), { type: 'openReview' });
+  it('moves the cursor over findings then questions and stops at both ends', () => {
+    const opened = apply(findingRound(), { type: 'openReview' });
     expect(apply(opened, { type: 'reviewPrev' })).toBe(opened);
-    const last = run(opened, { type: 'reviewNext' }, { type: 'reviewNext' });
-    expect(active(last).reviewRow).toBe(1);
+    const last = run(
+      opened,
+      { type: 'reviewNext' },
+      { type: 'reviewNext' },
+      { type: 'reviewNext' },
+    );
+    expect(active(last).reviewRow).toBe(2);
+  });
+
+  it('jumps from a finding row to the finding in the forms view', () => {
+    const opened = apply(
+      initialState(
+        [
+          presented('r1', {
+            notices: [notice('N1')],
+            findings: [finding('F1')],
+            questions: [question('Q1')],
+          }),
+        ],
+        'r1-session',
+      ),
+      { type: 'openReview' },
+    );
+    const onFinding = apply(opened, { type: 'reviewJump', row: 0 });
+    expect(onFinding.view).toBe('forms');
+    expect(active(onFinding).focus).toBe(1);
+    expect(active(apply(opened, { type: 'reviewJump', row: 1 })).focus).toBe(2);
   });
 
   it('jumps to the cursor’s question in the forms view', () => {
@@ -583,9 +683,9 @@ describe('review', () => {
     expect(focusedItem(active(state))).toEqual({ kind: 'question', index: 1 });
   });
 
-  it('ignores a row outside the questions', () => {
-    const opened = apply(mixedRound(), { type: 'openReview' });
-    expect(apply(opened, { type: 'reviewJump', row: 2 })).toBe(opened);
+  it('ignores a row outside the findings and questions', () => {
+    const opened = apply(findingRound(), { type: 'openReview' });
+    expect(apply(opened, { type: 'reviewJump', row: 3 })).toBe(opened);
   });
 
   it('closes back to the forms view', () => {
@@ -761,7 +861,7 @@ describe('roundClosed', () => {
   });
 });
 
-describe('unansweredQuestion', () => {
+describe('unansweredItem', () => {
   // Rail positions: 0 = Alpha, 1 = Beta, 2 = Gamma.
   const threeQuestions = (...actions: FormsAction[]) =>
     active(
@@ -788,8 +888,14 @@ describe('unansweredQuestion', () => {
 
   it('finds the nearest untouched question each way', () => {
     const round = threeQuestions(...betaChosen);
-    expect(unansweredQuestion(round, 1)).toBe(3);
-    expect(unansweredQuestion(round, -1)).toBe(1);
+    expect(unansweredItem(round, 1)).toEqual({
+      kind: 'question',
+      index: 3,
+    });
+    expect(unansweredItem(round, -1)).toEqual({
+      kind: 'question',
+      index: 1,
+    });
   });
 
   it('wraps past the last question', () => {
@@ -797,7 +903,10 @@ describe('unansweredQuestion', () => {
       type: 'focusItem',
       item: 2,
     });
-    expect(unansweredQuestion(round, 1)).toBe(1);
+    expect(unansweredItem(round, 1)).toEqual({
+      kind: 'question',
+      index: 1,
+    });
   });
 
   it('checks the focused question last', () => {
@@ -807,7 +916,10 @@ describe('unansweredQuestion', () => {
       { type: 'choose', choice: 1 },
       { type: 'focusItem', item: 0 },
     );
-    expect(unansweredQuestion(round, 1)).toBe(1);
+    expect(unansweredItem(round, 1)).toEqual({
+      kind: 'question',
+      index: 1,
+    });
   });
 
   it('runs from the first or last question with a notice focused', () => {
@@ -822,20 +934,43 @@ describe('unansweredQuestion', () => {
         'r1-session',
       ),
     );
-    expect(unansweredQuestion(round, 1)).toBe(1);
-    expect(unansweredQuestion(round, -1)).toBe(3);
+    expect(unansweredItem(round, 1)).toEqual({
+      kind: 'question',
+      index: 1,
+    });
+    expect(unansweredItem(round, -1)).toEqual({
+      kind: 'question',
+      index: 3,
+    });
   });
 
-  it('counts why text alone as an answer', () => {
+  it('counts notes text alone as an answer', () => {
     const round = threeQuestions(
-      ...[1, 2, 3].map((question): FormsAction => ({
+      ...[1, 2, 3].map((index): FormsAction => ({
         type: 'setText',
         roundId: 'r1',
-        target: { field: 'why', question },
+        target: { field: 'notes', item: { kind: 'question', index } },
         value: 'because',
       })),
     );
-    expect(unansweredQuestion(round, 1)).toBeNull();
+    expect(unansweredItem(round, 1)).toBeNull();
+  });
+
+  it('searches findings before questions', () => {
+    const round = active(
+      initialState(
+        [
+          presented('r1', {
+            notices: [notice('N1')],
+            findings: [finding('F1')],
+            questions: [question('Q1')],
+          }),
+        ],
+        'r1-session',
+      ),
+    );
+    expect(unansweredItem(round, 1)).toEqual({ kind: 'finding', index: 1 });
+    expect(unansweredItem(round, -1)).toEqual({ kind: 'question', index: 1 });
   });
 
   it('finds none when every question is not applicable', () => {
@@ -845,8 +980,8 @@ describe('unansweredQuestion', () => {
         { type: 'toggleNotApplicable' },
       ]),
     );
-    expect(unansweredQuestion(round, 1)).toBeNull();
-    expect(unansweredQuestion(round, -1)).toBeNull();
+    expect(unansweredItem(round, 1)).toBeNull();
+    expect(unansweredItem(round, -1)).toBeNull();
   });
 });
 
@@ -910,8 +1045,8 @@ describe('progress', () => {
             answers: [
               entry(1, { choice: 1 }),
               entry(2, { choice: 2, not_applicable: true }),
-              entry(3, { what: 'text but no pick' }),
-              entry(4, { why: '  ' }),
+              entry(3, { notes: 'text but no pick' }),
+              entry(4, { notes: '  ' }),
             ],
           }),
         ),
@@ -926,14 +1061,29 @@ describe('progress', () => {
     });
   });
 
-  it('counts why text alone as an answer', () => {
+  it('counts notes text alone as an answer', () => {
     const state = apply(mixedRound(), {
       type: 'setText',
       roundId: 'r1',
-      target: { field: 'why', question: 2 },
+      target: { field: 'notes', item: { kind: 'question', index: 2 } },
       value: 'because',
     });
     expect(progress(active(state)).answered).toBe(1);
+  });
+
+  it('counts findings with questions', () => {
+    const state = findingRound(
+      draft({
+        finding_answers: [entry(1, { choice: 1 })],
+        answers: [entry(1, { not_applicable: true })],
+      }),
+    );
+    expect(progress(active(state))).toEqual({
+      answered: 1,
+      notApplicable: 1,
+      untouched: 1,
+      total: 3,
+    });
   });
 });
 
@@ -1066,8 +1216,24 @@ describe('buildBody', () => {
     expect(buildBody(active(state))).toEqual({
       note: 'the note',
       answers: [entry(1, {}), entry(2, { choice: 3 })],
+      finding_answers: [],
       notice_comments: [{ index: 1, comment: 'check this' }],
     });
+  });
+
+  it('writes finding answers in finding_answers with their 1-based index', () => {
+    const state = run(
+      initialState(
+        [presented('r1', { findings: [finding('F1'), finding('F2')] })],
+        'r1-session',
+      ),
+      { type: 'focusItem', item: 1 },
+      { type: 'choose', choice: 1 },
+    );
+    expect(buildBody(active(state)).finding_answers).toEqual([
+      entry(1, {}),
+      entry(2, { choice: 1 }),
+    ]);
   });
 
   it('sends a not-applicable answer with the choice it kept', () => {
@@ -1084,23 +1250,26 @@ describe('buildBody', () => {
 
   it('a body restored as a draft rebuilds the same body', () => {
     const state = run(
-      mixedRound(),
-      { type: 'focusItem', item: 1 },
+      findingRound(),
+      { type: 'focusItem', item: 2 },
       { type: 'choose', choice: 2 },
       { type: 'toggleNotApplicable' },
       { type: 'toggleDontAsk' },
       {
         type: 'setText',
         roundId: 'r1',
-        target: { field: 'why', question: 2 },
+        target: { field: 'notes', item: { kind: 'question', index: 2 } },
         value: 'reason',
+      },
+      {
+        type: 'setText',
+        roundId: 'r1',
+        target: { field: 'notes', item: { kind: 'finding', index: 1 } },
+        value: 'seen',
       },
     );
     const body = buildBody(active(state));
-    const restored = initialState(
-      [presented('r1', { notices: [notice('N1')] }, body)],
-      'r1-session',
-    );
+    const restored = findingRound(body);
     expect(buildBody(active(restored))).toEqual(body);
   });
 });

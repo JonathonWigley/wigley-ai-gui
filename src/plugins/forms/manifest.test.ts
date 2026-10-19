@@ -45,9 +45,7 @@ const EXPECTED_PAGE: PageBind[] = [
   })),
   { keys: ['x'], scope: 'forms.forms', command: 'forms.toggleNotApplicable' },
   { keys: ['d'], scope: 'forms.forms', command: 'forms.toggleDontAsk' },
-  { keys: ['a'], scope: 'forms.forms', command: 'forms.editWhat' },
-  { keys: ['w'], scope: 'forms.forms', command: 'forms.editWhy' },
-  { keys: ['o'], scope: 'forms.forms', command: 'forms.editNote' },
+  { keys: ['a'], scope: 'forms.forms', command: 'forms.editNotes' },
   ...DIGITS.map((digit) => ({
     keys: [' ', digit],
     scope: 'forms.forms',

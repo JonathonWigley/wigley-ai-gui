@@ -17,13 +17,17 @@ import {
 import type { EditorBoxes } from './editor-boxes';
 import {
   activeRound,
+  type AnswerableItem,
   buildBody,
   focusedItem,
   type FormsAction,
   type FormsState,
   type FormsView,
-  type QuestionAnswer,
-  unansweredQuestion,
+  type ItemAnswer,
+  itemAnswer,
+  type RailItem,
+  railPosition,
+  unansweredItem,
 } from './form-state';
 import type { FormsStore } from './forms-store';
 
@@ -39,9 +43,9 @@ export interface FormsCommandDeps {
 
 type Handler = (context: PageCommandContext) => void;
 
-type DescribeChange = (answer: QuestionAnswer, question: number) => string;
+type DescribeChange = (answer: ItemAnswer, item: AnswerableItem) => string;
 
-const ANSWER_FIELDS: BoxField[] = ['what', 'comment'];
+const ANSWER_FIELDS: BoxField[] = ['notes', 'comment'];
 
 const APPEND: FocusOptions = { insertAtEnd: true };
 
@@ -61,16 +65,16 @@ export function formsCommandHandlers(
   const choose =
     (choice: number): Handler =>
     (context) =>
-      changeAnswer(deps, context, { type: 'choose', choice }, (answer, n) =>
+      changeAnswer(deps, context, { type: 'choose', choice }, (answer, item) =>
         answer.choice === choice
-          ? `chose ${choice} on question ${n}`
-          : `cleared the choice on question ${n}`,
+          ? `chose ${choice} on ${itemName(item)}`
+          : `cleared the choice on ${itemName(item)}`,
       );
 
   const jumpTo =
     (question: number): Handler =>
     (context) =>
-      jumpToQuestion(deps, context, question);
+      jumpToItem(deps, context, { kind: 'question', index: question });
 
   return {
     closeReview: plain({ type: 'closeReview' }),
@@ -96,35 +100,34 @@ export function formsCommandHandlers(
         deps,
         context,
         { type: 'clearChoice' },
-        (_answer, n) => `cleared the choice on question ${n}`,
+        (_answer, item) => `cleared the choice on ${itemName(item)}`,
       ),
     toggleNotApplicable: (context) =>
       changeAnswer(
         deps,
         context,
         { type: 'toggleNotApplicable' },
-        (answer, n) =>
+        (answer, item) =>
           answer.notApplicable
-            ? `not applicable on question ${n}`
-            : `applicable again on question ${n}`,
+            ? `not applicable on ${itemName(item)}`
+            : `applicable again on ${itemName(item)}`,
       ),
     toggleDontAsk: (context) => {
       const answer = changeAnswer(
         deps,
         context,
         { type: 'toggleDontAsk' },
-        (changed, n) =>
+        (changed, item) =>
           changed.dontAsk
-            ? `don't ask on question ${n}`
-            : `ask again on question ${n}`,
+            ? `don't ask on ${itemName(item)}`
+            : `ask again on ${itemName(item)}`,
       );
       if (answer?.dontAsk) {
         focusShownBox(deps, ['dontAskReason']);
       }
     },
     // As vim's `A`: `a` and `o` start typing after the box's text.
-    editWhat: () => focusShownBox(deps, ANSWER_FIELDS, APPEND),
-    editWhy: () => focusShownBox(deps, ['why']),
+    editNotes: () => focusShownBox(deps, ANSWER_FIELDS, APPEND),
     editNote: () => focusShownBox(deps, ['note'], APPEND),
     nextBox: (context) => stepFocus(deps, context, 1),
     prevBox: (context) => stepFocus(deps, context, -1),
@@ -180,25 +183,31 @@ function focusBoxItem(store: FormsStore, box: BoxRef | undefined) {
   }
 }
 
-function focusedAnswer(
-  state: FormsState,
-): { question: number; answer: QuestionAnswer } | null {
-  const round = activeRound(state);
-  const item = round === null ? null : focusedItem(round);
-  if (round === null || item === null || item.kind !== 'question') {
-    return null;
-  }
-  return { question: item.index, answer: round.answers[item.index - 1] };
+// How a log line names an item, e.g. `finding 2`.
+function itemName(item: RailItem): string {
+  return `${item.kind} ${item.index}`;
 }
 
-// Applies an answer action to the focused question and logs the change;
-// returns the changed answer, or null when nothing changed.
+function focusedAnswer(
+  state: FormsState,
+): { item: AnswerableItem; answer: ItemAnswer } | null {
+  const round = activeRound(state);
+  const focused = round === null ? null : focusedItem(round);
+  if (round === null || focused === null || focused.kind === 'notice') {
+    return null;
+  }
+  const item = { kind: focused.kind, index: focused.index };
+  return { item, answer: itemAnswer(round, item) };
+}
+
+// Applies an answer action to the focused question or finding and logs the
+// change; returns the changed answer, or null when nothing changed.
 function changeAnswer(
   deps: FormsCommandDeps,
   context: PageCommandContext,
   action: FormsAction,
   describe: DescribeChange,
-): QuestionAnswer | null {
+): ItemAnswer | null {
   focusBoxItem(deps.store, boxIn(deps, context));
   const before = focusedAnswer(deps.store.get());
   deps.store.dispatch(action);
@@ -206,7 +215,7 @@ function changeAnswer(
   if (before === null || after === null || after.answer === before.answer) {
     return null;
   }
-  deps.log('forms', describe(after.answer, after.question));
+  deps.log('forms', describe(after.answer, after.item));
   return after.answer;
 }
 
@@ -233,8 +242,8 @@ function stepFocus(
   }
 }
 
-// From inside a box the user stays typing: the new item's answer box takes
-// focus. From the page, focus stays on the page.
+// From inside a box the user stays typing: the new item's notes or comment
+// box takes focus. From the page, focus stays on the page.
 function moveItem(
   deps: FormsCommandDeps,
   context: PageCommandContext,
@@ -250,28 +259,27 @@ function moveItem(
   }
 }
 
-// Focuses question `question` as moveItem does; nothing when the forms view
-// shows no round with that question.
-function jumpToQuestion(
+// Focuses `item` as moveItem does; nothing when the forms view shows no round
+// with that item.
+function jumpToItem(
   deps: FormsCommandDeps,
   context: PageCommandContext,
-  question: number,
+  item: RailItem,
 ) {
   const state = deps.store.get();
   const round = activeRound(state);
-  const hasQuestion =
-    round !== null && question >= 1 && question <= round.round.questions.length;
-  if (state.view !== 'forms' || !hasQuestion) {
+  if (state.view !== 'forms' || round === null) {
     return;
   }
-  const item = round.round.notices.length + question - 1;
-  moveItem(deps, context, { type: 'focusItem', item });
-  const moved = round.focus !== item;
+  const position = railPosition(round.round, item);
+  if (position < 0) {
+    return;
+  }
+  moveItem(deps, context, { type: 'focusItem', item: position });
+  const moved = round.focus !== position;
   deps.log(
     'forms',
-    moved
-      ? `jumped to question ${question}`
-      : `already on question ${question}`,
+    moved ? `jumped to ${itemName(item)}` : `already on ${itemName(item)}`,
   );
 }
 
@@ -286,19 +294,19 @@ function jumpToUnanswered(
   if (state.view !== 'forms' || round === null) {
     return;
   }
-  const question = unansweredQuestion(round, step);
-  if (question === null) {
-    deps.log('forms', 'no unanswered question');
+  const item = unansweredItem(round, step);
+  if (item === null) {
+    deps.log('forms', 'no unanswered item');
     return;
   }
   const focused = focusedItem(round);
-  const isFocusedQuestion =
-    focused?.kind === 'question' && focused.index === question;
-  if (isFocusedQuestion) {
-    deps.log('forms', 'no other unanswered question');
+  const isFocusedItem =
+    focused?.kind === item.kind && focused.index === item.index;
+  if (isFocusedItem) {
+    deps.log('forms', 'no other unanswered item');
     return;
   }
-  jumpToQuestion(deps, context, question);
+  jumpToItem(deps, context, item);
 }
 
 // A session's tab closes only once its round is gone: with its round active it
