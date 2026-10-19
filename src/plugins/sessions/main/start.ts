@@ -83,6 +83,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       connect: (info) => list.connect(info),
       showTab: (sessionId) => list.showTab(sessionId),
       activate: (sessionId) => list.activate(sessionId),
+      addCloseGuard: (mayClose) => list.addCloseGuard(mayClose),
     };
     return {
       commands: {},

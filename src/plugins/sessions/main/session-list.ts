@@ -27,6 +27,7 @@ export interface SessionListDeps {
 export interface SessionList extends SessionsMainExports {
   tools(): ToolDefinition[];
   state(): SessionsState;
+  // The user's close, which every close guard must allow.
   closeTab(sessionId: string): void;
 }
 
@@ -74,18 +75,26 @@ function labelOf(entry: SessionEntry): string {
   return entry.number === 1 ? entry.group : `${entry.group} ${entry.number}`;
 }
 
+// A start that throws ends the tool sessions already started, then rethrows.
 function startToolSessions(
   contributions: Contribution[],
   session: AgentSession,
 ): Pick<SessionEntry, 'toolSessions' | 'toolRoutes'> {
   const toolSessions: ToolSession[] = [];
   const toolRoutes = new Map<string, ToolSession>();
-  for (const contribution of contributions) {
-    const toolSession = contribution.start(session);
-    toolSessions.push(toolSession);
-    for (const tool of contribution.tools) {
-      toolRoutes.set(tool.name, toolSession);
+  try {
+    for (const contribution of contributions) {
+      const toolSession = contribution.start(session);
+      toolSessions.push(toolSession);
+      for (const tool of contribution.tools) {
+        toolRoutes.set(tool.name, toolSession);
+      }
     }
+  } catch (error) {
+    for (const started of toolSessions) {
+      started.end();
+    }
+    throw error;
   }
   return { toolSessions, toolRoutes };
 }
@@ -108,9 +117,11 @@ function routeCall(
 // Connected sessions and the tab strip main holds for them. A session keeps its
 // label while connected; a closed tab comes back at the end when shown again.
 // `showTab`, `activate` and `closeTab` send the whole state only when it
-// changed, and log and ignore a session they cannot act on.
+// changed, and log and ignore a session they cannot act on; `closeTab` logs
+// and keeps a tab a close guard refuses.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
+  const closeGuards: ((sessionId: string) => boolean)[] = [];
   const toolNames = new Set<string>();
   const entries = new Map<string, SessionEntry>();
   const tabs: SessionTab[] = [];
@@ -251,9 +262,19 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       makeActive(tab);
       sendState();
     },
+    addCloseGuard(mayClose) {
+      closeGuards.push(mayClose);
+    },
     closeTab(sessionId) {
       const index = knownTab('closeTab', sessionId);
       if (index === null) {
+        return;
+      }
+      if (!closeGuards.every((mayClose) => mayClose(sessionId))) {
+        deps.log(
+          'sessions',
+          `closeTab for session ${sessionId} kept by a close guard`,
+        );
         return;
       }
       removeTab(index);

@@ -441,18 +441,135 @@ describe('collectLastRound', () => {
     expect(payload.note).toBe('done');
   });
 
-  it('answers an aborted call with a draft and leaves the round open', async () => {
+  it('answers an aborted call with a draft', async () => {
     const session = startSession();
     const controller = new AbortController();
     const first = session.askRound(NAMING_ARGS, null, controller.signal);
-    const shown = presenter.latest();
+    presenter.draft(presenter.latest().roundId, oneAnswer({ choice: 2 }));
 
     controller.abort();
-    expect((await first).outcome).toBe('draft');
+    const payload = await first;
 
-    const second = session.collectLastRound(true, live());
-    presenter.submit(shown.roundId, oneAnswer({ choice: 1 }));
-    expect((await second).outcome).toBe('submitted');
+    expect(payload.outcome).toBe('draft');
+    expect(payload.answers[0].choice).toBe(2);
+  });
+});
+
+describe('a call the host cancels', () => {
+  it('closes its round in the window and keeps the draft in the open file', async () => {
+    const session = startSession();
+    const host = new AbortController();
+    const asking = session.askRound(NAMING_ARGS, null, host.signal);
+    const naming = presenter.latest();
+    presenter.draft(naming.roundId, oneAnswer({ choice: 2 }, 'half'));
+
+    host.abort();
+    await asking;
+
+    expect(presenter.closed).toEqual([naming.roundId]);
+    expect(savedFile(naming.roundId)).toMatchObject({
+      outcome: 'open',
+      body: { note: 'half' },
+    });
+  });
+
+  it("shows the session's next round at once", async () => {
+    const session = startSession();
+    const host = new AbortController();
+    const asking = session.askRound(NAMING_ARGS, null, host.signal);
+
+    host.abort();
+    await asking;
+    void session.askRound(PLACEMENT_ARGS, null, live());
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(presenter.shown).toHaveLength(2);
+    expect(presenter.latest().round).toEqual(parseRound(PLACEMENT_ARGS));
+  });
+
+  it('closes a round left open after its deadline draft once a collect on it is cancelled', async () => {
+    const session = startSession();
+    const asking = session.askRound(NAMING_ARGS, null, live());
+    const naming = presenter.latest();
+    await expireDeadline();
+    await asking;
+    const host = new AbortController();
+    const collecting = session.collectLastRound(true, host.signal);
+
+    host.abort();
+    await collecting;
+
+    expect(presenter.closed).toEqual([naming.roundId]);
+  });
+
+  it('opens the round pre-filled when it is sent again', async () => {
+    const session = startSession();
+    const host = new AbortController();
+    const asking = session.askRound(NAMING_ARGS, null, host.signal);
+    presenter.draft(presenter.latest().roundId, oneAnswer({ choice: 2 }));
+    host.abort();
+    await asking;
+
+    void session.askRound(NAMING_ARGS, null, live());
+
+    expect(presenter.shown).toHaveLength(2);
+    expect(latestDraft()).toEqual(oneAnswer({ choice: 2 }));
+  });
+
+  it('keeps the round open while another call still waits on it', async () => {
+    const session = startSession();
+    const host = new AbortController();
+    const asking = session.askRound(NAMING_ARGS, null, host.signal);
+    const naming = presenter.latest();
+    const collecting = session.collectLastRound(true, live());
+
+    host.abort();
+    await asking;
+
+    expect(presenter.closed).toEqual([]);
+    presenter.submit(naming.roundId, oneAnswer({ choice: 1 }));
+    expect((await collecting).outcome).toBe('submitted');
+  });
+
+  it('returns and marks returned a round the user finished in the same tick', async () => {
+    const session = startSession();
+    const host = new AbortController();
+    const asking = session.askRound(NAMING_ARGS, null, host.signal);
+    const naming = presenter.latest();
+    presenter.submit(naming.roundId, oneAnswer({ choice: 1 }));
+
+    host.abort();
+
+    expect((await asking).outcome).toBe('submitted');
+    expect(savedFile(naming.roundId).returned).toBe(true);
+  });
+
+  it('leaves the open round be when a call queued behind it is cancelled', async () => {
+    const session = startSession();
+    void session.askRound(NAMING_ARGS, null, live());
+    const host = new AbortController();
+    const queued = session.askRound(PLACEMENT_ARGS, null, host.signal);
+
+    host.abort();
+    await expect(queued).rejects.toThrow(
+      'ask_round was cancelled before it ran.',
+    );
+
+    expect(presenter.closed).toEqual([]);
+  });
+
+  it("leaves the round open when a queued re-send's own deadline wakes it", async () => {
+    const session = startSession();
+    void session.askRound(NAMING_ARGS, null, live());
+    const naming = presenter.latest();
+    await vi.advanceTimersByTimeAsync(100_000);
+    const resent = session.askRound(NAMING_ARGS, null, live());
+
+    await expireDeadline();
+    expect((await resent).outcome).toBe('draft');
+
+    expect(presenter.closed).toEqual([]);
+    expect(savedFile(naming.roundId).outcome).toBe('open');
   });
 });
 

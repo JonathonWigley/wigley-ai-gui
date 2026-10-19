@@ -78,6 +78,9 @@ export interface SessionsMainExports {
   connect(info: SessionInfo): ConnectedSession;
   showTab(sessionId: string): void;
   activate(sessionId: string): void;
+  // The user closing a session's tab asks every guard first, and the tab stays
+  // while any answers false; a session that ends loses its tab regardless.
+  addCloseGuard(mayClose: (sessionId: string) => boolean): void;
 }
 
 export interface SessionsMainEvents extends EventShape {

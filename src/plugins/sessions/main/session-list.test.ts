@@ -319,6 +319,56 @@ describe('createSessionList', () => {
     expect(emitted).toHaveLength(emittedBefore);
   });
 
+  it('ends the tool sessions already started when a later start throws, and rethrows', () => {
+    const { list, emitted } = setUp();
+    const first = fakeContribution();
+    list.contributeTools([tool('a')], first.start);
+    list.contributeTools([tool('b')], () => {
+      throw new Error('forms could not start');
+    });
+
+    expect(() => list.connect(info('/work/x'))).toThrow(
+      'forms could not start',
+    );
+
+    expect(first.started).toHaveLength(1);
+    expect(first.ends()).toBe(1);
+    expect(emitted).toEqual([]);
+  });
+
+  it('keeps a tab a close guard refuses, with a log line, until every guard allows it', () => {
+    const { list, states, logged } = setUp();
+    const connected = list.connect(info('/work/x'));
+    const id = connected.session.id;
+    list.showTab(id);
+    let roundOpen = true;
+    list.addCloseGuard(() => true);
+    list.addCloseGuard((sessionId) => !(sessionId === id && roundOpen));
+    const sentBefore = states.length;
+
+    list.closeTab(id);
+
+    expect(list.state().tabs.map((tab) => tab.sessionId)).toEqual([id]);
+    expect(states).toHaveLength(sentBefore);
+    expect(logged).toEqual([
+      `[sessions] closeTab for session ${id} kept by a close guard`,
+    ]);
+    roundOpen = false;
+    list.closeTab(id);
+    expect(list.state().tabs).toEqual([]);
+  });
+
+  it('drops the tab of a session that ends whatever the close guards say', () => {
+    const { list } = setUp();
+    const connected = list.connect(info('/work/x'));
+    list.showTab(connected.session.id);
+    list.addCloseGuard(() => false);
+
+    connected.end();
+
+    expect(list.state().tabs).toEqual([]);
+  });
+
   it('ignores unknown sessions and tabs it does not hold, with a log line', () => {
     const { list, states, logged } = setUp();
     list.connect(info('/work/x'));

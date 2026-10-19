@@ -40,10 +40,13 @@ interface OpenRound {
   latestBody: FormBody;
   // The user's first submit or cancel; later ones are ignored.
   end: RoundFinish | null;
-  // Left the window: the user finished it or its session ended.
+  // Left the window: the user finished it, its session ended, or the host
+  // cancelled the last call waiting for its answers.
   closed: boolean;
   // One per call waiting on this round, woken when it ends or closes.
   waiters: Set<() => void>;
+  // The calls waiting for this round's own answers, not those queued behind it.
+  callers: number;
 }
 
 // The last round to finish, kept because the reply that carried its answers
@@ -196,20 +199,41 @@ function waitForEndOrDeadline(
   });
 }
 
+// No call is left to collect the round's answers: it leaves the window as on
+// a disconnect, its file still open, so a re-send opens it pre-filled. A round
+// the user already finished stays for the next call to collect.
+function abandonRound(session: SessionContext, open: OpenRound): void {
+  const isUnfinishedOpenRound = session.open === open && open.end === null;
+  if (isUnfinishedOpenRound) {
+    closeOpenRound(session);
+  }
+}
+
 // A deadline running out is a draft, never a failure: the round stays open
-// for collect_last_round.
+// for collect_last_round. The host cancelling the last call waiting on the
+// round abandons it, so the session's next round shows. `signal` wakes the
+// wait early; `host` is the caller's own signal, which a queued call's
+// deadline leaves alone.
 async function presentOpen(
   session: SessionContext,
   open: OpenRound,
   seconds: number,
   signal: AbortSignal,
+  host: AbortSignal = signal,
 ): Promise<AnswersPayload> {
   const mustWait =
     open.end === null && !open.closed && seconds > 0 && !signal.aborted;
-  if (mustWait) {
-    await waitForEndOrDeadline(open, seconds, signal);
+  if (!mustWait) {
+    return openRoundPayload(session, open);
   }
-  return openRoundPayload(session, open);
+  open.callers += 1;
+  await waitForEndOrDeadline(open, seconds, signal);
+  open.callers -= 1;
+  const payload = openRoundPayload(session, open);
+  if (host.aborted && open.callers === 0) {
+    abandonRound(session, open);
+  }
+  return payload;
 }
 
 // A finished round whose answers no tool reply has carried: the open round,
@@ -300,6 +324,7 @@ function openNewRound(
     end: null,
     closed: false,
     waiters: new Set(),
+    callers: 0,
   };
   session.presenter.show(
     {
@@ -350,6 +375,8 @@ function requireLiveCaller(session: SessionContext, signal: AbortSignal): void {
   }
 }
 
+// `signal` wakes the call's wait early; `host` is the caller's own signal,
+// whose abort may abandon the round.
 async function askParsedRound(
   session: SessionContext,
   round: Round,
@@ -357,11 +384,12 @@ async function askParsedRound(
   args: unknown,
   toolUseId: string | null,
   signal: AbortSignal,
+  host: AbortSignal = signal,
 ): Promise<AnswersPayload> {
   requireLiveCaller(session, signal);
   const open = session.open;
   if (open !== null && open.record.fingerprint === roundFingerprint) {
-    return presentOpen(session, open, session.deadlineSeconds, signal);
+    return presentOpen(session, open, session.deadlineSeconds, signal, host);
   }
   const last = session.lastFinished;
   // A cancelled round the agent already received opens again, pre-filled.
@@ -395,7 +423,7 @@ async function askParsedRound(
     toolUseId,
   );
   session.open = opened;
-  return presentOpen(session, opened, session.deadlineSeconds, signal);
+  return presentOpen(session, opened, session.deadlineSeconds, signal, host);
 }
 
 // The round the user is still answering, when it is not this call's own round.
@@ -497,6 +525,7 @@ async function askRoundWhenFree(
       args,
       toolUseId,
       callSignal,
+      signal,
     );
   } finally {
     clearTimeout(timer);

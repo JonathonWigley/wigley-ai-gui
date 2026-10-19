@@ -76,10 +76,11 @@ function fakeAlerts() {
   return { alerts, announced, counts };
 }
 
-// Records tab calls into `calls`; the presenter never contributes tools or
-// connects a session.
-function fakeSessions(calls: string[]): SessionsMainExports {
-  return {
+// Records tab calls into `calls` and keeps the close guards added; the
+// presenter never contributes tools or connects a session.
+function fakeSessions(calls: string[]) {
+  const guards: ((sessionId: string) => boolean)[] = [];
+  const sessions: SessionsMainExports = {
     contributeTools: () => {
       throw new Error('the presenter contributed tools');
     },
@@ -88,7 +89,11 @@ function fakeSessions(calls: string[]): SessionsMainExports {
     },
     showTab: (sessionId) => calls.push(`showTab ${sessionId}`),
     activate: (sessionId) => calls.push(`activate ${sessionId}`),
+    addCloseGuard: (mayClose) => guards.push(mayClose),
   };
+  const mayClose = (sessionId: string) =>
+    guards.every((guard) => guard(sessionId));
+  return { sessions, mayClose };
 }
 
 function fakeListener() {
@@ -107,12 +112,13 @@ function setUp() {
   const window = fakeWindow();
   const attention = fakeAlerts();
   const logged: string[] = [];
+  const tabs = fakeSessions(calls);
   const presenter = createChannelPresenter(
     page.channel,
     attention.alerts,
     window.window,
     (source, message) => logged.push(`[${source}] ${message}`),
-    fakeSessions(calls),
+    tabs.sessions,
   );
   const openRounds = () => page.invoke('openRounds') as PresentedRound[];
   const finish = (roundId: string, end: RoundEnd) =>
@@ -125,6 +131,7 @@ function setUp() {
     window,
     attention,
     logged,
+    mayClose: tabs.mayClose,
     presenter,
     openRounds,
     finish,
@@ -150,16 +157,42 @@ describe('createChannelPresenter', () => {
     expect(window.shown()).toBe(0);
   });
 
-  it("brings the window forward on the round's tab when the announcement is clicked", () => {
+  it("brings the window forward on the round's tab, shown again, when the announcement is clicked", () => {
     const { calls, window, attention, presenter } = setUp();
     presenter.show(ROUND, fakeListener().listener);
+    calls.length = 0;
 
     attention.announced[0].onClick();
 
-    expect(calls.filter((call) => call.startsWith('activate'))).toEqual([
-      'activate app-1',
-    ]);
+    expect(calls).toEqual(['showTab app-1', 'activate app-1']);
     expect(window.shown()).toBe(1);
+  });
+
+  it('only activates the tab when the announced round has closed', () => {
+    const { calls, attention, presenter } = setUp();
+    presenter.show(ROUND, fakeListener().listener);
+    presenter.close('round-1');
+    calls.length = 0;
+
+    attention.announced[0].onClick();
+
+    expect(calls).toEqual(['activate app-1']);
+  });
+
+  it("refuses to close a session's tab while its round is open", () => {
+    const { mayClose, presenter, finish } = setUp();
+    presenter.show(ROUND, fakeListener().listener);
+    presenter.show(
+      { ...ROUND, roundId: 'round-2', sessionId: 'app-2' },
+      fakeListener().listener,
+    );
+
+    expect(mayClose('app-1')).toBe(false);
+    expect(mayClose('app-3')).toBe(true);
+    finish('round-1', { kind: 'cancelled', body: BODY });
+    presenter.close('round-2');
+    expect(mayClose('app-1')).toBe(true);
+    expect(mayClose('app-2')).toBe(true);
   });
 
   it('serves open rounds with their latest draft and passes drafts on', () => {

@@ -97,7 +97,10 @@ export interface FormsSession {
   // that round finishes. Its own deadline passing first returns, without a
   // second wait, the open round's draft when that round is its own, or else a
   // draft that opens nothing and names the open round. A new round never
-  // closes or replaces an unfinished one.
+  // closes or replaces an unfinished one. A call that waits on its round, in
+  // ask_round or collect_last_round, and that the host cancels when no other
+  // call waits on that round, closes the unfinished round in the window as end
+  // does, so the session's next round shows.
   askRound(
     args: unknown,
     toolUseId: string | null,
