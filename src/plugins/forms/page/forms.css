@@ -584,14 +584,15 @@
   font-size: 1.3rem;
 }
 
-/* Status line: it fills the status bar's row beside any core item, and its
-   parts and key hints wrap onto more lines when narrow. */
+/* Status line: it fills the status bar's row, beside a core item when both
+   fit and on a row of its own when not, and its parts and key hints wrap onto
+   more lines when narrow. */
 .status-line {
   align-items: center;
   background: var(--wg-bg-deep);
   border-top: 1px solid var(--wg-border);
   display: flex;
-  flex: 1 1 0;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   font-family: var(--wg-font-mono);
   font-size: var(--wg-font-mono-size);

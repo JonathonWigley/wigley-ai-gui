@@ -44,22 +44,28 @@
   min-width: 0;
 }
 
-/* One row: core items first, then what plugins contribute. */
+/* Core items first, then what plugins contribute; an item that does not fit
+   beside the others takes a row of its own. */
 .shell-status-bar {
   display: flex;
+  flex-wrap: wrap;
   grid-area: status;
   min-width: 0;
 }
 
-/* The theme problem, styled as a status line part until it is fixed. */
+/* The theme problem, styled as a status line part until it is fixed: it fills
+   its row when alone on it, and its text wraps inside that row. */
 .status-error {
+  align-items: center;
   background: var(--wg-bg-deep);
   border-top: 1px solid var(--wg-border);
   color: var(--wg-error);
+  display: flex;
+  flex: 1 1 auto;
   font-family: var(--wg-font-mono);
   font-size: var(--wg-font-mono-size);
   min-width: 0;
-  padding: 0.2rem 0 0.2rem 0.75rem;
+  padding: 0.2rem 0.25rem 0.2rem 0.75rem;
 }
 
 /* Over everything, with no hit area of its own: only what is drawn in it
