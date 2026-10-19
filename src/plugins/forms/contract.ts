@@ -100,7 +100,8 @@ export interface FormsSession {
   // closes or replaces an unfinished one. A call that waits on its round, in
   // ask_round or collect_last_round, and that the host cancels when no other
   // call waits on that round, closes the unfinished round in the window as end
-  // does, so the session's next round shows.
+  // does, so the session's next round shows; a re-send of that round queued
+  // behind the call counts as waiting on it.
   askRound(
     args: unknown,
     toolUseId: string | null,

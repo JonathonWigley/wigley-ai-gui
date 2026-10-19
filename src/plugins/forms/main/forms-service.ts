@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { errorText } from '../../../shared/error-text';
 import type { AgentSession, SessionInfo } from '../../sessions/contract';
 import type {
   AnswersPayload,
@@ -31,6 +32,8 @@ export interface FormsServiceDeps {
 interface RoundFinish {
   kind: FinishedOutcome;
   body: FormBody;
+  // Why the finish's disk write failed; null once it saved.
+  saveFailure: string | null;
 }
 
 // A round shown in the window that no tool reply has settled yet.
@@ -45,7 +48,9 @@ interface OpenRound {
   closed: boolean;
   // One per call waiting on this round, woken when it ends or closes.
   waiters: Set<() => void>;
-  // The calls waiting for this round's own answers, not those queued behind it.
+  // The calls waiting for this round's own answers: those waiting on it now,
+  // and re-sends of it queued behind an earlier call. A call queued for
+  // another round is not one.
   callers: number;
 }
 
@@ -59,6 +64,7 @@ interface FinishedRound {
   // An ask_round for another round returned it with `earlier_heading`, so a
   // replay keeps that framing.
   handedBack: boolean;
+  saveFailure: string | null;
 }
 
 // One connected session: at most one open round, and the last finished one.
@@ -117,12 +123,32 @@ function prefillDraft(round: Round, saved: SavedRound | null): FormBody | null {
   };
 }
 
+// Finished answers whose disk write failed still stand; the summary says the
+// saved rounds lack them.
+function withSaveFailure(
+  payload: AnswersPayload,
+  saveFailure: string | null,
+): AnswersPayload {
+  if (saveFailure !== null) {
+    payload.summary +=
+      ` The app could not save these answers to its saved rounds ` +
+      `(${saveFailure}); they stand as given here.`;
+  }
+  return payload;
+}
+
 function finishedPayload(finished: FinishedRound): AnswersPayload {
-  return answersPayload(finished.round, finished.outcome, finished.body);
+  return withSaveFailure(
+    answersPayload(finished.round, finished.outcome, finished.body),
+    finished.saveFailure,
+  );
 }
 
 function handedBackFinishedPayload(finished: FinishedRound): AnswersPayload {
-  return handedBackPayload(finished.round, finished.outcome, finished.body);
+  return withSaveFailure(
+    handedBackPayload(finished.round, finished.outcome, finished.body),
+    finished.saveFailure,
+  );
 }
 
 function roundFromRecord(record: SavedRound): Round | null {
@@ -142,7 +168,7 @@ function closeInWindow(open: OpenRound, presenter: RoundPresenter): void {
 }
 
 function wakeWaiters(open: OpenRound): void {
-  for (const wake of [...open.waiters]) {
+  for (const wake of open.waiters) {
     wake();
   }
 }
@@ -160,6 +186,7 @@ function settle(
     body: end.body,
     fingerprint: open.record.fingerprint,
     handedBack: false,
+    saveFailure: end.saveFailure,
   };
   session.lastFinished = finished;
   session.open = null;
@@ -178,7 +205,10 @@ function openRoundPayload(
   if (session.open === open) {
     settle(session, open, end);
   }
-  return answersPayload(open.round, end.kind, end.body);
+  return withSaveFailure(
+    answersPayload(open.round, end.kind, end.body),
+    end.saveFailure,
+  );
 }
 
 function waitForEndOrDeadline(
@@ -209,11 +239,22 @@ function abandonRound(session: SessionContext, open: OpenRound): void {
   }
 }
 
+// A call stops waiting on the open round: the host cancelling the last one
+// abandons the round, so the session's next round shows.
+function releaseCaller(
+  session: SessionContext,
+  open: OpenRound,
+  host: AbortSignal,
+): void {
+  open.callers -= 1;
+  if (host.aborted && open.callers === 0) {
+    abandonRound(session, open);
+  }
+}
+
 // A deadline running out is a draft, never a failure: the round stays open
-// for collect_last_round. The host cancelling the last call waiting on the
-// round abandons it, so the session's next round shows. `signal` wakes the
-// wait early; `host` is the caller's own signal, which a queued call's
-// deadline leaves alone.
+// for collect_last_round. `signal` wakes the wait early; `host` is the
+// caller's own signal, which a queued call's deadline leaves alone.
 async function presentOpen(
   session: SessionContext,
   open: OpenRound,
@@ -228,11 +269,8 @@ async function presentOpen(
   }
   open.callers += 1;
   await waitForEndOrDeadline(open, seconds, signal);
-  open.callers -= 1;
   const payload = openRoundPayload(session, open);
-  if (host.aborted && open.callers === 0) {
-    abandonRound(session, open);
-  }
+  releaseCaller(session, open, host);
   return payload;
 }
 
@@ -259,6 +297,7 @@ function takeUnreturnedFinished(session: SessionContext): FinishedRound | null {
     body: readFormBody(round, record.body),
     fingerprint: record.fingerprint,
     handedBack: false,
+    saveFailure: null,
   };
   return session.lastFinished;
 }
@@ -288,16 +327,25 @@ function roundListener(
       // Throws when the disk write fails, so the page shows the draft unsaved.
       session.store.saveBody(open.record, open.latestBody);
     },
+    // A failed disk write throws, as a draft's does, once the round has
+    // closed and its waiting calls woke with the failure named.
     finish: (end) => {
       if (open.end !== null || open.closed) {
         return;
       }
       const body = readFormBody(open.round, end.body);
-      open.end = { kind: end.kind, body };
+      const finish: RoundFinish = { kind: end.kind, body, saveFailure: null };
+      open.end = finish;
       open.latestBody = body;
-      session.store.finish(open.record, end.kind, body);
-      closeInWindow(open, session.presenter);
-      wakeWaiters(open);
+      try {
+        session.store.finish(open.record, end.kind, body);
+      } catch (error) {
+        finish.saveFailure = errorText(error);
+        throw error;
+      } finally {
+        closeInWindow(open, session.presenter);
+        wakeWaiters(open);
+      }
     },
   };
 }
@@ -490,7 +538,8 @@ function queuedDeadlinePayload(
 // Opens this call's round only once every earlier call has returned and the
 // round the user is answering has finished. Its own deadline bounds the whole
 // call: passing first returns without opening a round and leaves the open
-// round be.
+// round be. A re-send of the open round waits on that round while queued, so
+// the host cancelling the call ahead of it leaves the round open.
 async function askRoundWhenFree(
   session: SessionContext,
   earlier: Promise<void>,
@@ -506,6 +555,11 @@ async function askRoundWhenFree(
     session.deadlineSeconds * 1000,
   );
   const callSignal = AbortSignal.any([signal, deadline.signal]);
+  const resentOpen =
+    session.open?.record.fingerprint === roundFingerprint ? session.open : null;
+  if (resentOpen !== null) {
+    resentOpen.callers += 1;
+  }
   try {
     await waitForOtherRoundToFinish(
       session,
@@ -513,6 +567,9 @@ async function askRoundWhenFree(
       roundFingerprint,
       callSignal,
     );
+    if (resentOpen !== null) {
+      releaseCaller(session, resentOpen, signal);
+    }
     const deadlinePassed =
       deadline.signal.aborted && !signal.aborted && !session.ended;
     if (deadlinePassed) {

@@ -3,6 +3,7 @@ import { createServer, type Socket } from 'node:net';
 import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 import type { Log } from '../../../../contracts/log';
+import { errorText } from '../../../../shared/error-text';
 import {
   type ConnectedSession,
   RELAY_PROTOCOL,
@@ -96,7 +97,7 @@ function startSession(socket: Socket, line: string, deps: RelayServerDeps) {
   } catch (error) {
     refuse(
       socket,
-      `the app could not start the session: ${String(error)}`,
+      `the app could not start the session: ${errorText(error)}`,
       deps,
     );
     return;

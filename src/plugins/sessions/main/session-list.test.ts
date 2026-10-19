@@ -336,7 +336,7 @@ describe('createSessionList', () => {
     expect(emitted).toEqual([]);
   });
 
-  it('keeps a tab a close guard refuses, with a log line, until every guard allows it', () => {
+  it('keeps a tab a close guard refuses, with a log line and false, until every guard allows it', () => {
     const { list, states, logged } = setUp();
     const connected = list.connect(info('/work/x'));
     const id = connected.session.id;
@@ -346,7 +346,7 @@ describe('createSessionList', () => {
     list.addCloseGuard((sessionId) => !(sessionId === id && roundOpen));
     const sentBefore = states.length;
 
-    list.closeTab(id);
+    expect(list.closeTab(id)).toBe(false);
 
     expect(list.state().tabs.map((tab) => tab.sessionId)).toEqual([id]);
     expect(states).toHaveLength(sentBefore);
@@ -354,7 +354,7 @@ describe('createSessionList', () => {
       `[sessions] closeTab for session ${id} kept by a close guard`,
     ]);
     roundOpen = false;
-    list.closeTab(id);
+    expect(list.closeTab(id)).toBe(true);
     expect(list.state().tabs).toEqual([]);
   });
 
@@ -374,7 +374,7 @@ describe('createSessionList', () => {
     list.connect(info('/work/x'));
 
     list.showTab('ffffffff');
-    list.closeTab('00000001');
+    expect(list.closeTab('00000001')).toBe(false);
 
     expect(logged).toEqual([
       '[sessions] showTab for unknown session ffffffff ignored',

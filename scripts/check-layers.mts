@@ -96,7 +96,7 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['node:'],
   },
   'src/plugins/sessions/main/relay': {
-    layers: ['src/contracts', 'src/plugins/sessions/contract.ts'],
+    layers: ['src/contracts', 'src/shared', 'src/plugins/sessions/contract.ts'],
     packages: ['node:'],
   },
   'src/plugins/sessions/main/mcp': {

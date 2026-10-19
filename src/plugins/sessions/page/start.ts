@@ -23,6 +23,8 @@ function createExports(
   state: () => SessionsState,
 ): SessionsPageExports {
   const { log } = api.services;
+  const tabLabel = (sessionId: string) =>
+    state().tabs.find((tab) => tab.sessionId === sessionId)?.label ?? sessionId;
   return {
     fill: (sessionId, sessionView) => view.fill(sessionId, sessionView),
     activeSessionId: () => state().activeSessionId,
@@ -39,6 +41,11 @@ function createExports(
       }
       api.channel
         .invoke('closeTab', sessionId)
+        .then((closed) => {
+          if (!closed) {
+            log('sessions', `tab close kept by main: ${tabLabel(sessionId)}`);
+          }
+        })
         .catch((error) =>
           log('sessions', `tab not closed: ${errorText(error)}`),
         );

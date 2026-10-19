@@ -487,6 +487,57 @@ describe('a call the host cancels', () => {
     expect(presenter.latest().round).toEqual(parseRound(PLACEMENT_ARGS));
   });
 
+  it('opens a different round queued behind it at once', async () => {
+    const session = startSession();
+    const host = new AbortController();
+    const asking = session.askRound(NAMING_ARGS, null, host.signal);
+    const naming = presenter.latest();
+    void session.askRound(PLACEMENT_ARGS, null, live());
+
+    host.abort();
+    await asking;
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(presenter.closed).toEqual([naming.roundId]);
+    expect(presenter.latest().round).toEqual(parseRound(PLACEMENT_ARGS));
+  });
+
+  it('keeps the round open for a re-send of it queued behind the cancelled call', async () => {
+    const session = startSession();
+    const host = new AbortController();
+    const asking = session.askRound(NAMING_ARGS, null, host.signal);
+    const naming = presenter.latest();
+    const resent = session.askRound(NAMING_ARGS, null, live());
+
+    host.abort();
+    await asking;
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(presenter.closed).toEqual([]);
+    expect(presenter.shown).toHaveLength(1);
+    presenter.submit(naming.roundId, oneAnswer({ choice: 1 }));
+    expect((await resent).outcome).toBe('submitted');
+  });
+
+  it('stops counting a queued re-send the host cancels, so cancelling the call ahead closes the round', async () => {
+    const session = startSession();
+    const host = new AbortController();
+    const asking = session.askRound(NAMING_ARGS, null, host.signal);
+    const naming = presenter.latest();
+    const resendHost = new AbortController();
+    const resent = session.askRound(NAMING_ARGS, null, resendHost.signal);
+
+    resendHost.abort();
+    await expect(resent).rejects.toThrow(
+      'ask_round was cancelled before it ran.',
+    );
+    expect(presenter.closed).toEqual([]);
+    host.abort();
+    await asking;
+
+    expect(presenter.closed).toEqual([naming.roundId]);
+  });
+
   it('closes a round left open after its deadline draft once a collect on it is cancelled', async () => {
     const session = startSession();
     const asking = session.askRound(NAMING_ARGS, null, live());
@@ -1213,6 +1264,23 @@ describe("the user's answers on disk", () => {
     await expireDeadline();
 
     expect(await pending).toMatchObject({ outcome: 'draft', note: 'half' });
+  });
+
+  it("closes the round and wakes the call when the finish's write fails, naming the failure", async () => {
+    const pending = startSession().askRound(NAMING_ARGS, null, live());
+    const shown = presenter.latest();
+    vi.spyOn(store, 'finish').mockImplementation(() => {
+      throw new Error('could not save round r: EACCES');
+    });
+
+    expect(() =>
+      presenter.submit(shown.roundId, oneAnswer({ choice: 1 })),
+    ).toThrow('could not save round r: EACCES');
+    const payload = await pending;
+
+    expect(presenter.closed).toEqual([shown.roundId]);
+    expect(payload.outcome).toBe('submitted');
+    expect(payload.summary).toContain('could not save round r: EACCES');
   });
 
   it('drops a draft that arrives after the finish', async () => {

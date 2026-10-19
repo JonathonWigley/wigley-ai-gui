@@ -99,11 +99,13 @@ export interface SessionsState {
   activeSessionId: string | null;
 }
 
+// `closeTab` returns whether the tab closed: false when a close guard kept it
+// or main knows no such tab.
 export interface SessionsChannel extends ChannelShape {
   invoke: {
     state(): SessionsState;
     activate(sessionId: string): void;
-    closeTab(sessionId: string): void;
+    closeTab(sessionId: string): boolean;
   };
   messages: { stateChanged: SessionsState };
 }

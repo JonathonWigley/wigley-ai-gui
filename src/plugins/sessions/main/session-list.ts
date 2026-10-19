@@ -27,8 +27,9 @@ export interface SessionListDeps {
 export interface SessionList extends SessionsMainExports {
   tools(): ToolDefinition[];
   state(): SessionsState;
-  // The user's close, which every close guard must allow.
-  closeTab(sessionId: string): void;
+  // The user's close, which every close guard must allow; returns whether the
+  // tab closed.
+  closeTab(sessionId: string): boolean;
 }
 
 interface Contribution {
@@ -118,7 +119,8 @@ function routeCall(
 // label while connected; a closed tab comes back at the end when shown again.
 // `showTab`, `activate` and `closeTab` send the whole state only when it
 // changed, and log and ignore a session they cannot act on; `closeTab` logs
-// and keeps a tab a close guard refuses.
+// and keeps a tab a close guard refuses, returning false for every tab it
+// leaves open.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   const closeGuards: ((sessionId: string) => boolean)[] = [];
@@ -268,17 +270,18 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     closeTab(sessionId) {
       const index = knownTab('closeTab', sessionId);
       if (index === null) {
-        return;
+        return false;
       }
       if (!closeGuards.every((mayClose) => mayClose(sessionId))) {
         deps.log(
           'sessions',
           `closeTab for session ${sessionId} kept by a close guard`,
         );
-        return;
+        return false;
       }
       removeTab(index);
       sendState();
+      return true;
     },
     tools: () => contributions.flatMap((contribution) => contribution.tools),
     state,

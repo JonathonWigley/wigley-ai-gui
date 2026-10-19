@@ -244,8 +244,7 @@ describe('startRelayServer', () => {
 
     expect(JSON.parse(await nextLine())).toEqual({
       ok: false,
-      error:
-        'the app could not start the session: Error: forms could not start',
+      error: 'the app could not start the session: forms could not start',
     });
     await ended;
     expect(served).toBe(0);
