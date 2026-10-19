@@ -22,9 +22,12 @@ const PAGE_BINDS: PageBind[] = [
 // An unbroken run of letters wider than any pane; no j, which would start jk.
 const LONG_WORD = 'unbroken'.repeat(14);
 
-// Opening on the finding: Space then k replays k to the notice, j back to the
-// finding, pick 2; a
-// types "agreed" at once (INSERT), Esc out. j to question 1, pick 2; a types
+// Opening on finding 1: Space then k replays k to the notice, j back to the
+// finding; Space a f sets Fix now, 2 picks solution 2, Space a f again clears
+// the action and Space a s sets Leave it. a types "agreed" at once (INSERT),
+// jk to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out. j to
+// finding 2, whose one solution Space a u alone answers with Follow-up. j to
+// question 1, pick 2; a types
 // "ab" at once, Esc out; d focuses its reason box, A appends a long word and
 // Ctrl+k still in INSERT moves back to its notes box, Esc out; a again types
 // "c" after "ab". j to question 2, where q a x then b breaks the self-test
@@ -41,12 +44,18 @@ const LONG_WORD = 'unbroken'.repeat(14);
 const STEPS: SelfTestStep[] = [
   { keys: [' ', 'k'], expect: '[page] k ran forms.prevItem', checksFit: true },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
+  { keys: [' ', 'a', 'f'], expect: '[forms] chose Fix now on finding 1' },
   { keys: ['2'], expect: '[forms] chose 2 on finding 1' },
+  { keys: [' ', 'a', 'f'], expect: '[forms] cleared the action on finding 1' },
+  { keys: [' ', 'a', 's'], expect: '[forms] chose Leave it on finding 1' },
   { keys: ['a'], expect: '[forms] focused notes on finding 1' },
   {
-    keys: [...'agreed', 'j', 'k', 'Escape'],
-    expect: '[forms] left the box',
+    keys: [...'agreed', 'j', 'k', ' ', 'a', 'u'],
+    expect: '[forms] chose Follow-up on finding 1',
   },
+  { keys: ['Escape'], expect: '[forms] left the box' },
+  { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
+  { keys: [' ', 'a', 'u'], expect: '[forms] chose Follow-up on finding 2' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
@@ -140,6 +149,14 @@ function fixtureRound(run: number) {
         recommend: 1,
         recommend_action: 'fix_now',
       },
+      {
+        title: 'A one-solution finding',
+        finding: '- the code repeats a check',
+        proof: '`check()` runs twice.',
+        choices: [{ text: 'Drop one', reason: 'One check is enough.' }],
+        recommend: 1,
+        recommend_action: 'fix_now',
+      },
     ],
     questions: [
       {
@@ -201,13 +218,13 @@ function toolResultProblems(result: ToolResult): string[] {
 
 // What the fixture's answers must come back as after STEPS.
 function payloadProblems(payload: AnswersPayload): string[] {
-  const [finding] = payload.findings;
+  const [finding, oneSolution] = payload.findings;
   const [first, second] = payload.answers;
   const checks: [boolean, string][] = [
     [payload.outcome === 'submitted', `outcome ${payload.outcome}`],
     [
       payload.summary ===
-        '1 finding, 2 questions: 2 answered, 1 not applicable, 0 untouched.',
+        '2 findings, 2 questions: 3 answered, 1 not applicable, 0 untouched.',
       `summary ${JSON.stringify(payload.summary)}`,
     ],
     [finding?.status === 'answered', `finding 1 status ${finding?.status}`],
@@ -216,9 +233,27 @@ function payloadProblems(payload: AnswersPayload): string[] {
       finding?.took_recommendation === false,
       `finding 1 took_recommendation ${finding?.took_recommendation}`,
     ],
+    [finding?.action === 'follow_up', `finding 1 action ${finding?.action}`],
+    [
+      finding?.took_action_recommendation === false,
+      `finding 1 took_action_recommendation ${finding?.took_action_recommendation}`,
+    ],
     [
       finding?.notes === 'agreed',
       `finding 1 notes ${JSON.stringify(finding?.notes)}`,
+    ],
+    [
+      oneSolution?.status === 'answered',
+      `finding 2 status ${oneSolution?.status}`,
+    ],
+    [oneSolution?.choice === 1, `finding 2 choice ${oneSolution?.choice}`],
+    [
+      oneSolution?.action === 'follow_up',
+      `finding 2 action ${oneSolution?.action}`,
+    ],
+    [
+      oneSolution?.took_action_recommendation === false,
+      `finding 2 took_action_recommendation ${oneSolution?.took_action_recommendation}`,
     ],
     [first?.status === 'answered', `question 1 status ${first?.status}`],
     [first?.choice === 2, `question 1 choice ${first?.choice}`],
