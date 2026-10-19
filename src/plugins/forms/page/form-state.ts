@@ -96,8 +96,11 @@ export type ItemAction =
   | { type: 'prevItem' }
   // `item` is a rail position.
   | { type: 'focusItem'; item: number }
+  // Picking the held choice again clears it, except a one-solution finding's
+  // solution while its action is fix_now or follow_up.
   | { type: 'choose'; choice: number }
-  // Clears only the solution on a finding; its action stays.
+  // Clears only the solution on a finding; its action stays. Keeps a
+  // one-solution finding's solution while its action is fix_now or follow_up.
   | { type: 'clearChoice' }
   // On a finding: picking the action it holds clears it.
   | { type: 'chooseAction'; action: FindingAction }
@@ -671,10 +674,16 @@ function applyItemAction(round: RoundState, action: ItemAction): RoundState {
     case 'focusItem':
       return focusAt(round, action.item);
     case 'choose':
+      if (holdsPinnedSolution(round)) {
+        return round;
+      }
       return updateFocusedAnswer(round, (answer, choiceCount) =>
         choose(answer, choiceCount, action.choice),
       );
     case 'clearChoice':
+      if (holdsPinnedSolution(round)) {
+        return round;
+      }
       return updateFocusedAnswer(round, (answer) =>
         answer.notApplicable || answer.choice === 0
           ? answer
@@ -737,8 +746,30 @@ function chooseAction(
   if (answer.action === action) {
     return { ...answer, action: '' };
   }
-  const picksOnlySolution = action !== 'leave_it' && solutionCount === 1;
-  return { ...answer, action, choice: picksOnlySolution ? 1 : answer.choice };
+  const choice = pinsLoneSolution(action, solutionCount) ? 1 : answer.choice;
+  return { ...answer, action, choice };
+}
+
+// Fixing or following up a one-solution finding means its one solution.
+function pinsLoneSolution(
+  action: FindingAction | '',
+  solutionCount: number,
+): boolean {
+  const isFixOrFollowUp = action === 'fix_now' || action === 'follow_up';
+  return isFixOrFollowUp && solutionCount === 1;
+}
+
+// Whether the focused item is a finding whose lone solution its action pins
+// and which holds it, so choose and clearChoice leave it picked.
+function holdsPinnedSolution(round: RoundState): boolean {
+  const focused = focusedItem(round);
+  if (focused === null || focused.kind !== 'finding') {
+    return false;
+  }
+  const answer = itemAnswer(round, { kind: 'finding', index: focused.index });
+  const solutionCount = ROUND_ITEMS.finding(round.round)[focused.index - 1]
+    .choices.length;
+  return answer.choice === 1 && pinsLoneSolution(answer.action, solutionCount);
 }
 
 // A no-op unless a finding is focused, or when `change` returns the answer

@@ -128,6 +128,18 @@ function findingRound(body: FormBody | null = null): FormsState {
   );
 }
 
+// Focuses rail position 0, finding F1, whose only solution is choice 1.
+function oneSolutionRound(): FormsState {
+  const lone = finding('F1', {
+    choices: [{ text: 'only', reason: 'only reason' }],
+    recommend: 1,
+  });
+  return apply(
+    initialState([presented('r1', { findings: [lone] })], 'r1-session'),
+    { type: 'focusItem', item: 0 },
+  );
+}
+
 // Focuses rail position 0, the round's first notice.
 function onNotice(state: FormsState): FormsState {
   return apply(state, { type: 'focusItem', item: 0 });
@@ -381,22 +393,50 @@ describe('clearChoice', () => {
       action: 'fix_now',
     });
   });
+
+  it("keeps a one-solution finding's solution while it is fixed now", () => {
+    const fixed = apply(oneSolutionRound(), {
+      type: 'chooseAction',
+      action: 'fix_now',
+    });
+    expect(apply(fixed, { type: 'clearChoice' })).toBe(fixed);
+    expect(active(fixed).findingAnswers[0].choice).toBe(1);
+  });
+
+  it("keeps a one-solution finding's solution while it is followed up, when its number is picked again", () => {
+    const followed = apply(oneSolutionRound(), {
+      type: 'chooseAction',
+      action: 'follow_up',
+    });
+    expect(apply(followed, { type: 'choose', choice: 1 })).toBe(followed);
+  });
+
+  it("clears a one-solution finding's solution while it is left", () => {
+    const state = run(
+      oneSolutionRound(),
+      { type: 'choose', choice: 1 },
+      { type: 'chooseAction', action: 'leave_it' },
+      { type: 'clearChoice' },
+    );
+    expect(active(state).findingAnswers[0]).toMatchObject({
+      choice: 0,
+      action: 'leave_it',
+    });
+  });
+
+  it("clears a one-solution finding's solution with no action", () => {
+    const state = run(
+      oneSolutionRound(),
+      { type: 'choose', choice: 1 },
+      { type: 'clearChoice' },
+    );
+    expect(active(state).findingAnswers[0].choice).toBe(0);
+  });
 });
 
 describe('chooseAction', () => {
   // Rail position 1 is finding F1, with three solutions.
   const onF1 = apply(findingRound(), { type: 'focusItem', item: 1 });
-
-  function oneSolutionRound(): FormsState {
-    const lone = finding('F1', {
-      choices: [{ text: 'only', reason: 'only reason' }],
-      recommend: 1,
-    });
-    return apply(
-      initialState([presented('r1', { findings: [lone] })], 'r1-session'),
-      { type: 'focusItem', item: 0 },
-    );
-  }
 
   it('sets the action on the focused finding, as an answer edit', () => {
     const state = apply(onF1, { type: 'chooseAction', action: 'follow_up' });
