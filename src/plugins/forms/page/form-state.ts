@@ -502,7 +502,8 @@ function restoreAnswers<Entry extends AnswerEntry, Answer>(
   );
 }
 
-// A missing or unknown action restores as none.
+// A missing or unknown action restores as none; an action that pins a lone
+// solution restores it picked.
 function restoreFindingAnswer(
   entry: FindingAnswerEntry | undefined,
   choiceCount: number,
@@ -511,7 +512,9 @@ function restoreFindingAnswer(
     return UNTOUCHED_FINDING;
   }
   const action = isFindingAction(entry.action) ? entry.action : '';
-  return { ...restoreAnswer(entry, choiceCount), action };
+  const answer = restoreAnswer(entry, choiceCount);
+  const choice = pinsLoneSolution(action, choiceCount) ? 1 : answer.choice;
+  return { ...answer, action, choice };
 }
 
 function restoreAnswer(

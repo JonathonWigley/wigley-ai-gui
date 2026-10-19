@@ -288,6 +288,34 @@ describe('restoring a draft', () => {
     expect(round.findingAnswers[0].choice).toBe(0);
   });
 
+  it.each([
+    { action: 'fix_now', choice: 1 },
+    { action: 'follow_up', choice: 1 },
+    { action: 'leave_it', choice: 0 },
+    { action: '', choice: 0 },
+  ] as const)(
+    "restores a one-solution finding's $action draft with choice $choice",
+    ({ action, choice }) => {
+      const lone = finding('F1', {
+        choices: [{ text: 'only', reason: 'only reason' }],
+        recommend: 1,
+      });
+      const state = initialState(
+        [
+          presented(
+            'r1',
+            { findings: [lone] },
+            draft({
+              finding_answers: [findingEntry(1, { choice: 0, action })],
+            }),
+          ),
+        ],
+        'r1-session',
+      );
+      expect(active(state).findingAnswers[0]).toMatchObject({ action, choice });
+    },
+  );
+
   it("restores a finding's unknown action as none", () => {
     const saved = { ...findingEntry(1, { choice: 1 }), action: 'Fix now' };
     const round = active(
