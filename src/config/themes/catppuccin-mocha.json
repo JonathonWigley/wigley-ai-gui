@@ -60,6 +60,13 @@
     "editor.selection": "#9399b240",
     "editor.cursor": "rosewater",
     "whichKey.command": "green",
-    "whichKey.prefix": "mauve"
+    "whichKey.prefix": "mauve",
+    "origin.caused": "red",
+    "origin.preExisting": "maroon",
+    "origin.design": "mauve",
+    "origin.nit": "overlay2",
+    "severity.critical": "red",
+    "severity.important": "peach",
+    "severity.minor": "overlay1"
   }
 }

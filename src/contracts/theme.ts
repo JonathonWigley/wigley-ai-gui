@@ -31,6 +31,13 @@ export const THEME_TOKENS = [
   'editor.cursor',
   'whichKey.command',
   'whichKey.prefix',
+  'origin.caused',
+  'origin.preExisting',
+  'origin.design',
+  'origin.nit',
+  'severity.critical',
+  'severity.important',
+  'severity.minor',
 ] as const;
 
 export type ThemeToken = (typeof THEME_TOKENS)[number];

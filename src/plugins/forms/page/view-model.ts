@@ -1,5 +1,6 @@
 import type { VimMode } from '../../../contracts/editor';
 import type { AnswerableKind, AnswerStatus, FindingAction } from '../contract';
+import { actionLabel } from '../finding-origins';
 import { findingSolution } from '../finding-pick';
 import {
   type AnswerableItem,
@@ -13,7 +14,6 @@ import {
   type RoundState,
   type SaveState,
 } from './form-state';
-import { FINDING_ACTION_LABELS } from './kinds/finding/action-labels';
 import { FORMATS, itemLabel } from './kinds/formats';
 
 // One question or finding as the review lists it.
@@ -29,6 +29,7 @@ export interface ReviewRow {
   // A finding's action while its pick is complete and it applies; '' otherwise,
   // whatever its notes, and on a question.
   action: FindingAction | '';
+  // The finding card's word for `action`; '' with no action.
   actionLabel: string;
   // The choice the agent gets while the item's pick is complete and it
   // applies, else 0: on a finding, the solution findingSolution gives.
@@ -84,7 +85,11 @@ export function reviewRows(round: RoundState): ReviewRow[] {
       title: format.title(round.round, item.index),
       status,
       action,
-      actionLabel: action === '' ? '' : FINDING_ACTION_LABELS[action],
+      actionLabel:
+        action === ''
+          ? ''
+          : (actionLabel(round.round.findings[item.index - 1].origin, action) ??
+            ''),
       choice,
       choiceText:
         choice > 0

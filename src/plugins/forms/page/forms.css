@@ -190,7 +190,7 @@
   margin-top: 0.35rem;
 }
 
-.context-proof .context-body {
+.finding-proof .context-body {
   color: var(--wg-text-muted);
   font-size: 0.92rem;
 }
@@ -370,6 +370,97 @@
 
 .badge-notice[data-badge='Decided'] {
   background: var(--wg-accent);
+}
+
+.badge-origin[data-origin='caused'] {
+  background: var(--wg-origin-caused);
+}
+
+.badge-origin[data-origin='pre_existing'] {
+  background: var(--wg-origin-preExisting);
+}
+
+.badge-origin[data-origin='design'] {
+  background: var(--wg-origin-design);
+}
+
+.badge-origin[data-origin='nit'] {
+  background: var(--wg-origin-nit);
+}
+
+.badge-severity[data-severity='critical'] {
+  background: var(--wg-severity-critical);
+}
+
+.badge-severity[data-severity='important'] {
+  background: var(--wg-severity-important);
+}
+
+.badge-severity[data-severity='minor'] {
+  background: var(--wg-severity-minor);
+}
+
+/* A finding's verdict: its chips, the recommended pick, the impact and the
+   Accept and Change… buttons, above the finding's sections. */
+.verdict {
+  margin-bottom: 1rem;
+}
+
+.verdict-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.verdict-line {
+  font-size: 1.05rem;
+}
+
+.verdict-action {
+  color: var(--wg-recommend);
+  font-weight: 600;
+}
+
+.verdict-impact {
+  color: var(--wg-text-muted);
+  margin-top: 0.35rem;
+}
+
+.verdict-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.verdict-button {
+  align-items: baseline;
+  background: transparent;
+  border: 1px solid var(--wg-border);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.5rem;
+  padding: 0.2rem 0.75rem;
+}
+
+.verdict-button:hover {
+  background: var(--wg-surface-hover);
+}
+
+.verdict-accept {
+  border-color: var(--wg-recommend);
+}
+
+.verdict-button[aria-expanded='true'] {
+  background: var(--wg-surface-selected);
+}
+
+.verdict-button kbd {
+  color: var(--wg-text-faint);
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-font-mono-size);
 }
 
 /* Toggles */
@@ -619,6 +710,7 @@
 
 .md code,
 .choice-text code,
+.verdict-choice code,
 .round-overview code {
   background: var(--wg-bg-deep);
   border-radius: 0.25rem;

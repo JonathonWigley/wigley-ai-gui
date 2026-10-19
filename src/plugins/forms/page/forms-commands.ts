@@ -6,6 +6,7 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import type { FindingAction, RoundEnd } from '../contract';
+import { actionLabel } from '../finding-origins';
 import type { formsManifest } from '../manifest';
 import {
   type BoxField,
@@ -31,7 +32,6 @@ import {
   unansweredItem,
 } from './form-state';
 import type { FormsStore } from './forms-store';
-import { FINDING_ACTION_LABELS } from './kinds/finding/action-labels';
 
 export interface FormsCommandDeps {
   store: FormsStore;
@@ -83,7 +83,7 @@ export function formsCommandHandlers(
         { type: 'chooseAction', action },
         (_, item) =>
           findingAction(deps.store.get(), item) === action
-            ? `chose ${FINDING_ACTION_LABELS[action]} on ${itemName(item)}`
+            ? `chose ${findingActionWord(deps.store.get(), item, action)} on ${itemName(item)}`
             : `cleared the action on ${itemName(item)}`,
       );
 
@@ -212,6 +212,17 @@ function findingAction(
 ): FindingAction | '' {
   const round = activeRound(state);
   return round === null ? '' : findingActionOf(round, item);
+}
+
+// The finding card's word for `action` on `item` in the active round.
+function findingActionWord(
+  state: FormsState,
+  item: AnswerableItem,
+  action: FindingAction,
+): string | null {
+  const round = activeRound(state);
+  const origin = round?.round.findings[item.index - 1].origin;
+  return origin === undefined ? null : actionLabel(origin, action);
 }
 
 function focusedAnswer(

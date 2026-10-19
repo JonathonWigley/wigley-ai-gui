@@ -8,7 +8,7 @@ import {
   initialState,
   type RoundState,
 } from './form-state';
-import { finding, presentedRound, question } from './test-rounds';
+import { decision, finding, presentedRound, question } from './test-rounds';
 import {
   modeLabel,
   progressText,
@@ -290,6 +290,20 @@ describe('reviewRows', () => {
       choice: 1,
       choiceText: 'only',
       recommended: true,
+    });
+  });
+
+  it("names a design finding's follow-up in the decision card's word", () => {
+    const [foxtrot] = reviewRows(
+      roundWithFindingAfter(
+        decision('Foxtrot'),
+        { type: 'choose', choice: 2 },
+        { type: 'chooseAction', action: 'follow_up' },
+      ),
+    );
+    expect(foxtrot).toMatchObject({
+      action: 'follow_up',
+      actionLabel: 'Plan it',
     });
   });
 
