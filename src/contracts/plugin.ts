@@ -169,14 +169,14 @@ export interface SelfTestStep {
 
 // `open` starts the fixture for run `run`, returning the line the page logs
 // once it shows and the result the script checks with `problems`, which lists
-// what was wrong, empty when nothing was. `scrollsItself` is a CSS selector
-// list of the elements a fit check lets scroll or clip in their own box rather
-// than wrap; nothing inside them is checked either.
+// what was wrong, empty when nothing was. `scrollsItself` lists CSS selectors
+// for the elements a fit check lets scroll or clip in their own box rather
+// than wrap, nothing inside them checked either; empty when nothing does.
 export interface SelfTestScript {
   pageBinds: PageBind[];
   open(run: number): { shownLine: string; result: Promise<unknown> };
   steps: SelfTestStep[];
-  scrollsItself: string;
+  scrollsItself: string[];
   problems(result: unknown): string[];
 }
 

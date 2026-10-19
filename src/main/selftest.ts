@@ -42,10 +42,11 @@ function isPageReady(window: BrowserWindow): Promise<boolean> {
 
 // Lists what the page cuts off on the right: an element whose content is wider
 // than its box, or that ends past the window, skipping the elements the
-// `scrollsItself` selector matches and everything inside them.
-function cutOffScript(scrollsItself: string): string {
+// `scrollsItself` selectors match and everything inside them.
+function cutOffScript(scrollsItself: string[]): string {
   return `(() => {
   const scrollsItself = ${JSON.stringify(scrollsItself)};
+  const isScroller = (node) => scrollsItself.some((selector) => node.matches(selector));
   const name = (node) => [node.tagName.toLowerCase(), ...node.classList].join('.');
   const problems = [];
   const page = document.documentElement;
@@ -54,14 +55,16 @@ function cutOffScript(scrollsItself: string): string {
   }
   for (const node of document.querySelectorAll('#app *')) {
     const right = node.getBoundingClientRect().right;
-    const isInScroller = node.parentElement.closest(scrollsItself) !== null;
+    const isInScroller = scrollsItself.some(
+      (selector) => node.parentElement.closest(selector) !== null,
+    );
     if (isInScroller || node.getClientRects().length === 0) {
       continue;
     }
     const isOverfull =
       node.clientWidth > 0 &&
       node.scrollWidth > node.clientWidth + 1 &&
-      !node.matches(scrollsItself);
+      !isScroller(node);
     if (isOverfull) {
       problems.push(name(node) + ' holds ' + node.scrollWidth + 'px in ' + node.clientWidth + 'px');
     } else if (right > innerWidth + 1) {
@@ -113,7 +116,7 @@ function waitForPageWidth(window: BrowserWindow, width: number) {
 // there, and restores the window's size.
 async function cutOffAtMinimumWidth(
   window: BrowserWindow,
-  scrollsItself: string,
+  scrollsItself: string[],
 ): Promise<string[]> {
   const [width, height] = window.getSize();
   const [minimumWidth] = window.getMinimumSize();
@@ -138,7 +141,7 @@ let hasPaintedSinceNavigation = false;
 async function runStep(
   window: BrowserWindow,
   step: SelfTestStep,
-  scrollsItself: string,
+  scrollsItself: string[],
   isCurrent: () => boolean,
 ): Promise<boolean> {
   const seen = (await readLog(window)).length;

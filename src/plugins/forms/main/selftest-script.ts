@@ -63,7 +63,12 @@ const STEPS: SelfTestStep[] = [
 
 // Code and tables scroll in their own box, and rail and switcher titles end
 // in an ellipsis, their full text in the item heading and the tooltip.
-const SCROLLS_ITSELF = '.md pre, .md table, .rail-title, .switcher-label';
+const SCROLLS_ITSELF = [
+  '.md pre',
+  '.md table',
+  '.rail-title',
+  '.switcher-label',
+];
 
 // Each run's fixture differs in one context line, so a later run never opens
 // pre-filled from an earlier run's saved draft.
