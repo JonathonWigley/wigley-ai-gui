@@ -604,6 +604,45 @@ describe('acceptRecommendation', () => {
     const state = apply(mixedRound(), { type: 'toggleNotApplicable' });
     expect(apply(state, { type: 'acceptRecommendation' })).toBe(state);
   });
+
+  // Focuses the round's only finding, F1, restored from `body`.
+  function leaveItRound(body: FormBody | null = null): FormsState {
+    return initialState(
+      [
+        presented(
+          'r1',
+          { findings: [finding('F1', { recommend_action: 'leave_it' })] },
+          body,
+        ),
+      ],
+      'r1-session',
+    );
+  }
+
+  it('keeps the solution a recommended leave_it answer holds', () => {
+    const state = leaveItRound(
+      draft({
+        finding_answers: [findingEntry(1, { action: 'leave_it', choice: 3 })],
+      }),
+    );
+    expect(apply(state, { type: 'acceptRecommendation' })).toBe(state);
+  });
+
+  it('sets leave_it on an untouched finding without picking a solution', () => {
+    const accepted = apply(leaveItRound(), { type: 'acceptRecommendation' });
+    expect(active(accepted).findingAnswers[0]).toMatchObject({
+      action: 'leave_it',
+      choice: 0,
+    });
+    expect(active(accepted).revision).toBe(1);
+    expect(changeShows(active(accepted), 1)).toBe(false);
+  });
+
+  it('hides Change… once a fix_now recommendation is accepted', () => {
+    const onF1 = apply(findingRound(), { type: 'focusItem', item: 1 });
+    const accepted = apply(onF1, { type: 'acceptRecommendation' });
+    expect(changeShows(active(accepted), 1)).toBe(false);
+  });
 });
 
 describe('Change…', () => {

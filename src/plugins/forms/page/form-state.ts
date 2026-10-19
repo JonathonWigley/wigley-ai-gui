@@ -417,16 +417,20 @@ export function changeShows(round: RoundState, index: number): boolean {
   return round.changeOpen[index - 1] || !matchesRecommendation(answer, finding);
 }
 
-// An untouched answer matches; leave_it keeps whatever solution is held, so
-// its solution is not compared.
+// An untouched answer shows as matching.
 function matchesRecommendation(
   answer: FindingAnswer,
   finding: Finding,
 ): boolean {
   const isUntouched = answer.action === '' && answer.choice === 0;
-  if (isUntouched) {
-    return true;
-  }
+  return isUntouched || holdsRecommendedPick(answer, finding);
+}
+
+// leave_it keeps whatever solution is held, so its solution is not compared.
+function holdsRecommendedPick(
+  answer: FindingAnswer,
+  finding: Finding,
+): boolean {
   const isSolutionMatched =
     answer.action === 'leave_it' || answer.choice === finding.recommend;
   return answer.action === finding.recommend_action && isSolutionMatched;
@@ -828,8 +832,8 @@ type RecommendedPick<K extends AnswerableKind> = (
 ) => AnswerOf[K];
 
 // A mapped type, not `satisfies`: indexing it by a generic kind keeps the
-// kind's answer type. A finding's solution is set even when its recommended
-// action is leave_it, which keeps a solution.
+// kind's answer type. A finding recommending leave_it keeps the solution its
+// answer holds.
 const RECOMMENDED_PICKS: { [K in AnswerableKind]: RecommendedPick<K> } = {
   question: (round, index, answer) => {
     const { recommend } = round.round.questions[index - 1];
@@ -838,12 +842,17 @@ const RECOMMENDED_PICKS: { [K in AnswerableKind]: RecommendedPick<K> } = {
       : { ...answer, choice: recommend };
   },
   finding: (round, index, answer) => {
-    const { recommend, recommend_action } = round.round.findings[index - 1];
-    const holdsPick =
-      answer.action === recommend_action && answer.choice === recommend;
-    return holdsPick
-      ? answer
-      : { ...answer, action: recommend_action, choice: recommend };
+    const finding = round.round.findings[index - 1];
+    if (holdsRecommendedPick(answer, finding)) {
+      return answer;
+    }
+    return finding.recommend_action === 'leave_it'
+      ? { ...answer, action: 'leave_it' }
+      : {
+          ...answer,
+          action: finding.recommend_action,
+          choice: finding.recommend,
+        };
   },
 };
 
