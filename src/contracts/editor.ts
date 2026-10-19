@@ -40,6 +40,14 @@ export interface EditorHost {
   // holding `element` as typed keys: each runs in the vim mode the keys before
   // it left, so in insert mode a character types itself.
   typeInto(element: Element, keys: string[]): void;
+  // Hears the keys of an unfinished normal-mode sequence in any editor this
+  // host created or will create, as vim names them (`['<Space>', 'a']`), each
+  // time they change; `[]` once the sequence ends or the editor leaves normal
+  // mode.
+  onPendingKeys(listener: (keys: string[]) => void): void;
+  // Discards the unfinished sequence, as Esc does, without running the bind
+  // on Esc; does nothing when no keys are pending.
+  cancelPendingKeys(): void;
 }
 
 // Every editor the host creates follows the keymap; a bound key runs its

@@ -135,6 +135,73 @@ function redrawCursorOnResize(view: EditorView): ResizeObserver {
   return observer;
 }
 
+// The keys of an unfinished sequence vim is waiting on. Insert and visual
+// mode report none, so a pending insert remap such as `jk` stays unseen.
+function pendingKeysOf(cm: VimEditor): string[] {
+  const { vim } = cm.state;
+  if (vim.insertMode || vim.visualMode) {
+    return [];
+  }
+  return [...vim.inputState.keyBuffer];
+}
+
+// Vim replaces its input state on every cleared sequence, so the buffer is
+// read fresh from this path each time; an upgrade that moves it fails here.
+function requireKeyBuffer(cm: VimEditor) {
+  if (!Array.isArray(cm.state.vim.inputState?.keyBuffer)) {
+    throw new Error(
+      'Vim has no array at cm.state.vim.inputState.keyBuffer to read pending keys from',
+    );
+  }
+}
+
+// Which editor holds the reported pending keys, and the listeners that hear
+// them; a report from any editor replaces the last.
+class PendingKeys {
+  private readonly listeners: ((keys: string[]) => void)[] = [];
+  private reported: string[] = [];
+  private holder: VimEditor | undefined;
+
+  listen(listener: (keys: string[]) => void) {
+    this.listeners.push(listener);
+  }
+
+  reportFrom(cm: VimEditor) {
+    this.report(cm, pendingKeysOf(cm));
+  }
+
+  // A destroyed editor's keys can no longer complete.
+  forget(cm: VimEditor) {
+    if (this.holder === cm) {
+      this.report(cm, []);
+    }
+  }
+
+  // Esc with nothing pending would run the bind on Esc, so it is sent only
+  // while the holder's buffer holds keys; vim's command-done reports `[]`.
+  cancel() {
+    const { holder } = this;
+    const isPending = holder !== undefined && pendingKeysOf(holder).length > 0;
+    if (isPending) {
+      Vim.handleKey(holder, '<Esc>', 'user');
+    }
+  }
+
+  private report(cm: VimEditor, keys: string[]) {
+    this.holder = keys.length > 0 ? cm : undefined;
+    const isUnchanged =
+      keys.length === this.reported.length &&
+      keys.every((key, index) => key === this.reported[index]);
+    if (isUnchanged) {
+      return;
+    }
+    this.reported = keys;
+    for (const listener of this.listeners) {
+      listener([...keys]);
+    }
+  }
+}
+
 function hostedViewOf(element: Element, hosted: HostedEditor[]): EditorView {
   const match = hosted.find(({ view }) => view.dom.contains(element));
   if (!match) {
@@ -167,6 +234,7 @@ function editorExtensions(events: EditorEvents) {
 export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
   const hosted: HostedEditor[] = [];
   let isKeymapApplied = false;
+  const pendingKeys = new PendingKeys();
   defineExCommands(keymap, hosted, run);
 
   return {
@@ -177,6 +245,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
         parent,
       });
       const cm = vimEditorOf(view);
+      requireKeyBuffer(cm);
       const cursorRedraw = redrawCursorOnResize(view);
       if (!isKeymapApplied) {
         for (const line of vimrcLines(keymap)) {
@@ -190,6 +259,8 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
           subMode: change.subMode ?? '',
         }),
       );
+      cm.on('vim-keypress', () => pendingKeys.reportFrom(cm));
+      cm.on('vim-command-done', () => pendingKeys.reportFrom(cm));
       const entry: HostedEditor = {
         view,
         editor: {
@@ -203,6 +274,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
             }
             hosted.splice(index, 1);
             cursorRedraw.disconnect();
+            pendingKeys.forget(cm);
             view.destroy();
           },
         },
@@ -219,5 +291,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
         typeKey(view, cm, key);
       }
     },
+    onPendingKeys: (listener) => pendingKeys.listen(listener),
+    cancelPendingKeys: () => pendingKeys.cancel(),
   };
 };
