@@ -5,11 +5,11 @@ import type {
   Area,
   AreaName,
   ChannelShape,
-  EventShape,
   PageApi,
   PageCommandContext,
   PageServices,
   PluginManifest,
+  UntypedEvents,
 } from '../../contracts/plugin';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { qualify } from '../../shared/plugin-manifests';
@@ -35,7 +35,7 @@ export interface PageApiDeps {
 export function createPageApi(
   manifest: PluginManifest,
   deps: PageApiDeps,
-): PageApi<PluginManifest, ChannelShape, EventShape> {
+): PageApi<PluginManifest, ChannelShape, UntypedEvents> {
   return {
     areas: deps.areas,
     channel: {

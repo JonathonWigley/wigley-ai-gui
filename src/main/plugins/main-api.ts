@@ -1,9 +1,9 @@
 import type {
   ChannelShape,
-  EventShape,
   MainApi,
   MainServices,
   PluginManifest,
+  UntypedEvents,
 } from '../../contracts/plugin';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import type { PluginChannels } from './plugin-channel';
@@ -21,7 +21,7 @@ export interface MainApiDeps {
 export function createMainApi(
   manifest: PluginManifest,
   deps: MainApiDeps,
-): MainApi<PluginManifest, ChannelShape, EventShape> {
+): MainApi<PluginManifest, ChannelShape, UntypedEvents> {
   return {
     channel: deps.channels.forPlugin(manifest.id),
     events: pluginEvents(deps.bus, manifest.id),

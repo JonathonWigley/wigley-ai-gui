@@ -1,5 +1,12 @@
+// Each `@ts-expect-error` below is checked by `npm run typecheck`: the line
+// after it must fail to compile.
 import { describe, expect, it } from 'vitest';
+import type { EventShape, QualifiedEvents } from '../contracts/plugin';
 import { createEventBus, pluginEvents } from './event-bus';
+
+interface TestEvents extends EventShape {
+  connected: { id: string };
+}
 
 describe('createEventBus', () => {
   it('delivers an event to its listeners in subscription order', () => {
@@ -80,5 +87,46 @@ describe('pluginEvents', () => {
     pluginEvents(bus, 'sessions').emit('connected', 1);
 
     expect(heard).toEqual([1]);
+  });
+
+  it('an undeclared event or a wrong payload is a type error on emit', () => {
+    const bus = createEventBus();
+    const heard: unknown[] = [];
+    bus.on('sessions.conected', (data) => heard.push(data));
+    const events = pluginEvents<TestEvents>(bus, 'sessions');
+
+    // @ts-expect-error -- `conected` is not a declared event
+    events.emit('conected', { id: 'a' });
+    // @ts-expect-error -- `connected` carries an id string
+    events.emit('connected', { id: 1 });
+
+    expect(heard).toEqual([{ id: 'a' }]);
+  });
+
+  it('an unheard event or a mismatched listener is a type error on on', () => {
+    const bus = createEventBus();
+    const heard: string[] = [];
+    const events = pluginEvents<
+      EventShape,
+      QualifiedEvents<'sessions', TestEvents>
+    >(bus, 'forms');
+
+    events.on('sessions.connected', ({ id }) => heard.push(id));
+    // @ts-expect-error -- `sessions.conected` is not a heard event
+    events.on('sessions.conected', () => {});
+    // @ts-expect-error -- `sessions.connected` carries an id, not a count
+    events.on('sessions.connected', (data: { count: number }) => data);
+    pluginEvents<TestEvents>(bus, 'sessions').emit('connected', { id: 'a' });
+
+    expect(heard).toEqual(['a']);
+  });
+
+  it('an unqualified name is a type error on an untyped on', () => {
+    const events = pluginEvents(createEventBus(), 'forms');
+
+    // @ts-expect-error -- a heard event names its publisher
+    events.on('connected', () => {});
+
+    expect(events).toBeDefined();
   });
 });
