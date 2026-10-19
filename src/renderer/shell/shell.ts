@@ -26,8 +26,20 @@ function createArea(element: HTMLElement): Area {
   };
 }
 
+// Keeps `--wg-status-bar-height` on the document root equal to the status
+// bar's rendered height, `0px` while it is hidden.
+function publishStatusBarHeight(statusBar: HTMLElement) {
+  const publish = () =>
+    document.documentElement.style.setProperty(
+      '--wg-status-bar-height',
+      `${statusBar.offsetHeight}px`,
+    );
+  publish();
+  new ResizeObserver(publish).observe(statusBar);
+}
+
 // Builds the window's six areas inside `root`, each hidden until something is
-// contributed to it.
+// contributed to it, and publishes the status bar's height.
 export function mountShell(root: HTMLElement): Record<AreaName, Area> {
   root.classList.add('shell');
   const areas = {} as Record<AreaName, Area>;
@@ -36,6 +48,9 @@ export function mountShell(root: HTMLElement): Record<AreaName, Area> {
     element.className = AREA_CLASSES[name];
     root.append(element);
     areas[name] = createArea(element);
+    if (name === 'statusBar') {
+      publishStatusBarHeight(element);
+    }
   }
   return areas;
 }

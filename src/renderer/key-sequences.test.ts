@@ -161,6 +161,47 @@ describe('createSequenceMatcher', () => {
     });
   });
 
+  it('lists the keys waiting for more', () => {
+    const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
+    matcher.feed(' ', 'forms', 0);
+    expect(matcher.pendingKeys()).toEqual([' ']);
+    matcher.feed(' ', 'forms', 100);
+    expect(matcher.pendingKeys()).toEqual([]);
+  });
+
+  it('continues a held sequence whose next key comes after the timeout', () => {
+    const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
+    matcher.feed('z', 'forms', 0);
+    matcher.hold();
+    expect(summarize(matcher.feed('a', 'forms', 5000))).toEqual({
+      ran: 'test.fold',
+      replay: [],
+      pending: false,
+    });
+  });
+
+  it('ends the hold once its sequence ends', () => {
+    const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
+    matcher.feed('z', 'forms', 0);
+    matcher.hold();
+    matcher.feed('a', 'forms', 100);
+    expect(matcher.isHeld()).toBe(false);
+    matcher.feed('z', 'forms', 200);
+    expect(summarize(matcher.feed('a', 'forms', 5000))).toEqual({
+      ran: undefined,
+      replay: [],
+      pending: false,
+    });
+  });
+
+  it('ends the hold on reset', () => {
+    const matcher = createSequenceMatcher(binds, TIMEOUT_MS);
+    matcher.feed('z', 'forms', 0);
+    matcher.hold();
+    matcher.reset();
+    expect(matcher.isHeld()).toBe(false);
+  });
+
   it('throws when built from ambiguous binds', () => {
     const duplicated: PageBind[] = [
       { keys: ['x'], scope: 'forms', command: 'test.first' },

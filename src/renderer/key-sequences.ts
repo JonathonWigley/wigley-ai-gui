@@ -18,9 +18,15 @@ export interface SequenceResult {
   pending: boolean;
 }
 
+// `pendingKeys` are the keys waiting for more, `[]` when none. `hold` keeps
+// them past the timeout until they become empty: a bind runs, the sequence
+// breaks, or `reset`. `isHeld` reads whether a hold is in force.
 export interface SequenceMatcher {
   feed(key: string, scope: ViewScope, now: number): SequenceResult;
   reset(): void;
+  pendingKeys(): string[];
+  hold(): void;
+  isHeld(): boolean;
 }
 
 function firesIn(bind: PageBind, scope: ViewScope): boolean {
@@ -113,9 +119,10 @@ function consumeKeys(
 
 // Unambiguous binds make a complete sequence never the start of a longer one,
 // so a match runs at once and only an incomplete sequence waits. A pending
-// sequence whose next key comes after the timeout is dropped, as its keys
-// have no meaning of their own. The caller feeds a result's `replay` keys
-// back one at a time, after running its bind, in the scope that bind left.
+// sequence whose next key comes after the timeout is dropped, unless held, as
+// its keys have no meaning of their own. The caller feeds a result's `replay`
+// keys back one at a time, after running its bind, in the scope that bind
+// left.
 export function createSequenceMatcher(
   binds: PageBind[],
   timeoutMs: number,
@@ -123,19 +130,28 @@ export function createSequenceMatcher(
   requireUnambiguousBinds(binds);
   let pending: string[] = [];
   let lastKeyAt = 0;
+  let isHeld = false;
 
   return {
     feed(key, scope, now) {
-      const isContinuing = pending.length > 0 && now - lastKeyAt <= timeoutMs;
+      const isInTime = isHeld || now - lastKeyAt <= timeoutMs;
+      const isContinuing = pending.length > 0 && isInTime;
       const keys = isContinuing ? [...pending, key] : [key];
       lastKeyAt = now;
       const { ran, replay, pendingKeys } = consumeKeys(binds, keys, scope);
       pending = pendingKeys;
+      isHeld &&= pendingKeys.length > 0;
       return { ran, replay, pending: pendingKeys.length > 0 };
     },
     reset() {
       pending = [];
+      isHeld = false;
     },
+    pendingKeys: () => [...pending],
+    hold() {
+      isHeld = pending.length > 0;
+    },
+    isHeld: () => isHeld,
   };
 }
 

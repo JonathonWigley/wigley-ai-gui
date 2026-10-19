@@ -1,3 +1,4 @@
+import type { Timers } from '../contracts/ambient';
 import type { EditorHost } from '../contracts/editor';
 import type { PageBind, ViewScope } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
@@ -28,13 +29,44 @@ export interface PageKeyTarget {
   run(bind: PageBind): void;
   // Types keys into the editor that has focus.
   typeIntoEditor(keys: string[]): void;
+  // Hears the pending keys each time they change, `[]` once none are.
+  report(keys: string[]): void;
+}
+
+function isSameKeys(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((key, index) => key === b[index]);
 }
 
 // Feeds `key`, then each key a bind it ran left to replay, as vim feeds
 // typeahead: each key reaches the scope and focus the commands before it left,
 // so the keys still to feed when an editor takes focus are typed into it.
+// Esc while keys are pending drops them and runs nothing; with none pending it
+// is fed like any key. Reports the pending keys when feeding changed them.
 // Returns whether the page consumed `key`.
 export function feedPageKey(
+  matcher: SequenceMatcher,
+  key: string,
+  now: number,
+  target: PageKeyTarget,
+): boolean {
+  const before = matcher.pendingKeys();
+  const isCancel = key === 'Escape' && before.length > 0;
+  if (isCancel) {
+    matcher.reset();
+    target.report([]);
+    return true;
+  }
+  const isConsumed = feedKeys(matcher, key, now, target);
+  const after = matcher.pendingKeys();
+  if (!isSameKeys(before, after)) {
+    target.report(after);
+  }
+  return isConsumed;
+}
+
+// Feeds `key` and the keys its binds leave to replay, returning whether the
+// page consumed `key`.
+function feedKeys(
   matcher: SequenceMatcher,
   key: string,
   now: number,
@@ -61,26 +93,73 @@ export function feedPageKey(
 }
 
 // Runs the chord bind `press` matches in the target's scope, dropping any
-// pending sequence, since a chord cannot continue one. Returns whether a bind
-// ran; with none, the pending sequence stays.
+// pending sequence, since a chord cannot continue one, and reporting `[]`
+// when that dropped keys. Returns whether a bind ran; with none, the pending
+// sequence stays.
 export function feedChordKey(
   chords: ChordMatcher,
   sequences: SequenceMatcher,
   press: ChordPress,
-  target: Pick<PageKeyTarget, 'scope' | 'run'>,
+  target: Pick<PageKeyTarget, 'scope' | 'run' | 'report'>,
 ): boolean {
   const bind = chords.match(press, target.scope());
   if (!bind) {
     return false;
   }
-  sequences.reset();
+  resetReporting(sequences, target.report);
   target.run(bind);
   return true;
 }
 
+// Drops the pending keys, reporting `[]` when there were any.
+function resetReporting(
+  matcher: SequenceMatcher,
+  report: (keys: string[]) => void,
+) {
+  const hadPending = matcher.pendingKeys().length > 0;
+  matcher.reset();
+  if (hadPending) {
+    report([]);
+  }
+}
+
+// Drops a pending sequence once `timeoutMs` passes with no key, unless the
+// matcher holds it. `arm` restarts the wait from now, and stops it while
+// nothing is pending or the matcher holds the keys.
+export function createPendingTimeout(
+  matcher: SequenceMatcher,
+  timers: Timers,
+  timeoutMs: number,
+  report: (keys: string[]) => void,
+): { arm(): void } {
+  let armed: number | undefined;
+  const isWaiting = () => matcher.pendingKeys().length > 0 && !matcher.isHeld();
+  const lapse = () => {
+    armed = undefined;
+    if (isWaiting()) {
+      matcher.reset();
+      report([]);
+    }
+  };
+  return {
+    arm() {
+      if (armed !== undefined) {
+        timers.clear(armed);
+        armed = undefined;
+      }
+      if (isWaiting()) {
+        armed = timers.set(lapse, timeoutMs);
+      }
+    },
+  };
+}
+
 // Non-chord keys fire when no editor has focus; chord binds fire everywhere,
 // inside an editor too, ahead of it. A bind fires only in the scope
-// `currentScope` reads.
+// `currentScope` reads. `report` hears the pending page keys each time they
+// change, `[]` once none are, with the scope in force as it reports. The
+// returned `hold` keeps the pending keys past the timeout until they end, and
+// `cancel` drops them, running nothing.
 export function installPageKeys(
   binds: PageBind[],
   timeoutMs: number,
@@ -88,9 +167,13 @@ export function installPageKeys(
   editors: EditorHost,
   commands: CommandRegistry<PageCommandContext>,
   log: Log,
-) {
+  timers: Timers,
+  report: (keys: string[], scope: ViewScope) => void,
+): { hold(): void; cancel(): void } {
   const chords = createChordMatcher(binds);
   const matcher = createSequenceMatcher(binds, timeoutMs);
+  const reportKeys = (keys: string[]) => report(keys, currentScope());
+  const timeout = createPendingTimeout(matcher, timers, timeoutMs, reportKeys);
   const runBind = (bind: PageBind) => {
     log('page', `${bind.keys.join('')} ran ${bind.command}`);
     commands.run(bind.command, {});
@@ -101,8 +184,10 @@ export function installPageKeys(
       const isConsumed = feedChordKey(chords, matcher, event, {
         scope: currentScope,
         run: runBind,
+        report: reportKeys,
       });
       if (isConsumed) {
+        timeout.arm();
         event.preventDefault();
         event.stopPropagation();
       }
@@ -111,7 +196,8 @@ export function installPageKeys(
   );
   document.addEventListener('keydown', (event) => {
     if (editors.contains(event.target as Element)) {
-      matcher.reset();
+      resetReporting(matcher, reportKeys);
+      timeout.arm();
       return;
     }
     if (!isPageKey(event)) {
@@ -127,9 +213,22 @@ export function installPageKeys(
         log('page', `typed ${keys.join('')} into the editor`);
         editors.typeInto(document.activeElement!, keys);
       },
+      report: reportKeys,
     });
+    timeout.arm();
     if (isConsumed) {
       event.preventDefault();
     }
   });
+  return {
+    hold() {
+      matcher.hold();
+      timeout.arm();
+    },
+    cancel() {
+      matcher.reset();
+      timeout.arm();
+      reportKeys([]);
+    },
+  };
 }

@@ -19,7 +19,9 @@ import { qualify } from '../shared/plugin-manifests';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
 import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
+import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
+import { createPendingKeys } from './pending-keys';
 import { createPageApi } from './plugins/page-api';
 import { mountShell } from './shell/shell';
 import { applyTheme } from './theme';
@@ -84,7 +86,13 @@ async function start() {
     log,
     timers,
   };
-  let scope = INITIAL_SCOPE;
+  const scopeStack = createScopeStack(INITIAL_SCOPE);
+  // Filled once the page keys are installed; no key reaches the engine before.
+  let pageKeys: { hold(): void; cancel(): void } | null = null;
+  const pendingKeys = createPendingKeys({
+    page: { hold: () => pageKeys?.hold(), cancel: () => pageKeys?.cancel() },
+    editor,
+  });
   const run = (id: CommandId, context: PageCommandContext = {}) =>
     commands.run(id, context);
   const bus = createEventBus();
@@ -94,11 +102,12 @@ async function start() {
       createPageApi(part.manifest, {
         areas,
         bridge,
-        setScope: (qualified) => {
-          scope = qualified;
-        },
+        scopeStack,
+        pendingKeys,
         keymap,
         label: (command) => commandLabel(config, command),
+        commandInfo: config.commands,
+        scopes: config.scopes,
         settings: servedSettings(config, id),
         services,
         run,
@@ -117,13 +126,15 @@ async function start() {
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
   );
   // Building the matcher rejects a page key bound twice in one scope.
-  installPageKeys(
+  pageKeys = installPageKeys(
     keymap.page,
     settings.keySequenceTimeoutMs,
-    () => scope,
+    () => scopeStack.current(),
     editor,
     commands,
     log,
+    timers,
+    (keys, scope) => pendingKeys.reportPage(keys, scope),
   );
 
   if (theme.error !== null) {

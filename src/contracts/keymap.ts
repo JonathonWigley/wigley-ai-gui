@@ -25,6 +25,13 @@ export interface EditorKeymap {
 // reach the keymap qualified as `<pluginId>.<scope>`.
 export type ViewScope = string;
 
+// The keys of an unfinished sequence: on the page, as KeyboardEvent.key values
+// (`[' ', 'a']`) with the scope they were typed in; in an editor, as vim names
+// them (`['<Space>', 'a']`).
+export type PendingKeys =
+  | { where: 'page'; keys: string[]; scope: ViewScope }
+  | { where: 'editor'; keys: string[] };
+
 // Keys pressed in order while no editor has focus; each is a KeyboardEvent.key
 // value. Or a chord, alone in `keys`: `<` + any of `C-` (Control), `A-`
 // (Alt/Option), `S-` (Shift), `D-` (Command) in that order, at least one of

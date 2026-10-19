@@ -6,6 +6,7 @@ import type {
   PluginManifest,
 } from '../../contracts/plugin';
 import { createEventBus } from '../../shared/event-bus';
+import { createScopeStack } from '../key-scope';
 import { createPageApi, type PageApiDeps } from './page-api';
 
 const manifest: PluginManifest = {
@@ -42,9 +43,12 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
   return {
     areas: {} as PageApiDeps['areas'],
     bridge: fakeBridge().bridge,
-    setScope: () => {},
+    scopeStack: createScopeStack('any'),
+    pendingKeys: { onPending: () => {}, hold: () => {}, cancel: () => {} },
     keymap: {} as PageApiDeps['keymap'],
     label: (id) => id,
+    commandInfo: {},
+    scopes: [],
     settings: {},
     services: {} as PageServices,
     run: () => {},
@@ -56,15 +60,23 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
 
 describe('createPageApi', () => {
   it('qualifies the scope a plugin sets', () => {
-    const scopes: string[] = [];
-    const api = createPageApi(
-      manifest,
-      deps({ setScope: (scope) => scopes.push(scope) }),
-    );
+    const scopeStack = createScopeStack('any');
+    const api = createPageApi(manifest, deps({ scopeStack }));
 
     api.keys.setScope('review');
 
-    expect(scopes).toEqual(['p.review']);
+    expect(scopeStack.current()).toBe('p.review');
+  });
+
+  it('qualifies the scope a plugin pushes, until its pop', () => {
+    const scopeStack = createScopeStack('any');
+    const api = createPageApi(manifest, deps({ scopeStack }));
+
+    const pushed = api.keys.pushScope('review');
+    expect(api.keys.scope()).toBe('p.review');
+
+    pushed.pop();
+    expect(api.keys.scope()).toBe('any');
   });
 
   it("routes channel calls under the plugin's id", async () => {

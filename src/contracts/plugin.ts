@@ -2,7 +2,13 @@ import type { Alerts } from './alerts';
 import type { Clock, RandomHex, Timers } from './ambient';
 import type { CommandId } from './commands';
 import type { EditorHost, TextEditor } from './editor';
-import type { InterceptBind, Keymap, PageBind, ViewScope } from './keymap';
+import type {
+  InterceptBind,
+  Keymap,
+  PageBind,
+  PendingKeys,
+  ViewScope,
+} from './keymap';
 import type { Log } from './log';
 import type { MarkdownRenderer } from './markdown';
 
@@ -168,8 +174,17 @@ export interface PageServices {
   timers: Timers;
 }
 
-// `keys.keymap` is the merged keymap, every plugin's binds qualified;
-// `keys.label` falls back to the id for a command with no label.
+// `keys.setScope` sets the scope page keys fire in, under any pushed scope;
+// `keys.pushScope` lays a scope over it until the handle's `pop`, which throws
+// on a second call. `keys.scope` is the qualified scope keys fire in now, and
+// `keys.onScopeChanged` hears it each time it changes. `keys.onPending` hears
+// the keys of an unfinished sequence on the page or in an editor, `null` once
+// none are pending; `keys.holdPending` keeps a pending page sequence past its
+// timeout until it ends, and `keys.cancelPending` drops whichever sequence is
+// pending, running nothing. `keys.keymap` is the merged keymap, every plugin's
+// binds qualified; `keys.label` falls back to the id for a command with no
+// label; `keys.command` reads a command by its qualified id; `keys.scopes`
+// lists every scope as main serves them.
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` is the
 // plugin's own events and `Heard` the other plugins' events it hears, as
@@ -185,8 +200,16 @@ export interface PageApi<
   events: PluginEvents<Ev, Heard>;
   keys: {
     setScope(scope: keyof M['scopes'] & string): void;
+    pushScope(scope: keyof M['scopes'] & string): { pop(): void };
+    scope(): ViewScope;
+    onScopeChanged(listener: (scope: ViewScope) => void): void;
+    onPending(listener: (pending: PendingKeys | null) => void): void;
+    holdPending(): void;
+    cancelPending(): void;
     keymap: Keymap;
     label(id: CommandId): string;
+    command(id: CommandId): CommandInfo | undefined;
+    scopes: readonly ScopeInfo[];
   };
   settings: M['settings'];
   commands: { run(id: CommandId, context?: PageCommandContext): void };
