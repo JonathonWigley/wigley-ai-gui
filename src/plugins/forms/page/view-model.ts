@@ -1,12 +1,12 @@
 import type { VimMode } from '../../../contracts/editor';
 import type { AnswerableKind, AnswerStatus, FindingAction } from '../contract';
-import { findingPickIsComplete } from '../finding-pick';
 import {
   type AnswerableItem,
   answerableItems,
   answerStatus,
   findingActionOf,
   itemAnswer,
+  pickIsComplete,
   type Progress,
   progress,
   type RoundState,
@@ -121,17 +121,6 @@ function tookEveryRecommendation(
     return kind === 'question' && tookRecommendation;
   }
   return tookRecommendation && tookActionRecommendation;
-}
-
-// Whether the item's picks alone answer it, notes aside: a choice on a
-// question, a complete pick of action and solution on a finding.
-function pickIsComplete(round: RoundState, item: AnswerableItem): boolean {
-  if (item.kind === 'question') {
-    return round.answers[item.index - 1].choice >= 1;
-  }
-  const answer = round.findingAnswers[item.index - 1];
-  const solutionCount = round.round.findings[item.index - 1].choices.length;
-  return findingPickIsComplete(solutionCount, answer.choice, answer.action);
 }
 
 // What an item's incomplete pick lacks: on a finding, an action still needs a

@@ -334,8 +334,6 @@ export function findingActionOf(
     : '';
 }
 
-// Whether the item's picks answer it: a choice on a question, a complete
-// pick of action and solution on a finding.
 const PICK_ANSWERS = {
   question: (round, index) => round.answers[index - 1].choice >= 1,
   finding: (round, index) => {
@@ -348,6 +346,15 @@ const PICK_ANSWERS = {
   (round: RoundState, index: number) => boolean
 >;
 
+// Whether the item's picks alone answer it, notes aside: a choice on a
+// question, a complete pick of action and solution on a finding.
+export function pickIsComplete(
+  round: RoundState,
+  item: AnswerableItem,
+): boolean {
+  return PICK_ANSWERS[item.kind](round, item.index);
+}
+
 // The item's picks, or written notes, answer it. Throws when the round has no
 // such item.
 export function answerStatus(
@@ -359,8 +366,7 @@ export function answerStatus(
     return 'not_applicable';
   }
   const hasText = answer.notes.trim() !== '';
-  const picksAnswer = PICK_ANSWERS[item.kind](round, item.index);
-  return picksAnswer || hasText ? 'answered' : 'untouched';
+  return pickIsComplete(round, item) || hasText ? 'answered' : 'untouched';
 }
 
 // The next answerable item after the focused one, by `step` and wrapping,
