@@ -1,4 +1,9 @@
 import type { PageBind, ViewScope } from '../contracts/keymap';
+import {
+  CHORD_NOTATION_RULE,
+  isChordToken,
+  parseChord,
+} from '../shared/chord-notation';
 
 type MatchResult =
   | { kind: 'run'; bind: PageBind }
@@ -148,34 +153,22 @@ interface ParsedChord extends ChordPress {
   bind: PageBind;
 }
 
-const CHORD_NOTATION = /^<(C-)?(A-)?(S-)?(D-)?([a-z0-9])>$/;
-
-function isChordToken(key: string): boolean {
-  return key.length > 1 && key.startsWith('<') && key.endsWith('>');
-}
-
 // A letter matches its `Key` code and a digit its top-row `Digit` code.
-function parseChord(bind: PageBind, token: string): ParsedChord {
-  const parts = CHORD_NOTATION.exec(token);
-  const hasNonShiftModifier =
-    parts !== null &&
-    (parts[1] !== undefined ||
-      parts[2] !== undefined ||
-      parts[4] !== undefined);
-  if (!parts || !hasNonShiftModifier) {
+function toParsedChord(bind: PageBind, token: string): ParsedChord {
+  const chord = parseChord(token);
+  if (!chord) {
     throw new Error(
-      `Page bind for ${bind.command} has a malformed chord ${token}: write modifiers C-, A-, S-, D- in that order, at least one of C-, A-, D-, then one lowercase letter or digit`,
+      `Page bind for ${bind.command} has a malformed chord ${token}: ${CHORD_NOTATION_RULE}`,
     );
   }
-  const key = parts[5];
-  const isDigit = key >= '0' && key <= '9';
+  const isDigit = chord.key >= '0' && chord.key <= '9';
   return {
     bind,
-    code: isDigit ? `Digit${key}` : `Key${key.toUpperCase()}`,
-    ctrlKey: parts[1] !== undefined,
-    altKey: parts[2] !== undefined,
-    shiftKey: parts[3] !== undefined,
-    metaKey: parts[4] !== undefined,
+    code: isDigit ? `Digit${chord.key}` : `Key${chord.key.toUpperCase()}`,
+    ctrlKey: chord.ctrl,
+    altKey: chord.alt,
+    shiftKey: chord.shift,
+    metaKey: chord.meta,
   };
 }
 
@@ -203,7 +196,7 @@ export function createChordMatcher(binds: PageBind[]): ChordMatcher {
       );
     }
     if (tokens.length === 1) {
-      chords.push(parseChord(bind, tokens[0]));
+      chords.push(toParsedChord(bind, tokens[0]));
     }
   }
 

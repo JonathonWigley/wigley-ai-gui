@@ -12,6 +12,7 @@ import type {
 import type { AppConfig } from '../contracts/settings';
 import { pageParts } from '../plugins/page';
 import { CommandRegistry } from '../shared/command-registry';
+import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { startPlugins } from '../shared/plugin-host';
 import { qualify } from '../shared/plugin-manifests';
@@ -138,7 +139,7 @@ async function start() {
 // only the page's static elements, since start can fail before anything else
 // is built.
 function showStartFailure(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorText(error);
   createLogView(document.getElementById('log') as HTMLOListElement)(
     'renderer',
     `start failed: ${message}`,

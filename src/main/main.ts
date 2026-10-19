@@ -30,6 +30,7 @@ import type { AppConfig } from '../contracts/settings';
 import { mainParts } from '../plugins/main';
 import { manifests } from '../plugins/manifests';
 import { CommandRegistry } from '../shared/command-registry';
+import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { startPlugins } from '../shared/plugin-host';
 import {
@@ -111,8 +112,17 @@ function readStartInputs(): StartInputs {
   };
 }
 
-function pageLog(page: WebContents): Log {
-  return (source, message) => page.send(BRIDGE_CHANNELS.log, source, message);
+// The window's page, or null once the window or its page is destroyed, as on
+// quit, when a part's dispose may still send to it.
+function livePage(window: BrowserWindow): WebContents | null {
+  const isGone = window.isDestroyed() || window.webContents.isDestroyed();
+  return isGone ? null : window.webContents;
+}
+
+// With the window's page destroyed, a line is dropped.
+function pageLog(window: BrowserWindow): Log {
+  return (source, message) =>
+    livePage(window)?.send(BRIDGE_CHANNELS.log, source, message);
 }
 
 // `selfTestBinds` are the self-test script's page binds, after every plugin's.
@@ -143,7 +153,7 @@ function startMainParts(
   services: MainServices,
   onStarted: (part: MainStart<PluginManifest>) => void,
 ) {
-  const channels = createPluginChannels(ipcMain, () => window.webContents);
+  const channels = createPluginChannels(ipcMain, () => livePage(window));
   const bus = createEventBus();
   return startPlugins(mainParts, (part, dependency) => {
     const started = part.start(
@@ -186,7 +196,7 @@ function createWindow(inputs: StartInputs) {
     isSelfTest,
   );
   mainWindow = window;
-  const log = pageLog(window.webContents);
+  const log = pageLog(window);
 
   const selfTest = isSelfTest ? startSelfTest(window, cleanUpSelfTest) : null;
   const selfTestHost: SelfTestHost | null = selfTest && {
@@ -245,8 +255,7 @@ function failStart(error: unknown) {
     failSelfTest('the app starts', error, cleanUpSelfTest);
     return;
   }
-  const message = error instanceof Error ? error.message : String(error);
-  dialog.showErrorBox('wigley-ai-gui could not start', message);
+  dialog.showErrorBox('wigley-ai-gui could not start', errorText(error));
   app.exit(1);
 }
 

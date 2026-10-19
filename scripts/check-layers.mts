@@ -19,7 +19,10 @@ const LAYERS: Record<string, LayerRule> = {
   'src/shared': { layers: ['src/contracts'], packages: [] },
   'src/shared/page': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/declarations.d.ts': { layers: ['src/contracts'], packages: [] },
-  'src/preload': { layers: ['src/contracts'], packages: ['electron'] },
+  'src/preload': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: ['electron'],
+  },
   'src/main': {
     layers: ['src/contracts', 'src/shared'],
     packages: ['electron', 'node:'],
@@ -28,7 +31,10 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts'],
     packages: ['@agentclientprotocol/sdk', 'node:'],
   },
-  'src/main/themes': { layers: ['src/contracts'], packages: ['node:'] },
+  'src/main/themes': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: ['node:'],
+  },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/main/main.ts': {

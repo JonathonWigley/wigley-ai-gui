@@ -10,6 +10,7 @@ import {
 import path from 'node:path';
 import type { Clock, RandomHex } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
+import { errorText } from '../../../shared/error-text';
 import type { FormBody } from '../contract';
 import type { SessionInfo } from '../../sessions/contract';
 import type { FinishedOutcome } from './round';
@@ -88,10 +89,6 @@ function isOwnedBy(record: SavedRound, owner: RoundOwner): boolean {
     return false;
   }
   return record.session_id === null && record.project_dir === owner.projectDir;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function stringOrNull(value: unknown): string | null {

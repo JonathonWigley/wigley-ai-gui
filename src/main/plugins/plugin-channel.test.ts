@@ -61,6 +61,16 @@ describe('createPluginChannels', () => {
     expect(page.sent).toEqual([['plugin:message', 'p', 'shown', data]]);
   });
 
+  it('drops a message while there is no page', () => {
+    let page: ReturnType<typeof fakePage> | null = null;
+    const channel = createPluginChannels(fakeIpc(), () => page).forPlugin('p');
+
+    expect(() => channel.send('shown', 1)).not.toThrow();
+    page = fakePage();
+    channel.send('shown', 2);
+    expect(page.sent).toEqual([['plugin:message', 'p', 'shown', 2]]);
+  });
+
   it('rejects a method registered twice', () => {
     const channel = createPluginChannels(fakeIpc(), () => null).forPlugin('p');
     channel.handle('save', () => undefined);

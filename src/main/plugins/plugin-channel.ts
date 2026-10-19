@@ -26,7 +26,8 @@ export interface PluginChannels {
 type Handler = (...args: unknown[]) => unknown;
 
 // Routes every plugin's invokes from the page to the handler that plugin
-// registered, and sends each plugin's messages to `page()` under its id.
+// registered, and sends each plugin's messages to `page()` under its id;
+// `page()` yields null while no page can receive one, as once it is destroyed.
 export function createPluginChannels(
   ipc: IpcLike,
   page: () => WebContentsLike | null,
@@ -55,7 +56,7 @@ export function createPluginChannels(
         methods.set(method, handler as Handler);
         handlers.set(pluginId, methods);
       },
-      // With no page loaded the message is dropped.
+      // With no page to receive it the message is dropped.
       send: (message, data) => {
         page()?.send(BRIDGE_CHANNELS.pluginMessage, pluginId, message, data);
       },

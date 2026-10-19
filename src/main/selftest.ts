@@ -5,6 +5,13 @@ import type {
   SelfTestScript,
   SelfTestStep,
 } from '../contracts/plugin';
+import {
+  type Chord,
+  CHORD_NOTATION_RULE,
+  isChordToken,
+  parseChord,
+} from '../shared/chord-notation';
+import { errorText } from '../shared/error-text';
 
 // Runs a plugin's self-test script on every page load: opens its fixture,
 // drives its keys into the page through Electron's input pipeline, and checks
@@ -17,26 +24,29 @@ const STEP_TIMEOUT_MS = 5000;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// The page key engine's chord notation, which `createChordMatcher` parses.
-const CHORD_NOTATION = /^<(C-)?(A-)?(S-)?(D-)?([a-z0-9])>$/;
-
 // A chord sends no `char`: its modifiers make it a command, not typed text.
-function pressChord(window: BrowserWindow, parts: RegExpExecArray) {
-  const keyCode = parts[5];
+function pressChord(window: BrowserWindow, chord: Chord) {
+  const keyCode = chord.key;
   const modifiers = [
-    ...(parts[1] ? ['control' as const] : []),
-    ...(parts[2] ? ['alt' as const] : []),
-    ...(parts[3] ? ['shift' as const] : []),
-    ...(parts[4] ? ['meta' as const] : []),
+    ...(chord.ctrl ? ['control' as const] : []),
+    ...(chord.alt ? ['alt' as const] : []),
+    ...(chord.shift ? ['shift' as const] : []),
+    ...(chord.meta ? ['meta' as const] : []),
   ];
   window.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
   window.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
 }
 
-// Presses a KeyboardEvent.key value, or a chord in the page keymap's notation.
+// Presses a KeyboardEvent.key value, or a chord in the page keymap's notation;
+// throws on a chord token that does not fit the notation.
 function press(window: BrowserWindow, key: string) {
-  const chord = CHORD_NOTATION.exec(key);
-  if (chord) {
+  if (isChordToken(key)) {
+    const chord = parseChord(key);
+    if (!chord) {
+      throw new Error(
+        `Self-test step presses a malformed chord ${key}: ${CHORD_NOTATION_RULE}`,
+      );
+    }
     pressChord(window, chord);
     return;
   }
@@ -150,8 +160,7 @@ export function failSelfTest(
   if (hasExited) {
     return;
   }
-  const message = error instanceof Error ? error.message : String(error);
-  report(false, `${what}: ${message}`);
+  report(false, `${what}: ${errorText(error)}`);
   exitSelfTest(1, cleanUp);
 }
 

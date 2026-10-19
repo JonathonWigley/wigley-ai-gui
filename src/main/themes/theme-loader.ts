@@ -6,6 +6,7 @@ import {
   type ThemeChoice,
   type ThemeToken,
 } from '../../contracts/theme';
+import { errorText } from '../../shared/error-text';
 
 // The theme every failure falls back to; it must be a built-in.
 const FALLBACK_THEME = 'catppuccin-mocha';
@@ -155,11 +156,10 @@ function readUserTheme(file: string): UserThemeFile {
   try {
     json = JSON.parse(readFileSync(file, 'utf8'));
   } catch (error) {
-    const problem = error instanceof Error ? error.message : String(error);
     return {
       kind: 'broken',
       name: null,
-      error: new ThemeError(file, problem).message,
+      error: new ThemeError(file, errorText(error)).message,
     };
   }
   try {
@@ -193,8 +193,10 @@ export function chooseTheme(
   try {
     fileNames = themeFileNames(userDir);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    return { theme: fallback, error: new ThemeError(userDir, reason).message };
+    return {
+      theme: fallback,
+      error: new ThemeError(userDir, errorText(error)).message,
+    };
   }
 
   let problem: string | null = null;

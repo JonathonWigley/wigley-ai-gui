@@ -1,5 +1,6 @@
 import type { Timers } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
+import { errorText } from '../../../shared/error-text';
 import type { FormBody } from '../contract';
 import { buildBody, saveState } from './form-state';
 import type { FormsStore } from './forms-store';
@@ -69,7 +70,7 @@ async function saveRound(
   try {
     await deps.save(roundId, buildBody(round));
   } catch (error) {
-    const message = messageOf(error);
+    const message = errorText(error);
     // An edit made during the save has its own save scheduled already.
     if (!pending.has(roundId)) {
       pending.set(roundId, { revision, handle: null });
@@ -91,8 +92,4 @@ function cancel(timers: Timers, entry: PendingSave) {
   if (entry.handle !== null) {
     timers.clear(entry.handle);
   }
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
