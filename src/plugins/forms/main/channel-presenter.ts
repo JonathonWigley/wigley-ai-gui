@@ -60,7 +60,6 @@ export function createChannelPresenter(
       alerts.announce('New review round', round.label, () => {
         sessions.activate(round.sessionId);
         window.show();
-        channel.send('focusRound', round.roundId);
       });
     },
     close(roundId) {

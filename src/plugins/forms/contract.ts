@@ -145,10 +145,9 @@ export interface RoundPresenter {
 }
 
 // The forms page part invokes `openRounds` on load, `draft` as the user types
-// and `finish` on submit or cancel; main sends each round as it opens, the id
-// of a round that closed without the page, and the id of a round a
-// notification click brings forward. A `draft` whose save failed rejects with
-// the reason.
+// and `finish` on submit or cancel; main sends each round as it opens and the
+// id of a round that closed without the page. A `draft` whose save failed
+// rejects with the reason.
 export interface FormsChannel extends ChannelShape {
   invoke: {
     openRounds(): PresentedRound[];
@@ -158,6 +157,5 @@ export interface FormsChannel extends ChannelShape {
   messages: {
     roundShown: PresentedRound;
     roundClosed: string;
-    focusRound: string;
   };
 }

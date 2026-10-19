@@ -32,7 +32,9 @@ function fakeTimers() {
 }
 
 function setup(save: (roundId: string, body: FormBody) => Promise<void>) {
-  const store = createFormsStore(initialState([presentedRound('r1')]));
+  const store = createFormsStore(
+    initialState([presentedRound('r1')], 'r1-session'),
+  );
   const clock = fakeTimers();
   const logs: string[] = [];
   startAutosave({

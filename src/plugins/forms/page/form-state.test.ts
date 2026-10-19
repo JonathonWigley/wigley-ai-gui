@@ -46,7 +46,7 @@ function presented(
 ): PresentedRound {
   return {
     roundId,
-    sessionId: `session-${roundId}`,
+    sessionId: `${roundId}-session`,
     label: `project · ${roundId}`,
     round: {
       heading: roundId,
@@ -90,7 +90,10 @@ function active(state: FormsState): RoundState {
 
 // Rail positions: 0 = notice N1, 1 = question Q1, 2 = question Q2.
 function mixedRound(body: FormBody | null = null): FormsState {
-  return initialState([presented('r1', { notices: [notice('N1')] }, body)]);
+  return initialState(
+    [presented('r1', { notices: [notice('N1')] }, body)],
+    'r1-session',
+  );
 }
 
 const untouched = {
@@ -104,16 +107,25 @@ const untouched = {
 
 describe('initialState', () => {
   it('shows the idle view with no rounds', () => {
-    const state = initialState([]);
+    const state = initialState([], 'r1-session');
     expect(state.view).toBe('idle');
     expect(activeRound(state)).toBeNull();
   });
 
-  it('makes the first round active in the forms view, keeping the order', () => {
-    const state = initialState([presented('r1'), presented('r2')]);
-    expect(state.activeRoundId).toBe('r1');
+  it("makes the active session's round active", () => {
+    const state = initialState(
+      [presented('r1'), presented('r2')],
+      'r2-session',
+    );
+    expect(state.activeRoundId).toBe('r2');
     expect(state.view).toBe('forms');
     expect(state.rounds.map((round) => round.roundId)).toEqual(['r1', 'r2']);
+  });
+
+  it('shows no round with no active session', () => {
+    const state = initialState([presented('r1')], null);
+    expect(state.activeRoundId).toBeNull();
+    expect(state.view).toBe('idle');
   });
 
   it('focuses the first rail item', () => {
@@ -418,47 +430,99 @@ describe('item navigation', () => {
   });
 });
 
-describe('round switching', () => {
-  const three = initialState([
-    presented('r1'),
-    presented('r2'),
-    presented('r3'),
-  ]);
+describe('sessionActivated', () => {
+  const two = initialState([presented('r1'), presented('r2')], 'r1-session');
 
-  it('wraps around the open rounds in both directions', () => {
-    expect(apply(three, { type: 'prevRound' }).activeRoundId).toBe('r3');
-    const onLast = run(three, { type: 'nextRound' }, { type: 'nextRound' });
-    expect(onLast.activeRoundId).toBe('r3');
-    expect(apply(onLast, { type: 'nextRound' }).activeRoundId).toBe('r1');
+  it("shows the session's round in the form", () => {
+    const state = apply(two, {
+      type: 'sessionActivated',
+      sessionId: 'r2-session',
+    });
+    expect(state.activeRoundId).toBe('r2');
+    expect(state.view).toBe('forms');
   });
 
-  it('does nothing with one round open', () => {
-    const state = initialState([presented('r1')]);
-    expect(apply(state, { type: 'nextRound' })).toBe(state);
+  it('shows the idle view for a session with no round', () => {
+    const state = apply(two, { type: 'sessionActivated', sessionId: 'other' });
+    expect(state.activeRoundId).toBeNull();
+    expect(state.view).toBe('idle');
   });
 
-  it('keeps each round’s answers apart', () => {
+  it('keeps help open, returning to the new view', () => {
     const state = run(
-      three,
+      two,
+      { type: 'toggleHelp' },
+      { type: 'sessionActivated', sessionId: 'other' },
+    );
+    expect(state.view).toBe('help');
+    expect(state.helpReturnView).toBe('idle');
+  });
+
+  it('dismisses a pending cancel prompt', () => {
+    const state = run(
+      two,
+      { type: 'askClose', sessionId: 'r1-session' },
+      { type: 'sessionActivated', sessionId: 'r2-session' },
+    );
+    expect(state.view).toBe('forms');
+    expect(state.activeRoundId).toBe('r2');
+    expect(state.confirmClosesTab).toBe(false);
+  });
+
+  it('changes nothing for the session already active', () => {
+    expect(
+      apply(two, { type: 'sessionActivated', sessionId: 'r1-session' }),
+    ).toBe(two);
+  });
+
+  it("keeps each round's answers apart", () => {
+    const state = run(
+      two,
       { type: 'focusItem', item: 0 },
       { type: 'choose', choice: 2 },
-      { type: 'nextRound' },
+      { type: 'sessionActivated', sessionId: 'r2-session' },
     );
     expect(active(state).answers[0].choice).toBe(0);
-    expect(active(apply(state, { type: 'prevRound' })).answers[0].choice).toBe(
-      2,
-    );
+    const back = apply(state, {
+      type: 'sessionActivated',
+      sessionId: 'r1-session',
+    });
+    expect(active(back).answers[0].choice).toBe(2);
+  });
+});
+
+describe('askClose', () => {
+  const two = initialState([presented('r1'), presented('r2')], 'r1-session');
+  const askClose: FormsAction = { type: 'askClose', sessionId: 'r1-session' };
+
+  it('opens the prompt from the form and keeping returns to the form', () => {
+    const asked = apply(two, askClose);
+    expect(asked.view).toBe('confirm');
+    expect(asked.confirmClosesTab).toBe(true);
+    const kept = apply(asked, { type: 'dismissConfirm' });
+    expect(kept.view).toBe('forms');
+    expect(kept.confirmClosesTab).toBe(false);
   });
 
-  it('keeps the review view when switching from the review', () => {
-    const state = run(three, { type: 'openReview' }, { type: 'nextRound' });
-    expect(state.view).toBe('review');
-    expect(state.activeRoundId).toBe('r2');
+  it('returns to the review when asked from the review', () => {
+    const asked = run(two, { type: 'openReview' }, askClose);
+    expect(asked.view).toBe('confirm');
+    expect(apply(asked, { type: 'dismissConfirm' }).view).toBe('review');
   });
 
-  it('does nothing while help is open', () => {
-    const state = apply(three, { type: 'toggleHelp' });
-    expect(apply(state, { type: 'nextRound' })).toBe(state);
+  it('closes help into the prompt, keeping returning to the form', () => {
+    const asked = run(two, { type: 'toggleHelp' }, askClose);
+    expect(asked.view).toBe('confirm');
+    expect(apply(asked, { type: 'dismissConfirm' }).view).toBe('forms');
+  });
+
+  it('does nothing for another session', () => {
+    expect(apply(two, { type: 'askClose', sessionId: 'r2-session' })).toBe(two);
+  });
+
+  it('does nothing while the prompt is open', () => {
+    const asked = apply(two, askClose);
+    expect(apply(asked, askClose)).toBe(asked);
   });
 });
 
@@ -518,17 +582,18 @@ describe('review', () => {
   });
 
   it('does not open from the idle view', () => {
-    const state = initialState([]);
+    const state = initialState([], null);
     expect(apply(state, { type: 'openReview' })).toBe(state);
   });
 });
 
 describe('cancel', () => {
-  const two = initialState([presented('r1'), presented('r2')]);
+  const two = initialState([presented('r1'), presented('r2')], 'r1-session');
 
   it('asks from the review, and dismissing returns to the review', () => {
     const asked = run(two, { type: 'openReview' }, { type: 'askCancel' });
     expect(asked.view).toBe('confirm');
+    expect(asked.confirmClosesTab).toBe(false);
     expect(apply(asked, { type: 'dismissConfirm' }).view).toBe('review');
   });
 
@@ -536,7 +601,7 @@ describe('cancel', () => {
     expect(apply(two, { type: 'askCancel' })).toBe(two);
   });
 
-  it('confirming closes the active round and shows the next one', () => {
+  it('confirming closes the active round and shows the idle view', () => {
     const state = run(
       two,
       { type: 'openReview' },
@@ -544,8 +609,8 @@ describe('cancel', () => {
       { type: 'confirmCancel' },
     );
     expect(state.rounds.map((round) => round.roundId)).toEqual(['r2']);
-    expect(state.activeRoundId).toBe('r2');
-    expect(state.view).toBe('forms');
+    expect(state.activeRoundId).toBeNull();
+    expect(state.view).toBe('idle');
   });
 
   it('confirming outside the confirmation does nothing', () => {
@@ -581,7 +646,7 @@ describe('help', () => {
   });
 
   it('opens from the idle view', () => {
-    const state = apply(initialState([]), { type: 'toggleHelp' });
+    const state = apply(initialState([], null), { type: 'toggleHelp' });
     expect(state.view).toBe('help');
     expect(apply(state, { type: 'closeHelp' }).view).toBe('idle');
   });
@@ -589,7 +654,7 @@ describe('help', () => {
 
 describe('roundShown', () => {
   it('appends a new round without taking over the active one', () => {
-    const state = apply(initialState([presented('r1')]), {
+    const state = apply(initialState([presented('r1')], 'r1-session'), {
       type: 'roundShown',
       round: presented('r2'),
     });
@@ -597,17 +662,27 @@ describe('roundShown', () => {
     expect(state.activeRoundId).toBe('r1');
   });
 
-  it('makes a round shown in the idle view active', () => {
-    const state = apply(initialState([]), {
+  it('makes a round for the active session active', () => {
+    const state = apply(initialState([], 's1'), {
       type: 'roundShown',
-      round: presented('r1'),
+      round: { ...presented('r1'), sessionId: 's1' },
     });
     expect(state.activeRoundId).toBe('r1');
     expect(state.view).toBe('forms');
   });
 
+  it('keeps a round for another session in the background', () => {
+    const state = apply(initialState([], 's1'), {
+      type: 'roundShown',
+      round: { ...presented('r1'), sessionId: 's2' },
+    });
+    expect(state.activeRoundId).toBeNull();
+    expect(state.view).toBe('idle');
+    expect(state.rounds).toHaveLength(1);
+  });
+
   it('keeps the live state of a round already open', () => {
-    const chosen = run(initialState([presented('r1')]), {
+    const chosen = run(initialState([presented('r1')], 'r1-session'), {
       type: 'choose',
       choice: 2,
     });
@@ -620,7 +695,7 @@ describe('roundShown', () => {
 
   it('a round shown under help over the idle view makes help return to it', () => {
     const state = run(
-      initialState([]),
+      initialState([], 'r1-session'),
       { type: 'toggleHelp' },
       { type: 'roundShown', round: presented('r1') },
     );
@@ -631,49 +706,17 @@ describe('roundShown', () => {
 });
 
 describe('roundClosed', () => {
-  const three = initialState([
-    presented('r1'),
-    presented('r2'),
-    presented('r3'),
-  ]);
+  const three = initialState(
+    [presented('r1'), presented('r2'), presented('r3')],
+    'r1-session',
+  );
 
-  it('closing the active round shows the round after it', () => {
-    const state = run(
-      three,
-      { type: 'nextRound' },
-      { type: 'roundClosed', roundId: 'r2' },
-    );
-    expect(state.activeRoundId).toBe('r3');
-    expect(state.view).toBe('forms');
-  });
-
-  it('closing the active last round wraps to the first', () => {
-    const state = run(
-      three,
-      { type: 'prevRound' },
-      { type: 'roundClosed', roundId: 'r3' },
-    );
-    expect(state.activeRoundId).toBe('r1');
-  });
-
-  it('closing the active round from the review shows the next round’s form', () => {
-    const state = run(
-      three,
-      { type: 'openReview' },
-      { type: 'roundClosed', roundId: 'r1' },
-    );
-    expect(state.activeRoundId).toBe('r2');
-    expect(state.view).toBe('forms');
-  });
-
-  it('closing the only round shows the idle view', () => {
-    const state = apply(initialState([presented('r1')]), {
-      type: 'roundClosed',
-      roundId: 'r1',
-    });
-    expect(state.rounds).toEqual([]);
+  it('closing the active round shows the idle view', () => {
+    const state = apply(three, { type: 'roundClosed', roundId: 'r1' });
+    expect(state.rounds.map((round) => round.roundId)).toEqual(['r2', 'r3']);
     expect(activeRound(state)).toBeNull();
     expect(state.view).toBe('idle');
+    expect(state.activeSessionId).toBe('r1-session');
   });
 
   it('closing another round keeps the active round and the view', () => {
@@ -687,41 +730,18 @@ describe('roundClosed', () => {
     expect(state.rounds.map((round) => round.roundId)).toEqual(['r1', 'r3']);
   });
 
-  it('closing the active round under help keeps help open over the next round', () => {
+  it('closing the active round under help keeps help open over idle', () => {
     const state = run(
       three,
       { type: 'toggleHelp' },
       { type: 'roundClosed', roundId: 'r1' },
     );
     expect(state.view).toBe('help');
-    expect(state.activeRoundId).toBe('r2');
-    expect(apply(state, { type: 'closeHelp' }).view).toBe('forms');
+    expect(state.helpReturnView).toBe('idle');
   });
 
   it('closing a round that is not open does nothing', () => {
     expect(apply(three, { type: 'roundClosed', roundId: 'gone' })).toBe(three);
-  });
-});
-
-describe('focusRound', () => {
-  const two = initialState([presented('r1'), presented('r2')]);
-
-  it('shows the named round in the forms view, closing help', () => {
-    const state = run(
-      two,
-      { type: 'toggleHelp' },
-      { type: 'focusRound', roundId: 'r2' },
-    );
-    expect(state.activeRoundId).toBe('r2');
-    expect(state.view).toBe('forms');
-  });
-
-  it('ignores a round that is not open', () => {
-    expect(apply(two, { type: 'focusRound', roundId: 'gone' })).toBe(two);
-  });
-
-  it('changes nothing for the round already shown in the forms view', () => {
-    expect(apply(two, { type: 'focusRound', roundId: 'r1' })).toBe(two);
   });
 });
 
@@ -741,10 +761,10 @@ describe('folds', () => {
   });
 
   it('foldAll and unfoldAll cover every item of the active round only', () => {
-    const two = initialState([
-      presented('r1', { notices: [notice('N1')] }),
-      presented('r2'),
-    ]);
+    const two = initialState(
+      [presented('r1', { notices: [notice('N1')] }), presented('r2')],
+      'r1-session',
+    );
     const folded = apply(two, { type: 'foldAll' });
     expect(active(folded).folded).toEqual([true, true, true]);
     expect(folded.rounds[1].folded).toEqual([false, false]);
@@ -812,27 +832,30 @@ describe('item actions outside the forms view', () => {
 
 describe('progress', () => {
   it('counts answered, not applicable and untouched questions', () => {
-    const state = initialState([
-      presented(
-        'r1',
-        {
-          questions: [
-            question('Q1'),
-            question('Q2'),
-            question('Q3'),
-            question('Q4'),
-          ],
-        },
-        draft({
-          answers: [
-            entry(1, { choice: 1 }),
-            entry(2, { choice: 2, not_applicable: true }),
-            entry(3, { what: 'text but no pick' }),
-            entry(4, { why: '  ' }),
-          ],
-        }),
-      ),
-    ]);
+    const state = initialState(
+      [
+        presented(
+          'r1',
+          {
+            questions: [
+              question('Q1'),
+              question('Q2'),
+              question('Q3'),
+              question('Q4'),
+            ],
+          },
+          draft({
+            answers: [
+              entry(1, { choice: 1 }),
+              entry(2, { choice: 2, not_applicable: true }),
+              entry(3, { what: 'text but no pick' }),
+              entry(4, { why: '  ' }),
+            ],
+          }),
+        ),
+      ],
+      'r1-session',
+    );
     expect(progress(active(state))).toEqual({
       answered: 2,
       notApplicable: 1,
@@ -1013,9 +1036,10 @@ describe('buildBody', () => {
       },
     );
     const body = buildBody(active(state));
-    const restored = initialState([
-      presented('r1', { notices: [notice('N1')] }, body),
-    ]);
+    const restored = initialState(
+      [presented('r1', { notices: [notice('N1')] }, body)],
+      'r1-session',
+    );
     expect(buildBody(active(restored))).toEqual(body);
   });
 });

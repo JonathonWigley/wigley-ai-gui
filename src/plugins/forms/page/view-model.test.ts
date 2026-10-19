@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   activeRound,
   apply,
+  baseView,
   type FormsAction,
   type FormsState,
   initialState,
@@ -9,21 +10,24 @@ import {
 } from './form-state';
 import { presentedRound, question } from './test-rounds';
 import {
-  baseView,
   modeLabel,
   progressText,
   reviewRows,
   saveLabel,
+  sessionTitle,
 } from './view-model';
 
 // Questions Alpha (recommend 2), Beta (recommend 2), Gamma; no notices, so
 // rail position = question position.
 function roundAfter(...actions: FormsAction[]): RoundState {
-  const start = initialState([
-    presentedRound('r1', {
-      questions: [question('Alpha'), question('Beta'), question('Gamma')],
-    }),
-  ]);
+  const start = initialState(
+    [
+      presentedRound('r1', {
+        questions: [question('Alpha'), question('Beta'), question('Gamma')],
+      }),
+    ],
+    'r1-session',
+  );
   const round = activeRound(actions.reduce(apply, start));
   if (round === null) {
     throw new Error('The test round is not active');
@@ -32,7 +36,10 @@ function roundAfter(...actions: FormsAction[]): RoundState {
 }
 
 function stateAfter(...actions: FormsAction[]): FormsState {
-  return actions.reduce(apply, initialState([presentedRound('r1')]));
+  return actions.reduce(
+    apply,
+    initialState([presentedRound('r1')], 'r1-session'),
+  );
 }
 
 describe('reviewRows', () => {
@@ -181,5 +188,26 @@ describe('baseView', () => {
 
   it('is the view itself otherwise', () => {
     expect(baseView(stateAfter())).toBe('forms');
+  });
+});
+
+describe('sessionTitle', () => {
+  // presentedRound('r1') has two questions and no notices.
+  function titleAfter(...actions: FormsAction[]): string {
+    const round = activeRound(stateAfter(...actions));
+    if (round === null) {
+      throw new Error('The test round is not active');
+    }
+    return sessionTitle(round);
+  }
+
+  it('sessionTitle counts answered and not-applicable questions', () => {
+    const choose: FormsAction = { type: 'choose', choice: 1 };
+
+    expect(titleAfter()).toBe('r1 heading 0/2');
+    expect(titleAfter(choose)).toBe('r1 heading 1/2');
+    expect(
+      titleAfter(choose, { type: 'nextItem' }, { type: 'toggleNotApplicable' }),
+    ).toBe('r1 heading 2/2');
   });
 });

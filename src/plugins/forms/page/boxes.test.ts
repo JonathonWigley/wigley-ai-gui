@@ -19,12 +19,15 @@ import { notice, presentedRound, question } from './test-rounds';
 
 // One notice, then questions Alpha and Beta: rail positions 0, 1, 2.
 function stateAfter(...actions: FormsAction[]): FormsState {
-  const start = initialState([
-    presentedRound('r1', {
-      notices: [notice('Heads up')],
-      questions: [question('Alpha'), question('Beta')],
-    }),
-  ]);
+  const start = initialState(
+    [
+      presentedRound('r1', {
+        notices: [notice('Heads up')],
+        questions: [question('Alpha'), question('Beta')],
+      }),
+    ],
+    'r1-session',
+  );
   return actions.reduce(apply, start);
 }
 
@@ -67,7 +70,7 @@ describe('shownBoxes', () => {
 
   it('shows no box under help, or with no round open', () => {
     expect(shownBoxes(stateAfter({ type: 'toggleHelp' }))).toEqual([]);
-    expect(shownBoxes(initialState([]))).toEqual([]);
+    expect(shownBoxes(initialState([], null))).toEqual([]);
   });
 });
 
@@ -98,7 +101,7 @@ describe('stepBox', () => {
   });
 
   it('finds nothing when no box is shown', () => {
-    expect(stepBox(initialState([]), null, 1)).toBeNull();
+    expect(stepBox(initialState([], null), null, 1)).toBeNull();
   });
 });
 

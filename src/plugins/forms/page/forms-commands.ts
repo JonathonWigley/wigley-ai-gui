@@ -31,6 +31,7 @@ export interface FormsCommandDeps {
   boxes: Pick<EditorBoxes, 'focus' | 'leave' | 'active' | 'boxOf'>;
   // Hands the finished round to main.
   finish(roundId: string, end: RoundEnd): void;
+  closeTab(sessionId: string): void;
   toast(text: string, tone: ToastTone): void;
   log: Log;
 }
@@ -69,8 +70,6 @@ export function formsCommandHandlers(
     toggleFold: plain({ type: 'toggleFold' }),
     unfoldAll: plain({ type: 'unfoldAll' }),
     foldAll: plain({ type: 'foldAll' }),
-    nextRound: plain({ type: 'nextRound' }),
-    prevRound: plain({ type: 'prevRound' }),
     closeReview: plain({ type: 'closeReview' }),
     reviewNext: plain({ type: 'reviewNext' }),
     reviewPrev: plain({ type: 'reviewPrev' }),
@@ -235,8 +234,30 @@ function moveItem(
   }
 }
 
+// A session's tab closes only once its round is gone: with an open round it
+// asks to cancel the round, and confirming closes the tab. Every close names
+// the active session, so a background round keeps its tab with no prompt.
+export function guardClose(
+  deps: Pick<FormsCommandDeps, 'store' | 'log'>,
+  sessionId: string,
+): boolean {
+  const { store } = deps;
+  const round = store
+    .get()
+    .rounds.find((candidate) => candidate.sessionId === sessionId);
+  if (round === undefined) {
+    return true;
+  }
+  const wasConfirm = store.get().view === 'confirm';
+  store.dispatch({ type: 'askClose', sessionId });
+  if (!wasConfirm && store.get().view === 'confirm') {
+    deps.log('forms', `closing the tab asks to cancel ${round.label}`);
+  }
+  return false;
+}
+
 // Reads the body before the round leaves the state, hands it to main, then
-// closes the round.
+// closes the round, and its tab when the cancel prompt was asked by closing it.
 function finishActiveRound(
   deps: FormsCommandDeps,
   from: FormsView,
@@ -247,6 +268,7 @@ function finishActiveRound(
   if (state.view !== from || round === null) {
     return;
   }
+  const closesTab = kind === 'cancelled' && state.confirmClosesTab;
   deps.finish(round.roundId, { kind, body: buildBody(round) });
   const isSubmit = kind === 'submitted';
   deps.store.dispatch(
@@ -261,4 +283,7 @@ function finishActiveRound(
       : `Round cancelled: ${round.label}`,
     isSubmit ? 'success' : 'info',
   );
+  if (closesTab) {
+    deps.closeTab(round.sessionId);
+  }
 }

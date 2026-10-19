@@ -101,3 +101,26 @@ export interface SessionsChannel extends ChannelShape {
   };
   messages: { stateChanged: SessionsState };
 }
+
+// The page part's exports and events.
+
+// `beforeClose` returns whether the tab may close now; false keeps it open.
+export interface SessionView {
+  element: HTMLElement;
+  title: string;
+  beforeClose(): boolean;
+}
+
+export interface SessionsPageExports {
+  fill(
+    sessionId: string,
+    view: SessionView,
+  ): { setTitle(title: string): void; remove(): void };
+  activeSessionId(): string | null;
+  activate(sessionId: string): void;
+  closeTab(sessionId: string): void;
+}
+
+export interface SessionsPageEvents extends EventShape {
+  activeChanged: { sessionId: string | null };
+}

@@ -1,20 +1,21 @@
 import './forms.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
+import { errorText } from '../../../shared/error-text';
+import type {
+  SessionsPageEvents,
+  SessionsPageExports,
+} from '../../sessions/contract';
 import type { FormsChannel, RoundEnd } from '../contract';
 import { formsManifest } from '../manifest';
 import { startAutosave } from './autosave';
 import { focusActionFor } from './boxes';
 import { createEditorBoxes, type EditorBoxes } from './editor-boxes';
 import { initialState } from './form-state';
-import { formsCommandHandlers } from './forms-commands';
+import { formsCommandHandlers, guardClose } from './forms-commands';
 import { createFormsStore, type FormsStore } from './forms-store';
 import { mountFormsView } from './forms-view';
 
 type FormsApi = PageApi<typeof formsManifest, FormsChannel>;
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 // Each box's edits reach the store, and a box taking focus focuses its item.
 function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes {
@@ -40,7 +41,8 @@ function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes {
 }
 
 // Listeners first: a round shown while openRounds is in flight arrives in
-// both, and showing an open round again changes nothing.
+// both, and showing an open round again changes nothing. The active round
+// follows the session the sessions plugin shows.
 function listenForRounds(api: FormsApi, store: FormsStore) {
   const { log } = api.services;
   api.channel.on('roundShown', (round) =>
@@ -49,8 +51,9 @@ function listenForRounds(api: FormsApi, store: FormsStore) {
   api.channel.on('roundClosed', (roundId) =>
     store.dispatch({ type: 'roundClosed', roundId }),
   );
-  api.channel.on('focusRound', (roundId) =>
-    store.dispatch({ type: 'focusRound', roundId }),
+  api.events.on<SessionsPageEvents['activeChanged']>(
+    'sessions.activeChanged',
+    ({ sessionId }) => store.dispatch({ type: 'sessionActivated', sessionId }),
   );
   void api.channel
     .invoke('openRounds')
@@ -75,16 +78,23 @@ function finishRound(api: FormsApi, roundId: string, end: RoundEnd) {
     );
 }
 
-// Shows agents' rounds and sends the user's answers back to main; the scope
-// follows the forms view.
+// Shows each agent round in its session's view and sends the user's answers
+// back to main; the scope follows the forms view. A session's tab with an open
+// round closes only through the cancel prompt.
 export const formsPagePart: PagePart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
     const { services } = api;
-    const store = createFormsStore(initialState([]));
+    const sessions = api.dependency<SessionsPageExports>('sessions');
+    const store = createFormsStore(
+      initialState([], sessions.activeSessionId()),
+    );
     const boxes = createBoxes(api, store);
     mountFormsView({
       areas: api.areas,
+      sessions,
+      beforeClose: (sessionId) =>
+        guardClose({ store, log: services.log }, sessionId),
       store,
       boxes,
       markdown: services.markdown,
@@ -107,6 +117,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         store,
         boxes,
         finish: (roundId, end) => finishRound(api, roundId, end),
+        closeTab: (sessionId) => sessions.closeTab(sessionId),
         toast: services.toast,
         log: services.log,
       }),

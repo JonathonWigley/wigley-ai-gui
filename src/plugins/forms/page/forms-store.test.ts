@@ -5,7 +5,9 @@ import { presentedRound } from './test-rounds';
 
 describe('createFormsStore', () => {
   it('holds the state an action produced and tells its listeners', () => {
-    const store = createFormsStore(initialState([presentedRound('r1')]));
+    const store = createFormsStore(
+      initialState([presentedRound('r1')], 'r1-session'),
+    );
     let calls = 0;
     store.subscribe(() => calls++);
 
@@ -16,7 +18,7 @@ describe('createFormsStore', () => {
   });
 
   it('tells no one about an action that changes nothing', () => {
-    const store = createFormsStore(initialState([]));
+    const store = createFormsStore(initialState([], null));
     let calls = 0;
     store.subscribe(() => calls++);
 
@@ -26,7 +28,9 @@ describe('createFormsStore', () => {
   });
 
   it('lets a listener dispatch and every listener read the newest state', () => {
-    const store = createFormsStore(initialState([presentedRound('r1')]));
+    const store = createFormsStore(
+      initialState([presentedRound('r1')], 'r1-session'),
+    );
     const seen: number[] = [];
     store.subscribe(() => {
       if (store.get().rounds[0].focus === 1) {

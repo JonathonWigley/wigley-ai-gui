@@ -2,15 +2,17 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Keymap } from '../../../contracts/keymap';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Area, AreaName } from '../../../contracts/plugin';
+import { button, element } from '../../../shared/dom';
+import type { SessionsPageExports } from '../../sessions/contract';
 import { formsCommand, formsScope } from '../ids';
 import { isBoxShown } from './boxes';
-import { button, element } from './dom';
 import type { EditorBoxes } from './editor-boxes';
 import {
   activeRound,
+  baseView,
   type FormsAction,
   type FormsState,
-  progress,
+  type RoundState,
   saveState,
 } from './form-state';
 import type { FormsStore } from './forms-store';
@@ -22,11 +24,14 @@ import {
   pageHints,
 } from './key-hints';
 import { createRoundView, type RoundView } from './round-view';
-import { baseView, modeLabel, saveLabel } from './view-model';
+import { modeLabel, saveLabel, sessionTitle } from './view-model';
 
 // `keymap` is the merged keymap and `label` names a command in hints and help.
+// `beforeClose` answers whether a session's tab may close now.
 export interface FormsViewDeps {
   areas: Record<AreaName, Area>;
+  sessions: Pick<SessionsPageExports, 'fill'>;
+  beforeClose(sessionId: string): boolean;
   store: FormsStore;
   boxes: EditorBoxes;
   markdown: MarkdownRenderer;
@@ -35,41 +40,43 @@ export interface FormsViewDeps {
   run(command: CommandId): void;
 }
 
-// The whole forms UI: the switcher and rounds in the main area, the status
-// line in the status bar, the dialogs in the overlay layer. Every store change
-// re-renders it; editors live in the round views and survive every render.
+// A round's view and the session view it fills, with the title last sent to
+// the session's tab.
+interface ShownRound {
+  view: RoundView;
+  fill: ReturnType<SessionsPageExports['fill']>;
+  title: string;
+}
+
+// The whole forms UI: each round in its session's view, the status line in
+// the status bar, the dialogs in the overlay layer, all serving the active
+// round. Every store change re-renders it; editors live in the round views and
+// survive every render.
 export function mountFormsView(deps: FormsViewDeps) {
   const { areas, store, boxes } = deps;
-  const root = element('div', 'forms-view');
-  const switcher = element('nav', 'switcher');
-  switcher.setAttribute('aria-label', 'Open rounds');
-  const workspace = element('main', 'workspace');
-  const idle = buildIdle();
-  workspace.append(idle);
-  root.append(switcher, workspace);
   const status = buildStatusLine(deps);
   const help = buildHelp(deps);
   const confirm = buildConfirm(deps.run);
-  areas.main.contribute(root);
   areas.statusBar.contribute(status.element);
   areas.overlay.contribute(confirm);
   areas.overlay.contribute(help);
-  const roundViews = new Map<string, RoundView>();
+  const roundViews = new Map<string, ShownRound>();
   const dispatch = (action: FormsAction) => store.dispatch(action);
 
   const render = () => {
     const state = store.get();
-    syncRoundViews(state, roundViews, workspace, deps, dispatch);
-    renderSwitcher(switcher, state, dispatch);
+    syncRoundViews(state, roundViews, deps, dispatch);
+    sendTitles(state, roundViews);
     const view = baseView(state);
     const shown = view === 'idle' ? null : activeRound(state);
     for (const [roundId, roundView] of roundViews) {
-      roundView.element.hidden = roundId !== shown?.roundId;
+      roundView.view.element.hidden = roundId !== shown?.roundId;
     }
     if (shown !== null) {
-      roundViews.get(shown.roundId)?.update(shown, view, state.view === 'help');
+      roundViews
+        .get(shown.roundId)
+        ?.view.update(shown, view, state.view === 'help');
     }
-    idle.hidden = view !== 'idle';
     help.hidden = state.view !== 'help';
     confirm.hidden = view !== 'confirm';
     status.update(state);
@@ -83,75 +90,62 @@ export function mountFormsView(deps: FormsViewDeps) {
   render();
 }
 
-// A round view per open round: built when the round appears, destroyed with
-// its editors when it leaves.
+// A round view per open round, filling its session's view: built when the
+// round appears, destroyed with its editors when it leaves.
 function syncRoundViews(
   state: FormsState,
-  roundViews: Map<string, RoundView>,
-  workspace: HTMLElement,
+  roundViews: Map<string, ShownRound>,
   deps: FormsViewDeps,
   dispatch: (action: FormsAction) => void,
 ) {
-  for (const [roundId, roundView] of roundViews) {
+  for (const [roundId, shown] of roundViews) {
     if (!state.rounds.some((round) => round.roundId === roundId)) {
       deps.boxes.destroyRound(roundId);
-      roundView.element.remove();
+      shown.fill.remove();
       roundViews.delete(roundId);
     }
   }
   for (const round of state.rounds) {
     if (!roundViews.has(round.roundId)) {
-      const roundView = createRoundView(workspace, round, {
-        markdown: deps.markdown,
-        boxes: deps.boxes,
-        dispatch,
-        run: deps.run,
-      });
-      roundViews.set(round.roundId, roundView);
+      roundViews.set(round.roundId, showRound(round, deps, dispatch));
     }
   }
 }
 
-function renderSwitcher(
-  switcher: HTMLElement,
-  state: FormsState,
+function showRound(
+  round: RoundState,
+  deps: FormsViewDeps,
   dispatch: (action: FormsAction) => void,
-) {
-  switcher.hidden = state.rounds.length === 0;
-  switcher.replaceChildren(
-    ...state.rounds.map((round) => {
-      const isActive = round.roundId === state.activeRoundId;
-      const counts = progress(round);
-      const entry = button('switcher-entry', '', () =>
-        dispatch({ type: 'focusRound', roundId: round.roundId }),
-      );
-      entry.title = round.label;
-      entry.classList.toggle('is-active', isActive);
-      entry.setAttribute('aria-current', String(isActive));
-      entry.append(
-        element('span', 'switcher-label', round.label),
-        element(
-          'span',
-          'switcher-count',
-          `${counts.answered + counts.notApplicable}/${counts.total}`,
-        ),
-      );
-      return entry;
-    }),
+): ShownRound {
+  const title = sessionTitle(round);
+  let fill = null as ShownRound['fill'] | null;
+  const view = createRoundView(
+    (root) => {
+      fill = deps.sessions.fill(round.sessionId, {
+        element: root,
+        title,
+        beforeClose: () => deps.beforeClose(round.sessionId),
+      });
+    },
+    round,
+    { markdown: deps.markdown, boxes: deps.boxes, dispatch, run: deps.run },
   );
+  if (fill === null) {
+    throw new Error(`Round ${round.roundId}'s view was never attached`);
+  }
+  return { view, fill, title };
 }
 
-function buildIdle(): HTMLElement {
-  const idle = element('section', 'idle');
-  idle.append(
-    element('h1', 'idle-title', 'No round open'),
-    element(
-      'p',
-      'idle-text',
-      'When an agent asks you a round, it opens here and the app icon counts it.',
-    ),
-  );
-  return idle;
+// Sends each round's title to its session's tab when it changed.
+function sendTitles(state: FormsState, roundViews: Map<string, ShownRound>) {
+  for (const round of state.rounds) {
+    const shown = roundViews.get(round.roundId);
+    const title = sessionTitle(round);
+    if (shown !== undefined && shown.title !== title) {
+      shown.title = title;
+      shown.fill.setTitle(title);
+    }
+  }
 }
 
 function renderHint(hint: KeyHint): HTMLElement {

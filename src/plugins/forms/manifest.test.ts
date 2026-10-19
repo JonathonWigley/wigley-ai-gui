@@ -43,8 +43,6 @@ const EXPECTED_PAGE: PageBind[] = [
   { keys: ['a'], scope: 'forms.forms', command: 'forms.editWhat' },
   { keys: ['w'], scope: 'forms.forms', command: 'forms.editWhy' },
   { keys: ['o'], scope: 'forms.forms', command: 'forms.editNote' },
-  { keys: ['g', 't'], scope: 'forms.forms', command: 'forms.nextRound' },
-  { keys: ['g', 'T'], scope: 'forms.forms', command: 'forms.prevRound' },
   { keys: [' ', ' '], scope: 'forms.forms', command: 'forms.openReview' },
   { keys: ['z', 'a'], scope: 'forms.forms', command: 'forms.toggleFold' },
   { keys: ['z', 'R'], scope: 'forms.forms', command: 'forms.unfoldAll' },
@@ -56,8 +54,6 @@ const EXPECTED_PAGE: PageBind[] = [
   { keys: ['Enter'], scope: 'forms.review', command: 'forms.reviewJump' },
   { keys: ['C'], scope: 'forms.review', command: 'forms.askCancel' },
   { keys: ['o'], scope: 'forms.review', command: 'forms.editNote' },
-  { keys: ['g', 't'], scope: 'forms.review', command: 'forms.nextRound' },
-  { keys: ['g', 'T'], scope: 'forms.review', command: 'forms.prevRound' },
   { keys: ['y'], scope: 'forms.confirm', command: 'forms.confirmCancel' },
   { keys: ['n'], scope: 'forms.confirm', command: 'forms.dismissConfirm' },
   {

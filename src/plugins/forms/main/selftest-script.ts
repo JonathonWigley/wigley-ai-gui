@@ -27,9 +27,12 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // long word, Esc out; a again types "c" after "ab"; j to question 2, where
 // q a x then b breaks the self-test bind, so a opens the what box and "xb" is
 // typed into it; jk Esc out and x marks question 2 not applicable; o types
-// "note" into the note box at once (INSERT), Esc out; g t switches rounds;
-// review, ? opens and closes help, C opens and n dismisses the cancel prompt, Enter jumps back to the question,
-// review again and Space Enter submits.
+// "note" into the note box at once (INSERT), Esc out. Option+o moves to the
+// second session's tab; Cmd+W there asks to cancel its round, Esc keeps it
+// and returns to its form, where j moves an item; Option+i moves back to the
+// first tab. Then review, ? opens and closes help, C opens and n dismisses the
+// cancel prompt, Enter jumps back to the question, review again and Space
+// Enter submits.
 const STEPS: SelfTestStep[] = [
   { keys: [' ', 'j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
@@ -56,7 +59,19 @@ const STEPS: SelfTestStep[] = [
     keys: ['o', 'n', 'o', 't', 'e', 'j', 'k', 'Escape'],
     expect: '[forms] left the box',
   },
-  { keys: ['g', 't'], expect: '[page] gt ran forms.nextRound' },
+  {
+    keys: ['<A-o>'],
+    expect: '[sessions] activated selftest 2',
+    checksFit: true,
+  },
+  {
+    keys: ['<D-w>'],
+    expect:
+      '[forms] closing the tab asks to cancel selftest · Second self-test round',
+  },
+  { keys: ['Escape'], expect: '[page] Escape ran forms.dismissConfirm' },
+  { keys: ['j'], expect: '[page] j ran forms.nextItem' },
+  { keys: ['<A-i>'], expect: '[sessions] activated selftest' },
   { keys: [' ', ' '], expect: '[forms] review opened', checksFit: true },
   { keys: ['?'], expect: '[page] ? ran forms.toggleHelp', checksFit: true },
   { keys: ['?'], expect: '[page] ? ran forms.closeHelp' },
@@ -67,13 +82,13 @@ const STEPS: SelfTestStep[] = [
   { keys: [' ', 'Enter'], expect: '[forms] submitted' },
 ];
 
-// Code and tables scroll in their own box, and rail and switcher titles end
-// in an ellipsis, their full text in the item heading and the tooltip.
+// Code and tables scroll in their own box, and rail and tab titles end in an
+// ellipsis, their full text in the item heading and the tooltip.
 const SCROLLS_ITSELF = [
   '.md pre',
   '.md table',
   '.rail-title',
-  '.switcher-label',
+  '.session-tab-label',
 ];
 
 // Each run's fixture differs in one context line, so a later run never opens
@@ -120,9 +135,29 @@ function fixtureRound(run: number) {
   };
 }
 
+// The round the second session's tab holds; the run never answers it.
+function secondRound(run: number) {
+  const waiting = {
+    context: `Run ${run}: waits here.`,
+    question: 'Pick one.',
+    choices: ['Yes', 'No'],
+    recommend: 1,
+    rationale: 'Yes is the default.',
+  };
+  return {
+    heading: 'Second self-test round',
+    overview: 'Waits in the second tab.',
+    notices: [],
+    questions: [
+      { title: 'Waits', ...waiting },
+      { title: 'Also waits', ...waiting },
+    ],
+  };
+}
+
 function toolResultProblems(result: ToolResult): string[] {
   if (result.isError) {
-    return [`tool error: ${result.content[0].text}`];
+    return [`ask_round failed: ${result.content[0].text}`];
   }
   return payloadProblems(result.structuredContent as unknown as AnswersPayload);
 }
@@ -150,28 +185,41 @@ function payloadProblems(payload: AnswersPayload): string[] {
   return checks.filter(([passed]) => !passed).map(([, problem]) => problem);
 }
 
-// Opens the fixture round with an ask_round call in a fresh session each run,
-// ending the previous run's session, and checks the answers the call returns.
+// Connects two sessions each run, ending the previous run's, and asks the
+// fixture round in the first and a second round in the second, which the
+// steps never answer. The first round is shown first, so its tab is active;
+// the script checks the answers the first call returns.
 export function formsSelfTestScript(
-  sessions: SessionsMainExports,
+  sessions: Pick<SessionsMainExports, 'connect'>,
 ): SelfTestScript {
-  let connected: ConnectedSession | null = null;
+  let connected: ConnectedSession[] = [];
+  const connect = (sessionId: string) =>
+    sessions.connect({
+      sessionId,
+      projectDir: 'selftest',
+      deadlineSeconds: 120,
+    });
+  const ask = (session: ConnectedSession, round: unknown) =>
+    session.call('ask_round', round, {
+      toolUseId: null,
+      signal: new AbortController().signal,
+    });
   return {
     pageBinds: PAGE_BINDS,
     scrollsItself: SCROLLS_ITSELF,
     open(run) {
-      connected?.end();
-      connected = sessions.connect({
-        sessionId: `selftest-${run}`,
-        projectDir: 'selftest',
-        deadlineSeconds: 120,
-      });
+      for (const session of connected) {
+        session.end();
+      }
+      const first = connect(`selftest-${run}`);
+      const second = connect(`selftest-${run}-2`);
+      connected = [first, second];
+      const result = ask(first, fixtureRound(run));
+      // Nothing checks the second call's end: a later run ends its session.
+      ask(second, secondRound(run)).catch(() => undefined);
       return {
-        shownLine: '[forms] round shown: selftest · Self-test round',
-        result: connected.call('ask_round', fixtureRound(run), {
-          toolUseId: null,
-          signal: new AbortController().signal,
-        }),
+        shownLine: '[forms] round shown: selftest · Second self-test round',
+        result,
       };
     },
     steps: STEPS,

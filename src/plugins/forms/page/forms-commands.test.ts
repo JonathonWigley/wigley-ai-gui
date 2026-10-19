@@ -4,7 +4,7 @@ import type { PageCommandContext } from '../../../contracts/plugin';
 import type { RoundEnd } from '../contract';
 import type { BoxRef } from './boxes';
 import { activeRound, buildBody, initialState } from './form-state';
-import { formsCommandHandlers } from './forms-commands';
+import { formsCommandHandlers, guardClose } from './forms-commands';
 import { createFormsStore } from './forms-store';
 import { notice, presentedRound, question } from './test-rounds';
 
@@ -27,12 +27,15 @@ function editorOf(box: BoxRef): TextEditor {
 // Rail: notice 1 (position 0), question Alpha (1), question Beta (2).
 function setup() {
   const store = createFormsStore(
-    initialState([
-      presentedRound('r1', {
-        notices: [notice('Heads up')],
-        questions: [question('Alpha'), question('Beta')],
-      }),
-    ]),
+    initialState(
+      [
+        presentedRound('r1', {
+          notices: [notice('Heads up')],
+          questions: [question('Alpha'), question('Beta')],
+        }),
+      ],
+      'r1-session',
+    ),
   );
   const focused: BoxRef[] = [];
   const focusOptions: (FocusOptions | undefined)[] = [];
@@ -41,6 +44,9 @@ function setup() {
   const finished: { roundId: string; end: RoundEnd }[] = [];
   const toasts: string[] = [];
   const logs: string[] = [];
+  // Each closed tab's session, with the rounds the store held at the call.
+  const closedTabs: { sessionId: string; roundCount: number }[] = [];
+  const log = (_source: string, message: string) => logs.push(message);
   const handlers = formsCommandHandlers({
     store,
     boxes: {
@@ -57,8 +63,10 @@ function setup() {
       boxOf: (editor) => boxEditors.get(editor),
     },
     finish: (roundId, end) => finished.push({ roundId, end }),
+    closeTab: (sessionId) =>
+      closedTabs.push({ sessionId, roundCount: store.get().rounds.length }),
     toast: (text) => toasts.push(text),
-    log: (_source, message) => logs.push(message),
+    log,
   });
   const run = (command: FormsCommand, context: PageCommandContext = {}) =>
     handlers[command](context);
@@ -79,6 +87,8 @@ function setup() {
     finished,
     toasts,
     logs,
+    closedTabs,
+    guardClose: (sessionId: string) => guardClose({ store, log }, sessionId),
     leaves: () => leaves,
   };
 }
@@ -277,7 +287,7 @@ describe('formsCommandHandlers', () => {
   });
 
   it('keeps the round when the confirmation is dismissed', () => {
-    const { run, store, finished } = setup();
+    const { run, store, finished, closedTabs } = setup();
     run('openReview');
     run('askCancel');
 
@@ -285,6 +295,43 @@ describe('formsCommandHandlers', () => {
 
     expect(store.get().view).toBe('review');
     expect(finished).toEqual([]);
+    expect(closedTabs).toEqual([]);
+    run('askCancel');
+    run('confirmCancel');
+    expect(closedTabs).toEqual([]);
+  });
+
+  it('the close guard lets a tab with no round close', () => {
+    const { store, logs, guardClose } = setup();
+    const before = store.get();
+
+    expect(guardClose('other')).toBe(true);
+
+    expect(store.get()).toBe(before);
+    expect(logs).toEqual([]);
+  });
+
+  it('the close guard opens the prompt and keeps a tab with an open round', () => {
+    const { store, logs, guardClose } = setup();
+
+    expect(guardClose('r1-session')).toBe(false);
+    expect(store.get().view).toBe('confirm');
+    expect(logs).toEqual(['closing the tab asks to cancel project · r1']);
+    expect(guardClose('r1-session')).toBe(false);
+
+    expect(logs).toHaveLength(1);
+  });
+
+  it('confirming a close prompt cancels the round, then closes its tab', () => {
+    const { run, finished, closedTabs, guardClose } = setup();
+    guardClose('r1-session');
+
+    run('confirmCancel');
+
+    expect(finished.map((entry) => [entry.roundId, entry.end.kind])).toEqual([
+      ['r1', 'cancelled'],
+    ]);
+    expect(closedTabs).toEqual([{ sessionId: 'r1-session', roundCount: 0 }]);
   });
 
   it('toggles help over the current view', () => {

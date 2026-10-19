@@ -1,7 +1,7 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import { formsCommand } from '../ids';
-import { button, element, markdownElement } from './dom';
+import { button, element, markdownElement } from '../../../shared/dom';
 import type { EditorBoxes } from './editor-boxes';
 import {
   type FormsAction,
@@ -43,9 +43,10 @@ interface Field {
 }
 
 // One open round's DOM, built once with its editors: the rail, every item's
-// pane, the review and the round note. A render only updates it.
+// pane, the review and the round note. A render only updates it. `attach`
+// places the root in the page once, before any editor mounts.
 export function createRoundView(
-  parent: HTMLElement,
+  attach: (root: HTMLElement) => void,
   round: RoundState,
   deps: RoundViewDeps,
 ): RoundView {
@@ -58,7 +59,7 @@ export function createRoundView(
   const main = element('div', 'round-main');
   root.append(rail, main);
   // Editors mount into attached elements, so they can measure themselves.
-  parent.append(root);
+  attach(root);
 
   const head = buildHead(main, round, deps.markdown);
   const itemsPane = element('div', 'items');

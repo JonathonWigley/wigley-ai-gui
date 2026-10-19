@@ -27,6 +27,8 @@ export interface QuestionAnswer {
 
 export interface RoundState {
   roundId: string;
+  // The session whose view the round fills.
+  sessionId: string;
   label: string;
   round: Round;
   // One per question, in order.
@@ -48,13 +50,20 @@ export interface RoundState {
   saveError: string | null;
 }
 
+// The active round is the round of the session the sessions plugin shows,
+// or null when that session has none.
 export interface FormsState {
-  // In switcher order.
+  // In the order they were shown.
   rounds: RoundState[];
   activeRoundId: string | null;
   view: FormsView;
   // Where closing help returns.
   helpReturnView: FormsView;
+  activeSessionId: string | null;
+  // Where keeping the round from the cancel prompt returns.
+  confirmReturnView: FormsView;
+  // Whether confirming the cancel prompt also closes the round's tab.
+  confirmClosesTab: boolean;
 }
 
 export interface Progress {
@@ -88,9 +97,9 @@ export type FormsAction =
   | ItemAction
   | { type: 'roundShown'; round: PresentedRound }
   | { type: 'roundClosed'; roundId: string }
-  | { type: 'focusRound'; roundId: string }
-  | { type: 'nextRound' }
-  | { type: 'prevRound' }
+  | { type: 'sessionActivated'; sessionId: string | null }
+  // Asks to cancel the active round before its session's tab closes.
+  | { type: 'askClose'; sessionId: string }
   | { type: 'openReview' }
   | { type: 'closeReview' }
   | { type: 'reviewNext' }
@@ -118,6 +127,9 @@ const EMPTY_STATE: FormsState = {
   activeRoundId: null,
   view: 'idle',
   helpReturnView: 'idle',
+  activeSessionId: null,
+  confirmReturnView: 'review',
+  confirmClosesTab: false,
 };
 
 const UNTOUCHED: QuestionAnswer = {
@@ -129,10 +141,13 @@ const UNTOUCHED: QuestionAnswer = {
   dontAskReason: '',
 };
 
-export function initialState(rounds: PresentedRound[]): FormsState {
+export function initialState(
+  rounds: PresentedRound[],
+  activeSessionId: string | null,
+): FormsState {
   return rounds.reduce(
     (state, round) => apply(state, { type: 'roundShown', round }),
-    EMPTY_STATE,
+    { ...EMPTY_STATE, activeSessionId },
   );
 }
 
@@ -144,12 +159,10 @@ export function apply(state: FormsState, action: FormsAction): FormsState {
       return showRound(state, action.round);
     case 'roundClosed':
       return closeRound(state, action.roundId);
-    case 'focusRound':
-      return focusRound(state, action.roundId);
-    case 'nextRound':
-      return stepRound(state, 1);
-    case 'prevRound':
-      return stepRound(state, -1);
+    case 'sessionActivated':
+      return activateSession(state, action.sessionId);
+    case 'askClose':
+      return askClose(state, action.sessionId);
     case 'openReview':
       return openReview(state);
     case 'closeReview':
@@ -161,13 +174,22 @@ export function apply(state: FormsState, action: FormsAction): FormsState {
     case 'reviewJump':
       return jumpToReviewRow(state, action.row);
     case 'askCancel':
-      return state.view === 'review' ? { ...state, view: 'confirm' } : state;
+      return state.view === 'review'
+        ? {
+            ...state,
+            view: 'confirm',
+            confirmReturnView: 'review',
+            confirmClosesTab: false,
+          }
+        : state;
     case 'confirmCancel':
       return state.view === 'confirm'
         ? closeRound(state, state.activeRoundId)
         : state;
     case 'dismissConfirm':
-      return state.view === 'confirm' ? { ...state, view: 'review' } : state;
+      return state.view === 'confirm'
+        ? { ...state, view: state.confirmReturnView, confirmClosesTab: false }
+        : state;
     case 'toggleHelp':
       return state.view === 'help'
         ? { ...state, view: state.helpReturnView }
@@ -201,6 +223,11 @@ export function activeRound(state: FormsState): RoundState | null {
   return (
     state.rounds.find((round) => round.roundId === state.activeRoundId) ?? null
   );
+}
+
+// The view the page shows under the help overlay: the one help returns to.
+export function baseView(state: FormsState): FormsView {
+  return state.view === 'help' ? state.helpReturnView : state.view;
 }
 
 export function railItems(round: Round): RailItem[] {
@@ -269,9 +296,10 @@ export function buildBody(round: RoundState): FormBody {
 }
 
 function restoreRound(presented: PresentedRound): RoundState {
-  const { roundId, label, round, draft } = presented;
+  const { roundId, sessionId, label, round, draft } = presented;
   return {
     roundId,
+    sessionId,
     label,
     round,
     answers: round.questions.map((question, i) =>
@@ -314,6 +342,8 @@ function restoreAnswer(
   };
 }
 
+// A round for the session shown becomes active; any other waits in the
+// background.
 function showRound(state: FormsState, presented: PresentedRound): FormsState {
   const isOpen = state.rounds.some(
     (round) => round.roundId === presented.roundId,
@@ -322,7 +352,7 @@ function showRound(state: FormsState, presented: PresentedRound): FormsState {
     return state;
   }
   const rounds = [...state.rounds, restoreRound(presented)];
-  if (state.activeRoundId !== null) {
+  if (presented.sessionId !== state.activeSessionId) {
     return { ...state, rounds };
   }
   const shown = { ...state, rounds, activeRoundId: presented.roundId };
@@ -331,43 +361,64 @@ function showRound(state: FormsState, presented: PresentedRound): FormsState {
     : { ...shown, view: 'forms' };
 }
 
+// The active round closing leaves its session shown with no round.
 function closeRound(state: FormsState, roundId: string | null): FormsState {
-  const position = state.rounds.findIndex((round) => round.roundId === roundId);
-  if (position < 0) {
+  const rounds = state.rounds.filter((round) => round.roundId !== roundId);
+  if (rounds.length === state.rounds.length) {
     return state;
   }
-  const rounds = state.rounds.filter((_, i) => i !== position);
   if (roundId !== state.activeRoundId) {
     return { ...state, rounds };
   }
-  const next =
-    rounds.length > 0 ? rounds[position % rounds.length].roundId : null;
-  const view: FormsView = next === null ? 'idle' : 'forms';
-  return state.view === 'help'
-    ? { rounds, activeRoundId: next, view: 'help', helpReturnView: view }
-    : { rounds, activeRoundId: next, view, helpReturnView: view };
-}
-
-function focusRound(state: FormsState, roundId: string): FormsState {
-  const isOpen = state.rounds.some((round) => round.roundId === roundId);
-  const isAlreadyShown =
-    state.activeRoundId === roundId && state.view === 'forms';
-  return isOpen && !isAlreadyShown
-    ? { ...state, activeRoundId: roundId, view: 'forms' }
-    : state;
-}
-
-function stepRound(state: FormsState, step: number): FormsState {
-  const canSwitch = state.view === 'forms' || state.view === 'review';
-  const count = state.rounds.length;
-  const position = state.rounds.findIndex(
-    (round) => round.roundId === state.activeRoundId,
+  return showView(
+    { ...state, rounds, activeRoundId: null, confirmClosesTab: false },
+    'idle',
   );
-  if (!canSwitch || position < 0 || count < 2) {
+}
+
+// Shows the newly active session's round, or the idle view; a pending
+// prompt is dismissed, and help stays open over the new view.
+function activateSession(
+  state: FormsState,
+  sessionId: string | null,
+): FormsState {
+  if (sessionId === state.activeSessionId) {
     return state;
   }
-  const next = state.rounds[(position + step + count) % count];
-  return { ...state, activeRoundId: next.roundId };
+  const round = state.rounds.find(
+    (candidate) => candidate.sessionId === sessionId,
+  );
+  const activated: FormsState = {
+    ...state,
+    activeSessionId: sessionId,
+    activeRoundId: round?.roundId ?? null,
+    confirmClosesTab: false,
+  };
+  return showView(activated, round === undefined ? 'idle' : 'forms');
+}
+
+// Opens the cancel prompt for the active round of the closing tab's session,
+// from its form or review; keeping the round returns there.
+function askClose(state: FormsState, sessionId: string): FormsState {
+  const view = baseView(state);
+  const isRoundOfSession = activeRound(state)?.sessionId === sessionId;
+  const isAskable = view === 'forms' || view === 'review';
+  if (!isRoundOfSession || !isAskable) {
+    return state;
+  }
+  return {
+    ...state,
+    view: 'confirm',
+    confirmReturnView: view,
+    confirmClosesTab: true,
+  };
+}
+
+// Under help, `view` becomes where help returns; otherwise it shows.
+function showView(state: FormsState, view: FormsView): FormsState {
+  return state.view === 'help'
+    ? { ...state, helpReturnView: view }
+    : { ...state, view, helpReturnView: view };
 }
 
 function openReview(state: FormsState): FormsState {

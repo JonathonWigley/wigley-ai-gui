@@ -1,9 +1,8 @@
 import type { VimMode } from '../../../contracts/editor';
 import type { AnswerStatus } from '../contract';
 import {
-  type FormsState,
-  type FormsView,
   type Progress,
+  progress,
   questionStatus,
   type RoundState,
   type SaveState,
@@ -67,9 +66,11 @@ export function reviewRows(round: RoundState): ReviewRow[] {
   });
 }
 
-// The view the page shows under the help overlay: the one help returns to.
-export function baseView(state: FormsState): FormsView {
-  return state.view === 'help' ? state.helpReturnView : state.view;
+// The round's title on its session's tab: its heading and how many of its
+// questions are answered or not applicable.
+export function sessionTitle(round: RoundState): string {
+  const counts = progress(round);
+  return `${round.round.heading} ${counts.answered + counts.notApplicable}/${counts.total}`;
 }
 
 export function progressText(progress: Progress): string {

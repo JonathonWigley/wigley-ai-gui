@@ -25,7 +25,7 @@ export function presentedRound(
 ): PresentedRound {
   return {
     roundId,
-    sessionId: `session-${roundId}`,
+    sessionId: `${roundId}-session`,
     label: `project · ${roundId}`,
     round: {
       heading: `${roundId} heading`,

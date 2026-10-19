@@ -150,8 +150,8 @@ describe('createChannelPresenter', () => {
     expect(window.shown()).toBe(0);
   });
 
-  it('brings the window forward on the round when the announcement is clicked', () => {
-    const { calls, page, window, attention, presenter } = setUp();
+  it("brings the window forward on the round's tab when the announcement is clicked", () => {
+    const { calls, window, attention, presenter } = setUp();
     presenter.show(ROUND, fakeListener().listener);
 
     attention.announced[0].onClick();
@@ -160,7 +160,6 @@ describe('createChannelPresenter', () => {
       'activate app-1',
     ]);
     expect(window.shown()).toBe(1);
-    expect(page.sent.at(-1)).toEqual(['focusRound', 'round-1']);
   });
 
   it('serves open rounds with their latest draft and passes drafts on', () => {
