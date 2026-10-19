@@ -1,6 +1,6 @@
 import '../../../shared/page/dialog.css';
 import './keys.css';
-import type { PageApi, PagePart } from '../../../contracts/plugin';
+import type { PageApi, PagePart, PushedScope } from '../../../contracts/plugin';
 import { qualify } from '../../../shared/plugin-manifests';
 import { keysManifest } from '../manifest';
 import { helpSections } from './help-sections';
@@ -18,8 +18,9 @@ type KeysApi = PageApi<
 >;
 
 // Shows which-key over every pending key sequence, on the page and in a box;
-// the help overlay over the `help` scope while it is open; and the keys that
-// fire now, leader sequences aside, in the status bar.
+// the help overlay over the `help` scope while it is open, closing when the
+// scope under it changes; and the keys that fire now, leader sequences aside,
+// in the status bar.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
@@ -43,7 +44,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       () => api.commands.run(qualify(keysManifest.id, 'closeHelp')),
     );
     // The pushed `help` scope while help is open, `null` while it is closed.
-    let helpScope: { pop(): void } | null = null;
+    let helpScope: PushedScope | null = null;
     const closeHelp = () => {
       helpScope?.pop();
       helpScope = null;
@@ -66,6 +67,9 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
             return;
           }
           helpScope = keys.pushScope('help');
+          // A view that changes under help, such as a prompt opening, shows at
+          // once rather than behind help's backdrop.
+          helpScope.onBaseChanged(closeHelp);
           context.editor?.blur();
           help.show();
         },

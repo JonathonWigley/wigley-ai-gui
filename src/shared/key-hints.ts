@@ -34,11 +34,6 @@ const VIM_TOKEN_NAMES: Partial<Record<string, string>> = {
   '<CR>': 'Enter',
 };
 
-// The `KeyboardEvent.key` of each vim-notation leader page binds can use.
-const PAGE_LEADER_KEYS: Partial<Record<string, string>> = {
-  '<Space>': ' ',
-};
-
 const VIM_TOKEN = /<[^<>]+>|./gu;
 
 const DIGIT_SUFFIX = /^(.*?)(\d)$/;
@@ -57,18 +52,6 @@ export function formatVimToken(token: string): string {
 // each, every `<Leader>` spelled as `leader`.
 export function vimTokens(keys: string, leader: string): string[] {
   return withLeader(keys, leader).match(VIM_TOKEN) ?? [];
-}
-
-// The `KeyboardEvent.key` page binds use for the editor's vim-notation leader.
-export function pageLeaderKey(leader: string): string {
-  const named = PAGE_LEADER_KEYS[leader];
-  if (named !== undefined) {
-    return named;
-  }
-  if (leader.length === 1) {
-    return leader;
-  }
-  throw new Error(`The leader ${leader} has no page key`);
 }
 
 // The page keys that fire in the qualified `scope`, `any` binds included.

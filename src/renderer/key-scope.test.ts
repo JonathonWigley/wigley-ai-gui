@@ -46,4 +46,31 @@ describe('createScopeStack', () => {
 
     expect(heard).toEqual(['keys.help', 'a.first', 'b.second']);
   });
+
+  it('tells a pushed scope of each base change under it until its pop', () => {
+    const stack = createScopeStack('forms.forms');
+    const help = stack.push('keys.help');
+    const heard: string[] = [];
+    help.onBaseChanged((base) => heard.push(base));
+
+    stack.setBase('forms.confirm');
+    stack.setBase('forms.confirm');
+    help.pop();
+    stack.setBase('forms.forms');
+
+    expect(heard).toEqual(['forms.confirm']);
+  });
+
+  it('lets a pushed scope pop itself when the base changes', () => {
+    const stack = createScopeStack('forms.forms');
+    const help = stack.push('keys.help');
+    const heard: string[] = [];
+    stack.onChange((scope) => heard.push(scope));
+    help.onBaseChanged(() => help.pop());
+
+    stack.setBase('forms.confirm');
+
+    expect(stack.current()).toBe('forms.confirm');
+    expect(heard).toEqual(['forms.confirm']);
+  });
 });

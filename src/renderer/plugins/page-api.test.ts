@@ -79,6 +79,17 @@ describe('createPageApi', () => {
     expect(api.keys.scope()).toBe('any');
   });
 
+  it('tells a pushed scope when the set scope under it changes', () => {
+    const api = createPageApi(manifest, deps({}));
+    const heard: string[] = [];
+    const pushed = api.keys.pushScope('review');
+    pushed.onBaseChanged((base) => heard.push(base));
+
+    api.keys.setScope('review');
+
+    expect(heard).toEqual(['p.review']);
+  });
+
   it("routes channel calls under the plugin's id", async () => {
     const { bridge, invoked, listeners } = fakeBridge();
     const channel: PageChannel<TestChannel> = createPageApi(

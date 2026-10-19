@@ -7,7 +7,6 @@ import {
   formatKeys,
   formatVimToken,
   pageHints,
-  pageLeaderKey,
   vimTokens,
 } from './key-hints';
 
@@ -117,13 +116,5 @@ describe('formatVimToken', () => {
     expect(formatVimToken('<Esc>')).toBe('Esc');
     expect(formatVimToken('<CR>')).toBe('Enter');
     expect(formatVimToken('a')).toBe('a');
-  });
-});
-
-describe('pageLeaderKey', () => {
-  it('pageLeaderKey_MapsSpaceToItsKey', () => {
-    expect(pageLeaderKey('<Space>')).toBe(' ');
-    expect(pageLeaderKey(',')).toBe(',');
-    expect(() => pageLeaderKey('<Tab>')).toThrow('<Tab>');
   });
 });

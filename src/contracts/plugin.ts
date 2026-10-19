@@ -174,9 +174,17 @@ export interface PageServices {
   timers: Timers;
 }
 
+// A scope `keys.pushScope` laid over the set scope. `pop` removes it wherever
+// it sits and throws on a second call; `onBaseChanged` listeners hear the set
+// scope, qualified, each time it changes while this scope is pushed.
+export interface PushedScope {
+  pop(): void;
+  onBaseChanged(listener: (base: ViewScope) => void): void;
+}
+
 // `keys.setScope` sets the scope page keys fire in, under any pushed scope;
-// `keys.pushScope` lays a scope over it until the handle's `pop`, which throws
-// on a second call. `keys.scope` is the qualified scope keys fire in now, and
+// `keys.pushScope` lays a scope over it until the `PushedScope`'s `pop`.
+// `keys.scope` is the qualified scope keys fire in now, and
 // `keys.onScopeChanged` hears it each time it changes. `keys.onPending` hears
 // the keys of an unfinished sequence on the page or in an editor, `null` once
 // none are pending; `keys.holdPending` keeps a pending page sequence past its
@@ -200,7 +208,7 @@ export interface PageApi<
   events: PluginEvents<Ev, Heard>;
   keys: {
     setScope(scope: keyof M['scopes'] & string): void;
-    pushScope(scope: keyof M['scopes'] & string): { pop(): void };
+    pushScope(scope: keyof M['scopes'] & string): PushedScope;
     scope(): ViewScope;
     onScopeChanged(listener: (scope: ViewScope) => void): void;
     onPending(listener: (pending: PendingKeys | null) => void): void;
