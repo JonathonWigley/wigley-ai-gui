@@ -1,13 +1,11 @@
-/* Layout: switcher, work area, status line. Rows are placed explicitly so a
-   hidden switcher leaves its row empty instead of shifting the others. The
-   one column never grows past the window, so content wraps to fit it; long
-   unbroken words break anywhere. */
-#app {
+/* Layout in the main area: switcher over the work area. Rows are placed
+   explicitly so a hidden switcher leaves its row empty instead of shifting
+   the work area. */
+.forms-view {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  height: 100vh;
-  overflow-wrap: anywhere;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
 }
 
 .switcher {
@@ -22,10 +20,6 @@
 .workspace {
   grid-row: 2;
   min-height: 0;
-}
-
-.status-line {
-  grid-row: 3;
 }
 
 .round {
@@ -590,7 +584,8 @@
   font-size: 1.3rem;
 }
 
-/* Status line: its parts and key hints wrap onto more lines when narrow. */
+/* Status line: it fills the status bar's row beside any core item, and its
+   parts and key hints wrap onto more lines when narrow. */
 .status-line {
   align-items: center;
   background: var(--wg-bg-deep);
@@ -599,7 +594,9 @@
   flex-wrap: wrap;
   font-family: var(--wg-font-mono);
   font-size: var(--wg-font-mono-size);
+  flex: 1 1 0;
   gap: 0.2rem 1rem;
+  min-width: 0;
   padding: 0.2rem 0.75rem;
 }
 
@@ -617,11 +614,6 @@
 
 .status-save[data-state='unsaved'] {
   color: var(--wg-warning);
-}
-
-.status-error {
-  color: var(--wg-error);
-  min-width: 0;
 }
 
 .status-keys {

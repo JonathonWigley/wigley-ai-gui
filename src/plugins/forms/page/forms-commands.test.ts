@@ -1,57 +1,68 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandId } from '../../contracts/commands';
-import type { FocusOptions } from '../../contracts/editor';
-import type { RoundEnd } from '../../contracts/forms';
-import { CommandRegistry } from '../../shared/command-registry';
-import type {
-  RendererCommandContext,
-  RendererCommands,
-} from '../renderer-commands';
+import type { FocusOptions, TextEditor } from '../../../contracts/editor';
+import type { PageCommandContext } from '../../../contracts/plugin';
+import type { RoundEnd } from '../contract';
 import type { BoxRef } from './boxes';
 import { activeRound, buildBody, initialState } from './form-state';
-import { registerFormsCommands } from './forms-commands';
+import { formsCommandHandlers } from './forms-commands';
 import { createFormsStore } from './forms-store';
 import { notice, presentedRound, question } from './test-rounds';
 
-// The skeleton's renderer command ids, written out independently of the code.
-const SKELETON_COMMANDS: CommandId[] = [
-  'forms.nextItem',
-  'forms.prevItem',
-  'forms.choose1',
-  'forms.choose2',
-  'forms.choose3',
-  'forms.choose4',
-  'forms.choose5',
-  'forms.choose6',
-  'forms.choose7',
-  'forms.choose8',
-  'forms.choose9',
-  'forms.clearChoice',
-  'forms.toggleNotApplicable',
-  'forms.toggleDontAsk',
-  'forms.editWhat',
-  'forms.editWhy',
-  'forms.editNote',
-  'forms.nextBox',
-  'forms.prevBox',
-  'forms.leaveBox',
-  'forms.nextRound',
-  'forms.prevRound',
-  'forms.openReview',
-  'forms.closeReview',
-  'forms.reviewNext',
-  'forms.reviewPrev',
-  'forms.reviewJump',
-  'forms.submit',
-  'forms.askCancel',
-  'forms.confirmCancel',
-  'forms.dismissConfirm',
-  'forms.toggleFold',
-  'forms.unfoldAll',
-  'forms.foldAll',
-  'help.toggle',
-  'help.close',
-];
+// The forms command ids, written out independently of the code.
+const FORMS_COMMANDS = [
+  'nextItem',
+  'prevItem',
+  'choose1',
+  'choose2',
+  'choose3',
+  'choose4',
+  'choose5',
+  'choose6',
+  'choose7',
+  'choose8',
+  'choose9',
+  'clearChoice',
+  'toggleNotApplicable',
+  'toggleDontAsk',
+  'editWhat',
+  'editWhy',
+  'editNote',
+  'nextBox',
+  'prevBox',
+  'leaveBox',
+  'nextRound',
+  'prevRound',
+  'openReview',
+  'closeReview',
+  'reviewNext',
+  'reviewPrev',
+  'reviewJump',
+  'submit',
+  'askCancel',
+  'confirmCancel',
+  'dismissConfirm',
+  'toggleFold',
+  'unfoldAll',
+  'foldAll',
+  'toggleHelp',
+  'closeHelp',
+] as const;
+
+type FormsCommand = (typeof FORMS_COMMANDS)[number];
+
+// The editor of each box a test fires a command in.
+const boxEditors = new Map<TextEditor, BoxRef>();
+
+function editorOf(box: BoxRef): TextEditor {
+  const editor: TextEditor = {
+    text: () => '',
+    focus: () => undefined,
+    blur: () => undefined,
+    destroy: () => undefined,
+  };
+  boxEditors.set(editor, box);
+  return editor;
+}
 
 // Rail: notice 1 (position 0), question Alpha (1), question Beta (2).
 function setup() {
@@ -70,9 +81,7 @@ function setup() {
   const finished: { roundId: string; end: RoundEnd }[] = [];
   const toasts: string[] = [];
   const logs: string[] = [];
-  const commands: RendererCommands =
-    new CommandRegistry<RendererCommandContext>();
-  registerFormsCommands(commands, {
+  const handlers = formsCommandHandlers({
     store,
     boxes: {
       focus: (box, options) => {
@@ -85,13 +94,14 @@ function setup() {
         active = null;
       },
       active: () => active,
+      boxOf: (editor) => boxEditors.get(editor),
     },
     finish: (roundId, end) => finished.push({ roundId, end }),
     toast: (text) => toasts.push(text),
     log: (_source, message) => logs.push(message),
   });
-  const run = (command: CommandId, context: RendererCommandContext = {}) =>
-    commands.run(command, context);
+  const run = (command: FormsCommand, context: PageCommandContext = {}) =>
+    handlers[command](context);
   const round = () => {
     const current = activeRound(store.get());
     if (current === null) {
@@ -101,7 +111,7 @@ function setup() {
   };
   return {
     store,
-    commands,
+    handlers,
     run,
     round,
     focused,
@@ -116,19 +126,19 @@ function setup() {
 const why2: BoxRef = { roundId: 'r1', target: { field: 'why', question: 2 } };
 const what1: BoxRef = { roundId: 'r1', target: { field: 'what', question: 1 } };
 
-describe('registerFormsCommands', () => {
-  it('registers every forms and help command the keymap may name', () => {
-    const { commands } = setup();
-    expect(() => commands.requireRegistered(SKELETON_COMMANDS)).not.toThrow();
+describe('formsCommandHandlers', () => {
+  it('has a handler for every forms command', () => {
+    const { handlers } = setup();
+    expect(Object.keys(handlers).sort()).toEqual([...FORMS_COMMANDS].sort());
   });
 
   it('picks a choice on the focused question, and the same number clears it', () => {
     const { run, round, logs } = setup();
-    run('forms.nextItem');
+    run('nextItem');
 
-    run('forms.choose2');
+    run('choose2');
     expect(round().answers[0].choice).toBe(2);
-    run('forms.choose2');
+    run('choose2');
 
     expect(round().answers[0].choice).toBe(0);
     expect(logs).toEqual([
@@ -140,7 +150,7 @@ describe('registerFormsCommands', () => {
   it("acts on the box's question when fired in a box", () => {
     const { run, round, logs } = setup();
 
-    run('forms.choose1', { box: why2 });
+    run('choose1', { editor: editorOf(why2) });
 
     expect(round().focus).toBe(2);
     expect(round().answers[1].choice).toBe(1);
@@ -149,15 +159,15 @@ describe('registerFormsCommands', () => {
 
   it('logs nothing when a pick changes nothing', () => {
     const { run, logs } = setup();
-    run('forms.choose1');
+    run('choose1');
     expect(logs).toEqual([]);
   });
 
   it('toggles not applicable and logs it', () => {
     const { run, round, logs } = setup();
-    run('forms.nextItem');
+    run('nextItem');
 
-    run('forms.toggleNotApplicable');
+    run('toggleNotApplicable');
 
     expect(round().answers[0].notApplicable).toBe(true);
     expect(logs).toEqual(['not applicable on question 1']);
@@ -165,9 +175,9 @@ describe('registerFormsCommands', () => {
 
   it("focuses the reason box when Don't ask turns on", () => {
     const { run, focused } = setup();
-    run('forms.nextItem');
+    run('nextItem');
 
-    run('forms.toggleDontAsk');
+    run('toggleDontAsk');
 
     expect(focused).toEqual([
       { roundId: 'r1', target: { field: 'dontAskReason', question: 1 } },
@@ -176,10 +186,10 @@ describe('registerFormsCommands', () => {
 
   it("focuses nothing when Don't ask turns off", () => {
     const { run, focused } = setup();
-    run('forms.nextItem');
-    run('forms.toggleDontAsk');
+    run('nextItem');
+    run('toggleDontAsk');
 
-    run('forms.toggleDontAsk');
+    run('toggleDontAsk');
 
     expect(focused).toHaveLength(1);
   });
@@ -187,7 +197,7 @@ describe('registerFormsCommands', () => {
   it("focuses a notice's comment box for the answer key", () => {
     const { run, focused } = setup();
 
-    run('forms.editWhat');
+    run('editWhat');
 
     expect(focused).toEqual([
       { roundId: 'r1', target: { field: 'comment', notice: 1 } },
@@ -197,8 +207,8 @@ describe('registerFormsCommands', () => {
   it('starts the answer and note boxes typing at the end, as vim A', () => {
     const { run, focusOptions } = setup();
 
-    run('forms.editWhat');
-    run('forms.editNote');
+    run('editWhat');
+    run('editNote');
 
     expect(focusOptions).toEqual([
       { insertAtEnd: true },
@@ -208,9 +218,9 @@ describe('registerFormsCommands', () => {
 
   it('focuses the why box in the mode it was left in', () => {
     const { run, focused, focusOptions } = setup();
-    run('forms.nextItem');
+    run('nextItem');
 
-    run('forms.editWhy');
+    run('editWhy');
 
     expect(focused).toEqual([
       { roundId: 'r1', target: { field: 'why', question: 1 } },
@@ -220,15 +230,15 @@ describe('registerFormsCommands', () => {
 
   it('focuses no why box on a notice', () => {
     const { run, focused } = setup();
-    run('forms.editWhy');
+    run('editWhy');
     expect(focused).toEqual([]);
   });
 
   it('steps to the next box from the box it fired in', () => {
     const { run, focused } = setup();
-    run('forms.nextItem');
+    run('nextItem');
 
-    run('forms.nextBox', { box: what1 });
+    run('nextBox', { editor: editorOf(what1) });
 
     expect(focused).toEqual([
       { roundId: 'r1', target: { field: 'why', question: 1 } },
@@ -238,8 +248,11 @@ describe('registerFormsCommands', () => {
   it("focuses the next item's answer box when moving items from a box", () => {
     const { run, round, focused } = setup();
 
-    run('forms.nextItem', {
-      box: { roundId: 'r1', target: { field: 'comment', notice: 1 } },
+    run('nextItem', {
+      editor: editorOf({
+        roundId: 'r1',
+        target: { field: 'comment', notice: 1 },
+      }),
     });
 
     expect(round().focus).toBe(1);
@@ -248,14 +261,14 @@ describe('registerFormsCommands', () => {
 
   it('moves items without focusing a box from the page', () => {
     const { run, focused } = setup();
-    run('forms.nextItem');
+    run('nextItem');
     expect(focused).toEqual([]);
   });
 
   it('leaves the box and logs it', () => {
     const { run, logs, leaves } = setup();
 
-    run('forms.leaveBox');
+    run('leaveBox');
 
     expect(leaves()).toBe(1);
     expect(logs).toEqual(['left the box']);
@@ -264,7 +277,7 @@ describe('registerFormsCommands', () => {
   it('logs the review opening', () => {
     const { run, store, logs } = setup();
 
-    run('forms.openReview');
+    run('openReview');
 
     expect(store.get().view).toBe('review');
     expect(logs).toEqual(['review opened']);
@@ -272,18 +285,18 @@ describe('registerFormsCommands', () => {
 
   it('submits only from the review', () => {
     const { run, finished } = setup();
-    run('forms.submit');
+    run('submit');
     expect(finished).toEqual([]);
   });
 
   it('hands main the body on submit, then closes the round', () => {
     const { run, round, store, finished, toasts, logs } = setup();
-    run('forms.nextItem');
-    run('forms.choose3');
-    run('forms.openReview');
+    run('nextItem');
+    run('choose3');
+    run('openReview');
     const body = buildBody(round());
 
-    run('forms.submit');
+    run('submit');
 
     expect(finished).toEqual([
       { roundId: 'r1', end: { kind: 'submitted', body } },
@@ -296,12 +309,12 @@ describe('registerFormsCommands', () => {
 
   it('asks before cancelling, then hands main a cancelled round', () => {
     const { run, store, finished, logs } = setup();
-    run('forms.openReview');
+    run('openReview');
 
-    run('forms.askCancel');
+    run('askCancel');
     expect(store.get().view).toBe('confirm');
     expect(finished).toEqual([]);
-    run('forms.confirmCancel');
+    run('confirmCancel');
 
     expect(finished.map((entry) => entry.end.kind)).toEqual(['cancelled']);
     expect(store.get().rounds).toEqual([]);
@@ -310,10 +323,10 @@ describe('registerFormsCommands', () => {
 
   it('keeps the round when the confirmation is dismissed', () => {
     const { run, store, finished } = setup();
-    run('forms.openReview');
-    run('forms.askCancel');
+    run('openReview');
+    run('askCancel');
 
-    run('forms.dismissConfirm');
+    run('dismissConfirm');
 
     expect(store.get().view).toBe('review');
     expect(finished).toEqual([]);
@@ -322,9 +335,9 @@ describe('registerFormsCommands', () => {
   it('toggles help over the current view', () => {
     const { run, store } = setup();
 
-    run('help.toggle');
+    run('toggleHelp');
     expect(store.get().view).toBe('help');
-    run('help.close');
+    run('closeHelp');
 
     expect(store.get().view).toBe('forms');
   });

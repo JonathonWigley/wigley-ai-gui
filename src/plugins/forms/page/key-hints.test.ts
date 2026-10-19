@@ -1,11 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import type { Keymap, PageBind } from '../../contracts/keymap';
-import { commandLabel } from './command-labels';
-import { editorHints, formatKeys, helpSections, pageHints } from './key-hints';
+import type { CommandId } from '../../../contracts/commands';
+import type { Keymap, PageBind } from '../../../contracts/keymap';
+import {
+  type CommandLabel,
+  editorHints,
+  formatKeys,
+  helpSections,
+  pageHints,
+} from './key-hints';
+
+const CHOICE_LABEL = 'pick a choice';
+
+const LABELS: Partial<Record<CommandId, string>> = {
+  'forms.choose1': CHOICE_LABEL,
+  'forms.choose2': CHOICE_LABEL,
+  'forms.choose3': CHOICE_LABEL,
+  'test.back': 'back to the form',
+};
+
+// Unlabelled commands read as their ids, as the page API's lookup does.
+const label: CommandLabel = (id) => LABELS[id] ?? id;
 
 const choiceBinds: PageBind[] = ['1', '2', '3'].map((digit): PageBind => ({
   keys: [digit],
-  scope: 'forms',
+  scope: 'forms.forms',
   command: `forms.choose${digit}`,
 }));
 
@@ -21,12 +39,12 @@ const keymap: Keymap = {
     ],
   },
   page: [
-    { keys: ['j'], scope: 'forms', command: 'test.down' },
+    { keys: ['j'], scope: 'forms.forms', command: 'test.down' },
     ...choiceBinds,
-    { keys: [' ', ' '], scope: 'forms', command: 'test.review' },
-    { keys: ['Escape'], scope: 'review', command: 'test.back' },
-    { keys: ['?'], scope: 'help', command: 'test.close' },
-    { keys: ['Escape'], scope: 'help', command: 'test.close' },
+    { keys: [' ', ' '], scope: 'forms.forms', command: 'test.review' },
+    { keys: ['Escape'], scope: 'forms.review', command: 'test.back' },
+    { keys: ['?'], scope: 'forms.help', command: 'test.close' },
+    { keys: ['Escape'], scope: 'forms.help', command: 'test.close' },
     { keys: ['F1'], scope: 'any', command: 'test.anywhere' },
   ],
   app: [],
@@ -44,30 +62,27 @@ describe('formatKeys', () => {
 
 describe('pageHints', () => {
   it("lists the view's binds and the any-scope binds, in keymap order", () => {
-    expect(pageHints(keymap.page, 'forms').map((hint) => hint.keys)).toEqual([
-      'j',
-      '1–3',
-      'Space Space',
-      'F1',
-    ]);
+    expect(
+      pageHints(keymap.page, 'forms.forms', label).map((hint) => hint.keys),
+    ).toEqual(['j', '1–3', 'Space Space', 'F1']);
   });
 
-  it('leaves out binds of other views', () => {
-    expect(pageHints(keymap.page, 'review')).toEqual([
-      { keys: 'Esc', label: 'test.back' },
+  it('lists the review binds with their labels, leaving out other views', () => {
+    expect(pageHints(keymap.page, 'forms.review', label)).toEqual([
+      { keys: 'Esc', label: 'back to the form' },
       { keys: 'F1', label: 'test.anywhere' },
     ]);
   });
 
   it('merges a run of digits with one label into a range', () => {
-    expect(pageHints(keymap.page, 'forms')[1]).toEqual({
+    expect(pageHints(keymap.page, 'forms.forms', label)[1]).toEqual({
       keys: '1–3',
-      label: commandLabel('forms.choose1'),
+      label: CHOICE_LABEL,
     });
   });
 
   it('joins other neighbours with one label', () => {
-    expect(pageHints(keymap.page, 'help')[0]).toEqual({
+    expect(pageHints(keymap.page, 'forms.help', label)[0]).toEqual({
       keys: '? / Esc',
       label: 'test.close',
     });
@@ -76,29 +91,31 @@ describe('pageHints', () => {
 
 describe('editorHints', () => {
   it('spells the leader and merges the digit binds', () => {
-    expect(editorHints(keymap.editor)).toEqual([
+    expect(editorHints(keymap.editor, label)).toEqual([
       { keys: '<Space>j', label: 'test.nextBox' },
-      { keys: '<Space>1–3', label: commandLabel('forms.choose1') },
+      { keys: '<Space>1–3', label: CHOICE_LABEL },
     ]);
   });
 });
 
 describe('helpSections', () => {
   it('lists a section per scope with binds, the editor keys and the chords', () => {
-    expect(helpSections(keymap).map((section) => section.title)).toEqual([
-      'In the form',
-      'In the review',
-      'In help',
-      'Everywhere',
-      'In a text box (vim normal mode)',
-      'Remaps in a text box',
-      'App chords',
-      'System-wide chords',
-    ]);
+    expect(helpSections(keymap, label).map((section) => section.title)).toEqual(
+      [
+        'In the form',
+        'In the review',
+        'In help',
+        'Everywhere',
+        'In a text box (vim normal mode)',
+        'Remaps in a text box',
+        'App chords',
+        'System-wide chords',
+      ],
+    );
   });
 
   it('lists only the binds of its own scope in a scope section', () => {
-    const [form] = helpSections(keymap);
+    const [form] = helpSections(keymap, label);
     expect(form.hints.map((hint) => hint.keys)).toEqual([
       'j',
       '1–3',
@@ -107,7 +124,7 @@ describe('helpSections', () => {
   });
 
   it('spells intercepted chords and global accelerators', () => {
-    const sections = helpSections(keymap);
+    const sections = helpSections(keymap, label);
     expect(sections.at(-2)?.hints).toEqual([
       { keys: 'Control+Tab', label: 'test.intercept' },
     ]);
@@ -117,7 +134,7 @@ describe('helpSections', () => {
   });
 
   it('describes a remap by the keys it sends', () => {
-    expect(helpSections(keymap)[5].hints).toEqual([
+    expect(helpSections(keymap, label)[5].hints).toEqual([
       { keys: 'jk', label: 'sends <Esc> in insert mode' },
     ]);
   });

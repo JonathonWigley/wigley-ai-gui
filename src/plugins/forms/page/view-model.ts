@@ -1,5 +1,5 @@
-import type { VimMode } from '../../contracts/editor';
-import type { AnswerStatus } from '../../contracts/forms';
+import type { VimMode } from '../../../contracts/editor';
+import type { AnswerStatus } from '../contract';
 import {
   type FormsState,
   type FormsView,

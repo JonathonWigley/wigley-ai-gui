@@ -1,4 +1,4 @@
-import type { Notice, PresentedRound, Question } from '../../contracts/forms';
+import type { Notice, PresentedRound, Question } from '../contract';
 
 export function question(
   title: string,

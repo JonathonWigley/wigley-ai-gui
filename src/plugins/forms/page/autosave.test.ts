@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Timers } from '../../contracts/ambient';
-import type { FormBody } from '../../contracts/forms';
+import type { Timers } from '../../../contracts/ambient';
+import type { FormBody } from '../contract';
 import { startAutosave } from './autosave';
 import { activeRound, initialState, saveState } from './form-state';
 import { createFormsStore, type FormsStore } from './forms-store';

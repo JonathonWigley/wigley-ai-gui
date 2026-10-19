@@ -1,12 +1,11 @@
-import type { CommandId } from '../../contracts/commands';
+import type { CommandId } from '../../../contracts/commands';
 import type {
   EditorKeymap,
   InterceptBind,
   Keymap,
   PageBind,
   ViewScope,
-} from '../../contracts/keymap';
-import { commandLabel } from './command-labels';
+} from '../../../contracts/keymap';
 
 export interface KeyHint {
   keys: string;
@@ -18,6 +17,10 @@ export interface HelpSection {
   hints: KeyHint[];
 }
 
+// What a command is called in hints and help; a command with no label reads
+// as its id.
+export type CommandLabel = (id: CommandId) => string;
+
 interface BoundKeys {
   keys: string;
   command: CommandId;
@@ -28,13 +31,13 @@ const KEY_NAMES: Partial<Record<string, string>> = {
   Escape: 'Esc',
 };
 
-// In help-overlay order.
+// By qualified scope, in help-overlay order.
 const SCOPE_TITLES: Record<ViewScope, string> = {
-  forms: 'In the form',
-  review: 'In the review',
-  confirm: 'In the cancel confirmation',
-  help: 'In help',
-  idle: 'With no round open',
+  'forms.forms': 'In the form',
+  'forms.review': 'In the review',
+  'forms.confirm': 'In the cancel confirmation',
+  'forms.help': 'In help',
+  'forms.idle': 'With no round open',
   any: 'Everywhere',
 };
 
@@ -45,38 +48,51 @@ export function formatKeys(keys: string[]): string {
   return keys.map((key) => KEY_NAMES[key] ?? key).join(' ');
 }
 
-// The page keys that fire in `scope`, `any` binds included.
-export function pageHints(binds: PageBind[], scope: ViewScope): KeyHint[] {
+// The page keys that fire in the qualified `scope`, `any` binds included.
+export function pageHints(
+  binds: PageBind[],
+  scope: ViewScope,
+  label: CommandLabel,
+): KeyHint[] {
   return mergeHints(
     binds
       .filter((bind) => bind.scope === scope || bind.scope === 'any')
       .map(pageKeys),
+    label,
   );
 }
 
 // The binds inside a text box, `<Leader>` spelled as the leader key.
-export function editorHints(editor: EditorKeymap): KeyHint[] {
+export function editorHints(
+  editor: EditorKeymap,
+  label: CommandLabel,
+): KeyHint[] {
   return mergeHints(
     editor.binds.map((bind) => ({
       keys: withLeader(bind.keys, editor.leader),
       command: bind.command,
     })),
+    label,
   );
 }
 
 // Every bound key, for the help overlay; sections with no binds are left out.
-export function helpSections(keymap: Keymap): HelpSection[] {
+export function helpSections(
+  keymap: Keymap,
+  label: CommandLabel,
+): HelpSection[] {
   const scopes = Object.keys(SCOPE_TITLES) as ViewScope[];
   const sections: HelpSection[] = [
     ...scopes.map((scope) => ({
       title: SCOPE_TITLES[scope],
       hints: mergeHints(
         keymap.page.filter((bind) => bind.scope === scope).map(pageKeys),
+        label,
       ),
     })),
     {
       title: 'In a text box (vim normal mode)',
-      hints: editorHints(keymap.editor),
+      hints: editorHints(keymap.editor, label),
     },
     {
       title: 'Remaps in a text box',
@@ -87,16 +103,19 @@ export function helpSections(keymap: Keymap): HelpSection[] {
     },
     {
       title: 'App chords',
-      hints: mergeHints([
-        ...keymap.app.map((bind) => ({
-          keys: bind.accelerator,
-          command: bind.command,
-        })),
-        ...keymap.intercept.map((bind) => ({
-          keys: chordName(bind),
-          command: bind.command,
-        })),
-      ]),
+      hints: mergeHints(
+        [
+          ...keymap.app.map((bind) => ({
+            keys: bind.accelerator,
+            command: bind.command,
+          })),
+          ...keymap.intercept.map((bind) => ({
+            keys: chordName(bind),
+            command: bind.command,
+          })),
+        ],
+        label,
+      ),
     },
     {
       title: 'System-wide chords',
@@ -105,6 +124,7 @@ export function helpSections(keymap: Keymap): HelpSection[] {
           keys: bind.accelerator,
           command: bind.command,
         })),
+        label,
       ),
     },
   ];
@@ -130,15 +150,15 @@ function chordName(bind: InterceptBind): string {
 }
 
 // Neighbouring binds with one label become one hint.
-function mergeHints(bound: BoundKeys[]): KeyHint[] {
+function mergeHints(bound: BoundKeys[], label: CommandLabel): KeyHint[] {
   const groups: { keys: string[]; label: string }[] = [];
   for (const { keys, command } of bound) {
-    const label = commandLabel(command);
+    const commandLabel = label(command);
     const last = groups.at(-1);
-    if (last?.label === label) {
+    if (last?.label === commandLabel) {
       last.keys.push(keys);
     } else {
-      groups.push({ keys: [keys], label });
+      groups.push({ keys: [keys], label: commandLabel });
     }
   }
   return groups.map((group) => ({

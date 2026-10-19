@@ -1,84 +1,102 @@
 // Composition root for the renderer: the one module that picks adapters and
-// wires features to them.
+// starts the page parts of the plugins.
 import './index.css';
-import './forms/forms.css';
 import './shell/shell.css';
 import type { Timers } from '../contracts/ambient';
+import type { CommandId } from '../contracts/commands';
+import type {
+  Area,
+  PageCommandContext,
+  PageServices,
+} from '../contracts/plugin';
+import type { AppConfig } from '../contracts/settings';
+import { pageParts } from '../plugins/page';
 import { CommandRegistry } from '../shared/command-registry';
+import { startPlugins } from '../shared/plugin-host';
+import { qualify } from '../shared/plugin-manifests';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
-import { startAutosave } from './forms/autosave';
-import { focusActionFor } from './forms/boxes';
-import { createEditorBoxes } from './forms/editor-boxes';
-import { initialState } from './forms/form-state';
-import { registerFormsCommands } from './forms/forms-commands';
-import { createFormsStore } from './forms/forms-store';
-import { mountFormsView } from './forms/forms-view';
 import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { installPageKeys } from './page-keys';
-import type {
-  RendererCommandContext,
-  RendererCommands,
-} from './renderer-commands';
+import { createPageApi } from './plugins/page-api';
+import { mountShell } from './shell/shell';
 import { applyTheme } from './theme';
+import { createToasts } from './toasts';
 
-// How long edits pause before the answers are saved as a draft.
-const AUTOSAVE_DELAY_MS = 400;
+// The scope page keys fire in until a plugin sets its own.
+const INITIAL_SCOPE = 'forms.idle';
 
 const timers: Timers = {
   set: (run, ms) => window.setTimeout(run, ms),
   clear: (handle) => window.clearTimeout(handle),
 };
 
+// A status-bar item naming the theme problem, hidden while there is none.
+function contributeThemeError(statusBar: Area, error: string | null) {
+  const item = document.createElement('span');
+  item.className = 'status-error';
+  item.hidden = error === null;
+  item.textContent = `Theme: ${error ?? ''}`;
+  item.title = error ?? '';
+  statusBar.contribute(item);
+}
+
+function commandLabel(config: AppConfig, id: CommandId): string {
+  return config.commands[id]?.label ?? id;
+}
+
 async function start() {
   const bridge = window.wigley;
   const log = createLogView(document.getElementById('log') as HTMLOListElement);
   bridge.onLog(log);
-  const { settings, keymap, theme } = await bridge.config();
+  const config = await bridge.config();
+  const { settings, keymap, theme } = config;
   applyTheme(theme.theme, settings.fonts, document.documentElement);
 
-  const markdown = createMarkdownItRenderer();
-  const store = createFormsStore(initialState([]));
-  const commands: RendererCommands =
-    new CommandRegistry<RendererCommandContext>();
-  const editors = createCodeMirrorVimHost(keymap.editor, (command, editor) =>
-    commands.run(command, { editor, box: boxes.boxOf(editor) }),
+  const areas = mountShell(document.getElementById('app') as HTMLElement);
+  const toastLayer = document.createElement('div');
+  toastLayer.className = 'toasts';
+  areas.overlay.contribute(toastLayer);
+  const toasts = createToasts(toastLayer, timers);
+  contributeThemeError(areas.statusBar, theme.error);
+
+  const commands = new CommandRegistry<PageCommandContext>();
+  const editor = createCodeMirrorVimHost(keymap.editor, (command, fired) =>
+    commands.run(command, { editor: fired }),
   );
-  const boxes = createEditorBoxes(
-    editors,
-    {
-      changed: (box, value) =>
-        store.dispatch({
-          type: 'setText',
-          roundId: box.roundId,
-          target: box.target,
-          value,
-        }),
-      activated: (box) => {
-        const action = focusActionFor(store.get(), box);
-        if (action !== null) {
-          store.dispatch(action);
-        }
-      },
-    },
+  const services: PageServices = {
+    editor,
+    markdown: createMarkdownItRenderer(),
+    toast: (text, tone) => toasts.show(text, tone),
     log,
-  );
-  const view = mountFormsView({
-    root: document.getElementById('app') as HTMLElement,
-    store,
-    boxes,
-    markdown,
-    keymap,
-    themeError: theme.error,
-    run: (command) => commands.run(command, {}),
     timers,
-  });
-  registerFormsCommands(commands, {
-    store,
-    boxes,
-    finish: (roundId, end) => bridge.finishRound(roundId, end),
-    toast: (text, tone) => view.toast(text, tone),
-    log,
+  };
+  let scope = INITIAL_SCOPE;
+  const run = (id: CommandId, context: PageCommandContext = {}) =>
+    commands.run(id, context);
+  startPlugins(pageParts, (part, dependency) => {
+    const { id } = part.manifest;
+    const started = part.start(
+      createPageApi(part.manifest, {
+        areas,
+        bridge,
+        setScope: (qualified) => {
+          scope = qualified;
+        },
+        keymap,
+        label: (command) => commandLabel(config, command),
+        settings: config.pluginSettings[id],
+        services,
+        run,
+        dependency,
+      }),
+    );
+    const handlers: Record<string, (context: PageCommandContext) => void> =
+      started.commands;
+    for (const [short, handler] of Object.entries(handlers)) {
+      commands.register(qualify(id, short), handler);
+    }
+    return started;
   });
   commands.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
@@ -87,35 +105,17 @@ async function start() {
   installPageKeys(
     keymap.page,
     settings.keySequenceTimeoutMs,
-    () => store.get().view,
-    editors,
+    () => scope,
+    editor,
     commands,
     log,
   );
-  startAutosave({
-    store,
-    save: (roundId, body) => bridge.saveDraft(roundId, body),
-    delayMs: AUTOSAVE_DELAY_MS,
-    timers,
-    log,
-  });
 
-  // Listeners first: a round shown while openRounds is in flight arrives in
-  // both, and showing an open round again changes nothing.
-  bridge.onRoundShown((round) => store.dispatch({ type: 'roundShown', round }));
-  bridge.onRoundClosed((roundId) =>
-    store.dispatch({ type: 'roundClosed', roundId }),
-  );
-  bridge.onFocusRound((roundId) =>
-    store.dispatch({ type: 'focusRound', roundId }),
-  );
-  for (const round of await bridge.openRounds()) {
-    store.dispatch({ type: 'roundShown', round });
-  }
   if (theme.error !== null) {
-    view.toast(`Theme error: ${theme.error}`, 'error');
+    toasts.show(`Theme error: ${theme.error}`, 'error');
   }
-  // The self-test opens its round only once the page listens.
+  // The self-test opens its round only once the page listens; each part adds
+  // its channel listeners while it starts.
   document.body.dataset.ready = 'true';
 }
 

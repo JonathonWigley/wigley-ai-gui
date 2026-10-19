@@ -4,7 +4,7 @@ import type {
   EditorHost,
   FocusOptions,
   TextEditor,
-} from '../../contracts/editor';
+} from '../../../contracts/editor';
 import type { BoxRef } from './boxes';
 import { createEditorBoxes } from './editor-boxes';
 

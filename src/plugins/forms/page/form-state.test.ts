@@ -6,7 +6,7 @@ import type {
   PresentedRound,
   Question,
   Round,
-} from '../../contracts/forms';
+} from '../contract';
 import {
   activeRound,
   apply,

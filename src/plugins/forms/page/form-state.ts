@@ -4,7 +4,7 @@ import type {
   FormBody,
   PresentedRound,
   Round,
-} from '../../contracts/forms';
+} from '../contract';
 
 export type FormsView = 'forms' | 'review' | 'confirm' | 'help' | 'idle';
 

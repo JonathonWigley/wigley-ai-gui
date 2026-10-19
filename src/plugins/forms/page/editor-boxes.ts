@@ -3,8 +3,8 @@ import type {
   FocusOptions,
   TextEditor,
   VimMode,
-} from '../../contracts/editor';
-import type { Log } from '../../contracts/log';
+} from '../../../contracts/editor';
+import type { Log } from '../../../contracts/log';
 import { type BoxRef, boxDescription, boxKey } from './boxes';
 
 export interface EditorBoxEvents {

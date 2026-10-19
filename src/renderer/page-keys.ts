@@ -1,8 +1,9 @@
 import type { EditorHost } from '../contracts/editor';
 import type { PageBind, ViewScope } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
+import type { PageCommandContext } from '../contracts/plugin';
+import type { CommandRegistry } from '../shared/command-registry';
 import { createSequenceMatcher, type SequenceMatcher } from './key-sequences';
-import type { RendererCommands } from './renderer-commands';
 
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
 
@@ -52,13 +53,14 @@ export function feedPageKey(
   return isConsumed;
 }
 
-// Keys for when no editor has focus; a bind fires only in its view's scope.
+// Keys for when no editor has focus; a bind fires only in the scope
+// `currentScope` reads.
 export function installPageKeys(
   binds: PageBind[],
   timeoutMs: number,
   currentScope: () => ViewScope,
   editors: EditorHost,
-  commands: RendererCommands,
+  commands: CommandRegistry<PageCommandContext>,
   log: Log,
 ) {
   const matcher = createSequenceMatcher(binds, timeoutMs);

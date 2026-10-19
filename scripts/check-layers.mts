@@ -43,7 +43,6 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['electron', 'electron-squirrel-startup', 'node:'],
   },
   'src/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
-  // Re-exports src/contracts' forms and relay contracts through contract.ts.
   'src/plugins/forms': {
     layers: ['src/contracts', 'src/shared'],
     packages: [],
@@ -61,6 +60,10 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/plugins/forms'],
     packages: ['@modelcontextprotocol/server', 'node:'],
   },
+  'src/plugins/forms/page': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/forms'],
+    packages: [],
+  },
   'src/plugins/main.ts': {
     layers: [
       'src/contracts',
@@ -68,6 +71,15 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/forms',
       'src/plugins/forms/main',
       'src/plugins/forms/main/mcp',
+    ],
+    packages: [],
+  },
+  'src/plugins/page.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/forms',
+      'src/plugins/forms/page',
     ],
     packages: [],
   },
@@ -87,6 +99,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/renderer',
       'src/renderer/codemirror-vim',
       'src/renderer/markdown-it',
+      'src/plugins/page.ts',
     ],
     packages: [],
   },

@@ -1,5 +1,5 @@
-import type { CommandId } from '../../contracts/commands';
-import type { MarkdownRenderer } from '../../contracts/markdown';
+import type { CommandId } from '../../../contracts/commands';
+import type { MarkdownRenderer } from '../../../contracts/markdown';
 import { button, element, markdownElement } from './dom';
 import type { EditorBoxes } from './editor-boxes';
 import {

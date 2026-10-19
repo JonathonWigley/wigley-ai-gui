@@ -1,9 +1,9 @@
-import type { Timers } from '../../contracts/ambient';
-import type { CommandId } from '../../contracts/commands';
-import type { Keymap } from '../../contracts/keymap';
-import type { MarkdownRenderer } from '../../contracts/markdown';
-import type { ToastTone } from '../../contracts/plugin';
-import { createToasts } from '../toasts';
+import type { CommandId } from '../../../contracts/commands';
+import type { Keymap } from '../../../contracts/keymap';
+import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { Area, AreaName } from '../../../contracts/plugin';
+import { qualify } from '../../../shared/plugin-manifests';
+import { formsManifest } from '../manifest';
 import { isBoxShown } from './boxes';
 import { button, element } from './dom';
 import type { EditorBoxes } from './editor-boxes';
@@ -16,6 +16,7 @@ import {
 } from './form-state';
 import type { FormsStore } from './forms-store';
 import {
+  type CommandLabel,
   editorHints,
   helpSections,
   type KeyHint,
@@ -24,37 +25,36 @@ import {
 import { createRoundView, type RoundView } from './round-view';
 import { baseView, modeLabel, saveLabel } from './view-model';
 
+// `keymap` is the merged keymap and `label` names a command in hints and help.
 export interface FormsViewDeps {
-  root: HTMLElement;
+  areas: Record<AreaName, Area>;
   store: FormsStore;
   boxes: EditorBoxes;
   markdown: MarkdownRenderer;
   keymap: Keymap;
-  // The theme problem to show until it is fixed, or null.
-  themeError: string | null;
+  label: CommandLabel;
   run(command: CommandId): void;
-  timers: Timers;
 }
 
-export interface MountedFormsView {
-  toast(text: string, tone: ToastTone): void;
-}
-
-// The whole forms UI. Every store change re-renders it; editors live in the
-// round views and survive every render.
-export function mountFormsView(deps: FormsViewDeps): MountedFormsView {
-  const { root, store, boxes } = deps;
+// The whole forms UI: the switcher and rounds in the main area, the status
+// line in the status bar, the dialogs in the overlay layer. Every store change
+// re-renders it; editors live in the round views and survive every render.
+export function mountFormsView(deps: FormsViewDeps) {
+  const { areas, store, boxes } = deps;
+  const view = element('div', 'forms-view');
   const switcher = element('nav', 'switcher');
   switcher.setAttribute('aria-label', 'Open rounds');
   const workspace = element('main', 'workspace');
   const idle = buildIdle();
   workspace.append(idle);
+  view.append(switcher, workspace);
   const status = buildStatusLine(deps);
-  const help = buildHelp(deps.keymap, deps.run);
+  const help = buildHelp(deps);
   const confirm = buildConfirm(deps.run);
-  const toastLayer = element('div', 'toasts');
-  root.append(switcher, workspace, status.element, confirm, help, toastLayer);
-  const toasts = createToasts(toastLayer, deps.timers);
+  areas.main.contribute(view);
+  areas.statusBar.contribute(status.element);
+  areas.overlay.contribute(confirm);
+  areas.overlay.contribute(help);
   const roundViews = new Map<string, RoundView>();
   const dispatch = (action: FormsAction) => store.dispatch(action);
 
@@ -82,7 +82,6 @@ export function mountFormsView(deps: FormsViewDeps): MountedFormsView {
   store.subscribe(render);
   boxes.onChange(() => status.update(store.get()));
   render();
-  return { toast: (text, tone) => toasts.show(text, tone) };
 }
 
 // A round view per open round: built when the round appears, destroyed with
@@ -169,15 +168,11 @@ function buildStatusLine(deps: FormsViewDeps): {
   const bar = element('footer', 'status-line');
   const mode = element('span', 'status-mode');
   const save = element('span', 'status-save');
-  const themeError = element('span', 'status-error');
   const keys = element('span', 'status-keys');
   const helpButton = button('status-help', 'Keys', () =>
-    deps.run('help.toggle'),
+    deps.run('forms.toggleHelp'),
   );
-  themeError.hidden = deps.themeError === null;
-  themeError.textContent = `Theme: ${deps.themeError ?? ''}`;
-  themeError.title = deps.themeError ?? '';
-  bar.append(mode, save, themeError, keys, helpButton);
+  bar.append(mode, save, keys, helpButton);
   return {
     element: bar,
     update(state) {
@@ -189,23 +184,24 @@ function buildStatusLine(deps: FormsViewDeps): {
       save.dataset.state = roundSave ?? '';
       const isInBox = deps.boxes.active() !== null;
       const hints = isInBox
-        ? editorHints(deps.keymap.editor)
-        : pageHints(deps.keymap.page, state.view);
+        ? editorHints(deps.keymap.editor, deps.label)
+        : pageHints(
+            deps.keymap.page,
+            qualify(formsManifest.id, state.view),
+            deps.label,
+          );
       keys.replaceChildren(...hints.map(renderHint));
     },
   };
 }
 
-function buildHelp(
-  keymap: Keymap,
-  run: (command: CommandId) => void,
-): HTMLElement {
+function buildHelp(deps: FormsViewDeps): HTMLElement {
   const overlay = element('div', 'overlay');
   const dialog = element('div', 'dialog dialog-help');
   dialog.setAttribute('role', 'dialog');
   dialog.setAttribute('aria-label', 'Keys');
   const sections = element('div', 'help-sections');
-  for (const section of helpSections(keymap)) {
+  for (const section of helpSections(deps.keymap, deps.label)) {
     const block = element('section', 'help-section');
     const list = element('dl', 'help-list');
     for (const hint of section.hints) {
@@ -219,7 +215,7 @@ function buildHelp(
   dialog.append(
     element('h2', 'dialog-title', 'Keys'),
     sections,
-    button('button', 'Close', () => run('help.close')),
+    button('button', 'Close', () => deps.run('forms.closeHelp')),
   );
   overlay.append(dialog);
   return overlay;
