@@ -37,11 +37,12 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // marks question 2 not applicable. Ctrl+h goes back to question 1, Space a 2
 // clears its choice and picks it again, Space 2 jumps to question 2, and
 // Space e n finds no unanswered item. Space opens which-key, a moves it into
-// the Space a group, and Esc cancels the sequence and closes it. Option+o moves to the second session's
-// tab; Cmd+W there asks to cancel its round, Esc keeps it and returns to its
-// form, where j moves to its question 2 and Space e p finds its untouched
-// question 1; Option+i moves back to the first tab. Then review, Space ? opens
-// help and Esc closes it, back in the review's scope, where C opens and n dismisses the cancel prompt, o types "note" into
+// the Space a group, and Esc cancels the sequence and closes it. Option+o
+// moves to the second session's tab; Cmd+W there asks to cancel its round, Esc
+// keeps it and returns to its form, where j moves to its question 2 and
+// Space e p finds its untouched question 1; Option+i moves back to the first
+// tab. Then review, Space ? opens help and Esc closes it, back in the review's
+// scope, where C opens and n dismisses the cancel prompt, o types "note" into
 // the Round note at once (INSERT), Esc out, Enter jumps back to the finding,
 // review again and Space Enter submits.
 const STEPS: SelfTestStep[] = [

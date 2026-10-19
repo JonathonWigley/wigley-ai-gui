@@ -19,8 +19,8 @@ export interface SequenceResult {
 }
 
 // `pendingKeys` are the keys waiting for more, `[]` when none. `hold` keeps
-// them past the timeout until they become empty: a bind runs, the sequence
-// breaks, or `reset`. `isHeld` reads whether a hold is in force.
+// them past the timeout until no keys are pending: a bind runs, a break leaves
+// nothing waiting, or `reset`. `isHeld` reads whether a hold is in force.
 export interface SequenceMatcher {
   feed(key: string, scope: ViewScope, now: number): SequenceResult;
   reset(): void;
