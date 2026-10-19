@@ -142,8 +142,9 @@ plugin still has something open there (forms: an open round), since main, not th
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms); a step with no keys waits for its line. The script's
   `settings` override plugin settings in the config main serves the page (forms' sets a short
-  `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Only one script runs, so the keys plugin's steps live in
-  forms' script, whose fixture gives them scopes full of binds and a box to type in.
+  `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Only one script
+  runs, so the keys plugin's steps live in forms' script, whose fixture gives them scopes full of binds and a box to
+  type in.
 - A visible `npm start` takes the user's foreground and keyboard, so that run is the user's: the agent gives the user
   the steps to try. The global shortcut needs it — macOS keys reach a global shortcut only from the real keyboard.
 

@@ -1,5 +1,6 @@
 /* Which-key: docked full width just above the status bar, over the content
-   and over an open dialog's backdrop (`.overlay`, z-index 10) in the same layer. */
+   and over an open dialog's backdrop (`.overlay`, z-index 10) in the same
+   layer. */
 .which-key {
   background: var(--wg-bg-deep);
   border-top: 1px solid var(--wg-border);
