@@ -40,6 +40,13 @@ function isPageReady(window: BrowserWindow): Promise<boolean> {
   );
 }
 
+// The error the page's start failed with, or null while it has not failed.
+function readStartFailure(window: BrowserWindow): Promise<string | null> {
+  return window.webContents.executeJavaScript(
+    `document.body.dataset.startFailed ?? null`,
+  );
+}
+
 // Lists what the page cuts off on the right: an element whose content is wider
 // than its box, or that ends past the window, skipping the elements the
 // `scrollsItself` selectors match and everything inside them.
@@ -191,8 +198,16 @@ async function runAllSteps(
   const exit = (code: number) => exitSelfTest(code, cleanUp);
   const isReadyForKeys = async () =>
     hasPaintedSinceNavigation && (await isPageReady(window));
-  const isReady = await waitFor(isReadyForKeys);
+  const hasStartFailed = async () => (await readStartFailure(window)) !== null;
+  const isSettled = async () =>
+    (await isReadyForKeys()) || (await hasStartFailed());
+  const isReady = await waitFor(isSettled);
   if (!isCurrent()) {
+    return;
+  }
+  const startFailure = await readStartFailure(window);
+  if (startFailure !== null) {
+    failSelfTest('the page starts', startFailure, cleanUp);
     return;
   }
   if (!isReady) {

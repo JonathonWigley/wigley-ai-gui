@@ -51,6 +51,16 @@ kbd {
   padding: 0 0.3em;
 }
 
+/* Why the page failed to start, shown in place of the shell. */
+.start-error {
+  color: var(--wg-error);
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-font-mono-size);
+  margin: 0;
+  padding: 1rem;
+  white-space: pre-wrap;
+}
+
 :focus-visible {
   outline: 1px solid var(--wg-border-focus);
   outline-offset: 2px;

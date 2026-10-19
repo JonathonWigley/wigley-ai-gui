@@ -131,4 +131,21 @@ async function start() {
   document.body.dataset.ready = 'true';
 }
 
-void start();
+// Logs why the page failed to start, puts the error in place of the shell, and
+// marks the body so the self-test fails instead of waiting for ready. It uses
+// only the page's static elements, since start can fail before anything else
+// is built.
+function showStartFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  createLogView(document.getElementById('log') as HTMLOListElement)(
+    'renderer',
+    `start failed: ${message}`,
+  );
+  const shown = document.createElement('pre');
+  shown.className = 'start-error';
+  shown.textContent = `The page failed to start: ${message}`;
+  (document.getElementById('app') as HTMLElement).replaceChildren(shown);
+  document.body.dataset.startFailed = message;
+}
+
+start().catch(showStartFailure);
