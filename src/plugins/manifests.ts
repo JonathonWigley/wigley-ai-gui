@@ -1,5 +1,6 @@
 import type { PluginManifest } from '../contracts/plugin';
 import { formsManifest } from './forms/manifest';
+import { keysManifest } from './keys/manifest';
 import { sessionsManifest } from './sessions/manifest';
 
 // Every built-in plugin's manifest: main builds the served keymap, command
@@ -8,4 +9,5 @@ import { sessionsManifest } from './sessions/manifest';
 export const manifests: readonly PluginManifest[] = [
   sessionsManifest,
   formsManifest,
+  keysManifest,
 ];

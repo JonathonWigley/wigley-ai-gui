@@ -1,0 +1,51 @@
+/* Which-key: docked full width just above the status bar, over the content. */
+.which-key {
+  background: var(--wg-bg-deep);
+  border-top: 1px solid var(--wg-border);
+  bottom: var(--wg-status-bar-height);
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-font-mono-size);
+  left: 0;
+  max-height: 50vh;
+  overflow: hidden;
+  padding: 0.5rem 0.75rem;
+  /* The overlay layer gives its children the pointer; this panel takes none. */
+  pointer-events: none !important;
+  position: fixed;
+  right: 0;
+}
+
+.which-key-title {
+  color: var(--wg-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.which-key-list {
+  column-gap: 1.5rem;
+  columns: 14rem;
+}
+
+.which-key-entry {
+  break-inside: avoid;
+  display: flex;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.1rem 0;
+}
+
+.which-key-arrow {
+  color: var(--wg-text-faint);
+}
+
+.which-key-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.which-key-label.is-command {
+  color: var(--wg-whichKey-command);
+}
+
+.which-key-label.is-prefix {
+  color: var(--wg-whichKey-prefix);
+}
