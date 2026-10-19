@@ -1,5 +1,6 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import { formsCommand } from '../ids';
 import { button, element, markdownElement } from './dom';
 import type { EditorBoxes } from './editor-boxes';
 import {
@@ -357,7 +358,7 @@ function buildQuestion(
   });
   const dontAsk = button('toggle', "Don't ask me this", () => {
     focusThis();
-    deps.run('forms.toggleDontAsk');
+    deps.run(formsCommand('toggleDontAsk'));
   });
   toggles.append(notApplicable, dontAsk);
   article.append(toggles);
@@ -449,8 +450,10 @@ function buildReview(
   const list = element('ol', 'review-rows');
   const actions = element('div', 'review-actions');
   actions.append(
-    button('button button-primary', 'Submit', () => deps.run('forms.submit')),
-    button('button', 'Cancel round', () => deps.run('forms.askCancel')),
+    button('button button-primary', 'Submit', () =>
+      deps.run(formsCommand('submit')),
+    ),
+    button('button', 'Cancel round', () => deps.run(formsCommand('askCancel'))),
   );
   section.append(
     element('h2', 'review-title', 'Review'),

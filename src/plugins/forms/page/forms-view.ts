@@ -2,8 +2,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Keymap } from '../../../contracts/keymap';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Area, AreaName } from '../../../contracts/plugin';
-import { qualify } from '../../../shared/plugin-manifests';
-import { formsManifest } from '../manifest';
+import { formsCommand, formsScope } from '../ids';
 import { isBoxShown } from './boxes';
 import { button, element } from './dom';
 import type { EditorBoxes } from './editor-boxes';
@@ -170,7 +169,7 @@ function buildStatusLine(deps: FormsViewDeps): {
   const save = element('span', 'status-save');
   const keys = element('span', 'status-keys');
   const helpButton = button('status-help', 'Keys', () =>
-    deps.run('forms.toggleHelp'),
+    deps.run(formsCommand('toggleHelp')),
   );
   bar.append(mode, save, keys, helpButton);
   return {
@@ -185,11 +184,7 @@ function buildStatusLine(deps: FormsViewDeps): {
       const isInBox = deps.boxes.active() !== null;
       const hints = isInBox
         ? editorHints(deps.keymap.editor, deps.label)
-        : pageHints(
-            deps.keymap.page,
-            qualify(formsManifest.id, state.view),
-            deps.label,
-          );
+        : pageHints(deps.keymap.page, formsScope(state.view), deps.label);
       keys.replaceChildren(...hints.map(renderHint));
     },
   };
@@ -215,7 +210,7 @@ function buildHelp(deps: FormsViewDeps): HTMLElement {
   dialog.append(
     element('h2', 'dialog-title', 'Keys'),
     sections,
-    button('button', 'Close', () => deps.run('forms.closeHelp')),
+    button('button', 'Close', () => deps.run(formsCommand('closeHelp'))),
   );
   overlay.append(dialog);
   return overlay;
@@ -229,9 +224,11 @@ function buildConfirm(run: (command: CommandId) => void): HTMLElement {
   const actions = element('div', 'dialog-actions');
   actions.append(
     button('button button-danger', 'Cancel the round', () =>
-      run('forms.confirmCancel'),
+      run(formsCommand('confirmCancel')),
     ),
-    button('button', 'Keep answering', () => run('forms.dismissConfirm')),
+    button('button', 'Keep answering', () =>
+      run(formsCommand('dismissConfirm')),
+    ),
   );
   dialog.append(
     element('h2', 'dialog-title', 'Cancel this round?'),
