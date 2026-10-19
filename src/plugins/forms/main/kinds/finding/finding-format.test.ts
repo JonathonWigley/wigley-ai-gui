@@ -162,6 +162,18 @@ describe('findingFormat.parse', () => {
     expect(message).toContain("'Stale cache'");
     expect(message).toContain('from 1 to 2');
   });
+
+  it('counts a lone solution in the singular for an out-of-range recommend', () => {
+    const lone = finding({
+      choices: [{ text: 'a', reason: 'r' }],
+      recommend: 2,
+    });
+
+    expect(parseError(lone)).toBe(
+      "Finding 1: 'Stale cache' has 1 solution; recommend was 2. " +
+        'Use a number from 1 to 1.',
+    );
+  });
 });
 
 describe('findingFormat.answerSubject', () => {

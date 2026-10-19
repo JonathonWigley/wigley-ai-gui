@@ -136,6 +136,7 @@ function parseFinding(item: unknown, where: string): Finding {
     item.recommend,
     title,
     choices.length,
+    'solution',
     where,
   );
   const recommend_action = parseRecommendAction(item.recommend_action, where);
@@ -176,7 +177,7 @@ export const findingFormat: AnswerableFormat<Finding> = {
               reason: {
                 type: 'string',
                 description:
-                  'Why one would pick this choice. Shown under it. Markdown.',
+                  'Why one would pick this solution. Shown under it. Markdown.',
               },
             },
           },

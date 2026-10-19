@@ -90,6 +90,7 @@ function parseQuestion(item: unknown, where: string): Question {
     item.recommend,
     title,
     choices.length,
+    'choice',
     where,
   );
   return { title, context, question, choices, recommend, rationale };
