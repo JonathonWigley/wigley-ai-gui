@@ -107,6 +107,10 @@ plugin still has something open there (forms: an open round), since main, not th
   `forms-service.ts`, and `ANSWER_ARRAYS` and `PICK_ANSWERS` in `form-state.ts`. The order lists are plain arrays
   the compiler cannot check: `formats.test.ts` fails when main's `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind,
   and `RAIL_ORDER` in `form-state.ts` is added to by hand.
+- **A finding origin** — `caused`, `pre_existing`, `design`, `nit` — is an entry in
+  `src/plugins/forms/finding-origins.ts`: the card it draws as (Defect, Decision, Nit), the fields it requires and
+  forbids, its choice bounds, and the actions it offers. Main's parser and the page's card both read that table, so a
+  new origin is one entry; the card's words for each action live beside the card in `page/kinds/finding/`.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
