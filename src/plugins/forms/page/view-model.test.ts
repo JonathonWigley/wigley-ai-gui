@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Finding } from '../contract';
 import {
   activeRound,
   apply,
@@ -34,13 +35,22 @@ function roundAfter(...actions: FormsAction[]): RoundState {
   return round;
 }
 
-// Question Alpha and finding Delta (recommend 2); the rail runs Delta, Alpha.
+// Question Alpha and finding Delta (recommend 2, fix_now); the rail runs
+// Delta, Alpha.
 function mixedRoundAfter(...actions: FormsAction[]): RoundState {
+  return roundWithFindingAfter(finding('Delta'), ...actions);
+}
+
+// Question Alpha and the given finding; the rail runs the finding, Alpha.
+function roundWithFindingAfter(
+  delta: Finding,
+  ...actions: FormsAction[]
+): RoundState {
   const start = initialState(
     [
       presentedRound('r1', {
         questions: [question('Alpha')],
-        findings: [finding('Delta')],
+        findings: [delta],
       }),
     ],
     'r1-session',
@@ -277,6 +287,64 @@ describe('reviewRows', () => {
       tookActionRecommendation: false,
       missing: null,
     });
+  });
+
+  it('recommends a question that took its recommendation', () => {
+    const [, alpha] = reviewRows(
+      mixedRoundAfter(
+        { type: 'focusItem', item: 1 },
+        { type: 'choose', choice: 2 },
+      ),
+    );
+    expect(alpha).toMatchObject({ kind: 'question', recommended: true });
+  });
+
+  it('recommends a fixed finding that took both recommendations', () => {
+    const [delta] = reviewRows(
+      mixedRoundAfter(
+        { type: 'chooseAction', action: 'fix_now' },
+        { type: 'choose', choice: 2 },
+      ),
+    );
+    expect(delta.recommended).toBe(true);
+  });
+
+  it('does not recommend a finding with the recommended solution but another action', () => {
+    const [delta] = reviewRows(
+      mixedRoundAfter(
+        { type: 'chooseAction', action: 'follow_up' },
+        { type: 'choose', choice: 2 },
+      ),
+    );
+    expect(delta).toMatchObject({ status: 'answered', recommended: false });
+  });
+
+  it('recommends a finding left alone as recommended', () => {
+    const [delta] = reviewRows(
+      roundWithFindingAfter(
+        finding('Delta', { recommend_action: 'leave_it' }),
+        {
+          type: 'chooseAction',
+          action: 'leave_it',
+        },
+      ),
+    );
+    expect(delta).toMatchObject({ status: 'answered', recommended: true });
+  });
+
+  it('does not recommend a finding answered by notes alone', () => {
+    const [delta] = reviewRows(
+      mixedRoundAfter(
+        {
+          type: 'setText',
+          roundId: 'r1',
+          target: { field: 'notes', item: { kind: 'finding', index: 1 } },
+          value: 'my own fix',
+        },
+        { type: 'choose', choice: 2 },
+      ),
+    );
+    expect(delta).toMatchObject({ status: 'answered', recommended: false });
   });
 
   it('marks the row under the review cursor', () => {

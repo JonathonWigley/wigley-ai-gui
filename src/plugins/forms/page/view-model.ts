@@ -34,6 +34,9 @@ export interface ReviewRow {
   choiceText: string;
   tookRecommendation: boolean;
   tookActionRecommendation: boolean;
+  // Whether the row earns its Recommended badge: a finding's for its action,
+  // and for its solution unless left alone; a question's for its choice.
+  recommended: boolean;
   // What an untouched finding's picks still lack; null when it lacks both,
   // and on every question.
   missing: 'solution' | 'action' | null;
@@ -65,6 +68,11 @@ export function reviewRows(round: RoundState): ReviewRow[] {
     const choiceCounts =
       action !== 'leave_it' && (item.kind === 'question' || action !== '');
     const choice = status === 'answered' && choiceCounts ? answer.choice : 0;
+    const tookRecommendation =
+      choice > 0 && choice === format.recommend(round.round, item.index);
+    const tookActionRecommendation =
+      action !== '' &&
+      action === round.round.findings[item.index - 1].recommend_action;
     return {
       row,
       kind: item.kind,
@@ -79,11 +87,14 @@ export function reviewRows(round: RoundState): ReviewRow[] {
         choice > 0
           ? format.choiceTexts(round.round, item.index)[choice - 1]
           : '',
-      tookRecommendation:
-        choice > 0 && choice === format.recommend(round.round, item.index),
-      tookActionRecommendation:
-        action !== '' &&
-        action === round.round.findings[item.index - 1].recommend_action,
+      tookRecommendation,
+      tookActionRecommendation,
+      recommended: tookEveryRecommendation(
+        item.kind,
+        action,
+        tookRecommendation,
+        tookActionRecommendation,
+      ),
       missing: status === 'untouched' ? missingPick(round, item) : null,
       notes: answer.notes,
       dontAsk: answer.dontAsk,
@@ -91,6 +102,23 @@ export function reviewRows(round: RoundState): ReviewRow[] {
       isCursor: row === round.reviewRow,
     };
   });
+}
+
+// A finding left alone needs only its action recommendation; one fixed or
+// followed up needs both; a row with no action earns it only as a question.
+function tookEveryRecommendation(
+  kind: AnswerableKind,
+  action: FindingAction | '',
+  tookRecommendation: boolean,
+  tookActionRecommendation: boolean,
+): boolean {
+  if (action === 'leave_it') {
+    return tookActionRecommendation;
+  }
+  if (action === '') {
+    return kind === 'question' && tookRecommendation;
+  }
+  return tookRecommendation && tookActionRecommendation;
 }
 
 // What an untouched item's picks lack. Untouched means the finding's pick is

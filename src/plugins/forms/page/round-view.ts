@@ -285,18 +285,6 @@ const MISSING_HINTS: Record<NonNullable<ReviewRow['missing']>, string> = {
   action: 'needs an action',
 };
 
-// A finding's row earns the badge for its action, and for its solution unless
-// it is left alone; a question's for its choice.
-function tookEveryRecommendation(row: ReviewRow): boolean {
-  if (row.action === 'leave_it') {
-    return row.tookActionRecommendation;
-  }
-  if (row.action === '') {
-    return row.kind === 'question' && row.tookRecommendation;
-  }
-  return row.tookRecommendation && row.tookActionRecommendation;
-}
-
 // An answered finding reads as its action, then its solution; an untouched
 // one missing half its pick names the missing half in place of its status.
 function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
@@ -323,7 +311,7 @@ function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
       ),
     );
   }
-  if (tookEveryRecommendation(row)) {
+  if (row.recommended) {
     answer.append(element('span', 'badge badge-recommend', 'Recommended'));
   }
   const showsPick = row.actionLabel !== '' || row.choice > 0;
