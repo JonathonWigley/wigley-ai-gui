@@ -87,6 +87,9 @@ plugin still has something open there (forms: an open round), since main, not th
   Built-in themes live in `src/config/themes/`; the user's own live in the `themes` folder of Electron's per-user
   data folder and override a built-in of the same name. Views read tokens as CSS variables and never name a
   colour. A broken theme falls back to Catppuccin Mocha and shows its error.
+- **An item kind** in a forms round — question, finding, notice — is a format module in a folder of its own,
+  `src/plugins/forms/main/kinds/<kind>/` and `src/plugins/forms/page/kinds/<kind>/`, listed in that process's typed
+  format table. A new kind is that folder pair and its table entries; the compiler rejects a kind with no format.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
