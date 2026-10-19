@@ -32,7 +32,7 @@ export interface FormsServiceDeps {
 interface RoundFinish {
   kind: FinishedOutcome;
   body: FormBody;
-  // Why the finish's disk write failed; null once it saved.
+  // Why the store's finish threw; null when it did not.
   saveFailure: string | null;
 }
 
@@ -327,8 +327,9 @@ function roundListener(
       // Throws when the disk write fails, so the page shows the draft unsaved.
       session.store.saveBody(open.record, open.latestBody);
     },
-    // A failed disk write throws, as a draft's does, once the round has
-    // closed and its waiting calls woke with the failure named.
+    // The store logs a failed finish write rather than throwing; a store
+    // whose finish throws still closes the round and wakes its waiting calls,
+    // with the failure named, then rethrows.
     finish: (end) => {
       if (open.end !== null || open.closed) {
         return;
