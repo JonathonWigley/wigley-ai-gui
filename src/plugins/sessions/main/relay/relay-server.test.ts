@@ -203,6 +203,42 @@ describe('startRelayServer', () => {
     expect(started).toEqual([]);
   });
 
+  it.each([
+    ['session_id', { session_id: 7 }],
+    ['project_dir', { project_dir: 42 }],
+    ['deadline_seconds', { deadline_seconds: '300' }],
+  ])(
+    'refuses a hello whose %s has the wrong type and starts no session',
+    async (field, override) => {
+      const { connect, started } = fakeSessions();
+      const channel = start(echoServe().serve, connect);
+      const { socket, nextLine } = await open(channel);
+      const ended = once(socket, 'end');
+
+      socket.write(helloLine({ ...HELLO, ...override }));
+
+      expect(JSON.parse(await nextLine())).toEqual({
+        ok: false,
+        error: `relay hello field ${field} has the wrong type`,
+      });
+      await ended;
+      expect(started).toEqual([]);
+    },
+  );
+
+  it('starts a session with null fields from a hello that omits them', async () => {
+    const { connect, started } = fakeSessions();
+    const channel = start(echoServe().serve, connect);
+    const { socket, nextLine } = await open(channel);
+
+    socket.write(helloLine({ protocol: RELAY_PROTOCOL }));
+
+    expect(JSON.parse(await nextLine())).toEqual({ ok: true });
+    expect(started).toEqual([
+      { sessionId: null, projectDir: null, deadlineSeconds: null },
+    ]);
+  });
+
   it('ends the session and its server when the relay disconnects', async () => {
     const fake = fakeSessions();
     const echo = echoServe();

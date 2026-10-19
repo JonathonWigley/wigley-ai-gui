@@ -40,7 +40,29 @@ function parseHello(line: string): { hello: RelayHello } | { error: string } {
       error: `relay protocol ${hello?.protocol}, app protocol ${RELAY_PROTOCOL}`,
     };
   }
+  const badField = mistypedHelloField(hello);
+  if (badField !== null) {
+    return { error: `relay hello field ${badField} has the wrong type` };
+  }
   return { hello };
+}
+
+// An absent field counts as null.
+function isOptional(value: unknown, type: 'string' | 'number'): boolean {
+  return value === undefined || value === null || typeof value === type;
+}
+
+function mistypedHelloField(hello: RelayHello): string | null {
+  if (!isOptional(hello.session_id, 'string')) {
+    return 'session_id';
+  }
+  if (!isOptional(hello.project_dir, 'string')) {
+    return 'project_dir';
+  }
+  if (!isOptional(hello.deadline_seconds, 'number')) {
+    return 'deadline_seconds';
+  }
+  return null;
 }
 
 function sessionInfo(hello: RelayHello): SessionInfo {
