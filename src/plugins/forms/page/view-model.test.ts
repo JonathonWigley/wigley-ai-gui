@@ -127,11 +127,21 @@ describe('reviewRows', () => {
           value: 'my own',
         },
         { type: 'toggleDontAsk' },
+        {
+          type: 'setText',
+          roundId: 'r1',
+          target: {
+            field: 'dontAskReason',
+            item: { kind: 'question', index: 1 },
+          },
+          value: 'settled',
+        },
       ),
     );
     expect(alpha).toMatchObject({
       notes: 'my own',
       dontAsk: true,
+      dontAskReason: 'settled',
     });
   });
 

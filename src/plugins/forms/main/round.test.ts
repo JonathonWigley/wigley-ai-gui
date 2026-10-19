@@ -162,6 +162,15 @@ describe('parseRound', () => {
     expect(message).toContain('overview must be a string');
   });
 
+  it.each(['notices', 'findings', 'questions'])(
+    'refuses %s that are not a list',
+    (key) => {
+      expect(roundError({ heading: 'H', [key]: 'one item' })).toBe(
+        `ask_round's ${key} must be a list of objects.`,
+      );
+    },
+  );
+
   it('refuses an empty questions list with no notices', () => {
     expect(roundError({ heading: 'H', questions: [] })).toBe(
       'ask_round needs at least one notice, finding or question.',
