@@ -6,8 +6,8 @@ export const defaultSettings: Settings = {
   fonts: {
     ui: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
     mono: 'ui-monospace, Menlo, monospace',
-    uiSize: 14,
-    monoSize: 13,
+    uiSize: 15,
+    monoSize: 14,
   },
   keySequenceTimeoutMs: 1000,
 };
