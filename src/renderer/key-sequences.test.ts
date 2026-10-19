@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { PageBind } from '../contracts/keymap';
 import {
+  type ChordPress,
+  createChordMatcher,
   createSequenceMatcher,
   requireUnambiguousBinds,
   type SequenceResult,
@@ -213,5 +215,122 @@ describe('requireUnambiguousBinds', () => {
         { keys: [], scope: 'forms', command: 'test.empty' },
       ]),
     ).toThrow(/test\.empty/);
+  });
+
+  it('rejects a chord bound twice in one scope', () => {
+    expect(() =>
+      requireUnambiguousBinds([
+        { keys: ['<C-h>'], scope: 'forms', command: 'test.first' },
+        { keys: ['<C-h>'], scope: 'forms', command: 'test.second' },
+      ]),
+    ).toThrow(/test\.first.*test\.second/);
+  });
+});
+
+// A key event on `code` holding only the modifiers named.
+function press(code: string, modifiers: Partial<ChordPress>): ChordPress {
+  return {
+    code,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+    ...modifiers,
+  };
+}
+
+describe('createChordMatcher', () => {
+  const nextTab: PageBind = {
+    keys: ['<A-o>'],
+    scope: 'forms',
+    command: 'test.nextTab',
+  };
+
+  it('matches a chord on its physical key and exact modifiers', () => {
+    const chords = createChordMatcher([nextTab]);
+    expect(
+      chords.match(press('KeyO', { altKey: true }), 'forms')?.command,
+    ).toBe('test.nextTab');
+  });
+
+  it('ignores a chord with an extra or missing modifier', () => {
+    const chords = createChordMatcher([nextTab]);
+    expect(
+      chords.match(press('KeyO', { altKey: true, shiftKey: true }), 'forms'),
+    ).toBeUndefined();
+    expect(chords.match(press('KeyO', {}), 'forms')).toBeUndefined();
+  });
+
+  it('matches a digit chord on its top-row code', () => {
+    const chords = createChordMatcher([
+      { keys: ['<C-1>'], scope: 'forms', command: 'test.first' },
+    ]);
+    expect(
+      chords.match(press('Digit1', { ctrlKey: true }), 'forms')?.command,
+    ).toBe('test.first');
+    expect(
+      chords.match(press('Numpad1', { ctrlKey: true }), 'forms'),
+    ).toBeUndefined();
+  });
+
+  it('matches a chord holding every modifier', () => {
+    const chords = createChordMatcher([
+      { keys: ['<C-A-S-D-k>'], scope: 'forms', command: 'test.all' },
+    ]);
+    const allHeld = {
+      ctrlKey: true,
+      altKey: true,
+      shiftKey: true,
+      metaKey: true,
+    };
+    expect(chords.match(press('KeyK', allHeld), 'forms')?.command).toBe(
+      'test.all',
+    );
+  });
+
+  it('matches a chord only in its scope', () => {
+    const closeTab: PageBind = {
+      keys: ['<D-w>'],
+      scope: 'any',
+      command: 'test.closeTab',
+    };
+    const chords = createChordMatcher([
+      { keys: ['<C-h>'], scope: 'forms', command: 'test.left' },
+      closeTab,
+    ]);
+    expect(
+      chords.match(press('KeyH', { ctrlKey: true }), 'review'),
+    ).toBeUndefined();
+    expect(chords.match(press('KeyW', { metaKey: true }), 'idle')).toBe(
+      closeTab,
+    );
+  });
+
+  it('rejects a chord inside a longer sequence', () => {
+    expect(() =>
+      createChordMatcher([
+        { keys: ['g', '<C-h>'], scope: 'forms', command: 'test.x' },
+      ]),
+    ).toThrow(/test\.x.*<C-h>/);
+  });
+
+  it.each(['<A-C-h>', '<C-H>', '<C-;>', '<C-F1>', '<S-h>', '<h>'])(
+    'rejects a malformed chord %s',
+    (token) => {
+      expect(() =>
+        createChordMatcher([
+          { keys: [token], scope: 'forms', command: 'test.x' },
+        ]),
+      ).toThrow(`Page bind for test.x has a malformed chord ${token}`);
+    },
+  );
+
+  it('leaves a lone < or > a plain key', () => {
+    expect(() =>
+      createChordMatcher([
+        { keys: ['<'], scope: 'forms', command: 'test.less' },
+        { keys: ['>'], scope: 'forms', command: 'test.more' },
+      ]),
+    ).not.toThrow();
   });
 });

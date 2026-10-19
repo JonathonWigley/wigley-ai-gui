@@ -25,7 +25,11 @@ export interface EditorKeymap {
 // reach the keymap qualified as `<pluginId>.<scope>`.
 export type ViewScope = string;
 
-// Keys pressed in order while no editor has focus; each is a KeyboardEvent.key value.
+// Keys pressed in order while no editor has focus; each is a KeyboardEvent.key
+// value. Or a chord, alone in `keys`: `<` + any of `C-` (Control), `A-`
+// (Alt/Option), `S-` (Shift), `D-` (Command) in that order, at least one of
+// C-, A-, D-, + one lowercase letter or digit + `>`, e.g. `<C-h>`. A chord
+// fires on the page and inside an editor, matched on the physical key.
 export interface PageBind {
   keys: string[];
   scope: ViewScope;

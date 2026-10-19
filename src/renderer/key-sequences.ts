@@ -133,3 +133,85 @@ export function createSequenceMatcher(
     },
   };
 }
+
+// The parts of a key event a chord matches on.
+export type ChordPress = Pick<
+  KeyboardEvent,
+  'code' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'
+>;
+
+export interface ChordMatcher {
+  match(press: ChordPress, scope: ViewScope): PageBind | undefined;
+}
+
+interface ParsedChord extends ChordPress {
+  bind: PageBind;
+}
+
+const CHORD_NOTATION = /^<(C-)?(A-)?(S-)?(D-)?([a-z0-9])>$/;
+
+function isChordToken(key: string): boolean {
+  return key.length > 1 && key.startsWith('<') && key.endsWith('>');
+}
+
+// A letter matches its `Key` code and a digit its top-row `Digit` code.
+function parseChord(bind: PageBind, token: string): ParsedChord {
+  const parts = CHORD_NOTATION.exec(token);
+  const hasNonShiftModifier =
+    parts !== null &&
+    (parts[1] !== undefined ||
+      parts[2] !== undefined ||
+      parts[4] !== undefined);
+  if (!parts || !hasNonShiftModifier) {
+    throw new Error(
+      `Page bind for ${bind.command} has a malformed chord ${token}: write modifiers C-, A-, S-, D- in that order, at least one of C-, A-, D-, then one lowercase letter or digit`,
+    );
+  }
+  const key = parts[5];
+  const isDigit = key >= '0' && key <= '9';
+  return {
+    bind,
+    code: isDigit ? `Digit${key}` : `Key${key.toUpperCase()}`,
+    ctrlKey: parts[1] !== undefined,
+    altKey: parts[2] !== undefined,
+    shiftKey: parts[3] !== undefined,
+    metaKey: parts[4] !== undefined,
+  };
+}
+
+function isSameChord(a: ChordPress, b: ChordPress): boolean {
+  return (
+    a.code === b.code &&
+    a.ctrlKey === b.ctrlKey &&
+    a.altKey === b.altKey &&
+    a.shiftKey === b.shiftKey &&
+    a.metaKey === b.metaKey
+  );
+}
+
+// Takes every page bind and keeps its chord binds: a bind whose only key is a
+// chord token such as `<C-h>`. Throws on a chord inside a longer sequence or a
+// chord that does not fit the notation. A chord matches on the physical key and
+// the exact modifiers held, never on `KeyboardEvent.key`.
+export function createChordMatcher(binds: PageBind[]): ChordMatcher {
+  const chords: ParsedChord[] = [];
+  for (const bind of binds) {
+    const tokens = bind.keys.filter(isChordToken);
+    if (tokens.length > 0 && bind.keys.length > 1) {
+      throw new Error(
+        `Page bind for ${bind.command} has the chord ${tokens[0]} inside the sequence "${bind.keys.join(' ')}"; a chord must be the bind's only key`,
+      );
+    }
+    if (tokens.length === 1) {
+      chords.push(parseChord(bind, tokens[0]));
+    }
+  }
+
+  return {
+    match(press, scope) {
+      return chords.find(
+        (chord) => isSameChord(chord, press) && firesIn(chord.bind, scope),
+      )?.bind;
+    },
+  };
+}

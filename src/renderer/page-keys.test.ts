@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PageBind, ViewScope } from '../contracts/keymap';
-import { createSequenceMatcher } from './key-sequences';
-import { feedPageKey } from './page-keys';
+import { createChordMatcher, createSequenceMatcher } from './key-sequences';
+import { feedChordKey, feedPageKey } from './page-keys';
 
 const TIMEOUT_MS = 1000;
 
@@ -72,5 +72,42 @@ describe('feedPageKey', () => {
     const { page, target } = fakePage();
     expect(feedPageKey(matcher, 'q', 0, target)).toBe(false);
     expect(page.ran).toEqual([]);
+  });
+});
+
+describe('feedChordKey', () => {
+  const chordBinds: PageBind[] = [
+    ...binds,
+    { keys: ['<C-h>'], scope: 'forms', command: 'test.chord' },
+  ];
+
+  // A Control chord on `code`.
+  const ctrl = (code: string) => ({
+    code,
+    ctrlKey: true,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+  });
+
+  it('runs a chord bind and drops the pending sequence', () => {
+    const chords = createChordMatcher(chordBinds);
+    const matcher = createSequenceMatcher(chordBinds, TIMEOUT_MS);
+    const { page, target } = fakePage();
+    feedPageKey(matcher, 'g', 0, target);
+    expect(feedChordKey(chords, matcher, ctrl('KeyH'), target)).toBe(true);
+    feedPageKey(matcher, 'u', 200, target);
+    expect(page.ran).toEqual(['test.chord', 'test.openReview']);
+  });
+
+  it('passes an unbound chord through and keeps the pending sequence', () => {
+    const chords = createChordMatcher(chordBinds);
+    const matcher = createSequenceMatcher(chordBinds, TIMEOUT_MS);
+    const { page, target } = fakePage();
+    feedPageKey(matcher, 'g', 0, target);
+    expect(feedChordKey(chords, matcher, ctrl('KeyA'), target)).toBe(false);
+    feedPageKey(matcher, 'u', 100, target);
+    feedPageKey(matcher, 'x', 200, target);
+    expect(page.ran).toEqual(['test.long']);
   });
 });

@@ -17,7 +17,29 @@ const STEP_TIMEOUT_MS = 5000;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// The page key engine's chord notation, which `createChordMatcher` parses.
+const CHORD_NOTATION = /^<(C-)?(A-)?(S-)?(D-)?([a-z0-9])>$/;
+
+// A chord sends no `char`: its modifiers make it a command, not typed text.
+function pressChord(window: BrowserWindow, parts: RegExpExecArray) {
+  const keyCode = parts[5];
+  const modifiers = [
+    ...(parts[1] ? ['control' as const] : []),
+    ...(parts[2] ? ['alt' as const] : []),
+    ...(parts[3] ? ['shift' as const] : []),
+    ...(parts[4] ? ['meta' as const] : []),
+  ];
+  window.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
+  window.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
+}
+
+// Presses a KeyboardEvent.key value, or a chord in the page keymap's notation.
 function press(window: BrowserWindow, key: string) {
+  const chord = CHORD_NOTATION.exec(key);
+  if (chord) {
+    pressChord(window, chord);
+    return;
+  }
   const keyCode = KEY_CODES[key] ?? key;
   // A capital letter's key event says Shift, as the keyboard's does.
   const modifiers = /^[A-Z]$/.test(key) ? ['shift' as const] : [];

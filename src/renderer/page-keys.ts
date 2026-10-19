@@ -3,11 +3,18 @@ import type { PageBind, ViewScope } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
 import type { PageCommandContext } from '../contracts/plugin';
 import type { CommandRegistry } from '../shared/command-registry';
-import { createSequenceMatcher, type SequenceMatcher } from './key-sequences';
+import {
+  type ChordMatcher,
+  type ChordPress,
+  createChordMatcher,
+  createSequenceMatcher,
+  type SequenceMatcher,
+} from './key-sequences';
 
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
 
-// Chords holding Control, Alt or Meta belong to the app and intercept keymaps.
+// A key holding Control, Alt or Meta is a chord: chord binds take it ahead of
+// this check, and the rest belong to the app and intercept keymaps.
 function isPageKey(event: KeyboardEvent): boolean {
   const isModifierAlone = MODIFIER_KEYS.has(event.key);
   const isChord = event.ctrlKey || event.altKey || event.metaKey;
@@ -53,7 +60,26 @@ export function feedPageKey(
   return isConsumed;
 }
 
-// Keys for when no editor has focus; a bind fires only in the scope
+// Runs the chord bind `press` matches in the target's scope, dropping any
+// pending sequence, since a chord cannot continue one. Returns whether a bind
+// ran; with none, the pending sequence stays.
+export function feedChordKey(
+  chords: ChordMatcher,
+  sequences: SequenceMatcher,
+  press: ChordPress,
+  target: Pick<PageKeyTarget, 'scope' | 'run'>,
+): boolean {
+  const bind = chords.match(press, target.scope());
+  if (!bind) {
+    return false;
+  }
+  sequences.reset();
+  target.run(bind);
+  return true;
+}
+
+// Non-chord keys fire when no editor has focus; chord binds fire everywhere,
+// inside an editor too, ahead of it. A bind fires only in the scope
 // `currentScope` reads.
 export function installPageKeys(
   binds: PageBind[],
@@ -63,7 +89,26 @@ export function installPageKeys(
   commands: CommandRegistry<PageCommandContext>,
   log: Log,
 ) {
+  const chords = createChordMatcher(binds);
   const matcher = createSequenceMatcher(binds, timeoutMs);
+  const runBind = (bind: PageBind) => {
+    log('page', `${bind.keys.join('')} ran ${bind.command}`);
+    commands.run(bind.command, {});
+  };
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      const isConsumed = feedChordKey(chords, matcher, event, {
+        scope: currentScope,
+        run: runBind,
+      });
+      if (isConsumed) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    },
+    { capture: true },
+  );
   document.addEventListener('keydown', (event) => {
     if (editors.contains(event.target as Element)) {
       matcher.reset();
@@ -77,10 +122,7 @@ export function installPageKeys(
       editorHasFocus: () =>
         document.activeElement !== null &&
         editors.contains(document.activeElement),
-      run: (bind) => {
-        log('page', `${bind.keys.join('')} ran ${bind.command}`);
-        commands.run(bind.command, {});
-      },
+      run: runBind,
       typeIntoEditor: (keys) => {
         log('page', `typed ${keys.join('')} into the editor`);
         editors.typeInto(document.activeElement!, keys);
