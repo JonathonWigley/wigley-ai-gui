@@ -27,7 +27,7 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 ```
 src/contracts/   interfaces and records crossing a seam, the plugin API among them; imports nothing
 src/config/      core keymap (leader, remaps, app chords) and settings, and the built-in themes  → read only by main
-src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, theme names)
+src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, theme variables)
 src/main/        core main process; main.ts is its composition root
   plugins/       the main-side plugin API: per-plugin channel routing and services
   themes/        theme loader: parses and chooses the built-in or user theme
@@ -51,17 +51,19 @@ lands in both repos together.
 
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
   and the process it runs in), key scopes, default keys, settings and the plugins it depends on; `main/` and
-  `page/` each export a start function that receives that process's plugin API and returns the handlers for the
-  manifest's commands. The compiler checks every declared command has a handler and every key names a declared
-  command. A built-in plugin joins the lists in `src/plugins/main.ts` and `src/plugins/page.ts`. A main part starts
-  once; a page part starts on every page load.
+  `page/` each export a part, the manifest with a start function that receives that process's plugin API and
+  returns the handlers for the manifest's commands that run in that process, plus the `exports` its dependents read
+  (and, in main, a `dispose`). The compiler checks every command that runs in a process has a handler there and
+  every key names a declared command. A built-in plugin joins the lists in `src/plugins/main.ts` and
+  `src/plugins/page.ts`. A main part starts once; a page part starts on every page load.
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on. A plugin imports only
   `src/contracts`, `src/shared` and its own folder.
 - **A key** is a default bind in its plugin's manifest naming that plugin's command; the core qualifies both, so
-  `nextItem` in plugin `forms` runs as `forms.nextItem`, and its scope `review` is `forms.review`. Keys never call code directly, so
-  rebinding never touches a handler. `src/config/keymap.ts` holds only the core's keys and is where the user's
-  overrides land. Each process checks at startup that no key is bound twice in one scope.
+  `nextItem` in plugin `forms` runs as `forms.nextItem`, and its scope `review` is `forms.review`. Keys never call
+  code directly, so rebinding never touches a handler. `src/config/keymap.ts` holds only the core's keys and is where
+  the user's overrides land. Each process checks at startup that every key it owns names a registered command, and
+  the page also rejects a key bound twice in one scope.
 - **A theme** is a JSON file of a `palette` and semantic `tokens` (a token names a palette entry or gives a hex).
   Built-in themes live in `src/config/themes/`; the user's own live in the `themes` folder of Electron's per-user
   data folder and override a built-in of the same name. Views read tokens as CSS variables and never name a
