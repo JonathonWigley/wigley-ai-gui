@@ -129,6 +129,8 @@ describe('pluginEvents', () => {
 
     // @ts-expect-error -- this part hears no events
     events.on('sessions.connected', (data) => heard.push(data));
+    // @ts-expect-error -- a primitive is not an events shape
+    pluginEvents<string>(bus, 'forms');
     bus.emit('sessions.connected', 1);
 
     expect(heard).toEqual([1]);

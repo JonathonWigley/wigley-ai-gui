@@ -97,10 +97,10 @@ export interface MainChannel<Ch extends ChannelShape> {
   ): void;
 }
 
-// A plugin's events: each name it publishes, with its payload. It has no index
-// signature, so an interface extending it holds only the names it declares and
-// `emit` rejects any other.
-export type EventShape = { [K in never]: unknown };
+// A plugin's events: each name it publishes, with its payload. It is an object
+// type with no index signature, so an interface extending it holds only the
+// names it declares and `emit` rejects any other; a primitive does not extend it.
+export type EventShape = object & { [K in never]: unknown };
 
 // Events whose names and payloads the type system does not know: what the
 // core's untyped bus hands every part, which narrows them with its own

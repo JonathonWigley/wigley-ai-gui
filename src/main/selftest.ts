@@ -172,14 +172,26 @@ function waitForPageWidth(window: BrowserWindow, width: number) {
   });
 }
 
-// Resolves after three of the page's frames: a resize reaches the editors'
-// ResizeObserver in the first, which asks vim to redraw its cursor in the
-// next, and the third starts after that redraw.
-function waitForResizeRedraw(window: BrowserWindow): Promise<void> {
-  return window.webContents.executeJavaScript(`new Promise((resolve) => {
-  const frames = (left) => left === 0 ? resolve() : requestAnimationFrame(() => frames(left - 1));
-  frames(3);
-})`);
+// Waits for three of the page's frames, true once they have run and false when
+// they have not within the step timeout (a page that stops producing frames or
+// reloads mid-wait): a resize reaches the editors' ResizeObserver in the first,
+// which asks vim to redraw its cursor in the next, and the third starts after
+// that redraw.
+async function waitForResizeRedraw(window: BrowserWindow): Promise<boolean> {
+  await window.webContents.executeJavaScript(`{
+  window.resizeRedrawFrames = 0;
+  const frame = () => {
+    window.resizeRedrawFrames += 1;
+    if (window.resizeRedrawFrames < 3) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}`);
+  return waitFor(
+    async () =>
+      (await window.webContents.executeJavaScript(
+        'window.resizeRedrawFrames',
+      )) >= 3,
+  );
 }
 
 // Shrinks the window to its minimum width, lists what the page cuts off
@@ -194,12 +206,19 @@ async function cutOffAtMinimumWidth(
   window.setSize(minimumWidth, height);
   const [narrowWidth] = window.getContentSize();
   const hasNarrowed = await waitForPageWidth(window, narrowWidth);
-  if (hasNarrowed) {
-    await waitForResizeRedraw(window);
+  const hasRedrawn = hasNarrowed && (await waitForResizeRedraw(window));
+  let problems: string[];
+  if (!hasNarrowed) {
+    problems = [`the page never narrowed to ${narrowWidth}px`];
+  } else if (!hasRedrawn) {
+    problems = [
+      `the page produced no frames after narrowing to ${narrowWidth}px`,
+    ];
+  } else {
+    problems = await window.webContents.executeJavaScript(
+      cutOffScript(scrollsItself),
+    );
   }
-  const problems = hasNarrowed
-    ? await window.webContents.executeJavaScript(cutOffScript(scrollsItself))
-    : [`the page never narrowed to ${narrowWidth}px`];
   window.setSize(width, height);
   await waitForPageWidth(window, window.getContentSize()[0]);
   return problems;
