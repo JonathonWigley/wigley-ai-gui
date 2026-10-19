@@ -161,9 +161,38 @@ const ROUND_ITEMS = {
   question: (round) => round.questions,
 } satisfies Record<ItemKind, (round: Round) => unknown[]>;
 
-const ANSWER_ARRAYS: Record<AnswerableKind, 'answers' | 'findingAnswers'> = {
-  question: 'answers',
-  finding: 'findingAnswers',
+// The answer each answerable kind holds.
+interface AnswerOf {
+  question: ItemAnswer;
+  finding: FindingAnswer;
+}
+
+// An answerable item of one kind.
+type KindItem<K extends AnswerableKind> = { kind: K; index: number };
+
+// Reads and replaces one kind's answers in a round.
+interface AnswerArray<Answer> {
+  read(round: RoundState): Answer[];
+  write(round: RoundState, answers: Answer[]): RoundState;
+}
+
+// Keeps every answer's own kind, so a finding's action survives.
+type AnswerChange = <Answer extends ItemAnswer>(
+  answer: Answer,
+  choiceCount: number,
+) => Answer;
+
+// A mapped type, not `satisfies`: indexing it by a generic kind keeps the
+// kind's answer type.
+const ANSWER_ARRAYS: { [K in AnswerableKind]: AnswerArray<AnswerOf[K]> } = {
+  question: {
+    read: (round) => round.answers,
+    write: (round, answers) => ({ ...round, answers }),
+  },
+  finding: {
+    read: (round) => round.findingAnswers,
+    write: (round, findingAnswers) => ({ ...round, findingAnswers }),
+  },
 };
 
 export function initialState(
@@ -281,14 +310,15 @@ export function focusedItem(round: RoundState): RailItem | null {
 }
 
 // Throws when the round has no such item.
-export function itemAnswer(
+export function itemAnswer<K extends AnswerableKind>(
   round: RoundState,
-  item: AnswerableItem,
-): ItemAnswer {
+  item: KindItem<K>,
+): AnswerOf[K] {
   if (!hasItem(round, item)) {
     throw new Error(`round ${round.roundId} has no ${item.kind} ${item.index}`);
   }
-  return round[ANSWER_ARRAYS[item.kind]][item.index - 1];
+  const answers: AnswerArray<AnswerOf[K]> = ANSWER_ARRAYS[item.kind];
+  return answers.read(round)[item.index - 1];
 }
 
 // The action picked on a finding; '' on a question.
@@ -681,11 +711,11 @@ function focusAt(round: RoundState, item: number): RoundState {
 }
 
 // Same number again clears; locked while not applicable.
-function choose(
-  answer: ItemAnswer,
+function choose<Answer extends ItemAnswer>(
+  answer: Answer,
   choiceCount: number,
   choice: number,
-): ItemAnswer {
+): Answer {
   const isChoiceInRange = choice >= 1 && choice <= choiceCount;
   if (answer.notApplicable || !isChoiceInRange) {
     return answer;
@@ -721,23 +751,36 @@ function updateFocusedFinding(
   if (focused === null || focused.kind !== 'finding') {
     return round;
   }
-  const item: AnswerableItem = { kind: 'finding', index: focused.index };
-  const answer = round.findingAnswers[item.index - 1];
-  const solutionCount = round.round.findings[item.index - 1].choices.length;
-  const next = change(answer, solutionCount);
-  return next === answer ? round : withItemAnswer(round, item, next);
+  return updateItemAnswer(
+    round,
+    { kind: 'finding', index: focused.index },
+    change,
+  );
 }
 
 // A no-op when a notice is focused or `change` returns the answer it was given.
 function updateFocusedAnswer(
   round: RoundState,
-  change: (answer: ItemAnswer, choiceCount: number) => ItemAnswer,
+  change: AnswerChange,
 ): RoundState {
   const focused = focusedItem(round);
   if (focused === null || focused.kind === 'notice') {
     return round;
   }
-  const item: AnswerableItem = { kind: focused.kind, index: focused.index };
+  return updateItemAnswer(
+    round,
+    { kind: focused.kind, index: focused.index },
+    change,
+  );
+}
+
+// A no-op when `change` returns the answer it was given. Throws when the
+// round has no such item.
+function updateItemAnswer<K extends AnswerableKind>(
+  round: RoundState,
+  item: KindItem<K>,
+  change: (answer: AnswerOf[K], choiceCount: number) => AnswerOf[K],
+): RoundState {
   const choiceCount = ROUND_ITEMS[item.kind](round.round)[item.index - 1]
     .choices.length;
   const answer = itemAnswer(round, item);
@@ -746,23 +789,23 @@ function updateFocusedAnswer(
 }
 
 function hasItem(round: RoundState, item: AnswerableItem): boolean {
-  const count = round[ANSWER_ARRAYS[item.kind]].length;
+  const count = ANSWER_ARRAYS[item.kind].read(round).length;
   return item.index >= 1 && item.index <= count;
 }
 
-function withItemAnswer(
+function withItemAnswer<K extends AnswerableKind>(
   round: RoundState,
-  item: AnswerableItem,
-  answer: ItemAnswer,
+  item: KindItem<K>,
+  answer: AnswerOf[K],
 ): RoundState {
-  const key = ANSWER_ARRAYS[item.kind];
-  return {
-    ...round,
-    [key]: round[key].map((current, i) =>
-      i === item.index - 1 ? answer : current,
-    ),
-    revision: round.revision + 1,
-  };
+  const answers: AnswerArray<AnswerOf[K]> = ANSWER_ARRAYS[item.kind];
+  const written = answers.write(
+    round,
+    answers
+      .read(round)
+      .map((current, i) => (i === item.index - 1 ? answer : current)),
+  );
+  return { ...written, revision: round.revision + 1 };
 }
 
 function setText(
@@ -794,10 +837,11 @@ function setText(
       if (!hasItem(round, item) || itemAnswer(round, item)[field] === value) {
         return round;
       }
-      return withItemAnswer(round, item, {
-        ...itemAnswer(round, item),
+      const writeField: AnswerChange = (answer) => ({
+        ...answer,
         [field]: value,
       });
+      return updateItemAnswer(round, item, writeField);
     }
   }
 }
