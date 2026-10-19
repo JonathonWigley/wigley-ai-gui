@@ -10,6 +10,7 @@ import type {
 import {
   activeRound,
   apply,
+  baseView,
   buildBody,
   focusedItem,
   initialState,
@@ -524,6 +525,20 @@ describe('askClose', () => {
   it('does nothing while the prompt is open', () => {
     const asked = apply(two, askClose);
     expect(apply(asked, askClose)).toBe(asked);
+  });
+});
+
+describe('baseView', () => {
+  it('is the view help returns to while help is open', () => {
+    expect(
+      baseView(
+        run(mixedRound(), { type: 'openReview' }, { type: 'toggleHelp' }),
+      ),
+    ).toBe('review');
+  });
+
+  it('is the view itself otherwise', () => {
+    expect(baseView(mixedRound())).toBe('forms');
   });
 });
 

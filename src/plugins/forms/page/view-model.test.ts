@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   activeRound,
   apply,
-  baseView,
   type FormsAction,
   type FormsState,
   initialState,
@@ -176,18 +175,6 @@ describe('saveLabel', () => {
     expect(saveLabel('unsaved', null)).toBe('Unsaved');
     expect(saveLabel('saving', null)).toBe('Saving…');
     expect(saveLabel('saved', null)).toBe('Saved');
-  });
-});
-
-describe('baseView', () => {
-  it('is the view help returns to while help is open', () => {
-    expect(
-      baseView(stateAfter({ type: 'openReview' }, { type: 'toggleHelp' })),
-    ).toBe('review');
-  });
-
-  it('is the view itself otherwise', () => {
-    expect(baseView(stateAfter())).toBe('forms');
   });
 });
 
