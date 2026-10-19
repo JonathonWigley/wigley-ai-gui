@@ -101,14 +101,18 @@ function roundLabel(projectDir: string | null, heading: string): string {
     : `${path.basename(projectDir)} · ${heading}`;
 }
 
-function withoutDontAsk(answer: AnswerEntry): AnswerEntry {
+function withoutDontAsk<Entry extends AnswerEntry>(answer: Entry): Entry {
   return { ...answer, dont_ask: false, dont_ask_reason: '' };
 }
 
-const ANSWER_LISTS: Record<AnswerableKind, 'answers' | 'finding_answers'> = {
-  question: 'answers',
-  finding: 'finding_answers',
-};
+// Each answerable kind's answer list in a body, its Don't ask me this
+// presses dropped and its entries keeping their own type.
+const ANSWER_LISTS = {
+  question: (body) => ({ answers: body.answers.map(withoutDontAsk) }),
+  finding: (body) => ({
+    finding_answers: body.finding_answers.map(withoutDontAsk),
+  }),
+} satisfies Record<AnswerableKind, (body: FormBody) => Partial<FormBody>>;
 
 // A press belongs to the round it was made in, so a finished round's copy
 // drops it; an open draft's copy keeps it, since retro reads finished rounds only.
@@ -121,8 +125,8 @@ function prefillDraft(round: Round, saved: SavedRound | null): FormBody | null {
     return body;
   }
   const stripped: FormBody = { ...body };
-  for (const key of Object.values(ANSWER_LISTS)) {
-    stripped[key] = body[key].map(withoutDontAsk);
+  for (const listWithoutDontAsk of Object.values(ANSWER_LISTS)) {
+    Object.assign(stripped, listWithoutDontAsk(body));
   }
   return stripped;
 }

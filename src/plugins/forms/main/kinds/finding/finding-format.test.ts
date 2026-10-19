@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FINDING_ACTIONS } from '../../../contract';
 import { RoundError } from '../../round-error';
 import { findingFormat } from './finding-format';
 
@@ -12,6 +13,7 @@ function finding(overrides: Record<string, unknown> = {}) {
       { text: 'Leave it', reason: 'Reloads are rare.' },
     ],
     recommend: 1,
+    recommend_action: 'fix_now',
     ...overrides,
   };
 }
@@ -46,11 +48,11 @@ describe('findingFormat.parse', () => {
     }
   });
 
-  it("parses a finding with its five fields and each choice's reason", () => {
+  it("parses a finding with its six fields and each choice's reason", () => {
     expect(findingFormat.parse(finding(), 'Finding 1: ')).toEqual(finding());
   });
 
-  it('names every missing finding field and the five required names', () => {
+  it('names every missing finding field and the six required names', () => {
     const partial: Record<string, unknown> = finding();
     delete partial.proof;
     delete partial.recommend;
@@ -58,13 +60,34 @@ describe('findingFormat.parse', () => {
     const message = parseError(partial);
 
     expect(message).toContain('Finding 1: missing proof, recommend');
-    expect(message).toContain('title, finding, proof, choices, recommend');
+    expect(message).toContain(
+      'All six fields are required: title, finding, proof, choices, ' +
+        'recommend, recommend_action.',
+    );
+  });
+
+  it('names a missing recommend_action with the six required names', () => {
+    const partial: Record<string, unknown> = finding();
+    delete partial.recommend_action;
+
+    expect(parseError(partial)).toBe(
+      'Finding 1: missing recommend_action. All six fields are required: ' +
+        'title, finding, proof, choices, recommend, recommend_action.',
+    );
+  });
+
+  it('refuses a recommend_action outside the three actions', () => {
+    expect(parseError(finding({ recommend_action: 'Fix now' }))).toBe(
+      "Finding 1: recommend_action must be one of 'fix_now', 'follow_up', " +
+        "and 'leave_it'.",
+    );
   });
 
   it('refuses an extra finding field, saying the form draws its own controls', () => {
     const message = parseError(finding({ context: 'x' }));
 
     expect(message).toContain('unknown field(s) context');
+    expect(message).toContain('the action control');
     expect(message).toContain('the Notes box');
   });
 
@@ -112,11 +135,17 @@ describe('findingFormat.parse', () => {
     );
   });
 
-  it('refuses one choice and eleven choices', () => {
+  it('accepts a single solution', () => {
+    const lone = finding({ choices: [{ text: 'a', reason: 'r' }] });
+
+    expect(findingFormat.parse(lone, 'Finding 1: ')).toEqual(lone);
+  });
+
+  it('refuses zero choices and eleven choices', () => {
     const choice = { text: 'a', reason: 'r' };
 
-    expect(parseError(finding({ choices: [choice] }))).toContain(
-      'has 1 choice(s)',
+    expect(parseError(finding({ choices: [] }))).toBe(
+      'Finding 1: has 0 choice(s). A finding needs at least 1 solution.',
     );
     expect(
       parseError(
@@ -144,5 +173,34 @@ describe('findingFormat.answerSubject', () => {
       choiceTexts: ['Fix it now', 'Leave it'],
       recommend: 1,
     });
+  });
+});
+
+describe('findingFormat.arraySchema', () => {
+  it('offers the three actions for recommend_action and takes one solution', () => {
+    const items = findingFormat.arraySchema.items as {
+      properties: {
+        recommend_action: { enum: string[] };
+        choices: { minItems: number };
+      };
+    };
+
+    expect(items.properties.recommend_action.enum).toEqual([
+      ...FINDING_ACTIONS,
+    ]);
+    expect(items.properties.choices.minItems).toBe(1);
+  });
+});
+
+describe('findingFormat.fingerprintContent', () => {
+  it('differs when only recommend_action differs', () => {
+    const content = (recommend_action: string) =>
+      JSON.stringify(
+        findingFormat.fingerprintContent(
+          findingFormat.parse(finding({ recommend_action }), 'Finding 1: '),
+        ),
+      );
+
+    expect(content('fix_now')).not.toBe(content('leave_it'));
   });
 });

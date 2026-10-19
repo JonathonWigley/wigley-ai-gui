@@ -68,6 +68,7 @@ const FINDING_ARGS = {
         { text: 'Leave it', reason: 'Reloads are rare.' },
       ],
       recommend: 1,
+      recommend_action: 'fix_now',
     },
   ],
 };
@@ -1213,12 +1214,15 @@ describe('pre-fill', () => {
       note: '',
       answers: [],
       finding_answers: [
-        answer({
-          choice: 2,
-          notes: 'half done',
-          dont_ask: true,
-          dont_ask_reason: 'obvious',
-        }),
+        {
+          ...answer({
+            choice: 2,
+            notes: 'half done',
+            dont_ask: true,
+            dont_ask_reason: 'obvious',
+          }),
+          action: 'follow_up',
+        },
       ],
       notice_comments: [],
     };
@@ -1227,7 +1231,7 @@ describe('pre-fill', () => {
     void startSession().askRound(FINDING_ARGS, null, live());
 
     expect(latestDraft().finding_answers).toEqual([
-      answer({ choice: 2, notes: 'half done' }),
+      { ...answer({ choice: 2, notes: 'half done' }), action: 'follow_up' },
     ]);
   });
 

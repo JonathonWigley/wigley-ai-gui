@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AnswerEntry, FormBody } from '../contract';
+import type { AnswerEntry, FindingAnswerEntry, FormBody } from '../contract';
 import {
   answersPayload,
   fingerprint,
@@ -40,6 +40,7 @@ function finding(overrides: Record<string, unknown> = {}) {
       { text: 'Leave it', reason: 'Reloads are rare.' },
     ],
     recommend: 1,
+    recommend_action: 'fix_now',
     ...overrides,
   };
 }
@@ -54,6 +55,10 @@ function answer(entry: Partial<AnswerEntry>): AnswerEntry {
     dont_ask_reason: '',
     ...entry,
   };
+}
+
+function findingAnswer(entry: Partial<FindingAnswerEntry>): FindingAnswerEntry {
+  return { ...answer(entry), action: '', ...entry };
 }
 
 function body(answers: AnswerEntry[], extra: Partial<FormBody> = {}): FormBody {
@@ -363,8 +368,8 @@ describe('readFormBody', () => {
     });
 
     expect(read.finding_answers).toEqual([
-      answer({ index: 1 }),
-      answer({ index: 2, choice: 1, notes: 'n' }),
+      findingAnswer({ index: 1 }),
+      findingAnswer({ index: 2, choice: 1, notes: 'n' }),
     ]);
   });
 
@@ -372,8 +377,34 @@ describe('readFormBody', () => {
     const round = parseRound({ heading: 'H', findings: [finding()] });
 
     expect(readFormBody(round, {}).finding_answers).toEqual([
-      answer({ index: 1 }),
+      findingAnswer({ index: 1 }),
     ]);
+  });
+
+  it("keeps a finding's saved action", () => {
+    const round = parseRound({ heading: 'H', findings: [finding()] });
+
+    const read = readFormBody(round, {
+      finding_answers: [{ index: 1, choice: 2, action: 'follow_up' }],
+    });
+
+    expect(read.finding_answers[0].action).toBe('follow_up');
+  });
+
+  it('reads a finding entry with no action, or an unknown one, as none', () => {
+    const round = parseRound({
+      heading: 'H',
+      findings: [finding(), finding({ title: 'Dead branch' })],
+    });
+
+    const read = readFormBody(round, {
+      finding_answers: [
+        { index: 1, choice: 2 },
+        { index: 2, choice: 1, action: 'Fix now' },
+      ],
+    });
+
+    expect(read.finding_answers.map((entry) => entry.action)).toEqual(['', '']);
   });
 
   it('keeps a pressed answer with its reason', () => {
@@ -617,8 +648,13 @@ describe('answersPayload findings', () => {
       'submitted',
       body([answer({ choice: 1 })], {
         finding_answers: [
-          answer({ index: 1, choice: 2, notes: 'later' }),
-          answer({ index: 2, not_applicable: true }),
+          findingAnswer({
+            index: 1,
+            choice: 2,
+            action: 'follow_up',
+            notes: 'later',
+          }),
+          findingAnswer({ index: 2, not_applicable: true }),
         ],
       }),
     );
@@ -631,6 +667,8 @@ describe('answersPayload findings', () => {
         choice: 2,
         choice_text: 'Leave it',
         took_recommendation: false,
+        action: 'follow_up',
+        took_action_recommendation: false,
         notes: 'later',
       },
       {
@@ -640,6 +678,8 @@ describe('answersPayload findings', () => {
         choice: 0,
         choice_text: '',
         took_recommendation: false,
+        action: '',
+        took_action_recommendation: false,
       },
     ]);
     expect(payload.answers).toHaveLength(1);
@@ -654,7 +694,12 @@ describe('answersPayload findings', () => {
       'submitted',
       body([], {
         finding_answers: [
-          answer({ choice: 1, dont_ask: true, dont_ask_reason: 'obvious' }),
+          findingAnswer({
+            choice: 1,
+            action: 'fix_now',
+            dont_ask: true,
+            dont_ask_reason: 'obvious',
+          }),
         ],
       }),
     );
@@ -675,7 +720,9 @@ describe('answersPayload findings', () => {
     const payload = answersPayload(
       round,
       'submitted',
-      body([], { finding_answers: [answer({ choice: 1 })] }),
+      body([], {
+        finding_answers: [findingAnswer({ choice: 1, action: 'fix_now' })],
+      }),
     );
 
     expect(payload.summary).toBe(
@@ -694,7 +741,7 @@ describe('answersPayload findings', () => {
       round,
       'submitted',
       body([answer({ choice: 1 })], {
-        finding_answers: [answer({ choice: 1 })],
+        finding_answers: [findingAnswer({ choice: 1, action: 'fix_now' })],
       }),
     );
 
@@ -725,6 +772,85 @@ describe('answersPayload findings', () => {
     expect(answersPayload(round, 'draft', body([])).summary).toBe(
       '1 finding: 0 answered, 0 not applicable, 1 untouched. The form is still open.',
     );
+  });
+});
+
+describe('answersPayload finding actions', () => {
+  const oneSolution = finding({
+    choices: [{ text: 'Clear on reload', reason: 'It is one line.' }],
+  });
+
+  function findingResult(
+    entry: Partial<FindingAnswerEntry>,
+    raw: Record<string, unknown> = finding(),
+  ) {
+    const round = parseRound({ heading: 'H', findings: [raw] });
+    const payload = answersPayload(
+      round,
+      'submitted',
+      body([], { finding_answers: [findingAnswer(entry)] }),
+    );
+    return payload.findings[0];
+  }
+
+  it('leaves a two-solution finding untouched until a solution is picked', () => {
+    expect(findingResult({ action: 'fix_now', choice: 0 })).toMatchObject({
+      status: 'untouched',
+      action: '',
+      choice: 0,
+      choice_text: '',
+      took_action_recommendation: false,
+    });
+  });
+
+  it('answers a one-solution finding with its action alone, reporting that solution', () => {
+    expect(
+      findingResult({ action: 'follow_up', choice: 0 }, oneSolution),
+    ).toMatchObject({
+      status: 'answered',
+      choice: 1,
+      choice_text: 'Clear on reload',
+      action: 'follow_up',
+    });
+  });
+
+  it('reports no solution on leave_it, whatever solution was kept', () => {
+    expect(findingResult({ action: 'leave_it', choice: 2 })).toMatchObject({
+      status: 'answered',
+      choice: 0,
+      choice_text: '',
+      took_recommendation: false,
+      action: 'leave_it',
+    });
+  });
+
+  it('judges the solution and the action against their own recommendations', () => {
+    expect(findingResult({ action: 'follow_up', choice: 1 })).toMatchObject({
+      took_recommendation: true,
+      took_action_recommendation: false,
+    });
+    expect(findingResult({ action: 'fix_now', choice: 2 })).toMatchObject({
+      took_recommendation: false,
+      took_action_recommendation: true,
+    });
+  });
+
+  it('reports no action on a not-applicable finding that holds one', () => {
+    expect(
+      findingResult({ action: 'fix_now', choice: 1, not_applicable: true }),
+    ).toMatchObject({
+      status: 'not_applicable',
+      action: '',
+      choice: 0,
+      took_action_recommendation: false,
+    });
+  });
+
+  it('leaves a finding with notes alone untouched on the wire', () => {
+    expect(findingResult({ notes: 'my own fix' })).toMatchObject({
+      status: 'untouched',
+      notes: 'my own fix',
+    });
   });
 });
 

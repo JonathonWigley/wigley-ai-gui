@@ -138,6 +138,7 @@ function fixtureRound(run: number) {
           },
         ],
         recommend: 1,
+        recommend_action: 'fix_now',
       },
     ],
     questions: [

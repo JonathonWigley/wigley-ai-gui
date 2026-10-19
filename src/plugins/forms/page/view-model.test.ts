@@ -155,7 +155,12 @@ describe('reviewRows', () => {
   });
 
   it('lists an answered finding with its choice text', () => {
-    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 2 }));
+    const [delta] = reviewRows(
+      mixedRoundAfter(
+        { type: 'chooseAction', action: 'fix_now' },
+        { type: 'choose', choice: 2 },
+      ),
+    );
     expect(delta).toMatchObject({
       kind: 'finding',
       title: 'Delta',
@@ -167,7 +172,12 @@ describe('reviewRows', () => {
   });
 
   it('marks a finding choice other than the recommended one', () => {
-    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 1 }));
+    const [delta] = reviewRows(
+      mixedRoundAfter(
+        { type: 'chooseAction', action: 'fix_now' },
+        { type: 'choose', choice: 1 },
+      ),
+    );
     expect(delta.tookRecommendation).toBe(false);
   });
 
@@ -250,7 +260,12 @@ describe('sessionTitle', () => {
       [presentedRound('r1', { findings: [finding('Delta')] })],
       'r1-session',
     );
-    const round = activeRound(apply(start, { type: 'choose', choice: 1 }));
+    const round = activeRound(
+      apply(apply(start, { type: 'chooseAction', action: 'fix_now' }), {
+        type: 'choose',
+        choice: 1,
+      }),
+    );
     if (round === null) {
       throw new Error('The test round is not active');
     }

@@ -2,11 +2,15 @@ import type {
   AnswerableKind,
   AnswerEntry,
   AnswerStatus,
+  Finding,
+  FindingAction,
+  FindingAnswerEntry,
   FormBody,
   ItemKind,
   PresentedRound,
   Round,
 } from '../contract';
+import { findingPickIsComplete, isFindingAction } from '../finding-pick';
 
 export type FormsView = 'forms' | 'review' | 'confirm' | 'help' | 'idle';
 
@@ -27,6 +31,12 @@ export interface ItemAnswer {
   dontAskReason: string;
 }
 
+// `choice` is the solution, kept while the action is 'leave_it'; '' is no
+// action.
+export interface FindingAnswer extends ItemAnswer {
+  action: FindingAction | '';
+}
+
 export interface RoundState {
   roundId: string;
   // The session whose view the round fills.
@@ -36,7 +46,7 @@ export interface RoundState {
   // One per question, in order.
   answers: ItemAnswer[];
   // One per finding, in order.
-  findingAnswers: ItemAnswer[];
+  findingAnswers: FindingAnswer[];
   // One per notice, in order.
   noticeComments: string[];
   note: string;
@@ -88,7 +98,10 @@ export type ItemAction =
   // `item` is a rail position.
   | { type: 'focusItem'; item: number }
   | { type: 'choose'; choice: number }
+  // Clears only the solution on a finding; its action stays.
   | { type: 'clearChoice' }
+  // On a finding: picking the action it holds clears it.
+  | { type: 'chooseAction'; action: FindingAction }
   | { type: 'toggleNotApplicable' }
   | { type: 'toggleDontAsk' };
 
@@ -138,6 +151,8 @@ const UNTOUCHED: ItemAnswer = {
   dontAsk: false,
   dontAskReason: '',
 };
+
+const UNTOUCHED_FINDING: FindingAnswer = { ...UNTOUCHED, action: '' };
 
 const RAIL_ORDER: ItemKind[] = ['notice', 'finding', 'question'];
 
@@ -277,14 +292,33 @@ export function itemAnswer(
   return round[ANSWER_ARRAYS[item.kind]][item.index - 1];
 }
 
-// A choice, or written notes, answers an item.
-export function answerStatus(answer: ItemAnswer): AnswerStatus {
+// Whether the item's picks answer it: a choice on a question, a complete
+// pick of action and solution on a finding.
+const PICK_ANSWERS = {
+  question: (round, index) => round.answers[index - 1].choice >= 1,
+  finding: (round, index) => {
+    const answer = round.findingAnswers[index - 1];
+    const solutionCount = round.round.findings[index - 1].choices.length;
+    return findingPickIsComplete(solutionCount, answer.choice, answer.action);
+  },
+} satisfies Record<
+  AnswerableKind,
+  (round: RoundState, index: number) => boolean
+>;
+
+// The item's picks, or written notes, answer it. Throws when the round has no
+// such item.
+export function answerStatus(
+  round: RoundState,
+  item: AnswerableItem,
+): AnswerStatus {
+  const answer = itemAnswer(round, item);
   if (answer.notApplicable) {
     return 'not_applicable';
   }
-  const hasChoice = answer.choice >= 1;
   const hasText = answer.notes.trim() !== '';
-  return hasChoice || hasText ? 'answered' : 'untouched';
+  const picksAnswer = PICK_ANSWERS[item.kind](round, item.index);
+  return picksAnswer || hasText ? 'answered' : 'untouched';
 }
 
 // The next answerable item after the focused one, by `step` and wrapping,
@@ -306,7 +340,7 @@ export function unansweredItem(
   const start = position < 0 ? outside : position;
   for (let offset = 1; offset <= count; offset++) {
     const item = items[(((start + step * offset) % count) + count) % count];
-    if (answerStatus(itemAnswer(round, item)) === 'untouched') {
+    if (answerStatus(round, item) === 'untouched') {
       return item;
     }
   }
@@ -315,7 +349,7 @@ export function unansweredItem(
 
 export function progress(round: RoundState): Progress {
   const statuses = answerableItems(round.round).map((item) =>
-    answerStatus(itemAnswer(round, item)),
+    answerStatus(round, item),
   );
   const count = (status: AnswerStatus) =>
     statuses.filter((candidate) => candidate === status).length;
@@ -339,7 +373,7 @@ export function buildBody(round: RoundState): FormBody {
   return {
     note: round.note,
     answers: round.answers.map(answerEntry),
-    finding_answers: round.findingAnswers.map(answerEntry),
+    finding_answers: round.findingAnswers.map(findingAnswerEntry),
     notice_comments: round.noticeComments.map((comment, i) => ({
       index: i + 1,
       comment,
@@ -359,6 +393,14 @@ function answerEntry(answer: ItemAnswer, i: number): AnswerEntry {
   };
 }
 
+// `i` is the answer's 0-based position.
+function findingAnswerEntry(
+  answer: FindingAnswer,
+  i: number,
+): FindingAnswerEntry {
+  return { ...answerEntry(answer, i), action: answer.action };
+}
+
 // Where a round opens: its first finding or question, past the notices; the
 // first notice when it has nothing to answer.
 function firstAnswerablePosition(round: Round): number {
@@ -374,7 +416,7 @@ function restoreRound(presented: PresentedRound): RoundState {
     label,
     round,
     answers: restoreAnswers(round.questions, draft?.answers ?? []),
-    findingAnswers: restoreAnswers(
+    findingAnswers: restoreFindingAnswers(
       round.findings,
       draft?.finding_answers ?? [],
     ),
@@ -404,6 +446,24 @@ function restoreAnswers(
       item.choices.length,
     ),
   );
+}
+
+// A missing or unknown action restores as none.
+function restoreFindingAnswers(
+  findings: Finding[],
+  entries: FindingAnswerEntry[],
+): FindingAnswer[] {
+  return findings.map((finding, i) => {
+    const entry = entries.find((candidate) => candidate.index === i + 1);
+    if (entry === undefined) {
+      return UNTOUCHED_FINDING;
+    }
+    const action = isFindingAction(entry.action) ? entry.action : '';
+    return {
+      ...restoreAnswer(entry, finding.choices.length),
+      action,
+    };
+  });
 }
 
 function restoreAnswer(
@@ -581,6 +641,10 @@ function applyItemAction(round: RoundState, action: ItemAction): RoundState {
           ? answer
           : { ...answer, choice: 0 },
       );
+    case 'chooseAction':
+      return updateFocusedFinding(round, (answer, solutionCount) =>
+        chooseAction(answer, solutionCount, action.action),
+      );
     case 'toggleNotApplicable':
       return updateFocusedAnswer(round, (answer) => ({
         ...answer,
@@ -618,6 +682,41 @@ function choose(
     return answer;
   }
   return { ...answer, choice: answer.choice === choice ? 0 : choice };
+}
+
+// Same action again clears it, leaving the solution; locked while not
+// applicable. Fixing or following up a one-solution finding picks that
+// solution.
+function chooseAction(
+  answer: FindingAnswer,
+  solutionCount: number,
+  action: FindingAction,
+): FindingAnswer {
+  if (answer.notApplicable) {
+    return answer;
+  }
+  if (answer.action === action) {
+    return { ...answer, action: '' };
+  }
+  const picksOnlySolution = action !== 'leave_it' && solutionCount === 1;
+  return { ...answer, action, choice: picksOnlySolution ? 1 : answer.choice };
+}
+
+// A no-op unless a finding is focused, or when `change` returns the answer
+// it was given.
+function updateFocusedFinding(
+  round: RoundState,
+  change: (answer: FindingAnswer, solutionCount: number) => FindingAnswer,
+): RoundState {
+  const focused = focusedItem(round);
+  if (focused === null || focused.kind !== 'finding') {
+    return round;
+  }
+  const item: AnswerableItem = { kind: 'finding', index: focused.index };
+  const answer = round.findingAnswers[item.index - 1];
+  const solutionCount = round.round.findings[item.index - 1].choices.length;
+  const next = change(answer, solutionCount);
+  return next === answer ? round : withItemAnswer(round, item, next);
 }
 
 // A no-op when a notice is focused or `change` returns the answer it was given.

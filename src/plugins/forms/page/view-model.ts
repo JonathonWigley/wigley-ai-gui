@@ -48,7 +48,7 @@ export function reviewRows(round: RoundState): ReviewRow[] {
   return answerableItems(round.round).map((item, row): ReviewRow => {
     const format = FORMATS[item.kind];
     const answer = itemAnswer(round, item);
-    const status = answerStatus(answer);
+    const status = answerStatus(round, item);
     const choice = status === 'answered' ? answer.choice : 0;
     return {
       row,

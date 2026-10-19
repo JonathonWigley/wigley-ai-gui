@@ -180,8 +180,11 @@ function buildAnswerControls(
 
 // Shows an answer's status on the card and its chip, its choice selected,
 // and the choices locked while not applicable.
-function showAnswer(parts: AnswerParts, answer: ItemAnswer) {
-  const status = answerStatus(answer);
+function showAnswer(
+  parts: AnswerParts,
+  answer: ItemAnswer,
+  status: AnswerStatus,
+) {
   parts.card.dataset.status = status;
   parts.statusChip.textContent =
     status === 'untouched' ? '' : statusLabel(status);
@@ -223,7 +226,7 @@ export function buildAnswerableCard(
       element: article,
       update(current) {
         const answer = itemAnswer(current, item);
-        showAnswer(parts, answer);
+        showAnswer(parts, answer, answerStatus(current, item));
         controls.update(answer);
       },
     },

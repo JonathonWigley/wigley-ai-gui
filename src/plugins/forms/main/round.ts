@@ -5,6 +5,9 @@ import type {
   AnswerResult,
   AnswerStatus,
   AnswersPayload,
+  Finding,
+  FindingAnswerEntry,
+  FindingResult,
   FormBody,
   ItemKind,
   Notice,
@@ -12,10 +15,12 @@ import type {
   Round,
   RoundEnd,
 } from '../contract';
+import { findingPickIsComplete, isFindingAction } from '../finding-pick';
 import {
   fieldsOutside,
   isObject,
   type JsonObject,
+  quotedList,
   requireText,
 } from './kinds/fields';
 import { ANSWERABLE_KINDS, FORMATS, ITEM_KINDS } from './kinds/formats';
@@ -43,12 +48,6 @@ const NEXT_ON_NO_ROUND =
   'for it. If you sent a round whose answers you never received, send the ' +
   "same round again with ask_round: the user's saved answers fill in. Do not " +
   'move the questions into the reply.';
-
-// 'a', 'b', and 'c'
-function quotedList(names: string[]): string {
-  const quoted = names.map((name) => `'${name}'`);
-  return `${quoted.slice(0, -1).join(', ')}, and ${quoted.at(-1)}`;
-}
 
 // a, b or c
 function eitherList(names: string[]): string {
@@ -160,12 +159,24 @@ function readAnswerEntry(index: number, entry: JsonObject): AnswerEntry {
   };
 }
 
-function readAnswerEntries(
+// A saved action outside the three, or none, reads as no action.
+function readFindingAnswerEntry(
+  index: number,
+  entry: JsonObject,
+): FindingAnswerEntry {
+  return {
+    ...readAnswerEntry(index, entry),
+    action: isFindingAction(entry.action) ? entry.action : '',
+  };
+}
+
+function readAnswerEntries<Entry>(
   items: readonly unknown[],
   saved: unknown,
-): AnswerEntry[] {
+  readEntry: (index: number, entry: JsonObject) => Entry,
+): Entry[] {
   const entries = entriesByIndex(saved);
-  return items.map((_, i) => readAnswerEntry(i + 1, entries.get(i + 1) ?? {}));
+  return items.map((_, i) => readEntry(i + 1, entries.get(i + 1) ?? {}));
 }
 
 // Any body — from the window or from a file another version wrote — as one
@@ -176,8 +187,12 @@ export function readFormBody(round: Round, raw: unknown): FormBody {
   const comments = entriesByIndex(body.notice_comments);
   return {
     note: textOrEmpty(body.note),
-    answers: readAnswerEntries(round.questions, body.answers),
-    finding_answers: readAnswerEntries(round.findings, body.finding_answers),
+    answers: readAnswerEntries(round.questions, body.answers, readAnswerEntry),
+    finding_answers: readAnswerEntries(
+      round.findings,
+      body.finding_answers,
+      readFindingAnswerEntry,
+    ),
     notice_comments: round.notices.map((_, i) => ({
       index: i + 1,
       comment: textOrEmpty(comments.get(i + 1)?.comment),
@@ -206,6 +221,49 @@ function answerResult(
     choice_text: answered ? subject.choiceTexts[entry.choice - 1] : '',
     took_recommendation: answered && entry.choice === subject.recommend,
   };
+  addNotesAndDontAsk(result, entry);
+  return result;
+}
+
+// A finding is answered once its pick is complete. Its `choice` is the
+// solution — 1 on a one-solution finding — and is 0 on 'leave_it', where no
+// solution applies.
+function findingResult(
+  finding: Finding,
+  entry: FindingAnswerEntry,
+): FindingResult {
+  const subject = FORMATS.finding.answerSubject(finding);
+  const solutionCount = subject.choiceTexts.length;
+  const answered =
+    !entry.not_applicable &&
+    findingPickIsComplete(solutionCount, entry.choice, entry.action);
+  let status: AnswerStatus = 'untouched';
+  if (entry.not_applicable) {
+    status = 'not_applicable';
+  } else if (answered) {
+    status = 'answered';
+  }
+  const hasSolution = answered && entry.action !== 'leave_it';
+  const solution = solutionCount === 1 ? 1 : entry.choice;
+  const choice = hasSolution ? solution : 0;
+  const result: FindingResult = {
+    index: entry.index,
+    title: subject.title,
+    status,
+    choice,
+    choice_text: choice > 0 ? subject.choiceTexts[choice - 1] : '',
+    took_recommendation: choice > 0 && choice === subject.recommend,
+    action: answered ? entry.action : '',
+    took_action_recommendation:
+      answered && entry.action === finding.recommend_action,
+  };
+  addNotesAndDontAsk(result, entry);
+  return result;
+}
+
+// Notes appear only when the user wrote some; `dont_ask` only on a pressed
+// answer, with its reason when the box held text.
+function addNotesAndDontAsk(result: AnswerResult, entry: AnswerEntry): void {
   if (entry.notes) {
     result.notes = entry.notes;
   }
@@ -215,7 +273,6 @@ function answerResult(
       result.dont_ask_reason = entry.dont_ask_reason;
     }
   }
-  return result;
 }
 
 function noticeResult(
@@ -273,10 +330,7 @@ export function answersPayload(
     answerResult(FORMATS.question.answerSubject(question), read.answers[i]),
   );
   const findings = round.findings.map((finding, i) =>
-    answerResult(
-      FORMATS.finding.answerSubject(finding),
-      read.finding_answers[i],
-    ),
+    findingResult(finding, read.finding_answers[i]),
   );
   const notices = round.notices.map((notice, i) =>
     noticeResult(notice, i + 1, read.notice_comments[i].comment),

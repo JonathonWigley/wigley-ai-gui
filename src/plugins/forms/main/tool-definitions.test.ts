@@ -86,7 +86,7 @@ describe('FORMS_TOOLS', () => {
     expect(notices.items.required).not.toContain('badge');
   });
 
-  it('declares findings with five required fields and nothing else allowed', () => {
+  it('declares findings with six required fields and nothing else allowed', () => {
     const findings = askRound.properties.findings;
 
     expect(findings.type).toBe('array');
@@ -96,6 +96,7 @@ describe('FORMS_TOOLS', () => {
       'proof',
       'choices',
       'recommend',
+      'recommend_action',
     ]);
     expect(findings.items.additionalProperties).toBe(false);
   });
@@ -103,7 +104,7 @@ describe('FORMS_TOOLS', () => {
   it('declares each finding choice as a strict text and reason pair', () => {
     const choices = askRound.properties.findings.items.properties.choices;
 
-    expect(choices.minItems).toBe(2);
+    expect(choices.minItems).toBe(1);
     expect(choices.maxItems).toBe(10);
     expect(choices.items?.required).toEqual(['text', 'reason']);
     expect(choices.items?.additionalProperties).toBe(false);

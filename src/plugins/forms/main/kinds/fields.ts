@@ -33,6 +33,12 @@ export function fieldsOutside(item: JsonObject, allowed: string[]): string[] {
     .sort();
 }
 
+// 'a', 'b', and 'c'
+export function quotedList(names: readonly string[]): string {
+  const quoted = names.map((name) => `'${name}'`);
+  return `${quoted.slice(0, -1).join(', ')}, and ${quoted.at(-1)}`;
+}
+
 // Python's type names, so messages read as they did from the Python server.
 function pythonTypeName(value: unknown): string {
   if (value === null || value === undefined) {

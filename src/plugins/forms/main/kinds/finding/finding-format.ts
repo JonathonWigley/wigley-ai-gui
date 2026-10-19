@@ -1,27 +1,45 @@
-import type { Finding, FindingChoice } from '../../../contract';
+import {
+  FINDING_ACTIONS,
+  type Finding,
+  type FindingAction,
+  type FindingChoice,
+} from '../../../contract';
+import { isFindingAction } from '../../../finding-pick';
 import { RoundError } from '../../round-error';
 import {
   fieldsMissing,
   fieldsOutside,
   isObject,
   MAX_CHOICES,
-  MIN_CHOICES,
   parseRecommend,
+  quotedList,
   requireText,
 } from '../fields';
 import type { AnswerableFormat } from '../item-format';
 
 const MAX_FINDINGS = 20;
 
-const FINDING_FIELDS = ['title', 'finding', 'proof', 'choices', 'recommend'];
+// A finding may offer a single solution; the user then picks only the action.
+const MIN_SOLUTIONS = 1;
+
+const FINDING_FIELDS = [
+  'title',
+  'finding',
+  'proof',
+  'choices',
+  'recommend',
+  'recommend_action',
+];
 const CHOICE_FIELDS = ['text', 'reason'];
 
 const FINDINGS_DESCRIPTION =
   "Review findings that need the user's decision — one object per finding. " +
   'Each draws as its own card after the notices and before the questions: ' +
-  'the finding, a brief proof, then the choices, each with its reason under ' +
-  'it. A finding already fixed or decided goes in notices instead; an open ' +
-  'decision that is not a review finding goes in questions.';
+  'the finding, a brief proof, then the solutions, each with its reason ' +
+  'under it, and under the solutions the action control — Fix now, ' +
+  'Follow-up or Leave it — the form draws itself. A finding already fixed ' +
+  'or decided goes in notices instead; an open decision that is not a ' +
+  'review finding goes in questions.';
 
 const PROOF_DESCRIPTION =
   'The evidence, in brief: short bullets naming the file, line, output or ' +
@@ -67,10 +85,10 @@ function parseChoices(raw: unknown, where: string): FindingChoice[] {
       `${where}choices must be a list of objects, each with text and reason.`,
     );
   }
-  if (raw.length < MIN_CHOICES) {
+  if (raw.length < MIN_SOLUTIONS) {
     throw new RoundError(
       `${where}has ${raw.length} choice(s). A finding needs at least ` +
-        `${MIN_CHOICES} choices for the user to decide between.`,
+        `${MIN_SOLUTIONS} solution.`,
     );
   }
   if (raw.length > MAX_CHOICES) {
@@ -82,6 +100,15 @@ function parseChoices(raw: unknown, where: string): FindingChoice[] {
   return raw.map((choice, i) => parseChoice(choice, i + 1, where));
 }
 
+function parseRecommendAction(raw: unknown, where: string): FindingAction {
+  if (!isFindingAction(raw)) {
+    throw new RoundError(
+      `${where}recommend_action must be one of ${quotedList(FINDING_ACTIONS)}.`,
+    );
+  }
+  return raw;
+}
+
 function parseFinding(item: unknown, where: string): Finding {
   if (!isObject(item)) {
     throw new RoundError(`${where}each finding must be an object.`);
@@ -89,16 +116,16 @@ function parseFinding(item: unknown, where: string): Finding {
   const missing = fieldsMissing(item, FINDING_FIELDS);
   if (missing.length > 0) {
     throw new RoundError(
-      `${where}missing ${missing.join(', ')}. All five fields are ` +
-        `required: title, finding, proof, choices, recommend.`,
+      `${where}missing ${missing.join(', ')}. All six fields are ` +
+        `required: title, finding, proof, choices, recommend, recommend_action.`,
     );
   }
   const extra = fieldsOutside(item, FINDING_FIELDS);
   if (extra.length > 0) {
     throw new RoundError(
       `${where}unknown field(s) ${extra.join(', ')}. The form draws ` +
-        `the not-applicable control and the Notes box itself; do not ` +
-        `describe them.`,
+        `the action control, the not-applicable control and the Notes box ` +
+        `itself; do not describe them.`,
     );
   }
   const title = requireText(item.title, 'title', where);
@@ -111,7 +138,8 @@ function parseFinding(item: unknown, where: string): Finding {
     choices.length,
     where,
   );
-  return { title, finding, proof, choices, recommend };
+  const recommend_action = parseRecommendAction(item.recommend_action, where);
+  return { title, finding, proof, choices, recommend, recommend_action };
 }
 
 export const findingFormat: AnswerableFormat<Finding> = {
@@ -137,7 +165,7 @@ export const findingFormat: AnswerableFormat<Finding> = {
         proof: { type: 'string', description: PROOF_DESCRIPTION },
         choices: {
           type: 'array',
-          minItems: MIN_CHOICES,
+          minItems: MIN_SOLUTIONS,
           maxItems: MAX_CHOICES,
           items: {
             type: 'object',
@@ -153,12 +181,21 @@ export const findingFormat: AnswerableFormat<Finding> = {
             },
           },
           description:
-            'The ways to resolve the finding, one object per choice.',
+            'The solutions, 1 to 10, one object per solution, each a way to ' +
+            'resolve the finding. What to do with the finding — fix now, ' +
+            'follow up or leave it — is the action control, never a choice.',
         },
         recommend: {
           type: 'integer',
           minimum: 1,
-          description: 'The 1-based number of the recommended choice.',
+          description: 'The 1-based number of the recommended solution.',
+        },
+        recommend_action: {
+          type: 'string',
+          enum: [...FINDING_ACTIONS],
+          description:
+            'The recommended action for the finding, picked on the ' +
+            "form's action control.",
         },
       },
     },
@@ -174,6 +211,7 @@ export const findingFormat: AnswerableFormat<Finding> = {
       reason: choice.reason,
     })),
     recommend: finding.recommend,
+    recommend_action: finding.recommend_action,
   }),
   answerSubject: (finding) => ({
     title: finding.title,

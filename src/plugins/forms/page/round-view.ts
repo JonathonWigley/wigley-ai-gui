@@ -8,7 +8,6 @@ import {
   answerStatus,
   type FormsAction,
   type FormsView,
-  itemAnswer,
   progress,
   type RailItem,
   railItems,
@@ -224,7 +223,7 @@ function updateRailEntry(
   const status =
     item.kind === 'notice'
       ? 'notice'
-      : answerStatus(itemAnswer(round, { kind: item.kind, index: item.index }));
+      : answerStatus(round, { kind: item.kind, index: item.index });
   entry.element.dataset.status = status;
   entry.element.classList.toggle('is-focused', position === round.focus);
   entry.element.classList.toggle(

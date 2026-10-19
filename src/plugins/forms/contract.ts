@@ -28,13 +28,25 @@ export interface FindingChoice {
   reason: string;
 }
 
+// What the user does with a finding, picked apart from its solution.
+export type FindingAction = 'fix_now' | 'follow_up' | 'leave_it';
+
+// In the order the action control draws them.
+export const FINDING_ACTIONS: readonly FindingAction[] = [
+  'fix_now',
+  'follow_up',
+  'leave_it',
+];
+
 export interface Finding {
   title: string;
   finding: string;
   proof: string;
+  // The solutions.
   choices: FindingChoice[];
   // 1-based.
   recommend: number;
+  recommend_action: FindingAction;
 }
 
 // A validated ask_round call.
@@ -57,6 +69,12 @@ export interface AnswerEntry {
   dont_ask_reason: string;
 }
 
+// `choice` is the solution, kept while the action is 'leave_it'; '' is no
+// action.
+export interface FindingAnswerEntry extends AnswerEntry {
+  action: FindingAction | '';
+}
+
 export interface NoticeComment {
   index: number;
   comment: string;
@@ -65,7 +83,7 @@ export interface NoticeComment {
 export interface FormBody {
   note: string;
   answers: AnswerEntry[];
-  finding_answers: AnswerEntry[];
+  finding_answers: FindingAnswerEntry[];
   notice_comments: NoticeComment[];
 }
 
@@ -90,6 +108,13 @@ export interface AnswerResult {
   dont_ask_reason?: string;
 }
 
+// `choice`, `choice_text` and `took_recommendation` describe the solution
+// alone; `action` is '' unless the finding is answered.
+export interface FindingResult extends AnswerResult {
+  action: FindingAction | '';
+  took_action_recommendation: boolean;
+}
+
 export interface NoticeResult {
   index: number;
   title: string;
@@ -103,7 +128,7 @@ export interface AnswersPayload {
   summary: string;
   next: string;
   answers: AnswerResult[];
-  findings: AnswerResult[];
+  findings: FindingResult[];
   notices: NoticeResult[];
   note?: string;
   earlier_heading?: string;

@@ -32,6 +32,7 @@ export function finding(
       reason: `${text} reason`,
     })),
     recommend: 2,
+    recommend_action: 'fix_now',
     ...overrides,
   };
 }
