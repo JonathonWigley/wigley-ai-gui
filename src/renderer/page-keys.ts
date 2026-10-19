@@ -156,9 +156,10 @@ export function createPendingTimeout(
 }
 
 // Non-chord keys fire when no editor has focus; chord binds fire everywhere,
-// inside an editor too, ahead of it. Focus entering an editor drops the
-// pending page keys, held ones included, so no page sequence outlives a move
-// into a box. A bind fires only in the scope `currentScope` reads. `report` hears the pending page keys each time they
+// inside an editor too, ahead of it. A page sequence never outlives the place
+// it was typed: focus entering an editor, or the window losing focus, drops
+// the pending page keys, held ones included. A bind fires only in the scope
+// `currentScope` reads. `report` hears the pending page keys each time they
 // change, `[]` once none are, with the scope in force as it reports. The
 // returned `hold` keeps the pending keys past the timeout until they end, and
 // `cancel` drops them, running nothing.
@@ -180,15 +181,16 @@ export function installPageKeys(
     log('page', `${bind.keys.join('')} ran ${bind.command}`);
     commands.run(bind.command, {});
   };
-  const dropForEditor = () => {
+  const dropPending = () => {
     dropPendingKeys(matcher, reportKeys);
     timeout.arm();
   };
   document.addEventListener('focusin', (event) => {
     if (editors.contains(event.target as Element)) {
-      dropForEditor();
+      dropPending();
     }
   });
+  window.addEventListener('blur', dropPending);
   document.addEventListener(
     'keydown',
     (event) => {
@@ -207,7 +209,7 @@ export function installPageKeys(
   );
   document.addEventListener('keydown', (event) => {
     if (editors.contains(event.target as Element)) {
-      dropForEditor();
+      dropPending();
       return;
     }
     if (!isPageKey(event)) {
