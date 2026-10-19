@@ -21,14 +21,9 @@ export interface EditorKeymap {
   binds: EditorBind[];
 }
 
-// The view a page key fires in; `any` fires in every view.
-export type ViewScope =
-  | 'forms'
-  | 'review'
-  | 'confirm'
-  | 'help'
-  | 'idle'
-  | 'any';
+// The scope a page key fires in; `any` fires in every scope. A plugin's scopes
+// reach the keymap qualified as `<pluginId>.<scope>`.
+export type ViewScope = string;
 
 // Keys pressed in order while no editor has focus; each is a KeyboardEvent.key value.
 export interface PageBind {

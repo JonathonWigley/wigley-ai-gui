@@ -19,6 +19,28 @@ const bridge: Bridge = {
       (_event, source: string, message: string) => listener(source, message),
     );
   },
+  invoke: async (pluginId, method, args) => {
+    try {
+      return await ipcRenderer.invoke(
+        BRIDGE_CHANNELS.pluginInvoke,
+        pluginId,
+        method,
+        args,
+      );
+    } catch (error) {
+      throw new Error(mainErrorText(error));
+    }
+  },
+  onMessage: (pluginId, message, listener) => {
+    ipcRenderer.on(
+      BRIDGE_CHANNELS.pluginMessage,
+      (_event, toPlugin: string, sent: string, data: unknown) => {
+        if (toPlugin === pluginId && sent === message) {
+          listener(data);
+        }
+      },
+    );
+  },
   openRounds: () => ipcRenderer.invoke(BRIDGE_CHANNELS.openRounds),
   onRoundShown: (listener) => {
     ipcRenderer.on(

@@ -5,6 +5,8 @@ import type { AppConfig } from './settings';
 export const BRIDGE_CHANNELS = {
   config: 'bridge:config',
   log: 'bridge:log',
+  pluginInvoke: 'plugin:invoke',
+  pluginMessage: 'plugin:message',
   openRounds: 'forms:open-rounds',
   roundShown: 'forms:shown',
   roundClosed: 'forms:closed',
@@ -17,6 +19,15 @@ export const BRIDGE_CHANNELS = {
 export interface Bridge {
   config(): Promise<AppConfig>;
   onLog(listener: Log): void;
+  // Calls `method` on the main part of plugin `pluginId`; rejects with main's
+  // own error text when the handler throws.
+  invoke(pluginId: string, method: string, args: unknown[]): Promise<unknown>;
+  // Calls `listener` with each `message` main sends plugin `pluginId`.
+  onMessage(
+    pluginId: string,
+    message: string,
+    listener: (data: unknown) => void,
+  ): void;
   // Rounds already open, with their latest drafts, for a page that just loaded.
   openRounds(): Promise<PresentedRound[]>;
   onRoundShown(listener: (round: PresentedRound) => void): void;

@@ -62,6 +62,8 @@ const config: AppConfig = {
         page: [...defaultKeymap.page, ...SELF_TEST_PAGE_BINDS],
       }
     : defaultKeymap,
+  commands: {},
+  pluginSettings: {},
   theme: chooseTheme(
     defaultSettings.theme,
     builtInThemes,
