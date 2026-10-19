@@ -20,9 +20,9 @@ const ASK_ROUND_DESCRIPTION =
   'round is always safe: the same questions, findings and notices re-attach ' +
   'to the round still open, return the answers of the round just ' +
   "submitted, or open pre-filled with the user's saved answers. When the " +
-  "result carries 'earlier_heading', " +
-  'those answers belong to an earlier round you never received; read them, ' +
-  "then send your round again. Answers to questions come back in 'answers' " +
+  "result carries 'earlier_heading', those answers belong to an earlier " +
+  'round you never received; read them, then send your round again. ' +
+  "Answers to questions come back in 'answers' " +
   "and answers to findings in 'findings'. An answer may carry 'notes', the " +
   "user's own answer or reasoning, and 'dont_ask' (true), with " +
   "'dont_ask_reason' when the user gave one: the user pressed Don't ask me " +
@@ -32,8 +32,9 @@ const ASK_ROUND_DESCRIPTION =
   'could not start the app and no round exists: send the same round again ' +
   'with ask_round once, which tries the start again; if it comes back a ' +
   "second time, tell the user the reason in its 'summary' and ask the " +
-  "round's questions in your reply. collect_last_round is never the answer " +
-  'to it. While the user is still answering another round of this session, ' +
+  "round's questions and findings in your reply. collect_last_round is " +
+  'never the answer to it. While the user is still answering another ' +
+  'round of this session, ' +
   'an ask_round for a different round waits until the user submits or ' +
   'cancels that round in the app; if its deadline passes first, it returns a ' +
   "'draft' whose 'next' says the round was not opened: send it again with " +

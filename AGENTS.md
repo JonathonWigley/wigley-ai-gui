@@ -89,12 +89,15 @@ plugin still has something open there (forms: an open round), since main, not th
   colour. A broken theme falls back to Catppuccin Mocha and shows its error.
 - **An item kind** in a forms round — question, finding, notice — is a format module in a folder of its own,
   `src/plugins/forms/main/kinds/<kind>/<kind>-format.ts` and `src/plugins/forms/page/kinds/<kind>/<kind>-card.ts`,
-  each listed in the typed `FORMATS` table of its process's `kinds/formats.ts`. A new kind is that folder pair, its
-  table entries, its array in the forms contract's `Round`, `FormBody` and `AnswersPayload`, `round.ts`'s fixed
-  keys (`parseRound`, `readFormBody`, the answers payload) and the per-kind records in `page/form-state.ts`
-  (`ROUND_ITEMS`, plus `ANSWER_ARRAYS` for an answerable kind); the compiler flags each one missing. The order
-  lists (`ITEM_KINDS` and `ANSWERABLE_KINDS` in main's `formats.ts`, `RAIL_ORDER` in `form-state.ts`) are plain
-  arrays the compiler cannot check: a new kind is added to each by hand.
+  each listed in the typed `FORMATS` table of its process's `kinds/formats.ts`. A new kind starts as its name in
+  the forms contract's `ItemKind` (and in `AnswerableKind`'s exclusion when it takes no answer), its item type, and
+  its `ItemOf` entry in main's `kinds/item-format.ts`; from there the compiler flags each of the rest missing: that
+  folder pair, its table entries, its array in the contract's `Round`, `FormBody` and `AnswersPayload`, `round.ts`'s
+  fixed keys (`parseRound`, `readFormBody`, the answers payload) and the per-kind records in `page/form-state.ts`
+  (`ROUND_ITEMS`, plus `ANSWER_ARRAYS` for an answerable kind). The order lists (`ITEM_KINDS` and
+  `ANSWERABLE_KINDS` in main's `formats.ts`, `RAIL_ORDER` in `form-state.ts`), `fingerprint` in `round.ts` and
+  `prefillDraft` in `forms-service.ts` name each kind in code the compiler cannot check: a new kind is added to
+  each by hand.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;

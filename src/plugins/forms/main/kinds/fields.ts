@@ -34,7 +34,7 @@ export function fieldsOutside(item: JsonObject, allowed: string[]): string[] {
 }
 
 // Python's type names, so messages read as they did from the Python server.
-export function pythonTypeName(value: unknown): string {
+function pythonTypeName(value: unknown): string {
   if (value === null || value === undefined) {
     return 'NoneType';
   }

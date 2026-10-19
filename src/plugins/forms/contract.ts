@@ -46,7 +46,8 @@ export interface Round {
   findings: Finding[];
 }
 
-// One question's or finding's answer as last saved; field names are the saved-round file format.
+// One question's or finding's answer as last saved; field names are the
+// saved-round file format.
 export interface AnswerEntry {
   index: number;
   choice: number;
