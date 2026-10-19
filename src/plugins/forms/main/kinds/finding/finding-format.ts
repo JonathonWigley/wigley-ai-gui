@@ -6,6 +6,7 @@ import {
   type DefectFinding,
   type Finding,
   type FindingAction,
+  type FindingCard,
   type FindingChoice,
   type FindingOrigin,
   type Severity,
@@ -27,6 +28,15 @@ import {
   type JsonObject,
 } from '../fields';
 import type { AnswerableFormat } from '../item-format';
+import {
+  actionLabelsText,
+  cardChoicesText,
+  cardName,
+  choiceCountText,
+  orList,
+  originCardsText,
+  unofferedActionsText,
+} from './finding-text';
 
 const MAX_FINDINGS = 20;
 
@@ -66,31 +76,15 @@ function isSeverity(value: unknown): value is Severity {
   return (SEVERITIES as readonly unknown[]).includes(value);
 }
 
+const SEVERITY_ORIGIN_LIST = FINDING_ORIGINS.filter(isDefectOrigin);
+
 // 'caused or pre_existing'
-const SEVERITY_ORIGINS = FINDING_ORIGINS.filter(isDefectOrigin).join(' or ');
+const SEVERITY_ORIGINS = orList(SEVERITY_ORIGIN_LIST);
 
-function capitalised(word: string): string {
-  return word.charAt(0).toUpperCase() + word.slice(1);
-}
-
-// Each action value with every card's word for it, from the origin table.
-function actionLabelsText(): string {
-  const cards = [
-    ...new Map(
-      FINDING_ORIGINS.map((origin) => [
-        FINDING_ORIGIN_RULES[origin].card,
-        FINDING_ORIGIN_RULES[origin].actions,
-      ]),
-    ),
-  ];
-  return FINDING_ACTIONS.map((action) => {
-    const labels = cards.flatMap(([card, actions]) => {
-      const label = actions[action];
-      return label === undefined ? [] : [`${label} (${capitalised(card)})`];
-    });
-    return `${action}: ${labels.join(', ')}`;
-  }).join('; ');
-}
+// 'a Defect'
+const SEVERITY_CARDS = orList([
+  ...new Set(SEVERITY_ORIGIN_LIST.map((origin) => `a ${cardName(origin)}`)),
+]);
 
 const FINDINGS_DESCRIPTION =
   "Review findings and deferred items that need the user's decision — one " +
@@ -101,12 +95,15 @@ const FINDINGS_DESCRIPTION =
   'already fixed or decided goes in notices instead; an open decision that ' +
   'is not a review finding goes in questions.';
 
+const ORIGIN_MEANINGS: Record<FindingOrigin, string> = {
+  caused: 'a defect the change under review introduced',
+  pre_existing: 'a real defect in code the change read but did not cause',
+  design: 'a design call, options to weigh now or in a feature plan',
+  nit: 'nothing builds on it, and it cannot be shown happening',
+};
+
 const ORIGIN_DESCRIPTION =
-  "Sets the card the finding draws as. 'caused' (Defect): a defect the " +
-  "change under review introduced. 'pre_existing' (Defect): a real defect " +
-  "in code the change read but did not cause. 'design' (Decision): a " +
-  'design call, options to weigh now or in a feature plan. ' +
-  "'nit' (Nit): nothing builds on it, and it cannot be shown happening.";
+  'Sets the card the finding draws as. ' + originCardsText(ORIGIN_MEANINGS);
 
 const PROOF_DESCRIPTION =
   'The evidence, in brief: short bullets naming the file, line, output or ' +
@@ -118,18 +115,23 @@ const CHOICE_TEXT_DESCRIPTION =
   'symbol name or term of art. Never opens with an action label. Inline ' +
   'markdown only.';
 
+// What each card's choices are.
+const CARD_CHOICES: Record<FindingCard, string> = {
+  defect: 'its solutions',
+  decision: 'the options a plan would weigh',
+  nit: 'the fix',
+};
+
 const CHOICES_DESCRIPTION =
-  "One object per choice: a Defect's solutions (1 to " +
-  `${MAX_CHOICES}), a Decision's options a plan would weigh (2 to ` +
-  `${MAX_CHOICES}), a Nit's exactly one, the fix. A choice names a ` +
-  'solution only: each card draws its own action control, and a choice ' +
-  "whose text opens with an action's label " +
+  `One object per choice: ${cardChoicesText(CARD_CHOICES)}. A choice ` +
+  'names a solution only: each card draws its own action control, and a ' +
+  "choice whose text opens with an action's label " +
   `(${ACTION_WORDS.join(', ')}) fails the call.`;
 
 const RECOMMEND_ACTION_DESCRIPTION =
   "The recommended action, picked on the card's action control. The values " +
   'are the same three on every card, each card labelling them its own way — ' +
-  `${actionLabelsText()}. A Nit offers no follow_up.`;
+  `${actionLabelsText()}. ${unofferedActionsText()}`.trimEnd();
 
 function parseChoice(
   raw: unknown,
@@ -168,27 +170,26 @@ function parseChoice(
   return { text, reason };
 }
 
+// A run of inline-markdown emphasis or code marks.
+const INLINE_MARKS = /^[*_`~]+/;
+
 // The action word the text opens with — the whole text, or the word followed
-// by whitespace or punctuation — or null.
+// by whitespace or punctuation — or null. Inline-markdown marks around the
+// word are skipped, since `**Fix now**` renders as the bare word.
 function openingActionWord(text: string): string | null {
-  const opening = text.trim().toLowerCase();
+  const opening = text.trim().replace(INLINE_MARKS, '').toLowerCase();
   const word = ACTION_WORDS.find((candidate) => {
     const lowered = candidate.toLowerCase();
-    const next = opening.charAt(lowered.length);
-    const endsAtABreak = next === '' || /[\s\p{P}]/u.test(next);
-    return opening.startsWith(lowered) && endsAtABreak;
+    if (!opening.startsWith(lowered)) {
+      return false;
+    }
+    const next = opening
+      .slice(lowered.length)
+      .replace(INLINE_MARKS, '')
+      .charAt(0);
+    return next === '' || /[\s\p{P}]/u.test(next);
   });
   return word ?? null;
-}
-
-function choiceCountText(origin: FindingOrigin): string {
-  const { minChoices, maxChoices } = FINDING_ORIGIN_RULES[origin];
-  if (minChoices !== maxChoices) {
-    return `takes ${minChoices} to ${maxChoices} choices`;
-  }
-  // A finding's lone choice is its fix.
-  const lone = minChoices === 1 ? ' choice: the fix' : ' choices';
-  return `takes exactly ${minChoices}${lone}`;
 }
 
 function parseChoices(
@@ -338,7 +339,7 @@ export const findingFormat: AnswerableFormat<Finding> = {
         severity: {
           type: 'string',
           enum: [...SEVERITIES],
-          description: `Required on a ${SEVERITY_ORIGINS} finding (a Defect); no other origin accepts it.`,
+          description: `Required on a ${SEVERITY_ORIGINS} finding (${SEVERITY_CARDS}); no other origin accepts it.`,
         },
         finding: {
           type: 'string',

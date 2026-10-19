@@ -215,6 +215,34 @@ describe('findingFormat.parse', () => {
     ]);
   });
 
+  it('refuses an action word wrapped in bold before punctuation', () => {
+    const raw = finding({
+      choices: [{ text: '**Fix now**: share the rule', reason: 'r' }],
+    });
+
+    expect(parseError(raw)).toContain(
+      'choices[1].text opens with "Fix now", an action.',
+    );
+  });
+
+  it('refuses an action word wrapped in inline code', () => {
+    const raw = finding({ choices: [{ text: '`Leave it`', reason: 'r' }] });
+
+    expect(parseError(raw)).toContain(
+      'choices[1].text opens with "Leave it", an action.',
+    );
+  });
+
+  it('accepts an emphasised choice whose first word only starts like an action word', () => {
+    const raw = finding({
+      choices: [{ text: '_Leave items cached_', reason: 'r' }],
+    });
+
+    expect(findingFormat.parse(raw, 'Finding 1: ').choices).toEqual([
+      { text: '_Leave items cached_', reason: 'r' },
+    ]);
+  });
+
   it('refuses follow_up on a nit finding', () => {
     const raw = findingWithoutSeverity({
       origin: 'nit',
@@ -349,6 +377,34 @@ describe('findingFormat.arraySchema', () => {
       ...FINDING_ACTIONS,
     ]);
     expect(items.properties.choices.minItems).toBe(1);
+  });
+
+  it("describes each origin's card, each card's choice count and the action a Nit lacks", () => {
+    const items = findingFormat.arraySchema.items as {
+      properties: Record<
+        'origin' | 'choices' | 'recommend_action' | 'severity',
+        {
+          description: string;
+        }
+      >;
+    };
+    const { origin, choices, recommend_action, severity } = items.properties;
+
+    expect(origin.description).toContain("'design' (Decision): a design call");
+    expect(choices.description).toContain(
+      'a Defect takes 1 to 10 choices, its solutions; a Decision takes 2 ' +
+        'to 10 choices, the options a plan would weigh; a Nit takes ' +
+        'exactly 1 choice, the fix.',
+    );
+    expect(recommend_action.description).toContain(
+      'follow_up: Follow-up (Defect), Plan it (Decision);',
+    );
+    expect(recommend_action.description).toContain(
+      'A Nit offers no follow_up.',
+    );
+    expect(severity.description).toContain(
+      'Required on a caused or pre_existing finding (a Defect)',
+    );
   });
 });
 

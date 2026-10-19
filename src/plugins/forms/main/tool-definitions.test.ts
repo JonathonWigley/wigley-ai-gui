@@ -145,6 +145,21 @@ describe('FORMS_TOOLS', () => {
     );
   });
 
+  it("names each card's origins and action words", () => {
+    expect(descriptionOf('ask_round')).toContain(
+      'a Defect (caused or pre_existing; actions Fix now, Follow-up, Leave ' +
+        'it), a Decision (design; actions Decide now, Plan it, Drop it) or a ' +
+        'Nit (nit; actions Fix anyway, Leave it).',
+    );
+  });
+
+  it('describes the card opening on a verdict, with the rest under Change…', () => {
+    const description = descriptionOf('ask_round');
+
+    expect(description).toContain('A card opens on a verdict');
+    expect(description).toContain('with Accept, or opens Change…');
+  });
+
   it('sends needs_manual_open back to ask_round, never collect_last_round', () => {
     expect(descriptionOf('ask_round')).toContain(
       "Outcome 'needs_manual_open' means the relay could not start the app",

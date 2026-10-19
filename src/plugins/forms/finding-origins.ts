@@ -1,6 +1,7 @@
 import {
   FINDING_ORIGINS,
   MAX_CHOICES,
+  type DefectFinding,
   type FindingAction,
   type FindingCard,
   type FindingOrigin,
@@ -21,7 +22,8 @@ const DEFECT_ACTIONS: Partial<Record<FindingAction, string>> = {
   leave_it: 'Leave it',
 };
 
-export const FINDING_ORIGIN_RULES: Record<FindingOrigin, OriginRules> = {
+// `satisfies` keeps each requiresSeverity a literal for the check below.
+const RULES = {
   caused: {
     card: 'defect',
     minChoices: 1,
@@ -54,7 +56,30 @@ export const FINDING_ORIGIN_RULES: Record<FindingOrigin, OriginRules> = {
     requiresSeverity: false,
     actions: { fix_now: 'Fix anyway', leave_it: 'Leave it' },
   },
-};
+} satisfies Record<FindingOrigin, OriginRules>;
+
+export const FINDING_ORIGIN_RULES: Record<FindingOrigin, OriginRules> = RULES;
+
+// The origins whose rules require severity.
+type SeverityOrigin = {
+  [
+    Origin in FindingOrigin
+  ]: (typeof RULES)[Origin]['requiresSeverity'] extends true ? Origin : never;
+}[FindingOrigin];
+
+type SameType<A, B> = [A] extends [B]
+  ? [B] extends [A]
+    ? true
+    : false
+  : false;
+
+// The parser narrows a finding whose rules require severity to DefectFinding,
+// so the table and DefectFinding's origin union must name the same origins:
+// this assignment stops compiling when they differ.
+const _severityOriginsAreDefectOrigins: SameType<
+  SeverityOrigin,
+  DefectFinding['origin']
+> = true;
 
 export function isFindingOrigin(value: unknown): value is FindingOrigin {
   return (FINDING_ORIGINS as readonly unknown[]).includes(value);

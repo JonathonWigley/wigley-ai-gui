@@ -1,4 +1,5 @@
 import type { ToolDefinition } from '../../sessions/contract';
+import { findingCardsText } from './kinds/finding/finding-text';
 import { FORMATS, ITEM_KINDS } from './kinds/formats';
 
 const ASK_ROUND_DESCRIPTION =
@@ -9,11 +10,11 @@ const ASK_ROUND_DESCRIPTION =
   "this control and each finding card's action control by itself — do not " +
   'describe them as questions or choices. Use ' +
   "'findings' for review findings that need the user's decision: a " +
-  "finding's origin sets its card — a Defect (caused or pre_existing; " +
-  'actions Fix now, Follow-up, Leave it), a Decision (design; Decide now, ' +
-  'Plan it, Drop it) or a Nit (nit; Fix anyway, Leave it) — which shows ' +
-  'the finding, a brief proof, then its choices, each with its reason ' +
-  'under it, and the action control under them. A choice never opens with ' +
+  `finding's origin sets its card — ${findingCardsText()}. A card opens on ` +
+  'a verdict, the recommended action and choice, with the impact, then ' +
+  'shows the finding and a brief proof; the user takes the verdict whole ' +
+  'with Accept, or opens Change… for the other choices, each with its ' +
+  'reason under it, and the action control. A choice never opens with ' +
   "an action's label. Use 'questions' for any " +
   "other open decision. Pass 'notices' for anything already fixed, " +
   'dispatched, decided by you alone, or otherwise settled before this round ' +
