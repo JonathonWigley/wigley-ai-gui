@@ -64,32 +64,61 @@ if (started) {
 // user's foreground.
 const isSelfTest = Boolean(process.env.PROOF_SELFTEST);
 
-const theme = chooseTheme(
-  defaultSettings.theme,
-  builtInThemes,
-  path.join(app.getPath('userData'), 'themes'),
-);
-requireListed(mainParts, manifests);
-const settingsByPlugin = pluginSettings(manifests);
-const commandsById = commandInfos(coreCommands, manifests);
 const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
+
 // The self-test gives plugins a fresh temp folder as the home folder, never
 // the user's, and deletes it before it exits.
-const homeDir = isSelfTest
-  ? mkdtempSync(path.join(os.tmpdir(), 'wigley-forms-selftest-'))
-  : os.homedir();
-const cleanUpSelfTest = () => rmSync(homeDir, { recursive: true, force: true });
+let selfTestHome: string | null = null;
+const cleanUpSelfTest = () => {
+  if (selfTestHome !== null) {
+    rmSync(selfTestHome, { recursive: true, force: true });
+  }
+};
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+
+// What the window and the plugins start from, read once the app is ready so
+// that a bad manifest, theme or temp folder fails the start through failStart.
+interface StartInputs {
+  theme: AppConfig['theme'];
+  settingsByPlugin: AppConfig['pluginSettings'];
+  commandsById: AppConfig['commands'];
+  homeDir: string;
+}
+
+function homeFolder(): string {
+  if (!isSelfTest) {
+    return os.homedir();
+  }
+  selfTestHome = mkdtempSync(path.join(os.tmpdir(), 'wigley-forms-selftest-'));
+  return selfTestHome;
+}
+
+function readStartInputs(): StartInputs {
+  requireListed(mainParts, manifests);
+  return {
+    theme: chooseTheme(
+      defaultSettings.theme,
+      builtInThemes,
+      path.join(app.getPath('userData'), 'themes'),
+    ),
+    settingsByPlugin: pluginSettings(manifests),
+    commandsById: commandInfos(coreCommands, manifests),
+    homeDir: homeFolder(),
+  };
+}
 
 function pageLog(page: WebContents): Log {
   return (source, message) => page.send(BRIDGE_CHANNELS.log, source, message);
 }
 
 // `selfTestBinds` are the self-test script's page binds, after every plugin's.
-function buildConfig(selfTestBinds: PageBind[]): AppConfig {
+function buildConfig(
+  inputs: StartInputs,
+  selfTestBinds: PageBind[],
+): AppConfig {
   const merged = mergeKeymap(coreKeymap, manifests);
   const keymap: Keymap = {
     ...merged,
@@ -98,9 +127,9 @@ function buildConfig(selfTestBinds: PageBind[]): AppConfig {
   return {
     settings: defaultSettings,
     keymap,
-    commands: commandsById,
-    pluginSettings: settingsByPlugin,
-    theme,
+    commands: inputs.commandsById,
+    pluginSettings: inputs.settingsByPlugin,
+    theme: inputs.theme,
   };
 }
 
@@ -109,6 +138,7 @@ function buildConfig(selfTestBinds: PageBind[]): AppConfig {
 // starts, so a part is known even when a later start throws.
 function startMainParts(
   window: BrowserWindow,
+  settingsByPlugin: StartInputs['settingsByPlugin'],
   services: MainServices,
   onStarted: (part: MainStart<PluginManifest>) => void,
 ) {
@@ -146,10 +176,10 @@ function disposeParts(parts: readonly MainStart<PluginManifest>[]) {
   return Promise.allSettled(parts.map(async (part) => part.dispose?.()));
 }
 
-function createWindow() {
+function createWindow(inputs: StartInputs) {
   const window = createMainWindow(
     defaultSettings.window,
-    theme.theme.tokens['bg.base'],
+    inputs.theme.theme.tokens['bg.base'],
     isSelfTest,
   );
   mainWindow = window;
@@ -159,17 +189,18 @@ function createWindow() {
   const selfTestHost: SelfTestHost | null = selfTest && {
     run: (script) => selfTest.run(script),
   };
-  // Registered before any part starts, so the parts that did start are
-  // disposed even when a later start throws.
+  // On a normal quit, will-quit disposes the parts that started; a failed
+  // start exits through failStart, which skips will-quit.
   const startedParts: MainStart<PluginManifest>[] = [];
   app.on('will-quit', () => void disposeParts(startedParts));
   const started = startMainParts(
     window,
+    inputs.settingsByPlugin,
     {
       log,
       clock,
       randomHex,
-      homeDir,
+      homeDir: inputs.homeDir,
       alerts: isSelfTest ? silentAlerts : createElectronAlerts(window, log),
       window: windowService(window),
       selfTest: selfTestHost,
@@ -182,7 +213,7 @@ function createWindow() {
   const commands: MainCommands = new CommandRegistry<string>();
   registerWindowCommands(commands, window, log);
   registerPartCommands(commands, started);
-  const config = buildConfig(selfTestBinds);
+  const config = buildConfig(inputs, selfTestBinds);
   ipcMain.handle(BRIDGE_CHANNELS.config, () => config);
   installWindowKeybindings(window, config.keymap, commands);
   window.on('closed', () => {
@@ -233,7 +264,7 @@ function startApp() {
   app
     .whenReady()
     .then(() => {
-      createWindow();
+      createWindow(readStartInputs());
       app.on('activate', () => mainWindow?.show());
     })
     .catch(failStart);

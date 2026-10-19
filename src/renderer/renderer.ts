@@ -144,7 +144,10 @@ function showStartFailure(error: unknown) {
   const shown = document.createElement('pre');
   shown.className = 'start-error';
   shown.textContent = `The page failed to start: ${message}`;
-  (document.getElementById('app') as HTMLElement).replaceChildren(shown);
+  const root = document.getElementById('app') as HTMLElement;
+  // A shell mounted before the failure leaves its grid class on the root.
+  root.classList.remove('shell');
+  root.replaceChildren(shown);
   document.body.dataset.startFailed = message;
 }
 

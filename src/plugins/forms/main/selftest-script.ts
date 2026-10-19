@@ -1,6 +1,7 @@
 import type { PageBind } from '../../../contracts/keymap';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
 import type { AnswersPayload, FormsService, FormsSession } from '../contract';
+import { formsCommand, formsScope } from '../ids';
 
 // Exists only for the self-test, which adds it to the keymap main serves; it
 // is never in the user's keymap. No step completes it: `q a x` then `b` breaks
@@ -8,8 +9,8 @@ import type { AnswersPayload, FormsService, FormsSession } from '../contract';
 const PAGE_BINDS: PageBind[] = [
   {
     keys: ['q', 'a', 'x', 'y'],
-    scope: 'forms.forms',
-    command: 'forms.nextItem',
+    scope: formsScope('forms'),
+    command: formsCommand('nextItem'),
   },
 ];
 

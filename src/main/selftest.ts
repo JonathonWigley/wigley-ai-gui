@@ -105,18 +105,29 @@ function report(passed: boolean, what: string) {
   console.log(`[selftest] ${passed ? 'PASS' : 'FAIL'} ${what}`);
 }
 
-// `cleanUp` runs before every exit, since app.exit skips quit handlers.
+let hasExited = false;
+
+// `cleanUp` runs before every exit, since app.exit skips quit handlers. Only
+// the first exit counts: a run a late page load starts after it stays quiet.
 function exitSelfTest(code: number, cleanUp: () => void) {
+  if (hasExited) {
+    return;
+  }
+  hasExited = true;
   cleanUp();
   app.exit(code);
 }
 
-// Reports `what` as failed with `error`'s text, and exits non-zero.
+// Reports `what` as failed with `error`'s text, and exits non-zero; after the
+// self-test has exited, does nothing.
 export function failSelfTest(
   what: string,
   error: unknown,
   cleanUp: () => void,
 ) {
+  if (hasExited) {
+    return;
+  }
   const message = error instanceof Error ? error.message : String(error);
   report(false, `${what}: ${message}`);
   exitSelfTest(1, cleanUp);
@@ -256,6 +267,9 @@ function startRun(
   script: SelfTestScript,
   cleanUp: () => void,
 ) {
+  if (hasExited) {
+    return;
+  }
   const run = ++latestRun;
   const isCurrent = () => run === latestRun;
   runAllSteps(window, script, run, isCurrent, cleanUp).catch((error) => {

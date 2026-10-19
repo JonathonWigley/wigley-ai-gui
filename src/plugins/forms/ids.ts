@@ -4,7 +4,7 @@ import { qualify } from '../../shared/plugin-manifests';
 import { formsManifest } from './manifest';
 
 type FormsCommandName = keyof typeof formsManifest.commands;
-type FormsScopeName = (typeof formsManifest.scopes)[number];
+export type FormsScopeName = (typeof formsManifest.scopes)[number];
 
 // A forms command's qualified id; a short name the manifest does not declare
 // fails to compile.

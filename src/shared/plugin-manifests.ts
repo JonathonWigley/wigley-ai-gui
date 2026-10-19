@@ -76,7 +76,7 @@ export function commandInfos(
   for (const manifest of manifests) {
     for (const [short, decl] of Object.entries(manifest.commands)) {
       const id = qualify(manifest.id, short);
-      if (id in infos) {
+      if (Object.hasOwn(infos, id)) {
         throw new Error(`Command "${id}" is declared twice`);
       }
       infos[id] = { ...decl, id, plugin: manifest.id };
@@ -89,14 +89,14 @@ export function commandInfos(
 export function pluginSettings(
   manifests: readonly PluginManifest[],
 ): Record<string, object> {
-  const settings: Record<string, object> = {};
+  const settings = new Map<string, object>();
   for (const manifest of manifests) {
-    if (manifest.id in settings) {
+    if (settings.has(manifest.id)) {
       throw new Error(`Plugin "${manifest.id}" is listed twice`);
     }
-    settings[manifest.id] = manifest.settings;
+    settings.set(manifest.id, manifest.settings);
   }
-  return settings;
+  return Object.fromEntries(settings);
 }
 
 // Throws naming each part whose manifest is not in `listed`, the manifests the

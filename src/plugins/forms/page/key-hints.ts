@@ -6,7 +6,7 @@ import type {
   PageBind,
   ViewScope,
 } from '../../../contracts/keymap';
-import type { formsManifest } from '../manifest';
+import { type FormsScopeName, formsScope } from '../ids';
 
 export interface KeyHint {
   keys: string;
@@ -32,18 +32,22 @@ const KEY_NAMES: Partial<Record<string, string>> = {
   Escape: 'Esc',
 };
 
-type FormsScope = `forms.${(typeof formsManifest.scopes)[number]}`;
+type HelpScope = FormsScopeName | 'any';
 
-// By qualified scope, in help-overlay order; every forms scope needs a title,
+// By short scope name, in help-overlay order; every forms scope needs a title,
 // or its binds drop out of the help overlay.
-const SCOPE_TITLES: Record<FormsScope | 'any', string> = {
-  'forms.forms': 'In the form',
-  'forms.review': 'In the review',
-  'forms.confirm': 'In the cancel confirmation',
-  'forms.help': 'In help',
-  'forms.idle': 'With no round open',
+const SCOPE_TITLES: Record<HelpScope, string> = {
+  forms: 'In the form',
+  review: 'In the review',
+  confirm: 'In the cancel confirmation',
+  help: 'In help',
+  idle: 'With no round open',
   any: 'Everywhere',
 };
+
+function qualifiedScope(scope: HelpScope): ViewScope {
+  return scope === 'any' ? 'any' : formsScope(scope);
+}
 
 const DIGIT_SUFFIX = /^(.*?)(\d)$/;
 
@@ -85,12 +89,14 @@ export function helpSections(
   keymap: Keymap,
   label: CommandLabel,
 ): HelpSection[] {
-  const scopes = Object.keys(SCOPE_TITLES) as (FormsScope | 'any')[];
+  const scopes = Object.keys(SCOPE_TITLES) as HelpScope[];
   const sections: HelpSection[] = [
     ...scopes.map((scope) => ({
       title: SCOPE_TITLES[scope],
       hints: mergeHints(
-        keymap.page.filter((bind) => bind.scope === scope).map(pageKeys),
+        keymap.page
+          .filter((bind) => bind.scope === qualifiedScope(scope))
+          .map(pageKeys),
         label,
       ),
     })),

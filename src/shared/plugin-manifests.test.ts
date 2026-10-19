@@ -190,6 +190,17 @@ describe('pluginSettings', () => {
       ]),
     ).toThrow('Plugin "p" is listed twice');
   });
+
+  it('stores ids an object inherits or treats specially as plain ids', () => {
+    const settings = pluginSettings([
+      manifest('toString', { settings: { a: 1 } }),
+      manifest('__proto__', { settings: { b: 2 } }),
+    ]);
+
+    expect(Object.hasOwn(settings, 'toString')).toBe(true);
+    expect(Object.hasOwn(settings, '__proto__')).toBe(true);
+    expect(Object.getPrototypeOf(settings)).toBe(Object.prototype);
+  });
 });
 
 describe('requireListed', () => {
