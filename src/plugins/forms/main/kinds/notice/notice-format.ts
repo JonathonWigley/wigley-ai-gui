@@ -36,9 +36,9 @@ const NOTICE_BADGE_DESCRIPTION =
   "'Decided' notice overrides the decision.";
 
 const NOTICES_DESCRIPTION =
-  'Findings already fixed, dispatched, decided by you alone, or otherwise ' +
-  'settled before this round opened — one object per notice. Each draws as ' +
-  "its own card before the questions, badged 'Applied', 'Dispatched' or " +
+  'Fixes already made, dispatched, decisions you took alone, or anything ' +
+  'otherwise settled before this round opened — one object per notice. Each ' +
+  "draws as its own card before the findings and questions, badged 'Applied', 'Dispatched' or " +
   "'Decided', with only a comment box: no choices, no recommendation, " +
   'nothing for the user to decide.';
 
