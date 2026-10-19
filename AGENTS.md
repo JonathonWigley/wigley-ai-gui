@@ -105,7 +105,7 @@ plugin still has something open there (forms: an open round), since main, not th
   folder pair, its table entries, its array in the contract's `Round`, `FormBody` and `AnswersPayload`, `round.ts`'s
   fixed keys (`parseRound`, `readFormBody`, the answers payload) and the per-kind records: `FINGERPRINT_LISTS` in
   `round.ts`, `ROUND_ITEMS` in `page/form-state.ts`, and for an answerable kind `ANSWER_LISTS` in
-  `forms-service.ts`, and `ANSWER_ARRAYS` and `PICK_ANSWERS` in `form-state.ts`. The order lists are plain arrays
+  `forms-service.ts`, and `ANSWER_ARRAYS`, `PICK_ANSWERS` and `RECOMMENDED_PICKS` (what Enter accepts) in `form-state.ts`. The order lists are plain arrays
   the compiler cannot check: `formats.test.ts` fails when main's `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind,
   and `RAIL_ORDER` in `form-state.ts` is added to by hand.
 - **A finding origin** — `caused`, `pre_existing`, `design`, `nit` — is an entry in
