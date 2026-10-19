@@ -1,5 +1,4 @@
 import { app, type BrowserWindow } from 'electron';
-import type { PageBind } from '../contracts/keymap';
 import type {
   SelfTestHost,
   SelfTestScript,
@@ -347,10 +346,13 @@ function startRun(
 // The host the self-test hands plugins, plus `closeHandover`, which the
 // composition root calls once every part has started.
 export interface SelfTestDriver extends SelfTestHost {
-  // Returns the handed script's page binds; with no script handed over, fails
-  // the self-test and exits.
-  closeHandover(): PageBind[];
+  // Returns the handed script's page binds and settings; with no script handed
+  // over, fails the self-test and exits.
+  closeHandover(): SelfTestConfig;
 }
+
+// What the handed script adds to the config main serves the page.
+export type SelfTestConfig = Pick<SelfTestScript, 'pageBinds' | 'settings'>;
 
 // `cleanUp` deletes what the self-test made outside the repo; it runs before
 // the self-test exits. The driver runs the one script a plugin hands it while
@@ -391,9 +393,9 @@ export function startSelfTest(
       if (!handed) {
         report(false, 'a plugin handed over a self-test script during start');
         exitSelfTest(1, cleanUp);
-        return [];
+        return { pageBinds: [], settings: {} };
       }
-      return handed.pageBinds;
+      return { pageBinds: handed.pageBinds, settings: handed.settings };
     },
   };
 }

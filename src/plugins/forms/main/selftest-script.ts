@@ -19,32 +19,41 @@ const PAGE_BINDS: PageBind[] = [
   },
 ];
 
+// A which-key panel left open closes after this long, so steps can wait it
+// out; long enough that the fit check under an open panel ends first.
+const SETTINGS = { keys: { whichKeyTimeoutMs: 1000 } };
+
 // An unbroken run of letters wider than any pane; no j, which would start jk.
 const LONG_WORD = 'unbroken'.repeat(14);
 
 // Opening on finding 1: Space then k replays k to the notice, j back to the
 // finding; Space a f sets Fix now, 2 picks solution 2, Space a f again clears
-// the action and Space a s sets Leave it. a types "agreed" at once (INSERT),
-// jk to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out. j to
+// the action and Space a s sets Leave it. a types "agreed" at once (INSERT), jk
+// to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out. j to
 // finding 2, whose one solution Space a u alone answers with Follow-up. j to
-// question 1, pick 2; a types
-// "ab" at once, Esc out; d focuses its reason box, A appends a long word and
-// Ctrl+k still in INSERT moves back to its notes box, Esc out; a again types
-// "c" after "ab". a once more, jk to NORMAL, where Space opens which-key and
-// Esc closes it without leaving the box (vim drops its pending input), and a
-// second Esc leaves. j to question 2, where q a x then b breaks the self-test
-// bind, so a opens the notes box and "xb" is typed into it; jk Esc out and x
-// marks question 2 not applicable. Ctrl+h goes back to question 1, Space a 2
-// clears its choice and picks it again, Space 2 jumps to question 2, and
-// Space e n finds no unanswered item. Space opens which-key, a moves it into
-// the Space a group, and Esc cancels the sequence and closes it. Option+o
+// question 1, pick 2; a types "ab" at once, Esc out; d focuses its reason box,
+// A appends a long word and Ctrl+k still in INSERT moves back to its notes box,
+// Esc out; a again types "c" after "ab". a once more, jk to NORMAL, where Space
+// opens which-key and Esc closes it without leaving the box (vim drops its
+// pending input); Space opens it again and, with no key pressed, the which-key
+// timeout closes it, and Esc then leaves the box, so the box kept focus and its
+// pending Space was dropped. a back in, jk, Space opens which-key, and Ctrl+j
+// moving to the reason box closes it; jk Esc out. j to question 2, where q a x
+// then b breaks the self-test bind, so a opens the notes box and "xb" is typed
+// into it; jk Esc out and x marks question 2 not applicable. Ctrl+h goes back
+// to question 1, where Space opens which-key and the timeout closes it, so 2
+// starts a fresh sequence and clears the choice (Space 2 would jump), 2 picks
+// it again; Space a 2 clears it and picks it again, Space 2 jumps to question
+// 2, and Space e n finds no unanswered item. Space opens which-key, a moves it
+// into the Space a group, and Esc cancels the sequence and closes it. Option+o
 // moves to the second session's tab; Cmd+W there asks to cancel its round, Esc
-// keeps it and returns to its form, where j moves to its question 2 and
-// Space e p finds its untouched question 1; Option+i moves back to the first
-// tab. Then review, Space ? opens help and Esc closes it, back in the review's
-// scope, where C opens and n dismisses the cancel prompt, o types "note" into
-// the Round note at once (INSERT), Esc out, Enter jumps back to the finding,
-// review again and Space Enter submits.
+// keeps it and returns to its form, where j moves to its question 2 and Space e
+// p finds its untouched question 1; Option+i moves back to the first tab. Then
+// review, Space ? opens help and Esc closes it, back in the review's scope,
+// where C opens and n dismisses the cancel prompt; Space ? opens help again,
+// Cmd+W opens the cancel prompt, which closes help, so n dismisses the prompt.
+// o types "note" into the Round note at once (INSERT), Esc out, Enter jumps
+// back to the finding, review again and Space Enter submits.
 const STEPS: SelfTestStep[] = [
   { keys: [' ', 'k'], expect: '[page] k ran forms.prevItem', checksFit: true },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
@@ -76,7 +85,13 @@ const STEPS: SelfTestStep[] = [
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   { keys: ['j', 'k', ' '], expect: '[keys] which-key shows Space' },
   { keys: ['Escape'], expect: '[keys] which-key closed' },
+  { keys: [' '], expect: '[keys] which-key shows Space' },
+  { keys: [], expect: '[keys] which-key closed' },
   { keys: ['Escape'], expect: '[forms] left the box' },
+  { keys: ['a'], expect: '[forms] focused notes on question 1' },
+  { keys: ['j', 'k', ' '], expect: '[keys] which-key shows Space' },
+  { keys: ['<C-j>'], expect: '[keys] which-key closed' },
+  { keys: ['j', 'k', 'Escape'], expect: '[forms] left the box' },
   {
     keys: ['j', 'q', 'a', 'x', 'b'],
     expect: '[page] typed xb into the editor',
@@ -84,6 +99,10 @@ const STEPS: SelfTestStep[] = [
   { keys: ['j', 'k', 'Escape'], expect: '[forms] left the box' },
   { keys: ['x'], expect: '[forms] not applicable on question 2' },
   { keys: ['<C-h>'], expect: '[page] <C-h> ran forms.prevItem' },
+  { keys: [' '], expect: '[keys] which-key shows Space' },
+  { keys: [], expect: '[keys] which-key closed' },
+  { keys: ['2'], expect: '[forms] cleared the choice on question 1' },
+  { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   {
     keys: [' ', 'a', '2'],
     expect: '[forms] cleared the choice on question 1',
@@ -116,6 +135,12 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
   { keys: ['C'], expect: '[page] C ran forms.askCancel', checksFit: true },
+  { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
+  { keys: [' ', '?'], expect: '[page]  ? ran keys.toggleHelp' },
+  {
+    keys: ['<D-w>'],
+    expect: '[forms] closing the tab asks to cancel selftest · Self-test round',
+  },
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
   {
     keys: ['o', 'n', 'o', 't', 'e', 'j', 'k', 'Escape'],
@@ -320,6 +345,7 @@ export function formsSelfTestScript(
     });
   return {
     pageBinds: PAGE_BINDS,
+    settings: SETTINGS,
     scrollsItself: SCROLLS_ITSELF,
     open(run) {
       for (const session of connected) {

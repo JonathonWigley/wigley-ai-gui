@@ -4,6 +4,7 @@ import type { PluginManifest } from '../contracts/plugin';
 import {
   commandInfos,
   mergeKeymap,
+  overrideSettings,
   pluginSettings,
   requireListed,
   scopeInfos,
@@ -220,6 +221,35 @@ describe('pluginSettings', () => {
     expect(Object.hasOwn(settings, 'toString')).toBe(true);
     expect(Object.hasOwn(settings, '__proto__')).toBe(true);
     expect(Object.getPrototypeOf(settings)).toBe(Object.prototype);
+  });
+});
+
+describe('overrideSettings', () => {
+  it("changes the named settings and keeps the plugin's others", () => {
+    const settings = overrideSettings(
+      { p: { a: 1, b: 2 }, q: { c: 3 } },
+      { p: { b: 5 } },
+    );
+
+    expect(settings).toEqual({ p: { a: 1, b: 5 }, q: { c: 3 } });
+  });
+
+  it('rejects a plugin the settings do not hold', () => {
+    expect(() => overrideSettings({ p: { a: 1 } }, { r: { a: 2 } })).toThrow(
+      'Settings override names no plugin "r"',
+    );
+  });
+
+  it('rejects a setting the plugin does not declare', () => {
+    expect(() =>
+      overrideSettings({ p: { a: 1 } }, { p: { a: 2, z: 3, y: 4 } }),
+    ).toThrow('Settings override names no setting of plugin "p": z, y');
+  });
+
+  it('treats an id an object inherits as a plugin it does not hold', () => {
+    expect(() =>
+      overrideSettings({ p: { a: 1 } }, { toString: { a: 2 } }),
+    ).toThrow('Settings override names no plugin "toString"');
   });
 });
 

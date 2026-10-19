@@ -87,7 +87,8 @@ plugin still has something open there (forms: an open round), since main, not th
   too, in every vim mode, ahead of the editor. Esc while a sequence waits cancels it and runs nothing.
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
-  modal view never fights the plugin under it for the scope.
+  modal view never fights the plugin under it for the scope. The pushed scope's `onBaseChanged` hears the set scope
+  change under it, so a modal view can close when the view beneath it moves on (help closes on it).
 - **Key hints** belong to the `keys` plugin, which reads the merged keymap: which-key after a pending prefix, help on
   `Space ?` (`<Leader>?` in a box), and the status bar's keys that don't start with the leader. A plugin declares
   its keys, labels, groups and scope titles, and draws no key hints of its own. The core and the editor host report
@@ -139,7 +140,9 @@ plugin still has something open there (forms: an open round), since main, not th
   through `FormsService` — drives keys with
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
-  (`src/plugins/forms/main/selftest-script.ts` for forms). Only one script runs, so the keys plugin's steps live in
+  (`src/plugins/forms/main/selftest-script.ts` for forms); a step with no keys waits for its line. The script's
+  `settings` override plugin settings in the config main serves the page (forms' sets a short
+  `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Only one script runs, so the keys plugin's steps live in
   forms' script, whose fixture gives them scopes full of binds and a box to type in.
 - A visible `npm start` takes the user's foreground and keyboard, so that run is the user's: the agent gives the user
   the steps to try. The global shortcut needs it — macOS keys reach a global shortcut only from the real keyboard.

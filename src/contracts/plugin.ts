@@ -254,8 +254,12 @@ export interface SelfTestStep {
 // what was wrong, empty when nothing was. `scrollsItself` lists CSS selectors
 // for the elements a fit check lets scroll or clip in their own box rather
 // than wrap, nothing inside them checked either; empty when nothing does.
+// `settings` overrides plugin settings in the config main serves the page, by
+// plugin id, each holding only the settings it changes; main parts have
+// already started on their defaults.
 export interface SelfTestScript {
   pageBinds: PageBind[];
+  settings: Record<string, object>;
   open(run: number): { shownLine: string; result: Promise<unknown> };
   steps: SelfTestStep[];
   scrollsItself: string[];
@@ -263,7 +267,7 @@ export interface SelfTestScript {
 }
 
 // One part calls `run` once, during its `start`, and the script's page binds
-// join the config. `run` throws on a second script or after the parts have
+// and settings join the config. `run` throws on a second script or after the parts have
 // started, and a self-test that got no script fails.
 export interface SelfTestHost {
   run(script: SelfTestScript): void;

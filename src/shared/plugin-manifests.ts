@@ -116,6 +116,32 @@ export function pluginSettings(
   return Object.fromEntries(settings);
 }
 
+// `settingsByPlugin` with `overrides` laid over it: each override names a
+// plugin and the settings it changes. Throws on a plugin or a setting
+// `settingsByPlugin` does not hold, which would otherwise change nothing.
+export function overrideSettings(
+  settingsByPlugin: Record<string, object>,
+  overrides: Record<string, object>,
+): Record<string, object> {
+  const merged = new Map(Object.entries(settingsByPlugin));
+  for (const [pluginId, changed] of Object.entries(overrides)) {
+    if (!Object.hasOwn(settingsByPlugin, pluginId)) {
+      throw new Error(`Settings override names no plugin "${pluginId}"`);
+    }
+    const settings = settingsByPlugin[pluginId];
+    const unknown = Object.keys(changed).filter(
+      (name) => !Object.hasOwn(settings, name),
+    );
+    if (unknown.length > 0) {
+      throw new Error(
+        `Settings override names no setting of plugin "${pluginId}": ${unknown.join(', ')}`,
+      );
+    }
+    merged.set(pluginId, { ...settings, ...changed });
+  }
+  return Object.fromEntries(merged);
+}
+
 // Throws naming each part whose manifest is not in `listed`, the manifests the
 // served config was built from: that part would get no keys, labels or settings.
 export function requireListed(

@@ -18,7 +18,7 @@ import { defaultSettings } from '../config/settings';
 import { builtInThemes } from '../config/themes';
 import type { Clock, RandomHex } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
-import type { Keymap, PageBind } from '../contracts/keymap';
+import type { Keymap } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
 import type {
   MainServices,
@@ -36,6 +36,7 @@ import { startPlugins } from '../shared/plugin-host';
 import {
   commandInfos,
   mergeKeymap,
+  overrideSettings,
   pluginSettings,
   qualify,
   requireListed,
@@ -50,7 +51,7 @@ import {
 } from './keybindings';
 import { createMainApi } from './plugins/main-api';
 import { createPluginChannels } from './plugins/plugin-channel';
-import { failSelfTest, startSelfTest } from './selftest';
+import { failSelfTest, type SelfTestConfig, startSelfTest } from './selftest';
 import { chooseTheme } from './themes/theme-loader';
 import {
   createMainWindow,
@@ -128,22 +129,23 @@ function pageLog(window: BrowserWindow): Log {
     livePage(window)?.send(BRIDGE_CHANNELS.log, source, message);
 }
 
-// `selfTestBinds` are the self-test script's page binds, after every plugin's.
-function buildConfig(
-  inputs: StartInputs,
-  selfTestBinds: PageBind[],
-): AppConfig {
+// `selfTest` adds the self-test script's page binds after every plugin's, and
+// lays its settings over the plugins'.
+function buildConfig(inputs: StartInputs, selfTest: SelfTestConfig): AppConfig {
   const merged = mergeKeymap(coreKeymap, manifests);
   const keymap: Keymap = {
     ...merged,
-    page: [...merged.page, ...selfTestBinds],
+    page: [...merged.page, ...selfTest.pageBinds],
   };
   return {
     settings: defaultSettings,
     keymap,
     commands: inputs.commandsById,
     scopes: inputs.scopes,
-    pluginSettings: inputs.settingsByPlugin,
+    pluginSettings: overrideSettings(
+      inputs.settingsByPlugin,
+      selfTest.settings,
+    ),
     theme: inputs.theme,
   };
 }
@@ -224,13 +226,17 @@ function createWindow(inputs: StartInputs) {
     },
     (part) => startedParts.push(part),
   );
-  // The config needs the page binds of the script a plugin handed the self-test.
-  const selfTestBinds = selfTest?.closeHandover() ?? [];
+  // The config needs the page binds and settings of the script a plugin
+  // handed the self-test.
+  const selfTestConfig = selfTest?.closeHandover() ?? {
+    pageBinds: [],
+    settings: {},
+  };
 
   const commands: MainCommands = new CommandRegistry<string>();
   registerWindowCommands(commands, window, log);
   registerPartCommands(commands, started);
-  const config = buildConfig(inputs, selfTestBinds);
+  const config = buildConfig(inputs, selfTestConfig);
   ipcMain.handle(BRIDGE_CHANNELS.config, () => config);
   installWindowKeybindings(window, config.keymap, commands);
   window.on('closed', () => {
