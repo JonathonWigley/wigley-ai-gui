@@ -162,8 +162,9 @@ export interface SelfTestScript {
   problems(result: unknown): string[];
 }
 
-// A part calls `run` once, during its `start`: the script's page binds join
-// the config then, and a self-test with no script never finishes.
+// One part calls `run` once, during its `start`, and the script's page binds
+// join the config. `run` throws on a second script or after the parts have
+// started, and a self-test that got no script fails.
 export interface SelfTestHost {
   run(script: SelfTestScript): void;
 }

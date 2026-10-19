@@ -24,7 +24,6 @@ import type {
   MainStart,
   PluginManifest,
   SelfTestHost,
-  SelfTestScript,
 } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { mainParts } from '../plugins/main';
@@ -100,20 +99,27 @@ function buildConfig(selfTestBinds: PageBind[]): AppConfig {
 }
 
 // Starts every plugin's main part, each with its own API over one plugin
-// channel router to the window's page.
-function startMainParts(window: BrowserWindow, services: MainServices) {
+// channel router to the window's page. `onStarted` sees each part as it
+// starts, so a part is known even when a later start throws.
+function startMainParts(
+  window: BrowserWindow,
+  services: MainServices,
+  onStarted: (part: MainStart<PluginManifest>) => void,
+) {
   const channels = createPluginChannels(ipcMain, () => window.webContents);
   const settings = pluginSettings(manifests);
-  return startPlugins(mainParts, (part, dependency) =>
-    part.start(
+  return startPlugins(mainParts, (part, dependency) => {
+    const started = part.start(
       createMainApi(part.manifest, {
         channels,
         settings: settings[part.manifest.id],
         services,
         dependency,
       }),
-    ),
-  );
+    );
+    onStarted(started);
+    return started;
+  });
 }
 
 function registerPartCommands(
@@ -129,13 +135,10 @@ function registerPartCommands(
   }
 }
 
-// Disposes each part in start order, each after the one before has finished.
-async function disposeParts(
-  started: ReadonlyMap<string, MainStart<PluginManifest>>,
-) {
-  for (const part of started.values()) {
-    await part.dispose?.();
-  }
+// Starts every part's dispose at once, in start order. Electron does not wait
+// for the returned promise, so the app may exit before a dispose finishes.
+function disposeParts(parts: readonly MainStart<PluginManifest>[]) {
+  return Promise.allSettled(parts.map(async (part) => part.dispose?.()));
 }
 
 function createWindow() {
@@ -152,24 +155,28 @@ function createWindow() {
         rmSync(homeDir, { recursive: true, force: true }),
       )
     : null;
-  // The config needs the binds of the script a plugin hands the self-test.
-  let selfTestBinds: PageBind[] = [];
   const selfTestHost: SelfTestHost | null = selfTest && {
-    run: (script: SelfTestScript) => {
-      selfTestBinds = script.pageBinds;
-      selfTest.run(script);
-    },
+    run: (script) => selfTest.run(script),
   };
-  const started = startMainParts(window, {
-    log,
-    clock,
-    randomHex,
-    homeDir,
-    alerts: isSelfTest ? silentAlerts : createElectronAlerts(window, log),
-    window: windowService(window),
-    selfTest: selfTestHost,
-  });
-  app.on('will-quit', () => void disposeParts(started));
+  // Registered before any part starts, so the parts that did start are
+  // disposed even when a later start throws.
+  const startedParts: MainStart<PluginManifest>[] = [];
+  app.on('will-quit', () => void disposeParts(startedParts));
+  const started = startMainParts(
+    window,
+    {
+      log,
+      clock,
+      randomHex,
+      homeDir,
+      alerts: isSelfTest ? silentAlerts : createElectronAlerts(window, log),
+      window: windowService(window),
+      selfTest: selfTestHost,
+    },
+    (part) => startedParts.push(part),
+  );
+  // The config needs the page binds of the script a plugin handed the self-test.
+  const selfTestBinds = selfTest?.closeHandover() ?? [];
 
   const commands: MainCommands = new CommandRegistry<string>();
   registerWindowCommands(commands, window, log);

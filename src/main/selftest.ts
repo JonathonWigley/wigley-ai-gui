@@ -1,4 +1,5 @@
 import { app, type BrowserWindow } from 'electron';
+import type { PageBind } from '../contracts/keymap';
 import type {
   SelfTestHost,
   SelfTestScript,
@@ -93,6 +94,12 @@ function report(passed: boolean, what: string) {
   console.log(`[selftest] ${passed ? 'PASS' : 'FAIL'} ${what}`);
 }
 
+// `cleanUp` runs before every exit, since app.exit skips quit handlers.
+function exitSelfTest(code: number, cleanUp: () => void) {
+  cleanUp();
+  app.exit(code);
+}
+
 function waitForPageWidth(window: BrowserWindow, width: number) {
   return waitFor(async () => {
     const pageWidth: number =
@@ -155,16 +162,12 @@ async function runStep(
   return cutOff.length === 0;
 }
 
-// `cleanUp` runs before every exit, since app.exit skips quit handlers.
 async function runAllSteps(
   window: BrowserWindow,
   script: SelfTestScript,
   cleanUp: () => void,
 ) {
-  const exit = (code: number) => {
-    cleanUp();
-    app.exit(code);
-  };
+  const exit = (code: number) => exitSelfTest(code, cleanUp);
   const run = ++latestRun;
   const isCurrent = () => run === latestRun;
   const isReadyForKeys = async () =>
@@ -212,12 +215,21 @@ async function runAllSteps(
   exit(failures === 0 ? 0 : 1);
 }
 
+// The host the self-test hands plugins, plus `closeHandover`, which the
+// composition root calls once every part has started.
+export interface SelfTestDriver extends SelfTestHost {
+  // Returns the handed script's page binds; with no script handed over, fails
+  // the self-test and exits.
+  closeHandover(): PageBind[];
+}
+
 // `cleanUp` deletes what the self-test made outside the repo; it runs before
-// the self-test exits. The returned host runs the script a plugin hands it.
+// the self-test exits. The driver runs the one script a plugin hands it while
+// the parts start, and throws on a second script or one handed over late.
 export function startSelfTest(
   window: BrowserWindow,
   cleanUp: () => void,
-): SelfTestHost {
+): SelfTestDriver {
   window.webContents.on('did-navigate', () => {
     // A run begun on the previous page stands down before its load finishes.
     latestRun++;
@@ -226,12 +238,34 @@ export function startSelfTest(
   window.webContents.on('paint', () => {
     hasPaintedSinceNavigation = true;
   });
+  let handed: SelfTestScript | null = null;
+  let isHandoverClosed = false;
   return {
     run(script) {
+      if (isHandoverClosed) {
+        throw new Error(
+          'A self-test script was handed over after the plugins started; hand it over during start',
+        );
+      }
+      if (handed) {
+        throw new Error(
+          'A second self-test script was handed over; the self-test runs one',
+        );
+      }
+      handed = script;
       window.webContents.on(
         'did-finish-load',
         () => void runAllSteps(window, script, cleanUp),
       );
+    },
+    closeHandover() {
+      isHandoverClosed = true;
+      if (!handed) {
+        report(false, 'a plugin handed over a self-test script during start');
+        exitSelfTest(1, cleanUp);
+        return [];
+      }
+      return handed.pageBinds;
     },
   };
 }
