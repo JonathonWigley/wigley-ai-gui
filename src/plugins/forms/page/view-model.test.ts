@@ -208,6 +208,22 @@ describe('reviewRows', () => {
     expect(delta).toMatchObject({ status: 'untouched', missing: 'action' });
   });
 
+  it('shows no pick and no missing hint for a not-applicable finding that kept a solution', () => {
+    const [delta] = reviewRows(
+      mixedRoundAfter(
+        { type: 'choose', choice: 2 },
+        { type: 'toggleNotApplicable' },
+      ),
+    );
+    expect(delta).toMatchObject({
+      status: 'not_applicable',
+      action: '',
+      actionLabel: '',
+      choice: 0,
+      missing: null,
+    });
+  });
+
   it('answers a fixed one-solution finding with no missing pick', () => {
     const start = initialState(
       [
