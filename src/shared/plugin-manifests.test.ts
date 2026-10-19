@@ -6,6 +6,7 @@ import {
   mergeKeymap,
   pluginSettings,
   requireListed,
+  scopeInfos,
 } from './plugin-manifests';
 
 const NO_KEYS: PluginManifest['keys'] = {
@@ -24,7 +25,7 @@ function manifest(
     id,
     dependsOn: [],
     commands: {},
-    scopes: [],
+    scopes: {},
     keys: NO_KEYS,
     settings: {},
     ...overrides,
@@ -47,7 +48,7 @@ function coreKeymap(): Keymap {
 
 const p = manifest('p', {
   commands: { go: { label: 'Go', group: 'Moves', runsIn: 'page' } },
-  scopes: ['view'],
+  scopes: { view: 'In the view' },
   keys: {
     page: [
       { keys: ['g'], scope: 'view', command: 'go' },
@@ -169,6 +170,25 @@ describe('commandInfos', () => {
         [windowPlugin],
       ),
     ).toThrow('Command "window.summon" is declared twice');
+  });
+});
+
+describe('scopeInfos', () => {
+  it('scopeInfos_ListsPluginScopesInOrder_ThenCoreScopes', () => {
+    const a = manifest('a', { scopes: { x: 'In x', y: 'In y' } });
+    const b = manifest('b', { scopes: { z: 'In z' } });
+
+    const infos = scopeInfos(
+      [{ id: 'any', title: 'Everywhere', plugin: 'core' }],
+      [a, b],
+    );
+
+    expect(infos).toEqual([
+      { id: 'a.x', title: 'In x', plugin: 'a' },
+      { id: 'a.y', title: 'In y', plugin: 'a' },
+      { id: 'b.z', title: 'In z', plugin: 'b' },
+      { id: 'any', title: 'Everywhere', plugin: 'core' },
+    ]);
   });
 });
 

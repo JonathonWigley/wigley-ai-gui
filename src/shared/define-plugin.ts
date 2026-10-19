@@ -16,7 +16,7 @@ export function definePlugin<
   id: string;
   dependsOn: readonly string[];
   commands: Cmds;
-  scopes: readonly S[];
+  scopes: Readonly<Record<S, string>>;
   keys: PluginKeys<
     NoInfer<CommandsDeclaredIn<Cmds, 'page'>>,
     NoInfer<CommandsDeclaredIn<Cmds, 'main'>>,

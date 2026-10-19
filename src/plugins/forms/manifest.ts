@@ -57,7 +57,7 @@ const helpBinds = (['forms', 'review', 'confirm', 'idle'] as const).map(
   (scope) => ({ keys: ['?'], scope, command: 'toggleHelp' as const }),
 );
 
-// Forms' scopes are its view names.
+// Forms' scopes are its view names, each titled for help.
 export const formsManifest = definePlugin({
   id: 'forms',
   dependsOn: ['sessions'],
@@ -127,7 +127,13 @@ export const formsManifest = definePlugin({
     toggleHelp: { label: 'help', group: 'help', runsIn: 'page' },
     closeHelp: { label: 'close help', group: 'help', runsIn: 'page' },
   },
-  scopes: ['forms', 'review', 'confirm', 'help', 'idle'],
+  scopes: {
+    forms: 'In the form',
+    review: 'In the review',
+    confirm: 'In the cancel confirmation',
+    help: 'In help',
+    idle: 'With no round open',
+  },
   keys: {
     editor: [
       { keys: '<Leader>x', command: 'toggleNotApplicable' },

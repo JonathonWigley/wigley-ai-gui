@@ -17,7 +17,7 @@ function part(
       id,
       dependsOn,
       commands: {},
-      scopes: [],
+      scopes: {},
       keys: { page: [], editor: [], app: [], global: [], intercept: [] },
       settings: {},
     },

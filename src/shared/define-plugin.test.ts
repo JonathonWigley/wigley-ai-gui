@@ -13,7 +13,7 @@ const manifest = definePlugin({
     go: { label: 'Go', group: 'Moves', runsIn: 'page' },
     quit: { label: 'Quit', group: 'App', runsIn: 'main' },
   },
-  scopes: ['view'],
+  scopes: { view: 'In the view' },
   keys: {
     ...NO_KEYS,
     page: [{ keys: ['g'], scope: 'view', command: 'go' }],

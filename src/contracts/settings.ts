@@ -1,6 +1,6 @@
 import type { CommandId } from './commands';
 import type { Keymap } from './keymap';
-import type { CommandInfo } from './plugin';
+import type { CommandInfo, ScopeInfo } from './plugin';
 import type { ThemeChoice } from './theme';
 
 export interface Settings {
@@ -25,6 +25,9 @@ export interface AppConfig {
   keymap: Keymap;
   // Every command by its qualified id.
   commands: Record<CommandId, CommandInfo>;
+  // Every scope: each plugin's in declaration order, plugins in list order,
+  // then the core's.
+  scopes: ScopeInfo[];
   // Each plugin's settings, by plugin id.
   pluginSettings: Record<string, object>;
   theme: ThemeChoice;

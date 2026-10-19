@@ -13,7 +13,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
-import { coreCommands, coreKeymap } from '../config/keymap';
+import { coreCommands, coreKeymap, coreScopes } from '../config/keymap';
 import { defaultSettings } from '../config/settings';
 import { builtInThemes } from '../config/themes';
 import type { Clock, RandomHex } from '../contracts/ambient';
@@ -39,6 +39,7 @@ import {
   pluginSettings,
   qualify,
   requireListed,
+  scopeInfos,
 } from '../shared/plugin-manifests';
 import { createElectronAlerts } from './alerts/electron-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
@@ -87,6 +88,7 @@ interface StartInputs {
   theme: AppConfig['theme'];
   settingsByPlugin: AppConfig['pluginSettings'];
   commandsById: AppConfig['commands'];
+  scopes: AppConfig['scopes'];
   homeDir: string;
 }
 
@@ -108,6 +110,7 @@ function readStartInputs(): StartInputs {
     ),
     settingsByPlugin: pluginSettings(manifests),
     commandsById: commandInfos(coreCommands, manifests),
+    scopes: scopeInfos(coreScopes, manifests),
     homeDir: homeFolder(),
   };
 }
@@ -139,6 +142,7 @@ function buildConfig(
     settings: defaultSettings,
     keymap,
     commands: inputs.commandsById,
+    scopes: inputs.scopes,
     pluginSettings: inputs.settingsByPlugin,
     theme: inputs.theme,
   };

@@ -10,7 +10,7 @@ export const sessionsManifest = definePlugin({
     prevTab: { label: 'previous tab', group: 'tabs', runsIn: 'page' },
     closeTab: { label: 'close the tab', group: 'tabs', runsIn: 'page' },
   },
-  scopes: [],
+  scopes: {},
   keys: {
     page: [
       { keys: ['<A-o>'], scope: 'any', command: 'nextTab' },

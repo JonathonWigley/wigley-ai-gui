@@ -5,6 +5,7 @@ import type {
   CommandInfo,
   PluginKeys,
   PluginManifest,
+  ScopeInfo,
 } from '../contracts/plugin';
 
 // `<pluginId>.<short>`: a plugin's command or scope under its qualified name.
@@ -83,6 +84,22 @@ export function commandInfos(
     }
   }
   return infos;
+}
+
+// Every scope with its title: each manifest's in declaration order, qualified
+// as `<pluginId>.<short>`, manifests in list order, then the core's as given.
+export function scopeInfos(
+  core: readonly ScopeInfo[],
+  manifests: readonly PluginManifest[],
+): ScopeInfo[] {
+  const pluginScopes = manifests.flatMap((manifest) =>
+    Object.entries(manifest.scopes).map(([short, title]) => ({
+      id: qualify(manifest.id, short),
+      title,
+      plugin: manifest.id,
+    })),
+  );
+  return [...pluginScopes, ...core];
 }
 
 // Each plugin's settings, by plugin id. Throws when two manifests share an id.

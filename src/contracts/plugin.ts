@@ -2,7 +2,7 @@ import type { Alerts } from './alerts';
 import type { Clock, RandomHex, Timers } from './ambient';
 import type { CommandId } from './commands';
 import type { EditorHost, TextEditor } from './editor';
-import type { InterceptBind, Keymap, PageBind } from './keymap';
+import type { InterceptBind, Keymap, PageBind, ViewScope } from './keymap';
 import type { Log } from './log';
 import type { MarkdownRenderer } from './markdown';
 
@@ -22,6 +22,14 @@ export interface CommandInfo extends CommandDecl {
   plugin: string;
 }
 
+// A scope under its qualified id, `<pluginId>.<short>`, or the core's own id
+// with plugin `core`; `title` names where its keys act, as help heads them.
+export interface ScopeInfo {
+  id: ViewScope;
+  title: string;
+  plugin: string;
+}
+
 // A plugin's default keys, naming its scopes `S` and its short command ids:
 // page and editor keys name commands `PageC`, run in the page; app, global and
 // intercept keys name commands `MainC`, run in main.
@@ -37,8 +45,9 @@ export interface PluginKeys<
   intercept: (Omit<InterceptBind, 'command'> & { command: MainC })[];
 }
 
-// `settings` holds the plugin's settings with their defaults; `dependsOn`
-// names plugins that start before this one.
+// `scopes` holds each scope's title by its short id; `settings` holds the
+// plugin's settings with their defaults; `dependsOn` names plugins that start
+// before this one.
 export interface PluginManifest<
   C extends string = string,
   S extends string = string,
@@ -47,7 +56,7 @@ export interface PluginManifest<
   id: string;
   dependsOn: readonly string[];
   commands: Record<C, CommandDecl>;
-  scopes: readonly S[];
+  scopes: Readonly<Record<S, string>>;
   keys: PluginKeys<C, C, S>;
   settings: T;
 }
@@ -175,7 +184,7 @@ export interface PageApi<
   channel: PageChannel<Ch>;
   events: PluginEvents<Ev, Heard>;
   keys: {
-    setScope(scope: M['scopes'][number]): void;
+    setScope(scope: keyof M['scopes'] & string): void;
     keymap: Keymap;
     label(id: CommandId): string;
   };

@@ -12,7 +12,7 @@ const manifest: PluginManifest = {
   id: 'p',
   dependsOn: [],
   commands: {},
-  scopes: [],
+  scopes: {},
   keys: { page: [], editor: [], app: [], global: [], intercept: [] },
   settings: {},
 };
