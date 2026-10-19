@@ -85,8 +85,9 @@ const COLLECT_LAST_ROUND_DESCRIPTION =
   "or return the last finished round's answers again. Takes no required " +
   "arguments. Call this after ask_round returns outcome 'draft', and after " +
   'any failure that lost the answers. ' +
-  "Outcome 'no_round' means nothing is open or saved: send the round again " +
-  "with ask_round, and the user's saved answers fill in.";
+  "Outcome 'no_round' means no round is open and no finished answers are " +
+  "waiting: send the round again with ask_round, and the user's saved " +
+  'answers fill in.';
 
 // The two wigley-forms tools as MCP tools/list publishes them; parseRound
 // enforces the same limits, so the schema and the validator never disagree.

@@ -48,10 +48,10 @@ const NEXT_ON_DRAFT =
   'Do not re-ask these questions and do not open a second round.';
 
 const NEXT_ON_NO_ROUND =
-  'No round is open, and none is saved for this session. If you sent a round ' +
-  'whose answers you never received, send the same round again with ' +
-  "ask_round: the user's saved answers fill in. Do not move the questions " +
-  'into the reply.';
+  'No round is open for this session, and no finished answers are waiting ' +
+  'for it. If you sent a round whose answers you never received, send the ' +
+  "same round again with ask_round: the user's saved answers fill in. Do not " +
+  'move the questions into the reply.';
 
 type JsonObject = Record<string, unknown>;
 
@@ -447,7 +447,7 @@ export function handedBackPayload(
 export function noRoundPayload(): AnswersPayload {
   return {
     outcome: 'no_round',
-    summary: 'No round is open or saved.',
+    summary: 'No round is open.',
     next: NEXT_ON_NO_ROUND,
     answers: [],
     notices: [],

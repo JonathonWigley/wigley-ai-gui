@@ -502,6 +502,21 @@ describe('a call the host cancels', () => {
     expect(presenter.closed).toEqual([naming.roundId]);
   });
 
+  it('answers a collect with no_round, whose next says to send the round again', async () => {
+    const session = startSession();
+    const host = new AbortController();
+    const asking = session.askRound(NAMING_ARGS, null, host.signal);
+    presenter.draft(presenter.latest().roundId, oneAnswer({ choice: 2 }));
+    host.abort();
+    await asking;
+
+    const payload = await session.collectLastRound(true, live());
+
+    expect(payload.outcome).toBe('no_round');
+    expect(payload.next).toContain('send the same round again with ask_round');
+    expect(presenter.shown).toHaveLength(1);
+  });
+
   it('opens the round pre-filled when it is sent again', async () => {
     const session = startSession();
     const host = new AbortController();

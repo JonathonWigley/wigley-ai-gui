@@ -226,6 +226,31 @@ describe('startRelayServer', () => {
     },
   );
 
+  it('refuses a hello whose session fails to start, naming the failure, and serves nothing', async () => {
+    let served = 0;
+    const channel = start(
+      () => {
+        served++;
+        return { close: async () => {} };
+      },
+      () => {
+        throw new Error('forms could not start');
+      },
+    );
+    const { socket, nextLine } = await open(channel);
+    const ended = once(socket, 'end');
+
+    socket.write(helloLine(HELLO));
+
+    expect(JSON.parse(await nextLine())).toEqual({
+      ok: false,
+      error:
+        'the app could not start the session: Error: forms could not start',
+    });
+    await ended;
+    expect(served).toBe(0);
+  });
+
   it('starts a session with null fields from a hello that omits them', async () => {
     const { connect, started } = fakeSessions();
     const channel = start(echoServe().serve, connect);

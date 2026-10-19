@@ -55,7 +55,8 @@ wigley-ai-marketplace, whose README states the tool contract, the saved-round fi
 the `retro` skill reads, and the relay's side of the channel). A change to either contract
 lands in both repos together. Each relay connection is one agent session, owned by the `sessions` plugin; a session
 gets a tab once a plugin shows something in it (forms, when the session sends a round), and keeps it until it
-disconnects or the user closes the tab.
+disconnects or the user closes the tab. A plugin's close guard (`addCloseGuard`) refuses the user's close while the
+plugin still has something open there (forms: an open round), since main, not the page, decides.
 
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
   and the process it runs in), key scopes, default keys, settings and the plugins it depends on; `main/` and

@@ -77,15 +77,31 @@ function replyLine(reply: RelayHelloReply): string {
   return `${JSON.stringify(reply)}\n`;
 }
 
+function refuse(socket: Socket, error: string, deps: RelayServerDeps) {
+  deps.log('relay', `refused a relay: ${error}`);
+  socket.end(replyLine({ ok: false, error }));
+}
+
+// The session opens before the reply, so a hello the app cannot serve is
+// refused rather than answered ok over a session that never started.
 function startSession(socket: Socket, line: string, deps: RelayServerDeps) {
   const parsed = parseHello(line);
   if ('error' in parsed) {
-    deps.log('relay', `refused a relay: ${parsed.error}`);
-    socket.end(replyLine({ ok: false, error: parsed.error }));
+    refuse(socket, parsed.error, deps);
+    return;
+  }
+  let session: ConnectedSession;
+  try {
+    session = deps.connect(sessionInfo(parsed.hello));
+  } catch (error) {
+    refuse(
+      socket,
+      `the app could not start the session: ${String(error)}`,
+      deps,
+    );
     return;
   }
   socket.write(replyLine({ ok: true }));
-  const session = deps.connect(sessionInfo(parsed.hello));
   const served = deps.serve({ input: socket, output: socket }, session);
   socket.on('close', () => {
     session.end();
