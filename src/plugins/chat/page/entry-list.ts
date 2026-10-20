@@ -40,7 +40,8 @@ export type ToggleResult = 'expanded' | 'collapsed' | 'nothing';
 
 // One session's entries, one slot per entry in the session's order, the
 // focused slot marked `is-focused`. After every change a following focus
-// scrolls the list to its bottom.
+// scrolls the list to its bottom; a hidden list does not scroll, so its tab
+// calls `scrollToFocus` each time it shows.
 export interface EntryList {
   element: HTMLOListElement;
   // Builds an entry new to the list, or redraws the one holding its id;
@@ -52,6 +53,9 @@ export interface EntryList {
   move(step: 1 | -1): ChatEntry | null;
   // Follows the latest entry and scrolls to the bottom.
   latest(): void;
+  // Scrolls to the bottom while following, else brings the focused entry
+  // into view.
+  scrollToFocus(): void;
   // Opens every expander of the focused entry when any is closed, else
   // closes them all; null with no focused entry.
   toggleFocused(): { entry: ChatEntry; result: ToggleResult } | null;
@@ -125,6 +129,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     latest() {
       focus = focusLatest(order);
       drawFocus('bottom');
+    },
+    scrollToFocus() {
+      drawFocus(focus.following ? 'bottom' : 'slot');
     },
     toggleFocused() {
       const slot =

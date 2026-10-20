@@ -148,6 +148,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         deps.setScope();
         log('chat', `Chat tab shown in ${shownTab.name}`);
         shownTab.statusLine.draw(shownTab);
+        shownTab.entries.scrollToFocus();
         focusIfRevealed(shownTab);
       },
       beforeClose: (closing) => mayClose(closing, deps),

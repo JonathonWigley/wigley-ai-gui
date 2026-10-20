@@ -251,7 +251,8 @@ describe('createClaudeCodeHarness', () => {
         'ended',
         {
           code: null,
-          error: 'claude was not found at /bin/claude; set claude.command',
+          error:
+            'claude was not found at /bin/claude, or the project folder /proj does not exist; set claude.command',
         },
       ],
     ]);

@@ -379,6 +379,29 @@ describe('createChatSessions', () => {
     expect(test.sent('sessionEnded')).toEqual([]);
   });
 
+  it('closed_processEndRejects_logsAndEndsTheOwnedSession', async () => {
+    const fake = createFakeAgentHarness();
+    const failingEnd: FakeAgentHarness = {
+      ...fake,
+      start: (request, events) => ({
+        ...fake.start(request, events),
+        end: () => Promise.reject(new Error('kill failed')),
+      }),
+    };
+    const test = setUp({ harnesses: [failingEnd] });
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+
+    test.chat.closed(ROW_ID);
+    await flush();
+
+    expect(test.logged).toContain(
+      `[chat] session ${ROW_ID} end failed: kill failed`,
+    );
+    expect(test.ownedEnds()).toBe(1);
+    expect(test.chat.sessions()).toEqual([]);
+  });
+
   it('closed_notOwned_doesNothing', async () => {
     const test = await started();
     const sentBefore = test.messages.length;
@@ -544,6 +567,42 @@ describe('createChatSessions', () => {
       id: 'permission-1',
       answer: { allowed: false, reason: CANCELLED_REASON },
     });
+  });
+
+  it('permission_sessionEnds_answersCancelledWithNoEntry', async () => {
+    const test = await started();
+    const call = test.chat
+      .permissionToolSession(test.agentSession)
+      .call('permission_prompt', BASH_ARGS, {
+        toolUseId: 'tu-1',
+        signal: signal().signal,
+      });
+    const entriesBefore = test.sent('entry').length;
+
+    test.process.events.ended({ code: 0, error: null });
+
+    expect(replyText(await settled(call))).toBe(
+      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
+    );
+    expect(test.sent('entry')).toHaveLength(entriesBefore);
+  });
+
+  it('permission_rowCloses_answersCancelledWithNoEntry', async () => {
+    const test = await started();
+    const call = test.chat
+      .permissionToolSession(test.agentSession)
+      .call('permission_prompt', BASH_ARGS, {
+        toolUseId: 'tu-1',
+        signal: signal().signal,
+      });
+    const entriesBefore = test.sent('entry').length;
+
+    test.chat.closed(ROW_ID);
+
+    expect(replyText(await settled(call))).toBe(
+      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
+    );
+    expect(test.sent('entry')).toHaveLength(entriesBefore);
   });
 
   it('permission_alreadyAborted_noEntry', async () => {

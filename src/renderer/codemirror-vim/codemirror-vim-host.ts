@@ -63,8 +63,12 @@ function insertAtEnd(view: EditorView, cm: VimEditor) {
   }
 }
 
-// Vim's `i`: enters insert mode with the cursor where it was.
+// Vim's `i` from any mode: leaves visual mode, then enters insert mode with
+// the cursor where it was. In visual mode `i` would start a text object.
 function insertHere(cm: VimEditor) {
+  if (cm.state.vim.visualMode) {
+    Vim.exitVisualMode(cm);
+  }
   if (!cm.state.vim.insertMode) {
     Vim.handleEx(cm, 'startinsert');
   }

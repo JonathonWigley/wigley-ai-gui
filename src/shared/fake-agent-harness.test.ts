@@ -333,6 +333,23 @@ describe('createFakeAgentHarness', () => {
     expect(isSettled).toBe(true);
   });
 
+  it('holdEnd_SecondEndPendingUntilRelease', async () => {
+    const { harness, agent } = await startedProcess();
+    harness.holdEnd();
+    let isSecondSettled = false;
+
+    void agent.end();
+    const secondEnding = agent.end().then(() => {
+      isSecondSettled = true;
+    });
+    await flush();
+
+    expect(isSecondSettled).toBe(false);
+    harness.releaseEnd();
+    await secondEnding;
+    expect(isSecondSettled).toBe(true);
+  });
+
   it('isFakeAgentHarness_TellsTheFakeFromAnother', () => {
     const other: AgentHarness = {
       id: 'claude',

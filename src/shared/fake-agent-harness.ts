@@ -32,8 +32,9 @@ export interface FakeAgentProcessRecord {
 
 // `processes` holds one record per `start` that did not throw, in start order:
 // the same array for the harness's life, each record changing in place.
-// `failNextStart` makes the next `start` throw `message`. Between `holdEnd`
-// and `releaseEnd`, `end` marks its process ended and leaves its promise
+// `failNextStart` makes the next `start` throw `message`. Every `end` on a
+// process returns the promise its first `end` returned. Between `holdEnd` and
+// `releaseEnd`, a first `end` marks its process ended and leaves that promise
 // pending; `releaseEnd` emits `ended` for each held process in call order and
 // resolves them.
 export interface FakeAgentHarness extends AgentHarness {
@@ -145,6 +146,7 @@ export function createFakeAgentHarness(): FakeAgentHarness {
     let controls = startingControls();
     let turn = 0;
     let isTurnOpen = false;
+    let endPromise: Promise<void> | null = null;
     const requireRunning = () => {
       if (record.ended) {
         throw new Error('fake agent process has ended');
@@ -218,26 +220,25 @@ export function createFakeAgentHarness(): FakeAgentHarness {
       },
       end() {
         calls.push({ method: 'end' });
-        if (record.ended) {
-          return Promise.resolve();
+        if (endPromise !== null) {
+          return endPromise;
         }
         record.ended = true;
         isTurnOpen = false;
         const emitEnded = () => events.ended({ code: 0, error: null });
-        if (isEndHeld) {
-          return new Promise<void>((resolve) => {
-            heldEnds.push(() => {
-              emitEnded();
-              resolve();
-            });
-          });
-        }
-        return new Promise<void>((resolve) => {
-          queueMicrotask(() => {
+        const isHeld = isEndHeld;
+        endPromise = new Promise<void>((resolve) => {
+          const exit = () => {
             emitEnded();
             resolve();
-          });
+          };
+          if (isHeld) {
+            heldEnds.push(exit);
+          } else {
+            queueMicrotask(exit);
+          }
         });
+        return endPromise;
       },
     };
   }

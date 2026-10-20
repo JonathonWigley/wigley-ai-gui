@@ -103,7 +103,7 @@ describe('createStreamDecoder', () => {
     ]);
   });
 
-  it('decode_AssistantAfterStream_AddsRawToStreamedEntry', () => {
+  it('decode_AssistantBeforeBlockStop_ConfirmsStreamedEntry', () => {
     const decoder = createStreamDecoder();
     for (const text of [
       messageStart('m1'),
@@ -112,17 +112,23 @@ describe('createStreamDecoder', () => {
     ]) {
       decoder.decode(text);
     }
-    decoder.decode(blockStop(0));
     const assistant = assistantEvent('m1', [{ type: 'text', text: 'Hello' }]);
 
-    const decoded = decoder.decode(line(assistant));
+    const confirmedEntries = decoder.decode(line(assistant)).entries;
+    const stoppedEntries = decoder.decode(blockStop(0)).entries;
 
-    expect(decoded.entries).toHaveLength(1);
-    const [entry] = decoded.entries;
-    expect(entry.id).toBe('text-m1-0');
-    expect(entry.kind === 'assistant' && entry.streaming).toBe(false);
-    expect(entry.raw).toHaveLength(2);
-    expect(entry.raw[1]).toEqual(assistant);
+    expect(confirmedEntries).toHaveLength(1);
+    const [confirmed] = confirmedEntries;
+    expect(confirmed.id).toBe('text-m1-0');
+    expect(confirmed.kind === 'assistant' && confirmed.streaming).toBe(false);
+    expect(confirmed.raw).toHaveLength(2);
+    expect(confirmed.raw[1]).toEqual(assistant);
+    expect(stoppedEntries).toHaveLength(1);
+    const [stopped] = stoppedEntries;
+    expect(stopped.id).toBe('text-m1-0');
+    expect(stopped.kind === 'assistant' && stopped.streaming).toBe(false);
+    expect(stopped.raw).toHaveLength(2);
+    expect(stopped.raw[1]).toEqual(assistant);
   });
 
   it('decode_ToolUse_AddsToolEntryWithSummary', () => {

@@ -69,10 +69,12 @@ function exitError(
   return `claude exited with ${how}${why}`;
 }
 
-function spawnError(error: Error, command: string): string {
+// Spawn reports a missing `cwd` as ENOENT just as it does a missing binary,
+// so the hint names both causes.
+function spawnError(error: Error, command: string, cwd: string): string {
   const isMissing = (error as NodeJS.ErrnoException).code === 'ENOENT';
   return isMissing
-    ? `claude was not found at ${command}; set claude.command`
+    ? `claude was not found at ${command}, or the project folder ${cwd} does not exist; set claude.command`
     : error.message;
 }
 
@@ -294,7 +296,10 @@ function startClaudeProcess(
     markClosed();
   });
   child.on('error', (error: Error) => {
-    emitEnded({ code: null, error: spawnError(error, deps.command) });
+    emitEnded({
+      code: null,
+      error: spawnError(error, deps.command, launch.cwd),
+    });
     // A child that never spawned has no pid and sends no `close` to wait for.
     if (child.pid === undefined) {
       markClosed();

@@ -651,6 +651,13 @@ describe('createSessionList', () => {
     const next = list.connect(owned('host-1'));
     expect(next.session).toBe(ownedSession.session);
     expect(list.state().rows).toHaveLength(1);
+
+    // The first relay's handle has already left: a second end must not clear
+    // the join `next` holds, so a third relay gets a session of its own.
+    connected.end();
+    const third = list.connect(owned('host-1'));
+    expect(third.session).not.toBe(ownedSession.session);
+    expect(list.state().rows).toHaveLength(2);
   });
 
   it('connects a second relay for a joined host id as a session of its own', () => {
