@@ -256,7 +256,7 @@ import `src/plugins/keys/contract.ts`); no plugin imports `src/renderer`.
 ### Wave 1
 - [ ] [Scoped editor binds](01-scoped-editor-binds.md)
 - [ ] [Sessions main: rows, harness, markRound](02-sessions-main-rows.md)
-- [ ] [Relay harness](03-relay-harness.md)
+- [x] [Relay harness](03-relay-harness.md)
 
 ### Wave 2
 - [ ] [Modes](04-modes.md) — after 01
@@ -280,8 +280,10 @@ Review base: a550cbd (wigley-ai-gui) · 96ce948 (wigley-ai-marketplace)
 Peers on the tree at preflight: wigley-ai-gui-cc, wigley-ai-gui-1c — commits pathspec-scoped, review range an explicit commit list.
 
 ### Groups
+- 03 · wigley-ai-marketplace a02ecb4 · proved (diff read, forms unittest OK, manifest checks pass) · concerns: none
 ### Contract changes
 ### Rulings
+- Plan folder moved mid-wave-1 by a peer run (wigley-ai-gui 6c52ae5) from ~/wigley-features/wigley-ai-gui/ to docs/features/; the run continues from the in-repo folder, commits each plan change, and leaves 6c52ae5 out of the review range — lead
 - Task 03 version: origin/main holds 1.3.1, local 1.4.0 unpushed → version left at 1.4.0 (one bump per pushed series) — preflight · lead
 ### Review rounds
 ### Test gate

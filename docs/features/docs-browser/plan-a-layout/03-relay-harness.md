@@ -1,6 +1,6 @@
 # 03 — Relay hello carries the harness
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -56,3 +56,4 @@ Commit: one commit in wigley-ai-marketplace, message naming the hello's `harness
 
 ## Proof
 
+wigley-ai-marketplace a02ecb4 · proved: diff read (hello_from_env returns harness last; HELLO fixture, three HelloTests), forms unittest 38 OK / 2 skipped, check_manifests --against origin/main passes · version left at 1.4.0 · concerns: none
