@@ -27,6 +27,40 @@ const SETTINGS = { keys: { whichKeyTimeoutMs: 1000 } };
 // An unbroken run of letters wider than any pane; no j, which would start jk.
 const LONG_WORD = 'unbroken'.repeat(14);
 
+// The layout forms' main writes into its data folder in the self-test only,
+// so the layout cycle holds `default` and `selftest`. Its question card builds
+// through the kit and throws on every update, its finding card throws at once,
+// and its notice card mounts a notes box, which a notice lacks.
+export const SELFTEST_LAYOUT = {
+  path: 'layouts/selftest/layout.js',
+  text: `export default {
+  cards: {
+    question(parent, input, kit) {
+      const article = kit.el(parent, 'article', 'item question');
+      kit.itemHead(article, 'Question');
+      kit.section(article, 'Question', input.question);
+      kit.section(article, 'Context', input.context);
+      kit.answerControls(kit.choiceList(article, 'recommended'));
+      return {
+        element: article,
+        update() {
+          throw new Error('selftest update throw');
+        },
+      };
+    },
+    finding() {
+      throw new Error('selftest throw');
+    },
+    notice(parent, input, kit) {
+      const article = kit.el(parent, 'article', 'item notice');
+      kit.textBox(article, 'notes');
+      return { element: article };
+    },
+  },
+};
+`,
+};
+
 // Opening on finding 1: Space k then k breaks Space k s, so the first k
 // replays to the notice and the second finds no item before it; j back to the
 // finding; Space a f sets Fix now, 2 picks solution 2, Space a f again clears
@@ -63,13 +97,22 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // hide it and Space k s in NORMAL shows it; Esc (forms' editor bind) leaves the
 // box. Option+Shift+i wraps to the last session, which has no tab, so nothing
 // shows and no form keeps its scope; Option+Shift+o wraps back to the first,
-// whose form takes its scope again. Then review, which only that scope opens,
+// whose form takes its scope again. Space z l n cycles to the selftest layout
+// and Space z l p back to default; each load logs every line its cards log at
+// once, so each step checks one of them: the finding card's failure, then,
+// cycling backwards onto selftest, the notice card's, then, forwards to default
+// and backwards onto selftest, its shown line. The shown question 2 card's
+// update threw on that load; k shows question 1's card, whose first update
+// throws, and 2 picks 2; Enter restores the recommendation and j returns to
+// question 2. Space z l n leaves default shown for the steps after. Then
+// review, which only that scope opens,
 // proves it; Space ? opens help and Esc closes it, back in the review's
 // scope, where C opens and n dismisses the cancel prompt; Space ? opens help
 // again, Cmd+W opens the cancel prompt, which closes help, so n dismisses the
 // prompt. o types "note" into the Round note at
 // once (INSERT), Esc out (forms' editor bind in the review's scope), Enter
-// jumps back to finding 1, review again and Space Enter submits.
+// jumps back to finding 1, review again and Space Enter submits. Space z l o
+// opens the layout preview's sample round.
 const STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'k', 'k'],
@@ -185,6 +228,41 @@ const STEPS: SelfTestStep[] = [
     checksFit: true,
   },
   { keys: ['<A-S-o>'], expect: '[sessions] activated selftest' },
+  {
+    keys: [' ', 'z', 'l', 'n'],
+    expect: '[forms] layout selftest finding card failed: selftest throw',
+  },
+  {
+    keys: [' ', 'z', 'l', 'p'],
+    expect: '[forms] layout default shown (cycled, revision 3)',
+  },
+  {
+    keys: [' ', 'z', 'l', 'p'],
+    expect:
+      '[forms] layout selftest notice card failed: notice card has no notes box',
+  },
+  {
+    keys: [' ', 'z', 'l', 'n'],
+    expect: '[forms] layout default shown (cycled, revision 5)',
+  },
+  {
+    keys: [' ', 'z', 'l', 'p'],
+    expect: '[forms] layout selftest shown (cycled, revision 6)',
+  },
+  {
+    keys: ['k', '2'],
+    expect:
+      '[forms] layout selftest question card update failed: selftest update throw',
+  },
+  {
+    keys: ['Enter'],
+    expect: '[forms] accepted the recommendation on question 1',
+  },
+  { keys: ['j'], expect: '[page] j ran forms.nextItem' },
+  {
+    keys: [' ', 'z', 'l', 'n'],
+    expect: '[forms] layout default shown (cycled, revision 7)',
+  },
   { keys: [' ', ' '], expect: '[forms] review opened', checksFit: true },
   {
     keys: [' ', '?'],
@@ -209,6 +287,10 @@ const STEPS: SelfTestStep[] = [
   { keys: ['Enter'], expect: '[page] Enter ran forms.reviewJump' },
   { keys: [' ', ' '], expect: '[forms] review opened' },
   { keys: [' ', 'Enter'], expect: '[forms] submitted' },
+  {
+    keys: [' ', 'z', 'l', 'o'],
+    expect: '[forms] round shown: Layout preview · Layout preview',
+  },
 ];
 
 // Code and tables scroll in their own box, and rail, row and tab titles end

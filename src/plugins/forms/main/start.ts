@@ -15,7 +15,7 @@ import {
 import { createLayoutPreview } from './preview/layout-preview';
 import { createMemoryRoundStore } from './preview/memory-round-store';
 import { createRoundStore } from './round-store';
-import { formsSelfTestScript } from './selftest-script';
+import { formsSelfTestScript, SELFTEST_LAYOUT } from './selftest-script';
 import { FORMS_TOOLS } from './tool-definitions';
 import { createFormsToolSession } from './tool-session';
 
@@ -65,18 +65,23 @@ function createForms(
   return { forms, preview };
 }
 
-// Starts the layout registry and serves it to the page; a handler called
-// before the registry is ready answers once it is, and every handler rejects
-// with the start's error when it failed.
-function serveLayouts(api: FormsApi): Promise<LayoutRegistry> {
+// Starts the layout registry once `written` settles and serves it to the
+// page; a handler called before the registry is ready answers once it is, and
+// every handler rejects with the start's error when it failed.
+function serveLayouts(
+  api: FormsApi,
+  written: Promise<void>,
+): Promise<LayoutRegistry> {
   const { log } = api.services;
-  const layouts = startLayoutRegistry({
-    data: api.data,
-    send: (choice) => api.channel.send('layoutChanged', choice),
-    log,
-    layoutTypes,
-    defaultLayout,
-  });
+  const layouts = written.then(() =>
+    startLayoutRegistry({
+      data: api.data,
+      send: (choice) => api.channel.send('layoutChanged', choice),
+      log,
+      layoutTypes,
+      defaultLayout,
+    }),
+  );
   layouts.catch((error: unknown) =>
     log('forms', `layouts not started: ${errorText(error)}`),
   );
@@ -90,7 +95,8 @@ function serveLayouts(api: FormsApi): Promise<LayoutRegistry> {
 
 // Serves its two tools to every agent session, shows each session's rounds on
 // the page, serves the page its layouts and opens the layout preview on the
-// page's ask; in the self-test it hands the driver its script.
+// page's ask; in the self-test it writes the fixture layout and hands the
+// driver its script.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
@@ -100,8 +106,14 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     sessions.contributeTools(FORMS_TOOLS, (session) =>
       createFormsToolSession(forms.startSession(session)),
     );
-    const layouts = serveLayouts(api);
-    api.services.selfTest?.run(formsSelfTestScript(sessions));
+    const { selfTest } = api.services;
+    // Written before the registry starts, so its watch reports no change and
+    // the revisions the steps expect hold.
+    const fixtureWritten = selfTest
+      ? api.data.write(SELFTEST_LAYOUT.path, SELFTEST_LAYOUT.text)
+      : Promise.resolve();
+    const layouts = serveLayouts(api, fixtureWritten);
+    selfTest?.run(formsSelfTestScript(sessions));
     return {
       commands: {},
       dispose: () =>
