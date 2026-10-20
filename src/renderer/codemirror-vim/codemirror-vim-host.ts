@@ -298,29 +298,14 @@ function hostedViewOf(element: Element, hosted: HostedEditor[]): EditorView {
   return match.view;
 }
 
-// An IME commits its composition on Enter, a keydown the browser marks
-// `isComposing` (keyCode 229 where it does not). Vim skips only the keys
-// `Process`, `Unidentified` and `Dead`, so it would take that Enter through
-// the host's insert map and break the line or run a bind. A handler that
-// returns true stops every later handler, vim's among them; CodeMirror then
-// prevents the keydown's default, which leaves the commit to the IME, already
-// holding the key, and the composition events CodeMirror reads the text from.
-const imeEnterPassesVim = EditorView.domEventHandlers({
-  keydown: (event) =>
-    event.key === 'Enter' && (event.isComposing || event.keyCode === 229),
-});
-
 // Answer boxes are prose: no gutters, brackets or completion; lines wrap.
 // `leaving` runs on blur before the editor reports it, so a box the user
-// leaves drops its unfinished keys before any other box reports. The IME
-// handler comes before vim, since a plugin earlier in the list handles a
-// DOM event first.
+// leaves drops its unfinished keys before any other box reports.
 function editorExtensions(
   events: EditorEvents,
   leaving: (view: EditorView) => void,
 ) {
   return [
-    imeEnterPassesVim,
     vim({ status: true }),
     minimalSetup,
     EditorView.lineWrapping,

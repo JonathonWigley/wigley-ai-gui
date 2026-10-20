@@ -101,7 +101,7 @@ export interface AgentProcess {
   send(text: string): void;
   interrupt(): void;
   setControl(id: string, value: string): void;
-  // Resolves once the process has exited.
+  // Resolves once the process has exited, after `ended` has fired.
   end(): Promise<void>;
 }
 
