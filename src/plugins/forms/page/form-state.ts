@@ -73,8 +73,8 @@ export interface FormsState {
   activeSessionId: string | null;
   // Where keeping the round from the cancel prompt returns.
   confirmReturnView: FormsView;
-  // Whether confirming the cancel prompt also closes the round's tab.
-  confirmClosesTab: boolean;
+  // Whether confirming the cancel prompt also closes the round's session.
+  confirmClosesSession: boolean;
 }
 
 export interface Progress {
@@ -116,7 +116,7 @@ export type FormsAction =
   | { type: 'roundShown'; round: PresentedRound }
   | { type: 'roundClosed'; roundId: string }
   | { type: 'sessionActivated'; sessionId: string | null }
-  // Asks to cancel the active round before its session's tab closes.
+  // Asks to cancel the active round before its session closes.
   | { type: 'askClose'; sessionId: string }
   | { type: 'openReview' }
   | { type: 'closeReview' }
@@ -144,7 +144,7 @@ const EMPTY_STATE: FormsState = {
   view: 'idle',
   activeSessionId: null,
   confirmReturnView: 'review',
-  confirmClosesTab: false,
+  confirmClosesSession: false,
 };
 
 const UNTOUCHED: ItemAnswer = {
@@ -237,7 +237,7 @@ export function apply(state: FormsState, action: FormsAction): FormsState {
             ...state,
             view: 'confirm',
             confirmReturnView: 'review',
-            confirmClosesTab: false,
+            confirmClosesSession: false,
           }
         : state;
     case 'confirmCancel':
@@ -246,7 +246,11 @@ export function apply(state: FormsState, action: FormsAction): FormsState {
         : state;
     case 'dismissConfirm':
       return state.view === 'confirm'
-        ? { ...state, view: state.confirmReturnView, confirmClosesTab: false }
+        ? {
+            ...state,
+            view: state.confirmReturnView,
+            confirmClosesSession: false,
+          }
         : state;
     case 'setText':
       return updateRound(state, action.roundId, (round) =>
@@ -576,7 +580,7 @@ function closeRound(state: FormsState, roundId: string | null): FormsState {
     rounds,
     activeRoundId: null,
     view: 'idle',
-    confirmClosesTab: false,
+    confirmClosesSession: false,
   };
 }
 
@@ -597,11 +601,11 @@ function activateSession(
     activeSessionId: sessionId,
     activeRoundId: round?.roundId ?? null,
     view: round === undefined ? 'idle' : 'forms',
-    confirmClosesTab: false,
+    confirmClosesSession: false,
   };
 }
 
-// Opens the cancel prompt for the active round of the closing tab's session,
+// Opens the cancel prompt for the active round of the closing session,
 // from its form or review; keeping the round returns there.
 function askClose(state: FormsState, sessionId: string): FormsState {
   const view = state.view;
@@ -614,7 +618,7 @@ function askClose(state: FormsState, sessionId: string): FormsState {
     ...state,
     view: 'confirm',
     confirmReturnView: view,
-    confirmClosesTab: true,
+    confirmClosesSession: true,
   };
 }
 

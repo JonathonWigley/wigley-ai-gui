@@ -1,170 +1,58 @@
-import type { Area } from '../../../contracts/plugin';
-import { button, element } from '../../../shared/page/dom';
-import type { SessionRow, SessionsState, SessionView } from '../contract';
+import { element } from '../../../shared/page/dom';
+import type { SessionsState } from '../contract';
 import {
-  keepsPane,
-  showsEmptyText,
-  showsIdleText,
-  tabText,
-  tabTitle,
-} from './tabs';
+  mountSessionTabsView,
+  type SessionTabsView,
+} from './session-tabs-view';
+import { mountSidebarView } from './sidebar-view';
+import { rowStatus, type SidebarLayout } from './tabs';
 
-// What fills a session's view, with the title it last set.
-interface Fill {
-  view: SessionView;
-  title: string;
-}
-
-interface SessionPane {
-  element: HTMLElement;
-  idle: HTMLElement;
-  fills: Fill[];
+// `activate` runs on a row click; `isModeShown` reads whether Sessions mode
+// shows; `tabsChanged` runs after any change to a session's tabs, their
+// selection or their statuses.
+export interface SessionsViewDeps {
+  activate(sessionId: string): void;
+  isModeShown(): boolean;
+  tabsChanged(): void;
 }
 
 export interface SessionsView {
+  element: HTMLElement;
+  tabs: SessionTabsView;
   render(state: SessionsState): void;
-  // Attaches the view's element before returning; fills keep call order.
-  fill(
-    sessionId: string,
-    view: SessionView,
-  ): { setTitle(title: string): void; remove(): void };
-  fillsOf(sessionId: string): SessionView[];
+  layOut(layout: SidebarLayout): void;
 }
 
-// The tab strip, one tab per session row, one view per session holding what
-// other plugins fill it with, and the empty state, in the main area. Only the
-// selected session's view shows; a session with no fill shows its idle text.
-// Until `render` hands it main's first state, it shows no empty state either.
-export function mountSessionsView(
-  main: Area,
-  activate: (sessionId: string) => void,
-): SessionsView {
+// Sessions mode's root: the sidebar of session rows beside the selected
+// session's tab area. The sidebar sits beside the tab area, over it, or
+// hidden, as `layOut` says; each row's second line follows its tabs'
+// statuses.
+export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const root = element('div', 'sessions');
-  const strip = element('nav', 'session-tabs');
-  strip.setAttribute('aria-label', 'Sessions');
-  const views = element('div', 'session-views');
-  const empty = buildEmpty();
-  root.append(strip, views, empty);
-  main.contribute(root);
-  const panes = new Map<string, SessionPane>();
+  const sidebar = mountSidebarView(deps.activate);
   let state: SessionsState | null = null;
-
-  const paneOf = (sessionId: string): SessionPane => {
-    const existing = panes.get(sessionId);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const pane = buildPane();
-    panes.set(sessionId, pane);
-    views.append(pane.element);
-    return pane;
-  };
-
-  const render = () => {
-    const tabs = state?.rows ?? [];
-    const activeSessionId = state?.selectedSessionId ?? null;
-    const hasTabs = tabs.length > 0;
-    for (const tab of tabs) {
-      paneOf(tab.sessionId);
-    }
-    for (const [sessionId, pane] of panes) {
-      const hasTab = tabs.some((tab) => tab.sessionId === sessionId);
-      if (!keepsPane(hasTab, pane.fills.length)) {
-        pane.element.remove();
-        panes.delete(sessionId);
-        continue;
-      }
-      pane.element.hidden = sessionId !== activeSessionId;
-      pane.idle.hidden = !showsIdleText(pane.fills.length);
-    }
-    strip.hidden = !hasTabs;
-    views.hidden = !hasTabs;
-    empty.hidden = !showsEmptyText(state);
-    strip.replaceChildren(
-      ...tabs.map((tab) =>
-        buildTab(
-          tab,
-          activeSessionId,
-          tabTitle(
-            panes.get(tab.sessionId)?.fills.map((fill) => fill.title) ?? [],
-          ),
-          activate,
-        ),
-      ),
-    );
-  };
-
-  render();
+  const drawSidebar = () =>
+    sidebar.render(state, (sessionId) => rowStatus(tabs.statusesOf(sessionId)));
+  const tabs = mountSessionTabsView({
+    isModeShown: deps.isModeShown,
+    changed() {
+      drawSidebar();
+      deps.tabsChanged();
+    },
+  });
+  root.append(sidebar.element, tabs.element);
   return {
+    element: root,
+    tabs,
     render(next) {
       state = next;
-      render();
+      drawSidebar();
+      tabs.render(next);
     },
-    fill(sessionId, view) {
-      const pane = paneOf(sessionId);
-      const entry: Fill = { view, title: view.title };
-      pane.element.insertBefore(view.element, pane.idle);
-      pane.fills.push(entry);
-      render();
-      return {
-        setTitle(title) {
-          entry.title = title;
-          render();
-        },
-        remove() {
-          view.element.remove();
-          pane.fills = pane.fills.filter((fill) => fill !== entry);
-          render();
-        },
-      };
+    layOut(layout) {
+      root.classList.toggle('is-sidebar-hidden', layout === 'hidden');
+      root.classList.toggle('is-sidebar-over', layout === 'over');
+      sidebar.element.hidden = layout === 'hidden';
     },
-    fillsOf: (sessionId) =>
-      panes.get(sessionId)?.fills.map((fill) => fill.view) ?? [],
   };
-}
-
-function buildTab(
-  tab: SessionRow,
-  activeSessionId: string | null,
-  title: string | null,
-  activate: (sessionId: string) => void,
-): HTMLElement {
-  const isActive = tab.sessionId === activeSessionId;
-  const text = tabText(tab.label, title);
-  const entry = button('session-tab', '', () => activate(tab.sessionId));
-  entry.title = text;
-  entry.classList.toggle('is-active', isActive);
-  entry.setAttribute('aria-current', String(isActive));
-  const marker = element('span', 'session-tab-marker', '●');
-  marker.hidden = !tab.marked;
-  entry.append(element('span', 'session-tab-label', text), marker);
-  return entry;
-}
-
-function buildPane(): SessionPane {
-  const pane = element('div', 'session-view');
-  const idle = element('section', 'session-idle');
-  idle.append(
-    element('h1', 'session-idle-title', 'No round open'),
-    element(
-      'p',
-      'session-idle-text',
-      "This session has no round for you now. Its agent's next round opens here.",
-    ),
-  );
-  pane.append(idle);
-  return { element: pane, idle, fills: [] };
-}
-
-function buildEmpty(): HTMLElement {
-  const empty = element('section', 'sessions-empty');
-  empty.append(
-    element('h1', 'sessions-empty-title', 'No sessions'),
-    element(
-      'p',
-      'sessions-empty-text',
-      'When an agent asks you a round, its session opens here as a tab and the app icon counts the round.',
-    ),
-  );
-  return empty;
 }

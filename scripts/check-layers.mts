@@ -126,6 +126,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared/page',
       'src/plugins/sessions',
       'src/plugins/sessions/contract.ts',
+      'src/plugins/keys/contract.ts',
     ],
     packages: [],
   },

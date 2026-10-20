@@ -88,31 +88,39 @@ function finishRound(api: FormsApi, roundId: string, end: RoundEnd) {
     );
 }
 
-// Shows each agent round in its session's view and sends the user's answers
-// back to main; the scope follows the forms view. A session's tab with an open
-// round closes only through the cancel prompt.
+// Shows each agent round in its session's Form tab and sends the user's
+// answers back to main; while a Form tab is the visible tab, the scope follows
+// the forms view. A session with an open round closes only through the cancel
+// prompt.
 export const formsPagePart: PagePart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
     const { services } = api;
     const sessions = api.dependency<SessionsPageExports>('sessions');
     const store = createFormsStore(
-      initialState([], sessions.activeSessionId()),
+      initialState([], sessions.selectedSessionId()),
     );
     const boxes = createBoxes(api, store);
-    mountFormsView({
+    const view = mountFormsView({
       areas: api.areas,
       sessions,
       beforeClose: (sessionId) =>
         guardClose({ store, log: services.log }, sessionId),
+      formShown: () => api.keys.setScope(store.get().view),
       store,
       boxes,
       markdown: services.markdown,
       keys: api.dependency<KeysPageExports>('keys'),
       run: (command) => api.commands.run(command),
     });
-    store.subscribe(() => api.keys.setScope(store.get().view));
-    api.keys.setScope(store.get().view);
+    store.subscribe(() => {
+      if (view.isFormShown()) {
+        api.keys.setScope(store.get().view);
+      }
+    });
+    api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
+      view.forgetSession(sessionId),
+    );
     startAutosave({
       store,
       save: (roundId, body) => api.channel.invoke('draft', roundId, body),
@@ -126,7 +134,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         store,
         boxes,
         finish: (roundId, end) => finishRound(api, roundId, end),
-        closeTab: (sessionId) => sessions.closeTab(sessionId),
+        closeSession: (sessionId) => sessions.closeSession(sessionId),
         toast: services.toast,
         log: services.log,
       }),

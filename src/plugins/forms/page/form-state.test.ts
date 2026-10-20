@@ -876,7 +876,7 @@ describe('sessionActivated', () => {
     );
     expect(state.view).toBe('forms');
     expect(state.activeRoundId).toBe('r2');
-    expect(state.confirmClosesTab).toBe(false);
+    expect(state.confirmClosesSession).toBe(false);
   });
 
   it('changes nothing for the session already active', () => {
@@ -908,10 +908,10 @@ describe('askClose', () => {
   it('opens the prompt from the form and keeping returns to the form', () => {
     const asked = apply(two, askClose);
     expect(asked.view).toBe('confirm');
-    expect(asked.confirmClosesTab).toBe(true);
+    expect(asked.confirmClosesSession).toBe(true);
     const kept = apply(asked, { type: 'dismissConfirm' });
     expect(kept.view).toBe('forms');
-    expect(kept.confirmClosesTab).toBe(false);
+    expect(kept.confirmClosesSession).toBe(false);
   });
 
   it('returns to the review when asked from the review', () => {
@@ -1022,7 +1022,7 @@ describe('cancel', () => {
   it('asks from the review, and dismissing returns to the review', () => {
     const asked = run(two, { type: 'openReview' }, { type: 'askCancel' });
     expect(asked.view).toBe('confirm');
-    expect(asked.confirmClosesTab).toBe(false);
+    expect(asked.confirmClosesSession).toBe(false);
     expect(apply(asked, { type: 'dismissConfirm' }).view).toBe('review');
   });
 

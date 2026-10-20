@@ -1,11 +1,102 @@
-/* Layout in the main area: the tab strip over the session views. Rows are
-   placed explicitly so a hidden strip leaves its row empty instead of shifting
-   the views. */
+/* Sessions mode: the sidebar beside the tab area. Hidden, the sidebar leaves
+   the tab area the whole width; over, it is drawn on top of the tab area. */
 .sessions {
+  display: grid;
+  grid-template-columns: 16rem minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  position: relative;
+}
+
+.sessions.is-sidebar-hidden,
+.sessions.is-sidebar-over {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.session-sidebar {
+  background: var(--wg-bg-pane);
+  border-right: 1px solid var(--wg-border);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sessions.is-sidebar-over .session-sidebar {
+  box-shadow: 0 0 1rem var(--wg-bg-deep);
+  inset-block: 0;
+  left: 0;
+  position: absolute;
+  width: 16rem;
+  z-index: 1;
+}
+
+/* Rows: the label, the harness and the round dot on the first line, the
+   session's status on the second. */
+.session-row {
+  background: transparent;
+  border: 0;
+  border-left: 2px solid transparent;
+  color: var(--wg-text-muted);
+  cursor: pointer;
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.4rem 0.75rem;
+  text-align: left;
+  width: 100%;
+}
+
+.session-row:hover {
+  background: var(--wg-surface-hover);
+  color: var(--wg-text);
+}
+
+.session-row.is-selected {
+  background: var(--wg-surface-selected);
+  border-left-color: var(--wg-accent);
+  color: var(--wg-text);
+}
+
+.session-row-line {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.session-row-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-row-harness {
+  color: var(--wg-text-faint);
+  flex: none;
+}
+
+/* Marks a session with a round not yet opened. */
+.session-row-marker {
+  color: var(--wg-accent);
+  flex: none;
+  margin-left: auto;
+}
+
+.session-row-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The tab area: the selected session's tab strip over the session bodies.
+   Cells are placed explicitly so a hidden strip leaves its row empty instead
+   of shifting the bodies, and the text saying why no tab shows lies over the
+   bodies' cell. */
+.session-area {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
-  height: 100%;
+  min-height: 0;
 }
 
 .session-tabs {
@@ -17,21 +108,18 @@
   scrollbar-width: none;
 }
 
-.session-views {
+.session-bodies {
+  grid-column: 1;
   grid-row: 2;
   min-height: 0;
 }
 
-.session-view {
+.session-body {
   height: 100%;
 }
 
-.sessions-empty {
-  grid-row: 2;
-}
-
 /* Tabs: one row of tabs that shrink to ellipsis, then scroll. The active tab
-   drops over the strip's bottom border to join the session view below it. */
+   drops over the strip's bottom border to join the body below it. */
 .session-tab {
   align-items: baseline;
   background: transparent;
@@ -67,23 +155,18 @@
   white-space: nowrap;
 }
 
-/* Marks a background tab that got something new. */
-.session-tab-marker {
-  color: var(--wg-accent);
-  flex: none;
-}
-
-/* Idle: a session with nothing open, and no sessions at all. */
-.session-idle,
+/* Why the tab area shows no tab: no sessions, none selected, or nothing open
+   in the selected one. */
 .sessions-empty {
   color: var(--wg-text-muted);
   display: grid;
+  grid-column: 1;
+  grid-row: 2;
   height: 100%;
   place-content: center;
   text-align: center;
 }
 
-.session-idle-title,
 .sessions-empty-title {
   color: var(--wg-text);
   font-size: 1.3rem;

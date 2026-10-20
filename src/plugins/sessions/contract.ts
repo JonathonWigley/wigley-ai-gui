@@ -129,23 +129,48 @@ export interface SessionsChannel extends ChannelShape {
 
 // The page part's exports and events.
 
-// `beforeClose` returns whether the tab may close now; false keeps it open.
-export interface SessionView {
-  element: HTMLElement;
+// A tab a plugin adds to a session. `beforeClose` returns whether the session
+// may close now; false keeps it. `shown` runs each time this tab becomes the
+// visible tab: the selected tab of the selected session while Sessions mode
+// shows. Its plugin sets its base key scope there.
+export interface SessionTabView {
+  id: string;
   title: string;
+  element: HTMLElement;
   beforeClose(): boolean;
+  shown(): void;
 }
 
+// `setStatus` sets the tab's line in its session's sidebar row. `select`
+// selects the tab inside its session, never changing the selected session.
+// `isVisible` reads, at the moment of the call, whether this tab is the
+// visible tab. Each call on a tab already dropped does nothing.
+export interface SessionTabHandle {
+  setStatus(status: string): void;
+  select(): void;
+  remove(): void;
+  isVisible(): boolean;
+}
+
+// `addTab` attaches the tab's element before returning and selects the tab
+// when it is the session's first; it throws on a tab id the session already
+// holds. A tab added before its session's row waits for the row. A session's
+// tabs drop when its row leaves, and `sessionRemoved` says so.
 export interface SessionsPageExports {
-  fill(
-    sessionId: string,
-    view: SessionView,
-  ): { setTitle(title: string): void; remove(): void };
-  activeSessionId(): string | null;
+  addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
+  selectedSessionId(): string | null;
   activate(sessionId: string): void;
-  closeTab(sessionId: string): void;
+  // Asks each of the session's tabs `beforeClose`, then asks main to close it.
+  closeSession(sessionId: string): void;
 }
 
 export interface SessionsPageEvents extends EventShape {
   activeChanged: { sessionId: string | null };
+  sessionAdded: {
+    sessionId: string;
+    projectDir: string | null;
+    harness: Harness | null;
+    hostSessionId: string | null;
+  };
+  sessionRemoved: { sessionId: string };
 }

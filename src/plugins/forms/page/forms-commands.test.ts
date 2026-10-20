@@ -61,8 +61,8 @@ function setup(
   const finished: { roundId: string; end: RoundEnd }[] = [];
   const toasts: string[] = [];
   const logs: string[] = [];
-  // Each closed tab's session, with the rounds the store held at the call.
-  const closedTabs: { sessionId: string; roundCount: number }[] = [];
+  // Each closed session, with the rounds the store held at the call.
+  const closedSessions: { sessionId: string; roundCount: number }[] = [];
   const log = (_source: string, message: string) => logs.push(message);
   const handlers = formsCommandHandlers({
     store,
@@ -80,8 +80,8 @@ function setup(
       boxOf: (editor) => boxEditors.get(editor),
     },
     finish: (roundId, end) => finished.push({ roundId, end }),
-    closeTab: (sessionId) =>
-      closedTabs.push({ sessionId, roundCount: store.get().rounds.length }),
+    closeSession: (sessionId) =>
+      closedSessions.push({ sessionId, roundCount: store.get().rounds.length }),
     toast: (text) => toasts.push(text),
     log,
   });
@@ -104,7 +104,7 @@ function setup(
     finished,
     toasts,
     logs,
-    closedTabs,
+    closedSessions,
     guardClose: (sessionId: string) => guardClose({ store, log }, sessionId),
     leaves: () => leaves,
     // Focuses a box as the user clicking into it would, outside any command.
@@ -481,7 +481,7 @@ describe('formsCommandHandlers', () => {
   });
 
   it('keeps the round when the confirmation is dismissed', () => {
-    const { run, store, finished, closedTabs } = setup();
+    const { run, store, finished, closedSessions } = setup();
     run('openReview');
     run('askCancel');
 
@@ -489,13 +489,13 @@ describe('formsCommandHandlers', () => {
 
     expect(store.get().view).toBe('review');
     expect(finished).toEqual([]);
-    expect(closedTabs).toEqual([]);
+    expect(closedSessions).toEqual([]);
     run('askCancel');
     run('confirmCancel');
-    expect(closedTabs).toEqual([]);
+    expect(closedSessions).toEqual([]);
   });
 
-  it('the close guard lets a tab with no round close', () => {
+  it('the close guard lets a session with no round close', () => {
     const { store, logs, guardClose } = setup();
     const before = store.get();
 
@@ -505,18 +505,18 @@ describe('formsCommandHandlers', () => {
     expect(logs).toEqual([]);
   });
 
-  it('the close guard opens the prompt and keeps a tab with an open round', () => {
+  it('the close guard opens the prompt and keeps a session with an open round', () => {
     const { store, logs, guardClose } = setup();
 
     expect(guardClose('r1-session')).toBe(false);
     expect(store.get().view).toBe('confirm');
-    expect(logs).toEqual(['closing the tab asks to cancel project · r1']);
+    expect(logs).toEqual(['closing the session asks to cancel project · r1']);
     expect(guardClose('r1-session')).toBe(false);
 
     expect(logs).toHaveLength(1);
   });
 
-  it("the close guard keeps a background round's tab and logs the refusal", () => {
+  it("the close guard keeps a background round's session and logs the refusal", () => {
     const { store, logs, guardClose } = setup();
     store.dispatch({ type: 'roundShown', round: presentedRound('r2') });
     const before = store.get();
@@ -525,12 +525,12 @@ describe('formsCommandHandlers', () => {
 
     expect(store.get()).toBe(before);
     expect(logs).toEqual([
-      'tab close kept: project · r2 is open in the background',
+      'session close kept: project · r2 is open in the background',
     ]);
   });
 
-  it('confirming a close prompt cancels the round, then closes its tab', () => {
-    const { run, finished, closedTabs, guardClose } = setup();
+  it('confirming a close prompt cancels the round, then closes its session', () => {
+    const { run, finished, closedSessions, guardClose } = setup();
     guardClose('r1-session');
 
     run('confirmCancel');
@@ -538,6 +538,8 @@ describe('formsCommandHandlers', () => {
     expect(finished.map((entry) => [entry.roundId, entry.end.kind])).toEqual([
       ['r1', 'cancelled'],
     ]);
-    expect(closedTabs).toEqual([{ sessionId: 'r1-session', roundCount: 0 }]);
+    expect(closedSessions).toEqual([
+      { sessionId: 'r1-session', roundCount: 0 },
+    ]);
   });
 });
