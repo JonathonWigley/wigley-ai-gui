@@ -14,6 +14,7 @@ import type {
 } from './keymap';
 import type { Log } from './log';
 import type { MarkdownRenderer } from './markdown';
+import type { ProcessRunner } from './processes';
 
 export type ProcessName = 'page' | 'main';
 
@@ -331,12 +332,14 @@ export interface SelfTestHost {
 }
 
 // `selfTest` is the plugin's own self-test host, null outside the self-test.
-// `files` takes absolute paths. `agentHarnesses` lists every harness adapter the app
-// runs, found by `id`. `window.chooseFolder` opens the native folder dialog
-// over the window and resolves to null when the user cancels;
-// `window.isFocused` is true while the app's window has focus.
+// `files` takes absolute paths; under the self-test, `files.trash` deletes for
+// good. `processes` runs the machine's programs. `agentHarnesses` lists every
+// harness adapter the app runs, found by `id`. `window.chooseFolder` opens the
+// native folder dialog over the window and resolves to null when the user
+// cancels; `window.isFocused` is true while the app's window has focus.
 export interface MainServices {
   files: Files;
+  processes: ProcessRunner;
   log: Log;
   clock: Clock;
   randomHex: RandomHex;

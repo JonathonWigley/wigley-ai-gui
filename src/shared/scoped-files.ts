@@ -27,13 +27,17 @@ export function resolveInside(root: string, path: string): string | null {
 }
 
 // `files` with every path relative to `root`. A path `resolveInside` refuses
-// fails with `<path> is outside <root>` before any I/O: `read`, `write` and
-// `list` reject, and `watch` throws.
+// fails with `<path> is outside <root>` before any I/O: `read`, `write`,
+// `list`, `stat`, `realPath`, `makeFolder`, `rename` (either path) and `trash`
+// reject, and `watch` throws. `realPath` returns the resolved path relative to
+// `root`'s own real path (`` for `root` itself), and rejects
+// `<path> is outside <root>` when a link leads out of `root`.
 export function scopedFiles(files: Files, root: string): Files {
+  const outside = (path: string) => new Error(`${path} is outside ${root}`);
   const inside = (path: string): string => {
     const resolved = resolveInside(root, path);
     if (resolved === null) {
-      throw new Error(`${path} is outside ${root}`);
+      throw outside(path);
     }
     return resolved;
   };
@@ -43,5 +47,30 @@ export function scopedFiles(files: Files, root: string): Files {
     list: async (folder, options) => files.list(inside(folder), options),
     watch: (folder, onChange, onError) =>
       files.watch(inside(folder), onChange, onError),
+    stat: async (path) => files.stat(inside(path)),
+    realPath: async (path) => {
+      const [real, realRoot] = await Promise.all([
+        files.realPath(inside(path)),
+        files.realPath(root),
+      ]);
+      const relative = relativeToFolder(realRoot, real);
+      if (relative === null) {
+        throw outside(path);
+      }
+      return relative;
+    },
+    makeFolder: async (path) => files.makeFolder(inside(path)),
+    rename: async (from, to) => files.rename(inside(from), inside(to)),
+    trash: async (path) => files.trash(inside(path)),
   };
+}
+
+// `path` relative to `folder`, `` for `folder` itself; null when `path` is
+// not inside `folder`.
+function relativeToFolder(folder: string, path: string): string | null {
+  if (path === folder) {
+    return '';
+  }
+  const prefix = folder.endsWith('/') ? folder : `${folder}/`;
+  return path.startsWith(prefix) ? path.slice(prefix.length) : null;
 }

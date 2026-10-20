@@ -6,11 +6,13 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  shell,
   type WebContents,
 } from 'electron';
 import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
@@ -60,6 +62,7 @@ import {
 } from './keybindings';
 import { createMainApi } from './plugins/main-api';
 import { createPluginChannels } from './plugins/plugin-channel';
+import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import type { SelfTestConfig } from './selftest-config';
 import { chooseTheme } from './themes/theme-loader';
@@ -80,7 +83,14 @@ const isSelfTest = Boolean(process.env.PROOF_SELFTEST);
 
 registerDataScheme();
 
-const files = createNodeFiles();
+// Every self-test file sits in the temp home folder, and the user's Trash
+// must not collect them.
+const files = createNodeFiles({
+  trashItem: isSelfTest
+    ? (file) => rm(file, { recursive: true })
+    : (file) => shell.trashItem(file),
+});
+const processes = createNodeProcesses();
 const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
@@ -252,6 +262,7 @@ function createWindow(inputs: StartInputs) {
     inputs.dataRoot,
     {
       files,
+      processes,
       log,
       clock,
       randomHex,

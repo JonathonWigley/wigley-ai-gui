@@ -1,4 +1,14 @@
-import { type FSWatcher, mkdtempSync, rmSync } from 'node:fs';
+import {
+  type FSWatcher,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,7 +31,13 @@ vi.mock('node:fs', async (importOriginal) => {
 
 const QUIET_MS = 100;
 
-const files = createNodeFiles();
+// Every path `trash` hands to `trashItem`.
+const trashed: string[] = [];
+const files = createNodeFiles({
+  trashItem: async (file) => {
+    trashed.push(file);
+  },
+});
 let root: string;
 
 function waitMs(ms: number): Promise<void> {
@@ -34,6 +50,7 @@ function byPath(entries: FileEntry[]): FileEntry[] {
 
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), 'wigley-node-files-'));
+  trashed.length = 0;
 });
 
 afterEach(() => {
@@ -150,5 +167,84 @@ describe('createNodeFiles', () => {
     }
 
     expect(reports).toEqual([]);
+  });
+
+  it('stat_MissingPath_Null', async () => {
+    writeFileSync(path.join(root, 'a'), 'text');
+
+    expect(await files.stat(path.join(root, 'none'))).toBeNull();
+    expect(await files.stat(path.join(root, 'a', 'b'))).toBeNull();
+  });
+
+  it('stat_FileAndFolder_IsFolder', async () => {
+    writeFileSync(path.join(root, 'a.md'), 'text');
+    mkdirSync(path.join(root, 'folder'));
+    symlinkSync(path.join(root, 'folder'), path.join(root, 'link'));
+
+    expect(await files.stat(path.join(root, 'a.md'))).toEqual({
+      isFolder: false,
+    });
+    expect(await files.stat(root)).toEqual({ isFolder: true });
+    expect(await files.stat(path.join(root, 'link'))).toEqual({
+      isFolder: true,
+    });
+  });
+
+  it('realPath_Symlink_ReturnsTarget', async () => {
+    writeFileSync(path.join(root, 'real.md'), 'text');
+    symlinkSync(path.join(root, 'real.md'), path.join(root, 'link.md'));
+
+    expect(await files.realPath(path.join(root, 'link.md'))).toBe(
+      realpathSync(path.join(root, 'real.md')),
+    );
+    const error = await files
+      .realPath(path.join(root, 'none'))
+      .catch((caught: unknown) => caught);
+    expect(isMissingFile(error)).toBe(true);
+  });
+
+  it('makeFolder_MissingParents_MakesThem', async () => {
+    const folder = path.join(root, 'x', 'y', 'z');
+
+    await files.makeFolder(folder);
+
+    expect(statSync(folder).isDirectory()).toBe(true);
+    await expect(files.makeFolder(folder)).resolves.toBeUndefined();
+  });
+
+  it('rename_File_Moves', async () => {
+    writeFileSync(path.join(root, 'a.md'), 'one');
+
+    await files.rename(path.join(root, 'a.md'), path.join(root, 'b.md'));
+
+    expect(readFileSync(path.join(root, 'b.md'), 'utf8')).toBe('one');
+    expect(await files.stat(path.join(root, 'a.md'))).toBeNull();
+  });
+
+  it('rename_Folder_MovesItsFiles', async () => {
+    mkdirSync(path.join(root, 's'));
+    writeFileSync(path.join(root, 's', 'ref.md'), 'ref');
+
+    await files.rename(path.join(root, 's'), path.join(root, 't'));
+
+    expect(readFileSync(path.join(root, 't', 'ref.md'), 'utf8')).toBe('ref');
+  });
+
+  it('rename_DestinationExists_RejectsAndKeepsBoth', async () => {
+    writeFileSync(path.join(root, 'a.md'), 'one');
+    writeFileSync(path.join(root, 'b.md'), 'two');
+
+    await expect(
+      files.rename(path.join(root, 'a.md'), path.join(root, 'b.md')),
+    ).rejects.toThrow(`${path.join(root, 'b.md')} already exists`);
+
+    expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
+    expect(readFileSync(path.join(root, 'b.md'), 'utf8')).toBe('two');
+  });
+
+  it('trash_Path_HandsItToTrashItem', async () => {
+    await files.trash(path.join(root, 'a.md'));
+
+    expect(trashed).toEqual([path.join(root, 'a.md')]);
   });
 });

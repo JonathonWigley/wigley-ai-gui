@@ -1,15 +1,24 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, watch as watchFolder } from 'node:fs';
 import {
+  lstat,
   mkdir,
   readdir,
   readFile,
+  realpath,
   rename,
   rm,
+  stat,
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
-import type { FileEntry, Files, FileWatch } from '../../contracts/files';
+import {
+  type FileEntry,
+  type Files,
+  type FileStat,
+  type FileWatch,
+  isMissingFile,
+} from '../../contracts/files';
 
 // Editors save through a rename and FSEvents repeats events, so one save
 // arrives as several events for one path.
@@ -18,14 +27,59 @@ const WATCH_QUIET_MS = 100;
 // The temp file `write` renames over its target: `.<name>.<8 hex>.tmp`.
 const TEMP_FILE = /^\..+\.[0-9a-f]{8}\.tmp$/;
 
-// `Files` over the disk, through `node:fs`. Paths are absolute.
-export function createNodeFiles(): Files {
+export interface NodeFilesOptions {
+  // Moves a path to the OS Trash; main.ts passes Electron's shell.trashItem.
+  trashItem: (path: string) => Promise<void>;
+}
+
+// `Files` over the disk, through `node:fs`. Paths are absolute. `trash` hands
+// its path to `options.trashItem`.
+export function createNodeFiles(options: NodeFilesOptions): Files {
   return {
     read: (file) => readFile(file, 'utf8'),
     write: writeAtomically,
     list: listFolder,
     watch: watchDebounced,
+    stat: statPath,
+    realPath: (file) => realpath(file),
+    makeFolder: async (folder) => {
+      await mkdir(folder, { recursive: true });
+    },
+    rename: renameWithoutReplacing,
+    trash: (file) => options.trashItem(file),
   };
+}
+
+async function statPath(file: string): Promise<FileStat | null> {
+  try {
+    return { isFolder: (await stat(file)).isDirectory() };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function renameWithoutReplacing(from: string, to: string): Promise<void> {
+  if (await isAnythingAt(to)) {
+    throw new Error(`${to} already exists`);
+  }
+  await rename(from, to);
+}
+
+// Through `lstat`, so a broken symlink counts as something there.
+async function isAnythingAt(file: string): Promise<boolean> {
+  try {
+    await lstat(file);
+    return true;
+  } catch (error) {
+    if (isMissingFile(error)) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 async function writeAtomically(file: string, text: string): Promise<void> {

@@ -74,4 +74,20 @@ describe('scopedFiles', () => {
 
     expect(reports).toEqual(['a/layout.js']);
   });
+
+  it('rename_DestinationOutsideRoot_RejectsBeforeMoving', async () => {
+    await inner.write(`${ROOT}/a.md`, 'text');
+    const scoped = scopedFiles(inner, ROOT);
+
+    await expect(scoped.rename('a.md', '../x')).rejects.toThrow(
+      `../x is outside ${ROOT}`,
+    );
+    expect(await scoped.read('a.md')).toBe('text');
+  });
+
+  it('realPath_PathInsideRoot_ReturnsRelative', async () => {
+    await inner.write(`${ROOT}/a/b.md`, 'text');
+
+    expect(await scopedFiles(inner, ROOT).realPath('a/./b.md')).toBe('a/b.md');
+  });
 });

@@ -5,12 +5,17 @@ export interface FileEntry {
   kind: 'file' | 'folder';
 }
 
+// What `Files.stat` finds at a path.
+export interface FileStat {
+  isFolder: boolean;
+}
+
 export interface FileWatch {
   // Stops the watch and drops any change not yet reported.
   close(): void;
 }
 
-// UTF-8 text files, read and written whole.
+// UTF-8 text files, read and written whole, and the folders that hold them.
 export interface Files {
   // Rejects when the file is missing with an error naming the path, which
   // `isMissingFile` tells from every other failure.
@@ -21,6 +26,19 @@ export interface Files {
   // The entries under `folder`, every level of them when `recursive`, in no
   // set order. A missing folder lists as `[]`.
   list(folder: string, options?: { recursive?: boolean }): Promise<FileEntry[]>;
+  // What is at `path`, following symlinks; null when nothing is there.
+  stat(path: string): Promise<FileStat | null>;
+  // `path` with every symlink resolved. Rejects, as `isMissingFile` tells,
+  // when nothing is there.
+  realPath(path: string): Promise<string>;
+  // Makes the folder and any missing parents; an existing folder is no error.
+  makeFolder(path: string): Promise<void>;
+  // Moves a file or a folder. Rejects with `<to> already exists` when anything
+  // is at `to`, changing nothing; makes no parent folders of `to`.
+  rename(from: string, to: string): Promise<void>;
+  // Moves a file or a folder to the OS Trash (under the self-test the Node
+  // adapter deletes it for good).
+  trash(path: string): Promise<void>;
   // Watches `folder` and every folder under it, calling `onChange` with the
   // changed path relative to `folder`, joined with `/`. The Node adapter
   // reports a burst of events for one path once, 100 ms after its last event;
@@ -38,8 +56,8 @@ export interface Files {
 }
 
 // Whether `error` names a missing file or folder: any error carrying Node's
-// `code: 'ENOENT'`, as a Node fs call throws and as `Files.read` rejects with
-// in every adapter.
+// `code: 'ENOENT'`, as a Node fs call throws and as `Files.read`,
+// `Files.realPath` and `Files.rename` reject with in every adapter.
 export function isMissingFile(error: unknown): boolean {
   return (
     error instanceof Error && (error as { code?: unknown }).code === 'ENOENT'

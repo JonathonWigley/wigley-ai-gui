@@ -44,9 +44,7 @@ function withHeldReports(inner: Files): { data: Files; flush(): void } {
   const held: (() => void)[] = [];
   return {
     data: {
-      read: (path) => inner.read(path),
-      write: (path, text) => inner.write(path, text),
-      list: (folder, options) => inner.list(folder, options),
+      ...inner,
       watch: (folder, onChange, onError) =>
         inner.watch(folder, (path) => held.push(() => onChange(path)), onError),
     },
@@ -66,9 +64,7 @@ function withFailingWatch(inner: Files): {
   let onWatchError: ((error: unknown) => void) | undefined;
   return {
     data: {
-      read: (path) => inner.read(path),
-      write: (path, text) => inner.write(path, text),
-      list: (folder, options) => inner.list(folder, options),
+      ...inner,
       watch: (folder, onChange, onError) => {
         onWatchError = onError;
         return inner.watch(folder, onChange);
