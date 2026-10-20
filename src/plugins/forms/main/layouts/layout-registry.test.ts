@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Files } from '../../../../contracts/files';
 import {
   createMemoryFiles,
@@ -18,6 +18,10 @@ beforeEach(() => {
   files = createMemoryFiles();
   sent = [];
   logLines = [];
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function start(data: Files = files): Promise<LayoutRegistry> {
@@ -45,14 +49,34 @@ function withHeldReports(inner: Files): { data: Files; flush(): void } {
       read: (path) => inner.read(path),
       write: (path, text) => inner.write(path, text),
       list: (folder, options) => inner.list(folder, options),
-      watch: (folder, onChange) =>
-        inner.watch(folder, (path) => held.push(() => onChange(path))),
+      watch: (folder, onChange, onError) =>
+        inner.watch(folder, (path) => held.push(() => onChange(path)), onError),
     },
     flush: () => {
       for (const report of held.splice(0)) {
         report();
       }
     },
+  };
+}
+
+// `files` whose watch hands its `onError` to `fail`.
+function withFailingWatch(inner: Files): {
+  data: Files;
+  fail(error: unknown): void;
+} {
+  let onWatchError: ((error: unknown) => void) | undefined;
+  return {
+    data: {
+      read: (path) => inner.read(path),
+      write: (path, text) => inner.write(path, text),
+      list: (folder, options) => inner.list(folder, options),
+      watch: (folder, onChange, onError) => {
+        onWatchError = onError;
+        return inner.watch(folder, onChange);
+      },
+    },
+    fail: (error) => onWatchError?.(error),
   };
 }
 
@@ -174,6 +198,47 @@ describe('watch', () => {
     expect(cycled.revision).toBeGreaterThan(before + 1);
   });
 
+  it.each([
+    'alpha/.layout.js.swp',
+    'alpha/4913',
+    'alpha/layout.js~',
+    'alpha/.#layout.js',
+  ])('watch_EditorSideFile_%s_ChangesNothing', async (sideFile) => {
+    await writeLayouts('alpha');
+    await files.write('layouts/active', 'alpha');
+    const registry = await start();
+    const before = registry.current().revision;
+
+    await files.write(`layouts/${sideFile}`, 'scratch');
+    const cycled = await registry.cycle(1);
+
+    expect(sent).toEqual([cycled]);
+    expect(cycled.revision).toBe(before + 1);
+  });
+
+  it.each(['alpha/parts/card.mjs', 'alpha/strings.json'])(
+    'watch_SaveOf_%s_SendsReloaded',
+    async (saved) => {
+      await writeLayouts('alpha');
+      await files.write('layouts/active', 'alpha');
+      await start();
+
+      await files.write(`layouts/${saved}`, '// saved');
+
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      expect(sent[0]).toMatchObject({ name: 'alpha', reason: 'reloaded' });
+    },
+  );
+
+  it('watch_Fails_LogsIt', async () => {
+    const failing = withFailingWatch(files);
+    await start(failing.data);
+
+    failing.fail(new Error('EMFILE'));
+
+    expect(logLines).toContain('[forms] layouts watch failed: EMFILE');
+  });
+
   it('hasCss_TrueWhenLayoutCssPresent', async () => {
     await writeLayouts('alpha');
     await files.write('layouts/active', 'alpha');
@@ -244,5 +309,35 @@ describe('copy', () => {
     await registry.cycle(1);
 
     expect(sent.map((choice) => choice.reason)).toEqual(['copied', 'cycled']);
+  });
+
+  it('copy_ReportJustUnderOneSecondLate_SendsNothing', async () => {
+    vi.useFakeTimers();
+    const held = withHeldReports(files);
+    const registry = await start(held.data);
+
+    await registry.copy();
+    vi.advanceTimersByTime(999);
+    held.flush();
+    await registry.cycle(1);
+
+    expect(sent.map((choice) => choice.reason)).toEqual(['copied', 'cycled']);
+  });
+
+  it('copy_ReportOneSecondLate_IsTheUsersSave', async () => {
+    vi.useFakeTimers();
+    const held = withHeldReports(files);
+    const registry = await start(held.data);
+
+    await registry.copy();
+    vi.advanceTimersByTime(1000);
+    held.flush();
+    await registry.cycle(1);
+
+    expect(sent.map((choice) => [choice.name, choice.reason])).toEqual([
+      ['default-2', 'copied'],
+      ['default-2', 'reloaded'],
+      ['default', 'cycled'],
+    ]);
   });
 });

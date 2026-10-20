@@ -5,7 +5,9 @@ import type { LayoutChoice } from '../../contract';
 
 // The layouts in forms' data folder, the active one among them, and the
 // revision the page loads them at. `cycle` and `copy` persist the new active
-// layout and send it; a save under the active layout's folder sends a reload.
+// layout and send it; a save of a `.js`, `.mjs`, `.css` or `.json` file under
+// the active layout's folder sends a reload. A watch failure is logged, and
+// saves then go unseen until the next start.
 export interface LayoutRegistry {
   current(): LayoutChoice;
   cycle(step: 1 | -1): Promise<LayoutChoice>;
@@ -27,6 +29,11 @@ export interface LayoutRegistryDeps {
 const LAYOUTS = 'layouts';
 const ACTIVE_FILE = `${LAYOUTS}/active`;
 const DEFAULT_NAME = 'default';
+// How long a path the registry wrote waits for the watch report of that write.
+const OWN_WRITE_MS = 1000;
+// The files a layout can load; saves of any other file, such as an editor's
+// swap or backup file, change nothing.
+const LAYOUT_FILE = /\.(js|mjs|css|json)$/;
 
 interface ListedLayout {
   name: string;
@@ -38,9 +45,13 @@ export async function startLayoutRegistry(
 ): Promise<LayoutRegistry> {
   const { data, send, log } = deps;
   let defaultSkipLogged = false;
-  // Paths, relative to `layouts`, the registry wrote whose next watch report
-  // is its own write.
-  const ownWrites = new Set<string>();
+  // Paths, relative to `layouts`, the registry wrote, each with the timer that
+  // forgets it OWN_WRITE_MS after its write. A held path's next watch report
+  // is the registry's own write.
+  const ownWrites = new Map<
+    string,
+    ReturnType<typeof setTimeout> | undefined
+  >();
   let revision = 1;
   let queue: Promise<unknown> = Promise.resolve();
 
@@ -106,9 +117,27 @@ export async function startLayoutRegistry(
     return run;
   };
 
+  // Drops the mark on `relative`, true when there was one.
+  const forgetOwnWrite = (relative: string): boolean => {
+    clearTimeout(ownWrites.get(relative));
+    return ownWrites.delete(relative);
+  };
+
+  // Marked from before the write, so a report during it is ignored too; the
+  // timer starts once the write settles.
   const writeOwn = async (relative: string, text: string) => {
-    ownWrites.add(relative);
-    await data.write(`${LAYOUTS}/${relative}`, text);
+    forgetOwnWrite(relative);
+    ownWrites.set(relative, undefined);
+    try {
+      await data.write(`${LAYOUTS}/${relative}`, text);
+    } finally {
+      if (ownWrites.has(relative)) {
+        ownWrites.set(
+          relative,
+          setTimeout(() => ownWrites.delete(relative), OWN_WRITE_MS),
+        );
+      }
+    }
   };
 
   const reloadActive = async (): Promise<void> => {
@@ -123,12 +152,15 @@ export async function startLayoutRegistry(
   };
 
   const onChange = (changed: string) => {
-    if (ownWrites.delete(changed)) {
+    if (forgetOwnWrite(changed)) {
       return;
     }
     const slash = changed.indexOf('/');
     const folder = slash === -1 ? null : changed.slice(0, slash);
-    if (folder === null || folder === DEFAULT_NAME) {
+    const fileName = changed.slice(changed.lastIndexOf('/') + 1);
+    const isLayoutFile =
+      LAYOUT_FILE.test(fileName) && !fileName.startsWith('.');
+    if (folder === null || folder === DEFAULT_NAME || !isLayoutFile) {
       return;
     }
     revision++;
@@ -140,7 +172,9 @@ export async function startLayoutRegistry(
     );
   };
 
-  const watch = data.watch(LAYOUTS, onChange);
+  const watch = data.watch(LAYOUTS, onChange, (error) =>
+    log('forms', `layouts watch failed: ${errorText(error)}`),
+  );
 
   return {
     current: () => choice('start'),
@@ -174,7 +208,13 @@ export async function startLayoutRegistry(
         }
         return activate({ name, hasCss }, 'copied');
       }),
-    dispose: () => watch.close(),
+    dispose: () => {
+      watch.close();
+      for (const timer of ownWrites.values()) {
+        clearTimeout(timer);
+      }
+      ownWrites.clear();
+    },
   };
 }
 

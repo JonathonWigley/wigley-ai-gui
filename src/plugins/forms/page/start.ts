@@ -4,7 +4,6 @@ import type {
   PageApi,
   PagePart,
   QualifiedEvents,
-  ToastTone,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type {
@@ -12,7 +11,7 @@ import type {
   SessionsPageExports,
 } from '../../sessions/contract';
 import type { KeysPageExports } from '../../keys/contract';
-import type { FormsChannel, LayoutChoice, RoundEnd } from '../contract';
+import type { FormsChannel, RoundEnd } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import { formsManifest } from '../manifest';
 import { startAutosave } from './autosave';
@@ -21,8 +20,8 @@ import { createEditorBoxes, type EditorBoxes } from './editor-boxes';
 import { initialState } from './form-state';
 import { formsCommandHandlers, guardClose } from './forms-commands';
 import { createFormsStore, type FormsStore } from './forms-store';
-import { type FormsView, mountFormsView } from './forms-view';
-import { createLayoutLoader } from './layout/layout-loader';
+import { mountFormsView } from './forms-view';
+import { createLayoutLoader, showLayouts } from './layout/layout-loader';
 
 type FormsApi = PageApi<
   typeof formsManifest,
@@ -78,71 +77,6 @@ function listenForRounds(api: FormsApi, store: FormsStore) {
     .catch((error) =>
       log('forms', `open rounds not read: ${errorText(error)}`),
     );
-}
-
-// Shows main's chosen layout, then each layout main reports changed, loaded
-// one at a time in arrival order. A layout that fails to load leaves the
-// current one shown. A change heard before main answers `layout` is newer, so
-// the answer is then dropped.
-function showLayouts(api: FormsApi, view: FormsView) {
-  const { log, toast } = api.services;
-  const loader = createLayoutLoader({
-    importModule: (url) => import(/* @vite-ignore */ url),
-    dataUrl: (path, revision) => api.dataUrl(path, revision),
-    defaultLayout,
-    head: document.head,
-  });
-  let queue = Promise.resolve();
-  let heardChange = false;
-  const show = (choice: LayoutChoice) => {
-    queue = queue.then(() =>
-      loader.load(choice).then(
-        (layout) => {
-          view.setLayout(layout, choice.name);
-          log(
-            'forms',
-            `layout ${choice.name} shown (${choice.reason}, revision ${choice.revision})`,
-          );
-          const shownToast = layoutToast(choice);
-          if (shownToast !== null) {
-            toast(shownToast.text, shownToast.tone);
-          }
-        },
-        (error) => {
-          log('forms', `layout ${choice.name} failed: ${errorText(error)}`);
-          toast(`Layout ${choice.name} failed: ${errorText(error)}`, 'error');
-        },
-      ),
-    );
-  };
-  api.channel.on('layoutChanged', (choice) => {
-    heardChange = true;
-    show(choice);
-  });
-  void api.channel
-    .invoke('layout')
-    .then((choice) => {
-      if (!heardChange) {
-        show(choice);
-      }
-    })
-    .catch((error) => log('forms', `layout not read: ${errorText(error)}`));
-}
-
-function layoutToast(
-  choice: LayoutChoice,
-): { text: string; tone: ToastTone } | null {
-  switch (choice.reason) {
-    case 'cycled':
-      return { text: `Layout: ${choice.name}`, tone: 'info' };
-    case 'copied':
-      return {
-        text: `Layout copied to layouts/${choice.name} in forms' data folder`,
-        tone: 'success',
-      };
-    default:
-      return null;
-  }
 }
 
 function finishRound(api: FormsApi, roundId: string, end: RoundEnd) {
@@ -205,7 +139,22 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       log: services.log,
     });
     listenForRounds(api, store);
-    showLayouts(api, view);
+    showLayouts({
+      channel: {
+        onLayoutChanged: (listener) =>
+          api.channel.on('layoutChanged', listener),
+        readLayout: () => api.channel.invoke('layout'),
+      },
+      loader: createLayoutLoader({
+        importModule: (url) => import(/* @vite-ignore */ url),
+        dataUrl: (path, revision) => api.dataUrl(path, revision),
+        defaultLayout,
+        head: document.head,
+      }),
+      setLayout: (layout, name) => view.setLayout(layout, name),
+      log: services.log,
+      toast: services.toast,
+    });
     return {
       commands: formsCommandHandlers({
         store,

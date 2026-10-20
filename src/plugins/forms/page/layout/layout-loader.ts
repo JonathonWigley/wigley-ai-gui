@@ -1,3 +1,6 @@
+import type { Log } from '../../../../contracts/log';
+import type { ToastTone } from '../../../../contracts/plugin';
+import { errorText } from '../../../../shared/error-text';
 import type { LayoutChoice } from '../../contract';
 import type { Layout } from '../../layouts/layout';
 
@@ -34,7 +37,7 @@ export function readLayout(module: unknown, name: string): Layout {
   const hasValidHead =
     layout.head === undefined || typeof layout.head === 'function';
   if (!hasValidHead) {
-    throw new Error(`layout ${name}: head is missing or not a function`);
+    throw new Error(`layout ${name}: head is not a function`);
   }
   return layout as unknown as Layout;
 }
@@ -86,6 +89,88 @@ export function createLayoutLoader(deps: LayoutLoaderDeps): LayoutLoader {
       return layout;
     },
   };
+}
+
+// Main's layout channel as the page hears it: `layoutChanged` messages and the
+// `layout` answer.
+export interface LayoutChannel {
+  onLayoutChanged(listener: (choice: LayoutChoice) => void): void;
+  readLayout(): Promise<LayoutChoice>;
+}
+
+export interface ShowLayoutsDeps {
+  channel: LayoutChannel;
+  loader: LayoutLoader;
+  setLayout(layout: Layout, name: string): void;
+  log: Log;
+  toast(text: string, tone: ToastTone): void;
+}
+
+// Shows main's chosen layout, then each layout main reports changed, loaded
+// one at a time in arrival order. A layout that fails to load leaves the
+// current one shown. A change heard before main answers `layout` is newer, so
+// the answer is then dropped.
+export function showLayouts(deps: ShowLayoutsDeps): void {
+  const { channel, loader, log, toast } = deps;
+  let queue = Promise.resolve();
+  let heardChange = false;
+  const shown = (layout: Layout, choice: LayoutChoice) => {
+    deps.setLayout(layout, choice.name);
+    log(
+      'forms',
+      `layout ${choice.name} shown (${choice.reason}, revision ${choice.revision})`,
+    );
+    const shownToast = layoutToast(choice);
+    if (shownToast !== null) {
+      toast(shownToast.text, shownToast.tone);
+    }
+  };
+  const failed = (error: unknown, choice: LayoutChoice) => {
+    log('forms', `layout ${choice.name} failed: ${errorText(error)}`);
+    toast(`Layout ${choice.name} failed: ${errorText(error)}`, 'error');
+  };
+  const show = (choice: LayoutChoice) => {
+    queue = queue
+      .then(() =>
+        loader.load(choice).then(
+          (layout) => shown(layout, choice),
+          (error: unknown) => failed(error, choice),
+        ),
+      )
+      .catch((error: unknown) =>
+        log('forms', `layout ${choice.name} not shown: ${errorText(error)}`),
+      );
+  };
+  channel.onLayoutChanged((choice) => {
+    heardChange = true;
+    show(choice);
+  });
+  channel
+    .readLayout()
+    .then((choice) => {
+      if (!heardChange) {
+        show(choice);
+      }
+    })
+    .catch((error: unknown) =>
+      log('forms', `layout not read: ${errorText(error)}`),
+    );
+}
+
+function layoutToast(
+  choice: LayoutChoice,
+): { text: string; tone: ToastTone } | null {
+  switch (choice.reason) {
+    case 'cycled':
+      return { text: `Layout: ${choice.name}`, tone: 'info' };
+    case 'copied':
+      return {
+        text: `Layout copied to layouts/${choice.name} in forms' data folder`,
+        tone: 'success',
+      };
+    default:
+      return null;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
