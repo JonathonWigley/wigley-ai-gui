@@ -1,5 +1,5 @@
 import type { CommandId } from '../contracts/commands';
-import type { Keymap, PageBind } from '../contracts/keymap';
+import type { Keymap } from '../contracts/keymap';
 import type {
   CommandDecl,
   CommandInfo,
@@ -26,12 +26,19 @@ function qualifiedBinds<Bind extends { command: string }>(
   );
 }
 
-function qualifiedPageBinds(manifest: PluginManifest): PageBind[] {
-  return manifest.keys.page.map((bind) => ({
-    keys: bind.keys,
-    scope: bind.scope === 'any' ? 'any' : qualify(manifest.id, bind.scope),
-    command: qualify(manifest.id, bind.command),
-  }));
+// Every manifest's scoped binds from `select`, each naming its qualified
+// command and scope; the `any` scope stays unqualified.
+function qualifiedScopedBinds<Bind extends { scope: string; command: string }>(
+  manifests: readonly PluginManifest[],
+  select: (keys: PluginKeys<string, string, string>) => readonly Bind[],
+): Bind[] {
+  return manifests.flatMap((manifest) =>
+    select(manifest.keys).map((bind) => ({
+      ...bind,
+      scope: bind.scope === 'any' ? 'any' : qualify(manifest.id, bind.scope),
+      command: qualify(manifest.id, bind.command),
+    })),
+  );
 }
 
 // The core's keymap with every manifest's binds after the core's own, in list
@@ -47,10 +54,13 @@ export function mergeKeymap(
       remaps: core.editor.remaps,
       binds: [
         ...core.editor.binds,
-        ...qualifiedBinds(manifests, (keys) => keys.editor),
+        ...qualifiedScopedBinds(manifests, (keys) => keys.editor),
       ],
     },
-    page: [...core.page, ...manifests.flatMap(qualifiedPageBinds)],
+    page: [
+      ...core.page,
+      ...qualifiedScopedBinds(manifests, (keys) => keys.page),
+    ],
     app: [...core.app, ...qualifiedBinds(manifests, (keys) => keys.app)],
     intercept: [
       ...core.intercept,

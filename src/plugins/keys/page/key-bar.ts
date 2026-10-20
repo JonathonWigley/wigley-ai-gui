@@ -11,7 +11,7 @@ import {
 const PAGE_LEADER_KEY = ' ';
 
 // The status bar's key list: the keys that fire where the user is now, in a
-// text box or on the page in `scope`, leaving out every sequence that starts
+// text box or on the page, in `scope`, leaving out every sequence that starts
 // with the leader, which which-key shows instead.
 export function barHints(
   keymap: Keymap,
@@ -22,7 +22,9 @@ export function barHints(
   if (isInBox) {
     const { leader } = keymap.editor;
     const binds = keymap.editor.binds.filter(
-      (bind) => vimTokens(bind.keys, leader)[0] !== leader,
+      (bind) =>
+        (bind.scope === scope || bind.scope === 'any') &&
+        vimTokens(bind.keys, leader)[0] !== leader,
     );
     return editorHints({ ...keymap.editor, binds }, label);
   }

@@ -1,23 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { exCommandName } from './ex-command-name';
+import { exBindName } from './ex-command-name';
 
-describe('exCommandName', () => {
+describe('exBindName', () => {
   it('spells a digit as a word', () => {
-    expect(exCommandName('forms.choose1')).toBe('formschooseone');
+    expect(exBindName(0)).toBe('wigleybindzero');
   });
 
   it('spells each digit of a number', () => {
-    expect(exCommandName('forms.choose10')).toBe('formschooseonezero');
+    expect(exBindName(12)).toBe('wigleybindonetwo');
   });
 
-  it('gives commands differing only by a digit different names', () => {
-    expect(exCommandName('forms.choose2')).not.toBe(
-      exCommandName('forms.choose3'),
-    );
+  it('gives indexes differing only by a digit different names', () => {
+    expect(exBindName(2)).not.toBe(exBindName(3));
   });
 
-  it('drops punctuation and lowercases letters', () => {
-    expect(exCommandName('forms.reviewJump')).toBe('formsreviewjump');
-    expect(exCommandName('box-Next_item')).toBe('boxnextitem');
+  it('gives a name of letters only', () => {
+    expect(exBindName(12)).toMatch(/^[a-z]+$/);
   });
 });

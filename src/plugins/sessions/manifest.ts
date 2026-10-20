@@ -18,7 +18,7 @@ export const sessionsManifest = definePlugin({
       { keys: ['<D-w>'], scope: 'any', command: 'closeTab' },
       { keys: [' ', ';'], scope: 'any', command: 'closeTab' },
     ],
-    editor: [{ keys: '<Leader>;', command: 'closeTab' }],
+    editor: [{ keys: '<Leader>;', scope: 'any', command: 'closeTab' }],
     app: [],
     global: [],
     intercept: [],

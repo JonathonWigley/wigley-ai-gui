@@ -19,7 +19,7 @@ export const keysManifest = definePlugin({
       { keys: [' ', '?'], scope: 'any', command: 'toggleHelp' },
       { keys: ['Escape'], scope: 'help', command: 'closeHelp' },
     ],
-    editor: [{ keys: '<Leader>?', command: 'toggleHelp' }],
+    editor: [{ keys: '<Leader>?', scope: 'any', command: 'toggleHelp' }],
     app: [],
     global: [],
     intercept: [],

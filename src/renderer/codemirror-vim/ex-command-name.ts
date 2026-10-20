@@ -1,5 +1,3 @@
-import type { CommandId } from '../../contracts/commands';
-
 const DIGIT_WORDS = [
   'zero',
   'one',
@@ -13,10 +11,9 @@ const DIGIT_WORDS = [
   'nine',
 ];
 
-// Vim ex command names are letters only.
-export function exCommandName(command: CommandId): string {
-  return command
-    .toLowerCase()
-    .replace(/[0-9]/g, (digit) => DIGIT_WORDS[Number(digit)])
-    .replace(/[^a-z]/g, '');
+// The ex command name of the `index`th bound key sequence: vim ex command
+// names are letters only, so each digit is spelled as a word.
+export function exBindName(index: number): string {
+  const digits = [...String(index)].map((digit) => DIGIT_WORDS[Number(digit)]);
+  return `wigleybind${digits.join('')}`;
 }

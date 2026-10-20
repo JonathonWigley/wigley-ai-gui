@@ -1,15 +1,19 @@
 import { EditorView, minimalSetup } from 'codemirror';
 import { getCM, Vim, vim } from '@replit/codemirror-vim';
-import type { CommandId } from '../../contracts/commands';
 import type {
   CreateEditorHost,
   EditorEvents,
   FocusOptions,
   TextEditor,
 } from '../../contracts/editor';
-import type { EditorKeymap, EditorMode } from '../../contracts/keymap';
+import type {
+  EditorBind,
+  EditorKeymap,
+  EditorMode,
+} from '../../contracts/keymap';
+import { withLeader } from '../../shared/key-hints';
 import { editorTheme } from './editor-theme';
-import { exCommandName } from './ex-command-name';
+import { exBindName } from './ex-command-name';
 
 type VimEditor = Parameters<typeof Vim.handleEx>[0];
 
@@ -20,21 +24,40 @@ interface HostedEditor {
 
 const MAP_PREFIX: Record<EditorMode, string> = { normal: 'n', insert: 'i' };
 
+// The binds sharing one key sequence, `<Leader>` spelled as the leader.
+interface BindGroup {
+  keys: string;
+  binds: EditorBind[];
+}
+
+// The keymap's binds grouped by key sequence, groups in the order their keys
+// first appear and binds in keymap order: one vim map per sequence.
+function bindGroups(keymap: EditorKeymap): BindGroup[] {
+  const groups = new Map<string, EditorBind[]>();
+  for (const bind of keymap.binds) {
+    const keys = withLeader(bind.keys, keymap.leader);
+    const group = groups.get(keys);
+    if (group) {
+      group.push(bind);
+    } else {
+      groups.set(keys, [bind]);
+    }
+  }
+  return [...groups].map(([keys, binds]) => ({ keys, binds }));
+}
+
 // The engine runs a complete bind at once instead of waiting for a longer one,
 // so the leader's own default bind is unmapped before the binds that use it. A
 // bind to an ex command ends in <CR>, or its keys only type into the prompt.
-function vimrcLines(keymap: EditorKeymap): string[] {
-  const withLeader = (keys: string) =>
-    keys.replaceAll('<Leader>', keymap.leader);
+function vimrcLines(keymap: EditorKeymap, groups: BindGroup[]): string[] {
   return [
     `unmap ${keymap.leader}`,
     ...keymap.remaps.map(
       (remap) =>
-        `${MAP_PREFIX[remap.mode]}noremap ${withLeader(remap.keys)} ${remap.to}`,
+        `${MAP_PREFIX[remap.mode]}noremap ${withLeader(remap.keys, keymap.leader)} ${remap.to}`,
     ),
-    ...keymap.binds.map(
-      (bind) =>
-        `nnoremap ${withLeader(bind.keys)} :${exCommandName(bind.command)}<CR>`,
+    ...groups.map(
+      (group, index) => `nnoremap ${group.keys} :${exBindName(index)}<CR>`,
     ),
   ];
 }
@@ -57,27 +80,19 @@ function hostedEditorOf(cm: VimEditor, hosted: HostedEditor[]): TextEditor {
   return match.editor;
 }
 
+// Each group's ex command hands `run` the group's binds and the editor its
+// keys fired in.
 function defineExCommands(
-  keymap: EditorKeymap,
+  groups: BindGroup[],
   hosted: HostedEditor[],
-  run: (command: CommandId, editor: TextEditor) => void,
+  run: (binds: EditorBind[], editor: TextEditor) => void,
 ) {
-  const commandsByName = new Map<string, CommandId>();
-  for (const { command } of keymap.binds) {
-    const name = exCommandName(command);
-    const claimant = commandsByName.get(name);
-    if (claimant && claimant !== command) {
-      throw new Error(
-        `Commands "${claimant}" and "${command}" share the ex name :${name}`,
-      );
-    }
-    commandsByName.set(name, command);
-  }
-  for (const [name, command] of commandsByName) {
+  groups.forEach((group, index) => {
+    const name = exBindName(index);
     Vim.defineEx(name, name, (cm: VimEditor) =>
-      run(command, hostedEditorOf(cm, hosted)),
+      run(group.binds, hostedEditorOf(cm, hosted)),
     );
-  }
+  });
 }
 
 // Vim's `GA` from any mode: leaves visual mode, puts the cursor after the
@@ -291,7 +306,8 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
   const hosted: HostedEditor[] = [];
   let isKeymapApplied = false;
   const pendingKeys = new PendingKeys();
-  defineExCommands(keymap, hosted, run);
+  const groups = bindGroups(keymap);
+  defineExCommands(groups, hosted, run);
 
   return {
     create(parent, doc, events) {
@@ -306,7 +322,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
       requireKeyBuffer(cm);
       const cursorRedraw = redrawCursorOnResize(view);
       if (!isKeymapApplied) {
-        for (const line of vimrcLines(keymap)) {
+        for (const line of vimrcLines(keymap, groups)) {
           Vim.handleEx(cm, line);
         }
         isKeymapApplied = true;

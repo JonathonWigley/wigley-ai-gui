@@ -2,10 +2,12 @@ import type { EditorHost } from '../contracts/editor';
 import type { PendingKeys, ViewScope } from '../contracts/keymap';
 
 // Where pending keys come from: the page's key engine, which can hold its keys
-// past its timeout, and the editor host, whose vim has no timeout to hold.
+// past its timeout, and the editor host, whose vim has no timeout to hold;
+// `scope` reads the scope in force, which the editor's keys are typed in.
 export interface PendingSources {
   page: { hold(): void; cancel(): void };
   editor: Pick<EditorHost, 'onPendingKeys' | 'cancelPendingKeys'>;
+  scope(): ViewScope;
 }
 
 // One report of pending keys over the page and the editors. `reportPage` takes
@@ -29,7 +31,11 @@ export function createPendingKeys(sources: PendingSources): PendingKeysHub {
     }
   };
   sources.editor.onPendingKeys((keys) =>
-    tell(keys.length > 0 ? { where: 'editor', keys } : null),
+    tell(
+      keys.length > 0
+        ? { where: 'editor', keys, scope: sources.scope() }
+        : null,
+    ),
   );
 
   return {

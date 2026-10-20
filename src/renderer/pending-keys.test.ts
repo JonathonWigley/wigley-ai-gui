@@ -18,6 +18,7 @@ function fakeSources() {
       },
       cancelPendingKeys: () => calls.push('editor.cancel'),
     },
+    scope: () => 'forms.forms',
   };
   return {
     sources,
@@ -35,7 +36,9 @@ describe('createPendingKeys', () => {
 
     reportEditor(['<Space>', 'a']);
 
-    expect(heard).toEqual([{ where: 'editor', keys: ['<Space>', 'a'] }]);
+    expect(heard).toEqual([
+      { where: 'editor', keys: ['<Space>', 'a'], scope: 'forms.forms' },
+    ]);
   });
 
   it('sends hold and cancel to the source whose keys are pending', () => {

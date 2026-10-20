@@ -1,5 +1,4 @@
-import type { CommandId } from './commands';
-import type { EditorKeymap } from './keymap';
+import type { EditorBind, EditorKeymap } from './keymap';
 
 // `insertAtEnd` focuses in insert mode with the cursor after the last
 // character, as vim's `GA` does; otherwise the editor keeps its mode.
@@ -53,9 +52,10 @@ export interface EditorHost {
   cancelPendingKeys(): void;
 }
 
-// Every editor the host creates follows the keymap; a bound key runs its
-// command with the editor it fired in.
+// Every editor the host creates follows the keymap; a bound key sequence calls
+// `run` with every bind on those keys, in keymap order, and the editor it fired
+// in, leaving the choice among them to the caller.
 export type CreateEditorHost = (
   keymap: EditorKeymap,
-  run: (command: CommandId, editor: TextEditor) => void,
+  run: (binds: EditorBind[], editor: TextEditor) => void,
 ) => EditorHost;

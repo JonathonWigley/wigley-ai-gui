@@ -33,10 +33,10 @@ const keymap: Keymap = {
     leader: '<Space>',
     remaps: [{ mode: 'insert', keys: 'jk', to: '<Esc>' }],
     binds: [
-      { keys: '<Leader>j', command: 'test.nextBox' },
-      { keys: '<Leader>1', command: 'forms.choose1' },
-      { keys: '<Leader>2', command: 'forms.choose2' },
-      { keys: '<Leader>3', command: 'forms.choose3' },
+      { keys: '<Leader>j', scope: 'any', command: 'test.nextBox' },
+      { keys: '<Leader>1', scope: 'any', command: 'forms.choose1' },
+      { keys: '<Leader>2', scope: 'any', command: 'forms.choose2' },
+      { keys: '<Leader>3', scope: 'any', command: 'forms.choose3' },
     ],
   },
   page: [

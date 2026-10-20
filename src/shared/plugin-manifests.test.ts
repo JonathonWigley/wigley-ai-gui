@@ -38,7 +38,7 @@ function coreKeymap(): Keymap {
     editor: {
       leader: ' ',
       remaps: [{ mode: 'insert', keys: 'jk', to: '<Esc>' }],
-      binds: [{ keys: '<Leader>s', command: 'core.save' }],
+      binds: [{ keys: '<Leader>s', scope: 'any', command: 'core.save' }],
     },
     page: [{ keys: ['q'], scope: 'any', command: 'core.quit' }],
     app: [{ accelerator: 'CommandOrControl+W', command: 'core.close' }],
@@ -55,7 +55,7 @@ const p = manifest('p', {
       { keys: ['g'], scope: 'view', command: 'go' },
       { keys: ['x'], scope: 'any', command: 'go' },
     ],
-    editor: [{ keys: '<Leader>g', command: 'go' }],
+    editor: [{ keys: '<Leader>g', scope: 'view', command: 'go' }],
     app: [{ accelerator: 'CommandOrControl+G', command: 'go' }],
     global: [{ accelerator: 'Alt+G', command: 'go' }],
     intercept: [{ key: 'g', meta: true, command: 'go' }],
@@ -76,7 +76,10 @@ describe('mergeKeymap', () => {
     expect(merged.editor).toEqual({
       leader: ' ',
       remaps: core.editor.remaps,
-      binds: [...core.editor.binds, { keys: '<Leader>g', command: 'p.go' }],
+      binds: [
+        ...core.editor.binds,
+        { keys: '<Leader>g', scope: 'p.view', command: 'p.go' },
+      ],
     });
     expect(merged.app).toEqual([
       ...core.app,
@@ -97,6 +100,24 @@ describe('mergeKeymap', () => {
 
     expect(merged.page).toContainEqual({
       keys: ['x'],
+      scope: 'any',
+      command: 'p.go',
+    });
+  });
+
+  it("keeps an editor bind's any scope unqualified", () => {
+    const h = manifest('p', {
+      commands: { go: { label: 'Go', group: 'Moves', runsIn: 'page' } },
+      keys: {
+        ...NO_KEYS,
+        editor: [{ keys: '<Leader>h', scope: 'any', command: 'go' }],
+      },
+    });
+
+    const merged = mergeKeymap(coreKeymap(), [h]);
+
+    expect(merged.editor.binds).toContainEqual({
+      keys: '<Leader>h',
       scope: 'any',
       command: 'p.go',
     });

@@ -18,6 +18,10 @@ import { createEventBus } from '../shared/event-bus';
 import { startPlugins } from '../shared/plugin-host';
 import { qualify } from '../shared/plugin-manifests';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
+import {
+  editorBindInForce,
+  requireUnambiguousEditorBinds,
+} from './editor-binds';
 import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { createScopeStack } from './key-scope';
@@ -77,9 +81,17 @@ async function start() {
   contributeThemeError(areas.statusBar, theme.error);
 
   const commands = new CommandRegistry<PageCommandContext>();
-  const editor = createCodeMirrorVimHost(keymap.editor, (command, fired) =>
-    commands.run(command, { editor: fired }),
-  );
+  const scopeStack = createScopeStack(INITIAL_SCOPE);
+  // Rejects editor binds vim could not tell apart, before any is mapped.
+  requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
+  const editor = createCodeMirrorVimHost(keymap.editor, (binds, fired) => {
+    const choice = editorBindInForce(binds, scopeStack.current());
+    if (choice.kind === 'run') {
+      commands.run(choice.bind.command, { editor: fired });
+    } else {
+      log('page', choice.message);
+    }
+  });
   const services: PageServices = {
     editor,
     markdown: createMarkdownItRenderer(),
@@ -87,12 +99,12 @@ async function start() {
     log,
     timers,
   };
-  const scopeStack = createScopeStack(INITIAL_SCOPE);
   // Filled once the page keys are installed; no key reaches the engine before.
   let pageKeys: { hold(): void; cancel(): void } | null = null;
   const pendingKeys = createPendingKeys({
     page: { hold: () => pageKeys?.hold(), cancel: () => pageKeys?.cancel() },
     editor,
+    scope: () => scopeStack.current(),
   });
   const run = (id: CommandId, context: PageCommandContext = {}) =>
     commands.run(id, context);

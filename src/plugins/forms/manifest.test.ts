@@ -13,25 +13,35 @@ const EMPTY_CORE: Keymap = {
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
+// The forms editor binds, with commands qualified, each in one scope.
+function editorBindsIn(scope: string): EditorBind[] {
+  return [
+    { keys: '<Leader>x', scope, command: 'forms.toggleNotApplicable' },
+    ...DIGITS.map((digit) => ({
+      keys: `<Leader>${digit}`,
+      scope,
+      command: `forms.jumpTo${digit}`,
+    })),
+    { keys: '<Leader>en', scope, command: 'forms.nextUnanswered' },
+    { keys: '<Leader>ep', scope, command: 'forms.prevUnanswered' },
+    ...DIGITS.map((digit) => ({
+      keys: `<Leader>a${digit}`,
+      scope,
+      command: `forms.choose${digit}`,
+    })),
+    { keys: '<Leader>ac', scope, command: 'forms.clearChoice' },
+    { keys: '<Leader>af', scope, command: 'forms.actFixNow' },
+    { keys: '<Leader>au', scope, command: 'forms.actFollowUp' },
+    { keys: '<Leader>as', scope, command: 'forms.actLeaveIt' },
+    { keys: '<Leader><Leader>', scope, command: 'forms.openReview' },
+    { keys: '<Esc>', scope, command: 'forms.leaveBox' },
+  ];
+}
+
 // The forms binds, with commands and scopes qualified.
 const EXPECTED_EDITOR: EditorBind[] = [
-  { keys: '<Leader>x', command: 'forms.toggleNotApplicable' },
-  ...DIGITS.map((digit) => ({
-    keys: `<Leader>${digit}`,
-    command: `forms.jumpTo${digit}`,
-  })),
-  { keys: '<Leader>en', command: 'forms.nextUnanswered' },
-  { keys: '<Leader>ep', command: 'forms.prevUnanswered' },
-  ...DIGITS.map((digit) => ({
-    keys: `<Leader>a${digit}`,
-    command: `forms.choose${digit}`,
-  })),
-  { keys: '<Leader>ac', command: 'forms.clearChoice' },
-  { keys: '<Leader>af', command: 'forms.actFixNow' },
-  { keys: '<Leader>au', command: 'forms.actFollowUp' },
-  { keys: '<Leader>as', command: 'forms.actLeaveIt' },
-  { keys: '<Leader><Leader>', command: 'forms.openReview' },
-  { keys: '<Esc>', command: 'forms.leaveBox' },
+  ...editorBindsIn('forms.forms'),
+  ...editorBindsIn('forms.review'),
 ];
 
 const EXPECTED_PAGE: PageBind[] = [

@@ -104,13 +104,13 @@ describe('whichKeyModel', () => {
     const map = keymap(
       [],
       [
-        { keys: '<Leader>a1', command: 'choose1' },
-        { keys: 'zz', command: 'other' },
+        { keys: '<Leader>a1', scope: 'any', command: 'choose1' },
+        { keys: 'zz', scope: 'any', command: 'other' },
       ],
     );
 
     const model = whichKeyModel(
-      { where: 'editor', keys: ['<Space>'] },
+      { where: 'editor', keys: ['<Space>'], scope: 's' },
       map,
       command,
       label,
@@ -136,5 +136,24 @@ describe('whichKeyModel', () => {
     );
 
     expect(model).toBeNull();
+  });
+
+  it('lists in a box only the editor binds firing in the pending scope', () => {
+    const map = keymap(
+      [],
+      [
+        { keys: '<Leader>x', scope: 'a.view', command: 'choose1' },
+        { keys: '<Leader>y', scope: 'b.other', command: 'other' },
+      ],
+    );
+
+    const model = whichKeyModel(
+      { where: 'editor', keys: ['<Space>'], scope: 'a.view' },
+      map,
+      command,
+      label,
+    );
+
+    expect(model?.entries.map((entry) => entry.keys)).toEqual(['x']);
   });
 });

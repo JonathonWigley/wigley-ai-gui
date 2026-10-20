@@ -15,31 +15,40 @@ export interface HelpSection {
   hints: KeyHint[];
 }
 
-// Every bound key, for the help overlay: a section per scope in `scopes`
-// order under its title, then the text box's binds and remaps and the app's
-// and system's chords. Sections with no binds are left out.
+// Every bound key, for the help overlay: for each scope in `scopes` order, its
+// page binds under its title and then its text box binds; then the text box's
+// remaps and the app's and system's chords. Sections with no binds are left
+// out.
 export function helpSections(
   keymap: Keymap,
   scopes: readonly ScopeInfo[],
   label: CommandLabel,
 ): HelpSection[] {
   const sections: HelpSection[] = [
-    ...scopes.map((info) => ({
-      title: info.title,
-      hints: mergeHints(
-        keymap.page
-          .filter((bind) => bind.scope === info.id)
-          .map((bind) => ({
-            keys: formatKeys(bind.keys),
-            command: bind.command,
-          })),
-        label,
-      ),
-    })),
-    {
-      title: 'In a text box (vim normal mode)',
-      hints: editorHints(keymap.editor, label),
-    },
+    ...scopes.flatMap((info) => [
+      {
+        title: info.title,
+        hints: mergeHints(
+          keymap.page
+            .filter((bind) => bind.scope === info.id)
+            .map((bind) => ({
+              keys: formatKeys(bind.keys),
+              command: bind.command,
+            })),
+          label,
+        ),
+      },
+      {
+        title: `${info.title}, in a text box`,
+        hints: editorHints(
+          {
+            ...keymap.editor,
+            binds: keymap.editor.binds.filter((bind) => bind.scope === info.id),
+          },
+          label,
+        ),
+      },
+    ]),
     {
       title: 'Remaps in a text box',
       hints: keymap.editor.remaps.map((remap) => ({

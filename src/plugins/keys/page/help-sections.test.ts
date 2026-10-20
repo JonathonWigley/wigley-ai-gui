@@ -64,17 +64,20 @@ describe('helpSections', () => {
       editor: {
         leader: '<Space>',
         remaps: [{ mode: 'insert', keys: 'jk', to: '<Esc>' }],
-        binds: [{ keys: '<Leader>w', command: 'a.save' }],
+        binds: [{ keys: '<Leader>w', scope: 'any', command: 'a.save' }],
       },
       intercept: [{ key: 'Tab', control: true, command: 'a.cycle' }],
       global: [{ accelerator: 'Control+Alt+Command+W', command: 'a.summon' }],
     });
+    const scopes: ScopeInfo[] = [
+      { id: 'any', title: 'Everywhere', plugin: 'core' },
+    ];
 
-    const sections = helpSections(map, [], label);
+    const sections = helpSections(map, scopes, label);
 
     expect(sections).toEqual([
       {
-        title: 'In a text box (vim normal mode)',
+        title: 'Everywhere, in a text box',
         hints: [{ keys: '<Space>w', label: 'save' }],
       },
       {
@@ -90,5 +93,34 @@ describe('helpSections', () => {
         hints: [{ keys: 'Control+Alt+Command+W', label: 'summon' }],
       },
     ]);
+  });
+
+  it("lists each scope's editor binds after its page binds", () => {
+    const map = keymap({
+      page: [{ keys: ['j'], scope: 'a.view', command: 'a.next' }],
+      editor: {
+        leader: '<Space>',
+        remaps: [],
+        binds: [
+          { keys: '<Leader>x', scope: 'a.view', command: 'a.save' },
+          { keys: '<Leader>?', scope: 'any', command: 'a.close' },
+        ],
+      },
+    });
+    const scopes: ScopeInfo[] = [
+      { id: 'a.view', title: 'In the view', plugin: 'a' },
+      { id: 'any', title: 'Everywhere', plugin: 'core' },
+    ];
+
+    const titles = helpSections(map, scopes, label).map(
+      (section) => section.title,
+    );
+
+    expect(titles).toEqual([
+      'In the view',
+      'In the view, in a text box',
+      'Everywhere, in a text box',
+    ]);
+    expect(titles).not.toContain('In a text box (vim normal mode)');
   });
 });

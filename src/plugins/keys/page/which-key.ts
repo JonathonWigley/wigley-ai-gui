@@ -29,7 +29,7 @@ interface Candidate {
 }
 
 // The keys that continue `pending`, in keymap order: those firing in the
-// pending scope (or `any`) on the page, or the editor's binds in a box.
+// pending scope (or `any`), on the page or in a box.
 // Neighbouring entries of one kind and label merge into one. Null when no bind
 // continues the sequence.
 export function whichKeyModel(
@@ -57,15 +57,15 @@ export function whichKeyModel(
 }
 
 function bindsFor(pending: PendingKeys, keymap: Keymap): Candidate[] {
+  const firesInPendingScope = (bind: { scope: string }) =>
+    bind.scope === pending.scope || bind.scope === 'any';
   if (pending.where === 'editor') {
-    return keymap.editor.binds.map((bind) => ({
+    return keymap.editor.binds.filter(firesInPendingScope).map((bind) => ({
       keys: vimTokens(bind.keys, keymap.editor.leader),
       command: bind.command,
     }));
   }
-  return keymap.page.filter(
-    (bind) => bind.scope === pending.scope || bind.scope === 'any',
-  );
+  return keymap.page.filter(firesInPendingScope);
 }
 
 function continuations(pending: string[], binds: Candidate[]): Candidate[] {

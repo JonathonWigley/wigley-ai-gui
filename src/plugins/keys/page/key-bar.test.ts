@@ -74,8 +74,8 @@ describe('barHints', () => {
         leader: '<Space>',
         remaps: [],
         binds: [
-          { keys: '<Esc>', command: 'a.leave' },
-          { keys: '<Leader>x', command: 'a.save' },
+          { keys: '<Esc>', scope: 's', command: 'a.leave' },
+          { keys: '<Leader>x', scope: 's', command: 'a.save' },
         ],
       },
       page: [{ keys: ['j'], scope: 's', command: 'a.next' }],
@@ -83,6 +83,25 @@ describe('barHints', () => {
 
     expect(barHints(map, 's', true, label)).toEqual([
       { keys: '<Esc>', label: 'leave the box' },
+    ]);
+  });
+
+  it('lists in a box only the editor binds firing in the scope', () => {
+    const map = keymap({
+      editor: {
+        leader: '<Space>',
+        remaps: [],
+        binds: [
+          { keys: '<Esc>', scope: 'a.view', command: 'a.leave' },
+          { keys: 'x', scope: 'b.other', command: 'b.x' },
+          { keys: 'q', scope: 'any', command: 'c.q' },
+        ],
+      },
+    });
+
+    expect(barHints(map, 'a.view', true, label)).toEqual([
+      { keys: '<Esc>', label: 'leave the box' },
+      { keys: 'q', label: 'c.q' },
     ]);
   });
 });

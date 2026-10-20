@@ -9,9 +9,11 @@ export interface EditorRemap {
   to: string;
 }
 
-// A normal-mode bind that runs a command in the editor it fired in.
+// A normal-mode bind that runs a command in the editor it fired in, while
+// `scope` is in force; `any` fires in every scope.
 export interface EditorBind {
   keys: string;
+  scope: ViewScope;
   command: CommandId;
 }
 
@@ -21,16 +23,16 @@ export interface EditorKeymap {
   binds: EditorBind[];
 }
 
-// The scope a page key fires in; `any` fires in every scope. A plugin's scopes
-// reach the keymap qualified as `<pluginId>.<scope>`.
+// The scope a page or editor key fires in; `any` fires in every scope. A
+// plugin's scopes reach the keymap qualified as `<pluginId>.<scope>`.
 export type ViewScope = string;
 
-// The keys of an unfinished sequence: on the page, as KeyboardEvent.key values
-// (`[' ', 'a']`) with the scope they were typed in; in an editor, as vim names
+// The keys of an unfinished sequence with the scope they were typed in: on the
+// page, as KeyboardEvent.key values (`[' ', 'a']`); in an editor, as vim names
 // them (`['<Space>', 'a']`).
 export type PendingKeys =
   | { where: 'page'; keys: string[]; scope: ViewScope }
-  | { where: 'editor'; keys: string[] };
+  | { where: 'editor'; keys: string[]; scope: ViewScope };
 
 // Keys pressed in order while no editor has focus; each is a KeyboardEvent.key
 // value. Or a chord, alone in `keys`: `<` + any of `C-` (Control), `A-`

@@ -52,6 +52,24 @@ const editorJumpBinds = DIGITS.map((digit) => ({
   command: `jumpTo${digit}` as const,
 }));
 
+// A text box holds focus only in the form's and the review's views, so its
+// binds fire in both.
+const EDITOR_SCOPES = ['forms', 'review'] as const;
+
+const editorBinds = [
+  { keys: '<Leader>x', command: 'toggleNotApplicable' },
+  ...editorJumpBinds,
+  { keys: '<Leader>en', command: 'nextUnanswered' },
+  { keys: '<Leader>ep', command: 'prevUnanswered' },
+  ...editorChoiceBinds,
+  { keys: '<Leader>ac', command: 'clearChoice' },
+  { keys: '<Leader>af', command: 'actFixNow' },
+  { keys: '<Leader>au', command: 'actFollowUp' },
+  { keys: '<Leader>as', command: 'actLeaveIt' },
+  { keys: '<Leader><Leader>', command: 'openReview' },
+  { keys: '<Esc>', command: 'leaveBox' },
+] as const;
+
 // Forms' scopes are its view names, each titled for the key help.
 export const formsManifest = definePlugin({
   id: 'forms',
@@ -145,19 +163,9 @@ export const formsManifest = definePlugin({
     idle: 'With no round open',
   },
   keys: {
-    editor: [
-      { keys: '<Leader>x', command: 'toggleNotApplicable' },
-      ...editorJumpBinds,
-      { keys: '<Leader>en', command: 'nextUnanswered' },
-      { keys: '<Leader>ep', command: 'prevUnanswered' },
-      ...editorChoiceBinds,
-      { keys: '<Leader>ac', command: 'clearChoice' },
-      { keys: '<Leader>af', command: 'actFixNow' },
-      { keys: '<Leader>au', command: 'actFollowUp' },
-      { keys: '<Leader>as', command: 'actLeaveIt' },
-      { keys: '<Leader><Leader>', command: 'openReview' },
-      { keys: '<Esc>', command: 'leaveBox' },
-    ],
+    editor: EDITOR_SCOPES.flatMap((scope) =>
+      editorBinds.map((bind) => ({ ...bind, scope })),
+    ),
     page: [
       { keys: ['j'], scope: 'forms', command: 'nextItem' },
       { keys: ['<C-l>'], scope: 'forms', command: 'nextItem' },

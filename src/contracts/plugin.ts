@@ -45,7 +45,7 @@ export interface PluginKeys<
   S extends string,
 > {
   page: { keys: string[]; scope: S | 'any'; command: PageC }[];
-  editor: { keys: string; command: PageC }[];
+  editor: { keys: string; scope: S | 'any'; command: PageC }[];
   app: { accelerator: string; command: MainC }[];
   global: { accelerator: string; command: MainC }[];
   intercept: (Omit<InterceptBind, 'command'> & { command: MainC })[];

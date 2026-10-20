@@ -29,11 +29,13 @@ export interface SequenceMatcher {
   isHeld(): boolean;
 }
 
-function firesIn(bind: PageBind, scope: ViewScope): boolean {
+// Whether a page or editor bind fires while `scope` is in force.
+export function firesIn(bind: { scope: ViewScope }, scope: ViewScope): boolean {
   return bind.scope === 'any' || bind.scope === scope;
 }
 
-function scopesOverlap(a: ViewScope, b: ViewScope): boolean {
+// Whether some scope holds binds in both `a` and `b`.
+export function scopesOverlap(a: ViewScope, b: ViewScope): boolean {
   return a === 'any' || b === 'any' || a === b;
 }
 
