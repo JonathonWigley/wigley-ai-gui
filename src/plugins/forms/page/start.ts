@@ -1,4 +1,5 @@
 import '../../../shared/page/dialog.css';
+import '../../../shared/page/markdown.css';
 import './forms.css';
 import type {
   PageApi,

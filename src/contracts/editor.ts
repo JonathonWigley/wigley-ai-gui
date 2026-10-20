@@ -1,9 +1,12 @@
 import type { EditorBind, EditorKeymap } from './keymap';
 
 // `insertAtEnd` focuses in insert mode with the cursor after the last
-// character, as vim's `GA` does; otherwise the editor keeps its mode.
+// character, as vim's `GA` does; `insert` focuses in insert mode with the
+// cursor where it was, as vim's `i` does; `insertAtEnd` wins when both are
+// set. With neither, the editor keeps its mode.
 export interface FocusOptions {
   insertAtEnd?: boolean;
+  insert?: boolean;
 }
 
 // A vim mode, e.g. `insert` or `visual`; `subMode` names a visual mode's kind
@@ -15,6 +18,9 @@ export interface VimMode {
 
 export interface TextEditor {
   text(): string;
+  // Replaces the whole text, keeping focus and the vim mode; it reports no
+  // `changed`.
+  setText(text: string): void;
   focus(options?: FocusOptions): void;
   blur(): void;
   // Removes the editor from the page; the host forgets it.

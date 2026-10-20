@@ -1,0 +1,212 @@
+/* Markdown (class names from markdown-it-renderer.ts) */
+.md {
+  max-width: 80ch;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md pre,
+.md table {
+  margin: 0.5em 0;
+}
+
+.md ul,
+.md ol {
+  padding-left: 1.5em;
+}
+
+.md-h {
+  color: var(--wg-text);
+  font-weight: 600;
+  margin: 0.75em 0 0.25em;
+}
+
+.md-h1,
+.md-h2 {
+  font-size: 1.1em;
+}
+
+.md-h3 {
+  font-size: 1em;
+}
+
+.md-h4,
+.md-h5,
+.md-h6 {
+  color: var(--wg-text-muted);
+  font-size: 0.95em;
+}
+
+.md code,
+.choice-text code,
+.round-overview code {
+  background: var(--wg-bg-deep);
+  border-radius: 0.25rem;
+  font-family: var(--wg-font-mono);
+  font-size: 0.9em;
+  padding: 0.05em 0.3em;
+}
+
+/* Code wraps at spaces but keeps an unbroken token whole, and a table keeps
+   its columns; either scrolls in its own box when wider than the pane. */
+.md pre {
+  background: var(--wg-bg-deep);
+  border: 1px solid var(--wg-border);
+  border-radius: 0.4rem;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  padding: 0.6em 0.8em;
+  white-space: pre-wrap;
+}
+
+.md pre code {
+  background: none;
+  padding: 0;
+}
+
+.md blockquote {
+  border-left: 3px solid var(--wg-border);
+  color: var(--wg-text-muted);
+  margin-left: 0;
+  padding-left: 0.75em;
+}
+
+.md table {
+  border-collapse: collapse;
+  overflow-wrap: normal;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  width: max-content;
+}
+
+.md th,
+.md td {
+  border: 1px solid var(--wg-border);
+  padding: 0.25em 0.6em;
+}
+
+.md th {
+  background: var(--wg-surface);
+  font-weight: 600;
+}
+
+.md .md-left {
+  text-align: left;
+}
+
+.md .md-center {
+  text-align: center;
+}
+
+.md .md-right {
+  text-align: right;
+}
+
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--wg-border);
+}
+
+.md-diff .md-diff-add {
+  color: var(--wg-change-added);
+}
+
+.md-diff .md-diff-del {
+  color: var(--wg-change-removed);
+}
+
+.md-diff .md-diff-mod {
+  color: var(--wg-change-changed);
+}
+
+.md-changes,
+.md-tree {
+  list-style: none;
+  padding-left: 0;
+}
+
+.md-change {
+  border-left: 3px solid var(--wg-border);
+  margin: 0.2em 0;
+  padding: 0.1em 0.6em;
+}
+
+.md-change.added {
+  border-left-color: var(--wg-change-added);
+}
+
+.md-change.changed {
+  border-left-color: var(--wg-change-changed);
+}
+
+.md-change.removed {
+  border-left-color: var(--wg-change-removed);
+}
+
+.md-pill {
+  background: var(--wg-border);
+  border-radius: 999px;
+  color: var(--wg-text-onAccent);
+  display: inline-block;
+  font-size: 0.75em;
+  font-weight: 600;
+  margin-right: 0.5em;
+  padding: 0 0.5em;
+}
+
+.md-change.added > .md-pill {
+  background: var(--wg-change-added);
+}
+
+.md-change.changed > .md-pill {
+  background: var(--wg-change-changed);
+}
+
+.md-change.removed > .md-pill {
+  background: var(--wg-change-removed);
+}
+
+.md-tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 1.25em;
+}
+
+.md-tree ul > li {
+  position: relative;
+}
+
+.md-tree ul > li::before {
+  border-bottom: 1px solid var(--wg-border);
+  border-left: 1px solid var(--wg-border);
+  content: '';
+  height: 0.9em;
+  left: -0.9em;
+  position: absolute;
+  top: 0;
+  width: 0.7em;
+}
+
+.md-details {
+  border: 1px solid var(--wg-border);
+  border-radius: 0.4rem;
+  margin: 0.5em 0;
+  padding: 0.4em 0.75em;
+}
+
+.md-details > summary {
+  color: var(--wg-accent);
+  cursor: pointer;
+  font-weight: 600;
+}

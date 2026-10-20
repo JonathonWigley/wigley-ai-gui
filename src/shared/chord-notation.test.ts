@@ -25,6 +25,23 @@ describe('parseChord', () => {
       expect(parseChord(token)).toBeNull();
     },
   );
+
+  it('parseChord_EnterKey', () => {
+    expect(parseChord('<D-Enter>')).toEqual({
+      ctrl: false,
+      alt: false,
+      shift: false,
+      meta: true,
+      key: 'Enter',
+    });
+  });
+
+  it.each(['<D-enter>', '<D-Tab>'])(
+    'parseChord_OtherNamedKeys_Rejected %s',
+    (token) => {
+      expect(parseChord(token)).toBeNull();
+    },
+  );
 });
 
 describe('isChordToken', () => {

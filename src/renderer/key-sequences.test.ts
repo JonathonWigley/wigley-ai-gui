@@ -314,6 +314,21 @@ describe('createChordMatcher', () => {
     ).toBeUndefined();
   });
 
+  it('matches an Enter chord on code Enter', () => {
+    const chords = createChordMatcher([
+      { keys: ['<D-Enter>'], scope: 'chat.chat', command: 'test.send' },
+    ]);
+    expect(
+      chords.match(press('Enter', { metaKey: true }), 'chat.chat')?.command,
+    ).toBe('test.send');
+    expect(
+      chords.match(
+        press('Enter', { metaKey: true, ctrlKey: true }),
+        'chat.chat',
+      ),
+    ).toBeUndefined();
+  });
+
   it('matches a chord holding every modifier', () => {
     const chords = createChordMatcher([
       { keys: ['<C-A-S-D-k>'], scope: 'forms', command: 'test.all' },

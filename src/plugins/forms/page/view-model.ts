@@ -1,4 +1,3 @@
-import type { VimMode } from '../../../contracts/editor';
 import type { AnswerableKind, AnswerStatus, FindingAction } from '../contract';
 import { findingSolution } from '../finding-pick';
 import {
@@ -15,6 +14,8 @@ import {
   type SaveState,
 } from './form-state';
 import { FORMATS, itemLabel } from './kinds/formats';
+
+export { modeLabel } from '../../../shared/vim-mode-label';
 
 // One question or finding as the review lists it.
 export interface ReviewRow {
@@ -54,12 +55,6 @@ const SAVE_LABELS: Record<SaveState, string> = {
   saved: 'Saved',
   saving: 'Saving…',
   unsaved: 'Unsaved',
-};
-
-// How vim's status line names a visual mode's kind.
-const VISUAL_KINDS: Partial<Record<string, string>> = {
-  linewise: 'line',
-  blockwise: 'block',
 };
 
 // Findings, then questions, as answerableItems orders them.
@@ -171,15 +166,4 @@ export function progressText(progress: Progress): string {
 export function saveLabel(state: SaveState, error: string | null): string {
   const hasError = state === 'unsaved' && error !== null;
   return hasError ? `${SAVE_LABELS[state]} — ${error}` : SAVE_LABELS[state];
-}
-
-// The status line's mode: the focused box's vim mode as vim shows it, e.g.
-// VISUAL LINE, or PAGE outside every box.
-export function modeLabel(mode: VimMode | null): string {
-  if (mode === null) {
-    return 'PAGE';
-  }
-  const kind = VISUAL_KINDS[mode.subMode];
-  const label = kind === undefined ? mode.mode : `${mode.mode} ${kind}`;
-  return label.toUpperCase();
 }

@@ -63,6 +63,13 @@ function insertAtEnd(view: EditorView, cm: VimEditor) {
   }
 }
 
+// Vim's `i`: enters insert mode with the cursor where it was.
+function insertHere(cm: VimEditor) {
+  if (!cm.state.vim.insertMode) {
+    Vim.handleEx(cm, 'startinsert');
+  }
+}
+
 function focusEditor(
   view: EditorView,
   cm: VimEditor,
@@ -71,7 +78,20 @@ function focusEditor(
   view.focus();
   if (options?.insertAtEnd) {
     insertAtEnd(view, cm);
+  } else if (options?.insert) {
+    insertHere(cm);
   }
+}
+
+// The user-event annotation marking the transaction `setText` dispatches, so
+// the editor reports no `changed` for it.
+const HOST_REPLACE = 'wigley.setText';
+
+function replaceText(view: EditorView, text: string) {
+  view.dispatch({
+    changes: { from: 0, to: view.state.doc.length, insert: text },
+    userEvent: HOST_REPLACE,
+  });
 }
 
 // A key goes through the editor's own keydown handling, so vim runs it in
@@ -242,7 +262,10 @@ function editorExtensions(
     EditorView.lineWrapping,
     editorTheme,
     EditorView.updateListener.of((update) => {
-      if (update.docChanged) {
+      const isHostReplace = update.transactions.some((transaction) =>
+        transaction.isUserEvent(HOST_REPLACE),
+      );
+      if (update.docChanged && !isHostReplace) {
         events.changed(update.state.doc.toString());
       }
     }),
@@ -295,6 +318,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
         view,
         editor: {
           text: () => view.state.doc.toString(),
+          setText: (text) => replaceText(view, text),
           focus: (options) => {
             leaveFocusedEditor(view, hosted, pendingKeys);
             focusEditor(view, cm, options);

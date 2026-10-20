@@ -2,7 +2,8 @@
 // The page key engine matches binds with it and the self-test driver presses
 // steps with it, so both read a token the same way.
 
-// The modifiers a chord holds, and its key: one lowercase letter or digit.
+// The modifiers a chord holds, and its key: one lowercase letter, one digit,
+// or `Enter`.
 export interface Chord {
   ctrl: boolean;
   alt: boolean;
@@ -12,9 +13,9 @@ export interface Chord {
 }
 
 export const CHORD_NOTATION_RULE =
-  'write modifiers C-, A-, S-, D- in that order, at least one of C-, A-, D-, then one lowercase letter or digit';
+  'write modifiers C-, A-, S-, D- in that order, at least one of C-, A-, D-, then one lowercase letter, one digit, or Enter';
 
-const CHORD_NOTATION = /^<(C-)?(A-)?(S-)?(D-)?([a-z0-9])>$/;
+const CHORD_NOTATION = /^<(C-)?(A-)?(S-)?(D-)?([a-z0-9]|Enter)>$/;
 
 // A key written in angle brackets claims to be a chord; a lone `<` or `>` is a
 // plain key.

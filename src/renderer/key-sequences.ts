@@ -171,7 +171,8 @@ interface ParsedChord extends ChordPress {
   bind: PageBind;
 }
 
-// A letter matches its `Key` code and a digit its top-row `Digit` code.
+// A letter matches its `Key` code, a digit its top-row `Digit` code, and
+// `Enter` the main Enter key's code.
 function toParsedChord(bind: PageBind, token: string): ParsedChord {
   const chord = parseChord(token);
   if (!chord) {
@@ -179,15 +180,22 @@ function toParsedChord(bind: PageBind, token: string): ParsedChord {
       `Page bind for ${bind.command} has a malformed chord ${token}: ${CHORD_NOTATION_RULE}`,
     );
   }
-  const isDigit = chord.key >= '0' && chord.key <= '9';
   return {
     bind,
-    code: isDigit ? `Digit${chord.key}` : `Key${chord.key.toUpperCase()}`,
+    code: chordCode(chord.key),
     ctrlKey: chord.ctrl,
     altKey: chord.alt,
     shiftKey: chord.shift,
     metaKey: chord.meta,
   };
+}
+
+function chordCode(key: string): string {
+  if (key === 'Enter') {
+    return 'Enter';
+  }
+  const isDigit = key >= '0' && key <= '9';
+  return isDigit ? `Digit${key}` : `Key${key.toUpperCase()}`;
 }
 
 function isSameChord(a: ChordPress, b: ChordPress): boolean {

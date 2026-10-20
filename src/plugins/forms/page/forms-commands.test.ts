@@ -28,6 +28,7 @@ const boxEditors = new Map<TextEditor, BoxRef>();
 function editorOf(box: BoxRef): TextEditor {
   const editor: TextEditor = {
     text: () => '',
+    setText: () => undefined,
     focus: () => undefined,
     blur: () => undefined,
     destroy: () => undefined,
