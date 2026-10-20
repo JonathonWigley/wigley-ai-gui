@@ -15,3 +15,9 @@
 - Fuzzy finders: `Space f f` finds a file, `Space f s` searches text, built on a fast Neovim finder's matcher (fzf/fzy style) rather than a home-made one. Deferred from the docs browser (`docs-browser/design.md`).
 - Keyboard link hints (vimium style) in rendered docs, if Tab between links is not enough.
 - Images in rendered docs: loading local image files into the page needs a safe file protocol of its own; today they show their alt text.
+- A Codex harness adapter behind `AgentHarness`, declaring Codex's own session controls (`agent-chat/design.md`).
+- A wigley-harness adapter behind `AgentHarness`, so the app drives the C# harness as it drives Claude Code.
+- A read-only Chat tab for sessions started in a terminal, following the session's transcript file.
+- Images and files pasted or dropped into the chat's message box.
+- "Always allow" on a chat permission card, writing the rule to the project's local Claude settings; Claude's
+  permission-prompt tool path for it is undocumented, so it starts with a spike.

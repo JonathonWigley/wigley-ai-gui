@@ -4,16 +4,18 @@
 
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the core and its plugins, the
   layers, the relay and agent sessions, and where a new plugin, mode, session tab, key, event, setting, theme, plugin
-  data, forms layout, round source, MCP tool or third-party tool goes, and the layer check.
+  data, layout, agent harness, session control, round source, MCP tool or third-party tool goes, and the layer
+  check.
 - **Running and testing** — Node version, the self-test the agent may run any time, and the visible run that is the user's.
-- **Dev quirks** — the startup reload and the unwired ACP adapter and mock agent.
+- **Dev quirks** — the startup reload.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
 vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `wigley-forms`
 tools, receiving agents' review rounds and showing each in its agent session's Form tab for the user to answer; and it
 browses and edits every agent doc on the machine through the docs index (`docs_index.py`, `plugins/wigley/scripts/docs-index/`
-in wigley-ai-marketplace, whose README states the index schema). An ACP client, built but not yet wired, is for
-driving an agent process over stdio.
+in wigley-ai-marketplace, whose README states the index schema). It also starts Claude Code sessions itself and
+chats with them in each session's Chat tab, a round from that session swapping in over the chat and back
+(`docs/features/agent-chat/design.md`).
 
 ## Architecture
 
@@ -30,13 +32,15 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 src/contracts/   interfaces and records crossing a seam, the plugin API among them; imports nothing
 src/config/      core keymap (leader, remaps, app chords) and settings, and the built-in themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
-                 theme variables, `errorText`)
-  page/          page-only DOM builders plugins share       → imported only by src/renderer and plugins' page/ parts
+                 theme variables, `errorText`, the fake agent harness)
+  layouts/       the layout registry plugins' main parts share (forms and chat layouts)
+  page/          page-only DOM builders plugins share, the layout loader among them
+                 → imported only by src/renderer and plugins' page/ parts
 src/main/        core main process; main.ts is its composition root
   plugins/       the main-side plugin API: per-plugin channel routing and services
   themes/        theme loader: parses and chooses the built-in or user theme
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts
-  acp/           ACP adapter behind AgentClient             → the only client-side @agentclientprotocol/sdk import
+  claude-code/   Claude Code CLI adapter behind AgentHarness → the only place the app spawns `claude`
   files/         file reads, atomic writes, rename, trash, folder lists and watching, behind Files
   processes/     runs a program and returns its exit code and output, behind ProcessRunner
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page
@@ -57,16 +61,20 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   docs/          manifest.ts, contract.ts, main/ (docs index runs, file changes inside the indexed folders only,
                  watching the open file), page/ (one docs view — tree, rendered doc, document editor — shown as
                  Docs mode over the machine's index and as each session's Docs tab over that session's)
+  chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
+                 permission_prompt MCP tool, recent folders), page/ (the Chat tab, the start prompt), layouts/ (the
+                 chat Layout contract and the built-in `default` chat layout)
   keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the status bar's key list, and the
                  keys-for-command lookup it exports); no main part
-src/mock-agent/  a separate executable the ACP adapter spawns in dev
 ```
 
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
 wigley-ai-marketplace, whose README states the tool contract, the saved-round file format
 the `retro` skill reads, and the relay's side of the channel). A change to either contract
 lands in both repos together. Each relay connection is one agent session, owned by the `sessions` plugin; every
-connected session has a row in the sessions sidebar until it disconnects or the user closes the row. A plugin's close
+connected session has a row in the sessions sidebar until it disconnects or the user closes the row. A session the
+app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
+host session id joins that row instead of adding one, and the row ends when the agent process ends. A plugin's close
 guard (`addCloseGuard`) refuses the user's close while the plugin still has something open there (forms: an open
 round), since main, not the page, decides.
 
@@ -97,8 +105,10 @@ round), since main, not the page, decides.
   the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
   core edit.
 - **A session tab** is added to a session by the plugin that fills it, through the `sessions` page export `addTab`:
-  forms adds a Form tab where a session's round view is created, when the session has no Form tab, and the docs
-  plugin, once it lands, a Docs tab when the session connects. A session's tabs drop when its row leaves, closed by the user or ended, and
+  forms adds a Form tab where a session's round view is created, when the session has no Form tab, chat a Chat tab
+  to each session it starts, and the docs plugin, once it lands, a Docs tab when the session connects. A tab that
+  needs the user now takes over its session (`takeOver()`), and its release gives the session back to the tab shown
+  before unless the user moved since: forms takes over for a round and releases on submit or cancel. A session's tabs drop when its row leaves, closed by the user or ended, and
   `sessions.sessionRemoved` tells each plugin to forget the session; the user moves between tabs with `Option+o` /
   `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`.
 - **A key** is a default bind in its plugin's manifest naming that plugin's command; the core qualifies both, so
@@ -113,7 +123,7 @@ round), since main, not the page, decides.
   `<keys> has no bind in <scope>`), and startup fails on two binds with the same keys in overlapping scopes or on keys
   that begin another bind's longer keys in any scope. Esc while a sequence waits cancels it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout keys are
-  `Space z l …`).
+  `Space z l …`, chat's `Space z c …`).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
   modal view never fights the plugin under it for the scope. The pushed scope's `onBaseChanged` hears the set scope
@@ -157,6 +167,13 @@ round), since main, not the page, decides.
   Defect words. Every card shows all its choices and its action row, the recommended ones badged, and Accept (Enter)
   takes them whole: the user ruled out folding the alternatives away, since it biased answers toward the
   recommendation.
+- **An agent harness** — Claude Code today, Codex and wigley-harness next — is an adapter behind `AgentHarness` in
+  `src/contracts/agent.ts`, handed to plugins as a main service; the fake in `src/shared/` drives the tests and the
+  self-test. The adapter alone reads its harness's output and turns it into chat entries, each carrying the raw
+  events, so a chat layout can show any field and the chat never parses a harness's JSON.
+- **A session control** — Claude's permission mode, effort and model — is declared by the harness adapter (id,
+  label, choices, current value), and the Chat tab draws whatever its adapter declares. A control gets its key as a
+  command in chat's manifest (`Space c m`, `Space c e`, `Space c o`); until then `Space c c` reaches it from the list.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
@@ -176,6 +193,10 @@ round), since main, not the page, decides.
   it by the URL `api.dataUrl(path, revision)` builds on the `wigley-data:` scheme, which the page's CSP allows for
   scripts and styles; `revision` sits in the URL's path, so a changed module and every relative import under it load
   fresh.
+- **A layout** is a plugin's user-editable look: the shared registry (`src/shared/layouts/`) and loader
+  (`src/shared/page/`) take the plugin's data folder, contract text, default layout and validator, and each plugin
+  keeps its own contract and built-in `default`. Forms' layouts build round cards and chat's build chat entries, a
+  chat entry's layout reading the entry's raw events for anything the entry does not name.
 - **A forms layout** builds each item's cards, and may add a head above them. Its contract is
   `src/plugins/forms/layouts/layout.d.ts`: the card input for each kind, and the kit of ready-made parts (sections,
   choice list, answer controls, verdict, action row), each of which keeps itself up to date. The built-in `default`
@@ -202,9 +223,10 @@ round), since main, not the page, decides.
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms); a step with no keys waits for its line. The script's
   `settings` override plugin settings in the config main serves the page (forms' sets a short
-  `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Only one script
-  runs, so the keys plugin's steps live in forms' script, whose fixture gives them scopes full of binds and a box to
-  type in.
+  `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Each plugin hands
+  at most one script, and the scripts run in plugin start order; the keys plugin has no main part, so its steps live
+  in forms' script, whose fixture gives them scopes full of binds and a box to type in. Chat's script runs its
+  sessions over the fake agent harness.
 - Forms visuals are checked live on the preview round (`Space z l o`): the built-in sample shows every card, and each
   further press swaps in the next saved real round, then back to the sample.
 - A visible `npm start` takes the user's foreground and keyboard, so that run is the user's: the agent gives the user
@@ -214,4 +236,3 @@ round), since main, not the page, decides.
 
 - Under `electron-forge start` the page loads twice at startup, the second load triggered by the dev server. Code
   that acts on page load runs on every load, as the self-test does.
-- Nothing in the app calls the ACP adapter or the mock agent; both still build for the harness work.
