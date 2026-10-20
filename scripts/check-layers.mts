@@ -1,4 +1,4 @@
-// Fails when a source file imports across a layer boundary LAYERS does not allow.
+// Fails when a source file (`.ts` or `.js`) imports across a layer boundary LAYERS does not allow.
 // A file belongs to the layer with the longest matching path; imports inside a
 // file's own layer are always allowed, and a `.test.ts` file may also import the
 // test packages. An import is allowed when the imported file's own layer is
@@ -36,6 +36,11 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['node:'],
   },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
+  'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
+  'src/main/data-protocol': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: ['electron', 'node:'],
+  },
   'src/main/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/main/main.ts': {
     layers: [
@@ -47,6 +52,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/main/plugins',
       'src/main/themes',
       'src/main/alerts',
+      'src/main/files',
+      'src/main/data-protocol',
       'src/plugins/main.ts',
       'src/plugins/manifests.ts',
     ],
@@ -62,16 +69,19 @@ const LAYERS: Record<string, LayerRule> = {
       'src/contracts',
       'src/shared',
       'src/plugins/forms',
+      'src/plugins/forms/layouts',
       'src/plugins/sessions/contract.ts',
     ],
     packages: ['node:'],
   },
+  'src/plugins/forms/layouts': { layers: [], packages: [] },
   'src/plugins/forms/page': {
     layers: [
       'src/contracts',
       'src/shared',
       'src/shared/page',
       'src/plugins/forms',
+      'src/plugins/forms/layouts',
       'src/plugins/keys/contract.ts',
       'src/plugins/sessions/contract.ts',
     ],
@@ -226,7 +236,9 @@ function importViolations(file: string): string[] {
   const isTestFile = file.endsWith('.test.ts');
   const violations: string[] = [];
   const imports = ts.preProcessFile(readFileSync(file, 'utf8'), true, true);
-  for (const { fileName: specifier } of imports.importedFiles) {
+  for (const { fileName } of imports.importedFiles) {
+    // A Vite query (`./x.js?raw`) names the same file.
+    const specifier = fileName.split('?')[0];
     if (!specifier.startsWith('.')) {
       const isTestPackage = isTestFile && TEST_PACKAGES.includes(specifier);
       if (!isTestPackage && !allowsPackage(rule, specifier)) {
@@ -249,7 +261,7 @@ function importViolations(file: string): string[] {
 }
 
 const files = readdirSync('src', { recursive: true, encoding: 'utf8' })
-  .filter((file) => file.endsWith('.ts'))
+  .filter((file) => file.endsWith('.ts') || file.endsWith('.js'))
   .map((file) => path.join('src', file));
 const violations = files.flatMap(importViolations);
 for (const violation of violations) {
