@@ -71,6 +71,7 @@ async function listFolder(
 function watchDebounced(
   folder: string,
   onChange: (path: string) => void,
+  onError?: (error: unknown) => void,
 ): FileWatch {
   mkdirSync(folder, { recursive: true });
   const pending = new Map<string, NodeJS.Timeout>();
@@ -91,21 +92,35 @@ function watchDebounced(
       }, WATCH_QUIET_MS),
     );
   });
-  return {
-    close: () => {
-      watcher.close();
-      for (const timer of pending.values()) {
-        clearTimeout(timer);
-      }
-      pending.clear();
-    },
+  const close = () => {
+    watcher.close();
+    for (const timer of pending.values()) {
+      clearTimeout(timer);
+    }
+    pending.clear();
   };
+  let failed = false;
+  // A listener stays attached after the first error, since an `'error'` an
+  // emitter has no listener for is thrown.
+  watcher.on('error', (error) => {
+    if (failed) {
+      return;
+    }
+    failed = true;
+    close();
+    onError?.(error);
+  });
+  return { close };
 }
 
 // FSEvents reports a change to the watched folder itself (its contents
 // changing, or its own creation) under the folder's own name.
 function isWatchedFolderItself(folder: string, name: string): boolean {
-  return name === path.basename(folder) && !existsSync(path.join(folder, name));
+  return (
+    process.platform === 'darwin' &&
+    name === path.basename(folder) &&
+    !existsSync(path.join(folder, name))
+  );
 }
 
 function slashJoined(relative: string): string {

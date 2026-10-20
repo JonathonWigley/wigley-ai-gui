@@ -1,4 +1,5 @@
-// Fails when a source file (`.ts` or `.js`) imports across a layer boundary LAYERS does not allow.
+// Fails when a source file (`.ts` or `.js`) imports across a layer boundary
+// LAYERS does not allow.
 // A file belongs to the layer with the longest matching path; imports inside a
 // file's own layer are always allowed, and a `.test.ts` file may also import the
 // test packages. An import is allowed when the imported file's own layer is

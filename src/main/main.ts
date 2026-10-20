@@ -172,8 +172,8 @@ function buildConfig(inputs: StartInputs, selfTest: SelfTestConfig): AppConfig {
 
 // Starts every plugin's main part, each with its own API over one plugin
 // channel router to the window's page, one event bus, and its data folder
-// under `dataRoot`. `onStarted` sees
-// each part as it starts, so a part is known even when a later start throws.
+// under `dataRoot`. `onStarted` sees each part as it starts, so a part is
+// known even when a later start throws.
 function startMainParts(
   window: BrowserWindow,
   settingsByPlugin: StartInputs['settingsByPlugin'],

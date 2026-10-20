@@ -79,6 +79,18 @@ describe('definePlugin', () => {
     expect(changed.delayMs).toBe(5);
   });
 
+  it('an id holding an uppercase letter throws naming the id', () => {
+    expect(() => definePlugin({ ...manifest, id: 'Forms' })).toThrow(
+      'Plugin id "Forms"',
+    );
+  });
+
+  it('an id holding a dot throws naming the id', () => {
+    expect(() => definePlugin({ ...manifest, id: 'my.plugin' })).toThrow(
+      'Plugin id "my.plugin"',
+    );
+  });
+
   it('a page bind naming an undeclared scope is a type error', () => {
     const defined = definePlugin({
       ...manifest,

@@ -3,7 +3,8 @@ import { resolveInside } from './scoped-files';
 
 // `Files` held in memory, the double plugin tests use. `write` and `remove`
 // report each changed path to the watches over it at once, with no debounce,
-// so a test drives a save by writing.
+// so a test drives a save by writing. A watch never fails, so it never calls
+// its `onError`.
 export interface MemoryFiles extends Files {
   // Deletes the file at `path`, or every file under the folder at `path`.
   remove(path: string): void;
@@ -63,11 +64,11 @@ export function createMemoryFiles(): MemoryFiles {
 }
 
 // The one spelling a path is stored under: `/`-led, normalized, or `` for the
-// top folder.
+// top folder. Throws on a path `resolveInside` refuses.
 function keyOf(path: string): string {
   const key = resolveInside('', path.replace(/^\/+/, ''));
   if (key === null) {
-    throw new Error(`${path} climbs above /`);
+    throw new Error(`${path} is outside /`);
   }
   return key;
 }

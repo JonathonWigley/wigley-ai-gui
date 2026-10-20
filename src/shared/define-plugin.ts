@@ -4,10 +4,13 @@ import type {
   PluginKeys,
 } from '../contracts/plugin';
 
+const PLUGIN_ID = /^[a-z0-9-]+$/;
+
 // Returns `manifest` unchanged, keeping its literal command ids and scopes in
 // its type and its settings as plain types: a key naming an undeclared command
 // or scope, or a command running in the other process, fails to compile, and
-// so does a start function missing a declared command's handler.
+// so does a start function missing a declared command's handler. Throws when
+// the id holds anything but lowercase letters, digits and `-`.
 export function definePlugin<
   const Cmds extends Record<string, CommandDecl>,
   const S extends string,
@@ -24,5 +27,10 @@ export function definePlugin<
   >;
   settings: T;
 }): typeof manifest {
+  if (!PLUGIN_ID.test(manifest.id)) {
+    throw new Error(
+      `Plugin id "${manifest.id}" must be lowercase letters, digits and -`,
+    );
+  }
   return manifest;
 }

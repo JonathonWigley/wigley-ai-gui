@@ -39,6 +39,24 @@ describe('scopedFiles', () => {
     expect(await inner.list('/', { recursive: true })).toEqual([]);
   });
 
+  it('write_BackslashPath_Rejects', async () => {
+    const scoped = scopedFiles(inner, ROOT);
+
+    await expect(scoped.write('a\\..\\..\\x', 'text')).rejects.toThrow(
+      `a\\..\\..\\x is outside ${ROOT}`,
+    );
+    expect(await inner.list('/', { recursive: true })).toEqual([]);
+  });
+
+  it('write_DrivePrefixPath_Rejects', async () => {
+    const scoped = scopedFiles(inner, ROOT);
+
+    await expect(scoped.write('C:x', 'text')).rejects.toThrow(
+      `C:x is outside ${ROOT}`,
+    );
+    expect(await inner.list('/', { recursive: true })).toEqual([]);
+  });
+
   it('watch_ParentEscape_Throws', () => {
     const scoped = scopedFiles(inner, ROOT);
 

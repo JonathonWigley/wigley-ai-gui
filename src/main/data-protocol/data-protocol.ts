@@ -1,10 +1,12 @@
 import { net, protocol } from 'electron';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DATA_SCHEME, dataFilePath } from '../../shared/data-url';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
   '.css': 'text/css',
   '.json': 'application/json',
 };
@@ -27,7 +29,8 @@ export function registerDataScheme(): void {
 
 // Serves each plugin's data folder under `dataRoot` on the default session,
 // open to any origin, so the page imports modules from it in dev and packaged
-// alike. A URL outside a plugin's folder, or a missing file, answers 404.
+// alike. A URL outside a plugin's folder, or naming anything but a file,
+// answers 404.
 export function serveDataScheme(dataRoot: string): void {
   protocol.handle(DATA_SCHEME, async (request) => {
     const file = dataFilePath(request.url, dataRoot);
@@ -47,9 +50,13 @@ export function serveDataScheme(dataRoot: string): void {
   });
 }
 
-// Null when the file cannot be read, as when it is missing.
+// Null when `file` is not a file, such as a folder, or cannot be read, as
+// when it is missing.
 async function fetchFile(file: string): Promise<Response | null> {
   try {
+    if (!(await stat(file)).isFile()) {
+      return null;
+    }
     return await net.fetch(pathToFileURL(file).toString());
   } catch {
     return null;

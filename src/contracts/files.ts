@@ -21,9 +21,16 @@ export interface Files {
   // set order. A missing folder lists as `[]`.
   list(folder: string, options?: { recursive?: boolean }): Promise<FileEntry[]>;
   // Watches `folder` and every folder under it, calling `onChange` with the
-  // changed path relative to `folder`, joined with `/`. A burst of events for
-  // one path reports once, 100 ms after its last event; a temp file `write`
-  // makes never reports, so a write reports only its target. Creates `folder`
-  // when it is missing.
-  watch(folder: string, onChange: (path: string) => void): FileWatch;
+  // changed path relative to `folder`, joined with `/`. The Node adapter
+  // reports a burst of events for one path once, 100 ms after its last event;
+  // the memory adapter reports each change at once. A temp file `write` makes
+  // never reports, so a write reports only its target. Creates `folder` when it
+  // is missing. When watching fails the watch closes, dropping any change not
+  // yet reported, and calls `onError` once; with no `onError` it closes
+  // silently.
+  watch(
+    folder: string,
+    onChange: (path: string) => void,
+    onError?: (error: unknown) => void,
+  ): FileWatch;
 }

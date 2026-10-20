@@ -1,12 +1,32 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { type FSWatcher, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FileEntry } from '../../contracts/files';
 import { createNodeFiles } from './node-files';
 
+// The real `watch`, keeping each watcher it opens so a test can make one fail.
+const watchers = vi.hoisted(() => [] as FSWatcher[]);
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...fs,
+    watch: (...args: Parameters<typeof fs.watch>) => {
+      const watcher = fs.watch(...args);
+      watchers.push(watcher);
+      return watcher;
+    },
+  };
+});
+
+const QUIET_MS = 100;
+
 const files = createNodeFiles();
 let root: string;
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function byPath(entries: FileEntry[]): FileEntry[] {
   return [...entries].sort((a, b) => a.path.localeCompare(b.path));
@@ -68,13 +88,52 @@ describe('createNodeFiles', () => {
     try {
       const file = path.join(root, 'z.txt');
       await files.write(file, 'first');
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await waitMs(20);
       await files.write(file, 'second');
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await vi.waitFor(() => expect(reports).not.toHaveLength(0), {
+        timeout: 5000,
+      });
+      await waitMs(3 * QUIET_MS);
     } finally {
       watch.close();
     }
 
     expect(reports).toEqual(['z.txt']);
+  });
+
+  it('watch_WatcherErrors_ClosesAndReportsTheErrorOnce', async () => {
+    const reports: string[] = [];
+    const errors: unknown[] = [];
+    const failure = new Error('watch failed');
+    const watch = files.watch(
+      root,
+      (changed) => reports.push(changed),
+      (error) => errors.push(error),
+    );
+    try {
+      watchers.at(-1)?.emit('error', failure);
+      watchers.at(-1)?.emit('error', new Error('second failure'));
+      await files.write(path.join(root, 'z.txt'), 'text');
+      await waitMs(3 * QUIET_MS);
+    } finally {
+      watch.close();
+    }
+
+    expect(errors).toEqual([failure]);
+    expect(reports).toEqual([]);
+  });
+
+  it('watch_WatcherErrorsWithNoOnError_ClosesSilently', async () => {
+    const reports: string[] = [];
+    const watch = files.watch(root, (changed) => reports.push(changed));
+    try {
+      watchers.at(-1)?.emit('error', new Error('watch failed'));
+      await files.write(path.join(root, 'z.txt'), 'text');
+      await waitMs(3 * QUIET_MS);
+    } finally {
+      watch.close();
+    }
+
+    expect(reports).toEqual([]);
   });
 });

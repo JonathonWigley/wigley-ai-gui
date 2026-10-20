@@ -60,6 +60,8 @@ export interface PluginManifest<
   S extends string = string,
   T extends object = object,
 > {
+  // Lowercase letters, digits and `-`: the `wigley-data:` URL host carries the
+  // id, and Chromium lowercases a URL's host.
   id: string;
   dependsOn: readonly string[];
   commands: Record<C, CommandDecl>;

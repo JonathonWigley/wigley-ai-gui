@@ -16,14 +16,18 @@ describe('dataFilePath', () => {
     ).toBe('/d/forms/layouts/a b/layout.js');
   });
 
-  it('dataFilePath_ParentEscape_ReturnsNull', () => {
-    expect(dataFilePath('wigley-data://forms/~1/../sessions/x', '/d')).toBe(
-      null,
-    );
+  it('dataFilePath_ParentHost_ReturnsNull', () => {
+    expect(dataFilePath('wigley-data://../~1/x', '/d')).toBe(null);
   });
 
-  it('dataFilePath_EncodedDots_ReturnsNull', () => {
-    expect(dataFilePath('wigley-data://forms/~1/%2e%2e/x', '/d')).toBe(null);
+  it('dataFilePath_DotHost_ReturnsNull', () => {
+    expect(dataFilePath('wigley-data://./~1/x', '/d')).toBe(null);
+  });
+
+  it('dataFilePath_EncodedBackslash_ReturnsNull', () => {
+    expect(dataFilePath('wigley-data://forms/~1/..%5C..%5C..%5Cx', '/d')).toBe(
+      null,
+    );
   });
 
   it('dataFilePath_EncodedSlash_ReturnsNull', () => {
