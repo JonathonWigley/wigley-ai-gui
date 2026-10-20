@@ -1,6 +1,6 @@
 # 05 — Core: agent contract, services, self-test scripts, ACP removal, fake harness
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)

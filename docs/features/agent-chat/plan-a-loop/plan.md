@@ -343,9 +343,9 @@ the name. Recent folders live in chat's data folder at `recent-folders.json`, ne
 
 ### Wave 1
 - [ ] [Spike: Claude stream-json wire facts](01-spike-claude-stream.md)
-- [ ] [Shared layout machinery](02-shared-layouts.md)
-- [ ] [Sessions main: owned sessions, mark, closed](03-sessions-owned.md)
-- [ ] [Chat layout contract and default layout](08-chat-layout.md)
+- [x] [Shared layout machinery](02-shared-layouts.md)
+- [x] [Sessions main: owned sessions, mark, closed](03-sessions-owned.md)
+- [x] [Chat layout contract and default layout](08-chat-layout.md)
 
 ### Wave 2
 - [ ] [Sessions page: takeOver, and forms taking over](04-tab-takeover.md) — after 03
@@ -372,10 +372,15 @@ the name. Recent folders live in chat's data folder at `recent-folders.json`, ne
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 4597f154604caf0e8453b17f551918d444f11ab5
 
 ### Groups
+- 08 chat layout · 187049e · diff read + typecheck + lint pass · concerns: no strict null checks, so `@ts-check` misses null misuse
+- 03 sessions owned · 22c3c42 · diff read + typecheck + lint pass · concerns: the `closed` test sets no guard
+- 02 shared layouts · a646bb4 · diff read + typecheck + lint pass · concerns: the done-when grep hits fixtures that were already there; 5 `[forms]` log lines in `showLayouts`' tests, not 4
 ### Contract changes
 ### Rulings
+- Lint and typecheck run under the `.nvmrc` Node (`source ~/.nvm/nvm.sh && nvm use`); the shell's default Node 22.14 rejects `check-layers.mts` — every later brief says so · lead
+- A joined relay's `end()` holds its own once-flag, so an old relay's repeated `end()` cannot clear a later relay's join — costs nothing if wrong · group 03
 ### Review rounds
 ### Test gate

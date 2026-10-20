@@ -1,6 +1,6 @@
 # 02 — Shared layout machinery
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -123,3 +123,5 @@ Done when: compiles; `npm run lint` passes, its layer check printing `layers: <n
 Commit:    one commit for the group
 
 ## Proof
+
+a646bb4 · diff read: every Produces present (`LayoutChoice` in `src/contracts/layouts.ts`, registry, loader, `showLayouts`, `readLayout`, forms' re-export); `npm run typecheck` and `npm run lint` pass. Concerns: `grep -rn "'forms'" src/shared` is not empty, but only because of plugin-id fixtures in `data-url.test.ts` and `event-bus.test.ts` that were there before this run; the old `showLayouts` describe held 5 `[forms]` lines, not the 4 the task named, and all 5 became `[demo]`.

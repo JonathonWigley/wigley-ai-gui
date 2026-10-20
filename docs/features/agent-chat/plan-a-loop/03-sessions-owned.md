@@ -1,6 +1,6 @@
 # 03 — Sessions main: owned sessions, mark, closed
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -124,3 +124,5 @@ Done when: compiles; `grep -rn "markRound" src` → empty; the test gate runs th
 Commit:    one commit for the group
 
 ## Proof
+
+22c3c42 · diff read: `OwnedSession`, `open`, `mark`, `selectedSessionId`, `closed` present in contract, `session-list.ts` and `start.ts`; `grep -rn markRound src` empty; typecheck and lint pass. Rulings: each joined relay's `end()` has its own once-flag; `connect`/`open` share `addEntry`. Concern: the `closed` test sets no guard (none set means every guard allows).

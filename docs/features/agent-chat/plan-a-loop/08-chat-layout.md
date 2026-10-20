@@ -1,6 +1,6 @@
 # 08 — Chat layout contract and default layout
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -149,3 +149,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+187049e · diff read: `layout.d.ts` exports every planned type and `ChatKit` with its comments; `layout.js` is `// @ts-check` and uses no `innerHTML`; typecheck and lint pass. Concern: `tsconfig` has no strict null checks, so `@ts-check` does not catch null misuse; the tests cover the null result/cost/duration cases.
