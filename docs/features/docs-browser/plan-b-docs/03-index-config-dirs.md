@@ -1,6 +1,6 @@
 # 03 — Docs index: claudeConfigDirs
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -349,3 +349,4 @@ Commit:    one commit in wigley-ai-marketplace on `main`, for example "Docs inde
 
 ## Proof
 
+wigley-ai-marketplace `b13aa84` · diff read, every Produces present, 148 docs-index tests and the manifest check pass; version 1.5.0. Concerns and rulings in plan.md's Run log.

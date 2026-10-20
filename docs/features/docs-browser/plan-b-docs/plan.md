@@ -263,8 +263,8 @@ only tests import it.
 
 ### Wave 1
 - [ ] [Core files and processes services](01-core-services.md)
-- [ ] [Docs index: claudeConfigDirs](03-index-config-dirs.md)
-- [ ] [Docs pure modules](04-docs-pure-modules.md)
+- [x] [Docs index: claudeConfigDirs](03-index-config-dirs.md)
+- [x] [Docs pure modules](04-docs-pure-modules.md)
 
 ### Wave 2
 - [ ] [Code highlighter and markdown document render](02-highlight-and-document-render.md) — after 01 (its lint needs 01's layer entries)
@@ -290,10 +290,37 @@ only tests import it.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: wigley-ai-gui `22c3c425c50c4177851ff96a75a1e5f9c6cfb2f0` · wigley-ai-marketplace `b619e201ae82735a399cedc0a16309efdbefe73e`
+
+Peer session `wigley-ai-gui-39` runs agent-chat plan A on the same tree: every commit is pathspec-scoped and the
+review range is this run's explicit commit list.
 
 ### Groups
+- 03 · wigley-ai-marketplace `b13aa84` · proved: diff read, every Produces present, 148 docs-index tests and
+  `check_manifests.py` pass · concerns: on this Mac `~/.claude-personal/plugins`, `skills` and `CLAUDE.md` are symlinks
+  into `~/.claude`, so shared files come out as single entries judged as user files whichever folder is judged; task 11
+  confirms on the real build. A config folder not named `.claude` now reads `Claude Code file` for Codex, as the
+  README intends
+- 04 · wigley-ai-gui `03b19ed` · proved: diff read, all 47 Produces names exported, typecheck, 65 tests, lint pass ·
+  concerns: a feature slug equal to a kind name (`task`) gets the same tree id as that kind's group under Features;
+  `changeRefusal` makes a global ancestor `CLAUDE.md`'s whole parent folder writable, which can be the home folder;
+  a global `instructions` place outside `~/wigley-agents` creates a file nothing loads
 ### Contract changes
+- `tree.ts`: adds `compareTitles(a, b): number` (base-sensitivity `localeCompare`, code-unit tie-break), used by
+  `kinds.ts` · why: places sort as tree nodes do · consumers: 08 may use it · group 04
+- `_Scope` (private) gains `written_home` · why: other-folder reasons need the unresolved home for `home_relative`
+  · consumers: none · group 03
 ### Rulings
+- links: an href `<no colon>:<digits>` ending or followed by `#`/`?` is a line suffix, not a scheme (the pinned test
+  `resolve_ColonLine_Resolved` contradicts step 3's regex) — `x:123` would read as a file and toast — group 04
+- links: `file://` hrefs decode once; an empty fragment is `null` — group 04
+- path-completion: a relative folder part resolves against the home folder — group 04
+- kinds: `createTarget` trims the name; `placesFor` takes the first entry's title for a shared folder — group 04
+- index-document: a non-object context reports `malformed: folder` — group 04
+- 03's locate test passes the real path of the temp `dotclaude` (macOS `/var` → `/private/var`) — group 03
+- Run 03 and 04 now; hold 01, 02, 05–11 and the package install until agent-chat plan A closes, then rewrite task 09
+  for agent-chat's per-plugin self-test scripts before dispatching it — the plans share `plugin.ts`, `main.ts`,
+  `check-layers.mts`, the plugin lists and `package.json` — user, in the preflight round · lead
+- Version: origin `main` and local both read `1.4.0`, so task 03 bumps both manifests to `1.5.0` · lead
 ### Review rounds
 ### Test gate

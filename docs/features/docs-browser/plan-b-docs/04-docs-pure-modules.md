@@ -1,6 +1,6 @@
 # 04 — Docs pure modules
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -376,3 +376,4 @@ One commit for the group: "Docs plugin pure modules: index document, tree, front
 
 ## Proof
 
+wigley-ai-gui `03b19ed` · diff read, all Produces exported, typecheck, 65 tests and lint pass. Concerns and rulings in plan.md's Run log.
