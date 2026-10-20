@@ -4,7 +4,7 @@
 - Move the feature primer into the app.
 - Packaging and installers for macOS and Windows.
 - A Latte (light) theme and OS light/dark following.
-- A user config file for settings and the keymap.
+- A user config file for settings and the keymap. The editor's insert remaps merge only from the core keymap, which holds none since `jk` was dropped, so the keys help's "Remaps in a text box" section stays empty until this lands.
 - A settings window, and settings that hot reload: a change applies to the open window without restarting main, which today owns the settings and serves them to the page only at load. Builds on the user config file above.
 - Syntax-highlighting theme tokens.
 - `npm run selftest` on Windows (`tee /dev/stderr` in the script).
@@ -36,3 +36,6 @@
   completes the kit's parts in a copied `layout.js` from `layouts/layout.d.ts`. In a packaged build
   (`npm run package`, dev instance closed): repeat the copy-and-css and cycle-and-restart checks, since the
   `wigley-data:` scheme, CORS and the CSP under `file://` are unproven.
+- Chat raw events drop the streaming deltas (text, thinking and tool input) and `message_start` / `message_delta` / `message_stop`, while `agent-chat/design.md` says every entry carries the events it was built from. Chosen: rule the deltas covered by the start and final assistant events, and say so in design.md.
+- The Claude harness counts one result per sent message (measured on 2.1.304, `agent-chat/claude-stream.md` § Queued messages); a message that gets no result would leave the session `working` and the turn alert unfired. Chosen: probe the cases that might give none (local slash commands, a rejected message) and record them in claude-stream.md before guarding.
+- Two tabs' take-overs released out of order give the session back to the first taker's tab even though its take-over has ended (pinned by `sessions/page/tabs.test.ts`); only forms takes over today, so it matters once a second plugin does.
