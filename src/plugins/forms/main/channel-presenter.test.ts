@@ -79,7 +79,8 @@ function fakeAlerts() {
 }
 
 // Records row calls into `calls` and keeps the close guards added; the
-// presenter never contributes tools or connects a session.
+// presenter never contributes tools, connects or opens a session, or reads
+// the selected one.
 function fakeSessions(calls: string[]) {
   const guards: ((sessionId: string) => boolean)[] = [];
   const sessions: SessionsMainExports = {
@@ -89,7 +90,13 @@ function fakeSessions(calls: string[]) {
     connect: () => {
       throw new Error('the presenter connected a session');
     },
-    markRound: (sessionId) => calls.push(`markRound ${sessionId}`),
+    open: () => {
+      throw new Error('the presenter opened a session');
+    },
+    selectedSessionId: () => {
+      throw new Error('the presenter read the selected session');
+    },
+    mark: (sessionId) => calls.push(`mark ${sessionId}`),
     activate: (sessionId) => calls.push(`activate ${sessionId}`),
     addCloseGuard: (mayClose) => guards.push(mayClose),
   };
@@ -147,7 +154,7 @@ describe('createChannelPresenter', () => {
 
     presenter.show(ROUND, fakeListener().listener);
 
-    expect(calls).toEqual(['markRound app-1', 'send roundShown']);
+    expect(calls).toEqual(['mark app-1', 'send roundShown']);
     expect(page.sent).toEqual([['roundShown', ROUND]]);
     expect(attention.announced.map(({ title, body }) => [title, body])).toEqual(
       [['New review round', 'wigley-ai-gui · Pick a theme']],
@@ -164,7 +171,7 @@ describe('createChannelPresenter', () => {
 
     presenter.quiet.show(ROUND, fakeListener().listener);
 
-    expect(calls).toEqual(['markRound app-1', 'send roundShown']);
+    expect(calls).toEqual(['mark app-1', 'send roundShown']);
     expect(page.sent).toEqual([['roundShown', ROUND]]);
     expect(attention.announced).toEqual([]);
     expect(attention.counts).toEqual([]);

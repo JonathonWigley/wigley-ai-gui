@@ -78,6 +78,13 @@ export interface ConnectedSession extends ToolSession {
   session: AgentSession;
 }
 
+// A session the app started itself. `end` ends its tool sessions and removes
+// its row; a second call does nothing.
+export interface OwnedSession {
+  session: AgentSession;
+  end(): void;
+}
+
 export interface SessionsMainExports {
   // A contribution reaches only sessions that connect after it, so a plugin
   // contributes during its start. Throws on a tool name another contribution
@@ -86,20 +93,29 @@ export interface SessionsMainExports {
     tools: ToolDefinition[],
     start: (session: AgentSession) => ToolSession,
   ): void;
-  // Adds the session's row, unmarked and unselected.
+  // Adds the session's row, unmarked and unselected, or joins the owned session
+  // whose host id the info carries, adding no row.
   connect(info: SessionInfo): ConnectedSession;
-  // A round arrived for the session: selects its row when none is selected,
-  // else marks it; a row the user closed comes back at the end first.
-  markRound(sessionId: string): void;
+  // Starts an owned session with its row selected. Throws when `info.sessionId`
+  // is null or any session already holds that host id.
+  open(info: SessionInfo): OwnedSession;
+  // Attention for the session: selects its row when none is selected, else
+  // marks it; a row the user closed comes back at the end first.
+  mark(sessionId: string): void;
   activate(sessionId: string): void;
+  selectedSessionId(): string | null;
   // The user closing a session's row asks every guard first, and the row stays
-  // while any answers false; a session that ends loses its row regardless.
+  // while any answers false; once every guard allows, the row goes and
+  // `closed` is emitted. A session that ends loses its row regardless.
   addCloseGuard(mayClose: (sessionId: string) => boolean): void;
 }
 
+// `closed` is the user closing a row every guard allowed; the session itself
+// stays until it ends.
 export interface SessionsMainEvents extends EventShape {
   connected: AgentSession;
   ended: { sessionId: string };
+  closed: { sessionId: string };
 }
 
 // One connected session's sidebar row. `marked` is a round not yet opened;

@@ -5,6 +5,7 @@ import type { PluginEvents } from '../../../contracts/plugin';
 import type {
   AgentSession,
   ConnectedSession,
+  OwnedSession,
   SessionInfo,
   SessionsMainEvents,
   SessionsMainExports,
@@ -30,7 +31,7 @@ export interface SessionList extends SessionsMainExports {
   tools(): ToolDefinition[];
   state(): SessionsState;
   // The user's close, which every close guard must allow; returns whether the
-  // row closed. The session stays connected.
+  // row closed, emitting `closed` when it did. The session stays connected.
   closeSession(sessionId: string): boolean;
 }
 
@@ -39,8 +40,8 @@ interface Contribution {
   start(session: AgentSession): ToolSession;
 }
 
-// One connected session: one tool session per contribution, and each tool
-// name routed to the tool session that serves it.
+// One connected or owned session: one tool session per contribution, and each
+// tool name routed to the tool session that serves it.
 interface SessionEntry {
   session: AgentSession;
   // Fixed at connect: the project folder's last segment, else `Codex session`
@@ -50,6 +51,9 @@ interface SessionEntry {
   number: number;
   toolSessions: ToolSession[];
   toolRoutes: Map<string, ToolSession>;
+  // Started by `open`; `joined` while its relay is connected.
+  owned: boolean;
+  joined: boolean;
 }
 
 const NO_FOLDER_LABEL = 'session';
@@ -133,12 +137,15 @@ function routeCall(
   return toolSession.call(name, args, context);
 }
 
-// Connected sessions and the sidebar rows main holds for them. Each session
-// gets its row at connect, unselected, and keeps its label while connected; a
-// closed row comes back at the end with the session's next round. `markRound`,
-// `activate` and `closeSession` send the whole state only when it changed, and
-// log and ignore a session they cannot act on; `closeSession` logs and keeps a
-// row a close guard refuses, returning false for every row it leaves open.
+// Connected and owned sessions and the sidebar rows main holds for them. A
+// connected session gets its row at connect, unselected; an owned session gets
+// its row at open, selected, is joined by the first relay carrying its host id
+// without a row of its own, and ends only by its `end()`. Each session keeps
+// its label while it lasts; a closed row comes back at the end with the
+// session's next mark. `mark`, `activate` and `closeSession` send the whole
+// state only when it changed, and log and ignore a session they cannot act on;
+// `closeSession` logs and keeps a row a close guard refuses, returning false
+// for every row it leaves open, and emits `closed` for a row it closes.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   const closeGuards: ((sessionId: string) => boolean)[] = [];
@@ -205,6 +212,50 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     deps.emit('ended', { sessionId: entry.session.id });
   };
 
+  // Builds the session's entry and adds its row at the end; a throwing
+  // contribution start leaves neither.
+  const addEntry = (info: SessionInfo, owned: boolean): SessionEntry => {
+    const session: AgentSession = { id: deps.randomHex(), info };
+    const group = groupOf(info);
+    const entry: SessionEntry = {
+      session,
+      group,
+      number: freeNumber(entries.values(), group),
+      ...startToolSessions(contributions, session),
+      owned,
+      joined: false,
+    };
+    entries.set(session.id, entry);
+    rows.push(rowOf(entry));
+    return entry;
+  };
+
+  const entriesHolding = (hostId: string): SessionEntry[] =>
+    [...entries.values()].filter(
+      (entry) => entry.session.info.sessionId === hostId,
+    );
+
+  // The relay's handle on an owned session: its `end` only clears the join,
+  // once, and not after the owned session ended.
+  const join = (entry: SessionEntry): ConnectedSession => {
+    const appId = entry.session.id;
+    entry.joined = true;
+    deps.log('sessions', `relay joined session ${appId}`);
+    let left = false;
+    return {
+      session: entry.session,
+      call: (name, args, context) => routeCall(entry, name, args, context),
+      end: () => {
+        if (left || !entries.has(appId)) {
+          return;
+        }
+        left = true;
+        entry.joined = false;
+        deps.log('sessions', `relay left session ${appId}`);
+      },
+    };
+  };
+
   return {
     contributeTools(tools, start) {
       const namesInThisContribution = new Set<string>();
@@ -227,31 +278,47 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       contributions.push({ tools, start });
     },
     connect(info): ConnectedSession {
-      const session: AgentSession = { id: deps.randomHex(), info };
-      const group = groupOf(info);
-      const entry: SessionEntry = {
-        session,
-        group,
-        number: freeNumber(entries.values(), group),
-        ...startToolSessions(contributions, session),
-      };
-      entries.set(session.id, entry);
-      rows.push(rowOf(entry));
+      const hostId = info.sessionId;
+      const ownedEntry =
+        hostId === null
+          ? undefined
+          : entriesHolding(hostId).find((entry) => entry.owned);
+      if (ownedEntry !== undefined && !ownedEntry.joined) {
+        return join(ownedEntry);
+      }
+      const entry = addEntry(info, false);
       sendState();
-      deps.emit('connected', session);
+      deps.emit('connected', entry.session);
+      if (ownedEntry !== undefined) {
+        deps.log(
+          'sessions',
+          `relay for host session ${hostId} connected while one is joined; added as session ${entry.session.id}`,
+        );
+      }
       return {
-        session,
+        session: entry.session,
         call: (name, args, context) => routeCall(entry, name, args, context),
         end: () => end(entry),
       };
     },
-    markRound(sessionId) {
+    open(info): OwnedSession {
+      const hostId = info.sessionId;
+      if (hostId === null) {
+        throw new Error('open needs a host session id');
+      }
+      if (entriesHolding(hostId).length > 0) {
+        throw new Error(`Host session ${hostId} is already open`);
+      }
+      const entry = addEntry(info, true);
+      select(rows.at(-1));
+      sendState();
+      deps.emit('connected', entry.session);
+      return { session: entry.session, end: () => end(entry) };
+    },
+    mark(sessionId) {
       const entry = entries.get(sessionId);
       if (entry === undefined) {
-        deps.log(
-          'sessions',
-          `markRound for unknown session ${sessionId} ignored`,
-        );
+        deps.log('sessions', `mark for unknown session ${sessionId} ignored`);
         return;
       }
       // A row the user closed comes back at the end, then is selected or
@@ -305,8 +372,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       }
       removeRow(index);
       sendState();
+      deps.emit('closed', { sessionId });
       return true;
     },
+    selectedSessionId: () => selectedSessionId,
     tools: () => contributions.flatMap((contribution) => contribution.tools),
     state,
   };

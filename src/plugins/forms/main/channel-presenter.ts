@@ -72,7 +72,7 @@ export function createChannelPresenter(
     quiet: boolean,
   ) => {
     open.set(round.roundId, { round, listener, quiet });
-    sessions.markRound(round.sessionId);
+    sessions.mark(round.sessionId);
     channel.send('roundShown', round);
     log('forms', `round shown: ${round.label}`);
     if (quiet) {

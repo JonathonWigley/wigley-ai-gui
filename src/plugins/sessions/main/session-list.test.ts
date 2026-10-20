@@ -21,6 +21,20 @@ function info(
   return { sessionId: null, projectDir, deadlineSeconds: null, harness };
 }
 
+function owned(hostId: string, projectDir = '/work/x'): SessionInfo {
+  return {
+    sessionId: hostId,
+    projectDir,
+    deadlineSeconds: null,
+    harness: 'claude',
+  };
+}
+
+const CONTEXT: ToolCallContext = {
+  toolUseId: null,
+  signal: new AbortController().signal,
+};
+
 function tool(name: string): ToolDefinition {
   return { name, description: `${name} tool`, inputSchema: {} };
 }
@@ -31,7 +45,8 @@ function setUp() {
   const states: SessionsState[] = [];
   const logged: string[] = [];
   const activated: string[] = [];
-  // `activated <id>` and `stateChanged`, in the order the list called them.
+  // `activated <id>`, `stateChanged` and `emit <event>`, in the order the list
+  // called them.
   const calls: string[] = [];
   const list = createSessionList({
     randomHex: () => {
@@ -39,7 +54,10 @@ function setUp() {
       return hexCount.toString(16).padStart(8, '0');
     },
     log: (source, message) => logged.push(`[${source}] ${message}`),
-    emit: (event, data) => emitted.push([event, data]),
+    emit: (event, data) => {
+      emitted.push([event, data]);
+      calls.push(`emit ${event}`);
+    },
     stateChanged: (state) => {
       states.push(state);
       calls.push('stateChanged');
@@ -255,8 +273,8 @@ describe('createSessionList', () => {
     const a = list.connect(info('/work/x'));
     const b = list.connect(info('/work/x'));
 
-    list.markRound(a.session.id);
-    list.markRound(b.session.id);
+    list.mark(a.session.id);
+    list.mark(b.session.id);
 
     const { rows, selectedSessionId } = list.state();
     expect(selectedSessionId).toBe(a.session.id);
@@ -268,7 +286,7 @@ describe('createSessionList', () => {
     list.connect(info('/work/x'));
     const b = list.connect(info('/work/x'));
 
-    list.markRound(b.session.id);
+    list.mark(b.session.id);
 
     const { rows, selectedSessionId } = list.state();
     expect(selectedSessionId).toBe(b.session.id);
@@ -279,13 +297,13 @@ describe('createSessionList', () => {
     const { list, states } = setUp();
     const a = list.connect(info('/work/x'));
     const b = list.connect(info('/work/x'));
-    list.markRound(a.session.id);
-    list.markRound(b.session.id);
+    list.mark(a.session.id);
+    list.mark(b.session.id);
     const sentBefore = states.length;
     const before = list.state();
 
-    list.markRound(a.session.id);
-    list.markRound(b.session.id);
+    list.mark(a.session.id);
+    list.mark(b.session.id);
 
     expect(states).toHaveLength(sentBefore);
     expect(list.state()).toEqual(before);
@@ -294,12 +312,12 @@ describe('createSessionList', () => {
   it('selects a row when the selected one closed and none is left selected', () => {
     const { list } = setUp();
     const a = list.connect(info('/work/x'));
-    list.markRound(a.session.id);
+    list.mark(a.session.id);
     list.closeSession(a.session.id);
     expect(list.state().selectedSessionId).toBeNull();
     const b = list.connect(info('/work/x'));
 
-    list.markRound(b.session.id);
+    list.mark(b.session.id);
 
     expect(list.state().selectedSessionId).toBe(b.session.id);
     expect(list.state().rows.map((row) => row.marked)).toEqual([false]);
@@ -311,10 +329,10 @@ describe('createSessionList', () => {
     list.contributeTools([tool('a')], contribution.start);
     const a = list.connect(info('/work/x'));
     const b = list.connect(info('/work/x'));
-    list.markRound(a.session.id);
+    list.mark(a.session.id);
     list.closeSession(b.session.id);
 
-    list.markRound(b.session.id);
+    list.mark(b.session.id);
     await b.call(
       'a',
       {},
@@ -337,8 +355,8 @@ describe('createSessionList', () => {
     const { list, activated, calls } = setUp();
     const a = list.connect(info('/work/x'));
     const b = list.connect(info('/work/x'));
-    list.markRound(a.session.id);
-    list.markRound(b.session.id);
+    list.mark(a.session.id);
+    list.mark(b.session.id);
     const callsBefore = calls.length;
 
     list.activate(b.session.id);
@@ -355,7 +373,7 @@ describe('createSessionList', () => {
   it('reports activated for the selected row and sends nothing', () => {
     const { list, states, activated } = setUp();
     const a = list.connect(info('/work/x'));
-    list.markRound(a.session.id);
+    list.mark(a.session.id);
     const sentBefore = states.length;
 
     list.activate(a.session.id);
@@ -368,7 +386,7 @@ describe('createSessionList', () => {
     const { list } = setUp();
     const [a, b, c] = [1, 2, 3].map(() => list.connect(info('/work/x')));
     for (const connected of [a, b, c]) {
-      list.markRound(connected.session.id);
+      list.mark(connected.session.id);
     }
 
     list.closeSession(a.session.id);
@@ -391,8 +409,8 @@ describe('createSessionList', () => {
     list.contributeTools([tool('b')], secondContribution.start);
     const first = list.connect(info('/work/x'));
     const second = list.connect(info('/work/x'));
-    list.markRound(first.session.id);
-    list.markRound(second.session.id);
+    list.mark(first.session.id);
+    list.mark(second.session.id);
 
     first.end();
 
@@ -476,12 +494,12 @@ describe('createSessionList', () => {
     list.closeSession(connected.session.id);
     const sentBefore = states.length;
 
-    list.markRound('ffffffff');
+    list.mark('ffffffff');
     list.activate(connected.session.id);
     expect(list.closeSession(connected.session.id)).toBe(false);
 
     expect(logged).toEqual([
-      '[sessions] markRound for unknown session ffffffff ignored',
+      '[sessions] mark for unknown session ffffffff ignored',
       '[sessions] activate for session 00000001 with no row ignored',
       '[sessions] closeSession for session 00000001 with no row ignored',
     ]);
@@ -497,8 +515,8 @@ describe('createSessionList', () => {
     const changes = [
       () => connected.push(list.connect(info('/work/x'))),
       () => connected.push(list.connect(info('/work/x'))),
-      () => list.markRound(id(0)),
-      () => list.markRound(id(1)),
+      () => list.mark(id(0)),
+      () => list.mark(id(1)),
       () => list.activate(id(1)),
       () => list.closeSession(id(1)),
       () => connected[0].end(),
@@ -510,5 +528,221 @@ describe('createSessionList', () => {
     }
 
     expect(states).toEqual(taken);
+  });
+
+  it('opens an owned session with a selected row and emits connected', () => {
+    const { list, states, emitted } = setUp();
+
+    const { session } = list.open(owned('host-1'));
+
+    expect(session.id).toBe('00000001');
+    expect(list.state()).toEqual({
+      rows: [
+        {
+          sessionId: '00000001',
+          label: 'x',
+          harness: 'claude',
+          marked: false,
+          projectDir: '/work/x',
+          hostSessionId: 'host-1',
+        },
+      ],
+      selectedSessionId: '00000001',
+    });
+    expect(states).toHaveLength(1);
+    expect(emitted).toEqual([
+      ['connected', { id: '00000001', info: owned('host-1') }],
+    ]);
+  });
+
+  it('selects the opened row over the selected one', () => {
+    const { list } = setUp();
+    const a = list.connect(info('/work/x'));
+    list.mark(a.session.id);
+
+    list.open(owned('h'));
+
+    const state = list.state();
+    expect(state.selectedSessionId).toBe('00000002');
+    expect(labels(state)).toEqual(['x', 'x 2']);
+    expect(state.rows.map((row) => row.marked)).toEqual([false, false]);
+  });
+
+  it('starts the contributed tool sessions when an owned session opens', () => {
+    const { list } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+
+    const ownedSession = list.open(owned('host-1'));
+
+    expect(contribution.started).toEqual([ownedSession.session]);
+  });
+
+  it('throws opening a session with no host id', () => {
+    const { list, states, emitted } = setUp();
+
+    expect(() => list.open({ ...owned('h'), sessionId: null })).toThrow(
+      'open needs a host session id',
+    );
+    expect(states).toEqual([]);
+    expect(emitted).toEqual([]);
+  });
+
+  it('throws opening a host id already open, owned or connected', () => {
+    const { list } = setUp();
+    list.open(owned('host-1'));
+
+    expect(() => list.open(owned('host-1'))).toThrow(
+      'Host session host-1 is already open',
+    );
+    list.connect(owned('host-2'));
+    expect(() => list.open(owned('host-2'))).toThrow(
+      'Host session host-2 is already open',
+    );
+    expect(list.state().rows).toHaveLength(2);
+  });
+
+  it('joins an owned session when its relay connects, adding no row', () => {
+    const { list, states, emitted, logged } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    const ownedSession = list.open(owned('host-1'));
+    const sentBefore = states.length;
+
+    const connected = list.connect(owned('host-1'));
+
+    expect(connected.session).toBe(ownedSession.session);
+    expect(list.state().rows).toHaveLength(1);
+    expect(contribution.started).toHaveLength(1);
+    expect(states).toHaveLength(sentBefore);
+    expect(emitted.filter(([event]) => event === 'connected')).toHaveLength(1);
+    expect(logged).toEqual(['[sessions] relay joined session 00000001']);
+  });
+
+  it("routes a joined relay's calls to the owned session's tool sessions", async () => {
+    const { list } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    list.open(owned('host-1'));
+    const connected = list.connect(owned('host-1'));
+
+    const result = await connected.call('a', { v: 1 }, CONTEXT);
+
+    expect(result).toBe(RESULT);
+    expect(contribution.calls).toEqual([
+      { name: 'a', args: { v: 1 }, context: CONTEXT },
+    ]);
+  });
+
+  it('leaves the owned session and its row when its relay ends, and lets the next relay join', () => {
+    const { list, emitted, logged } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    const ownedSession = list.open(owned('host-1'));
+    const connected = list.connect(owned('host-1'));
+
+    connected.end();
+
+    expect(contribution.ends()).toBe(0);
+    expect(list.state().rows).toHaveLength(1);
+    expect(emitted.map(([event]) => event)).not.toContain('ended');
+    expect(logged.at(-1)).toBe('[sessions] relay left session 00000001');
+
+    const next = list.connect(owned('host-1'));
+    expect(next.session).toBe(ownedSession.session);
+    expect(list.state().rows).toHaveLength(1);
+  });
+
+  it('connects a second relay for a joined host id as a session of its own', () => {
+    const { list, logged } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    list.open(owned('host-1'));
+    list.connect(owned('host-1'));
+
+    const second = list.connect(owned('host-1'));
+
+    expect(second.session.id).toBe('00000002');
+    expect(labels(list.state())).toEqual(['x', 'x 2']);
+    expect(contribution.started).toHaveLength(2);
+    expect(logged).toContain(
+      '[sessions] relay for host session host-1 connected while one is joined; added as session 00000002',
+    );
+  });
+
+  it('ends an owned session: its tool sessions, its row and an ended event', () => {
+    const { list, states, emitted, logged } = setUp();
+    const first = fakeContribution();
+    const second = fakeContribution();
+    list.contributeTools([tool('a')], first.start);
+    list.contributeTools([tool('b')], second.start);
+    const ownedSession = list.open(owned('host-1'));
+    const relay = list.connect(owned('host-1'));
+
+    ownedSession.end();
+
+    expect(first.ends()).toBe(1);
+    expect(second.ends()).toBe(1);
+    expect(list.state()).toEqual({ rows: [], selectedSessionId: null });
+    expect(emitted.at(-1)).toEqual(['ended', { sessionId: '00000001' }]);
+
+    const lengthsBefore = [states.length, emitted.length, logged.length];
+    ownedSession.end();
+    relay.end();
+
+    expect([states.length, emitted.length, logged.length]).toEqual(
+      lengthsBefore,
+    );
+    expect(first.ends()).toBe(1);
+    expect(second.ends()).toBe(1);
+  });
+
+  it('emits closed after the state when the user closes a row every guard allows', () => {
+    const { list, emitted, calls } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    list.open(owned('host-1'));
+    list.connect(info('/work/y'));
+
+    expect(list.closeSession('00000001')).toBe(true);
+
+    expect(calls.slice(-2)).toEqual(['stateChanged', 'emit closed']);
+    expect(emitted.at(-1)).toEqual(['closed', { sessionId: '00000001' }]);
+    expect(contribution.ends()).toBe(0);
+
+    list.closeSession('00000002');
+    expect(emitted.at(-1)).toEqual(['closed', { sessionId: '00000002' }]);
+
+    list.mark('00000001');
+    expect(list.state().rows.map((row) => row.sessionId)).toEqual(['00000001']);
+  });
+
+  it('emits no closed for a row a guard keeps or a row already gone', () => {
+    const { list, emitted } = setUp();
+    const connected = list.connect(info('/work/x'));
+    const id = connected.session.id;
+    let allow = false;
+    list.addCloseGuard(() => allow);
+    const closedEvents = () => emitted.filter(([event]) => event === 'closed');
+
+    expect(list.closeSession(id)).toBe(false);
+    expect(closedEvents()).toEqual([]);
+
+    allow = true;
+    list.closeSession(id);
+    expect(list.closeSession(id)).toBe(false);
+    expect(closedEvents()).toHaveLength(1);
+  });
+
+  it('reads the selected session id', () => {
+    const { list } = setUp();
+    expect(list.selectedSessionId()).toBeNull();
+
+    list.open(owned('host-1'));
+    expect(list.selectedSessionId()).toBe('00000001');
+
+    list.connect(info('/work/x'));
+    list.activate('00000002');
+    expect(list.selectedSessionId()).toBe('00000002');
   });
 });
