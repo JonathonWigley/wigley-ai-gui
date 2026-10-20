@@ -2,6 +2,7 @@ import type { PageBind } from '../../../contracts/keymap';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
 import type {
   ConnectedSession,
+  Harness,
   SessionsMainExports,
   ToolResult,
 } from '../../sessions/contract';
@@ -26,10 +27,12 @@ const SETTINGS = { keys: { whichKeyTimeoutMs: 1000 } };
 // An unbroken run of letters wider than any pane; no j, which would start jk.
 const LONG_WORD = 'unbroken'.repeat(14);
 
-// Opening on finding 1: Space then k replays k to the notice, j back to the
+// Opening on finding 1: Space k then k breaks Space k s, so the first k
+// replays to the notice and the second finds no item before it; j back to the
 // finding; Space a f sets Fix now, 2 picks solution 2, Space a f again clears
 // the action and Space a s sets Leave it. a types "agreed" at once (INSERT), jk
-// to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out. j to
+// to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out, as
+// every Esc out of a box in the form runs forms' editor bind there. j to
 // finding 2, a Nit: Space a u is refused, since a Nit offers no follow-up, and
 // Space a f alone answers its one solution with Fix anyway. j to finding 3, a
 // Decision: Space a u sets Plan it, and Enter accepts its recommendation. j to
@@ -51,17 +54,27 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // again, Enter replaces that pick with its recommendation, Space 2 jumps to
 // question 2, and Space e n finds no unanswered item.
 // Space opens which-key, a moves it into the Space a group, and Esc cancels the
-// sequence and closes it. Option+o moves to the second session's tab; Cmd+W
-// there asks to cancel its round, Esc keeps it and returns to its form, where j
-// moves to its question 2 and Space e p finds its untouched question 1;
-// Option+i moves back to the first tab. Then review, Space ? opens help and Esc
-// closes it, back in the review's scope, where C opens and n dismisses the
+// sequence and closes it. Option+Shift+o moves to the second session, where
+// Option+o finds no other tab; Cmd+W there asks to cancel its round, Esc keeps
+// it and returns to its form, where j moves to its question 2 and Space e p
+// finds its untouched question 1; Option+Shift+i moves back to the first
+// session, on question 2. Space k s hides the sidebar and shows it again; a
+// enters question 2's notes box, where jk and Space k s (the editor bind)
+// hide it and Space k s in NORMAL shows it; Esc (forms' editor bind) leaves the
+// box. Option+Shift+i wraps to the last session, which has no tab, so nothing
+// shows and no form keeps its scope; Option+Shift+o wraps back to the first,
+// whose form takes its scope again. Then review, which only that scope opens,
+// proves it; Space ? opens help and Esc closes it, back in the review's scope, where C opens and n dismisses the
 // cancel prompt; Space ? opens help again, Cmd+W opens the cancel prompt, which
 // closes help, so n dismisses the prompt. o types "note" into the Round note at
-// once (INSERT), Esc out, Enter jumps back to finding 1, review again and Space
-// Enter submits.
+// once (INSERT), Esc out (forms' editor bind in the review's scope), Enter
+// jumps back to finding 1, review again and Space Enter submits.
 const STEPS: SelfTestStep[] = [
-  { keys: [' ', 'k'], expect: '[page] k ran forms.prevItem', checksFit: true },
+  {
+    keys: [' ', 'k', 'k'],
+    expect: '[page] k ran forms.prevItem',
+    checksFit: true,
+  },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: [' ', 'a', 'f'], expect: '[forms] chose Fix now on finding 1' },
   { keys: ['2'], expect: '[forms] chose 2 on finding 1' },
@@ -138,19 +151,39 @@ const STEPS: SelfTestStep[] = [
   { keys: ['a'], expect: '[keys] which-key shows Space a' },
   { keys: ['Escape'], expect: '[keys] which-key closed' },
   {
-    keys: ['<A-o>'],
+    keys: ['<A-S-o>'],
     expect: '[sessions] activated selftest 2',
     checksFit: true,
   },
+  { keys: ['<A-o>'], expect: '[sessions] no other tab in selftest 2' },
   {
     keys: ['<D-w>'],
     expect:
-      '[forms] closing the tab asks to cancel selftest · Second self-test round',
+      '[forms] closing the session asks to cancel selftest · Second self-test round',
   },
   { keys: ['Escape'], expect: '[page] Escape ran forms.dismissConfirm' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem' },
   { keys: [' ', 'e', 'p'], expect: '[forms] jumped to question 1' },
-  { keys: ['<A-i>'], expect: '[sessions] activated selftest' },
+  { keys: ['<A-S-i>'], expect: '[sessions] activated selftest' },
+  {
+    keys: [' ', 'k', 's'],
+    expect: '[sessions] sidebar hidden',
+    checksFit: true,
+  },
+  { keys: [' ', 'k', 's'], expect: '[sessions] sidebar shown' },
+  { keys: ['a'], expect: '[forms] focused notes on question 2' },
+  {
+    keys: ['j', 'k', ' ', 'k', 's'],
+    expect: '[sessions] sidebar hidden',
+  },
+  { keys: [' ', 'k', 's'], expect: '[sessions] sidebar shown' },
+  { keys: ['Escape'], expect: '[forms] left the box' },
+  {
+    keys: ['<A-S-i>'],
+    expect: '[sessions] nothing shown in Codex session',
+    checksFit: true,
+  },
+  { keys: ['<A-S-o>'], expect: '[sessions] activated selftest' },
   { keys: [' ', ' '], expect: '[forms] review opened', checksFit: true },
   {
     keys: [' ', '?'],
@@ -163,7 +196,8 @@ const STEPS: SelfTestStep[] = [
   { keys: [' ', '?'], expect: '[page]  ? ran keys.toggleHelp' },
   {
     keys: ['<D-w>'],
-    expect: '[forms] closing the tab asks to cancel selftest · Self-test round',
+    expect:
+      '[forms] closing the session asks to cancel selftest · Self-test round',
   },
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
   {
@@ -176,12 +210,14 @@ const STEPS: SelfTestStep[] = [
   { keys: [' ', 'Enter'], expect: '[forms] submitted' },
 ];
 
-// Code and tables scroll in their own box, and rail and tab titles end in an
-// ellipsis, their full text in the item heading and the tooltip.
+// Code and tables scroll in their own box, and rail, row and tab titles end
+// in an ellipsis, their full text in the item heading and the tooltip.
 const SCROLLS_ITSELF = [
   '.md pre',
   '.md table',
   '.rail-title',
+  '.session-row-label',
+  '.session-row-status',
   '.session-tab-label',
 ];
 
@@ -271,7 +307,7 @@ function fixtureRound(run: number) {
   };
 }
 
-// The round the second session's tab holds; the run never answers it.
+// The round the second session holds; the run never answers it.
 function secondRound(run: number) {
   const waiting = {
     context: `Run ${run}: waits here.`,
@@ -282,7 +318,7 @@ function secondRound(run: number) {
   };
   return {
     heading: 'Second self-test round',
-    overview: 'Waits in the second tab.',
+    overview: 'Waits in the second session.',
     notices: [],
     questions: [
       { title: 'Waits', ...waiting },
@@ -377,20 +413,26 @@ function payloadProblems(payload: AnswersPayload): string[] {
   return checks.filter(([passed]) => !passed).map(([, problem]) => problem);
 }
 
-// Connects two sessions each run, ending the previous run's, and asks the
-// fixture round in the first and a second round in the second, which the
-// steps never answer. The first round is shown first, so its tab is active;
-// the script checks the answers the first call returns.
+// Connects three sessions each run, ending the previous run's: a Claude and
+// a Codex session in project `selftest`, and a Codex session with no project
+// that never gets a round. Asks the fixture round in the first and a second
+// round in the second, which the steps never answer. The first round is
+// marked first, so its row is selected; the script checks the answers the
+// first call returns.
 export function formsSelfTestScript(
   sessions: Pick<SessionsMainExports, 'connect'>,
 ): SelfTestScript {
   let connected: ConnectedSession[] = [];
-  const connect = (sessionId: string) =>
+  const connect = (
+    sessionId: string,
+    projectDir: string | null,
+    harness: Harness,
+  ) =>
     sessions.connect({
       sessionId,
-      projectDir: 'selftest',
+      projectDir,
       deadlineSeconds: 120,
-      harness: 'claude',
+      harness,
     });
   const ask = (session: ConnectedSession, round: unknown) =>
     session.call('ask_round', round, {
@@ -405,9 +447,10 @@ export function formsSelfTestScript(
       for (const session of connected) {
         session.end();
       }
-      const first = connect(`selftest-${run}`);
-      const second = connect(`selftest-${run}-2`);
-      connected = [first, second];
+      const first = connect(`selftest-${run}`, 'selftest', 'claude');
+      const second = connect(`selftest-${run}-2`, 'selftest', 'codex');
+      const idle = connect(`selftest-${run}-3`, null, 'codex');
+      connected = [first, second, idle];
       const result = ask(first, fixtureRound(run));
       // Nothing checks the second call's end: a later run ends its session.
       ask(second, secondRound(run)).catch(() => undefined);
