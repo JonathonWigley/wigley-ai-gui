@@ -114,7 +114,7 @@ describe('createStreamDecoder', () => {
       .map((event) => decoder.decode(line(event)).entries)
       .flat();
     decoder.decode(line(result));
-    const [nextTurn] = decoder.decode(line(requesting)).entries;
+    const [nextTurn] = decoder.decode(line(init)).entries;
 
     expect(seen.map((entry) => entry.id)).toEqual([
       'turn-events-1',
@@ -133,7 +133,7 @@ describe('createStreamDecoder', () => {
     expect(nextTurn).toEqual({
       kind: 'raw',
       id: 'turn-events-2',
-      raw: [requesting],
+      raw: [init],
     });
   });
 
@@ -568,9 +568,19 @@ describe('createStreamDecoder', () => {
     ).toEqual([['turn-events-1', 2]]);
   });
 
-  it('decode_ControlResponseBetweenTurns_JoinsThePreviousTurnsEvents', () => {
+  it('decode_ModeChangeBetweenTurns_JoinsThePreviousTurnsEvents', () => {
     const decoder = createStreamDecoder();
+    const hookStarted = {
+      type: 'system',
+      subtype: 'hook_started',
+      hook_name: 'SessionStart:startup',
+    };
     const init = { type: 'system', subtype: 'init', model: 'claude-haiku-5-5' };
+    const requesting = {
+      type: 'system',
+      subtype: 'status',
+      status: 'requesting',
+    };
     const result = {
       type: 'result',
       subtype: 'success',
@@ -585,17 +595,37 @@ describe('createStreamDecoder', () => {
         response: { mode: 'plan' },
       },
     };
-    decoder.decode(line(init));
-    decoder.decode(line(result));
+    const modeStatus = {
+      type: 'system',
+      subtype: 'status',
+      status: null,
+      permissionMode: 'plan',
+    };
+    const nextInit = { ...init, permissionMode: 'plan' };
+    for (const event of [hookStarted, init, result]) {
+      decoder.decode(line(event));
+    }
 
-    const [idle] = decoder.decode(line(modeChanged)).entries;
-    const [nextTurn] = decoder.decode(line(init)).entries;
+    const [response] = decoder.decode(line(modeChanged)).entries;
+    const [status] = decoder.decode(line(modeStatus)).entries;
+    const [nextTurn] = decoder.decode(line(nextInit)).entries;
+    const [nextRequesting] = decoder.decode(line(requesting)).entries;
 
-    expect(idle).toEqual({
+    expect(response.id).toBe('turn-events-1');
+    expect(status).toEqual({
       kind: 'raw',
       id: 'turn-events-1',
-      raw: [init, modeChanged],
+      raw: [hookStarted, init, modeChanged, modeStatus],
     });
-    expect(nextTurn).toEqual({ kind: 'raw', id: 'turn-events-2', raw: [init] });
+    expect(nextTurn).toEqual({
+      kind: 'raw',
+      id: 'turn-events-2',
+      raw: [nextInit],
+    });
+    expect(nextRequesting).toEqual({
+      kind: 'raw',
+      id: 'turn-events-2',
+      raw: [nextInit, requesting],
+    });
   });
 });

@@ -127,8 +127,8 @@ function messageText(content: unknown): string {
 // One decoder reads one process's stdout: it keeps the entries it built, so a
 // later line updates them. An event joins the entry it belongs to; a known
 // event that belongs to none joins the turn's events entry, one raw entry per
-// turn re-sent as it grows; an event of a type the decoder does not know gets a
-// raw entry of its own. An entry is re-sent whenever it changes, its `raw`
+// turn re-sent as it grows, which an event between turns joins too; an event
+// of a type the decoder does not know gets a raw entry of its own. An entry is re-sent whenever it changes, its `raw`
 // included, except a thinking entry's `system/thinking_tokens`: those arrive
 // once per delta, so they ride with the entry's next send, which the block's
 // `content_block_stop` brings, or the turn's result when an interrupt ends the
@@ -149,11 +149,14 @@ export function createStreamDecoder(): StreamDecoder {
   const unstreamedCounts = new Map<string, number>();
   let rawCount = 0;
   let turnCount = 0;
-  // Null until the turn's first gathered event; a result closes it.
+  // The events entry gathered events join: the first gathered event opens the
+  // first one (the start hooks, ahead of the first init), and each later
+  // turn's `system/init`, which starts every turn, opens that turn's. From a
+  // result to the next init it stays the ended turn's, so an event with no
+  // turn running joins the turn before.
   let turnEvents: RawEntry | null = null;
-  // The events entry a result closed last, which a control response between
-  // turns joins.
-  let closedTurnEvents: RawEntry | null = null;
+  // True from a result until the next turn's init.
+  let betweenTurns = false;
   let noticeCount = 0;
   let resultCount = 0;
   // `total_cost_usd` is the process's cost so far.
@@ -165,26 +168,19 @@ export function createStreamDecoder(): StreamDecoder {
     return { kind: 'raw', id: `raw-${rawCount}`, raw: [raw] };
   }
 
-  // The turn's events entry with `event` added: hooks at process start open
-  // the first one.
-  function gathered(event: unknown): ChatEntry {
-    if (turnEvents === null) {
+  // The events entry with `event` added; `startsTurn` marks a turn's init.
+  function gathered(event: unknown, startsTurn = false): ChatEntry {
+    let entry = turnEvents;
+    if (entry === null || (startsTurn && betweenTurns)) {
       turnCount += 1;
-      turnEvents = { kind: 'raw', id: `turn-events-${turnCount}`, raw: [] };
+      entry = { kind: 'raw', id: `turn-events-${turnCount}`, raw: [] };
+      turnEvents = entry;
     }
-    turnEvents.raw.push(event);
-    return snapshot(turnEvents);
-  }
-
-  // A control response with no turn running answers a request sent between
-  // turns, so it joins the turn before rather than opening the next one's
-  // entry; before the first result it gathers as any event does.
-  function gatheredResponse(event: unknown): ChatEntry {
-    if (turnEvents !== null || closedTurnEvents === null) {
-      return gathered(event);
+    if (startsTurn) {
+      betweenTurns = false;
     }
-    closedTurnEvents.raw.push(event);
-    return snapshot(closedTurnEvents);
+    entry.raw.push(event);
+    return snapshot(entry);
   }
 
   // Every block still open, closed and re-sent: an interrupt can end a block
@@ -236,7 +232,7 @@ export function createStreamDecoder(): StreamDecoder {
     }
     out.entries.push(
       GATHERED_SYSTEM_SUBTYPES.has(asString(event.subtype))
-        ? gathered(event)
+        ? gathered(event, event.subtype === 'init')
         : rawEntry(event),
     );
   }
@@ -446,7 +442,7 @@ export function createStreamDecoder(): StreamDecoder {
   // An error turn's stop reason is its subtype: an interrupted turn reports
   // the `stop_reason` of the last message it finished. A cumulative total below
   // the last one has no turn share, so its cost is null. A result ends the
-  // turn's open blocks and its events entry.
+  // turn's open blocks, and its events entry takes events until the next init.
   function decodeResult(event: Json, out: DecodedLine) {
     closeOpenBlocks(out);
     const isError = event.is_error === true;
@@ -477,10 +473,7 @@ export function createStreamDecoder(): StreamDecoder {
         typeof event.duration_ms === 'number' ? event.duration_ms : null,
       raw: [event],
     });
-    if (turnEvents !== null) {
-      closedTurnEvents = turnEvents;
-    }
-    turnEvents = null;
+    betweenTurns = true;
   }
 
   function decodeControlResponse(event: Json, out: DecodedLine) {
@@ -490,7 +483,7 @@ export function createStreamDecoder(): StreamDecoder {
       requestId: asString(response.request_id),
       error: isError ? asString(response.error) || 'unknown error' : null,
     };
-    out.entries.push(gatheredResponse(event));
+    out.entries.push(gathered(event));
   }
 
   function decodeControlRequest(event: Json, out: DecodedLine) {
