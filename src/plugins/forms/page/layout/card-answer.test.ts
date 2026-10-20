@@ -28,8 +28,25 @@ function roundAfter(...actions: FormsAction[]): RoundState {
 }
 
 describe('cardAnswer', () => {
-  it('cardAnswer_Untouched_HasNullChoiceAndAction', () => {
+  it('cardAnswer_Untouched_HoldsFixNowAndNullChoice', () => {
     const answer = cardAnswer(roundAfter(), { kind: 'finding', index: 1 });
+
+    expect(answer).toEqual({
+      status: 'untouched',
+      choice: null,
+      notApplicable: false,
+      dontAsk: false,
+      action: 'fix_now',
+    });
+  });
+
+  it('cardAnswer_ActionCleared_HasNullChoiceAndAction', () => {
+    const round = roundAfter(
+      { type: 'focusItem', item: 0 },
+      { type: 'chooseAction', action: 'fix_now' },
+    );
+
+    const answer = cardAnswer(round, { kind: 'finding', index: 1 });
 
     expect(answer).toEqual({
       status: 'untouched',

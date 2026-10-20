@@ -165,12 +165,7 @@ describe('reviewRows', () => {
   });
 
   it('lists an answered finding with its choice text', () => {
-    const [delta] = reviewRows(
-      mixedRoundAfter(
-        { type: 'chooseAction', action: 'fix_now' },
-        { type: 'choose', choice: 2 },
-      ),
-    );
+    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 2 }));
     expect(delta).toMatchObject({
       kind: 'finding',
       title: 'Delta',
@@ -182,19 +177,12 @@ describe('reviewRows', () => {
   });
 
   it('marks a finding choice other than the recommended one', () => {
-    const [delta] = reviewRows(
-      mixedRoundAfter(
-        { type: 'chooseAction', action: 'fix_now' },
-        { type: 'choose', choice: 1 },
-      ),
-    );
+    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 1 }));
     expect(delta.tookRecommendation).toBe(false);
   });
 
   it('flags a fixed finding with no solution among several as missing one', () => {
-    const [delta] = reviewRows(
-      mixedRoundAfter({ type: 'chooseAction', action: 'fix_now' }),
-    );
+    const [delta] = reviewRows(mixedRoundAfter());
     expect(delta).toMatchObject({
       status: 'untouched',
       action: '',
@@ -204,7 +192,12 @@ describe('reviewRows', () => {
   });
 
   it('flags a finding with a solution and no action as missing an action', () => {
-    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 2 }));
+    const [delta] = reviewRows(
+      mixedRoundAfter(
+        { type: 'chooseAction', action: 'fix_now' },
+        { type: 'choose', choice: 2 },
+      ),
+    );
     expect(delta).toMatchObject({ status: 'untouched', missing: 'action' });
   });
 
@@ -236,9 +229,7 @@ describe('reviewRows', () => {
       ],
       'r1-session',
     );
-    const round = activeRound(
-      apply(start, { type: 'chooseAction', action: 'fix_now' }),
-    );
+    const round = activeRound(start);
     if (round === null) {
       throw new Error('The test round is not active');
     }
@@ -329,6 +320,7 @@ describe('reviewRows', () => {
   it('drops the solution from a finding answered by notes with no action, and flags the action', () => {
     const [delta] = reviewRows(
       mixedRoundAfter(
+        { type: 'chooseAction', action: 'fix_now' },
         {
           type: 'setText',
           roundId: 'r1',
@@ -350,15 +342,12 @@ describe('reviewRows', () => {
 
   it('drops the action from a finding with notes, fix now and no solution among several, and flags the solution', () => {
     const [delta] = reviewRows(
-      mixedRoundAfter(
-        {
-          type: 'setText',
-          roundId: 'r1',
-          target: { field: 'notes', item: { kind: 'finding', index: 1 } },
-          value: 'my own fix',
-        },
-        { type: 'chooseAction', action: 'fix_now' },
-      ),
+      mixedRoundAfter({
+        type: 'setText',
+        roundId: 'r1',
+        target: { field: 'notes', item: { kind: 'finding', index: 1 } },
+        value: 'my own fix',
+      }),
     );
     expect(delta).toMatchObject({
       status: 'answered',
@@ -393,12 +382,7 @@ describe('reviewRows', () => {
   });
 
   it('recommends a fixed finding that took both recommendations', () => {
-    const [delta] = reviewRows(
-      mixedRoundAfter(
-        { type: 'chooseAction', action: 'fix_now' },
-        { type: 'choose', choice: 2 },
-      ),
-    );
+    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 2 }));
     expect(delta.recommended).toBe(true);
   });
 
@@ -428,6 +412,7 @@ describe('reviewRows', () => {
   it('does not recommend a finding answered by notes alone', () => {
     const [delta] = reviewRows(
       mixedRoundAfter(
+        { type: 'chooseAction', action: 'fix_now' },
         {
           type: 'setText',
           roundId: 'r1',
@@ -519,12 +504,7 @@ describe('sessionTitle', () => {
       [presentedRound('r1', { findings: [finding('Delta')] })],
       'r1-session',
     );
-    const round = activeRound(
-      apply(apply(start, { type: 'chooseAction', action: 'fix_now' }), {
-        type: 'choose',
-        choice: 1,
-      }),
-    );
+    const round = activeRound(apply(start, { type: 'choose', choice: 1 }));
     if (round === null) {
       throw new Error('The test round is not active');
     }

@@ -67,12 +67,13 @@ export const SELFTEST_LAYOUT = {
 
 // Opening on finding 1: Space k then k breaks Space k s, so the first k
 // replays to the notice and the second finds no item before it; j back to the
-// finding; Space a f sets Fix now, 2 picks solution 2, Space a f again clears
-// the action and Space a s sets Leave it. a types "agreed" at once (INSERT), jk
+// finding, which opens on Fix now; 2 picks solution 2, Space a f clears the
+// action and Space a s sets Leave it. a types "agreed" at once (INSERT), jk
 // to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out, as
 // every Esc out of a box in the form runs forms' editor bind there. j to
 // finding 2, a Nit: Space a u is refused, since a Nit offers no follow-up, and
-// Space a f alone answers its one solution with Fix anyway. j to finding 3, a
+// it opens on Fix anyway with its one solution, so Space a s sets Leave it and
+// Space a f sets Fix anyway again. j to finding 3, a
 // Decision: Space a u sets Plan it, and Enter accepts its recommendation. j to
 // question 1, where 2 picks 2; a types "ab" at once, Esc out; d focuses its
 // reason box, A appends a long word and Ctrl+k still in INSERT moves back to
@@ -126,7 +127,6 @@ const STEPS: SelfTestStep[] = [
     checksFit: true,
   },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
-  { keys: [' ', 'a', 'f'], expect: '[forms] chose Fix now on finding 1' },
   { keys: ['2'], expect: '[forms] chose 2 on finding 1' },
   { keys: [' ', 'a', 'f'], expect: '[forms] cleared the action on finding 1' },
   { keys: [' ', 'a', 's'], expect: '[forms] chose Leave it on finding 1' },
@@ -138,6 +138,7 @@ const STEPS: SelfTestStep[] = [
   { keys: ['Escape'], expect: '[forms] left the box' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: [' ', 'a', 'u'], expect: '[forms] finding 2 offers no follow-up' },
+  { keys: [' ', 'a', 's'], expect: '[forms] chose Leave it on finding 2' },
   { keys: [' ', 'a', 'f'], expect: '[forms] chose Fix anyway on finding 2' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: [' ', 'a', 'u'], expect: '[forms] chose Plan it on finding 3' },

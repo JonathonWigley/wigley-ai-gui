@@ -523,14 +523,15 @@ function restoreAnswers<Item, Entry extends AnswerEntry, Answer>(
   );
 }
 
-// A missing or unknown action, or one the finding's origin does not offer,
-// restores as none; an action that pins a lone solution restores it picked.
+// A finding with no draft entry starts on fix_now. A draft's unknown action,
+// or one the finding's origin does not offer, restores as none; an action
+// that pins a lone solution restores it picked.
 function restoreFindingAnswer(
   entry: FindingAnswerEntry | undefined,
   finding: Finding,
 ): FindingAnswer {
   if (entry === undefined) {
-    return UNTOUCHED_FINDING;
+    return chooseAction(UNTOUCHED_FINDING, finding, 'fix_now');
   }
   const isOffered =
     isFindingAction(entry.action) &&

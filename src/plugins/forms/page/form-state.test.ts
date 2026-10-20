@@ -315,6 +315,21 @@ describe('restoring a draft', () => {
     },
   );
 
+  it('starts a finding with no draft entry on fix_now, picking a lone solution', () => {
+    const lone = finding('F2', {
+      choices: [{ text: 'only', reason: 'only reason' }],
+      recommend: 1,
+    });
+    const state = initialState(
+      [presented('r1', { findings: [finding('F1'), lone] })],
+      'r1-session',
+    );
+    expect(active(state).findingAnswers).toMatchObject([
+      { action: 'fix_now', choice: 0 },
+      { action: 'fix_now', choice: 1 },
+    ]);
+  });
+
   it("restores a finding's unknown action as none", () => {
     const saved = { ...findingEntry(1, { choice: 1 }), action: 'Fix now' };
     const round = active(
@@ -433,7 +448,6 @@ describe('clearChoice', () => {
       findingRound(),
       { type: 'focusItem', item: 1 },
       { type: 'choose', choice: 2 },
-      { type: 'chooseAction', action: 'fix_now' },
       { type: 'clearChoice' },
     );
     expect(active(state).findingAnswers[0]).toMatchObject({
@@ -443,10 +457,7 @@ describe('clearChoice', () => {
   });
 
   it("keeps a one-solution finding's solution while it is fixed now", () => {
-    const fixed = apply(oneSolutionRound(), {
-      type: 'chooseAction',
-      action: 'fix_now',
-    });
+    const fixed = oneSolutionRound();
     expect(apply(fixed, { type: 'clearChoice' })).toBe(fixed);
     expect(active(fixed).findingAnswers[0].choice).toBe(1);
   });
@@ -475,10 +486,13 @@ describe('clearChoice', () => {
   it("clears a one-solution finding's solution with no action", () => {
     const state = run(
       oneSolutionRound(),
-      { type: 'choose', choice: 1 },
+      { type: 'chooseAction', action: 'fix_now' },
       { type: 'clearChoice' },
     );
-    expect(active(state).findingAnswers[0].choice).toBe(0);
+    expect(active(state).findingAnswers[0]).toMatchObject({
+      action: '',
+      choice: 0,
+    });
   });
 });
 
@@ -505,10 +519,12 @@ describe('chooseAction', () => {
   });
 
   it('picks the one solution on fix_now, and keeps it when cleared', () => {
-    const set = apply(oneSolutionRound(), {
-      type: 'chooseAction',
-      action: 'fix_now',
-    });
+    const set = run(
+      oneSolutionRound(),
+      { type: 'chooseAction', action: 'leave_it' },
+      { type: 'clearChoice' },
+      { type: 'chooseAction', action: 'fix_now' },
+    );
     expect(active(set).findingAnswers[0]).toMatchObject({
       action: 'fix_now',
       choice: 1,
@@ -642,16 +658,12 @@ describe('answerStatus', () => {
   const onF1 = apply(findingRound(), { type: 'focusItem', item: 1 });
 
   it('leaves a finding untouched with an action and no solution', () => {
-    const state = apply(onF1, { type: 'chooseAction', action: 'fix_now' });
-    expect(answerStatus(active(state), f1)).toBe('untouched');
+    expect(active(onF1).findingAnswers[0].action).toBe('fix_now');
+    expect(answerStatus(active(onF1), f1)).toBe('untouched');
   });
 
   it('answers a finding with its action and solution', () => {
-    const state = run(
-      onF1,
-      { type: 'chooseAction', action: 'fix_now' },
-      { type: 'choose', choice: 2 },
-    );
+    const state = apply(onF1, { type: 'choose', choice: 2 });
     expect(answerStatus(active(state), f1)).toBe('answered');
   });
 
@@ -1482,8 +1494,8 @@ describe('buildBody', () => {
       { type: 'choose', choice: 1 },
     );
     expect(buildBody(active(state)).finding_answers).toEqual([
-      findingEntry(1, {}),
-      findingEntry(2, { choice: 1 }),
+      findingEntry(1, { action: 'fix_now' }),
+      findingEntry(2, { choice: 1, action: 'fix_now' }),
     ]);
   });
 

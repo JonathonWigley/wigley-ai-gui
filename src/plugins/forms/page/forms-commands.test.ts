@@ -182,8 +182,21 @@ describe('formsCommandHandlers', () => {
     expect(logs).toEqual(['chose 2 on finding 1']);
   });
 
+  it('actFixNow clears the fix_now a finding starts on, and again picks it', () => {
+    const { run, round, logs } = setup([finding('Leak')]);
+
+    run('actFixNow');
+    expect(round().findingAnswers[0].action).toBe('');
+    run('actFixNow');
+
+    expect(round().findingAnswers[0].action).toBe('fix_now');
+    expect(logs).toEqual([
+      'cleared the action on finding 1',
+      'chose Fix now on finding 1',
+    ]);
+  });
+
   it.each([
-    ['actFixNow', 'fix_now', 'Fix now'],
     ['actFollowUp', 'follow_up', 'Follow-up'],
     ['actLeaveIt', 'leave_it', 'Leave it'],
   ] as const)(
@@ -207,9 +220,13 @@ describe('formsCommandHandlers', () => {
     const { run, round, logs } = setup([decision('Shape')]);
 
     run('actFixNow');
+    run('actFixNow');
 
     expect(round().findingAnswers[0].action).toBe('fix_now');
-    expect(logs).toEqual(['chose Decide now on finding 1']);
+    expect(logs).toEqual([
+      'cleared the action on finding 1',
+      'chose Decide now on finding 1',
+    ]);
   });
 
   it('logs that a Nit offers no follow-up and keeps its answer', () => {
