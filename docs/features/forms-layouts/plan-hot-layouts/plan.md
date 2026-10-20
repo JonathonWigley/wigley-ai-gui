@@ -195,7 +195,7 @@ Boundary rules:
 - [x] [Preview round](06-preview-round.md) — after 04
 
 ### Wave 5
-- [ ] [Self-test steps](07-selftest.md) — after 05, 06
+- [x] [Self-test steps](07-selftest.md) — after 05, 06
 
 ### Wave 6
 - [ ] [Doc re-read](08-doc-re-read.md) — after 07
@@ -224,6 +224,8 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   until task 07
 - 06 preview round · 66789d6 · proved (diff read, typecheck clean, layer check) · concerns: an unused forms tool
   session rides on the preview row; no `sessions.ended` listener; memory store grows per press
+- 07 self-test · 25718bd · proved (`npm run selftest` all passed, typecheck clean, layer check) · concerns: fixed
+  revisions assume a fresh data folder
 ### Contract changes
 - `createRoundView`: → gains `layout: Layout, layoutName: string` after `round`; `RoundViewDeps` gains `log: Log`,
   `boxes` widens to `Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>` · why: builds through the layout
@@ -240,6 +242,9 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
 - `FormsCommandDeps`: → gains `layouts: LayoutCommandChannel` (`cycleLayout(step)`, `copyLayout()`,
   `openPreview()`, each `Promise<unknown>`); page `start.ts` wires it to `api.channel.invoke` · why: the handlers
   invoke main's channel · consumers: none · group 05
+- Self-test steps: → also `export const SELFTEST_LAYOUT = { path, text }` in `selftest-script.ts`; forms main
+  `serveLayouts(api, written)` starts the registry after the fixture write settles · why: no watch report bumps the
+  revision, so the steps' revisions are fixed · consumers: none · group 07
 ### Rulings
 - `layoutChanged` listener registers before `layout()` is invoked; an answer arriving after a change is dropped
   (the change is newer) — no stale `start` choice overwrites a newer one — none known · group 05
@@ -294,5 +299,13 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   spec names submit, cancel and draft only — none known · group 06
 - `ConnectedSession` exposes the session as `.session` (the brief said `.connected`) — lead's brief corrected by the
   tree · group 06
+- Steps 2 and 3 (no keys) cannot pass — one `setLayout` logs every card line and the shown line at once, and a step
+  awaits one line — so each line gets its own switch: ␣zln finding failed (rev 2), ␣zlp default (3), ␣zlp notice
+  failed (4), ␣zln default (5), ␣zlp selftest shown (6) — four extra cycle steps · group 07
+- Step 4 is `k 2`: the shown question 2 logs its update failure during the cycle itself, so `k` shows question 1's
+  freshly built card, whose first update logs the line; `Enter` and `j` restore the answers and focus — proves the
+  failure is logged, not that it fires on a pick · group 07
+- Step 5 expects revision 7; step 6 expects `[forms] round shown: Layout preview · Layout preview`; the fixture
+  notice calls `textBox(article, 'notes')` (same throw) — none known · group 07
 ### Review rounds
 ### Test gate

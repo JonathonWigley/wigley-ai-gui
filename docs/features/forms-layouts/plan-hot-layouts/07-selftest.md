@@ -1,6 +1,6 @@
 # 07 — Self-test steps for layouts and the preview
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 05, 06
 Plan: [plan.md](plan.md)
@@ -57,3 +57,9 @@ Done when: `npm run selftest` passes with the new steps (the test gate or this t
 the agent to run it any time).
 
 ## Proof
+
+Commit `25718bd`. `npm run selftest` exits 0 ending `[selftest] PASS ␣zlo -> [forms] round shown: Layout preview ·
+Layout preview`, `[selftest] all passed` (worker's run, tree at cc17c5d + this group). Typecheck clean; layer check
+clean. One contract addition: `SELFTEST_LAYOUT` in `selftest-script.ts`; the registry starts after the fixture write.
+
+Concerns: the expected revisions assume a fresh self-test data folder and no page reload mid-steps.
