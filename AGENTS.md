@@ -97,9 +97,10 @@ round), since main, not the page, decides.
   the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
   core edit.
 - **A session tab** is added to a session by the plugin that fills it, through the `sessions` page export `addTab`:
-  forms adds a Form tab on a session's first round, docs a Docs tab when the session connects. Tabs stay while the
-  session's row does; the user moves between them with `Option+o` / `Option+i` and between sessions with
-  `Option+Shift+o` / `Option+Shift+i`.
+  forms adds a Form tab where a session's round view is created, when the session has no Form tab, docs a Docs tab
+  when the session connects. A session's tabs drop when its row leaves, closed by the user or ended, and
+  `sessions.sessionRemoved` tells each plugin to forget the session; the user moves between tabs with `Option+o` /
+  `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`.
 - **A key** is a default bind in its plugin's manifest naming that plugin's command; the core qualifies both, so
   `nextItem` in plugin `forms` runs as `forms.nextItem`, and its scope `review` is `forms.review`. Keys never call
   code directly, so rebinding never touches a handler. `src/config/keymap.ts` holds only the core's keys and is where
@@ -107,7 +108,10 @@ round), since main, not the page, decides.
   the page also rejects a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
   `<D-w>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
   too, in every vim mode, ahead of the editor. An editor key carries a scope as a page key does and runs only while
-  that scope is in force, so two plugins' editors may bind one vim key in different scopes. Esc while a sequence
+  that scope is in force, so two plugins' editors may bind one vim key in different scopes. Vim keeps one mapping per
+  key sequence for every editor, so a sequence bound in any scope runs nothing in the others (the page logs
+  `<keys> has no bind in <scope>`), and startup fails on two binds with the same keys in overlapping scopes or on keys
+  that begin another bind's longer keys in any scope. Esc while a sequence
   waits cancels it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout keys are
   `Space z l …`).
