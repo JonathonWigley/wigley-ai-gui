@@ -84,6 +84,11 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       permissions,
       confirm,
       setScope: () => api.keys.setScope('chat'),
+      otherSessionShown: () => {
+        picker.close();
+        reasonBox.cancel();
+        confirm.keep();
+      },
       log: services.log,
       toast: services.toast,
     });

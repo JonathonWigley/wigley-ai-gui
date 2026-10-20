@@ -19,7 +19,9 @@ export const ENTRY_KINDS: readonly ChatEntryKind[] = Object.keys(
 
 // Compile-time checks: each chat entry variant is assignable to its layout
 // input, and the contract's kinds and the layout's kinds are one set. A
-// drifted variant or kind makes a member `never`, which `true` cannot fill.
+// variant missing or renaming an input's field, or a drifted kind, makes a
+// member `never`, which `true` cannot fill. Without strictNullChecks a field
+// turning nullable is not caught.
 type VariantFitsInput = {
   [K in ChatEntryKind]: Extract<ChatEntry, { kind: K }> extends EntryInput<K>
     ? true

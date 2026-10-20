@@ -83,8 +83,8 @@ const CONTROL_IDS = {
 } as const;
 
 // Every chat command's handler but `newSession`'s (the start prompt's), by
-// short id. A command acting on a session acts on the one whose box the key
-// fired in, else the session whose Chat tab shows.
+// short id. A command acting on a session acts only on the session whose Chat
+// tab is the visible tab, and does nothing while no Chat tab is visible.
 export function chatCommandHandlers(
   deps: ChatCommandDeps,
 ): Omit<PageStart<typeof chatManifest>['commands'], 'newSession'> {
@@ -101,8 +101,17 @@ export function chatCommandHandlers(
       }
       act(session, context);
     };
-  const pickControlOf = (id: string) =>
+  // An ended session takes no interrupt and no control change.
+  const inLiveSession = (act: (session: ChatSession) => void): Handler =>
     inSession((session) => {
+      if (session.ended) {
+        log('chat', `${session.name} has ended`);
+        return;
+      }
+      act(session);
+    });
+  const pickControlOf = (id: string) =>
+    inLiveSession((session) => {
       const control = session.state.controls.find((held) => held.id === id);
       if (control === undefined) {
         log('chat', `${session.name} has no ${id} control`);
@@ -132,7 +141,7 @@ export function chatCommandHandlers(
       log('chat', 'left the box');
     }),
     send: inSession((session) => send(deps, session)),
-    interrupt: inSession((session) => {
+    interrupt: inLiveSession((session) => {
       if (session.state.activity === 'idle') {
         log('chat', `nothing to interrupt in ${session.name}`);
         return;
@@ -185,7 +194,7 @@ export function chatCommandHandlers(
     pickMode: pickControlOf(CONTROL_IDS.pickMode),
     pickEffort: pickControlOf(CONTROL_IDS.pickEffort),
     pickModel: pickControlOf(CONTROL_IDS.pickModel),
-    pickControl: inSession((session) => {
+    pickControl: inLiveSession((session) => {
       const { controls } = session.state;
       if (controls.length === 0) {
         log('chat', `${session.name} has no controls`);
@@ -212,20 +221,19 @@ export function chatCommandHandlers(
   };
 }
 
-// The session of the box the key fired in, else the shown Chat tab's.
+// The visible Chat tab's session; undefined while no Chat tab is visible, or
+// when the key fired in another session's box.
 function sessionFor(
   tabs: ChatTabs,
   context: PageCommandContext,
 ): ChatSession | undefined {
-  const inBox =
-    context.editor === undefined
-      ? undefined
-      : tabs.sessionOfEditor(context.editor);
-  if (inBox !== undefined) {
-    return inBox;
-  }
   const visible = tabs.visibleSessionId();
-  return visible === null ? undefined : tabs.session(visible);
+  const session = visible === null ? undefined : tabs.session(visible);
+  const firedInOtherBox =
+    context.editor !== undefined &&
+    context.editor !== session?.box &&
+    tabs.sessionOfEditor(context.editor) !== undefined;
+  return firedInOtherBox ? undefined : session;
 }
 
 // Sends the box's text as typed and clears the box; an empty box or an ended

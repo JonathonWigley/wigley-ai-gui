@@ -113,7 +113,8 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   control's value. Enter in normal mode sends, Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
   `a` focus the box, `j` / `k` move between entries, `Enter` expands a tool call, `G` jumps to the latest, Ctrl+C
   interrupts. Tool calls show one compact line (tool name and a short input summary) that expands to the full input
-  and output.
+  and output. These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
+  nothing, and the chat's pickers and dialogs close when another session's Chat tab shows.
 - **Controls**: `Space c m` mode, `Space c e` effort, `Space c o` model, each opening a picker of its choices;
   `Space c c` lists every control, so a control a new adapter declares is reachable before it gets a key.
 - **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder — the
@@ -122,7 +123,8 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   step starts nothing. Recent folders live in chat's plugin data.
 - **Permissions**: sessions run in auto mode; anything auto mode would still prompt reaches chat's `permission_prompt`
   MCP tool, contributed to sessions as forms contributes its tools, and shows as a permission entry. `y` allows, `n`
-  denies and opens a box for an optional reason Claude reads.
+  denies and opens a box for an optional reason Claude reads, each answering the oldest pending permission of the
+  session on screen.
 - **Status**: a row's tab status reads what the chat is doing — working, waiting for a permission — and is empty
   while idle.
 - **Turn finished**: when the window is not focused or the session is not on screen, the same alert as a round, and

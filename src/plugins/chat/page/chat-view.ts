@@ -74,8 +74,9 @@ export interface PermissionActions {
   deny(session: SessionRef, entry: PermissionEntry): void;
 }
 
-// `setScope` sets the base scope `chat`; `onSessionRemoved` hears the
-// sessions plugin drop a row's tabs.
+// `setScope` sets the base scope `chat`; `otherSessionShown` runs when the
+// Chat tab shown is another session's than the Chat tab shown before;
+// `onSessionRemoved` hears the sessions plugin drop a row's tabs.
 export interface ChatViewDeps {
   channel: PageChannel<ChatChannel>;
   sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'closeSession'>;
@@ -86,6 +87,7 @@ export interface ChatViewDeps {
   permissions: PermissionActions;
   confirm: CloseConfirm;
   setScope(): void;
+  otherSessionShown(): void;
   log: Log;
   toast(text: string, tone: ToastTone): void;
 }
@@ -125,6 +127,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     toastedKinds: new Set(),
   };
   let pendingReveal: string | null = null;
+  let lastShownSessionId: string | null = null;
 
   const focusIfRevealed = (tab: HeldTab) => {
     const isWaiting = pendingReveal === tab.sessionId;
@@ -144,8 +147,18 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     const tab = createTab(state, shown, deps, {
+      // Chat keys act only on the visible Chat tab's session. Another
+      // session's Chat tab sets the same scope, so no pushed dialog hears a
+      // base change: `otherSessionShown` closes them.
       shown: (shownTab) => {
         deps.setScope();
+        if (
+          lastShownSessionId !== null &&
+          lastShownSessionId !== shownTab.sessionId
+        ) {
+          deps.otherSessionShown();
+        }
+        lastShownSessionId = shownTab.sessionId;
         log('chat', `Chat tab shown in ${shownTab.name}`);
         shownTab.statusLine.draw(shownTab);
         shownTab.entries.scrollToFocus();
