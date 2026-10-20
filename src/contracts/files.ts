@@ -27,7 +27,8 @@ export interface Files {
   // never reports, so a write reports only its target. Creates `folder` when it
   // is missing. When watching fails the watch closes, dropping any change not
   // yet reported, and calls `onError` once; with no `onError` it closes
-  // silently.
+  // silently. A failure to start watching, creating `folder` or starting the
+  // watcher, throws from `watch` and never reaches `onError`.
   watch(
     folder: string,
     onChange: (path: string) => void,

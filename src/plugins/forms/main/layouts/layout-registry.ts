@@ -5,9 +5,9 @@ import type { LayoutChoice } from '../../contract';
 
 // The layouts in forms' data folder, the active one among them, and the
 // revision the page loads them at. `cycle` and `copy` persist the new active
-// layout and send it; a save of a `.js`, `.mjs`, `.css` or `.json` file under
-// the active layout's folder sends a reload. A watch failure is logged, and
-// saves then go unseen until the next start.
+// layout and send it; a save of a code, style, data, image or font file
+// under the active layout's folder sends a reload. A watch failure is logged,
+// and saves then go unseen until the next start.
 export interface LayoutRegistry {
   current(): LayoutChoice;
   cycle(step: 1 | -1): Promise<LayoutChoice>;
@@ -31,9 +31,10 @@ const ACTIVE_FILE = `${LAYOUTS}/active`;
 const DEFAULT_NAME = 'default';
 // How long a path the registry wrote waits for the watch report of that write.
 const OWN_WRITE_MS = 1000;
-// The files a layout can load; saves of any other file, such as an editor's
-// swap or backup file, change nothing.
-const LAYOUT_FILE = /\.(js|mjs|css|json)$/;
+// The files a layout can load: code, style, data, images and fonts. Saves of
+// any other file, such as an editor's swap or backup file, change nothing.
+const LAYOUT_FILE =
+  /\.(js|mjs|css|json|svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|otf)$/;
 
 interface ListedLayout {
   name: string;

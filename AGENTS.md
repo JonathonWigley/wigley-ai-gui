@@ -203,11 +203,12 @@ round), since main, not the page, decides.
   choice list, answer controls, verdict, action row), each of which keeps itself up to date. The built-in `default`
   layout is `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract, and it draws the
   forms look. The user's layouts are folders in forms' plugin data, `layouts/<name>/layout.js` and an optional
-  `layout.css`, and the app writes `layouts/layout.d.ts` there at every start. Saving the active layout's `.js`,
-  `.mjs`, `.css` or `.json` files redraws open rounds and keeps every answer; editor swap and lock files do not.
-  `Space z l n` / `Space z l p` cycle the layouts, `Space z l c` copies the active one into a new folder, and
-  `Space z l o` opens the preview round and selects its row; the round sends nothing and raises no notification or
-  badge. A card that throws falls back to `default`, and a reload that fails keeps the last good layout.
+  `layout.css`, and the app writes `layouts/layout.d.ts` there at every start. Saving the active layout's code
+  (`.js`, `.mjs`), style (`.css`), data (`.json`), image or font files redraws open rounds and keeps every answer;
+  editor swap and lock files do not. `Space z l n` / `Space z l p` cycle the layouts, `Space z l c` copies the
+  active one into a new folder, and `Space z l o` opens the preview round and selects its row; the round sends
+  nothing and raises no notification or badge. A card that throws falls back to `default`, and a reload that fails
+  keeps the last good layout.
 - `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its `LAYERS` table does
   not allow. A new layer, adapter or plugin folder gets a `LAYERS` entry, and the composition root's entry lists it.
 

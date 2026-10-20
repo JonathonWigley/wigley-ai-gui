@@ -116,7 +116,9 @@ export const SELFTEST_LAYOUT = {
 // prompt. o types "note" into the Round note at
 // once (INSERT), Esc out (forms' editor bind in the review's scope), Enter
 // jumps back to finding 1, review again and Space Enter submits. Space z l o
-// opens the layout preview's sample round.
+// opens the layout preview's sample round and selects its row, which the
+// sessions page logs; Cmd+W there asks to cancel the sample round, so the
+// selected session shows it, and n dismisses the prompt.
 const STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'k', 'k'],
@@ -291,10 +293,13 @@ const STEPS: SelfTestStep[] = [
   { keys: ['Enter'], expect: '[page] Enter ran forms.reviewJump' },
   { keys: [' ', ' '], expect: '[forms] review opened' },
   { keys: [' ', 'Enter'], expect: '[forms] submitted' },
+  { keys: [' ', 'z', 'l', 'o'], expect: '[sessions] activated Layout preview' },
   {
-    keys: [' ', 'z', 'l', 'o'],
-    expect: '[forms] round shown: Layout preview · Layout preview',
+    keys: ['<D-w>'],
+    expect:
+      '[forms] closing the session asks to cancel Layout preview · Layout preview',
   },
+  { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
 ];
 
 // Code and tables scroll in their own box, and rail, row and tab titles end

@@ -216,19 +216,20 @@ describe('watch', () => {
     expect(cycled.revision).toBe(before + 1);
   });
 
-  it.each(['alpha/parts/card.mjs', 'alpha/strings.json'])(
-    'watch_SaveOf_%s_SendsReloaded',
-    async (saved) => {
-      await writeLayouts('alpha');
-      await files.write('layouts/active', 'alpha');
-      await start();
+  it.each([
+    'alpha/parts/card.mjs',
+    'alpha/strings.json',
+    'alpha/icons/check.svg',
+  ])('watch_SaveOf_%s_SendsReloaded', async (saved) => {
+    await writeLayouts('alpha');
+    await files.write('layouts/active', 'alpha');
+    await start();
 
-      await files.write(`layouts/${saved}`, '// saved');
+    await files.write(`layouts/${saved}`, '// saved');
 
-      await vi.waitFor(() => expect(sent).toHaveLength(1));
-      expect(sent[0]).toMatchObject({ name: 'alpha', reason: 'reloaded' });
-    },
-  );
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toMatchObject({ name: 'alpha', reason: 'reloaded' });
+  });
 
   it('watch_Fails_LogsIt', async () => {
     const failing = withFailingWatch(files);
