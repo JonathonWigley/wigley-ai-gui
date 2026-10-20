@@ -16,7 +16,7 @@ Files:
 - create `src/plugins/docs/page/start.ts`, `src/plugins/docs/page/docs-view.ts`, `src/plugins/docs/page/tree-view.ts`,
   `src/plugins/docs/page/doc-view.ts`, `src/plugins/docs/page/docs-state.ts`, `src/plugins/docs/page/docs.css`
 - test `src/plugins/docs/page/docs-state.test.ts`
-- modify `src/plugins/page.ts` (add `docsPagePart` after `keysPagePart`)
+- modify `src/plugins/page.ts` (add `docsPagePart` to `pageParts`, after `chatPagePart`, the list's last)
 
 Consumes:
 - from 04: `buildTree`, `TreeNode`, `TreeGroup`, `TreeLeaf` (tree.ts); `splitFrontmatter` (frontmatter.ts);
@@ -24,18 +24,20 @@ Consumes:
   `IndexContext`, `IndexHarness`, `LoadStateRecord` (contract.ts); `baseName`, `tildePath` (doc-paths.ts)
 - from 06: `DocsChannel`, `IndexLoad`, `SessionSourceSpec`, `WriteResult`, `DocChange` (contract.ts), `docsManifest`
 - from 02: `MarkdownRenderer.document(text: string): Promise<string>` (`PageServices.markdown`): links as
-  `a.md-link` with `data-href`, headings with `data-anchor`, each top-level block with `data-source-line` (1-based in
+  `a.md-link` with `data-href`, headings with `data-anchor`, each block element with a source map (list items included) with `data-source-line` (1-based in
   the text passed in), images as their alt text
 - from 05: `EditorHost.createDocument(parent, doc, options, events): DocumentEditor`, `DocumentOptions`,
   `DocumentEditorEvents`, `DocumentEditor` (`setText`, `goToLine`, `focus`, `blur`, `destroy`, `text`)
-- from plan A: `PageApi.modes` — `Modes.add(mode: Mode): ModeHandle` with `Mode { id; title; element; shown(): void }`,
-  `ModeHandle.show`, `ModeHandle.isShown`, `Modes.onChanged` (plan A task 04); `SessionsPageExports.addTab(sessionId,
-  tab: SessionTabView): SessionTabHandle` with `SessionTabView { id; title; element; beforeClose(): boolean; shown():
+- from agent chat plan A's landed contracts (`e0afe84`; where this task cites plan A, read the code):
+  `PageApi.modes` (`src/contracts/plugin.ts`) — `Modes.add(mode: Mode): ModeHandle` with `Mode { id; title; element;
+  shown(): void; hidden(): void }`, `ModeHandle.show`, `ModeHandle.isShown`, `Modes.shown(): string`,
+  `Modes.onChanged`; `SessionsPageExports.addTab(sessionId, tab: SessionTabView): SessionTabHandle`
+  (`src/plugins/sessions/contract.ts`) with `SessionTabView { id; title; element; beforeClose(): boolean; shown():
   void }` and `SessionTabHandle.remove`, `SessionTabHandle.isVisible`; `SessionsPageEvents.sessionAdded`
   `{ sessionId, projectDir, harness, hostSessionId }` (emitted for each row as it arrives, the rows of main's first
-  state included) and `sessionRemoved` `{ sessionId }` (plan A task 05); `EditorBind.scope` (plan A task 01). Plan A's
-  plan.md interfaces block pins `Mode.shown` and `SessionTabView.shown` (the lead's ruling: a hidden view never keeps
-  the key scope); each docs `shown()` sets the scope of the pane that last had focus (`focusScope()`).
+  state included) and `sessionRemoved` `{ sessionId }`; `EditorBind.scope` (`src/contracts/keymap.ts`). `Mode.shown`
+  and `SessionTabView.shown` exist so a hidden view never keeps the key scope; each docs `shown()` sets the scope of
+  the pane that last had focus (`focusScope()`).
 - `element`, `markdownElement`, `button` (`src/shared/page/dom.ts`), `errorText` — in the tree
 
 ## Produces
@@ -124,7 +126,7 @@ task 08 reuses it). Commands (all `runsIn: 'page'`), `label` /
 | `boxAccept` | `accept` | `box` | `Enter` (box) |
 | `boxCancel` | `cancel` | `box` | `Escape` (box) |
 
-No existing bind starts with `Space k` other than plan A's `Space k s` (plan A Preconditions). `<C-h>` / `<C-l>` are
+No existing bind clashes with `Space k d`: the other `Space k` binds are sessions' `Space k s` and chat's `Space k n`. `<C-h>` / `<C-l>` are
 already forms' page chords in scope `forms`; scopes differ, so no clash. The filter box and scope `box` land here
 (below); task 08's path and name boxes reuse them.
 
@@ -238,10 +240,11 @@ path: rendered → re-read and re-render (log `reloaded <name>`); editing → re
 or reload (log `changed on disk: <name>`). The view's own write fires the watch too: then disk equals `loadedText` and
 no banner shows.
 
-**Docs mode** (plan.md Decisions, keys; design.md § Modes and layout; plan A task 04). Start registers
-`api.modes.add({ id: 'docs', title: 'Docs', element, shown })` with the machine view's element; Sessions registers
+**Docs mode** (plan.md Decisions, keys; design.md § Modes and layout; `Mode` in `src/contracts/plugin.ts`). Start registers
+`api.modes.add({ id: 'docs', title: 'Docs', element, shown, hidden })` with the machine view's element, `hidden` an
+empty function (a hidden mode keeps its DOM, state and unsaved edits); Sessions registers
 first, so Docs starts hidden. The page keeps `isDocsModeShown`: `true` in `shown()`, and `modeId === 'docs.docs'` in
-an `api.modes.onChanged` listener (plan A: `shown()` must not read the handle `add` returns). `shown()` sets the
+an `api.modes.onChanged` listener (`add` calls the first mode's `shown` before it returns, so `shown()` must not read the handle `add` returns). `shown()` sets the
 machine view's scope and calls its `showFirstTime()` (the first Docs mode show of the page load runs the build).
 `showMode`: Docs hidden → `handle.show()` (the modes core logs `showed Docs mode`); shown → `toggleTree()`, log
 `tree hidden` / `tree shown`.
@@ -251,7 +254,7 @@ the session ends). On `sessions.sessionAdded`: create a session view (view id `s
 `{ type: 'session', spec: { hostSessionId, projectDir, harness } }`) and `addTab(sessionId, { id: 'docs', title:
 'Docs', element, beforeClose, shown })`; log `Docs tab added for <projectDir, or 'a session with no folder'>`.
 `shown()` sets that view's scope, logs `Docs tab shown` and calls `showFirstTime()`; it reads no handle, since
-`addTab` may call it before returning (a session's first tab is selected at once, plan A task 05). `beforeClose()` returns false and
+`addTab` may call it before returning (a session's first tab is selected at once). `beforeClose()` returns false and
 toasts `Unsaved changes — :w to save, :q! to discard` while the view has unsaved edits; else true. On
 `sessions.sessionRemoved`: `handle.remove()` and `view.dispose()` (stops its watch, destroys its editor).
 

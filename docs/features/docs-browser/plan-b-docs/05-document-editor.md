@@ -21,10 +21,12 @@ Consumes:
   `@codemirror/view`, `@lezer/highlight`) ← 01
 - `TextEditor`, `EditorHost`, `VimMode`, `FocusOptions` in `src/contracts/editor.ts`; `createCodeMirrorVimHost`, its
   `hosted` list, `PendingKeys`, `vimEditorOf`, `redrawCursorOnResize`, `editorTheme` (tree)
-- plan A's scoped editor binds: `EditorBind.scope`; the host's one ex command per key group, named
-  `exBindName(index: number): string` in `src/renderer/codemirror-vim/ex-command-name.ts` (`wigleybind` + the
-  index's digit words: `0` → `wigleybindzero`, `12` → `wigleybindonetwo`), whose binds in force the composition root
-  picks (plan A task 01, `01-scoped-editor-binds.md`)
+- agent chat plan A's scoped editor binds (landed, `e0afe84`): `EditorBind.scope` and `EditorBind.mode` in
+  `src/contracts/keymap.ts`; the host's one ex command per normal-mode key group (an insert-mode group maps a vim action
+  of the same name, `<CR>` only), named `exBindName(index: number): string` in
+  `src/renderer/codemirror-vim/ex-command-name.ts` (`wigleybind` + the index's digit words: `0` → `wigleybindzero`,
+  `12` → `wigleybindonetwo`), whose binds in force the composition root picks through the `run` callback of
+  `CreateEditorHost`
 
 Produces (exactly as plan.md's File Structure):
 
@@ -81,15 +83,17 @@ Decisions:
 - **Start line and goToLine**: `line` is 1-based and clamped to `1 … doc.lines`. The cursor goes to that line's
   start and the view scrolls it to the top (`EditorView.scrollIntoView(pos, { y: 'start' })`), matching plan.md's
   "`i` … swaps to the document editor at the top visible line".
-- **setText** replaces the whole text in one transaction and puts the cursor at the start of the line it was on,
+- **setText** is already on `TextEditor` (a box editor's, which dispatches `replaceText` and keeps focus and the vim mode); a
+  document editor's refines it. It replaces the whole text in one transaction and puts the cursor at the start of the line it was on,
   clamped to the new line count. It does not report `changed`: `changed` reports only the user's edits, as
-  `EditorEvents.changed` does (the transaction carries an annotation the update listener skips).
+  `EditorEvents.changed` does (the transaction carries the `HOST_REPLACE` user event the update listener skips, as the host's `replaceText` does for a
+  box).
 - **Look**: document editors fill their parent's height and scroll inside (`'&.wg-document-editor': { height:
   '100%' }`). `editorTheme` gains gutter colours shared by every editor that shows a gutter: `.cm-gutters`
   background `editor.bg`, text `editor.gutter`, no border. Spacing is the implementer's choice, checked live.
-- **Hosted like a box**: a document editor joins the host's `hosted` list, so `contains`, `typeInto`, pending-key
+- **Hosted like a box**: a document editor joins the host's `hosted` list (entries `{ view, editor }`), so `contains`, `typeInto`, pending-key
   reports, focus handling (`leaveFocusedEditor`) and `destroy` treat it exactly as a box. `focus(options)` and
-  `blur()` behave as the box's. Plan A's editor binds therefore apply to document editors too: the bind in force for
+  `blur()` behave as the box's. Agent chat's editor binds therefore apply to document editors too: the bind in force for
   the current scope runs with this `DocumentEditor` as the context's `editor` (task 07 sets the scope while
   editing).
 - **Ex commands** (`@replit/codemirror-vim` 6.4.0 bundles its vim engine from `@replit/codemirror-vim-core` 0.1.0;
@@ -103,15 +107,14 @@ Decisions:
   `documentExEvent`: `write` → `{ kind: 'write' }`; `quit` → `{ kind: 'quit', force }` where `force` is true when
   `argString`, trimmed, starts with `!`; `wq` and `xit` → `{ kind: 'writeQuit' }` (a `!` after them changes
   nothing). The host defines each once, at creation, through `Vim.defineEx(name, prefix, (cm, params) => …)`; the
-  handler finds the hosted document editor whose `getCM(view) === cm` (as `hostedEditorOf` finds a box) and calls
+  handler finds the hosted document editor whose `getCM(view) === cm` (as `hostedEntryOf` finds a box) and calls
   its `events.write()`, `events.quit(force)` or `events.writeQuit()`. Run in a box editor, the four do nothing:
   `:w` in a form box saves nothing today and stays so.
-- **No ex name clash**: plan A task 01 names each key group's ex command `exBindName(i)` and drops the old
-  "share the ex name" throw. The host adds no runtime check: the `wigleybind` stem cannot equal any `name` or
+- **No ex name clash**: the host names each key group's ex command `exBindName(i)`. The host adds no runtime check: the `wigleybind` stem cannot equal any `name` or
   `prefix` in `DOCUMENT_EX_COMMANDS` (`write`, `w`, `quit`, `q`, `wq`, `xit`, `x`). `documentExClash(exName)` (true
   when `exName` equals one of them) exists for the test `no bind ex name clashes`, which fails if a later change to
   `exBindName` would replace `:w` or `:q`.
-- `editor-boxes.test.ts`'s fake host gains `createDocument: () => { throw new Error('not used by forms'); }` so it
+- `editor-boxes.test.ts`'s fake host (its only hand-built `EditorHost`) gains `createDocument: () => { throw new Error('not used by forms'); }` so it
   still satisfies `EditorHost`.
 
 GIVEN a document editor WHEN the user types `:w` and Enter THEN its `write` event fires once

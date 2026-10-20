@@ -18,14 +18,17 @@ Files:
 - test `src/plugins/docs/main/index-sources.test.ts`, `src/plugins/docs/main/script-locator.test.ts`,
   `src/plugins/docs/main/doc-files.test.ts`
 - modify `src/plugins/manifests.ts` (add `docsManifest` after `keysManifest`), `src/plugins/main.ts` (add
-  `docsMainPart` after `formsMainPart`)
+  `docsMainPart` last, after `chatMainPart`: a part's self-test script runs in start order, so task 09's docs script
+  runs after every existing one and disturbs none of them)
 - modify `src/contracts/plugin.ts` (`MainServices.openExternal`), `src/main/main.ts` (fill it)
 
 Consumes:
-- `Files`, `FileStat`, `FolderEntry`, `FileWatch` (`src/contracts/files.ts`), `ProcessRunner`, `ProcessResult`
-  (`src/contracts/processes.ts`), `MainServices.files`, `MainServices.processes` ← 01
-- the test doubles in `src/shared/testing/memory-files.ts` and `src/shared/testing/fake-processes.ts` ← 01, under the
-  names 01 exports (tests only)
+- `Files` with its tree members `read`, `write`, `list` (entries `FileEntry { path; kind }`) and `watch(folder,
+  onChange(relPath), onError?)`, `FileWatch`, `isMissingFile` (`src/contracts/files.ts`, tree) and the members 01
+  adds: `stat` (`FileStat { isFolder }`), `realPath`, `makeFolder`, `rename`, `trash`; `ProcessRunner`,
+  `ProcessResult` (`src/contracts/processes.ts`), `MainServices.processes` ← 01; `MainServices.files` (tree)
+- the test doubles `createMemoryFiles()` (`src/shared/memory-files.ts`, tree, with 01's added members) and
+  `FakeProcesses` (`src/shared/fake-processes.ts`) ← 01 (tests only)
 - the `LAYERS` entries for `src/plugins/docs/contract.ts` (`src/contracts` only), `src/plugins/docs`,
   `src/plugins/docs/main`, and the composition roots' lists naming them ← 01
 - from 04: `IndexDocument`, `IndexEntry`, `IndexHarness`, `CreateKind`, `CreatePlace` (contract.ts);
@@ -48,8 +51,10 @@ export const docsManifest = definePlugin({
   settings: { scriptPath: '' },
 });
 
-// src/plugins/docs/contract.ts (added to 04's types; imports only `src/contracts`, so `FolderEntry` comes from
-// `src/contracts/files.ts` and the harness is 04's `IndexHarness`, the same union as sessions' `Harness`)
+// src/plugins/docs/contract.ts (added to 04's types; imports only `src/contracts`, so the harness is 04's
+// `IndexHarness`, the same union as sessions' `Harness`)
+// One entry of a folder's one-level listing: the `{ name, isFolder }` shape 04's `completions` takes.
+export interface FolderEntry { name: string; isFolder: boolean; }
 // What one run of an index source gives the view: the document to show (null: none) and a line to show above
 // the tree (null: none).
 export interface IndexLoad { document: IndexDocument | null; message: string | null; }
@@ -110,7 +115,7 @@ export function createIndexSources(deps: IndexSourcesDeps): IndexSources;
 
 // src/plugins/docs/main/doc-files.ts
 export interface DocFilesDeps {
-  files: Files; homeDir: string;
+  files: Files; homeDir: string; log: Log;
   entries(): readonly IndexEntry[];          // the machine index's, for the guard
 }
 export interface DocFiles {
@@ -120,12 +125,15 @@ export interface DocFiles {
   rename(from: string, to: string): Promise<string>;
   trash(path: string): Promise<string>;
   list(folder: string): Promise<FolderEntry[]>;
+  // Calls `changed` after the file at `path` changes or is replaced.
+  watch(path: string, changed: () => void): Promise<FileWatch>;
   pluginConfigFile(key: string, harness: IndexHarness): Promise<{ path: string; line: number } | null>;
 }
 export function createDocFiles(deps: DocFilesDeps): DocFiles;
 
 // src/plugins/docs/main/selftest-fixture.ts
-// Writes the self-test's docs, index and stand-in docs_index.py under `homeDir` (the self-test's temp home).
+// Writes the self-test's docs, index and stand-in docs_index.py under `homeDir` (the self-test's temp home),
+// first removing what an earlier self-test run's steps added.
 export function writeDocsFixture(files: Files, homeDir: string): Promise<void>;
 
 // src/plugins/docs/main/start.ts
@@ -195,7 +203,9 @@ runs `session` too — Codex sets no `CLAUDE_CODE_SESSION_ID`, design.md § Mode
   throws `A path starts with / or ~`.
 - `write(path, text, expectedText)`: guard; when `expectedText` is non-null, read the file (missing reads as `''`)
   and when it differs from `expectedText` return `{ type: 'changedOnDisk', diskText }` without writing; else
-  `files.write` (atomic, 01) and `{ type: 'written' }`.
+  `files.write(<the guard's real target>, text)` and `{ type: 'written' }`. The tree's `write` renames a temp file
+  over its target, which would replace a symlink with a plain file; writing to the real target keeps a symlinked doc
+  (this Mac's `~/.claude/CLAUDE.md` style links into `~/wigley-agents`) a link and gives its target the text.
 - `create({ type: 'kind', … })`: `nameProblem(kind, name)` non-null → throw it; `createTarget(kind, place,
   name.trim())`; guard its path; an existing file throws `<path> already exists` unless the target `appends`;
   `files.makeFolder(parentFolder(path))`; write `contents(existing).text`; return `{ path, line:
@@ -213,7 +223,15 @@ runs `session` too — Codex sets no `CLAUDE_CODE_SESSION_ID`, design.md § Mode
 - `trash(path)`: a path whose `skillFolder` is non-null trashes that folder (plan.md Decisions, Delete); guard the trashed
   item; `files.trash`; return the trashed path.
 - `read(path)`: no guard (plan.md guards changes only); a missing file rejects with the `Files.read` error.
-- `list(folder)`: a missing path or a file → `[]`; else `files.list(folder)`.
+- `list(folder)`: `files.stat(folder)` null or not a folder → `[]`; else `files.list(folder)` (one level, no
+  `recursive`), each entry mapped to `{ name: entry.path, isFolder: entry.kind === 'folder' }` (one level, so `path`
+  is the bare name). The tree's `list` reads the entry's own type, so a symlink to a folder lists as a file.
+- `watch(path, changed)`: the real path is `files.realPath(path)`, or `path` when nothing is there yet;
+  `files.watch(parentFolder(real), onChange, onError)` with `onChange` calling `changed` only when the reported
+  relative path equals `baseName(real)` (the tree's `watch` reports every path under the folder, relative to it,
+  and skips `write`'s temp files). Watching the folder, not the file, is what sees an atomic replace. `onError` logs
+  `watch <path> stopped: <errorText(error)>` under source `docs`; the tree's watch has already closed itself. A
+  watch that fails to start throws from `files.watch`, so the returned promise rejects.
 - `pluginConfigFile(key, harness)` (a plugin entry's `path` is its install folder, not a file; README § The index
   file): `claude` → for each folder of `readClaudeConfigDirs` in order, `<dir>/plugins/installed_plugins.json` when
   its text holds `"<key>"`; `codex` → `<homeDir>/.codex/config.toml` when its text holds `<key>`. The result's `line`
@@ -226,7 +244,7 @@ self-test the temp home is a link into `/private` (`/var/folders/…`), so `~` t
 On a normal Mac the home folder is already real.
 
 **Watching** (design.md § Docs browser, Disk changes). `start.ts` keeps one `FileWatch` per `viewId`:
-`watchDoc(viewId, path)` closes that view's watch, then, with `path` non-null, `files.watch(path, () =>
+`watchDoc(viewId, path)` closes that view's watch, then, with `path` non-null, keeps `await docFiles.watch(path, () =>
 channel.send('docChanged', { viewId, path }))`. `unwatchAll()` closes every watch: the page calls it at its start,
 since a page reload leaves main's watches behind. `dispose` closes every watch.
 
@@ -237,8 +255,13 @@ since a page reload leaves main's watches behind. `dispose` closes every watch.
 **Self-test fixture** (AGENTS.md § Running and testing: the self-test runs under a temp home, `homeFolder()` in
 `src/main/main.ts`; docs never reads or writes the user's real docs or index during it).
 - `start` calls `writeDocsFixture(files, homeDir)` when `services.selfTest` is non-null, before serving anything:
-  it keeps the returned promise, and every channel handler awaits it first. The docs plugin hands the driver no
-  script (only forms' runs; task 09 adds the docs steps to it).
+  it keeps the returned promise, and every channel handler awaits it first. This task hands the driver no script;
+  task 09 adds the docs plugin's own (`src/plugins/docs/main/selftest-script.ts`), which calls `writeDocsFixture`
+  again at the start of each run.
+- Before writing, `writeDocsFixture` removes every file in `H/.claude/rules` other than `style.md` (`files.list`,
+  then `files.trash`, which deletes for good under the self-test, 01), so each call starts from the fixture
+  whatever an earlier run's create and rename steps left there. Only the self-test calls it, always with the temp
+  home.
 - Under the self-test, `homeDir` is the temp home, so the index path, `config.json`, the Claude config folder
   `~/.claude` and the plugin's `installed_plugins.json` all resolve inside it; `scriptPath` is `''` (main parts
   start on their defaults), so the locator finds the stand-in script the fixture installs, never the user's.
@@ -333,9 +356,10 @@ since a page reload leaves main's watches behind. `dispose` closes every watch.
 
 ## Tests
 
-Each test builds its own `MemoryFiles` and `FakeProcesses` (01's doubles, `src/shared/testing/`) with home
-`/Users/u`; `MemoryFiles.realPath` returns the path when something is there, so the guard's link handling is not
-reachable in these tests (task 11 check 8 covers a real repo).
+Each test builds its own `createMemoryFiles()` (`src/shared/memory-files.ts`) and `new FakeProcesses()`
+(`src/shared/fake-processes.ts`), 01's doubles, with home `/Users/u`; memory `realPath` returns the path when
+something is there, so the guard's link handling is not reachable in these tests (task 11 check 8 covers a real
+repo).
 
 `script-locator.test.ts`
 - `locateScript_SettingSet_ReturnsItExpanded` — `scriptPath` `~/src/docs_index.py` → `/Users/u/src/docs_index.py`.
@@ -380,10 +404,15 @@ reachable in these tests (task 11 check 8 covers a real repo).
 - `pluginConfigFile_ClaudeSecondDir_KeyLine` — `config.json` `{"claudeConfigDirs":["~/.claude","~/.claude-personal"]}`; `/Users/u/.claude/plugins/installed_plugins.json` `{"plugins":{}}`; `/Users/u/.claude-personal/plugins/installed_plugins.json` `{\n"plugins":{\n"p@m":[]\n}}` → `{ path: '/Users/u/.claude-personal/plugins/installed_plugins.json', line: 3 }`; key `q@m` → null.
 - `pluginConfigFile_Codex_ConfigToml` — `/Users/u/.codex/config.toml` `[features]\n\n[plugins."p@m"]\nenabled = true\n` → `{ path: '/Users/u/.codex/config.toml', line: 3 }`.
 - `rename_UnlistedSkill_MovesFolder` — no entry lists `/Users/u/dev/r/.claude/skills/new/SKILL.md` (inside root `/Users/u/dev/r`); renamed to `…/skills/newer/SKILL.md` → the folder `…/skills/new` moved.
-- `trash_SkillMd_TrashesFolder` — result `/Users/u/dev/r/.claude/skills/s`; `files.trashed` is `['/Users/u/dev/r/.claude/skills/s']`.
+- `trash_SkillMd_TrashesFolder` — the skill folder also holds `ref.md`; result `/Users/u/dev/r/.claude/skills/s`; `files.stat` of the folder and of `…/skills/s/ref.md` are both `null`.
 - `list_MissingFolder_Empty` — `[]`.
+- `list_File_Empty` — `list('/Users/u/dev/r/a.md')` on a file → `[]`.
+- `list_Folder_OneLevelNamesAndFolders` — files `/Users/u/dev/r/a.md`, `/Users/u/dev/r/sub/b.md` → sorted by name in the test, `[{ name: 'a.md', isFolder: false }, { name: 'sub', isFolder: true }]`.
+- `watch_ChangeToTheFile_CallsChanged` — watch `/Users/u/dev/r/a.md`; `files.write` of it → `changed` ran once.
+- `watch_OtherFileInTheFolder_NotCalled` — watch `/Users/u/dev/r/a.md`; write `/Users/u/dev/r/b.md` and `/Users/u/dev/r/sub/a.md` → `changed` never ran.
+- `watch_Closed_NotCalled` — watch, `close()`, write the file → `changed` never ran.
 
-The start wiring (channel handlers, the fixture gate, watches) is proved by the self-test steps of task 09.
+The start wiring (channel handlers, the fixture gate, one watch per view) is proved by the self-test steps of task 09.
 
 ## Done when
 

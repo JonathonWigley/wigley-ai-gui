@@ -32,14 +32,17 @@ re-read owns the mode, session-tab, sidebar and scoped-editor-key lines. Check e
 3. **An ambient service**: the list "the clock, ids, the home folder, files (with watching), processes". Task 06 added
    `MainServices.openExternal`; add it to the list ("opening a link in the default browser") so the line names every
    main service a plugin gets.
-4. **A third-party tool**: "the core hands plugins the shared ones (editor, markdown, code highlighter) as services" —
-   check whether task 02 put the highlighter on `PageServices` or kept it inside the markdown adapter and the editor
-   host only; if plugins never receive it, drop "code highlighter" from the parenthesis.
-5. **Running and testing**, the self-test paragraph: it names only forms' fixture. Add one sentence: the docs main part
-   writes its own fixture (docs, an index, and a stand-in `docs_index.py`) into the self-test's temp home at start, so
-   the docs steps in forms' script never reach the user's docs or index. Name the file
-   `src/plugins/docs/main/selftest-fixture.ts`.
-6. **A key**: if any docs key behaviour the code landed contradicts it (for example a text box that keeps typed keys
+4. **A third-party tool**: "the core hands plugins the shared ones (editor, markdown) as services" — task 02 keeps the
+   highlighter inside the markdown adapter and the editor host (`PageServices` is unchanged), so the line holds; add
+   "code highlighter" to the parenthesis only when the landed code puts it on `PageServices`.
+5. **Running and testing**, the self-test paragraph: each plugin hands one script (it names forms' and chat's). Add one
+   sentence: the docs plugin hands its own, `src/plugins/docs/main/selftest-script.ts`, whose fixture
+   `src/plugins/docs/main/selftest-fixture.ts` writes docs, an index and a stand-in `docs_index.py` into the self-test's
+   temp home at start, so the docs steps never reach the user's docs or index.
+6. **A session tab**: agent chat plan A's re-read is closed and left the clause "and the docs plugin, once it lands, a
+   Docs tab when the session connects". With the docs plugin landed, it reads "and docs a Docs tab to each session when
+   it connects".
+7. **A key**: if any docs key behaviour the code landed contradicts it (for example a text box that keeps typed keys
    from the page keys, task 08), add the rule the code follows.
 
 Commit in wigley-ai-gui: "AGENTS.md: docs plugin lines re-read against the landed code" (only when a line changed).

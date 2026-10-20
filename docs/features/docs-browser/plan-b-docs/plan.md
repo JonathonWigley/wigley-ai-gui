@@ -17,9 +17,10 @@ Docs tab shows the same view over that session's own index. A change on disk rel
 
 Systems touched:
 
-- **core main services** (`src/contracts/files.ts`, `src/contracts/processes.ts`, `MainServices` in
-  `src/contracts/plugin.ts`, new `src/main/files/`, `src/main/processes/`, `src/main/main.ts`): files (with watching)
-  and processes for every main part.
+- **core main services** (`src/contracts/files.ts` and its adapters `src/main/files/`, `src/shared/memory-files.ts`,
+  `src/shared/scoped-files.ts`; new `src/contracts/processes.ts`, `src/main/processes/`; `MainServices` in
+  `src/contracts/plugin.ts`, `src/main/main.ts`): the existing files seam gains stat, real paths, folders, rename and
+  trash, and a new processes service, for every main part.
 - **code highlighting and markdown** (`src/contracts/highlight.ts`, `src/contracts/markdown.ts`,
   `src/renderer/codemirror-vim/`, `src/renderer/markdown-it/markdown-it-renderer.ts`, `src/renderer/renderer.ts`,
   theme tokens): a document render with links and highlighted code.
@@ -162,60 +163,64 @@ editing several files in splits.
 
 Existing files modified:
 
-- `src/contracts/plugin.ts` — `MainServices.files: Files`, `MainServices.processes: ProcessRunner` (task 01);
+- `src/contracts/files.ts` — `Files` gains `stat`, `realPath`, `makeFolder`, `rename`, `trash`; `FileStat` (task 01).
+- `src/main/files/node-files.ts` (+ test) — the five members; `createNodeFiles({ trashItem })` (task 01).
+- `src/shared/memory-files.ts` (+ new test), `src/shared/scoped-files.ts` (+ test),
+  `src/shared/layouts/layout-registry.test.ts` — every other `Files` implementation gains the five members (task 01).
+- `src/contracts/plugin.ts` — `MainServices.processes: ProcessRunner` (task 01; `files` is there already);
   `MainServices.openExternal(url: string): Promise<void>` (task 06; Electron's `shell.openExternal`, logged only in the
   self-test).
 - `src/contracts/markdown.ts` — `MarkdownRenderer.document(text: string): Promise<string>`.
 - `src/contracts/editor.ts` — `EditorHost.createDocument`, `DocumentEditor`, `DocumentEditorEvents`,
   `DocumentOptions`.
 - `src/contracts/theme.ts`, `src/config/themes/catppuccin-mocha.json` — `syntax.*` tokens.
-- `src/main/main.ts` — fills `files` and `processes`.
+- `src/main/main.ts` — passes `trashItem` to `createNodeFiles` (`rm` under the self-test) and fills `processes`.
 - `src/renderer/renderer.ts` — builds the highlighter and hands it to the markdown adapter.
 - `src/renderer/markdown-it/markdown-it-renderer.ts` (+ test) — `document`.
 - `src/renderer/codemirror-vim/codemirror-vim-host.ts`, `editor-theme.ts` — `createDocument`.
 - `src/plugins/manifests.ts`, `main.ts`, `page.ts` — the docs plugin.
-- `src/plugins/forms/main/selftest-script.ts` — docs steps (only one self-test script runs).
+- `src/plugins/forms/main/selftest-script.ts` — the steps the session Docs tabs change (task 09).
 - `scripts/check-layers.mts` — every entry this plan needs lands in task 01 alone, so wave-1 tasks share no file:
-  `src/main/files`, `src/main/processes`, `src/plugins/docs`, `src/plugins/docs/main`, `src/plugins/docs/page`,
-  `src/shared/testing`, the composition roots' lists, and `@codemirror/lang-markdown`, `@codemirror/language-data`,
-  `@lezer/highlight` for `src/renderer/codemirror-vim`.
+  `src/main/processes`, `src/plugins/docs`, `src/plugins/docs/contract.ts`, `src/plugins/docs/main`,
+  `src/plugins/docs/page`, the composition roots' lists, and the six `@codemirror/*` and `@lezer/highlight` packages
+  for `src/renderer/codemirror-vim` (`src/main/files` is in the table already).
 - `package.json`, `package-lock.json` — the user's install (Preconditions).
 - wigley-ai-marketplace `plugins/wigley/scripts/docs-index/` (`config.py`, `environment.py`, `discover.py`,
   `claude_rules.py`, `session.py`, `docs_index.py`, tests) and both `plugin.json` manifests.
 
 New files (each justified by a seam or a decision above):
 
-- `src/contracts/files.ts`, `src/contracts/processes.ts`, `src/contracts/highlight.ts` — the seams.
-- `src/main/files/node-files.ts` (+ test on a temp folder), `src/main/processes/node-processes.ts` (+ test) — adapters.
-- `src/shared/testing/memory-files.ts`, `src/shared/testing/fake-processes.ts` — the second adapters, for plugin tests.
+- `src/contracts/processes.ts`, `src/contracts/highlight.ts` — the seams.
+- `src/main/processes/node-processes.ts` (+ test) — the adapter.
+- `src/shared/fake-processes.ts` — the second adapter, for plugin tests, beside `memory-files.ts`.
 - `src/renderer/codemirror-vim/languages.ts` — language lookup shared by the editor and the highlighter;
   `src/renderer/codemirror-vim/codemirror-highlighter.ts` — `CodeHighlighter` adapter.
 - `src/plugins/docs/manifest.ts`, `contract.ts`, and pure shared modules (+ tests): `index-document.ts`, `tree.ts`,
   `frontmatter.ts`, `kinds.ts`, `links.ts`, `path-completion.ts`, `path-guard.ts`.
 - `src/plugins/docs/main/start.ts`, `index-sources.ts`, `script-locator.ts`, `doc-files.ts` (+ tests),
-  `selftest-fixture.ts`.
+  `selftest-fixture.ts`, `selftest-script.ts` (the docs plugin's own self-test script, task 09).
 - `src/plugins/docs/page/start.ts`, `docs-view.ts`, `tree-view.ts`, `doc-view.ts`, `docs-dialogs.ts`, `docs.css`,
   and page-side state modules with tests where a decision lives (`docs-state.ts`).
 
 Interfaces every task shares (exact names; the task documents spell them the same):
 
 ```ts
-// src/contracts/files.ts
-export interface FileStat { isFolder: boolean; modifiedMs: number; size: number; }
-export interface FolderEntry { name: string; isFolder: boolean; }
+// src/contracts/files.ts — the tree's members, then task 01's five
+export interface FileEntry { path: string; kind: 'file' | 'folder'; }  // path relative to the folder listed
+export interface FileStat { isFolder: boolean; }
 export interface FileWatch { close(): void; }
 export interface Files {
   read(path: string): Promise<string>;
-  // Writes through a temp file in the same folder, then renames.
+  // Writes through a temp file in the same folder, then renames; creates parents.
   write(path: string, text: string): Promise<void>;
-  stat(path: string): Promise<FileStat | null>;     // null when nothing is there
+  list(folder: string, options?: { recursive?: boolean }): Promise<FileEntry[]>;  // missing folder → []
+  // Reports each changed path under `folder`, relative to it, debounced 100 ms per path.
+  watch(folder: string, onChange: (path: string) => void, onError?: (error: unknown) => void): FileWatch;
+  stat(path: string): Promise<FileStat | null>;     // follows links; null when nothing is there
   realPath(path: string): Promise<string>;
-  list(folder: string): Promise<FolderEntry[]>;
   makeFolder(path: string): Promise<void>;           // with parents
-  rename(from: string, to: string): Promise<void>;
-  trash(path: string): Promise<void>;                // the OS Trash
-  // Calls `changed` after the file at `path` changes or is replaced, debounced 100 ms.
-  watch(path: string, changed: () => void): FileWatch;
+  rename(from: string, to: string): Promise<void>;   // rejects `<to> already exists`
+  trash(path: string): Promise<void>;                // the OS Trash; deletes for good under the self-test
 }
 
 // src/contracts/processes.ts
@@ -253,8 +258,8 @@ produce `Mode.shown()`, `SessionTabView.shown()` and `SessionTabHandle.isVisible
 
 Boundary rules: `src/plugins/docs` imports `src/contracts`, `src/shared`, and `src/plugins/sessions/contract.ts`
 (page: also `src/plugins/keys/contract.ts`, `src/shared/page`); `src/main/files` and `src/main/processes` import
-`src/contracts`, `src/shared` and `node:` only (main.ts injects Electron's `shell.trashItem`); only `src/shared/testing` holds fakes, and
-only tests import it.
+`src/contracts` and `node:` only (main.ts injects Electron's `shell.trashItem`); test doubles live in `src/shared`
+beside the tree's own (`memory-files.ts`, `fake-agent-harness.ts`), named for what they are.
 
 ## Tasks
 
@@ -322,5 +327,23 @@ review range is this run's explicit commit list.
   for agent-chat's per-plugin self-test scripts before dispatching it — the plans share `plugin.ts`, `main.ts`,
   `check-layers.mts`, the plugin lists and `package.json` — user, in the preflight round · lead
 - Version: origin `main` and local both read `1.4.0`, so task 03 bumps both manifests to `1.5.0` · lead
+- Files seam: `src/contracts/files.ts` already exists (`191f4d7`, the forms layouts run) with a recursive `list`
+  of `{ path, kind }` and a folder `watch`. Task 01 extends it in place with `stat`, `realPath`, `makeFolder`,
+  `rename` and `trash`, in the Node adapter and in `src/shared/memory-files.ts`, and keeps `list` and `watch` as
+  they are; 06 maps `list` to `{ name, isFolder }` and watches a doc's folder, filtering on the file's name; tasks
+  01, 06 and 09 and plan.md's File Structure are amended before dispatch — user, in the resume round · lead
+- Order: docs browser B runs to close before agent-chat plan B starts, since both extend the files seam and the
+  editor host — user, in the resume round · lead
+- Agent-chat A closed at `e0afe84`; tasks 01–11's remaining docs are re-checked against it (jk remap gone,
+  `EditorBind` mode `insert`, per-plugin self-test scripts, `TabsState.selections`, take-over release wording)
+  before dispatch · lead
+- The amended 06 watches a doc's parent folder with the tree's recursive `watch`, so a doc directly in `~/.claude`
+  also sees every transcript write under `~/.claude/projects`; kept, since one watch per open view filters by name
+  on a debounced FSEvents stream and the user chose to keep `watch` as it is — costs a little CPU while sessions
+  stream; a non-recursive option is the fix if it shows · lead
+- Tasks 07 and 08's "`npm run selftest` still passes" is proved at the test gate after 09, which holds the forms
+  and chat step edits that Docs tabs require; 07's and 08's per-group proof is the diff read and compile · lead
+- 09 also edits chat's self-test steps a chat session's Docs tab breaks (amendment worker's concern: 07 gives
+  every session a Docs tab and pins no tab order) · lead
 ### Review rounds
 ### Test gate
