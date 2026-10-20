@@ -115,7 +115,8 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   `a` focus the box, `j` / `k` move between entries, `Enter` expands a tool call, `G` jumps to the latest, Ctrl+C
   interrupts. Tool calls show one compact line (tool name and a short input summary) that expands to the full input
   and output. These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
-  nothing, and the chat's pickers and dialogs close when another session's Chat tab shows.
+  nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows (the start
+  prompt, tied to no session, stays open).
 - **Controls**: `Space c m` mode, `Space c e` effort, `Space c o` model, each opening a picker of its choices;
   `Space c c` lists every control, so a control a new adapter declares is reachable before it gets a key.
 - **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder — the

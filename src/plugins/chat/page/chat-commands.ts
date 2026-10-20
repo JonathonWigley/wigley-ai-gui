@@ -204,6 +204,7 @@ export function chatCommandHandlers(
         title: 'Controls',
         items: controls,
         label: controlText,
+        sessionBound: true,
         picked: (control) => openChoices(deps, session, control),
       });
     }),
@@ -285,6 +286,7 @@ function openChoices(
     items: control.choices,
     label: (choice) => choice.label,
     selected: Math.max(0, current),
+    sessionBound: true,
     picked: (choice) => {
       void deps.channel
         .invoke('setControl', session.sessionId, control.id, choice.value)

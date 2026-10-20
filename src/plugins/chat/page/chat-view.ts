@@ -149,7 +149,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     const tab = createTab(state, shown, deps, {
       // Chat keys act only on the visible Chat tab's session. Another
       // session's Chat tab sets the same scope, so no pushed dialog hears a
-      // base change: `otherSessionShown` closes them.
+      // base change: `otherSessionShown` closes the session's dialogs.
       shown: (shownTab) => {
         deps.setScope();
         if (

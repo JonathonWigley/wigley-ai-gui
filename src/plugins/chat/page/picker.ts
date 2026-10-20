@@ -19,6 +19,9 @@ export interface PickerRequest<T> {
   label(item: T): string;
   // The item index highlighted on open; 0 when left out or out of range.
   selected?: number;
+  // True when the list acts on the shown Chat tab's session, so
+  // `closeSessionBound` closes it; false when left out.
+  sessionBound?: boolean;
   // Runs once the picker has closed.
   picked(item: T): void;
 }
@@ -26,6 +29,7 @@ export interface PickerRequest<T> {
 // One list dialog in the overlay, holding one request at a time: `open`
 // replaces the open request, if any. `pick` with nothing visible does
 // nothing; `close` and the pushed scope's base changing close it unpicked.
+// `closeSessionBound` closes it only while its request is session-bound.
 // `focusFilter` types into the filter box, and `leaveFilter` leaves it with
 // the filter kept.
 export interface Picker {
@@ -35,6 +39,7 @@ export interface Picker {
   up(): void;
   pick(): void;
   close(): void;
+  closeSessionBound(): void;
   focusFilter(): void;
   leaveFilter(): void;
 }
@@ -51,6 +56,7 @@ export interface PickerDeps {
 // and hands the picked index back.
 interface OpenRequest {
   title: string;
+  sessionBound: boolean;
   pickAt(index: number): void;
 }
 
@@ -116,6 +122,7 @@ export function createPicker(deps: PickerDeps): Picker {
       filter.setText('');
       request = {
         title: next.title,
+        sessionBound: next.sessionBound ?? false,
         pickAt: (index) => next.picked(next.items[index]),
       };
       state = openPicker(next.items.map(next.label), next.selected ?? 0);
@@ -153,6 +160,11 @@ export function createPicker(deps: PickerDeps): Picker {
       const closed = hide();
       if (closed !== null) {
         deps.log('chat', `picker closed: ${closed.title}`);
+      }
+    },
+    closeSessionBound() {
+      if (request?.sessionBound === true) {
+        picker.close();
       }
     },
     focusFilter() {
