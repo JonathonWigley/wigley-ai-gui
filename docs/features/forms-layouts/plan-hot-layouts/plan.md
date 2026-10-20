@@ -328,6 +328,9 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   recommendation raised, all taken by the user's ruling — fix round 2 dispatched (asset extensions redraw and are
   served typed; `watch` start-failure comment; check-layers header reflow; the self-test proves the preview row
   selected)
+- fix round 2 · 1b86e3e · typecheck and lint clean, 729 tests in 44 files pass
+- re-review 2 · 1b86e3e · PASS, no findings; every round-2 item closed
+- Self-test on the fixes: pending — blocked while the user's `npm start` holds the app's data folder
 ### Test gate
 - Range: this run's commits 191f4d7 f9e9db6 b5142a6 c070e90 f8afed4 66789d6 25718bd a4f3184. Pass 1 (written):
   node-files, main-api, layout-registry, layout-preview, preview-round, round-store, manifest, editor-boxes,
