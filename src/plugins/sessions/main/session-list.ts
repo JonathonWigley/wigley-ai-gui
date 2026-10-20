@@ -51,9 +51,10 @@ interface SessionEntry {
   number: number;
   toolSessions: ToolSession[];
   toolRoutes: Map<string, ToolSession>;
-  // Started by `open`; `joined` while its relay is connected.
+  // Started by `open`; `joinedBy` names the relay handle holding the join,
+  // null while no relay is joined.
   owned: boolean;
-  joined: boolean;
+  joinedBy: symbol | null;
 }
 
 const NO_FOLDER_LABEL = 'session';
@@ -139,8 +140,9 @@ function routeCall(
 
 // Connected and owned sessions and the sidebar rows main holds for them. A
 // connected session gets its row at connect, unselected; an owned session gets
-// its row at open, selected, is joined by the first relay carrying its host id
-// without a row of its own, and ends only by its `end()`. Each session keeps
+// its row at open, selected, is joined by each relay carrying its host id
+// without a row of its own, a newer relay taking the join from an older one,
+// and ends only by its `end()`. Each session keeps
 // its label while it lasts; a closed row comes back at the end with the
 // session's next mark. `mark`, `activate` and `closeSession` send the whole
 // state only when it changed, and log and ignore a session they cannot act on;
@@ -223,7 +225,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       number: freeNumber(entries.values(), group),
       ...startToolSessions(contributions, session),
       owned,
-      joined: false,
+      joinedBy: null,
     };
     entries.set(session.id, entry);
     rows.push(rowOf(entry));
@@ -235,22 +237,29 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       (entry) => entry.session.info.sessionId === hostId,
     );
 
-  // The relay's handle on an owned session: its `end` only clears the join,
-  // once, and not after the owned session ended.
+  // The relay's handle on an owned session, taking the join from any older
+  // relay still holding it: a harness restarting its MCP connection can say
+  // hello on the new socket before the old one closes. The handle's `end`
+  // only clears the join, and only while this handle still holds it.
   const join = (entry: SessionEntry): ConnectedSession => {
     const appId = entry.session.id;
-    entry.joined = true;
-    deps.log('sessions', `relay joined session ${appId}`);
-    let left = false;
+    const handle = Symbol(appId);
+    const isTakingOver = entry.joinedBy !== null;
+    entry.joinedBy = handle;
+    deps.log(
+      'sessions',
+      isTakingOver
+        ? `newer relay took over session ${appId}`
+        : `relay joined session ${appId}`,
+    );
     return {
       session: entry.session,
       call: (name, args, context) => routeCall(entry, name, args, context),
       end: () => {
-        if (left || !entries.has(appId)) {
+        if (entry.joinedBy !== handle || !entries.has(appId)) {
           return;
         }
-        left = true;
-        entry.joined = false;
+        entry.joinedBy = null;
         deps.log('sessions', `relay left session ${appId}`);
       },
     };
@@ -283,18 +292,12 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         hostId === null
           ? undefined
           : entriesHolding(hostId).find((entry) => entry.owned);
-      if (ownedEntry !== undefined && !ownedEntry.joined) {
+      if (ownedEntry !== undefined) {
         return join(ownedEntry);
       }
       const entry = addEntry(info, false);
       sendState();
       deps.emit('connected', entry.session);
-      if (ownedEntry !== undefined) {
-        deps.log(
-          'sessions',
-          `relay for host session ${hostId} connected while one is joined; added as session ${entry.session.id}`,
-        );
-      }
       return {
         session: entry.session,
         call: (name, args, context) => routeCall(entry, name, args, context),

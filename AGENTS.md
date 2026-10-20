@@ -74,7 +74,8 @@ the `retro` skill reads, and the relay's side of the channel). A change to eithe
 lands in both repos together. Each relay connection is one agent session, owned by the `sessions` plugin; every
 connected session has a row in the sessions sidebar until it disconnects or the user closes the row. A session the
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
-host session id joins that row instead of adding one, and the row ends when the agent process ends. A plugin's close
+host session id joins that row instead of adding one (a newer relay takes the join from an older one still
+connected, as when the harness restarts its MCP connection), and the row ends when the agent process ends. A plugin's close
 guard (`addCloseGuard`) refuses the user's close while the plugin still has something open there (forms: an open
 round), since main, not the page, decides.
 
@@ -108,7 +109,7 @@ round), since main, not the page, decides.
   forms adds a Form tab where a session's round view is created, when the session has no Form tab, chat a Chat tab
   to each session it starts, and the docs plugin, once it lands, a Docs tab when the session connects. A tab that
   needs the user now takes over its session (`takeOver()`), and its release gives the session back to the tab shown
-  before unless the user moved since: forms takes over for a round and releases on submit or cancel. A session's tabs drop when its row leaves, closed by the user or ended, and
+  before only if no tab was selected since, even back to the taking tab: forms takes over for a round and releases on submit or cancel. A session's tabs drop when its row leaves, closed by the user or ended, and
   `sessions.sessionRemoved` tells each plugin to forget the session; the user moves between tabs with `Option+o` /
   `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`.
 - **A key** is a default bind in its plugin's manifest naming that plugin's command; the core qualifies both, so

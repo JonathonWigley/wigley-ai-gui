@@ -94,7 +94,9 @@ export interface SessionsMainExports {
     start: (session: AgentSession) => ToolSession,
   ): void;
   // Adds the session's row, unmarked and unselected, or joins the owned session
-  // whose host id the info carries, adding no row.
+  // whose host id the info carries, adding no row. A newer relay for that host
+  // id takes the join from an older one still connected; the older handle's
+  // `end` then leaves the join alone.
   connect(info: SessionInfo): ConnectedSession;
   // Starts an owned session with its row selected. Throws when `info.sessionId`
   // is null or any session already holds that host id.
@@ -165,8 +167,9 @@ export interface SessionTabView {
 // `setStatus` sets the tab's line in its session's sidebar row. `select`
 // selects the tab inside its session, never changing the selected session.
 // `takeOver` selects the tab inside its session and returns a release; the
-// first release selects the tab selected before the take over, unless another
-// tab was selected since or that tab is gone. `isVisible` reads, at the moment
+// first release selects the tab selected before the take over, unless a tab
+// was selected since (by the user or `select`, even back to this one), another
+// take over holds the session, or that tab is gone. `isVisible` reads, at the moment
 // of the call, whether this tab is the visible tab. Each call on a tab already
 // dropped does nothing.
 export interface SessionTabHandle {

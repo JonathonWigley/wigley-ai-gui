@@ -73,12 +73,24 @@ describe('tabs', () => {
     const first = tabsAfterAdd(NO_TABS, 's', 'form');
     const second = tabsAfterAdd(first, 's', 'docs');
 
-    expect(first).toEqual({ tabIds: ['form'], selectedTabId: 'form' });
-    expect(second).toEqual({ tabIds: ['form', 'docs'], selectedTabId: 'form' });
+    expect(first).toEqual({
+      tabIds: ['form'],
+      selectedTabId: 'form',
+      selections: 0,
+    });
+    expect(second).toEqual({
+      tabIds: ['form', 'docs'],
+      selectedTabId: 'form',
+      selections: 0,
+    });
   });
 
   it('tabsAfterAdd throws on a duplicate id', () => {
-    const tabs: TabsState = { tabIds: ['form'], selectedTabId: 'form' };
+    const tabs: TabsState = {
+      tabIds: ['form'],
+      selectedTabId: 'form',
+      selections: 0,
+    };
 
     expect(() => tabsAfterAdd(tabs, 's', 'form')).toThrow(
       'Session s already has a tab "form"',
@@ -86,67 +98,105 @@ describe('tabs', () => {
   });
 
   it('tabsAfterRemove passes the selection of a middle tab to its right neighbour', () => {
-    const tabs: TabsState = { tabIds: ['a', 'b', 'c'], selectedTabId: 'b' };
+    const tabs: TabsState = {
+      tabIds: ['a', 'b', 'c'],
+      selectedTabId: 'b',
+      selections: 0,
+    };
 
     expect(tabsAfterRemove(tabs, 'b')).toEqual({
       tabIds: ['a', 'c'],
       selectedTabId: 'c',
+      selections: 0,
     });
   });
 
   it('tabsAfterRemove passes the selection of the last tab to its left neighbour', () => {
-    const tabs: TabsState = { tabIds: ['a', 'b', 'c'], selectedTabId: 'c' };
+    const tabs: TabsState = {
+      tabIds: ['a', 'b', 'c'],
+      selectedTabId: 'c',
+      selections: 0,
+    };
 
     expect(tabsAfterRemove(tabs, 'c')).toEqual({
       tabIds: ['a', 'b'],
       selectedTabId: 'b',
+      selections: 0,
     });
   });
 
   it('tabsAfterRemove of the only tab leaves none selected', () => {
-    const tabs: TabsState = { tabIds: ['a'], selectedTabId: 'a' };
+    const tabs: TabsState = {
+      tabIds: ['a'],
+      selectedTabId: 'a',
+      selections: 0,
+    };
 
     expect(tabsAfterRemove(tabs, 'a')).toEqual(NO_TABS);
   });
 
   it('tabsAfterRemove of an unselected tab keeps the selection', () => {
-    const tabs: TabsState = { tabIds: ['a', 'b', 'c'], selectedTabId: 'c' };
+    const tabs: TabsState = {
+      tabIds: ['a', 'b', 'c'],
+      selectedTabId: 'c',
+      selections: 0,
+    };
 
     expect(tabsAfterRemove(tabs, 'a')).toEqual({
       tabIds: ['b', 'c'],
       selectedTabId: 'c',
+      selections: 0,
     });
   });
 
-  it('tabsAfterSelect selects a present tab and returns the same value for an absent one', () => {
-    const tabs: TabsState = { tabIds: ['a', 'b'], selectedTabId: 'a' };
+  it('tabsAfterSelect selects a present tab, counting it, and returns the same value for an absent one', () => {
+    const tabs: TabsState = {
+      tabIds: ['a', 'b'],
+      selectedTabId: 'a',
+      selections: 0,
+    };
 
     expect(tabsAfterSelect(tabs, 'b')).toEqual({
       tabIds: ['a', 'b'],
       selectedTabId: 'b',
+      selections: 1,
     });
     expect(tabsAfterSelect(tabs, 'x')).toBe(tabs);
   });
 
   it('tabsAfterTakeOver selects the tab and remembers the one selected before', () => {
-    const tabs: TabsState = { tabIds: ['chat', 'form'], selectedTabId: 'chat' };
+    const tabs: TabsState = {
+      tabIds: ['chat', 'form'],
+      selectedTabId: 'chat',
+      selections: 0,
+    };
 
     const taken = tabsAfterTakeOver(tabs, 'form');
 
     expect(taken.tabs).toEqual({
       tabIds: ['chat', 'form'],
       selectedTabId: 'form',
+      selections: 0,
     });
-    expect(taken.takeOver).toEqual({ tabId: 'form', previousTabId: 'chat' });
+    expect(taken.takeOver).toEqual({
+      tabId: 'form',
+      previousTabId: 'chat',
+      selections: 0,
+    });
   });
 
   it('tabsAfterRelease gives the session back while the taking tab is selected', () => {
-    const tabs: TabsState = { tabIds: ['chat', 'form'], selectedTabId: 'chat' };
+    const tabs: TabsState = {
+      tabIds: ['chat', 'form'],
+      selectedTabId: 'chat',
+      selections: 0,
+    };
     const taken = tabsAfterTakeOver(tabs, 'form');
 
     expect(tabsAfterRelease(taken.tabs, taken.takeOver)).toEqual({
       tabIds: ['chat', 'form'],
       selectedTabId: 'chat',
+      selections: 0,
     });
   });
 
@@ -154,18 +204,46 @@ describe('tabs', () => {
     const tabs: TabsState = {
       tabIds: ['chat', 'form', 'docs'],
       selectedTabId: 'docs',
+      selections: 0,
     };
 
     expect(
-      tabsAfterRelease(tabs, { tabId: 'form', previousTabId: 'chat' }),
+      tabsAfterRelease(tabs, {
+        tabId: 'form',
+        previousTabId: 'chat',
+        selections: 0,
+      }),
     ).toBe(tabs);
   });
 
+  it('tabsAfterRelease keeps the taking tab when the user left it and came back', () => {
+    const tabs: TabsState = {
+      tabIds: ['chat', 'form'],
+      selectedTabId: 'chat',
+      selections: 0,
+    };
+    const taken = tabsAfterTakeOver(tabs, 'form');
+    const movedBack = tabsAfterSelect(
+      tabsAfterSelect(taken.tabs, 'chat'),
+      'form',
+    );
+
+    expect(tabsAfterRelease(movedBack, taken.takeOver)).toBe(movedBack);
+  });
+
   it('tabsAfterRelease keeps the selection when the remembered tab is gone', () => {
-    const tabs: TabsState = { tabIds: ['form'], selectedTabId: 'form' };
+    const tabs: TabsState = {
+      tabIds: ['form'],
+      selectedTabId: 'form',
+      selections: 0,
+    };
 
     expect(
-      tabsAfterRelease(tabs, { tabId: 'form', previousTabId: 'chat' }),
+      tabsAfterRelease(tabs, {
+        tabId: 'form',
+        previousTabId: 'chat',
+        selections: 0,
+      }),
     ).toBe(tabs);
   });
 
@@ -173,6 +251,7 @@ describe('tabs', () => {
     const tabs: TabsState = {
       tabIds: ['chat', 'form', 'docs'],
       selectedTabId: 'chat',
+      selections: 0,
     };
     const taken = tabsAfterTakeOver(tabs, 'form');
     const removed = tabsAfterRemove(taken.tabs, 'form');
@@ -185,17 +264,25 @@ describe('tabs', () => {
 
   it('tabsAfterTakeOver with none selected remembers none, and its release keeps the selection', () => {
     const taken = tabsAfterTakeOver(
-      { tabIds: ['form'], selectedTabId: null },
+      { tabIds: ['form'], selectedTabId: null, selections: 0 },
       'form',
     );
-    const selected: TabsState = { tabIds: ['form'], selectedTabId: 'form' };
+    const selected: TabsState = {
+      tabIds: ['form'],
+      selectedTabId: 'form',
+      selections: 0,
+    };
 
     expect(taken.takeOver.previousTabId).toBeNull();
     expect(tabsAfterRelease(selected, taken.takeOver)).toBe(selected);
   });
 
   it('tabsAfterTakeOver of the selected tab remembers itself, and its release changes nothing', () => {
-    const tabs: TabsState = { tabIds: ['chat', 'form'], selectedTabId: 'form' };
+    const tabs: TabsState = {
+      tabIds: ['chat', 'form'],
+      selectedTabId: 'form',
+      selections: 0,
+    };
 
     const taken = tabsAfterTakeOver(tabs, 'form');
 
@@ -208,6 +295,7 @@ describe('tabs', () => {
     const tabs: TabsState = {
       tabIds: ['chat', 'form', 'docs'],
       selectedTabId: 'chat',
+      selections: 0,
     };
     const form = tabsAfterTakeOver(tabs, 'form');
     const docs = tabsAfterTakeOver(form.tabs, 'docs');
@@ -224,6 +312,24 @@ describe('tabs', () => {
     expect(tabsAfterRelease(formFirst, docs.takeOver).selectedTabId).toBe(
       'form',
     );
+  });
+
+  it('stacked take overs give back nothing once the user moved between them', () => {
+    const tabs: TabsState = {
+      tabIds: ['chat', 'form', 'docs'],
+      selectedTabId: 'chat',
+      selections: 0,
+    };
+    const form = tabsAfterTakeOver(tabs, 'form');
+    const docs = tabsAfterTakeOver(form.tabs, 'docs');
+    const movedBack = tabsAfterSelect(
+      tabsAfterSelect(docs.tabs, 'chat'),
+      'docs',
+    );
+
+    const docsReleased = tabsAfterRelease(movedBack, docs.takeOver);
+    expect(docsReleased).toBe(movedBack);
+    expect(tabsAfterRelease(docsReleased, form.takeOver)).toBe(movedBack);
   });
 
   it('rowStatus takes the last non-empty status in add order', () => {

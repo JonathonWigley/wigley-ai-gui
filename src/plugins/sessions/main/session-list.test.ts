@@ -653,28 +653,42 @@ describe('createSessionList', () => {
     expect(list.state().rows).toHaveLength(1);
 
     // The first relay's handle has already left: a second end must not clear
-    // the join `next` holds, so a third relay gets a session of its own.
+    // the join `next` holds.
+    const loggedBefore = logged.length;
     connected.end();
-    const third = list.connect(owned('host-1'));
-    expect(third.session).not.toBe(ownedSession.session);
-    expect(list.state().rows).toHaveLength(2);
+    expect(logged).toHaveLength(loggedBefore);
+    next.end();
+    expect(logged.at(-1)).toBe('[sessions] relay left session 00000001');
   });
 
-  it('connects a second relay for a joined host id as a session of its own', () => {
-    const { list, logged } = setUp();
+  it('hands the join to a newer relay that says hello before the older one closes', async () => {
+    const { list, states, emitted, logged } = setUp();
     const contribution = fakeContribution();
     list.contributeTools([tool('a')], contribution.start);
-    list.open(owned('host-1'));
-    list.connect(owned('host-1'));
+    const ownedSession = list.open(owned('host-1'));
+    const older = list.connect(owned('host-1'));
+    const sentBefore = states.length;
 
-    const second = list.connect(owned('host-1'));
+    const newer = list.connect(owned('host-1'));
 
-    expect(second.session.id).toBe('00000002');
-    expect(labels(list.state())).toEqual(['x', 'x 2']);
-    expect(contribution.started).toHaveLength(2);
-    expect(logged).toContain(
-      '[sessions] relay for host session host-1 connected while one is joined; added as session 00000002',
+    expect(newer.session).toBe(ownedSession.session);
+    expect(list.state().rows).toHaveLength(1);
+    expect(contribution.started).toHaveLength(1);
+    expect(states).toHaveLength(sentBefore);
+    expect(emitted.filter(([event]) => event === 'connected')).toHaveLength(1);
+    expect(logged.at(-1)).toBe(
+      '[sessions] newer relay took over session 00000001',
     );
+
+    // The older socket's close comes late and leaves the newer join alone.
+    const loggedBefore = logged.length;
+    older.end();
+    expect(logged).toHaveLength(loggedBefore);
+    expect(await newer.call('a', { v: 1 }, CONTEXT)).toBe(RESULT);
+
+    newer.end();
+    expect(logged.at(-1)).toBe('[sessions] relay left session 00000001');
+    expect(contribution.ends()).toBe(0);
   });
 
   it('ends an owned session: its tool sessions, its row and an ended event', () => {

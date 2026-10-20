@@ -42,13 +42,20 @@ export function stepTab(
   return tabIds.length < 2 ? null : stepFrom(tabIds, selectedTabId, step);
 }
 
-// A session's tab ids in add order and the selected one's id.
+// A session's tab ids in add order, the selected one's id, and how many times
+// `tabsAfterSelect` changed the selection: a take over and its release select
+// without counting, so a release can tell whether a tab was selected since.
 export interface TabsState {
   tabIds: readonly string[];
   selectedTabId: string | null;
+  selections: number;
 }
 
-export const NO_TABS: TabsState = { tabIds: [], selectedTabId: null };
+export const NO_TABS: TabsState = {
+  tabIds: [],
+  selectedTabId: null,
+  selections: 0,
+};
 
 // The tabs with `tabId` added last; the first tab added selects itself.
 // Throws when the session already has a tab with that id.
@@ -61,6 +68,7 @@ export function tabsAfterAdd(
     throw new Error(`Session ${sessionId} already has a tab "${tabId}"`);
   }
   return {
+    ...tabs,
     tabIds: [...tabs.tabIds, tabId],
     selectedTabId: tabs.selectedTabId ?? tabId,
   };
@@ -75,21 +83,36 @@ export function tabsAfterRemove(tabs: TabsState, tabId: string): TabsState {
     tabs.selectedTabId === tabId
       ? (tabIds[position] ?? tabIds[position - 1] ?? null)
       : tabs.selectedTabId;
-  return { tabIds, selectedTabId };
+  return { ...tabs, tabIds, selectedTabId };
 }
 
-// The tabs with `tabId` selected; the same value when that tab is absent or
-// already selected.
+// Whether selecting `tabId` changes nothing: that tab is absent or already
+// selected.
+function isSelectUnchanged(tabs: TabsState, tabId: string): boolean {
+  return !tabs.tabIds.includes(tabId) || tabs.selectedTabId === tabId;
+}
+
+// The tabs with `tabId` selected, counted in `selections`; the same value
+// when that tab is absent or already selected.
 export function tabsAfterSelect(tabs: TabsState, tabId: string): TabsState {
-  const isUnchanged =
-    !tabs.tabIds.includes(tabId) || tabs.selectedTabId === tabId;
-  return isUnchanged ? tabs : { ...tabs, selectedTabId: tabId };
+  return isSelectUnchanged(tabs, tabId)
+    ? tabs
+    : { ...tabs, selectedTabId: tabId, selections: tabs.selections + 1 };
 }
 
-// A tab taking over its session, and the tab selected when it took over.
+// The tabs with `tabId` selected, not counted in `selections`.
+function tabsWithSelected(tabs: TabsState, tabId: string): TabsState {
+  return isSelectUnchanged(tabs, tabId)
+    ? tabs
+    : { ...tabs, selectedTabId: tabId };
+}
+
+// A tab taking over its session, the tab selected when it took over, and
+// the session's `selections` count then.
 export interface TakeOver {
   tabId: string;
   previousTabId: string | null;
+  selections: number;
 }
 
 // The tabs with `tabId` selected, and the take over remembering the tab
@@ -99,24 +122,31 @@ export function tabsAfterTakeOver(
   tabId: string,
 ): { tabs: TabsState; takeOver: TakeOver } {
   return {
-    tabs: tabsAfterSelect(tabs, tabId),
-    takeOver: { tabId, previousTabId: tabs.selectedTabId },
+    tabs: tabsWithSelected(tabs, tabId),
+    takeOver: {
+      tabId,
+      previousTabId: tabs.selectedTabId,
+      selections: tabs.selections,
+    },
   };
 }
 
-// The tabs with the remembered tab selected again while the taking tab is
-// still selected and the remembered tab still present; otherwise the same
-// value.
+// The tabs with the remembered tab selected again when no `tabsAfterSelect`
+// changed the selection since the take over, the taking tab is still
+// selected (another take over may hold the session) and the remembered tab
+// is still present; otherwise the same value. A user who left the taking tab
+// and came back keeps it.
 export function tabsAfterRelease(
   tabs: TabsState,
   takeOver: TakeOver,
 ): TabsState {
-  const { tabId, previousTabId } = takeOver;
+  const { tabId, previousTabId, selections } = takeOver;
+  const isUnmovedSince = tabs.selections === selections;
   const isTakingTabSelected = tabs.selectedTabId === tabId;
   const isPreviousTabPresent =
     previousTabId !== null && tabs.tabIds.includes(previousTabId);
-  return isTakingTabSelected && isPreviousTabPresent
-    ? tabsAfterSelect(tabs, previousTabId)
+  return isUnmovedSince && isTakingTabSelected && isPreviousTabPresent
+    ? tabsWithSelected(tabs, previousTabId)
     : tabs;
 }
 
