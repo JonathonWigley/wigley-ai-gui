@@ -243,6 +243,11 @@ describe('createSessionList', () => {
       'Codex session 2',
       'session',
     ]);
+    expect(list.state().rows.map((row) => row.harness)).toEqual([
+      'codex',
+      'codex',
+      'claude',
+    ]);
   });
 
   it("selects the round's row when none is selected and marks a later one", () => {

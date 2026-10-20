@@ -277,6 +277,17 @@ describe('startRelayServer', () => {
     ]);
   });
 
+  it('starts a codex session from a hello naming the codex harness', async () => {
+    const { connect, started } = fakeSessions();
+    const channel = start(echoServe().serve, connect);
+    const { socket, nextLine } = await open(channel);
+
+    socket.write(helloLine({ ...HELLO, harness: 'codex' }));
+
+    expect(JSON.parse(await nextLine())).toEqual({ ok: true });
+    expect(started.map((info) => info.harness)).toEqual(['codex']);
+  });
+
   it('reads a harness it does not know as none', async () => {
     const { connect, started } = fakeSessions();
     const channel = start(echoServe().serve, connect);

@@ -1,7 +1,11 @@
 import type { ChannelShape, EventShape } from '../../contracts/plugin';
 
+// Every agent harness a session can run in; the relay hello's parse reads a
+// harness missing from this list as none.
+export const HARNESSES = ['claude', 'codex'] as const;
+
 // The agent harness a session runs in.
-export type Harness = 'claude' | 'codex';
+export type Harness = (typeof HARNESSES)[number];
 
 // What a round source knows about the session it serves.
 export interface SessionInfo {

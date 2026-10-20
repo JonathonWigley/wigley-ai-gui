@@ -60,12 +60,9 @@ export function createChannelPresenter(
       channel.send('roundShown', round);
       updateOpenCount();
       log('forms', `round shown: ${round.label}`);
-      // A notification click is the user's own act, so the window may come
-      // forward, on the round's row, brought back while the round is open.
+      // A notification click is the user's own act, so it selects the round's
+      // session and brings the window forward.
       alerts.announce('New review round', round.label, () => {
-        if (open.has(round.roundId)) {
-          sessions.markRound(round.sessionId);
-        }
         sessions.activate(round.sessionId);
         window.show();
       });

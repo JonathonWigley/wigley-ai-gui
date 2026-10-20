@@ -159,26 +159,15 @@ describe('createChannelPresenter', () => {
     expect(window.shown()).toBe(0);
   });
 
-  it("brings the window forward on the round's row, marked again, when the announcement is clicked", () => {
+  it("brings the window forward on the round's row when the announcement is clicked", () => {
     const { calls, window, attention, presenter } = setUp();
     presenter.show(ROUND, fakeListener().listener);
     calls.length = 0;
 
     attention.announced[0].onClick();
 
-    expect(calls).toEqual(['markRound app-1', 'activate app-1']);
-    expect(window.shown()).toBe(1);
-  });
-
-  it('only activates the row when the announced round has closed', () => {
-    const { calls, attention, presenter } = setUp();
-    presenter.show(ROUND, fakeListener().listener);
-    presenter.close('round-1');
-    calls.length = 0;
-
-    attention.announced[0].onClick();
-
     expect(calls).toEqual(['activate app-1']);
+    expect(window.shown()).toBe(1);
   });
 
   it("refuses to close a session's row while its round is open", () => {

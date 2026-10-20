@@ -6,6 +6,7 @@ import type { Log } from '../../../../contracts/log';
 import { errorText } from '../../../../shared/error-text';
 import {
   type ConnectedSession,
+  HARNESSES,
   RELAY_PROTOCOL,
   type RelayHello,
   type Harness,
@@ -69,8 +70,6 @@ function mistypedHelloField(hello: RelayHello): string | null {
   }
   return null;
 }
-
-const HARNESSES: readonly Harness[] = ['claude', 'codex'];
 
 // A harness the app does not know reads as none.
 function harnessOf(value: string | null | undefined): Harness | null {
