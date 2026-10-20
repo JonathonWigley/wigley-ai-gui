@@ -1,6 +1,6 @@
 # 06 — Self-test: rows, tabs, the new keys and scoped editor binds
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -82,3 +82,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+1d811e3 · proved: diff read (STEPS, SCROLLS_ITSELF, connect fixture and comments as the Decisions give), typecheck clean; the worker's selftest run printed `[selftest] all passed` (97 PASS lines) with no fix needed in 01, 02 or 05 · concerns: none
