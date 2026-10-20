@@ -143,7 +143,9 @@ round), since main, not the page, decides.
   The rest it cannot check: the `FINDING_ORIGINS` list in the contract, an `origin.*` theme token in
   `THEME_TOKENS` and every built-in theme with its `.badge-origin` rule in `forms.css`, and retro's
   `ORIGIN_ACTION_LABELS` in the marketplace's `answers.py`, which otherwise labels the new origin's actions with the
-  Defect words.
+  Defect words. Every card shows all its choices and its action row, the recommended ones badged, and Accept (Enter)
+  takes them whole: the user ruled out folding the alternatives away, since it biased answers toward the
+  recommendation.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
