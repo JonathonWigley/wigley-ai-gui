@@ -1,6 +1,6 @@
 # 05 — Layout loading, swapping and keys on the page
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -71,3 +71,8 @@ Tests:
 Done when: compiles; `npm run lint` passes; the test gate runs the tests above.
 
 ## Proof
+
+Commit `f8afed4`. Diff read: every Produces signature present (`LayoutLoaderDeps` / `LayoutLoader` named); one
+contract addition (`FormsCommandDeps.layouts`). Typecheck clean; layer check 200 files clean; oxlint clean.
+
+Concerns: `showLayouts` (the queue and drop-stale logic) has no unit test; task 07's live run covers it.

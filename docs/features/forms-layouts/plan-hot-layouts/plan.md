@@ -191,7 +191,7 @@ Boundary rules:
 - [x] [Layout registry in forms main](04-layout-registry.md) — after 02, 03
 
 ### Wave 4
-- [ ] [Layout loading, swapping and keys on the page](05-page-layouts.md) — after 02, 03, 04
+- [x] [Layout loading, swapping and keys on the page](05-page-layouts.md) — after 02, 03, 04
 - [ ] [Preview round](06-preview-round.md) — after 04
 
 ### Wave 5
@@ -220,6 +220,8 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   box; DOM behaviour proved only by the self-test
 - 04 layout registry · c070e90 · proved (diff read, typecheck clean in its files, layer check) · concerns: a copied
   path's ignore mark lingers until its watch report arrives
+- 05 page layouts · f8afed4 · proved (diff read, typecheck clean, layer check) · concerns: `showLayouts` untested
+  until task 07
 ### Contract changes
 - `createRoundView`: → gains `layout: Layout, layoutName: string` after `round`; `RoundViewDeps` gains `log: Log`,
   `boxes` widens to `Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>` · why: builds through the layout
@@ -233,7 +235,17 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   a card input and a `cards` entry · consumers: none · group 02
 - `ids.ts`: → gains `formsCommandNamed(short: string): CommandId | null`, widened out of `numberedCommand` · why:
   `kit.keys` qualifies an unchecked short name · consumers: none · group 02
+- `FormsCommandDeps`: → gains `layouts: LayoutCommandChannel` (`cycleLayout(step)`, `copyLayout()`,
+  `openPreview()`, each `Promise<unknown>`); page `start.ts` wires it to `api.channel.invoke` · why: the handlers
+  invoke main's channel · consumers: none · group 05
 ### Rulings
+- `layoutChanged` listener registers before `layout()` is invoked; an answer arriving after a change is dropped
+  (the change is newer) — no stale `start` choice overwrites a newer one — none known · group 05
+- A rejected `layout()` logs `[forms] layout not read: <errorText>`, no toast, default stays — the spec lists toasts
+  for load outcomes only — one toast line if the user should see it · group 05
+- A rejected command logs `layout command failed: <errorText>` and toasts `Layout command failed: <errorText>`
+  (error); `readLayout` names `cards.question` when `cards` is absent, and `head is missing or not a function` for a
+  non-function head — the spec's one message shape — none known · group 05
 - Node watch drops an event named after the watched folder when no child of that name exists (FSEvents self-report)
   — the burst test failed on it, and every new watch would report a stray `layouts` — a real child sharing the
   folder's name that is deleted would go unreported · group 01
