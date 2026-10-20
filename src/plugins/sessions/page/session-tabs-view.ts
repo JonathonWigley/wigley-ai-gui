@@ -10,8 +10,10 @@ import {
   showsNoSelectionText,
   type TabsState,
   tabsAfterAdd,
+  tabsAfterRelease,
   tabsAfterRemove,
   tabsAfterSelect,
+  tabsAfterTakeOver,
 } from './tabs';
 
 // A tab with the status it last set.
@@ -108,17 +110,20 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     deps.changed();
   };
 
-  const select = (sessionId: string, tabId: string) => {
-    const session = sessions.get(sessionId);
-    if (session === undefined) {
-      return;
-    }
-    const tabs = tabsAfterSelect(session.tabs, tabId);
+  // Stores the session's next tabs, running `changed` only when they changed.
+  const setTabs = (session: SessionTabs, tabs: TabsState) => {
     if (tabs === session.tabs) {
       return;
     }
     session.tabs = tabs;
     changed();
+  };
+
+  const select = (sessionId: string, tabId: string) => {
+    const session = sessions.get(sessionId);
+    if (session !== undefined) {
+      setTabs(session, tabsAfterSelect(session.tabs, tabId));
+    }
   };
 
   // The live tab entry, or undefined once it was dropped or removed.
@@ -159,6 +164,28 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
           if (liveTab(sessionId, tab) !== undefined) {
             select(sessionId, view.id);
           }
+        },
+        takeOver() {
+          const live = liveTab(sessionId, tab);
+          if (live === undefined) {
+            return { release() {} };
+          }
+          const taken = tabsAfterTakeOver(live.tabs, view.id);
+          setTabs(live, taken.tabs);
+          let isReleased = false;
+          return {
+            release() {
+              const stillLive = liveTab(sessionId, tab);
+              if (isReleased || stillLive === undefined) {
+                return;
+              }
+              isReleased = true;
+              setTabs(
+                stillLive,
+                tabsAfterRelease(stillLive.tabs, taken.takeOver),
+              );
+            },
+          };
         },
         remove() {
           const live = liveTab(sessionId, tab);

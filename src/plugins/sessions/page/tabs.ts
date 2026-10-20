@@ -86,6 +86,40 @@ export function tabsAfterSelect(tabs: TabsState, tabId: string): TabsState {
   return isUnchanged ? tabs : { ...tabs, selectedTabId: tabId };
 }
 
+// A tab taking over its session, and the tab selected when it took over.
+export interface TakeOver {
+  tabId: string;
+  previousTabId: string | null;
+}
+
+// The tabs with `tabId` selected, and the take over remembering the tab
+// selected before it, null when none was.
+export function tabsAfterTakeOver(
+  tabs: TabsState,
+  tabId: string,
+): { tabs: TabsState; takeOver: TakeOver } {
+  return {
+    tabs: tabsAfterSelect(tabs, tabId),
+    takeOver: { tabId, previousTabId: tabs.selectedTabId },
+  };
+}
+
+// The tabs with the remembered tab selected again while the taking tab is
+// still selected and the remembered tab still present; otherwise the same
+// value.
+export function tabsAfterRelease(
+  tabs: TabsState,
+  takeOver: TakeOver,
+): TabsState {
+  const { tabId, previousTabId } = takeOver;
+  const isTakingTabSelected = tabs.selectedTabId === tabId;
+  const isPreviousTabPresent =
+    previousTabId !== null && tabs.tabIds.includes(previousTabId);
+  return isTakingTabSelected && isPreviousTabPresent
+    ? tabsAfterSelect(tabs, previousTabId)
+    : tabs;
+}
+
 // A sidebar row's second line: the last non-empty status among its session's
 // tabs, in tab-add order, or null.
 export function rowStatus(statuses: readonly string[]): string | null {

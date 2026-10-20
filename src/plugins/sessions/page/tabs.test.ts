@@ -18,8 +18,10 @@ import {
   stepTab,
   type TabsState,
   tabsAfterAdd,
+  tabsAfterRelease,
   tabsAfterRemove,
   tabsAfterSelect,
+  tabsAfterTakeOver,
   toggledSidebar,
   visibleTab,
 } from './tabs';
@@ -124,6 +126,104 @@ describe('tabs', () => {
       selectedTabId: 'b',
     });
     expect(tabsAfterSelect(tabs, 'x')).toBe(tabs);
+  });
+
+  it('tabsAfterTakeOver selects the tab and remembers the one selected before', () => {
+    const tabs: TabsState = { tabIds: ['chat', 'form'], selectedTabId: 'chat' };
+
+    const taken = tabsAfterTakeOver(tabs, 'form');
+
+    expect(taken.tabs).toEqual({
+      tabIds: ['chat', 'form'],
+      selectedTabId: 'form',
+    });
+    expect(taken.takeOver).toEqual({ tabId: 'form', previousTabId: 'chat' });
+  });
+
+  it('tabsAfterRelease gives the session back while the taking tab is selected', () => {
+    const tabs: TabsState = { tabIds: ['chat', 'form'], selectedTabId: 'chat' };
+    const taken = tabsAfterTakeOver(tabs, 'form');
+
+    expect(tabsAfterRelease(taken.tabs, taken.takeOver)).toEqual({
+      tabIds: ['chat', 'form'],
+      selectedTabId: 'chat',
+    });
+  });
+
+  it('tabsAfterRelease keeps a selection the user moved since', () => {
+    const tabs: TabsState = {
+      tabIds: ['chat', 'form', 'docs'],
+      selectedTabId: 'docs',
+    };
+
+    expect(
+      tabsAfterRelease(tabs, { tabId: 'form', previousTabId: 'chat' }),
+    ).toBe(tabs);
+  });
+
+  it('tabsAfterRelease keeps the selection when the remembered tab is gone', () => {
+    const tabs: TabsState = { tabIds: ['form'], selectedTabId: 'form' };
+
+    expect(
+      tabsAfterRelease(tabs, { tabId: 'form', previousTabId: 'chat' }),
+    ).toBe(tabs);
+  });
+
+  it('tabsAfterRelease changes nothing once the taking tab was removed', () => {
+    const tabs: TabsState = {
+      tabIds: ['chat', 'form', 'docs'],
+      selectedTabId: 'chat',
+    };
+    const taken = tabsAfterTakeOver(tabs, 'form');
+    const removed = tabsAfterRemove(taken.tabs, 'form');
+
+    const released = tabsAfterRelease(removed, taken.takeOver);
+
+    expect(released).toBe(removed);
+    expect(released.selectedTabId).toBe('docs');
+  });
+
+  it('tabsAfterTakeOver with none selected remembers none, and its release keeps the selection', () => {
+    const taken = tabsAfterTakeOver(
+      { tabIds: ['form'], selectedTabId: null },
+      'form',
+    );
+    const selected: TabsState = { tabIds: ['form'], selectedTabId: 'form' };
+
+    expect(taken.takeOver.previousTabId).toBeNull();
+    expect(tabsAfterRelease(selected, taken.takeOver)).toBe(selected);
+  });
+
+  it('tabsAfterTakeOver of the selected tab remembers itself, and its release changes nothing', () => {
+    const tabs: TabsState = { tabIds: ['chat', 'form'], selectedTabId: 'form' };
+
+    const taken = tabsAfterTakeOver(tabs, 'form');
+
+    expect(taken.tabs).toBe(tabs);
+    expect(taken.takeOver.previousTabId).toBe('form');
+    expect(tabsAfterRelease(taken.tabs, taken.takeOver)).toBe(tabs);
+  });
+
+  it('stacked take overs each give back what they took', () => {
+    const tabs: TabsState = {
+      tabIds: ['chat', 'form', 'docs'],
+      selectedTabId: 'chat',
+    };
+    const form = tabsAfterTakeOver(tabs, 'form');
+    const docs = tabsAfterTakeOver(form.tabs, 'docs');
+
+    const docsFirst = tabsAfterRelease(docs.tabs, docs.takeOver);
+    expect(docsFirst.selectedTabId).toBe('form');
+    expect(tabsAfterRelease(docsFirst, form.takeOver).selectedTabId).toBe(
+      'chat',
+    );
+
+    const formFirst = tabsAfterRelease(docs.tabs, form.takeOver);
+    expect(formFirst).toBe(docs.tabs);
+    expect(formFirst.selectedTabId).toBe('docs');
+    expect(tabsAfterRelease(formFirst, docs.takeOver).selectedTabId).toBe(
+      'form',
+    );
   });
 
   it('rowStatus takes the last non-empty status in add order', () => {

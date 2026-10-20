@@ -80,12 +80,21 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   areas.overlay.contribute(confirm);
   const roundViews = new Map<string, RoundView>();
   const formTabs = new Map<string, FormTab>();
+  const takeOvers: TakeOvers = new Map();
   const dispatch = (action: FormsAction) => store.dispatch(action);
   const active: ActiveLayout = { layout: defaultLayout, name: 'default' };
 
   const render = () => {
     const state = store.get();
-    syncRoundViews(state, roundViews, formTabs, active, deps, dispatch);
+    syncRoundViews(
+      state,
+      roundViews,
+      formTabs,
+      takeOvers,
+      active,
+      deps,
+      dispatch,
+    );
     syncFormTabs(state, formTabs);
     const view = state.view;
     const shown = view === 'idle' ? null : activeRound(state);
@@ -108,7 +117,13 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   return {
     forgetSession(sessionId) {
       formTabs.delete(sessionId);
-      destroySessionRoundViews(sessionId, store.get(), roundViews, deps);
+      destroySessionRoundViews(
+        sessionId,
+        store.get(),
+        roundViews,
+        takeOvers,
+        deps,
+      );
     },
     showForm: (sessionId) => formTabs.get(sessionId)?.handle.select(),
     isFormShown: () =>
@@ -123,20 +138,24 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   };
 }
 
+// Each open round's take over of its session's tabs, by round id.
+type TakeOvers = Map<string, { release(): void }>;
+
 // A round view per open round, in its session's Form tab: built when the
-// round appears, adding the Form tab when the session has none and selecting
-// it; destroyed with its editors when the round leaves.
+// round appears, adding the Form tab when the session has none and taking
+// over the session with it; destroyed with its editors when the round leaves.
 function syncRoundViews(
   state: FormsState,
   roundViews: Map<string, RoundView>,
   formTabs: Map<string, FormTab>,
+  takeOvers: TakeOvers,
   active: ActiveLayout,
   deps: FormsViewDeps,
   dispatch: (action: FormsAction) => void,
 ) {
   for (const roundId of roundViews.keys()) {
     if (!state.rounds.some((round) => round.roundId === roundId)) {
-      destroyRoundView(roundId, roundViews, deps);
+      destroyRoundView(roundId, roundViews, takeOvers, deps);
     }
   }
   for (const round of state.rounds) {
@@ -146,7 +165,7 @@ function syncRoundViews(
         round.roundId,
         showRound(round, formTab, active, deps, dispatch),
       );
-      formTab.handle.select();
+      takeOvers.set(round.roundId, formTab.handle.takeOver());
     }
   }
 }
@@ -155,24 +174,29 @@ function destroySessionRoundViews(
   sessionId: string,
   state: FormsState,
   roundViews: Map<string, RoundView>,
+  takeOvers: TakeOvers,
   deps: Pick<FormsViewDeps, 'boxes'>,
 ) {
   for (const round of state.rounds) {
     if (round.sessionId === sessionId && roundViews.has(round.roundId)) {
-      destroyRoundView(round.roundId, roundViews, deps);
+      destroyRoundView(round.roundId, roundViews, takeOvers, deps);
     }
   }
 }
 
-// Destroys the round's editors and removes its view.
+// Destroys the round's editors, removes its view, and releases its take
+// over, giving its session back.
 function destroyRoundView(
   roundId: string,
   roundViews: Map<string, RoundView>,
+  takeOvers: TakeOvers,
   deps: Pick<FormsViewDeps, 'boxes'>,
 ) {
   deps.boxes.destroyRound(roundId);
   roundViews.get(roundId)?.element.remove();
   roundViews.delete(roundId);
+  takeOvers.get(roundId)?.release();
+  takeOvers.delete(roundId);
 }
 
 function formTabOf(
