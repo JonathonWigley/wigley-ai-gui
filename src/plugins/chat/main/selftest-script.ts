@@ -48,31 +48,37 @@ const ALLOW_REPLY = JSON.stringify({
 // sends.
 const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 
-// Each step expects the last line its keys cause: the fake emits in
-// microtasks, so an earlier line can land before the step's wait begins.
-// Option+Shift+i shows the second session's Chat tab, where y finds no pending
-// permission, leaving the first session's alone, and Option+Shift+o goes back.
-// Space c e opens Effort, and showing the second session's Chat tab closes it.
-// hi typed, Esc and v leave the box in visual mode, and showing the second
-// session's Chat tab blurs it; back on the first, i leaves visual mode and
-// inserts before the cursor, so ok sends hoki. hello draws its reply; Enter in
-// insert mode breaks the line, so one, two goes as one message; hello again in
-// insert mode, sent with Cmd+Enter, draws its own; Esc leaves insert mode and
-// Esc again the box. y allows the fixture's permission, which asks the round
-// that takes the Chat tab over; Space Space opens its review and Space Enter
-// submits, which hands the Chat tab back. The tool turn's entries are user,
-// tool, assistant, result, focus following the result, so k k j k walks them;
-// Enter opens the tool entry and G follows the latest. Space c e opens Effort
-// on Medium, j Enter sets High; Space c e again, / and low filter to Low, and
-// Enter in the filter's insert mode sets it. A held turn ends on Ctrl+c in the
-// box with the fake's notice; Space k n opens the start prompt and Esc closes
-// it. A second held turn makes Cmd+W ask, and y ends the session.
+// Each step expects the last line its keys cause: the fake emits in microtasks,
+// so an earlier line can land before the step's wait begins. Option+Shift+i
+// shows the second session's Chat tab, where y finds no pending permission,
+// leaving the first session's alone, and Option+Shift+o goes back. Space c e
+// opens Effort, and showing the second session's Chat tab closes it; Space k n
+// opens the start prompt, which stays open over the second session's Chat tab
+// until Esc closes it, and Option+Shift+o goes back. hi typed, Esc and v leave
+// the box in visual mode, and showing the second session's Chat tab blurs it;
+// back on the first, i leaves visual mode and inserts before the cursor, so ok
+// sends hoki. hello draws its reply; Enter in insert mode breaks the line, so
+// one, two goes as one message; hello again in insert mode, sent with
+// Cmd+Enter, draws its own; Esc leaves insert mode and Esc again the box. y
+// allows the fixture's permission, which asks the round that takes the Chat tab
+// over; Space Space opens its review and Space Enter submits, which hands the
+// Chat tab back. The tool turn's entries are user, tool, assistant, result,
+// focus following the result, so k k j k walks them; Enter opens the tool entry
+// and G follows the latest. Space c e opens Effort on Medium, j Enter sets
+// High; Space c e again, / and low filter to Low, and Enter in the filter's
+// insert mode sets it. A held turn ends on Ctrl+c in the box with the fake's
+// notice; Space k n opens the start prompt and Esc closes it. A second held
+// turn makes Cmd+W ask, and y ends the session.
 const STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
   { keys: ['y'], expect: '[chat] no pending permission in chat-second' },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
   { keys: [' ', 'c', 'e'], expect: '[chat] picker shown: Effort' },
   { keys: ['<A-S-i>'], expect: '[chat] picker closed: Effort' },
+  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+  { keys: [' ', 'k', 'n'], expect: '[chat] picker shown: Folder' },
+  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  { keys: ['Escape'], expect: '[chat] picker closed: Folder' },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
   {
     keys: ['i', ...'hi', 'Escape', 'v', '<A-S-i>'],

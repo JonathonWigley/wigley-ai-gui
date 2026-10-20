@@ -271,7 +271,9 @@ function moveEntry(session: ChatSession, step: 1 | -1, log: Log) {
 }
 
 // The control's choices picker, the current value highlighted; a pick asks
-// main to set it, and the status line changes once main reports it.
+// main to set it, and logs the change only once main has made it: main
+// refuses a session it no longer holds, which logs and toasts the failure
+// instead. The status line changes once main reports the new value.
 function openChoices(
   deps: ChatCommandDeps,
   session: ChatSession,
@@ -290,11 +292,17 @@ function openChoices(
     picked: (choice) => {
       void deps.channel
         .invoke('setControl', session.sessionId, control.id, choice.value)
-        .catch((error: unknown) => {
-          log('chat', `setControl failed: ${errorText(error)}`);
-          deps.toast(errorText(error), 'error');
-        });
-      log('chat', `set ${control.id} to ${choice.value} in ${session.name}`);
+        .then(
+          () =>
+            log(
+              'chat',
+              `set ${control.id} to ${choice.value} in ${session.name}`,
+            ),
+          (error: unknown) => {
+            log('chat', `setControl failed: ${errorText(error)}`);
+            deps.toast(errorText(error), 'error');
+          },
+        );
     },
   });
 }

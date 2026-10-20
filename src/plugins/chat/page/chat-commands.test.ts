@@ -36,12 +36,21 @@ function session(ended: boolean): ChatSession {
   };
 }
 
+// Lets a settled invoke's handlers run.
+async function flush() {
+  for (let turn = 0; turn < 5; turn++) {
+    await Promise.resolve();
+  }
+}
+
 // The handlers over one shown session; `invoked` records each call to chat
-// main and `opened` each picker request.
-function setUp(shown: ChatSession) {
+// main, `opened` each picker request and `toasts` each toast. Every invoke
+// resolves, or rejects with `refusal` when one is given.
+function setUp(shown: ChatSession, refusal?: Error) {
   const invoked: unknown[][] = [];
   const opened: PickerRequest<unknown>[] = [];
   const logs: string[] = [];
+  const toasts: string[] = [];
   const tabs = {
     visibleSessionId: () => shown.sessionId,
     session: (sessionId: string) =>
@@ -58,17 +67,25 @@ function setUp(shown: ChatSession) {
     channel: {
       invoke: (...args: unknown[]) => {
         invoked.push(args);
-        return Promise.resolve();
+        return refusal === undefined
+          ? Promise.resolve()
+          : Promise.reject(refusal);
       },
     } as unknown as ChatCommandDeps['channel'],
     permissions: {} as PermissionActions,
     reasonBox: {} as ReasonBox,
     confirm: {} as CloseConfirm,
     picker,
-    toast: () => undefined,
+    toast: (text) => toasts.push(text),
     log: (source, message) => logs.push(`[${source}] ${message}`),
   };
-  return { handlers: chatCommandHandlers(deps), invoked, opened, logs };
+  return {
+    handlers: chatCommandHandlers(deps),
+    invoked,
+    opened,
+    logs,
+    toasts,
+  };
 }
 
 describe('chat commands', () => {
@@ -115,6 +132,31 @@ describe('chat commands', () => {
 
     expect(request.sessionBound).toBe(true);
     expect(run.invoked).toEqual([['setControl', 'row-1', 'mode', 'plan']]);
+  });
+
+  it('pickMode_mainApplies_logsTheChangeOnceMainAnswers', async () => {
+    const run = setUp(session(false));
+
+    run.handlers.pickMode({});
+    run.opened[0].picked(mode.choices[1]);
+    const beforeAnswer = [...run.logs];
+    await flush();
+
+    expect(beforeAnswer).toEqual([]);
+    expect(run.logs).toEqual(['[chat] set mode to plan in app']);
+  });
+
+  it('pickMode_mainRefuses_logsAndToastsTheFailureOnly', async () => {
+    const run = setUp(session(false), new Error('session row-1 has ended'));
+
+    run.handlers.pickMode({});
+    run.opened[0].picked(mode.choices[1]);
+    await flush();
+
+    expect(run.logs).toEqual([
+      '[chat] setControl failed: session row-1 has ended',
+    ]);
+    expect(run.toasts).toEqual(['session row-1 has ended']);
   });
 
   it('pickControl_liveSession_sessionBoundPickerOpensChoices', () => {

@@ -60,6 +60,9 @@ export interface ChatSessions {
   start(request: StartRequest): string;
   send(sessionId: string, text: string): void;
   interrupt(sessionId: string): void;
+  // Throws for a session chat no longer holds, as the process's own
+  // `setControl` throws for a value it refuses, so the caller learns the
+  // change was not made.
   setControl(sessionId: string, controlId: string, value: string): void;
   answerPermission(
     sessionId: string,
@@ -386,7 +389,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       heldFor('interrupt', sessionId)?.process?.interrupt();
     },
     setControl(sessionId, controlId, value) {
-      heldFor('setControl', sessionId)?.process?.setControl(controlId, value);
+      const session = held.get(sessionId);
+      if (session === undefined) {
+        throw new Error(`session ${sessionId} has ended`);
+      }
+      session.process?.setControl(controlId, value);
     },
     answerPermission(sessionId, entryId, answer) {
       const session = heldFor('answerPermission', sessionId);

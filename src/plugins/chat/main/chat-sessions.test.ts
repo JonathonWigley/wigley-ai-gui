@@ -458,7 +458,6 @@ describe('createChatSessions', () => {
 
     test.chat.send('row-x', 'hi');
     test.chat.interrupt('row-x');
-    test.chat.setControl('row-x', 'mode', 'plan');
     test.chat.answerPermission('row-x', 'permission-1', {
       allowed: true,
       reason: null,
@@ -468,9 +467,17 @@ describe('createChatSessions', () => {
       expect.arrayContaining([
         '[chat] send for unknown session row-x ignored',
         '[chat] interrupt for unknown session row-x ignored',
-        '[chat] setControl for unknown session row-x ignored',
         '[chat] answerPermission for unknown session row-x ignored',
       ]),
+    );
+    expect(test.process.calls).toEqual([]);
+  });
+
+  it('setControl_unknownSession_throwsAndSetsNothing', async () => {
+    const test = await started();
+
+    expect(() => test.chat.setControl('row-x', 'mode', 'plan')).toThrow(
+      'session row-x has ended',
     );
     expect(test.process.calls).toEqual([]);
   });
