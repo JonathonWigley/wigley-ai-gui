@@ -198,7 +198,7 @@ Boundary rules:
 - [x] [Self-test steps](07-selftest.md) — after 05, 06
 
 ### Wave 6
-- [ ] [Doc re-read](08-doc-re-read.md) — after 07
+- [x] [Doc re-read](08-doc-re-read.md) — after 07
 
 ### Wave 7
 - [ ] [Final verification](09-final-verification.md) — after 08
@@ -226,6 +226,7 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   session rides on the preview row; no `sessions.ended` listener; memory store grows per press
 - 07 self-test · 25718bd · proved (`npm run selftest` all passed, typecheck clean, layer check) · concerns: fixed
   revisions assume a fresh data folder
+- 08 doc re-read · a4f3184 · proved (diff read: one AGENTS.md line) · concerns: none
 ### Contract changes
 - `createRoundView`: → gains `layout: Layout, layoutName: string` after `round`; `RoundViewDeps` gains `log: Log`,
   `boxes` widens to `Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>` · why: builds through the layout
@@ -309,3 +310,8 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   notice calls `textBox(article, 'notes')` (same throw) — none known · group 07
 ### Review rounds
 ### Test gate
+- Range: this run's commits 191f4d7 f9e9db6 b5142a6 c070e90 f8afed4 66789d6 25718bd a4f3184. Pass 1 (written):
+  node-files, main-api, layout-registry, layout-preview, preview-round, round-store, manifest, editor-boxes,
+  forms-commands, card-input, card-answer, layout-actions, layout-loader, data-url, scoped-files (`.test.ts`). Pass 2
+  (break): forms-service, page `kinds/formats`, page-api (`.test.ts`), and `npm run selftest` (its script changed) ·
+  18 files, 228 tests passed; self-test exit 0, 107 steps PASS, `[selftest] all passed`

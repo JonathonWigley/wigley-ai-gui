@@ -1,6 +1,6 @@
 # 08 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -32,3 +32,6 @@ whose own re-read checks it.
 Done when: every listed part matches the code; the fixes are committed.
 
 ## Proof
+
+Commit `a4f3184`. Every listed part held but the Running and testing preview line, which now says a press after the
+last saved round wraps back to the sample. The `files/` line was left for plan B.
