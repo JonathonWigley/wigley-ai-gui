@@ -1,6 +1,6 @@
 # 01 — Spike: Claude stream-json wire facts
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -66,3 +66,4 @@ Commit:    one commit holding `docs/features/agent-chat/claude-stream.md` only �
 
 ## Proof
 
+436936c · diff read: the doc's first line names `2.1.304 (Claude Code)`, and all 17 `##` sections are present in the planned order; no product code changed. Its contract changes, which task 06 reads: local `/effort` and `/model` print a synthetic `assistant` event plus a zero-cost `result`, not `<local-command-stdout>`; no event reports effort; `manual` mode comes back as `default`; `total_cost_usd` is cumulative for the process; SIGINT ends the process, so only the `interrupt` control request keeps it alive; there is one assistant event per content block; thinking text is never streamed; a missing permission prompt tool exits 1 at the first prompt. Concerns: a probe may have opened a stray forms round; about 20 spike transcripts sit in `~/.claude-personal/projects/`; in plan mode the turn ran on sonnet while `init` reported haiku.

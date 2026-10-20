@@ -342,14 +342,14 @@ the name. Recent folders live in chat's data folder at `recent-folders.json`, ne
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Spike: Claude stream-json wire facts](01-spike-claude-stream.md)
+- [x] [Spike: Claude stream-json wire facts](01-spike-claude-stream.md)
 - [x] [Shared layout machinery](02-shared-layouts.md)
 - [x] [Sessions main: owned sessions, mark, closed](03-sessions-owned.md)
 - [x] [Chat layout contract and default layout](08-chat-layout.md)
 
 ### Wave 2
-- [ ] [Sessions page: takeOver, and forms taking over](04-tab-takeover.md) — after 03
-- [ ] [Core: agent contract, services, self-test scripts, ACP removal, fake harness](05-core-agent-services.md) — after 02
+- [x] [Sessions page: takeOver, and forms taking over](04-tab-takeover.md) — after 03
+- [x] [Core: agent contract, services, self-test scripts, ACP removal, fake harness](05-core-agent-services.md) — after 02
 
 ### Wave 3
 - [ ] [Claude Code adapter](06-claude-adapter.md) — after 01, 05
@@ -378,9 +378,16 @@ Review base: 4597f154604caf0e8453b17f551918d444f11ab5
 - 08 chat layout · 187049e · diff read + typecheck + lint pass · concerns: no strict null checks, so `@ts-check` misses null misuse
 - 03 sessions owned · 22c3c42 · diff read + typecheck + lint pass · concerns: the `closed` test sets no guard
 - 02 shared layouts · a646bb4 · diff read + typecheck + lint pass · concerns: the done-when grep hits fixtures that were already there; 5 `[forms]` log lines in `showLayouts`' tests, not 4
+- 04 tab takeover · c70ed85 · diff read + typecheck + layers pass · concerns: a private `setTabs` helper was extracted in `session-tabs-view.ts`
+- 05 core agent services · f83d324 · diff read + typecheck + layers pass · concerns: the npm uninstall was denied, so the lock lines were removed by hand; the worker's selftest failed 2 of 3 runs, on forms' layout-cycle steps
+- 01 spike · 436936c · diff read: 17 sections in order, version on line 1 · concerns: a stray forms round may be open; about 20 spike transcripts in `~/.claude-personal/projects/`; plan mode ran on sonnet while init reported haiku
 ### Contract changes
+- claude-stream.md facts amend task 06's pinned reading: local `/effort` and `/model` print a synthetic `assistant` (`message.model` `<synthetic>`) plus a zero-cost `result`; no event reports effort; `manual` comes back as `default`; `total_cost_usd` is cumulative per process; SIGINT ends the process, so only `control_request` interrupt keeps it alive; there is one assistant event per content block; thinking is never streamed · consumers: 06 · group 01
+- `src/plugins/chat/layouts` had no LAYERS entry before task 05, so 05 added it as planned · consumers: none · group 05
 ### Rulings
 - Lint and typecheck run under the `.nvmrc` Node (`source ~/.nvm/nvm.sh && nvm use`); the shell's default Node 22.14 rejects `check-layers.mts` — every later brief says so · lead
 - A joined relay's `end()` holds its own once-flag, so an old relay's repeated `end()` cannot clear a later relay's join — costs nothing if wrong · group 03
+- A peer session (wigley-ai-gui-29, docs-browser plan B, untracked `src/plugins/docs/`) joined the tree after preflight: every commit from 04 on is pathspec-scoped, and the review range is this run's commit list · lead
+- The spike's "permission tool not exposed" is the relay's offline stand-in: `relay.py` serves `BUILT_IN_TOOLS` only while the app is not running, and forwards the app's tool list otherwise, so chat's contributed `permission_prompt` reaches Claude through the joined relay; no plan change · lead
 ### Review rounds
 ### Test gate

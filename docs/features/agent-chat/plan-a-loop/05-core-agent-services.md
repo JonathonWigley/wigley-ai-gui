@@ -1,6 +1,6 @@
 # 05 — Core: agent contract, services, self-test scripts, ACP removal, fake harness
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -260,3 +260,4 @@ Commit:    one commit for the group — "Agent harness seam: AgentHarness contra
 
 ## Proof
 
+f83d324 · diff read: every Produces is present (`agent.ts` contract, `RandomUuid`, the `MainServices` members, the `claude.command` setting, `expandHome`, the fake harness, `selftest-config.ts`, `SelfTestDriver.hostFor`, `MainApiDeps.selfTestFor`, `windowService`, the LAYERS entries); the ACP grep is empty; typecheck passes; the layer check reports 228 files clean. Concerns: the `npm uninstall` call was denied, so the sdk lines were deleted from `package.json` and `package-lock.json` by hand (11 deletions only; the package folder stays in `node_modules`); the worker's `npm run selftest` passed in 1 of 3 runs, with the forms layout-cycle steps failing in the others; this goes to the test gate.

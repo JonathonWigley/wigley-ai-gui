@@ -1,6 +1,6 @@
 # 04 — Sessions page: takeOver, and forms taking over
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -86,3 +86,5 @@ Done when: compiles; `grep -c "formTab.handle.select()" src/plugins/forms/page/f
 Commit:    one commit for the group
 
 ## Proof
+
+c70ed85 · diff read: `takeOver` on the contract and the handle, `TakeOver`, `tabsAfterTakeOver` and `tabsAfterRelease` in `tabs.ts`; forms keeps a release per round; `grep -c "formTab.handle.select()"` → 0; typecheck and the layer check pass at f83d324. Concern: a private `setTabs` helper was extracted in `session-tabs-view.ts` and is shared by `select` and `takeOver`.
