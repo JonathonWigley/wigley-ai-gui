@@ -44,10 +44,10 @@ export interface SavedRound {
 
 export type FinishedSavedRound = SavedRound & { outcome: FinishedOutcome };
 
-// The saved-round folder: every draft and every finish, so a round's answers
-// outlive a deadline, the next round and an app restart. A disk failure is
-// logged and never thrown, losing the copy must not cost the live round —
-// except a draft's, which saveBody throws so the page can show it unsaved.
+// Where a round's answers are kept: every draft and every finish. The
+// folder store (createRoundStore) keeps them on disk, so they outlive a
+// deadline, the next round and an app restart; the preview's store keeps them
+// in memory only.
 export interface RoundStore {
   create(
     owner: RoundOwner,
@@ -70,6 +70,9 @@ export interface RoundStore {
     owner: RoundOwner,
     excluding: ReadonlySet<string>,
   ): FinishedSavedRound | null;
+  // The args of the newest rounds by `updated`, newest first: one per
+  // fingerprint, at most `limit`.
+  recentArgs(limit: number): unknown[];
   // Deletes every round file, and any temp file a crash left, last written more
   // than RETENTION_SECONDS ago.
   prune(): void;
@@ -79,7 +82,7 @@ const ROUND_FILE_SUFFIX = '.json';
 // What a crash between the write and the rename leaves behind.
 const TEMPORARY_FILE_SUFFIX = '.tmp';
 
-function isFinished(record: SavedRound): record is FinishedSavedRound {
+export function isFinished(record: SavedRound): record is FinishedSavedRound {
   return record.outcome !== 'open';
 }
 
@@ -178,6 +181,72 @@ function newestUpdated<T extends SavedRound>(records: T[]): T | null {
   return newest;
 }
 
+function recentArgsOf(records: SavedRound[], limit: number): unknown[] {
+  const newestFirst = records.toSorted((a, b) => b.updated - a.updated);
+  const seenFingerprints = new Set<string>();
+  const args: unknown[] = [];
+  for (const record of newestFirst) {
+    if (args.length >= limit) {
+      break;
+    }
+    if (!seenFingerprints.has(record.fingerprint)) {
+      seenFingerprints.add(record.fingerprint);
+      args.push(record.args);
+    }
+  }
+  return args;
+}
+
+// The store's reads, answered over every round `readAll` returns.
+export function roundQueries(
+  readAll: () => SavedRound[],
+): Pick<RoundStore, 'newestFor' | 'newestUnreturnedFinished' | 'recentArgs'> {
+  return {
+    newestFor: (fingerprint) =>
+      newestUpdated(
+        readAll().filter((record) => record.fingerprint === fingerprint),
+      ),
+    newestUnreturnedFinished: (owner, excluding) =>
+      newestUpdated(
+        readAll().filter(
+          (record): record is FinishedSavedRound =>
+            isFinished(record) &&
+            !record.returned &&
+            isOwnedBy(record, owner) &&
+            !excluding.has(record.id),
+        ),
+      ),
+    recentArgs: (limit) => recentArgsOf(readAll(), limit),
+  };
+}
+
+// A new open round's record, stamped now, with an `<epoch seconds>-<hex>` id.
+export function openRecord(
+  owner: RoundOwner,
+  fingerprint: string,
+  args: unknown,
+  body: FormBody | null,
+  toolUseId: string | null,
+  clock: Clock,
+  randomHex: RandomHex,
+): SavedRound {
+  const now = clock.now() / 1000;
+  // Field order is Python's dataclass order, so a file reads the same.
+  return {
+    id: `${Math.floor(now)}-${randomHex()}`,
+    fingerprint,
+    args,
+    body: body ?? {},
+    outcome: 'open',
+    returned: false,
+    session_id: owner.sessionId,
+    project_dir: owner.projectDir,
+    tool_use_id: toolUseId,
+    created: now,
+    updated: now,
+  };
+}
+
 // Rewrites the whole file through a temp file and a rename, so a crash
 // mid-write leaves the previous file intact. Throws when the write fails.
 function writeRecord(
@@ -237,6 +306,10 @@ function pruneOlderThan(roundsDir: string, cutoffMs: number, log: Log): void {
   }
 }
 
+// The saved-round folder. A disk failure is logged and never thrown, losing
+// the copy must not cost the live round — except a draft's, which saveBody
+// throws so the page can show it unsaved. A file that does not parse is
+// skipped by every read.
 export function createRoundStore(deps: {
   roundsDir: string;
   clock: Clock;
@@ -248,21 +321,15 @@ export function createRoundStore(deps: {
     writeRecordOrLog(roundsDir, record, clock, log);
   return {
     create: (owner, fingerprint, args, body, toolUseId) => {
-      const now = clock.now() / 1000;
-      // Field order is Python's dataclass order, so a file reads the same.
-      const record: SavedRound = {
-        id: `${Math.floor(now)}-${randomHex()}`,
+      const record = openRecord(
+        owner,
         fingerprint,
         args,
-        body: body ?? {},
-        outcome: 'open',
-        returned: false,
-        session_id: owner.sessionId,
-        project_dir: owner.projectDir,
-        tool_use_id: toolUseId,
-        created: now,
-        updated: now,
-      };
+        body,
+        toolUseId,
+        clock,
+        randomHex,
+      );
       write(record);
       return record;
     },
@@ -282,22 +349,7 @@ export function createRoundStore(deps: {
       record.returned = true;
       write(record);
     },
-    newestFor: (fingerprint) =>
-      newestUpdated(
-        readAllRounds(roundsDir).filter(
-          (record) => record.fingerprint === fingerprint,
-        ),
-      ),
-    newestUnreturnedFinished: (owner, excluding) =>
-      newestUpdated(
-        readAllRounds(roundsDir).filter(
-          (record): record is FinishedSavedRound =>
-            isFinished(record) &&
-            !record.returned &&
-            isOwnedBy(record, owner) &&
-            !excluding.has(record.id),
-        ),
-      ),
+    ...roundQueries(() => readAllRounds(roundsDir)),
     prune: () =>
       pruneOlderThan(roundsDir, clock.now() - RETENTION_SECONDS * 1000, log),
   };

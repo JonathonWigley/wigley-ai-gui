@@ -160,6 +160,42 @@ describe('RoundStore', () => {
     expect(store.newestFor('fp')?.body).toEqual(withNote('touched last'));
   });
 
+  it('recentArgs_NewestFirst_Limited', () => {
+    const store = storeIn(roundsDir);
+    store.create(MINE, 'fp-1', { heading: 'oldest' }, null, null);
+    nowMs = 2_000_000;
+    store.create(MINE, 'fp-2', { heading: 'middle' }, null, null);
+    nowMs = 3_000_000;
+    store.create(MINE, 'fp-3', { heading: 'newest' }, null, null);
+
+    expect(store.recentArgs(2)).toEqual([
+      { heading: 'newest' },
+      { heading: 'middle' },
+    ]);
+  });
+
+  it('recentArgs_SkipsUnreadableFile', () => {
+    const store = storeIn(roundsDir);
+    store.create(MINE, 'fp', ARGS, null, null);
+    writeFileSync(path.join(roundsDir, 'broken.json'), '{not json', 'utf8');
+
+    expect(store.recentArgs(5)).toEqual([ARGS]);
+  });
+
+  it('recentArgs_OneRecordPerFingerprint', () => {
+    const store = storeIn(roundsDir);
+    store.create(MINE, 'fp', { heading: 'first send' }, null, null);
+    nowMs = 2_000_000;
+    store.create(MINE, 'other', { heading: 'other' }, null, null);
+    nowMs = 3_000_000;
+    store.create(MINE, 'fp', { heading: 'second send' }, null, null);
+
+    expect(store.recentArgs(5)).toEqual([
+      { heading: 'second send' },
+      { heading: 'other' },
+    ]);
+  });
+
   it('finds a finished round as unreturned until it is marked returned', () => {
     const store = storeIn(roundsDir);
     const record = store.create(MINE, 'fp', ARGS, null, null);

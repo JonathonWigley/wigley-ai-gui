@@ -12,6 +12,8 @@ import {
   type LayoutRegistry,
   startLayoutRegistry,
 } from './layouts/layout-registry';
+import { createLayoutPreview } from './preview/layout-preview';
+import { createMemoryRoundStore } from './preview/memory-round-store';
 import { createRoundStore } from './round-store';
 import { formsSelfTestScript } from './selftest-script';
 import { FORMS_TOOLS } from './tool-definitions';
@@ -19,10 +21,16 @@ import { createFormsToolSession } from './tool-session';
 
 type FormsApi = MainApi<typeof formsManifest, FormsChannel>;
 
+// How many saved rounds the preview cycles through.
+const PREVIEW_SAVED_ROUNDS = 20;
+
+// The agents' FormsService over the saved-round folder, and the layout
+// preview over a FormsService of its own whose store is in memory. Both share
+// one presenter, which owns the channel's `finish` and `draft` handlers.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
-): FormsService {
+): { forms: FormsService; preview: { open(): void } } {
   const { services } = api;
   const store = createRoundStore({
     roundsDir: path.join(services.homeDir, '.agents', 'wigley-forms', 'rounds'),
@@ -31,17 +39,30 @@ function createForms(
     log: services.log,
   });
   store.prune();
-  return createFormsService({
-    presenter: createChannelPresenter(
-      api.channel,
-      services.alerts,
-      services.window,
-      services.log,
-      sessions,
-    ),
+  const presenter = createChannelPresenter(
+    api.channel,
+    services.alerts,
+    services.window,
+    services.log,
+    sessions,
+  );
+  const defaultDeadlineSeconds = api.settings.deadlineSeconds;
+  const forms = createFormsService({
+    presenter,
     store,
-    defaultDeadlineSeconds: api.settings.deadlineSeconds,
+    defaultDeadlineSeconds,
   });
+  const preview = createLayoutPreview({
+    sessions,
+    forms: createFormsService({
+      presenter,
+      store: createMemoryRoundStore(services.clock, services.randomHex),
+      defaultDeadlineSeconds,
+    }),
+    savedArgs: () => store.recentArgs(PREVIEW_SAVED_ROUNDS),
+    log: services.log,
+  });
+  return { forms, preview };
 }
 
 // Starts the layout registry and serves it to the page; a handler called
@@ -68,13 +89,14 @@ function serveLayouts(api: FormsApi): Promise<LayoutRegistry> {
 }
 
 // Serves its two tools to every agent session, shows each session's rounds on
-// the page and serves the page its layouts; in the self-test it hands the
-// driver its script.
+// the page, serves the page its layouts and opens the layout preview on the
+// page's ask; in the self-test it hands the driver its script.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
     const sessions = api.dependency<SessionsMainExports>('sessions');
-    const forms = createForms(api, sessions);
+    const { forms, preview } = createForms(api, sessions);
+    api.channel.handle('openPreview', () => preview.open());
     sessions.contributeTools(FORMS_TOOLS, (session) =>
       createFormsToolSession(forms.startSession(session)),
     );
