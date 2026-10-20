@@ -1,6 +1,6 @@
 # 06 — Preview round
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -81,3 +81,10 @@ Tests:
 Done when: compiles; `npm run lint` passes; the test gate runs the tests above.
 
 ## Proof
+
+Commit `66789d6`. Diff read: every Produces signature present, no contract changes; the shared presenter routes
+`draft` and `finish` through one map keyed by round id, so two FormsServices share it safely. Typecheck clean; layer
+check 200 files clean; oxlint clean.
+
+Concerns: `connect` also starts an unused forms tool session on the agents' service for the preview row (ends with
+the row); the preview does not hear `sessions.ended`; the memory store keeps every preview round for the app's run.

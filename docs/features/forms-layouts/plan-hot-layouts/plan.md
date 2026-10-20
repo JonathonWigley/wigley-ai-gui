@@ -192,7 +192,7 @@ Boundary rules:
 
 ### Wave 4
 - [x] [Layout loading, swapping and keys on the page](05-page-layouts.md) — after 02, 03, 04
-- [ ] [Preview round](06-preview-round.md) — after 04
+- [x] [Preview round](06-preview-round.md) — after 04
 
 ### Wave 5
 - [ ] [Self-test steps](07-selftest.md) — after 05, 06
@@ -222,6 +222,8 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   path's ignore mark lingers until its watch report arrives
 - 05 page layouts · f8afed4 · proved (diff read, typecheck clean, layer check) · concerns: `showLayouts` untested
   until task 07
+- 06 preview round · 66789d6 · proved (diff read, typecheck clean, layer check) · concerns: an unused forms tool
+  session rides on the preview row; no `sessions.ended` listener; memory store grows per press
 ### Contract changes
 - `createRoundView`: → gains `layout: Layout, layoutName: string` after `round`; `RoundViewDeps` gains `log: Log`,
   `boxes` widens to `Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>` · why: builds through the layout
@@ -281,5 +283,16 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   group 04
 - File hand-off with plan A's session: it holds forms page `start.ts`, `forms-view.ts`, `forms-commands.ts` (+test)
   until group 05 commits; this run never reads `api.areas.main` — lead
+- `round-store.ts` exports `roundQueries(readAll)`, `openRecord` and `isFinished`, shared by both stores (widened,
+  not copied) — the memory store could hold copies · group 06
+- The memory store implements every `RoundStore` method, so a re-shown sample pre-fills answers typed earlier in the
+  app's run — its `newestFor` could return null · group 06
+- `savedArgs()` is re-read on every press and the cursor indexes the fresh list — a round saved mid-cycle shifts the
+  order by one · group 06
+- Both `FormsSession.end()` and `ConnectedSession.end()` run on submit or cancel; a non-abort rejection logs
+  `[forms] preview round failed: <errorText>` and ends the session, as do `no_round` and `needs_manual_open` — the
+  spec names submit, cancel and draft only — none known · group 06
+- `ConnectedSession` exposes the session as `.session` (the brief said `.connected`) — lead's brief corrected by the
+  tree · group 06
 ### Review rounds
 ### Test gate

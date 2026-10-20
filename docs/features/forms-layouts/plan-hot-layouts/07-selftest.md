@@ -1,6 +1,6 @@
 # 07 — Self-test steps for layouts and the preview
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 05, 06
 Plan: [plan.md](plan.md)
