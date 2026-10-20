@@ -170,10 +170,14 @@ round), since main, not the page, decides.
 - **An agent harness** — Claude Code today, Codex and wigley-harness next — is an adapter behind `AgentHarness` in
   `src/contracts/agent.ts`, handed to plugins as a main service; the fake in `src/shared/` drives the tests and the
   self-test. The adapter alone reads its harness's output and turns it into chat entries, each carrying the raw
-  events, so a chat layout can show any field and the chat never parses a harness's JSON.
+  events, so a chat layout can show any field and the chat never parses a harness's JSON. The Claude adapter's
+  readings of the CLI (`docs/features/agent-chat/claude-stream.md`): it reports permission mode `manual` as
+  `default`, no event reports effort, `total_cost_usd` is cumulative per process, and only a `control_request`
+  interrupt keeps the process alive (SIGINT ends it).
 - **A session control** — Claude's permission mode, effort and model — is declared by the harness adapter (id,
   label, choices, current value), and the Chat tab draws whatever its adapter declares. A control gets its key as a
-  command in chat's manifest (`Space c m`, `Space c e`, `Space c o`); until then `Space c c` reaches it from the list.
+  command in chat's manifest (`Space c m`, `Space c e`, `Space c o`); `Space c c` lists every control, so a new
+  adapter's controls are reachable before they get a key.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly. It reads saved rounds only through a
   function the composition root injects, as the layout preview reads saved round args through `savedArgs`.

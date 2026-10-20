@@ -37,8 +37,8 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 ## Flow
 
 ```
- Space k n ─► start prompt (overlay): profile + folder (recent first, or the folder dialog)
-                 │                     [plan B: new session, or resume one of the folder's sessions]
+ Space k n ─► start prompt (overlay): folder (recent first, or the folder dialog), then profile
+                 │                     (skipped with one profile) [plan B: new session, or resume one of the folder's sessions]
                  ▼
  chat main ─► sessions.open(info with a fresh host session id) ─► row + Chat tab, selected
           └─► AgentHarness.start(...) ─► claude -p --input-format stream-json --output-format stream-json
@@ -71,9 +71,15 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   one entry in place; a tool call and its result are one entry, paired by tool use id). A layout reads an entry's
   raw events for anything the entry does not name.
 - **Controls**: the adapter declares its controls and reports their current values; the chat draws whatever it
-  declares. Claude changes `mode` by the control protocol and `effort` and `model` by their slash commands; the
-  plan A spike confirms each on the installed CLI.
-- **Interrupt**: Ctrl+C ends the running turn; the process stays open for the next message.
+  declares. Claude changes `mode` by a `set_permission_mode` control request and `effort` and `model` by sending
+  `/effort <value>` and `/model <value>` as messages (`claude-stream.md` records each on the installed CLI). The
+  adapter reads Claude's values like this: `default` mode is the `manual` choice; effort stays unset (null) until a
+  `/effort` succeeds, since no event reports it; the model comes from the init event and the last successful
+  `/model`, a full model name shown as its alias.
+- **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request; the process stays open for the next
+  message. A SIGINT would end the process.
+- A result entry's `costUsd` is the difference between consecutive results, since Claude's `total_cost_usd` is
+  cumulative for the process.
 - **Locality** (plan B): listing a folder's past sessions and reading a transcript into chat entries are adapter
   calls, so Claude's undocumented transcript format stays in the adapter. A line it cannot read becomes a raw entry.
 - Slash commands typed in the chat run as in the terminal (`/model`, `/compact`, `/wigley:feature …`).
@@ -98,14 +104,14 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 
 - `src/plugins/chat/`, depending on `sessions` and `keys`. Main keeps every owned session's entries, so a page
   reload redraws the chat whole (the dev server reloads twice at start).
-- **Chat tab**: the entries, a vim message box, and a status line under it with each control's value. Enter in
+- **Chat tab**: the entries, a vim message box, and a status line under it with the box's vim mode and each control's value. Enter in
   normal mode sends, Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` / `a` focus the box, `j` /
   `k` move between entries, `Enter` expands a tool call, `G` jumps to the latest, Ctrl+C interrupts. Tool calls show
   one compact line (tool name and a short input summary) that expands to the full input and output.
 - **Controls**: `Space c m` mode, `Space c e` effort, `Space c o` model, each opening a picker of its choices;
   `Space c c` lists every control, so a control a new adapter declares is reachable before it gets a key.
-- **Start prompt**: `Space k n`, in the overlay layer: type to filter, `j` / `k` and Enter. It picks the profile and
-  the folder: the folders the app started sessions in before, most recent first, plus an entry opening the native
+- **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
+  the profile (a single profile is not asked), and Esc at either step starts nothing: the folders the app started sessions in before, most recent first, plus an entry opening the native
   folder dialog; the last profile used in a folder is pre-selected. Recent folders live in chat's plugin data.
 - **Permissions**: sessions run in auto mode; anything auto mode would still prompt reaches chat's `permission_prompt`
   MCP tool, contributed to sessions as forms contributes its tools, and shows as a permission entry. `y` allows, `n`
