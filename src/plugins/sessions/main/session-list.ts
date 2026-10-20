@@ -254,7 +254,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         );
         return;
       }
-      // A row the user closed comes back at the end, unmarked.
+      // A row the user closed comes back at the end, then is selected or
+      // marked like any other.
       let index = rowIndex(sessionId);
       if (index === -1) {
         index = rows.push(rowOf(entry)) - 1;

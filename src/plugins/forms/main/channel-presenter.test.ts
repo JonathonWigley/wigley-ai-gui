@@ -78,7 +78,7 @@ function fakeAlerts() {
   return { alerts, announced, counts };
 }
 
-// Records tab calls into `calls` and keeps the close guards added; the
+// Records row calls into `calls` and keeps the close guards added; the
 // presenter never contributes tools or connects a session.
 function fakeSessions(calls: string[]) {
   const guards: ((sessionId: string) => boolean)[] = [];
@@ -159,7 +159,7 @@ describe('createChannelPresenter', () => {
     expect(window.shown()).toBe(0);
   });
 
-  it("brings the window forward on the round's tab, shown again, when the announcement is clicked", () => {
+  it("brings the window forward on the round's row, marked again, when the announcement is clicked", () => {
     const { calls, window, attention, presenter } = setUp();
     presenter.show(ROUND, fakeListener().listener);
     calls.length = 0;
@@ -170,7 +170,7 @@ describe('createChannelPresenter', () => {
     expect(window.shown()).toBe(1);
   });
 
-  it('only activates the tab when the announced round has closed', () => {
+  it('only activates the row when the announced round has closed', () => {
     const { calls, attention, presenter } = setUp();
     presenter.show(ROUND, fakeListener().listener);
     presenter.close('round-1');
@@ -181,7 +181,7 @@ describe('createChannelPresenter', () => {
     expect(calls).toEqual(['activate app-1']);
   });
 
-  it("refuses to close a session's tab while its round is open", () => {
+  it("refuses to close a session's row while its round is open", () => {
     const { mayClose, presenter, finish } = setUp();
     presenter.show(ROUND, fakeListener().listener);
     presenter.show(

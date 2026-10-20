@@ -9,7 +9,7 @@ export interface SessionInfo {
   projectDir: string | null;
   // The host's soft deadline; null means the default.
   deadlineSeconds: number | null;
-  // Null when the relay did not say.
+  // Null when the relay did not say, or named a harness the app does not know.
   harness: Harness | null;
 }
 
@@ -132,7 +132,8 @@ export interface SessionsChannel extends ChannelShape {
 // A tab a plugin adds to a session. `beforeClose` returns whether the session
 // may close now; false keeps it. `shown` runs each time this tab becomes the
 // visible tab: the selected tab of the selected session while Sessions mode
-// shows. Its plugin sets its base key scope there.
+// shows. Its plugin sets its base key scope there. `shown` may run inside
+// `addTab`, before its handle returns, so it must not read that handle.
 export interface SessionTabView {
   id: string;
   title: string;
@@ -164,6 +165,8 @@ export interface SessionsPageExports {
   closeSession(sessionId: string): void;
 }
 
+// `sessionAdded` fires once for every row main sends, the rows present at
+// start included, and `sessionRemoved` once when that row leaves.
 export interface SessionsPageEvents extends EventShape {
   activeChanged: { sessionId: string | null };
   sessionAdded: {

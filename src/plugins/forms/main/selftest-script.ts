@@ -64,9 +64,10 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // box. Option+Shift+i wraps to the last session, which has no tab, so nothing
 // shows and no form keeps its scope; Option+Shift+o wraps back to the first,
 // whose form takes its scope again. Then review, which only that scope opens,
-// proves it; Space ? opens help and Esc closes it, back in the review's scope, where C opens and n dismisses the
-// cancel prompt; Space ? opens help again, Cmd+W opens the cancel prompt, which
-// closes help, so n dismisses the prompt. o types "note" into the Round note at
+// proves it; Space ? opens help and Esc closes it, back in the review's
+// scope, where C opens and n dismisses the cancel prompt; Space ? opens help
+// again, Cmd+W opens the cancel prompt, which closes help, so n dismisses the
+// prompt. o types "note" into the Round note at
 // once (INSERT), Esc out (forms' editor bind in the review's scope), Enter
 // jumps back to finding 1, review again and Space Enter submits.
 const STEPS: SelfTestStep[] = [

@@ -97,8 +97,8 @@ round), since main, not the page, decides.
   the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
   core edit.
 - **A session tab** is added to a session by the plugin that fills it, through the `sessions` page export `addTab`:
-  forms adds a Form tab where a session's round view is created, when the session has no Form tab, docs a Docs tab
-  when the session connects. A session's tabs drop when its row leaves, closed by the user or ended, and
+  forms adds a Form tab where a session's round view is created, when the session has no Form tab, and the docs
+  plugin, once it lands, a Docs tab when the session connects. A session's tabs drop when its row leaves, closed by the user or ended, and
   `sessions.sessionRemoved` tells each plugin to forget the session; the user moves between tabs with `Option+o` /
   `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`.
 - **A key** is a default bind in its plugin's manifest naming that plugin's command; the core qualifies both, so
@@ -111,8 +111,7 @@ round), since main, not the page, decides.
   that scope is in force, so two plugins' editors may bind one vim key in different scopes. Vim keeps one mapping per
   key sequence for every editor, so a sequence bound in any scope runs nothing in the others (the page logs
   `<keys> has no bind in <scope>`), and startup fails on two binds with the same keys in overlapping scopes or on keys
-  that begin another bind's longer keys in any scope. Esc while a sequence
-  waits cancels it and runs nothing.
+  that begin another bind's longer keys in any scope. Esc while a sequence waits cancels it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout keys are
   `Space z l …`).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base

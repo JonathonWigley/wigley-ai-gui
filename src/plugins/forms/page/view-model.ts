@@ -153,8 +153,8 @@ function missingPick(
   return answer.choice > 0 ? 'action' : null;
 }
 
-// The round's status on its session's sidebar row: its heading and how many of its
-// questions and findings are answered or not applicable.
+// The round's status on its session's sidebar row: its heading and how many
+// of its questions and findings are answered or not applicable.
 export function sessionTitle(round: RoundState): string {
   const counts = progress(round);
   return `${round.round.heading} ${counts.answered + counts.notApplicable}/${counts.total}`;
