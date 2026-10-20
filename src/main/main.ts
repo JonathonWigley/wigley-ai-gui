@@ -45,6 +45,11 @@ import {
 import { createElectronAlerts } from './alerts/electron-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import {
+  registerDataScheme,
+  serveDataScheme,
+} from './data-protocol/data-protocol';
+import { createNodeFiles } from './files/node-files';
+import {
   installWindowKeybindings,
   type MainCommands,
   registerGlobalShortcuts,
@@ -68,11 +73,15 @@ if (started) {
 // user's foreground.
 const isSelfTest = Boolean(process.env.PROOF_SELFTEST);
 
+registerDataScheme();
+
+const files = createNodeFiles();
 const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 
-// The self-test gives plugins a fresh temp folder as the home folder, never
-// the user's, and deletes it before it exits.
+// The self-test gives plugins a fresh temp folder as the home folder, and
+// their data folders inside it, never the user's, and deletes it before it
+// exits.
 let selfTestHome: string | null = null;
 const cleanUpSelfTest = () => {
   if (selfTestHome !== null) {
@@ -91,6 +100,7 @@ interface StartInputs {
   commandsById: AppConfig['commands'];
   scopes: AppConfig['scopes'];
   homeDir: string;
+  dataRoot: string;
 }
 
 function homeFolder(): string {
@@ -101,8 +111,17 @@ function homeFolder(): string {
   return selfTestHome;
 }
 
+// The folder that holds every plugin's data folder; in the self-test it sits
+// inside the temp home folder, so `homeFolder` runs first.
+function dataFolder(): string {
+  return selfTestHome === null
+    ? path.join(app.getPath('userData'), 'plugins')
+    : path.join(selfTestHome, 'plugin-data');
+}
+
 function readStartInputs(): StartInputs {
   requireListed(mainParts, manifests);
+  const homeDir = homeFolder();
   return {
     theme: chooseTheme(
       defaultSettings.theme,
@@ -112,7 +131,8 @@ function readStartInputs(): StartInputs {
     settingsByPlugin: pluginSettings(manifests),
     commandsById: commandInfos(coreCommands, manifests),
     scopes: scopeInfos(coreScopes, manifests),
-    homeDir: homeFolder(),
+    homeDir,
+    dataRoot: dataFolder(),
   };
 }
 
@@ -151,11 +171,13 @@ function buildConfig(inputs: StartInputs, selfTest: SelfTestConfig): AppConfig {
 }
 
 // Starts every plugin's main part, each with its own API over one plugin
-// channel router to the window's page and one event bus. `onStarted` sees
+// channel router to the window's page, one event bus, and its data folder
+// under `dataRoot`. `onStarted` sees
 // each part as it starts, so a part is known even when a later start throws.
 function startMainParts(
   window: BrowserWindow,
   settingsByPlugin: StartInputs['settingsByPlugin'],
+  dataRoot: string,
   services: MainServices,
   onStarted: (part: MainStart<PluginManifest>) => void,
 ) {
@@ -171,6 +193,7 @@ function startMainParts(
           services,
           dependency,
           bus,
+          dataRoot,
         }),
       );
       onStarted(started);
@@ -219,7 +242,9 @@ function createWindow(inputs: StartInputs) {
   const started = startMainParts(
     window,
     inputs.settingsByPlugin,
+    inputs.dataRoot,
     {
+      files,
       log,
       clock,
       randomHex,
@@ -290,7 +315,9 @@ function startApp() {
   app
     .whenReady()
     .then(() => {
-      createWindow(readStartInputs());
+      const inputs = readStartInputs();
+      serveDataScheme(inputs.dataRoot);
+      createWindow(inputs);
       app.on('activate', () => mainWindow?.show());
     })
     .catch(failStart);

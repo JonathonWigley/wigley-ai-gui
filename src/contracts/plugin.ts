@@ -2,6 +2,7 @@ import type { Alerts } from './alerts';
 import type { Clock, RandomHex, Timers } from './ambient';
 import type { CommandId } from './commands';
 import type { EditorHost, TextEditor } from './editor';
+import type { Files } from './files';
 import type {
   InterceptBind,
   Keymap,
@@ -229,6 +230,9 @@ export interface PushedScope {
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` is the
 // plugin's own events and `Heard` the other plugins' events it hears, as
 // `PluginEvents` takes them; a part that declares no `Heard` hears nothing.
+// `dataUrl` is the `wigley-data:` URL of `path` in the plugin's data folder;
+// a new `revision` makes the file and every relative import under it load
+// fresh.
 export interface PageApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
@@ -256,6 +260,7 @@ export interface PageApi<
   commands: { run(id: CommandId, context?: PageCommandContext): void };
   services: PageServices;
   dependency<E>(pluginId: string): E;
+  dataUrl(path: string, revision: number): string;
 }
 
 // `exports` reaches the plugins that depend on this one.
@@ -306,8 +311,9 @@ export interface SelfTestHost {
   run(script: SelfTestScript): void;
 }
 
-// `selfTest` is null outside the self-test.
+// `selfTest` is null outside the self-test. `files` takes absolute paths.
 export interface MainServices {
+  files: Files;
   log: Log;
   clock: Clock;
   randomHex: RandomHex;
@@ -319,7 +325,9 @@ export interface MainServices {
 
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` and
-// `Heard` are as on `PageApi`.
+// `Heard` are as on `PageApi`. `data` is the files service scoped to the
+// plugin's data folder: its paths are relative to that folder, and one that
+// resolves outside it fails.
 export interface MainApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
@@ -331,6 +339,7 @@ export interface MainApi<
   settings: M['settings'];
   services: MainServices;
   dependency<E>(pluginId: string): E;
+  data: Files;
 }
 
 // `exports` reaches the plugins that depend on this one; `dispose` runs when

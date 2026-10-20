@@ -14,6 +14,7 @@ import type {
   ScopeInfo,
   UntypedEvents,
 } from '../../contracts/plugin';
+import { dataUrl } from '../../shared/data-url';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { qualify } from '../../shared/plugin-manifests';
 import type { ScopeStack } from '../key-scope';
@@ -80,5 +81,6 @@ export function createPageApi(
     commands: { run: deps.run },
     services: deps.services,
     dependency: deps.dependency,
+    dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
   };
 }
