@@ -38,6 +38,12 @@
   min-width: 0;
 }
 
+/* A mode's root fills the main area. */
+.shell-main > * {
+  height: 100%;
+  min-height: 0;
+}
+
 .shell-panel {
   border-top: 1px solid var(--wg-border);
   grid-area: panel;

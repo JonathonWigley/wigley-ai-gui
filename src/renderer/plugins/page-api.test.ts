@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Bridge } from '../../contracts/bridge';
 import type {
+  Mode,
+  Modes,
   PageChannel,
   PageServices,
   PluginManifest,
@@ -42,6 +44,7 @@ function fakeBridge() {
 function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
   return {
     areas: {} as PageApiDeps['areas'],
+    modes: {} as Modes,
     bridge: fakeBridge().bridge,
     scopeStack: createScopeStack('any'),
     pendingKeys: { onPending: () => {}, hold: () => {}, cancel: () => {} },
@@ -119,5 +122,24 @@ describe('createPageApi', () => {
 
     expect(emitted).toEqual([3]);
     expect(heard).toEqual([4]);
+  });
+
+  it("qualifies a mode's id by the plugin", () => {
+    const added: Mode[] = [];
+    const modes = {
+      add: (mode) => {
+        added.push(mode);
+        return { show: () => {}, isShown: () => false };
+      },
+    } as Pick<Modes, 'add'> as Modes;
+    const api = createPageApi(manifest, deps({ modes }));
+    const element = {} as HTMLElement;
+    const shown = () => {};
+
+    api.modes.add({ id: 'browse', title: 'Browse', element, shown });
+
+    expect(added).toEqual([
+      { id: 'p.browse', title: 'Browse', element, shown },
+    ]);
   });
 });

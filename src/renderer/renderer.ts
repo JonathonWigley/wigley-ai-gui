@@ -28,6 +28,7 @@ import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
 import { createPendingKeys } from './pending-keys';
 import { createPageApi } from './plugins/page-api';
+import { createModes } from './shell/modes';
 import { mountShell } from './shell/shell';
 import { applyTheme } from './theme';
 import { createToasts } from './toasts';
@@ -74,6 +75,7 @@ async function start() {
   applyTheme(theme.theme, settings.fonts, document.documentElement);
 
   const areas = mountShell(document.getElementById('app') as HTMLElement);
+  const modes = createModes((element) => areas.main.contribute(element), log);
   const toastLayer = document.createElement('div');
   toastLayer.className = 'toasts';
   areas.overlay.contribute(toastLayer);
@@ -116,6 +118,7 @@ async function start() {
       const started = part.start(
         createPageApi(part.manifest, {
           areas,
+          modes,
           bridge,
           scopeStack,
           pendingKeys,

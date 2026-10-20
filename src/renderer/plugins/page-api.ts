@@ -6,6 +6,7 @@ import type {
   AreaName,
   ChannelShape,
   CommandInfo,
+  Modes,
   PageApi,
   PageCommandContext,
   PageServices,
@@ -21,9 +22,11 @@ import type { PendingKeysHub } from '../pending-keys';
 // What the page core shares with every plugin's API. `scopeStack` holds
 // qualified scopes; `pendingKeys` is the page's one pending-key report;
 // `keymap` is the merged keymap; `commandInfo` and `scopes` are as main serves
-// them; `bus` is the page load's event bus.
+// them; `bus` is the page load's event bus; `modes` is the core's mode
+// registry, which takes qualified ids.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
+  modes: Modes;
   bridge: Bridge;
   scopeStack: ScopeStack;
   pendingKeys: Pick<PendingKeysHub, 'onPending' | 'hold' | 'cancel'>;
@@ -39,7 +42,8 @@ export interface PageApiDeps {
 }
 
 // One plugin's page API: its channel and its events run under the manifest's
-// id, and the scopes it sets and pushes are qualified by it.
+// id, and the scopes it sets and pushes and the modes it adds are qualified by
+// it.
 export function createPageApi(
   manifest: PluginManifest,
   deps: PageApiDeps,
@@ -65,6 +69,12 @@ export function createPageApi(
       label: deps.label,
       command: (id) => deps.commandInfo[id],
       scopes: deps.scopes,
+    },
+    modes: {
+      add: (mode) =>
+        deps.modes.add({ ...mode, id: qualify(manifest.id, mode.id) }),
+      shown: () => deps.modes.shown(),
+      onChanged: (listener) => deps.modes.onChanged(listener),
     },
     settings: deps.settings,
     commands: { run: deps.run },

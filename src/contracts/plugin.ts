@@ -159,6 +159,36 @@ export interface Area {
   contribute(element: HTMLElement): { remove(): void };
 }
 
+// A view that fills the window above the status bar; the core shows one mode at
+// a time. `shown` runs each time this mode becomes the shown one, the first
+// mode's at its `add` included; the mode's plugin sets its base key scope
+// there, so a hidden view never keeps the scope.
+export interface Mode {
+  id: string;
+  title: string;
+  element: HTMLElement;
+  shown(): void;
+}
+
+// `show` hides the shown mode and shows this one; on the shown mode it does
+// nothing.
+export interface ModeHandle {
+  show(): void;
+  isShown(): boolean;
+}
+
+// The first mode added shows and every later one is added hidden; a hidden
+// mode keeps its DOM and state. `add` throws on an id already added, and calls
+// the first mode's `shown` before it returns, so that `shown` cannot read the
+// handle. `shown` is the shown mode's id and throws before any `add`;
+// `onChanged` listeners hear the new id each time `show` changes the shown
+// mode, after that mode's `shown`.
+export interface Modes {
+  add(mode: Mode): ModeHandle;
+  shown(): string;
+  onChanged(listener: (modeId: string) => void): void;
+}
+
 export type ToastTone = 'success' | 'info' | 'error';
 
 // `editor` is the text box a key fired in.
@@ -193,6 +223,8 @@ export interface PushedScope {
 // binds qualified; `keys.label` falls back to the id for a command with no
 // label; `keys.command` reads a command by its qualified id; `keys.scopes`
 // lists every scope as main serves them.
+// `modes.add` qualifies the mode's id by the plugin (`browse` in plugin `p`
+// is `p.browse`), and `modes.shown` and `modes.onChanged` read qualified ids.
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` is the
 // plugin's own events and `Heard` the other plugins' events it hears, as
@@ -219,6 +251,7 @@ export interface PageApi<
     command(id: CommandId): CommandInfo | undefined;
     scopes: readonly ScopeInfo[];
   };
+  modes: Modes;
   settings: M['settings'];
   commands: { run(id: CommandId, context?: PageCommandContext): void };
   services: PageServices;
