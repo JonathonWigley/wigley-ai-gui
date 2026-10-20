@@ -154,7 +154,7 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 
 ## Plans
 
-- **Plan A — the loop** (`plan-a-loop/`): the spike, the harness seam with the Claude and fake adapters, ACP removal,
+- **Plan A — the loop** (landed 2026-10-20, its plan folder closed): the spike, the harness seam with the Claude and fake adapters, ACP removal,
   owned sessions, take over and `mark`, the shared layout machinery, the chat plugin with its default layout,
   permission cards, controls, alerts, and the start prompt with profiles and recent folders.
 - **Plan B — resume and completion** (`plan-b-resume/`): resume with history, archive, slash completion.

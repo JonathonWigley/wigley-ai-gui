@@ -47,6 +47,19 @@ Each re-run by `wigley:make` before the first dispatch (paths from the repo root
   - `grep -c "export function toolSummary" src/main/claude-code/tool-summary.ts` → 1; `grep -c "export function openStartPrompt" src/plugins/chat/page/start-prompt.ts`
     → 1; `grep -c "cursorIndex" src/plugins/chat/page/picker.ts` → 0; `grep -c "createEditor\|editor.create(" src/plugins/chat/page/chat-view.ts` → ≥ 1
     (the Chat tab's box, plan A task 09).
+- Plan A landed with changes these tasks were written without; its plan folder is deleted, so where a task cites
+  plan A's plan.md, File Structure or a task's Produces, read the code instead. Changes that bear on this plan:
+  `EditorBind` gains `mode?: 'normal' | 'insert'` (an insert bind is one key the host types unbound, today only
+  `<CR>`; chat's picker filter binds it); the core `jk` insert remap is gone (Esc leaves insert mode, and self-test
+  text may hold `j`); chat keys act only on the visible Chat tab's session, and showing another session's Chat tab
+  closes the control pickers (`PickerRequest.sessionBound`), the reason box and the confirm; `PERMISSION_TOOL_NAME`
+  and `CLAUDE_PERMISSION_TOOL` live in `src/contracts/agent.ts`; `isMissingFile` is in `src/contracts/files.ts`;
+  `AgentProcess.end()` resolves after `ended` fires; chat main's `setControl` throws for a session it no longer
+  holds; the stream decoder folds related events into their entries and gathers the rest into one
+  `turn-events-<n>` entry per turn (opened at the turn's init; between-turn events join the ended turn's); the
+  harness counts outstanding turns (`claude-stream.md` § Queued messages); the launch strips the nested-session
+  environment (`claude-stream.md` § Launch); `mountChatView` returns `ChatTabs` (`session(id)`,
+  `sessionOfEditor(editor)`).
 - Not yet built: `grep -c "listSessions\|PastSession" src/contracts/agent.ts` → 0; `grep -c "modified\|readStart" src/contracts/files.ts`
   → 0; `grep -c "completions\|EditorOptions" src/contracts/editor.ts` → 0; `test -e src/plugins/chat/main/archived-sessions.ts || echo absent` → `absent`.
 - The editor host's `create` as at plan time: `grep -c "create(parent: HTMLElement, doc: string, events: EditorEvents): TextEditor;" src/contracts/editor.ts` → 1.
