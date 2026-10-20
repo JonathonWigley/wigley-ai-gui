@@ -82,12 +82,12 @@ const CONTROL_IDS = {
   pickModel: 'model',
 } as const;
 
-// Every chat command's handler, by short id. A command acting on a session
-// acts on the one whose box the key fired in, else the session whose Chat tab
-// shows.
+// Every chat command's handler but `newSession`'s (the start prompt's), by
+// short id. A command acting on a session acts on the one whose box the key
+// fired in, else the session whose Chat tab shows.
 export function chatCommandHandlers(
   deps: ChatCommandDeps,
-): PageStart<typeof chatManifest>['commands'] {
+): Omit<PageStart<typeof chatManifest>['commands'], 'newSession'> {
   const { tabs, channel, picker, log } = deps;
   const inSession =
     (

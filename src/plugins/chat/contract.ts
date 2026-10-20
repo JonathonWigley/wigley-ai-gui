@@ -42,6 +42,8 @@ export interface ChatChannel extends ChannelShape {
     sessions(): ChatSessionState[];
     recentFolders(): Promise<RecentFolder[]>;
     chooseFolder(): Promise<string | null>;
+    // The home folder, which the start prompt shows as `~`.
+    homeDir(): string;
     // The new row's sessionId.
     start(request: StartRequest): string;
     send(sessionId: string, text: string): void;

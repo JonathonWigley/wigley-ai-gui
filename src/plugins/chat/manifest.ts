@@ -14,6 +14,7 @@ export const chatManifest = definePlugin({
   id: 'chat',
   dependsOn: ['sessions', 'keys'],
   commands: {
+    newSession: { label: 'new session', group: 'sessions', runsIn: 'page' },
     focusBox: { label: 'type a message', group: 'box', runsIn: 'page' },
     appendBox: {
       label: 'type after the message',
@@ -115,6 +116,7 @@ export const chatManifest = definePlugin({
       { keys: ['y'], scope: 'confirm', command: 'endSession' },
       { keys: ['n'], scope: 'confirm', command: 'keepSession' },
       { keys: ['Escape'], scope: 'confirm', command: 'keepSession' },
+      { keys: [' ', 'k', 'n'], scope: 'any', command: 'newSession' },
       { keys: [' ', 'z', 'c', 'n'], scope: 'any', command: 'nextLayout' },
       { keys: [' ', 'z', 'c', 'p'], scope: 'any', command: 'prevLayout' },
       { keys: [' ', 'z', 'c', 'c'], scope: 'any', command: 'copyLayout' },
@@ -130,6 +132,7 @@ export const chatManifest = definePlugin({
       { keys: '<Esc>', scope: 'picker', command: 'pickerList' },
       { keys: '<CR>', scope: 'reason', command: 'submitReason' },
       { keys: '<Esc>', scope: 'reason', command: 'cancelReason' },
+      { keys: '<Leader>kn', scope: 'any', command: 'newSession' },
     ],
     app: [],
     global: [],

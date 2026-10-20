@@ -88,6 +88,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     );
     api.channel.handle('recentFolders', () => recent.list());
     api.channel.handle('chooseFolder', () => services.window.chooseFolder());
+    api.channel.handle('homeDir', () => services.homeDir);
     api.events.on('sessions.closed', ({ sessionId }) => chat.closed(sessionId));
     sessions.contributeTools(PERMISSION_TOOLS, (session) =>
       chat.permissionToolSession(session),
