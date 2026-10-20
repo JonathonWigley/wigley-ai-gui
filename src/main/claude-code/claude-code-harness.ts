@@ -100,8 +100,11 @@ function startClaudeProcess(
   let requestCount = 0;
   let noticeCount = 0;
   const pendingRequests = new Map<string, PendingRequest>();
-  // The effort or model command whose turn is running, if any.
-  let pendingCommand: ControlCommand | null = null;
+  // One item per message written and not yet answered by a `result`, in
+  // write order: Claude queues a message sent mid-turn and answers each with
+  // its own `result`. The item is the effort or model command the message
+  // carries, or null.
+  const pendingTurns: (ControlCommand | null)[] = [];
   let lastStderr: string | null = null;
   let isEndCalled = false;
   let hasClosed = false;
@@ -144,7 +147,7 @@ function startClaudeProcess(
   };
 
   // True when the value changed.
-  const setValue = (id: ClaudeControlId, value: string): boolean => {
+  const setValue = (id: ClaudeControlId, value: string | null): boolean => {
     const current = controls.find((control) => control.id === id);
     if (current?.value === value) {
       return false;
@@ -237,10 +240,11 @@ function startClaudeProcess(
   };
 
   // A control command's own result entry is not shown; its success sets the
-  // control, since the turn's init still reports the value from before.
+  // control, since the turn's init still reports the value from before. A
+  // value that is not among the control's choices leaves the control unknown.
   const handleLine = (line: string) => {
     const decoded = decoder.decode(line);
-    const command = decoded.turnEnded ? pendingCommand : null;
+    const command = decoded.turnEnded ? (pendingTurns.shift() ?? null) : null;
     for (const entry of decoded.entries) {
       const isCommandResult = command !== null && entry.kind === 'result';
       if (!isCommandResult) {
@@ -253,12 +257,10 @@ function startClaudeProcess(
       hasChanged =
         setValue(controlId, controlValue(controlId, value)) || hasChanged;
     }
-    if (command !== null) {
-      pendingCommand = null;
-      if (!decoded.turnFailed) {
-        const value = controlValue(command.id, command.value);
-        hasChanged = setValue(command.id, value) || hasChanged;
-      }
+    if (command !== null && !decoded.turnFailed) {
+      const value = controlValue(command.id, command.value);
+      const known = isChoice(command.id, value) ? value : null;
+      hasChanged = setValue(command.id, known) || hasChanged;
     }
     if (hasChanged) {
       emitControls();
@@ -273,7 +275,7 @@ function startClaudeProcess(
     if (decoded.hostRequest !== null) {
       refuseHostRequest(decoded.hostRequest);
     }
-    if (decoded.turnEnded) {
+    if (decoded.turnEnded && pendingTurns.length === 0) {
       setActivity('idle');
     }
   };
@@ -285,6 +287,7 @@ function startClaudeProcess(
   });
   child.stdin.on('error', (error) => deps.log('claude', errorText(error)));
   child.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+    pendingTurns.length = 0;
     if (activity === 'working') {
       setActivity('idle');
     }
@@ -322,11 +325,11 @@ function startClaudeProcess(
         raw: [message],
       });
       const typed = CONTROL_COMMAND.exec(text);
-      if (typed !== null && activity !== 'working') {
-        const id = typed[1] as ControlCommand['id'];
-        const isKnownValue = isChoice(id, controlValue(id, typed[2]));
-        pendingCommand = isKnownValue ? { id, value: typed[2] } : null;
-      }
+      pendingTurns.push(
+        typed === null
+          ? null
+          : { id: typed[1] as ControlCommand['id'], value: typed[2] },
+      );
       setActivity('working');
     },
     interrupt() {
@@ -366,7 +369,7 @@ function startClaudeProcess(
       }
       // A slash command carries no request id.
       write(controlMessage(control.id, value, ''));
-      pendingCommand = { id: control.id, value };
+      pendingTurns.push({ id: control.id, value });
       setActivity('working');
     },
     end() {

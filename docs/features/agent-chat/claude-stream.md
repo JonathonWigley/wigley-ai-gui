@@ -576,3 +576,57 @@ Event types and subtypes seen in the logs that the sections above do not cover:
 Expected but not observed: `ping` stream events, `system/api_retry`, `system/permission_denied`, any
 `control_request` sent by Claude to the host (none arrived, even with `--permission-prompt-tool`), and non-JSON
 stdout lines (every stdout line in every probe parsed as JSON).
+
+## Queued messages
+
+A message written while a turn runs is queued: it runs as its own turn after the running one, with its own `init` and
+its own `result`. Claude never folds it into the running turn. An `interrupt` ends only the running turn; the queued
+message still runs.
+
+Measured 2026-10-20 on `2.1.304`, one process, in a fresh project folder holding `notes.txt`. Launch as in § How
+every probe ran: base plus cheap flags, the § Launch nested-session variables stripped. Each phase wrote
+`U(Count from 1 to 200, one number per line.)` and, at the turn's first `stream_event` (`message_start`), wrote the
+queued line(s) below; it ended after 10 s with no output. Seconds are counted from spawn; excerpts trimmed as above.
+
+**A: a second message.** Queued `U(Reply with the single word two.)` at 1.99:
+
+```
+ 1.99 stream_event message_start            ← U(two) written here
+ 3.15 assistant (text "1\n2\n…")
+ 3.34 {"type":"result","subtype":"success","result":"1\n2\n…200","num_turns":1,"result_index":0,"queued_turn_count":0,…}
+ 3.40 system/init
+ 4.65 assistant (text "two")
+ 4.77 {"type":"result","subtype":"success","result":"two","num_turns":1,"result_index":1,"queued_turn_count":0,…}
+```
+
+**B: a second message, then an interrupt.** Queued `U(Reply with the single word four.)` and, in the same
+millisecond after it, `{"type":"control_request","request_id":"probe-1","request":{"subtype":"interrupt"}}`:
+
+```
+15.72 stream_event message_start            ← U(four), then the interrupt, written here
+15.73 {"type":"control_response","response":{"subtype":"success","request_id":"probe-1","response":{"still_queued":[]}}}
+15.73 assistant (text "1\n2\n3\n4")
+15.73 user [{"type":"text","text":"[Request interrupted by user]"}]
+15.73 {"type":"result","subtype":"error_during_execution","is_error":true,"num_turns":2,"terminal_reason":"aborted_streaming","result_index":2,"queued_turn_count":0,…}
+15.79 system/init
+17.34 assistant (text "four")
+17.44 {"type":"result","subtype":"success","result":"four","num_turns":1,"result_index":3,"queued_turn_count":0,…}
+```
+
+**C: a local command queued behind a model turn.** Queued `U(/effort medium)` at 28.97:
+
+```
+30.23 {"type":"result","subtype":"success","result":"1\n2\n…200","result_index":4,…}
+30.23 system/init
+30.23 assistant {"message":{"model":"<synthetic>",…,"content":[{"type":"text","text":"Set effort level to medium (this session only): …"}]},…}
+30.23 {"type":"result","subtype":"success","result":"Set effort level to medium (this session only): …","num_turns":0,"local_command":"effort","result_index":5,"queued_turn_count":0,…}
+```
+
+- One `result` per message written, in write order, local commands included: results match writes first in, first
+  out.
+- The interrupt's `still_queued` was `[]` although `U(four)` was queued, and `U(four)` ran afterwards. The plain
+  `interrupt` request cancels nothing queued; init's `interrupt_cancel_queued_v1` capability names some other request
+  shape, not measured.
+- Every `result` carried `"queued_turn_count":0`, even the A turn's result with `U(two)` waiting behind it, so the
+  field does not count queued messages. A queued local command's `result` also carries `"local_command":"effort"`.
+- The process exited with code 0 when stdin closed after phase C.

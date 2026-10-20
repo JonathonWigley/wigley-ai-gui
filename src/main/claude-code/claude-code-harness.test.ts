@@ -103,6 +103,36 @@ const errorResult = {
   result: 'boom',
 };
 
+function successResult(result: string) {
+  return {
+    type: 'result',
+    subtype: 'success',
+    is_error: false,
+    result,
+    total_cost_usd: 0,
+    num_turns: 0,
+  };
+}
+
+function lastActivity(heard: [string, unknown][]) {
+  return heard.filter(([name]) => name === 'activity').at(-1)?.[1];
+}
+
+// The effort value the last `controls` emission reported.
+function effortValue(heard: [string, unknown][]) {
+  const controls = heard.filter(([name]) => name === 'controls').at(-1)?.[1] as
+    | { id: string; value: string | null }[]
+    | undefined;
+  return controls?.find((control) => control.id === 'effort')?.value ?? null;
+}
+
+function resultEntries(heard: [string, unknown][]) {
+  return heard.filter(
+    ([name, payload]) =>
+      name === 'entry' && (payload as { kind: string }).kind === 'result',
+  );
+}
+
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -218,6 +248,77 @@ describe('createClaudeCodeHarness', () => {
       request_id: 'wigley-1',
       request: { subtype: 'interrupt' },
     });
+  });
+
+  it('send_TwoMessagesOneResult_StaysWorking', async () => {
+    const run = await startedQuiet();
+    run.agent.send('one');
+    run.agent.send('two');
+
+    writeLine(run.stdout, successResult('1'));
+    await settle();
+
+    expect(lastActivity(run.heard)).toBe('working');
+  });
+
+  it('send_TwoMessagesTwoResults_GoesIdle', async () => {
+    const run = await startedQuiet();
+    run.agent.send('one');
+    run.agent.send('two');
+
+    writeLine(run.stdout, successResult('1'));
+    writeLine(run.stdout, successResult('2'));
+    await settle();
+
+    expect(lastActivity(run.heard)).toBe('idle');
+  });
+
+  it('interrupt_WhileQueuedTurnRuns_WritesRequest', async () => {
+    const run = await startedQuiet();
+    run.agent.send('one');
+    run.agent.send('two');
+    writeLine(run.stdout, successResult('1'));
+    await settle();
+
+    run.agent.interrupt();
+
+    expect(run.written[2]).toEqual({
+      type: 'control_request',
+      request_id: 'wigley-1',
+      request: { subtype: 'interrupt' },
+    });
+  });
+
+  it('send_ControlCommandQueuedBehindTurn_TakesItsOwnResult', async () => {
+    const run = await startedQuiet();
+    run.agent.send('one');
+    run.agent.send('/effort high');
+
+    writeLine(run.stdout, successResult('1'));
+    await settle();
+    expect(effortValue(run.heard)).toBeNull();
+    expect(resultEntries(run.heard)).toHaveLength(1);
+
+    writeLine(run.stdout, successResult('Set effort level to high'));
+    await settle();
+
+    expect(effortValue(run.heard)).toBe('high');
+    expect(resultEntries(run.heard)).toHaveLength(1);
+    expect(lastActivity(run.heard)).toBe('idle');
+  });
+
+  it('send_EffortValueNotAChoice_LeavesEffortUnknown', async () => {
+    const run = await startedQuiet();
+    run.agent.setControl('effort', 'high');
+    writeLine(run.stdout, successResult('Set effort level to high'));
+    await settle();
+    expect(effortValue(run.heard)).toBe('high');
+
+    run.agent.send('/effort auto');
+    writeLine(run.stdout, successResult('Set effort level to auto'));
+    await settle();
+
+    expect(effortValue(run.heard)).toBeNull();
   });
 
   it('stderrAndExit_LogsAndEnds', async () => {
