@@ -3,8 +3,8 @@
 **Contents**
 
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the core and its plugins, the
-  layers, the relay and agent sessions, and where a new plugin, mode, session tab, key, event, setting, theme, round
-  source, MCP tool or third-party tool goes, and the layer check.
+  layers, the relay and agent sessions, and where a new plugin, mode, session tab, key, event, setting, theme, plugin
+  data, forms layout, round source, MCP tool or third-party tool goes, and the layer check.
 - **Running and testing** — Node version, the self-test the agent may run any time, and the visible run that is the user's.
 - **Dev quirks** — the startup reload and the unwired ACP adapter and mock agent.
 
@@ -39,6 +39,7 @@ src/main/        core main process; main.ts is its composition root
   acp/           ACP adapter behind AgentClient             → the only client-side @agentclientprotocol/sdk import
   files/         file reads, atomic writes, rename, trash, folder lists and watching, behind Files
   processes/     runs a program and returns its exit code and output, behind ProcessRunner
+  data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page
 src/preload/     the Bridge, exposed as window.wigley
 src/renderer/    core page; renderer.ts is its composition root
   shell/         the window's areas (activity bar, side bar, main, panel, status bar, overlay layer) and its modes
@@ -51,7 +52,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
                  endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions mode: the
                  sidebar and each session's tabs)
-  forms/         manifest.ts, contract.ts, main/ (round logic, saved rounds, its MCP tools), page/ (the Form tab)
+  forms/         manifest.ts, contract.ts, main/ (round logic, saved rounds, its MCP tools, layouts, the preview
+                 round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   docs/          manifest.ts, contract.ts, main/ (docs index runs, file changes inside the indexed folders only,
                  watching the open file), page/ (one docs view — tree, rendered doc, document editor — shown as
                  Docs mode over the machine's index and as each session's Docs tab over that session's)
@@ -105,6 +107,8 @@ round), since main, not the page, decides.
   too, in every vim mode, ahead of the editor. An editor key carries a scope as a page key does and runs only while
   that scope is in force, so two plugins' editors may bind one vim key in different scopes. Esc while a sequence
   waits cancels it and runs nothing.
+- **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout keys are
+  `Space z l …`).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
   modal view never fights the plugin under it for the scope. The pushed scope's `onBaseChanged` hears the set scope
@@ -122,14 +126,16 @@ round), since main, not the page, decides.
   colour. A broken theme falls back to Catppuccin Mocha and shows its error.
 - **An item kind** in a forms round — question, finding, notice — is a format module in a folder of its own,
   `src/plugins/forms/main/kinds/<kind>/<kind>-format.ts` and `src/plugins/forms/page/kinds/<kind>/<kind>-card.ts`,
-  each listed in the typed `FORMATS` table of its process's `kinds/formats.ts`. A new kind starts as its name in
+  each listed in the typed `FORMATS` table of its process's `kinds/formats.ts`; the page module hands a layout the
+  kind's card input, and the layout builds the card. A new kind starts as its name in
   the forms contract's `ItemKind` (and in `AnswerableKind`'s exclusion when it takes no answer), its item type, and
   its `ItemOf` entry in main's `kinds/item-format.ts`; from there the compiler flags each of the rest missing: that
   folder pair, its table entries, its array in the contract's `Round`, `FormBody` and `AnswersPayload`, `round.ts`'s
   fixed keys (`parseRound`, `readFormBody`, the answers payload) and the per-kind records: `FINGERPRINT_LISTS` in
   `round.ts`, `ROUND_ITEMS` in `page/form-state.ts`, and for an answerable kind `ANSWER_LISTS` in
   `forms-service.ts`, and `ANSWER_ARRAYS`, `PICK_ANSWERS` and `RECOMMENDED_PICKS` (what Enter accepts) in
-  `form-state.ts`. The order lists are plain arrays the compiler cannot check: `formats.test.ts` fails when main's
+  `form-state.ts`, then its card input and kit parts in the Layout contract (`layouts/layout.d.ts`) and its card in
+  the `default` layout. The order lists are plain arrays the compiler cannot check: `formats.test.ts` fails when main's
   `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind, and `RAIL_ORDER` in `form-state.ts` is added to by hand.
 - **A finding origin** — `caused`, `pre_existing`, `design`, `nit` — is an entry in
   `src/plugins/forms/finding-origins.ts`: the card it draws as (Defect, Decision, Nit), the fields it requires and
@@ -159,6 +165,21 @@ round), since main, not the page, decides.
 - **A third-party tool** gets a contract in `src/contracts/` and an adapter folder of its own; the core hands
   plugins the shared ones (editor, markdown) as services. Swapping it is a new adapter folder against the same
   contract, and one changed line in the composition root.
+- **Plugin data** — files a plugin keeps for the user, such as forms layouts — lives in the plugin's own folder,
+  `plugins/<id>/` in Electron's per-user data folder (a temp folder in the self-test). Main reaches it through
+  `api.data`, the files service scoped to that folder, which refuses a path outside it. The page loads a file from
+  it by the URL `api.dataUrl(path, revision)` builds on the `wigley-data:` scheme, which the page's CSP allows for
+  scripts and styles; `revision` sits in the URL's path, so a changed module and every relative import under it load
+  fresh.
+- **A forms layout** builds each item's cards, and may add a head above them. Its contract is
+  `src/plugins/forms/layouts/layout.d.ts`: the card input for each kind, and the kit of ready-made parts (sections,
+  choice list, answer controls, verdict, action row), each of which keeps itself up to date. The built-in `default`
+  layout is `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract, and it draws the
+  forms look. The user's layouts are folders in forms' plugin data, `layouts/<name>/layout.js` and an optional
+  `layout.css`, and the app writes `layouts/layout.d.ts` there at every start. Saving the active layout's files
+  redraws open rounds and keeps every answer. `Space z l n` / `Space z l p` cycle the layouts, `Space z l c` copies
+  the active one into a new folder, and `Space z l o` opens the preview round, which sends nothing. A card that
+  throws falls back to `default`, and a reload that fails keeps the last good layout.
 - `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its `LAYERS` table does
   not allow. A new layer, adapter or plugin folder gets a `LAYERS` entry, and the composition root's entry lists it.
 
@@ -179,6 +200,8 @@ round), since main, not the page, decides.
   `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Only one script
   runs, so the keys plugin's steps live in forms' script, whose fixture gives them scopes full of binds and a box to
   type in.
+- Forms visuals are checked live on the preview round (`Space z l o`): the built-in sample shows every card, and each
+  further press swaps in the next saved real round.
 - A visible `npm start` takes the user's foreground and keyboard, so that run is the user's: the agent gives the user
   the steps to try. The global shortcut needs it — macOS keys reach a global shortcut only from the real keyboard.
 
