@@ -1,6 +1,6 @@
 # 05 — Sessions mode: the sidebar and each session's tabs
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 04
 Plan: [plan.md](plan.md)
@@ -308,3 +308,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+b8ce743 · proved: diff read (every Produces present in contract.ts and tabs.ts; SessionView and fill gone), typecheck clean, suite 53 files / 858 pass, Done-when grep empty, no `<Leader>k` / `<Leader>;` collision · selftest deferred to 06 · concerns: width/overlay/look unverified live; no DOM test of start.ts, the tabs view or the Form tab wiring; a Form tab's `shown()` can run inside `addTab` before the handle returns; a row dropped while its round stays in forms' state leaves that round's view detached
