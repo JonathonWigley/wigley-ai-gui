@@ -23,6 +23,7 @@ export interface StreamDecoder {
 type Json = Record<string, unknown>;
 type TextEntry = Extract<ChatEntry, { kind: 'assistant' | 'thinking' }>;
 type ToolEntry = Extract<ChatEntry, { kind: 'tool' }>;
+type RawEntry = Extract<ChatEntry, { kind: 'raw' }>;
 
 // Local slash commands answer with an assistant event of this model.
 const SYNTHETIC_MODEL = '<synthetic>';
@@ -37,6 +38,16 @@ const ID_PREFIXES: Readonly<Record<TextEntry['kind'], string>> = {
   assistant: 'text',
   thinking: 'thinking',
 };
+
+// System subtypes that join the turn's events entry; any other subtype is a
+// new CLI event and gets a raw entry of its own.
+const GATHERED_SYSTEM_SUBTYPES: ReadonlySet<string> = new Set([
+  'init',
+  'status',
+  'hook_started',
+  'hook_response',
+  'thinking_tokens',
+]);
 
 function asJson(value: unknown): Json {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -114,7 +125,13 @@ function messageText(content: unknown): string {
 }
 
 // One decoder reads one process's stdout: it keeps the entries it built, so a
-// later line updates them.
+// later line updates them. An event joins the entry it belongs to; a known
+// event that belongs to none joins the turn's events entry, one raw entry per
+// turn re-sent as it grows; an event of a type the decoder does not know gets a
+// raw entry of its own. An entry is re-sent whenever it changes, its `raw`
+// included, except a thinking entry's `system/thinking_tokens`: those arrive
+// once per delta, so they ride with the entry's next send, which the block's
+// `content_block_stop` always brings.
 export function createStreamDecoder(): StreamDecoder {
   const textEntries = new Map<string, TextEntry>();
   const toolEntries = new Map<string, ToolEntry>();
@@ -124,17 +141,34 @@ export function createStreamDecoder(): StreamDecoder {
   // `parent_tool_use_id` (null for the main conversation).
   const currentMessage = new Map<string | null, string>();
   const openBlocks = new Map<string, TextEntry>();
+  // The thinking block streaming last, which `system/thinking_tokens` joins.
+  let openThinking: TextEntry | null = null;
   // Assistant blocks with no streamed entry, per message id.
   const unstreamedCounts = new Map<string, number>();
   let rawCount = 0;
+  let turnCount = 0;
+  // Null until the turn's first gathered event; a result closes it.
+  let turnEvents: RawEntry | null = null;
   let noticeCount = 0;
   let resultCount = 0;
   // `total_cost_usd` is the process's cost so far.
   let lastTotalCost = 0;
 
+  // An event of a type the decoder does not know, alone in its entry.
   function rawEntry(raw: unknown): ChatEntry {
     rawCount += 1;
     return { kind: 'raw', id: `raw-${rawCount}`, raw: [raw] };
+  }
+
+  // The turn's events entry with `event` added: hooks at process start open
+  // the first one.
+  function gathered(event: unknown): ChatEntry {
+    if (turnEvents === null) {
+      turnCount += 1;
+      turnEvents = { kind: 'raw', id: `turn-events-${turnCount}`, raw: [] };
+    }
+    turnEvents.raw.push(event);
+    return snapshot(turnEvents);
   }
 
   function noticeEntry(
@@ -161,15 +195,22 @@ export function createStreamDecoder(): StreamDecoder {
       if (typeof event.model === 'string') {
         out.reported.model = event.model;
       }
-      return;
     }
     const isModeStatus =
       event.subtype === 'status' && typeof event.permissionMode === 'string';
     if (isModeStatus) {
       out.reported.mode = event.permissionMode as string;
+    }
+    const isThinkingTokens = event.subtype === 'thinking_tokens';
+    if (isThinkingTokens && openThinking !== null) {
+      openThinking.raw.push(event);
       return;
     }
-    out.entries.push(rawEntry(event));
+    out.entries.push(
+      GATHERED_SYSTEM_SUBTYPES.has(asString(event.subtype))
+        ? gathered(event)
+        : rawEntry(event),
+    );
   }
 
   function decodeStreamEvent(event: Json, out: DecodedLine) {
@@ -198,6 +239,9 @@ export function createStreamDecoder(): StreamDecoder {
       };
       textEntries.set(entry.id, entry);
       openBlocks.set(blockKey, entry);
+      if (kind === 'thinking') {
+        openThinking = entry;
+      }
       out.entries.push(snapshot(entry));
       return;
     }
@@ -210,36 +254,40 @@ export function createStreamDecoder(): StreamDecoder {
       const isOwnDelta =
         (delta.type === 'text_delta' && entry.kind === 'assistant') ||
         (delta.type === 'thinking_delta' && entry.kind === 'thinking');
-      if (!isOwnDelta) {
-        return;
-      }
-      entry.text += asString(
+      const addedText = asString(
         entry.kind === 'assistant' ? delta.text : delta.thinking,
       );
+      // Claude streams no thinking text: each thinking delta adds "".
+      if (!isOwnDelta || addedText === '') {
+        return;
+      }
+      entry.text += addedText;
       out.entries.push(snapshot(entry));
       return;
     }
     if (inner.type === 'content_block_stop') {
       openBlocks.delete(blockKey);
+      if (openThinking === entry) {
+        openThinking = null;
+      }
       entry.streaming = false;
       out.entries.push(snapshot(entry));
     }
   }
 
-  // The streamed entry an assistant block confirms: same message and kind,
-  // same text, not yet confirmed.
+  // The streamed entry an assistant block confirms: the first of its message
+  // and kind not yet confirmed, since blocks complete in order, one per
+  // assistant event.
   function streamedEntry(
     kind: TextEntry['kind'],
     messageId: string,
-    text: string,
   ): TextEntry | undefined {
     const idStart = `${ID_PREFIXES[kind]}-${messageId}-`;
     for (const entry of textEntries.values()) {
       const isCandidate =
         entry.kind === kind &&
         entry.id.startsWith(idStart) &&
-        !confirmed.has(entry.id) &&
-        entry.text === text;
+        !confirmed.has(entry.id);
       if (isCandidate) {
         return entry;
       }
@@ -267,6 +315,8 @@ export function createStreamDecoder(): StreamDecoder {
     return entry;
   }
 
+  // The assistant block's text stands over the streamed one: an interrupt can
+  // end the stream short of the block.
   function decodeTextBlock(
     kind: TextEntry['kind'],
     messageId: string,
@@ -274,11 +324,12 @@ export function createStreamDecoder(): StreamDecoder {
     event: Json,
   ): TextEntry {
     const text = asString(kind === 'assistant' ? block.text : block.thinking);
-    const entry = streamedEntry(kind, messageId, text);
+    const entry = streamedEntry(kind, messageId);
     if (entry === undefined) {
       return unstreamedEntry(kind, messageId, text, event);
     }
     confirmed.add(entry.id);
+    entry.text = text;
     entry.streaming = false;
     entry.raw.push(event);
     return entry;
@@ -306,7 +357,7 @@ export function createStreamDecoder(): StreamDecoder {
     if (message.model === SYNTHETIC_MODEL) {
       const text = messageText(message.content).trim();
       out.entries.push(
-        text === '' ? rawEntry(event) : noticeEntry(text, 'info', event),
+        text === '' ? gathered(event) : noticeEntry(text, 'info', event),
       );
       return;
     }
@@ -339,7 +390,7 @@ export function createStreamDecoder(): StreamDecoder {
 
   // Tool results pair with their tool entries. Local command output (the
   // `set_model` replay) wrapped in `<local-command-stdout>` is a notice; any
-  // other text (the interrupt marker) is a raw entry.
+  // other text (the interrupt marker) joins the turn's events.
   function decodeUser(event: Json, out: DecodedLine) {
     const content = asJson(event.message).content;
     const toolResults = asArray(content)
@@ -360,12 +411,14 @@ export function createStreamDecoder(): StreamDecoder {
     out.entries.push(
       isLocalOutput && output !== ''
         ? noticeEntry(output, 'info', event)
-        : rawEntry(event),
+        : gathered(event),
     );
   }
 
   // An error turn's stop reason is its subtype: an interrupted turn reports
-  // the `stop_reason` of the last message it finished.
+  // the `stop_reason` of the last message it finished. A cumulative total below
+  // the last one has no turn share, so its cost is null. A result ends the
+  // turn's events entry.
   function decodeResult(event: Json, out: DecodedLine) {
     const isError = event.is_error === true;
     out.turnEnded = true;
@@ -375,10 +428,13 @@ export function createStreamDecoder(): StreamDecoder {
       out.entries.push(noticeEntry(errorText, 'error', event));
     }
     const hasStopReason = !isError && typeof event.stop_reason === 'string';
+    const totalCost = event.total_cost_usd;
+    const hasTurnShare =
+      typeof totalCost === 'number' && totalCost >= lastTotalCost;
     let costUsd: number | null = null;
-    if (typeof event.total_cost_usd === 'number') {
-      costUsd = event.total_cost_usd - lastTotalCost;
-      lastTotalCost = event.total_cost_usd;
+    if (hasTurnShare) {
+      costUsd = totalCost - lastTotalCost;
+      lastTotalCost = totalCost;
     }
     resultCount += 1;
     out.entries.push({
@@ -392,6 +448,7 @@ export function createStreamDecoder(): StreamDecoder {
         typeof event.duration_ms === 'number' ? event.duration_ms : null,
       raw: [event],
     });
+    turnEvents = null;
   }
 
   function decodeControlResponse(event: Json, out: DecodedLine) {
@@ -401,6 +458,7 @@ export function createStreamDecoder(): StreamDecoder {
       requestId: asString(response.request_id),
       error: isError ? asString(response.error) || 'unknown error' : null,
     };
+    out.entries.push(gathered(event));
   }
 
   function decodeControlRequest(event: Json, out: DecodedLine) {
@@ -408,7 +466,23 @@ export function createStreamDecoder(): StreamDecoder {
       requestId: asString(event.request_id),
       subtype: asString(asJson(event.request).subtype),
     };
-    out.entries.push(rawEntry(event));
+    out.entries.push(gathered(event));
+  }
+
+  // A heartbeat's `parent_tool_use_id` is the pending call's id, not a
+  // subagent's.
+  function decodeToolProgress(event: Json, out: DecodedLine) {
+    const entry = toolEntries.get(asString(event.parent_tool_use_id));
+    if (entry === undefined) {
+      out.entries.push(gathered(event));
+      return;
+    }
+    entry.raw.push(event);
+    out.entries.push(snapshot(entry));
+  }
+
+  function decodeRateLimit(event: Json, out: DecodedLine) {
+    out.entries.push(gathered(event));
   }
 
   const DECODERS: Readonly<
@@ -421,6 +495,8 @@ export function createStreamDecoder(): StreamDecoder {
     result: decodeResult,
     control_response: decodeControlResponse,
     control_request: decodeControlRequest,
+    tool_progress: decodeToolProgress,
+    rate_limit_event: decodeRateLimit,
   };
 
   return {

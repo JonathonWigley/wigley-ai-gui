@@ -49,4 +49,40 @@ describe('claudeLaunch', () => {
     expect(launch.env.CLAUDE_CONFIG_DIR).toBe('/x');
     expect(launch.env).not.toBe(env);
   });
+
+  it('claudeLaunch_NestedSessionEnv_StripsListedNamesOnly', () => {
+    const launch = claudeLaunch(
+      {
+        sessionId: 's-1',
+        resume: false,
+        projectDir: '/proj',
+        profileDir: '/p',
+      },
+      TOOL,
+      {
+        HOME: '/h',
+        AI_AGENT: 'claude-code',
+        CLAUDECODE: '1',
+        CLAUDE_PID: '123',
+        CLAUDE_EFFORT: 'high',
+        CLAUDE_AFK_TIMEOUT_MS: '60000',
+        CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '80',
+        CLAUDE_CODE_ENTRYPOINT: 'cli',
+        CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+        CLAUDE_CODE_MESSAGING_SOCKET: '/tmp/s',
+        CLAUDE_CODE_MESSAGING_TOKEN: 'tok',
+        CLAUDE_CODE_EXECPATH: '/bin/claude',
+        CLAUDE_CODE_SESSION_ID: 'parent-session',
+        CLAUDE_CODE_CHILD_SESSION: '1',
+        CLAUDE_CODE_SESSION_ATTENDED: '1',
+        CLAUDE_CODE_USE_BEDROCK: '1',
+      },
+    );
+
+    expect(launch.env).toEqual({
+      HOME: '/h',
+      CLAUDE_CODE_USE_BEDROCK: '1',
+      CLAUDE_CONFIG_DIR: '/p',
+    });
+  });
 });

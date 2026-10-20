@@ -56,25 +56,178 @@ const toolUseEvent = assistantEvent('m2', [
 describe('createStreamDecoder', () => {
   it('decode_Init_ReportsCommandsAndControls', () => {
     const decoder = createStreamDecoder();
+    const init = {
+      type: 'system',
+      subtype: 'init',
+      cwd: '/proj',
+      model: 'claude-opus-5-5[1m]',
+      permissionMode: 'auto',
+      slash_commands: ['/compact', 'model'],
+      skills: ['wigley:feature', 'compact'],
+    };
 
-    const decoded = decoder.decode(
-      line({
-        type: 'system',
-        subtype: 'init',
-        cwd: '/proj',
-        model: 'claude-opus-5-5[1m]',
-        permissionMode: 'auto',
-        slash_commands: ['/compact', 'model'],
-        skills: ['wigley:feature', 'compact'],
-      }),
-    );
+    const decoded = decoder.decode(line(init));
 
     expect(decoded.commands).toEqual(['compact', 'model', 'wigley:feature']);
     expect(decoded.reported).toEqual({
       mode: 'auto',
       model: 'claude-opus-5-5[1m]',
     });
-    expect(decoded.entries).toEqual([]);
+    expect(decoded.entries).toEqual([
+      { kind: 'raw', id: 'turn-events-1', raw: [init] },
+    ]);
+  });
+
+  it('decode_StartHooksAndTurnEvents_GatherIntoOneEntryPerTurn', () => {
+    const decoder = createStreamDecoder();
+    const hookStarted = {
+      type: 'system',
+      subtype: 'hook_started',
+      hook_name: 'SessionStart:startup',
+      hook_event: 'SessionStart',
+    };
+    const hookResponse = {
+      type: 'system',
+      subtype: 'hook_response',
+      hook_name: 'SessionStart:startup',
+      exit_code: 0,
+      outcome: 'success',
+    };
+    const init = { type: 'system', subtype: 'init', model: 'claude-haiku-5-5' };
+    const requesting = {
+      type: 'system',
+      subtype: 'status',
+      status: 'requesting',
+    };
+    const rateLimit = {
+      type: 'rate_limit_event',
+      rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour' },
+    };
+    const result = {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      stop_reason: 'end_turn',
+    };
+
+    const seen = [hookStarted, hookResponse, init, requesting, rateLimit]
+      .map((event) => decoder.decode(line(event)).entries)
+      .flat();
+    decoder.decode(line(result));
+    const [nextTurn] = decoder.decode(line(requesting)).entries;
+
+    expect(seen.map((entry) => entry.id)).toEqual([
+      'turn-events-1',
+      'turn-events-1',
+      'turn-events-1',
+      'turn-events-1',
+      'turn-events-1',
+    ]);
+    expect(seen[seen.length - 1].raw).toEqual([
+      hookStarted,
+      hookResponse,
+      init,
+      requesting,
+      rateLimit,
+    ]);
+    expect(nextTurn).toEqual({
+      kind: 'raw',
+      id: 'turn-events-2',
+      raw: [requesting],
+    });
+  });
+
+  it('decode_UnnamedEventTypes_EachGetsItsOwnRawEntry', () => {
+    const decoder = createStreamDecoder();
+    const newSubtype = { type: 'system', subtype: 'api_retry', attempt: 1 };
+    const newType = { type: 'brand_new_event', value: 1 };
+
+    const entries = [newSubtype, newType].flatMap(
+      (event) => decoder.decode(line(event)).entries,
+    );
+
+    expect(entries).toEqual([
+      { kind: 'raw', id: 'raw-1', raw: [newSubtype] },
+      { kind: 'raw', id: 'raw-2', raw: [newType] },
+    ]);
+  });
+
+  it('decode_ThinkingDeltaAndTokens_FoldIntoThinkingWithoutResend', () => {
+    const decoder = createStreamDecoder();
+    const thinkingStart = streamLine({
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'thinking', thinking: '', signature: '' },
+    });
+    const thinkingDelta = streamLine({
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'thinking_delta', thinking: '', estimated_tokens: 50 },
+    });
+    const tokens = {
+      type: 'system',
+      subtype: 'thinking_tokens',
+      estimated_tokens: 50,
+      estimated_tokens_delta: 50,
+    };
+    decoder.decode(messageStart('m1'));
+    decoder.decode(thinkingStart);
+
+    const midBlock = [
+      ...decoder.decode(thinkingDelta).entries,
+      ...decoder.decode(line(tokens)).entries,
+    ];
+    const [stopped] = decoder.decode(blockStop(0)).entries;
+    const [afterStop] = decoder.decode(line(tokens)).entries;
+
+    expect(midBlock).toEqual([]);
+    expect(stopped.id).toBe('thinking-m1-0');
+    expect(stopped.raw).toContainEqual(tokens);
+    expect(afterStop.id).toBe('turn-events-1');
+  });
+
+  it('decode_ToolProgress_FoldsIntoThePendingToolEntry', () => {
+    const decoder = createStreamDecoder();
+    decoder.decode(line(toolUseEvent));
+    const heartbeat = {
+      type: 'tool_progress',
+      tool_use_id: 't1-heartbeat-0',
+      tool_name: 'Bash',
+      parent_tool_use_id: 't1',
+      elapsed_time_seconds: 30,
+      heartbeat: true,
+    };
+    const strayHeartbeat = { ...heartbeat, parent_tool_use_id: 't9' };
+
+    const [entry] = decoder.decode(line(heartbeat)).entries;
+    const [stray] = decoder.decode(line(strayHeartbeat)).entries;
+
+    expect(entry).toMatchObject({ kind: 'tool', id: 'tool-t1', result: null });
+    expect(entry.raw).toEqual([toolUseEvent, heartbeat]);
+    expect(stray).toEqual({
+      kind: 'raw',
+      id: 'turn-events-1',
+      raw: [strayHeartbeat],
+    });
+  });
+
+  it('decode_HostControlRequest_ReportsAndGathers', () => {
+    const decoder = createStreamDecoder();
+    const request = {
+      type: 'control_request',
+      request_id: 'r1',
+      request: { subtype: 'can_use_tool' },
+    };
+
+    const decoded = decoder.decode(line(request));
+
+    expect(decoded.hostRequest).toEqual({
+      requestId: 'r1',
+      subtype: 'can_use_tool',
+    });
+    expect(decoded.entries).toEqual([
+      { kind: 'raw', id: 'turn-events-1', raw: [request] },
+    ]);
   });
 
   it('decode_TextStream_UpdatesOneEntry', () => {
@@ -129,6 +282,26 @@ describe('createStreamDecoder', () => {
     expect(stopped.kind === 'assistant' && stopped.streaming).toBe(false);
     expect(stopped.raw).toHaveLength(2);
     expect(stopped.raw[1]).toEqual(assistant);
+  });
+
+  it('decode_AssistantTextDiffersFromStream_AdoptsAssistantText', () => {
+    const decoder = createStreamDecoder();
+    for (const text of [messageStart('m1'), textStart(0)]) {
+      decoder.decode(text);
+    }
+    const assistant = assistantEvent('m1', [{ type: 'text', text: '1' }]);
+
+    const confirmedEntries = decoder.decode(line(assistant)).entries;
+    const stoppedEntries = decoder.decode(blockStop(0)).entries;
+
+    expect(
+      [...confirmedEntries, ...stoppedEntries].map((entry) =>
+        entry.kind === 'assistant' ? [entry.id, entry.text] : entry.kind,
+      ),
+    ).toEqual([
+      ['text-m1-0', '1'],
+      ['text-m1-0', '1'],
+    ]);
   });
 
   it('decode_ToolUse_AddsToolEntryWithSummary', () => {
@@ -214,6 +387,19 @@ describe('createStreamDecoder', () => {
     expect(entry).toMatchObject({ kind: 'result', costUsd: 0.5 });
   });
 
+  it('decode_TotalBelowLast_CostNullAndLastTotalKept', () => {
+    const decoder = createStreamDecoder();
+    const result = (total: number) =>
+      line({ type: 'result', subtype: 'success', total_cost_usd: total });
+    decoder.decode(result(0.5));
+
+    const [lower] = decoder.decode(result(0.25)).entries;
+    const [next] = decoder.decode(result(0.75)).entries;
+
+    expect(lower).toMatchObject({ kind: 'result', costUsd: null });
+    expect(next).toMatchObject({ kind: 'result', costUsd: 0.25 });
+  });
+
   it('decode_ErrorResult_AddsNoticeThenResult', () => {
     const decoder = createStreamDecoder();
 
@@ -295,20 +481,21 @@ describe('createStreamDecoder', () => {
     ]);
   });
 
-  it('decode_ModeStatus_ReportsModeWithNoEntry', () => {
+  it('decode_ModeStatus_ReportsModeAndGathers', () => {
     const decoder = createStreamDecoder();
+    const status = {
+      type: 'system',
+      subtype: 'status',
+      status: null,
+      permissionMode: 'plan',
+    };
 
-    const decoded = decoder.decode(
-      line({
-        type: 'system',
-        subtype: 'status',
-        status: null,
-        permissionMode: 'plan',
-      }),
-    );
+    const decoded = decoder.decode(line(status));
 
     expect(decoded.reported).toEqual({ mode: 'plan' });
-    expect(decoded.entries).toEqual([]);
+    expect(decoded.entries).toEqual([
+      { kind: 'raw', id: 'turn-events-1', raw: [status] },
+    ]);
   });
 
   it('decode_ControlResponse_ReportsRequestOutcome', () => {
@@ -344,6 +531,8 @@ describe('createStreamDecoder', () => {
       requestId: 'wigley-2',
       error: 'Cannot set permission mode',
     });
-    expect([...success.entries, ...failure.entries]).toEqual([]);
+    expect(
+      failure.entries.map((entry) => [entry.id, entry.raw.length]),
+    ).toEqual([['turn-events-1', 2]]);
   });
 });

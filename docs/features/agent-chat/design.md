@@ -24,8 +24,8 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   next ones). Its seam is `AgentHarness` in `src/contracts/agent.ts`; each harness is one **harness adapter**.
 - **Agent process** — one running session of a harness, started by the app: one `claude` child process.
 - **Chat entry** — one item in a session's chat, in the app's own shape: a user message, an assistant message,
-  thinking, a tool call (with its result), a permission request, a turn result, a notice, or a raw event the adapter
-  does not read. Every entry carries the raw harness events it was built from, so nothing the harness sends is lost.
+  thinking, a tool call (with its result), a permission request, a turn result, a notice, or a raw entry. Every entry
+  carries the raw harness events it was built from, so nothing the harness sends is lost.
 - **Session control** — a setting of a running session the harness adapter declares (id, label, choices, current
   value): Claude declares `mode` (permission mode), `effort` and `model`.
 - **Profile** — a named Claude config folder (`work` → `~/.claude`, `personal` → `~/.claude-personal`); it sets the
@@ -70,6 +70,9 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 - The adapter, not the chat, reads Claude's JSON: it turns stdout events into chat entries (streamed text updates
   one entry in place; a tool call and its result are one entry, paired by tool use id). A layout reads an entry's
   raw events for anything the entry does not name.
+- **Raw entries**: the adapter folds related events into their entries and gathers the rest into one raw entry per
+  turn, re-sent under one id as it grows (the start hooks open the first). An event of a type the adapter has no
+  name for gets a raw entry of its own, since it signals a new CLI event.
 - **Controls**: the adapter declares its controls and reports their current values; the chat draws whatever it
   declares. Claude changes `mode` by a `set_permission_mode` control request and `effort` and `model` by sending
   `/effort <value>` and `/model <value>` as messages (`claude-stream.md` records each on the installed CLI). The
@@ -79,7 +82,7 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 - **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request; the process stays open for the next
   message. A SIGINT would end the process.
 - A result entry's `costUsd` is the difference between consecutive results, since Claude's `total_cost_usd` is
-  cumulative for the process.
+  cumulative for the process; a total below the last one gives `null`.
 - **Locality** (plan B): listing a folder's past sessions and reading a transcript into chat entries are adapter
   calls, so Claude's undocumented transcript format stays in the adapter. A line it cannot read becomes a raw entry.
 - Slash commands typed in the chat run as in the terminal (`/model`, `/compact`, `/wigley:feature …`).
@@ -89,7 +92,9 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 - `sessions` main gains `open(info)` for an owned session: the row is added at once and the contributed tool sessions
   start. A relay connection whose hello carries an owned session's host id joins that session's entry, its calls
   routed to those tool sessions, instead of adding a row; the relay going away ends nothing, and a later relay joins
-  again. The owned session's `end()` drops the row. Closing an owned
+  again. The owned session's `end()` drops the row. Joining depends on the child not inheriting the parent's
+  `CLAUDE_CODE_SESSION_ID` when the app was started from a Claude Code terminal, so the launch strips the
+  nested-session environment (`claude-stream.md` § Launch). Closing an owned
   session's row ends it (chat ends the process), after the Chat tab's confirm while a turn runs.
 - `markRound` becomes `mark`: one attention mark per row, raised by forms for a round and by chat for a finished
   turn.
