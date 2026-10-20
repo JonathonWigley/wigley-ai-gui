@@ -7,7 +7,7 @@ import type { CommandDecl, ScopeInfo } from '../contracts/plugin';
 export const coreKeymap: Keymap = {
   editor: {
     leader: '<Space>',
-    remaps: [{ mode: 'insert', keys: 'jk', to: '<Esc>' }],
+    remaps: [],
     binds: [],
   },
   page: [],

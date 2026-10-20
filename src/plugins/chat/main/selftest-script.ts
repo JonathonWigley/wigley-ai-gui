@@ -44,8 +44,8 @@ const ALLOW_REPLY = JSON.stringify({
   updatedInput: PERMISSION_INPUT,
 });
 
-// Normal-mode Enter in the box sends; its text holds no j, which would start
-// the insert remap jk.
+// Types the text in insert mode, Esc to normal mode, where Enter in the box
+// sends.
 const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 
 // Each step expects the last line its keys cause: the fake emits in

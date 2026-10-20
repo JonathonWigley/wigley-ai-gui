@@ -24,7 +24,7 @@ const PAGE_BINDS: PageBind[] = [
 // out; long enough that the fit check under an open panel ends first.
 const SETTINGS = { keys: { whichKeyTimeoutMs: 1000 } };
 
-// An unbroken run of letters wider than any pane; no j, which would start jk.
+// An unbroken run of letters wider than any pane.
 const LONG_WORD = 'unbroken'.repeat(14);
 
 // The layout forms' main writes into its data folder in the self-test only,
@@ -68,25 +68,26 @@ export const SELFTEST_LAYOUT = {
 // Opening on finding 1: Space k then k breaks Space k s, so the first k
 // replays to the notice and the second finds no item before it; j back to the
 // finding, which opens on Fix now; 2 picks solution 2, Space a f clears the
-// action and Space a s sets Leave it. a types "agreed" at once (INSERT), jk
+// action and Space a s sets Leave it. a types "agreed" at once (INSERT), Esc
 // to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out, as
-// every Esc out of a box in the form runs forms' editor bind there. j to
+// every Esc out of a box in NORMAL runs forms' editor bind there. j to
 // finding 2, a Nit: Space a u is refused, since a Nit offers no follow-up, and
 // it opens on Fix anyway with its one solution, so Space a s sets Leave it and
 // Space a f sets Fix anyway again. j to finding 3, a
 // Decision: Space a u sets Plan it, and Enter accepts its recommendation. j to
-// question 1, where 2 picks 2; a types "ab" at once, Esc out; d focuses its
-// reason box, A appends a long word and Ctrl+k still in INSERT moves back to
-// its notes box, Esc out; a again types "c" after "ab". a once more, jk to
-// NORMAL, where Space opens which-key and Esc closes it without leaving the box
-// (vim drops its pending input); Space opens it again and, with no key pressed,
+// question 1, where 2 picks 2; a types "ab" at once, Esc Esc out (the first
+// Esc to NORMAL); d focuses its reason box, A appends a long word and Ctrl+k
+// still in INSERT moves back to its notes box, Esc out; a again types "c"
+// after "ab", Esc Esc out. a once more, Esc to NORMAL, where Space opens
+// which-key and Esc closes it without leaving the box (vim drops its pending
+// input); Space opens it again and, with no key pressed,
 // the which-key timeout closes it, and Esc then leaves the box, so the box kept
-// focus and its pending Space was dropped. a back in, jk, Space opens
-// which-key, and Ctrl+j moving to the reason box closes it; jk Esc out. a, jk
-// and d, then Ctrl+j to the reason box and Ctrl+k back; w and Esc leave the
-// box, and w deleted nothing, since leaving dropped the pending d. j to
-// question 2, where q a x then b breaks the self-test bind, so a opens the
-// notes box and "xb" is typed into it; jk Esc out and x marks question 2 not
+// focus and its pending Space was dropped. a back in, Esc, Space opens
+// which-key, and Ctrl+j moving to the reason box, still in INSERT, closes it;
+// Esc Esc out. a, Esc and d, then Ctrl+j to the reason box and Ctrl+k back;
+// w and Esc leave the box, and w deleted nothing, since leaving dropped the
+// pending d. j to question 2, where q a x then b breaks the self-test bind,
+// so a opens the notes box and "xb" is typed into it; Esc Esc out and x marks question 2 not
 // applicable. Ctrl+h goes back to question 1, where Space opens which-key and
 // the timeout closes it, so 2 starts a fresh sequence and clears the choice
 // (Space 2 would jump), 2 picks it again; Space a 2 clears it and picks it
@@ -98,7 +99,7 @@ export const SELFTEST_LAYOUT = {
 // it and returns to its form, where j moves to its question 2 and Space e p
 // finds its untouched question 1; Option+Shift+i moves back to the first
 // session, on question 2. Space k s hides the sidebar and shows it again; a
-// enters question 2's notes box, where jk and Space k s (the editor bind)
+// enters question 2's notes box, where Esc and Space k s (the editor bind)
 // hide it and Space k s in NORMAL shows it; Esc (forms' editor bind) leaves the
 // box. Option+Shift+i wraps to the last session, which has no tab, so nothing
 // shows and no form keeps its scope; Option+Shift+o wraps back to the first,
@@ -115,7 +116,7 @@ export const SELFTEST_LAYOUT = {
 // scope, where C opens and n dismisses the cancel prompt; Space ? opens help
 // again, Cmd+W opens the cancel prompt, which closes help, so n dismisses the
 // prompt. o types "note" into the Round note at
-// once (INSERT), Esc out (forms' editor bind in the review's scope), Enter
+// once (INSERT), Esc Esc out (forms' editor bind in the review's scope), Enter
 // jumps back to finding 1, review again and Space Enter submits. Space z l o
 // opens the layout preview's sample round and selects its row, which the
 // sessions page logs; Cmd+W there asks to cancel the sample round, so the
@@ -132,7 +133,7 @@ const STEPS: SelfTestStep[] = [
   { keys: [' ', 'a', 's'], expect: '[forms] chose Leave it on finding 1' },
   { keys: ['a'], expect: '[forms] focused notes on finding 1' },
   {
-    keys: [...'agreed', 'j', 'k', ' ', 'a', 'u'],
+    keys: [...'agreed', 'Escape', ' ', 'a', 'u'],
     expect: '[forms] chose Follow-up on finding 1',
   },
   { keys: ['Escape'], expect: '[forms] left the box' },
@@ -149,7 +150,7 @@ const STEPS: SelfTestStep[] = [
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
-  { keys: ['a', 'b', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
+  { keys: ['a', 'b', 'Escape', 'Escape'], expect: '[forms] left the box' },
   { keys: ['d'], expect: '[forms] focused dontAskReason on question 1' },
   {
     keys: ['A', ...LONG_WORD, '<C-k>'],
@@ -158,20 +159,20 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[forms] left the box' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
-  { keys: ['c', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
+  { keys: ['c', 'Escape', 'Escape'], expect: '[forms] left the box' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
-  { keys: ['j', 'k', ' '], expect: '[keys] which-key shows Space' },
+  { keys: ['Escape', ' '], expect: '[keys] which-key shows Space' },
   { keys: ['Escape'], expect: '[keys] which-key closed' },
   { keys: [' '], expect: '[keys] which-key shows Space' },
   { keys: [], expect: '[keys] which-key closed' },
   { keys: ['Escape'], expect: '[forms] left the box' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
-  { keys: ['j', 'k', ' '], expect: '[keys] which-key shows Space' },
+  { keys: ['Escape', ' '], expect: '[keys] which-key shows Space' },
   { keys: ['<C-j>'], expect: '[keys] which-key closed' },
-  { keys: ['j', 'k', 'Escape'], expect: '[forms] left the box' },
+  { keys: ['Escape', 'Escape'], expect: '[forms] left the box' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   {
-    keys: ['j', 'k', 'd', '<C-j>'],
+    keys: ['Escape', 'd', '<C-j>'],
     expect: '[forms] focused dontAskReason on question 1',
   },
   { keys: ['<C-k>'], expect: '[forms] focused notes on question 1' },
@@ -180,7 +181,7 @@ const STEPS: SelfTestStep[] = [
     keys: ['j', 'q', 'a', 'x', 'b'],
     expect: '[page] typed xb into the editor',
   },
-  { keys: ['j', 'k', 'Escape'], expect: '[forms] left the box' },
+  { keys: ['Escape', 'Escape'], expect: '[forms] left the box' },
   { keys: ['x'], expect: '[forms] not applicable on question 2' },
   { keys: ['<C-h>'], expect: '[page] <C-h> ran forms.prevItem' },
   { keys: [' '], expect: '[keys] which-key shows Space' },
@@ -224,7 +225,7 @@ const STEPS: SelfTestStep[] = [
   { keys: [' ', 'k', 's'], expect: '[sessions] sidebar shown' },
   { keys: ['a'], expect: '[forms] focused notes on question 2' },
   {
-    keys: ['j', 'k', ' ', 'k', 's'],
+    keys: ['Escape', ' ', 'k', 's'],
     expect: '[sessions] sidebar hidden',
   },
   { keys: [' ', 'k', 's'], expect: '[sessions] sidebar shown' },
@@ -287,7 +288,7 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
   {
-    keys: ['o', 'n', 'o', 't', 'e', 'j', 'k', 'Escape'],
+    keys: ['o', 'n', 'o', 't', 'e', 'Escape', 'Escape'],
     expect: '[forms] left the box',
     checksFit: true,
   },

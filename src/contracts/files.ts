@@ -37,8 +37,9 @@ export interface Files {
   ): FileWatch;
 }
 
-// Whether `error` is the one `Files.read` rejects with for a missing file: an
-// error carrying Node's `code: 'ENOENT'`, which every adapter sets.
+// Whether `error` names a missing file or folder: any error carrying Node's
+// `code: 'ENOENT'`, as a Node fs call throws and as `Files.read` rejects with
+// in every adapter.
 export function isMissingFile(error: unknown): boolean {
   return (
     error instanceof Error && (error as { code?: unknown }).code === 'ENOENT'

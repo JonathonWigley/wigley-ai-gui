@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { isMissingFile } from '../../contracts/files';
 import {
   THEME_TOKENS,
   type Theme,
@@ -125,10 +126,6 @@ export function parseTheme(json: unknown, source: string): Theme {
   };
 }
 
-function isMissingFolder(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
-}
-
 function themeFileNames(userDir: string): string[] {
   try {
     return readdirSync(userDir, { withFileTypes: true })
@@ -140,7 +137,7 @@ function themeFileNames(userDir: string): string[] {
       .map((entry) => entry.name)
       .sort();
   } catch (error) {
-    if (isMissingFolder(error)) {
+    if (isMissingFile(error)) {
       return [];
     }
     throw error;
