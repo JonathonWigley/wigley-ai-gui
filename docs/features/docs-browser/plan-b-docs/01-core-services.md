@@ -1,6 +1,6 @@
 # 01 — Core files and processes services
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none (plan A landed, Preconditions)
 Plan: [plan.md](plan.md)
@@ -231,3 +231,4 @@ in every adapter; a processes service behind its contract with a Node adapter an
 
 ## Proof
 
+`af32f7f` · diff read, every Produces present, typecheck and lint pass. Rulings and concerns in plan.md's Run log.

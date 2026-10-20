@@ -267,7 +267,7 @@ beside the tree's own (`memory-files.ts`, `fake-agent-harness.ts`), named for wh
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Core files and processes services](01-core-services.md)
+- [x] [Core files and processes services](01-core-services.md)
 - [x] [Docs index: claudeConfigDirs](03-index-config-dirs.md)
 - [x] [Docs pure modules](04-docs-pure-modules.md)
 
@@ -310,6 +310,10 @@ review range is this run's explicit commit list.
   concerns: a feature slug equal to a kind name (`task`) gets the same tree id as that kind's group under Features;
   `changeRefusal` makes a global ancestor `CLAUDE.md`'s whole parent folder writable, which can be the home folder;
   a global `instructions` place outside `~/wigley-agents` creates a file nothing loads
+- 01 · wigley-ai-gui `af32f7f` · proved: diff read, the five methods in the contract and all four Files, processes
+  seam, adapter and fake present, main.ts wiring, typecheck and lint pass (worker: 1282 tests and selftest pass) ·
+  concerns: Node `rename` checks `to` then moves, so a path created at `to` in between is replaced (no
+  non-replacing rename in Node); `node-processes.test.ts` assumes Vitest runs on plain Node
 ### Contract changes
 - `tree.ts`: adds `compareTitles(a, b): number` (base-sensitivity `localeCompare`, code-unit tie-break), used by
   `kinds.ts` · why: places sort as tree nodes do · consumers: 08 may use it · group 04
@@ -345,5 +349,8 @@ review range is this run's explicit commit list.
   and chat step edits that Docs tabs require; 07's and 08's per-group proof is the diff read and compile · lead
 - 09 also edits chat's self-test steps a chat session's Docs tab breaks (amendment worker's concern: 07 gives
   every session a Docs tab and pins no tab order) · lead
+- Node `rename` passes a non-ENOENT `lstat(to)` error on without moving; MemoryFiles `rename` refuses a move into
+  its own subtree; MemoryFiles `makeFolder` on a file rejects `EEXIST`; scopedFiles `realPath` checks the inside
+  by `/`-prefix of real paths; the self-test `trashItem` is `rm` recursive without `force` — group 01
 ### Review rounds
 ### Test gate
