@@ -186,6 +186,38 @@ describe('createStreamDecoder', () => {
     expect(afterStop.id).toBe('turn-events-1');
   });
 
+  it('decode_ResultAfterInterruptMidThinking_ClosesAndResendsThinking', () => {
+    const decoder = createStreamDecoder();
+    const thinkingStart = streamLine({
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'thinking', thinking: '', signature: '' },
+    });
+    const tokens = {
+      type: 'system',
+      subtype: 'thinking_tokens',
+      estimated_tokens: 50,
+      estimated_tokens_delta: 50,
+    };
+    const interrupted = {
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      stop_reason: 'tool_use',
+    };
+    decoder.decode(messageStart('m1'));
+    decoder.decode(thinkingStart);
+    decoder.decode(line(tokens));
+
+    const [closed, result] = decoder.decode(line(interrupted)).entries;
+    const [nextTurnTokens] = decoder.decode(line(tokens)).entries;
+
+    expect(closed).toMatchObject({ id: 'thinking-m1-0', streaming: false });
+    expect(closed.raw).toContainEqual(tokens);
+    expect(result.kind).toBe('result');
+    expect(nextTurnTokens.id).toBe('turn-events-1');
+  });
+
   it('decode_ToolProgress_FoldsIntoThePendingToolEntry', () => {
     const decoder = createStreamDecoder();
     decoder.decode(line(toolUseEvent));
@@ -534,5 +566,36 @@ describe('createStreamDecoder', () => {
     expect(
       failure.entries.map((entry) => [entry.id, entry.raw.length]),
     ).toEqual([['turn-events-1', 2]]);
+  });
+
+  it('decode_ControlResponseBetweenTurns_JoinsThePreviousTurnsEvents', () => {
+    const decoder = createStreamDecoder();
+    const init = { type: 'system', subtype: 'init', model: 'claude-haiku-5-5' };
+    const result = {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      stop_reason: 'end_turn',
+    };
+    const modeChanged = {
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'wigley-1',
+        response: { mode: 'plan' },
+      },
+    };
+    decoder.decode(line(init));
+    decoder.decode(line(result));
+
+    const [idle] = decoder.decode(line(modeChanged)).entries;
+    const [nextTurn] = decoder.decode(line(init)).entries;
+
+    expect(idle).toEqual({
+      kind: 'raw',
+      id: 'turn-events-1',
+      raw: [init, modeChanged],
+    });
+    expect(nextTurn).toEqual({ kind: 'raw', id: 'turn-events-2', raw: [init] });
   });
 });

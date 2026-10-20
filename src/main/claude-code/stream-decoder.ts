@@ -131,14 +131,16 @@ function messageText(content: unknown): string {
 // raw entry of its own. An entry is re-sent whenever it changes, its `raw`
 // included, except a thinking entry's `system/thinking_tokens`: those arrive
 // once per delta, so they ride with the entry's next send, which the block's
-// `content_block_stop` always brings.
+// `content_block_stop` brings, or the turn's result when an interrupt ends the
+// block with no stop.
 export function createStreamDecoder(): StreamDecoder {
   const textEntries = new Map<string, TextEntry>();
   const toolEntries = new Map<string, ToolEntry>();
   // Stream entries an assistant event has already confirmed.
   const confirmed = new Set<string>();
   // The current message id and open blocks of each stream, keyed by
-  // `parent_tool_use_id` (null for the main conversation).
+  // `parent_tool_use_id` (null for the main conversation). A result closes
+  // every block still open.
   const currentMessage = new Map<string | null, string>();
   const openBlocks = new Map<string, TextEntry>();
   // The thinking block streaming last, which `system/thinking_tokens` joins.
@@ -149,6 +151,9 @@ export function createStreamDecoder(): StreamDecoder {
   let turnCount = 0;
   // Null until the turn's first gathered event; a result closes it.
   let turnEvents: RawEntry | null = null;
+  // The events entry a result closed last, which a control response between
+  // turns joins.
+  let closedTurnEvents: RawEntry | null = null;
   let noticeCount = 0;
   let resultCount = 0;
   // `total_cost_usd` is the process's cost so far.
@@ -169,6 +174,29 @@ export function createStreamDecoder(): StreamDecoder {
     }
     turnEvents.raw.push(event);
     return snapshot(turnEvents);
+  }
+
+  // A control response with no turn running answers a request sent between
+  // turns, so it joins the turn before rather than opening the next one's
+  // entry; before the first result it gathers as any event does.
+  function gatheredResponse(event: unknown): ChatEntry {
+    if (turnEvents !== null || closedTurnEvents === null) {
+      return gathered(event);
+    }
+    closedTurnEvents.raw.push(event);
+    return snapshot(closedTurnEvents);
+  }
+
+  // Every block still open, closed and re-sent: an interrupt can end a block
+  // with no `content_block_stop`, leaving it streaming and its folded
+  // `system/thinking_tokens` unsent.
+  function closeOpenBlocks(out: DecodedLine) {
+    for (const entry of openBlocks.values()) {
+      entry.streaming = false;
+      out.entries.push(snapshot(entry));
+    }
+    openBlocks.clear();
+    openThinking = null;
   }
 
   function noticeEntry(
@@ -418,8 +446,9 @@ export function createStreamDecoder(): StreamDecoder {
   // An error turn's stop reason is its subtype: an interrupted turn reports
   // the `stop_reason` of the last message it finished. A cumulative total below
   // the last one has no turn share, so its cost is null. A result ends the
-  // turn's events entry.
+  // turn's open blocks and its events entry.
   function decodeResult(event: Json, out: DecodedLine) {
+    closeOpenBlocks(out);
     const isError = event.is_error === true;
     out.turnEnded = true;
     out.turnFailed = isError;
@@ -448,6 +477,9 @@ export function createStreamDecoder(): StreamDecoder {
         typeof event.duration_ms === 'number' ? event.duration_ms : null,
       raw: [event],
     });
+    if (turnEvents !== null) {
+      closedTurnEvents = turnEvents;
+    }
     turnEvents = null;
   }
 
@@ -458,7 +490,7 @@ export function createStreamDecoder(): StreamDecoder {
       requestId: asString(response.request_id),
       error: isError ? asString(response.error) || 'unknown error' : null,
     };
-    out.entries.push(gathered(event));
+    out.entries.push(gatheredResponse(event));
   }
 
   function decodeControlRequest(event: Json, out: DecodedLine) {
