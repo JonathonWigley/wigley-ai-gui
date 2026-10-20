@@ -76,6 +76,8 @@ export interface AgentStart {
   profileDir: string | null;
 }
 
+// An event caused by `start` or by a call on the process arrives in a later
+// microtask, never inside that call.
 export interface AgentProcessEvents {
   entry(entry: ChatEntry): void;
   controls(controls: SessionControl[]): void;
@@ -85,6 +87,9 @@ export interface AgentProcessEvents {
   ended(end: { code: number | null; error: string | null }): void;
 }
 
+// `send`, `interrupt` and `setControl` throw after `end`. `setControl` also
+// throws for a control or choice the harness did not declare, or when the
+// harness cannot change that control now.
 export interface AgentProcess {
   send(text: string): void;
   interrupt(): void;

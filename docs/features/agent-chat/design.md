@@ -24,8 +24,8 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   next ones). Its seam is `AgentHarness` in `src/contracts/agent.ts`; each harness is one **harness adapter**.
 - **Agent process** — one running session of a harness, started by the app: one `claude` child process.
 - **Chat entry** — one item in a session's chat, in the app's own shape: a user message, an assistant message,
-  thinking, a tool call (with its result), a permission request, a turn result, or a notice. Every entry carries the
-  raw harness events it was built from, so nothing the harness sends is lost.
+  thinking, a tool call (with its result), a permission request, a turn result, a notice, or a raw event the adapter
+  does not read. Every entry carries the raw harness events it was built from, so nothing the harness sends is lost.
 - **Session control** — a setting of a running session the harness adapter declares (id, label, choices, current
   value): Claude declares `mode` (permission mode), `effort` and `model`.
 - **Profile** — a named Claude config folder (`work` → `~/.claude`, `personal` → `~/.claude-personal`); it sets the
@@ -104,15 +104,17 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 
 - `src/plugins/chat/`, depending on `sessions` and `keys`. Main keeps every owned session's entries, so a page
   reload redraws the chat whole (the dev server reloads twice at start).
-- **Chat tab**: the entries, a vim message box, and a status line under it with the box's vim mode and each control's value. Enter in
-  normal mode sends, Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` / `a` focus the box, `j` /
-  `k` move between entries, `Enter` expands a tool call, `G` jumps to the latest, Ctrl+C interrupts. Tool calls show
-  one compact line (tool name and a short input summary) that expands to the full input and output.
+- **Chat tab**: the entries, a vim message box, and a status line under it with the box's vim mode and each
+  control's value. Enter in normal mode sends, Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
+  `a` focus the box, `j` / `k` move between entries, `Enter` expands a tool call, `G` jumps to the latest, Ctrl+C
+  interrupts. Tool calls show one compact line (tool name and a short input summary) that expands to the full input
+  and output.
 - **Controls**: `Space c m` mode, `Space c e` effort, `Space c o` model, each opening a picker of its choices;
   `Space c c` lists every control, so a control a new adapter declares is reachable before it gets a key.
-- **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
-  the profile (a single profile is not asked), and Esc at either step starts nothing: the folders the app started sessions in before, most recent first, plus an entry opening the native
-  folder dialog; the last profile used in a folder is pre-selected. Recent folders live in chat's plugin data.
+- **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder — the
+  folders the app started sessions in before, most recent first, plus an entry opening the native folder dialog —
+  then the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at either
+  step starts nothing. Recent folders live in chat's plugin data.
 - **Permissions**: sessions run in auto mode; anything auto mode would still prompt reaches chat's `permission_prompt`
   MCP tool, contributed to sessions as forms contributes its tools, and shows as a permission entry. `y` allows, `n`
   denies and opens a box for an optional reason Claude reads.

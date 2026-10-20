@@ -47,9 +47,7 @@
   font-size: 0.95em;
 }
 
-.md code,
-.choice-text code,
-.round-overview code {
+.md code {
   background: var(--wg-bg-deep);
   border-radius: 0.25rem;
   font-family: var(--wg-font-mono);

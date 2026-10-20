@@ -22,7 +22,8 @@ export interface StartRequest {
   profile: string;
 }
 
-// `sessionId` is the sessions plugin's id for the row.
+// `sessionId` is the sessions plugin's id for the row; an ended session's
+// state is dropped at once.
 export interface ChatSessionState {
   sessionId: string;
   projectDir: string;

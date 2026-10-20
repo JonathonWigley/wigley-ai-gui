@@ -52,7 +52,6 @@ export interface EntryList {
   move(step: 1 | -1): ChatEntry | null;
   // Follows the latest entry and scrolls to the bottom.
   latest(): void;
-  focused(): ChatEntry | null;
   // Opens every expander of the focused entry when any is closed, else
   // closes them all; null with no focused entry.
   toggleFocused(): { entry: ChatEntry; result: ToggleResult } | null;
@@ -127,7 +126,6 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       focus = focusLatest(order);
       drawFocus('bottom');
     },
-    focused: () => focusedEntry(focus, slots),
     toggleFocused() {
       const slot =
         focus.entryId === null ? undefined : slots.get(focus.entryId);

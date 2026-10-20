@@ -293,6 +293,15 @@
   min-width: 0;
 }
 
+.choice-text code,
+.round-overview code {
+  background: var(--wg-bg-deep);
+  border-radius: 0.25rem;
+  font-family: var(--wg-font-mono);
+  font-size: 0.9em;
+  padding: 0.05em 0.3em;
+}
+
 .choices.is-locked {
   opacity: 0.55;
 }
