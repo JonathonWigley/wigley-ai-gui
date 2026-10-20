@@ -163,6 +163,19 @@ describe('createEditorBoxes', () => {
     expect(boxes.active()).toBeNull();
   });
 
+  it('destroyBox_ThenMountSameBox_Mounts', () => {
+    const { boxes, created } = setup();
+    boxes.focus(notes);
+
+    boxes.destroyBox(notes);
+    boxes.mount(parent, notes, 'again');
+
+    expect(created[0].editor.isDestroyed).toBe(true);
+    expect(created[1].editor.isDestroyed).toBe(false);
+    expect(boxes.active()).toBeNull();
+    expect(boxes.boxOf(created[3].editor)).toEqual(notes);
+  });
+
   it('refuses a box mounted twice, and focusing a box never mounted', () => {
     const { boxes } = setup();
     expect(() => boxes.mount(parent, notes, '')).toThrow(

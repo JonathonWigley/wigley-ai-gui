@@ -5,28 +5,14 @@ import {
   element,
   markdownElement,
 } from '../../../../shared/page/dom';
-import type { AnswerStatus } from '../../contract';
-import { formsCommand, numberedCommand } from '../../ids';
-import {
-  type AnswerableItem,
-  answerStatus,
-  type ItemAnswer,
-  itemAnswer,
-  type RoundState,
-} from '../form-state';
-import type { AnswerableFormat, CardDeps, ItemCard } from './item-format';
+import type { AnswerStatus, Round } from '../../contract';
+import { numberedCommand } from '../../ids';
+import type { RoundInfo } from '../../layouts/layout';
+import type { CardDeps } from './item-format';
 
 export interface Field {
   element: HTMLElement;
   box: HTMLElement;
-}
-
-// The parts of an answerable card its answer changes.
-interface AnswerParts {
-  card: HTMLElement;
-  statusChip: HTMLElement;
-  choiceList: HTMLElement;
-  choices: HTMLLIElement[];
 }
 
 const STATUS_LABELS: Record<AnswerStatus, string> = {
@@ -44,24 +30,32 @@ export function labelFor(railPrefix: string, index: number): string {
   return `${railPrefix}${index}`;
 }
 
-// The label naming the item's kind; returns the status slot after it.
-export function buildItemHead(parent: HTMLElement, kind: string): HTMLElement {
-  const head = element('header', 'item-head');
-  const status = element('span', 'item-status');
-  head.append(element('span', 'item-kind', kind), status);
-  parent.append(head);
-  return status;
+// The round's heading and overview, as every card input carries them.
+export function roundInfo(round: Round): RoundInfo {
+  return { heading: round.heading, overview: round.overview };
 }
 
-// A labelled block of markdown; nothing for blank text.
+// The header naming the item's kind, with the status slot after the label.
+export function buildItemHead(
+  parent: HTMLElement,
+  kind: string,
+): { header: HTMLElement; status: HTMLElement } {
+  const header = element('header', 'item-head');
+  const status = element('span', 'item-status');
+  header.append(element('span', 'item-kind', kind), status);
+  parent.append(header);
+  return { header, status };
+}
+
+// A labelled block of markdown; nothing and null for blank text.
 export function buildSection(
   parent: HTMLElement,
   label: string,
   text: string,
   markdown: MarkdownRenderer,
-) {
+): HTMLElement | null {
   if (text.trim() === '') {
-    return;
+    return null;
   }
   const section = element('section', 'context');
   section.append(
@@ -69,6 +63,7 @@ export function buildSection(
     markdownElement('div', 'context-body md', markdown.block(text)),
   );
   parent.append(section);
+  return section;
 }
 
 // The labelled reason under a choice: why one would pick it, or why it is
@@ -107,12 +102,12 @@ export function buildField(
 // Appends one choice per text to `list`, each inline markdown with the keys
 // that pick it, the recommended one badged; `pick` gets the clicked choice,
 // 1-based.
-function buildChoiceList(
+export function buildChoiceList(
   list: HTMLElement,
   texts: string[],
   recommend: number,
   pick: (choice: number) => void,
-  deps: CardDeps,
+  deps: Pick<CardDeps, 'markdown' | 'keysFor'>,
 ): HTMLLIElement[] {
   return texts.map((text, i) => {
     const choice = i + 1;
@@ -134,114 +129,4 @@ function buildChoiceList(
     list.append(entry);
     return entry;
   });
-}
-
-// The Notes box, the Not applicable and Don't ask toggles, each with the keys
-// that run it, and the reason box, for `item` at rail `position`; `update`
-// shows an answer's toggles and hides the reason box while Don't ask is off.
-function buildAnswerControls(
-  parent: HTMLElement,
-  round: RoundState,
-  item: AnswerableItem,
-  position: number,
-  deps: CardDeps,
-): { update(answer: ItemAnswer): void } {
-  const answer = itemAnswer(round, item);
-  const focusThis = () => deps.dispatch({ type: 'focusItem', item: position });
-  const notes = buildField(
-    parent,
-    'field-notes',
-    'Notes',
-    'your own answer or your reasoning - optional, sent to the agent',
-  );
-  const toggles = element('div', 'toggles');
-  const notApplicable = button('toggle', 'Not applicable', () => {
-    focusThis();
-    deps.dispatch({ type: 'toggleNotApplicable' });
-  });
-  const dontAsk = button('toggle', "Don't ask me this", () => {
-    focusThis();
-    deps.toggleDontAsk();
-  });
-  appendKeys(notApplicable, deps.keysFor(formsCommand('toggleNotApplicable')));
-  appendKeys(dontAsk, deps.keysFor(formsCommand('toggleDontAsk')));
-  toggles.append(notApplicable, dontAsk);
-  parent.append(toggles);
-  const reason = buildField(
-    parent,
-    'field-reason',
-    'Why not ask this',
-    'sent to the agent with your answer - optional',
-  );
-  deps.mountBox(notes.box, { field: 'notes', item }, answer.notes);
-  deps.mountBox(
-    reason.box,
-    { field: 'dontAskReason', item },
-    answer.dontAskReason,
-  );
-  return {
-    update(current) {
-      notApplicable.setAttribute('aria-pressed', String(current.notApplicable));
-      dontAsk.setAttribute('aria-pressed', String(current.dontAsk));
-      reason.element.hidden = !current.dontAsk;
-    },
-  };
-}
-
-// Shows an answer's status on the card and its chip, its choice selected,
-// and the choices locked while not applicable.
-function showAnswer(
-  parts: AnswerParts,
-  answer: ItemAnswer,
-  status: AnswerStatus,
-) {
-  parts.card.dataset.status = status;
-  parts.statusChip.textContent =
-    status === 'untouched' ? '' : statusLabel(status);
-  parts.choices.forEach((entry, i) =>
-    entry.classList.toggle('is-selected', answer.choice === i + 1),
-  );
-  parts.choiceList.classList.toggle('is-locked', answer.notApplicable);
-}
-
-// The answer area under an answerable card's sections: its choice list and
-// answer controls, and the card's update; `choices` takes a kind's extras,
-// and a kind's own controls go right after `choiceList`.
-export function buildAnswerableCard(
-  article: HTMLElement,
-  statusChip: HTMLElement,
-  format: AnswerableFormat,
-  round: RoundState,
-  item: AnswerableItem,
-  position: number,
-  deps: CardDeps,
-): { card: ItemCard; choices: HTMLLIElement[]; choiceList: HTMLElement } {
-  const answerArea = element('div', 'answer');
-  const choiceList = element('ol', 'choices');
-  answerArea.append(element('div', 'answer-label', 'Your answer'), choiceList);
-  article.append(answerArea);
-  const choices = buildChoiceList(
-    choiceList,
-    format.choiceTexts(round.round, item.index),
-    format.recommend(round.round, item.index),
-    (choice) => {
-      deps.dispatch({ type: 'focusItem', item: position });
-      deps.dispatch({ type: 'choose', choice });
-    },
-    deps,
-  );
-  const controls = buildAnswerControls(answerArea, round, item, position, deps);
-  const parts = { card: article, statusChip, choiceList, choices };
-  return {
-    card: {
-      element: article,
-      update(current) {
-        const answer = itemAnswer(current, item);
-        showAnswer(parts, answer, answerStatus(current, item));
-        controls.update(answer);
-      },
-    },
-    choices,
-    choiceList,
-  };
 }

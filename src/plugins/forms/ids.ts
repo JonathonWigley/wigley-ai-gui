@@ -17,14 +17,19 @@ export function formsScope(short: FormsScopeName): ViewScope {
   return qualify(formsManifest.id, short);
 }
 
+// A forms command's qualified id by its short name; null when the manifest
+// declares no command of that name.
+export function formsCommandNamed(short: string): CommandId | null {
+  return short in formsManifest.commands
+    ? formsCommand(short as FormsCommandName)
+    : null;
+}
+
 // The numbered command picking choice `n` or jumping to question `n`; null
 // past the ninth, which has none.
 export function numberedCommand(
   prefix: 'choose' | 'jumpTo',
   n: number,
 ): CommandId | null {
-  const short = `${prefix}${n}`;
-  return short in formsManifest.commands
-    ? formsCommand(short as FormsCommandName)
-    : null;
+  return formsCommandNamed(`${prefix}${n}`);
 }

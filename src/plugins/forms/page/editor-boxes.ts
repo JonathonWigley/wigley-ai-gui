@@ -24,6 +24,8 @@ export interface EditorBoxes {
   active(): BoxRef | null;
   // The focused box's vim mode, or null outside every box.
   activeMode(): VimMode | null;
+  // Destroys one mounted box's editor, so the box can mount again.
+  destroyBox(box: BoxRef): void;
   destroyRound(roundId: string): void;
   // Runs after the focused box, or its vim mode, changes.
   onChange(listener: () => void): void;
@@ -67,6 +69,14 @@ export function createEditorBoxes(
     }
     activeKey = null;
     notify();
+  };
+  const destroy = (key: string, entry: MountedBox) => {
+    if (activeKey === key) {
+      activeKey = null;
+    }
+    entry.editor.destroy();
+    mounted.delete(key);
+    modes.delete(key);
   };
 
   return {
@@ -118,17 +128,20 @@ export function createEditorBoxes(
         ? null
         : (modes.get(activeKey) ?? STARTING_MODE);
     },
+    destroyBox(box) {
+      const key = boxKey(box);
+      const entry = mounted.get(key);
+      if (entry === undefined) {
+        throw new Error(`No box is mounted as ${key}`);
+      }
+      destroy(key, entry);
+      notify();
+    },
     destroyRound(roundId) {
       for (const [key, entry] of mounted) {
-        if (entry.box.roundId !== roundId) {
-          continue;
+        if (entry.box.roundId === roundId) {
+          destroy(key, entry);
         }
-        if (activeKey === key) {
-          activeKey = null;
-        }
-        entry.editor.destroy();
-        mounted.delete(key);
-        modes.delete(key);
       }
       notify();
     },

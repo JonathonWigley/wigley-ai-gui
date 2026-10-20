@@ -112,6 +112,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       markdown: services.markdown,
       keys: api.dependency<KeysPageExports>('keys'),
       run: (command) => api.commands.run(command),
+      log: services.log,
     });
     store.subscribe(() => {
       if (view.isFormShown()) {

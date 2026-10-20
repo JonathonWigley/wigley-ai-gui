@@ -1,5 +1,7 @@
 import type { CommandId } from '../../../contracts/commands';
+import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import { errorText } from '../../../shared/error-text';
 import type { KeysPageExports } from '../../keys/contract';
 import {
   type FormsCommandName,
@@ -7,6 +9,7 @@ import {
   formsScope,
   numberedCommand,
 } from '../ids';
+import type { Layout } from '../layouts/layout';
 import {
   appendKeys,
   button,
@@ -25,51 +28,157 @@ import {
   railPosition,
   type RoundState,
 } from './form-state';
-import { buildField, statusLabel } from './kinds/card-parts';
+import { buildField, roundInfo, statusLabel } from './kinds/card-parts';
 import { FORMATS, itemLabel } from './kinds/formats';
-import type { CardDeps } from './kinds/item-format';
+import type { CardDeps, ItemCard } from './kinds/item-format';
+import { createHeadKit } from './layout/card-kit';
+import { buildLayoutCard } from './layout/layout-cards';
 import { progressText, type ReviewRow, reviewRows } from './view-model';
 
 export interface RoundViewDeps {
   markdown: MarkdownRenderer;
-  boxes: Pick<EditorBoxes, 'mount'>;
+  boxes: Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>;
   keys: Pick<KeysPageExports, 'keysFor'>;
   dispatch(action: FormsAction): void;
   run(command: CommandId): void;
+  log: Log;
 }
 
+// `setLayout` rebuilds the view's children with `layout`'s cards and head
+// from `round`, remounting every box.
 export interface RoundView {
   element: HTMLElement;
   update(round: RoundState, view: FormsView): void;
+  setLayout(layout: Layout, layoutName: string, round: RoundState): void;
 }
 
-// One open round's DOM, built once with its editors: the rail, every item's
-// card, and the review with the round note. A render only updates it. `attach`
-// places the root in the page once, before any editor mounts.
+// The children of a round view one build makes.
+interface RoundParts {
+  items: RailItem[];
+  // Each rail position's review row.
+  reviewRowAt: (number | undefined)[];
+  main: HTMLElement;
+  head: { element: HTMLElement; update(round: RoundState): void };
+  layoutHead: HTMLElement | null;
+  railEntries: RailEntry[];
+  itemsPane: HTMLElement;
+  itemCards: ItemCard[];
+  review: { element: HTMLElement; update(round: RoundState): void };
+}
+
+// One open round's DOM, built with its editors: the rail, the layout's head
+// and every item's card, and the review with the round note. A render only
+// updates it; a new layout rebuilds it. `attach` places the root in the page
+// once, before any editor mounts.
 export function createRoundView(
   attach: (root: HTMLElement) => void,
   round: RoundState,
+  layout: Layout,
+  layoutName: string,
   deps: RoundViewDeps,
 ): RoundView {
-  const items = railItems(round.round);
   const root = element('section', 'round');
+  // Editors mount into attached elements, so they can measure themselves.
+  attach(root);
+  let shownView: FormsView = 'forms';
+  let shownFocus = -1;
+  const build = (current: RoundState, cardLayout: Layout, name: string) =>
+    buildRoundParts(root, current, cardLayout, name, deps, () => shownView);
+  let parts = build(round, layout, layoutName);
+
+  const view: RoundView = {
+    element: root,
+    update(current, viewName) {
+      shownView = viewName;
+      const isForms = viewName === 'forms';
+      const isReview = viewName === 'review' || viewName === 'confirm';
+      const { items, reviewRowAt } = parts;
+      parts.head.element.hidden = !isReview;
+      parts.head.update(current);
+      if (parts.layoutHead !== null) {
+        parts.layoutHead.hidden = !isForms;
+      }
+      parts.railEntries.forEach((entry, position) => {
+        const item = items[position];
+        updateRailEntry(entry, current, item, position, isReview);
+        if (entry.keys !== null) {
+          entry.keys.hidden = !isForms;
+        }
+        const action = railPickAction(
+          viewName,
+          position,
+          reviewRowAt[position],
+        );
+        entry.pick.disabled = action === null;
+      });
+      parts.itemsPane.hidden = !isForms;
+      parts.itemCards.forEach((card, position) => {
+        const isShown = isForms && position === current.focus;
+        card.element.hidden = !isShown;
+        if (isShown) {
+          card.update(current);
+        }
+      });
+      parts.review.element.hidden = !isReview;
+      if (isReview) {
+        parts.review.update(current);
+      }
+      if (current.focus !== shownFocus) {
+        shownFocus = current.focus;
+        parts.main.scrollTop = 0;
+        parts.railEntries[current.focus]?.element.scrollIntoView({
+          block: 'nearest',
+        });
+      }
+    },
+    setLayout(nextLayout, nextName, current) {
+      deps.boxes.destroyRound(current.roundId);
+      root.replaceChildren();
+      parts = build(current, nextLayout, nextName);
+      shownFocus = -1;
+      view.update(current, shownView);
+    },
+  };
+  return view;
+}
+
+// Builds the rail and the round's main column into `root`: the review's
+// head, the layout's head, the items pane of cards, and the review.
+// `shownView` reads the view last shown, which decides what a rail click does.
+function buildRoundParts(
+  root: HTMLElement,
+  round: RoundState,
+  layout: Layout,
+  layoutName: string,
+  deps: RoundViewDeps,
+  shownView: () => FormsView,
+): RoundParts {
+  const items = railItems(round.round);
   const rail = element('nav', 'rail');
   rail.setAttribute('aria-label', 'Items');
   const railList = element('ol', 'rail-list');
   rail.append(railList);
   const main = element('div', 'round-main');
   root.append(rail, main);
-  // Editors mount into attached elements, so they can measure themselves.
-  attach(root);
 
   const head = buildHead(main, round, deps.markdown);
+  const keysFor = (command: CommandId) =>
+    deps.keys.keysFor(command, formsScope('forms'));
+  const layoutHead = buildLayoutHead(main, round, layout, layoutName, {
+    markdown: deps.markdown,
+    keysFor,
+    log: deps.log,
+  });
   const itemsPane = element('div', 'items');
   main.append(itemsPane);
-  let shownView: FormsView = 'forms';
   const reviewRowAt = reviewRowsByRailPosition(round);
   const railEntries = items.map((item, position) =>
     buildRailEntry(railList, round, item, deps.keys, () => {
-      const action = railPickAction(shownView, position, reviewRowAt[position]);
+      const action = railPickAction(
+        shownView(),
+        position,
+        reviewRowAt[position],
+      );
       if (action !== null) {
         deps.dispatch(action);
       }
@@ -79,60 +188,59 @@ export function createRoundView(
     markdown: deps.markdown,
     mountBox: (parent, target, text) =>
       deps.boxes.mount(parent, { roundId: round.roundId, target }, text),
+    destroyBox: (target) =>
+      deps.boxes.destroyBox({ roundId: round.roundId, target }),
     dispatch: deps.dispatch,
     toggleDontAsk: () => deps.run(formsCommand('toggleDontAsk')),
-    keysFor: (command) => deps.keys.keysFor(command, formsScope('forms')),
+    keysFor,
+    log: deps.log,
   };
   const itemCards = items.map((item, position) =>
-    FORMATS[item.kind].buildCard(
+    buildLayoutCard(
+      layout,
+      layoutName,
       itemsPane,
       round,
-      item.index,
+      item,
       position,
       cardDeps,
     ),
   );
   const review = buildReview(main, round, deps);
-
-  let shownFocus = -1;
   return {
-    element: root,
-    update(current, view) {
-      shownView = view;
-      const isForms = view === 'forms';
-      const isReview = view === 'review' || view === 'confirm';
-      head.element.hidden = !isReview;
-      head.update(current);
-      railEntries.forEach((entry, position) => {
-        const item = items[position];
-        updateRailEntry(entry, current, item, position, isReview);
-        if (entry.keys !== null) {
-          entry.keys.hidden = !isForms;
-        }
-        const action = railPickAction(view, position, reviewRowAt[position]);
-        entry.pick.disabled = action === null;
-      });
-      itemsPane.hidden = !isForms;
-      itemCards.forEach((card, position) => {
-        const isShown = isForms && position === current.focus;
-        card.element.hidden = !isShown;
-        if (isShown) {
-          card.update(current);
-        }
-      });
-      review.element.hidden = !isReview;
-      if (isReview) {
-        review.update(current);
-      }
-      if (current.focus !== shownFocus) {
-        shownFocus = current.focus;
-        main.scrollTop = 0;
-        railEntries[current.focus]?.element.scrollIntoView({
-          block: 'nearest',
-        });
-      }
-    },
+    items,
+    reviewRowAt,
+    main,
+    head,
+    layoutHead,
+    railEntries,
+    itemsPane,
+    itemCards,
+    review,
   };
+}
+
+// The slot above the cards the layout's head draws into; null for a layout
+// with no head. A head that throws is logged and leaves the slot empty.
+function buildLayoutHead(
+  parent: HTMLElement,
+  round: RoundState,
+  layout: Layout,
+  layoutName: string,
+  deps: Pick<CardDeps, 'markdown' | 'keysFor' | 'log'>,
+): HTMLElement | null {
+  if (layout.head === undefined) {
+    return null;
+  }
+  const slot = element('div', 'layout-head');
+  parent.append(slot);
+  try {
+    layout.head(slot, roundInfo(round.round), createHeadKit(deps));
+  } catch (error) {
+    slot.replaceChildren();
+    deps.log('forms', `layout ${layoutName} head failed: ${errorText(error)}`);
+  }
+  return slot;
 }
 
 function buildHead(
