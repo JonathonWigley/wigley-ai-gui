@@ -42,7 +42,7 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
                  ▼
  chat main ─► sessions.open(info with a fresh host session id) ─► row + Chat tab, selected
           └─► AgentHarness.start(...) ─► claude -p --input-format stream-json --output-format stream-json
-                                            --include-partial-messages --session-id <id>
+                                            --include-partial-messages --verbose --session-id <id>
                                             --permission-mode auto --permission-prompt-tool <chat's tool>
                  │ claude starts the wigley plugin's relay.py, whose hello carries the same session id
                  ▼
@@ -63,8 +63,8 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   `@agentclientprotocol/sdk` are removed; ACP comes back as an adapter of this contract if a later harness needs it.
 - The Claude adapter is `src/main/claude-code/`, the only place the app spawns `claude`. It runs the installed CLI,
   one long-lived process per session, in stream-json mode, with the user's own login, plugins, skills and hooks. It
-  is handed to plugins as a main service. The `claude` path and the profiles are chat settings: an app started from
-  the Dock has no shell `PATH` or `CLAUDE_CONFIG_DIR`.
+  is handed to plugins as a main service. The `claude` path is a core setting (`claude.command`) and the profiles a
+  chat setting: an app started from the Dock has no shell `PATH` or `CLAUDE_CONFIG_DIR`.
 - A fake adapter in `src/shared/` plays scripted entries for the tests and the self-test, so the seam has two
   adapters now.
 - The adapter, not the chat, reads Claude's JSON: it turns stdout events into chat entries (streamed text updates
@@ -80,9 +80,10 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 
 ## Sessions and tabs
 
-- `sessions` main gains `open(info)` for an owned session: the row is added at once. A relay connection whose hello
-  carries an owned session's host id joins that session's entry (its tool sessions start there) instead of adding a
-  row; the relay going away ends only its tool sessions. The owned session's `end()` drops the row. Closing an owned
+- `sessions` main gains `open(info)` for an owned session: the row is added at once and the contributed tool sessions
+  start. A relay connection whose hello carries an owned session's host id joins that session's entry, its calls
+  routed to those tool sessions, instead of adding a row; the relay going away ends nothing, and a later relay joins
+  again. The owned session's `end()` drops the row. Closing an owned
   session's row ends it (chat ends the process), after the Chat tab's confirm while a turn runs.
 - `markRound` becomes `mark`: one attention mark per row, raised by forms for a round and by chat for a finished
   turn.
