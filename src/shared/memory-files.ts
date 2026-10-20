@@ -34,7 +34,9 @@ export function createMemoryFiles(): MemoryFiles {
     read: async (path) => {
       const text = texts.get(keyOf(path));
       if (text === undefined) {
-        throw new Error(`no file at ${path}`);
+        throw Object.assign(new Error(`no file at ${path}`), {
+          code: 'ENOENT',
+        });
       }
       return text;
     },

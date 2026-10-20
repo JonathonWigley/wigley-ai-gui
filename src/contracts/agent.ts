@@ -1,3 +1,10 @@
+// The MCP tool that answers a harness's permission prompts, served to every
+// session by the app's MCP server. Claude Code names a plugin's MCP tool
+// `mcp__plugin_<plugin>_<server>__<tool>`: the server is `wigley-forms` in the
+// marketplace's `wigley` plugin.
+export const PERMISSION_TOOL_NAME = 'permission_prompt';
+export const CLAUDE_PERMISSION_TOOL = `mcp__plugin_wigley_wigley-forms__${PERMISSION_TOOL_NAME}`;
+
 export interface ControlChoice {
   value: string;
   label: string;

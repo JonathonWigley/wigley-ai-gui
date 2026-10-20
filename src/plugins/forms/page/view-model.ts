@@ -15,8 +15,6 @@ import {
 } from './form-state';
 import { FORMATS, itemLabel } from './kinds/formats';
 
-export { modeLabel } from '../../../shared/vim-mode-label';
-
 // One question or finding as the review lists it.
 export interface ReviewRow {
   // 0-based, as `reviewJump` takes it.

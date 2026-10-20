@@ -1,7 +1,8 @@
+import { PERMISSION_TOOL_NAME } from '../../../contracts/agent';
 import type { ToolDefinition } from '../../sessions/contract';
 import type { PermissionAnswer } from '../contract';
 
-export const PERMISSION_TOOL_NAME = 'permission_prompt';
+export { PERMISSION_TOOL_NAME };
 export const DEFAULT_DENY_MESSAGE = 'The user denied this tool call.';
 export const CANCELLED_REASON =
   'The tool call was cancelled before the user answered.';

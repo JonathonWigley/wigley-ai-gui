@@ -12,7 +12,8 @@ export interface FileWatch {
 
 // UTF-8 text files, read and written whole.
 export interface Files {
-  // Rejects when the file is missing, with an error naming the path.
+  // Rejects when the file is missing with an error naming the path, which
+  // `isMissingFile` tells from every other failure.
   read(path: string): Promise<string>;
   // Atomic: writes a temp file `.<name>.<8 hex>.tmp` beside the target and
   // renames it over the target, creating missing parent folders first.
@@ -34,4 +35,12 @@ export interface Files {
     onChange: (path: string) => void,
     onError?: (error: unknown) => void,
   ): FileWatch;
+}
+
+// Whether `error` is the one `Files.read` rejects with for a missing file: an
+// error carrying Node's `code: 'ENOENT'`, which every adapter sets.
+export function isMissingFile(error: unknown): boolean {
+  return (
+    error instanceof Error && (error as { code?: unknown }).code === 'ENOENT'
+  );
 }

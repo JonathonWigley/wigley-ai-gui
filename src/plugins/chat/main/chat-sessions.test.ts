@@ -377,6 +377,32 @@ describe('createChatSessions', () => {
     expect(test.ownedEnds()).toBe(1);
     expect(test.sent('entry')).toEqual([]);
     expect(test.sent('sessionEnded')).toEqual([]);
+    expect(test.logged).toContain(`[chat] session ${ROW_ID} closed (code 0)`);
+  });
+
+  it('closed_processExitsWithAnError_logsTheExit', async () => {
+    const fake = createFakeAgentHarness();
+    const failingExit: FakeAgentHarness = {
+      ...fake,
+      start: (request, events) => ({
+        ...fake.start(request, events),
+        end: () => {
+          events.ended({ code: 1, error: 'stdin closed early' });
+          return Promise.resolve();
+        },
+      }),
+    };
+    const test = setUp({ harnesses: [failingExit] });
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+
+    test.chat.closed(ROW_ID);
+    await flush();
+
+    expect(test.logged).toContain(
+      `[chat] session ${ROW_ID} closed (code 1, error: stdin closed early)`,
+    );
+    expect(test.ownedEnds()).toBe(1);
   });
 
   it('closed_processEndRejects_logsAndEndsTheOwnedSession', async () => {

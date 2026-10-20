@@ -10,7 +10,6 @@ import {
 } from './form-state';
 import { decision, finding, presentedRound, question } from './test-rounds';
 import {
-  modeLabel,
   progressText,
   reviewRows,
   saveLabel,
@@ -444,26 +443,6 @@ describe('progressText', () => {
     expect(
       progressText({ answered: 1, notApplicable: 1, untouched: 1, total: 3 }),
     ).toBe('1 of 3 answered, 1 not applicable');
-  });
-});
-
-describe('modeLabel', () => {
-  it('reads PAGE outside every box', () => {
-    expect(modeLabel(null)).toBe('PAGE');
-  });
-
-  it("reads the box's vim mode in capitals", () => {
-    expect(modeLabel({ mode: 'insert', subMode: '' })).toBe('INSERT');
-  });
-
-  it('names a visual mode by its kind, as vim does', () => {
-    expect(modeLabel({ mode: 'visual', subMode: '' })).toBe('VISUAL');
-    expect(modeLabel({ mode: 'visual', subMode: 'linewise' })).toBe(
-      'VISUAL LINE',
-    );
-    expect(modeLabel({ mode: 'visual', subMode: 'blockwise' })).toBe(
-      'VISUAL BLOCK',
-    );
   });
 });
 

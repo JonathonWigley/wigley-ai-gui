@@ -80,6 +80,50 @@ describe('createRecentFolders', () => {
     ).toBe(true);
   });
 
+  it('list_readFails_emptyAndLogged', async () => {
+    const test = setUp();
+    test.data.read = () => Promise.reject(new Error('EACCES: denied'));
+
+    expect(await test.recent.list()).toEqual([]);
+    expect(test.logged).toContain(
+      '[chat] recent-folders.json unreadable: EACCES: denied',
+    );
+  });
+
+  it('record_readFails_rejectsAndKeepsTheFile', async () => {
+    const test = setUp();
+    const earlier = JSON.stringify([
+      { projectDir: '/a', profile: 'work', lastUsed: 10 },
+    ]);
+    await test.data.write(RECENT_FOLDERS_FILE, earlier);
+    const read = test.data.read;
+    test.data.read = () => Promise.reject(new Error('EIO: i/o error'));
+
+    await expect(test.recent.record('/b', 'work')).rejects.toThrow('EIO');
+
+    test.data.read = read;
+    expect(await test.data.read(RECENT_FOLDERS_FILE)).toBe(earlier);
+  });
+
+  it('record_unparseableFile_rejectsAndKeepsTheFile', async () => {
+    const test = setUp();
+    await test.data.write(RECENT_FOLDERS_FILE, '{oops');
+
+    await expect(test.recent.record('/b', 'work')).rejects.toThrow();
+
+    expect(await test.data.read(RECENT_FOLDERS_FILE)).toBe('{oops');
+  });
+
+  it('record_missingFile_writesTheFirstEntry', async () => {
+    const test = setUp();
+
+    await test.recent.record('/a', 'work');
+
+    expect(await test.saved()).toEqual([
+      { projectDir: '/a', profile: 'work', lastUsed: 1000 },
+    ]);
+  });
+
   it('record_concurrentWritesKeepBoth', async () => {
     const test = setUp();
 

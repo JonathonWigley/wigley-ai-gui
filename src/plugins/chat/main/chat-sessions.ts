@@ -91,6 +91,8 @@ interface HeldSession {
   harnessActivity: ProcessActivity;
   pending: Map<string, PendingPermission>;
   permissionCount: number;
+  // How the process exited, once its `ended` arrives; a user close logs it.
+  exit: { code: number | null; error: string | null } | null;
 }
 
 function textResult(text: string): ToolResult {
@@ -194,6 +196,20 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     cancelPending(session);
   }
 
+  // The harness emits `ended` before `end()` resolves, so the exit is known here.
+  function logCloseExit(session: HeldSession) {
+    const { sessionId } = session.state;
+    if (session.exit === null) {
+      log('chat', `session ${sessionId} closed; no exit reported`);
+      return;
+    }
+    const { code, error } = session.exit;
+    log(
+      'chat',
+      `session ${sessionId} closed (code ${code}${error === null ? '' : `, error: ${error}`})`,
+    );
+  }
+
   function settlePermission(
     session: HeldSession,
     pending: PendingPermission,
@@ -233,6 +249,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       // Plan B reads the session's commands.
       commands() {},
       ended({ code, error }) {
+        session.exit = { code, error };
         if (!isHeld(session)) {
           return;
         }
@@ -290,6 +307,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       harnessActivity: 'idle',
       pending: new Map(),
       permissionCount: 0,
+      exit: null,
     };
     held.set(sessionId, session);
     send('sessionStarted', copyState(session.state));
@@ -390,7 +408,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       drop(session);
       const ended = session.process?.end() ?? Promise.resolve();
       ended.then(
-        () => session.owned.end(),
+        () => {
+          logCloseExit(session);
+          session.owned.end();
+        },
         (error: unknown) => {
           log('chat', `session ${sessionId} end failed: ${errorText(error)}`);
           session.owned.end();

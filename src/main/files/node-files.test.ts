@@ -2,7 +2,7 @@ import { type FSWatcher, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FileEntry } from '../../contracts/files';
+import { type FileEntry, isMissingFile } from '../../contracts/files';
 import { createNodeFiles } from './node-files';
 
 // The real `watch`, keeping each watcher it opens so a test can make one fail.
@@ -80,6 +80,21 @@ describe('createNodeFiles', () => {
     const file = path.join(root, 'missing.txt');
 
     await expect(files.read(file)).rejects.toThrow(file);
+  });
+
+  it('read_MissingFile_IsMissingFile', async () => {
+    const error = await files
+      .read(path.join(root, 'missing.txt'))
+      .catch((caught: unknown) => caught);
+
+    expect(isMissingFile(error)).toBe(true);
+  });
+
+  it('read_Folder_IsNotMissingFile', async () => {
+    const error = await files.read(root).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(isMissingFile(error)).toBe(false);
   });
 
   it('watch_TwoWritesInABurst_ReportsOnce', async () => {

@@ -3,6 +3,7 @@ import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { PluginAreas } from '../../../contracts/plugin';
 import { appendKeys, button, element } from '../../../shared/page/dom';
+import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
   SessionsPageExports,
@@ -23,7 +24,7 @@ import {
 } from './form-state';
 import type { FormsStore } from './forms-store';
 import { createRoundView, type RoundView } from './round-view';
-import { modeLabel, saveLabel, sessionTitle } from './view-model';
+import { saveLabel, sessionTitle } from './view-model';
 
 // `beforeClose` answers whether a session may close now; `formShown` runs
 // each time a session's Form tab becomes the visible tab.

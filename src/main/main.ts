@@ -17,6 +17,7 @@ import started from 'electron-squirrel-startup';
 import { coreCommands, coreKeymap, coreScopes } from '../config/keymap';
 import { defaultSettings } from '../config/settings';
 import { builtInThemes } from '../config/themes';
+import { CLAUDE_PERMISSION_TOOL } from '../contracts/agent';
 import type { Clock, RandomHex, RandomUuid } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { Keymap } from '../contracts/keymap';
@@ -265,8 +266,7 @@ function createWindow(inputs: StartInputs) {
                 defaultSettings.claude.command,
                 inputs.homeDir,
               ),
-              permissionTool:
-                'mcp__plugin_wigley_wigley-forms__permission_prompt',
+              permissionTool: CLAUDE_PERMISSION_TOOL,
               env: process.env,
               log,
               spawn,
