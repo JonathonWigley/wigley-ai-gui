@@ -1,6 +1,6 @@
 # 11 — Chat self-test script
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 05, 06, 07, 09, 10
 Plan: [plan.md](plan.md)
@@ -120,3 +120,5 @@ Done when: the typecheck and `npm run lint` pass; `npm run selftest` passes form
 Commit:    one commit for the group
 
 ## Proof
+
+a5aafea · diff read: `chatSelfTestScript`, `ChatSelfTestDeps` and `SELFTEST_PROJECT_DIR` are present, and `start.ts` hands the script over after the tool contribution; typecheck and lint pass. Worker's selftest: chat printed 28 PASS and 0 FAIL in 3 of 3 runs; forms' four layout-cycle steps failed in 4 of 4, including a run with chat's script off. Concern: an `electron-forge start` instance (started 12:03, on the real data dir) was running during the runs, and `<D-Enter>` is still unexercised.
