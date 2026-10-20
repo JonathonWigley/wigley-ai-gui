@@ -1,6 +1,6 @@
 # 04 — Modes: the core's one-at-a-time window layer
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -94,3 +94,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+639039c · proved: diff read (Mode, ModeHandle, Modes, PageApi.modes, createModes, PageApiDeps.modes present), typecheck clean, suite 53 files / 853 pass · concerns: one `Modes` type carries short ids on the plugin side and qualified ids in the core
