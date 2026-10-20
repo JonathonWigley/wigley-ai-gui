@@ -4,6 +4,7 @@ import type {
   MainChannel,
   MainServices,
   PluginManifest,
+  SelfTestHost,
 } from '../../contracts/plugin';
 import { createEventBus } from '../../shared/event-bus';
 import { createMemoryFiles } from '../../shared/memory-files';
@@ -27,6 +28,7 @@ describe('createMainApi', () => {
       channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
       settings: {},
       services: {} as MainServices,
+      selfTestFor: () => null,
       dependency: <E>() => undefined as E,
       bus,
       dataRoot: '/d',
@@ -45,6 +47,7 @@ describe('createMainApi', () => {
         channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
         settings: {},
         services: { files } as unknown as MainServices,
+        selfTestFor: () => null,
         dependency: <E>() => undefined as E,
         bus: createEventBus(),
         dataRoot: '/d',
@@ -57,5 +60,33 @@ describe('createMainApi', () => {
     await expect(api.data.write('../x.txt', 'text')).rejects.toThrow(
       '../x.txt is outside /d/forms',
     );
+  });
+
+  it('createMainApi_SelfTest_IsTheHostForThePlugin', () => {
+    const host: SelfTestHost = { run: () => undefined };
+    const clock = { now: () => 0 };
+    const askedFor: string[] = [];
+    const api = createMainApi(
+      { ...manifest, id: 'forms' },
+      {
+        channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
+        settings: {},
+        services: {
+          files: createMemoryFiles(),
+          clock,
+        } as unknown as MainServices,
+        selfTestFor: (pluginId) => {
+          askedFor.push(pluginId);
+          return host;
+        },
+        dependency: <E>() => undefined as E,
+        bus: createEventBus(),
+        dataRoot: '/d',
+      },
+    );
+
+    expect(askedFor).toEqual(['forms']);
+    expect(api.services.selfTest).toBe(host);
+    expect(api.services.clock).toBe(clock);
   });
 });

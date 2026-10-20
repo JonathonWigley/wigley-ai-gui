@@ -17,6 +17,9 @@ export interface Settings {
   fonts: { ui: string; mono: string; uiSize: number; monoSize: number };
   // How long a page key sequence waits for its next key.
   keySequenceTimeoutMs: number;
+  // `command` is the `claude` executable a session runs; a leading `~/` means
+  // the home folder, since an app started from the Dock has no shell `PATH`.
+  claude: { command: string };
 }
 
 // Everything the main process loads and serves to the renderer.

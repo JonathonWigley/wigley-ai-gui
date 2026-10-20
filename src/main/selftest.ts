@@ -1,9 +1,5 @@
 import { app, type BrowserWindow } from 'electron';
-import type {
-  SelfTestHost,
-  SelfTestScript,
-  SelfTestStep,
-} from '../contracts/plugin';
+import type { SelfTestHost, SelfTestStep } from '../contracts/plugin';
 import {
   type Chord,
   CHORD_NOTATION_RULE,
@@ -11,11 +7,16 @@ import {
   parseChord,
 } from '../shared/chord-notation';
 import { errorText } from '../shared/error-text';
+import {
+  type HandedScript,
+  mergeSelfTestConfigs,
+  type SelfTestConfig,
+} from './selftest-config';
 
-// Runs a plugin's self-test script on every page load: opens its fixture,
-// drives its keys into the page through Electron's input pipeline, and checks
-// the lines the page logs, that the page fits the window's minimum width, and
-// the result the script checks. Run with `npm run selftest`; exits non-zero on
+// Runs the plugins' self-test scripts on every page load, one after another:
+// opens each script's fixture, drives its keys into the page through
+// Electron's input pipeline, and checks the lines the page logs, that the page
+// fits the window's minimum width, and the result the script checks. Run with `npm run selftest`; exits non-zero on
 // failure.
 
 const KEY_CODES: Record<string, string> = { ' ': 'Space' };
@@ -263,9 +264,51 @@ async function runStep(
   return cutOff.length === 0;
 }
 
-async function runAllSteps(
+// Opens the script's fixture, runs its steps and checks its result, reporting
+// each under `pluginId`; returns how many checks failed, or null when a reload
+// interrupted the run.
+async function runScript(
   window: BrowserWindow,
-  script: SelfTestScript,
+  { pluginId, script }: HandedScript,
+  run: number,
+  isCurrent: () => boolean,
+): Promise<number | null> {
+  const seen = (await readLog(window)).length;
+  // A later run may have begun while the log was read.
+  if (!isCurrent()) {
+    return null;
+  }
+  const { shownLine, result } = script.open(run);
+  let failures = (await waitForNewLogLine(window, shownLine, seen)) ? 0 : 1;
+  if (isCurrent()) {
+    report(failures === 0, shownLine);
+  }
+
+  for (const step of script.steps) {
+    if (!isCurrent()) {
+      return null;
+    }
+    if (!(await runStep(window, step, script.scrollsItself, isCurrent))) {
+      failures++;
+    }
+  }
+  const outcome = await result;
+  if (!isCurrent()) {
+    return null;
+  }
+  const problems = script.problems(outcome);
+  report(
+    problems.length === 0,
+    `${pluginId} result ${problems.join(', ') || 'as expected'}`,
+  );
+  return failures + (problems.length === 0 ? 0 : 1);
+}
+
+// Waits for the page to be ready for keys and focuses it, then runs every
+// handed script in hand-over order; a failing script does not stop the next.
+async function runAllScripts(
+  window: BrowserWindow,
+  handed: readonly HandedScript[],
   run: number,
   isCurrent: () => boolean,
   cleanUp: () => void,
@@ -292,43 +335,25 @@ async function runAllSteps(
   }
   window.webContents.focus();
 
-  const seen = (await readLog(window)).length;
-  // A later run may have begun while the log was read.
-  if (!isCurrent()) {
-    return;
-  }
-  const { shownLine, result } = script.open(run);
-  let failures = (await waitForNewLogLine(window, shownLine, seen)) ? 0 : 1;
-  if (isCurrent()) {
-    report(failures === 0, shownLine);
-  }
-
-  for (const step of script.steps) {
-    if (!(await runStep(window, step, script.scrollsItself, isCurrent))) {
-      failures++;
+  let failures = 0;
+  for (const script of handed) {
+    const scriptFailures = await runScript(window, script, run, isCurrent);
+    if (scriptFailures === null) {
+      return;
     }
+    failures += scriptFailures;
   }
-  const outcome = await result;
-  if (!isCurrent()) {
-    return;
-  }
-  const problems = script.problems(outcome);
-  report(
-    problems.length === 0,
-    `result ${problems.join(', ') || 'as expected'}`,
-  );
-  failures += problems.length === 0 ? 0 : 1;
   console.log(
     `[selftest] ${failures === 0 ? 'all passed' : `${failures} failed`}`,
   );
   exit(failures === 0 ? 0 : 1);
 }
 
-// Starts a fresh run of the script; a step that throws fails the self-test,
-// unless a reload already interrupted the run.
+// Starts a fresh run of every handed script; a step that throws fails the
+// self-test, unless a reload already interrupted the run.
 function startRun(
   window: BrowserWindow,
-  script: SelfTestScript,
+  handed: readonly HandedScript[],
   cleanUp: () => void,
 ) {
   if (hasExited) {
@@ -336,27 +361,27 @@ function startRun(
   }
   const run = ++latestRun;
   const isCurrent = () => run === latestRun;
-  runAllSteps(window, script, run, isCurrent, cleanUp).catch((error) => {
+  runAllScripts(window, handed, run, isCurrent, cleanUp).catch((error) => {
     if (isCurrent()) {
       failSelfTest('the steps run', error, cleanUp);
     }
   });
 }
 
-// The host the self-test hands plugins, plus `closeHandover`, which the
-// composition root calls once every part has started.
-export interface SelfTestDriver extends SelfTestHost {
-  // Returns the handed script's page binds and settings; with no script handed
-  // over, fails the self-test and exits.
+// What the composition root holds: `hostFor` gives each plugin the host its
+// part hands its script to, and `closeHandover`, called once every part has
+// started, returns the merged page binds and settings of every handed script.
+// With no script handed over, or scripts whose settings clash, `closeHandover`
+// fails the self-test and exits.
+export interface SelfTestDriver {
+  hostFor(pluginId: string): SelfTestHost;
   closeHandover(): SelfTestConfig;
 }
 
-// What the handed script adds to the config main serves the page.
-export type SelfTestConfig = Pick<SelfTestScript, 'pageBinds' | 'settings'>;
-
 // `cleanUp` deletes what the self-test made outside the repo; it runs before
-// the self-test exits. The driver runs the one script a plugin hands it while
-// the parts start, and throws on a second script or one handed over late.
+// the self-test exits. Each plugin hands at most one script while the parts
+// start; a host throws on its plugin's second script or one handed over late.
+// Every page load runs the handed scripts in hand-over order.
 export function startSelfTest(
   window: BrowserWindow,
   cleanUp: () => void,
@@ -369,33 +394,42 @@ export function startSelfTest(
   window.webContents.on('paint', () => {
     hasPaintedSinceNavigation = true;
   });
-  let handed: SelfTestScript | null = null;
+  const handed: HandedScript[] = [];
   let isHandoverClosed = false;
   return {
-    run(script) {
-      if (isHandoverClosed) {
-        throw new Error(
-          'A self-test script was handed over after the plugins started; hand it over during start',
-        );
-      }
-      if (handed) {
-        throw new Error(
-          'A second self-test script was handed over; the self-test runs one',
-        );
-      }
-      handed = script;
-      window.webContents.on('did-finish-load', () =>
-        startRun(window, script, cleanUp),
-      );
-    },
+    hostFor: (pluginId) => ({
+      run(script) {
+        if (isHandoverClosed) {
+          throw new Error(
+            'A self-test script was handed over after the plugins started; hand it over during start',
+          );
+        }
+        if (handed.some((entry) => entry.pluginId === pluginId)) {
+          throw new Error(
+            `Plugin ${pluginId} handed over a second self-test script; each plugin hands at most one`,
+          );
+        }
+        handed.push({ pluginId, script });
+      },
+    }),
     closeHandover() {
       isHandoverClosed = true;
-      if (!handed) {
+      if (handed.length === 0) {
         report(false, 'a plugin handed over a self-test script during start');
         exitSelfTest(1, cleanUp);
         return { pageBinds: [], settings: {} };
       }
-      return { pageBinds: handed.pageBinds, settings: handed.settings };
+      let config: SelfTestConfig;
+      try {
+        config = mergeSelfTestConfigs(handed);
+      } catch (error) {
+        failSelfTest('the self-test scripts merge', error, cleanUp);
+        return { pageBinds: [], settings: {} };
+      }
+      window.webContents.on('did-finish-load', () =>
+        startRun(window, handed, cleanUp),
+      );
+      return config;
     },
   };
 }

@@ -8,7 +8,7 @@ import {
   ipcMain,
   type WebContents,
 } from 'electron';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,7 +16,7 @@ import started from 'electron-squirrel-startup';
 import { coreCommands, coreKeymap, coreScopes } from '../config/keymap';
 import { defaultSettings } from '../config/settings';
 import { builtInThemes } from '../config/themes';
-import type { Clock, RandomHex } from '../contracts/ambient';
+import type { Clock, RandomHex, RandomUuid } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { Keymap } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
@@ -24,7 +24,6 @@ import type {
   MainServices,
   MainStart,
   PluginManifest,
-  SelfTestHost,
 } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { mainParts } from '../plugins/main';
@@ -32,6 +31,7 @@ import { manifests } from '../plugins/manifests';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
+import { createFakeAgentHarness } from '../shared/fake-agent-harness';
 import { startPlugins } from '../shared/plugin-host';
 import {
   commandInfos,
@@ -56,7 +56,8 @@ import {
 } from './keybindings';
 import { createMainApi } from './plugins/main-api';
 import { createPluginChannels } from './plugins/plugin-channel';
-import { failSelfTest, type SelfTestConfig, startSelfTest } from './selftest';
+import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
+import type { SelfTestConfig } from './selftest-config';
 import { chooseTheme } from './themes/theme-loader';
 import {
   createMainWindow,
@@ -78,6 +79,7 @@ registerDataScheme();
 const files = createNodeFiles();
 const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
+const randomUuid: RandomUuid = () => randomUUID();
 
 // The self-test gives plugins a fresh temp folder as the home folder, and
 // their data folders inside it, never the user's, and deletes it before it
@@ -149,8 +151,8 @@ function pageLog(window: BrowserWindow): Log {
     livePage(window)?.send(BRIDGE_CHANNELS.log, source, message);
 }
 
-// `selfTest` adds the self-test script's page binds after every plugin's, and
-// lays its settings over the plugins'.
+// `selfTest` adds the self-test scripts' page binds after every plugin's, and
+// lays their settings over the plugins'.
 function buildConfig(inputs: StartInputs, selfTest: SelfTestConfig): AppConfig {
   const merged = mergeKeymap(coreKeymap, manifests);
   const keymap: Keymap = {
@@ -171,14 +173,16 @@ function buildConfig(inputs: StartInputs, selfTest: SelfTestConfig): AppConfig {
 }
 
 // Starts every plugin's main part, each with its own API over one plugin
-// channel router to the window's page, one event bus, and its data folder
-// under `dataRoot`. `onStarted` sees each part as it starts, so a part is
-// known even when a later start throws.
+// channel router to the window's page, one event bus, the shared `services`,
+// its own host from `selfTest` (null outside the self-test), and its data
+// folder under `dataRoot`. `onStarted` sees each part as it starts, so a part
+// is known even when a later start throws.
 function startMainParts(
   window: BrowserWindow,
   settingsByPlugin: StartInputs['settingsByPlugin'],
   dataRoot: string,
-  services: MainServices,
+  services: Omit<MainServices, 'selfTest'>,
+  selfTest: SelfTestDriver | null,
   onStarted: (part: MainStart<PluginManifest>) => void,
 ) {
   const channels = createPluginChannels(ipcMain, () => livePage(window));
@@ -191,6 +195,7 @@ function startMainParts(
           channels,
           settings: settingsByPlugin[part.manifest.id],
           services,
+          selfTestFor: (pluginId) => selfTest?.hostFor(pluginId) ?? null,
           dependency,
           bus,
           dataRoot,
@@ -232,9 +237,7 @@ function createWindow(inputs: StartInputs) {
   const log = pageLog(window);
 
   const selfTest = isSelfTest ? startSelfTest(window, cleanUpSelfTest) : null;
-  const selfTestHost: SelfTestHost | null = selfTest && {
-    run: (script) => selfTest.run(script),
-  };
+  const pluginWindow = windowService(window);
   // On a normal quit, will-quit disposes the parts that started; a failed
   // start exits through failStart, which skips will-quit.
   const startedParts: MainStart<PluginManifest>[] = [];
@@ -248,14 +251,19 @@ function createWindow(inputs: StartInputs) {
       log,
       clock,
       randomHex,
+      randomUuid,
       homeDir: inputs.homeDir,
       alerts: isSelfTest ? silentAlerts : createElectronAlerts(window, log),
-      window: windowService(window),
-      selfTest: selfTestHost,
+      agentHarnesses: isSelfTest ? [createFakeAgentHarness()] : [],
+      // An offscreen self-test window can show no dialog.
+      window: isSelfTest
+        ? { ...pluginWindow, chooseFolder: () => Promise.resolve(null) }
+        : pluginWindow,
     },
+    selfTest,
     (part) => startedParts.push(part),
   );
-  // The config needs the page binds and settings of the script a plugin
+  // The config needs the page binds and settings of the scripts the plugins
   // handed the self-test.
   const selfTestConfig = selfTest?.closeHandover() ?? {
     pageBinds: [],

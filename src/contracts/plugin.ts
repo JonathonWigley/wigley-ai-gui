@@ -1,5 +1,6 @@
+import type { AgentHarness } from './agent';
 import type { Alerts } from './alerts';
-import type { Clock, RandomHex, Timers } from './ambient';
+import type { Clock, RandomHex, RandomUuid, Timers } from './ambient';
 import type { CommandId } from './commands';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
@@ -314,22 +315,34 @@ export interface SelfTestScript {
   problems(result: unknown): string[];
 }
 
-// One part calls `run` once, during its `start`, and the script's page binds
-// and settings join the config. `run` throws on a second script or after the
-// parts have started, and a self-test that got no script fails.
+// Each plugin's part calls `run` at most once, during its `start`, and the
+// script's page binds and settings join the config. The driver runs the handed
+// scripts in hand-over order on each run. `run` throws on a plugin's second
+// script or after the parts have started, and a self-test that got no script
+// fails.
 export interface SelfTestHost {
   run(script: SelfTestScript): void;
 }
 
-// `selfTest` is null outside the self-test. `files` takes absolute paths.
+// `selfTest` is the plugin's own self-test host, null outside the self-test.
+// `files` takes absolute paths. `agentHarnesses` lists every harness adapter the app
+// runs, found by `id`. `window.chooseFolder` opens the native folder dialog
+// over the window and resolves to null when the user cancels;
+// `window.isFocused` is true while the app's window has focus.
 export interface MainServices {
   files: Files;
   log: Log;
   clock: Clock;
   randomHex: RandomHex;
+  randomUuid: RandomUuid;
   homeDir: string;
   alerts: Alerts;
-  window: { show(): void };
+  agentHarnesses: readonly AgentHarness[];
+  window: {
+    show(): void;
+    isFocused(): boolean;
+    chooseFolder(): Promise<string | null>;
+  };
   selfTest: SelfTestHost | null;
 }
 

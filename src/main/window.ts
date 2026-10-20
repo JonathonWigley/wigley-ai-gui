@@ -1,6 +1,7 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import path from 'node:path';
 import type { Log } from '../contracts/log';
+import type { MainServices } from '../contracts/plugin';
 import type { Settings } from '../contracts/settings';
 import type { MainCommands } from './keybindings';
 
@@ -33,13 +34,22 @@ export function createMainWindow(
   return window;
 }
 
-// Plugins' window service: shows the window and gives it focus, for a user's
-// own act such as clicking a notification.
-export function windowService(window: BrowserWindow): { show(): void } {
+// Plugins' window service: `show` shows the window and gives it focus, for a
+// user's own act such as clicking a notification; `isFocused` reads whether
+// the window has focus; `chooseFolder` opens the native folder dialog over the
+// window and resolves to the chosen folder, or null when the user cancels.
+export function windowService(window: BrowserWindow): MainServices['window'] {
   return {
     show: () => {
       window.show();
       window.focus();
+    },
+    isFocused: () => window.isFocused(),
+    chooseFolder: async () => {
+      const chosen = await dialog.showOpenDialog(window, {
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      return chosen.canceled ? null : (chosen.filePaths[0] ?? null);
     },
   };
 }

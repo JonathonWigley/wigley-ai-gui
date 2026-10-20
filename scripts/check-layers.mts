@@ -28,9 +28,9 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared'],
     packages: ['electron', 'node:'],
   },
-  'src/main/acp': {
-    layers: ['src/contracts'],
-    packages: ['@agentclientprotocol/sdk', 'node:'],
+  'src/main/claude-code': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: ['node:'],
   },
   'src/main/themes': {
     layers: ['src/contracts', 'src/shared'],
@@ -49,7 +49,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared',
       'src/config',
       'src/main',
-      'src/main/acp',
+      'src/main/claude-code',
       'src/main/plugins',
       'src/main/themes',
       'src/main/alerts',
@@ -61,6 +61,38 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['electron', 'electron-squirrel-startup', 'node:'],
   },
   'src/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
+  'src/plugins/chat': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/sessions/contract.ts',
+      'src/plugins/keys/contract.ts',
+    ],
+    packages: [],
+  },
+  'src/plugins/chat/main': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/chat',
+      'src/plugins/chat/layouts',
+      'src/plugins/sessions/contract.ts',
+    ],
+    packages: ['node:'],
+  },
+  'src/plugins/chat/layouts': { layers: [], packages: [] },
+  'src/plugins/chat/page': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page',
+      'src/plugins/chat',
+      'src/plugins/chat/layouts',
+      'src/plugins/keys/contract.ts',
+      'src/plugins/sessions/contract.ts',
+    ],
+    packages: [],
+  },
   'src/plugins/forms': {
     layers: ['src/contracts', 'src/shared', 'src/plugins/sessions/contract.ts'],
     packages: [],
@@ -145,6 +177,8 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/plugins/chat',
+      'src/plugins/chat/main',
       'src/plugins/forms',
       'src/plugins/forms/main',
       'src/plugins/sessions',
@@ -156,6 +190,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/plugins/chat',
       'src/plugins/forms',
       'src/plugins/keys',
       'src/plugins/sessions',
@@ -167,6 +202,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/contracts',
       'src/shared',
       'src/shared/page',
+      'src/plugins/chat',
+      'src/plugins/chat/page',
       'src/plugins/forms',
       'src/plugins/forms/page',
       'src/plugins/keys',
@@ -199,10 +236,6 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/manifests.ts',
     ],
     packages: [],
-  },
-  'src/mock-agent': {
-    layers: [],
-    packages: ['@agentclientprotocol/sdk', 'node:'],
   },
 };
 

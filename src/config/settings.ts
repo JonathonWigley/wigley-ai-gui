@@ -10,4 +10,5 @@ export const defaultSettings: Settings = {
     monoSize: 14,
   },
   keySequenceTimeoutMs: 1000,
+  claude: { command: '~/.local/bin/claude' },
 };
