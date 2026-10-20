@@ -181,7 +181,7 @@ Boundary rules:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Files service](01-files-service.md)
+- [x] [Files service](01-files-service.md)
 - [ ] [Layout contract and the default layout](02-layout-contract.md)
 
 ### Wave 2
@@ -211,8 +211,19 @@ Peers on the tree at preflight: wigley-ai-gui-de runs docs-browser plan A (01–
 re-read open) — commits pathspec-scoped, review range an explicit commit list.
 
 ### Groups
+- 01 files service · 191f4d7 · proved (diff read, typecheck clean in its files, layer check) · concerns: Node watcher
+  has no error listener; real-time watch test; oxfmt fails on `docs/features/` plan docs (pre-existing)
 ### Contract changes
 ### Rulings
+- Node watch drops an event named after the watched folder when no child of that name exists (FSEvents self-report)
+  — the burst test failed on it, and every new watch would report a stray `layouts` — a real child sharing the
+  folder's name that is deleted would go unreported · group 01
+- `read` passes Node's missing-file error through (it names the path) — no wrapper — wording differs from the memory
+  fake's `no file at <path>` · group 01
+- Memory files key every path through `resolveInside`, so `/a/b` and `a/b` are one file — a test meaning two files
+  would collide · group 01
+- `npm run lint`'s oxfmt step fails on plan docs under `docs/features/` (not this run's code); groups are proved on
+  the layer check, oxlint and oxfmt over `src` — lead
 - Started with plan A's 06–07 still open, by the user's go: this plan's 07 waits for plan A's 06 (both edit
   `selftest-script.ts`), and 08 for plan A's 07 (both edit `AGENTS.md`) — lead
 ### Review rounds

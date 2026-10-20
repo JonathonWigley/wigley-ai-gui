@@ -1,6 +1,6 @@
 # 01 — Files service: read, atomic write, list, watch
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -96,3 +96,10 @@ Done when: compiles; `npm run lint` passes; the test gate runs the tests above.
   the one normalizer, and `data-url.ts` reuses it.
 
 ## Proof
+
+Commit `191f4d7`. Diff read: every Produces signature present, no contract changes. `npm run typecheck`: no error in
+the group's files (the tree's other errors were group 02's work in flight). Layer check passes; oxlint clean. Tests
+run at the test gate.
+
+Concerns: the Node watcher has no `'error'` listener (the contract has no way to report one); the watch test is real
+time; `oxfmt --check` fails on the plan docs under `docs/features/` (pre-existing since the features-home move).
