@@ -56,9 +56,9 @@ export function cardAnswer(
 }
 
 // The item's card at rail `position`, built by `layout` into `parent`. When
-// the layout's builder throws, what it appended and the boxes it mounted are
-// removed, the failure is logged, and the default layout's card is built in
-// its place.
+// the layout's builder throws, or returns no element appended to `parent`,
+// what it appended and the boxes it mounted are removed, the failure is
+// logged, and the default layout's card is built in its place.
 export function buildLayoutCard(
   layout: Layout,
   layoutName: string,
@@ -81,9 +81,9 @@ export function buildLayoutCard(
   return hostCard(built, layoutName, item, deps);
 }
 
-// Builds through `cards`, then mounts the boxes the card left unmounted. On a
-// throw, destroys the boxes it mounted and removes what it appended to
-// `parent` before rethrowing.
+// Builds through `cards`, checks the card's element, then mounts the boxes
+// the card left unmounted. On a throw, destroys the boxes it mounted and
+// removes what it appended to `parent` before rethrowing.
 function buildCard(
   cards: CardBuilders,
   parent: HTMLElement,
@@ -138,8 +138,25 @@ function buildCardOf<K extends ItemKind>(
   const input = CARD_INPUTS[kind].cardInput(round.round, index);
   const kit = createCardKit(kind, index, input, round, position, deps);
   const card = cards[kind](parent, input, kit.kit);
+  requireElementIn(card, kind, parent);
   kit.appendUnmountedBoxes(card.element);
   return { card, kit };
+}
+
+// A layout's card must return an element it appended to `parent`: the host
+// shows, hides and marks that node.
+function requireElementIn(
+  card: LayoutCard | null | undefined,
+  kind: ItemKind,
+  parent: HTMLElement,
+): void {
+  const element = card?.element;
+  if (!(element instanceof HTMLElement)) {
+    throw new Error(`${kind} card returned no element`);
+  }
+  if (element.parentNode !== parent) {
+    throw new Error(`${kind} card's element is not appended to parent`);
+  }
 }
 
 // The ItemCard over a built card: `update` runs the kit's updaters, then, on

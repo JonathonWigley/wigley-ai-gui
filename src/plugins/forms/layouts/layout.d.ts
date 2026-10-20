@@ -58,7 +58,7 @@ export type LayoutAction =
   | { type: 'accept' }
   | { type: 'focus' };
 
-// Every part appends itself to `parent` and returns what it appended.
+// Every part appends itself to `parent` and returns what it appended, except where its comment says otherwise.
 export interface HeadKit {
   el(
     parent: HTMLElement,
@@ -86,7 +86,7 @@ export interface Kit extends HeadKit {
     parent: HTMLElement,
     field: 'notes' | 'dontAskReason' | 'comment',
   ): HTMLElement;
-  // Focuses this card's item, then runs the action.
+  // Focuses this card's item, then runs the action. Call it from event handlers, not while the card builds.
   run(action: LayoutAction): void;
 }
 export interface AnswerKit extends Kit {
@@ -99,7 +99,8 @@ export interface AnswerKit extends Kit {
     parent: HTMLElement,
     reasons: 'recommended' | 'all' | 'none',
   ): HTMLElement;
-  // The Notes box, the Not applicable and Don't ask toggles, and the reason box.
+  // The Notes box, the Not applicable and Don't ask toggles, and the reason box, appended to `parent` in that order;
+  // returns the toggles row (`div.toggles`).
   answerControls(parent: HTMLElement): HTMLElement;
 }
 export interface FindingKit extends AnswerKit {
@@ -107,7 +108,9 @@ export interface FindingKit extends AnswerKit {
   actionRow(parent: HTMLElement): HTMLElement;
 }
 
-// `update` runs with the item's current answer while its card shows; the kit's parts update themselves.
+// `element` is the card's own node, appended to `parent` before the card mounts any text box; the app shows, hides and
+// marks that node. On question and finding cards, `update` runs with the item's current answer while the card shows;
+// a notice card's `update` never runs. The kit's parts update themselves.
 export interface LayoutCard {
   element: HTMLElement;
   update?(answer: CardAnswer): void;

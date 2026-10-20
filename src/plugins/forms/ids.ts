@@ -20,7 +20,7 @@ export function formsScope(short: FormsScopeName): ViewScope {
 // A forms command's qualified id by its short name; null when the manifest
 // declares no command of that name.
 export function formsCommandNamed(short: string): CommandId | null {
-  return short in formsManifest.commands
+  return Object.hasOwn(formsManifest.commands, short)
     ? formsCommand(short as FormsCommandName)
     : null;
 }

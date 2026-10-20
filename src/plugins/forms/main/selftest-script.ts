@@ -29,8 +29,10 @@ const LONG_WORD = 'unbroken'.repeat(14);
 
 // The layout forms' main writes into its data folder in the self-test only,
 // so the layout cycle holds `default` and `selftest`. Its question card builds
-// through the kit and throws on every update, its finding card throws at once,
-// and its notice card mounts a notes box, which a notice lacks.
+// through the kit and throws on every update, its finding card mounts its
+// notes box and then throws, so the default card can mount that box only once
+// the host has destroyed it, and its notice card mounts a notes box, which a
+// notice lacks.
 export const SELFTEST_LAYOUT = {
   path: 'layouts/selftest/layout.js',
   text: `export default {
@@ -48,7 +50,9 @@ export const SELFTEST_LAYOUT = {
         },
       };
     },
-    finding() {
+    finding(parent, input, kit) {
+      const article = kit.el(parent, 'article', 'item finding');
+      kit.textBox(article, 'notes');
       throw new Error('selftest throw');
     },
     notice(parent, input, kit) {
