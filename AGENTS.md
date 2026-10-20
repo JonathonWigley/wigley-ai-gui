@@ -206,7 +206,7 @@ round), since main, not the page, decides.
   runs, so the keys plugin's steps live in forms' script, whose fixture gives them scopes full of binds and a box to
   type in.
 - Forms visuals are checked live on the preview round (`Space z l o`): the built-in sample shows every card, and each
-  further press swaps in the next saved real round.
+  further press swaps in the next saved real round, then back to the sample.
 - A visible `npm start` takes the user's foreground and keyboard, so that run is the user's: the agent gives the user
   the steps to try. The global shortcut needs it — macOS keys reach a global shortcut only from the real keyboard.
 
