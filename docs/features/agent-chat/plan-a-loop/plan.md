@@ -356,7 +356,7 @@ the name. Recent folders live in chat's data folder at `recent-folders.json`, ne
 - [x] [Chat main part](07-chat-main.md) — after 02, 03, 05, 08
 
 ### Wave 4
-- [ ] [Chat tab](09-chat-tab.md) — after 04, 07, 08
+- [x] [Chat tab](09-chat-tab.md) — after 04, 07, 08
 
 ### Wave 5
 - [ ] [Start prompt and new session](10-start-prompt.md) — after 09
@@ -383,11 +383,16 @@ Review base: 4597f154604caf0e8453b17f551918d444f11ab5
 - 01 spike · 436936c · diff read: 17 sections in order, version on line 1 · concerns: a stray forms round may be open; about 20 spike transcripts in `~/.claude-personal/projects/`; plan mode ran on sonnet while init reported haiku
 - 07 chat main · f7840dd · diff read + typecheck + lint pass · concerns: `recent.list()` swallows every read failure without a log line
 - 06 claude adapter · 6a886b6 · diff read + typecheck + lint pass · concerns: the inherited nested-session env is not stripped; raw entries pile up (thinking_tokens, status, rate_limit, hooks, tool_progress); idle is set at turnEnded even with a queued message; an ENOENT for a missing projectDir reads as "claude not found"; `commands` fires every turn
+- 09 chat tab · 80edb99 · diff read + typecheck + lint pass · concerns: raw entries fill j/k with noise; Cmd+Enter vs the Enter bind is unverified; the selftest flake (forms layout-cycle revisions one higher) also shows on an archive of 380800b
 ### Contract changes
 - `DecodedLine`: gains `turnFailed: boolean` · why: effort and model command results need it · consumers: none outside `src/main/claude-code` · group 06
 - claude-stream.md facts amend task 06's pinned reading: local `/effort` and `/model` print a synthetic `assistant` (`message.model` `<synthetic>`) plus a zero-cost `result`; no event reports effort; `manual` comes back as `default`; `total_cost_usd` is cumulative per process; SIGINT ends the process, so only `control_request` interrupt keeps it alive; there is one assistant event per content block; thinking is never streamed · consumers: 06 · group 01
 - `src/plugins/chat/layouts` had no LAYERS entry before task 05, so 05 added it as planned · consumers: none · group 05
+- `mountChatView`: returns `ChatView` → returns `ChatTabs extends ChatView`, adding `session(id)` and `sessionOfEditor(editor)` · why: the commands need a held session · consumers: 10 (`reveal` only), 11 · group 09
+- `ChatViewDeps` (left open by the plan): `{ channel; sessions: Pick<…,'addTab'|'activate'|'closeSession'>; onSessionRemoved; editor; markdown; keys; permissions; confirm; setScope; log; toast }` · consumers: 10 · group 09
 ### Rulings
+- `modeLabel` moved to `src/shared/vim-mode-label.ts`, and forms' `view-model.ts` re-exports it (widened rather than copied) · group 09
+- `setText` tags its edit with user event `wigley.setText`, not an `Annotation`, so no direct `@codemirror/state` dependency is added · group 09
 - Lint and typecheck run under the `.nvmrc` Node (`source ~/.nvm/nvm.sh && nvm use`); the shell's default Node 22.14 rejects `check-layers.mts` — every later brief says so · lead
 - A joined relay's `end()` holds its own once-flag, so an old relay's repeated `end()` cannot clear a later relay's join — costs nothing if wrong · group 03
 - A peer session (wigley-ai-gui-29, docs-browser plan B, untracked `src/plugins/docs/`) joined the tree after preflight: every commit from 04 on is pathspec-scoped, and the review range is this run's commit list. The peer's commits so far are 03b19ed and d402d6c, both outside the review range. The peer agreed to stay out of this run's shared files until the run closes, and asked for a message at close · lead

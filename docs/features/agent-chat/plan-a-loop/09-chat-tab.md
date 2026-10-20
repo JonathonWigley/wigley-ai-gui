@@ -1,6 +1,6 @@
 # 09 — Chat tab
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 04, 05, 07, 08
 Plan: [plan.md](plan.md)
@@ -365,3 +365,5 @@ the tests above.
 Commit:    one commit for the group
 
 ## Proof
+
+80edb99 · diff read: `ids.ts` and the page modules are present; `picker.ts` exports `PickerRequest`; the core edits are in (`FocusOptions.insert`, `TextEditor.setText`, chords naming Enter, `markdown.css`); typecheck and lint pass. Contract changes: `mountChatView` returns `ChatTabs extends ChatView` (`session`, `sessionOfEditor`); `ChatViewDeps` landed as listed in the Run log; `setText` tags its edit with user event `wigley.setText` (no direct `@codemirror/state` dependency). Ruling: `modeLabel` moved to `src/shared/vim-mode-label.ts`, and forms re-exports it. Concerns: raw entries are noise for j/k; whether Cmd+Enter also fires the Enter bind is unverified (task 11); the selftest flake also shows on an archive of 380800b.

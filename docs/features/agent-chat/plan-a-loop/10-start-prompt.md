@@ -1,6 +1,6 @@
 # 10 — Start prompt and new session
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 07, 09
 Plan: [plan.md](plan.md)
