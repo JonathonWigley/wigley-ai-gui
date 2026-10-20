@@ -8,6 +8,7 @@ import {
   ipcMain,
   type WebContents,
 } from 'electron';
+import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
@@ -31,6 +32,7 @@ import { manifests } from '../plugins/manifests';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
+import { expandHome } from '../shared/expand-home';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
 import { startPlugins } from '../shared/plugin-host';
 import {
@@ -44,6 +46,7 @@ import {
 } from '../shared/plugin-manifests';
 import { createElectronAlerts } from './alerts/electron-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
+import { createClaudeCodeHarness } from './claude-code/claude-code-harness';
 import {
   registerDataScheme,
   serveDataScheme,
@@ -254,7 +257,21 @@ function createWindow(inputs: StartInputs) {
       randomUuid,
       homeDir: inputs.homeDir,
       alerts: isSelfTest ? silentAlerts : createElectronAlerts(window, log),
-      agentHarnesses: isSelfTest ? [createFakeAgentHarness()] : [],
+      agentHarnesses: isSelfTest
+        ? [createFakeAgentHarness()]
+        : [
+            createClaudeCodeHarness({
+              command: expandHome(
+                defaultSettings.claude.command,
+                inputs.homeDir,
+              ),
+              permissionTool:
+                'mcp__plugin_wigley_wigley-forms__permission_prompt',
+              env: process.env,
+              log,
+              spawn,
+            }),
+          ],
       // An offscreen self-test window can show no dialog.
       window: isSelfTest
         ? { ...pluginWindow, chooseFolder: () => Promise.resolve(null) }
