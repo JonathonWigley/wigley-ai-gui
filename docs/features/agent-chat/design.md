@@ -92,7 +92,8 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 - `sessions` main gains `open(info)` for an owned session: the row is added at once and the contributed tool sessions
   start. A relay connection whose hello carries an owned session's host id joins that session's entry, its calls
   routed to those tool sessions, instead of adding a row; the relay going away ends nothing, and a later relay joins
-  again. The owned session's `end()` drops the row. Joining depends on the child not inheriting the parent's
+  again. A newer relay takes the join from an older one still connected (the harness restarting its MCP connection),
+  and the older relay's later end leaves the join alone. The owned session's `end()` drops the row. Joining depends on the child not inheriting the parent's
   `CLAUDE_CODE_SESSION_ID` when the app was started from a Claude Code terminal, so the launch strips the
   nested-session environment (`claude-stream.md` § Launch). Closing an owned
   session's row ends it (chat ends the process), after the Chat tab's confirm while a turn runs.

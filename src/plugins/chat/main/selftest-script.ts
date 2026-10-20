@@ -7,24 +7,36 @@ import {
   type FakeAgentProcessRecord,
   isFakeAgentHarness,
 } from '../../../shared/fake-agent-harness';
-import type { SessionsMainExports, ToolResult } from '../../sessions/contract';
+import type {
+  ConnectedSession,
+  SessionsMainExports,
+  ToolCallContext,
+  ToolResult,
+} from '../../sessions/contract';
 import type { ChatSessions } from './chat-sessions';
 import { PERMISSION_TOOL_NAME } from './permission-tool';
 
 // Never read: the fake harness spawns nothing. Its last segment names the
 // session in every page line.
 export const SELFTEST_PROJECT_DIR = '/selftest/chat-selftest';
+// A second session whose Chat tab the steps show while the first holds a
+// pending permission.
+const SECOND_PROJECT_DIR = '/selftest/chat-second';
 
 export interface ChatSelfTestDeps {
   chat: Pick<ChatSessions, 'start' | 'closed' | 'permissionToolSession'>;
-  sessions: Pick<SessionsMainExports, 'activate'>;
+  sessions: Pick<SessionsMainExports, 'activate' | 'connect'>;
   harnesses: readonly AgentHarness[];
 }
 
 interface ChatSelfTestResult {
   permission: ToolResult;
+  // Null when no fake process was found to join.
+  round: ToolResult | null;
   process: FakeAgentProcessRecord | null;
 }
+
+const ROUND_HEADING = 'Chat self-test round';
 
 const PERMISSION_INPUT = { command: 'rm selftest.txt' };
 const ALLOW_REPLY = JSON.stringify({
@@ -38,22 +50,45 @@ const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 
 // Each step expects the last line its keys cause: the fake emits in
 // microtasks, so an earlier line can land before the step's wait begins.
-// hello draws its reply; Esc leaves the box and y allows the fixture's
-// permission; the tool turn's entries are user, tool, assistant, result, focus
+// Option+Shift+i shows the second session's Chat tab, where y finds no pending
+// permission, leaving the first session's alone, and Option+Shift+o goes back.
+// hello draws its reply; Enter in insert mode breaks the line, so one, two
+// goes as one message; hello again in insert mode, sent with Cmd+Enter,
+// draws its own; Esc leaves insert mode and Esc again the box. y allows the
+// fixture's permission, which asks the round that takes the Chat tab over;
+// Space Space opens its review and Space Enter submits, which hands the Chat
+// tab back. The tool turn's entries are user, tool, assistant, result, focus
 // following the result, so k k j k walks them; Enter opens the tool entry and
-// G follows the latest. Space c e opens Effort on Medium, j Enter sets High. A
-// held turn ends on Ctrl+c in the box with the fake's notice; Space k n opens
-// the start prompt and Esc closes it. A second held turn makes Cmd+W ask, and
+// G follows the latest. Space c e opens Effort on Medium, j Enter sets High;
+// Space c e again, / and low filter to Low, and Enter in the filter's insert
+// mode sets it. A held turn ends on Ctrl+c in the box with the fake's notice;
+// Space k n opens the start prompt and Esc closes it. A second held turn makes Cmd+W ask, and
 // y ends the session.
 const STEPS: SelfTestStep[] = [
+  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  { keys: ['y'], expect: '[chat] no pending permission in chat-second' },
+  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
   {
     keys: sendKeys('hello'),
     expect: '[chat] assistant entry added in chat-selftest',
   },
-  { keys: ['Escape'], expect: '[chat] left the box' },
+  {
+    keys: ['i', ...'one', 'Enter', ...'two', 'Escape', 'Enter'],
+    expect: '[chat] assistant entry added in chat-selftest',
+  },
+  {
+    keys: ['i', ...'hello', '<D-Enter>'],
+    expect: '[chat] assistant entry added in chat-selftest',
+  },
+  { keys: ['Escape', 'Escape'], expect: '[chat] left the box' },
   {
     keys: ['y'],
-    expect: '[chat] allowed Bash in chat-selftest',
+    expect: `[forms] round shown: chat-selftest · ${ROUND_HEADING}`,
+  },
+  { keys: [' ', ' '], expect: '[forms] review opened' },
+  {
+    keys: [' ', 'Enter'],
+    expect: '[chat] Chat tab shown in chat-selftest',
     checksFit: true,
   },
   {
@@ -73,6 +108,11 @@ const STEPS: SelfTestStep[] = [
     checksFit: true,
   },
   { keys: ['j', 'Enter'], expect: '[chat] Effort is High in chat-selftest' },
+  { keys: [' ', 'c', 'e'], expect: '[chat] picker shown: Effort' },
+  {
+    keys: ['/', ...'low', 'Enter'],
+    expect: '[chat] Effort is Low in chat-selftest',
+  },
   {
     keys: sendKeys(FAKE_HOLD_TEXT),
     expect: '[chat] chat-selftest is working',
@@ -112,13 +152,42 @@ const SCROLLS_ITSELF = [
 // The calls STEPS cause on the fake process, in order.
 const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: 'hello' },
+  { method: 'send', text: 'one\ntwo' },
+  { method: 'send', text: 'hello' },
   { method: 'send', text: FAKE_TOOL_TEXT },
   { method: 'setControl', id: 'effort', value: 'high' },
+  { method: 'setControl', id: 'effort', value: 'low' },
   { method: 'send', text: FAKE_HOLD_TEXT },
   { method: 'interrupt' },
   { method: 'send', text: FAKE_HOLD_TEXT },
   { method: 'end' },
 ];
+
+// The round the fixture's permission answer asks in the first session. Each
+// run's differs in its context, so a later run never opens pre-filled from an
+// earlier run's saved draft.
+function chatRound(run: number) {
+  return {
+    heading: ROUND_HEADING,
+    overview: 'Takes over the Chat tab until submitted.',
+    notices: [],
+    questions: [
+      {
+        title: 'Back to chat',
+        context: `Run ${run}: submitted untouched.`,
+        question: 'Pick one.',
+        choices: ['Yes', 'No'],
+        recommend: 1,
+        rationale: 'Yes is the default.',
+      },
+    ],
+  };
+}
+
+const toolCallContext = (toolUseId: string | null): ToolCallContext => ({
+  toolUseId,
+  signal: new AbortController().signal,
+});
 
 // The last fake process started for the self-test's project.
 function selftestProcess(
@@ -131,7 +200,11 @@ function selftestProcess(
   return records.at(-1) ?? null;
 }
 
-function resultProblems({ permission, process }: ChatSelfTestResult): string[] {
+function resultProblems({
+  permission,
+  round,
+  process,
+}: ChatSelfTestResult): string[] {
   const reply = permission.content[0]?.text;
   const problems: string[] = [];
   if (permission.isError === true) {
@@ -140,9 +213,15 @@ function resultProblems({ permission, process }: ChatSelfTestResult): string[] {
   if (reply !== ALLOW_REPLY) {
     problems.push(`permission reply ${reply}`);
   }
-  if (process === null) {
+  if (process === null || round === null) {
     problems.push(`no fake process for ${SELFTEST_PROJECT_DIR}`);
     return problems;
+  }
+  const outcome = round.structuredContent?.outcome;
+  if (round.isError === true) {
+    problems.push(`ask_round failed: ${round.content[0]?.text}`);
+  } else if (outcome !== 'submitted') {
+    problems.push(`round outcome ${String(outcome)}`);
   }
   const calls = JSON.stringify(process.calls);
   if (calls !== JSON.stringify(EXPECTED_CALLS)) {
@@ -154,27 +233,36 @@ function resultProblems({ permission, process }: ChatSelfTestResult): string[] {
   return problems;
 }
 
-// Starts one chat session in the self-test's project each run, closing the
-// previous run's, shows its Chat tab, and asks one permission prompt through
-// chat's tool, which the steps allow. The result is that call's reply and the
+// Starts two chat sessions each run, closing the previous run's: the second
+// project's, then the self-test's, whose Chat tab it shows. Asks one
+// permission prompt through chat's tool in the self-test's session, which the
+// steps allow; the answer asks a forms round there over a relay that joins the
+// session, which the steps submit. The result is both calls' replies and the
 // session's fake process, whose record the steps keep changing in place.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   const { chat, sessions, harnesses } = deps;
-  let previousId: string | null = null;
+  let previousIds: string[] = [];
+  let previousRelay: ConnectedSession | null = null;
   return {
     pageBinds: [],
     settings: {},
     scrollsItself: SCROLLS_ITSELF,
-    open() {
-      if (previousId !== null) {
+    open(run) {
+      previousRelay?.end();
+      for (const previousId of previousIds) {
         chat.closed(previousId);
       }
+      const secondId = chat.start({
+        projectDir: SECOND_PROJECT_DIR,
+        profile: 'work',
+      });
       const id = chat.start({
         projectDir: SELFTEST_PROJECT_DIR,
         profile: 'work',
       });
-      previousId = id;
+      previousIds = [secondId, id];
       sessions.activate(id);
+      const process = selftestProcess(harnesses);
       const permission = chat
         .permissionToolSession({
           id,
@@ -192,15 +280,28 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
             input: PERMISSION_INPUT,
             tool_use_id: 'selftest-tool-use',
           },
-          {
-            toolUseId: 'selftest-tool-use',
-            signal: new AbortController().signal,
-          },
+          toolCallContext('selftest-tool-use'),
         );
-      const result = permission.then((reply): ChatSelfTestResult => ({
-        permission: reply,
-        process: selftestProcess(harnesses),
-      }));
+      const result = permission.then(
+        async (reply): Promise<ChatSelfTestResult> => {
+          if (process === null) {
+            return { permission: reply, round: null, process };
+          }
+          const relay = sessions.connect({
+            sessionId: process.request.sessionId,
+            projectDir: SELFTEST_PROJECT_DIR,
+            deadlineSeconds: null,
+            harness: 'claude',
+          });
+          previousRelay = relay;
+          const round = await relay.call(
+            'ask_round',
+            chatRound(run),
+            toolCallContext(null),
+          );
+          return { permission: reply, round, process };
+        },
+      );
       return { shownLine: '[chat] Chat tab shown in chat-selftest', result };
     },
     steps: STEPS,
