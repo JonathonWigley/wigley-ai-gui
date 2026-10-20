@@ -1,0 +1,119 @@
+# Plugin framework — settled design
+
+**Contents**
+
+- **Plans** — the three plans and what each lands.
+- **Core and plugins** — what the core owns, what a plugin is, and how plugins talk.
+- **Shell and areas** — the permanent areas and who fills them.
+- **Sessions (plan A2)** — tabs as agent sessions, the relay, tab lifecycle.
+- **Keymap (plan A2)** — the user's new keys, from the keymap rounds.
+- **Keys plugin (plan B)** — the one page-only `keys` plugin: which-key, help on `Space ?`, the scope stack, titled scopes, the bar split.
+
+The decisions the user settled in the 2026-10-18 interview rounds, kept so plans A2 and B are written from them once
+the plan before has landed. Each plan reads this file and the code as it then stands; a decision here stands unless
+the user changes it.
+
+## Plans
+
+- **A1 — core**: plugin contracts and host, manifests, shell areas, per-plugin Bridge channel, page and main plugin
+  APIs, and the forms feature moved into `src/plugins/forms/` with its behaviour and keys unchanged. Plan folder
+  `plan-a1-core/`.
+- **A2 — sessions**: the `sessions` plugin, session tabs, the event bus, plugin dependencies used for real, and the
+  keymap changes.
+- **B — keys**: the `keys` plugin: which-key, help on `<leader>?`, the slimmer bottom bar.
+
+Each lands green on its own, the self-test passing, and is reviewed on its own.
+
+## Core and plugins
+
+- Nothing in the app is anything other than a plugin: the core provides events, UI areas and tooling, and every
+  feature is built on the same plugin API, so every plugin has the same reach as the app itself (user's words).
+- Plugins are built-in folders under `src/plugins/<id>/`, compiled in, through the API a runtime loader from a user
+  folder would use later. No runtime loader yet.
+- A plugin may have a main part and a page part, each started with its own process's API.
+- A typed manifest declares commands (label, group, process), scopes, default keys, settings and dependencies; each
+  part's start function returns the handlers. A missing handler is a type error.
+- Plugins never import a third-party library's adapter: the core hands them services (editor, markdown,
+  notifications, log, clock, home folder). Built-in main parts use Node directly.
+- A plugin's two parts talk over one generic per-plugin Bridge channel (invoke and listen, by plugin id), typed in
+  the plugin's `contract.ts`.
+- A manifest names the plugins it depends on; they start first, and a plugin's start function may return an
+  exported API its dependents receive, typed from the dependency's `contract.ts`.
+- Plugins may publish their own events for other plugins to listen to. One event bus per process; the core forwards
+  the core events both sides need; a plugin's cross-process messages use its own channel. The bus lands in A2,
+  where sessions publish the first events.
+- Every built-in plugin starts at launch; no enable/disable list until a second case needs one.
+- Key scopes are plugin-declared and qualified (`forms.review`); plugin settings live in the manifest under the
+  plugin's id (which-key's delay is a setting, 200 ms default); fonts and theme stay core settings.
+- Core: plugin host, shell and areas, commands, key engine (sequences, chords, leader), settings, themes, the
+  Bridge's plugin channel, services (editor, markdown, notifications and Dock badge, log, clock). The unwired ACP
+  adapter and mock agent wait for a harness plugin. The self-test is a core driver running a plugin's script.
+
+## Shell and areas
+
+- The shell owns the layout: activity bar, side bar, main area, bottom panel, status bar, overlay layer, each hidden
+  while nothing fills it (VS Code's areas).
+- The app is heading to be a chat frontend for the wigley harness, so the whole forms view, its question rail
+  included, fits inside the main area.
+
+## Sessions (plan A2)
+
+- Tabs are an agent-session structure, not part of forms: each agent session is a tab whose window shows the chat
+  until the agent triggers a form; the session's tab then shows the form instead, so a form is self-contained in
+  its session (user's words).
+- A `sessions` plugin owns the session list, the tab strip in the main area, and a session-view place other plugins
+  fill: forms fills it while a round is open, chat later.
+- The sessions plugin owns the relay: each relay connection is a session, and plugins contribute MCP tools to it
+  (forms contributes `ask_round` and `collect_last_round`; the primer's tools are the named second set). The tool
+  list `relay.py` answers when the app is closed lives in wigley-ai-marketplace; A2 leaves that repo alone.
+- A session gets a tab when it first sends a round; the tab stays, showing the session idle between rounds, until
+  the session disconnects or the user closes it.
+- A tab is labelled by its project folder, numbered when two sessions share one (`wigley-ai-gui 2`); while a round is open the tab reads `<label> · <round heading> <answered>/<total>`.
+- Cmd+W, `Space ;` and `<Leader>;` (in a box) close the session tab, opening the cancel-round confirmation first when a round is open.
+
+## Keymap (plan A2)
+
+Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
+
+- Option+o / Option+i switch session tabs (next / previous); `gt` / `gT` are not bound. Option chords match the physical key
+  (Electron's `Input.code`, present in Electron 44.9.0), since macOS turns Option+o into `ø`.
+- Ctrl+h / Ctrl+l move to the previous / next question, on the page and inside a box (inside a box this takes
+  Ctrl+h from backspace); `<Leader>n` / `<Leader>p` go.
+- Ctrl+j / Ctrl+k move to the next / previous box, on the page and inside a box; `<Leader>j` / `<Leader>k` go.
+- `<leader>N` jumps to question N, on the page and inside a box; a bare digit on the page still picks a choice.
+- `<leader>en` / `<leader>ep` jump to the next / previous unanswered question.
+- `<leader>a<digit>` picks a choice and `<leader>ac` clears it, on the page and inside a box; `<Leader>1`–`9` and
+  `<Leader>c` inside a box go (A2 interview). Plan folder `plan-a2-sessions/` holds the rest of A2's settled design.
+- No half-page scroll.
+- Folding goes: the fold keys (`za`, `zM`, `zR`) and the collapsible context and "Why recommended" sections are
+  removed; both are always shown.
+
+## Keys plugin (plan B)
+
+Landed as one page-only `keys` plugin (no main part, depends on no plugin) holding which-key, the help overlay and the
+bottom bar's key list.
+
+- Which-key opens `whichKeyDelayMs` (200 ms) after a prefix key (the leader), as a panel docked full width just above
+  the status bar, listing what can follow in columns; it redraws at once on a deeper prefix and closes when the
+  sequence ends or on Esc. `whichKeyTimeoutMs` (default `null`,
+  wait for the next key or Esc) ends a sequence the panel has shown that long. Commands draw in the theme's green and
+  prefixes in its mauve, from theme tokens (the user's IdeaVim which-key colours).
+- It also opens inside a box in vim normal mode: `@replit/codemirror-vim` 6.4.0 keeps the typed keys in
+  `getCM(view).state.vim.inputState.keyBuffer` and fires `vim-keypress` per key and `vim-command-done` when the
+  pending input clears; the editor adapter reports them through `EditorHost.onPendingKeys` and `cancelPendingKeys`,
+  and a test fails if an upgrade drops that state. The remaining keys come from the app's own keymap, not vim's.
+  A count-prefixed sequence (`3 Space`) gets no panel.
+- `Space ?` (`<Leader>?` in a box) opens the full help overlay; bare `?` is freed. Help lays the `help` scope
+  (`keys.help`, Esc closes) over the page's scope with `api.keys.pushScope`, and closes itself when the scope under it
+  changes (the `PushedScope`'s `onBaseChanged`), so a prompt such as Cmd+W's cancel shows at once.
+- Key scope is a stack in the page core: `setScope` sets a plugin's base scope, `pushScope` lays a scope over it until
+  the handle's `pop`, so a modal view never fights the plugin under it. Each scope in a manifest carries a title, which
+  help shows over its keys. Esc while a sequence waits cancels it and runs nothing.
+- A key sequence never outlives the place it was typed: focus entering a box or the window losing focus drops a
+  pending page sequence, and a box losing focus discards vim's unfinished command (keys, count, operator, register) by
+  sending it `<Nop>`, which vim matches to nothing, rather than Esc, which would run the box's mapped Esc. The
+  offscreen self-test fires no DOM focus or blur events, so those two paths are proved only in a visible run.
+- The bottom bar splits: forms keeps the mode and save state (`.status-line`; round progress stays on the session tab);
+  the keys plugin's `.keys-bar` lists the keys that don't start with the leader (page binds spell the leader as Space,
+  whatever the editor's leader), plus a `Keys` button that opens help. Both fit on one row at the 420 px minimum width;
+  the bar takes its own row only below that.
