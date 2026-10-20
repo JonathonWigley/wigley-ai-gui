@@ -15,6 +15,7 @@ import { pageParts } from '../plugins/page';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
+import { editorBindMode } from '../shared/key-hints';
 import { startPlugins } from '../shared/plugin-host';
 import { qualify } from '../shared/plugin-manifests';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
@@ -86,13 +87,18 @@ async function start() {
   const scopeStack = createScopeStack(INITIAL_SCOPE);
   // Rejects editor binds vim could not tell apart, before any is mapped.
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
+  // An insert-mode key with no bind in force types as it would unbound, so
+  // only a normal-mode miss is logged.
   const editor = createCodeMirrorVimHost(keymap.editor, (binds, fired) => {
     const choice = editorBindInForce(binds, scopeStack.current());
     if (choice.kind === 'run') {
       commands.run(choice.bind.command, { editor: fired });
-    } else {
+      return true;
+    }
+    if (editorBindMode(binds[0]) === 'normal') {
       log('page', choice.message);
     }
+    return false;
   });
   const services: PageServices = {
     editor,

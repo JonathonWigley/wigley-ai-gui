@@ -1,5 +1,5 @@
 import { EditorView, minimalSetup } from 'codemirror';
-import { getCM, Vim, vim } from '@replit/codemirror-vim';
+import { CodeMirror, getCM, Vim, vim } from '@replit/codemirror-vim';
 import type {
   CreateEditorHost,
   EditorEvents,
@@ -26,28 +26,72 @@ function vimEditorOf(view: EditorView): VimEditor {
   return cm as VimEditor;
 }
 
-// The editor an ex command ran in, from the cm vim hands the command: focus
+// The editor a bound key ran in, from the cm vim hands the command: focus
 // state is unreliable, since view.hasFocus is false while the window is not.
-function hostedEditorOf(cm: VimEditor, hosted: HostedEditor[]): TextEditor {
+function hostedEntryOf(cm: VimEditor, hosted: HostedEditor[]): HostedEditor {
   const match = hosted.find((entry) => getCM(entry.view) === cm);
   if (!match) {
-    throw new Error('Ex command ran in an editor this host did not create');
+    throw new Error('Bound key ran in an editor this host did not create');
   }
-  return match.editor;
+  return match;
 }
 
-// Each group's ex command hands `run` the group's binds and the editor its
-// keys fired in.
-function defineExCommands(
+type RunBinds = (binds: EditorBind[], editor: TextEditor) => boolean;
+
+// What each key an insert-mode bind may take does in insert mode with no bind
+// on it, as CodeMirror's own key handling does it.
+const UNBOUND_INSERT_KEYS: Partial<Record<string, (cm: CodeMirror) => void>> = {
+  '<CR>': (cm) => CodeMirror.commands.newlineAndIndent(cm),
+};
+
+function unboundInsertKey(group: BindGroup): (cm: CodeMirror) => void {
+  const unbound = UNBOUND_INSERT_KEYS[group.keys];
+  if (!unbound) {
+    const supported = Object.keys(UNBOUND_INSERT_KEYS).join(', ');
+    throw new Error(
+      `Insert-mode bind "${group.keys}" names a key the editor cannot type when no bind is in force; insert binds take ${supported}`,
+    );
+  }
+  return unbound;
+}
+
+// An insert-mode group maps its key to a vim action, which runs without
+// leaving insert mode; when `run` runs no bind, the key does what it does
+// unbound, since vim's map on it holds in every editor.
+function defineInsertAction(
+  group: BindGroup,
+  name: string,
+  hosted: HostedEditor[],
+  run: RunBinds,
+) {
+  const unbound = unboundInsertKey(group);
+  Vim.defineAction(name, (cm: VimEditor) => {
+    const entry = hostedEntryOf(cm, hosted);
+    const isBound = run(group.binds, entry.editor);
+    const adapter = getCM(entry.view);
+    if (!isBound && adapter) {
+      unbound(adapter);
+    }
+  });
+  Vim.mapCommand(group.keys, 'action', name, undefined, { context: 'insert' });
+}
+
+// Each group's ex command, or an insert group's action, hands `run` the
+// group's binds and the editor its keys fired in.
+function defineBindCommands(
   groups: BindGroup[],
   hosted: HostedEditor[],
-  run: (binds: EditorBind[], editor: TextEditor) => void,
+  run: RunBinds,
 ) {
   groups.forEach((group, index) => {
     const name = exBindName(index);
-    Vim.defineEx(name, name, (cm: VimEditor) =>
-      run(group.binds, hostedEditorOf(cm, hosted)),
-    );
+    if (group.mode === 'insert') {
+      defineInsertAction(group, name, hosted, run);
+    } else {
+      Vim.defineEx(name, name, (cm: VimEditor) => {
+        run(group.binds, hostedEntryOf(cm, hosted).editor);
+      });
+    }
   });
 }
 
@@ -290,7 +334,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
   let isKeymapApplied = false;
   const pendingKeys = new PendingKeys();
   const groups = bindGroups(keymap);
-  defineExCommands(groups, hosted, run);
+  defineBindCommands(groups, hosted, run);
 
   return {
     create(parent, doc, events) {

@@ -9,12 +9,15 @@ export interface EditorRemap {
   to: string;
 }
 
-// A normal-mode bind that runs a command in the editor it fired in, while
-// `scope` is in force; `any` fires in every scope.
+// A bind that runs a command in the editor it fired in, while `scope` is in
+// force; `any` fires in every scope. It fires in `mode`, normal when absent.
+// An insert-mode bind's keys are one key, and in a scope it has no bind the
+// key does what it does unbound (Enter breaks the line).
 export interface EditorBind {
   keys: string;
   scope: ViewScope;
   command: CommandId;
+  mode?: EditorMode;
 }
 
 export interface EditorKeymap {

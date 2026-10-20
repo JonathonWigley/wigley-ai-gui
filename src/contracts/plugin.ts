@@ -5,6 +5,7 @@ import type { CommandId } from './commands';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
 import type {
+  EditorMode,
   InterceptBind,
   Keymap,
   PageBind,
@@ -47,7 +48,12 @@ export interface PluginKeys<
   S extends string,
 > {
   page: { keys: string[]; scope: S | 'any'; command: PageC }[];
-  editor: { keys: string; scope: S | 'any'; command: PageC }[];
+  editor: {
+    keys: string;
+    scope: S | 'any';
+    command: PageC;
+    mode?: EditorMode;
+  }[];
   app: { accelerator: string; command: MainC }[];
   global: { accelerator: string; command: MainC }[];
   intercept: (Omit<InterceptBind, 'command'> & { command: MainC })[];

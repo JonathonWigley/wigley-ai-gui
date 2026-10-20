@@ -119,10 +119,12 @@ round), since main, not the page, decides.
   the page also rejects a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
   `<D-w>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
   too, in every vim mode, ahead of the editor. An editor key carries a scope as a page key does and runs only while
-  that scope is in force, so two plugins' editors may bind one vim key in different scopes. Vim keeps one mapping per
-  key sequence for every editor, so a sequence bound in any scope runs nothing in the others (the page logs
-  `<keys> has no bind in <scope>`), and startup fails on two binds with the same keys in overlapping scopes or on keys
-  that begin another bind's longer keys in any scope. Esc while a sequence waits cancels it and runs nothing.
+  that scope is in force, so two plugins' editors may bind one vim key in different scopes. It fires in normal mode,
+  or in insert mode with `mode: 'insert'` (one key, e.g. `<CR>` in the chat picker's filter). Vim keeps one mapping
+  per key sequence and mode for every editor, so a sequence bound in any scope runs nothing in the others (the page
+  logs `<keys> has no bind in <scope>`; an insert key types as it does unbound, Enter breaking the line), and startup
+  fails on two binds in one mode with the same keys in overlapping scopes or on keys that begin another same-mode
+  bind's longer keys in any scope. Esc while a sequence waits cancels it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout keys are
   `Space z l …`, chat's `Space z c …`).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base

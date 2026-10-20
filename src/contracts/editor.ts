@@ -59,9 +59,11 @@ export interface EditorHost {
 }
 
 // Every editor the host creates follows the keymap; a bound key sequence calls
-// `run` with every bind on those keys, in keymap order, and the editor it fired
-// in, leaving the choice among them to the caller.
+// `run` with every bind on those keys in its mode, in keymap order, and the
+// editor it fired in, leaving the choice among them to the caller. `run`
+// returns whether a bind ran; when none ran on an insert-mode key, the host
+// does what the key does unbound, so Enter still breaks the line.
 export type CreateEditorHost = (
   keymap: EditorKeymap,
-  run: (binds: EditorBind[], editor: TextEditor) => void,
+  run: (binds: EditorBind[], editor: TextEditor) => boolean,
 ) => EditorHost;

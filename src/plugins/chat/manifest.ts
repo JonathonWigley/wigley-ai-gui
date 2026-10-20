@@ -129,6 +129,7 @@ export const chatManifest = definePlugin({
       { keys: '<Leader>co', scope: 'chat', command: 'pickModel' },
       { keys: '<Leader>cc', scope: 'chat', command: 'pickControl' },
       { keys: '<CR>', scope: 'picker', command: 'pickerPick' },
+      { keys: '<CR>', mode: 'insert', scope: 'picker', command: 'pickerPick' },
       { keys: '<Esc>', scope: 'picker', command: 'pickerList' },
       { keys: '<CR>', scope: 'reason', command: 'submitReason' },
       { keys: '<Esc>', scope: 'reason', command: 'cancelReason' },

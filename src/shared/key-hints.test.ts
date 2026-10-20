@@ -97,6 +97,20 @@ describe('editorHints', () => {
       { keys: '<Space>1–3', label: CHOICE_LABEL },
     ]);
   });
+
+  it('shows keys bound to one command in two modes once', () => {
+    const editor = {
+      ...keymap.editor,
+      binds: [
+        { keys: '<CR>', scope: 'any', command: 'test.pick' },
+        { keys: '<CR>', scope: 'any', command: 'test.pick', mode: 'insert' },
+      ],
+    } satisfies Keymap['editor'];
+
+    expect(editorHints(editor, label)).toEqual([
+      { keys: '<CR>', label: 'test.pick' },
+    ]);
+  });
 });
 
 describe('vimTokens', () => {

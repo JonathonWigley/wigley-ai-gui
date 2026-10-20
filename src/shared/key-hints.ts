@@ -3,7 +3,9 @@
 
 import type { CommandId } from '../contracts/commands';
 import type {
+  EditorBind,
   EditorKeymap,
+  EditorMode,
   InterceptBind,
   PageBind,
   ViewScope,
@@ -54,6 +56,11 @@ export function vimTokens(keys: string, leader: string): string[] {
   return withLeader(keys, leader).match(VIM_TOKEN) ?? [];
 }
 
+// The vim mode an editor bind fires in; normal when the bind names none.
+export function editorBindMode(bind: EditorBind): EditorMode {
+  return bind.mode ?? 'normal';
+}
+
 // The page keys that fire in the qualified `scope`, `any` binds included.
 export function pageHints(
   binds: PageBind[],
@@ -97,12 +104,16 @@ export function chordName(bind: InterceptBind): string {
   return [...modifiers, bind.key].join('+');
 }
 
-// Neighbouring binds with one label become one hint.
+// Neighbouring binds with one label become one hint, each key listed once.
 export function mergeHints(bound: BoundKeys[], label: CommandLabel): KeyHint[] {
   const groups: { keys: string[]; label: string }[] = [];
   for (const { keys, command } of bound) {
     const commandLabel = label(command);
     const last = groups.at(-1);
+    const isRepeat = last?.label === commandLabel && last.keys.includes(keys);
+    if (isRepeat) {
+      continue;
+    }
     if (last?.label === commandLabel) {
       last.keys.push(keys);
     } else {
