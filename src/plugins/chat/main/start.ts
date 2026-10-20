@@ -19,6 +19,7 @@ import { chatManifest } from '../manifest';
 import { createChatSessions } from './chat-sessions';
 import { PERMISSION_TOOLS } from './permission-tool';
 import { createRecentFolders } from './recent-folders';
+import { chatSelfTestScript } from './selftest-script';
 
 type ChatApi = MainApi<
   typeof chatManifest,
@@ -92,6 +93,13 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.events.on('sessions.closed', ({ sessionId }) => chat.closed(sessionId));
     sessions.contributeTools(PERMISSION_TOOLS, (session) =>
       chat.permissionToolSession(session),
+    );
+    services.selfTest?.run(
+      chatSelfTestScript({
+        chat,
+        sessions,
+        harnesses: services.agentHarnesses,
+      }),
     );
     const layouts = serveLayouts(api);
     return {
