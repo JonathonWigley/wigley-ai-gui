@@ -365,7 +365,7 @@ the name. Recent folders live in chat's data folder at `recent-folders.json`, ne
 - [x] [Chat self-test script](11-selftest.md) — after 06, 10
 
 ### Wave 7
-- [ ] [Doc re-read](12-doc-re-read.md) — after 11
+- [x] [Doc re-read](12-doc-re-read.md) — after 11
 
 ### Wave 8
 - [ ] [Final verification](13-final-verification.md) — after 12
@@ -386,6 +386,7 @@ Review base: 4597f154604caf0e8453b17f551918d444f11ab5
 - 09 chat tab · 80edb99 · diff read + typecheck + lint pass · concerns: raw entries fill j/k with noise; Cmd+Enter vs the Enter bind is unverified; the selftest flake (forms layout-cycle revisions one higher) also shows on an archive of 380800b
 - 10 start prompt · 9fba269 · diff read + typecheck + lint pass · concerns: a type-only `Omit<…,'newSession'>` on 09's `chatCommandHandlers`
 - 11 chat selftest · a5aafea · diff read + typecheck + lint pass · concerns: chat's script passes 3/3; forms' layout-cycle steps fail 4/4 even with chat off; a user-started app instance was running; `<D-Enter>` unexercised
+- 12 doc re-read · c02b20e · diff read · concerns: an empty untracked `src/main/forms/` from Oct 18, which predates the run
 ### Contract changes
 - `DecodedLine`: gains `turnFailed: boolean` · why: effort and model command results need it · consumers: none outside `src/main/claude-code` · group 06
 - claude-stream.md facts amend task 06's pinned reading: local `/effort` and `/model` print a synthetic `assistant` (`message.model` `<synthetic>`) plus a zero-cost `result`; no event reports effort; `manual` comes back as `default`; `total_cost_usd` is cumulative per process; SIGINT ends the process, so only `control_request` interrupt keeps it alive; there is one assistant event per content block; thinking is never streamed · consumers: 06 · group 01

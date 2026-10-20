@@ -1,6 +1,6 @@
 # 12 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -34,3 +34,5 @@ Done when: every listed line checked against the landed code, every stale one fi
 Commit:    one commit for the group
 
 ## Proof
+
+c02b20e · diff read: design.md fixes the Flow start-prompt line, the controls, interrupt and cost bullets, the Chat tab status line and the start prompt bullet; AGENTS.md gains the adapter's CLI readings and the corrected `Space c c` line; followups.md's five agent-chat lines were checked and stand. Concern: an empty, untracked `src/main/forms/` folder from Oct 18 sits in the tree; it predates the run and was left alone.
