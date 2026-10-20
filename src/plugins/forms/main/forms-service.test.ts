@@ -1178,20 +1178,60 @@ describe('saved rounds from an earlier app run', () => {
     expect(presenter.shown).toHaveLength(1);
   });
 
-  it('marks a saved round that no longer parses as returned and skips it', async () => {
+  // A finding saved before findings carried an origin.
+  const OLD_SHAPE_ARGS = {
+    heading: 'Old review',
+    overview: 'Reviewing the cache. This round: one finding.',
+    findings: [{ ...FINDING_ARGS.findings[0], origin: undefined }],
+  };
+
+  function saveUnparseable(): SavedRound {
     const record = store.create(
       SESSION,
       'unparseable',
-      { heading: '', questions: [] },
+      OLD_SHAPE_ARGS,
       HALF_BODY,
       null,
     );
     store.finish(record, 'submitted', HALF_BODY);
+    return record;
+  }
 
-    const payload = await startSession().collectLastRound(true, live());
+  it('reports a saved round that no longer parses to collect_last_round and leaves it unreturned', async () => {
+    const record = saveUnparseable();
+    const session = startSession();
+
+    const failed = session.collectLastRound(true, live());
+
+    await expect(failed).rejects.toThrow("The saved round 'Old review'");
+    await expect(failed).rejects.toThrow(`${record.id}.json`);
+    await expect(failed).rejects.toThrow('origin');
+    expect(savedFile(record.id).returned).toBe(false);
+  });
+
+  it('passes over a reported unparseable round on the next call, still unreturned', async () => {
+    const record = saveUnparseable();
+    const session = startSession();
+    await session.collectLastRound(true, live()).catch(() => {});
+
+    const payload = await session.collectLastRound(true, live());
 
     expect(payload.outcome).toBe('no_round');
-    expect(newestSaved('unparseable').returned).toBe(true);
+    expect(savedFile(record.id).returned).toBe(false);
+  });
+
+  it('reports an unparseable saved round to a new round, which opens once re-sent', async () => {
+    const record = saveUnparseable();
+    const session = startSession();
+
+    await expect(session.askRound(NAMING_ARGS, null, live())).rejects.toThrow(
+      "The saved round 'Old review'",
+    );
+    expect(presenter.shown).toEqual([]);
+    void session.askRound(NAMING_ARGS, null, live());
+
+    expect(presenter.shown).toHaveLength(1);
+    expect(savedFile(record.id).returned).toBe(false);
   });
 });
 

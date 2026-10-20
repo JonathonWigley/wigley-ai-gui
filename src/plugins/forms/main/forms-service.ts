@@ -80,6 +80,9 @@ interface SessionContext {
   askTurn: Promise<void> | null;
   // The relay disconnected; no call opens a round after this.
   ended: boolean;
+  // Ids of unreturned saved rounds that no longer parse, already reported to
+  // a call.
+  reportedUnreadable: Set<string>;
 }
 
 // setTimeout fires at once for a delay above a signed 32-bit millisecond count.
@@ -139,12 +142,34 @@ function handedBackFinishedPayload(finished: FinishedRound): AnswersPayload {
   return handedBackPayload(finished.round, finished.outcome, finished.body);
 }
 
-function roundFromRecord(record: SavedRound): Round | null {
+function savedHeading(args: unknown): string | null {
+  const heading = (args as { heading?: unknown } | null)?.heading;
+  return typeof heading === 'string' && heading.trim() !== '' ? heading : null;
+}
+
+function unreadableRoundError(record: SavedRound, cause: RoundError): Error {
+  const heading = savedHeading(record.args);
+  const named =
+    heading === null ? 'A saved round' : `The saved round '${heading}'`;
+  return new Error(
+    `${named} (file ${record.id}.json) was finished but never returned, and ` +
+      `its answers cannot be read: it was saved in a shape this app no longer ` +
+      `accepts (${cause.message}). Its file is left as it was. Tell the user ` +
+      `its answers were not returned. Later calls in this session pass over ` +
+      `it, so send your round again with ask_round.`,
+  );
+}
+
+// A saved round the current parser rejects stays unreturned on disk and is
+// reported to the first call that meets it in this session; later calls pass
+// over it, so it never blocks the session's rounds.
+function roundFromRecord(session: SessionContext, record: SavedRound): Round {
   try {
     return parseRound(record.args);
   } catch (error) {
     if (error instanceof RoundError) {
-      return null;
+      session.reportedUnreadable.add(record.id);
+      throw unreadableRoundError(record, error);
     }
     throw error;
   }
@@ -260,21 +285,19 @@ async function presentOpen(
 
 // A finished round whose answers no tool reply has carried: the open round,
 // when the user finished it after its last reply, or else the newest such
-// file this session left on disk before an app restart.
+// file this session left on disk before an app restart. Throws when that file
+// no longer parses.
 function takeUnreturnedFinished(session: SessionContext): FinishedRound | null {
   const open = session.open;
   if (open !== null) {
     return open.end === null ? null : settle(session, open, open.end);
   }
   const record = session.store.newestUnreturnedFinished(session.info);
-  if (record === null) {
+  if (record === null || session.reportedUnreadable.has(record.id)) {
     return null;
   }
+  const round = roundFromRecord(session, record);
   session.store.markReturned(record);
-  const round = roundFromRecord(record);
-  if (round === null) {
-    return null;
-  }
   session.lastFinished = {
     round,
     outcome: record.outcome,
@@ -679,6 +702,7 @@ function startSession(
     lastFinished: null,
     askTurn: null,
     ended: false,
+    reportedUnreadable: new Set(),
   };
   return {
     askRound: (args, toolUseId, signal) =>
