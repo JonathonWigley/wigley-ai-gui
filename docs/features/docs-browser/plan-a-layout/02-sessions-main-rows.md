@@ -172,4 +172,4 @@ Commit: one commit for the group.
 
 ## Proof
 
-c802d7b · proved: diff read (every Produces present: Harness, SessionInfo.harness, RelayHello.harness?, SessionRow, SessionsState, markRound, closeSession, activated, SessionListDeps.activated), typecheck clean, sessions + forms main suites 340 pass · selftest runs once 01 lands · concerns: rows now exist from connect, so the selftest's timing may differ
+c802d7b · proved: diff read (every Produces present: Harness, SessionInfo.harness, RelayHello.harness?, SessionRow, SessionsState, markRound, closeSession, activated, SessionListDeps.activated), typecheck clean, sessions + forms main suites 340 pass · selftest all passed after 01 landed (07dd24a) · concerns: rows now exist from connect, so the selftest's timing may differ

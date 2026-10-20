@@ -1,6 +1,6 @@
 # 01 — Scoped editor binds
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -158,3 +158,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+07dd24a · proved: diff read (every Produces present, plus `scopesOverlap` exported), typecheck clean, full suite 52 files / 847 pass, `exCommandName` gone, selftest all passed (Esc in the round note runs forms.leaveBox in review) · lint: layers, oxlint and src formatting pass; oxfmt flags only docs/features/** from 6c52ae5 · concerns: check (b) compares with the leader spelled; editorBindInForce reads binds[0] (host never sends an empty group); host vim wiring has no unit test
