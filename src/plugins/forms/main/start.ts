@@ -109,8 +109,9 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       createFormsToolSession(forms.startSession(session)),
     );
     const { selfTest } = api.services;
-    // Written before the registry starts, so its watch reports no change and
-    // the revisions the steps expect hold.
+    // Written before the registry starts, so the registry lists selftest. A
+    // late watch report of this write changes nothing: a save in an inactive
+    // layout's folder leaves the revision alone.
     const fixtureWritten = selfTest
       ? api.data.write(SELFTEST_LAYOUT.path, SELFTEST_LAYOUT.text)
       : Promise.resolve();

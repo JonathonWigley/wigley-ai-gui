@@ -166,7 +166,6 @@ export async function startLayoutRegistry(
     if (folder === null || folder === DEFAULT_NAME || !isLayoutFile) {
       return;
     }
-    revision++;
     if (folder !== active.name) {
       return;
     }

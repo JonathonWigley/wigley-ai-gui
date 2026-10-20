@@ -168,7 +168,7 @@ describe('watch', () => {
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]).toMatchObject({ name: 'alpha', reason: 'reloaded' });
-    expect(sent[0].revision).toBeGreaterThan(before);
+    expect(sent[0].revision).toBe(before + 1);
   });
 
   it('watch_ActiveLayoutJsRemoved_FallsBackToDefault', async () => {
@@ -183,7 +183,7 @@ describe('watch', () => {
     expect(await files.read('layouts/active')).toBe('default');
   });
 
-  it('watch_SaveInInactiveFolder_BumpsRevisionWithoutSending', async () => {
+  it('watch_SaveInInactiveFolder_KeepsRevisionAndSendsNothing', async () => {
     await writeLayouts('alpha');
     const registry = await start();
     const before = registry.current().revision;
@@ -193,7 +193,7 @@ describe('watch', () => {
 
     expect(sent).toEqual([cycled]);
     expect(cycled.name).toBe('alpha');
-    expect(cycled.revision).toBeGreaterThan(before + 1);
+    expect(cycled.revision).toBe(before + 1);
   });
 
   it.each([
