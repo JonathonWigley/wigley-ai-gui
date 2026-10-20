@@ -228,6 +228,10 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   revisions assume a fresh data folder
 - 08 doc re-read · a4f3184 · proved (diff read: one AGENTS.md line) · concerns: none
 ### Contract changes
+- `Files.watch`: → `watch(folder, onChange, onError?)`; the Node adapter closes a failed watch and reports once ·
+  why: review finding 2 · consumers: 04 (registry logs `layouts watch failed`) · fix round 1
+- `createChannelPresenter`: → returns `ChannelPresenter` (`RoundPresenter` plus `quiet`); the preview shows
+  through `quiet` · why: review finding 21 · consumers: 06 · fix round 1
 - `createRoundView`: → gains `layout: Layout, layoutName: string` after `round`; `RoundViewDeps` gains `log: Log`,
   `boxes` widens to `Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>` · why: builds through the layout
   from the first build and logs failures · consumers: 05 · group 02
@@ -308,10 +312,22 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   failure is logged, not that it fires on a pick · group 07
 - Step 5 expects revision 7; step 6 expects `[forms] round shown: Layout preview · Layout preview`; the fixture
   notice calls `textBox(article, 'notes')` (same throw) — none known · group 07
+- Mark expiry uses global `setTimeout` (main code has no injected timers; `forms-service.ts` uses the globals) ·
+  fix round 1, W3
+- Dot-led file names (`.#layout.js`) never reload, beyond the brief's extension list · fix round 1, W3
+- The presenter's `quiet` view rather than quiet session ids: a round's `sessionId` is a random per-connect id ·
+  fix round 1, W4
+- `definePlugin` holds the lowercase id check: every manifest passes through it in both processes · fix round 1, W1
 ### Review rounds
 - review 1 · 765db00 · NEEDS FIXES — 5 Important, 20 Minor (report `review-765db00.md`); every recommendation taken
   by the user's ruling; fix round 1 dispatched as four workers by file (W1 core, W2 cards, W3 registry and page
   loader, W4 preview); 09's check 6 fixed by the lead
+- fix round 1 · da7ea3c 82d23b7 fb578bd b555114 05c9bac f027f58 · typecheck and lint clean (the oxfmt ignore for
+  `docs/features/**` landed), 705 tests in 42 files pass
+- re-review 1 · f027f58 · PASS on every prior finding (R1 core, R2 forms); 2 Minor, 1 follow-up and 1
+  recommendation raised, all taken by the user's ruling — fix round 2 dispatched (asset extensions redraw and are
+  served typed; `watch` start-failure comment; check-layers header reflow; the self-test proves the preview row
+  selected)
 ### Test gate
 - Range: this run's commits 191f4d7 f9e9db6 b5142a6 c070e90 f8afed4 66789d6 25718bd a4f3184. Pass 1 (written):
   node-files, main-api, layout-registry, layout-preview, preview-round, round-store, manifest, editor-boxes,
