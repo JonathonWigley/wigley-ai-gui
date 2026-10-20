@@ -1,3 +1,4 @@
+import type { LayoutChoice } from '../../contracts/layouts';
 import type { ChannelShape } from '../../contracts/plugin';
 import type { AgentSession } from '../sessions/contract';
 
@@ -235,17 +236,8 @@ export interface RoundPresenter {
   close(roundId: string): void;
 }
 
-// The layout the Form tab builds cards with. `revision` grows on every change
-// to a layout's files and every switch, so a URL holding it loads fresh
-// modules; `builtIn` marks the `default` layout, which has no files in forms'
-// data folder.
-export interface LayoutChoice {
-  name: string;
-  revision: number;
-  hasCss: boolean;
-  builtIn: boolean;
-  reason: 'start' | 'cycled' | 'reloaded' | 'copied';
-}
+// The layout the Form tab builds cards with.
+export type { LayoutChoice } from '../../contracts/layouts';
 
 // The forms page part invokes `openRounds` and `layout` on load, `draft` as
 // the user types, `finish` on submit or cancel, and `cycleLayout`,

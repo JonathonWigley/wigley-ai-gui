@@ -6,6 +6,10 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import {
+  createLayoutLoader,
+  showLayouts,
+} from '../../../shared/page/layout-loader';
 import type {
   SessionsPageEvents,
   SessionsPageExports,
@@ -13,6 +17,7 @@ import type {
 import type { KeysPageExports } from '../../keys/contract';
 import type { FormsChannel, RoundEnd } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import type { Layout } from '../layouts/layout';
 import { formsManifest } from '../manifest';
 import { startAutosave } from './autosave';
 import { focusActionFor } from './boxes';
@@ -21,7 +26,7 @@ import { initialState } from './form-state';
 import { formsCommandHandlers, guardClose } from './forms-commands';
 import { createFormsStore, type FormsStore } from './forms-store';
 import { mountFormsView } from './forms-view';
-import { createLayoutLoader, showLayouts } from './layout/layout-loader';
+import { readLayout } from './layout/read-layout';
 
 type FormsApi = PageApi<
   typeof formsManifest,
@@ -145,14 +150,17 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
           api.channel.on('layoutChanged', listener),
         readLayout: () => api.channel.invoke('layout'),
       },
-      loader: createLayoutLoader({
+      loader: createLayoutLoader<Layout>({
         importModule: (url) => import(/* @vite-ignore */ url),
         dataUrl: (path, revision) => api.dataUrl(path, revision),
         defaultLayout,
         head: document.head,
+        read: readLayout,
       }),
       setLayout: (layout, name) => view.setLayout(layout, name),
       log: services.log,
+      logSource: 'forms',
+      dataFolderLabel: "forms' data folder",
       toast: services.toast,
     });
     return {

@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Files } from '../../../../contracts/files';
-import {
-  createMemoryFiles,
-  type MemoryFiles,
-} from '../../../../shared/memory-files';
-import type { LayoutChoice } from '../../contract';
+import type { Files } from '../../contracts/files';
+import type { LayoutChoice } from '../../contracts/layouts';
+import { createMemoryFiles, type MemoryFiles } from '../memory-files';
 import { type LayoutRegistry, startLayoutRegistry } from './layout-registry';
 
 const LAYOUT_TYPES = 'declare const types: 1;';
@@ -29,6 +26,7 @@ function start(data: Files = files): Promise<LayoutRegistry> {
     data,
     send: (choice) => sent.push(choice),
     log: (source, message) => logLines.push(`[${source}] ${message}`),
+    logSource: 'demo',
     layoutTypes: LAYOUT_TYPES,
     defaultLayout: DEFAULT_LAYOUT,
   });
@@ -130,7 +128,7 @@ describe('start', () => {
     expect(back).toMatchObject({ name: 'default', builtIn: true });
     expect(sent.map((choice) => choice.name)).toEqual(['alpha', 'default']);
     expect(logLines).toContain(
-      '[forms] layouts/default is ignored; the built-in default layout wins',
+      '[demo] layouts/default is ignored; the built-in default layout wins',
     );
   });
 });
@@ -237,7 +235,7 @@ describe('watch', () => {
 
     failing.fail(new Error('EMFILE'));
 
-    expect(logLines).toContain('[forms] layouts watch failed: EMFILE');
+    expect(logLines).toContain('[demo] layouts watch failed: EMFILE');
   });
 
   it('hasCss_TrueWhenLayoutCssPresent', async () => {

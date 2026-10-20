@@ -1,9 +1,9 @@
-import type { Files } from '../../../../contracts/files';
-import type { Log } from '../../../../contracts/log';
-import { errorText } from '../../../../shared/error-text';
-import type { LayoutChoice } from '../../contract';
+import type { Files } from '../../contracts/files';
+import type { LayoutChoice } from '../../contracts/layouts';
+import type { Log } from '../../contracts/log';
+import { errorText } from '../error-text';
 
-// The layouts in forms' data folder, the active one among them, and the
+// The layouts in a plugin's data folder, the active one among them, and the
 // revision the page loads them at. `cycle` and `copy` persist the new active
 // layout and send it; a save of a code, style, data, image or font file
 // under the active layout's folder sends a reload. A watch failure is logged,
@@ -16,10 +16,12 @@ export interface LayoutRegistry {
 }
 
 export interface LayoutRegistryDeps {
-  // Scoped to forms' data folder.
+  // Scoped to the plugin's data folder.
   data: Files;
   send(choice: LayoutChoice): void;
   log: Log;
+  // The source name every log line carries.
+  logSource: string;
   // The text of `layout.d.ts`, written to `layouts/layout.d.ts` at start.
   layoutTypes: string;
   // The text of the built-in `default` layout's `layout.js`.
@@ -44,7 +46,7 @@ interface ListedLayout {
 export async function startLayoutRegistry(
   deps: LayoutRegistryDeps,
 ): Promise<LayoutRegistry> {
-  const { data, send, log } = deps;
+  const { data, send, log, logSource } = deps;
   let defaultSkipLogged = false;
   // Paths, relative to `layouts`, the registry wrote, each with the timer that
   // forgets it OWN_WRITE_MS after its write. A held path's next watch report
@@ -70,7 +72,7 @@ export async function startLayoutRegistry(
     if (userNames.includes(DEFAULT_NAME) && !defaultSkipLogged) {
       defaultSkipLogged = true;
       log(
-        'forms',
+        logSource,
         'layouts/default is ignored; the built-in default layout wins',
       );
     }
@@ -169,12 +171,12 @@ export async function startLayoutRegistry(
       return;
     }
     serially(reloadActive).catch((error: unknown) =>
-      log('forms', `layout ${folder} not reloaded: ${errorText(error)}`),
+      log(logSource, `layout ${folder} not reloaded: ${errorText(error)}`),
     );
   };
 
   const watch = data.watch(LAYOUTS, onChange, (error) =>
-    log('forms', `layouts watch failed: ${errorText(error)}`),
+    log(logSource, `layouts watch failed: ${errorText(error)}`),
   );
 
   return {

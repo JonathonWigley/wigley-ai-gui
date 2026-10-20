@@ -1,6 +1,10 @@
 import path from 'node:path';
 import type { MainApi, MainPart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import {
+  type LayoutRegistry,
+  startLayoutRegistry,
+} from '../../../shared/layouts/layout-registry';
 import type { SessionsMainExports } from '../../sessions/contract';
 import type { FormsChannel, FormsService } from '../contract';
 import defaultLayout from '../layouts/default/layout.js?raw';
@@ -8,10 +12,6 @@ import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
 import { createChannelPresenter } from './channel-presenter';
 import { createFormsService } from './forms-service';
-import {
-  type LayoutRegistry,
-  startLayoutRegistry,
-} from './layouts/layout-registry';
 import { createLayoutPreview } from './preview/layout-preview';
 import { createMemoryRoundStore } from './preview/memory-round-store';
 import { createRoundStore } from './round-store';
@@ -79,6 +79,7 @@ function serveLayouts(
       data: api.data,
       send: (choice) => api.channel.send('layoutChanged', choice),
       log,
+      logSource: 'forms',
       layoutTypes,
       defaultLayout,
     }),

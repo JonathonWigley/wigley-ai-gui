@@ -1,15 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { LayoutChoice } from '../../contract';
-import type { Layout } from '../../layouts/layout';
+import type { LayoutChoice } from '../../contracts/layouts';
 import {
   createLayoutLoader,
   type LayoutLoader,
   layoutUrls,
-  readLayout,
   showLayouts,
 } from './layout-loader';
 
-const card = () => ({ element: {} as HTMLElement });
+interface TestLayout {
+  tag: string;
+}
+
+function readTestLayout(module: unknown): TestLayout {
+  return (module as { default: TestLayout }).default;
+}
 
 function choice(hasCss: boolean): LayoutChoice {
   return {
@@ -29,44 +33,6 @@ function recordingDataUrl() {
   };
   return { calls, dataUrl };
 }
-
-describe('readLayout', () => {
-  it('readLayout_MissingNoticeCard_ThrowsNamingIt', () => {
-    const module = { default: { cards: { question: card, finding: card } } };
-
-    expect(() => readLayout(module, 'mine')).toThrow(
-      'layout mine: cards.notice is missing or not a function',
-    );
-  });
-
-  it('readLayout_NoDefaultExport_Throws', () => {
-    expect(() => readLayout({}, 'mine')).toThrow(
-      'layout mine: the default export is missing or not an object',
-    );
-  });
-
-  it('readLayout_HeadNotFunction_Throws', () => {
-    const module = {
-      default: {
-        cards: { question: card, finding: card, notice: card },
-        head: 'banner',
-      },
-    };
-
-    expect(() => readLayout(module, 'mine')).toThrow(
-      'layout mine: head is not a function',
-    );
-  });
-
-  it('readLayout_ValidModule_ReturnsItsDefault', () => {
-    const layout = {
-      cards: { question: card, finding: card, notice: card },
-      head: () => undefined,
-    };
-
-    expect(readLayout({ default: layout }, 'mine')).toBe(layout);
-  });
-});
 
 describe('layoutUrls', () => {
   it('layoutUrls_WithCss_BuildsBothWithRevision', () => {
@@ -94,10 +60,8 @@ describe('layoutUrls', () => {
   });
 });
 
-function userLayout(): Layout {
-  return {
-    cards: { question: card, finding: card, notice: card },
-  } as unknown as Layout;
+function userLayout(): TestLayout {
+  return { tag: 'mine' };
 }
 
 interface FakeLink {
@@ -126,13 +90,17 @@ function fakeHead() {
   return { head: head as unknown as HTMLElement, appended };
 }
 
-function loaderWith(importModule: (url: string) => Promise<unknown>) {
+function loaderWith(
+  importModule: (url: string) => Promise<unknown>,
+  read: (module: unknown, name: string) => TestLayout = readTestLayout,
+) {
   const { head, appended } = fakeHead();
-  const loader = createLayoutLoader({
+  const loader = createLayoutLoader<TestLayout>({
     importModule,
     dataUrl: (path, revision) => `url:${path}@${revision}`,
-    defaultLayout: userLayout(),
+    defaultLayout: { tag: 'built-in' },
     head,
+    read,
   });
   return { loader, appended };
 }
@@ -187,14 +155,55 @@ describe('createLayoutLoader', () => {
 
     expect(appended[0]).toMatchObject({ removed: true });
   });
+
+  it('load_UserLayout_HandsReadTheModuleAndName', async () => {
+    const reads: [unknown, string][] = [];
+    const { loader } = loaderWith(
+      async () => ({ default: { tag: 'mine' } }),
+      (module, name) => {
+        reads.push([module, name]);
+        return { tag: 'read' };
+      },
+    );
+
+    const loaded = await loader.load(choice(false));
+
+    expect(reads).toEqual([[{ default: { tag: 'mine' } }, 'mine']]);
+    expect(loaded).toEqual({ tag: 'read' });
+  });
+
+  it('load_ReadThrows_RejectsAndKeepsStylesheet', async () => {
+    let fail = false;
+    const { loader, appended } = loaderWith(
+      async () => ({ default: userLayout() }),
+      (module) => {
+        if (fail) {
+          throw new Error('layout mine: cards.notice is missing');
+        }
+        return readTestLayout(module);
+      },
+    );
+    await loader.load(choice(true));
+
+    fail = true;
+    await expect(loader.load({ ...choice(true), revision: 5 })).rejects.toThrow(
+      'layout mine: cards.notice is missing',
+    );
+
+    expect(appended).toHaveLength(1);
+    expect(appended[0]).toMatchObject({
+      href: 'url:layouts/mine/layout.css@4',
+      removed: false,
+    });
+  });
 });
 
 // A loader whose every load waits for `finish(name)` or `fail(name)`.
 function heldLoader() {
-  const pending = new Map<string, PromiseWithResolvers<Layout>>();
-  const loader: LayoutLoader = {
+  const pending = new Map<string, PromiseWithResolvers<TestLayout>>();
+  const loader: LayoutLoader<TestLayout> = {
     load: (layoutChoice) => {
-      const held = Promise.withResolvers<Layout>();
+      const held = Promise.withResolvers<TestLayout>();
       pending.set(layoutChoice.name, held);
       return held.promise;
     },
@@ -208,8 +217,8 @@ function heldLoader() {
 }
 
 function showing(
-  loader: LayoutLoader,
-  setLayout: (layout: Layout, name: string) => void = () => undefined,
+  loader: LayoutLoader<TestLayout>,
+  setLayout: (layout: TestLayout, name: string) => void = () => undefined,
 ) {
   const answer = Promise.withResolvers<LayoutChoice>();
   let listener: (changed: LayoutChoice) => void = () => undefined;
@@ -229,6 +238,8 @@ function showing(
       shown.push(name);
     },
     log: (source, message) => logLines.push(`[${source}] ${message}`),
+    logSource: 'demo',
+    dataFolderLabel: "demo's data folder",
     toast: (text, tone) => toasts.push(`${tone}: ${text}`),
   });
   return {
@@ -259,8 +270,8 @@ describe('showLayouts', () => {
 
     await vi.waitFor(() => expect(page.shown).toEqual(['first', 'second']));
     expect(page.logLines).toEqual([
-      '[forms] layout first shown (cycled, revision 2)',
-      '[forms] layout second shown (reloaded, revision 2)',
+      '[demo] layout first shown (cycled, revision 2)',
+      '[demo] layout second shown (reloaded, revision 2)',
     ]);
     expect(page.toasts).toEqual(['info: Layout: first']);
   });
@@ -287,7 +298,7 @@ describe('showLayouts', () => {
     held.fail('mine');
 
     await vi.waitFor(() =>
-      expect(page.logLines).toEqual(['[forms] layout mine failed: broken']),
+      expect(page.logLines).toEqual(['[demo] layout mine failed: broken']),
     );
     expect(page.toasts).toEqual(['error: Layout mine failed: broken']);
     expect(page.shown).toEqual([]);
@@ -310,7 +321,7 @@ describe('showLayouts', () => {
 
     await vi.waitFor(() => expect(page.shown).toEqual(['second']));
     expect(page.logLines).toContain(
-      '[forms] layout first not shown: rebuild failed',
+      '[demo] layout first not shown: rebuild failed',
     );
   });
 
@@ -320,7 +331,22 @@ describe('showLayouts', () => {
     page.answer.reject(new Error('not started'));
 
     await vi.waitFor(() =>
-      expect(page.logLines).toEqual(['[forms] layout not read: not started']),
+      expect(page.logLines).toEqual(['[demo] layout not read: not started']),
+    );
+  });
+
+  it('showLayouts_Copied_ToastsTheDataFolderLabel', async () => {
+    const held = heldLoader();
+    const page = showing(held.loader);
+
+    page.change(named('mine-2', 'copied'));
+    await vi.waitFor(() => expect(held.isLoading('mine-2')).toBe(true));
+    held.finish('mine-2');
+
+    await vi.waitFor(() =>
+      expect(page.toasts).toEqual([
+        "success: Layout copied to layouts/mine-2 in demo's data folder",
+      ]),
     );
   });
 });
