@@ -201,7 +201,8 @@ Boundary rules:
 - [x] [Doc re-read](08-doc-re-read.md) — after 07
 
 ### Wave 7
-- [ ] [Final verification](09-final-verification.md) — after 08
+- [x] ~~[Final verification](09-final-verification.md)~~ — dropped: the user closed the run before the live run; its
+  checks and the self-test on the fixes are carried to `docs/features/followups.md`
 
 ## Run log
 

@@ -24,3 +24,15 @@
 - Sessions mode's live checks have not been run: rows appearing on connect with `No session selected`, the dimmed `Claude` / `Codex` label (wigley 1.4.0's relay sends it), a round selecting its row and Form tab with the `heading 0/<total>` status line, a background round's accent dot, `Option+Shift+o` / `Option+Shift+i` / `Option+o` / `Space k s` from the real keyboard (macOS turns Option+Shift+o into `Ø`), `Cmd+W` closing a row and the row returning at the end with its next round, the `Cancel this round?` prompt over the sidebar, and the narrow window (below 680 px the sidebar hides and `Space k s` opens it over the form). Also decide whether a row click should close that overlay; today it stays open until `Space k s` or a wider window.
 - When the docs editor lands: an editor key sequence bound only in other scopes is taken from vim in every editor, so a normal-mode Esc in a docs box runs nothing and logs `<Esc> has no bind in docs.…` while forms binds `<Esc>`; a new round selects its session's Form tab, switching away from a Docs tab mid-edit; and a row removed while its round stays open rebuilds that round's Form tab in a hidden body nothing drops after the round closes.
 - A Codex process started from a shell Claude Code spawned inherits `CLAUDECODE=1`, so its row reads `Claude`.
+- Forms layouts: run `npm run selftest` on the review fixes. The run closed before it could, while a dev
+  `npm start` held the app's data folder; `1b86e3e` rewrote the preview steps (`Space z l o` waits on
+  `[sessions] activated Layout preview`, then `<D-w>` and `n` prove the preview round is the selected session's
+  and dismiss the prompt), so they have never run live.
+- Forms layouts live checks, never run. Under `npm start`: `Space z l o` shows the sample with every card kind;
+  `Space z l c` toasts the copy path, and saving a `layout.css` added to the copy redraws the open card keeping its
+  answer; saving a relatively imported `parts.js` alone shows its change; a `layout.js` syntax error toasts and keeps
+  the last look, and fixing it brings the layout back; `Space z l n` / `p` cycle and the choice survives a restart;
+  `Space z l o` twice swaps in the newest saved round, whose submit removes the row and reaches no agent; an editor
+  completes the kit's parts in a copied `layout.js` from `layouts/layout.d.ts`. In a packaged build
+  (`npm run package`, dev instance closed): repeat the copy-and-css and cycle-and-restart checks, since the
+  `wigley-data:` scheme, CORS and the CSP under `file://` are unproven.
