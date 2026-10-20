@@ -10,6 +10,7 @@ import type {
   PageApi,
   PageCommandContext,
   PageServices,
+  PluginAreas,
   PluginManifest,
   ScopeInfo,
   UntypedEvents,
@@ -24,7 +25,8 @@ import type { PendingKeysHub } from '../pending-keys';
 // qualified scopes; `pendingKeys` is the page's one pending-key report;
 // `keymap` is the merged keymap; `commandInfo` and `scopes` are as main serves
 // them; `bus` is the page load's event bus; `modes` is the core's mode
-// registry, which takes qualified ids.
+// registry, which takes qualified ids. `areas` holds every area, `main`
+// included; plugins get every area but `main`.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
@@ -44,13 +46,13 @@ export interface PageApiDeps {
 
 // One plugin's page API: its channel and its events run under the manifest's
 // id, and the scopes it sets and pushes and the modes it adds are qualified by
-// it.
+// it. Its areas leave out `main`, which only the mode registry fills.
 export function createPageApi(
   manifest: PluginManifest,
   deps: PageApiDeps,
 ): PageApi<PluginManifest, ChannelShape, UntypedEvents, UntypedEvents> {
   return {
-    areas: deps.areas,
+    areas: pluginAreas(deps.areas),
     channel: {
       invoke: (method, ...args) =>
         deps.bridge.invoke(manifest.id, method, args),
@@ -82,5 +84,15 @@ export function createPageApi(
     services: deps.services,
     dependency: deps.dependency,
     dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
+  };
+}
+
+function pluginAreas(areas: Record<AreaName, Area>): PluginAreas {
+  return {
+    activityBar: areas.activityBar,
+    sideBar: areas.sideBar,
+    panel: areas.panel,
+    statusBar: areas.statusBar,
+    overlay: areas.overlay,
   };
 }

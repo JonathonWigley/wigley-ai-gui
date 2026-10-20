@@ -279,6 +279,15 @@ export function activeRound(state: FormsState): RoundState | null {
   );
 }
 
+// The session's round; main keeps one open round per session, so the first
+// match is the only one.
+export function roundOfSession(
+  state: FormsState,
+  sessionId: string | null,
+): RoundState | undefined {
+  return state.rounds.find((round) => round.sessionId === sessionId);
+}
+
 export function railItems(round: Round): RailItem[] {
   return RAIL_ORDER.flatMap((kind) =>
     ROUND_ITEMS[kind](round).map((_, i): RailItem => ({ kind, index: i + 1 })),
@@ -593,9 +602,7 @@ function activateSession(
   if (sessionId === state.activeSessionId) {
     return state;
   }
-  const round = state.rounds.find(
-    (candidate) => candidate.sessionId === sessionId,
-  );
+  const round = roundOfSession(state, sessionId);
   return {
     ...state,
     activeSessionId: sessionId,

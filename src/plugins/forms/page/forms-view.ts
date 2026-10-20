@@ -1,7 +1,7 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { Area, AreaName } from '../../../contracts/plugin';
+import type { PluginAreas } from '../../../contracts/plugin';
 import { appendKeys, button, element } from '../../../shared/page/dom';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -18,6 +18,7 @@ import {
   type FormsAction,
   type FormsState,
   type RoundState,
+  roundOfSession,
   saveState,
 } from './form-state';
 import type { FormsStore } from './forms-store';
@@ -27,7 +28,7 @@ import { modeLabel, saveLabel, sessionTitle } from './view-model';
 // `beforeClose` answers whether a session may close now; `formShown` runs
 // each time a session's Form tab becomes the visible tab.
 export interface FormsViewDeps {
-  areas: Record<AreaName, Area>;
+  areas: Pick<PluginAreas, 'statusBar' | 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
   beforeClose(sessionId: string): boolean;
   formShown(): void;
@@ -45,12 +46,15 @@ interface ActiveLayout {
   name: string;
 }
 
-// `forgetSession` drops a session's Form tab entry once sessions dropped the
-// tab, so the session's next round adds a new one. `isFormShown` reads whether
-// a Form tab is the visible tab. `setLayout` rebuilds every open round view
-// with `layout`, and rounds that open later are built with it.
+// `forgetSession` drops a session's Form tab entry and destroys its round
+// views once sessions dropped the tab, so the next render rebuilds a round
+// still open for the session in a new Form tab. `showForm` selects the
+// session's Form tab, a no-op when it has none. `isFormShown` reads whether a
+// Form tab is the visible tab. `setLayout` rebuilds every open round view with
+// `layout`, and rounds that open later are built with it.
 export interface FormsView {
   forgetSession(sessionId: string): void;
+  showForm(sessionId: string): void;
   isFormShown(): boolean;
   setLayout(layout: Layout, layoutName: string): void;
 }
@@ -102,7 +106,11 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   boxes.onChange(() => status.update(store.get()));
   render();
   return {
-    forgetSession: (sessionId) => formTabs.delete(sessionId),
+    forgetSession(sessionId) {
+      formTabs.delete(sessionId);
+      destroySessionRoundViews(sessionId, store.get(), roundViews, deps);
+    },
+    showForm: (sessionId) => formTabs.get(sessionId)?.handle.select(),
     isFormShown: () =>
       [...formTabs.values()].some((tab) => tab.handle.isVisible()),
     setLayout(layout, layoutName) {
@@ -126,11 +134,9 @@ function syncRoundViews(
   deps: FormsViewDeps,
   dispatch: (action: FormsAction) => void,
 ) {
-  for (const [roundId, roundView] of roundViews) {
+  for (const roundId of roundViews.keys()) {
     if (!state.rounds.some((round) => round.roundId === roundId)) {
-      deps.boxes.destroyRound(roundId);
-      roundView.element.remove();
-      roundViews.delete(roundId);
+      destroyRoundView(roundId, roundViews, deps);
     }
   }
   for (const round of state.rounds) {
@@ -143,6 +149,30 @@ function syncRoundViews(
       formTab.handle.select();
     }
   }
+}
+
+function destroySessionRoundViews(
+  sessionId: string,
+  state: FormsState,
+  roundViews: Map<string, RoundView>,
+  deps: Pick<FormsViewDeps, 'boxes'>,
+) {
+  for (const round of state.rounds) {
+    if (round.sessionId === sessionId && roundViews.has(round.roundId)) {
+      destroyRoundView(round.roundId, roundViews, deps);
+    }
+  }
+}
+
+// Destroys the round's editors and removes its view.
+function destroyRoundView(
+  roundId: string,
+  roundViews: Map<string, RoundView>,
+  deps: Pick<FormsViewDeps, 'boxes'>,
+) {
+  deps.boxes.destroyRound(roundId);
+  roundViews.get(roundId)?.element.remove();
+  roundViews.delete(roundId);
 }
 
 function formTabOf(
@@ -204,9 +234,7 @@ function showRound(
 // sends the tab's status, the round's title or '' with none, when it changed.
 function syncFormTabs(state: FormsState, formTabs: Map<string, FormTab>) {
   for (const [sessionId, formTab] of formTabs) {
-    const round = state.rounds.find(
-      (candidate) => candidate.sessionId === sessionId,
-    );
+    const round = roundOfSession(state, sessionId);
     formTab.idle.hidden = round !== undefined;
     const status = round === undefined ? '' : sessionTitle(round);
     if (formTab.status !== status) {

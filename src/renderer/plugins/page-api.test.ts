@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Bridge } from '../../contracts/bridge';
 import type {
+  Area,
   Mode,
   Modes,
   PageChannel,
@@ -122,6 +123,29 @@ describe('createPageApi', () => {
 
     expect(emitted).toEqual([3]);
     expect(heard).toEqual([4]);
+  });
+
+  it('hands the plugin every area but main', () => {
+    const area = (): Area => ({ contribute: () => ({ remove: () => {} }) });
+    const areas: PageApiDeps['areas'] = {
+      activityBar: area(),
+      sideBar: area(),
+      main: area(),
+      panel: area(),
+      statusBar: area(),
+      overlay: area(),
+    };
+
+    const api = createPageApi(manifest, deps({ areas }));
+
+    expect(api.areas).toEqual({
+      activityBar: areas.activityBar,
+      sideBar: areas.sideBar,
+      panel: areas.panel,
+      statusBar: areas.statusBar,
+      overlay: areas.overlay,
+    });
+    expect(api.areas).not.toHaveProperty('main');
   });
 
   it("qualifies a mode's id by the plugin", () => {

@@ -173,7 +173,14 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       areas: api.areas,
       sessions,
       beforeClose: (sessionId) =>
-        guardClose({ store, log: services.log }, sessionId),
+        guardClose(
+          {
+            store,
+            log: services.log,
+            showForm: (formSessionId) => view.showForm(formSessionId),
+          },
+          sessionId,
+        ),
       formShown: () => api.keys.setScope(store.get().view),
       store,
       boxes,

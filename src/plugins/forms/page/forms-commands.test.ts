@@ -103,6 +103,10 @@ function setup(
     },
     log,
   });
+  // Each Form tab the guard selected, with the store's view at that moment.
+  const shownForms: { sessionId: string; view: string }[] = [];
+  const showForm = (sessionId: string) =>
+    shownForms.push({ sessionId, view: store.get().view });
   const run = (command: FormsCommand, context: PageCommandContext = {}) =>
     handlers[command](context);
   const round = () => {
@@ -129,7 +133,9 @@ function setup(
       layoutFailure = error;
     },
     closedSessions,
-    guardClose: (sessionId: string) => guardClose({ store, log }, sessionId),
+    shownForms,
+    guardClose: (sessionId: string) =>
+      guardClose({ store, log, showForm }, sessionId),
     leaves: () => leaves,
     // Focuses a box as the user clicking into it would, outside any command.
     setActive: (box: BoxRef) => {
@@ -520,13 +526,23 @@ describe('formsCommandHandlers', () => {
   });
 
   it('the close guard lets a session with no round close', () => {
-    const { store, logs, guardClose } = setup();
+    const { store, logs, shownForms, guardClose } = setup();
     const before = store.get();
 
     expect(guardClose('other')).toBe(true);
 
     expect(store.get()).toBe(before);
     expect(logs).toEqual([]);
+    expect(shownForms).toEqual([]);
+  });
+
+  it("the close guard selects the session's Form tab before the prompt shows", () => {
+    const { store, shownForms, guardClose } = setup();
+
+    guardClose('r1-session');
+
+    expect(shownForms).toEqual([{ sessionId: 'r1-session', view: 'forms' }]);
+    expect(store.get().view).toBe('confirm');
   });
 
   it('the close guard opens the prompt and keeps a session with an open round', () => {
@@ -541,13 +557,14 @@ describe('formsCommandHandlers', () => {
   });
 
   it("the close guard keeps a background round's session and logs the refusal", () => {
-    const { store, logs, guardClose } = setup();
+    const { store, logs, shownForms, guardClose } = setup();
     store.dispatch({ type: 'roundShown', round: presentedRound('r2') });
     const before = store.get();
 
     expect(guardClose('r2-session')).toBe(false);
 
     expect(store.get()).toBe(before);
+    expect(shownForms).toEqual([]);
     expect(logs).toEqual([
       'session close kept: project · r2 is open in the background',
     ]);

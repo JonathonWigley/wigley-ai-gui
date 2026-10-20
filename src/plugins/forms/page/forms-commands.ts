@@ -31,6 +31,7 @@ import {
   itemAnswer,
   type RailItem,
   railPosition,
+  roundOfSession,
   unansweredItem,
 } from './form-state';
 import type { FormsStore } from './forms-store';
@@ -406,17 +407,21 @@ function jumpToUnanswered(
   jumpToItem(deps, context, item);
 }
 
-// A session closes only once its round is gone: with its round active it asks
-// to cancel the round, and confirming closes the session. A round open in the
-// background keeps its session with no prompt, and the refusal is logged.
-export function guardClose(
-  deps: Pick<FormsCommandDeps, 'store' | 'log'>,
-  sessionId: string,
-): boolean {
+// `showForm` selects the session's Form tab.
+export interface GuardCloseDeps extends Pick<
+  FormsCommandDeps,
+  'store' | 'log'
+> {
+  showForm(sessionId: string): void;
+}
+
+// A session closes only once its round is gone: with its round active it
+// selects the session's Form tab, so the confirm scope's keys are in force,
+// and asks to cancel the round; confirming closes the session. A round open in
+// the background keeps its session with no prompt, and the refusal is logged.
+export function guardClose(deps: GuardCloseDeps, sessionId: string): boolean {
   const { store } = deps;
-  const round = store
-    .get()
-    .rounds.find((candidate) => candidate.sessionId === sessionId);
+  const round = roundOfSession(store.get(), sessionId);
   if (round === undefined) {
     return true;
   }
@@ -427,6 +432,7 @@ export function guardClose(
     );
     return false;
   }
+  deps.showForm(sessionId);
   const wasConfirm = store.get().view === 'confirm';
   store.dispatch({ type: 'askClose', sessionId });
   if (!wasConfirm && store.get().view === 'confirm') {

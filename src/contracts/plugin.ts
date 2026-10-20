@@ -160,6 +160,10 @@ export interface Area {
   contribute(element: HTMLElement): { remove(): void };
 }
 
+// The areas a plugin contributes to: every area but `main`, which belongs to
+// the modes and is filled through `modes.add`.
+export type PluginAreas = Record<Exclude<AreaName, 'main'>, Area>;
+
 // A view that fills the window above the status bar; the core shows one mode at
 // a time. `shown` runs each time this mode becomes the shown one, the first
 // mode's at its `add` included; the mode's plugin sets its base key scope
@@ -243,7 +247,7 @@ export interface PageApi<
   Ev extends EventShape = Record<never, never>,
   Heard extends EventShape = Record<never, never>,
 > {
-  areas: Record<AreaName, Area>;
+  areas: PluginAreas;
   channel: PageChannel<Ch>;
   events: PluginEvents<Ev, Heard>;
   keys: {
