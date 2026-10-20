@@ -143,9 +143,10 @@ function replaceText(view: EditorView, text: string) {
 }
 
 // A key goes through the editor's own keydown handling, so vim runs it in
-// any mode and CodeMirror's keymap takes Enter or Backspace. A key event
-// built in script types no text, so a character neither handles in insert
-// mode is inserted here, as the browser inserts a typed one.
+// any mode (in insert mode Enter through the host's insert map, whose
+// fallback breaks the line) and CodeMirror's keymap takes Backspace. A key
+// event built in script types no text, so a character neither handles in
+// insert mode is inserted here, as the browser inserts a typed one.
 function typeKey(view: EditorView, cm: VimEditor, key: string) {
   const event = new KeyboardEvent('keydown', {
     key,

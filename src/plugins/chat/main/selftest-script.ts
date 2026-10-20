@@ -62,8 +62,8 @@ const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 // G follows the latest. Space c e opens Effort on Medium, j Enter sets High;
 // Space c e again, / and low filter to Low, and Enter in the filter's insert
 // mode sets it. A held turn ends on Ctrl+c in the box with the fake's notice;
-// Space k n opens the start prompt and Esc closes it. A second held turn makes Cmd+W ask, and
-// y ends the session.
+// Space k n opens the start prompt and Esc closes it. A second held turn
+// makes Cmd+W ask, and y ends the session.
 const STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
   { keys: ['y'], expect: '[chat] no pending permission in chat-second' },

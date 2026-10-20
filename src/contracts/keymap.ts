@@ -11,8 +11,9 @@ export interface EditorRemap {
 
 // A bind that runs a command in the editor it fired in, while `scope` is in
 // force; `any` fires in every scope. It fires in `mode`, normal when absent.
-// An insert-mode bind's keys are one key, and in a scope it has no bind the
-// key does what it does unbound (Enter breaks the line).
+// An insert-mode bind's keys are one key the host can type unbound, today
+// only `<CR>`, and in a scope it has no bind the key does what it does unbound
+// (Enter breaks the line).
 export interface EditorBind {
   keys: string;
   scope: ViewScope;

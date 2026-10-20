@@ -169,9 +169,9 @@ export interface SessionTabView {
 // `takeOver` selects the tab inside its session and returns a release; the
 // first release selects the tab selected before the take over, unless a tab
 // was selected since (by the user or `select`, even back to this one), another
-// take over holds the session, or that tab is gone. `isVisible` reads, at the moment
-// of the call, whether this tab is the visible tab. Each call on a tab already
-// dropped does nothing.
+// tab's take over holds the session, or that tab is gone. `isVisible` reads,
+// at the moment of the call, whether this tab is the visible tab. Each call on
+// a tab already dropped does nothing.
 export interface SessionTabHandle {
   setStatus(status: string): void;
   select(): void;
