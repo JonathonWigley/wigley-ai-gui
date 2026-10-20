@@ -89,7 +89,7 @@ function fakeSessions(calls: string[]) {
     connect: () => {
       throw new Error('the presenter connected a session');
     },
-    showTab: (sessionId) => calls.push(`showTab ${sessionId}`),
+    markRound: (sessionId) => calls.push(`markRound ${sessionId}`),
     activate: (sessionId) => calls.push(`activate ${sessionId}`),
     addCloseGuard: (mayClose) => guards.push(mayClose),
   };
@@ -147,7 +147,7 @@ describe('createChannelPresenter', () => {
 
     presenter.show(ROUND, fakeListener().listener);
 
-    expect(calls).toEqual(['showTab app-1', 'send roundShown']);
+    expect(calls).toEqual(['markRound app-1', 'send roundShown']);
     expect(page.sent).toEqual([['roundShown', ROUND]]);
     expect(attention.announced.map(({ title, body }) => [title, body])).toEqual(
       [['New review round', 'wigley-ai-gui · Pick a theme']],
@@ -166,7 +166,7 @@ describe('createChannelPresenter', () => {
 
     attention.announced[0].onClick();
 
-    expect(calls).toEqual(['showTab app-1', 'activate app-1']);
+    expect(calls).toEqual(['markRound app-1', 'activate app-1']);
     expect(window.shown()).toBe(1);
   });
 

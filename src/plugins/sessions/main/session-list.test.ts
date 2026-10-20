@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type {
   AgentSession,
+  ConnectedSession,
+  Harness,
   SessionInfo,
   SessionsState,
   ToolCallContext,
@@ -12,8 +14,11 @@ import { createSessionList } from './session-list';
 
 const RESULT: ToolResult = { content: [{ type: 'text', text: 'done' }] };
 
-function info(projectDir: string | null): SessionInfo {
-  return { sessionId: null, projectDir, deadlineSeconds: null };
+function info(
+  projectDir: string | null,
+  harness: Harness | null = null,
+): SessionInfo {
+  return { sessionId: null, projectDir, deadlineSeconds: null, harness };
 }
 
 function tool(name: string): ToolDefinition {
@@ -25,6 +30,9 @@ function setUp() {
   const emitted: [string, unknown][] = [];
   const states: SessionsState[] = [];
   const logged: string[] = [];
+  const activated: string[] = [];
+  // `activated <id>` and `stateChanged`, in the order the list called them.
+  const calls: string[] = [];
   const list = createSessionList({
     randomHex: () => {
       hexCount++;
@@ -32,9 +40,16 @@ function setUp() {
     },
     log: (source, message) => logged.push(`[${source}] ${message}`),
     emit: (event, data) => emitted.push([event, data]),
-    stateChanged: (state) => states.push(state),
+    stateChanged: (state) => {
+      states.push(state);
+      calls.push('stateChanged');
+    },
+    activated: (sessionId) => {
+      activated.push(sessionId);
+      calls.push(`activated ${sessionId}`);
+    },
   });
-  return { list, emitted, states, logged };
+  return { list, emitted, states, logged, activated, calls };
 }
 
 // A contribution's start: records each session it starts for, and each tool
@@ -59,7 +74,7 @@ function fakeContribution() {
 }
 
 function labels(state: SessionsState): string[] {
-  return state.tabs.map((tab) => tab.label);
+  return state.rows.map((row) => row.label);
 }
 
 describe('createSessionList', () => {
@@ -153,127 +168,149 @@ describe('createSessionList', () => {
     expect(list.tools().map((each) => each.name)).toEqual(['a', 'b', 'c']);
   });
 
+  it('adds an unselected, unmarked row for each connected session', () => {
+    const { list, states } = setUp();
+
+    list.connect(info('/work/x'));
+    list.connect(info('/work/x'));
+
+    const expected: SessionsState = {
+      rows: [
+        {
+          sessionId: '00000001',
+          label: 'x',
+          harness: null,
+          marked: false,
+          projectDir: '/work/x',
+          hostSessionId: null,
+        },
+        {
+          sessionId: '00000002',
+          label: 'x 2',
+          harness: null,
+          marked: false,
+          projectDir: '/work/x',
+          hostSessionId: null,
+        },
+      ],
+      selectedSessionId: null,
+    };
+    expect(list.state()).toEqual(expected);
+    expect(states).toHaveLength(2);
+    expect(states[1]).toEqual(expected);
+  });
+
   it('numbers sessions of one folder by the lowest free number', () => {
     const { list } = setUp();
-    const a = list.connect(info('/work/x'));
+    list.connect(info('/work/x'));
     const b = list.connect(info('/work/x'));
-    const c = list.connect(info('/work/x'));
-    for (const connected of [a, b, c]) {
-      list.showTab(connected.session.id);
-    }
+    list.connect(info('/work/x'));
     expect(labels(list.state())).toEqual(['x', 'x 2', 'x 3']);
 
     b.end();
-    const d = list.connect(info('/work/x'));
-    list.showTab(d.session.id);
+    list.connect(info('/work/x'));
 
     expect(labels(list.state())).toEqual(['x', 'x 3', 'x 2']);
   });
 
   it('numbers two folders with one name as one group', () => {
     const { list } = setUp();
-    const first = list.connect(info('/a/x'));
-    const second = list.connect(info('/b/x'));
 
-    list.showTab(first.session.id);
-    list.showTab(second.session.id);
+    list.connect(info('/a/x'));
+    list.connect(info('/b/x'));
 
     expect(labels(list.state())).toEqual(['x', 'x 2']);
   });
 
   it('labels a session with no project folder session', () => {
     const { list } = setUp();
-    const first = list.connect(info(null));
-    const second = list.connect(info(null));
 
-    list.showTab(first.session.id);
-    list.showTab(second.session.id);
+    list.connect(info(null));
+    list.connect(info(null));
 
     expect(labels(list.state())).toEqual(['session', 'session 2']);
   });
 
-  it('shows the first tab active and later tabs marked', () => {
+  it('labels a codex session with no project folder Codex session', () => {
     const { list } = setUp();
-    const first = list.connect(info('/work/x'));
-    const second = list.connect(info('/work/x'));
 
-    list.showTab(first.session.id);
-    list.showTab(second.session.id);
+    list.connect(info(null, 'codex'));
+    list.connect(info(null, 'codex'));
+    list.connect(info(null, 'claude'));
 
-    expect(list.state()).toEqual({
-      tabs: [
-        { sessionId: '00000001', label: 'x', marked: false },
-        { sessionId: '00000002', label: 'x 2', marked: true },
-      ],
-      activeSessionId: '00000001',
-    });
+    expect(labels(list.state())).toEqual([
+      'Codex session',
+      'Codex session 2',
+      'session',
+    ]);
   });
 
-  it('marks a background tab when it is shown again and leaves the active tab alone', () => {
+  it("selects the round's row when none is selected and marks a later one", () => {
+    const { list } = setUp();
+    const a = list.connect(info('/work/x'));
+    const b = list.connect(info('/work/x'));
+
+    list.markRound(a.session.id);
+    list.markRound(b.session.id);
+
+    const { rows, selectedSessionId } = list.state();
+    expect(selectedSessionId).toBe(a.session.id);
+    expect(rows.map((row) => row.marked)).toEqual([false, true]);
+  });
+
+  it("selects the second session's row when its round arrives first", () => {
+    const { list } = setUp();
+    list.connect(info('/work/x'));
+    const b = list.connect(info('/work/x'));
+
+    list.markRound(b.session.id);
+
+    const { rows, selectedSessionId } = list.state();
+    expect(selectedSessionId).toBe(b.session.id);
+    expect(rows.map((row) => row.marked)).toEqual([false, false]);
+  });
+
+  it('sends nothing for the selected row or a row already marked', () => {
     const { list, states } = setUp();
-    const first = list.connect(info('/work/x'));
-    const second = list.connect(info('/work/x'));
-    list.showTab(first.session.id);
-    list.showTab(second.session.id);
-    list.activate(second.session.id);
-    list.activate(first.session.id);
+    const a = list.connect(info('/work/x'));
+    const b = list.connect(info('/work/x'));
+    list.markRound(a.session.id);
+    list.markRound(b.session.id);
     const sentBefore = states.length;
+    const before = list.state();
 
-    list.showTab(first.session.id);
+    list.markRound(a.session.id);
+    list.markRound(b.session.id);
+
     expect(states).toHaveLength(sentBefore);
-
-    list.showTab(second.session.id);
-    expect(list.state().tabs[1]).toEqual({
-      sessionId: '00000002',
-      label: 'x 2',
-      marked: true,
-    });
+    expect(list.state()).toEqual(before);
   });
 
-  it('activates a tab and clears its mark', () => {
+  it('selects a row when the selected one closed and none is left selected', () => {
     const { list } = setUp();
-    const first = list.connect(info('/work/x'));
-    const second = list.connect(info('/work/x'));
-    list.showTab(first.session.id);
-    list.showTab(second.session.id);
+    const a = list.connect(info('/work/x'));
+    list.markRound(a.session.id);
+    list.closeSession(a.session.id);
+    expect(list.state().selectedSessionId).toBeNull();
+    const b = list.connect(info('/work/x'));
 
-    list.activate(second.session.id);
+    list.markRound(b.session.id);
 
-    expect(list.state().activeSessionId).toBe('00000002');
-    expect(list.state().tabs[1].marked).toBe(false);
+    expect(list.state().selectedSessionId).toBe(b.session.id);
+    expect(list.state().rows.map((row) => row.marked)).toEqual([false]);
   });
 
-  it('moves to the right neighbour, else the left, when the active tab closes', () => {
-    const { list } = setUp();
-    const [a, b, c] = [1, 2, 3].map(() => list.connect(info('/work/x')));
-    for (const connected of [a, b, c]) {
-      list.showTab(connected.session.id);
-    }
-
-    list.closeTab(a.session.id);
-    expect(list.state().activeSessionId).toBe(b.session.id);
-    expect(list.state().tabs[0].marked).toBe(false);
-
-    list.activate(c.session.id);
-    list.closeTab(c.session.id);
-    expect(list.state().activeSessionId).toBe(b.session.id);
-
-    list.closeTab(b.session.id);
-    expect(list.state()).toEqual({ tabs: [], activeSessionId: null });
-  });
-
-  it('keeps a session connected after its tab closes and brings the tab back at the end', async () => {
+  it('brings a closed row back at the end on its next round', async () => {
     const { list } = setUp();
     const contribution = fakeContribution();
     list.contributeTools([tool('a')], contribution.start);
-    const first = list.connect(info('/work/x'));
-    const second = list.connect(info('/work/x'));
-    list.showTab(first.session.id);
-    list.showTab(second.session.id);
+    const a = list.connect(info('/work/x'));
+    const b = list.connect(info('/work/x'));
+    list.markRound(a.session.id);
+    list.closeSession(b.session.id);
 
-    list.closeTab(first.session.id);
-    list.showTab(first.session.id);
-    await first.call(
+    list.markRound(b.session.id);
+    await b.call(
       'a',
       {},
       {
@@ -282,14 +319,66 @@ describe('createSessionList', () => {
       },
     );
 
-    expect(list.state().tabs.map((tab) => tab.sessionId)).toEqual([
-      second.session.id,
-      first.session.id,
+    const { rows } = list.state();
+    expect(rows.map((row) => row.sessionId)).toEqual([
+      a.session.id,
+      b.session.id,
     ]);
+    expect(rows.map((row) => row.marked)).toEqual([false, true]);
     expect(contribution.calls.map((call) => call.name)).toEqual(['a']);
   });
 
-  it('ends tool sessions, drops the tab and emits ended when a session ends', () => {
+  it('activates a row, clears its mark and reports activated first', () => {
+    const { list, activated, calls } = setUp();
+    const a = list.connect(info('/work/x'));
+    const b = list.connect(info('/work/x'));
+    list.markRound(a.session.id);
+    list.markRound(b.session.id);
+    const callsBefore = calls.length;
+
+    list.activate(b.session.id);
+
+    expect(activated).toEqual(['00000002']);
+    expect(calls.slice(callsBefore)).toEqual([
+      'activated 00000002',
+      'stateChanged',
+    ]);
+    expect(list.state().selectedSessionId).toBe('00000002');
+    expect(list.state().rows[1].marked).toBe(false);
+  });
+
+  it('reports activated for the selected row and sends nothing', () => {
+    const { list, states, activated } = setUp();
+    const a = list.connect(info('/work/x'));
+    list.markRound(a.session.id);
+    const sentBefore = states.length;
+
+    list.activate(a.session.id);
+
+    expect(activated).toEqual(['00000001']);
+    expect(states).toHaveLength(sentBefore);
+  });
+
+  it('moves to the right neighbour, else the left, when the selected row closes', () => {
+    const { list } = setUp();
+    const [a, b, c] = [1, 2, 3].map(() => list.connect(info('/work/x')));
+    for (const connected of [a, b, c]) {
+      list.markRound(connected.session.id);
+    }
+
+    list.closeSession(a.session.id);
+    expect(list.state().selectedSessionId).toBe(b.session.id);
+    expect(list.state().rows[0].marked).toBe(false);
+
+    list.activate(c.session.id);
+    list.closeSession(c.session.id);
+    expect(list.state().selectedSessionId).toBe(b.session.id);
+
+    list.closeSession(b.session.id);
+    expect(list.state()).toEqual({ rows: [], selectedSessionId: null });
+  });
+
+  it('ends tool sessions, drops the row and emits ended when a session ends', () => {
     const { list, emitted, states } = setUp();
     const firstContribution = fakeContribution();
     const secondContribution = fakeContribution();
@@ -297,8 +386,8 @@ describe('createSessionList', () => {
     list.contributeTools([tool('b')], secondContribution.start);
     const first = list.connect(info('/work/x'));
     const second = list.connect(info('/work/x'));
-    list.showTab(first.session.id);
-    list.showTab(second.session.id);
+    list.markRound(first.session.id);
+    list.markRound(second.session.id);
 
     first.end();
 
@@ -306,8 +395,17 @@ describe('createSessionList', () => {
     expect(secondContribution.ends()).toBe(1);
     expect(emitted.at(-1)).toEqual(['ended', { sessionId: '00000001' }]);
     expect(list.state()).toEqual({
-      tabs: [{ sessionId: '00000002', label: 'x 2', marked: false }],
-      activeSessionId: '00000002',
+      rows: [
+        {
+          sessionId: '00000002',
+          label: 'x 2',
+          harness: null,
+          marked: false,
+          projectDir: '/work/x',
+          hostSessionId: null,
+        },
+      ],
+      selectedSessionId: '00000002',
     });
 
     const sentBefore = states.length;
@@ -336,64 +434,69 @@ describe('createSessionList', () => {
     expect(emitted).toEqual([]);
   });
 
-  it('keeps a tab a close guard refuses, with a log line and false, until every guard allows it', () => {
+  it('keeps a row a close guard refuses, with a log line and false, until every guard allows it', () => {
     const { list, states, logged } = setUp();
     const connected = list.connect(info('/work/x'));
     const id = connected.session.id;
-    list.showTab(id);
     let roundOpen = true;
     list.addCloseGuard(() => true);
     list.addCloseGuard((sessionId) => !(sessionId === id && roundOpen));
     const sentBefore = states.length;
 
-    expect(list.closeTab(id)).toBe(false);
+    expect(list.closeSession(id)).toBe(false);
 
-    expect(list.state().tabs.map((tab) => tab.sessionId)).toEqual([id]);
+    expect(list.state().rows.map((row) => row.sessionId)).toEqual([id]);
     expect(states).toHaveLength(sentBefore);
     expect(logged).toEqual([
-      `[sessions] closeTab for session ${id} kept by a close guard`,
+      `[sessions] closeSession for session ${id} kept by a close guard`,
     ]);
     roundOpen = false;
-    expect(list.closeTab(id)).toBe(true);
-    expect(list.state().tabs).toEqual([]);
+    expect(list.closeSession(id)).toBe(true);
+    expect(list.state().rows).toEqual([]);
   });
 
-  it('drops the tab of a session that ends whatever the close guards say', () => {
+  it('drops the row of a session that ends whatever the close guards say', () => {
     const { list } = setUp();
     const connected = list.connect(info('/work/x'));
-    list.showTab(connected.session.id);
     list.addCloseGuard(() => false);
 
     connected.end();
 
-    expect(list.state().tabs).toEqual([]);
+    expect(list.state().rows).toEqual([]);
   });
 
-  it('ignores unknown sessions and tabs it does not hold, with a log line', () => {
-    const { list, states, logged } = setUp();
-    list.connect(info('/work/x'));
+  it('ignores unknown sessions and rows it does not hold, with a log line', () => {
+    const { list, states, logged, activated } = setUp();
+    const connected = list.connect(info('/work/x'));
+    list.closeSession(connected.session.id);
+    const sentBefore = states.length;
 
-    list.showTab('ffffffff');
-    expect(list.closeTab('00000001')).toBe(false);
+    list.markRound('ffffffff');
+    list.activate(connected.session.id);
+    expect(list.closeSession(connected.session.id)).toBe(false);
 
     expect(logged).toEqual([
-      '[sessions] showTab for unknown session ffffffff ignored',
-      '[sessions] closeTab for session 00000001 with no tab ignored',
+      '[sessions] markRound for unknown session ffffffff ignored',
+      '[sessions] activate for session 00000001 with no row ignored',
+      '[sessions] closeSession for session 00000001 with no row ignored',
     ]);
-    expect(states).toEqual([]);
+    expect(activated).toEqual([]);
+    expect(states).toHaveLength(sentBefore);
   });
 
   it('sends the whole state on every change', () => {
     const { list, states } = setUp();
-    const first = list.connect(info('/work/x'));
-    const second = list.connect(info('/work/x'));
     const taken: SessionsState[] = [];
+    const connected: ConnectedSession[] = [];
+    const id = (index: number) => connected[index].session.id;
     const changes = [
-      () => list.showTab(first.session.id),
-      () => list.showTab(second.session.id),
-      () => list.activate(second.session.id),
-      () => list.closeTab(second.session.id),
-      () => first.end(),
+      () => connected.push(list.connect(info('/work/x'))),
+      () => connected.push(list.connect(info('/work/x'))),
+      () => list.markRound(id(0)),
+      () => list.markRound(id(1)),
+      () => list.activate(id(1)),
+      () => list.closeSession(id(1)),
+      () => connected[0].end(),
     ];
 
     for (const change of changes) {

@@ -30,10 +30,13 @@ function createList(api: SessionsApi): SessionList {
     log: api.services.log,
     emit: (event, data) => api.events.emit(event, data),
     stateChanged: (state) => api.channel.send('stateChanged', state),
+    activated: (sessionId) => api.channel.send('activated', { sessionId }),
   });
   api.channel.handle('state', () => list.state());
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
-  api.channel.handle('closeTab', (sessionId) => list.closeTab(sessionId));
+  api.channel.handle('closeSession', (sessionId) =>
+    list.closeSession(sessionId),
+  );
   return list;
 }
 
@@ -60,9 +63,9 @@ function openRelay(api: SessionsApi, list: SessionList) {
 }
 
 // Owns agent sessions: the relay they connect through, the tools other plugins
-// contribute for them, and their tabs. Each contribution rewrites the endpoint
-// files, so a relay that starts the app finds every tool listed. In the
-// self-test it opens no relay and writes no file.
+// contribute for them, and their sidebar rows. Each contribution rewrites the
+// endpoint files, so a relay that starts the app finds every tool listed. In
+// the self-test it opens no relay and writes no file.
 export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -81,7 +84,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
         }
       },
       connect: (info) => list.connect(info),
-      showTab: (sessionId) => list.showTab(sessionId),
+      markRound: (sessionId) => list.markRound(sessionId),
       activate: (sessionId) => list.activate(sessionId),
       addCloseGuard: (mayClose) => list.addCloseGuard(mayClose),
     };

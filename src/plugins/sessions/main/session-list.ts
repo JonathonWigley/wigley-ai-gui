@@ -8,8 +8,8 @@ import type {
   SessionInfo,
   SessionsMainEvents,
   SessionsMainExports,
+  SessionRow,
   SessionsState,
-  SessionTab,
   ToolCallContext,
   ToolDefinition,
   ToolResult,
@@ -21,15 +21,17 @@ export interface SessionListDeps {
   log: Log;
   emit: PluginEvents<SessionsMainEvents>['emit'];
   stateChanged(state: SessionsState): void;
+  // The user activated a session; called before the state it changes is sent.
+  activated(sessionId: string): void;
 }
 
-// The session list and its tabs. `tools` lists every contributed tool in contribution order.
+// The session list and its rows. `tools` lists every contributed tool in contribution order.
 export interface SessionList extends SessionsMainExports {
   tools(): ToolDefinition[];
   state(): SessionsState;
   // The user's close, which every close guard must allow; returns whether the
-  // tab closed.
-  closeTab(sessionId: string): boolean;
+  // row closed. The session stays connected.
+  closeSession(sessionId: string): boolean;
 }
 
 interface Contribution {
@@ -41,7 +43,8 @@ interface Contribution {
 // name routed to the tool session that serves it.
 interface SessionEntry {
   session: AgentSession;
-  // Fixed at connect: the project folder's last segment, or `session`.
+  // Fixed at connect: the project folder's last segment, else `Codex session`
+  // for a Codex session or `session`.
   group: string;
   // 1 for the first of its group, which reads without a number.
   number: number;
@@ -50,11 +53,14 @@ interface SessionEntry {
 }
 
 const NO_FOLDER_LABEL = 'session';
+const CODEX_NO_FOLDER_LABEL = 'Codex session';
 
 function groupOf(info: SessionInfo): string {
+  const noFolderLabel =
+    info.harness === 'codex' ? CODEX_NO_FOLDER_LABEL : NO_FOLDER_LABEL;
   return info.projectDir === null
-    ? NO_FOLDER_LABEL
-    : path.basename(info.projectDir) || NO_FOLDER_LABEL;
+    ? noFolderLabel
+    : path.basename(info.projectDir) || noFolderLabel;
 }
 
 // The lowest number no connected session of the group holds.
@@ -74,6 +80,18 @@ function freeNumber(entries: Iterable<SessionEntry>, group: string): number {
 
 function labelOf(entry: SessionEntry): string {
   return entry.number === 1 ? entry.group : `${entry.group} ${entry.number}`;
+}
+
+function rowOf(entry: SessionEntry): SessionRow {
+  const { id, info } = entry.session;
+  return {
+    sessionId: id,
+    label: labelOf(entry),
+    harness: info.harness,
+    marked: false,
+    projectDir: info.projectDir,
+    hostSessionId: info.sessionId,
+  };
 }
 
 // A start that throws ends the tool sessions already started, then rethrows.
@@ -115,45 +133,45 @@ function routeCall(
   return toolSession.call(name, args, context);
 }
 
-// Connected sessions and the tab strip main holds for them. A session keeps its
-// label while connected; a closed tab comes back at the end when shown again.
-// `showTab`, `activate` and `closeTab` send the whole state only when it
-// changed, and log and ignore a session they cannot act on; `closeTab` logs
-// and keeps a tab a close guard refuses, returning false for every tab it
-// leaves open.
+// Connected sessions and the sidebar rows main holds for them. Each session
+// gets its row at connect, unselected, and keeps its label while connected; a
+// closed row comes back at the end with the session's next round. `markRound`,
+// `activate` and `closeSession` send the whole state only when it changed, and
+// log and ignore a session they cannot act on; `closeSession` logs and keeps a
+// row a close guard refuses, returning false for every row it leaves open.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   const closeGuards: ((sessionId: string) => boolean)[] = [];
   const toolNames = new Set<string>();
   const entries = new Map<string, SessionEntry>();
-  const tabs: SessionTab[] = [];
-  let activeSessionId: string | null = null;
+  const rows: SessionRow[] = [];
+  let selectedSessionId: string | null = null;
 
   const state = (): SessionsState => ({
-    tabs: tabs.map((tab) => ({ ...tab })),
-    activeSessionId,
+    rows: rows.map((row) => ({ ...row })),
+    selectedSessionId,
   });
   const sendState = () => deps.stateChanged(state());
-  const tabIndex = (sessionId: string) =>
-    tabs.findIndex((tab) => tab.sessionId === sessionId);
+  const rowIndex = (sessionId: string) =>
+    rows.findIndex((row) => row.sessionId === sessionId);
 
-  const makeActive = (tab: SessionTab | undefined) => {
-    activeSessionId = tab?.sessionId ?? null;
-    if (tab !== undefined) {
-      tab.marked = false;
+  const select = (row: SessionRow | undefined) => {
+    selectedSessionId = row?.sessionId ?? null;
+    if (row !== undefined) {
+      row.marked = false;
     }
   };
 
-  // The right neighbour takes over from a closed active tab, else the left.
-  const removeTab = (index: number) => {
-    const [removed] = tabs.splice(index, 1);
-    if (removed.sessionId === activeSessionId) {
-      makeActive(tabs[index] ?? tabs[index - 1]);
+  // The right neighbour takes over from a closed selected row, else the left.
+  const removeRow = (index: number) => {
+    const [removed] = rows.splice(index, 1);
+    if (removed.sessionId === selectedSessionId) {
+      select(rows[index] ?? rows[index - 1]);
     }
   };
 
-  // The index of the session's tab, or null after logging why it was ignored.
-  const knownTab = (method: string, sessionId: string): number | null => {
+  // The index of the session's row, or null after logging why it was ignored.
+  const knownRow = (method: string, sessionId: string): number | null => {
     if (!entries.has(sessionId)) {
       deps.log(
         'sessions',
@@ -161,11 +179,11 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       );
       return null;
     }
-    const index = tabIndex(sessionId);
+    const index = rowIndex(sessionId);
     if (index === -1) {
       deps.log(
         'sessions',
-        `${method} for session ${sessionId} with no tab ignored`,
+        `${method} for session ${sessionId} with no row ignored`,
       );
       return null;
     }
@@ -179,9 +197,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     for (const toolSession of entry.toolSessions) {
       toolSession.end();
     }
-    const index = tabIndex(entry.session.id);
+    const index = rowIndex(entry.session.id);
     if (index !== -1) {
-      removeTab(index);
+      removeRow(index);
       sendState();
     }
     deps.emit('ended', { sessionId: entry.session.id });
@@ -218,6 +236,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         ...startToolSessions(contributions, session),
       };
       entries.set(session.id, entry);
+      rows.push(rowOf(entry));
+      sendState();
       deps.emit('connected', session);
       return {
         session,
@@ -225,61 +245,64 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         end: () => end(entry),
       };
     },
-    showTab(sessionId) {
+    markRound(sessionId) {
       const entry = entries.get(sessionId);
       if (entry === undefined) {
         deps.log(
           'sessions',
-          `showTab for unknown session ${sessionId} ignored`,
+          `markRound for unknown session ${sessionId} ignored`,
         );
         return;
       }
-      const index = tabIndex(sessionId);
+      // A row the user closed comes back at the end, unmarked.
+      let index = rowIndex(sessionId);
       if (index === -1) {
-        tabs.push({
-          sessionId,
-          label: labelOf(entry),
-          marked: activeSessionId !== null,
-        });
-        activeSessionId ??= sessionId;
+        index = rows.push(rowOf(entry)) - 1;
+      }
+      const row = rows[index];
+      if (sessionId === selectedSessionId) {
+        return;
+      }
+      if (selectedSessionId === null) {
+        select(row);
         sendState();
         return;
       }
-      const tab = tabs[index];
-      if (sessionId === activeSessionId || tab.marked) {
+      if (row.marked) {
         return;
       }
-      tab.marked = true;
+      row.marked = true;
       sendState();
     },
     activate(sessionId) {
-      const index = knownTab('activate', sessionId);
+      const index = knownRow('activate', sessionId);
       if (index === null) {
         return;
       }
-      const tab = tabs[index];
-      if (sessionId === activeSessionId && !tab.marked) {
+      deps.activated(sessionId);
+      const row = rows[index];
+      if (sessionId === selectedSessionId && !row.marked) {
         return;
       }
-      makeActive(tab);
+      select(row);
       sendState();
     },
     addCloseGuard(mayClose) {
       closeGuards.push(mayClose);
     },
-    closeTab(sessionId) {
-      const index = knownTab('closeTab', sessionId);
+    closeSession(sessionId) {
+      const index = knownRow('closeSession', sessionId);
       if (index === null) {
         return false;
       }
       if (!closeGuards.every((mayClose) => mayClose(sessionId))) {
         deps.log(
           'sessions',
-          `closeTab for session ${sessionId} kept by a close guard`,
+          `closeSession for session ${sessionId} kept by a close guard`,
         );
         return false;
       }
-      removeTab(index);
+      removeRow(index);
       sendState();
       return true;
     },

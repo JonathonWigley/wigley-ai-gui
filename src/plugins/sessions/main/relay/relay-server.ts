@@ -8,6 +8,7 @@ import {
   type ConnectedSession,
   RELAY_PROTOCOL,
   type RelayHello,
+  type Harness,
   type RelayHelloReply,
   type SessionInfo,
 } from '../../contract';
@@ -63,7 +64,17 @@ function mistypedHelloField(hello: RelayHello): string | null {
   if (!isOptional(hello.deadline_seconds, 'number')) {
     return 'deadline_seconds';
   }
+  if (!isOptional(hello.harness, 'string')) {
+    return 'harness';
+  }
   return null;
+}
+
+const HARNESSES: readonly Harness[] = ['claude', 'codex'];
+
+// A harness the app does not know reads as none.
+function harnessOf(value: string | null | undefined): Harness | null {
+  return HARNESSES.find((harness) => harness === value) ?? null;
 }
 
 function sessionInfo(hello: RelayHello): SessionInfo {
@@ -71,6 +82,7 @@ function sessionInfo(hello: RelayHello): SessionInfo {
     sessionId: hello.session_id ?? null,
     projectDir: hello.project_dir ?? null,
     deadlineSeconds: hello.deadline_seconds ?? null,
+    harness: harnessOf(hello.harness),
   };
 }
 

@@ -390,6 +390,7 @@ export function formsSelfTestScript(
       sessionId,
       projectDir: 'selftest',
       deadlineSeconds: 120,
+      harness: 'claude',
     });
   const ask = (session: ConnectedSession, round: unknown) =>
     session.call('ask_round', round, {

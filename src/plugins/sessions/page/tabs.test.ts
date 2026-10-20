@@ -12,15 +12,18 @@ import {
 
 function stateOf(
   sessionIds: string[],
-  activeSessionId: string | null,
+  selectedSessionId: string | null,
 ): SessionsState {
   return {
-    tabs: sessionIds.map((sessionId) => ({
+    rows: sessionIds.map((sessionId) => ({
       sessionId,
       label: sessionId,
+      harness: null,
       marked: false,
+      projectDir: null,
+      hostSessionId: null,
     })),
-    activeSessionId,
+    selectedSessionId,
   };
 }
 

@@ -1,11 +1,16 @@
 import type { ChannelShape, EventShape } from '../../contracts/plugin';
 
+// The agent harness a session runs in.
+export type Harness = 'claude' | 'codex';
+
 // What a round source knows about the session it serves.
 export interface SessionInfo {
   sessionId: string | null;
   projectDir: string | null;
   // The host's soft deadline; null means the default.
   deadlineSeconds: number | null;
+  // Null when the relay did not say.
+  harness: Harness | null;
 }
 
 // A tool a round source exposes, as MCP `tools/list` describes it.
@@ -23,6 +28,8 @@ export interface RelayHello {
   session_id: string | null;
   project_dir: string | null;
   deadline_seconds: number | null;
+  // Absent reads as null, as does a harness the app does not know.
+  harness?: string | null;
 }
 
 // The app's one-line answer to a hello; MCP follows only after `ok: true`.
@@ -75,11 +82,14 @@ export interface SessionsMainExports {
     tools: ToolDefinition[],
     start: (session: AgentSession) => ToolSession,
   ): void;
+  // Adds the session's row, unmarked and unselected.
   connect(info: SessionInfo): ConnectedSession;
-  showTab(sessionId: string): void;
+  // A round arrived for the session: selects its row when none is selected,
+  // else marks it; a row the user closed comes back at the end first.
+  markRound(sessionId: string): void;
   activate(sessionId: string): void;
-  // The user closing a session's tab asks every guard first, and the tab stays
-  // while any answers false; a session that ends loses its tab regardless.
+  // The user closing a session's row asks every guard first, and the row stays
+  // while any answers false; a session that ends loses its row regardless.
   addCloseGuard(mayClose: (sessionId: string) => boolean): void;
 }
 
@@ -88,26 +98,33 @@ export interface SessionsMainEvents extends EventShape {
   ended: { sessionId: string };
 }
 
-export interface SessionTab {
+// One connected session's sidebar row. `marked` is a round not yet opened;
+// `projectDir`, `hostSessionId` and `harness` are the session's info, fixed at
+// connect.
+export interface SessionRow {
   sessionId: string;
   label: string;
+  harness: Harness | null;
   marked: boolean;
+  projectDir: string | null;
+  hostSessionId: string | null;
 }
 
 export interface SessionsState {
-  tabs: SessionTab[];
-  activeSessionId: string | null;
+  rows: SessionRow[];
+  selectedSessionId: string | null;
 }
 
-// `closeTab` returns whether the tab closed: false when a close guard kept it
-// or main knows no such tab.
+// `closeSession` returns whether the row closed: false when a close guard kept
+// it or main holds no such row; the session stays connected either way.
+// `activated` arrives before the `stateChanged` the activation causes.
 export interface SessionsChannel extends ChannelShape {
   invoke: {
     state(): SessionsState;
     activate(sessionId: string): void;
-    closeTab(sessionId: string): boolean;
+    closeSession(sessionId: string): boolean;
   };
-  messages: { stateChanged: SessionsState };
+  messages: { stateChanged: SessionsState; activated: { sessionId: string } };
 }
 
 // The page part's exports and events.

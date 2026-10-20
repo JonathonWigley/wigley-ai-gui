@@ -1,6 +1,6 @@
 import type { Area } from '../../../contracts/plugin';
 import { button, element } from '../../../shared/page/dom';
-import type { SessionsState, SessionTab, SessionView } from '../contract';
+import type { SessionRow, SessionsState, SessionView } from '../contract';
 import {
   keepsPane,
   showsEmptyText,
@@ -31,10 +31,10 @@ export interface SessionsView {
   fillsOf(sessionId: string): SessionView[];
 }
 
-// The tab strip, one view per session holding what other plugins fill it
-// with, and the empty state, in the main area. Only the active session's view
-// shows; a session with no fill shows its idle text. Until `render` hands
-// it main's first state, it shows no empty state either.
+// The tab strip, one tab per session row, one view per session holding what
+// other plugins fill it with, and the empty state, in the main area. Only the
+// selected session's view shows; a session with no fill shows its idle text.
+// Until `render` hands it main's first state, it shows no empty state either.
 export function mountSessionsView(
   main: Area,
   activate: (sessionId: string) => void,
@@ -61,8 +61,8 @@ export function mountSessionsView(
   };
 
   const render = () => {
-    const tabs = state?.tabs ?? [];
-    const activeSessionId = state?.activeSessionId ?? null;
+    const tabs = state?.rows ?? [];
+    const activeSessionId = state?.selectedSessionId ?? null;
     const hasTabs = tabs.length > 0;
     for (const tab of tabs) {
       paneOf(tab.sessionId);
@@ -124,7 +124,7 @@ export function mountSessionsView(
 }
 
 function buildTab(
-  tab: SessionTab,
+  tab: SessionRow,
   activeSessionId: string | null,
   title: string | null,
   activate: (sessionId: string) => void,

@@ -1,16 +1,16 @@
 import type { SessionsState, SessionView } from '../contract';
 
-// The session `step` tabs away from the active one, wrapping at both ends, as
-// vim's `gt` does; null with no active tab or fewer than two tabs.
+// The session `step` rows away from the selected one, wrapping at both ends,
+// as vim's `gt` does; null with no selected row or fewer than two rows.
 export function stepTab(state: SessionsState, step: 1 | -1): string | null {
-  const { tabs } = state;
-  const position = tabs.findIndex(
-    (tab) => tab.sessionId === state.activeSessionId,
+  const { rows } = state;
+  const position = rows.findIndex(
+    (row) => row.sessionId === state.selectedSessionId,
   );
-  if (position < 0 || tabs.length < 2) {
+  if (position < 0 || rows.length < 2) {
     return null;
   }
-  return tabs[(position + step + tabs.length) % tabs.length].sessionId;
+  return rows[(position + step + rows.length) % rows.length].sessionId;
 }
 
 // A tab's text: its label, then the title of what fills it, when there is one.
@@ -36,9 +36,9 @@ export function showsIdleText(fillCount: number): boolean {
 }
 
 // Whether the page shows its "No sessions" text: only once main's state has
-// arrived (null until then) and it holds no tab.
+// arrived (null until then) and it holds no row.
 export function showsEmptyText(state: SessionsState | null): boolean {
-  return state !== null && state.tabs.length === 0;
+  return state !== null && state.rows.length === 0;
 }
 
 // Asks each view in order whether its tab may close, stopping at the first

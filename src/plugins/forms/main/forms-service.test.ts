@@ -27,6 +27,7 @@ const SESSION: SessionInfo = {
   sessionId: 'session-1',
   projectDir: '/work/wigley',
   deadlineSeconds: null,
+  harness: null,
 };
 
 function question(overrides: Record<string, unknown> = {}) {

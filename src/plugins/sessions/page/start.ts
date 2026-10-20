@@ -24,10 +24,10 @@ function createExports(
 ): SessionsPageExports {
   const { log } = api.services;
   const tabLabel = (sessionId: string) =>
-    state().tabs.find((tab) => tab.sessionId === sessionId)?.label ?? sessionId;
+    state().rows.find((row) => row.sessionId === sessionId)?.label ?? sessionId;
   return {
     fill: (sessionId, sessionView) => view.fill(sessionId, sessionView),
-    activeSessionId: () => state().activeSessionId,
+    activeSessionId: () => state().selectedSessionId,
     activate(sessionId) {
       api.channel
         .invoke('activate', sessionId)
@@ -40,7 +40,7 @@ function createExports(
         return;
       }
       api.channel
-        .invoke('closeTab', sessionId)
+        .invoke('closeSession', sessionId)
         .then((closed) => {
           if (!closed) {
             log('sessions', `tab close kept by main: ${tabLabel(sessionId)}`);
@@ -53,15 +53,15 @@ function createExports(
   };
 }
 
-// Shows main's tabs, one view per session that other plugins fill, and
-// publishes `activeChanged` on the first state and whenever the active tab
-// changes. Main owns the tabs: activating or closing one asks main, and the
-// page redraws from the state main sends back.
+// Shows a tab for each of main's session rows, one view per session that other
+// plugins fill, and publishes `activeChanged` on the first state and whenever
+// the selected session changes. Main owns the rows: activating or closing one
+// asks main, and the page redraws from the state main sends back.
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
     const { log } = api.services;
-    let state: SessionsState = { tabs: [], activeSessionId: null };
+    let state: SessionsState = { rows: [], selectedSessionId: null };
     // Undefined until the first state is published.
     let published: string | null | undefined;
     const view = mountSessionsView(api.areas.main, (sessionId) =>
@@ -72,16 +72,16 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     const apply = (next: SessionsState) => {
       state = next;
       view.render(next);
-      const sessionId = next.activeSessionId;
+      const sessionId = next.selectedSessionId;
       if (sessionId === published) {
         return;
       }
       published = sessionId;
-      const tab = next.tabs.find(
+      const row = next.rows.find(
         (candidate) => candidate.sessionId === sessionId,
       );
-      if (tab !== undefined) {
-        log('sessions', `activated ${tab.label}`);
+      if (row !== undefined) {
+        log('sessions', `activated ${row.label}`);
       }
       api.events.emit('activeChanged', { sessionId });
     };
@@ -114,8 +114,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         prevTab: () => step(-1),
         // Acts on the active tab, whichever box the key fired in.
         closeTab: () => {
-          if (state.activeSessionId !== null) {
-            exports.closeTab(state.activeSessionId);
+          if (state.selectedSessionId !== null) {
+            exports.closeTab(state.selectedSessionId);
           }
         },
       },

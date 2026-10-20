@@ -22,6 +22,7 @@ const HELLO: RelayHello = {
   session_id: 'session-1',
   project_dir: '/work/project',
   deadline_seconds: 300,
+  harness: 'claude',
 };
 
 const cleanups: (() => Promise<void> | void)[] = [];
@@ -129,6 +130,7 @@ describe('startRelayServer', () => {
         sessionId: 'session-1',
         projectDir: '/work/project',
         deadlineSeconds: 300,
+        harness: 'claude',
       },
     ]);
   });
@@ -144,12 +146,18 @@ describe('startRelayServer', () => {
         session_id: null,
         project_dir: null,
         deadline_seconds: null,
+        harness: null,
       }),
     );
     await nextLine();
 
     expect(started).toEqual([
-      { sessionId: null, projectDir: null, deadlineSeconds: null },
+      {
+        sessionId: null,
+        projectDir: null,
+        deadlineSeconds: null,
+        harness: null,
+      },
     ]);
   });
 
@@ -207,6 +215,7 @@ describe('startRelayServer', () => {
     ['session_id', { session_id: 7 }],
     ['project_dir', { project_dir: 42 }],
     ['deadline_seconds', { deadline_seconds: '300' }],
+    ['harness', { harness: 3 }],
   ])(
     'refuses a hello whose %s has the wrong type and starts no session',
     async (field, override) => {
@@ -259,8 +268,24 @@ describe('startRelayServer', () => {
 
     expect(JSON.parse(await nextLine())).toEqual({ ok: true });
     expect(started).toEqual([
-      { sessionId: null, projectDir: null, deadlineSeconds: null },
+      {
+        sessionId: null,
+        projectDir: null,
+        deadlineSeconds: null,
+        harness: null,
+      },
     ]);
+  });
+
+  it('reads a harness it does not know as none', async () => {
+    const { connect, started } = fakeSessions();
+    const channel = start(echoServe().serve, connect);
+    const { socket, nextLine } = await open(channel);
+
+    socket.write(helloLine({ ...HELLO, harness: 'gemini' }));
+
+    expect(JSON.parse(await nextLine())).toEqual({ ok: true });
+    expect(started.map((info) => info.harness)).toEqual([null]);
   });
 
   it('ends the session and its server when the relay disconnects', async () => {

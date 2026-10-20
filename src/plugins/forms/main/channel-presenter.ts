@@ -14,8 +14,8 @@ interface OpenRound {
   listener: RoundListener;
 }
 
-// Shows rounds on the page over the forms channel, each in its session's tab,
-// and keeps that tab from closing while the round is open; registers its
+// Shows rounds on the page over the forms channel, each marked on its
+// session's row, and keeps that row from closing while the round is open; registers its
 // channel handlers and close guard once, so it lives as long as the app.
 export function createChannelPresenter(
   channel: MainChannel<FormsChannel>,
@@ -56,15 +56,15 @@ export function createChannelPresenter(
   return {
     show(round, listener) {
       open.set(round.roundId, { round, listener });
-      sessions.showTab(round.sessionId);
+      sessions.markRound(round.sessionId);
       channel.send('roundShown', round);
       updateOpenCount();
       log('forms', `round shown: ${round.label}`);
       // A notification click is the user's own act, so the window may come
-      // forward, on the round's tab, shown again while the round is open.
+      // forward, on the round's row, brought back while the round is open.
       alerts.announce('New review round', round.label, () => {
         if (open.has(round.roundId)) {
-          sessions.showTab(round.sessionId);
+          sessions.markRound(round.sessionId);
         }
         sessions.activate(round.sessionId);
         window.show();
