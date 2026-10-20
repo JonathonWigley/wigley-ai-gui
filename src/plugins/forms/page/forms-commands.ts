@@ -5,6 +5,7 @@ import type {
   PageStart,
   ToastTone,
 } from '../../../contracts/plugin';
+import { errorText } from '../../../shared/error-text';
 import type { FindingAction, RoundEnd } from '../contract';
 import { actionLabel } from '../finding-origins';
 import type { formsManifest } from '../manifest';
@@ -40,8 +41,18 @@ export interface FormsCommandDeps {
   // Hands the finished round to main.
   finish(roundId: string, end: RoundEnd): void;
   closeSession(sessionId: string): void;
+  layouts: LayoutCommandChannel;
   toast(text: string, tone: ToastTone): void;
   log: Log;
+}
+
+// Main's layout methods the layout keys invoke. The page applies a changed
+// layout only from main's `layoutChanged` message, so what these resolve to
+// is unused.
+export interface LayoutCommandChannel {
+  cycleLayout(step: 1 | -1): Promise<unknown>;
+  copyLayout(): Promise<unknown>;
+  openPreview(): Promise<unknown>;
 }
 
 type Handler = (context: PageCommandContext) => void;
@@ -104,6 +115,14 @@ export function formsCommandHandlers(
     (question: number): Handler =>
     (context) =>
       jumpToItem(deps, context, { kind: 'question', index: question });
+
+  const layoutCommand =
+    (invoke: () => Promise<unknown>): Handler =>
+    () =>
+      void invoke().catch((error) => {
+        log('forms', `layout command failed: ${errorText(error)}`);
+        deps.toast(`Layout command failed: ${errorText(error)}`, 'error');
+      });
 
   return {
     closeReview: plain({ type: 'closeReview' }),
@@ -195,6 +214,10 @@ export function formsCommandHandlers(
     },
     submit: () => finishActiveRound(deps, 'review', 'submitted'),
     confirmCancel: () => finishActiveRound(deps, 'confirm', 'cancelled'),
+    nextLayout: layoutCommand(() => deps.layouts.cycleLayout(1)),
+    prevLayout: layoutCommand(() => deps.layouts.cycleLayout(-1)),
+    copyLayout: layoutCommand(() => deps.layouts.copyLayout()),
+    openPreview: layoutCommand(() => deps.layouts.openPreview()),
   };
 }
 

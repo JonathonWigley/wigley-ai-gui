@@ -103,6 +103,10 @@ const EXPECTED_PAGE: PageBind[] = [
     scope: 'forms.confirm',
     command: 'forms.dismissConfirm',
   },
+  { keys: [' ', 'z', 'l', 'n'], scope: 'any', command: 'forms.nextLayout' },
+  { keys: [' ', 'z', 'l', 'p'], scope: 'any', command: 'forms.prevLayout' },
+  { keys: [' ', 'z', 'l', 'c'], scope: 'any', command: 'forms.copyLayout' },
+  { keys: [' ', 'z', 'l', 'o'], scope: 'any', command: 'forms.openPreview' },
 ];
 
 describe('formsManifest', () => {

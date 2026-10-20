@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { FocusOptions, TextEditor } from '../../../contracts/editor';
-import type { PageCommandContext } from '../../../contracts/plugin';
+import type { PageCommandContext, ToastTone } from '../../../contracts/plugin';
 import type { Finding, Question, RoundEnd } from '../contract';
 import type { BoxRef } from './boxes';
 import {
@@ -60,7 +60,17 @@ function setup(
   let leaves = 0;
   const finished: { roundId: string; end: RoundEnd }[] = [];
   const toasts: string[] = [];
+  const toastTones: ToastTone[] = [];
   const logs: string[] = [];
+  // Each layout method invoked, with its arguments.
+  const layoutCalls: unknown[][] = [];
+  let layoutFailure: Error | null = null;
+  const invokeLayout = (...call: unknown[]) => {
+    layoutCalls.push(call);
+    return layoutFailure === null
+      ? Promise.resolve()
+      : Promise.reject(layoutFailure);
+  };
   // Each closed session, with the rounds the store held at the call.
   const closedSessions: { sessionId: string; roundCount: number }[] = [];
   const log = (_source: string, message: string) => logs.push(message);
@@ -82,7 +92,15 @@ function setup(
     finish: (roundId, end) => finished.push({ roundId, end }),
     closeSession: (sessionId) =>
       closedSessions.push({ sessionId, roundCount: store.get().rounds.length }),
-    toast: (text) => toasts.push(text),
+    layouts: {
+      cycleLayout: (step) => invokeLayout('cycleLayout', step),
+      copyLayout: () => invokeLayout('copyLayout'),
+      openPreview: () => invokeLayout('openPreview'),
+    },
+    toast: (text, tone) => {
+      toasts.push(text);
+      toastTones.push(tone);
+    },
     log,
   });
   const run = (command: FormsCommand, context: PageCommandContext = {}) =>
@@ -103,7 +121,13 @@ function setup(
     focusOptions,
     finished,
     toasts,
+    toastTones,
     logs,
+    layoutCalls,
+    // Makes every later layout method reject with `error`.
+    failLayouts: (error: Error) => {
+      layoutFailure = error;
+    },
     closedSessions,
     guardClose: (sessionId: string) => guardClose({ store, log }, sessionId),
     leaves: () => leaves,
@@ -541,5 +565,34 @@ describe('formsCommandHandlers', () => {
     expect(closedSessions).toEqual([
       { sessionId: 'r1-session', roundCount: 0 },
     ]);
+  });
+
+  it('nextLayout_InvokesCycleLayoutForward', () => {
+    const { run, layoutCalls } = setup();
+
+    run('nextLayout');
+
+    expect(layoutCalls).toEqual([['cycleLayout', 1]]);
+  });
+
+  it('prevLayout_InvokesCycleLayoutBackward', () => {
+    const { run, layoutCalls } = setup();
+
+    run('prevLayout');
+
+    expect(layoutCalls).toEqual([['cycleLayout', -1]]);
+  });
+
+  it('openPreview_Rejects_ToastsError', async () => {
+    const { run, failLayouts, toasts, toastTones, logs } = setup();
+    failLayouts(new Error('no preview round'));
+
+    run('openPreview');
+
+    await vi.waitFor(() =>
+      expect(toasts).toEqual(['Layout command failed: no preview round']),
+    );
+    expect(toastTones).toEqual(['error']);
+    expect(logs).toContain('layout command failed: no preview round');
   });
 });
