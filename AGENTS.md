@@ -157,7 +157,7 @@ round), since main, not the page, decides.
   its manifest's `settings`. Main owns the config and serves it to the page over the Bridge, so a user config file
   later lands in `main.ts` alone.
 - **A third-party tool** gets a contract in `src/contracts/` and an adapter folder of its own; the core hands
-  plugins the shared ones (editor, markdown, code highlighter) as services. Swapping it is a new adapter folder against the same
+  plugins the shared ones (editor, markdown) as services. Swapping it is a new adapter folder against the same
   contract, and one changed line in the composition root.
 - `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its `LAYERS` table does
   not allow. A new layer, adapter or plugin folder gets a `LAYERS` entry, and the composition root's entry lists it.
