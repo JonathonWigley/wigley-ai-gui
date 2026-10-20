@@ -1,6 +1,6 @@
 # 07 — Doc re-read against the landed code
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -68,3 +68,4 @@ Commit: one commit per repo that changed.
 
 ## Proof
 
+AGENTS.md fixed in wigley-ai-gui (commit below the tick) · items 7 (Form tab timing; tabs drop with their row, sessionRemoved) and 8 (one vim mapping per sequence; start-time ambiguity rules) fixed; items 1–6, 7a, 9, the renamed-member search and the marketplace README Hello paragraph and refusal bullet current — no marketplace commit · concerns: plan B's lines (Docs tab, `Space k d`, `docs/` tree line) name code not yet in the tree, left for plan B
