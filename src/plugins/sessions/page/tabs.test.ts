@@ -85,6 +85,20 @@ describe('tabs', () => {
     });
   });
 
+  it('tabsAfterAdd keeps the selections count', () => {
+    const tabs: TabsState = {
+      tabIds: ['form'],
+      selectedTabId: 'form',
+      selections: 2,
+    };
+
+    expect(tabsAfterAdd(tabs, 's', 'docs')).toEqual({
+      tabIds: ['form', 'docs'],
+      selectedTabId: 'form',
+      selections: 2,
+    });
+  });
+
   it('tabsAfterAdd throws on a duplicate id', () => {
     const tabs: TabsState = {
       tabIds: ['form'],
@@ -101,13 +115,13 @@ describe('tabs', () => {
     const tabs: TabsState = {
       tabIds: ['a', 'b', 'c'],
       selectedTabId: 'b',
-      selections: 0,
+      selections: 2,
     };
 
     expect(tabsAfterRemove(tabs, 'b')).toEqual({
       tabIds: ['a', 'c'],
       selectedTabId: 'c',
-      selections: 0,
+      selections: 2,
     });
   });
 
@@ -153,13 +167,13 @@ describe('tabs', () => {
     const tabs: TabsState = {
       tabIds: ['a', 'b'],
       selectedTabId: 'a',
-      selections: 0,
+      selections: 2,
     };
 
     expect(tabsAfterSelect(tabs, 'b')).toEqual({
       tabIds: ['a', 'b'],
       selectedTabId: 'b',
-      selections: 1,
+      selections: 3,
     });
     expect(tabsAfterSelect(tabs, 'x')).toBe(tabs);
   });
@@ -168,7 +182,7 @@ describe('tabs', () => {
     const tabs: TabsState = {
       tabIds: ['chat', 'form'],
       selectedTabId: 'chat',
-      selections: 0,
+      selections: 2,
     };
 
     const taken = tabsAfterTakeOver(tabs, 'form');
@@ -176,12 +190,12 @@ describe('tabs', () => {
     expect(taken.tabs).toEqual({
       tabIds: ['chat', 'form'],
       selectedTabId: 'form',
-      selections: 0,
+      selections: 2,
     });
     expect(taken.takeOver).toEqual({
       tabId: 'form',
       previousTabId: 'chat',
-      selections: 0,
+      selections: 2,
     });
   });
 
@@ -189,14 +203,30 @@ describe('tabs', () => {
     const tabs: TabsState = {
       tabIds: ['chat', 'form'],
       selectedTabId: 'chat',
-      selections: 0,
+      selections: 2,
     };
     const taken = tabsAfterTakeOver(tabs, 'form');
 
     expect(tabsAfterRelease(taken.tabs, taken.takeOver)).toEqual({
       tabIds: ['chat', 'form'],
       selectedTabId: 'chat',
-      selections: 0,
+      selections: 2,
+    });
+  });
+
+  it('tabsAfterRelease gives the session back after a tab was added since the take over', () => {
+    const tabs: TabsState = {
+      tabIds: ['chat', 'form'],
+      selectedTabId: 'chat',
+      selections: 2,
+    };
+    const taken = tabsAfterTakeOver(tabs, 'form');
+    const added = tabsAfterAdd(taken.tabs, 's', 'docs');
+
+    expect(tabsAfterRelease(added, taken.takeOver)).toEqual({
+      tabIds: ['chat', 'form', 'docs'],
+      selectedTabId: 'chat',
+      selections: 2,
     });
   });
 
