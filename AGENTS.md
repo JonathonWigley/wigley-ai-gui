@@ -175,7 +175,8 @@ round), since main, not the page, decides.
   label, choices, current value), and the Chat tab draws whatever its adapter declares. A control gets its key as a
   command in chat's manifest (`Space c m`, `Space c e`, `Space c o`); until then `Space c c` reaches it from the list.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
-  reaches the round store, the deadline or the window directly.
+  reaches the round store, the deadline or the window directly. It reads saved rounds only through a
+  function the composition root injects, as the layout preview reads saved round args through `savedArgs`.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool.
@@ -204,8 +205,9 @@ round), since main, not the page, decides.
   forms look. The user's layouts are folders in forms' plugin data, `layouts/<name>/layout.js` and an optional
   `layout.css`, and the app writes `layouts/layout.d.ts` there at every start. Saving the active layout's files
   redraws open rounds and keeps every answer. `Space z l n` / `Space z l p` cycle the layouts, `Space z l c` copies
-  the active one into a new folder, and `Space z l o` opens the preview round, which sends nothing. A card that
-  throws falls back to `default`, and a reload that fails keeps the last good layout.
+  the active one into a new folder, and `Space z l o` opens the preview round and selects its row; the round sends
+  nothing and raises no notification or badge. A card that throws falls back to `default`, and a reload that fails
+  keeps the last good layout.
 - `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its `LAYERS` table does
   not allow. A new layer, adapter or plugin folder gets a `LAYERS` entry, and the composition root's entry lists it.
 

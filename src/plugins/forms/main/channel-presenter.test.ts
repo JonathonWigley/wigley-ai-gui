@@ -159,6 +159,38 @@ describe('createChannelPresenter', () => {
     expect(window.shown()).toBe(0);
   });
 
+  it('shows a quiet round on the page and its row without an alert or a count', () => {
+    const { calls, page, attention, logged, presenter } = setUp();
+
+    presenter.quiet.show(ROUND, fakeListener().listener);
+
+    expect(calls).toEqual(['markRound app-1', 'send roundShown']);
+    expect(page.sent).toEqual([['roundShown', ROUND]]);
+    expect(attention.announced).toEqual([]);
+    expect(attention.counts).toEqual([]);
+    expect(logged).toEqual([
+      '[forms] round shown: wigley-ai-gui · Pick a theme',
+    ]);
+  });
+
+  it('counts only announced rounds open, and a quiet round ending leaves the count', () => {
+    const { page, attention, presenter, openRounds, finish } = setUp();
+    const quietRound = { ...ROUND, roundId: 'round-q', sessionId: 'app-q' };
+    presenter.quiet.show(quietRound, fakeListener().listener);
+    presenter.quiet.show(
+      { ...quietRound, roundId: 'round-q2' },
+      fakeListener().listener,
+    );
+    presenter.show(ROUND, fakeListener().listener);
+
+    finish('round-q', { kind: 'submitted', body: BODY });
+    presenter.quiet.close('round-q2');
+
+    expect(attention.counts).toEqual([1]);
+    expect(page.sent.at(-1)).toEqual(['roundClosed', 'round-q2']);
+    expect(openRounds()).toEqual([ROUND]);
+  });
+
   it("brings the window forward on the round's row when the announcement is clicked", () => {
     const { calls, window, attention, presenter } = setUp();
     presenter.show(ROUND, fakeListener().listener);

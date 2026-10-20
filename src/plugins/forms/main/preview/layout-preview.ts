@@ -51,9 +51,10 @@ function nextRound(
 
 // A round source over its own FormsService: the first open shows the sample in
 // a session of its own, and each further open swaps in the next saved round,
-// wrapping back to the sample. A submit or cancel ends the session.
+// wrapping back to the sample. Every open selects the session's row. A submit
+// or cancel ends the session.
 export function createLayoutPreview(deps: {
-  sessions: Pick<SessionsMainExports, 'connect'>;
+  sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
   forms: FormsService;
   savedArgs(): unknown[];
   log: Log;
@@ -111,6 +112,7 @@ export function createLayoutPreview(deps: {
           asking: new AbortController(),
         };
         cursor = SAMPLE;
+        deps.sessions.activate(connected.session.id);
         ask(preview, PREVIEW_ROUND_ARGS);
         return;
       }
@@ -118,6 +120,7 @@ export function createLayoutPreview(deps: {
       preview = { ...preview, asking: new AbortController() };
       const next = nextRound(cursor, deps.savedArgs(), log);
       cursor = next.cursor;
+      deps.sessions.activate(preview.connected.session.id);
       ask(preview, next.args);
     },
   };

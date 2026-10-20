@@ -18,6 +18,7 @@ interface Call {
   args: unknown;
   signal: AbortSignal;
   settle(outcome: Outcome): void;
+  fail(error: Error): void;
 }
 
 const FIRST_SAVED = {
@@ -31,6 +32,7 @@ const SECOND_SAVED = {
 const UNPARSEABLE = { heading: 'Broken', notices: [] };
 
 let connects: SessionInfo[];
+let activated: string[];
 let connectedEnds: number;
 let formsEnds: number;
 let calls: Call[];
@@ -53,12 +55,13 @@ function record(
   args: unknown,
   signal: AbortSignal,
 ): Promise<AnswersPayload> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     calls.push({
       method,
       args,
       signal,
       settle: (outcome) => resolve(payload(outcome)),
+      fail: reject,
     });
   });
 }
@@ -88,7 +91,10 @@ function connect(info: SessionInfo): ConnectedSession {
 
 function preview() {
   return createLayoutPreview({
-    sessions: { connect },
+    sessions: {
+      connect,
+      activate: (sessionId) => activated.push(sessionId),
+    },
     forms: fakeForms,
     savedArgs: () => saved,
     log: (source, message) => logLines.push(`[${source}] ${message}`),
@@ -102,6 +108,7 @@ function flush(): Promise<void> {
 
 beforeEach(() => {
   connects = [];
+  activated = [];
   connectedEnds = 0;
   formsEnds = 0;
   calls = [];
@@ -142,6 +149,15 @@ describe('open', () => {
       false,
     ]);
     expect(connects).toHaveLength(1);
+  });
+
+  it('open_EveryPress_ActivatesPreviewRow', () => {
+    const subject = preview();
+
+    subject.open();
+    subject.open();
+
+    expect(activated).toEqual(['preview-row', 'preview-row']);
   });
 
   it('open_PastLastSaved_WrapsToSample', () => {
@@ -213,6 +229,32 @@ describe('settle', () => {
     calls[0].settle('cancelled');
     await flush();
 
+    expect(connectedEnds).toBe(0);
+  });
+
+  it('askRejects_LogsAndEndsSession', async () => {
+    preview().open();
+
+    calls[0].fail(new Error('store write failed'));
+    await flush();
+
+    expect(logLines).toEqual([
+      '[forms] preview round failed: store write failed',
+    ]);
+    expect(formsEnds).toBe(1);
+    expect(connectedEnds).toBe(1);
+  });
+
+  it('abortedAsk_Rejects_IsIgnored', async () => {
+    const subject = preview();
+    subject.open();
+    subject.open();
+
+    calls[0].fail(new Error('aborted'));
+    await flush();
+
+    expect(logLines).toEqual([]);
+    expect(formsEnds).toBe(0);
     expect(connectedEnds).toBe(0);
   });
 

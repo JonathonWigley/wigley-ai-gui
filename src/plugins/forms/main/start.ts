@@ -26,7 +26,8 @@ const PREVIEW_SAVED_ROUNDS = 20;
 
 // The agents' FormsService over the saved-round folder, and the layout
 // preview over a FormsService of its own whose store is in memory. Both share
-// one presenter, which owns the channel's `finish` and `draft` handlers.
+// one presenter, which owns the channel's `finish` and `draft` handlers; the
+// preview's rounds go through its quiet view.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
@@ -55,7 +56,7 @@ function createForms(
   const preview = createLayoutPreview({
     sessions,
     forms: createFormsService({
-      presenter,
+      presenter: presenter.quiet,
       store: createMemoryRoundStore(services.clock, services.randomHex),
       defaultDeadlineSeconds,
     }),
