@@ -359,7 +359,7 @@ the name. Recent folders live in chat's data folder at `recent-folders.json`, ne
 - [x] [Chat tab](09-chat-tab.md) — after 04, 07, 08
 
 ### Wave 5
-- [ ] [Start prompt and new session](10-start-prompt.md) — after 09
+- [x] [Start prompt and new session](10-start-prompt.md) — after 09
 
 ### Wave 6
 - [ ] [Chat self-test script](11-selftest.md) — after 06, 10
@@ -384,6 +384,7 @@ Review base: 4597f154604caf0e8453b17f551918d444f11ab5
 - 07 chat main · f7840dd · diff read + typecheck + lint pass · concerns: `recent.list()` swallows every read failure without a log line
 - 06 claude adapter · 6a886b6 · diff read + typecheck + lint pass · concerns: the inherited nested-session env is not stripped; raw entries pile up (thinking_tokens, status, rate_limit, hooks, tool_progress); idle is set at turnEnded even with a queued message; an ENOENT for a missing projectDir reads as "claude not found"; `commands` fires every turn
 - 09 chat tab · 80edb99 · diff read + typecheck + lint pass · concerns: raw entries fill j/k with noise; Cmd+Enter vs the Enter bind is unverified; the selftest flake (forms layout-cycle revisions one higher) also shows on an archive of 380800b
+- 10 start prompt · 9fba269 · diff read + typecheck + lint pass · concerns: a type-only `Omit<…,'newSession'>` on 09's `chatCommandHandlers`
 ### Contract changes
 - `DecodedLine`: gains `turnFailed: boolean` · why: effort and model command results need it · consumers: none outside `src/main/claude-code` · group 06
 - claude-stream.md facts amend task 06's pinned reading: local `/effort` and `/model` print a synthetic `assistant` (`message.model` `<synthetic>`) plus a zero-cost `result`; no event reports effort; `manual` comes back as `default`; `total_cost_usd` is cumulative per process; SIGINT ends the process, so only `control_request` interrupt keeps it alive; there is one assistant event per content block; thinking is never streamed · consumers: 06 · group 01

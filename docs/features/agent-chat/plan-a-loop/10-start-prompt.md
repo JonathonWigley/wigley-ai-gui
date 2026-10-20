@@ -1,6 +1,6 @@
 # 10 — Start prompt and new session
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 07, 09
 Plan: [plan.md](plan.md)
@@ -110,3 +110,5 @@ Done when: the typecheck and `npm run lint` pass; the test gate runs `start-prom
 Commit:    one commit for the group
 
 ## Proof
+
+9fba269 · diff read: `homeDir` is in the contract and handled in main; `start-prompt.ts` and `start-prompt-items.ts` export the planned members; `newSession` is bound to `Space k n` and `<Leader>kn`; typecheck and lint pass. Concern: `chatCommandHandlers`' return type became `Omit<…, 'newSession'>` (a type-only edit to 09's file).

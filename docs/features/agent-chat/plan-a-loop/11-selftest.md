@@ -1,6 +1,6 @@
 # 11 — Chat self-test script
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 05, 06, 07, 09, 10
 Plan: [plan.md](plan.md)
