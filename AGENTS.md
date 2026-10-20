@@ -124,7 +124,8 @@ round), since main, not the page, decides.
   picker's filter). Vim keeps one mapping per key sequence and mode for every editor, so a sequence bound in any
   scope runs nothing in the others (the page logs `<keys> has no bind in <scope>`; an insert key types as it does
   unbound, Enter breaking the line), and startup fails on two binds in one mode with the same keys in overlapping
-  scopes or on keys that begin another same-mode bind's longer keys in any scope. Esc while a sequence waits cancels it and runs nothing.
+  scopes or on keys that begin another same-mode bind's longer keys in any scope. Esc while a sequence waits cancels
+  it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout keys are
   `Space z l …`, chat's `Space z c …`).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base

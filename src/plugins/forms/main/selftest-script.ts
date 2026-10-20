@@ -83,12 +83,12 @@ export const SELFTEST_LAYOUT = {
 // input); Space opens it again and, with no key pressed,
 // the which-key timeout closes it, and Esc then leaves the box, so the box kept
 // focus and its pending Space was dropped. a back in, Esc, Space opens
-// which-key, and Ctrl+j moving to the reason box, still in INSERT, closes it;
-// Esc Esc out. a, Esc and d, then Ctrl+j to the reason box and Ctrl+k back;
-// w and Esc leave the box, and w deleted nothing, since leaving dropped the
-// pending d. j to question 2, where q a x then b breaks the self-test bind,
-// so a opens the notes box and "xb" is typed into it; Esc Esc out and x marks question 2 not
-// applicable. Ctrl+h goes back to question 1, where Space opens which-key and
+// which-key, and Ctrl+j moving to the reason box, which it focuses in INSERT,
+// closes it; Esc Esc out. a, Esc and d, then Ctrl+j to the reason box and
+// Ctrl+k back; w and Esc leave the box, and w deleted nothing, since leaving
+// dropped the pending d. j to question 2, where q a x then b breaks the
+// self-test bind, so a opens the notes box and "xb" is typed into it; Esc Esc
+// out and x marks question 2 not applicable. Ctrl+h goes back to question 1, where Space opens which-key and
 // the timeout closes it, so 2 starts a fresh sequence and clears the choice
 // (Space 2 would jump), 2 picks it again; Space a 2 clears it and picks it
 // again, Enter replaces that pick with its recommendation, Space 2 jumps to
