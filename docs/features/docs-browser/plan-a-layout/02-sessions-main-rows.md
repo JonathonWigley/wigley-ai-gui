@@ -1,6 +1,6 @@
 # 02 — Sessions main: a row for every connected session, harness, markRound
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -172,3 +172,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+c802d7b · proved: diff read (every Produces present: Harness, SessionInfo.harness, RelayHello.harness?, SessionRow, SessionsState, markRound, closeSession, activated, SessionListDeps.activated), typecheck clean, sessions + forms main suites 340 pass · selftest runs once 01 lands · concerns: rows now exist from connect, so the selftest's timing may differ

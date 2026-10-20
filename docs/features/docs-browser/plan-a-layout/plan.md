@@ -255,7 +255,7 @@ import `src/plugins/keys/contract.ts`); no plugin imports `src/renderer`.
 
 ### Wave 1
 - [ ] [Scoped editor binds](01-scoped-editor-binds.md)
-- [ ] [Sessions main: rows, harness, markRound](02-sessions-main-rows.md)
+- [x] [Sessions main: rows, harness, markRound](02-sessions-main-rows.md)
 - [x] [Relay harness](03-relay-harness.md)
 
 ### Wave 2
@@ -281,8 +281,10 @@ Peers on the tree at preflight: wigley-ai-gui-cc, wigley-ai-gui-1c — commits p
 
 ### Groups
 - 03 · wigley-ai-marketplace a02ecb4 · proved (diff read, forms unittest OK, manifest checks pass) · concerns: none
+- 02 · c802d7b · proved (diff read, typecheck, sessions + forms main suites) · concerns: selftest timing may differ now rows exist from connect (selftest pending 01); connect sends state before emitting `connected`; HARNESSES list in relay-server.ts kept in step with the Harness union by hand
 ### Contract changes
 ### Rulings
+- `connect` sends the state before it emits `connected` (the row exists first) — a `connected` listener reading state sees the row — cost if wrong: flip one ordering · group 02
 - Plan folder moved mid-wave-1 by a peer run (wigley-ai-gui 6c52ae5) from ~/wigley-features/wigley-ai-gui/ to docs/features/; the run continues from the in-repo folder, commits each plan change, and leaves 6c52ae5 out of the review range — lead
 - Task 03 version: origin/main holds 1.3.1, local 1.4.0 unpushed → version left at 1.4.0 (one bump per pushed series) — preflight · lead
 ### Review rounds
