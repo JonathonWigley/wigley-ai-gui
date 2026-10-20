@@ -1,6 +1,6 @@
 # 02 — Layout contract, the kit, the card host and the default layout
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -212,3 +212,10 @@ gate runs the tests above; the cards draw as before (the self-test's existing st
   the lines pinned there.
 
 ## Proof
+
+Commit `b5142a6`. Diff read: every Produces signature present (`layout.d.ts` rewrapped by oxfmt, same declarations);
+five contract changes, in the Run log. `npm run typecheck` clean (checks `layout.js`); layer check and oxlint clean.
+The cards drawing as before is proved by the self-test at the test gate.
+
+Concerns: the fallback card's own build is not caught; a layout that builds its article detached mounts editors
+into detached elements; `setLayout` clears the focused editor box; no unit test reaches the DOM behaviour (task 07).

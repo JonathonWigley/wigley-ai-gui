@@ -182,7 +182,7 @@ Boundary rules:
 
 ### Wave 1
 - [x] [Files service](01-files-service.md)
-- [ ] [Layout contract and the default layout](02-layout-contract.md)
+- [x] [Layout contract and the default layout](02-layout-contract.md)
 
 ### Wave 2
 - [x] [Plugin data folders and the wigley-data scheme](03-plugin-data.md) — after 01
@@ -215,7 +215,22 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   has no error listener; real-time watch test; oxfmt fails on `docs/features/` plan docs (pre-existing)
 - 03 plugin data · f9e9db6 · proved (diff read, typecheck clean outside forms, layer check) · concerns: `URL.parse`
   untested until 09; plugin ids must be lowercase; Windows path separators untested
+- 02 layout contract · b5142a6 · proved (diff read, typecheck clean incl. `layout.js`, layer check) · concerns:
+  fallback card's build uncaught; detached-article layouts mount editors detached; `setLayout` clears the focused
+  box; DOM behaviour proved only by the self-test
 ### Contract changes
+- `createRoundView`: → gains `layout: Layout, layoutName: string` after `round`; `RoundViewDeps` gains `log: Log`,
+  `boxes` widens to `Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>` · why: builds through the layout
+  from the first build and logs failures · consumers: 05 · group 02
+- `FormsViewDeps`: → gains `log: Log`; page `start.ts` passes `services.log` · why: the card host logs with source
+  `forms` · consumers: 05 · group 02
+- `CardDeps`: → gains `destroyBox(target: TextTarget): void` and `log: Log` · why: the host undoes a throwing
+  builder's boxes · consumers: 05, 07 · group 02
+- `ItemFormat` / `AnswerableFormat`: → generic over the card input (`cardInput(round, index): Input`);
+  `item-format.ts` exports `CardInputs` / `CardKits` from `Layout['cards']` · why: the compiler check that a kind has
+  a card input and a `cards` entry · consumers: none · group 02
+- `ids.ts`: → gains `formsCommandNamed(short: string): CommandId | null`, widened out of `numberedCommand` · why:
+  `kit.keys` qualifies an unchecked short name · consumers: none · group 02
 ### Rulings
 - Node watch drops an event named after the watched folder when no child of that name exists (FSEvents self-report)
   — the burst test failed on it, and every new watch would report a stray `layouts` — a real child sharing the
@@ -235,5 +250,15 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
 - Plan A finished its groups 01–07 (`6126427`) mid-run, so this plan's 07 and 08 no longer wait on it — lead
 - The user's standing ruling for this session: at every review triage, take every review recommendation without a
   triage round (the recommended action on each finding) — user
+- `answerControls` returns the `div.toggles` row (today's DOM has no wrapper round its three parts) — a wrapper
+  would change the DOM — a layout wanting the whole block gets the middle row · group 02
+- A throwing `layout.head` is caught and logged `layout <name> head failed: <errorText>` (source `forms`); the head
+  slot `div.layout-head` sits in `.round-main` before `div.items`, created only when the layout has a head — an
+  uncaught throw would abort the round view — task 07 may want the line pinned · group 02
+- A layout `update` that keeps throwing is still called; only its first throw is logged — the plan says once per
+  card — a throwing layout stays silent after its first line · group 02
+- A blank (after trim) choice reason draws nothing; card inputs copy their arrays and objects; `destroyBox` throws
+  `No box is mounted as <key>` for an unmounted box; a notice's host `update` sets no `data-status` — as today's
+  cards — none known · group 02
 ### Review rounds
 ### Test gate
