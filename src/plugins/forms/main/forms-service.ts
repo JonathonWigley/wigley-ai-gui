@@ -285,15 +285,18 @@ async function presentOpen(
 
 // A finished round whose answers no tool reply has carried: the open round,
 // when the user finished it after its last reply, or else the newest such
-// file this session left on disk before an app restart. Throws when that file
-// no longer parses.
+// file this session left on disk before an app restart, passing over the
+// files already reported unreadable. Throws when that file no longer parses.
 function takeUnreturnedFinished(session: SessionContext): FinishedRound | null {
   const open = session.open;
   if (open !== null) {
     return open.end === null ? null : settle(session, open, open.end);
   }
-  const record = session.store.newestUnreturnedFinished(session.info);
-  if (record === null || session.reportedUnreadable.has(record.id)) {
+  const record = session.store.newestUnreturnedFinished(
+    session.info,
+    session.reportedUnreadable,
+  );
+  if (record === null) {
     return null;
   }
   const round = roundFromRecord(session, record);

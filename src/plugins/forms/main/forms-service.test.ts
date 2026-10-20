@@ -105,6 +105,7 @@ function oneAnswer(entry: Partial<AnswerEntry>, note = ''): FormBody {
 const HALF_BODY = oneAnswer({ choice: 2, notes: 'half done' });
 
 let roundsDir: string;
+let nowMs: number;
 let hexCount: number;
 let presenter: ScriptedRoundPresenter;
 let store: RoundStore;
@@ -178,11 +179,12 @@ function watch(pending: Promise<AnswersPayload>): { settled: boolean } {
 beforeEach(() => {
   vi.useFakeTimers();
   roundsDir = mkdtempSync(path.join(tmpdir(), 'wigley-forms-service-'));
+  nowMs = 1_000_000;
   hexCount = 0;
   presenter = new ScriptedRoundPresenter();
   store = createRoundStore({
     roundsDir,
-    clock: { now: () => 1_000_000 },
+    clock: { now: () => nowMs },
     randomHex: () => (++hexCount).toString(16).padStart(8, '0'),
     log: () => {},
   });
@@ -1218,6 +1220,23 @@ describe('saved rounds from an earlier app run', () => {
 
     expect(payload.outcome).toBe('no_round');
     expect(savedFile(record.id).returned).toBe(false);
+  });
+
+  it('returns an older readable round behind a reported unparseable one', async () => {
+    const older = saveEarlier(NAMING_ARGS, 'submitted', HALF_BODY);
+    nowMs = 2_000_000;
+    const unreadable = saveUnparseable();
+    const session = startSession();
+    await expect(session.collectLastRound(true, live())).rejects.toThrow(
+      "The saved round 'Old review'",
+    );
+
+    const payload = await session.collectLastRound(true, live());
+
+    expect(payload.outcome).toBe('submitted');
+    expect(payload.answers[0]).toMatchObject({ choice: 2, notes: 'half done' });
+    expect(savedFile(older.id).returned).toBe(true);
+    expect(savedFile(unreadable.id).returned).toBe(false);
   });
 
   it('reports an unparseable saved round to a new round, which opens once re-sent', async () => {

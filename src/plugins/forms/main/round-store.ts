@@ -64,8 +64,12 @@ export interface RoundStore {
   // The newest by `updated` with this fingerprint, from any owner and in any
   // state: what a re-sent round is pre-filled from.
   newestFor(fingerprint: string): SavedRound | null;
-  // The newest finished round of this owner that no tool reply has carried.
-  newestUnreturnedFinished(owner: RoundOwner): FinishedSavedRound | null;
+  // The newest finished round of this owner that no tool reply has carried,
+  // passing over the rounds whose ids are in `excluding`.
+  newestUnreturnedFinished(
+    owner: RoundOwner,
+    excluding: ReadonlySet<string>,
+  ): FinishedSavedRound | null;
   // Deletes every round file, and any temp file a crash left, last written more
   // than RETENTION_SECONDS ago.
   prune(): void;
@@ -284,11 +288,14 @@ export function createRoundStore(deps: {
           (record) => record.fingerprint === fingerprint,
         ),
       ),
-    newestUnreturnedFinished: (owner) =>
+    newestUnreturnedFinished: (owner, excluding) =>
       newestUpdated(
         readAllRounds(roundsDir).filter(
           (record): record is FinishedSavedRound =>
-            isFinished(record) && !record.returned && isOwnedBy(record, owner),
+            isFinished(record) &&
+            !record.returned &&
+            isOwnedBy(record, owner) &&
+            !excluding.has(record.id),
         ),
       ),
     prune: () =>

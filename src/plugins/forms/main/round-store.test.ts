@@ -20,6 +20,7 @@ import {
 
 const MINE: RoundOwner = { sessionId: 's1', projectDir: '/p' };
 const ARGS = { heading: 'h' };
+const NONE: ReadonlySet<string> = new Set();
 
 let root: string;
 let roundsDir: string;
@@ -162,13 +163,27 @@ describe('RoundStore', () => {
   it('finds a finished round as unreturned until it is marked returned', () => {
     const store = storeIn(roundsDir);
     const record = store.create(MINE, 'fp', ARGS, null, null);
-    expect(store.newestUnreturnedFinished(MINE)).toBeNull();
+    expect(store.newestUnreturnedFinished(MINE, NONE)).toBeNull();
 
     store.finish(record, 'cancelled', withNote(''));
-    expect(store.newestUnreturnedFinished(MINE)?.id).toBe(record.id);
+    expect(store.newestUnreturnedFinished(MINE, NONE)?.id).toBe(record.id);
 
     store.markReturned(record);
-    expect(store.newestUnreturnedFinished(MINE)).toBeNull();
+    expect(store.newestUnreturnedFinished(MINE, NONE)).toBeNull();
+  });
+
+  it('passes over an excluded round to the older one behind it', () => {
+    const store = storeIn(roundsDir);
+    const older = store.create(MINE, 'fp', ARGS, null, null);
+    store.finish(older, 'submitted', withNote(''));
+    nowMs = 2_000_000;
+    const newer = store.create(MINE, 'fp', ARGS, null, null);
+    store.finish(newer, 'submitted', withNote(''));
+
+    expect(store.newestUnreturnedFinished(MINE, NONE)?.id).toBe(newer.id);
+    expect(store.newestUnreturnedFinished(MINE, new Set([newer.id]))?.id).toBe(
+      older.id,
+    );
   });
 
   it("never finds another session's round as this session's", () => {
@@ -182,7 +197,7 @@ describe('RoundStore', () => {
     );
     store.finish(theirs, 'submitted', withNote(''));
 
-    expect(store.newestUnreturnedFinished(MINE)).toBeNull();
+    expect(store.newestUnreturnedFinished(MINE, NONE)).toBeNull();
   });
 
   it('lets the project folder decide when there is no session id', () => {
@@ -205,7 +220,10 @@ describe('RoundStore', () => {
     store.finish(theirs, 'submitted', withNote(''));
 
     expect(
-      store.newestUnreturnedFinished({ sessionId: null, projectDir: '/p' })?.id,
+      store.newestUnreturnedFinished(
+        { sessionId: null, projectDir: '/p' },
+        NONE,
+      )?.id,
     ).toBe(mine.id);
   });
 
@@ -215,7 +233,7 @@ describe('RoundStore', () => {
     const record = store.create(nobody, 'fp', ARGS, null, null);
     store.finish(record, 'submitted', withNote(''));
 
-    expect(store.newestUnreturnedFinished(nobody)).toBeNull();
+    expect(store.newestUnreturnedFinished(nobody, NONE)).toBeNull();
     expect(store.newestFor('fp')?.id).toBe(record.id);
   });
 
@@ -317,7 +335,9 @@ describe('RoundStore', () => {
       'utf8',
     );
 
-    expect(storeIn(roundsDir).newestUnreturnedFinished(MINE)).toMatchObject({
+    expect(
+      storeIn(roundsDir).newestUnreturnedFinished(MINE, NONE),
+    ).toMatchObject({
       id: '1700000000-0a1b2c3d',
       fingerprint: 'fp-python',
       outcome: 'submitted',
