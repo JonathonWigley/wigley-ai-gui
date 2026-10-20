@@ -2,11 +2,13 @@ import '../../../shared/page/dialog.css';
 import './keys.css';
 import type { PageApi, PagePart, PushedScope } from '../../../contracts/plugin';
 import { qualify } from '../../../shared/plugin-manifests';
+import type { KeysPageExports } from '../contract';
 import { keysManifest } from '../manifest';
 import { helpSections } from './help-sections';
 import { mountHelpView } from './help-view';
 import { barHints } from './key-bar';
 import { mountKeyBarView } from './key-bar-view';
+import { keysFor } from './keys-for';
 import { whichKeyModel } from './which-key';
 import { startWhichKey } from './which-key-controller';
 import { mountWhichKeyView } from './which-key-view';
@@ -20,7 +22,8 @@ type KeysApi = PageApi<
 // Shows which-key over every pending key sequence, on the page and in a box;
 // the help overlay over the `help` scope while it is open, closing when the
 // scope under it changes; and the keys that fire now, leader sequences aside,
-// in the status bar.
+// in the status bar. Exports the keys bound to a command, for a view that
+// shows them beside its control.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
@@ -59,7 +62,11 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       openHelp: () => api.commands.run(qualify(keysManifest.id, 'toggleHelp')),
     });
 
+    const exports: KeysPageExports = {
+      keysFor: (command, scope) => keysFor(keys.keymap, command, scope),
+    };
     return {
+      exports,
       commands: {
         toggleHelp(context) {
           if (helpScope !== null) {

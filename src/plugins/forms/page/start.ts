@@ -10,6 +10,7 @@ import type {
   SessionsPageEvents,
   SessionsPageExports,
 } from '../../sessions/contract';
+import type { KeysPageExports } from '../../keys/contract';
 import type { FormsChannel, RoundEnd } from '../contract';
 import { formsManifest } from '../manifest';
 import { startAutosave } from './autosave';
@@ -107,6 +108,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       store,
       boxes,
       markdown: services.markdown,
+      keys: api.dependency<KeysPageExports>('keys'),
       run: (command) => api.commands.run(command),
     });
     store.subscribe(() => api.keys.setScope(store.get().view));

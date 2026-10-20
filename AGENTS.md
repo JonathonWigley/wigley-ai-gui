@@ -47,7 +47,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (session tabs and the
                  session view)
   forms/         manifest.ts, contract.ts, main/ (round logic, saved rounds, its MCP tools), page/ (the round view)
-  keys/          manifest.ts, page/ (which-key, the help overlay, the status bar's key list); no main part
+  keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the status bar's key list, and the
+                 keys-for-command lookup it exports); no main part
 src/mock-agent/  a separate executable the ACP adapter spawns in dev
 ```
 
@@ -73,7 +74,8 @@ plugin still has something open there (forms: an open round), since main, not th
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
-  which types that plugin's exports and events.
+  which types that plugin's exports and events. A dependency with no part in a process (`keys` in main) starts
+  nowhere there, and its exports read as `undefined` in that process.
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`activeChanged` in plugin
   `sessions` is `sessions.activeChanged`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`. Each process has its own bus, and nothing crosses processes on it: a plugin's own
@@ -91,8 +93,11 @@ plugin still has something open there (forms: an open round), since main, not th
   change under it, so a modal view can close when the view beneath it moves on (help closes on it).
 - **Key hints** belong to the `keys` plugin, which reads the merged keymap: which-key after a pending prefix, help on
   `Space ?` (`<Leader>?` in a box), and the status bar's keys that don't start with the leader. A plugin declares
-  its keys, labels, groups and scope titles, and draws no key hints of its own. The core and the editor host report
-  a pending prefix through `api.keys`; the editor host reads it from vim's pending input, behind `EditorHost`.
+  its keys, labels, groups and scope titles, and draws no key hints of its own: a view that shows a key beside its
+  control (the finding card's Accept and Change…) depends on `keys` and reads it from that plugin's `keysFor`
+  export, so a rebind reaches the control, and draws no hint when the command is unbound. The core and the editor
+  host report a pending prefix through `api.keys`; the editor host reads it from vim's pending input, behind
+  `EditorHost`.
 - **A theme** is a JSON file of a `palette` and semantic `tokens` (a token names a palette entry or gives a hex).
   Built-in themes live in `src/config/themes/`; the user's own live in the `themes` folder of Electron's per-user
   data folder and override a built-in of the same name. Views read tokens as CSS variables and never name a
@@ -113,12 +118,14 @@ plugin still has something open there (forms: an open round), since main, not th
   forbids, its choice bounds, and the actions it offers with the card's word for each. Main's parser (which rejects a
   choice opening with one of those words) and the page's card both read that table. A new origin starts as its name
   in the forms contract's `FindingOrigin` and its variant in the `Finding` union (and in `DefectFinding`'s origin when
-  it takes severity); the compiler then flags its table entry and its chip text in `ORIGIN_CHIPS` in
-  `page/kinds/finding/verdict.ts`, and a new card its `CARD_TEXT` in `finding-card.ts`. The rest it cannot check:
-  the `FINDING_ORIGINS` list in the contract, an `origin.*` theme token in `THEME_TOKENS` and every built-in theme
-  with its `.badge-origin` rule in `forms.css`, the origin prose in `finding-format.ts`'s `ORIGIN_DESCRIPTION` and
-  `ASK_ROUND_DESCRIPTION` in `main/tool-definitions.ts`, and retro's `ORIGIN_ACTION_LABELS` in the marketplace's
-  `answers.py`, which otherwise labels the new origin's actions with the Defect words.
+  it takes severity); the compiler then flags its table entry, its chip text in `ORIGIN_CHIPS` in
+  `page/kinds/finding/verdict.ts` and its meaning in `ORIGIN_MEANINGS` in `main/kinds/finding/finding-format.ts`,
+  and a new card its `CARD_TEXT` in `finding-card.ts` and its `CARD_CHOICES` in `finding-format.ts`. The card list
+  in `ASK_ROUND_DESCRIPTION` is built from the table by `findingCardsText()` in `main/kinds/finding/finding-text.ts`.
+  The rest it cannot check: the `FINDING_ORIGINS` list in the contract, an `origin.*` theme token in
+  `THEME_TOKENS` and every built-in theme with its `.badge-origin` rule in `forms.css`, and retro's
+  `ORIGIN_ACTION_LABELS` in the marketplace's `answers.py`, which otherwise labels the new origin's actions with the
+  Defect words.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;

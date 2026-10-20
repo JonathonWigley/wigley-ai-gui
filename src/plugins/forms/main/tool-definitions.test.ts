@@ -153,10 +153,12 @@ describe('FORMS_TOOLS', () => {
     );
   });
 
-  it('describes the card opening on a verdict, with the rest under Change…', () => {
+  it('describes the verdict under the finding, with the rest under Change…', () => {
     const description = descriptionOf('ask_round');
 
-    expect(description).toContain('A card opens on a verdict');
+    expect(description).toContain(
+      'A card shows the finding and a brief proof, then a verdict',
+    );
     expect(description).toContain('with Accept, or opens Change…');
   });
 

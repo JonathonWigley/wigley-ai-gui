@@ -1,3 +1,4 @@
+import type { CommandId } from '../../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { AnswerableKind, ItemKind, Round } from '../../contract';
 import type { FormsAction, RoundState, TextTarget } from '../form-state';
@@ -8,13 +9,15 @@ export interface ItemCard {
   update(round: RoundState): void;
 }
 
-// What a card reaches outside itself: the round's boxes, its actions and the
-// Don't-ask command, which also focuses the reason box.
+// What a card reaches outside itself: the round's boxes, its actions, the
+// Don't-ask command, which also focuses the reason box, and the keys that run
+// a qualified command in the forms view, null when none is bound.
 export interface CardDeps {
   markdown: MarkdownRenderer;
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
   dispatch(action: FormsAction): void;
   toggleDontAsk(): void;
+  keysFor(command: CommandId): string | null;
 }
 
 // How the page shows one kind of item. `index` is 1-based within the kind;

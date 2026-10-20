@@ -1,3 +1,4 @@
+import type { CommandId } from '../../../../../contracts/commands';
 import {
   button,
   element,
@@ -11,6 +12,7 @@ import {
   type FindingOrigin,
 } from '../../../contract';
 import { actionLabel } from '../../../finding-origins';
+import { formsCommand } from '../../../ids';
 import { changeShows, type FindingAnswer } from '../../form-state';
 import {
   buildAnswerableCard,
@@ -45,12 +47,12 @@ export const findingFormat: AnswerableFormat = {
     const article = element('article', 'item finding');
     parent.append(article);
     const statusChip = buildItemHead(article, text.kind);
-    const verdictBlock = buildVerdict(finding, verdict, position, deps);
-    article.append(verdictBlock.element);
     buildSection(article, text.finding, finding.finding, deps.markdown);
     const proof = element('div', 'finding-proof');
     article.append(proof);
     buildSection(proof, text.proof, finding.proof, deps.markdown);
+    const verdictBlock = buildVerdict(finding, verdict, position, deps);
+    article.append(verdictBlock.element);
     const { card, choices, choiceList } = buildAnswerableCard(
       article,
       statusChip,
@@ -85,10 +87,11 @@ export const findingFormat: AnswerableFormat = {
   },
 };
 
-// The verdict over the finding: its origin and severity chips, the
+// The verdict under the finding and proof: its origin and severity chips, the
 // recommended action and choice, the impact, and the Accept and Change…
-// buttons, each focusing the finding at rail `position` first. `update` marks
-// Change… open while the Change… region shows.
+// buttons, each focusing the finding at rail `position` first and showing the
+// keys that run its command. `update` marks Change… open while the Change…
+// region shows.
 function buildVerdict(
   finding: Finding,
   verdict: Verdict,
@@ -122,12 +125,12 @@ function buildVerdict(
     focusThis();
     deps.dispatch({ type: 'acceptRecommendation' });
   });
-  accept.append(element('kbd', '', '⏎'));
+  appendKeys(accept, formsCommand('acceptRecommendation'), deps);
   const changeButton = button('verdict-button', 'Change…', () => {
     focusThis();
     deps.dispatch({ type: 'toggleChange' });
   });
-  changeButton.append(element('kbd', '', 'c'));
+  appendKeys(changeButton, formsCommand('toggleChange'), deps);
   const buttons = element('div', 'verdict-buttons');
   buttons.append(accept, changeButton);
   block.append(
@@ -146,6 +149,15 @@ function buildVerdict(
       changeButton.setAttribute('aria-expanded', String(changeShows));
     },
   };
+}
+
+// Shows the keys that run `command` after `control`'s label; nothing when no
+// key is bound.
+function appendKeys(control: HTMLElement, command: CommandId, deps: CardDeps) {
+  const keys = deps.keysFor(command);
+  if (keys !== null) {
+    control.append(element('kbd', '', keys));
+  }
 }
 
 // Moves the "Your answer" label and choice list buildAnswerableCard built into

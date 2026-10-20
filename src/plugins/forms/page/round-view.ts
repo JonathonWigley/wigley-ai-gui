@@ -1,6 +1,7 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import { formsCommand } from '../ids';
+import type { KeysPageExports } from '../../keys/contract';
+import { formsCommand, formsScope } from '../ids';
 import { button, element, markdownElement } from '../../../shared/page/dom';
 import type { EditorBoxes } from './editor-boxes';
 import {
@@ -22,6 +23,7 @@ import { progressText, type ReviewRow, reviewRows } from './view-model';
 export interface RoundViewDeps {
   markdown: MarkdownRenderer;
   boxes: Pick<EditorBoxes, 'mount'>;
+  keys: Pick<KeysPageExports, 'keysFor'>;
   dispatch(action: FormsAction): void;
   run(command: CommandId): void;
 }
@@ -69,6 +71,7 @@ export function createRoundView(
       deps.boxes.mount(parent, { roundId: round.roundId, target }, text),
     dispatch: deps.dispatch,
     toggleDontAsk: () => deps.run(formsCommand('toggleDontAsk')),
+    keysFor: (command) => deps.keys.keysFor(command, formsScope('forms')),
   };
   const itemCards = items.map((item, position) =>
     FORMATS[item.kind].buildCard(

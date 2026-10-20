@@ -161,19 +161,23 @@ function startMainParts(
 ) {
   const channels = createPluginChannels(ipcMain, () => livePage(window));
   const bus = createEventBus();
-  return startPlugins(mainParts, (part, dependency) => {
-    const started = part.start(
-      createMainApi(part.manifest, {
-        channels,
-        settings: settingsByPlugin[part.manifest.id],
-        services,
-        dependency,
-        bus,
-      }),
-    );
-    onStarted(started);
-    return started;
-  });
+  return startPlugins(
+    mainParts,
+    (part, dependency) => {
+      const started = part.start(
+        createMainApi(part.manifest, {
+          channels,
+          settings: settingsByPlugin[part.manifest.id],
+          services,
+          dependency,
+          bus,
+        }),
+      );
+      onStarted(started);
+      return started;
+    },
+    manifests,
+  );
 }
 
 function registerPartCommands(

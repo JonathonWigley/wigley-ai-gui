@@ -2,6 +2,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Area, AreaName } from '../../../contracts/plugin';
 import { button, element } from '../../../shared/page/dom';
+import type { KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
 import { formsCommand } from '../ids';
 import { isBoxShown } from './boxes';
@@ -25,6 +26,7 @@ export interface FormsViewDeps {
   store: FormsStore;
   boxes: EditorBoxes;
   markdown: MarkdownRenderer;
+  keys: Pick<KeysPageExports, 'keysFor'>;
   run(command: CommandId): void;
 }
 
@@ -111,7 +113,13 @@ function showRound(
       });
     },
     round,
-    { markdown: deps.markdown, boxes: deps.boxes, dispatch, run: deps.run },
+    {
+      markdown: deps.markdown,
+      boxes: deps.boxes,
+      keys: deps.keys,
+      dispatch,
+      run: deps.run,
+    },
   );
   if (fill === null) {
     throw new Error(`Round ${round.roundId}'s view was never attached`);

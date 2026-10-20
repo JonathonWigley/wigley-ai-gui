@@ -10,8 +10,11 @@ function requireUniqueIds(manifests: readonly PluginManifest[]) {
   }
 }
 
-function requireDependenciesListed(manifests: readonly PluginManifest[]) {
-  const ids = new Set(manifests.map((manifest) => manifest.id));
+function requireDependenciesListed(
+  manifests: readonly PluginManifest[],
+  known: readonly PluginManifest[],
+) {
+  const ids = new Set(known.map((manifest) => manifest.id));
   for (const manifest of manifests) {
     const missing = manifest.dependsOn.filter((id) => !ids.has(id));
     if (missing.length > 0) {
@@ -23,7 +26,7 @@ function requireDependenciesListed(manifests: readonly PluginManifest[]) {
 }
 
 // `dependency` for a part: the exports of a plugin its manifest lists in
-// `dependsOn`, which started before it.
+// `dependsOn`, which started before it; undefined for one with no part here.
 function dependencyFor(
   manifest: PluginManifest,
   started: ReadonlyMap<string, { exports?: unknown }>,
@@ -39,24 +42,31 @@ function dependencyFor(
 }
 
 // Starts every part, each after the parts its manifest depends on and otherwise
-// in list order, handing it the exports of those dependencies. Returns what
-// each start returned, by plugin id, in start order. Throws on a duplicate id,
-// a dependency not in the list, or a dependency cycle.
+// in list order, handing it the exports of those dependencies. `known` is every
+// plugin's manifest, those with no part in this process included; a dependency
+// in `known` with no part here, such as a page-only plugin in main, starts
+// nowhere in this process. Returns what each start returned, by plugin id, in
+// start order. Throws on a duplicate id, a dependency not in `known`, or a
+// dependency cycle.
 export function startPlugins<
   Part extends { manifest: PluginManifest },
   Started extends { exports?: unknown },
 >(
   parts: readonly Part[],
   start: (part: Part, dependency: <E>(pluginId: string) => E) => Started,
+  known: readonly PluginManifest[] = parts.map((part) => part.manifest),
 ): Map<string, Started> {
   const manifests = parts.map((part) => part.manifest);
   requireUniqueIds(manifests);
-  requireDependenciesListed(manifests);
+  requireDependenciesListed(manifests, known);
+  const partIds = new Set(manifests.map((manifest) => manifest.id));
   const started = new Map<string, Started>();
   let pending = [...parts];
   while (pending.length > 0) {
     const ready = pending.find((part) =>
-      part.manifest.dependsOn.every((id) => started.has(id)),
+      part.manifest.dependsOn.every(
+        (id) => started.has(id) || !partIds.has(id),
+      ),
     );
     if (!ready) {
       const waiting = pending.map((part) => part.manifest.id).join(', ');

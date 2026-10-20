@@ -401,7 +401,7 @@
 }
 
 /* A finding's verdict: its chips, the recommended pick, the impact and the
-   Accept and Change… buttons, above the finding's sections. */
+   Accept and Change… buttons, under the finding's sections. */
 .verdict {
   margin-bottom: 1rem;
 }

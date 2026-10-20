@@ -63,6 +63,24 @@ describe('startPlugins', () => {
     expect(() => startRecording([part('b', ['a'])])).toThrow(/"b".*a/);
   });
 
+  it('starts a part whose dependency is known but has no part here', () => {
+    let received: unknown = 'not read';
+    const pageOnly = part('a').manifest;
+    const b = part('b', ['a']);
+
+    const started = startPlugins(
+      [b],
+      (started, dependency) => {
+        received = dependency('a');
+        return { exports: started.exports };
+      },
+      [pageOnly, b.manifest],
+    );
+
+    expect([...started.keys()]).toEqual(['b']);
+    expect(received).toBeUndefined();
+  });
+
   it('rejects a duplicate id', () => {
     expect(() => startRecording([part('a'), part('a')])).toThrow(/"a"/);
   });

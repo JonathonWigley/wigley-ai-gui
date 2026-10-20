@@ -55,7 +55,7 @@ const editorJumpBinds = DIGITS.map((digit) => ({
 // Forms' scopes are its view names, each titled for the key help.
 export const formsManifest = definePlugin({
   id: 'forms',
-  dependsOn: ['sessions'],
+  dependsOn: ['sessions', 'keys'],
   commands: {
     nextItem: { label: 'next item', group: 'questions', runsIn: 'page' },
     prevItem: { label: 'previous item', group: 'questions', runsIn: 'page' },
