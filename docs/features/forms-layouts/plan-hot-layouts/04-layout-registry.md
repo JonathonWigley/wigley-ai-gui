@@ -1,6 +1,6 @@
 # 04 — Layout registry in forms main
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 03
 Plan: [plan.md](plan.md)
@@ -88,3 +88,10 @@ Tests (`createMemoryFiles()`, each test writing its own layouts; `send` recorded
 Done when: compiles; `npm run lint` passes; the test gate runs the tests above.
 
 ## Proof
+
+Commit `c070e90`. Diff read: every Produces signature present, no contract changes; `src/declarations.d.ts` gained
+`declare module '*?raw'` (permitted). Typecheck: the one error is a peer's uncommitted `Mode.hidden` work in
+`sessions/page/start.ts`; none in this group's files. Layer check 193 files clean; oxlint clean.
+
+Concerns: a path written during a copy stays marked "ignore next report" until a report arrives; if the Node watcher
+never reports it, the user's next save of that file is ignored once.

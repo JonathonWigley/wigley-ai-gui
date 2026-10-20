@@ -188,7 +188,7 @@ Boundary rules:
 - [x] [Plugin data folders and the wigley-data scheme](03-plugin-data.md) — after 01
 
 ### Wave 3
-- [ ] [Layout registry in forms main](04-layout-registry.md) — after 02, 03
+- [x] [Layout registry in forms main](04-layout-registry.md) — after 02, 03
 
 ### Wave 4
 - [ ] [Layout loading, swapping and keys on the page](05-page-layouts.md) — after 02, 03, 04
@@ -218,6 +218,8 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
 - 02 layout contract · b5142a6 · proved (diff read, typecheck clean incl. `layout.js`, layer check) · concerns:
   fallback card's build uncaught; detached-article layouts mount editors detached; `setLayout` clears the focused
   box; DOM behaviour proved only by the self-test
+- 04 layout registry · c070e90 · proved (diff read, typecheck clean in its files, layer check) · concerns: a copied
+  path's ignore mark lingers until its watch report arrives
 ### Contract changes
 - `createRoundView`: → gains `layout: Layout, layoutName: string` after `round`; `RoundViewDeps` gains `log: Log`,
   `boxes` widens to `Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>` · why: builds through the layout
@@ -260,5 +262,12 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
 - A blank (after trim) choice reason draws nothing; card inputs copy their arrays and objects; `destroyBox` throws
   `No box is mounted as <key>` for an unmounted box; a notice's host `update` sets no `data-status` — as today's
   cards — none known · group 02
+- `copy_Twice_TakesNextFreeNumber` cycles back to `default` between copies: `<active>-<n>` from the active
+  `default-2` would name `default-2-2` — the Behaviour line's rule read literally — if the plan meant to strip a
+  trailing `-n`, `freeCopyName` changes · group 04
+- `openPreview` is declared with no handler (compiles: `handle` registers per method); group 06 registers it ·
+  group 04
+- File hand-off with plan A's session: it holds forms page `start.ts`, `forms-view.ts`, `forms-commands.ts` (+test)
+  until group 05 commits; this run never reads `api.areas.main` — lead
 ### Review rounds
 ### Test gate

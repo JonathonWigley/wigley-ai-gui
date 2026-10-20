@@ -1,6 +1,6 @@
 # 06 — Preview round
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
