@@ -47,8 +47,7 @@ export function buildItemHead(parent: HTMLElement, kind: string): HTMLElement {
   return status;
 }
 
-// A labelled block of markdown, classed by its label (`context-proof`);
-// nothing for blank text.
+// A labelled block of markdown; nothing for blank text.
 export function buildSection(
   parent: HTMLElement,
   label: string,
@@ -58,7 +57,7 @@ export function buildSection(
   if (text.trim() === '') {
     return;
   }
-  const section = element('section', `context context-${label.toLowerCase()}`);
+  const section = element('section', 'context');
   section.append(
     element('div', 'context-label', label),
     markdownElement('div', 'context-body md', markdown.block(text)),

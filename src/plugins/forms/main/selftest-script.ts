@@ -33,8 +33,8 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // finding 2, a Nit: Space a u is refused, since a Nit offers no follow-up, and
 // Space a f alone answers its one solution with Fix anyway. j to finding 3, a
 // Decision: Space a u sets Plan it, c opens and c closes its other choices, and
-// Enter accepts its recommendation. j to question 1, where Enter accepts its
-// recommendation and 2 then picks 2; a types "ab" at once, Esc out; d focuses
+// Enter accepts its recommendation. j to question 1, where 2 picks 2; a types
+// "ab" at once, Esc out; d focuses
 // its reason box, A appends a long word and Ctrl+k still in INSERT moves back
 // to its notes box, Esc out; a again types "c" after "ab". a once more, jk to
 // NORMAL, where Space opens which-key and Esc closes it without leaving the box
@@ -49,7 +49,8 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // applicable. Ctrl+h goes back to question 1, where Space opens which-key and
 // the timeout closes it, so 2 starts a fresh sequence and clears the choice
 // (Space 2 would jump), 2 picks it again; Space a 2 clears it and picks it
-// again, Space 2 jumps to question 2, and Space e n finds no unanswered item.
+// again, Enter replaces that pick with its recommendation, Space 2 jumps to
+// question 2, and Space e n finds no unanswered item.
 // Space opens which-key, a moves it into the Space a group, and Esc cancels the
 // sequence and closes it. Option+o moves to the second session's tab; Cmd+W
 // there asks to cancel its round, Esc keeps it and returns to its form, where j
@@ -85,10 +86,6 @@ const STEPS: SelfTestStep[] = [
     expect: '[forms] accepted the recommendation on finding 3',
   },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
-  {
-    keys: ['Enter'],
-    expect: '[forms] accepted the recommendation on question 1',
-  },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   { keys: ['a', 'b', 'j', 'k', 'Escape'], expect: '[forms] left the box' },
@@ -134,6 +131,10 @@ const STEPS: SelfTestStep[] = [
     expect: '[forms] cleared the choice on question 1',
   },
   { keys: [' ', 'a', '2'], expect: '[forms] chose 2 on question 1' },
+  {
+    keys: ['Enter'],
+    expect: '[forms] accepted the recommendation on question 1',
+  },
   { keys: [' ', '2'], expect: '[forms] jumped to question 2' },
   { keys: [' ', 'e', 'n'], expect: '[forms] no unanswered item' },
   { keys: [' '], expect: '[keys] which-key shows Space', checksFit: true },
@@ -345,7 +346,12 @@ function payloadProblems(payload: AnswersPayload): string[] {
       `finding 3 took_action_recommendation ${design?.took_action_recommendation}`,
     ],
     [first?.status === 'answered', `question 1 status ${first?.status}`],
-    [first?.choice === 2, `question 1 choice ${first?.choice}`],
+    // Choice 1, the recommendation, proves Enter replaced the pick of 2.
+    [first?.choice === 1, `question 1 choice ${first?.choice}`],
+    [
+      first?.took_recommendation === true,
+      `question 1 took_recommendation ${first?.took_recommendation}`,
+    ],
     // "abc" proves each a entered INSERT with the cursor at the end, and that
     // a d left pending in the box deleted nothing once the box was left.
     [

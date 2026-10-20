@@ -1,12 +1,12 @@
 import type { VimMode } from '../../../contracts/editor';
 import type { AnswerableKind, AnswerStatus, FindingAction } from '../contract';
-import { actionLabel } from '../finding-origins';
 import { findingSolution } from '../finding-pick';
 import {
   type AnswerableItem,
   answerableItems,
   answerStatus,
   findingActionOf,
+  findingActionWord,
   itemAnswer,
   pickIsComplete,
   type Progress,
@@ -86,10 +86,7 @@ export function reviewRows(round: RoundState): ReviewRow[] {
       status,
       action,
       actionLabel:
-        action === ''
-          ? ''
-          : (actionLabel(round.round.findings[item.index - 1].origin, action) ??
-            ''),
+        action === '' ? '' : (findingActionWord(round, item, action) ?? ''),
       choice,
       choiceText:
         choice > 0

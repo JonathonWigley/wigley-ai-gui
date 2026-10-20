@@ -327,6 +327,16 @@ export function findingActionOf(
     : '';
 }
 
+// The finding card's word for `action` on finding `item` in `round`, or null
+// when the finding's origin does not offer it.
+export function findingActionWord(
+  round: RoundState,
+  item: AnswerableItem,
+  action: FindingAction,
+): string | null {
+  return actionLabel(round.round.findings[item.index - 1].origin, action);
+}
+
 const PICK_ANSWERS = {
   question: (round, index) => round.answers[index - 1].choice >= 1,
   finding: (round, index) => {

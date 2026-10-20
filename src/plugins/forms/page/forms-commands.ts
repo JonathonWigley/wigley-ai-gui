@@ -25,6 +25,7 @@ import {
   type FormsState,
   type FormsView,
   findingActionOf,
+  findingActionWord,
   type ItemAnswer,
   itemAnswer,
   type RailItem,
@@ -94,7 +95,7 @@ export function formsCommandHandlers(
         { type: 'chooseAction', action },
         (_, item) =>
           findingAction(store.get(), item) === action
-            ? `chose ${findingActionWord(store.get(), item, action)} on ${itemName(item)}`
+            ? `chose ${activeFindingActionWord(store.get(), item, action)} on ${itemName(item)}`
             : `cleared the action on ${itemName(item)}`,
       );
     };
@@ -235,14 +236,13 @@ function findingAction(
 }
 
 // The finding card's word for `action` on `item` in the active round.
-function findingActionWord(
+function activeFindingActionWord(
   state: FormsState,
   item: AnswerableItem,
   action: FindingAction,
 ): string | null {
   const round = activeRound(state);
-  const origin = round?.round.findings[item.index - 1].origin;
-  return origin === undefined ? null : actionLabel(origin, action);
+  return round === null ? null : findingActionWord(round, item, action);
 }
 
 // The Defect card's word for `action`, which offers every action.
@@ -259,7 +259,7 @@ function findingLackingAction(
   const focused = state.view === 'forms' ? focusedAnswer(state) : null;
   const isLacking =
     focused?.item.kind === 'finding' &&
-    findingActionWord(state, focused.item, action) === null;
+    activeFindingActionWord(state, focused.item, action) === null;
   return isLacking ? focused.item : null;
 }
 
