@@ -33,10 +33,9 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // finding 2, a Nit: Space a u is refused, since a Nit offers no follow-up, and
 // Space a f alone answers its one solution with Fix anyway. j to finding 3, a
 // Decision: Space a u sets Plan it, and Enter accepts its recommendation. j to
-// question 1, where 2 picks 2; a types
-// "ab" at once, Esc out; d focuses
-// its reason box, A appends a long word and Ctrl+k still in INSERT moves back
-// to its notes box, Esc out; a again types "c" after "ab". a once more, jk to
+// question 1, where 2 picks 2; a types "ab" at once, Esc out; d focuses its
+// reason box, A appends a long word and Ctrl+k still in INSERT moves back to
+// its notes box, Esc out; a again types "c" after "ab". a once more, jk to
 // NORMAL, where Space opens which-key and Esc closes it without leaving the box
 // (vim drops its pending input); Space opens it again and, with no key pressed,
 // the which-key timeout closes it, and Esc then leaves the box, so the box kept
