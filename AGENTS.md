@@ -93,10 +93,12 @@ round), since main, not the page, decides.
 - **A mode** fills the window above the status bar, and the core shows one at a time: a plugin registers its mode
   through the page plugin API and binds the command that shows it (Sessions on `Space k s`, Docs on `Space k d`;
   pressed while its mode already shows, the same command toggles that mode's sidebar). A hidden mode keeps its state,
-  so leaving one never loses work in it. A new full-window feature is a new mode, with no core edit.
+  so leaving one never loses work in it, but it keeps no keys: each mode and each session tab is told when it becomes
+  the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
+  core edit.
 - **A session tab** is added to a session by the plugin that fills it, through the `sessions` page export `addTab`:
-  forms adds a Form tab on a session's first round, docs a Docs tab when the session connects. Tabs stay until the
-  session ends; the user moves between them with `Option+o` / `Option+i` and between sessions with
+  forms adds a Form tab on a session's first round, docs a Docs tab when the session connects. Tabs stay while the
+  session's row does; the user moves between them with `Option+o` / `Option+i` and between sessions with
   `Option+Shift+o` / `Option+Shift+i`.
 - **A key** is a default bind in its plugin's manifest naming that plugin's command; the core qualifies both, so
   `nextItem` in plugin `forms` runs as `forms.nextItem`, and its scope `review` is `forms.review`. Keys never call
