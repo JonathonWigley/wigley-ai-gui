@@ -121,6 +121,11 @@
   white-space: nowrap;
 }
 
+.rail-item .key-hint {
+  flex: none;
+  margin-left: auto;
+}
+
 /* Round head */
 .round-head {
   margin-bottom: 1rem;
@@ -400,8 +405,8 @@
   background: var(--wg-severity-minor);
 }
 
-/* A finding's verdict: its chips, the recommended pick, the impact and the
-   Accept and Change… buttons, under the finding's sections. */
+/* A finding's verdict: its chips, the impact and the Accept button, under the
+   finding's sections. */
 .verdict {
   margin-bottom: 1rem;
 }
@@ -411,15 +416,6 @@
   flex-wrap: wrap;
   gap: 0.4rem;
   margin-bottom: 0.5rem;
-}
-
-.verdict-line {
-  font-size: 1.05rem;
-}
-
-.verdict-action {
-  color: var(--wg-recommend);
-  font-weight: 600;
 }
 
 .verdict-impact {
@@ -453,16 +449,6 @@
   border-color: var(--wg-recommend);
 }
 
-.verdict-button[aria-expanded='true'] {
-  background: var(--wg-surface-selected);
-}
-
-.verdict-button kbd {
-  color: var(--wg-text-faint);
-  font-family: var(--wg-font-mono);
-  font-size: var(--wg-font-mono-size);
-}
-
 /* Toggles */
 .toggles {
   display: flex;
@@ -481,6 +467,10 @@
 
 .toggle:hover {
   background: var(--wg-surface-hover);
+}
+
+.toggle .key-hint {
+  margin-left: 0.5em;
 }
 
 .toggle[aria-pressed='true'] {
@@ -710,7 +700,6 @@
 
 .md code,
 .choice-text code,
-.verdict-choice code,
 .round-overview code {
   background: var(--wg-bg-deep);
   border-radius: 0.25rem;

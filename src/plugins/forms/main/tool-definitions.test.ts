@@ -153,13 +153,15 @@ describe('FORMS_TOOLS', () => {
     );
   });
 
-  it('describes the verdict under the finding, with the rest under Change…', () => {
+  it('describes the verdict under the finding, with every choice shown', () => {
     const description = descriptionOf('ask_round');
 
     expect(description).toContain(
       'A card shows the finding and a brief proof, then a verdict',
     );
-    expect(description).toContain('with Accept, or opens Change…');
+    expect(description).toContain(
+      'Under it every choice shows with its reason',
+    );
   });
 
   it('sends needs_manual_open back to ask_round, never collect_last_round', () => {

@@ -1,8 +1,18 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { KeysPageExports } from '../../keys/contract';
-import { formsCommand, formsScope } from '../ids';
-import { button, element, markdownElement } from '../../../shared/page/dom';
+import {
+  type FormsCommandName,
+  formsCommand,
+  formsScope,
+  numberedCommand,
+} from '../ids';
+import {
+  appendKeys,
+  button,
+  element,
+  markdownElement,
+} from '../../../shared/page/dom';
 import type { EditorBoxes } from './editor-boxes';
 import {
   answerableItems,
@@ -58,7 +68,7 @@ export function createRoundView(
   let shownView: FormsView = 'forms';
   const reviewRowAt = reviewRowsByRailPosition(round);
   const railEntries = items.map((item, position) =>
-    buildRailEntry(railList, round, item, () => {
+    buildRailEntry(railList, round, item, deps.keys, () => {
       const action = railPickAction(shownView, position, reviewRowAt[position]);
       if (action !== null) {
         deps.dispatch(action);
@@ -96,6 +106,9 @@ export function createRoundView(
       railEntries.forEach((entry, position) => {
         const item = items[position];
         updateRailEntry(entry, current, item, position, isReview);
+        if (entry.keys !== null) {
+          entry.keys.hidden = !isForms;
+        }
         const action = railPickAction(view, position, reviewRowAt[position]);
         entry.pick.disabled = action === null;
       });
@@ -173,15 +186,21 @@ function railPickAction(
   return isReviewItem ? { type: 'reviewJump', row: reviewRow } : null;
 }
 
+// `keys` is the hint of the keys that jump to the entry's item from the form,
+// absent when none do.
 interface RailEntry {
   element: HTMLLIElement;
   pick: HTMLButtonElement;
+  keys: HTMLElement | null;
 }
 
+// A question's entry shows the keys that jump to it, as clicking it does in
+// the form.
 function buildRailEntry(
   parent: HTMLElement,
   round: RoundState,
   item: RailItem,
+  keys: RoundViewDeps['keys'],
   onClick: () => void,
 ): RailEntry {
   const entry = element('li', 'rail-entry');
@@ -193,9 +212,15 @@ function buildRailEntry(
     element('span', 'rail-number', itemLabel(item)),
     element('span', 'rail-title', title),
   );
+  const command =
+    item.kind === 'question' ? numberedCommand('jumpTo', item.index) : null;
+  const hint = appendKeys(
+    pick,
+    command === null ? null : keys.keysFor(command, formsScope('forms')),
+  );
   entry.append(pick);
   parent.append(entry);
-  return { element: entry, pick };
+  return { element: entry, pick, keys: hint };
 }
 
 // While the review is open, untouched items are flagged in the rail.
@@ -218,8 +243,9 @@ function updateRailEntry(
   );
 }
 
-// The review's rows, then the round note, then Submit and Cancel; the note
-// shows only while the review or the cancel prompt does.
+// The review's rows, then the round note, then Submit and Cancel with the
+// review's keys for them; the note shows only while the review or the cancel
+// prompt does.
 function buildReview(
   parent: HTMLElement,
   round: RoundState,
@@ -242,12 +268,15 @@ function buildReview(
     round.note,
   );
   const actions = element('div', 'review-actions');
-  actions.append(
-    button('button button-primary', 'Submit', () =>
-      deps.run(formsCommand('submit')),
-    ),
-    button('button', 'Cancel round', () => deps.run(formsCommand('askCancel'))),
+  const submit = button('button button-primary', 'Submit', () =>
+    deps.run(formsCommand('submit')),
   );
+  appendKeys(submit, reviewKeysFor(deps, 'submit'));
+  const cancel = button('button', 'Cancel round', () =>
+    deps.run(formsCommand('askCancel')),
+  );
+  appendKeys(cancel, reviewKeysFor(deps, 'askCancel'));
+  actions.append(submit, cancel);
   section.append(actions);
   return {
     element: section,
@@ -266,13 +295,22 @@ function buildReview(
   };
 }
 
+// The review scope's keys for a forms command; null when unbound there.
+function reviewKeysFor(
+  deps: RoundViewDeps,
+  command: FormsCommandName,
+): string | null {
+  return deps.keys.keysFor(formsCommand(command), formsScope('review'));
+}
+
 const MISSING_HINTS: Record<NonNullable<ReviewRow['missing']>, string> = {
   solution: 'needs a solution',
   action: 'needs an action',
 };
 
 // A finding with a complete pick reads as its action, then its solution; one
-// missing half its pick names the missing half in place of its status.
+// missing half its pick names the missing half in place of its status. The
+// cursor's row shows the keys that jump to its item, as clicking it does.
 function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
   const entry = element('li', 'review-row');
   entry.dataset.status = row.status;
@@ -312,6 +350,9 @@ function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
     element('span', 'review-question', row.title),
     answer,
   );
+  if (row.isCursor) {
+    appendKeys(pick, reviewKeysFor(deps, 'reviewJump'));
+  }
   entry.append(pick);
   if (row.notes.trim() !== '') {
     entry.append(element('p', 'review-detail', `Notes: ${row.notes}`));

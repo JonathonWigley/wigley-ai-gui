@@ -39,3 +39,18 @@ export function button(
   node.addEventListener('click', onClick);
   return node;
 }
+
+// Shows `keys`, the keys that run a control's command, after `control`'s
+// label and returns the hint; nothing and null when the command is unbound
+// (null).
+export function appendKeys(
+  control: HTMLElement,
+  keys: string | null,
+): HTMLElement | null {
+  if (keys === null) {
+    return null;
+  }
+  const hint = element('kbd', 'key-hint', keys);
+  control.append(hint);
+  return hint;
+}

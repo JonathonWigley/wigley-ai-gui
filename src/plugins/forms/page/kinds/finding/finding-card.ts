@@ -1,5 +1,6 @@
 import type { CommandId } from '../../../../../contracts/commands';
 import {
+  appendKeys,
   button,
   element,
   markdownElement,
@@ -13,7 +14,7 @@ import {
 } from '../../../contract';
 import { actionLabel } from '../../../finding-origins';
 import { formsCommand } from '../../../ids';
-import { changeShows, type FindingAnswer } from '../../form-state';
+import type { FindingAnswer } from '../../form-state';
 import {
   buildAnswerableCard,
   buildChoiceReason,
@@ -31,6 +32,13 @@ const CARD_TEXT: Record<
   defect: { kind: 'Defect', finding: 'Finding', proof: 'Proof' },
   decision: { kind: 'Decision', finding: 'Decision', proof: 'Context' },
   nit: { kind: 'Nit', finding: 'Finding', proof: "Why it's safe" },
+};
+
+// The command that picks each action.
+const ACTION_COMMANDS: Record<FindingAction, CommandId> = {
+  fix_now: formsCommand('actFixNow'),
+  follow_up: formsCommand('actFollowUp'),
+  leave_it: formsCommand('actLeaveIt'),
 };
 
 export const findingFormat: AnswerableFormat = {
@@ -51,8 +59,7 @@ export const findingFormat: AnswerableFormat = {
     const proof = element('div', 'finding-proof');
     article.append(proof);
     buildSection(proof, text.proof, finding.proof, deps.markdown);
-    const verdictBlock = buildVerdict(finding, verdict, position, deps);
-    article.append(verdictBlock.element);
+    article.append(buildVerdict(finding, verdict, position, deps));
     const { card, choices, choiceList } = buildAnswerableCard(
       article,
       statusChip,
@@ -71,33 +78,29 @@ export const findingFormat: AnswerableFormat = {
       position,
       deps,
     );
-    const change = foldIntoChange(choiceList, actions.element);
+    choiceList.after(actions.element);
     return {
       element: card.element,
       update(current) {
         card.update(current);
         const answer = current.findingAnswers[index - 1];
-        const shows = changeShows(current, index);
         actions.update(answer);
         choiceList.classList.toggle('is-dimmed', answer.action === 'leave_it');
-        change.hidden = !shows;
-        verdictBlock.update(shows);
       },
     };
   },
 };
 
 // The verdict under the finding and proof: its origin and severity chips, the
-// recommended action and choice, the impact, and the Accept and Change…
-// buttons, each focusing the finding at rail `position` first and showing the
-// keys that run its command. `update` marks Change… open while the Change…
-// region shows.
+// impact, and the Accept button, which focuses the finding at rail `position`
+// and picks the recommended action and choice the choice list and action row
+// badge.
 function buildVerdict(
   finding: Finding,
   verdict: Verdict,
   position: number,
   deps: CardDeps,
-): { element: HTMLElement; update(changeShows: boolean): void } {
+): HTMLElement {
   const block = element('section', 'verdict');
   const chips = element('div', 'verdict-chips');
   const origin = element('span', 'badge badge-origin', verdict.origin);
@@ -108,34 +111,15 @@ function buildVerdict(
     severity.dataset.severity = finding.severity;
     chips.append(severity);
   }
-  const line = element('div', 'verdict-line');
-  line.append(element('span', 'verdict-action', verdict.action));
-  if (verdict.choice !== null) {
-    line.append(
-      ' — ',
-      markdownElement(
-        'span',
-        'verdict-choice',
-        deps.markdown.inline(verdict.choice),
-      ),
-    );
-  }
-  const focusThis = () => deps.dispatch({ type: 'focusItem', item: position });
   const accept = button('verdict-button verdict-accept', 'Accept', () => {
-    focusThis();
+    deps.dispatch({ type: 'focusItem', item: position });
     deps.dispatch({ type: 'acceptRecommendation' });
   });
-  appendKeys(accept, formsCommand('acceptRecommendation'), deps);
-  const changeButton = button('verdict-button', 'Change…', () => {
-    focusThis();
-    deps.dispatch({ type: 'toggleChange' });
-  });
-  appendKeys(changeButton, formsCommand('toggleChange'), deps);
+  appendKeys(accept, deps.keysFor(formsCommand('acceptRecommendation')));
   const buttons = element('div', 'verdict-buttons');
-  buttons.append(accept, changeButton);
+  buttons.append(accept);
   block.append(
     chips,
-    line,
     markdownElement(
       'div',
       'verdict-impact md',
@@ -143,46 +127,13 @@ function buildVerdict(
     ),
     buttons,
   );
-  return {
-    element: block,
-    update(changeShows) {
-      changeButton.setAttribute('aria-expanded', String(changeShows));
-    },
-  };
-}
-
-// Shows the keys that run `command` after `control`'s label; nothing when no
-// key is bound.
-function appendKeys(control: HTMLElement, command: CommandId, deps: CardDeps) {
-  const keys = deps.keysFor(command);
-  if (keys !== null) {
-    control.append(element('kbd', '', keys));
-  }
-}
-
-// Moves the "Your answer" label and choice list buildAnswerableCard built into
-// a Change… region in their place, with the action row after them; returns
-// the region.
-function foldIntoChange(
-  choiceList: HTMLElement,
-  actionRow: HTMLElement,
-): HTMLElement {
-  const answerLabel = choiceList.previousElementSibling;
-  if (answerLabel === null) {
-    throw new Error(
-      'The finding card found no answer label before its choices',
-    );
-  }
-  const change = element('div', 'finding-change');
-  answerLabel.before(change);
-  change.append(answerLabel, choiceList, actionRow);
-  return change;
+  return block;
 }
 
 // The labelled Action row: one button per action the origin offers, in the
 // card's word, the recommended one badged; a click focuses the finding at rail
-// `position` and picks that action. `update` shows the picked action and
-// locks the row while not applicable.
+// `position` and picks that action, and shows the keys that pick it. `update`
+// shows the picked action and locks the row while not applicable.
 function buildActionRow(
   origin: FindingOrigin,
   recommend: FindingAction,
@@ -205,6 +156,7 @@ function buildActionRow(
       pick.classList.add('is-recommended');
       pick.append(element('span', 'badge badge-recommend', 'Recommended'));
     }
+    appendKeys(pick, deps.keysFor(ACTION_COMMANDS[action]));
     buttons.append(pick);
     return [{ action, pick }];
   });

@@ -32,8 +32,8 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out. j to
 // finding 2, a Nit: Space a u is refused, since a Nit offers no follow-up, and
 // Space a f alone answers its one solution with Fix anyway. j to finding 3, a
-// Decision: Space a u sets Plan it, c opens and c closes its other choices, and
-// Enter accepts its recommendation. j to question 1, where 2 picks 2; a types
+// Decision: Space a u sets Plan it, and Enter accepts its recommendation. j to
+// question 1, where 2 picks 2; a types
 // "ab" at once, Esc out; d focuses
 // its reason box, A appends a long word and Ctrl+k still in INSERT moves back
 // to its notes box, Esc out; a again types "c" after "ab". a once more, jk to
@@ -79,8 +79,6 @@ const STEPS: SelfTestStep[] = [
   { keys: [' ', 'a', 'f'], expect: '[forms] chose Fix anyway on finding 2' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: [' ', 'a', 'u'], expect: '[forms] chose Plan it on finding 3' },
-  { keys: ['c'], expect: '[forms] opened other choices on finding 3' },
-  { keys: ['c'], expect: '[forms] closed other choices on finding 3' },
   {
     keys: ['Enter'],
     expect: '[forms] accepted the recommendation on finding 3',

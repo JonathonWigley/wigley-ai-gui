@@ -11,10 +11,11 @@ const ASK_ROUND_DESCRIPTION =
   'describe them as questions or choices. Use ' +
   "'findings' for review findings that need the user's decision: a " +
   `finding's origin sets its card — ${findingCardsText()}. A card shows ` +
-  'the finding and a brief proof, then a verdict: the recommended action ' +
-  'and choice, with the impact. The user takes the verdict whole ' +
-  'with Accept, or opens Change… for the other choices, each with its ' +
-  'reason under it, and the action control. A choice never opens with ' +
+  'the finding and a brief proof, then a verdict: the origin and severity ' +
+  'and the impact. Under it every choice shows with its reason, the ' +
+  'recommended choice and action badged, and the action control; the ' +
+  'user takes the recommendation whole with Accept, or picks any choice ' +
+  'and action. A choice never opens with ' +
   "an action's label. Use 'questions' for any " +
   "other open decision. Pass 'notices' for anything already fixed, " +
   'dispatched, decided by you alone, or otherwise settled before this round ' +

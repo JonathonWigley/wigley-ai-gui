@@ -54,7 +54,6 @@ const EXPECTED_PAGE: PageBind[] = [
     scope: 'forms.forms',
     command: 'forms.acceptRecommendation',
   },
-  { keys: ['c'], scope: 'forms.forms', command: 'forms.toggleChange' },
   ...DIGITS.map((digit) => ({
     keys: [' ', digit],
     scope: 'forms.forms',

@@ -136,7 +136,6 @@ export function formsCommandHandlers(
         { type: 'acceptRecommendation' },
         (_answer, item) => `accepted the recommendation on ${itemName(item)}`,
       ),
-    toggleChange: (context) => toggleChangeOnFocused(deps, context),
     actFixNow: act('fix_now'),
     actFollowUp: act('follow_up'),
     actLeaveIt: act('leave_it'),
@@ -261,39 +260,6 @@ function findingLackingAction(
     focused?.item.kind === 'finding' &&
     activeFindingActionWord(state, focused.item, action) === null;
   return isLacking ? focused.item : null;
-}
-
-// The focused finding and whether its Change… is open; null when no finding
-// is focused.
-function focusedChange(
-  state: FormsState,
-): { item: AnswerableItem; open: boolean } | null {
-  const round = activeRound(state);
-  const focused = round === null ? null : focusedItem(round);
-  if (round === null || focused?.kind !== 'finding') {
-    return null;
-  }
-  return {
-    item: { kind: 'finding', index: focused.index },
-    open: round.changeOpen[focused.index - 1],
-  };
-}
-
-// Logs every flip of the focused finding's Change… state, whether or not the
-// card shows Change… for another reason.
-function toggleChangeOnFocused(
-  deps: FormsCommandDeps,
-  context: PageCommandContext,
-) {
-  focusBoxItem(deps.store, boxIn(deps, context));
-  const before = focusedChange(deps.store.get());
-  deps.store.dispatch({ type: 'toggleChange' });
-  const after = focusedChange(deps.store.get());
-  if (before === null || after === null || after.open === before.open) {
-    return;
-  }
-  const verb = after.open ? 'opened' : 'closed';
-  deps.log('forms', `${verb} other choices on ${itemName(after.item)}`);
 }
 
 function focusedAnswer(

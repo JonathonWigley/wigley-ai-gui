@@ -50,9 +50,6 @@ export interface RoundState {
   findingAnswers: FindingAnswer[];
   // One per notice, in order.
   noticeComments: string[];
-  // One per finding, in order: whether the user opened Change… on it. Page
-  // state only: never saved, and not an answer edit.
-  changeOpen: boolean[];
   note: string;
   // A position in railItems(round).
   focus: number;
@@ -111,8 +108,6 @@ export type ItemAction =
   // Sets the recommended choice on a question, or the recommended action and
   // solution on a finding.
   | { type: 'acceptRecommendation' }
-  // Opens or closes Change… on the focused finding.
-  | { type: 'toggleChange' }
   | { type: 'toggleNotApplicable' }
   | { type: 'toggleDontAsk' };
 
@@ -419,23 +414,6 @@ export function saveState(round: RoundState): SaveState {
   return round.savingRevision === round.revision ? 'saving' : 'unsaved';
 }
 
-// Whether finding `index` (1-based) shows its Change… options: the user
-// opened them, or its answer differs from the recommended pick.
-export function changeShows(round: RoundState, index: number): boolean {
-  const answer = round.findingAnswers[index - 1];
-  const finding = round.round.findings[index - 1];
-  return round.changeOpen[index - 1] || !matchesRecommendation(answer, finding);
-}
-
-// An untouched answer shows as matching.
-function matchesRecommendation(
-  answer: FindingAnswer,
-  finding: Finding,
-): boolean {
-  const isUntouched = answer.action === '' && answer.choice === 0;
-  return isUntouched || holdsRecommendedPick(answer, finding);
-}
-
 // leave_it keeps whatever solution is held, so its solution is not compared.
 function holdsRecommendedPick(
   answer: FindingAnswer,
@@ -508,7 +486,6 @@ function restoreRound(presented: PresentedRound): RoundState {
         draft?.notice_comments.find((comment) => comment.index === i + 1)
           ?.comment ?? '',
     ),
-    changeOpen: round.findings.map(() => false),
     note: draft?.note ?? '',
     focus: firstAnswerablePosition(round),
     reviewRow: 0,
@@ -732,8 +709,6 @@ function applyItemAction(round: RoundState, action: ItemAction): RoundState {
       );
     case 'acceptRecommendation':
       return acceptRecommendation(round);
-    case 'toggleChange':
-      return toggleChange(round);
     case 'toggleNotApplicable':
       return updateFocusedAnswer(round, (answer) => ({
         ...answer,
@@ -887,21 +862,6 @@ function acceptRecommendationOn<K extends AnswerableKind>(
   return updateItemAnswer(round, item, (answer) =>
     answer.notApplicable ? answer : pick(round, item.index, answer),
   );
-}
-
-// A no-op unless a finding is focused. Leaves the revision alone, since
-// changeOpen is never saved.
-function toggleChange(round: RoundState): RoundState {
-  const focused = focusedItem(round);
-  if (focused === null || focused.kind !== 'finding') {
-    return round;
-  }
-  return {
-    ...round,
-    changeOpen: round.changeOpen.map((open, i) =>
-      i === focused.index - 1 ? !open : open,
-    ),
-  };
 }
 
 // A no-op when a notice is focused or `change` returns the answer it was given.

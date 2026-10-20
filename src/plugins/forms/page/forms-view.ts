@@ -1,10 +1,10 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Area, AreaName } from '../../../contracts/plugin';
-import { button, element } from '../../../shared/page/dom';
+import { appendKeys, button, element } from '../../../shared/page/dom';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
-import { formsCommand } from '../ids';
+import { type FormsCommandName, formsCommand, formsScope } from '../ids';
 import { isBoxShown } from './boxes';
 import type { EditorBoxes } from './editor-boxes';
 import {
@@ -45,7 +45,7 @@ interface ShownRound {
 export function mountFormsView(deps: FormsViewDeps) {
   const { areas, store, boxes } = deps;
   const status = buildStatusLine(deps);
-  const confirm = buildConfirm(deps.run);
+  const confirm = buildConfirm(deps);
   areas.statusBar.contribute(status.element);
   areas.overlay.contribute(confirm);
   const roundViews = new Map<string, ShownRound>();
@@ -160,19 +160,30 @@ function buildStatusLine(deps: FormsViewDeps): {
   };
 }
 
-function buildConfirm(run: (command: CommandId) => void): HTMLElement {
+// The cancel prompt; each button shows the confirm scope's keys for it.
+function buildConfirm(deps: Pick<FormsViewDeps, 'keys' | 'run'>): HTMLElement {
   const overlay = element('div', 'overlay');
   const dialog = element('div', 'dialog dialog-confirm');
   dialog.setAttribute('role', 'alertdialog');
   dialog.setAttribute('aria-label', 'Cancel this round?');
   const actions = element('div', 'dialog-actions');
+  const confirmButton = (
+    className: string,
+    label: string,
+    command: FormsCommandName,
+  ) => {
+    const control = button(className, label, () =>
+      deps.run(formsCommand(command)),
+    );
+    appendKeys(
+      control,
+      deps.keys.keysFor(formsCommand(command), formsScope('confirm')),
+    );
+    return control;
+  };
   actions.append(
-    button('button button-danger', 'Cancel the round', () =>
-      run(formsCommand('confirmCancel')),
-    ),
-    button('button', 'Keep answering', () =>
-      run(formsCommand('dismissConfirm')),
-    ),
+    confirmButton('button button-danger', 'Cancel the round', 'confirmCancel'),
+    confirmButton('button', 'Keep answering', 'dismissConfirm'),
   );
   dialog.append(
     element('h2', 'dialog-title', 'Cancel this round?'),

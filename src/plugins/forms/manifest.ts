@@ -81,11 +81,6 @@ export const formsManifest = definePlugin({
       group: 'choices',
       runsIn: 'page',
     },
-    toggleChange: {
-      label: 'show or hide other choices',
-      group: 'choices',
-      runsIn: 'page',
-    },
     // Each label names every card's word for the action.
     actFixNow: {
       label: 'fix now · decide now · fix anyway',
@@ -175,7 +170,6 @@ export const formsManifest = definePlugin({
       { keys: ['d'], scope: 'forms', command: 'toggleDontAsk' },
       { keys: ['a'], scope: 'forms', command: 'editNotes' },
       { keys: ['Enter'], scope: 'forms', command: 'acceptRecommendation' },
-      { keys: ['c'], scope: 'forms', command: 'toggleChange' },
       ...pageJumpBinds,
       { keys: [' ', 'e', 'n'], scope: 'forms', command: 'nextUnanswered' },
       { keys: [' ', 'e', 'p'], scope: 'forms', command: 'prevUnanswered' },

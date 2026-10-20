@@ -62,3 +62,12 @@
   border-color: var(--wg-error);
   color: var(--wg-error);
 }
+
+/* The keys that run a button's command, after its label. */
+.key-hint {
+  color: var(--wg-text-faint);
+}
+
+.button .key-hint {
+  margin-left: 0.5em;
+}

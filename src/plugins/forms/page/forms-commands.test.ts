@@ -225,28 +225,6 @@ describe('formsCommandHandlers', () => {
     expect(logs).toEqual([]);
   });
 
-  it('opens and closes other choices on the focused finding', () => {
-    const { run, round, logs } = setup([finding('Leak')]);
-
-    run('toggleChange');
-    expect(round().changeOpen).toEqual([true]);
-    run('toggleChange');
-
-    expect(round().changeOpen).toEqual([false]);
-    expect(logs).toEqual([
-      'opened other choices on finding 1',
-      'closed other choices on finding 1',
-    ]);
-  });
-
-  it('logs nothing when other choices toggle on a question', () => {
-    const { run, logs } = setup();
-
-    run('toggleChange');
-
-    expect(logs).toEqual([]);
-  });
-
   it('logs nothing when an action command runs on a question', () => {
     const { run, logs } = setup();
 

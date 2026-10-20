@@ -13,7 +13,6 @@ import {
   answerStatus,
   apply,
   buildBody,
-  changeShows,
   focusedItem,
   initialState,
   progress,
@@ -635,66 +634,6 @@ describe('acceptRecommendation', () => {
       choice: 0,
     });
     expect(active(accepted).revision).toBe(1);
-    expect(changeShows(active(accepted), 1)).toBe(false);
-  });
-
-  it('hides Change… once a fix_now recommendation is accepted', () => {
-    const onF1 = apply(findingRound(), { type: 'focusItem', item: 1 });
-    const accepted = apply(onF1, { type: 'acceptRecommendation' });
-    expect(changeShows(active(accepted), 1)).toBe(false);
-  });
-});
-
-describe('Change…', () => {
-  // Focuses the round's only finding, F1, restored from `body`.
-  function oneFindingRound(
-    overrides: Parameters<typeof finding>[1] = {},
-    body: FormBody | null = null,
-  ): FormsState {
-    return initialState(
-      [presented('r1', { findings: [finding('F1', overrides)] }, body)],
-      'r1-session',
-    );
-  }
-
-  it('toggleChange opens and closes Change… on the focused finding', () => {
-    const opened = apply(oneFindingRound(), { type: 'toggleChange' });
-    expect(changeShows(active(opened), 1)).toBe(true);
-
-    const closed = apply(opened, { type: 'toggleChange' });
-    expect(active(closed).changeOpen).toEqual([false]);
-    expect(changeShows(active(closed), 1)).toBe(false);
-  });
-
-  it('toggleChange leaves the revision and save state alone', () => {
-    const state = apply(oneFindingRound(), { type: 'toggleChange' });
-    expect(active(state).revision).toBe(0);
-    expect(saveState(active(state))).toBe('saved');
-  });
-
-  it('shows for a restored action that differs from the recommended one', () => {
-    const state = oneFindingRound(
-      { recommend_action: 'fix_now' },
-      draft({ finding_answers: [findingEntry(1, { action: 'leave_it' })] }),
-    );
-    expect(active(state).changeOpen).toEqual([false]);
-    expect(changeShows(active(state), 1)).toBe(true);
-  });
-
-  it('hides for a recommended leave_it answered leave_it with no solution', () => {
-    const state = oneFindingRound(
-      { recommend_action: 'leave_it' },
-      draft({ finding_answers: [findingEntry(1, { action: 'leave_it' })] }),
-    );
-    expect(changeShows(active(state), 1)).toBe(false);
-  });
-
-  it('shows for a solution picked with no action', () => {
-    const state = oneFindingRound(
-      {},
-      draft({ finding_answers: [findingEntry(1, { choice: 2 })] }),
-    );
-    expect(changeShows(active(state), 1)).toBe(true);
   });
 });
 

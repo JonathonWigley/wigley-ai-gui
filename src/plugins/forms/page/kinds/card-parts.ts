@@ -1,6 +1,12 @@
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import { button, element, markdownElement } from '../../../../shared/page/dom';
+import {
+  appendKeys,
+  button,
+  element,
+  markdownElement,
+} from '../../../../shared/page/dom';
 import type { AnswerStatus } from '../../contract';
+import { formsCommand, numberedCommand } from '../../ids';
 import {
   type AnswerableItem,
   answerStatus,
@@ -98,14 +104,15 @@ export function buildField(
   return { element: field, box };
 }
 
-// Appends one choice per text to `list`, each inline markdown, the
-// recommended one badged; `pick` gets the clicked choice, 1-based.
+// Appends one choice per text to `list`, each inline markdown with the keys
+// that pick it, the recommended one badged; `pick` gets the clicked choice,
+// 1-based.
 function buildChoiceList(
   list: HTMLElement,
   texts: string[],
   recommend: number,
   pick: (choice: number) => void,
-  markdown: MarkdownRenderer,
+  deps: CardDeps,
 ): HTMLLIElement[] {
   return texts.map((text, i) => {
     const choice = i + 1;
@@ -113,7 +120,7 @@ function buildChoiceList(
     const choicePick = button('choice-pick', '', () => pick(choice));
     choicePick.append(
       element('span', 'choice-number', String(choice)),
-      markdownElement('span', 'choice-text', markdown.inline(text)),
+      markdownElement('span', 'choice-text', deps.markdown.inline(text)),
     );
     entry.append(choicePick);
     if (choice === recommend) {
@@ -122,14 +129,16 @@ function buildChoiceList(
         element('span', 'badge badge-recommend', 'Recommended'),
       );
     }
+    const command = numberedCommand('choose', choice);
+    appendKeys(choicePick, command === null ? null : deps.keysFor(command));
     list.append(entry);
     return entry;
   });
 }
 
-// The Notes box, the Not applicable and Don't ask toggles and the reason box,
-// for `item` at rail `position`; `update` shows an answer's toggles and hides
-// the reason box while Don't ask is off.
+// The Notes box, the Not applicable and Don't ask toggles, each with the keys
+// that run it, and the reason box, for `item` at rail `position`; `update`
+// shows an answer's toggles and hides the reason box while Don't ask is off.
 function buildAnswerControls(
   parent: HTMLElement,
   round: RoundState,
@@ -154,6 +163,8 @@ function buildAnswerControls(
     focusThis();
     deps.toggleDontAsk();
   });
+  appendKeys(notApplicable, deps.keysFor(formsCommand('toggleNotApplicable')));
+  appendKeys(dontAsk, deps.keysFor(formsCommand('toggleDontAsk')));
   toggles.append(notApplicable, dontAsk);
   parent.append(toggles);
   const reason = buildField(
@@ -217,7 +228,7 @@ export function buildAnswerableCard(
       deps.dispatch({ type: 'focusItem', item: position });
       deps.dispatch({ type: 'choose', choice });
     },
-    deps.markdown,
+    deps,
   );
   const controls = buildAnswerControls(answerArea, round, item, position, deps);
   const parts = { card: article, statusChip, choiceList, choices };
