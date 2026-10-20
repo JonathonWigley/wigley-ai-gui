@@ -74,8 +74,8 @@ plugin still has something open there (forms: an open round), since main, not th
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
-  which types that plugin's exports and events. A dependency with no part in a process (`keys` in main) starts
-  nowhere there, and its exports read as `undefined` in that process.
+  which types that plugin's exports and events. A dependency with no part in a process (`keys` in main, a
+  main-only plugin on the page) starts nowhere there, and its exports read as `undefined` in that process.
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`activeChanged` in plugin
   `sessions` is `sessions.activeChanged`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`. Each process has its own bus, and nothing crosses processes on it: a plugin's own

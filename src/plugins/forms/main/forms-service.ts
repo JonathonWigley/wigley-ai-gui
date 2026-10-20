@@ -300,15 +300,16 @@ function takeUnreturnedFinished(session: SessionContext): FinishedRound | null {
     return null;
   }
   const round = roundFromRecord(session, record);
-  session.store.markReturned(record);
-  session.lastFinished = {
+  const finished: FinishedRound = {
     round,
     outcome: record.outcome,
     body: readFormBody(round, record.body),
     fingerprint: record.fingerprint,
     handedBack: false,
   };
-  return session.lastFinished;
+  session.store.markReturned(record);
+  session.lastFinished = finished;
+  return finished;
 }
 
 function closeOpenRound(session: SessionContext): void {

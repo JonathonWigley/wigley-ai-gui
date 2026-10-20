@@ -10,6 +10,7 @@ import type {
   PageServices,
 } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
+import { manifests } from '../plugins/manifests';
 import { pageParts } from '../plugins/page';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
@@ -96,32 +97,36 @@ async function start() {
   const run = (id: CommandId, context: PageCommandContext = {}) =>
     commands.run(id, context);
   const bus = createEventBus();
-  startPlugins(pageParts, (part, dependency) => {
-    const { id } = part.manifest;
-    const started = part.start(
-      createPageApi(part.manifest, {
-        areas,
-        bridge,
-        scopeStack,
-        pendingKeys,
-        keymap,
-        label: (command) => commandLabel(config, command),
-        commandInfo: config.commands,
-        scopes: config.scopes,
-        settings: servedSettings(config, id),
-        services,
-        run,
-        dependency,
-        bus,
-      }),
-    );
-    const handlers: Record<string, (context: PageCommandContext) => void> =
-      started.commands;
-    for (const [short, handler] of Object.entries(handlers)) {
-      commands.register(qualify(id, short), handler);
-    }
-    return started;
-  });
+  startPlugins(
+    pageParts,
+    (part, dependency) => {
+      const { id } = part.manifest;
+      const started = part.start(
+        createPageApi(part.manifest, {
+          areas,
+          bridge,
+          scopeStack,
+          pendingKeys,
+          keymap,
+          label: (command) => commandLabel(config, command),
+          commandInfo: config.commands,
+          scopes: config.scopes,
+          settings: servedSettings(config, id),
+          services,
+          run,
+          dependency,
+          bus,
+        }),
+      );
+      const handlers: Record<string, (context: PageCommandContext) => void> =
+        started.commands;
+      for (const [short, handler] of Object.entries(handlers)) {
+        commands.register(qualify(id, short), handler);
+      }
+      return started;
+    },
+    manifests,
+  );
   commands.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
   );

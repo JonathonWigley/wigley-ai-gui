@@ -184,6 +184,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/renderer/codemirror-vim',
       'src/renderer/markdown-it',
       'src/plugins/page.ts',
+      'src/plugins/manifests.ts',
     ],
     packages: [],
   },
