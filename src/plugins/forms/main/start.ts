@@ -1,10 +1,17 @@
 import path from 'node:path';
 import type { MainApi, MainPart } from '../../../contracts/plugin';
+import { errorText } from '../../../shared/error-text';
 import type { SessionsMainExports } from '../../sessions/contract';
 import type { FormsChannel, FormsService } from '../contract';
+import defaultLayout from '../layouts/default/layout.js?raw';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
 import { createChannelPresenter } from './channel-presenter';
 import { createFormsService } from './forms-service';
+import {
+  type LayoutRegistry,
+  startLayoutRegistry,
+} from './layouts/layout-registry';
 import { createRoundStore } from './round-store';
 import { formsSelfTestScript } from './selftest-script';
 import { FORMS_TOOLS } from './tool-definitions';
@@ -37,8 +44,32 @@ function createForms(
   });
 }
 
-// Serves its two tools to every agent session and shows each session's rounds
-// on the page; in the self-test it hands the driver its script.
+// Starts the layout registry and serves it to the page; a handler called
+// before the registry is ready answers once it is, and every handler rejects
+// with the start's error when it failed.
+function serveLayouts(api: FormsApi): Promise<LayoutRegistry> {
+  const { log } = api.services;
+  const layouts = startLayoutRegistry({
+    data: api.data,
+    send: (choice) => api.channel.send('layoutChanged', choice),
+    log,
+    layoutTypes,
+    defaultLayout,
+  });
+  layouts.catch((error: unknown) =>
+    log('forms', `layouts not started: ${errorText(error)}`),
+  );
+  api.channel.handle('layout', async () => (await layouts).current());
+  api.channel.handle('cycleLayout', async (step) =>
+    (await layouts).cycle(step),
+  );
+  api.channel.handle('copyLayout', async () => (await layouts).copy());
+  return layouts;
+}
+
+// Serves its two tools to every agent session, shows each session's rounds on
+// the page and serves the page its layouts; in the self-test it hands the
+// driver its script.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
@@ -47,7 +78,15 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     sessions.contributeTools(FORMS_TOOLS, (session) =>
       createFormsToolSession(forms.startSession(session)),
     );
+    const layouts = serveLayouts(api);
     api.services.selfTest?.run(formsSelfTestScript(sessions));
-    return { commands: {} };
+    return {
+      commands: {},
+      dispose: () =>
+        layouts.then(
+          (registry) => registry.dispose(),
+          () => undefined,
+        ),
+    };
   },
 };

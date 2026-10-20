@@ -235,18 +235,38 @@ export interface RoundPresenter {
   close(roundId: string): void;
 }
 
-// The forms page part invokes `openRounds` on load, `draft` as the user types
-// and `finish` on submit or cancel; main sends each round as it opens and the
-// id of a round that closed without the page. A `draft` whose save failed
-// rejects with the reason.
+// The layout the Form tab builds cards with. `revision` grows on every change
+// to a layout's files and every switch, so a URL holding it loads fresh
+// modules; `builtIn` marks the `default` layout, which has no files in forms'
+// data folder.
+export interface LayoutChoice {
+  name: string;
+  revision: number;
+  hasCss: boolean;
+  builtIn: boolean;
+  reason: 'start' | 'cycled' | 'reloaded' | 'copied';
+}
+
+// The forms page part invokes `openRounds` and `layout` on load, `draft` as
+// the user types, `finish` on submit or cancel, and `cycleLayout`,
+// `copyLayout` and `openPreview` from the layout keys; main sends each round
+// as it opens, the id of a round that closed without the page, and each layout
+// change, the page's own cycles and copies included. A `draft` whose save
+// failed rejects with the reason; `layout` rejects when the layouts failed to
+// start.
 export interface FormsChannel extends ChannelShape {
   invoke: {
     openRounds(): PresentedRound[];
     draft(roundId: string, body: FormBody): void;
     finish(roundId: string, end: RoundEnd): void;
+    layout(): Promise<LayoutChoice>;
+    cycleLayout(step: 1 | -1): Promise<LayoutChoice>;
+    copyLayout(): Promise<LayoutChoice>;
+    openPreview(): void;
   };
   messages: {
     roundShown: PresentedRound;
     roundClosed: string;
+    layoutChanged: LayoutChoice;
   };
 }
