@@ -5,6 +5,7 @@ import {
   isRoundToast,
   isSameVisibleTab,
   mayClose,
+  NO_TABS,
   roundToastText,
   rowChanges,
   rowStatus,
@@ -15,6 +16,10 @@ import {
   sidebarLayout,
   stepSession,
   stepTab,
+  type TabsState,
+  tabsAfterAdd,
+  tabsAfterRemove,
+  tabsAfterSelect,
   toggledSidebar,
   visibleTab,
 } from './tabs';
@@ -60,6 +65,65 @@ describe('tabs', () => {
     expect(stepTab(['form', 'docs'], 'docs', 1)).toBe('form');
     expect(stepTab(['form', 'docs'], null, -1)).toBe('docs');
     expect(stepTab(['form'], 'form', 1)).toBeNull();
+  });
+
+  it('tabsAfterAdd selects the first tab added and keeps the selection after', () => {
+    const first = tabsAfterAdd(NO_TABS, 's', 'form');
+    const second = tabsAfterAdd(first, 's', 'docs');
+
+    expect(first).toEqual({ tabIds: ['form'], selectedTabId: 'form' });
+    expect(second).toEqual({ tabIds: ['form', 'docs'], selectedTabId: 'form' });
+  });
+
+  it('tabsAfterAdd throws on a duplicate id', () => {
+    const tabs: TabsState = { tabIds: ['form'], selectedTabId: 'form' };
+
+    expect(() => tabsAfterAdd(tabs, 's', 'form')).toThrow(
+      'Session s already has a tab "form"',
+    );
+  });
+
+  it('tabsAfterRemove passes the selection of a middle tab to its right neighbour', () => {
+    const tabs: TabsState = { tabIds: ['a', 'b', 'c'], selectedTabId: 'b' };
+
+    expect(tabsAfterRemove(tabs, 'b')).toEqual({
+      tabIds: ['a', 'c'],
+      selectedTabId: 'c',
+    });
+  });
+
+  it('tabsAfterRemove passes the selection of the last tab to its left neighbour', () => {
+    const tabs: TabsState = { tabIds: ['a', 'b', 'c'], selectedTabId: 'c' };
+
+    expect(tabsAfterRemove(tabs, 'c')).toEqual({
+      tabIds: ['a', 'b'],
+      selectedTabId: 'b',
+    });
+  });
+
+  it('tabsAfterRemove of the only tab leaves none selected', () => {
+    const tabs: TabsState = { tabIds: ['a'], selectedTabId: 'a' };
+
+    expect(tabsAfterRemove(tabs, 'a')).toEqual(NO_TABS);
+  });
+
+  it('tabsAfterRemove of an unselected tab keeps the selection', () => {
+    const tabs: TabsState = { tabIds: ['a', 'b', 'c'], selectedTabId: 'c' };
+
+    expect(tabsAfterRemove(tabs, 'a')).toEqual({
+      tabIds: ['b', 'c'],
+      selectedTabId: 'c',
+    });
+  });
+
+  it('tabsAfterSelect selects a present tab and returns the same value for an absent one', () => {
+    const tabs: TabsState = { tabIds: ['a', 'b'], selectedTabId: 'a' };
+
+    expect(tabsAfterSelect(tabs, 'b')).toEqual({
+      tabIds: ['a', 'b'],
+      selectedTabId: 'b',
+    });
+    expect(tabsAfterSelect(tabs, 'x')).toBe(tabs);
   });
 
   it('rowStatus takes the last non-empty status in add order', () => {

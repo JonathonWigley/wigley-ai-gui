@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createModes } from './modes';
 
 // The test environment has no DOM, so each mode's element is a plain object
-// holding `hidden`; `calls` records each mode's `shown` and each change heard.
+// holding `hidden`; `calls` records each mode's `shown` and `hidden` and each
+// change heard.
 function setup() {
   const attached: HTMLElement[] = [];
   const logs: string[] = [];
@@ -19,6 +20,7 @@ function setup() {
       title,
       element,
       shown: () => calls.push(`shown ${id}`),
+      hidden: () => calls.push(`hidden ${id}`),
     });
     return { element, handle };
   };
@@ -40,7 +42,7 @@ describe('createModes', () => {
     expect(calls).toEqual(['shown a.one']);
   });
 
-  it('shows a mode and hides the shown one, telling the mode, then listeners', () => {
+  it('hides the shown mode and shows another, telling each mode, then listeners', () => {
     const { modes, logs, calls, add } = setup();
     const one = add('a.one', 'One');
     const two = add('b.two', 'Two');
@@ -50,7 +52,12 @@ describe('createModes', () => {
     expect(one.element.hidden).toBe(true);
     expect(two.element.hidden).toBe(false);
     expect(modes.shown()).toBe('b.two');
-    expect(calls).toEqual(['shown a.one', 'shown b.two', 'changed b.two']);
+    expect(calls).toEqual([
+      'shown a.one',
+      'hidden a.one',
+      'shown b.two',
+      'changed b.two',
+    ]);
     expect(logs.at(-1)).toBe('[page] showed Two mode');
     expect(two.handle.isShown()).toBe(true);
     expect(one.handle.isShown()).toBe(false);

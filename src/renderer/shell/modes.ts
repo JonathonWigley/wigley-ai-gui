@@ -38,6 +38,7 @@ export function createModes(
           }
           if (shownMode !== null) {
             shownMode.element.hidden = true;
+            shownMode.hidden();
           }
           reveal(mode);
           for (const listener of listeners) {

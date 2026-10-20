@@ -4,7 +4,15 @@ import type {
   SessionTabHandle,
   SessionTabView,
 } from '../contract';
-import { showsEmptyText, showsNoSelectionText } from './tabs';
+import {
+  NO_TABS,
+  showsEmptyText,
+  showsNoSelectionText,
+  type TabsState,
+  tabsAfterAdd,
+  tabsAfterRemove,
+  tabsAfterSelect,
+} from './tabs';
 
 // A tab with the status it last set.
 interface Tab {
@@ -12,12 +20,12 @@ interface Tab {
   status: string;
 }
 
-// A session's tabs in add order, the selected one's id, and the body holding
-// their elements.
+// A session's tab ids and selection, its tabs by id in add order, and the
+// body holding their elements.
 interface SessionTabs {
   body: HTMLElement;
-  tabs: Tab[];
-  selectedTabId: string | null;
+  tabs: TabsState;
+  entries: Map<string, Tab>;
 }
 
 // `isModeShown` reads whether Sessions mode shows; `changed` runs after any
@@ -63,8 +71,8 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     }
     const created: SessionTabs = {
       body: element('div', 'session-body'),
-      tabs: [],
-      selectedTabId: null,
+      tabs: NO_TABS,
+      entries: new Map(),
     };
     sessions.set(sessionId, created);
     bodies.append(created.body);
@@ -75,17 +83,17 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     const selectedSessionId = state?.selectedSessionId ?? null;
     for (const [sessionId, session] of sessions) {
       session.body.hidden = sessionId !== selectedSessionId;
-      for (const tab of session.tabs) {
-        tab.view.element.hidden = tab.view.id !== session.selectedTabId;
+      for (const tab of session.entries.values()) {
+        tab.view.element.hidden = tab.view.id !== session.tabs.selectedTabId;
       }
     }
     const selected =
       selectedSessionId === null ? undefined : sessions.get(selectedSessionId);
-    const selectedTabs = selected?.tabs ?? [];
+    const selectedTabs = [...(selected?.entries.values() ?? [])];
     strip.hidden = selectedTabs.length === 0;
     strip.replaceChildren(
       ...selectedTabs.map((tab) =>
-        buildTab(tab.view, tab.view.id === selected?.selectedTabId, () => {
+        buildTab(tab.view, tab.view.id === selected?.tabs.selectedTabId, () => {
           if (selectedSessionId !== null) {
             select(selectedSessionId, tab.view.id);
           }
@@ -102,27 +110,27 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
 
   const select = (sessionId: string, tabId: string) => {
     const session = sessions.get(sessionId);
-    if (session === undefined || session.selectedTabId === tabId) {
+    if (session === undefined) {
       return;
     }
-    session.selectedTabId = tabId;
+    const tabs = tabsAfterSelect(session.tabs, tabId);
+    if (tabs === session.tabs) {
+      return;
+    }
+    session.tabs = tabs;
     changed();
   };
 
   // The live tab entry, or undefined once it was dropped or removed.
   const liveTab = (sessionId: string, tab: Tab): SessionTabs | undefined => {
     const session = sessions.get(sessionId);
-    return session?.tabs.includes(tab) ? session : undefined;
+    return session?.entries.get(tab.view.id) === tab ? session : undefined;
   };
 
   const remove = (session: SessionTabs, tab: Tab) => {
-    const position = session.tabs.indexOf(tab);
     tab.view.element.remove();
-    session.tabs.splice(position, 1);
-    if (session.selectedTabId === tab.view.id) {
-      const neighbour = session.tabs[position] ?? session.tabs[position - 1];
-      session.selectedTabId = neighbour?.view.id ?? null;
-    }
+    session.tabs = tabsAfterRemove(session.tabs, tab.view.id);
+    session.entries.delete(tab.view.id);
     changed();
   };
 
@@ -135,13 +143,10 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     },
     add(sessionId, view) {
       const session = sessionOf(sessionId);
-      if (session.tabs.some((tab) => tab.view.id === view.id)) {
-        throw new Error(`Session ${sessionId} already has a tab "${view.id}"`);
-      }
+      session.tabs = tabsAfterAdd(session.tabs, sessionId, view.id);
       const tab: Tab = { view, status: '' };
+      session.entries.set(view.id, tab);
       session.body.append(view.element);
-      session.tabs.push(tab);
-      session.selectedTabId ??= view.id;
       changed();
       return {
         setStatus(status) {
@@ -164,7 +169,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         isVisible: () =>
           deps.isModeShown() &&
           state?.selectedSessionId === sessionId &&
-          liveTab(sessionId, tab)?.selectedTabId === view.id,
+          liveTab(sessionId, tab)?.tabs.selectedTabId === view.id,
       };
     },
     drop(sessionId) {
@@ -173,15 +178,19 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       draw();
     },
     tabsOf: (sessionId) =>
-      sessions.get(sessionId)?.tabs.map((tab) => tab.view) ?? [],
+      [...(sessions.get(sessionId)?.entries.values() ?? [])].map(
+        (tab) => tab.view,
+      ),
     statusesOf: (sessionId) =>
-      sessions.get(sessionId)?.tabs.map((tab) => tab.status) ?? [],
+      [...(sessions.get(sessionId)?.entries.values() ?? [])].map(
+        (tab) => tab.status,
+      ),
     selectedTabOf(sessionId) {
       const session = sessions.get(sessionId);
-      return (
-        session?.tabs.find((tab) => tab.view.id === session.selectedTabId)
-          ?.view ?? null
-      );
+      const selectedTabId = session?.tabs.selectedTabId ?? null;
+      return selectedTabId === null
+        ? null
+        : (session?.entries.get(selectedTabId)?.view ?? null);
     },
     select,
   };

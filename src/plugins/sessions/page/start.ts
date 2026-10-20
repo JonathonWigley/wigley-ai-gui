@@ -145,11 +145,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       layOut();
     });
 
-    const modeId = qualify(sessionsManifest.id, 'sessions');
-    api.modes.onChanged((shownModeId) => {
-      isModeShown = shownModeId === modeId;
-      checkVisible();
-    });
     // The first mode's `shown` runs inside `add`, before `mode` is assigned.
     const mode = api.modes.add({
       id: 'sessions',
@@ -157,6 +152,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       element: view.element,
       shown() {
         isModeShown = true;
+        checkVisible();
+      },
+      hidden() {
+        isModeShown = false;
         checkVisible();
       },
     });

@@ -135,11 +135,12 @@ describe('createPageApi', () => {
     const api = createPageApi(manifest, deps({ modes }));
     const element = {} as HTMLElement;
     const shown = () => {};
+    const hidden = () => {};
 
-    api.modes.add({ id: 'browse', title: 'Browse', element, shown });
+    api.modes.add({ id: 'browse', title: 'Browse', element, shown, hidden });
 
     expect(added).toEqual([
-      { id: 'p.browse', title: 'Browse', element, shown },
+      { id: 'p.browse', title: 'Browse', element, shown, hidden },
     ]);
   });
 });

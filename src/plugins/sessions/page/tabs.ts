@@ -42,6 +42,50 @@ export function stepTab(
   return tabIds.length < 2 ? null : stepFrom(tabIds, selectedTabId, step);
 }
 
+// A session's tab ids in add order and the selected one's id.
+export interface TabsState {
+  tabIds: readonly string[];
+  selectedTabId: string | null;
+}
+
+export const NO_TABS: TabsState = { tabIds: [], selectedTabId: null };
+
+// The tabs with `tabId` added last; the first tab added selects itself.
+// Throws when the session already has a tab with that id.
+export function tabsAfterAdd(
+  tabs: TabsState,
+  sessionId: string,
+  tabId: string,
+): TabsState {
+  if (tabs.tabIds.includes(tabId)) {
+    throw new Error(`Session ${sessionId} already has a tab "${tabId}"`);
+  }
+  return {
+    tabIds: [...tabs.tabIds, tabId],
+    selectedTabId: tabs.selectedTabId ?? tabId,
+  };
+}
+
+// The tabs without `tabId`; removing the selected tab selects its right
+// neighbour, else its left, else none.
+export function tabsAfterRemove(tabs: TabsState, tabId: string): TabsState {
+  const position = tabs.tabIds.indexOf(tabId);
+  const tabIds = tabs.tabIds.filter((id) => id !== tabId);
+  const selectedTabId =
+    tabs.selectedTabId === tabId
+      ? (tabIds[position] ?? tabIds[position - 1] ?? null)
+      : tabs.selectedTabId;
+  return { tabIds, selectedTabId };
+}
+
+// The tabs with `tabId` selected; the same value when that tab is absent or
+// already selected.
+export function tabsAfterSelect(tabs: TabsState, tabId: string): TabsState {
+  const isUnchanged =
+    !tabs.tabIds.includes(tabId) || tabs.selectedTabId === tabId;
+  return isUnchanged ? tabs : { ...tabs, selectedTabId: tabId };
+}
+
 // A sidebar row's second line: the last non-empty status among its session's
 // tabs, in tab-add order, or null.
 export function rowStatus(statuses: readonly string[]): string | null {

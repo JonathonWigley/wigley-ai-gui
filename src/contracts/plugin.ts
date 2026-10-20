@@ -163,12 +163,15 @@ export interface Area {
 // A view that fills the window above the status bar; the core shows one mode at
 // a time. `shown` runs each time this mode becomes the shown one, the first
 // mode's at its `add` included; the mode's plugin sets its base key scope
-// there, so a hidden view never keeps the scope.
+// there, so a hidden view never keeps the scope. `hidden` runs each time
+// another mode's `show` hides this one, after its element is hidden and before
+// the other mode's `shown`.
 export interface Mode {
   id: string;
   title: string;
   element: HTMLElement;
   shown(): void;
+  hidden(): void;
 }
 
 // `show` hides the shown mode and shows this one; on the shown mode it does
@@ -181,9 +184,10 @@ export interface ModeHandle {
 // The first mode added shows and every later one is added hidden; a hidden
 // mode keeps its DOM and state. `add` throws on an id already added, and calls
 // the first mode's `shown` before it returns, so that `shown` cannot read the
-// handle. `shown` is the shown mode's id and throws before any `add`;
-// `onChanged` listeners hear the new id each time `show` changes the shown
-// mode, after that mode's `shown`.
+// handle. `shown` is the shown mode's id and throws before any `add`. A `show`
+// that changes the shown mode hides the old mode's element, calls the old
+// mode's `hidden`, unhides the new mode's element and calls its `shown`, then
+// `onChanged` listeners hear the new id.
 export interface Modes {
   add(mode: Mode): ModeHandle;
   shown(): string;
