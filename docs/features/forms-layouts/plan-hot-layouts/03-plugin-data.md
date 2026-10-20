@@ -1,6 +1,6 @@
 # 03 — Plugin data folders and the wigley-data scheme
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -73,3 +73,10 @@ The scheme adapter itself (Electron's `protocol` and `net`) is checked live in t
 Done when: compiles; `npm run lint` passes; the test gate runs the tests above.
 
 ## Proof
+
+Commit `f9e9db6`. Diff read: every Produces signature present, pinned CSP exact, no contract changes. Typecheck: no
+error outside `src/plugins/forms/` (group 02 in flight), none naming `data`, `files` or `dataUrl`. Layer check 189
+files clean; oxlint clean. Tests run at the test gate; the scheme adapter is checked live in task 09.
+
+Concerns: the page side relies on `URL.parse` (untested until task 09); plugin ids must be lowercase (Chromium
+lowercases the host); Windows paths would mix `\` and `/`.

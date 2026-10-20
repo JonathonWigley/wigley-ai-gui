@@ -185,7 +185,7 @@ Boundary rules:
 - [ ] [Layout contract and the default layout](02-layout-contract.md)
 
 ### Wave 2
-- [ ] [Plugin data folders and the wigley-data scheme](03-plugin-data.md) — after 01
+- [x] [Plugin data folders and the wigley-data scheme](03-plugin-data.md) — after 01
 
 ### Wave 3
 - [ ] [Layout registry in forms main](04-layout-registry.md) — after 02, 03
@@ -213,6 +213,8 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
 ### Groups
 - 01 files service · 191f4d7 · proved (diff read, typecheck clean in its files, layer check) · concerns: Node watcher
   has no error listener; real-time watch test; oxfmt fails on `docs/features/` plan docs (pre-existing)
+- 03 plugin data · f9e9db6 · proved (diff read, typecheck clean outside forms, layer check) · concerns: `URL.parse`
+  untested until 09; plugin ids must be lowercase; Windows path separators untested
 ### Contract changes
 ### Rulings
 - Node watch drops an event named after the watched folder when no child of that name exists (FSEvents self-report)
@@ -226,5 +228,12 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
   the layer check, oxlint and oxfmt over `src` — lead
 - Started with plan A's 06–07 still open, by the user's go: this plan's 07 waits for plan A's 06 (both edit
   `selftest-script.ts`), and 08 for plan A's 07 (both edit `AGENTS.md`) — lead
+- 404 answers carry `Access-Control-Allow-Origin: *` too; a host of `.` or `..` resolves to null — a module
+  import's 404 would read as a CORS error otherwise — none known · group 03
+- The services fake in `main-api.test.ts` casts `as unknown as MainServices` — TS2352 on the direct cast — a fake
+  missing a member compiles · group 03
+- Plan A finished its groups 01–07 (`6126427`) mid-run, so this plan's 07 and 08 no longer wait on it — lead
+- The user's standing ruling for this session: at every review triage, take every review recommendation without a
+  triage round (the recommended action on each finding) — user
 ### Review rounds
 ### Test gate
