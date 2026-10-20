@@ -205,10 +205,15 @@ Boundary rules:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: b8ce743
+
+Peers on the tree at preflight: wigley-ai-gui-de runs docs-browser plan A (01–05 landed; 06 self-test and 07 doc
+re-read open) — commits pathspec-scoped, review range an explicit commit list.
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Started with plan A's 06–07 still open, by the user's go: this plan's 07 waits for plan A's 06 (both edit
+  `selftest-script.ts`), and 08 for plan A's 07 (both edit `AGENTS.md`) — lead
 ### Review rounds
 ### Test gate

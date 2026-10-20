@@ -1,6 +1,6 @@
 # 02 — Layout contract, the kit, the card host and the default layout
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

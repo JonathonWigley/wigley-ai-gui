@@ -1,6 +1,6 @@
 # 01 — Files service: read, atomic write, list, watch
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
