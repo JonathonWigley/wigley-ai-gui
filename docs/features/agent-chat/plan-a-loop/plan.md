@@ -352,8 +352,8 @@ the name. Recent folders live in chat's data folder at `recent-folders.json`, ne
 - [x] [Core: agent contract, services, self-test scripts, ACP removal, fake harness](05-core-agent-services.md) — after 02
 
 ### Wave 3
-- [ ] [Claude Code adapter](06-claude-adapter.md) — after 01, 05
-- [ ] [Chat main part](07-chat-main.md) — after 02, 03, 05, 08
+- [x] [Claude Code adapter](06-claude-adapter.md) — after 01, 05
+- [x] [Chat main part](07-chat-main.md) — after 02, 03, 05, 08
 
 ### Wave 4
 - [ ] [Chat tab](09-chat-tab.md) — after 04, 07, 08
@@ -381,13 +381,18 @@ Review base: 4597f154604caf0e8453b17f551918d444f11ab5
 - 04 tab takeover · c70ed85 · diff read + typecheck + layers pass · concerns: a private `setTabs` helper was extracted in `session-tabs-view.ts`
 - 05 core agent services · f83d324 · diff read + typecheck + layers pass · concerns: the npm uninstall was denied, so the lock lines were removed by hand; the worker's selftest failed 2 of 3 runs, on forms' layout-cycle steps
 - 01 spike · 436936c · diff read: 17 sections in order, version on line 1 · concerns: a stray forms round may be open; about 20 spike transcripts in `~/.claude-personal/projects/`; plan mode ran on sonnet while init reported haiku
+- 07 chat main · f7840dd · diff read + typecheck + lint pass · concerns: `recent.list()` swallows every read failure without a log line
+- 06 claude adapter · 6a886b6 · diff read + typecheck + lint pass · concerns: the inherited nested-session env is not stripped; raw entries pile up (thinking_tokens, status, rate_limit, hooks, tool_progress); idle is set at turnEnded even with a queued message; an ENOENT for a missing projectDir reads as "claude not found"; `commands` fires every turn
 ### Contract changes
+- `DecodedLine`: gains `turnFailed: boolean` · why: effort and model command results need it · consumers: none outside `src/main/claude-code` · group 06
 - claude-stream.md facts amend task 06's pinned reading: local `/effort` and `/model` print a synthetic `assistant` (`message.model` `<synthetic>`) plus a zero-cost `result`; no event reports effort; `manual` comes back as `default`; `total_cost_usd` is cumulative per process; SIGINT ends the process, so only `control_request` interrupt keeps it alive; there is one assistant event per content block; thinking is never streamed · consumers: 06 · group 01
 - `src/plugins/chat/layouts` had no LAYERS entry before task 05, so 05 added it as planned · consumers: none · group 05
 ### Rulings
 - Lint and typecheck run under the `.nvmrc` Node (`source ~/.nvm/nvm.sh && nvm use`); the shell's default Node 22.14 rejects `check-layers.mts` — every later brief says so · lead
 - A joined relay's `end()` holds its own once-flag, so an old relay's repeated `end()` cannot clear a later relay's join — costs nothing if wrong · group 03
-- A peer session (wigley-ai-gui-29, docs-browser plan B, untracked `src/plugins/docs/`) joined the tree after preflight: every commit from 04 on is pathspec-scoped, and the review range is this run's commit list · lead
+- A peer session (wigley-ai-gui-29, docs-browser plan B, untracked `src/plugins/docs/`) joined the tree after preflight: every commit from 04 on is pathspec-scoped, and the review range is this run's commit list. The peer's commits so far are 03b19ed and d402d6c, both outside the review range. The peer agreed to stay out of this run's shared files until the run closes, and asked for a message at close · lead
 - The spike's "permission tool not exposed" is the relay's offline stand-in: `relay.py` serves `BUILT_IN_TOOLS` only while the app is not running, and forwards the app's tool list otherwise, so chat's contributed `permission_prompt` reaches Claude through the joined relay; no plan change · lead
+- Claude adapter readings of claude-stream.md: a synthetic assistant becomes an info notice; the interrupt marker becomes raw; mode `default` maps to `manual`; the model control reads `init.model` and the last successful `/model`; effort stays null until a successful `/effort`; costUsd is the difference between results; on an error turn stopReason is `subtype`; interrupt uses the control request only; every emission goes through queueMicrotask — costs if wrong: control values shown wrong, or a duplicated notice · group 06
+- In chat, a rejected `process.end()` on `closed` is logged and `owned.end()` still runs — costs if wrong: none · group 07
 ### Review rounds
 ### Test gate

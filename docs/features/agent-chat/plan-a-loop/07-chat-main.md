@@ -1,6 +1,6 @@
 # 07 — Chat main part
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 03, 05, 08
 Plan: [plan.md](plan.md)
@@ -315,3 +315,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+f7840dd · diff read: the contract matches plan.md, with the five promise return types the task pins; the manifest, main part, `chat-sessions`, `permission-tool` and `recent-folders` are present; chat is added to `manifests.ts` and `plugins/main.ts`; typecheck and lint pass at 6a886b6. Rulings: a non-string `tool_use_id` is rejected; a rejected `process.end()` on `closed` is logged and `owned.end()` still runs. Concern: `recent.list()` returns `[]` with no log line for any read failure.

@@ -1,6 +1,6 @@
 # 06 — Claude Code adapter
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 05
 Plan: [plan.md](plan.md)
@@ -241,3 +241,4 @@ Commit:    one commit for the group — "Claude Code adapter: the installed CLI 
 
 ## Proof
 
+6a886b6 · diff read: every Produces is present in `src/main/claude-code/`; main.ts adds the adapter outside the self-test; `node:child_process` is imported only in claude-code and main.ts, which hands `spawn` in; typecheck and lint pass. Contract change: `DecodedLine.turnFailed: boolean` was added, internal to the adapter. Rulings applied from claude-stream.md are in the Run log. Concerns: the env inherits `CLAUDECODE`, `CLAUDE_EFFORT` and `CLAUDE_CODE_*` when the app starts from a Claude Code terminal; raw entries pile up (thinking_tokens, status, rate_limit, hooks, tool_progress); `turnEnded` sets idle at once, even while a queued message waits; an ENOENT for a missing projectDir would read as "claude not found"; `commands` fires on every turn.

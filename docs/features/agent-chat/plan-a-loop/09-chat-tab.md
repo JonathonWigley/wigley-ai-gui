@@ -1,6 +1,6 @@
 # 09 — Chat tab
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 02, 04, 05, 07, 08
 Plan: [plan.md](plan.md)
