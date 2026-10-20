@@ -30,8 +30,8 @@ already pin are left off.
    and the previous look stays. Fix it and save: the layout returns.
 5. **Expected** — `Space z l n` / `Space z l p` cycle `default` ↔ `default-2`. Quit and start the app: the layout
    last chosen is active.
-6. **Expected** — `Space z l o` again swaps in the newest saved real round. Submit it: the row leaves, and no agent
-   session receives anything.
+6. **Expected** — `Space z l o` opens the preview on the sample (the restart in check 5 closed it); press it again: it
+   swaps in the newest saved real round. Submit it: the row leaves, and no agent session receives anything.
 7. **Low-confidence** (the editor reads the `.d.ts` the app wrote) — open `default-2/layout.js` in an editor with
    `// @ts-check` and `/** @type {import('../layout').Layout} */`: completions list the kit's parts.
 

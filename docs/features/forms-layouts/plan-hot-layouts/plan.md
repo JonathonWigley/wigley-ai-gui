@@ -309,6 +309,9 @@ re-read open) — commits pathspec-scoped, review range an explicit commit list.
 - Step 5 expects revision 7; step 6 expects `[forms] round shown: Layout preview · Layout preview`; the fixture
   notice calls `textBox(article, 'notes')` (same throw) — none known · group 07
 ### Review rounds
+- review 1 · 765db00 · NEEDS FIXES — 5 Important, 20 Minor (report `review-765db00.md`); every recommendation taken
+  by the user's ruling; fix round 1 dispatched as four workers by file (W1 core, W2 cards, W3 registry and page
+  loader, W4 preview); 09's check 6 fixed by the lead
 ### Test gate
 - Range: this run's commits 191f4d7 f9e9db6 b5142a6 c070e90 f8afed4 66789d6 25718bd a4f3184. Pass 1 (written):
   node-files, main-api, layout-registry, layout-preview, preview-round, round-store, manifest, editor-boxes,
