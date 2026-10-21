@@ -29,14 +29,28 @@ export function readOnlyText(plugin: string): string {
   return `Plugin cache — ${plugin}. Edit the source repo's copy.`;
 }
 
+// The file a detail view's `i` edits, read, and the 1-based line it opens at.
+export interface DetailFile {
+  path: string;
+  text: string;
+  line: number;
+}
+
+// A hook or plugin entry's view: a field table in place of a file, which is
+// neither read nor watched until `i` edits the file `editFile` finds.
+export interface DocDetail {
+  fields: [string, string][];
+  // Null when there is no file to edit; the finder toasts why.
+  editFile(): Promise<DetailFile | null>;
+}
+
 // What the doc pane opens.
 export interface DocTarget {
   path: string;
   title: string;
   // The entry whose chips show; null for a file no entry names.
   entryId: string | null;
-  // A hook or plugin entry: the header only, no file read or watched.
-  isHeaderOnly: boolean;
+  detail: DocDetail | null;
   // The plugin whose cache holds the file, which makes it read-only.
   cachePlugin: string | null;
   // 1-based line of the whole file to scroll to.
@@ -61,16 +75,23 @@ export interface DocViewDeps {
 }
 
 // The doc pane: the header with its chips, the plugin cache line, the
-// frontmatter table and the rendered body, swapped for the document editor
-// on `edit`. Opening another doc is refused while the editor holds unsaved
-// edits. `open` resolves to whether the doc opened.
+// frontmatter table and the rendered body (a detail's field table), swapped
+// for the document editor on `edit`; the editor's `:q` returns to them.
+// Opening another doc is refused while the editor holds unsaved edits.
+// `open` resolves to whether the doc opened.
 export interface DocView {
   element: HTMLElement;
   open(target: DocTarget): Promise<boolean>;
   openPath(): string | null;
+  // The open doc's file moved: the pane, its editor included, follows it to
+  // `target`, watching the new path.
+  retarget(target: DocTarget): void;
+  // Empties the pane, its editor dropped and its watch stopped.
+  clear(): void;
   refreshChips(): void;
   diskChanged(path: string): void;
-  edit(): void;
+  // Opens the editor at `line`, else at the top visible line.
+  edit(line?: number): void;
   scroll(by: 1 | -1): void;
   // Focuses the open editor, else the pane.
   focus(): void;
@@ -91,6 +112,9 @@ interface Rendered {
 
 interface ShownDoc {
   target: DocTarget;
+  // The file the text, the editor, writes and the watch act on: the
+  // target's, or the file a detail view edits.
+  filePath: string;
   name: string;
   // The file text the view last read or wrote.
   text: string;
@@ -125,6 +149,10 @@ async function renderText(
     `${fence}${language}\n${text}\n${fence}`,
   );
   return { fields: [], html, bodyStartLine: 1 };
+}
+
+function detailRendered(detail: DocDetail): Rendered {
+  return { fields: detail.fields, html: '', bodyStartLine: 1 };
 }
 
 function frontmatterTable(fields: [string, string][]): HTMLElement {
@@ -302,9 +330,24 @@ export function createDocView(deps: DocViewDeps): DocView {
     prompt.hidden = false;
   };
 
-  // Destroys the editor and shows the rendered doc from the text last read
-  // or written.
-  const closeEditor = (doc: ShownDoc) => {
+  const watchFile = (path: string | null, name: string) => {
+    deps.channel
+      .invoke('watchDoc', deps.viewId, path)
+      .catch((error) =>
+        deps.log('docs', `not watching ${name}: ${errorText(error)}`),
+      );
+  };
+
+  // Shows the detail's field table, the file it edits let go.
+  const showDetail = (doc: ShownDoc, detail: DocDetail) => {
+    doc.filePath = doc.target.path;
+    doc.name = baseName(doc.target.path);
+    doc.text = '';
+    drawBody(detailRendered(detail));
+    watchFile(null, doc.name);
+  };
+
+  const dropEditor = () => {
     endConflict(false);
     editor?.destroy();
     editor = null;
@@ -312,9 +355,19 @@ export function createDocView(deps: DocViewDeps): DocView {
     editorBox = null;
     pane.classList.remove('is-editing');
     banner.hidden = true;
+  };
+
+  // Destroys the editor and shows the rendered doc from the text last read
+  // or written, or the detail view it was opened from.
+  const closeEditor = (doc: ShownDoc) => {
+    dropEditor();
     deps.log('docs', `closed the editor on ${doc.name}`);
     pane.focus();
-    renderText(deps.markdown, doc.target.path, doc.text)
+    if (doc.target.detail !== null) {
+      showDetail(doc, doc.target.detail);
+      return;
+    }
+    renderText(deps.markdown, doc.filePath, doc.text)
       .then((rendered) => {
         if (shown === doc && editor === null) {
           doc.bodyStartLine = rendered.bodyStartLine;
@@ -333,7 +386,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     const text = writing.text();
     writingText = text;
     deps.channel
-      .invoke('writeDoc', doc.target.path, text, overwrite ? null : doc.text)
+      .invoke('writeDoc', doc.filePath, text, overwrite ? null : doc.text)
       .then((result) => {
         if (shown !== doc || editor !== writing) {
           return;
@@ -384,7 +437,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   };
 
   const reread = async (doc: ShownDoc) => {
-    const diskText = await deps.channel.invoke('readDoc', doc.target.path);
+    const diskText = await deps.channel.invoke('readDoc', doc.filePath);
     if (shown !== doc || diskText === writingText) {
       return;
     }
@@ -395,7 +448,10 @@ export function createDocView(deps: DocViewDeps): DocView {
       }
       return;
     }
-    const rendered = await renderText(deps.markdown, doc.target.path, diskText);
+    if (doc.target.detail !== null) {
+      return;
+    }
+    const rendered = await renderText(deps.markdown, doc.filePath, diskText);
     if (shown !== doc || editor !== null) {
       return;
     }
@@ -405,6 +461,34 @@ export function createDocView(deps: DocViewDeps): DocView {
     drawBody(rendered);
     pane.scrollTop = scrollTop;
     deps.log('docs', `reloaded ${doc.name}`);
+  };
+
+  const openEditor = (doc: ShownDoc, line: number) => {
+    pane.classList.add('is-editing');
+    pane.scrollTop = 0;
+    editorBox = element('div', 'docs-editor');
+    pane.append(editorBox);
+    editor = deps.editor.createDocument(
+      editorBox,
+      doc.text,
+      { fileName: doc.name, readOnly: false, line },
+      editorEvents,
+    );
+    editor.focus();
+    deps.log('docs', `editing ${doc.name}`);
+  };
+
+  // Opens the file the detail finds in the editor, watched while it edits.
+  const editDetail = async (doc: ShownDoc, detail: DocDetail) => {
+    const file = await detail.editFile();
+    if (file === null || shown !== doc || editor !== null) {
+      return;
+    }
+    doc.filePath = file.path;
+    doc.name = baseName(file.path);
+    doc.text = file.text;
+    watchFile(file.path, doc.name);
+    openEditor(doc, file.line);
   };
 
   const view: DocView = {
@@ -418,9 +502,11 @@ export function createDocView(deps: DocViewDeps): DocView {
       let rendered: Rendered = { fields: [], html: '', bodyStartLine: 1 };
       const homeDir = await deps.homeDir;
       try {
-        if (!target.isHeaderOnly) {
+        if (target.detail === null) {
           text = await deps.channel.invoke('readDoc', target.path);
           rendered = await renderText(deps.markdown, target.path, text);
+        } else {
+          rendered = detailRendered(target.detail);
         }
       } catch (error) {
         const failure = `Could not open ${tildePath(target.path, homeDir)}: ${errorText(error)}`;
@@ -435,20 +521,18 @@ export function createDocView(deps: DocViewDeps): DocView {
         closeEditor(shown);
       }
       const name = baseName(target.path);
-      shown = { target, name, text, bodyStartLine: rendered.bodyStartLine };
+      shown = {
+        target,
+        filePath: target.path,
+        name,
+        text,
+        bodyStartLine: rendered.bodyStartLine,
+      };
       drawHeader(target, homeDir);
       drawChips();
       drawBody(rendered);
       pane.scrollTop = 0;
-      deps.channel
-        .invoke(
-          'watchDoc',
-          deps.viewId,
-          target.isHeaderOnly ? null : target.path,
-        )
-        .catch((error) =>
-          deps.log('docs', `not watching ${name}: ${errorText(error)}`),
-        );
+      watchFile(target.detail === null ? target.path : null, name);
       deps.log('docs', `opened ${name}`);
       if (target.line !== null) {
         scrollToLine(target.line, rendered.bodyStartLine);
@@ -459,22 +543,52 @@ export function createDocView(deps: DocViewDeps): DocView {
       return true;
     },
     openPath: () => shown?.target.path ?? null,
+    retarget(target) {
+      const doc = shown;
+      if (doc === null) {
+        return;
+      }
+      doc.target = target;
+      if (target.detail === null) {
+        doc.filePath = target.path;
+        doc.name = baseName(target.path);
+        watchFile(target.path, doc.name);
+      }
+      drawChips();
+      void deps.homeDir.then((homeDir) => {
+        if (shown === doc) {
+          drawHeader(target, homeDir);
+        }
+      });
+    },
+    clear() {
+      if (shown === null) {
+        return;
+      }
+      openCount++;
+      dropEditor();
+      watchFile(null, shown.name);
+      shown = null;
+      header.hidden = true;
+      readOnlyLine.hidden = true;
+      drawChips();
+      drawBody({ fields: [], html: '', bodyStartLine: 1 });
+    },
     refreshChips: drawChips,
     diskChanged(changedPath) {
       const doc = shown;
-      if (doc === null || doc.target.isHeaderOnly) {
-        return;
-      }
-      if (doc.target.path !== changedPath) {
+      const isWatching =
+        doc !== null && (doc.target.detail === null || editor !== null);
+      if (!isWatching || doc.filePath !== changedPath) {
         return;
       }
       reread(doc).catch((error) =>
         deps.log('docs', `not reloaded ${doc.name}: ${errorText(error)}`),
       );
     },
-    edit() {
+    edit(line) {
       const doc = shown;
-      if (doc === null || doc.target.isHeaderOnly) {
+      if (doc === null) {
         return;
       }
       if (doc.target.cachePlugin !== null) {
@@ -485,23 +599,17 @@ export function createDocView(deps: DocViewDeps): DocView {
         editor.focus();
         return;
       }
-      const line = topVisibleLine(
-        sourceBlocks(body),
-        pane.scrollTop,
-        doc.bodyStartLine,
+      if (doc.target.detail !== null) {
+        editDetail(doc, doc.target.detail).catch((error) =>
+          deps.toast(errorText(error), 'error'),
+        );
+        return;
+      }
+      openEditor(
+        doc,
+        line ??
+          topVisibleLine(sourceBlocks(body), pane.scrollTop, doc.bodyStartLine),
       );
-      pane.classList.add('is-editing');
-      pane.scrollTop = 0;
-      editorBox = element('div', 'docs-editor');
-      pane.append(editorBox);
-      editor = deps.editor.createDocument(
-        editorBox,
-        doc.text,
-        { fileName: doc.name, readOnly: false, line },
-        editorEvents,
-      );
-      editor.focus();
-      deps.log('docs', `editing ${doc.name}`);
     },
     scroll(by) {
       pane.scrollTop += by * SCROLL_STEP_PX;
@@ -550,11 +658,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       endConflict(false);
       editor?.destroy();
       editor = null;
-      deps.channel
-        .invoke('watchDoc', deps.viewId, null)
-        .catch((error) =>
-          deps.log('docs', `watch not stopped: ${errorText(error)}`),
-        );
+      watchFile(null, shown?.name ?? 'the doc');
     },
   };
   return view;

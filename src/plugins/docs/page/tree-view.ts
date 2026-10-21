@@ -52,6 +52,8 @@ export interface TreeView {
   up(): void;
   open(): void;
   close(): void;
+  // The selected row's node, or null when no row is selected.
+  selected(): TreeNode | null;
   // Selects the entry's leaf, expanding the groups above it; nothing when no
   // leaf holds it.
   selectEntry(entryId: string): void;
@@ -188,6 +190,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
         draw();
       }
     },
+    selected: () => selectedRow()?.node ?? null,
     selectEntry(entryId) {
       const leafId = `entry:${entryId}`;
       const expanded = new Set(state.expanded);

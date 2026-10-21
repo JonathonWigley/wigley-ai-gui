@@ -62,6 +62,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       viewId: string,
       source: DocsSource,
       isActive: () => boolean,
+      afterChange: () => void,
     ) =>
       createDocsView({
         viewId,
@@ -75,12 +76,14 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         setScope: (scope) => api.keys.setScope(scope),
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,
+        afterChange,
       });
 
     const machineView = createView(
       'machine',
       { type: 'machine' },
       () => isDocsModeShown,
+      () => undefined,
     );
 
     // `add` may call `shown` before it returns, so `shown` reads no handle.
@@ -107,6 +110,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             `session:${sessionId}`,
             { type: 'session', spec: { hostSessionId, projectDir, harness } },
             () => held.handle?.isVisible() === true,
+            () => machineView.rebuildInBackground(),
           ),
           handle: null,
         };
@@ -192,6 +196,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         boxComplete: onActiveView('boxComplete'),
         boxAccept: onActiveView('boxAccept'),
         boxCancel: onActiveView('boxCancel'),
+        createByKind: onActiveView('createByKind'),
+        createByPath: onActiveView('createByPath'),
+        rename: onActiveView('rename'),
+        trash: onActiveView('trash'),
+        confirmYes: onActiveView('confirmYes'),
+        confirmNo: onActiveView('confirmNo'),
       },
     };
   },

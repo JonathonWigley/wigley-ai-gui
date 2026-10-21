@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { IndexContext, IndexDocument } from '../contract';
+import type { IndexContext, IndexDocument, IndexEntry } from '../contract';
 import type { TreeGroup, TreeLeaf, TreeNode } from '../tree';
 import {
+  applyChange,
   chips,
   codeFence,
   contextChoices,
+  detailFields,
   parentId,
+  provisionalEntry,
   rootIds,
+  settlePending,
   stepSelection,
   type TreeRow,
   type TreeState,
@@ -197,5 +201,267 @@ describe('codeFence', () => {
   it('codeFence_LongestRunPlusOne', () => {
     expect(codeFence('a ```` b `` c')).toBe('`````');
     expect(codeFence('plain text')).toBe('```');
+  });
+});
+
+function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
+  return {
+    id: overrides.path,
+    kind: 'reference',
+    source: 'global',
+    repo: null,
+    root: null,
+    plugin: null,
+    line: null,
+    title: overrides.path.slice(overrides.path.lastIndexOf('/') + 1),
+    meta: {},
+    ...overrides,
+  };
+}
+
+function documentOf(
+  entries: IndexEntry[],
+  contexts: IndexContext[] = [],
+): IndexDocument {
+  return {
+    schemaVersion: 1,
+    generatedAt: '2026-10-20T00:00:00Z',
+    entries,
+    contexts,
+  };
+}
+
+const paths = (document: IndexDocument) =>
+  document.entries.map((each) => each.path);
+
+describe('applyChange', () => {
+  it('applyChange_Created_AddsEntry', () => {
+    const before = documentOf([entry({ path: '/Users/u/dev/r/a.md' })]);
+
+    const after = applyChange(before, {
+      type: 'created',
+      entry: entry({ path: '/Users/u/dev/r/b.md' }),
+    });
+
+    expect(paths(after)).toEqual([
+      '/Users/u/dev/r/a.md',
+      '/Users/u/dev/r/b.md',
+    ]);
+  });
+
+  it('applyChange_RenamedFile_PathIdAndTitle', () => {
+    const before = documentOf([
+      entry({ path: '/r/a.md', title: 'a.md' }),
+      entry({ path: '/r/c.md', title: 'Alpha' }),
+    ]);
+
+    const renamedA = applyChange(before, {
+      type: 'renamed',
+      from: '/r/a.md',
+      to: '/r/sub/b.md',
+    });
+    const renamedC = applyChange(before, {
+      type: 'renamed',
+      from: '/r/c.md',
+      to: '/r/d.md',
+    });
+
+    expect(renamedA.entries[0]).toMatchObject({
+      id: '/r/sub/b.md',
+      path: '/r/sub/b.md',
+      title: 'b.md',
+    });
+    expect(renamedC.entries[1].title).toBe('Alpha');
+  });
+
+  it('applyChange_RenamedFolder_MovesEntriesInside', () => {
+    const before = documentOf([
+      entry({ path: '/r/skills/s/SKILL.md', kind: 'skill', title: 's' }),
+    ]);
+
+    const after = applyChange(before, {
+      type: 'renamed',
+      from: '/r/skills/s',
+      to: '/r/skills/t',
+    });
+
+    expect(paths(after)).toEqual(['/r/skills/t/SKILL.md']);
+  });
+
+  it('applyChange_Renamed_StatesFollowId', () => {
+    const launch = { claude: { state: 'launch' as const, reason: 'r' } };
+    const before = documentOf(
+      [entry({ path: '/r/a.md' })],
+      [{ folder: '/r', sessionId: null, states: { '/r/a.md': launch } }],
+    );
+
+    const after = applyChange(before, {
+      type: 'renamed',
+      from: '/r/a.md',
+      to: '/r/sub/b.md',
+    });
+
+    expect(after.contexts[0].states).toEqual({ '/r/sub/b.md': launch });
+  });
+
+  it('applyChange_TrashedFolder_DropsEntriesInside', () => {
+    const before = documentOf([
+      entry({ path: '/r/skills/s/SKILL.md' }),
+      entry({ path: '/r/skills/s/ref.md' }),
+      entry({ path: '/r/other.md' }),
+    ]);
+
+    const after = applyChange(before, { type: 'trashed', path: '/r/skills/s' });
+
+    expect(paths(after)).toEqual(['/r/other.md']);
+  });
+});
+
+describe('provisionalEntry', () => {
+  const repoEntries = [
+    entry({
+      path: '/Users/u/dev/r/AGENTS.md',
+      source: 'repo',
+      repo: 'r',
+      root: '/Users/u/dev/r',
+    }),
+    entry({
+      path: '/Users/u/dev/r/nested/AGENTS.md',
+      source: 'repo',
+      repo: 'n',
+      root: '/Users/u/dev/r/nested',
+    }),
+  ];
+
+  it('provisionalEntry_InsideRepoRoot_CopiesOwner', () => {
+    const made = provisionalEntry(
+      '/Users/u/dev/r/nested/x.md',
+      null,
+      repoEntries,
+    );
+
+    expect(made).toMatchObject({
+      id: '/Users/u/dev/r/nested/x.md',
+      source: 'repo',
+      repo: 'n',
+      root: '/Users/u/dev/r/nested',
+      kind: 'reference',
+      title: 'x.md',
+      line: null,
+      plugin: null,
+    });
+  });
+
+  it('provisionalEntry_GuessesKindFromPath', () => {
+    const guessed = (path: string) => provisionalEntry(path, null, repoEntries);
+
+    expect(
+      guessed('/Users/u/dev/r/.claude/skills/tidy/SKILL.md'),
+    ).toMatchObject({ kind: 'skill', title: 'tidy' });
+    expect(guessed('/Users/u/dev/r/.claude/rules/a.md').kind).toBe('rule');
+    expect(guessed('/Users/u/dev/r/.claude/agents/a.md').kind).toBe('subagent');
+    expect(guessed('/Users/u/dev/r/.claude/commands/a.md').kind).toBe(
+      'command',
+    );
+    expect(guessed('/Users/u/dev/r/web/AGENTS.md').kind).toBe('instructions');
+  });
+
+  it('provisionalEntry_FeaturesOwner_FeatureDoc', () => {
+    const owner = entry({
+      path: '/Users/u/wigley-features/r/followups.md',
+      source: 'features',
+      repo: 'r',
+      root: '/Users/u/wigley-features/r',
+    });
+
+    const made = provisionalEntry(
+      '/Users/u/wigley-features/r/f/notes.md',
+      null,
+      [owner],
+    );
+
+    expect(made.kind).toBe('feature-doc');
+  });
+
+  it('provisionalEntry_OutsideEveryRoot_Global', () => {
+    const made = provisionalEntry(
+      '/Users/u/.claude/rules/x.md',
+      'rule',
+      repoEntries,
+    );
+
+    expect(made).toMatchObject({
+      source: 'global',
+      repo: null,
+      root: null,
+      kind: 'rule',
+    });
+  });
+
+  it('provisionalEntry_PluginRootIgnored', () => {
+    const pluginEntry = entry({
+      path: '/Users/u/.claude/plugins/cache/m/p/1/skills/a/SKILL.md',
+      source: 'plugin',
+      plugin: 'p@m',
+      root: '/Users/u/.claude/plugins/cache/m/p/1',
+    });
+
+    const made = provisionalEntry(
+      '/Users/u/.claude/plugins/cache/m/p/1/notes.md',
+      null,
+      [pluginEntry],
+    );
+
+    expect(made.source).toBe('global');
+  });
+});
+
+describe('settlePending', () => {
+  it('settlePending_ClearsOnlySettledChanges', () => {
+    const pending = new Map([
+      ['/a', 1],
+      ['/b', 2],
+    ]);
+
+    expect([...settlePending(pending, 1)]).toEqual([['/b', 2]]);
+    expect([...settlePending(pending, 2)]).toEqual([]);
+  });
+});
+
+describe('detailFields', () => {
+  it('detailFields_Hook_NullMatcherDash', () => {
+    const hook = entry({
+      path: '/Users/u/.claude/settings.json',
+      kind: 'hook',
+      meta: { event: 'PreToolUse', matcher: null, command: 'lint' },
+    });
+
+    expect(detailFields(hook, '/Users/u')).toEqual([
+      ['Event', 'PreToolUse'],
+      ['Matcher', '—'],
+      ['Command', 'lint'],
+    ]);
+  });
+
+  it('detailFields_Plugin_InstallsJoined', () => {
+    const plugin = entry({
+      path: '/Users/u/.claude/plugins/cache/m/p/1',
+      kind: 'plugin',
+      meta: {
+        harness: 'claude',
+        version: '1.0.0',
+        installs: [
+          { scope: 'user', projectPath: null },
+          { scope: 'project', projectPath: '/Users/u/dev/r' },
+        ],
+      },
+    });
+
+    expect(detailFields(plugin, '/Users/u')).toEqual([
+      ['Harness', 'Claude'],
+      ['Version', '1.0.0'],
+      ['Enabled', '—'],
+      ['Installs', 'user, project · ~/dev/r'],
+    ]);
   });
 });

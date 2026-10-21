@@ -16,11 +16,27 @@ import type {
   IndexLoad,
   SessionSourceSpec,
 } from '../contract';
-import { baseName, isInside, tildePath } from '../doc-paths';
+import { baseName, isInside, parentFolder, tildePath } from '../doc-paths';
+import { metaString } from '../index-document';
+import { skillFolder } from '../kinds';
 import { isIndexedPath } from '../path-guard';
 import { buildTree, type TreeLeaf } from '../tree';
-import { chips, contextChoices } from './docs-state';
-import { createDocView, type DocTarget } from './doc-view';
+import {
+  type DocDetail,
+  type DocTarget,
+  createDocView,
+  readOnlyText,
+  UNSAVED_TEXT,
+} from './doc-view';
+import { createDocsDialogs } from './docs-dialogs';
+import {
+  applyChange,
+  chips,
+  contextChoices,
+  type DocChangeRecord,
+  detailFields,
+  settlePending,
+} from './docs-state';
 import { createTreeView } from './tree-view';
 
 export type DocsSource =
@@ -30,7 +46,7 @@ export type DocsSource =
 export type DocsPaneScope = 'tree' | 'doc';
 
 // The scopes a docs view pushes over its pane's scope.
-export type DocsPushedScope = 'conflict' | 'picker' | 'box';
+export type DocsPushedScope = 'conflict' | 'picker' | 'box' | 'confirm';
 
 // What each page command does on this view.
 export interface DocsViewCommands {
@@ -56,6 +72,12 @@ export interface DocsViewCommands {
   boxComplete(): void;
   boxAccept(): void;
   boxCancel(): void;
+  createByKind(): void;
+  createByPath(): void;
+  rename(): void;
+  trash(): void;
+  confirmYes(): void;
+  confirmNo(): void;
 }
 
 export interface DocsView {
@@ -65,6 +87,8 @@ export interface DocsView {
   showFirstTime(): void;
   // Runs the source again: `R`.
   rescan(): void;
+  // Runs the source again after another view's change.
+  rebuildInBackground(): void;
   // Returns whether the tree now shows.
   toggleTree(): boolean;
   // The scope this view's keys use now.
@@ -89,6 +113,8 @@ export interface DocsViewDeps {
   setScope(scope: DocsPaneScope): void;
   pushScope(scope: DocsPushedScope): PushedScope;
   isActive(): boolean;
+  // A session view's change was made: the machine view rebuilds.
+  afterChange(): void;
 }
 
 const SESSION_CONTEXT_TEXT =
@@ -134,116 +160,36 @@ function cachingPlugin(
   return entry?.plugin ?? null;
 }
 
-interface PickerRequest<T> {
-  title: string;
-  items: readonly T[];
-  label(item: T): string;
-  selected: number;
-  chosen(item: T): void;
+// The line of `text` that first holds the hook's command as JSON writes it;
+// 1 when none does.
+function hookLine(text: string, command: string): number {
+  const written = JSON.stringify(command).slice(1, -1);
+  const index = text.split('\n').findIndex((line) => line.includes(written));
+  return index === -1 ? 1 : index + 1;
 }
 
-// A list over the view, scope `docs.picker` pushed while it shows; the base
-// scope changing under it cancels it.
-interface ListPicker {
-  element: HTMLElement;
-  open<T>(request: PickerRequest<T>): void;
-  down(): void;
-  up(): void;
-  choose(): void;
-  cancel(): void;
-}
-
-function createListPicker(pushScope: () => PushedScope, log: Log): ListPicker {
-  const overlay = element('div', 'docs-overlay');
-  const dialog = element('div', 'dialog docs-picker');
-  const title = element('h2', 'dialog-title');
-  const list = element('ol', 'docs-picker-list');
-  dialog.append(title, list);
-  overlay.append(dialog);
-  overlay.hidden = true;
-
-  let labels: string[] = [];
-  let cursor = 0;
-  let chooseAt: ((index: number) => void) | null = null;
-  let pushed: PushedScope | null = null;
-
-  const draw = () => {
-    list.replaceChildren(
-      ...labels.map((label, index) => {
-        const item = element('li', 'docs-picker-item', label);
-        item.classList.toggle('is-cursor', index === cursor);
-        item.addEventListener('mousedown', (event) => event.preventDefault());
-        item.addEventListener('click', () => {
-          cursor = index;
-          picker.choose();
-        });
-        return item;
-      }),
-    );
-    list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
-  };
-
-  const hide = () => {
-    overlay.hidden = true;
-    chooseAt = null;
-    pushed?.pop();
-    pushed = null;
-  };
-
-  const move = (by: 1 | -1) => {
-    cursor = Math.min(Math.max(cursor + by, 0), labels.length - 1);
-    draw();
-  };
-
-  const picker: ListPicker = {
-    element: overlay,
-    open(request) {
-      if (pushed === null) {
-        const scope = pushScope();
-        scope.onBaseChanged(() => {
-          if (pushed === scope) {
-            picker.cancel();
-          }
-        });
-        pushed = scope;
-      }
-      labels = request.items.map(request.label);
-      cursor = Math.min(Math.max(request.selected, 0), labels.length - 1);
-      chooseAt = (index) => request.chosen(request.items[index]);
-      title.textContent = request.title;
-      overlay.hidden = false;
-      draw();
-      log('docs', `picker shown: ${request.title}`);
-    },
-    down: () => move(1),
-    up: () => move(-1),
-    choose() {
-      const chosen = chooseAt;
-      if (chosen === null || labels.length === 0) {
-        return;
-      }
-      const index = cursor;
-      hide();
-      chosen(index);
-    },
-    cancel() {
-      if (chooseAt !== null) {
-        hide();
-      }
-    },
-  };
-  return picker;
+interface AppliedChange {
+  seq: number;
+  record: DocChangeRecord;
 }
 
 // One docs view over an index source: the tree pane and the doc pane, the
-// context picker over them. A machine view reads the last index at creation;
-// a session view reads nothing until its first show.
+// dialogs over them. A machine view reads the last index at creation; a
+// session view reads nothing until its first show. A change made here shows
+// at once and its paths stay pending until a source run asked after it lands.
 export function createDocsView(deps: DocsViewDeps): DocsView {
   const { log, toast } = deps;
   const run = sourceRun(deps);
   const root = element('div', 'docs-view');
   let document: IndexDocument | null = null;
   let entriesById = new Map<string, IndexEntry>();
+  // Set from the first document shown, before any entry can be opened.
+  let homeDirNow = '';
+  let changeSeq = 0;
+  // Path → the change that made or moved it.
+  let pending = new Map<string, number>();
+  // The changes a landing run may predate, applied again over its document.
+  let unsettled: AppliedChange[] = [];
   let contextFolder: string | null = null;
   let focused: DocsPaneScope = 'tree';
   let isTreeShown = true;
@@ -270,18 +216,52 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     );
   };
 
+  const hookFile = async (entry: IndexEntry) => {
+    const text = await deps.channel.invoke('readDoc', entry.path);
+    const command = metaString(entry, 'command');
+    const line = command === null ? 1 : hookLine(text, command);
+    return { path: entry.path, text, line };
+  };
+
+  const pluginFile = async (entry: IndexEntry) => {
+    const harness =
+      metaString(entry, 'harness') === 'codex' ? 'codex' : 'claude';
+    const found = await deps.channel.invoke(
+      'pluginConfigFile',
+      entry.title,
+      harness,
+    );
+    if (found === null) {
+      toast(`No config file lists ${entry.title}`, 'info');
+      return null;
+    }
+    const text = await deps.channel.invoke('readDoc', found.path);
+    return { path: found.path, text, line: found.line };
+  };
+
+  const detailOf = (entry: IndexEntry | null): DocDetail | null => {
+    if (entry?.kind === 'hook') {
+      const fields = detailFields(entry, homeDirNow);
+      return { fields, editFile: () => hookFile(entry) };
+    }
+    if (entry?.kind === 'plugin') {
+      const fields = detailFields(entry, homeDirNow);
+      return { fields, editFile: () => pluginFile(entry) };
+    }
+    return null;
+  };
+
   const targetFor = (
     path: string,
     entry: IndexEntry | null,
     line: number | null,
     fragment: string | null,
   ): DocTarget => {
-    const isHeaderOnly = entry?.kind === 'hook' || entry?.kind === 'plugin';
     return {
       path,
       title: entry?.title ?? baseName(path),
       entryId: entry?.id ?? null,
-      isHeaderOnly,
+      detail: detailOf(entry),
       cachePlugin:
         entry?.kind === 'plugin' ? null : cachingPlugin(document, path),
       line,
@@ -312,7 +292,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     markdown: deps.markdown,
     toast,
     log,
-    chipsOf: (entryId) => chips(context(), entryId, false),
+    chipsOf: (entryId) => {
+      const path = entriesById.get(entryId)?.path;
+      return chips(context(), entryId, path !== undefined && pending.has(path));
+    },
     followFile(path, line, fragment) {
       if (document === null || !isIndexedPath(path, document.entries)) {
         toast(`Not an indexed doc: ${path}`, 'error');
@@ -329,8 +312,33 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     pushConflictScope: () => deps.pushScope('conflict'),
   });
 
-  const picker = createListPicker(() => deps.pushScope('picker'), log);
-  root.append(tree.element, doc.element, picker.element);
+  const restoreFocus = () => {
+    if (focused === 'doc') {
+      doc.focus();
+    } else {
+      tree.focus();
+    }
+  };
+
+  const openInEditor = async (entry: IndexEntry, line: number) => {
+    if (await doc.open(targetFor(entry.path, entry, line, null))) {
+      doc.edit(line);
+    }
+  };
+
+  const dialogs = createDocsDialogs({
+    channel: deps.channel,
+    homeDir: deps.homeDir,
+    toast,
+    log,
+    pushScope: (scope) => deps.pushScope(scope),
+    entries: () => document?.entries ?? [],
+    changed: (record, selectPath) => applyDocChange(record, selectPath),
+    openInEditor,
+    dialogClosed: restoreFocus,
+  });
+  const { picker } = dialogs;
+  root.append(tree.element, doc.element, ...dialogs.elements);
 
   for (const [pane, scope] of [
     [tree.element, 'tree'],
@@ -342,10 +350,16 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     });
   }
 
+  // The document and its entries take effect at once; the tree and chips
+  // redraw once the home folder is known, unless a newer document came.
   const showDocument = async (next: IndexDocument | null) => {
-    const homeDir = await deps.homeDir;
     document = next;
     entriesById = new Map(next?.entries.map((entry) => [entry.id, entry]));
+    const homeDir = await deps.homeDir;
+    if (document !== next) {
+      return;
+    }
+    homeDirNow = homeDir;
     if (next !== null && deps.source.type === 'machine') {
       const choices = contextChoices(next, homeDir);
       const kept = choices.some((choice) => choice.folder === contextFolder);
@@ -358,11 +372,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   // Runs `read`, showing `busyText` while it runs, then its document and
-  // message; `lines` give the line logged on its result.
+  // message; `lines` give the line logged on its result. The result covers
+  // every change up to `settledSeq`; later ones apply again over it.
   const load = (
     read: () => Promise<IndexLoad>,
     busyText: string | null,
     lines: Pick<SourceRun, 'readLine' | 'messageLine'>,
+    settledSeq: number,
   ) => {
     const number = ++startedLoads;
     tree.setStatus(busyText);
@@ -372,7 +388,17 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           return;
         }
         shownLoad = number;
-        await showDocument(result.document);
+        pending = settlePending(pending, settledSeq);
+        unsettled = unsettled.filter((change) => change.seq > settledSeq);
+        const built = result.document;
+        await showDocument(
+          built === null
+            ? null
+            : unsettled.reduce(
+                (shown, change) => applyChange(shown, change.record),
+                built,
+              ),
+        );
         log(
           'docs',
           result.message === null
@@ -391,16 +417,139 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       });
   };
 
-  const runSource = () => load(() => run.run(), run.busyText, run);
+  const runSource = () => load(() => run.run(), run.busyText, run, changeSeq);
 
   if (deps.source.type === 'machine') {
-    load(() => deps.channel.invoke('machineIndex'), null, {
-      readLine: (count) => `machine index read: ${count} entries`,
-      messageLine: (message) => `machine index: ${message}`,
-    });
+    load(
+      () => deps.channel.invoke('machineIndex'),
+      null,
+      {
+        readLine: (count) => `machine index read: ${count} entries`,
+        messageLine: (message) => `machine index: ${message}`,
+      },
+      0,
+    );
   } else {
     tree.setStatus('Not read yet');
   }
+
+  // The paths a change made or moved, read from the document it produced.
+  const changedPaths = (record: DocChangeRecord, next: IndexDocument) => {
+    switch (record.type) {
+      case 'created':
+        return [record.entry.path];
+      case 'renamed':
+        return next.entries
+          .filter((entry) => isInside(entry.path, record.to))
+          .map((entry) => entry.path);
+      case 'trashed':
+        return [];
+    }
+  };
+
+  const entryAt = (path: string) =>
+    document?.entries.find(
+      (entry) => entry.path === path && entry.line === null,
+    ) ?? null;
+
+  // The doc pane follows a move of its file and empties when it is trashed.
+  const followChange = (record: DocChangeRecord) => {
+    const openPath = doc.openPath();
+    if (openPath === null) {
+      return;
+    }
+    if (record.type === 'renamed' && isInside(openPath, record.from)) {
+      const moved = record.to + openPath.slice(record.from.length);
+      doc.retarget(targetFor(moved, entryAt(moved), null, null));
+    } else if (record.type === 'trashed' && isInside(openPath, record.path)) {
+      doc.clear();
+    }
+  };
+
+  const applyDocChange = (
+    record: DocChangeRecord,
+    selectPath: string | null,
+  ) => {
+    const seq = ++changeSeq;
+    unsettled.push({ seq, record });
+    if (document !== null) {
+      const next = applyChange(document, record);
+      for (const path of changedPaths(record, next)) {
+        pending.set(path, seq);
+      }
+      const shown = showDocument(next);
+      followChange(record);
+      const selectId =
+        record.type === 'created'
+          ? record.entry.id
+          : selectPath === null
+            ? null
+            : entryAt(selectPath)?.id;
+      void shown.then(() => {
+        if (selectId != null) {
+          tree.selectEntry(selectId);
+        }
+      });
+    }
+    runSource();
+    if (deps.source.type === 'session') {
+      deps.afterChange();
+    }
+  };
+
+  // The selected doc, when it is one that may be renamed or trashed; else
+  // toasts why not.
+  const changeableEntry = (groupText: string): IndexEntry | null => {
+    const node = tree.selected();
+    if (node === null) {
+      return null;
+    }
+    if (node.type === 'group') {
+      toast(groupText, 'info');
+      return null;
+    }
+    const entry = entriesById.get(node.entryId);
+    if (entry === undefined) {
+      return null;
+    }
+    const isItemInFile =
+      entry.line !== null || entry.kind === 'hook' || entry.kind === 'plugin';
+    if (isItemInFile) {
+      toast(
+        `${entry.title} is an item inside ${baseName(entry.path)}; it cannot be renamed or moved to the Trash alone`,
+        'info',
+      );
+      return null;
+    }
+    if (entry.source === 'plugin') {
+      toast(readOnlyText(entry.plugin ?? entry.title), 'info');
+      return null;
+    }
+    const openPath = doc.openPath();
+    const editsThisFile =
+      doc.hasUnsavedEdits() &&
+      openPath !== null &&
+      isInside(openPath, skillFolder(entry.path) ?? entry.path);
+    if (editsThisFile) {
+      toast(UNSAVED_TEXT, 'error');
+      return null;
+    }
+    return entry;
+  };
+
+  // The folder `A` starts in: the selected doc's, the selected group's, or
+  // null for the home folder.
+  const selectedFolder = (): string | null => {
+    const node = tree.selected();
+    if (node === null) {
+      return null;
+    }
+    if (node.type === 'group') {
+      return node.folder;
+    }
+    const entry = entriesById.get(node.entryId);
+    return entry === undefined ? null : parentFolder(entry.path);
+  };
 
   const focusDoc = () => {
     focused = 'doc';
@@ -469,9 +618,35 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     pickerUp: () => picker.up(),
     pickerChoose: () => picker.choose(),
     pickerCancel: () => picker.cancel(),
-    boxComplete: () => undefined,
-    boxAccept: () => tree.acceptFilter(),
-    boxCancel: () => tree.cancelFilter(),
+    boxComplete: () => dialogs.boxComplete(),
+    boxAccept: () =>
+      dialogs.isBoxOpen() ? dialogs.boxAccept() : tree.acceptFilter(),
+    boxCancel: () =>
+      dialogs.isBoxOpen() ? dialogs.boxCancel() : tree.cancelFilter(),
+    createByKind: () => {
+      if (!doc.refuseWithUnsavedEdits()) {
+        dialogs.createByKind();
+      }
+    },
+    createByPath: () => {
+      if (!doc.refuseWithUnsavedEdits()) {
+        dialogs.createByPath(selectedFolder());
+      }
+    },
+    rename: () => {
+      const entry = changeableEntry('Select a doc to rename');
+      if (entry !== null) {
+        dialogs.rename(entry);
+      }
+    },
+    trash: () => {
+      const entry = changeableEntry('Select a doc to move to the Trash');
+      if (entry !== null) {
+        dialogs.trash(entry);
+      }
+    },
+    confirmYes: () => dialogs.confirmYes(),
+    confirmNo: () => dialogs.confirmNo(),
   };
 
   let isDisposed = false;
@@ -493,6 +668,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       hasRun = true;
       runSource();
     },
+    rebuildInBackground() {
+      hasRun = true;
+      runSource();
+    },
     toggleTree() {
       isTreeShown = !isTreeShown;
       root.classList.toggle('is-tree-hidden', !isTreeShown);
@@ -506,7 +685,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     hasUnsavedEdits: () => doc.hasUnsavedEdits(),
     dispose() {
       isDisposed = true;
-      picker.cancel();
+      dialogs.close();
       doc.dispose();
     },
     commands,
