@@ -14,14 +14,14 @@
 }
 
 .session-sidebar {
-  background: var(--wg-bg-pane);
-  border-right: 1px solid var(--wg-border);
+  background: var(--wg-material-chrome-bg-dense);
+  border-right: 1px solid var(--wg-border-default);
   min-height: 0;
   overflow-y: auto;
 }
 
 .sessions.is-sidebar-over .session-sidebar {
-  box-shadow: 0 0 1rem var(--wg-bg-deep);
+  box-shadow: 0 0 1rem var(--wg-window-background);
   inset-block: 0;
   left: 0;
   position: absolute;
@@ -35,7 +35,7 @@
   background: transparent;
   border: 0;
   border-left: 2px solid transparent;
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   cursor: pointer;
   display: grid;
   gap: 0.1rem;
@@ -45,14 +45,14 @@
 }
 
 .session-row:hover {
-  background: var(--wg-surface-hover);
-  color: var(--wg-text);
+  background: var(--wg-list-hover-background);
+  color: var(--wg-fg);
 }
 
 .session-row.is-selected {
-  background: var(--wg-surface-selected);
+  background: var(--wg-list-active-background);
   border-left-color: var(--wg-accent);
-  color: var(--wg-text);
+  color: var(--wg-fg);
 }
 
 .session-row-line {
@@ -71,7 +71,7 @@
 }
 
 .session-row-harness {
-  color: var(--wg-text-faint);
+  color: var(--wg-fg-tertiary);
   flex: none;
 }
 
@@ -100,8 +100,8 @@
 }
 
 .session-tabs {
-  background: var(--wg-bg-deep);
-  border-bottom: 1px solid var(--wg-border);
+  background: var(--wg-material-chrome-bg);
+  border-bottom: 1px solid var(--wg-border-default);
   display: flex;
   grid-row: 1;
   overflow-x: auto;
@@ -124,9 +124,9 @@
   align-items: baseline;
   background: transparent;
   border: 0;
-  border-right: 1px solid var(--wg-border);
+  border-right: 1px solid var(--wg-border-default);
   border-top: 2px solid transparent;
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   cursor: pointer;
   display: flex;
   flex: 0 1 16rem;
@@ -137,14 +137,14 @@
 }
 
 .session-tab:hover {
-  background: var(--wg-surface-hover);
-  color: var(--wg-text);
+  background: var(--wg-list-hover-background);
+  color: var(--wg-fg);
 }
 
 .session-tab.is-active {
-  background: var(--wg-bg-base);
-  border-top-color: var(--wg-accent);
-  color: var(--wg-text);
+  background: var(--wg-tab-active-background);
+  border-top-color: var(--wg-tab-active-indicator);
+  color: var(--wg-fg);
 }
 
 .session-tab-label {
@@ -158,7 +158,7 @@
 /* Why the tab area shows no tab: no sessions, none selected, or nothing open
    in the selected one. */
 .sessions-empty {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   display: grid;
   grid-column: 1;
   grid-row: 2;
@@ -168,6 +168,6 @@
 }
 
 .sessions-empty-title {
-  color: var(--wg-text);
+  color: var(--wg-fg);
   font-size: 1.3rem;
 }

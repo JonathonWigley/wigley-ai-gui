@@ -1,6 +1,6 @@
 # 01 — Theme model and token registry
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -462,3 +462,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 943c502. Proof: every Produces signature found in its file; `npm run typecheck` passes; `npm run lint` passes the layer check and oxlint, and fails only on oxfmt's check of `DESIGN.md`, unchanged since e1f6b73 (pre-existing; task 07 formats it). The worker ran `npm test` (1619 pass) and `npm run selftest` (pass). Concerns: see the Run log, group 01.

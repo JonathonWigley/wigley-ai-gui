@@ -11,7 +11,7 @@
 }
 
 .docs-tree {
-  border-right: 1px solid var(--wg-border);
+  border-right: 1px solid var(--wg-border-default);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 0;
@@ -20,7 +20,7 @@
 }
 
 .docs-status {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   overflow: hidden;
   padding: 0.4rem 0.75rem;
   text-overflow: ellipsis;
@@ -29,10 +29,10 @@
 
 /* A docs text box: the filter, and the path and name boxes. */
 .docs-box {
-  background: var(--wg-bg-deep);
-  border: 1px solid var(--wg-border-focus);
+  background: var(--wg-input-background);
+  border: 1px solid var(--wg-focus-border);
   border-radius: 0.4rem;
-  color: var(--wg-text);
+  color: var(--wg-fg);
   font: inherit;
   margin: 0.4rem 0.75rem;
   min-width: 0;
@@ -57,19 +57,19 @@
 }
 
 .docs-row:hover {
-  background: var(--wg-surface-hover);
+  background: var(--wg-list-hover-background);
 }
 
 .docs-row.is-selected {
-  background: var(--wg-surface-selected);
+  background: var(--wg-list-active-background);
 }
 
 .docs-tree:focus-within .docs-row.is-selected {
-  border-left-color: var(--wg-border-focus);
+  border-left-color: var(--wg-focus-border);
 }
 
 .docs-row-caret {
-  color: var(--wg-text-faint);
+  color: var(--wg-fg-tertiary);
   flex: none;
   margin-left: 0.5rem;
   width: 0.8rem;
@@ -120,9 +120,9 @@
 }
 
 .docs-path {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   font-family: var(--wg-font-mono);
-  font-size: var(--wg-font-mono-size);
+  font-size: var(--wg-text-mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -143,11 +143,11 @@
 }
 
 .docs-chip[data-state='launch'] {
-  color: var(--wg-success);
+  color: var(--wg-status-success);
 }
 
 .docs-chip[data-state='on-demand'] {
-  color: var(--wg-info);
+  color: var(--wg-status-info);
 }
 
 .docs-chip[data-state='listed'] {
@@ -156,24 +156,24 @@
 
 .docs-chip[data-state='shadowed'],
 .docs-chip[data-state='pending'] {
-  color: var(--wg-warning);
+  color: var(--wg-status-warning);
 }
 
 .docs-chip[data-state='not-loaded'],
 .docs-chip[data-state='none'] {
-  color: var(--wg-text-faint);
+  color: var(--wg-fg-tertiary);
 }
 
 .docs-readonly {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   margin-bottom: 0.75rem;
 }
 
 .docs-banner,
 .docs-prompt {
-  border: 1px solid var(--wg-warning);
+  border: 1px solid var(--wg-status-warning);
   border-radius: 0.4rem;
-  color: var(--wg-warning);
+  color: var(--wg-status-warning);
   margin-bottom: 0.75rem;
   padding: 0.35rem 0.75rem;
 }
@@ -193,14 +193,14 @@
 
 .docs-frontmatter th,
 .docs-frontmatter td {
-  border: 1px solid var(--wg-border);
+  border: 1px solid var(--wg-border-default);
   padding: 0.25rem 0.6rem;
   text-align: left;
   vertical-align: top;
 }
 
 .docs-frontmatter th {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -208,7 +208,7 @@
 /* A dialog's overlay, over the view, and the list picker's width;
    dialog.css styles its list. */
 .docs-overlay {
-  background: color-mix(in srgb, var(--wg-bg-deep) 75%, transparent);
+  background: var(--wg-scrim);
   display: grid;
   inset: 0;
   place-items: center;
@@ -232,14 +232,14 @@
 
 .docs-completion {
   font-family: var(--wg-font-mono);
-  font-size: var(--wg-font-mono-size);
+  font-size: var(--wg-text-mono);
   list-style: none;
   margin: 0.4rem 0 0;
   padding: 0;
 }
 
 .docs-completion-item {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   overflow: hidden;
   padding: 0.1rem 0.5rem;
   text-overflow: ellipsis;

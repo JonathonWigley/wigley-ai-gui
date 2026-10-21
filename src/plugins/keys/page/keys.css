@@ -2,11 +2,11 @@
    and over an open dialog's backdrop (`.overlay`, z-index 10) in the same
    layer. */
 .which-key {
-  background: var(--wg-bg-deep);
-  border-top: 1px solid var(--wg-border);
+  background: var(--wg-material-floating-bg);
+  border-top: 1px solid var(--wg-border-default);
   bottom: var(--wg-status-bar-height);
   font-family: var(--wg-font-mono);
-  font-size: var(--wg-font-mono-size);
+  font-size: var(--wg-text-mono);
   left: 0;
   max-height: 50vh;
   overflow: hidden;
@@ -19,7 +19,7 @@
 }
 
 .which-key-title {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   margin-bottom: 0.35rem;
 }
 
@@ -37,7 +37,7 @@
 }
 
 .which-key-arrow {
-  color: var(--wg-text-faint);
+  color: var(--wg-fg-tertiary);
 }
 
 .which-key-label {
@@ -46,11 +46,11 @@
 }
 
 .which-key-label.is-command {
-  color: var(--wg-whichKey-command);
+  color: var(--wg-keys-which-key-command);
 }
 
 .which-key-label.is-prefix {
-  color: var(--wg-whichKey-prefix);
+  color: var(--wg-keys-which-key-prefix);
 }
 
 /* Help: every bound key, in a dialog over the shared backdrop. */
@@ -62,7 +62,7 @@
 }
 
 .keys-help-title {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   font-size: 0.85rem;
   margin-bottom: 0.35rem;
 }
@@ -84,15 +84,15 @@
    longer fits beside it, and its hints wrap onto more lines when narrow. */
 .keys-bar {
   align-items: center;
-  background: var(--wg-bg-deep);
-  border-top: 1px solid var(--wg-border);
-  color: var(--wg-text-muted);
+  background: var(--wg-material-chrome-bg);
+  border-top: 1px solid var(--wg-border-default);
+  color: var(--wg-fg-secondary);
   column-gap: 0.9rem;
   display: flex;
   flex: 999 1 12rem;
   flex-wrap: wrap;
   font-family: var(--wg-font-mono);
-  font-size: var(--wg-font-mono-size);
+  font-size: var(--wg-text-mono);
   min-width: 0;
   padding: 0.2rem 0.75rem;
   row-gap: 0.2rem;
@@ -100,10 +100,10 @@
 
 .keys-bar-help {
   background: transparent;
-  border: 1px solid var(--wg-border);
+  border: 1px solid var(--wg-border-default);
   border-radius: 0.25rem;
   /* Reads in the text colour, not the list's muted one. */
-  color: var(--wg-text);
+  color: var(--wg-fg);
   cursor: pointer;
   padding: 0 0.5rem;
 }

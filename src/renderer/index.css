@@ -15,18 +15,18 @@ body {
 }
 
 body {
-  background: var(--wg-bg-base);
-  color: var(--wg-text);
+  background: var(--wg-window-background);
+  color: var(--wg-fg);
   font-family: var(--wg-font-ui);
-  font-size: var(--wg-font-ui-size);
+  font-size: var(--wg-text-ui);
   line-height: 1.5;
   margin: 0;
   overflow: hidden;
-  scrollbar-color: var(--wg-surface-hover) transparent;
+  scrollbar-color: var(--wg-border-strong) transparent;
 }
 
 ::selection {
-  background: var(--wg-selection);
+  background: var(--wg-selection-background);
 }
 
 h1,
@@ -42,26 +42,26 @@ button {
 }
 
 kbd {
-  background: var(--wg-surface);
-  border: 1px solid var(--wg-border);
+  background: var(--wg-card-background);
+  border: 1px solid var(--wg-border-default);
   border-radius: 0.25rem;
-  color: var(--wg-text);
+  color: var(--wg-fg);
   font-family: var(--wg-font-mono);
-  font-size: var(--wg-font-mono-size);
+  font-size: var(--wg-text-mono);
   padding: 0 0.3em;
 }
 
 /* Why the page failed to start, shown in place of the shell. */
 .start-error {
-  color: var(--wg-error);
+  color: var(--wg-status-error);
   font-family: var(--wg-font-mono);
-  font-size: var(--wg-font-mono-size);
+  font-size: var(--wg-text-mono);
   margin: 0;
   padding: 1rem;
   white-space: pre-wrap;
 }
 
 :focus-visible {
-  outline: 1px solid var(--wg-border-focus);
+  outline: 1px solid var(--wg-focus-border);
   outline-offset: 2px;
 }

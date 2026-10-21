@@ -20,8 +20,8 @@
 }
 
 .chat-entry-slot.is-focused {
-  background: var(--wg-surface-selected);
-  border-left-color: var(--wg-border-focus);
+  background: var(--wg-list-active-background);
+  border-left-color: var(--wg-focus-border);
 }
 
 @media (max-width: 800px) {
@@ -37,14 +37,14 @@
 }
 
 .chat-user {
-  background: var(--wg-surface);
-  border: 1px solid var(--wg-border);
+  background: var(--wg-card-background);
+  border: 1px solid var(--wg-border-default);
   border-radius: 0.5rem;
   padding: 0.4rem 0.75rem;
 }
 
 .chat-assistant {
-  color: var(--wg-text);
+  color: var(--wg-fg);
 }
 
 .chat-streaming {
@@ -53,27 +53,27 @@
 
 .chat-thinking,
 .chat-raw {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
 }
 
 .chat-thinking-body,
 .chat-tool-body,
 .chat-raw-body {
-  border-left: 2px solid var(--wg-border);
+  border-left: 2px solid var(--wg-border-default);
   margin: 0.25rem 0 0.25rem 0.4rem;
   padding-left: 0.75rem;
 }
 
 .chat-tool-running .chat-expander-summary {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
 }
 
 .chat-tool-error .chat-expander-summary {
-  color: var(--wg-error);
+  color: var(--wg-status-error);
 }
 
 .chat-section-label {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   font-size: 0.85rem;
   font-weight: 600;
   margin: 0.5rem 0 0.2rem;
@@ -81,11 +81,11 @@
 
 .chat-json,
 .chat-tool-result {
-  background: var(--wg-bg-deep);
-  border: 1px solid var(--wg-border);
+  background: var(--wg-block-background);
+  border: 1px solid var(--wg-border-default);
   border-radius: 0.4rem;
   font-family: var(--wg-font-mono);
-  font-size: var(--wg-font-mono-size);
+  font-size: var(--wg-text-mono);
   margin: 0.25rem 0;
   max-height: 24rem;
   overflow-wrap: normal;
@@ -96,7 +96,7 @@
 }
 
 .chat-muted {
-  color: var(--wg-text-faint);
+  color: var(--wg-fg-tertiary);
 }
 
 .chat-result {
@@ -104,24 +104,24 @@
 }
 
 .chat-notice {
-  border-left: 3px solid var(--wg-info);
+  border-left: 3px solid var(--wg-status-info);
   padding-left: 0.6rem;
 }
 
 .chat-notice-error {
-  border-left-color: var(--wg-error);
-  color: var(--wg-error);
+  border-left-color: var(--wg-status-error);
+  color: var(--wg-status-error);
 }
 
 /* Permissions: the tool and its input, then Allow / Deny or the answer. */
 .chat-permission {
-  border: 1px solid var(--wg-warning);
+  border: 1px solid var(--wg-status-warning);
   border-radius: 0.5rem;
   padding: 0.5rem 0.75rem;
 }
 
 .chat-permission-answered {
-  border-color: var(--wg-border);
+  border-color: var(--wg-border-default);
 }
 
 .chat-permission-head {
@@ -137,7 +137,7 @@
 }
 
 .chat-permission-answer {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   font-weight: 600;
 }
 
@@ -156,11 +156,11 @@
 }
 
 .chat-expander-line:hover {
-  color: var(--wg-text);
+  color: var(--wg-fg);
 }
 
 .chat-expander-marker {
-  color: var(--wg-text-faint);
+  color: var(--wg-fg-tertiary);
   flex: none;
 }
 
@@ -171,7 +171,7 @@
 
 /* The message box and the status line under it. */
 .chat-box {
-  border-top: 1px solid var(--wg-border);
+  border-top: 1px solid var(--wg-border-default);
   padding: 0.5rem 1.5rem 0.25rem;
 }
 
@@ -189,7 +189,7 @@
 }
 
 .chat-controls {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   display: flex;
   flex-wrap: wrap;
   font-size: 0.85rem;

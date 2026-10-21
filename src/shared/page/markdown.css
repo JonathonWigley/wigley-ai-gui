@@ -26,7 +26,7 @@
 }
 
 .md-h {
-  color: var(--wg-text);
+  color: var(--wg-fg);
   font-weight: 600;
   margin: 0.75em 0 0.25em;
 }
@@ -43,12 +43,12 @@
 .md-h4,
 .md-h5,
 .md-h6 {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
   font-size: 0.95em;
 }
 
 .md code {
-  background: var(--wg-bg-deep);
+  background: var(--wg-block-background);
   border-radius: 0.25rem;
   font-family: var(--wg-font-mono);
   font-size: 0.9em;
@@ -58,8 +58,8 @@
 /* Code wraps at spaces but keeps an unbroken token whole, and a table keeps
    its columns; either scrolls in its own box when wider than the pane. */
 .md pre {
-  background: var(--wg-bg-deep);
-  border: 1px solid var(--wg-border);
+  background: var(--wg-block-background);
+  border: 1px solid var(--wg-border-default);
   border-radius: 0.4rem;
   overflow-wrap: normal;
   overflow-x: auto;
@@ -73,8 +73,8 @@
 }
 
 .md blockquote {
-  border-left: 3px solid var(--wg-border);
-  color: var(--wg-text-muted);
+  border-left: 3px solid var(--wg-border-default);
+  color: var(--wg-fg-secondary);
   margin-left: 0;
   padding-left: 0.75em;
 }
@@ -90,12 +90,12 @@
 
 .md th,
 .md td {
-  border: 1px solid var(--wg-border);
+  border: 1px solid var(--wg-border-default);
   padding: 0.25em 0.6em;
 }
 
 .md th {
-  background: var(--wg-surface);
+  background: var(--wg-card-background);
   font-weight: 600;
 }
 
@@ -113,19 +113,19 @@
 
 .md hr {
   border: 0;
-  border-top: 1px solid var(--wg-border);
+  border-top: 1px solid var(--wg-border-default);
 }
 
 .md-diff .md-diff-add {
-  color: var(--wg-change-added);
+  color: var(--wg-diff-inserted-mark);
 }
 
 .md-diff .md-diff-del {
-  color: var(--wg-change-removed);
+  color: var(--wg-diff-removed-mark);
 }
 
 .md-diff .md-diff-mod {
-  color: var(--wg-change-changed);
+  color: var(--wg-diff-changed-mark);
 }
 
 .md-changes,
@@ -135,27 +135,27 @@
 }
 
 .md-change {
-  border-left: 3px solid var(--wg-border);
+  border-left: 3px solid var(--wg-border-default);
   margin: 0.2em 0;
   padding: 0.1em 0.6em;
 }
 
 .md-change.added {
-  border-left-color: var(--wg-change-added);
+  border-left-color: var(--wg-diff-inserted-mark);
 }
 
 .md-change.changed {
-  border-left-color: var(--wg-change-changed);
+  border-left-color: var(--wg-diff-changed-mark);
 }
 
 .md-change.removed {
-  border-left-color: var(--wg-change-removed);
+  border-left-color: var(--wg-diff-removed-mark);
 }
 
 .md-pill {
-  background: var(--wg-border);
+  background: var(--wg-border-strong);
   border-radius: 999px;
-  color: var(--wg-text-onAccent);
+  color: var(--wg-fg-on-accent);
   display: inline-block;
   font-size: 0.75em;
   font-weight: 600;
@@ -164,15 +164,15 @@
 }
 
 .md-change.added > .md-pill {
-  background: var(--wg-change-added);
+  background: var(--wg-diff-inserted-mark);
 }
 
 .md-change.changed > .md-pill {
-  background: var(--wg-change-changed);
+  background: var(--wg-diff-changed-mark);
 }
 
 .md-change.removed > .md-pill {
-  background: var(--wg-change-removed);
+  background: var(--wg-diff-removed-mark);
 }
 
 .md-tree ul {
@@ -186,8 +186,8 @@
 }
 
 .md-tree ul > li::before {
-  border-bottom: 1px solid var(--wg-border);
-  border-left: 1px solid var(--wg-border);
+  border-bottom: 1px solid var(--wg-border-default);
+  border-left: 1px solid var(--wg-border-default);
   content: '';
   height: 0.9em;
   left: -0.9em;
@@ -197,7 +197,7 @@
 }
 
 .md-details {
-  border: 1px solid var(--wg-border);
+  border: 1px solid var(--wg-border-default);
   border-radius: 0.4rem;
   margin: 0.5em 0;
   padding: 0.4em 0.75em;

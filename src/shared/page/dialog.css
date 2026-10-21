@@ -1,6 +1,6 @@
 /* Overlays */
 .overlay {
-  background: color-mix(in srgb, var(--wg-bg-deep) 75%, transparent);
+  background: var(--wg-scrim);
   display: grid;
   inset: 0;
   place-items: center;
@@ -9,8 +9,8 @@
 }
 
 .dialog {
-  background: var(--wg-bg-pane);
-  border: 1px solid var(--wg-border);
+  background: var(--wg-material-floating-bg);
+  border: 1px solid var(--wg-border-default);
   border-radius: 0.75rem;
   max-height: calc(100vh - 4rem);
   max-width: min(56rem, calc(100vw - 2rem));
@@ -24,7 +24,7 @@
 }
 
 .dialog-text {
-  color: var(--wg-text-muted);
+  color: var(--wg-fg-secondary);
 }
 
 .dialog-actions {
@@ -60,31 +60,31 @@
 }
 
 .list-picker-item:hover {
-  background: var(--wg-surface-hover);
+  background: var(--wg-list-hover-background);
 }
 
 .list-picker-item.is-cursor {
-  background: var(--wg-surface-selected);
-  border-left-color: var(--wg-border-focus);
+  background: var(--wg-list-active-background);
+  border-left-color: var(--wg-focus-border);
 }
 
 /* Buttons */
 .button {
-  background: var(--wg-surface);
-  border: 1px solid var(--wg-border);
+  background: var(--wg-button-secondary-background);
+  border: 1px solid var(--wg-border-default);
   border-radius: 0.4rem;
   cursor: pointer;
   padding: 0.35rem 1rem;
 }
 
 .button:hover {
-  background: var(--wg-surface-hover);
+  background: var(--wg-button-secondary-hover);
 }
 
 .button-primary {
   background: var(--wg-accent);
   border-color: var(--wg-accent);
-  color: var(--wg-text-onAccent);
+  color: var(--wg-fg-on-accent);
 }
 
 .button-primary:hover {
@@ -93,13 +93,13 @@
 }
 
 .button-danger {
-  border-color: var(--wg-error);
-  color: var(--wg-error);
+  border-color: var(--wg-status-error);
+  color: var(--wg-status-error);
 }
 
 /* The keys that run a button's command, after its label. */
 .key-hint {
-  color: var(--wg-text-faint);
+  color: var(--wg-fg-tertiary);
 }
 
 .button .key-hint {

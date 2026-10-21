@@ -385,11 +385,11 @@ list; task 06's rename map reads from it.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Theme model and token registry](01-theme-model.md)
+- [x] [Theme model and token registry](01-theme-model.md)
 
 ### Wave 2
 - [ ] [ConfigStore and the layered keymap](02-config-store.md) — after 01
-- [ ] [Token rename across every stylesheet](06-token-rename.md) — after 01
+- [x] [Token rename across every stylesheet](06-token-rename.md) — after 01
 
 ### Wave 3
 - [ ] [Live config on the page](03-live-config-page.md) — after 02
@@ -411,7 +411,16 @@ list; task 06's rename map reads from it.
 Review base: 17cf5935eb176577587a6a3c230e907efdef81c9
 
 ### Groups
+- 01 · 943c502 · diff read + typecheck pass; lint fails only on DESIGN.md format (pre-existing) · concerns: highlighter test asserts definitionKeyword (same class as keyword); a `git rm` of syntax.css was reset to an unstaged deletion; `npx vitest` ran once (installed copy, nothing downloaded)
 ### Contract changes
 ### Rulings
+- `src/main/themes` layer allows no packages now that the loader is pure — task 02 reads files through `Files` in `src/main/config` — 02 would need `node:` back if it reads files there · group 01
+- Alias cycles are also checked with `reduced` laid over `tokens` — a reduced override could close a cycle — a stricter rejection only · group 01
+- `window-background` step 7 error names the file that set the value, as steps 3/5/6 do — consistent with the extends-chain rule — none · group 01
+- Only colour tokens accept a whole-value alias; shadow/filter/raw accept one inside their text; length/duration/number reject one — the grammar table — a theme aliasing a length is rejected · group 01
+- `code-colours.ts` keeps the tag list in a `MOCHA_TAG_STYLES` const: check-layers' `preProcessFile` reads an inline `define([` as an AMD import — none · group 01
+- `theme-tokens.ts` registry carries `// prettier-ignore` so every key keeps its quotes (oxfmt would unquote four, breaking the count grep) — none · group 01
+- `colorScheme` is checked on every theme in the chain that sets it — none · group 01
+- `DESIGN.md` fails `oxfmt --check` at the review base (two unaligned tables); task 07, which owns `DESIGN.md`, formats it — lint stays red until 07 lands · lead
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 06 — Token rename across every stylesheet
 
-Status: not started
+Status: done
 Type: Parallel
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -147,3 +147,4 @@ No unit test: a stylesheet's variable names are checked by the registry check be
 
 ## Proof
 
+Proof: diff read against the map and every per-file note; the registry check and the camel-case grep print nothing; `npm run lint` fails only on `DESIGN.md` format (pre-existing). Two sonnet workers (5 + 4 files). Concerns: neither worker loaded the skills or did the mandatory reads (pure rename). Commit sha in the Run log.

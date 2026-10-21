@@ -16,16 +16,16 @@
 }
 
 .shell-activity-bar {
-  background: var(--wg-bg-deep);
-  border-right: 1px solid var(--wg-border);
+  background: var(--wg-material-chrome-bg);
+  border-right: 1px solid var(--wg-border-default);
   grid-area: activity;
   overflow-y: auto;
   width: 3rem;
 }
 
 .shell-side-bar {
-  background: var(--wg-bg-pane);
-  border-right: 1px solid var(--wg-border);
+  background: var(--wg-material-chrome-bg-dense);
+  border-right: 1px solid var(--wg-border-default);
   grid-area: side;
   min-height: 0;
   overflow-y: auto;
@@ -45,7 +45,7 @@
 }
 
 .shell-panel {
-  border-top: 1px solid var(--wg-border);
+  border-top: 1px solid var(--wg-border-default);
   grid-area: panel;
   min-width: 0;
 }
@@ -63,13 +63,13 @@
    its row when alone on it, and its text wraps inside that row. */
 .status-error {
   align-items: center;
-  background: var(--wg-bg-deep);
-  border-top: 1px solid var(--wg-border);
-  color: var(--wg-error);
+  background: var(--wg-material-chrome-bg);
+  border-top: 1px solid var(--wg-border-default);
+  color: var(--wg-status-error);
   display: flex;
   flex: 1 1 auto;
   font-family: var(--wg-font-mono);
-  font-size: var(--wg-font-mono-size);
+  font-size: var(--wg-text-mono);
   min-width: 0;
   padding: 0.2rem 0.25rem 0.2rem 0.75rem;
 }
@@ -99,18 +99,18 @@
 }
 
 .toast {
-  background: var(--wg-surface);
-  border: 1px solid var(--wg-border);
-  border-left: 3px solid var(--wg-info);
+  background: var(--wg-material-floating-bg);
+  border: 1px solid var(--wg-border-default);
+  border-left: 3px solid var(--wg-status-info);
   border-radius: 0.5rem;
   max-width: min(24rem, calc(100vw - 2rem));
   padding: 0.5rem 0.9rem;
 }
 
 .toast[data-tone='success'] {
-  border-left-color: var(--wg-success);
+  border-left-color: var(--wg-status-success);
 }
 
 .toast[data-tone='error'] {
-  border-left-color: var(--wg-error);
+  border-left-color: var(--wg-status-error);
 }
