@@ -1,6 +1,6 @@
 # 08 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -40,3 +40,5 @@ Done when: every listed line checked against the landed code, every stale one fi
 Commit:    one commit for the group
 
 ## Proof
+
+Commit `b38a08a`. Proof: diff read; every listed line checked against the code (AGENTS.md layout `files/`, `claude-code/`, `codemirror-vim/`, `chat/`, An agent harness, the self-test sentence changed; Plugin data kept; design.md Flow, Locality, Slash completion, Resume and archive, Plans changed).

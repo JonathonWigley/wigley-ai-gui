@@ -301,7 +301,7 @@ picker title is `Session`; the box's completion prefix is `/`.
 - [x] [Chat self-test steps](07-selftest-steps.md) — after 05, 06
 
 ### Wave 7
-- [ ] [Doc re-read](08-doc-re-read.md) — after 07
+- [x] [Doc re-read](08-doc-re-read.md) — after 07
 
 ### Wave 8
 - [ ] [Final verification](09-final-verification.md) — after 08
@@ -321,6 +321,7 @@ Peer session `wigley-ai-gui-6a` shares the working tree: every commit is pathspe
 - 06 · f6c9e9e · diff read + typecheck pass · concerns: no Vitest tests by design — only task 07's self-test steps 30–32 prove the wiring; the stale `AgentProcessEvents.commands` comment (`src/contracts/agent.ts:92`) rewritten here
 - 07 · 2a959ae · diff read + typecheck pass; selftest FAILS (16): with the Chat box's completions on, normal-mode Enter in the box stops sending (plan A steps 13–15 and later) and Tab does not accept (31); with completions off for one run every step but 30–33 passes · fix dispatched to `wigley:opus-high` (proof failed in 02/06's code) · concerns: none beyond the blocker
 - 07 fix · 3806289 · diff read + typecheck pass; `npm run selftest` all passed (forms, chat 34 steps, docs) · root cause: `autocompletion()` brings in the keymap facet whose keydown handler took precedence ahead of vim, so `minimalSetup`'s Enter inserted a newline in normal mode; and `acceptCompletion` refuses within the 75 ms `interactionDelay` · concerns: no DOM unit-test seam, the self-test locks both
+- 08 · b38a08a · diff read: every listed line checked, stale ones fixed · concerns: a few rewritten lines run past the docs' line width
 ### Contract changes
 - manifest editor binds in scope `resume`: `<CR>` pickerPick, `<Esc>` pickerList → those plus `{ keys: '<CR>', mode: 'insert', scope: 'resume', command: 'pickerPick' }` · why: plan A's `picker` scope gained an insert `<CR>` for its filter, and `resume` repeats the picker binds · consumers: 07 · group 05
 - `ListPicker` (`src/shared/page/list-picker.ts`) gains `cursorIndex(): number \| null` · why: the cursor lives only in its state, so `Picker.cursorIndex` delegates to it · consumers: 05 · group 05
@@ -341,5 +342,8 @@ Peer session `wigley-ai-gui-6a` shares the working tree: every commit is pathspe
 - self-test `open(run)` closes every held state in either self-test project (`SELFTEST_PROJECT_DIR`, `SECOND_PROJECT_DIR`) — plan A closed the second project's session per run too — none · group 07
 - `ChatSelfTestResult.process` dropped; `problems` finds the fixture (last `resume: false`) and resumed (last `resume: true`) records in the fake's `processes` when it runs — resume happens after the result settles — none · group 07
 - completion extension sits after `vim(...)` with `popupKeys` in `Prec.highest` and `interactionDelay: 0` — task 02's "ahead of vim" placement made CodeMirror's keymap outrank vim — none; `prefix-completion.ts` now imports `Prec` from `@codemirror/state` (a direct dependency, against task 02's no-import line, which its worker found stale) · lead, fix 3806289
+- peer `wigley-ai-gui-6a` held an uncommitted AGENTS.md edit on the `codemirror-vim/` line; settled by message: the peer committed it (c551ea8, inside this run's range but not this run's), then task 08 ran — lead
+- `@codemirror/autocomplete` not named in the layout line: `@codemirror` already covers it — none · group 08
 ### Review rounds
 ### Test gate
+- pass 1 (written): claude-code-harness, past-sessions, transcripts, node-files, archived-sessions, chat-sessions, chat-commands, resume-items, start-prompt, prefix-completion, fake-agent-harness, memory-files, scoped-files tests · pass 2 (break): stream-decoder (decoder rule moved); recent-folders, layout-registry, index-sources, script-locator, doc-files, main-api (`createMemoryFiles` / `Files` consumers); forms-commands, editor-boxes (`EditorHost.create`) · 22 files, 380 tests passed at 3806289 · `npm run selftest` all passed (forms, chat 34 steps, docs) at 3806289
