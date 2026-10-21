@@ -337,6 +337,7 @@ export interface SelfTestHost {
 // harness adapter the app runs, found by `id`. `window.chooseFolder` opens the
 // native folder dialog over the window and resolves to null when the user
 // cancels; `window.isFocused` is true while the app's window has focus.
+// `openExternal` opens an http(s) or mailto URL in the user's default app.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -352,6 +353,7 @@ export interface MainServices {
     isFocused(): boolean;
     chooseFolder(): Promise<string | null>;
   };
+  openExternal(url: string): Promise<void>;
   selfTest: SelfTestHost | null;
 }
 

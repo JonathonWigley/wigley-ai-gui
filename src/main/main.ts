@@ -287,6 +287,11 @@ function createWindow(inputs: StartInputs) {
       window: isSelfTest
         ? { ...pluginWindow, chooseFolder: () => Promise.resolve(null) }
         : pluginWindow,
+      // The self-test never takes the user's foreground.
+      openExternal: isSelfTest
+        ? async (url) =>
+            log('main', `external link not opened in the self-test: ${url}`)
+        : (url) => shell.openExternal(url),
     },
     selfTest,
     (part) => startedParts.push(part),

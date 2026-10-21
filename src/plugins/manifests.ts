@@ -1,5 +1,6 @@
 import type { PluginManifest } from '../contracts/plugin';
 import { chatManifest } from './chat/manifest';
+import { docsManifest } from './docs/manifest';
 import { formsManifest } from './forms/manifest';
 import { keysManifest } from './keys/manifest';
 import { sessionsManifest } from './sessions/manifest';
@@ -13,4 +14,5 @@ export const manifests: readonly PluginManifest[] = [
   formsManifest,
   chatManifest,
   keysManifest,
+  docsManifest,
 ];

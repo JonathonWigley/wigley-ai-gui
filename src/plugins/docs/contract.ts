@@ -1,5 +1,8 @@
-// The docs index document (schema 1), as `docs_index.py` writes it; the
-// marketplace's `plugins/wigley/scripts/docs-index/README.md` is its schema.
+// The docs index document (schema 1), as `docs_index.py` writes it (the
+// marketplace's `plugins/wigley/scripts/docs-index/README.md` is its schema),
+// and the docs plugin's channel between its main and page parts.
+
+import type { ChannelShape } from '../../contracts/plugin';
 
 export type DocKind =
   | 'instructions'
@@ -86,4 +89,77 @@ export interface CreatePlace {
   title: string;
   folder: string;
   source: DocSource;
+}
+
+// One entry of a folder's one-level listing.
+export interface FolderEntry {
+  name: string;
+  isFolder: boolean;
+}
+
+// What one run of an index source gives the view: the document to show
+// (null: none) and a line to show above the tree (null: none).
+export interface IndexLoad {
+  document: IndexDocument | null;
+  message: string | null;
+}
+
+// A session's Docs tab's source, from sessions' `sessionAdded` payload.
+export interface SessionSourceSpec {
+  hostSessionId: string | null;
+  projectDir: string | null;
+  harness: IndexHarness | null;
+}
+
+export type WriteResult =
+  | { type: 'written' }
+  | { type: 'changedOnDisk'; diskText: string };
+
+export type CreateRequest =
+  | { type: 'kind'; kind: CreateKind; place: CreatePlace; name: string }
+  | { type: 'path'; path: string };
+
+export interface CreatedDoc {
+  path: string;
+  // 1-based: where the editor opens on the new file.
+  line: number;
+}
+
+export interface DocChange {
+  viewId: string;
+  path: string;
+}
+
+// Every method rejects with main's own error text when its handler throws.
+export interface DocsChannel extends ChannelShape {
+  invoke: {
+    homeDir(): Promise<string>;
+    machineIndex(): Promise<IndexLoad>;
+    rebuild(): Promise<IndexLoad>;
+    sessionIndex(spec: SessionSourceSpec): Promise<IndexLoad>;
+    readDoc(path: string): Promise<string>;
+    // `expectedText` null overwrites whatever is on disk.
+    writeDoc(
+      path: string,
+      text: string,
+      expectedText: string | null,
+    ): Promise<WriteResult>;
+    createDoc(request: CreateRequest): Promise<CreatedDoc>;
+    // The path the doc now has.
+    renameDoc(from: string, to: string): Promise<string>;
+    // The path moved to the Trash.
+    trashDoc(path: string): Promise<string>;
+    listFolder(folder: string): Promise<FolderEntry[]>;
+    // One watched file per view; `path` null stops that view's watch.
+    watchDoc(viewId: string, path: string | null): Promise<void>;
+    unwatchAll(): Promise<void>;
+    openExternal(url: string): Promise<void>;
+    // The config file that lists plugin `key` (`<plugin>@<marketplace>`) and
+    // the 1-based line holding it; null when none lists it.
+    pluginConfigFile(
+      key: string,
+      harness: IndexHarness,
+    ): Promise<{ path: string; line: number } | null>;
+  };
+  messages: { docChanged: DocChange };
 }
