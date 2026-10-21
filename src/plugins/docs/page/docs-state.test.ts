@@ -3,18 +3,26 @@ import type { IndexContext, IndexDocument, IndexEntry } from '../contract';
 import type { TreeGroup, TreeLeaf, TreeNode } from '../tree';
 import {
   applyChange,
+  changeableEntry,
   chips,
   codeFence,
+  conflictText,
   contextChoices,
   detailFields,
+  noPlaceText,
   parentId,
   provisionalEntry,
+  readOnlyText,
+  reapplyChange,
+  renameRecord,
   rootIds,
   settlePending,
   stepSelection,
   type TreeRow,
   type TreeState,
   topVisibleLine,
+  trashQuestion,
+  UNSAVED_TEXT,
   visibleRows,
 } from './docs-state';
 
@@ -314,6 +322,226 @@ describe('applyChange', () => {
     const after = applyChange(before, { type: 'trashed', path: '/r/skills/s' });
 
     expect(paths(after)).toEqual(['/r/other.md']);
+  });
+});
+
+describe('reapplyChange', () => {
+  it('reapplyChange_CreatedIdListed_KeepsRunEntry', () => {
+    const built = entry({
+      path: '/r/rules/a.md',
+      kind: 'rule',
+      title: 'Alpha',
+      meta: { paths: ['*.ts'] },
+    });
+    const provisional = entry({ path: '/r/rules/a.md', kind: 'reference' });
+
+    const after = reapplyChange(documentOf([built]), {
+      type: 'created',
+      entry: provisional,
+    });
+
+    expect(after.entries).toEqual([built]);
+  });
+
+  it('reapplyChange_CreatedIdMissing_AddsEntry', () => {
+    const created = entry({ path: '/r/b.md' });
+
+    const after = reapplyChange(documentOf([entry({ path: '/r/a.md' })]), {
+      type: 'created',
+      entry: created,
+    });
+
+    expect(paths(after)).toEqual(['/r/a.md', '/r/b.md']);
+  });
+
+  it('reapplyChange_RenamedToListed_FileMadeAtFromStays', () => {
+    const before = documentOf([
+      entry({ path: '/r/x.md' }),
+      entry({ path: '/r/y.md' }),
+    ]);
+
+    const after = reapplyChange(before, {
+      type: 'renamed',
+      from: '/r/x.md',
+      to: '/r/y.md',
+    });
+
+    expect(paths(after)).toEqual(['/r/x.md', '/r/y.md']);
+  });
+
+  it('reapplyChange_RenamedToMissing_Moves', () => {
+    const after = reapplyChange(documentOf([entry({ path: '/r/x.md' })]), {
+      type: 'renamed',
+      from: '/r/x.md',
+      to: '/r/y.md',
+    });
+
+    expect(paths(after)).toEqual(['/r/y.md']);
+  });
+
+  it('reapplyChange_RenamedFolderToListed_Skipped', () => {
+    const before = documentOf([entry({ path: '/r/skills/t/SKILL.md' })]);
+
+    const after = reapplyChange(before, {
+      type: 'renamed',
+      from: '/r/skills/s',
+      to: '/r/skills/t',
+    });
+
+    expect(paths(after)).toEqual(['/r/skills/t/SKILL.md']);
+  });
+});
+
+describe('renameRecord', () => {
+  it('renameRecord_File_NamesFiles', () => {
+    expect(renameRecord('/r/rules/a.md', '/r/rules/b.md')).toEqual({
+      type: 'renamed',
+      from: '/r/rules/a.md',
+      to: '/r/rules/b.md',
+    });
+  });
+
+  it('renameRecord_Skill_NamesFolders', () => {
+    expect(
+      renameRecord(
+        '/r/.claude/skills/s/SKILL.md',
+        '/r/.claude/skills/t/SKILL.md',
+      ),
+    ).toEqual({
+      type: 'renamed',
+      from: '/r/.claude/skills/s',
+      to: '/r/.claude/skills/t',
+    });
+  });
+});
+
+describe('changeableEntry', () => {
+  const rule = entry({ path: '/r/rules/a.md', kind: 'rule' });
+  const skill = entry({ path: '/r/.claude/skills/s/SKILL.md', kind: 'skill' });
+  const followup = entry({
+    path: '/r/followups.md',
+    kind: 'followup',
+    id: '/r/followups.md#L4',
+    line: 4,
+    title: 'Fix it',
+  });
+  const hook = entry({
+    path: '/r/.claude/settings.json',
+    kind: 'hook',
+    id: 'hook:1',
+    title: 'PreToolUse',
+  });
+  const cached = entry({
+    path: '/c/p/skills/s/SKILL.md',
+    kind: 'skill',
+    source: 'plugin',
+    plugin: 'p@m',
+    root: '/c/p',
+  });
+  const byId = new Map(
+    [rule, skill, followup, hook, cached].map((each) => [each.id, each]),
+  );
+  const check = (entryId: string, unsavedPaths: string[] = []) =>
+    changeableEntry(
+      leaf(`entry:${entryId}`, entryId, entryId),
+      (id) => byId.get(id),
+      'Select a doc',
+      unsavedPaths,
+    );
+
+  it('changeableEntry_Doc_Allowed', () => {
+    expect(check(rule.id)).toEqual({ entry: rule });
+  });
+
+  it('changeableEntry_NothingSelectedOrGone_Null', () => {
+    const none = changeableEntry(null, (id) => byId.get(id), 'Select', []);
+
+    expect(none).toBe(null);
+    expect(check('/r/gone.md')).toBe(null);
+  });
+
+  it('changeableEntry_Group_RefusedWithGroupText', () => {
+    const checked = changeableEntry(
+      group('group:/r', 'r', []),
+      (id) => byId.get(id),
+      'Select a doc to rename',
+      [],
+    );
+
+    expect(checked).toEqual({
+      refusal: { text: 'Select a doc to rename', tone: 'info' },
+    });
+  });
+
+  it('changeableEntry_ItemInsideFile_Refused', () => {
+    const refusedText = (id: string) => {
+      const checked = check(id);
+      return checked !== null && 'refusal' in checked
+        ? checked.refusal.text
+        : null;
+    };
+
+    expect(refusedText(followup.id)).toBe(
+      'Fix it is an item inside followups.md; it cannot be renamed or moved to the Trash alone',
+    );
+    expect(refusedText(hook.id)).toBe(
+      'PreToolUse is an item inside settings.json; it cannot be renamed or moved to the Trash alone',
+    );
+  });
+
+  it('changeableEntry_PluginCache_RefusedReadOnly', () => {
+    expect(check(cached.id)).toEqual({
+      refusal: { text: readOnlyText('p@m'), tone: 'info' },
+    });
+  });
+
+  it('changeableEntry_UnsavedEditsOnFile_Refused', () => {
+    expect(check(rule.id, ['/r/rules/a.md'])).toEqual({
+      refusal: { text: UNSAVED_TEXT, tone: 'error' },
+    });
+    expect(check(rule.id, ['/r/rules/b.md'])).toEqual({ entry: rule });
+  });
+
+  it('changeableEntry_UnsavedEditsInSkillFolder_Refused', () => {
+    expect(check(skill.id, ['/r/.claude/skills/s/reference.md'])).toEqual({
+      refusal: { text: UNSAVED_TEXT, tone: 'error' },
+    });
+  });
+});
+
+describe('key hint texts', () => {
+  it('conflictText_AllBound_EachAnswerWithKeys', () => {
+    expect(conflictText({ reload: 'r', overwrite: 'o', cancel: 'Esc' })).toBe(
+      'File changed on disk — r reload, o overwrite, Esc cancel',
+    );
+  });
+
+  it('conflictText_UnboundAnswer_DropsOut', () => {
+    expect(conflictText({ reload: 'R', overwrite: null, cancel: 'q' })).toBe(
+      'File changed on disk — R reload, q cancel',
+    );
+    expect(conflictText({ reload: null, overwrite: null, cancel: null })).toBe(
+      'File changed on disk',
+    );
+  });
+
+  it('trashQuestion_Keys_AfterQuestion', () => {
+    expect(trashQuestion('a.md', { yes: 'y', no: 'n' })).toBe(
+      'Move a.md to the Trash? y/n',
+    );
+    expect(trashQuestion('a.md', { yes: 'Y', no: null })).toBe(
+      'Move a.md to the Trash? Y',
+    );
+    expect(trashQuestion('a.md', { yes: null, no: null })).toBe(
+      'Move a.md to the Trash?',
+    );
+  });
+
+  it('noPlaceText_CreateByPathBoundOrNot', () => {
+    expect(noPlaceText('learning', 'A')).toBe(
+      'No place holds a learning yet — A creates a file by path',
+    );
+    expect(noPlaceText('learning', null)).toBe('No place holds a learning yet');
   });
 });
 

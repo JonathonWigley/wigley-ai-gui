@@ -1,7 +1,8 @@
 // The docs view's pure state rules: the tree's visible rows and selection,
 // the load-state chips and context choices, the editor's opening line, the
 // fence a non-markdown file renders in, the changes the view applies before a
-// build lists them, and a hook's or plugin's detail fields.
+// build lists them, which docs may be renamed or trashed, the texts the view
+// shows with their keys, and a hook's or plugin's detail fields.
 
 import type {
   DocKind,
@@ -12,10 +13,18 @@ import type {
   LoadState,
   LoadStateRecord,
 } from '../contract';
-import { baseName, isInside, tildePath } from '../doc-paths';
+import { baseName, isInside, parentFolder, tildePath } from '../doc-paths';
 import { metaString } from '../index-document';
 import { skillFolder } from '../kinds';
+import type { docsManifest } from '../manifest';
 import type { TreeLeaf, TreeNode } from '../tree';
+
+// The page keys bound now to a docs command in a docs scope, as the user
+// reads them; null when none is.
+export type DocsKeysFor = (
+  command: keyof typeof docsManifest.commands,
+  scope: keyof typeof docsManifest.scopes,
+) => string | null;
 
 export interface TreeRow {
   node: TreeNode;
@@ -264,6 +273,142 @@ function renamedDocument(
     ),
   }));
   return { ...document, entries, contexts };
+}
+
+// The change applied again over a source run's document, which may already
+// reflect it when the run scanned after the change's write: a created entry
+// whose id the run lists keeps the run's entry, and a rename whose `to` the
+// run lists is skipped, so a file made at `from` since stays there.
+export function reapplyChange(
+  document: IndexDocument,
+  change: DocChangeRecord,
+): IndexDocument {
+  const isReflected =
+    (change.type === 'created' &&
+      document.entries.some((entry) => entry.id === change.entry.id)) ||
+    (change.type === 'renamed' &&
+      document.entries.some((entry) => isInside(entry.path, change.to)));
+  return isReflected ? document : applyChange(document, change);
+}
+
+// The record of renaming the doc at `path` to the file `renamed`: a skill's
+// rename moves its folder, so it names the folder before and after.
+export function renameRecord(
+  path: string,
+  renamed: string,
+): Extract<DocChangeRecord, { type: 'renamed' }> {
+  const skill = skillFolder(path);
+  return skill === null
+    ? { type: 'renamed', from: path, to: renamed }
+    : { type: 'renamed', from: skill, to: parentFolder(renamed) };
+}
+
+export const UNSAVED_TEXT = 'Unsaved changes — :w to save, :q! to discard';
+
+// The plugin cache line, shown under the header and toasted on `i`.
+export function readOnlyText(plugin: string): string {
+  return `Plugin cache — ${plugin}. Edit the source repo's copy.`;
+}
+
+// Why a selected tree node may not be renamed or moved to the Trash.
+export interface ChangeRefusal {
+  text: string;
+  tone: 'info' | 'error';
+}
+
+// The selected doc when it may be renamed or trashed, else why not; null when
+// nothing is selected or its entry is gone. Refused: a group (`groupText`),
+// an item inside a file (a line, a hook or a plugin), a plugin cache doc, and
+// a doc whose file, or skill folder, holds a file in `unsavedPaths`.
+export function changeableEntry(
+  node: TreeNode | null,
+  entryOf: (entryId: string) => IndexEntry | undefined,
+  groupText: string,
+  unsavedPaths: readonly string[],
+): { entry: IndexEntry } | { refusal: ChangeRefusal } | null {
+  if (node === null) {
+    return null;
+  }
+  if (node.type === 'group') {
+    return { refusal: { text: groupText, tone: 'info' } };
+  }
+  const entry = entryOf(node.entryId);
+  if (entry === undefined) {
+    return null;
+  }
+  const isItemInFile =
+    entry.line !== null || entry.kind === 'hook' || entry.kind === 'plugin';
+  if (isItemInFile) {
+    const text = `${entry.title} is an item inside ${baseName(entry.path)}; it cannot be renamed or moved to the Trash alone`;
+    return { refusal: { text, tone: 'info' } };
+  }
+  if (entry.source === 'plugin') {
+    const text = readOnlyText(entry.plugin ?? entry.title);
+    return { refusal: { text, tone: 'info' } };
+  }
+  const changed = skillFolder(entry.path) ?? entry.path;
+  if (unsavedPaths.some((path) => isInside(path, changed))) {
+    return { refusal: { text: UNSAVED_TEXT, tone: 'error' } };
+  }
+  return { entry };
+}
+
+// `<keys> <what>` for each bound key, joined by `separator`; an unbound key
+// (null) drops out.
+function keyHints(
+  hints: readonly [string | null, string][],
+  separator: string,
+): string {
+  return hints
+    .filter((hint): hint is [string, string] => hint[0] !== null)
+    .map(([keys, what]) => (what === '' ? keys : `${keys} ${what}`))
+    .join(separator);
+}
+
+// The changed-on-disk prompt, each answer with its keys.
+export function conflictText(keys: {
+  reload: string | null;
+  overwrite: string | null;
+  cancel: string | null;
+}): string {
+  const hints = keyHints(
+    [
+      [keys.reload, 'reload'],
+      [keys.overwrite, 'overwrite'],
+      [keys.cancel, 'cancel'],
+    ],
+    ', ',
+  );
+  return hints === ''
+    ? 'File changed on disk'
+    : `File changed on disk — ${hints}`;
+}
+
+// The Trash question, its yes and no keys after it.
+export function trashQuestion(
+  name: string,
+  keys: { yes: string | null; no: string | null },
+): string {
+  const hints = keyHints(
+    [
+      [keys.yes, ''],
+      [keys.no, ''],
+    ],
+    '/',
+  );
+  const question = `Move ${name} to the Trash?`;
+  return hints === '' ? question : `${question} ${hints}`;
+}
+
+// The toast when no place holds a kind, pointing at create by path's keys.
+export function noPlaceText(
+  kindTitle: string,
+  createByPathKeys: string | null,
+): string {
+  const text = `No place holds a ${kindTitle} yet`;
+  return createByPathKeys === null
+    ? text
+    : `${text} — ${createByPathKeys} creates a file by path`;
 }
 
 const INSTRUCTION_NAMES = new Set([

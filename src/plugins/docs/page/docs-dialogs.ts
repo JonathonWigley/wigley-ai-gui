@@ -13,7 +13,7 @@ import type {
   FolderEntry,
   IndexEntry,
 } from '../contract';
-import { baseName, parentFolder, tildePath } from '../doc-paths';
+import { baseName, tildePath } from '../doc-paths';
 import { CREATE_KINDS, nameProblem, placesFor, skillFolder } from '../kinds';
 import {
   COMPLETION_LIMIT,
@@ -21,8 +21,15 @@ import {
   completionQuery,
   completions,
 } from '../path-completion';
-import { type DocChangeRecord, provisionalEntry } from './docs-state';
-import { textBoxInput } from './tree-view';
+import {
+  type DocChangeRecord,
+  type DocsKeysFor,
+  noPlaceText,
+  provisionalEntry,
+  renameRecord,
+  trashQuestion,
+} from './docs-state';
+import { textBoxInput } from './text-box';
 
 // The scopes the dialogs push over the view's pane scope.
 export type DialogScope = 'picker' | 'box' | 'confirm';
@@ -410,6 +417,7 @@ export interface DocsDialogsDeps {
   homeDir: Promise<string>;
   toast(text: string, tone: ToastTone): void;
   log: Log;
+  keysFor: DocsKeysFor;
   pushScope(scope: DialogScope): PushedScope;
   // The view's entries now.
   entries(): readonly IndexEntry[];
@@ -467,7 +475,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     const places = placesFor(kind, deps.entries(), await deps.homeDir);
     if (places.length === 0) {
       toast(
-        `No place holds a ${kindTitle} yet — A creates a file by path`,
+        noPlaceText(kindTitle, deps.keysFor('createByPath', 'tree')),
         'info',
       );
       createCancelled();
@@ -584,7 +592,6 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       });
     },
     rename(entry) {
-      const skill = skillFolder(entry.path);
       void deps.homeDir.then((homeDir) => {
         box.open({
           label: 'Rename to',
@@ -598,10 +605,12 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
                 typed,
               );
               box.close();
-              const from = skill ?? entry.path;
-              const to = skill === null ? renamed : parentFolder(renamed);
-              deps.changed({ type: 'renamed', from, to }, renamed);
-              log('docs', `renamed ${baseName(from)} to ${baseName(to)}`);
+              const record = renameRecord(entry.path, renamed);
+              deps.changed(record, renamed);
+              log(
+                'docs',
+                `renamed ${baseName(record.from)} to ${baseName(record.to)}`,
+              );
             } catch (error) {
               failed(error);
             }
@@ -615,7 +624,10 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       const skill = skillFolder(entry.path);
       const name = baseName(skill ?? entry.path);
       confirm.open(
-        `Move ${name} to the Trash? y/n`,
+        trashQuestion(name, {
+          yes: deps.keysFor('confirmYes', 'confirm'),
+          no: deps.keysFor('confirmNo', 'confirm'),
+        }),
         () => {
           channel
             .invoke('trashDoc', entry.path)

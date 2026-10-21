@@ -18,23 +18,20 @@ import type {
 } from '../contract';
 import { baseName, isInside, parentFolder, tildePath } from '../doc-paths';
 import { metaString } from '../index-document';
-import { skillFolder } from '../kinds';
 import { isIndexedPath } from '../path-guard';
 import { buildTree, type TreeLeaf } from '../tree';
-import {
-  type DocDetail,
-  type DocTarget,
-  createDocView,
-  readOnlyText,
-  UNSAVED_TEXT,
-} from './doc-view';
+import { type DocDetail, type DocTarget, createDocView } from './doc-view';
 import { createDocsDialogs } from './docs-dialogs';
 import {
   applyChange,
+  changeableEntry,
   chips,
+  conflictText,
   contextChoices,
   type DocChangeRecord,
+  type DocsKeysFor,
   detailFields,
+  reapplyChange,
   settlePending,
 } from './docs-state';
 import { createTreeView } from './tree-view';
@@ -87,14 +84,23 @@ export interface DocsView {
   showFirstTime(): void;
   // Runs the source again: `R`.
   rescan(): void;
-  // Runs the source again after another view's change.
-  rebuildInBackground(): void;
+  // Another view made `change`. A view that has read nothing yet does
+  // nothing; else a rename or trash shows at once, the doc pane following its
+  // file, and the source runs again, which lists a created doc.
+  outsideChange(change: DocChangeRecord): void;
+  // Closes the filter box, the dialogs and the changed-on-disk prompt, each
+  // scope they pushed popped, without moving focus: another docs view is
+  // about to show, and its pane scope may equal this one's.
+  closeOverlays(): void;
   // Returns whether the tree now shows.
   toggleTree(): boolean;
   // The scope this view's keys use now.
   focusScope(): DocsPaneScope;
   hasUnsavedEdits(): boolean;
-  // Stops the view's watch and destroys its editor.
+  // The open doc's path while its editor holds unsaved edits, else null.
+  unsavedPath(): string | null;
+  // Closes the overlays, stops the view's watch and its `docChanged`
+  // listener, and destroys its editor.
   dispose(): void;
   commands: DocsViewCommands;
 }
@@ -110,11 +116,14 @@ export interface DocsViewDeps {
   markdown: MarkdownRenderer;
   toast(text: string, tone: ToastTone): void;
   log: Log;
+  keysFor: DocsKeysFor;
   setScope(scope: DocsPaneScope): void;
   pushScope(scope: DocsPushedScope): PushedScope;
   isActive(): boolean;
-  // A session view's change was made: the machine view rebuilds.
-  afterChange(): void;
+  // This view made `change`: every other view hears it.
+  changed(change: DocChangeRecord): void;
+  // Every docs view's `unsavedPath`, this one's included.
+  unsavedPaths(): string[];
 }
 
 const SESSION_CONTEXT_TEXT =
@@ -176,7 +185,8 @@ interface AppliedChange {
 // One docs view over an index source: the tree pane and the doc pane, the
 // dialogs over them. A machine view reads the last index at creation; a
 // session view reads nothing until its first show. A change made here shows
-// at once and its paths stay pending until a source run asked after it lands.
+// at once and its paths stay pending until a source run asked after it lands;
+// every other view hears it through `changed`.
 export function createDocsView(deps: DocsViewDeps): DocsView {
   const { log, toast } = deps;
   const run = sourceRun(deps);
@@ -310,6 +320,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       });
     },
     pushConflictScope: () => deps.pushScope('conflict'),
+    conflictText: () =>
+      conflictText({
+        reload: deps.keysFor('conflictReload', 'conflict'),
+        overwrite: deps.keysFor('conflictOverwrite', 'conflict'),
+        cancel: deps.keysFor('conflictCancel', 'conflict'),
+      }),
   });
 
   const restoreFocus = () => {
@@ -338,6 +354,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     homeDir: deps.homeDir,
     toast,
     log,
+    keysFor: deps.keysFor,
     pushScope: (scope) => deps.pushScope(scope),
     entries: () => document?.entries ?? [],
     changed: (record, selectPath) => applyDocChange(record, selectPath),
@@ -380,7 +397,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   // Runs `read`, showing `busyText` while it runs, then its document and
   // message; `lines` give the line logged on its result. The result covers
-  // every change up to `settledSeq`; later ones apply again over it.
+  // every change up to `settledSeq`; later ones apply again over it, unless
+  // it already reflects them.
   const load = (
     read: () => Promise<IndexLoad>,
     busyText: string | null,
@@ -402,7 +420,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           built === null
             ? null
             : unsettled.reduce(
-                (shown, change) => applyChange(shown, change.record),
+                (shown, change) => reapplyChange(shown, change.record),
                 built,
               ),
         );
@@ -473,75 +491,61 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
   };
 
+  // Applies the change to the shown document, its paths pending until a run
+  // asked after it lands, and moves the doc pane with it; resolves once the
+  // tree shows it, null when no document shows yet.
+  const showChange = (record: DocChangeRecord): Promise<void> | null => {
+    const seq = ++changeSeq;
+    unsettled.push({ seq, record });
+    if (document === null) {
+      return null;
+    }
+    const next = applyChange(document, record);
+    for (const path of changedPaths(record, next)) {
+      pending.set(path, seq);
+    }
+    const shown = showDocument(next);
+    followChange(record);
+    return shown;
+  };
+
   const applyDocChange = (
     record: DocChangeRecord,
     selectPath: string | null,
   ) => {
-    const seq = ++changeSeq;
-    unsettled.push({ seq, record });
-    if (document !== null) {
-      const next = applyChange(document, record);
-      for (const path of changedPaths(record, next)) {
-        pending.set(path, seq);
+    const shown = showChange(record);
+    const selectId =
+      record.type === 'created'
+        ? record.entry.id
+        : selectPath === null
+          ? null
+          : entryAt(selectPath)?.id;
+    void shown?.then(() => {
+      if (selectId != null) {
+        tree.selectEntry(selectId);
       }
-      const shown = showDocument(next);
-      followChange(record);
-      const selectId =
-        record.type === 'created'
-          ? record.entry.id
-          : selectPath === null
-            ? null
-            : entryAt(selectPath)?.id;
-      void shown.then(() => {
-        if (selectId != null) {
-          tree.selectEntry(selectId);
-        }
-      });
-    }
+    });
     runSource();
-    if (deps.source.type === 'session') {
-      deps.afterChange();
-    }
+    deps.changed(record);
   };
 
   // The selected doc, when it is one that may be renamed or trashed; else
   // toasts why not.
-  const changeableEntry = (groupText: string): IndexEntry | null => {
-    const node = tree.selected();
-    if (node === null) {
+  const changeable = (groupText: string): IndexEntry | null => {
+    const checked = changeableEntry(
+      tree.selected(),
+      (entryId) => entriesById.get(entryId),
+      groupText,
+      deps.unsavedPaths(),
+    );
+    if (checked === null) {
       return null;
     }
-    if (node.type === 'group') {
-      toast(groupText, 'info');
+    if ('refusal' in checked) {
+      toast(checked.refusal.text, checked.refusal.tone);
       return null;
     }
-    const entry = entriesById.get(node.entryId);
-    if (entry === undefined) {
-      return null;
-    }
-    const isItemInFile =
-      entry.line !== null || entry.kind === 'hook' || entry.kind === 'plugin';
-    if (isItemInFile) {
-      toast(
-        `${entry.title} is an item inside ${baseName(entry.path)}; it cannot be renamed or moved to the Trash alone`,
-        'info',
-      );
-      return null;
-    }
-    if (entry.source === 'plugin') {
-      toast(readOnlyText(entry.plugin ?? entry.title), 'info');
-      return null;
-    }
-    const openPath = doc.openPath();
-    const editsThisFile =
-      doc.hasUnsavedEdits() &&
-      openPath !== null &&
-      isInside(openPath, skillFolder(entry.path) ?? entry.path);
-    if (editsThisFile) {
-      toast(UNSAVED_TEXT, 'error');
-      return null;
-    }
-    return entry;
+    return checked.entry;
   };
 
   // The folder `A` starts in: the selected doc's, the selected group's, or
@@ -635,13 +639,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       }
     },
     rename: () => {
-      const entry = changeableEntry('Select a doc to rename');
+      const entry = changeable('Select a doc to rename');
       if (entry !== null) {
         dialogs.rename(entry);
       }
     },
     trash: () => {
-      const entry = changeableEntry('Select a doc to move to the Trash');
+      const entry = changeable('Select a doc to move to the Trash');
       if (entry !== null) {
         dialogs.trash(entry);
       }
@@ -650,9 +654,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     confirmNo: () => dialogs.confirmNo(),
   };
 
-  let isDisposed = false;
-  deps.channel.on('docChanged', (change) => {
-    if (!isDisposed && change.viewId === deps.viewId) {
+  const listening = deps.channel.on('docChanged', (change) => {
+    if (change.viewId === deps.viewId) {
       doc.diskChanged(change.path);
     }
   });
@@ -669,9 +672,21 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       hasRun = true;
       runSource();
     },
-    rebuildInBackground() {
+    outsideChange(change) {
+      const hasRead = hasRun || deps.source.type === 'machine';
+      if (!hasRead) {
+        return;
+      }
+      if (change.type !== 'created') {
+        void showChange(change);
+      }
       hasRun = true;
       runSource();
+    },
+    closeOverlays() {
+      tree.dismissFilter();
+      dialogs.close();
+      doc.closeConflict();
     },
     toggleTree() {
       isTreeShown = !isTreeShown;
@@ -684,9 +699,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     focusScope: () => focused,
     hasUnsavedEdits: () => doc.hasUnsavedEdits(),
+    unsavedPath: () => (doc.hasUnsavedEdits() ? doc.openPath() : null),
     dispose() {
-      isDisposed = true;
-      dialogs.close();
+      view.closeOverlays();
+      listening.remove();
       doc.dispose();
     },
     commands,

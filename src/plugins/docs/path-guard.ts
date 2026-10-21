@@ -1,5 +1,5 @@
 import type { IndexEntry } from './contract';
-import { isInside, parentFolder } from './doc-paths';
+import { isInside } from './doc-paths';
 
 // The folders a change may land in that no index entry names, as real paths.
 export interface GuardFolders {
@@ -10,7 +10,7 @@ export interface GuardFolders {
 }
 
 // Whether a link may open `path`: an indexed file, or a file inside an
-// entry's root (plugins included) or a global entry's folder.
+// entry's root (plugins included).
 export function isIndexedPath(
   path: string,
   entries: readonly IndexEntry[],
@@ -18,8 +18,7 @@ export function isIndexedPath(
   return entries.some(
     (entry) =>
       path === entry.path ||
-      (entry.root !== null && isInside(path, entry.root)) ||
-      (entry.source === 'global' && isInside(path, parentFolder(entry.path))),
+      (entry.root !== null && isInside(path, entry.root)),
   );
 }
 

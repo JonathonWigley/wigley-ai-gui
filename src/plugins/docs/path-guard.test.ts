@@ -115,4 +115,13 @@ describe('isIndexedPath', () => {
     expect(isIndexedPath(PLUGIN_SKILL, ENTRIES)).toBe(true);
     expect(isIndexedPath('/Users/u/Desktop/x.md', ENTRIES)).toBe(false);
   });
+
+  it('isIndexedPath_InsideRepoRoot_Openable', () => {
+    expect(isIndexedPath('/Users/u/dev/r/docs/notes.md', ENTRIES)).toBe(true);
+  });
+
+  it('isIndexedPath_BesideGlobalEntry_NotOpenable', () => {
+    expect(isIndexedPath('/Users/u/.claude/CLAUDE.md', ENTRIES)).toBe(true);
+    expect(isIndexedPath('/Users/u/.claude/notes.md', ENTRIES)).toBe(false);
+  });
 });

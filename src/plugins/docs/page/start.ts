@@ -7,6 +7,8 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { qualify } from '../../../shared/plugin-manifests';
+import type { KeysPageExports } from '../../keys/contract';
 import type {
   SessionTabHandle,
   SessionsPageEvents,
@@ -14,7 +16,7 @@ import type {
 } from '../../sessions/contract';
 import type { DocsChannel } from '../contract';
 import { docsManifest } from '../manifest';
-import { UNSAVED_TEXT } from './doc-view';
+import { type DocChangeRecord, UNSAVED_TEXT } from './docs-state';
 import {
   createDocsView,
   type DocsSource,
@@ -37,13 +39,16 @@ interface SessionDocs {
 
 // Docs mode over the machine's index, and a Docs tab in every session over
 // that session's index. Each command acts on the active view: the machine
-// view while Docs mode shows, else the session view whose tab is visible.
+// view while Docs mode shows, else the session view whose tab is visible. A
+// change made in one view reaches every other, and a view showing closes the
+// others' overlays, since two views' pane scopes may be equal.
 export const docsPagePart: PagePart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
     const { services } = api;
     const { log } = services;
     const sessions = api.dependency<SessionsPageExports>('sessions');
+    const keys = api.dependency<KeysPageExports>('keys');
     // A page reload leaves main's watches for the old page's views.
     api.channel
       .invoke('unwatchAll')
@@ -58,13 +63,34 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     let isDocsModeShown = false;
     const sessionDocs = new Map<string, SessionDocs>();
 
+    const allViews = (): DocsView[] => [
+      machineView,
+      ...[...sessionDocs.values()].map((held) => held.view),
+    ];
+
+    const otherViews = (view: DocsView) =>
+      allViews().filter((each) => each !== view);
+
+    const changedIn = (view: DocsView, change: DocChangeRecord) => {
+      for (const other of otherViews(view)) {
+        other.outsideChange(change);
+      }
+    };
+
+    // Runs before the shown view sets its scope.
+    const closeOverlaysBesides = (view: DocsView) => {
+      for (const other of otherViews(view)) {
+        other.closeOverlays();
+      }
+    };
+
+    // `changed` reads the view only once a change is made, after creation.
     const createView = (
       viewId: string,
       source: DocsSource,
       isActive: () => boolean,
-      afterChange: () => void,
-    ) =>
-      createDocsView({
+    ): DocsView => {
+      const view: DocsView = createDocsView({
         viewId,
         source,
         channel: api.channel,
@@ -73,17 +99,27 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         markdown: services.markdown,
         toast: services.toast,
         log,
+        keysFor: (command, scope) =>
+          keys.keysFor(
+            qualify(docsManifest.id, command),
+            qualify(docsManifest.id, scope),
+          ),
         setScope: (scope) => api.keys.setScope(scope),
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,
-        afterChange,
+        changed: (change) => changedIn(view, change),
+        unsavedPaths: () =>
+          allViews()
+            .map((each) => each.unsavedPath())
+            .filter((path) => path !== null),
       });
+      return view;
+    };
 
     const machineView = createView(
       'machine',
       { type: 'machine' },
       () => isDocsModeShown,
-      () => undefined,
     );
 
     // `add` may call `shown` before it returns, so `shown` reads no handle.
@@ -93,6 +129,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       element: machineView.element,
       shown() {
         isDocsModeShown = true;
+        closeOverlaysBesides(machineView);
         api.keys.setScope(machineView.focusScope());
         machineView.showFirstTime();
       },
@@ -110,7 +147,6 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             `session:${sessionId}`,
             { type: 'session', spec: { hostSessionId, projectDir, harness } },
             () => held.handle?.isVisible() === true,
-            () => machineView.rebuildInBackground(),
           ),
           handle: null,
         };
@@ -131,6 +167,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             return true;
           },
           shown() {
+            closeOverlaysBesides(held.view);
             api.keys.setScope(held.view.focusScope());
             log('docs', 'Docs tab shown');
             held.view.showFirstTime();

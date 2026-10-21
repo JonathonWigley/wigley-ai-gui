@@ -16,18 +16,16 @@ import type { DocsChannel } from '../contract';
 import { baseName, tildePath } from '../doc-paths';
 import { splitFrontmatter } from '../frontmatter';
 import { resolveLink } from '../links';
-import { type Chip, codeFence, topVisibleLine } from './docs-state';
+import {
+  type Chip,
+  codeFence,
+  readOnlyText,
+  topVisibleLine,
+  UNSAVED_TEXT,
+} from './docs-state';
 
-export const UNSAVED_TEXT = 'Unsaved changes — :w to save, :q! to discard';
-const CONFLICT_TEXT =
-  'File changed on disk — r reload, o overwrite, Esc cancel';
 const BANNER_TEXT = 'Changed on disk since you opened it';
 const SCROLL_STEP_PX = 48;
-
-// The plugin cache line, shown under the header and toasted on `i`.
-export function readOnlyText(plugin: string): string {
-  return `Plugin cache — ${plugin}. Edit the source repo's copy.`;
-}
 
 // The file a detail view's `i` edits, read, and the 1-based line it opens at.
 export interface DetailFile {
@@ -72,6 +70,8 @@ export interface DocViewDeps {
   followFile(path: string, line: number | null, fragment: string | null): void;
   // Pushes `docs.conflict` while the changed-on-disk prompt shows.
   pushConflictScope(): PushedScope;
+  // The changed-on-disk prompt with the keys bound now.
+  conflictText(): string;
 }
 
 // The doc pane: the header with its chips, the plugin cache line, the
@@ -101,6 +101,8 @@ export interface DocView {
   conflictReload(): void;
   conflictOverwrite(): void;
   conflictCancel(): void;
+  // Ends the changed-on-disk prompt, if it shows, without moving focus.
+  closeConflict(): void;
   dispose(): void;
 }
 
@@ -195,7 +197,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   header.append(title, path, chipRow);
   const readOnlyLine = element('div', 'docs-readonly');
   const banner = element('div', 'docs-banner', BANNER_TEXT);
-  const prompt = element('div', 'docs-prompt', CONFLICT_TEXT);
+  const prompt = element('div', 'docs-prompt');
   let frontmatter = frontmatterTable([]);
   let body = markdownElement('div', 'md docs-body', '');
   header.hidden = true;
@@ -327,6 +329,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       }
     });
     conflict = { diskText, after, scope };
+    prompt.textContent = deps.conflictText();
     prompt.hidden = false;
   };
 
@@ -593,6 +596,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       }
       if (doc.target.cachePlugin !== null) {
         deps.toast(readOnlyText(doc.target.cachePlugin), 'info');
+        deps.log('docs', `refused to edit ${doc.name} in the plugin cache`);
         return;
       }
       if (editor !== null) {
@@ -652,6 +656,9 @@ export function createDocView(deps: DocViewDeps): DocView {
     },
     conflictCancel() {
       endConflict(true);
+    },
+    closeConflict() {
+      endConflict(false);
     },
     dispose() {
       isDisposed = true;
