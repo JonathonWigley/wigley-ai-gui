@@ -43,6 +43,9 @@ function fakeHost() {
       created.push({ events, editor });
       return editor;
     },
+    createDocument: () => {
+      throw new Error('not used by forms');
+    },
     contains: () => false,
     typeInto: () => {},
     onPendingKeys: () => {},

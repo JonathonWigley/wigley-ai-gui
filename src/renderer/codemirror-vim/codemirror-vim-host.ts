@@ -1,21 +1,38 @@
+import './syntax.css';
 import { EditorView, minimalSetup } from 'codemirror';
+import { syntaxHighlighting } from '@codemirror/language';
+import { Compartment, EditorState } from '@codemirror/state';
+import { lineNumbers } from '@codemirror/view';
+import { classHighlighter } from '@lezer/highlight';
 import { CodeMirror, getCM, Vim, vim } from '@replit/codemirror-vim';
 import type {
   CreateEditorHost,
+  DocumentEditor,
+  DocumentEditorEvents,
+  DocumentOptions,
   EditorEvents,
   FocusOptions,
   TextEditor,
+  VimMode,
 } from '../../contracts/editor';
 import type { EditorBind } from '../../contracts/keymap';
+import {
+  DOCUMENT_EX_COMMANDS,
+  type DocumentExEvent,
+  documentExEvent,
+} from './document-ex-commands';
 import { editorTheme } from './editor-theme';
 import { exBindName } from './ex-command-name';
+import { findLanguageByFile, loadLanguage } from './languages';
 import { type BindGroup, bindGroups, vimrcLines } from './vim-binds';
 
 type VimEditor = Parameters<typeof Vim.handleEx>[0];
 
+// `answerEx` raises a document editor's ex command events; a box has none.
 interface HostedEditor {
   view: EditorView;
   editor: TextEditor;
+  answerEx?: (event: DocumentExEvent) => void;
 }
 
 function vimEditorOf(view: EditorView): VimEditor {
@@ -26,12 +43,14 @@ function vimEditorOf(view: EditorView): VimEditor {
   return cm as VimEditor;
 }
 
-// The editor a bound key ran in, from the cm vim hands the command: focus
+// The editor a bound key or ex command ran in, from the cm vim hands it: focus
 // state is unreliable, since view.hasFocus is false while the window is not.
 function hostedEntryOf(cm: VimEditor, hosted: HostedEditor[]): HostedEditor {
   const match = hosted.find((entry) => getCM(entry.view) === cm);
   if (!match) {
-    throw new Error('Bound key ran in an editor this host did not create');
+    throw new Error(
+      'A bound key or ex command ran in an editor this host did not create',
+    );
   }
   return match;
 }
@@ -95,6 +114,36 @@ function defineBindCommands(
   });
 }
 
+// Each document ex command raises its event in the document editor it ran in,
+// and does nothing in a box. Defining one replaces vim's own command of that
+// name, such as `write`, which saves through a handler the adapter leaves unset.
+function defineDocumentExCommands(hosted: HostedEditor[]) {
+  for (const { name, prefix } of DOCUMENT_EX_COMMANDS) {
+    Vim.defineEx(
+      name,
+      prefix,
+      (cm: VimEditor, params: { argString?: string }) => {
+        const event = documentExEvent(name, params.argString);
+        hostedEntryOf(cm, hosted).answerEx?.(event);
+      },
+    );
+  }
+}
+
+function raiseDocumentEx(events: DocumentEditorEvents, event: DocumentExEvent) {
+  switch (event.kind) {
+    case 'write':
+      events.write();
+      break;
+    case 'quit':
+      events.quit(event.force);
+      break;
+    case 'writeQuit':
+      events.writeQuit();
+      break;
+  }
+}
+
 // Vim's `GA` from any mode: leaves visual mode, puts the cursor after the
 // last character, and enters insert mode there. `:startinsert!` is vim's `A`.
 function insertAtEnd(view: EditorView, cm: VimEditor) {
@@ -139,6 +188,50 @@ function replaceText(view: EditorView, text: string) {
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: text },
     userEvent: HOST_REPLACE,
+  });
+}
+
+// Replaces the whole text in one transaction, the cursor at the start of the
+// line it was on, clamped to the new line count.
+function replaceTextKeepingLine(view: EditorView, text: string) {
+  const { state } = view;
+  const cursorLine = state.doc.lineAt(state.selection.main.head).number;
+  const next = state.toText(text);
+  const anchor = next.line(Math.min(cursorLine, next.lines)).from;
+  view.dispatch({
+    changes: { from: 0, to: state.doc.length, insert: next },
+    selection: { anchor },
+    userEvent: HOST_REPLACE,
+  });
+}
+
+// The cursor to the start of the 1-based `line`, clamped to the text, and
+// that line scrolled to the top.
+function goToLine(view: EditorView, line: number) {
+  const { doc } = view.state;
+  const anchor = doc.line(Math.min(Math.max(line, 1), doc.lines)).from;
+  view.dispatch({
+    selection: { anchor },
+    effects: EditorView.scrollIntoView(anchor, { y: 'start' }),
+  });
+}
+
+// Reconfigures `slot` with the file's language once it loads, unless the
+// editor was destroyed first; a file with no known language stays plain text.
+function loadDocumentLanguage(
+  view: EditorView,
+  fileName: string,
+  slot: Compartment,
+  isHosted: () => boolean,
+) {
+  const language = findLanguageByFile(fileName);
+  if (language === null) {
+    return;
+  }
+  void loadLanguage(language).then((support) => {
+    if (isHosted()) {
+      view.dispatch({ effects: slot.reconfigure(support) });
+    }
   });
 }
 
@@ -298,10 +391,22 @@ function hostedViewOf(element: Element, hosted: HostedEditor[]): EditorView {
   return match.view;
 }
 
+// The whole text after each change the user makes; `setText` is no such change.
+function reportUserChanges(changed: (text: string) => void) {
+  return EditorView.updateListener.of((update) => {
+    const isHostReplace = update.transactions.some((transaction) =>
+      transaction.isUserEvent(HOST_REPLACE),
+    );
+    if (update.docChanged && !isHostReplace) {
+      changed(update.state.doc.toString());
+    }
+  });
+}
+
 // Answer boxes are prose: no gutters, brackets or completion; lines wrap.
 // `leaving` runs on blur before the editor reports it, so a box the user
 // leaves drops its unfinished keys before any other box reports.
-function editorExtensions(
+function boxExtensions(
   events: EditorEvents,
   leaving: (view: EditorView) => void,
 ) {
@@ -310,19 +415,40 @@ function editorExtensions(
     minimalSetup,
     EditorView.lineWrapping,
     editorTheme,
-    EditorView.updateListener.of((update) => {
-      const isHostReplace = update.transactions.some((transaction) =>
-        transaction.isUserEvent(HOST_REPLACE),
-      );
-      if (update.docChanged && !isHostReplace) {
-        events.changed(update.state.doc.toString());
-      }
-    }),
+    reportUserChanges(events.changed),
     EditorView.domEventHandlers({
       focus: () => events.focused(),
       blur: (_event, view) => {
         leaving(view);
         events.blurred();
+      },
+    }),
+  ];
+}
+
+// A whole file: line numbers, wrapped lines, the language `language` holds once
+// it loads, highlighted through the `tok-*` classes. Read-only blocks typed
+// input, and vim drops every edit it dispatches under the same facet.
+function documentExtensions(
+  options: DocumentOptions,
+  language: Compartment,
+  events: DocumentEditorEvents,
+  leaving: (view: EditorView) => void,
+) {
+  return [
+    vim({ status: true }),
+    minimalSetup,
+    lineNumbers(),
+    EditorView.lineWrapping,
+    EditorState.readOnly.of(options.readOnly),
+    language.of([]),
+    syntaxHighlighting(classHighlighter),
+    editorTheme,
+    EditorView.editorAttributes.of({ class: 'wg-document-editor' }),
+    reportUserChanges(events.changed),
+    EditorView.domEventHandlers({
+      blur: (_event, view) => {
+        leaving(view);
       },
     }),
   ];
@@ -337,59 +463,93 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
   const groups = bindGroups(keymap);
   defineBindCommands(groups, hosted, run);
 
+  defineDocumentExCommands(hosted);
+  const leaving = (left: EditorView) =>
+    pendingKeys.discardIn(vimEditorOf(left));
+
+  // Joins `view` to the host: the keymap, mode and pending-key reports, and the
+  // focus, blur and destroy every editor shares, which `editorOf` builds the
+  // hosted editor on.
+  function hostView<E extends TextEditor>(
+    view: EditorView,
+    modeChanged: (mode: VimMode) => void,
+    editorOf: (shared: TextEditor) => E,
+    answerEx?: (event: DocumentExEvent) => void,
+  ): E {
+    const cm = vimEditorOf(view);
+    requireKeyBuffer(cm);
+    const cursorRedraw = redrawCursorOnResize(view);
+    if (!isKeymapApplied) {
+      for (const line of vimrcLines(keymap, groups)) {
+        Vim.handleEx(cm, line);
+      }
+      isKeymapApplied = true;
+    }
+    cm.on('vim-mode-change', (change: { mode: string; subMode?: string }) =>
+      modeChanged({
+        mode: change.mode,
+        subMode: change.subMode ?? '',
+      }),
+    );
+    cm.on('vim-keypress', () => pendingKeys.reportFrom(cm));
+    cm.on('vim-command-done', () => pendingKeys.reportFrom(cm));
+    const editor = editorOf({
+      text: () => view.state.doc.toString(),
+      setText: (text) => replaceText(view, text),
+      focus: (options) => {
+        leaveFocusedEditor(view, hosted, pendingKeys);
+        focusEditor(view, cm, options);
+      },
+      blur: () => {
+        pendingKeys.discardIn(cm);
+        view.contentDOM.blur();
+      },
+      destroy: () => {
+        const index = hosted.findIndex((entry) => entry.view === view);
+        if (index < 0) {
+          return;
+        }
+        hosted.splice(index, 1);
+        cursorRedraw.disconnect();
+        pendingKeys.forget(cm);
+        view.destroy();
+      },
+    });
+    hosted.push({ view, editor, answerEx });
+    return editor;
+  }
+
   return {
     create(parent, doc, events) {
       const view = new EditorView({
         doc,
-        extensions: editorExtensions(events, (left) =>
-          pendingKeys.discardIn(vimEditorOf(left)),
-        ),
+        extensions: boxExtensions(events, leaving),
         parent,
       });
-      const cm = vimEditorOf(view);
-      requireKeyBuffer(cm);
-      const cursorRedraw = redrawCursorOnResize(view);
-      if (!isKeymapApplied) {
-        for (const line of vimrcLines(keymap, groups)) {
-          Vim.handleEx(cm, line);
-        }
-        isKeymapApplied = true;
-      }
-      cm.on('vim-mode-change', (change: { mode: string; subMode?: string }) =>
-        events.modeChanged({
-          mode: change.mode,
-          subMode: change.subMode ?? '',
-        }),
-      );
-      cm.on('vim-keypress', () => pendingKeys.reportFrom(cm));
-      cm.on('vim-command-done', () => pendingKeys.reportFrom(cm));
-      const entry: HostedEditor = {
+      return hostView(view, events.modeChanged, (shared) => shared);
+    },
+    createDocument(parent, doc, options, events) {
+      const language = new Compartment();
+      const view = new EditorView({
+        doc,
+        extensions: documentExtensions(options, language, events, leaving),
+        parent,
+      });
+      const editor = hostView(
         view,
-        editor: {
-          text: () => view.state.doc.toString(),
-          setText: (text) => replaceText(view, text),
-          focus: (options) => {
-            leaveFocusedEditor(view, hosted, pendingKeys);
-            focusEditor(view, cm, options);
-          },
-          blur: () => {
-            pendingKeys.discardIn(cm);
-            view.contentDOM.blur();
-          },
-          destroy: () => {
-            const index = hosted.indexOf(entry);
-            if (index < 0) {
-              return;
-            }
-            hosted.splice(index, 1);
-            cursorRedraw.disconnect();
-            pendingKeys.forget(cm);
-            view.destroy();
-          },
-        },
-      };
-      hosted.push(entry);
-      return entry.editor;
+        events.modeChanged,
+        (shared): DocumentEditor => ({
+          ...shared,
+          setText: (text) => replaceTextKeepingLine(view, text),
+          goToLine: (line) => goToLine(view, line),
+        }),
+        (event) => raiseDocumentEx(events, event),
+      );
+      goToLine(view, options.line);
+      loadDocumentLanguage(view, options.fileName, language, () =>
+        hosted.some((entry) => entry.view === view),
+      );
+      return editor;
     },
     contains: (element) =>
       hosted.some(({ view }) => view.dom.contains(element)),

@@ -37,8 +37,53 @@ export interface EditorEvents {
   modeChanged(mode: VimMode): void;
 }
 
+// How a document editor opens a file: `fileName` picks the language by its
+// extension, and `line` (1-based) is the line shown at the top with the cursor
+// on it.
+export interface DocumentOptions {
+  fileName: string;
+  readOnly: boolean;
+  line: number;
+}
+
+// What a document editor reports. The ex commands fire in a read-only editor
+// too.
+export interface DocumentEditorEvents {
+  // The whole text, after every change the user makes.
+  changed(text: string): void;
+  // `:w`
+  write(): void;
+  // `:q`, and `:q!` with `force`
+  quit(force: boolean): void;
+  // `:wq`, `:x`
+  writeQuit(): void;
+  // The vim mode the editor entered.
+  modeChanged(mode: VimMode): void;
+}
+
+// A whole file in vim: line numbers, the file's language, wrapped lines, and
+// its parent's full height, scrolling inside.
+export interface DocumentEditor extends TextEditor {
+  // Replaces the whole text, keeping focus and the vim mode, and puts the
+  // cursor at the start of the line it was on, clamped to the new line count;
+  // it reports no `changed`.
+  setText(text: string): void;
+  // Puts the cursor at the start of the 1-based `line`, clamped to the text,
+  // and scrolls it to the top.
+  goToLine(line: number): void;
+}
+
 export interface EditorHost {
+  // A small prose box: no gutter, no language; it reports focus and blur.
   create(parent: HTMLElement, doc: string, events: EditorEvents): TextEditor;
+  // A full-file editor, hosted as a box is: keys, focus and pending keys
+  // behave the same in both.
+  createDocument(
+    parent: HTMLElement,
+    doc: string,
+    options: DocumentOptions,
+    events: DocumentEditorEvents,
+  ): DocumentEditor;
   // Whether the element sits inside an editor this host created.
   contains(element: Element): boolean;
   // Delivers `keys`, named as KeyboardEvent.key names them, to the editor

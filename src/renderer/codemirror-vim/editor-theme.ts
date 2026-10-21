@@ -16,7 +16,14 @@ export const editorTheme = EditorView.theme({
     fontSize: `var(${FONT_VARIABLES.monoSize})`,
   },
   '&.cm-focused': { outline: `1px solid ${colour('border.focus')}` },
+  '&.wg-document-editor': { height: '100%' },
   '.cm-scroller': { fontFamily: `var(${FONT_VARIABLES.mono})` },
+  '.cm-gutters': {
+    backgroundColor: colour('editor.bg'),
+    color: colour('editor.gutter'),
+    border: 'none',
+  },
+  '.cm-lineNumbers .cm-gutterElement': { padding: '0 0.75em 0 0.5em' },
   '.cm-cursor': { borderLeftColor: colour('editor.cursor') },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
     { backgroundColor: colour('editor.selection') },
