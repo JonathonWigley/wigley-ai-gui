@@ -32,10 +32,3 @@ export function documentExEvent(
       throw new Error(`"${name}" is not a document ex command`);
   }
 }
-
-// Whether an ex name equals a DOCUMENT_EX_COMMANDS name or prefix.
-export function documentExClash(exName: string): boolean {
-  return DOCUMENT_EX_COMMANDS.some(
-    ({ name, prefix }) => exName === name || exName === prefix,
-  );
-}

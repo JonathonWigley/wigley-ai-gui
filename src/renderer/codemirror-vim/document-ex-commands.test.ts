@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { documentExClash, documentExEvent } from './document-ex-commands';
-import { exBindName } from './ex-command-name';
+import { documentExEvent } from './document-ex-commands';
 
 describe('documentExEvent', () => {
   it('maps each command to its event', () => {
@@ -24,21 +23,5 @@ describe('documentExEvent', () => {
 
   it('ignores a bang on write-and-quit', () => {
     expect(documentExEvent('wq', '!')).toEqual({ kind: 'writeQuit' });
-  });
-});
-
-describe('documentExClash', () => {
-  it('finds an ex name clash', () => {
-    for (const name of ['w', 'write', 'q', 'wq', 'xit', 'x']) {
-      expect(documentExClash(name), name).toBe(true);
-    }
-    expect(documentExClash('wigleybindzero')).toBe(false);
-    expect(documentExClash('wr')).toBe(false);
-  });
-
-  it('no bind ex name clashes', () => {
-    for (let index = 0; index <= 99; index++) {
-      expect(documentExClash(exBindName(index)), exBindName(index)).toBe(false);
-    }
   });
 });

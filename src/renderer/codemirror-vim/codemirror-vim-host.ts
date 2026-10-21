@@ -217,7 +217,9 @@ function goToLine(view: EditorView, line: number) {
 }
 
 // Reconfigures `slot` with the file's language once it loads, unless the
-// editor was destroyed first; a file with no known language stays plain text.
+// editor was destroyed first. A file with no known language, or one whose
+// language fails to load, stays plain text: the text is still whole and
+// editable, so a missing highlight is no error to raise.
 function loadDocumentLanguage(
   view: EditorView,
   fileName: string,
@@ -228,11 +230,14 @@ function loadDocumentLanguage(
   if (language === null) {
     return;
   }
-  void loadLanguage(language).then((support) => {
-    if (isHosted()) {
-      view.dispatch({ effects: slot.reconfigure(support) });
-    }
-  });
+  void loadLanguage(language).then(
+    (support) => {
+      if (isHosted()) {
+        view.dispatch({ effects: slot.reconfigure(support) });
+      }
+    },
+    () => undefined,
+  );
 }
 
 // A key goes through the editor's own keydown handling, so vim runs it in
@@ -518,7 +523,8 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
         cursorRedraw.disconnect();
         pendingKeys.forget(cm);
         // Destroying the view nulls cm.state.vim, which vim still reads after
-        // an ex command or key it is running returns: `:q` lands here.
+        // an ex command or key it is running returns: `:q` lands here. Vim's
+        // prompt stops the Enter that ran the command, so no page key hears it.
         queueMicrotask(() => view.destroy());
       },
     });
