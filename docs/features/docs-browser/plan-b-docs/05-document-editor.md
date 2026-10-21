@@ -1,6 +1,6 @@
 # 05 — Document editor
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -151,3 +151,4 @@ read-only, and :w :q :q! :wq :x as events`
 
 ## Proof
 
+`92330de` · diff read, every Produces present, typecheck and lint pass. Concerns in plan.md's Run log.

@@ -276,7 +276,7 @@ beside the tree's own (`memory-files.ts`, `fake-agent-harness.ts`), named for wh
 - [x] [Docs main part](06-docs-main.md) — after 01, 04
 
 ### Wave 3
-- [ ] [Document editor](05-document-editor.md) — after 02
+- [x] [Document editor](05-document-editor.md) — after 02
 
 ### Wave 4
 - [ ] [Docs view, Docs mode and Docs tabs](07-docs-view.md) — after 02, 04, 05, 06
@@ -322,6 +322,9 @@ review range is this run's explicit commit list.
   Produces present, 16 `syntax.*` tokens in theme and catppuccin, renderer wiring, typecheck and lint pass (worker:
   1354 tests and selftest pass) · concerns: the document instance's render rules cast `env` to `DocumentEnv`, safe
   only while `renderDocument` is that instance's one caller
+- 05 · wigley-ai-gui `92330de` · proved: diff read, every Produces present, typecheck and lint pass (worker: 1359
+  tests and selftest pass) · concerns: a failed language load leaves plain text and an unhandled rejection in the
+  console; the editor's ex keys, read-only edits, start line and highlighting run only in a DOM, left to 09 and 11
 ### Contract changes
 - `tree.ts`: adds `compareTitles(a, b): number` (base-sensitivity `localeCompare`, code-unit tie-break), used by
   `kinds.ts` · why: places sort as tree nodes do · consumers: 08 may use it · group 04
@@ -370,5 +373,7 @@ review range is this run's explicit commit list.
   · group 06
 - the table test asserts `<table data-source-line="1">` (Source lines rule puts it on `table_open`); fences
   highlight with `Promise.all`; repeated slugs take a numeric suffix; paths split on `/` and `\\` — group 02
+- hosted entries gain an optional `answerEx` so the shared ex handler reaches a document's events; the host
+  imports `syntax.css` itself; `documentExEvent` throws on an unknown name — group 05
 ### Review rounds
 ### Test gate

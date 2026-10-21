@@ -1,6 +1,6 @@
 # 07 — Docs view, Docs mode and Docs tabs
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 02, 04, 05, 06
 Plan: [plan.md](plan.md)
