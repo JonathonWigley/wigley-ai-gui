@@ -100,7 +100,10 @@ export interface ChannelShape {
   messages: Record<string, unknown>;
 }
 
-// Rejects with main's own error text when main's handler throws.
+// `invoke` rejects with main's own error text when main's handler throws.
+// `on` calls `listener` with each `message` main sends, until the returned
+// handle's `remove`; a second `remove` does nothing. Listening twice with one
+// listener registers it twice, each `remove` dropping its own registration.
 export interface PageChannel<Ch extends ChannelShape> {
   invoke<K extends keyof Ch['invoke'] & string>(
     method: K,
@@ -109,7 +112,7 @@ export interface PageChannel<Ch extends ChannelShape> {
   on<K extends keyof Ch['messages'] & string>(
     message: K,
     listener: (data: Ch['messages'][K]) => void,
-  ): void;
+  ): { remove(): void };
 }
 
 export interface MainChannel<Ch extends ChannelShape> {
@@ -297,9 +300,14 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
   start(api: PageApi<M, any, any, any>): PageStart<M>;
 }
 
-// `expect` is a line the page logs once the keys have run; `checksFit` also
-// checks the page fits the window's minimum width.
+// `writeFile`, when set, writes `text` to `path` before the keys run, as an
+// outside program changing a file on disk would; `path` is relative to the
+// self-test's temp home (`MainServices.homeDir` under the self-test), and one
+// that resolves outside it fails the self-test. `expect` is a line the page
+// logs once the write and the keys have run; `checksFit` also checks the page
+// fits the window's minimum width.
 export interface SelfTestStep {
+  writeFile?: { path: string; text: string };
   keys: string[];
   expect: string;
   checksFit?: true;
@@ -337,7 +345,9 @@ export interface SelfTestHost {
 // harness adapter the app runs, found by `id`. `window.chooseFolder` opens the
 // native folder dialog over the window and resolves to null when the user
 // cancels; `window.isFocused` is true while the app's window has focus.
-// `openExternal` opens an http(s) or mailto URL in the user's default app.
+// `openExternal` opens an http, https or mailto URL in the user's default app,
+// and rejects with `Refused to open <url>: …` for any other scheme or a URL
+// that does not parse.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;

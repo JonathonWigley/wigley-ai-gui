@@ -257,7 +257,8 @@ round), since main, not the page, decides.
   through `FormsService` — drives keys with
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
-  (`src/plugins/forms/main/selftest-script.ts` for forms); a step with no keys waits for its line. The script's
+  (`src/plugins/forms/main/selftest-script.ts` for forms); a step with no keys waits for its line, and a step's
+  `writeFile` writes a file under the self-test's temp home before its keys, as an outside change on disk. The script's
   `settings` override plugin settings in the config main serves the page (forms' sets a short
   `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Each plugin hands
   at most one script, and the scripts run in plugin start order; the keys plugin has no main part, so its steps live
@@ -272,6 +273,9 @@ round), since main, not the page, decides.
 
 ## Dev quirks
 
+- An app launched from Finder or the Dock inherits launchd's bare PATH, so before plugins start main swaps in the PATH
+  the user's login shell builds (`src/main/login-shell-path.ts`), keeping the inherited one when that read fails. The
+  self-test skips the read and keeps the PATH of the shell that ran it.
 - Under `electron-forge start` the page loads twice at startup, the second load triggered by the dev server. Code
   that acts on page load runs on every load, as the self-test does.
 - A session's `ask_round` schema is fixed when the session starts, so after a change to the forms tool contract the

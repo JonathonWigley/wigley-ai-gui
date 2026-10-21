@@ -5,6 +5,7 @@ import type {
   Area,
   AreaName,
   ChannelShape,
+  PageChannel,
   CommandInfo,
   Modes,
   PageApi,
@@ -53,12 +54,7 @@ export function createPageApi(
 ): PageApi<PluginManifest, ChannelShape, UntypedEvents, UntypedEvents> {
   return {
     areas: pluginAreas(deps.areas),
-    channel: {
-      invoke: (method, ...args) =>
-        deps.bridge.invoke(manifest.id, method, args),
-      on: (message, listener) =>
-        deps.bridge.onMessage(manifest.id, message, listener),
-    },
+    channel: pageChannel(manifest.id, deps.bridge),
     events: pluginEvents(deps.bus, manifest.id),
     keys: {
       setScope: (scope) => deps.scopeStack.setBase(qualify(manifest.id, scope)),
@@ -84,6 +80,51 @@ export function createPageApi(
     services: deps.services,
     dependency: deps.dependency,
     dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
+  };
+}
+
+// Plugin `pluginId`'s channel over the bridge. The bridge has no way to drop
+// a listener, so the channel takes one bridge listener per message name, the
+// first time it is listened to, and hands each message to the registrations
+// not yet removed, in the order they were made.
+function pageChannel(
+  pluginId: string,
+  bridge: Bridge,
+): PageChannel<ChannelShape> {
+  type Registration = { listener: (data: unknown) => void };
+  const registrations = new Map<string, Set<Registration>>();
+  const registrationsFor = (message: string): Set<Registration> => {
+    let forMessage = registrations.get(message);
+    if (forMessage === undefined) {
+      const created = new Set<Registration>();
+      bridge.onMessage(pluginId, message, (data) => {
+        // A registration added while this message is delivered waits for the
+        // next one; one removed meanwhile hears no more.
+        for (const registration of Array.from(created)) {
+          if (created.has(registration)) {
+            registration.listener(data);
+          }
+        }
+      });
+      registrations.set(message, created);
+      forMessage = created;
+    }
+    return forMessage;
+  };
+  return {
+    invoke: (method, ...args) => bridge.invoke(pluginId, method, args),
+    on: (message, listener) => {
+      const forMessage = registrationsFor(message);
+      const registration: Registration = {
+        listener: listener as (data: unknown) => void,
+      };
+      forMessage.add(registration);
+      return {
+        remove: () => {
+          forMessage.delete(registration);
+        },
+      };
+    },
   };
 }
 

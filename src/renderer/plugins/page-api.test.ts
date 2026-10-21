@@ -23,10 +23,11 @@ const manifest: PluginManifest = {
 
 interface TestChannel {
   invoke: { save(a: number, b: number): string };
-  messages: { shown: string };
+  messages: { shown: string; other: string };
 }
 
-// A Bridge recording the plugin calls it receives; the rest is unused here.
+// A Bridge recording the plugin calls it receives, whose `send` delivers a
+// message as main would; the rest is unused here.
 function fakeBridge() {
   const invoked: [string, string, unknown[]][] = [];
   const listeners: [string, string, (data: unknown) => void][] = [];
@@ -39,7 +40,18 @@ function fakeBridge() {
       listeners.push([pluginId, message, listener]);
     },
   } as Pick<Bridge, 'invoke' | 'onMessage'> as Bridge;
-  return { bridge, invoked, listeners };
+  const send = (pluginId: string, message: string, data: unknown) => {
+    for (const [toPlugin, sent, listener] of listeners) {
+      if (toPlugin === pluginId && sent === message) {
+        listener(data);
+      }
+    }
+  };
+  return { bridge, invoked, listeners, send };
+}
+
+function testChannel(bridge: Bridge): PageChannel<TestChannel> {
+  return createPageApi(manifest, deps({ bridge })).channel;
 }
 
 function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
@@ -95,19 +107,80 @@ describe('createPageApi', () => {
   });
 
   it("routes channel calls under the plugin's id", async () => {
-    const { bridge, invoked, listeners } = fakeBridge();
-    const channel: PageChannel<TestChannel> = createPageApi(
-      manifest,
-      deps({ bridge }),
-    ).channel;
-    const shown = () => {};
+    const { bridge, invoked } = fakeBridge();
+    const channel = testChannel(bridge);
 
     const result = await channel.invoke('save', 1, 2);
-    channel.on('shown', shown);
 
     expect(invoked).toEqual([['p', 'save', [1, 2]]]);
     expect(result).toBe('done');
-    expect(listeners).toEqual([['p', 'shown', shown]]);
+  });
+
+  it("hands a listener the plugin's own messages of its name", () => {
+    const { bridge, send } = fakeBridge();
+    const channel = testChannel(bridge);
+    const heard: string[] = [];
+    channel.on('shown', (data) => heard.push(data));
+
+    send('p', 'shown', 'a');
+    send('p', 'other', 'b');
+    send('q', 'shown', 'c');
+
+    expect(heard).toEqual(['a']);
+  });
+
+  it('stops a listener once its registration is removed, leaving the others', () => {
+    const { bridge, send } = fakeBridge();
+    const channel = testChannel(bridge);
+    const heard: string[] = [];
+    const first = channel.on('shown', (data) => heard.push(`first ${data}`));
+    channel.on('shown', (data) => heard.push(`second ${data}`));
+
+    send('p', 'shown', 'a');
+    first.remove();
+    first.remove();
+    send('p', 'shown', 'b');
+
+    expect(heard).toEqual(['first a', 'second a', 'second b']);
+  });
+
+  it('keeps one registration of a listener listened with twice when the other is removed', () => {
+    const { bridge, send } = fakeBridge();
+    const channel = testChannel(bridge);
+    const heard: string[] = [];
+    const listener = (data: string) => heard.push(data);
+    const first = channel.on('shown', listener);
+    channel.on('shown', listener);
+
+    first.remove();
+    send('p', 'shown', 'a');
+
+    expect(heard).toEqual(['a']);
+  });
+
+  it('skips a listener removed by an earlier listener of the same message', () => {
+    const { bridge, send } = fakeBridge();
+    const channel = testChannel(bridge);
+    const heard: string[] = [];
+    channel.on('shown', () => second.remove());
+    const second = channel.on('shown', (data) => heard.push(data));
+
+    send('p', 'shown', 'a');
+
+    expect(heard).toEqual([]);
+  });
+
+  it('takes one bridge listener per message name however many listen', () => {
+    const { bridge, listeners } = fakeBridge();
+    const channel = testChannel(bridge);
+
+    channel.on('shown', () => {});
+    channel.on('shown', () => {}).remove();
+    channel.on('shown', () => {});
+
+    expect(listeners.map(([pluginId, message]) => [pluginId, message])).toEqual(
+      [['p', 'shown']],
+    );
   });
 
   it('gives the plugin events under its id', () => {

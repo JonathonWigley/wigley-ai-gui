@@ -36,6 +36,7 @@ import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { expandHome } from '../shared/expand-home';
+import { scopedFiles } from '../shared/scoped-files';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
 import { startPlugins } from '../shared/plugin-host';
 import {
@@ -54,12 +55,14 @@ import {
   registerDataScheme,
   serveDataScheme,
 } from './data-protocol/data-protocol';
+import { gateExternalLinks } from './external-links';
 import { createNodeFiles } from './files/node-files';
 import {
   installWindowKeybindings,
   type MainCommands,
   registerGlobalShortcuts,
 } from './keybindings';
+import { readLoginShellPath } from './login-shell-path';
 import { createMainApi } from './plugins/main-api';
 import { createPluginChannels } from './plugins/plugin-channel';
 import { createNodeProcesses } from './processes/node-processes';
@@ -82,6 +85,13 @@ if (started) {
 const isSelfTest = Boolean(process.env.PROOF_SELFTEST);
 
 registerDataScheme();
+
+// Read while the app gets ready, and applied before any plugin starts. The
+// self-test inherits the PATH of the shell that ran it and stays clear of the
+// user's shell profile.
+const loginShellPath = isSelfTest
+  ? Promise.resolve(null)
+  : readLoginShellPath(process.env.SHELL);
 
 // Every self-test file sits in the temp home folder, and the user's Trash
 // must not collect them.
@@ -250,7 +260,9 @@ function createWindow(inputs: StartInputs) {
   mainWindow = window;
   const log = pageLog(window);
 
-  const selfTest = isSelfTest ? startSelfTest(window, cleanUpSelfTest) : null;
+  const selfTest = isSelfTest
+    ? startSelfTest(window, scopedFiles(files, inputs.homeDir), cleanUpSelfTest)
+    : null;
   const pluginWindow = windowService(window);
   // On a normal quit, will-quit disposes the parts that started; a failed
   // start exits through failStart, which skips will-quit.
@@ -288,10 +300,12 @@ function createWindow(inputs: StartInputs) {
         ? { ...pluginWindow, chooseFolder: () => Promise.resolve(null) }
         : pluginWindow,
       // The self-test never takes the user's foreground.
-      openExternal: isSelfTest
-        ? async (url) =>
-            log('main', `external link not opened in the self-test: ${url}`)
-        : (url) => shell.openExternal(url),
+      openExternal: gateExternalLinks(
+        isSelfTest
+          ? async (url) =>
+              log('main', `external link not opened in the self-test: ${url}`)
+          : (url) => shell.openExternal(url),
+      ),
     },
     selfTest,
     (part) => startedParts.push(part),
@@ -355,7 +369,12 @@ function startApp() {
   });
   app
     .whenReady()
-    .then(() => {
+    .then(async () => {
+      // With no login PATH read, the inherited one stays.
+      const shellPath = await loginShellPath;
+      if (shellPath !== null) {
+        process.env.PATH = shellPath;
+      }
       const inputs = readStartInputs();
       serveDataScheme(inputs.dataRoot);
       createWindow(inputs);

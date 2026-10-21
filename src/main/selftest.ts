@@ -1,4 +1,5 @@
 import { app, type BrowserWindow } from 'electron';
+import type { Files } from '../contracts/files';
 import type { SelfTestHost, SelfTestStep } from '../contracts/plugin';
 import {
   type Chord,
@@ -14,10 +15,10 @@ import {
 } from './selftest-config';
 
 // Runs the plugins' self-test scripts on every page load, one after another:
-// opens each script's fixture, drives its keys into the page through
-// Electron's input pipeline, and checks the lines the page logs, that the page
-// fits the window's minimum width, and the result the script checks. Run with `npm run selftest`; exits non-zero on
-// failure.
+// opens each script's fixture, writes the files a step writes, drives its keys
+// into the page through Electron's input pipeline, and checks the lines the
+// page logs, that the page fits the window's minimum width, and the result the
+// script checks. Run with `npm run selftest`; exits non-zero on failure.
 
 const KEY_CODES: Record<string, string> = { ' ': 'Space' };
 const STEP_TIMEOUT_MS = 5000;
@@ -232,13 +233,24 @@ let latestRun = 0;
 // offscreen (window.ts), so a visible-window self-test would time out here.
 let hasPaintedSinceNavigation = false;
 
+// Writes the step's file through `homeFiles` (rooted at the self-test's temp
+// home, so a path outside it rejects), presses its keys, and waits for its
+// line; the log is counted before the write, so a line the write alone
+// causes counts.
 async function runStep(
   window: BrowserWindow,
+  homeFiles: Files,
   step: SelfTestStep,
   scrollsItself: string[],
   isCurrent: () => boolean,
 ): Promise<boolean> {
   const seen = (await readLog(window)).length;
+  if (step.writeFile) {
+    if (!isCurrent()) {
+      return false;
+    }
+    await homeFiles.write(step.writeFile.path, step.writeFile.text);
+  }
   for (const key of step.keys) {
     if (!isCurrent()) {
       return false;
@@ -247,7 +259,12 @@ async function runStep(
     await wait(30);
   }
   const passed = await waitForNewLogLine(window, step.expect, seen);
-  const keys = step.keys.join('').replaceAll(' ', '␣');
+  const keys = [
+    ...(step.writeFile ? [`write ${step.writeFile.path}`] : []),
+    step.keys.join('').replaceAll(' ', '␣'),
+  ]
+    .filter((part) => part !== '')
+    .join(', ');
   if (isCurrent()) {
     report(passed, `${keys} -> ${step.expect}`);
   }
@@ -269,6 +286,7 @@ async function runStep(
 // interrupted the run.
 async function runScript(
   window: BrowserWindow,
+  homeFiles: Files,
   { pluginId, script }: HandedScript,
   run: number,
   isCurrent: () => boolean,
@@ -288,7 +306,14 @@ async function runScript(
     if (!isCurrent()) {
       return null;
     }
-    if (!(await runStep(window, step, script.scrollsItself, isCurrent))) {
+    const passed = await runStep(
+      window,
+      homeFiles,
+      step,
+      script.scrollsItself,
+      isCurrent,
+    );
+    if (!passed) {
       failures++;
     }
   }
@@ -308,6 +333,7 @@ async function runScript(
 // handed script in hand-over order; a failing script does not stop the next.
 async function runAllScripts(
   window: BrowserWindow,
+  homeFiles: Files,
   handed: readonly HandedScript[],
   run: number,
   isCurrent: () => boolean,
@@ -337,7 +363,13 @@ async function runAllScripts(
 
   let failures = 0;
   for (const script of handed) {
-    const scriptFailures = await runScript(window, script, run, isCurrent);
+    const scriptFailures = await runScript(
+      window,
+      homeFiles,
+      script,
+      run,
+      isCurrent,
+    );
     if (scriptFailures === null) {
       return;
     }
@@ -353,6 +385,7 @@ async function runAllScripts(
 // self-test, unless a reload already interrupted the run.
 function startRun(
   window: BrowserWindow,
+  homeFiles: Files,
   handed: readonly HandedScript[],
   cleanUp: () => void,
 ) {
@@ -361,11 +394,13 @@ function startRun(
   }
   const run = ++latestRun;
   const isCurrent = () => run === latestRun;
-  runAllScripts(window, handed, run, isCurrent, cleanUp).catch((error) => {
-    if (isCurrent()) {
-      failSelfTest('the steps run', error, cleanUp);
-    }
-  });
+  runAllScripts(window, homeFiles, handed, run, isCurrent, cleanUp).catch(
+    (error) => {
+      if (isCurrent()) {
+        failSelfTest('the steps run', error, cleanUp);
+      }
+    },
+  );
 }
 
 // What the composition root holds: `hostFor` gives each plugin the host its
@@ -378,12 +413,14 @@ export interface SelfTestDriver {
   closeHandover(): SelfTestConfig;
 }
 
-// `cleanUp` deletes what the self-test made outside the repo; it runs before
-// the self-test exits. Each plugin hands at most one script while the parts
+// `homeFiles` is the files service rooted at the self-test's temp home, which
+// steps' `writeFile` writes through. `cleanUp` deletes what the self-test made
+// outside the repo; it runs before the self-test exits. Each plugin hands at most one script while the parts
 // start; a host throws on its plugin's second script or one handed over late.
 // Every page load runs the handed scripts in hand-over order.
 export function startSelfTest(
   window: BrowserWindow,
+  homeFiles: Files,
   cleanUp: () => void,
 ): SelfTestDriver {
   window.webContents.on('did-navigate', () => {
@@ -427,7 +464,7 @@ export function startSelfTest(
         return { pageBinds: [], settings: {} };
       }
       window.webContents.on('did-finish-load', () =>
-        startRun(window, handed, cleanUp),
+        startRun(window, homeFiles, handed, cleanUp),
       );
       return config;
     },
