@@ -115,7 +115,7 @@ function startSession(info: Partial<SessionInfo> = {}): FormsSession {
   return createFormsService({
     presenter,
     store,
-    defaultDeadlineSeconds: DEFAULT_DEADLINE_SECONDS,
+    defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
   }).startSession({ id: 'app-1', info: { ...SESSION, ...info } });
 }
 

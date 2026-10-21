@@ -74,7 +74,7 @@ function started(fake = fakeChild()) {
   const logged: [string, string][] = [];
   const spawn: ClaudeSpawn = () => fake.child;
   const harness = createClaudeCodeHarness({
-    command: '/bin/claude',
+    command: () => '/bin/claude',
     permissionTool: 'tool',
     env: {},
     log: (source, message) => logged.push([source, message]),
@@ -406,7 +406,7 @@ describe('createClaudeCodeHarness past sessions', () => {
       transcript,
     );
     const harness = createClaudeCodeHarness({
-      command: '/bin/claude',
+      command: () => '/bin/claude',
       permissionTool: 'tool',
       env,
       log: () => {},

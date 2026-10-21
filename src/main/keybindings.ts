@@ -50,43 +50,57 @@ function matchesChord(input: Input, bind: InterceptBind): boolean {
   return isKeyDown && modifiersMatch;
 }
 
-function interceptChords(
+// The window's keymap chords, swapped for a new keymap's.
+export interface WindowKeybindings {
+  // Rebuilds the app menu and swaps the intercepted chords; throws before
+  // changing either when a main-process bind names an unregistered command.
+  setKeymap(keymap: Keymap): void;
+}
+
+function requireMainCommandsRegistered(keymap: Keymap, commands: MainCommands) {
+  commands.requireRegistered(
+    [...keymap.app, ...keymap.intercept, ...keymap.global].map(
+      (bind) => bind.command,
+    ),
+  );
+}
+
+// The keymap's in-window chords: the app menu's and the intercepted ones, read
+// by one input listener from the binds the last keymap set. Checks every
+// main-process bind, global ones included, names a registered command.
+export function installWindowKeybindings(
   window: BrowserWindow,
-  binds: InterceptBind[],
+  keymap: Keymap,
   commands: MainCommands,
-) {
+): WindowKeybindings {
+  requireMainCommandsRegistered(keymap, commands);
+  Menu.setApplicationMenu(buildMenu(keymap.app, commands));
+  let intercepts = keymap.intercept;
   window.webContents.on('before-input-event', (event, input) => {
-    const bind = binds.find((candidate) => matchesChord(input, candidate));
+    const bind = intercepts.find((candidate) => matchesChord(input, candidate));
     if (!bind) {
       return;
     }
     event.preventDefault();
     commands.run(bind.command, chordName(bind));
   });
+  return {
+    setKeymap(next) {
+      requireMainCommandsRegistered(next, commands);
+      Menu.setApplicationMenu(buildMenu(next.app, commands));
+      intercepts = next.intercept;
+    },
+  };
 }
 
-// The keymap's in-window chords: the app menu's and the intercepted ones.
-// Checks every main-process bind, global ones included, names a registered
-// command.
-export function installWindowKeybindings(
-  window: BrowserWindow,
-  keymap: Keymap,
-  commands: MainCommands,
-) {
-  commands.requireRegistered(
-    [...keymap.app, ...keymap.intercept, ...keymap.global].map(
-      (bind) => bind.command,
-    ),
-  );
-  Menu.setApplicationMenu(buildMenu(keymap.app, commands));
-  interceptChords(window, keymap.intercept, commands);
-}
-
+// Registers `binds` system-wide, replacing every shortcut an earlier call
+// registered.
 export function registerGlobalShortcuts(
   binds: AcceleratorBind[],
   commands: MainCommands,
   log: Log,
 ) {
+  globalShortcut.unregisterAll();
   for (const bind of binds) {
     const registered = globalShortcut.register(bind.accelerator, () =>
       commands.run(bind.command, bind.accelerator),

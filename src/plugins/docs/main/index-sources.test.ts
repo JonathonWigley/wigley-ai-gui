@@ -52,7 +52,7 @@ function setUp(scriptPath = SCRIPT) {
     files,
     processes,
     homeDir: HOME,
-    scriptPath,
+    scriptPath: () => scriptPath,
     log: (source, message) => logged.push([source, message]),
   });
   return { files, processes, logged, sources };
@@ -96,7 +96,7 @@ describe('machine source', () => {
         },
       },
       homeDir: HOME,
-      scriptPath: SCRIPT,
+      scriptPath: () => SCRIPT,
       log: () => undefined,
     });
 

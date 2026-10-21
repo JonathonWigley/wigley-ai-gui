@@ -70,7 +70,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     const chat = createChatSessions({
       harnesses: services.agentHarnesses,
       sessions,
-      profiles: api.settings.profiles,
+      profiles: () => api.settings().profiles,
       homeDir: services.homeDir,
       randomUuid: services.randomUuid,
       recent,

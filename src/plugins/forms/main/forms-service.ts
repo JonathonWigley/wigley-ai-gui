@@ -26,8 +26,8 @@ import type { RoundStore, SavedRound } from './round-store';
 export interface FormsServiceDeps {
   presenter: RoundPresenter;
   store: RoundStore;
-  // The soft deadline when the host names none.
-  defaultDeadlineSeconds: number;
+  // Reads the soft deadline when the host names none, once per session.
+  defaultDeadlineSeconds(): number;
 }
 
 interface RoundFinish {
@@ -699,7 +699,7 @@ function startSession(
   const session: SessionContext = {
     sessionId: agentSession.id,
     info,
-    deadlineSeconds: deadlineSeconds(info, deps.defaultDeadlineSeconds),
+    deadlineSeconds: deadlineSeconds(info, deps.defaultDeadlineSeconds()),
     presenter: deps.presenter,
     store: deps.store,
     open: null,

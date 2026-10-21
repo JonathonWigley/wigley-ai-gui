@@ -34,10 +34,10 @@ interface DocsMain {
 }
 
 // The index uses real paths, so the home folder every `~` expands to is the
-// real one.
+// real one. `scriptPath` is read at each index run.
 async function startDocs(
   services: MainServices,
-  scriptPath: string,
+  scriptPath: () => string,
 ): Promise<DocsMain> {
   const { files, processes, log } = services;
   const homeDir = await files.realPath(services.homeDir);
@@ -67,7 +67,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
     const { services, channel } = api;
-    const docs = startDocs(services, api.settings.scriptPath);
+    const docs = startDocs(services, () => api.settings().scriptPath);
     docs.catch((error: unknown) =>
       services.log('docs', `docs not started: ${errorText(error)}`),
     );

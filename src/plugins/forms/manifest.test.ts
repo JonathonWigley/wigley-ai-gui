@@ -111,7 +111,7 @@ const EXPECTED_PAGE: PageBind[] = [
 
 describe('formsManifest', () => {
   it('merges to the forms binds', () => {
-    const merged = mergeKeymap(EMPTY_CORE, [formsManifest]);
+    const merged = mergeKeymap(EMPTY_CORE, [formsManifest], {});
 
     expect(merged.editor.binds).toEqual(EXPECTED_EDITOR);
     expect(merged.page).toEqual(EXPECTED_PAGE);

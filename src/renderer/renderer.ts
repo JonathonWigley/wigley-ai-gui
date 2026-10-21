@@ -16,15 +16,13 @@ import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { editorBindMode } from '../shared/key-hints';
+import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
 import { startPlugins } from '../shared/plugin-host';
 import { qualify } from '../shared/plugin-manifests';
 import { mountCodeColours } from './codemirror-vim/code-colours';
 import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
-import {
-  editorBindInForce,
-  requireUnambiguousEditorBinds,
-} from './editor-binds';
+import { editorBindInForce } from './editor-binds';
 import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { createScopeStack } from './key-scope';

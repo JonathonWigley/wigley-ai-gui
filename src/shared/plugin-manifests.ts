@@ -1,5 +1,15 @@
 import type { CommandId } from '../contracts/commands';
-import type { Keymap } from '../contracts/keymap';
+import type {
+  AcceleratorBind,
+  EditorBind,
+  EditorKeymap,
+  EditorRemap,
+  InterceptBind,
+  Keymap,
+  KeymapUnbind,
+  PageBind,
+  UserKeymap,
+} from '../contracts/keymap';
 import type {
   CommandDecl,
   CommandInfo,
@@ -8,6 +18,8 @@ import type {
   ScopeInfo,
 } from '../contracts/plugin';
 import type { TokenDecl } from '../contracts/theme';
+import { editorBindMode, withLeader } from './key-hints';
+import { startsWith } from './keymap-checks';
 
 const THEME_TOKEN_NAME = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 
@@ -44,36 +56,226 @@ function qualifiedScopedBinds<Bind extends { scope: string; command: string }>(
   );
 }
 
-// The core's keymap with every manifest's binds after the core's own, in list
-// order, their commands and scopes qualified as `<pluginId>.<short>`; the
-// `any` scope stays unqualified. The editor's leader and remaps are the core's.
-export function mergeKeymap(
-  core: Keymap,
+// The manifests in the order their plugins start: repeatedly the first, in
+// list order, whose `dependsOn` have all been taken. A dependency on a plugin
+// not in `manifests` holds nothing back. Throws on a dependency cycle.
+export function dependencyOrder(
   manifests: readonly PluginManifest[],
+): PluginManifest[] {
+  const listed = new Set(manifests.map((manifest) => manifest.id));
+  const taken = new Set<string>();
+  const ordered: PluginManifest[] = [];
+  let pending = [...manifests];
+  while (pending.length > 0) {
+    const ready = pending.find((manifest) =>
+      manifest.dependsOn.every((id) => taken.has(id) || !listed.has(id)),
+    );
+    if (!ready) {
+      const waiting = pending.map((manifest) => manifest.id).join(', ');
+      throw new Error(`Plugins depend on each other in a cycle: ${waiting}`);
+    }
+    ordered.push(ready);
+    taken.add(ready.id);
+    pending = pending.filter((manifest) => manifest !== ready);
+  }
+  return ordered;
+}
+
+type SameBind<B> = (a: B, b: B) => boolean;
+
+// How the merge tells that a later layer's bind replaces an earlier one, for
+// each list of the keymap; the editor's compare keys with `leader` spelled.
+interface BindIdentities {
+  page: SameBind<PageBind>;
+  editorBinds: SameBind<EditorBind>;
+  remaps: SameBind<EditorRemap>;
+  accelerators: SameBind<AcceleratorBind>;
+  intercept: SameBind<Omit<InterceptBind, 'command'>>;
+}
+
+function bindIdentities(leader: string): BindIdentities {
+  const sameKeys = (a: string, b: string) =>
+    withLeader(a, leader) === withLeader(b, leader);
+  return {
+    page: (a, b) =>
+      a.scope === b.scope &&
+      a.keys.length === b.keys.length &&
+      startsWith(a.keys, b.keys),
+    editorBinds: (a, b) =>
+      a.scope === b.scope &&
+      editorBindMode(a) === editorBindMode(b) &&
+      sameKeys(a.keys, b.keys),
+    remaps: (a, b) => a.mode === b.mode && sameKeys(a.keys, b.keys),
+    accelerators: (a, b) => a.accelerator === b.accelerator,
+    intercept: (a, b) =>
+      a.key === b.key &&
+      Boolean(a.control) === Boolean(b.control) &&
+      Boolean(a.alt) === Boolean(b.alt) &&
+      Boolean(a.shift) === Boolean(b.shift) &&
+      Boolean(a.meta) === Boolean(b.meta),
+  };
+}
+
+// `earlier` with `layer` laid over it: each bind of `layer` takes the place of
+// the earlier layers' bind it matches, or appends after every earlier bind.
+// Binds inside `layer` never replace each other, so a clash inside one layer
+// stays for the keymap checks to find.
+function layerOver<B>(
+  earlier: readonly B[],
+  layer: readonly B[],
+  same: SameBind<B>,
+): B[] {
+  const merged = earlier.map((bind) => ({ bind, isThisLayer: false }));
+  for (const bind of layer) {
+    const replaced = merged.findIndex(
+      (entry) => !entry.isThisLayer && same(entry.bind, bind),
+    );
+    if (replaced === -1) {
+      merged.push({ bind, isThisLayer: true });
+    } else {
+      merged[replaced] = { bind, isThisLayer: true };
+    }
+  }
+  return merged.map((entry) => entry.bind);
+}
+
+// The binds one layer lays over the earlier ones; the leader is the merge's.
+type KeymapLayer = Omit<Keymap, 'editor'> & {
+  editor: Omit<EditorKeymap, 'leader'>;
+};
+
+// One plugin's default keys, their commands and scopes qualified as
+// `<pluginId>.<short>`; the `any` scope stays unqualified.
+function pluginLayer(manifest: PluginManifest): KeymapLayer {
+  return {
+    editor: {
+      remaps: [],
+      binds: qualifiedScopedBinds([manifest], (keys) => keys.editor),
+    },
+    page: qualifiedScopedBinds([manifest], (keys) => keys.page),
+    app: qualifiedBinds([manifest], (keys) => keys.app),
+    intercept: qualifiedBinds([manifest], (keys) => keys.intercept),
+    global: qualifiedBinds([manifest], (keys) => keys.global),
+  };
+}
+
+function keymapLayerOver(
+  earlier: Keymap,
+  layer: KeymapLayer,
+  same: BindIdentities,
 ): Keymap {
   return {
     editor: {
-      leader: core.editor.leader,
-      remaps: core.editor.remaps,
-      binds: [
-        ...core.editor.binds,
-        ...qualifiedScopedBinds(manifests, (keys) => keys.editor),
-      ],
+      leader: earlier.editor.leader,
+      remaps: layerOver(
+        earlier.editor.remaps,
+        layer.editor.remaps,
+        same.remaps,
+      ),
+      binds: layerOver(
+        earlier.editor.binds,
+        layer.editor.binds,
+        same.editorBinds,
+      ),
     },
-    page: [
-      ...core.page,
-      ...qualifiedScopedBinds(manifests, (keys) => keys.page),
-    ],
-    app: [...core.app, ...qualifiedBinds(manifests, (keys) => keys.app)],
-    intercept: [
-      ...core.intercept,
-      ...qualifiedBinds(manifests, (keys) => keys.intercept),
-    ],
-    global: [
-      ...core.global,
-      ...qualifiedBinds(manifests, (keys) => keys.global),
-    ],
+    page: layerOver(earlier.page, layer.page, same.page),
+    app: layerOver(earlier.app, layer.app, same.accelerators),
+    intercept: layerOver(earlier.intercept, layer.intercept, same.intercept),
+    global: layerOver(earlier.global, layer.global, same.accelerators),
   };
+}
+
+// `keymap` without each bind an entry of `unbind` names; an entry naming no
+// bind removes nothing.
+function withoutUnbound(
+  keymap: Keymap,
+  unbind: readonly KeymapUnbind[],
+  same: BindIdentities,
+): Keymap {
+  const isUnbound = (names: (entry: KeymapUnbind) => boolean) =>
+    unbind.some(names);
+  return {
+    editor: {
+      ...keymap.editor,
+      binds: keymap.editor.binds.filter(
+        (bind) =>
+          !isUnbound(
+            (entry) =>
+              'editor' in entry &&
+              same.editorBinds(bind, {
+                ...entry,
+                keys: entry.editor,
+                command: '',
+              }),
+          ),
+      ),
+    },
+    page: keymap.page.filter(
+      (bind) =>
+        !isUnbound(
+          (entry) =>
+            'page' in entry &&
+            same.page(bind, {
+              keys: entry.page,
+              scope: entry.scope,
+              command: '',
+            }),
+        ),
+    ),
+    app: keymap.app.filter(
+      (bind) =>
+        !isUnbound((entry) => 'app' in entry && entry.app === bind.accelerator),
+    ),
+    intercept: keymap.intercept.filter(
+      (bind) =>
+        !isUnbound(
+          (entry) =>
+            'intercept' in entry && same.intercept(bind, entry.intercept),
+        ),
+    ),
+    global: keymap.global.filter(
+      (bind) =>
+        !isUnbound(
+          (entry) => 'global' in entry && entry.global === bind.accelerator,
+        ),
+    ),
+  };
+}
+
+// The keymap in layers: `core`, then each manifest's binds in `dependencyOrder`
+// (commands and scopes qualified as `<pluginId>.<short>`, the `any` scope left
+// unqualified), then the user's. A later layer's bind replaces an earlier
+// layer's bind on the same keys in the same scope (the same accelerator for
+// app and global binds, the same key and modifiers for intercepts), taking its
+// place; any other appends. The user layer first removes each bind its
+// `unbind` names from the core and plugin layers, and its `editor.leader`
+// replaces the core's, which the editor binds and remaps compare keys with.
+export function mergeKeymap(
+  core: Keymap,
+  manifests: readonly PluginManifest[],
+  user: UserKeymap,
+): Keymap {
+  const leader = user.editor?.leader ?? core.editor.leader;
+  const same = bindIdentities(leader);
+  let merged: Keymap = { ...core, editor: { ...core.editor, leader } };
+  for (const manifest of dependencyOrder(manifests)) {
+    merged = keymapLayerOver(merged, pluginLayer(manifest), same);
+  }
+  merged = withoutUnbound(merged, user.unbind ?? [], same);
+  return keymapLayerOver(
+    merged,
+    {
+      editor: {
+        remaps: user.editor?.remaps ?? [],
+        binds: user.editor?.binds ?? [],
+      },
+      page: user.page ?? [],
+      app: user.app ?? [],
+      intercept: user.intercept ?? [],
+      global: user.global ?? [],
+    },
+    same,
+  );
 }
 
 // Every command by id: the core's under their own ids with plugin `core`,

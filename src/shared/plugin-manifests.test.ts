@@ -3,6 +3,7 @@ import type { Keymap } from '../contracts/keymap';
 import type { PluginManifest } from '../contracts/plugin';
 import {
   commandInfos,
+  dependencyOrder,
   mergeKeymap,
   overrideSettings,
   pluginSettings,
@@ -68,7 +69,7 @@ describe('mergeKeymap', () => {
   it("qualifies plugin commands and scopes and keeps the core's binds", () => {
     const core = coreKeymap();
 
-    const merged = mergeKeymap(core, [p]);
+    const merged = mergeKeymap(core, [p], {});
 
     expect(merged.page).toContainEqual({
       keys: ['g'],
@@ -98,7 +99,7 @@ describe('mergeKeymap', () => {
   });
 
   it('keeps the any scope unqualified', () => {
-    const merged = mergeKeymap(coreKeymap(), [p]);
+    const merged = mergeKeymap(coreKeymap(), [p], {});
 
     expect(merged.page).toContainEqual({
       keys: ['x'],
@@ -116,7 +117,7 @@ describe('mergeKeymap', () => {
       },
     });
 
-    const merged = mergeKeymap(coreKeymap(), [h]);
+    const merged = mergeKeymap(coreKeymap(), [h], {});
 
     expect(merged.editor.binds).toContainEqual({
       keys: '<Leader>h',
@@ -134,7 +135,7 @@ describe('mergeKeymap', () => {
       },
     });
 
-    const merged = mergeKeymap(coreKeymap(), [q, p]);
+    const merged = mergeKeymap(coreKeymap(), [q, p], {});
 
     expect(merged.page.map((bind) => bind.command)).toEqual([
       'core.quit',
@@ -142,6 +143,40 @@ describe('mergeKeymap', () => {
       'p.go',
       'p.go',
     ]);
+  });
+
+  it("a later plugin layer replaces an earlier one's bind", () => {
+    const binding = (id: string, dependsOn: string[]) =>
+      manifest(id, {
+        dependsOn,
+        commands: { go: { label: 'Go', group: 'Moves', runsIn: 'page' } },
+        keys: {
+          ...NO_KEYS,
+          page: [{ keys: ['x'], scope: 'any', command: 'go' }],
+        },
+      });
+
+    const merged = mergeKeymap(
+      coreKeymap(),
+      [binding('a', ['b']), binding('b', [])],
+      {},
+    );
+
+    expect(merged.page.filter((bind) => bind.keys.join(' ') === 'x')).toEqual([
+      { keys: ['x'], scope: 'any', command: 'a.go' },
+    ]);
+  });
+});
+
+describe('dependencyOrder', () => {
+  it('orders plugins by dependency, ties in list order', () => {
+    const ordered = dependencyOrder([
+      manifest('a', { dependsOn: ['c'] }),
+      manifest('b'),
+      manifest('c'),
+    ]);
+
+    expect(ordered.map((each) => each.id)).toEqual(['b', 'c', 'a']);
   });
 });
 

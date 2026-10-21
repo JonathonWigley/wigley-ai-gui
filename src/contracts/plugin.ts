@@ -2,6 +2,7 @@ import type { AgentHarness } from './agent';
 import type { Alerts } from './alerts';
 import type { Clock, RandomHex, RandomUuid, Timers } from './ambient';
 import type { CommandId } from './commands';
+import type { Disposable } from './disposable';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
 import type {
@@ -374,7 +375,9 @@ export interface MainServices {
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` and
 // `Heard` are as on `PageApi`. `data` is the files service scoped to the
 // plugin's data folder: its paths are relative to that folder, and one that
-// resolves outside it fails.
+// resolves outside it fails. `settings` reads the plugin's settings as the
+// user config now sets them; `onSettingsChanged` hears them each time they
+// change, until its `dispose`.
 export interface MainApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
@@ -383,7 +386,8 @@ export interface MainApi<
 > {
   channel: MainChannel<Ch>;
   events: PluginEvents<Ev, Heard>;
-  settings: M['settings'];
+  settings(): M['settings'];
+  onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
   services: MainServices;
   dependency<E>(pluginId: string): E;
   data: Files;

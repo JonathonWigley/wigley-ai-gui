@@ -4,7 +4,6 @@ import {
   type ChordPress,
   createChordMatcher,
   createSequenceMatcher,
-  requireUnambiguousBinds,
   type SequenceResult,
 } from './key-sequences';
 
@@ -210,61 +209,6 @@ describe('createSequenceMatcher', () => {
     expect(() => createSequenceMatcher(duplicated, TIMEOUT_MS)).toThrow(
       /test\.first.*test\.second/,
     );
-  });
-});
-
-describe('requireUnambiguousBinds', () => {
-  it('rejects the same keys twice in one scope, naming both binds', () => {
-    expect(() =>
-      requireUnambiguousBinds([
-        { keys: ['x'], scope: 'review', command: 'test.first' },
-        { keys: ['x'], scope: 'review', command: 'test.second' },
-      ]),
-    ).toThrow(/test\.first.*test\.second/);
-  });
-
-  it('rejects a bind whose keys begin another bind in one scope', () => {
-    expect(() =>
-      requireUnambiguousBinds([
-        { keys: ['z'], scope: 'forms', command: 'test.short' },
-        { keys: ['z', 'a'], scope: 'forms', command: 'test.long' },
-      ]),
-    ).toThrow(/test\.short.*test\.long/);
-  });
-
-  it('rejects an any-scope bind that shares keys with a scoped one', () => {
-    expect(() =>
-      requireUnambiguousBinds([
-        { keys: ['?'], scope: 'help', command: 'test.close' },
-        { keys: ['?'], scope: 'any', command: 'test.help' },
-      ]),
-    ).toThrow(/test\.close.*test\.help/);
-  });
-
-  it('accepts the same keys in different scopes', () => {
-    expect(() =>
-      requireUnambiguousBinds([
-        { keys: ['Escape'], scope: 'review', command: 'test.back' },
-        { keys: ['Escape'], scope: 'help', command: 'test.close' },
-      ]),
-    ).not.toThrow();
-  });
-
-  it('rejects a bind with no keys', () => {
-    expect(() =>
-      requireUnambiguousBinds([
-        { keys: [], scope: 'forms', command: 'test.empty' },
-      ]),
-    ).toThrow(/test\.empty/);
-  });
-
-  it('rejects a chord bound twice in one scope', () => {
-    expect(() =>
-      requireUnambiguousBinds([
-        { keys: ['<C-h>'], scope: 'forms', command: 'test.first' },
-        { keys: ['<C-h>'], scope: 'forms', command: 'test.second' },
-      ]),
-    ).toThrow(/test\.first.*test\.second/);
   });
 });
 

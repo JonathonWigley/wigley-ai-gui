@@ -97,7 +97,7 @@ function setUp(
   const chat = createChatSessions({
     harnesses,
     sessions,
-    profiles: DEFAULT_PROFILES,
+    profiles: () => DEFAULT_PROFILES,
     homeDir: '/Users/u',
     randomUuid: () => {
       uuidCalls++;

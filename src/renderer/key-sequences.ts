@@ -1,9 +1,11 @@
 import type { PageBind, ViewScope } from '../contracts/keymap';
+import { type Chord, isChordToken, parseChord } from '../shared/chord-notation';
 import {
-  CHORD_NOTATION_RULE,
-  isChordToken,
-  parseChord,
-} from '../shared/chord-notation';
+  firesIn,
+  requireUnambiguousBinds,
+  requireWellFormedChords,
+  startsWith,
+} from '../shared/keymap-checks';
 
 type MatchResult =
   | { kind: 'run'; bind: PageBind }
@@ -27,49 +29,6 @@ export interface SequenceMatcher {
   pendingKeys(): string[];
   hold(): void;
   isHeld(): boolean;
-}
-
-// Whether a page or editor bind fires while `scope` is in force.
-export function firesIn(bind: { scope: ViewScope }, scope: ViewScope): boolean {
-  return bind.scope === 'any' || bind.scope === scope;
-}
-
-// Whether some scope holds binds in both `a` and `b`.
-export function scopesOverlap(a: ViewScope, b: ViewScope): boolean {
-  return a === 'any' || b === 'any' || a === b;
-}
-
-function startsWith(keys: string[], prefix: string[]): boolean {
-  return (
-    prefix.length <= keys.length &&
-    prefix.every((key, index) => keys[index] === key)
-  );
-}
-
-function describeBind(bind: PageBind): string {
-  return `"${bind.keys.join(' ')}" [${bind.scope}] ${bind.command}`;
-}
-
-// Throws on a bind with no keys, or on two binds sharing a scope where one's
-// keys equal or begin the other's.
-export function requireUnambiguousBinds(binds: PageBind[]): void {
-  for (const bind of binds) {
-    if (bind.keys.length === 0) {
-      throw new Error(`Page bind for ${bind.command} has no keys`);
-    }
-  }
-  binds.forEach((bind, index) => {
-    for (const other of binds.slice(index + 1)) {
-      const sharesAScope = scopesOverlap(bind.scope, other.scope);
-      const keysCollide =
-        startsWith(bind.keys, other.keys) || startsWith(other.keys, bind.keys);
-      if (sharesAScope && keysCollide) {
-        throw new Error(
-          `Page binds ${describeBind(bind)} and ${describeBind(other)} share a scope, and one's keys begin the other's`,
-        );
-      }
-    }
-  });
 }
 
 function matchKeys(
@@ -173,13 +132,7 @@ interface ParsedChord extends ChordPress {
 
 // A letter matches its `Key` code, a digit its top-row `Digit` code, and
 // `Enter` the main Enter key's code.
-function toParsedChord(bind: PageBind, token: string): ParsedChord {
-  const chord = parseChord(token);
-  if (!chord) {
-    throw new Error(
-      `Page bind for ${bind.command} has a malformed chord ${token}: ${CHORD_NOTATION_RULE}`,
-    );
-  }
+function toParsedChord(bind: PageBind, chord: Chord): ParsedChord {
   return {
     bind,
     code: chordCode(chord.key),
@@ -213,16 +166,13 @@ function isSameChord(a: ChordPress, b: ChordPress): boolean {
 // chord that does not fit the notation. A chord matches on the physical key and
 // the exact modifiers held, never on `KeyboardEvent.key`.
 export function createChordMatcher(binds: PageBind[]): ChordMatcher {
+  requireWellFormedChords(binds);
   const chords: ParsedChord[] = [];
   for (const bind of binds) {
-    const tokens = bind.keys.filter(isChordToken);
-    if (tokens.length > 0 && bind.keys.length > 1) {
-      throw new Error(
-        `Page bind for ${bind.command} has the chord ${tokens[0]} inside the sequence "${bind.keys.join(' ')}"; a chord must be the bind's only key`,
-      );
-    }
-    if (tokens.length === 1) {
-      chords.push(toParsedChord(bind, tokens[0]));
+    const isChordBind = bind.keys.length === 1 && isChordToken(bind.keys[0]);
+    const chord = isChordBind ? parseChord(bind.keys[0]) : null;
+    if (chord !== null) {
+      chords.push(toParsedChord(bind, chord));
     }
   }
 

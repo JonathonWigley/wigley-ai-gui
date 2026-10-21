@@ -1,4 +1,6 @@
 import type { SelfTestScript } from '../contracts/plugin';
+import type { AppConfig } from '../contracts/settings';
+import { overrideSettings } from '../shared/plugin-manifests';
 
 // A script as the self-test received it, with the id of the plugin that handed
 // it over.
@@ -41,5 +43,22 @@ export function mergeSelfTestConfigs(
   return {
     pageBinds: handed.flatMap(({ script }) => script.pageBinds),
     settings,
+  };
+}
+
+// `config` as the self-test serves it: the scripts' page binds after every
+// bind, and their settings laid over the plugin settings. Throws on a setting
+// no plugin holds.
+export function applySelfTestConfig(
+  config: AppConfig,
+  selfTest: SelfTestConfig,
+): AppConfig {
+  return {
+    ...config,
+    keymap: {
+      ...config.keymap,
+      page: [...config.keymap.page, ...selfTest.pageBinds],
+    },
+    pluginSettings: overrideSettings(config.pluginSettings, selfTest.settings),
   };
 }

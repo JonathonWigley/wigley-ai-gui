@@ -388,7 +388,7 @@ list; task 06's rename map reads from it.
 - [x] [Theme model and token registry](01-theme-model.md)
 
 ### Wave 2
-- [ ] [ConfigStore and the layered keymap](02-config-store.md) — after 01
+- [x] [ConfigStore and the layered keymap](02-config-store.md) — after 01
 - [x] [Token rename across every stylesheet](06-token-rename.md) — after 01
 
 ### Wave 3
@@ -412,6 +412,7 @@ Review base: 17cf5935eb176577587a6a3c230e907efdef81c9
 
 ### Groups
 - 01 · 943c502 · diff read + typecheck pass; lint fails only on DESIGN.md format (pre-existing) · concerns: highlighter test asserts definitionKeyword (same class as keyword); a `git rm` of syntax.css was reset to an unstaged deletion; `npx vitest` ran once (installed copy, nothing downloaded)
+- 06 · 3da1dc1 · diff read + registry check + camel-case grep clean · concerns: workers skipped skills and mandatory reads (pure rename)
 ### Contract changes
 ### Rulings
 - `src/main/themes` layer allows no packages now that the loader is pure — task 02 reads files through `Files` in `src/main/config` — 02 would need `node:` back if it reads files there · group 01
@@ -422,5 +423,13 @@ Review base: 17cf5935eb176577587a6a3c230e907efdef81c9
 - `theme-tokens.ts` registry carries `// prettier-ignore` so every key keeps its quotes (oxfmt would unquote four, breaking the count grep) — none · group 01
 - `colorScheme` is checked on every theme in the chain that sets it — none · group 01
 - `DESIGN.md` fails `oxfmt --check` at the review base (two unaligned tables); task 07, which owns `DESIGN.md`, formats it — lint stays red until 07 lands · lead
+- dialog `.list-picker-item` rows take the list-* defaults (list-hover-background, list-active-background, focus-border) — rows, not buttons — a look tweak in plan C if wrong · group 06
+- `src/main/config/config-json.ts` added (shared JSON reading for user-settings and user-keymap); `renderer.ts` import and `forms/manifest.test.ts` touched for the moves — one home, not a copy — none · group 02
+- `dependencyOrder` treats a dependency not in the list as satisfied, leaving `startPlugins`' own error to report it — an unlisted dependency would read as a cycle otherwise · group 02
+- `WindowKeybindings.setKeymap` checks commands before changing anything, so a bad keymap leaves menu and intercepts as they were — none · group 02
+- Problems order: the watch problem first, then settings.json, keymap.json, theme files by path — none · group 02
+- Only `themes/*.json` directly in the folder are read; an unreadable one is its own problem; a non-ThemeError from `resolveTheme` is a problem with file `themes` — none · group 02
+- keymap.json messages beyond the task's table follow its style; unbind entries are not checked against known names — an unbind matching nothing is ignored · group 02
+- A rebuild that throws unexpectedly logs `[config] config not read: …` and keeps the served config — none · group 02
 ### Review rounds
 ### Test gate

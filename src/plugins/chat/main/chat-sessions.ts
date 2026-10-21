@@ -48,7 +48,8 @@ export interface ChatSessionsDeps {
     SessionsMainExports,
     'open' | 'mark' | 'activate' | 'selectedSessionId'
   >;
-  profiles: readonly ChatProfile[];
+  // Read at each session start.
+  profiles(): readonly ChatProfile[];
   homeDir: string;
   randomUuid: RandomUuid;
   recent: RecentFolders;
@@ -303,7 +304,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   function requireProfile(name: string): ChatProfile {
-    const profile = deps.profiles.find((held) => held.name === name);
+    const profile = deps.profiles().find((held) => held.name === name);
     if (!profile) {
       throw new Error(`chat has no profile "${name}"`);
     }

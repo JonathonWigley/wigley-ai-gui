@@ -17,20 +17,23 @@ import os from 'node:os';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { coreCommands, coreKeymap, coreScopes } from '../config/keymap';
-import { defaultSettings } from '../config/settings';
+import {
+  defaultSettings,
+  optionalSettings,
+  settingChoices,
+} from '../config/settings';
 import { coreThemeTokens } from '../config/theme-tokens';
 import { builtInThemes } from '../config/themes';
 import { CLAUDE_PERMISSION_TOOL } from '../contracts/agent';
 import type { Clock, RandomHex, RandomUuid } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
-import type { Keymap } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
+import type { Platform } from '../contracts/platform';
 import type {
   MainServices,
   MainStart,
   PluginManifest,
 } from '../contracts/plugin';
-import type { AppConfig } from '../contracts/settings';
 import { mainParts } from '../plugins/main';
 import { manifests } from '../plugins/manifests';
 import { CommandRegistry } from '../shared/command-registry';
@@ -40,19 +43,15 @@ import { expandHome } from '../shared/expand-home';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
 import { startPlugins } from '../shared/plugin-host';
 import {
-  commandInfos,
-  mergeKeymap,
-  overrideSettings,
-  pluginSettings,
   pluginThemeTokens,
   qualify,
   requireListed,
-  scopeInfos,
 } from '../shared/plugin-manifests';
 import { scopedFiles } from '../shared/scoped-files';
 import { createElectronAlerts } from './alerts/electron-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import { createClaudeCodeHarness } from './claude-code/claude-code-harness';
+import { type ConfigStore, loadConfigStore } from './config/config-store';
 import {
   registerDataScheme,
   serveDataScheme,
@@ -72,7 +71,7 @@ import { createMainApi } from './plugins/main-api';
 import { createPluginChannels } from './plugins/plugin-channel';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
-import type { SelfTestConfig } from './selftest-config';
+import { applySelfTestConfig } from './selftest-config';
 import { resolveTheme } from './themes/theme-loader';
 import {
   createMainWindow,
@@ -126,16 +125,21 @@ const cleanUpSelfTest = () => {
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
-// What the window and the plugins start from, read once the app is ready so
-// that a bad manifest, theme or temp folder fails the start through failStart.
+// What the window and the plugins start from besides the config, read once
+// the app is ready so that a bad manifest or temp folder fails the start
+// through failStart.
 interface StartInputs {
-  theme: AppConfig['theme'];
-  settingsByPlugin: AppConfig['pluginSettings'];
-  commandsById: AppConfig['commands'];
-  scopes: AppConfig['scopes'];
   homeDir: string;
   dataRoot: string;
 }
+
+// The OS as the served config names it.
+const platform: Platform =
+  process.platform === 'darwin'
+    ? 'macos'
+    : process.platform === 'win32'
+      ? 'windows'
+      : 'linux';
 
 function homeFolder(): string {
   if (!isSelfTest) {
@@ -156,17 +160,35 @@ function dataFolder(): string {
 function readStartInputs(): StartInputs {
   requireListed(mainParts, manifests);
   const homeDir = homeFolder();
-  return {
-    theme: resolveTheme(defaultSettings.theme, builtInThemes, [], {
+  return { homeDir, dataRoot: dataFolder() };
+}
+
+// The ConfigStore over the user config folder in `homeDir`. Its log reaches
+// the window's page once the window exists; a line before is dropped.
+function loadConfig(homeDir: string): Promise<ConfigStore> {
+  return loadConfigStore({
+    files,
+    folder: path.join(homeDir, '.config', 'wigley-ai-gui'),
+    defaults: defaultSettings,
+    optionalSettings,
+    settingChoices,
+    coreKeymap,
+    coreCommands,
+    coreScopes,
+    manifests,
+    builtInThemes,
+    themeTokens: {
       core: coreThemeTokens,
       plugins: pluginThemeTokens(manifests),
-    }),
-    settingsByPlugin: pluginSettings(manifests),
-    commandsById: commandInfos(coreCommands, manifests),
-    scopes: scopeInfos(coreScopes, manifests),
-    homeDir,
-    dataRoot: dataFolder(),
-  };
+    },
+    resolveTheme,
+    platform,
+    log: (source, message) => {
+      if (mainWindow !== null) {
+        pageLog(mainWindow)(source, message);
+      }
+    },
+  });
 }
 
 // The window's page, or null once the window or its page is destroyed, as on
@@ -182,36 +204,15 @@ function pageLog(window: BrowserWindow): Log {
     livePage(window)?.send(BRIDGE_CHANNELS.log, source, message);
 }
 
-// `selfTest` adds the self-test scripts' page binds after every plugin's, and
-// lays their settings over the plugins'.
-function buildConfig(inputs: StartInputs, selfTest: SelfTestConfig): AppConfig {
-  const merged = mergeKeymap(coreKeymap, manifests);
-  const keymap: Keymap = {
-    ...merged,
-    page: [...merged.page, ...selfTest.pageBinds],
-  };
-  return {
-    settings: defaultSettings,
-    keymap,
-    commands: inputs.commandsById,
-    scopes: inputs.scopes,
-    pluginSettings: overrideSettings(
-      inputs.settingsByPlugin,
-      selfTest.settings,
-    ),
-    theme: inputs.theme,
-    problems: [],
-  };
-}
-
 // Starts every plugin's main part, each with its own API over one plugin
-// channel router to the window's page, one event bus, the shared `services`,
+// channel router to the window's page, the settings `store` serves with no
+// self-test layer, one event bus, the shared `services`,
 // its own host from `selfTest` (null outside the self-test), and its data
 // folder under `dataRoot`. `onStarted` sees each part as it starts, so a part
 // is known even when a later start throws.
 function startMainParts(
   window: BrowserWindow,
-  settingsByPlugin: StartInputs['settingsByPlugin'],
+  store: ConfigStore,
   dataRoot: string,
   services: Omit<MainServices, 'selfTest'>,
   selfTest: SelfTestDriver | null,
@@ -225,7 +226,9 @@ function startMainParts(
       const started = part.start(
         createMainApi(part.manifest, {
           channels,
-          settings: settingsByPlugin[part.manifest.id],
+          pluginSettings: () => store.current().pluginSettings,
+          onPluginSettingsChanged: (listener) =>
+            store.onChanged((config) => listener(config.pluginSettings)),
           services,
           selfTestFor: (pluginId) => selfTest?.hostFor(pluginId) ?? null,
           dependency,
@@ -259,10 +262,13 @@ function disposeParts(parts: readonly MainStart<PluginManifest>[]) {
   return Promise.allSettled(parts.map(async (part) => part.dispose?.()));
 }
 
-function createWindow(inputs: StartInputs) {
+// The window's size and background are read once: the one window hides
+// rather than closes, so a new size applies at the next start.
+function createWindow(inputs: StartInputs, store: ConfigStore) {
+  const startConfig = store.current();
   const window = createMainWindow(
-    defaultSettings.window,
-    inputs.theme.tokens['window-background'],
+    startConfig.settings.window,
+    startConfig.theme.tokens['window-background'],
     isSelfTest,
   );
   mainWindow = window;
@@ -278,7 +284,7 @@ function createWindow(inputs: StartInputs) {
   app.on('will-quit', () => void disposeParts(startedParts));
   const started = startMainParts(
     window,
-    inputs.settingsByPlugin,
+    store,
     inputs.dataRoot,
     {
       files,
@@ -293,10 +299,11 @@ function createWindow(inputs: StartInputs) {
         ? [createFakeAgentHarness()]
         : [
             createClaudeCodeHarness({
-              command: expandHome(
-                defaultSettings.claude.command,
-                inputs.homeDir,
-              ),
+              command: () =>
+                expandHome(
+                  store.current().settings.claude.command,
+                  inputs.homeDir,
+                ),
               permissionTool: CLAUDE_PERMISSION_TOOL,
               env: process.env,
               log,
@@ -330,19 +337,47 @@ function createWindow(inputs: StartInputs) {
   const commands: MainCommands = new CommandRegistry<string>();
   registerWindowCommands(commands, window, log);
   registerPartCommands(commands, started);
-  const config = buildConfig(inputs, selfTestConfig);
-  ipcMain.handle(BRIDGE_CHANNELS.config, () => config);
-  installWindowKeybindings(window, config.keymap, commands);
+  // Read at each request, so a page reload after a config edit starts on the
+  // current config.
+  const served = () => applySelfTestConfig(store.current(), selfTestConfig);
+  const startServed = served();
+  ipcMain.handle(BRIDGE_CHANNELS.config, () => served());
+  const keybindings = installWindowKeybindings(
+    window,
+    startServed.keymap,
+    commands,
+  );
   window.on('closed', () => {
     globalShortcut.unregisterAll();
+  });
+
+  let hasPageLoaded = false;
+  let appliedKeymap = JSON.stringify(startServed.keymap);
+  store.onChanged(() => {
+    const config = served();
+    livePage(window)?.send(BRIDGE_CHANNELS.configChanged, config);
+    const keymap = JSON.stringify(config.keymap);
+    if (keymap === appliedKeymap) {
+      return;
+    }
+    try {
+      keybindings.setKeymap(config.keymap);
+      if (!isSelfTest && hasPageLoaded) {
+        registerGlobalShortcuts(config.keymap.global, commands, log);
+      }
+      appliedKeymap = keymap;
+    } catch (error) {
+      log('config', `keys not applied: ${errorText(error)}`);
+    }
   });
 
   if (isSelfTest) {
     return;
   }
-  window.webContents.once('did-finish-load', () =>
-    registerGlobalShortcuts(config.keymap.global, commands, log),
-  );
+  window.webContents.once('did-finish-load', () => {
+    hasPageLoaded = true;
+    registerGlobalShortcuts(served().keymap.global, commands, log);
+  });
   // The window holds every open round, so on macOS closing it hides it
   // until the app quits.
   window.on('close', (event) => {
@@ -386,8 +421,9 @@ function startApp() {
         process.env.PATH = shellPath;
       }
       const inputs = readStartInputs();
+      const store = await loadConfig(inputs.homeDir);
       serveDataScheme(inputs.dataRoot);
-      createWindow(inputs);
+      createWindow(inputs, store);
       app.on('activate', () => mainWindow?.show());
     })
     .catch(failStart);

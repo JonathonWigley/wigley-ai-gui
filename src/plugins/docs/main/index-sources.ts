@@ -26,7 +26,8 @@ export interface IndexSourcesDeps {
   files: Files;
   processes: ProcessRunner;
   homeDir: string;
-  scriptPath: string;
+  // Read at each index run.
+  scriptPath(): string;
   log: Log;
 }
 
@@ -188,7 +189,7 @@ async function runScript(
   const script = await locateScript(
     deps.files,
     deps.homeDir,
-    deps.scriptPath,
+    deps.scriptPath(),
     deps.log,
   );
   if (script === null) {

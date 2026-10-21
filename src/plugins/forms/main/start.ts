@@ -47,7 +47,7 @@ function createForms(
     services.log,
     sessions,
   );
-  const defaultDeadlineSeconds = api.settings.deadlineSeconds;
+  const defaultDeadlineSeconds = () => api.settings().deadlineSeconds;
   const forms = createFormsService({
     presenter,
     store,

@@ -1,6 +1,6 @@
 # 02 — ConfigStore and the layered keymap
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -312,3 +312,4 @@ Tests:     `config-store.test.ts`:
 
 ## Proof
 
+Proof: every Produces signature found in its file; `npm run typecheck` passes; `npm run lint` fails only on `DESIGN.md` format (pre-existing). The worker ran `npm test` (1648 pass) and `npm run selftest` (pass). Concerns and rulings in the Run log, group 02; commit sha there.

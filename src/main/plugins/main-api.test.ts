@@ -20,14 +20,74 @@ const manifest: PluginManifest = {
   themeTokens: {},
 };
 
+const fixedSettings = {
+  pluginSettings: () => ({ p: {} }),
+  onPluginSettingsChanged: () => ({ dispose: () => undefined }),
+};
+
+// Settings deps whose value `change` replaces, calling every listener.
+function liveSettings(initial: Record<string, object>) {
+  let current = initial;
+  const listeners = new Set<(settings: Record<string, object>) => void>();
+  return {
+    deps: {
+      pluginSettings: () => current,
+      onPluginSettingsChanged: (
+        listener: (settings: Record<string, object>) => void,
+      ) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      },
+    },
+    change(next: Record<string, object>) {
+      current = next;
+      for (const listener of listeners) {
+        listener(next);
+      }
+    },
+  };
+}
+
+function apiOver(settings: ReturnType<typeof liveSettings>) {
+  return createMainApi(manifest, {
+    channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
+    ...settings.deps,
+    services: {} as MainServices,
+    selfTestFor: () => null,
+    dependency: <E>() => undefined as E,
+    bus: createEventBus(),
+    dataRoot: '/d',
+  });
+}
+
 describe('createMainApi', () => {
+  it("settings() reads the plugin's current settings", () => {
+    const settings = liveSettings({ p: { size: 1 }, q: { size: 2 } });
+    const api = apiOver(settings);
+
+    settings.change({ p: { size: 3 }, q: { size: 2 } });
+
+    expect(api.settings()).toEqual({ size: 3 });
+  });
+
+  it("onSettingsChanged fires only when that plugin's settings change", () => {
+    const settings = liveSettings({ p: { size: 1 }, q: { size: 2 } });
+    const heard: object[] = [];
+    apiOver(settings).onSettingsChanged((next) => heard.push(next));
+
+    settings.change({ p: { size: 1 }, q: { size: 5 } });
+    settings.change({ p: { size: 4 }, q: { size: 5 } });
+
+    expect(heard).toEqual([{ size: 4 }]);
+  });
+
   it('gives the plugin events under its id', () => {
     const bus = createEventBus();
     const heard: unknown[] = [];
     bus.on('p.x', (data) => heard.push(data));
     const api = createMainApi(manifest, {
       channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
-      settings: {},
+      ...fixedSettings,
       services: {} as MainServices,
       selfTestFor: () => null,
       dependency: <E>() => undefined as E,
@@ -46,7 +106,7 @@ describe('createMainApi', () => {
       { ...manifest, id: 'forms' },
       {
         channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
-        settings: {},
+        ...fixedSettings,
         services: { files } as unknown as MainServices,
         selfTestFor: () => null,
         dependency: <E>() => undefined as E,
@@ -71,7 +131,7 @@ describe('createMainApi', () => {
       { ...manifest, id: 'forms' },
       {
         channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
-        settings: {},
+        ...fixedSettings,
         services: {
           files: createMemoryFiles(),
           clock,

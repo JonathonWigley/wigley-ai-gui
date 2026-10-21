@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
+import type { AppConfig } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
 
 // Electron prefixes a handler's error with the channel and the error's name.
@@ -12,6 +13,11 @@ function mainErrorText(error: unknown): string {
 
 const bridge: Bridge = {
   config: () => ipcRenderer.invoke(BRIDGE_CHANNELS.config),
+  onConfig: (listener) => {
+    ipcRenderer.on(BRIDGE_CHANNELS.configChanged, (_event, config: AppConfig) =>
+      listener(config),
+    );
+  },
   onLog: (listener) => {
     ipcRenderer.on(
       BRIDGE_CHANNELS.log,

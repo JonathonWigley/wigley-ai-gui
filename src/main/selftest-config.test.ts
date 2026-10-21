@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { PageBind } from '../contracts/keymap';
 import type { SelfTestScript } from '../contracts/plugin';
-import { type HandedScript, mergeSelfTestConfigs } from './selftest-config';
+import type { AppConfig } from '../contracts/settings';
+import {
+  applySelfTestConfig,
+  type HandedScript,
+  mergeSelfTestConfigs,
+} from './selftest-config';
 
 function handed(
   pluginId: string,
@@ -66,5 +71,47 @@ describe('mergeSelfTestConfigs', () => {
 
   it('mergeSelfTestConfigs_NoScripts_IsEmpty', () => {
     expect(mergeSelfTestConfigs([])).toEqual({ pageBinds: [], settings: {} });
+  });
+});
+
+describe('applySelfTestConfig', () => {
+  it("applySelfTestConfig appends page binds and lays settings over the plugins'", () => {
+    const userBind: PageBind = { keys: ['j'], scope: 'any', command: 'p.down' };
+    const scriptBind: PageBind = {
+      keys: ['z'],
+      scope: 'any',
+      command: 'p.zap',
+    };
+    const config: AppConfig = {
+      settings: {
+        window: { width: 1, height: 1, minWidth: 1, minHeight: 1 },
+        theme: 't',
+        transparency: 'system',
+        fonts: {},
+        keySequenceTimeoutMs: 1,
+        claude: { command: 'claude' },
+      },
+      keymap: {
+        editor: { leader: ' ', remaps: [], binds: [] },
+        page: [userBind],
+        app: [],
+        intercept: [],
+        global: [],
+      },
+      commands: {},
+      scopes: [],
+      pluginSettings: { p: { size: 1, speed: 2 } },
+      theme: { name: 't', colorScheme: 'dark', tokens: {}, reduced: {} },
+      platform: 'macos',
+      problems: [],
+    };
+
+    const served = applySelfTestConfig(config, {
+      pageBinds: [scriptBind],
+      settings: { p: { speed: 9 } },
+    });
+
+    expect(served.keymap.page).toEqual([userBind, scriptBind]);
+    expect(served.pluginSettings).toEqual({ p: { size: 1, speed: 9 } });
   });
 });

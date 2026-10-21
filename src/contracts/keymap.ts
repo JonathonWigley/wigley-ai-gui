@@ -76,3 +76,26 @@ export interface Keymap {
   intercept: InterceptBind[];
   global: AcceleratorBind[];
 }
+
+// A default bind the user's keymap removes, named as the merge matches binds:
+// a page bind by its keys and scope; an editor bind by its keys, scope and
+// mode (normal when absent); an app or global bind by its accelerator; an
+// intercept bind by its key and modifiers (each absent one false).
+export type KeymapUnbind =
+  | { page: string[]; scope: ViewScope }
+  | { editor: string; scope: ViewScope; mode?: EditorMode }
+  | { app: string }
+  | { global: string }
+  | { intercept: Omit<InterceptBind, 'command'> };
+
+// The user's `keymap.json`: binds laid over the core's and the plugins', each
+// naming its command and scope qualified (`forms.nextItem`, `forms.review`,
+// `any`). `editor.leader` replaces the core's leader.
+export interface UserKeymap {
+  page?: PageBind[];
+  editor?: { leader?: string; remaps?: EditorRemap[]; binds?: EditorBind[] };
+  app?: AcceleratorBind[];
+  intercept?: InterceptBind[];
+  global?: AcceleratorBind[];
+  unbind?: KeymapUnbind[];
+}

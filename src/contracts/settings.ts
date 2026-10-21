@@ -1,5 +1,6 @@
 import type { CommandId } from './commands';
 import type { Keymap } from './keymap';
+import type { Platform } from './platform';
 import type { CommandInfo, ScopeInfo } from './plugin';
 import type { Theme } from './theme';
 
@@ -47,6 +48,7 @@ export interface AppConfig {
   // Each plugin's settings, by plugin id.
   pluginSettings: Record<string, object>;
   theme: Theme;
+  platform: Platform;
   // Every config file that could not be applied; empty when none.
   problems: ConfigProblem[];
 }

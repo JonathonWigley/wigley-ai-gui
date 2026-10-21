@@ -33,6 +33,10 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['node:'],
   },
   'src/main/themes': { layers: ['src/contracts', 'src/shared'], packages: [] },
+  'src/main/config': {
+    layers: ['src/contracts', 'src/shared', 'src/main/themes'],
+    packages: ['node:'],
+  },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
   'src/main/processes': { layers: ['src/contracts'], packages: ['node:'] },
@@ -50,6 +54,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/main/claude-code',
       'src/main/plugins',
       'src/main/themes',
+      'src/main/config',
       'src/main/alerts',
       'src/main/files',
       'src/main/processes',
