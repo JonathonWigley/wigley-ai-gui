@@ -38,7 +38,7 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 
 ```
  Space k n ─► start prompt (overlay): folder (recent first, or the folder dialog), then profile
-                 │                     (skipped with one profile) [plan B: new session, or resume one of the folder's sessions]
+                 │                     (skipped with one profile), then a new session or one of the folder's saved sessions to resume
                  ▼
  chat main ─► sessions.open(info with a fresh host session id) ─► row + Chat tab, selected
           └─► AgentHarness.start(...) ─► claude -p --input-format stream-json --output-format stream-json
@@ -83,7 +83,7 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   message. A SIGINT would end the process.
 - A result entry's `costUsd` is the difference between consecutive results, since Claude's `total_cost_usd` is
   cumulative for the process; a total below the last one gives `null`.
-- **Locality** (plan B): listing a folder's past sessions and reading a transcript into chat entries are adapter
+- **Locality**: listing a folder's past sessions and reading a transcript into chat entries are adapter
   calls, so Claude's undocumented transcript format stays in the adapter. A line it cannot read becomes a raw entry.
 - Slash commands typed in the chat run as in the terminal (`/model`, `/compact`, `/wigley:feature …`).
 
@@ -131,13 +131,14 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   while idle.
 - **Turn finished**: when the window is not focused or the session is not on screen, the same alert as a round, and
   the row is marked.
-- **Slash completion** (plan B): typing `/` offers the session's commands and skills, from Claude's startup event,
-  through CodeMirror's completion (`@codemirror/autocomplete` 6.20.3, already on disk, added as a direct dependency)
+- **Slash completion**: typing `/` at the start of the box offers the session's commands and skills, from Claude's
+  startup event, and Tab accepts. It runs through CodeMirror's completion (`@codemirror/autocomplete` 6.20.3, already on disk, added as a direct dependency)
   inside the editor adapter, behind an option on the editor contract.
-- **Resume and archive** (plan B): after the folder, the start prompt offers a new session or one of the folder's
+- **Resume and archive**: after the folder, the start prompt offers a new session or one of the folder's
   saved sessions (terminal and app alike, newest first, labelled by first message and time; one the app has open is
-  left out), resumed with its earlier conversation read from the transcript. One key archives the entry under the
-  cursor; a toggle shows archived entries to restore one. Archived ids live in chat's plugin data; Claude's
+  left out), resumed with its earlier conversation read from the transcript. `x` archives the entry under the
+  cursor or restores an archived one; `.` shows or hides archived entries. When the transcript cannot be read, the
+  chat shows one notice and the session still resumes. Archived ids live in chat's plugin data; Claude's
   transcript files stay as Claude keeps them.
 - **Self-test**: the self-test host takes one script per plugin and runs them in plugin start order, so chat's
   steps live in chat's own script over the fake adapter. The give-back rule is pinned by the tabs unit tests; the
@@ -157,7 +158,7 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 - **Plan A — the loop** (landed 2026-10-20, its plan folder closed): the spike, the harness seam with the Claude and fake adapters, ACP removal,
   owned sessions, take over and `mark`, the shared layout machinery, the chat plugin with its default layout,
   permission cards, controls, alerts, and the start prompt with profiles and recent folders.
-- **Plan B — resume and completion** (`plan-b-resume/`): resume with history, archive, slash completion.
+- **Plan B — resume and completion** (landed, its plan folder closing): resume with history, archive, slash completion.
 
 ## Out of scope
 

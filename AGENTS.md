@@ -72,8 +72,10 @@ src/main/        core main process; main.ts is its composition root
                  defaults, and pushes each new config to the page
   themes/        theme loader: parses a theme by the token registry and resolves `extends`
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts
-  claude-code/   Claude Code CLI adapter behind AgentHarness → the only place the app spawns `claude`
-  files/         file reads, atomic writes, rename, trash, folder lists and watching, behind Files
+  claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions
+                 → the only place the app spawns `claude`
+  files/         file reads (whole or the first bytes), modified times, atomic writes, rename, trash, folder lists
+                 and watching, behind Files
   processes/     runs a program and returns its exit code and output, behind ProcessRunner
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page
 src/preload/     the Bridge, exposed as window.wigley
@@ -81,7 +83,8 @@ src/renderer/    core page; renderer.ts is its composition root
   shell/         the shell registry, its areas and the default `ShellLayout`, and the modes
   plugins/       the page-side plugin API
   markdown-it/   markdown adapter behind MarkdownRenderer   → the only markdown-it import
-  codemirror-vim/ editor and code-highlight adapters behind EditorHost and CodeHighlighter, and the code colours
+  codemirror-vim/ editor (with prefix completion) and code-highlight adapters behind EditorHost and CodeHighlighter,
+                 and the code colours
                  → the only codemirror, @codemirror, @lezer and @replit import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, main.ts and page.ts the
                  parts each root starts
@@ -94,7 +97,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  watching the open file), page/ (one docs view — tree, rendered doc, document editor — shown as
                  Docs mode over the machine's index and as each session's Docs tab over that session's)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
-                 permission_prompt MCP tool, recent folders), page/ (the Chat tab, the start prompt), layouts/ (the
+                 permission_prompt MCP tool, recent folders, archived sessions, resume), page/ (the Chat tab, the start prompt
+                 with its folder, profile and session steps), layouts/ (the
                  chat Layout contract and the built-in `default` chat layout)
   keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the status bar's key list, and the
                  keys-for-command lookup it exports); no main part
@@ -223,7 +227,11 @@ round), since main, not the page, decides.
   events, so a chat layout can show any field and the chat never parses a harness's JSON. The Claude adapter's
   readings of the CLI (`docs/features/agent-chat/claude-stream.md`): it reports permission mode `manual` as
   `default`, no event reports effort, `total_cost_usd` is cumulative per process, and only a `control_request`
-  interrupt keeps the process alive (SIGINT ends it).
+  interrupt keeps the process alive (SIGINT ends it). Listing a folder's saved sessions and reading one into chat
+  entries are adapter calls too (`listSessions`, `history`), so Claude's transcript format stays in
+  `src/main/claude-code/transcripts.ts`. That format is undocumented and was measured on the installed CLI, so a
+  resume that lists nothing or draws raw entries starts with `transcripts.ts` and a fresh look at a transcript's line
+  shapes.
 - **A session control** — Claude's permission mode, effort and model — is declared by the harness adapter (id,
   label, choices, current value), and the Chat tab draws whatever its adapter declares. A control gets its key as a
   command in chat's manifest (`Space c m`, `Space c e`, `Space c o`); `Space c c` lists every control, so a new
@@ -291,7 +299,7 @@ round), since main, not the page, decides.
   `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Each plugin hands
   at most one script, and the scripts run in plugin start order; the keys plugin has no main part, so its steps live
   in forms' script, whose fixture gives them scopes full of binds and a box to type in. Chat's script runs its
-  sessions over the fake agent harness. Docs' (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture
+  sessions over the fake agent harness, its steps covering the resume list, archive and slash completion. Docs' (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture
   (`selftest-fixture.ts`) that writes docs, an index and a stand-in `docs_index.py` into the self-test's temp home at
   start, so its steps never reach the user's docs or index.
 - Forms visuals are checked live on the preview round (`Space z l o`): the built-in sample shows every card, and each
