@@ -85,7 +85,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   appended as a `- **title** — …` item to the home's `followups.md`. The path box lists matching folders and files
   under the chosen place as the user types, and Tab completes the shared part, as a shell does.
 - **Rename** (`r`) uses the same path box, so it also moves a file. **Delete** (`d`) moves the file to the Trash after
-  a confirm prompt; a skill's whole folder goes with its SKILL.md.
+  a confirm prompt; a skill's whole folder goes with its SKILL.md. Deleting a symlink sends the file or folder it
+  points to to the Trash and then the link, the prompt naming both; the guard below must allow both, or neither goes.
 - Main writes, renames and deletes only files the index lists, files inside a repo or feature home the index lists,
   and files inside a folder the index walks for global docs: each Claude config folder, `~/.codex`, `~/.agents` and
   `~/wigley-agents`. Never the home folder itself, and never anything inside a plugin cache.

@@ -208,16 +208,16 @@ export function codeFence(text: string): string {
 }
 
 // A change main made to the docs on disk. A rename or trash of a skill
-// folder names the folder.
+// folder names the folder; a trash of a link names its target and the link.
 export type DocChangeRecord =
   | { type: 'created'; entry: IndexEntry }
   | { type: 'renamed'; from: string; to: string }
-  | { type: 'trashed'; path: string };
+  | { type: 'trashed'; paths: readonly string[] };
 
 // The document with the change applied, before any build sees it. A rename
 // moves every entry at or inside `from`, its id and its states with it, and a
 // title that was the old base name becomes the new one; a trash drops every
-// entry at or inside the path.
+// entry at or inside any of its paths.
 export function applyChange(
   document: IndexDocument,
   change: DocChangeRecord,
@@ -235,7 +235,7 @@ export function applyChange(
       return {
         ...document,
         entries: document.entries.filter(
-          (entry) => !isInside(entry.path, change.path),
+          (entry) => !change.paths.some((path) => isInside(entry.path, path)),
         ),
       };
   }
@@ -278,7 +278,8 @@ function renamedDocument(
 // The change applied again over a source run's document, which may already
 // reflect it when the run scanned after the change's write: a created entry
 // whose id the run lists keeps the run's entry, and a rename whose `to` the
-// run lists is skipped, so a file made at `from` since stays there.
+// run lists is skipped, so a file made at `from` since stays there; a trash
+// drops its paths' entries again, any the run still lists among them.
 export function reapplyChange(
   document: IndexDocument,
   change: DocChangeRecord,
@@ -384,9 +385,12 @@ export function conflictText(keys: {
     : `File changed on disk — ${hints}`;
 }
 
-// The Trash question, its yes and no keys after it.
+// The Trash question over what `trashTargets` named, its yes and no keys
+// after it: one path by its base name, a link's target and the link by
+// their paths, since the two often share a name.
 export function trashQuestion(
-  name: string,
+  targets: readonly string[],
+  homeDir: string,
   keys: { yes: string | null; no: string | null },
 ): string {
   const hints = keyHints(
@@ -396,7 +400,12 @@ export function trashQuestion(
     ],
     '/',
   );
-  const question = `Move ${name} to the Trash?`;
+  const [target, link] = targets;
+  const names =
+    link === undefined
+      ? baseName(target)
+      : `${tildePath(target, homeDir)} and its link ${tildePath(link, homeDir)}`;
+  const question = `Move ${names} to the Trash?`;
   return hints === '' ? question : `${question} ${hints}`;
 }
 

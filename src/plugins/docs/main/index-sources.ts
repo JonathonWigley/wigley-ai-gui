@@ -16,10 +16,11 @@ const NO_FOLDER_MESSAGE = 'No project folder is known for this session';
 
 type ScriptCommand = 'build' | 'session' | 'context';
 
-// A script run's stdout, or the message the view shows when it failed.
+// A script run's stdout, or the message the view shows when it failed;
+// `isScriptMissing` when no `docs_index.py` was found to run.
 type ScriptOutcome =
   | { ok: true; stdout: string }
-  | { ok: false; message: string };
+  | { ok: false; message: string; isScriptMissing: boolean };
 
 export interface IndexSourcesDeps {
   files: Files;
@@ -37,7 +38,8 @@ export interface IndexSources {
   rebuild(): Promise<IndexLoad>;
   // A fresh index for one session, its entries kept for `loadedEntries`. A
   // Claude session whose `session` run fails, as before its transcript
-  // exists, falls back to `context` on its project folder.
+  // exists, falls back to `context` on its project folder, unless no script
+  // was found to run.
   sessionIndex(spec: SessionSourceSpec): Promise<IndexLoad>;
   // Drops the kept entries of every session not in `specs`.
   retainSessions(specs: readonly SessionSourceSpec[]): void;
@@ -120,7 +122,7 @@ export function createIndexSources(deps: IndexSourcesDeps): IndexSources {
     }
     let outcome = await runScript(deps, run.command, [run.argument]);
     const fallbackDir = run.command === 'session' ? spec.projectDir : null;
-    if (!outcome.ok && fallbackDir !== null) {
+    if (!outcome.ok && !outcome.isScriptMissing && fallbackDir !== null) {
       deps.log(
         'docs',
         `session ${run.argument} not indexed (${outcome.message}); indexing ${fallbackDir} instead`,
@@ -190,13 +192,13 @@ async function runScript(
     deps.log,
   );
   if (script === null) {
-    return { ok: false, message: NO_SCRIPT_MESSAGE };
+    return { ok: false, message: NO_SCRIPT_MESSAGE, isScriptMissing: true };
   }
   let result;
   try {
     result = await deps.processes.run('python3', [script, command, ...args]);
   } catch (error) {
-    return { ok: false, message: errorText(error) };
+    return { ok: false, message: errorText(error), isScriptMissing: false };
   }
   const stderr = result.stderr.trim();
   if (result.code !== 0) {
@@ -207,6 +209,7 @@ async function runScript(
     return {
       ok: false,
       message: lastLine(stderr) ?? `docs_index.py exited ${result.code}`,
+      isScriptMissing: false,
     };
   }
   if (stderr !== '') {

@@ -294,6 +294,23 @@ describe('session source', () => {
     ]);
   });
 
+  it('sessionIndex_NoScript_NotFoundMessageWithoutFallback', async () => {
+    const test = setUp('');
+
+    const load = await test.sources.sessionIndex({
+      hostSessionId: 'abc',
+      projectDir: '/p',
+      harness: 'claude',
+    });
+
+    expect(load).toEqual({
+      document: null,
+      message: 'docs_index.py not found — set docs.scriptPath',
+    });
+    expect(test.processes.runs).toEqual([]);
+    expect(test.logged).toEqual([]);
+  });
+
   it('sessionIndex_SessionFailsNoFolder_SessionMessage', async () => {
     const test = setUp();
     test.processes.script(

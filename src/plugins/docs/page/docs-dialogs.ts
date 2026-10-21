@@ -18,7 +18,7 @@ import type {
   IndexEntry,
 } from '../contract';
 import { baseName, tildePath } from '../doc-paths';
-import { CREATE_KINDS, nameProblem, placesFor, skillFolder } from '../kinds';
+import { CREATE_KINDS, nameProblem, placesFor } from '../kinds';
 import {
   COMPLETION_LIMIT,
   completeTyped,
@@ -511,26 +511,31 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
         log('docs', 'rename: type the new path');
       });
     },
+    // Main names what goes before the question, so a link's target is named
+    // beside the link.
     trash(entry) {
-      const skill = skillFolder(entry.path);
-      const name = baseName(skill ?? entry.path);
-      confirm.open(
-        trashQuestion(name, {
-          yes: deps.keysFor('confirmYes', 'confirm'),
-          no: deps.keysFor('confirmNo', 'confirm'),
-        }),
-        () => {
-          channel
-            .invoke('trashDoc', entry.path)
-            .then((path) => {
-              deps.changed({ type: 'trashed', path }, null);
-              log('docs', `moved ${name} to the Trash`);
-            })
-            .catch(failed);
-        },
-        () => log('docs', `kept ${name}`),
-      );
-      log('docs', `asked to move ${name} to the Trash`);
+      Promise.all([channel.invoke('trashTargets', entry.path), deps.homeDir])
+        .then(([targets, homeDir]) => {
+          const name = baseName(targets[targets.length - 1]);
+          confirm.open(
+            trashQuestion(targets, homeDir, {
+              yes: deps.keysFor('confirmYes', 'confirm'),
+              no: deps.keysFor('confirmNo', 'confirm'),
+            }),
+            () => {
+              channel
+                .invoke('trashDoc', entry.path)
+                .then((paths) => {
+                  deps.changed({ type: 'trashed', paths }, null);
+                  log('docs', `moved ${name} to the Trash`);
+                })
+                .catch(failed);
+            },
+            () => log('docs', `kept ${name}`),
+          );
+          log('docs', `asked to move ${name} to the Trash`);
+        })
+        .catch(failed);
     },
     isBoxOpen: () => box.isOpen(),
     boxComplete: () => box.complete(),

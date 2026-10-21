@@ -22,13 +22,14 @@ import {
   normalizePath,
   parentFolder,
 } from '../doc-paths';
-import { createTarget, nameProblem, skillFolder } from '../kinds';
+import {
+  createTarget,
+  nameProblem,
+  skillFolder,
+  WIGLEY_AGENTS_FOLDER,
+} from '../kinds';
 import { changeRefusal, type GuardFolders } from '../path-guard';
 import { installedPluginsFile, readClaudeConfigDirs } from './script-locator';
-
-// The folder `~/wigley-agents` names, a link or a clone; the index walks its
-// top level, `learning` and `decisions`.
-const WIGLEY_AGENTS_FOLDER = 'wigley-agents';
 
 export interface DocFilesDeps {
   files: Files;
@@ -43,8 +44,10 @@ export interface DocFilesDeps {
 // absolute rejects. A write, create, rename or trash the guard refuses (see
 // `changeRefusal`) rejects with its refusal. A write or create lands on the
 // real path, so a symlinked doc stays a link, and rejects on a link whose
-// target is missing; a rename or trash acts on the path itself with only its
-// folder resolved, so a symlinked doc moves as the link and its target stays.
+// target is missing. A rename acts on the path itself with only its folder
+// resolved, so a symlinked doc moves as the link and its target stays. A
+// trash of a link trashes its target and then the link, so neither is left
+// behind and both can be restored.
 export interface DocFiles {
   read(path: string): Promise<string>;
   // `expectedText` non-null: writes only while the disk (missing reads as
@@ -58,9 +61,13 @@ export interface DocFiles {
   // A skill's `SKILL.md` moves its whole folder. Resolves to the doc's new
   // path.
   rename(from: string, to: string): Promise<string>;
-  // A skill's `SKILL.md` trashes its whole folder. Resolves to the path
-  // trashed.
-  trash(path: string): Promise<string>;
+  // What a trash at `path` moves, in order: the real file or folder, then the
+  // path itself (its folder real) when that is a link. A skill's `SKILL.md`
+  // stands for its whole folder.
+  trashTargets(path: string): Promise<string[]>;
+  // Moves `trashTargets(path)` to the Trash once the guard allows every one,
+  // else moves none. Resolves to them.
+  trash(path: string): Promise<string[]>;
   // `folder`'s entries one level down; [] when it is no folder.
   list(folder: string): Promise<FolderEntry[]>;
   // Calls `changed` after the file at `path` changes or is replaced.
@@ -186,11 +193,23 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     return toPath;
   }
 
-  async function trash(path: string): Promise<string> {
+  async function trashTargets(path: string): Promise<string[]> {
     const requested = absolute(path);
     const trashed = skillFolder(requested) ?? requested;
-    await files.trash(await moveTarget(trashed));
-    return trashed;
+    const itself = await folderRealTarget(files, trashed);
+    const target = await realTarget(files, trashed);
+    return target === itself ? [itself] : [target, itself];
+  }
+
+  async function trash(path: string): Promise<string[]> {
+    const targets = await trashTargets(path);
+    for (const target of targets) {
+      await allowed(target);
+    }
+    for (const target of targets) {
+      await files.trash(target);
+    }
+    return targets;
   }
 
   async function list(folder: string): Promise<FolderEntry[]> {
@@ -252,6 +271,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     write,
     create,
     rename,
+    trashTargets,
     trash,
     list,
     watch,

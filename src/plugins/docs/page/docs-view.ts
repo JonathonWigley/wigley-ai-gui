@@ -486,7 +486,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (record.type === 'renamed' && isInside(openPath, record.from)) {
       const moved = record.to + openPath.slice(record.from.length);
       doc.retarget(targetFor(moved, entryAt(moved), null, null));
-    } else if (record.type === 'trashed' && isInside(openPath, record.path)) {
+    } else if (
+      record.type === 'trashed' &&
+      record.paths.some((path) => isInside(openPath, path))
+    ) {
       doc.clear();
     }
   };

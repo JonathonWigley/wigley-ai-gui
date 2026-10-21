@@ -456,23 +456,88 @@ describe('trash', () => {
 
     const trashed = await test.docFiles.trash(SKILL);
 
-    expect(trashed).toBe(`${ROOT}/.claude/skills/s`);
+    expect(trashed).toEqual([`${ROOT}/.claude/skills/s`]);
     expect(await test.files.stat(`${ROOT}/.claude/skills/s`)).toBeNull();
     expect(await test.files.stat(`${ROOT}/.claude/skills/s/ref.md`)).toBeNull();
   });
 
-  it('trash_SymlinkedDoc_TrashesLinkKeepsTarget', async () => {
+  it('trash_File_TrashesOnlyIt', async () => {
     const test = setUp();
-    const target = '/Users/u/src/clone/linked.md';
-    await test.files.write(target, 'linked');
-    const links = new Map([[`${ROOT}/linked.md`, target]]);
+    await test.files.write(`${ROOT}/a.md`, 'a');
+    await test.files.write(`${ROOT}/b.md`, 'b');
+
+    const trashed = await test.docFiles.trash(`${ROOT}/a.md`);
+
+    expect(trashed).toEqual([`${ROOT}/a.md`]);
+    expect(await test.files.stat(`${ROOT}/a.md`)).toBeNull();
+    expect(await test.files.read(`${ROOT}/b.md`)).toBe('b');
+  });
+
+  it('trash_LinkToFile_TrashesTargetThenLink', async () => {
+    const test = setUp();
+    const target = `${ROOT}/docs/real.md`;
+    const link = `${HOME}/.claude/linked.md`;
+    await test.files.write(target, 'real');
+    await test.files.makeFolder(`${HOME}/.claude`);
+    const links = new Map([[link, target]]);
     const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
 
-    const trashed = await docFiles.trash(`${ROOT}/linked.md`);
+    const trashed = await docFiles.trash(link);
 
-    expect(trashed).toBe(`${ROOT}/linked.md`);
+    expect(trashed).toEqual([target, link]);
     expect(links.size).toBe(0);
-    expect(await test.files.read(target)).toBe('linked');
+    expect(await test.files.stat(target)).toBeNull();
+  });
+
+  it('trash_SkillMdInLinkedSkillFolder_TrashesTargetFolderThenLink', async () => {
+    const test = setUp();
+    const target = `${ROOT}/skills/foo`;
+    const link = `${HOME}/.claude/skills/foo`;
+    await test.files.write(`${target}/SKILL.md`, 'skill');
+    await test.files.write(`${target}/ref.md`, 'ref');
+    await test.files.makeFolder(`${HOME}/.claude/skills`);
+    const links = new Map([[link, target]]);
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    const trashed = await docFiles.trash(`${link}/SKILL.md`);
+
+    expect(trashed).toEqual([target, link]);
+    expect(links.size).toBe(0);
+    expect(await test.files.stat(target)).toBeNull();
+    expect(await test.files.stat(`${target}/ref.md`)).toBeNull();
+  });
+
+  it('trash_LinkToPluginCache_RefusedTrashesNeither', async () => {
+    const test = setUp();
+    const target = `${PLUGIN_ROOT}/skills/foo`;
+    const link = `${HOME}/.claude/skills/foo`;
+    await test.files.write(`${target}/SKILL.md`, 'skill');
+    await test.files.makeFolder(`${HOME}/.claude/skills`);
+    const links = new Map([[link, target]]);
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    await expect(docFiles.trash(`${link}/SKILL.md`)).rejects.toThrow(
+      `Refused: ${target} is inside the plugin cache of p@m`,
+    );
+    expect([...links]).toEqual([[link, target]]);
+    expect(await test.files.read(`${target}/SKILL.md`)).toBe('skill');
+  });
+
+  it('trashTargets_LinkToFile_TargetThenLinkNothingMoved', async () => {
+    const test = setUp();
+    const target = `${ROOT}/docs/real.md`;
+    const link = `${HOME}/.claude/linked.md`;
+    await test.files.write(target, 'real');
+    await test.files.makeFolder(`${HOME}/.claude`);
+    const links = new Map([[link, target]]);
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    expect(await docFiles.trashTargets('~/.claude/linked.md')).toEqual([
+      target,
+      link,
+    ]);
+    expect(links.size).toBe(1);
+    expect(await test.files.read(target)).toBe('real');
   });
 });
 

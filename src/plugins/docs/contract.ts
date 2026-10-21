@@ -147,8 +147,12 @@ export interface DocsChannel extends ChannelShape {
     createDoc(request: CreateRequest): Promise<CreatedDoc>;
     // The path the doc now has.
     renameDoc(from: string, to: string): Promise<string>;
-    // The path moved to the Trash.
-    trashDoc(path: string): Promise<string>;
+    // What `trashDoc(path)` would move to the Trash, in order: the real file
+    // or folder (a skill's whole folder for its `SKILL.md`), then the path
+    // itself when that is a link to it.
+    trashTargets(path: string): Promise<string[]>;
+    // The paths moved to the Trash, as `trashTargets` names them.
+    trashDoc(path: string): Promise<string[]>;
     listFolder(folder: string): Promise<FolderEntry[]>;
     // One watched file per view; `path` null stops that view's watch.
     watchDoc(viewId: string, path: string | null): Promise<void>;

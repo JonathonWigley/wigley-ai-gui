@@ -319,9 +319,27 @@ describe('applyChange', () => {
       entry({ path: '/r/other.md' }),
     ]);
 
-    const after = applyChange(before, { type: 'trashed', path: '/r/skills/s' });
+    const after = applyChange(before, {
+      type: 'trashed',
+      paths: ['/r/skills/s'],
+    });
 
     expect(paths(after)).toEqual(['/r/other.md']);
+  });
+
+  it('applyChange_TrashedLinkAndTarget_DropsEntriesUnderBoth', () => {
+    const before = documentOf([
+      entry({ path: '/r/skills/s/SKILL.md' }),
+      entry({ path: '/h/.claude/skills/s/SKILL.md' }),
+      entry({ path: '/h/.claude/skills/t/SKILL.md' }),
+    ]);
+
+    const after = applyChange(before, {
+      type: 'trashed',
+      paths: ['/r/skills/s', '/h/.claude/skills/s'],
+    });
+
+    expect(paths(after)).toEqual(['/h/.claude/skills/t/SKILL.md']);
   });
 });
 
@@ -389,6 +407,21 @@ describe('reapplyChange', () => {
     });
 
     expect(paths(after)).toEqual(['/r/skills/t/SKILL.md']);
+  });
+
+  it('reapplyChange_TrashedLinkAndTargetStillListed_DropsBoth', () => {
+    const before = documentOf([
+      entry({ path: '/r/skills/s/SKILL.md' }),
+      entry({ path: '/h/.claude/skills/s/SKILL.md' }),
+      entry({ path: '/r/other.md' }),
+    ]);
+
+    const after = reapplyChange(before, {
+      type: 'trashed',
+      paths: ['/r/skills/s', '/h/.claude/skills/s'],
+    });
+
+    expect(paths(after)).toEqual(['/r/other.md']);
   });
 });
 
@@ -526,14 +559,23 @@ describe('key hint texts', () => {
   });
 
   it('trashQuestion_Keys_AfterQuestion', () => {
-    expect(trashQuestion('a.md', { yes: 'y', no: 'n' })).toBe(
+    const targets = ['/h/r/a.md'];
+    expect(trashQuestion(targets, '/h', { yes: 'y', no: 'n' })).toBe(
       'Move a.md to the Trash? y/n',
     );
-    expect(trashQuestion('a.md', { yes: 'Y', no: null })).toBe(
+    expect(trashQuestion(targets, '/h', { yes: 'Y', no: null })).toBe(
       'Move a.md to the Trash? Y',
     );
-    expect(trashQuestion('a.md', { yes: null, no: null })).toBe(
+    expect(trashQuestion(targets, '/h', { yes: null, no: null })).toBe(
       'Move a.md to the Trash?',
+    );
+  });
+
+  it('trashQuestion_LinkAndTarget_NamesBothByPath', () => {
+    const targets = ['/h/r/skills/s', '/h/.claude/skills/s'];
+
+    expect(trashQuestion(targets, '/h', { yes: 'y', no: 'n' })).toBe(
+      'Move ~/r/skills/s and its link ~/.claude/skills/s to the Trash? y/n',
     );
   });
 

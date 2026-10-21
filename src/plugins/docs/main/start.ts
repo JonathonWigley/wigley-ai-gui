@@ -109,6 +109,9 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     channel.handle('renameDoc', async (from, to) =>
       (await docs).docFiles.rename(from, to),
     );
+    channel.handle('trashTargets', async (path) =>
+      (await docs).docFiles.trashTargets(path),
+    );
     channel.handle('trashDoc', async (path) =>
       (await docs).docFiles.trash(path),
     );
@@ -126,9 +129,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     channel.handle('openExternal', async (url) => {
       await docs;
       if (!EXTERNAL_SCHEME.test(url)) {
-        throw new Error(
-          'Only http, https and mailto links open outside the app',
-        );
+        throw new Error('Only http and https links open outside the app');
       }
       await services.openExternal(url);
     });
