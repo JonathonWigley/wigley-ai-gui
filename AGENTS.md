@@ -97,9 +97,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  watching the open file), page/ (one docs view — tree, rendered doc, document editor — shown as
                  Docs mode over the machine's index and as each session's Docs tab over that session's)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
-                 permission_prompt MCP tool, recent folders, archived sessions, resume), page/ (the Chat tab, the start prompt
-                 with its folder, profile and session steps), layouts/ (the
-                 chat Layout contract and the built-in `default` chat layout)
+                 permission_prompt MCP tool, recent folders, archived sessions, resume), page/ (the Chat tab,
+                 the start prompt with its folder, profile and session steps), layouts/ (the chat Layout contract
+                 and the built-in `default` chat layout)
   keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the status bar's key list, and the
                  keys-for-command lookup it exports); no main part
   gallery/       manifest.ts, page/ (Gallery mode: every primitive in every state); no main part
@@ -299,9 +299,10 @@ round), since main, not the page, decides.
   `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Each plugin hands
   at most one script, and the scripts run in plugin start order; the keys plugin has no main part, so its steps live
   in forms' script, whose fixture gives them scopes full of binds and a box to type in. Chat's script runs its
-  sessions over the fake agent harness, its steps covering the resume list, archive and slash completion. Docs' (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture
-  (`selftest-fixture.ts`) that writes docs, an index and a stand-in `docs_index.py` into the self-test's temp home at
-  start, so its steps never reach the user's docs or index.
+  sessions over the fake agent harness, its steps covering the resume list, archive and slash completion. Docs'
+  (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture (`selftest-fixture.ts`) that writes docs, an index
+  and a stand-in `docs_index.py` into the self-test's temp home at start, so its steps never reach the user's docs or
+  index.
 - Forms visuals are checked live on the preview round (`Space z l o`): the built-in sample shows every card, and each
   further press swaps in the next saved real round, then back to the sample.
 - A visible `npm start` takes the user's foreground and keyboard, so that run is the user's: the agent gives the user

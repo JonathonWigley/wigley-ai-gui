@@ -3,7 +3,8 @@ import { type Files, readIfPresent } from '../../../contracts/files';
 export const ARCHIVED_SESSIONS_FILE = 'archived-sessions.json';
 
 export interface ArchivedSessions {
-  // Rejects when the file holds anything but a JSON array of strings, naming the file.
+  // Rejects when the file holds anything but a JSON array of strings,
+  // naming the file.
   ids(): Promise<ReadonlySet<string>>;
   // Writes run one after another, each reading the file the last one wrote.
   set(hostSessionId: string, archived: boolean): Promise<void>;
