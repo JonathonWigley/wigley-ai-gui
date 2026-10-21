@@ -1,4 +1,5 @@
 import {
+  existsSync,
   type FSWatcher,
   lstatSync,
   mkdirSync,
@@ -30,6 +31,19 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
+// When set, `link` runs this in place of the real call.
+const linkStandIn = vi.hoisted(() => ({
+  current: null as ((from: string, to: string) => Promise<void>) | null,
+}));
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...fs,
+    link: (from: string, to: string) =>
+      (linkStandIn.current ?? fs.link)(from, to),
+  };
+});
+
 const QUIET_MS = 100;
 
 // Every path `trash` hands to `trashItem`.
@@ -52,7 +66,23 @@ function byPath(entries: FileEntry[]): FileEntry[] {
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), 'wigley-node-files-'));
   trashed.length = 0;
+  linkStandIn.current = null;
 });
+
+// Whether `folder`'s volume finds a name in any case.
+function isCaseInsensitive(folder: string): boolean {
+  const probe = path.join(folder, 'case-probe');
+  writeFileSync(probe, '');
+  try {
+    return existsSync(path.join(folder, 'CASE-PROBE'));
+  } finally {
+    rmSync(probe);
+  }
+}
+
+function errorCode(error: unknown): unknown {
+  return (error as { code?: unknown }).code;
+}
 
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });
@@ -253,6 +283,127 @@ describe('createNodeFiles', () => {
 
     expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
     expect(lstatSync(path.join(root, 'b.md')).isSymbolicLink()).toBe(true);
+  });
+
+  it('rename_CaseOnlyOnCaseInsensitiveVolume_Renames', async ({ skip }) => {
+    if (!isCaseInsensitive(root)) {
+      skip();
+    }
+    writeFileSync(path.join(root, 'readme.md'), 'one');
+
+    await files.rename(
+      path.join(root, 'readme.md'),
+      path.join(root, 'README.md'),
+    );
+
+    expect(await files.list(root)).toEqual([
+      { path: 'README.md', kind: 'file' },
+    ]);
+    expect(readFileSync(path.join(root, 'README.md'), 'utf8')).toBe('one');
+  });
+
+  it('rename_FileAppearsAtDestinationMidMove_RejectsAndKeepsBoth', async () => {
+    writeFileSync(path.join(root, 'a.md'), 'one');
+    const actual =
+      await vi.importActual<typeof import('node:fs/promises')>(
+        'node:fs/promises',
+      );
+    linkStandIn.current = async (from, to) => {
+      writeFileSync(to, 'two');
+      await actual.link(from, to);
+    };
+
+    await expect(
+      files.rename(path.join(root, 'a.md'), path.join(root, 'b.md')),
+    ).rejects.toThrow(`${path.join(root, 'b.md')} already exists`);
+
+    expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
+    expect(readFileSync(path.join(root, 'b.md'), 'utf8')).toBe('two');
+  });
+
+  it('rename_VolumeTakesNoHardLink_RenamesInstead', async () => {
+    writeFileSync(path.join(root, 'a.md'), 'one');
+    linkStandIn.current = async () => {
+      throw Object.assign(new Error('cross-device link'), { code: 'EXDEV' });
+    };
+
+    await files.rename(path.join(root, 'a.md'), path.join(root, 'b.md'));
+
+    expect(readFileSync(path.join(root, 'b.md'), 'utf8')).toBe('one');
+    expect(await files.stat(path.join(root, 'a.md'))).toBeNull();
+  });
+
+  it('rename_Symlink_MovesTheLinkItself', async () => {
+    writeFileSync(path.join(root, 'real.md'), 'one');
+    symlinkSync(path.join(root, 'real.md'), path.join(root, 'a.md'));
+
+    await files.rename(path.join(root, 'a.md'), path.join(root, 'b.md'));
+
+    expect(lstatSync(path.join(root, 'b.md')).isSymbolicLink()).toBe(true);
+    expect(await files.stat(path.join(root, 'a.md'))).toBeNull();
+  });
+
+  it('rename_DestinationParentIsFile_RejectsWithEnotdir', async () => {
+    writeFileSync(path.join(root, 'a.md'), 'one');
+    writeFileSync(path.join(root, 'f'), 'file');
+
+    const error = await files
+      .rename(path.join(root, 'a.md'), path.join(root, 'f', 'b.md'))
+      .catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('ENOTDIR');
+    expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
+  });
+
+  it('makeFolder_UnderAFile_RejectsWithEnotdir', async () => {
+    writeFileSync(path.join(root, 'f'), 'file');
+
+    const error = await files
+      .makeFolder(path.join(root, 'f', 'x'))
+      .catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('ENOTDIR');
+  });
+
+  it('write_OntoAFolder_RejectsWithEisdir', async () => {
+    mkdirSync(path.join(root, 'folder'));
+
+    const error = await files
+      .write(path.join(root, 'folder'), 'text')
+      .catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('EISDIR');
+    expect(statSync(path.join(root, 'folder')).isDirectory()).toBe(true);
+  });
+
+  it('write_ParentIsAFile_RejectsWithEexist', async () => {
+    writeFileSync(path.join(root, 'f'), 'file');
+
+    const error = await files
+      .write(path.join(root, 'f', 'x.md'), 'text')
+      .catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('EEXIST');
+  });
+
+  it('write_AncestorAboveParentIsAFile_RejectsWithEnotdir', async () => {
+    writeFileSync(path.join(root, 'f'), 'file');
+
+    const error = await files
+      .write(path.join(root, 'f', 'x', 'y.md'), 'text')
+      .catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('ENOTDIR');
+  });
+
+  it('makeFolder_ExistingFile_RejectsWithEexist', async () => {
+    writeFileSync(path.join(root, 'f'), 'file');
+
+    const error = await files
+      .makeFolder(path.join(root, 'f'))
+      .catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('EEXIST');
   });
 
   it('trash_Path_HandsItToTrashItem', async () => {

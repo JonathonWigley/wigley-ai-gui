@@ -6,10 +6,10 @@ import { resolveInside } from './scoped-files';
 // at once, with no debounce, so a test drives a save by writing; a rename
 // reports each moved file's old path and its new one. A watch never fails, so
 // it never calls its `onError`. There are no links, so `realPath` returns the
-// path's stored spelling.
+// path's stored spelling. Names are case-sensitive.
 export interface MemoryFiles extends Files {
-  // Deletes the file at `path`, or every file and made folder under the
-  // folder at `path`.
+  // Deletes the file at `path`, or the folder at `path` and everything under
+  // it; the folder holding `path` stays.
   remove(path: string): void;
 }
 
@@ -18,9 +18,12 @@ interface MemoryWatch {
   onChange: (path: string) => void;
 }
 
-// A folder exists when `makeFolder` made it or any file or made folder lies
+// A folder exists when `makeFolder` made it, it held a file or folder that
+// `rename`, `trash` or `remove` took away, or any file or made folder lies
 // under it; the top folder always exists. A path's leading `/` is optional:
-// `/a/b` and `a/b` name one file.
+// `/a/b` and `a/b` name one file. Each call that meets a file where a folder
+// must be, or a folder where a file must be, rejects with the code Node's fs
+// gives.
 export function createMemoryFiles(): MemoryFiles {
   const texts = new Map<string, string>();
   const madeFolders = new Set<string>();
@@ -49,7 +52,39 @@ export function createMemoryFiles(): MemoryFiles {
     return isFolder(key) ? { isFolder: true } : null;
   };
 
+  const hasFileAbove = (key: string): boolean => {
+    for (let above = parentOf(key); above !== ''; above = parentOf(above)) {
+      if (texts.has(above)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Rejects as Node's recursive `mkdir` does when a file is at `key` or above
+  // it.
+  const requireFolderCanBeMade = (key: string, path: string) => {
+    if (texts.has(key)) {
+      throw codedError(`${path} is a file`, 'EEXIST');
+    }
+    if (hasFileAbove(key)) {
+      throw codedError(`a file lies above ${path}`, 'ENOTDIR');
+    }
+  };
+
+  // Keeps the folder holding `key` once `key` goes, as a folder on disk stays
+  // when its last entry leaves.
+  const keepParentOf = (key: string) => {
+    const parent = parentOf(key);
+    if (parent !== '') {
+      madeFolders.add(parent);
+    }
+  };
+
   const removeKey = (target: string) => {
+    if (statKey(target) !== null) {
+      keepParentOf(target);
+    }
     for (const folder of atOrUnder(madeFolders, target)) {
       madeFolders.delete(folder);
     }
@@ -69,6 +104,10 @@ export function createMemoryFiles(): MemoryFiles {
     },
     write: async (path, text) => {
       const file = keyOf(path);
+      requireFolderCanBeMade(parentOf(file), parentOf(file));
+      if (isFolder(file)) {
+        throw codedError(`${path} is a folder`, 'EISDIR');
+      }
       texts.set(file, text);
       report(file);
     },
@@ -94,11 +133,7 @@ export function createMemoryFiles(): MemoryFiles {
     },
     makeFolder: async (path) => {
       const key = keyOf(path);
-      if (texts.has(key)) {
-        throw Object.assign(new Error(`${path} is a file`), {
-          code: 'EEXIST',
-        });
-      }
+      requireFolderCanBeMade(key, path);
       if (key !== '') {
         madeFolders.add(key);
       }
@@ -112,6 +147,9 @@ export function createMemoryFiles(): MemoryFiles {
       if (statKey(fromKey) === null) {
         throw missingError(`nothing at ${from}`);
       }
+      if (hasFileAbove(toKey)) {
+        throw codedError(`a file lies above ${to}`, 'ENOTDIR');
+      }
       if (!isFolder(parentOf(toKey))) {
         throw missingError(`no folder holds ${to}`);
       }
@@ -119,6 +157,7 @@ export function createMemoryFiles(): MemoryFiles {
         throw new Error(`${from} cannot move inside itself to ${to}`);
       }
       const moved = (key: string) => toKey + key.slice(fromKey.length);
+      keepParentOf(fromKey);
       for (const folder of atOrUnder(madeFolders, fromKey)) {
         madeFolders.delete(folder);
         madeFolders.add(moved(folder));
@@ -156,7 +195,12 @@ function keyOf(path: string): string {
 
 // An error `isMissingFile` accepts, as a Node fs call's `ENOENT`.
 function missingError(message: string): Error {
-  return Object.assign(new Error(message), { code: 'ENOENT' });
+  return codedError(message, 'ENOENT');
+}
+
+// An error carrying a Node fs `code`.
+function codedError(message: string, code: string): Error {
+  return Object.assign(new Error(message), { code });
 }
 
 // The folder holding `key`: `` for a key one level under the top folder.

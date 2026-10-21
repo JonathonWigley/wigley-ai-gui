@@ -1,5 +1,5 @@
 import type { Clock } from '../../../contracts/ambient';
-import { type Files, isMissingFile } from '../../../contracts/files';
+import { type Files, readIfPresent } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 import type { RecentFolder } from '../contract';
@@ -48,16 +48,8 @@ export function createRecentFolders(deps: {
 
   // [] when the file is missing; throws when it cannot be read or parsed.
   async function readSaved(): Promise<RecentFolder[]> {
-    let text: string;
-    try {
-      text = await data.read(RECENT_FOLDERS_FILE);
-    } catch (error) {
-      if (isMissingFile(error)) {
-        return [];
-      }
-      throw error;
-    }
-    return parseRecentFolders(text);
+    const text = await readIfPresent(data, RECENT_FOLDERS_FILE);
+    return text === null ? [] : parseRecentFolders(text);
   }
 
   async function list(): Promise<RecentFolder[]> {

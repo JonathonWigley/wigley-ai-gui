@@ -4,6 +4,10 @@ import { createMemoryFiles, type MemoryFiles } from './memory-files';
 
 let files: MemoryFiles;
 
+function errorCode(error: unknown): unknown {
+  return (error as { code?: unknown }).code;
+}
+
 beforeEach(() => {
   files = createMemoryFiles();
 });
@@ -112,5 +116,77 @@ describe('createMemoryFiles', () => {
 
     expect(await files.stat('/h/e')).toEqual({ isFolder: true });
     expect(await files.list('/h')).toEqual([{ path: 'e', kind: 'folder' }]);
+  });
+
+  it('rename_LastFileInFolder_KeepsTheFolder', async () => {
+    await files.write('/h/s/a.md', 'one');
+
+    await files.rename('/h/s/a.md', '/h/b.md');
+
+    expect(await files.stat('/h/s')).toEqual({ isFolder: true });
+    expect(await files.list('/h/s')).toEqual([]);
+  });
+
+  it('trash_LastFileInFolder_KeepsTheFolder', async () => {
+    await files.write('/h/s/a.md', 'one');
+
+    await files.trash('/h/s/a.md');
+
+    expect(await files.stat('/h/s')).toEqual({ isFolder: true });
+  });
+
+  it('makeFolder_UnderAFile_RejectsWithEnotdir', async () => {
+    await files.write('/h/f', 'file');
+
+    const error = await files
+      .makeFolder('/h/f/x')
+      .catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('ENOTDIR');
+    expect(await files.read('/h/f')).toBe('file');
+  });
+
+  it('write_OntoAFolder_RejectsWithEisdir', async () => {
+    await files.makeFolder('/h/folder');
+
+    const error = await files
+      .write('/h/folder', 'text')
+      .catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('EISDIR');
+    expect(await files.stat('/h/folder')).toEqual({ isFolder: true });
+  });
+
+  it('write_ParentIsAFile_RejectsWithEexist', async () => {
+    await files.write('/h/f', 'file');
+
+    const error = await files
+      .write('/h/f/x.md', 'text')
+      .catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('EEXIST');
+    expect(await files.read('/h/f')).toBe('file');
+  });
+
+  it('write_AncestorAboveParentIsAFile_RejectsWithEnotdir', async () => {
+    await files.write('/h/f', 'file');
+
+    const error = await files
+      .write('/h/f/x/y.md', 'text')
+      .catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('ENOTDIR');
+  });
+
+  it('rename_DestinationParentIsFile_RejectsWithEnotdir', async () => {
+    await files.write('/h/a.md', 'one');
+    await files.write('/h/f', 'file');
+
+    const error = await files
+      .rename('/h/a.md', '/h/f/b.md')
+      .catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('ENOTDIR');
+    expect(await files.read('/h/a.md')).toBe('one');
   });
 });

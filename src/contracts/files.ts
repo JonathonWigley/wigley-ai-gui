@@ -34,7 +34,12 @@ export interface Files {
   // Makes the folder and any missing parents; an existing folder is no error.
   makeFolder(path: string): Promise<void>;
   // Moves a file or a folder. Rejects with `<to> already exists` when anything
-  // is at `to`, changing nothing; makes no parent folders of `to`.
+  // is at `to`, changing nothing; makes no parent folders of `to`. A rename
+  // that only changes the case of a name on a case-insensitive volume moves
+  // the entry. The Node adapter moves a file by hard link, so a file that
+  // appears at `to` mid-move is never replaced; a folder, a symlink, or a file
+  // on a volume without hard links is checked then renamed, and something that
+  // appears at `to` between the check and the rename is replaced.
   rename(from: string, to: string): Promise<void>;
   // Moves a file or a folder to the OS Trash (under the self-test the Node
   // adapter deletes it for good).
@@ -62,4 +67,19 @@ export function isMissingFile(error: unknown): boolean {
   return (
     error instanceof Error && (error as { code?: unknown }).code === 'ENOENT'
   );
+}
+
+// The text at `path`; null when nothing is there.
+export async function readIfPresent(
+  files: Files,
+  path: string,
+): Promise<string | null> {
+  try {
+    return await files.read(path);
+  } catch (error) {
+    if (isMissingFile(error)) {
+      return null;
+    }
+    throw error;
+  }
 }

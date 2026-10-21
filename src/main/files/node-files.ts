@@ -1,6 +1,12 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, watch as watchFolder } from 'node:fs';
 import {
+  existsSync,
+  mkdirSync,
+  type Stats,
+  watch as watchFolder,
+} from 'node:fs';
+import {
+  link,
   lstat,
   mkdir,
   readdir,
@@ -9,6 +15,7 @@ import {
   rename,
   rm,
   stat,
+  unlink,
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
@@ -63,21 +70,72 @@ async function statPath(file: string): Promise<FileStat | null> {
   }
 }
 
+// The codes `link` fails with on a volume or for a file that takes no hard
+// link.
+const NO_HARD_LINK = new Set(['EXDEV', 'EPERM', 'ENOTSUP']);
+
 async function renameWithoutReplacing(from: string, to: string): Promise<void> {
-  if (await isAnythingAt(to)) {
-    throw new Error(`${to} already exists`);
+  const target = await lstatOrNull(to);
+  if (target !== null) {
+    if (!(await isSameEntryRespelled(from, to, target))) {
+      throw new Error(`${to} already exists`);
+    }
+    await rename(from, to);
+    return;
+  }
+  if ((await lstat(from)).isFile() && (await movedByLink(from, to))) {
+    return;
   }
   await rename(from, to);
 }
 
-// Through `lstat`, so a broken symlink counts as something there.
-async function isAnythingAt(file: string): Promise<boolean> {
+// Whether `to` names the entry at `from` in another case, as on a
+// case-insensitive volume.
+async function isSameEntryRespelled(
+  from: string,
+  to: string,
+  target: Stats,
+): Promise<boolean> {
+  const source = await lstatOrNull(from);
+  const isSameEntry =
+    source !== null && source.dev === target.dev && source.ino === target.ino;
+  const differsOnlyInCase =
+    from !== to && from.toLowerCase() === to.toLowerCase();
+  return isSameEntry && differsOnlyInCase;
+}
+
+// Moves the file at `from` to `to` by hard link, which fails rather than
+// replace a file at `to`; false, changing nothing, when the volume takes no
+// hard link.
+async function movedByLink(from: string, to: string): Promise<boolean> {
   try {
-    await lstat(file);
-    return true;
+    await link(from, to);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') {
+      throw new Error(`${to} already exists`);
+    }
+    if (code !== undefined && NO_HARD_LINK.has(code)) {
+      return false;
+    }
+    throw error;
+  }
+  try {
+    await unlink(from);
+  } catch (error) {
+    await rm(to, { force: true });
+    throw error;
+  }
+  return true;
+}
+
+// Through `lstat`, so a broken symlink counts as something there.
+async function lstatOrNull(file: string): Promise<Stats | null> {
+  try {
+    return await lstat(file);
   } catch (error) {
     if (isMissingFile(error)) {
-      return false;
+      return null;
     }
     throw error;
   }

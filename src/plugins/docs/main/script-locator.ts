@@ -1,4 +1,4 @@
-import { type Files, isMissingFile } from '../../../contracts/files';
+import { type Files, readIfPresent } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 import { expandTilde, joinPath } from '../doc-paths';
@@ -16,20 +16,8 @@ export function installedPluginsFile(configDir: string): string {
   return joinPath(configDir, 'plugins', 'installed_plugins.json');
 }
 
-// The text at `path`; null when nothing is there.
-export async function readIfPresent(
-  files: Files,
-  path: string,
-): Promise<string | null> {
-  try {
-    return await files.read(path);
-  } catch (error) {
-    if (isMissingFile(error)) {
-      return null;
-    }
-    throw error;
-  }
-}
+// doc-files.ts and index-sources.ts import it from here.
+export { readIfPresent } from '../../../contracts/files';
 
 // Each configured Claude config folder, `~` expanded, in config order; an
 // entry that is not absolute once expanded is dropped, and the default stands
