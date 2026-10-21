@@ -70,9 +70,12 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
   model change.
 - **Font settings win over the theme** when set: `fonts` in `settings.json` are optional overrides of
   the theme's font family and base-size tokens. Mocha gives UI 13px and mono 13px.
-- **Code colours** come from `@catppuccin/codemirror` (the user's choice over theme-driven syntax
-  tokens), in the editors and in rendered markdown code blocks. The theme's `syntax.*` tokens and
-  `syntax.css` go. Code colours stay Mocha under any theme; that is accepted.
+- **Code colours** are the Catppuccin Mocha highlight style (the user's choice over theme-driven
+  syntax tokens), in the editors and in rendered markdown code blocks. `@catppuccin/codemirror`
+  exports only whole editor extensions, which would also override the editor's token-driven
+  surfaces and give markdown blocks nothing to use, so its Mocha tag map is copied into one module
+  in the codemirror-vim adapter with its MIT credit, and the package is not installed. The theme's
+  `syntax.*` tokens and `syntax.css` go. Code colours stay Mocha under any theme; that is accepted.
 - **Raw values live only in theme files.** CSS reads tokens. CSS cannot read a variable in
   `@media`, so breakpoints stay raw and `DESIGN.md` lists them. `0`, `1px` hairlines and percentages
   are allowed. `scripts/check-styles.mts` enforces this in `npm run lint`.
@@ -196,7 +199,6 @@ Every package is bundled by Vite into the app, so nothing loads from the network
 
 - `@vscode/codicons` — the one icon set, behind the Icon primitive.
 - `@fontsource/jetbrains-mono` — weights 400, 500 and 600 only.
-- `@catppuccin/codemirror` — code colours, imported only by the codemirror-vim adapter.
 
 ## Out of scope
 

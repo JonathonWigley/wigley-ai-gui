@@ -81,8 +81,8 @@ src/renderer/    core page; renderer.ts is its composition root
   shell/         the shell registry, its areas and the default `ShellLayout`, and the modes
   plugins/       the page-side plugin API
   markdown-it/   markdown adapter behind MarkdownRenderer   → the only markdown-it import
-  codemirror-vim/ editor and code-highlight adapters behind EditorHost and CodeHighlighter → the only codemirror,
-                 @codemirror, @lezer, @replit and @catppuccin/codemirror import
+  codemirror-vim/ editor and code-highlight adapters behind EditorHost and CodeHighlighter, and the code colours
+                 → the only codemirror, @codemirror, @lezer and @replit import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, main.ts and page.ts the
                  parts each root starts
   sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
