@@ -288,7 +288,7 @@ beside the tree's own (`memory-files.ts`, `fake-agent-harness.ts`), named for wh
 - [x] [Self-test](09-selftest.md) — after 08
 
 ### Wave 7
-- [ ] [Doc re-read](10-doc-re-read.md) — after 09
+- [x] [Doc re-read](10-doc-re-read.md) — after 09
 
 ### Wave 8
 - [ ] [Final verification](11-final-verification.md) — after 10
@@ -340,6 +340,10 @@ review range is this run's explicit commit list.
   `e461903` (`openInEditor` calls `focusDoc`); after the fix `npm run selftest` gives 208 PASS, 0 FAIL, twice, with
   forms', chat's and docs' results as expected · concerns: why the doc pane's `focusin` did not fire under the
   self-test is unproven (likely no OS focus); fix holds either way
+- 10 · wigley-ai-gui `1939b4f` · proved: diff read; four AGENTS.md lines fixed (Docs tab clause, `openExternal` in
+  the ambient services, text-box key rule, docs self-test sentence), followups' `@codemirror/view` note dropped; the
+  intro, layout tree, third-party-tool line, the docs-index README and design.md hold · concerns: design.md's
+  "scopes docs.tree, docs.doc" omits the dialog scopes (conflict, picker, box, confirm) — carried to Close
 ### Contract changes
 - `tree.ts`: adds `compareTitles(a, b): number` (base-sensitivity `localeCompare`, code-unit tie-break), used by
   `kinds.ts` · why: places sort as tree nodes do · consumers: 08 may use it · group 04

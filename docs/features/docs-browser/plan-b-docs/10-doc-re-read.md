@@ -1,6 +1,6 @@
 # 10 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -89,3 +89,4 @@ One commit per repo that changed, messages above. Nothing is pushed.
 
 ## Proof
 
+`1939b4f` · lines changed and left in plan.md's Run log.
