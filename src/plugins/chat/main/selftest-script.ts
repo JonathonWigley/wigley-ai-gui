@@ -50,11 +50,9 @@ const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 
 // Each step expects the last line its keys cause: the fake emits in microtasks,
 // so an earlier line can land before the step's wait begins. Each session
-// opens on its Docs tab, its first: Option+o shows the first session's Chat
-// tab, Option+Shift+i the second session, and Option+o its Chat tab, which
-// each session keeps selected from then on. There y finds no pending
-// permission, leaving the first session's alone, and Option+Shift+o goes back
-// to the first session's Chat tab. Space c e
+// opens on its Chat tab: Option+Shift+i shows the second session's Chat tab,
+// where y finds no pending permission, leaving the first session's alone, and
+// Option+Shift+o goes back to the first session's Chat tab. Space c e
 // opens Effort, and showing the second session's Chat tab closes it; Space k n
 // opens the start prompt, which stays open over the second session's Chat tab
 // until Esc closes it, and Option+Shift+o goes back. hi typed, Esc and v leave
@@ -73,9 +71,7 @@ const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 // notice; Space k n opens the start prompt and Esc closes it. A second held
 // turn makes Cmd+W ask, and y ends the session.
 const STEPS: SelfTestStep[] = [
-  { keys: ['<A-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
-  { keys: ['<A-S-i>'], expect: '[sessions] activated chat-second' },
-  { keys: ['<A-o>'], expect: '[chat] Chat tab shown in chat-second' },
+  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
   { keys: ['y'], expect: '[chat] no pending permission in chat-second' },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
   { keys: [' ', 'c', 'e'], expect: '[chat] picker shown: Effort' },
@@ -266,8 +262,7 @@ function resultProblems({
 // steps allow; the answer asks a forms round there over a relay that joins the
 // session, which the steps submit. The result is both calls' replies and the
 // session's fake process, whose record the steps keep changing in place.
-// Activating shows the session's first tab, its Docs tab, so the run waits on
-// the activation.
+// The run waits on the session's Chat tab being shown.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   const { chat, sessions, harnesses } = deps;
   let previousIds: string[] = [];
@@ -331,7 +326,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
           return { permission: reply, round, process };
         },
       );
-      return { shownLine: '[sessions] activated chat-selftest', result };
+      return { shownLine: '[chat] Chat tab shown in chat-selftest', result };
     },
     steps: STEPS,
     problems: (result) => resultProblems(result as ChatSelfTestResult),

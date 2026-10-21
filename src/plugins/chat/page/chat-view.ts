@@ -117,7 +117,8 @@ interface StatusLine {
 const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 
 // One Chat tab per chat session main holds, each with its entries, message
-// box and status line, kept up to date from chat main's messages.
+// box and status line, kept up to date from chat main's messages. Each tab is
+// selected in its session when added.
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
@@ -286,8 +287,10 @@ function sessionOf(tab: HeldTab, box: TextEditor): ChatSession {
 }
 
 // The tab element (`div.chat-tab`: entries, box, status line) added to its
-// session, with the box's editor mounted once the element is attached.
-// `view.shown` may run inside `addTab`, before the handle and box are set.
+// session, with the box's editor mounted once the element is attached. The
+// tab then selects itself, so a chat session opens on its Chat tab whichever
+// plugin's tab the session got first. `view.shown` may run inside `addTab`,
+// before the handle and box are set.
 function createTab(
   state: ChatSessionState,
   shown: ShownLayout,
@@ -350,6 +353,7 @@ function createTab(
     },
   });
   sendStatus(tab, tabStatus(state.activity));
+  tab.handle.select();
   return tab;
 }
 
