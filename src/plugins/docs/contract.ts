@@ -125,6 +125,14 @@ export interface CreatedDoc {
   line: number;
 }
 
+// What `trashDoc` moved to the Trash: every path that went, and the path as
+// asked once all went. `error` is a later move's failure after the first
+// went; null when all went.
+export interface TrashResult {
+  trashed: string[];
+  error: string | null;
+}
+
 export interface DocChange {
   viewId: string;
   path: string;
@@ -148,11 +156,15 @@ export interface DocsChannel extends ChannelShape {
     // The path the doc now has.
     renameDoc(from: string, to: string): Promise<string>;
     // What `trashDoc(path)` would move to the Trash, in order: the real file
-    // or folder (a skill's whole folder for its `SKILL.md`), then the path
-    // itself when that is a link to it.
+    // or folder (a skill's whole folder for its `SKILL.md`; a chain of links'
+    // final target, a link in between staying), then the path itself, its
+    // folder resolved, when that is a link.
     trashTargets(path: string): Promise<string[]>;
-    // The paths moved to the Trash, as `trashTargets` names them.
-    trashDoc(path: string): Promise<string[]>;
+    // Moves `trashTargets(path)` in order. Rejects when nothing moved;
+    // otherwise names what moved, the path as asked among them once all went
+    // (it can differ from those through a linked folder), and the failure
+    // that stopped the rest.
+    trashDoc(path: string): Promise<TrashResult>;
     listFolder(folder: string): Promise<FolderEntry[]>;
     // One watched file per view; `path` null stops that view's watch.
     watchDoc(viewId: string, path: string | null): Promise<void>;

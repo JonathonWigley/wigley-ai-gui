@@ -7,7 +7,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   pathFromMarkedOutput,
   readLoginShellPath,
@@ -134,6 +134,33 @@ describe('readLoginShellPath', () => {
       expect(await readLoginShellPath(shell, CAP_MS)).toBeNull();
       const childPid = Number(readFileSync(pidFile, 'utf8'));
       expect(await isRunningAfter(childPid, 500)).toBe(false);
+    },
+    SETTLE_LIMIT_MS,
+  );
+
+  it(
+    'resolves null within the cap when killing the group fails with EPERM',
+    async () => {
+      const pidFile = path.join(folder, 'shell.pid');
+      const shell = standInShell(
+        `echo $$ > '${pidFile}'\nprintf '%s' '${START}/a'\nexec sleep 5`,
+      );
+      const realKill = process.kill.bind(process);
+      const kill = vi
+        .spyOn(process, 'kill')
+        .mockImplementation((pid: number, signal?: string | number) => {
+          if (pid < 0) {
+            throw Object.assign(new Error('not permitted'), { code: 'EPERM' });
+          }
+          return realKill(pid, signal);
+        });
+
+      try {
+        expect(await readLoginShellPath(shell, CAP_MS)).toBeNull();
+      } finally {
+        kill.mockRestore();
+        process.kill(-Number(readFileSync(pidFile, 'utf8')), 'SIGKILL');
+      }
     },
     SETTLE_LIMIT_MS,
   );

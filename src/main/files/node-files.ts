@@ -60,7 +60,11 @@ export function createNodeFiles(options: NodeFilesOptions): Files {
 
 async function statPath(file: string): Promise<FileStat | null> {
   try {
-    return { isFolder: (await stat(file)).isDirectory() };
+    const itself = await lstat(file);
+    if (!itself.isSymbolicLink()) {
+      return { isFolder: itself.isDirectory(), isLink: false };
+    }
+    return { isFolder: (await stat(file)).isDirectory(), isLink: true };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'ENOENT' || code === 'ENOTDIR') {

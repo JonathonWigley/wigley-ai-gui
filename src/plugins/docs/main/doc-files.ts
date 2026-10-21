@@ -12,6 +12,7 @@ import type {
   FolderEntry,
   IndexEntry,
   IndexHarness,
+  TrashResult,
   WriteResult,
 } from '../contract';
 import {
@@ -46,8 +47,9 @@ export interface DocFilesDeps {
 // real path, so a symlinked doc stays a link, and rejects on a link whose
 // target is missing. A rename acts on the path itself with only its folder
 // resolved, so a symlinked doc moves as the link and its target stays. A
-// trash of a link trashes its target and then the link, so neither is left
-// behind and both can be restored.
+// trash of a link trashes its final target and then the link, so neither is
+// left behind and both can be restored; a link in between, in a chain of
+// links, stays.
 export interface DocFiles {
   read(path: string): Promise<string>;
   // `expectedText` non-null: writes only while the disk (missing reads as
@@ -61,13 +63,14 @@ export interface DocFiles {
   // A skill's `SKILL.md` moves its whole folder. Resolves to the doc's new
   // path.
   rename(from: string, to: string): Promise<string>;
-  // What a trash at `path` moves, in order: the real file or folder, then the
-  // path itself (its folder real) when that is a link. A skill's `SKILL.md`
-  // stands for its whole folder.
+  // What a trash at `path` moves, in order: the real file or folder (a link
+  // chain's final target), then the path itself (its folder real) when that
+  // is a link. A skill's `SKILL.md` stands for its whole folder.
   trashTargets(path: string): Promise<string[]>;
-  // Moves `trashTargets(path)` to the Trash once the guard allows every one,
-  // else moves none. Resolves to them.
-  trash(path: string): Promise<string[]>;
+  // Moves `trashTargets(path)` to the Trash in order once the guard allows
+  // every one, else rejects moving none. Rejects when the first move fails;
+  // when a later one fails, resolves to what moved and the failure.
+  trash(path: string): Promise<TrashResult>;
   // `folder`'s entries one level down; [] when it is no folder.
   list(folder: string): Promise<FolderEntry[]>;
   // Calls `changed` after the file at `path` changes or is replaced.
@@ -194,22 +197,38 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
   }
 
   async function trashTargets(path: string): Promise<string[]> {
-    const requested = absolute(path);
-    const trashed = skillFolder(requested) ?? requested;
-    const itself = await folderRealTarget(files, trashed);
-    const target = await realTarget(files, trashed);
-    return target === itself ? [itself] : [target, itself];
+    const itself = await folderRealTarget(files, trashedPath(absolute(path)));
+    const found = await files.stat(itself);
+    if (found === null || !found.isLink) {
+      return [itself];
+    }
+    return [await files.realPath(itself), itself];
   }
 
-  async function trash(path: string): Promise<string[]> {
+  // A full trash also names the path as asked, so entries and an open doc
+  // reached through a linked folder match it.
+  async function trash(path: string): Promise<TrashResult> {
     const targets = await trashTargets(path);
     for (const target of targets) {
       await allowed(target);
     }
+    const trashed: string[] = [];
     for (const target of targets) {
-      await files.trash(target);
+      try {
+        await files.trash(target);
+      } catch (error) {
+        if (trashed.length === 0) {
+          throw error;
+        }
+        return { trashed, error: errorText(error) };
+      }
+      trashed.push(target);
     }
-    return targets;
+    const asked = trashedPath(absolute(path));
+    if (!trashed.includes(asked)) {
+      trashed.push(asked);
+    }
+    return { trashed, error: null };
   }
 
   async function list(folder: string): Promise<FolderEntry[]> {
@@ -284,6 +303,12 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
 // `config.toml`, since `@` is not allowed in a bare one.
 function quotedKeyForms(key: string, harness: IndexHarness): string[] {
   return harness === 'claude' ? [`"${key}"`] : [`"${key}"`, `'${key}'`];
+}
+
+// What a trash of the doc at `path` moves: a skill's whole folder for its
+// `SKILL.md`, else the doc.
+function trashedPath(path: string): string {
+  return skillFolder(path) ?? path;
 }
 
 function absolutePath(path: string, homeDir: string): string {

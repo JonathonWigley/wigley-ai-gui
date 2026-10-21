@@ -5,8 +5,8 @@ import { resolveInside } from './scoped-files';
 // `trash` and `remove` report each changed file's path to the watches over it
 // at once, with no debounce, so a test drives a save by writing; a rename
 // reports each moved file's old path and its new one. A watch never fails, so
-// it never calls its `onError`. There are no links, so `realPath` returns the
-// path's stored spelling. Names are case-sensitive.
+// it never calls its `onError`. There are no links, so `stat` reports none and
+// `realPath` returns the path's stored spelling. Names are case-sensitive.
 export interface MemoryFiles extends Files {
   // Deletes the file at `path`, or the folder at `path` and everything under
   // it; the folder holding `path` stays.
@@ -47,9 +47,9 @@ export function createMemoryFiles(): MemoryFiles {
 
   const statKey = (key: string): FileStat | null => {
     if (texts.has(key)) {
-      return { isFolder: false };
+      return { isFolder: false, isLink: false };
     }
-    return isFolder(key) ? { isFolder: true } : null;
+    return isFolder(key) ? { isFolder: true, isLink: false } : null;
   };
 
   const hasFileAbove = (key: string): boolean => {

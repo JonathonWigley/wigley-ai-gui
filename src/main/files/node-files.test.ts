@@ -207,18 +207,31 @@ describe('createNodeFiles', () => {
     expect(await files.stat(path.join(root, 'a', 'b'))).toBeNull();
   });
 
-  it('stat_FileAndFolder_IsFolder', async () => {
+  it('stat_FileFolderAndLink_IsFolderAndIsLink', async () => {
     writeFileSync(path.join(root, 'a.md'), 'text');
     mkdirSync(path.join(root, 'folder'));
+    writeFileSync(path.join(root, 'folder', 'b.md'), 'text');
     symlinkSync(path.join(root, 'folder'), path.join(root, 'link'));
 
     expect(await files.stat(path.join(root, 'a.md'))).toEqual({
       isFolder: false,
+      isLink: false,
     });
-    expect(await files.stat(root)).toEqual({ isFolder: true });
+    expect(await files.stat(root)).toEqual({ isFolder: true, isLink: false });
     expect(await files.stat(path.join(root, 'link'))).toEqual({
       isFolder: true,
+      isLink: true,
     });
+    expect(await files.stat(path.join(root, 'link', 'b.md'))).toEqual({
+      isFolder: false,
+      isLink: false,
+    });
+  });
+
+  it('stat_DanglingLink_Null', async () => {
+    symlinkSync(path.join(root, 'gone.md'), path.join(root, 'link.md'));
+
+    expect(await files.stat(path.join(root, 'link.md'))).toBeNull();
   });
 
   it('realPath_Symlink_ReturnsTarget', async () => {

@@ -83,24 +83,24 @@ export function readLoginShellPath(
       clearTimeout(cap);
       resolve(pathFromMarkedOutput(output));
     });
-    // An interactive shell ignores SIGTERM, so the group gets SIGKILL.
+    // An interactive shell ignores SIGTERM, so the group gets SIGKILL. The
+    // read settles before the kill, so a kill that fails cannot hold it open.
     const cap = setTimeout(() => {
+      resolve(null);
       if (child.pid !== undefined) {
         killProcessGroup(child.pid);
       }
-      resolve(null);
     }, timeoutMs);
   });
 }
 
-// SIGKILL to the process group `leaderPid` leads; a group already gone is
-// left alone.
+// SIGKILL to the process group `leaderPid` leads. Every kill error is
+// swallowed: ESRCH (the group already gone) is expected, and any other, such
+// as EPERM, leaves a stray shell rather than crashing main.
 function killProcessGroup(leaderPid: number): void {
   try {
     process.kill(-leaderPid, 'SIGKILL');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
-      throw error;
-    }
+  } catch {
+    // Nothing left to do.
   }
 }

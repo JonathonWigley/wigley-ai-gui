@@ -77,7 +77,10 @@ function withLinks(files: MemoryFiles, links: Map<string, string>): Files {
       links.delete(asItself(path));
       await files.write(asItself(path), text);
     },
-    stat: (path) => files.stat(resolve(path)),
+    stat: async (path) => {
+      const found = await files.stat(resolve(path));
+      return found && { ...found, isLink: links.has(asItself(path)) };
+    },
     realPath: (path) => files.realPath(resolve(path)),
     makeFolder: (path) => files.makeFolder(resolve(path)),
     list: async (folder) => {
@@ -103,20 +106,23 @@ function withLinks(files: MemoryFiles, links: Map<string, string>): Files {
   };
 }
 
-// `files` on a case-insensitive volume: `stat` finds a name in any case.
+// `files` on a case-insensitive volume: `stat` finds a name in any case, and
+// `realPath` returns the name in its case on disk.
 function caseInsensitive(files: MemoryFiles): Files {
+  const onDisk = async (path: string): Promise<string> => {
+    const name = baseName(path).toLowerCase();
+    const siblings = await files.list(parentFolder(path));
+    const found = siblings.find(
+      (sibling) => sibling.path.toLowerCase() === name,
+    );
+    return found === undefined
+      ? path
+      : joinPath(parentFolder(path), found.path);
+  };
   return {
     ...files,
-    stat: async (path) => {
-      const name = baseName(path).toLowerCase();
-      const siblings = await files.list(parentFolder(path));
-      const found = siblings.find(
-        (sibling) => sibling.path.toLowerCase() === name,
-      );
-      return found === undefined
-        ? files.stat(path)
-        : files.stat(joinPath(parentFolder(path), found.path));
-    },
+    stat: async (path) => files.stat(await onDisk(path)),
+    realPath: async (path) => files.realPath(await onDisk(path)),
   };
 }
 
@@ -456,7 +462,10 @@ describe('trash', () => {
 
     const trashed = await test.docFiles.trash(SKILL);
 
-    expect(trashed).toEqual([`${ROOT}/.claude/skills/s`]);
+    expect(trashed).toEqual({
+      trashed: [`${ROOT}/.claude/skills/s`],
+      error: null,
+    });
     expect(await test.files.stat(`${ROOT}/.claude/skills/s`)).toBeNull();
     expect(await test.files.stat(`${ROOT}/.claude/skills/s/ref.md`)).toBeNull();
   });
@@ -468,7 +477,7 @@ describe('trash', () => {
 
     const trashed = await test.docFiles.trash(`${ROOT}/a.md`);
 
-    expect(trashed).toEqual([`${ROOT}/a.md`]);
+    expect(trashed).toEqual({ trashed: [`${ROOT}/a.md`], error: null });
     expect(await test.files.stat(`${ROOT}/a.md`)).toBeNull();
     expect(await test.files.read(`${ROOT}/b.md`)).toBe('b');
   });
@@ -484,7 +493,7 @@ describe('trash', () => {
 
     const trashed = await docFiles.trash(link);
 
-    expect(trashed).toEqual([target, link]);
+    expect(trashed).toEqual({ trashed: [target, link], error: null });
     expect(links.size).toBe(0);
     expect(await test.files.stat(target)).toBeNull();
   });
@@ -501,10 +510,116 @@ describe('trash', () => {
 
     const trashed = await docFiles.trash(`${link}/SKILL.md`);
 
-    expect(trashed).toEqual([target, link]);
+    expect(trashed).toEqual({ trashed: [target, link], error: null });
     expect(links.size).toBe(0);
     expect(await test.files.stat(target)).toBeNull();
     expect(await test.files.stat(`${target}/ref.md`)).toBeNull();
+  });
+
+  it('trash_DocInLinkedFolder_NamesRealPathAndPathAsAsked', async () => {
+    const test = setUp();
+    const linkedFolder = `${HOME}/dev/linked`;
+    await test.files.write(`${ROOT}/a.md`, 'a');
+    const links = new Map([[linkedFolder, ROOT]]);
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    const trashed = await docFiles.trash(`${linkedFolder}/a.md`);
+
+    expect(trashed).toEqual({
+      trashed: [`${ROOT}/a.md`, `${linkedFolder}/a.md`],
+      error: null,
+    });
+    expect(await test.files.stat(`${ROOT}/a.md`)).toBeNull();
+  });
+
+  it('trash_LinkInLinkedFolder_NamesTargetLinkAndPathAsAsked', async () => {
+    const test = setUp();
+    const target = `${ROOT}/docs/real.md`;
+    const linkedFolder = `${HOME}/dev/linked`;
+    await test.files.write(target, 'real');
+    const links = new Map([
+      [linkedFolder, ROOT],
+      [`${ROOT}/linked.md`, target],
+    ]);
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    const trashed = await docFiles.trash(`${linkedFolder}/linked.md`);
+
+    expect(trashed).toEqual({
+      trashed: [target, `${ROOT}/linked.md`, `${linkedFolder}/linked.md`],
+      error: null,
+    });
+    expect([...links]).toEqual([[linkedFolder, ROOT]]);
+  });
+
+  it('trashTargets_NameInOtherCaseOnCaseInsensitiveVolume_NamesTheFileOnce', async () => {
+    const test = setUp();
+    await test.files.write(`${ROOT}/a.md`, 'a');
+    const docFiles = setUp({ files: caseInsensitive(test.files) }).docFiles;
+
+    expect(await docFiles.trashTargets(`${ROOT}/A.md`)).toEqual([
+      `${ROOT}/A.md`,
+    ]);
+  });
+
+  it('trash_LinkChain_TrashesFinalTargetAndFirstLinkKeepsMiddle', async () => {
+    const test = setUp();
+    const first = `${ROOT}/a.md`;
+    const middle = `${ROOT}/b.md`;
+    const target = `${ROOT}/c.md`;
+    await test.files.write(target, 'c');
+    const links = new Map([
+      [first, middle],
+      [middle, target],
+    ]);
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    const trashed = await docFiles.trash(first);
+
+    expect(trashed).toEqual({ trashed: [target, first], error: null });
+    expect([...links]).toEqual([[middle, target]]);
+  });
+
+  it('trash_LinkTrashFailsAfterTarget_ResolvesTargetAndFailure', async () => {
+    const test = setUp();
+    const target = `${ROOT}/docs/real.md`;
+    const link = `${HOME}/.claude/linked.md`;
+    await test.files.write(target, 'real');
+    await test.files.makeFolder(`${HOME}/.claude`);
+    const linked = withLinks(test.files, new Map([[link, target]]));
+    const docFiles = setUp({
+      files: {
+        ...linked,
+        trash: async (path) => {
+          if (path === link) {
+            throw new Error('Trash is full');
+          }
+          await linked.trash(path);
+        },
+      },
+    }).docFiles;
+
+    const trashed = await docFiles.trash(link);
+
+    expect(trashed).toEqual({ trashed: [target], error: 'Trash is full' });
+    expect(await test.files.stat(target)).toBeNull();
+  });
+
+  it('trash_FirstTrashFails_Rejects', async () => {
+    const test = setUp();
+    await test.files.write(`${ROOT}/a.md`, 'a');
+    const docFiles = setUp({
+      files: {
+        ...test.files,
+        trash: async () => {
+          throw new Error('Trash is full');
+        },
+      },
+    }).docFiles;
+
+    await expect(docFiles.trash(`${ROOT}/a.md`)).rejects.toThrow(
+      'Trash is full',
+    );
   });
 
   it('trash_LinkToPluginCache_RefusedTrashesNeither', async () => {

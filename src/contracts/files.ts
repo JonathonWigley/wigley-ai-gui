@@ -7,7 +7,10 @@ export interface FileEntry {
 
 // What `Files.stat` finds at a path.
 export interface FileStat {
+  // Of what the path leads to, its links followed.
   isFolder: boolean;
+  // Whether the path itself is a symlink.
+  isLink: boolean;
 }
 
 export interface FileWatch {
@@ -26,7 +29,8 @@ export interface Files {
   // The entries under `folder`, every level of them when `recursive`, in no
   // set order. A missing folder lists as `[]`.
   list(folder: string, options?: { recursive?: boolean }): Promise<FileEntry[]>;
-  // What is at `path`, following symlinks; null when nothing is there.
+  // What is at `path`, following symlinks; null when nothing is there, as for
+  // a link whose target is missing.
   stat(path: string): Promise<FileStat | null>;
   // `path` with every symlink resolved. Rejects, as `isMissingFile` tells,
   // when nothing is there.

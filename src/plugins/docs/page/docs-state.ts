@@ -208,7 +208,8 @@ export function codeFence(text: string): string {
 }
 
 // A change main made to the docs on disk. A rename or trash of a skill
-// folder names the folder; a trash of a link names its target and the link.
+// folder names the folder; a trash names every path that moved (a link's
+// target and the link) and the path as asked once all moved.
 export type DocChangeRecord =
   | { type: 'created'; entry: IndexEntry }
   | { type: 'renamed'; from: string; to: string }

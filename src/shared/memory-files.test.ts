@@ -114,7 +114,7 @@ describe('createMemoryFiles', () => {
   it('makeFolder_EmptyFolder_StatsAndLists', async () => {
     await files.makeFolder('/h/e');
 
-    expect(await files.stat('/h/e')).toEqual({ isFolder: true });
+    expect(await files.stat('/h/e')).toEqual({ isFolder: true, isLink: false });
     expect(await files.list('/h')).toEqual([{ path: 'e', kind: 'folder' }]);
   });
 
@@ -123,7 +123,7 @@ describe('createMemoryFiles', () => {
 
     await files.rename('/h/s/a.md', '/h/b.md');
 
-    expect(await files.stat('/h/s')).toEqual({ isFolder: true });
+    expect(await files.stat('/h/s')).toEqual({ isFolder: true, isLink: false });
     expect(await files.list('/h/s')).toEqual([]);
   });
 
@@ -132,7 +132,7 @@ describe('createMemoryFiles', () => {
 
     await files.trash('/h/s/a.md');
 
-    expect(await files.stat('/h/s')).toEqual({ isFolder: true });
+    expect(await files.stat('/h/s')).toEqual({ isFolder: true, isLink: false });
   });
 
   it('makeFolder_UnderAFile_RejectsWithEnotdir', async () => {
@@ -154,7 +154,10 @@ describe('createMemoryFiles', () => {
       .catch((caught: unknown) => caught);
 
     expect(errorCode(error)).toBe('EISDIR');
-    expect(await files.stat('/h/folder')).toEqual({ isFolder: true });
+    expect(await files.stat('/h/folder')).toEqual({
+      isFolder: true,
+      isLink: false,
+    });
   });
 
   it('write_ParentIsAFile_RejectsWithEexist', async () => {

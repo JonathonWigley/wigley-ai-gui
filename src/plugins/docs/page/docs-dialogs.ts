@@ -361,6 +361,9 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
 
   const failed = (error: unknown) => toast(errorText(error), 'error');
 
+  // Whether a delete is waiting on main to name what it moves.
+  let isTrashAsking = false;
+
   const pickPlace = async (kind: CreateKind) => {
     const kindTitle = CREATE_KIND_TITLES[kind];
     const places = placesFor(kind, deps.entries(), await deps.homeDir);
@@ -512,9 +515,18 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       });
     },
     // Main names what goes before the question, so a link's target is named
-    // beside the link.
+    // beside the link; a delete while that is asked is ignored. A trash that
+    // fails partway still applies what moved, and toasts the failure.
     trash(entry) {
+      if (isTrashAsking) {
+        log('docs', 'delete ignored: one is already being asked');
+        return;
+      }
+      isTrashAsking = true;
       Promise.all([channel.invoke('trashTargets', entry.path), deps.homeDir])
+        .finally(() => {
+          isTrashAsking = false;
+        })
         .then(([targets, homeDir]) => {
           const name = baseName(targets[targets.length - 1]);
           confirm.open(
@@ -525,9 +537,20 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
             () => {
               channel
                 .invoke('trashDoc', entry.path)
-                .then((paths) => {
-                  deps.changed({ type: 'trashed', paths }, null);
-                  log('docs', `moved ${name} to the Trash`);
+                .then((result) => {
+                  deps.changed(
+                    { type: 'trashed', paths: result.trashed },
+                    null,
+                  );
+                  if (result.error === null) {
+                    log('docs', `moved ${name} to the Trash`);
+                  } else {
+                    failed(result.error);
+                    log(
+                      'docs',
+                      `moved ${result.trashed.map(baseName).join(', ')} to the Trash, then failed: ${result.error}`,
+                    );
+                  }
                 })
                 .catch(failed);
             },
