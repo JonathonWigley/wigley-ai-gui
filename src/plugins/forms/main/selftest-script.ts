@@ -104,9 +104,9 @@ export const SELFTEST_LAYOUT = {
 // hide it and Space k s in NORMAL shows it; Esc (forms' editor bind) leaves the
 // box. Option+Shift+i wraps to the last session, a Codex one with no folder,
 // whose only tab is its Docs tab: its first show runs the session source,
-// which knows no folder, and no form keeps its scope; Option+Shift+o wraps
-// back to the first,
-// whose form takes its scope again. Space z l n cycles to the selftest layout
+// which knows no folder, and no form keeps its scope; Option+o finds no other
+// tab there; Option+Shift+o wraps back to the first, whose form takes its
+// scope again. Space z l n cycles to the selftest layout
 // and Space z l p back to default; each load logs every line its cards log at
 // once, so each step checks one of them: the finding card's failure, then,
 // cycling backwards onto selftest, the notice card's, then, forwards to default
@@ -243,6 +243,7 @@ const STEPS: SelfTestStep[] = [
     expect: '[docs] session index: No project folder is known for this session',
     checksFit: true,
   },
+  { keys: ['<A-o>'], expect: '[sessions] no other tab in Codex session' },
   { keys: ['<A-S-o>'], expect: '[sessions] activated selftest' },
   {
     keys: [' ', 'z', 'l', 'n'],

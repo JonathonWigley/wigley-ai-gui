@@ -27,9 +27,20 @@ export interface DocsSelfTestDeps {
 // it. A opens the path box at the rules folder, n and Tab complete to neat.md,
 // and Esc cancels; A again and fresh.md creates it, :q closes its editor,
 // Ctrl+h to the tree and d asks to move it to the Trash, y does. R rescans:
-// eight entries and neat.md. c opens the context picker, j Enter picks the
-// repo. Space k d hides the tree and again shows it; Space k s shows Sessions
-// mode on the docs session's Docs tab, where R reads its session index.
+// eight entries and neat.md. / filters the tree to neat and Enter keeps the
+// filter, leaving Global, Rules and neat.md; k k j j selects neat.md and d
+// asks to trash it, n keeps it, d again and Esc keeps it; / and Esc clear the
+// filter. h goes up to Rules and h again collapses it. j l expands Hooks and
+// j l opens the hook's detail view; Ctrl+l, i edits settings.json and :q
+// closes it; Ctrl+h back. j j l expands the plugin, j j l its Plugins group
+// and j l opens the plugin's detail view; Ctrl+l, i edits
+// installed_plugins.json and :q closes it; Ctrl+h back. k k l expands the
+// plugin's Skills and j l opens its cached SKILL.md; Ctrl+l, j and k scroll,
+// and i toasts that the plugin cache is read-only; Ctrl+h back. a opens the
+// kind picker, j k j l picks rule, and Esc cancels its place picker. c opens
+// the context picker, j Enter picks the repo. Space k d hides the tree and
+// again shows it; Space k s shows Sessions mode on the docs session's Docs
+// tab, where R reads its session index.
 const STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'k', 'd'],
@@ -85,6 +96,52 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['y'], expect: '[docs] moved fresh.md to the Trash' },
   { keys: ['R'], expect: '[docs] index rebuilt: 9 entries' },
+  {
+    keys: ['/', ...'neat', 'Enter'],
+    expect: '[docs] filtered the tree: neat',
+  },
+  {
+    keys: ['k', 'k', 'j', 'j', 'd'],
+    expect: '[docs] asked to move neat.md to the Trash',
+  },
+  { keys: ['n'], expect: '[docs] kept neat.md' },
+  { keys: ['d'], expect: '[docs] asked to move neat.md to the Trash' },
+  { keys: ['Escape'], expect: '[docs] kept neat.md' },
+  { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
+  { keys: ['h', 'h'], expect: '[docs] collapsed Rules' },
+  { keys: ['j', 'l'], expect: '[docs] expanded Hooks' },
+  { keys: ['j', 'l'], expect: '[docs] opened settings.json' },
+  { keys: ['<C-l>'], expect: '[docs] doc focused' },
+  { keys: ['i'], expect: '[docs] editing settings.json' },
+  {
+    keys: [':', 'q', 'Enter'],
+    expect: '[docs] closed the editor on settings.json',
+  },
+  { keys: ['<C-h>'], expect: '[docs] tree focused' },
+  {
+    keys: ['j', 'j', 'l'],
+    expect: '[docs] expanded selftest-plugin@selftest-market',
+  },
+  { keys: ['j', 'j', 'l'], expect: '[docs] expanded Plugins' },
+  { keys: ['j', 'l'], expect: '[docs] opened 1.0.0' },
+  { keys: ['<C-l>'], expect: '[docs] doc focused' },
+  { keys: ['i'], expect: '[docs] editing installed_plugins.json' },
+  {
+    keys: [':', 'q', 'Enter'],
+    expect: '[docs] closed the editor on installed_plugins.json',
+  },
+  { keys: ['<C-h>'], expect: '[docs] tree focused' },
+  { keys: ['k', 'k', 'l'], expect: '[docs] expanded Skills' },
+  { keys: ['j', 'l'], expect: '[docs] opened SKILL.md' },
+  { keys: ['<C-l>'], expect: '[docs] doc focused' },
+  { keys: ['j'], expect: '[page] j ran docs.scrollDown' },
+  { keys: ['k'], expect: '[page] k ran docs.scrollUp' },
+  // The read-only toast logs nothing; the line proves `i` ran in doc scope.
+  { keys: ['i'], expect: '[page] i ran docs.edit' },
+  { keys: ['<C-h>'], expect: '[docs] tree focused' },
+  { keys: ['a'], expect: '[docs] create: pick a kind' },
+  { keys: ['j', 'k', 'j', 'l'], expect: '[docs] create rule: pick a place' },
+  { keys: ['Escape'], expect: '[docs] create cancelled' },
   { keys: ['c'], expect: '[page] c ran docs.pickContext', checksFit: true },
   { keys: ['j', 'Enter'], expect: '[docs] context ~/dev/selftest-repo' },
   { keys: [' ', 'k', 'd'], expect: '[docs] tree hidden', checksFit: true },
