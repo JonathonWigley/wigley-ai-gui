@@ -1,4 +1,3 @@
-import type { FileWatch } from '../../../contracts/files';
 import type {
   MainApi,
   MainPart,
@@ -6,13 +5,14 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type { SessionsMainExports } from '../../sessions/contract';
-import type { DocChange, DocsChannel } from '../contract';
+import type { DocsChannel } from '../contract';
 import { EXTERNAL_SCHEME } from '../links';
 import { docsManifest } from '../manifest';
 import { createDocFiles, type DocFiles } from './doc-files';
 import { createIndexSources, type IndexSources } from './index-sources';
 import { writeDocsFixture } from './selftest-fixture';
 import { docsSelfTestScript } from './selftest-script';
+import { createViewWatches } from './view-watches';
 
 type DocsApi = MainApi<typeof docsManifest, DocsChannel>;
 
@@ -22,13 +22,6 @@ interface DocsMain {
   homeDir: string;
   sources: IndexSources;
   docFiles: DocFiles;
-}
-
-interface ViewWatches {
-  // Closes the view's watch, then watches `path` unless it is null; a later
-  // call for the view wins over one still starting.
-  watch(viewId: string, path: string | null): Promise<void>;
-  closeAll(): void;
 }
 
 // The index uses real paths, so the home folder every `~` expands to is the
@@ -56,44 +49,6 @@ async function startDocs(
     entries: () => sources.machineEntries(),
   });
   return { homeDir, sources, docFiles };
-}
-
-function createViewWatches(
-  watchFile: (path: string, changed: () => void) => Promise<FileWatch>,
-  send: (change: DocChange) => void,
-): ViewWatches {
-  const watches = new Map<string, FileWatch>();
-  const latestRequest = new Map<string, number>();
-  let requestCount = 0;
-
-  const stop = (viewId: string) => {
-    watches.get(viewId)?.close();
-    watches.delete(viewId);
-  };
-
-  return {
-    async watch(viewId, path) {
-      const request = ++requestCount;
-      latestRequest.set(viewId, request);
-      stop(viewId);
-      if (path === null) {
-        return;
-      }
-      const watch = await watchFile(path, () => send({ viewId, path }));
-      if (latestRequest.get(viewId) !== request) {
-        watch.close();
-        return;
-      }
-      watches.set(viewId, watch);
-    },
-    closeAll() {
-      latestRequest.clear();
-      for (const watch of watches.values()) {
-        watch.close();
-      }
-      watches.clear();
-    },
-  };
 }
 
 // Serves the page the machine and session indexes, the guarded doc changes,

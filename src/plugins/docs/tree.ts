@@ -178,7 +178,8 @@ function cloneNodes(
     .sort((a, b) => compareTitles(a.title, b.title));
 }
 
-// One node per feature slug, then kind groups for the entries with none.
+// One node per feature slug, ids `<featuresId>/feature:<slug>` so no slug
+// meets a kind group's id, then kind groups for the entries with none.
 function featuresNode(
   repoId: string,
   entries: readonly IndexEntry[],
@@ -191,7 +192,7 @@ function featuresNode(
     (entry) => featureSlug(entry) ?? '',
   ).map(([slug, slugEntries]) => {
     const leaves = [...slugEntries].sort(byKindThenTitle).map(leaf);
-    return group(`${id}/${slug}`, slug, slugEntries, leaves);
+    return group(`${id}/feature:${slug}`, slug, slugEntries, leaves);
   });
   return group(id, 'Features', entries, [
     ...slugNodes,

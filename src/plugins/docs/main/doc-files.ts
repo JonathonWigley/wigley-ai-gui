@@ -75,7 +75,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
   // The real path a change at `path` lands on, once the guard allows it.
   async function guarded(path: string): Promise<string> {
     const target = await realTarget(files, path);
-    const configDirs = await realConfigDirs(files, homeDir);
+    const configDirs = await realConfigDirs(files, homeDir, log);
     const refusal = changeRefusal(target, deps.entries(), configDirs);
     if (refusal !== null) {
       throw new Error(refusal);
@@ -206,14 +206,18 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
   ): Promise<{ path: string; line: number } | null> {
     const candidates =
       harness === 'claude'
-        ? (await readClaudeConfigDirs(files, homeDir)).map(installedPluginsFile)
+        ? (await readClaudeConfigDirs(files, homeDir, log)).map(
+            installedPluginsFile,
+          )
         : [joinPath(homeDir, '.codex', 'config.toml')];
-    const listed = harness === 'claude' ? `"${key}"` : key;
+    const quotedKeys = quotedKeyForms(key, harness);
     for (const path of candidates) {
       const text = await readIfPresent(files, path);
       const index = text
         ?.split('\n')
-        .findIndex((line) => line.includes(listed));
+        .findIndex((line) =>
+          quotedKeys.some((quoted) => line.includes(quoted)),
+        );
       if (index !== undefined && index >= 0) {
         return { path, line: index + 1 };
       }
@@ -231,6 +235,13 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     watch,
     pluginConfigFile,
   };
+}
+
+// `key` as the harness's config file writes it: a JSON string in
+// `installed_plugins.json`, a quoted TOML key (basic or literal) in Codex's
+// `config.toml`, since `@` is not allowed in a bare one.
+function quotedKeyForms(key: string, harness: IndexHarness): string[] {
+  return harness === 'claude' ? [`"${key}"`] : [`"${key}"`, `'${key}'`];
 }
 
 function absolutePath(path: string, homeDir: string): string {
@@ -268,7 +279,8 @@ async function realPathOrSelf(files: Files, path: string): Promise<string> {
 async function realConfigDirs(
   files: Files,
   homeDir: string,
+  log: Log,
 ): Promise<string[]> {
-  const dirs = await readClaudeConfigDirs(files, homeDir);
+  const dirs = await readClaudeConfigDirs(files, homeDir, log);
   return Promise.all(dirs.map((dir) => realPathOrSelf(files, dir)));
 }

@@ -107,17 +107,20 @@ describe('machine source', () => {
     expect(sources.machineEntries()).toEqual([ENTRY]);
   });
 
-  it('rebuild_ExitNonZero_FirstStderrLineAndLog', async () => {
+  it('rebuild_ExitNonZero_LastStderrLineAndLog', async () => {
     const test = setUp();
     await test.files.write(INDEX_FILE, JSON.stringify(documentOf([ENTRY])));
-    test.processes.script('python3', BUILD, exited(1, '\nboom\nmore\n'));
+    const stderr =
+      'warning: slow disk\nTraceback (most recent call last):\n' +
+      '  File "docs_index.py", line 9\nValueError: bad root\n\n';
+    test.processes.script('python3', BUILD, exited(1, stderr));
 
     const load = await test.sources.rebuild();
 
-    expect(load.message).toBe('boom');
+    expect(load.message).toBe('ValueError: bad root');
     expect(load.document?.entries).toEqual([ENTRY]);
     expect(test.logged).toEqual([
-      ['docs', 'docs_index.py build exited 1: boom\nmore'],
+      ['docs', `docs_index.py build exited 1: ${stderr.trim()}`],
     ]);
   });
 

@@ -198,6 +198,35 @@ describe('buildTree', () => {
     ]);
   });
 
+  it('buildTree_FeatureSlugNamedLikeKind_IdsDistinct', () => {
+    const root = '/Users/u/wigley-features/r';
+    const feature = { source: 'features', repo: 'r', root } as const;
+    const entries = [
+      entry({
+        ...feature,
+        path: `${root}/followup/design.md`,
+        kind: 'feature-doc',
+      }),
+      entry({
+        ...feature,
+        path: `${root}/followups.md`,
+        id: `${root}/followups.md#L3`,
+        kind: 'followup',
+        line: 3,
+      }),
+    ];
+
+    const features = child(
+      child(buildTree(entries, HOME), 'r').children,
+      'Features',
+    );
+
+    expect(features.children.map((node) => node.id)).toEqual([
+      'repo:r/features/feature:followup',
+      'repo:r/features/followup',
+    ]);
+  });
+
   it('buildTree_GroupEntries_SortByTitleCaseInsensitive', () => {
     const entries = [
       entry({ path: '/Users/u/.claude/rules/1.md', title: 'beta' }),

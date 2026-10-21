@@ -143,13 +143,20 @@ function sessionRun(
   return null;
 }
 
-// Runs `python3 <script> <command> <args>`, logging what it wrote to stderr.
+// Runs `python3 <script> <command> <args>`, logging what it wrote to stderr. A
+// failed run's message is stderr's last non-empty line, where a traceback
+// puts its cause.
 async function runScript(
   deps: IndexSourcesDeps,
   command: ScriptCommand,
   args: string[],
 ): Promise<ScriptOutcome> {
-  const script = await locateScript(deps.files, deps.homeDir, deps.scriptPath);
+  const script = await locateScript(
+    deps.files,
+    deps.homeDir,
+    deps.scriptPath,
+    deps.log,
+  );
   if (script === null) {
     return { ok: false, message: NO_SCRIPT_MESSAGE };
   }
@@ -165,15 +172,21 @@ async function runScript(
       'docs',
       `docs_index.py ${command} exited ${result.code}: ${stderr}`,
     );
-    const firstLine = stderr.split('\n')[0].trim();
     return {
       ok: false,
-      message:
-        firstLine === '' ? `docs_index.py exited ${result.code}` : firstLine,
+      message: lastLine(stderr) ?? `docs_index.py exited ${result.code}`,
     };
   }
   if (stderr !== '') {
     deps.log('docs', `docs_index.py ${command} wrote to stderr: ${stderr}`);
   }
   return { ok: true, stdout: result.stdout };
+}
+
+function lastLine(text: string): string | null {
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+  return lines.at(-1) ?? null;
 }

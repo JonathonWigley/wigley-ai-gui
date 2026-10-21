@@ -324,6 +324,19 @@ describe('pluginConfigFile', () => {
       line: 3,
     });
   });
+
+  it('pluginConfigFile_CodexKeyPrefixOfAnother_MatchesWholeKey', async () => {
+    const test = setUp();
+    await test.files.write(
+      '/Users/u/.codex/config.toml',
+      '[plugins."p@m-extra"]\nenabled = true\n\n[plugins.\'p@m\']\n',
+    );
+
+    expect(await test.docFiles.pluginConfigFile('p@m', 'codex')).toEqual({
+      path: '/Users/u/.codex/config.toml',
+      line: 4,
+    });
+  });
 });
 
 describe('list', () => {

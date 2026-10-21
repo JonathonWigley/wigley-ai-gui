@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import type { Files } from '../../../contracts/files';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { locateScript, readClaudeConfigDirs } from './script-locator';
 
 const HOME = '/Users/u';
 const SCRIPT_IN_INSTALL = 'scripts/docs-index/docs_index.py';
+const CONFIG_FILE = '/Users/u/.agents/wigley-docs/config.json';
+
+const ignoreLog = () => undefined;
 
 function installs(...installPaths: string[]): string {
   return JSON.stringify({
@@ -19,7 +23,12 @@ describe('locateScript', () => {
   it('locateScript_SettingSet_ReturnsItExpanded', async () => {
     const files = createMemoryFiles();
 
-    const script = await locateScript(files, HOME, '~/src/docs_index.py');
+    const script = await locateScript(
+      files,
+      HOME,
+      '~/src/docs_index.py',
+      ignoreLog,
+    );
 
     expect(script).toBe('/Users/u/src/docs_index.py');
   });
@@ -33,7 +42,7 @@ describe('locateScript', () => {
     );
     await files.write(`${install}/${SCRIPT_IN_INSTALL}`, '');
 
-    const script = await locateScript(files, HOME, '');
+    const script = await locateScript(files, HOME, '', ignoreLog);
 
     expect(script).toBe(`${install}/${SCRIPT_IN_INSTALL}`);
   });
@@ -51,7 +60,7 @@ describe('locateScript', () => {
     );
     await files.write(`${install}/${SCRIPT_IN_INSTALL}`, '');
 
-    const script = await locateScript(files, HOME, '');
+    const script = await locateScript(files, HOME, '', ignoreLog);
 
     expect(script).toBe(`${install}/${SCRIPT_IN_INSTALL}`);
   });
@@ -66,7 +75,7 @@ describe('locateScript', () => {
     );
     await files.write(`${present}/${SCRIPT_IN_INSTALL}`, '');
 
-    const script = await locateScript(files, HOME, '');
+    const script = await locateScript(files, HOME, '', ignoreLog);
 
     expect(script).toBe(`${present}/${SCRIPT_IN_INSTALL}`);
   });
@@ -74,7 +83,7 @@ describe('locateScript', () => {
   it('locateScript_NothingInstalled_Null', async () => {
     const files = createMemoryFiles();
 
-    expect(await locateScript(files, HOME, '')).toBeNull();
+    expect(await locateScript(files, HOME, '', ignoreLog)).toBeNull();
   });
 });
 
@@ -86,10 +95,104 @@ describe('readClaudeConfigDirs', () => {
     'not json',
   ])('readClaudeConfigDirs_EmptyOrWrongShape_Default %s', async (config) => {
     const files = createMemoryFiles();
-    await files.write('/Users/u/.agents/wigley-docs/config.json', config);
+    await files.write(CONFIG_FILE, config);
 
-    expect(await readClaudeConfigDirs(files, HOME)).toEqual([
+    expect(await readClaudeConfigDirs(files, HOME, ignoreLog)).toEqual([
       '/Users/u/.claude',
+    ]);
+  });
+
+  it('readClaudeConfigDirs_RelativeEntries_Dropped', async () => {
+    const files = createMemoryFiles();
+    await files.write(
+      CONFIG_FILE,
+      '{"claudeConfigDirs":[".", "~/.claude-personal", "rel/dir", "/abs"]}',
+    );
+
+    expect(await readClaudeConfigDirs(files, HOME, ignoreLog)).toEqual([
+      '/Users/u/.claude-personal',
+      '/abs',
+    ]);
+  });
+
+  it('readClaudeConfigDirs_OnlyRelativeEntries_Default', async () => {
+    const files = createMemoryFiles();
+    await files.write(CONFIG_FILE, '{"claudeConfigDirs":[".", "~user/x"]}');
+
+    expect(await readClaudeConfigDirs(files, HOME, ignoreLog)).toEqual([
+      '/Users/u/.claude',
+    ]);
+  });
+
+  it('readClaudeConfigDirs_UnparsableConfig_DefaultAndLogged', async () => {
+    const files = createMemoryFiles();
+    await files.write(CONFIG_FILE, 'not json');
+    const logged: string[] = [];
+
+    const dirs = await readClaudeConfigDirs(files, HOME, (source, message) =>
+      logged.push(`[${source}] ${message}`),
+    );
+
+    expect(dirs).toEqual(['/Users/u/.claude']);
+    expect(logged).toHaveLength(1);
+    expect(logged[0].startsWith(`[docs] ${CONFIG_FILE} not read: `)).toBe(true);
+  });
+
+  it('readClaudeConfigDirs_UnreadableConfig_DefaultAndLogged', async () => {
+    const memory = createMemoryFiles();
+    const files: Files = {
+      ...memory,
+      read: async () => {
+        throw new Error('EACCES: permission denied');
+      },
+    };
+    const logged: string[] = [];
+
+    const dirs = await readClaudeConfigDirs(files, HOME, (source, message) =>
+      logged.push(`[${source}] ${message}`),
+    );
+
+    expect(dirs).toEqual(['/Users/u/.claude']);
+    expect(logged).toEqual([
+      `[docs] ${CONFIG_FILE} not read: EACCES: permission denied`,
+    ]);
+  });
+
+  it('readClaudeConfigDirs_NoConfig_DefaultNothingLogged', async () => {
+    const files = createMemoryFiles();
+    const logged: string[] = [];
+
+    const dirs = await readClaudeConfigDirs(files, HOME, (_source, message) =>
+      logged.push(message),
+    );
+
+    expect(dirs).toEqual(['/Users/u/.claude']);
+    expect(logged).toEqual([]);
+  });
+});
+
+describe('locateScript failures', () => {
+  it('locateScript_UnreadableInstalledPlugins_NullAndLogged', async () => {
+    const memory = createMemoryFiles();
+    const installed = '/Users/u/.claude/plugins/installed_plugins.json';
+    const files: Files = {
+      ...memory,
+      read: async (path) => {
+        if (path === installed) {
+          throw new Error('EACCES: permission denied');
+        }
+        return memory.read(path);
+      },
+    };
+    const logged: string[] = [];
+
+    const script = await locateScript(files, HOME, '', (_source, message) =>
+      logged.push(message),
+    );
+
+    expect(script).toBeNull();
+    expect(logged).toEqual([
+      `${installed} not read: EACCES: permission denied`,
     ]);
   });
 });
