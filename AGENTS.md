@@ -9,7 +9,7 @@
   data, layout, agent harness, session control, round source, MCP tool or third-party tool goes, and the layer
   check.
 - **Running and testing** — Node version, the self-test the agent may run any time, and the visible run that is the user's.
-- **Dev quirks** — the startup reload.
+- **Dev quirks** — the startup reload, and a session's stale forms schema.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
 vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `wigley-forms`
@@ -274,3 +274,6 @@ round), since main, not the page, decides.
 
 - Under `electron-forge start` the page loads twice at startup, the second load triggered by the dev server. Code
   that acts on page load runs on every load, as the self-test does.
+- A session's `ask_round` schema is fixed when the session starts, so after a change to the forms tool contract the
+  running session still offers the old shape. Take the fields the server now requires from its error, and send a
+  sample round that needs the new schema from a new session.
