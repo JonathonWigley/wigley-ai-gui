@@ -89,7 +89,8 @@ export interface AgentProcessEvents {
   entry(entry: ChatEntry): void;
   controls(controls: SessionControl[]): void;
   activity(activity: ProcessActivity): void;
-  // The slash commands and skills the session offers, as typed after `/`; plan B reads it.
+  // The slash commands and skills the session offers, as typed after `/`.
+  // Chat main stores them and the Chat tab's message box offers them after `/`.
   commands(names: string[]): void;
   ended(end: { code: number | null; error: string | null }): void;
 }

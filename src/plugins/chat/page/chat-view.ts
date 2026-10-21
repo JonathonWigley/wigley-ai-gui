@@ -205,6 +205,12 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       sendStatus(tab, tab.ended ? '' : tabStatus(activity));
     }
   });
+  channel.on('commands', ({ sessionId, names }) => {
+    const tab = heldFor('commands', sessionId);
+    if (tab !== undefined) {
+      tab.state = { ...tab.state, commands: names };
+    }
+  });
   channel.on('sessionEnded', ({ sessionId, error }) => {
     const tab = heldFor('sessionEnded', sessionId);
     if (tab === undefined) {
@@ -337,21 +343,38 @@ function createTab(
     beforeClose: () => view.beforeClose(tab),
     shown: () => view.shown(tab),
   });
-  tab.box = deps.editor.create(boxElement, '', {
-    changed: () => undefined,
-    focused: () => {
-      tab.isBoxFocused = true;
-      statusLine.draw(tab);
+  tab.box = deps.editor.create(
+    boxElement,
+    '',
+    {
+      changed: () => undefined,
+      focused: () => {
+        tab.isBoxFocused = true;
+        statusLine.draw(tab);
+      },
+      blurred: () => {
+        tab.isBoxFocused = false;
+        statusLine.draw(tab);
+      },
+      modeChanged: (mode) => {
+        tab.boxMode = mode;
+        statusLine.draw(tab);
+      },
     },
-    blurred: () => {
-      tab.isBoxFocused = false;
-      statusLine.draw(tab);
+    {
+      completions: {
+        prefix: '/',
+        // Read each call: commands can arrive after the box exists.
+        words: () => tab.state.commands,
+        offered: (words) =>
+          deps.log(
+            'chat',
+            `completions offered: ${words.map((word) => `/${word}`).join(', ')}`,
+          ),
+        accepted: (word) => deps.log('chat', `completion accepted: /${word}`),
+      },
     },
-    modeChanged: (mode) => {
-      tab.boxMode = mode;
-      statusLine.draw(tab);
-    },
-  });
+  );
   sendStatus(tab, tabStatus(state.activity));
   tab.handle.select();
   return tab;
