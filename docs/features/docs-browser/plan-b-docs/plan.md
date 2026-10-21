@@ -273,7 +273,7 @@ beside the tree's own (`memory-files.ts`, `fake-agent-harness.ts`), named for wh
 
 ### Wave 2
 - [ ] [Code highlighter and markdown document render](02-highlight-and-document-render.md) — after 01 (its lint needs 01's layer entries)
-- [ ] [Docs main part](06-docs-main.md) — after 01, 04
+- [x] [Docs main part](06-docs-main.md) — after 01, 04
 
 ### Wave 3
 - [ ] [Document editor](05-document-editor.md) — after 02
@@ -314,11 +314,18 @@ review range is this run's explicit commit list.
   seam, adapter and fake present, main.ts wiring, typecheck and lint pass (worker: 1282 tests and selftest pass) ·
   concerns: Node `rename` checks `to` then moves, so a path created at `to` in between is replaced (no
   non-replacing rename in Node); `node-processes.test.ts` assumes Vitest runs on plain Node
+- 06 · wigley-ai-gui `751d48e` · proved: diff read, all 49 Produces names present, docs part last in `mainParts`,
+  typecheck and lint pass (worker: 48 new tests and selftest pass) · concerns: a dangling symlink counts as missing,
+  so a write there replaces the link with a plain file; a non-missing read error during script lookup rejects
+  instead of skipping that file; the start wiring has no unit test (09's steps cover it)
 ### Contract changes
 - `tree.ts`: adds `compareTitles(a, b): number` (base-sensitivity `localeCompare`, code-unit tie-break), used by
   `kinds.ts` · why: places sort as tree nodes do · consumers: 08 may use it · group 04
 - `_Scope` (private) gains `written_home` · why: other-folder reasons need the unresolved home for `home_relative`
   · consumers: none · group 03
+- `script-locator.ts` also exports `readIfPresent`, `installedPluginsFile`, `DOCS_CONFIG_FILE`; `index-sources.ts`
+  exports `MACHINE_INDEX_FILE` · why: doc-files and the fixture share them and the Files list allowed no new shared
+  module · consumers: 08, 09 · group 06
 ### Rulings
 - links: an href `<no colon>:<digits>` ending or followed by `#`/`?` is a line suffix, not a scheme (the pinned test
   `resolve_ColonLine_Resolved` contradicts step 3's regex) — `x:123` would read as a file and toast — group 04
@@ -352,5 +359,10 @@ review range is this run's explicit commit list.
 - Node `rename` passes a non-ENOENT `lstat(to)` error on without moving; MemoryFiles `rename` refuses a move into
   its own subtree; MemoryFiles `makeFolder` on a file rejects `EEXIST`; scopedFiles `realPath` checks the inside
   by `/`-prefix of real paths; the self-test `trashItem` is `rm` recursive without `force` — group 01
+- rename and trash act on the guard's real path, as write does: a hand-typed path through a symlink moves or
+  trashes the link's target, not the link (index paths are already real) — matches write's symlink rule — a user
+  deleting a linked doc by typed path loses the target · group 06
+- overlapping `watchDoc` calls for one view: the later wins; `unwatchAll` also cancels a watch still starting
+  · group 06
 ### Review rounds
 ### Test gate

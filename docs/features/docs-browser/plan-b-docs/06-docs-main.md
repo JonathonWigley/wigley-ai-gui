@@ -1,6 +1,6 @@
 # 06 — Docs main part
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 04
 Plan: [plan.md](plan.md)
@@ -425,3 +425,4 @@ One commit for the group: "Docs plugin main part: index sources, script locator,
 
 ## Proof
 
+`751d48e` · diff read, every Produces present, typecheck and lint pass. Rulings and concerns in plan.md's Run log.
