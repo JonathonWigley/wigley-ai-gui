@@ -82,12 +82,16 @@ const CONTROL_IDS = {
   pickModel: 'model',
 } as const;
 
-// Every chat command's handler but `newSession`'s (the start prompt's), by
-// short id. A command acting on a session acts only on the session whose Chat
-// tab is the visible tab, and does nothing while no Chat tab is visible.
+// Every chat command's handler but the start prompt's (`newSession`,
+// `toggleArchive`, `showArchived`), by short id. A command acting on a
+// session acts only on the session whose Chat tab is the visible tab, and
+// does nothing while no Chat tab is visible.
 export function chatCommandHandlers(
   deps: ChatCommandDeps,
-): Omit<PageStart<typeof chatManifest>['commands'], 'newSession'> {
+): Omit<
+  PageStart<typeof chatManifest>['commands'],
+  'newSession' | 'toggleArchive' | 'showArchived'
+> {
   const { tabs, channel, picker, log } = deps;
   const inSession =
     (

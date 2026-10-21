@@ -24,7 +24,7 @@ import { createCloseConfirm, createReasonBox } from './chat-dialogs';
 import { mountChatView } from './chat-view';
 import { createPicker } from './picker';
 import { readChatLayout } from './read-chat-layout';
-import { openStartPrompt, type StartPromptDeps } from './start-prompt';
+import { createStartPrompt } from './start-prompt';
 
 type ChatApi = PageApi<
   typeof chatManifest,
@@ -35,8 +35,8 @@ type ChatApi = PageApi<
 
 // Shows each chat session main holds in its session's Chat tab: the entries,
 // drawn by the chat layout main chooses, a message box and the controls'
-// status line. The new-session prompt asks for a folder and a profile in the
-// picker and starts a session there. The picker, the deny reason box and the
+// status line. The new-session prompt asks for a folder, a profile and a new
+// or saved session in the picker and starts or resumes a session there. The picker, the deny reason box and the
 // end-session confirmation sit in the overlay layer, each over a scope of its
 // own; another session's Chat tab showing closes the dialogs and a control
 // picker, and leaves the start prompt open.
@@ -65,7 +65,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const picker = createPicker({
       overlay: api.areas.overlay,
       editor: services.editor,
-      pushScope: () => api.keys.pushScope('picker'),
+      pushScope: (scope) => api.keys.pushScope(scope),
       log: services.log,
     });
     const permissions = createPermissionActions({
@@ -113,14 +113,14 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       dataFolderLabel: "chat's data folder",
       toast: services.toast,
     });
-    const startPrompt: StartPromptDeps = {
+    const startPrompt = createStartPrompt({
       picker,
       channel: api.channel,
       profiles: () => api.settings.profiles,
       reveal: (sessionId) => view.reveal(sessionId),
       log: services.log,
       toast: services.toast,
-    };
+    });
     return {
       commands: {
         ...chatCommandHandlers({
@@ -133,7 +133,9 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           toast: services.toast,
           log: services.log,
         }),
-        newSession: () => openStartPrompt(startPrompt),
+        newSession: () => startPrompt.open(),
+        toggleArchive: () => startPrompt.toggleArchive(),
+        showArchived: () => startPrompt.showArchived(),
       },
     };
   },

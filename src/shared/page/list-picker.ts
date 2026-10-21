@@ -37,6 +37,9 @@ export interface ListPicker {
   element: HTMLElement;
   open<T>(request: ListPickerRequest<T>): void;
   isOpen(): boolean;
+  // The open request's item index under the cursor; null when closed or
+  // nothing is visible.
+  cursorIndex(): number | null;
   down(): void;
   up(): void;
   choose(): void;
@@ -150,6 +153,8 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       deps.log(deps.logSource, `picker shown: ${next.title}`);
     },
     isOpen: () => request !== null,
+    cursorIndex: () =>
+      request === null || state.cursor < 0 ? null : state.cursor,
     down() {
       state = movePicker(state, 1);
       draw();

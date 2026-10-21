@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ToastTone } from '../../../contracts/plugin';
-import type { ChatProfile, RecentFolder, StartRequest } from '../contract';
+import type {
+  ChatProfile,
+  PastSessionRow,
+  RecentFolder,
+  StartRequest,
+} from '../contract';
 import type { Picker, PickerRequest } from './picker';
-import { openStartPrompt } from './start-prompt';
+import { createStartPrompt } from './start-prompt';
 import { CHOOSE_FOLDER_LABEL, type FolderItem } from './start-prompt-items';
 
 const HOME = '/Users/u';
@@ -25,6 +30,7 @@ interface Answers {
   recentFolders: () => Promise<RecentFolder[]>;
   homeDir: () => Promise<string>;
   chooseFolder: () => Promise<string | null>;
+  pastSessions: () => Promise<PastSessionRow[]>;
   start: (request: StartRequest) => Promise<string>;
 }
 
@@ -61,6 +67,7 @@ function setUp(
     recentFolders: () => Promise.resolve(recent),
     homeDir: () => Promise.resolve(HOME),
     chooseFolder: () => Promise.resolve('/Users/u/dev/new'),
+    pastSessions: () => Promise.resolve([]),
     start: () => Promise.resolve('row-1'),
     ...options.answers,
   };
@@ -83,14 +90,14 @@ function setUp(
     }
     return answers[method as Exclude<keyof Answers, 'start'>]();
   };
-  openStartPrompt({
+  createStartPrompt({
     picker: picker as Picker,
-    channel: { invoke } as Parameters<typeof openStartPrompt>[0]['channel'],
+    channel: { invoke } as Parameters<typeof createStartPrompt>[0]['channel'],
     profiles: () => profiles,
     reveal: (sessionId) => revealed.push(sessionId),
     log: (source, message) => logs.push(`[${source}] ${message}`),
     toast: (text, tone) => toasts.push({ text, tone }),
-  });
+  }).open();
   return { opened, invoked, started, revealed, logs, toasts };
 }
 

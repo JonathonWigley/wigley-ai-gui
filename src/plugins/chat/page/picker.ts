@@ -2,6 +2,7 @@ import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import { createListPicker } from '../../../shared/page/list-picker';
+import type { ChatScopeName } from '../ids';
 import { blurFocusedElement } from './chat-dialogs';
 
 export interface PickerRequest<T> {
@@ -15,12 +16,15 @@ export interface PickerRequest<T> {
   // True when the list acts on the shown Chat tab's session, so
   // `closeSessionBound` closes it; false when left out.
   sessionBound?: boolean;
+  // The scope pushed while it is open; `picker` when left out.
+  scope?: 'picker' | 'resume';
   // Runs once the picker has closed.
   picked(item: T): void;
 }
 
 // The shared list picker with a filter box, in the window's overlay, holding
-// one request at a time: `open` replaces the open request, if any. `pick`
+// one request at a time: `open` replaces the open request, if any, keeping
+// the pushed scope when the new request names the same one. `pick`
 // with nothing visible does nothing; `close` and the pushed scope's base
 // changing close it unpicked and log `picker closed: <title>`.
 // `closeSessionBound` closes it only while its request is session-bound.
@@ -29,6 +33,9 @@ export interface PickerRequest<T> {
 export interface Picker {
   open<T>(request: PickerRequest<T>): void;
   isOpen(): boolean;
+  // The open request's item index under the cursor; null when closed or
+  // nothing is visible.
+  cursorIndex(): number | null;
   down(): void;
   up(): void;
   pick(): void;
@@ -41,14 +48,16 @@ export interface Picker {
 export interface PickerDeps {
   overlay: PluginAreas['overlay'];
   editor: EditorHost;
-  // Pushes `chat.picker`.
-  pushScope(): PushedScope;
+  // Pushes the named chat scope.
+  pushScope(scope: ChatScopeName): PushedScope;
   log: Log;
 }
 
 export function createPicker(deps: PickerDeps): Picker {
+  // The scope of the request being opened, then of the open one.
+  let scope: ChatScopeName = 'picker';
   const list = createListPicker({
-    pushScope: deps.pushScope,
+    pushScope: () => deps.pushScope(scope),
     log: deps.log,
     logSource: 'chat',
     overlayClass: 'overlay',
@@ -63,6 +72,11 @@ export function createPicker(deps: PickerDeps): Picker {
     open(next) {
       blurFocusedElement();
       isSessionBound = next.sessionBound ?? false;
+      const nextScope = next.scope ?? 'picker';
+      if (list.isOpen() && nextScope !== scope) {
+        list.close();
+      }
+      scope = nextScope;
       list.open({
         title: next.title,
         items: next.items,
@@ -73,6 +87,7 @@ export function createPicker(deps: PickerDeps): Picker {
       });
     },
     isOpen: () => list.isOpen(),
+    cursorIndex: () => list.cursorIndex(),
     down: () => list.down(),
     up: () => list.up(),
     pick: () => list.choose(),
