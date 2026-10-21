@@ -497,6 +497,29 @@ describe('start prompt', () => {
     ]);
   });
 
+  it('setArchivedRejects_nextPressWritesAgain', async () => {
+    let writes = 0;
+    const run = await atSessionStep({
+      setArchived: () =>
+        writes++ === 0
+          ? Promise.reject(new Error('read-only'))
+          : Promise.resolve(),
+    });
+    run.moveCursor(1);
+    run.prompt.toggleArchive();
+    await flush();
+    run.prompt.toggleArchive();
+    await flush();
+    expect(run.archiveWrites).toEqual([
+      { hostSessionId: 'a', archived: true },
+      { hostSessionId: 'a', archived: true },
+    ]);
+    expect(run.logs).toEqual([
+      '[chat] archive failed: read-only',
+      '[chat] archived Alpha',
+    ]);
+  });
+
   it('showArchived_showsThenHidesTheArchivedRows', async () => {
     const run = await atSessionStep();
     run.prompt.showArchived();
