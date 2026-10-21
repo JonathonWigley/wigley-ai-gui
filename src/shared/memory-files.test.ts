@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { isMissingFile } from '../contracts/files';
 import { createMemoryFiles, type MemoryFiles } from './memory-files';
 
 let files: MemoryFiles;
@@ -36,6 +37,61 @@ describe('createMemoryFiles', () => {
       't/SKILL.md',
       't/ref.md',
     ]);
+  });
+
+  it('rename_SourceMissing_RejectsAsMissingFile', async () => {
+    await files.makeFolder('/h');
+
+    const error = await files
+      .rename('/h/none.md', '/h/b.md')
+      .catch((caught: unknown) => caught);
+
+    expect(isMissingFile(error)).toBe(true);
+    expect(await files.stat('/h/b.md')).toBeNull();
+  });
+
+  it('rename_DestinationParentMissing_RejectsAsMissingFileAndKeepsSource', async () => {
+    await files.write('/h/a.md', 'one');
+
+    const error = await files
+      .rename('/h/a.md', '/h/none/b.md')
+      .catch((caught: unknown) => caught);
+
+    expect(isMissingFile(error)).toBe(true);
+    expect(await files.read('/h/a.md')).toBe('one');
+    expect(await files.stat('/h/none')).toBeNull();
+  });
+
+  it('rename_FolderIntoItself_RejectsAndMovesNothing', async () => {
+    await files.write('/h/s/ref.md', 'ref');
+
+    await expect(files.rename('/h/s', '/h/s/t')).rejects.toThrow('/h/s');
+
+    expect(await files.read('/h/s/ref.md')).toBe('ref');
+    expect(await files.stat('/h/s/t')).toBeNull();
+  });
+
+  it('makeFolder_ExistingFolder_Resolves', async () => {
+    await files.write('/h/e/a.md', 'a');
+
+    await expect(files.makeFolder('/h/e')).resolves.toBeUndefined();
+  });
+
+  it('makeFolder_ExistingFile_RejectsWithEexist', async () => {
+    await files.write('/h/a.md', 'one');
+
+    await expect(files.makeFolder('/h/a.md')).rejects.toMatchObject({
+      code: 'EEXIST',
+    });
+    expect(await files.read('/h/a.md')).toBe('one');
+  });
+
+  it('realPath_MissingPath_RejectsAsMissingFile', async () => {
+    const error = await files
+      .realPath('/h/none.md')
+      .catch((caught: unknown) => caught);
+
+    expect(isMissingFile(error)).toBe(true);
   });
 
   it('trash_Folder_RemovesItsFiles', async () => {

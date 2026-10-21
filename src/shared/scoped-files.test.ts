@@ -90,4 +90,39 @@ describe('scopedFiles', () => {
 
     expect(await scopedFiles(inner, ROOT).realPath('a/./b.md')).toBe('a/b.md');
   });
+
+  it('realPath_LinkLeadingOutsideRoot_Rejects', async () => {
+    const linked = withRealPaths({
+      [ROOT]: ROOT,
+      [`${ROOT}/link.md`]: '/elsewhere/x.md',
+    });
+
+    await expect(scopedFiles(linked, ROOT).realPath('link.md')).rejects.toThrow(
+      `link.md is outside ${ROOT}`,
+    );
+  });
+
+  it('realPath_WindowsSeparators_ReturnsSlashJoinedRelative', async () => {
+    const root = 'C:\\data\\forms';
+    const windows = withRealPaths({
+      [root]: root,
+      [`${root}/a/b.md`]: 'C:\\data\\forms\\a\\b.md',
+    });
+
+    expect(await scopedFiles(windows, root).realPath('a/b.md')).toBe('a/b.md');
+  });
 });
+
+// `inner` with `realPath` answering from `realPaths`, keyed by the path asked.
+function withRealPaths(realPaths: Record<string, string>): MemoryFiles {
+  return {
+    ...inner,
+    realPath: async (path) => {
+      const real = realPaths[path];
+      if (real === undefined) {
+        throw new Error(`no real path for ${path}`);
+      }
+      return real;
+    },
+  };
+}

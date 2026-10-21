@@ -30,7 +30,8 @@ export function resolveInside(root: string, path: string): string | null {
 // fails with `<path> is outside <root>` before any I/O: `read`, `write`,
 // `list`, `stat`, `realPath`, `makeFolder`, `rename` (either path) and `trash`
 // reject, and `watch` throws. `realPath` returns the resolved path relative to
-// `root`'s own real path (`` for `root` itself), and rejects
+// `root`'s own real path (`` for `root` itself), its segments joined with
+// `/` whichever separator the adapter returns, and rejects
 // `<path> is outside <root>` when a link leads out of `root`.
 export function scopedFiles(files: Files, root: string): Files {
   const outside = (path: string) => new Error(`${path} is outside ${root}`);
@@ -53,7 +54,10 @@ export function scopedFiles(files: Files, root: string): Files {
         files.realPath(inside(path)),
         files.realPath(root),
       ]);
-      const relative = relativeToFolder(realRoot, real);
+      const relative = relativeToFolder(
+        slashJoined(realRoot),
+        slashJoined(real),
+      );
       if (relative === null) {
         throw outside(path);
       }
@@ -65,8 +69,13 @@ export function scopedFiles(files: Files, root: string): Files {
   };
 }
 
-// `path` relative to `folder`, `` for `folder` itself; null when `path` is
-// not inside `folder`.
+// `path` with each Windows `\` separator written as `/`.
+function slashJoined(path: string): string {
+  return path.replaceAll('\\', '/');
+}
+
+// `path` relative to `folder`, both joined with `/`, `` for `folder` itself;
+// null when `path` is not inside `folder`.
 function relativeToFolder(folder: string, path: string): string | null {
   if (path === folder) {
     return '';

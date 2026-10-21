@@ -1,5 +1,6 @@
 import {
   type FSWatcher,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -240,6 +241,18 @@ describe('createNodeFiles', () => {
 
     expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
     expect(readFileSync(path.join(root, 'b.md'), 'utf8')).toBe('two');
+  });
+
+  it('rename_DestinationIsBrokenSymlink_RejectsAndKeepsBoth', async () => {
+    writeFileSync(path.join(root, 'a.md'), 'one');
+    symlinkSync(path.join(root, 'gone.md'), path.join(root, 'b.md'));
+
+    await expect(
+      files.rename(path.join(root, 'a.md'), path.join(root, 'b.md')),
+    ).rejects.toThrow(`${path.join(root, 'b.md')} already exists`);
+
+    expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
+    expect(lstatSync(path.join(root, 'b.md')).isSymbolicLink()).toBe(true);
   });
 
   it('trash_Path_HandsItToTrashItem', async () => {
