@@ -15,9 +15,9 @@ stands. A decision here stands unless the user changes it.
 
 ## Plans
 
-- **A — layout** (`plan-a-layout/`): modes as a core extension point, the sessions sidebar in place of the tab strip,
+- **A — layout** (landed): modes as a core extension point, the sessions sidebar in place of the tab strip,
   tabs inside a session, scoped editor binds, the relay hello's `harness` field (wigley-ai-marketplace).
-- **B — docs** (`plan-b-docs/`): the core `files` and `processes` services, the markdown document render and code
+- **B — docs** (landed): the core `files` and `processes` services, the markdown document render and code
   highlighter, the document editor, the `docs` plugin (Docs mode and each session's Docs tab), and the docs index's
   `claudeConfigDirs` (wigley-ai-marketplace).
 - **C — plugin-source status**: written after B lands.
@@ -97,12 +97,14 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   the settings or config file holding it in the same editor.
 - **Disk changes**: the open file is watched. The rendered view reloads by itself; while editing, a banner says the
   file changed, and `:w` asks reload-or-overwrite.
-- **Links**: a relative link to a file opens it in the browser, an http link opens in the default browser, a
+- **Links**: a relative link to a file opens it in the browser, an http or https link opens in the default browser (any other scheme is refused), a
   `#heading` link scrolls. Links are real anchors: Tab moves between them, Enter follows. Forms keep literal links.
   Images show their alt text.
-- **Keys** (scopes `docs.tree`, `docs.doc`): tree `j`/`k` move, `l`/Enter open or expand, `h` collapse, `/` filter,
-  `a`, `A`, `r`, `d`, `R` rescan, `c` pick the load-state folder; `Ctrl+l` / `Ctrl+h` move focus between tree and
-  doc. Doc `j`/`k` scroll, `i` edit.
+- **Keys** (scopes `docs.tree`, `docs.doc`, `docs.conflict`, `docs.picker`, `docs.box`, `docs.confirm`): tree `j`/`k`
+  move, `l`/Enter open or expand, `h` collapse, `/` filter, `a`, `A`, `r`, `d`, `R` rescan, `c` pick the load-state
+  folder; `Ctrl+l` / `Ctrl+h` move focus between tree and doc. Doc `j`/`k` scroll, `i` edit. Conflict prompt `r`
+  reload, `o` overwrite, Esc keep editing. Picker `j`/`k` move, Enter or `l` choose, Esc cancel. Text box Tab
+  completes the path, Enter accepts, Esc cancels. Trash confirm `y` yes, `n` or Esc keep.
 - **Packages** (the user's yes): `@codemirror/lang-markdown`, `@codemirror/language-data`; `@lezer/highlight`,
   `@codemirror/language`, `@codemirror/state` and `@codemirror/view`, already installed under `codemirror`, declared
   directly. No highlight.js: rendered code is highlighted with the same

@@ -15,6 +15,8 @@
 - Fuzzy finders: `Space f f` finds a file, `Space f s` searches text, built on a fast Neovim finder's matcher (fzf/fzy style) rather than a home-made one. Deferred from the docs browser (`docs-browser/design.md`).
 - Keyboard link hints (vimium style) in rendered docs, if Tab between links is not enough.
 - Images in rendered docs: loading local image files into the page needs a safe file protocol of its own; today they show their alt text.
+- Docs delete trashes every link that points at a trashed target. Deleting a synced skill from the tree trashes the repo's folder and leaves `~/.claude/skills/<name>` dangling, because each index entry carries only its real path. The docs index exports the link locations it walked, which `to_json` leaves out today, and `trashTargets` adds them (wigley-ai-marketplace `plugins/wigley/scripts/docs-index` `model.py` `to_json`; `src/plugins/docs/main/doc-files.ts` `trashTargets`).
+- The docs main part watches an open doc's parent folder with the recursive `watch`, so a doc directly in `~/.claude` also sees every transcript write under `~/.claude/projects`. Kept: the watch filters by name on a debounced FSEvents stream. If it costs CPU while sessions stream, add a non-recursive option to `watch` on the Files contract (`src/plugins/docs/main/view-watches.ts`, `src/contracts/files.ts`).
 - A Codex harness adapter behind `AgentHarness`, declaring Codex's own session controls (`agent-chat/design.md`).
 - A wigley-harness adapter behind `AgentHarness`, so the app drives the C# harness as it drives Claude Code.
 - A read-only Chat tab for sessions started in a terminal, following the session's transcript file.
