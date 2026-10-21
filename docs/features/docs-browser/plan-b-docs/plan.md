@@ -412,6 +412,7 @@ review range is this run's explicit commit list.
 ### Review rounds
 - 1 · ceb6ea6 · NEEDS FIXES (41 findings, all fixed in bb1f57e..a240aad; 10 open ones per the user's triage)
 - 2 (re-review, correctness ×2) · a240aad · NEEDS FIXES (login-shell PATH read can hang start; 4 prose/style edits lead-applied; 2 Node rename tests missing)
+- 2 fixes · bf94d23 (lead-applied), 15d1f0b (SIGKILL plus an own timer cap the login-shell read; Node rename tests) · closed after cycle 2; the lead read 15d1f0b's diff
 ### Test gate
 - Pass 1, tests this run wrote or edited (22 files) and pass 2, tests importing a changed module by resolved path (18
   files: `contracts/plugin`, `contracts/theme`, `contracts/editor`, `shared/memory-files` importers); a first
@@ -423,3 +424,4 @@ review range is this run's explicit commit list.
 - Gate fix `94e9067` (the host destroys a view on the next microtask, so vim's `onPromptClose` no longer reads a
   nulled `cm.state.vim` after `:q`; the 4 errors were the `:q`/`:q!` steps, printed above their PASS lines): no test
   imports the host; `npm run selftest` 208 PASS, 0 FAIL, 0 unhandled errors on two runs; typecheck and lint clean
+- After review fixes (15d1f0b): vitest 106 files, 1499 tests passed; typecheck and lint clean · `npm run selftest` 253 PASS, `all passed`, no unhandled errors
