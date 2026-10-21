@@ -286,10 +286,10 @@ picker title is `Session`; the box's completion prefix is `/`.
 - [x] [Editor completion option](02-editor-completion.md)
 
 ### Wave 2
-- [ ] [Harness: past sessions and history](03-harness-past-sessions.md) — after 01
+- [x] [Harness: past sessions and history](03-harness-past-sessions.md) — after 01
 
 ### Wave 3
-- [ ] [Chat main: past sessions, archive, resume, commands](04-chat-main-resume.md) — after 03
+- [x] [Chat main: past sessions, archive, resume, commands](04-chat-main-resume.md) — after 03
 
 ### Wave 4
 - [ ] [Start prompt: the session step](05-start-prompt-resume.md) — after 04
@@ -315,11 +315,18 @@ Peer session `wigley-ai-gui-6a` shares the working tree: every commit is pathspe
 ### Groups
 - 01 · b395bc1 · diff read + typecheck pass · concerns: Produces comments exceed the 80-column comment width (oxfmt accepts); node readStart makes one read with no short-read retry
 - 02 · a5f2c2e · diff read + typecheck pass · concerns: plan's `editorExtensions` is `boxExtensions` in the tree (completion added there, document editors get none); `@codemirror/view`/`state` are direct deps after all (rule kept anyway); popup keys ahead of vim unverified live (tasks 07/09)
+- 03 · 7742ab6 · diff read + typecheck pass, `projects/` grep lists only `src/main/claude-code/` · concerns: task GIVEN says `firstMessage` of `fix   the\n bug` is `fix the\n bug` but its user-text rule keeps the string as is — rule followed, title still `fix the bug`; transcript facts re-checked on 2.1.306, new `system` subtype `informational` already falls to the skip rule
+- 04 · 46145ab · diff read + typecheck pass · concerns: `chat-commands.test.ts` fixture gained `commands: []` (outside the Files list); `src/contracts/agent.ts:92` comment on `AgentProcessEvents.commands` still says plan B reads it (stale, for task 08 or the review); resume test compares history only as `[id, text]` pairs
 ### Contract changes
 ### Rulings
 - memory files' read, modified and readStart share one `textOf` lookup, all rejecting `no file at <path>` — one rule for missing files — none · group 01
 - node and memory adapters each hold their own one-line cut-UTF-8 decode rather than a shared helper — node-files imports only contracts — duplicate if a third adapter appears · group 01
 - completion behaviour lives in `prefixCompletion(completions)` in `prefix-completion.ts`; the host only adds it ahead of `vim(...)` and a `vim-mode-change` listener closing the popup outside insert mode — one module for the behaviour — moving one function · group 02
 - `offered` resets when `completionStatus` is null (closed); `pending` does not reset — so `/`, `f`, `a` with one list reports once — a stale list reported once more after a close · group 02
+- new file `src/main/claude-code/json-fields.ts` holds the decoder's former private `asJson`/`asString`/`asArray`/`parsed`/`Json`, shared by decoder, `tool-result-text.ts` and `transcripts.ts` — exporting them from the decoder would cycle with `tool-result-text.ts` — one more module · group 03
+- an empty `CLAUDE_CONFIG_DIR` counts as unset; a `local_command` line with no `uuid` takes `history:line-<n>`; command args are trimmed before joining the title — edge cases the task left open — small label or folder differences · group 03
+- open host ids are only what `sessions.connected` recorded and `sessions.ended` dropped, not chat's own held map — the Decisions line names that one record — a resumed session reappears in the list if owned sessions stop emitting `connected` · group 04
+- `pastSessions` and `resume` reject (async) for an unknown profile or missing harness; `start` still throws synchronously — matches the GIVENs' wording — none · group 04
+- a non-missing read failure of `archived-sessions.json` passes on unchanged; bad JSON and a non-string-array both reject the pinned message — only the shape is the user's state — none · group 04
 ### Review rounds
 ### Test gate

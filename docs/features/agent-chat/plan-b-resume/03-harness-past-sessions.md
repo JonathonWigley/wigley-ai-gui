@@ -1,6 +1,6 @@
 # 03 — Harness: past sessions and history
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -191,3 +191,5 @@ Done when: the typecheck and `npm run lint` pass; `grep -rn "projects/" src --in
 Commit:    one commit for the group
 
 ## Proof
+
+Commit `7742ab6`. Proof: diff read (every Produces present; `json-fields.ts` added for the moved JSON helpers) and `npm run typecheck` pass; the `projects/` grep lists only `src/main/claude-code/transcripts.ts` (a comment). Concern: the task's `firstMessage` GIVEN contradicts its user-text rule; the rule was followed.

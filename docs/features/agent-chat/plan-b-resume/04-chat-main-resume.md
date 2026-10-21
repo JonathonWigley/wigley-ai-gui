@@ -1,6 +1,6 @@
 # 04 — Chat main: past sessions, archive, resume, commands
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -120,3 +120,5 @@ Done when: the typecheck and `npm run lint` pass; the test gate runs both test f
 Commit:    one commit for the group
 
 ## Proof
+
+Commit `46145ab`. Proof: diff read (every Produces present; `start` and `resume` share `openSession`) and `npm run typecheck` pass. Concerns: a stale comment at `src/contracts/agent.ts:92`; the `chat-commands.test.ts` fixture edit outside the Files list.
