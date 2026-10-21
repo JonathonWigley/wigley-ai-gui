@@ -44,7 +44,8 @@ export const editorTheme = EditorView.theme({
     backgroundColor: colour('bg.pane'),
     border: `1px solid ${colour('border')}`,
     color: colour('editor.fg'),
-    fontFamily: `var(${FONT_VARIABLES.mono})`,
+    // Autocomplete's base theme sets `monospace` on the list itself.
+    '& > ul': { fontFamily: `var(${FONT_VARIABLES.mono})` },
     '& > ul > li[aria-selected]': {
       backgroundColor: colour('surface.selected'),
       color: colour('editor.fg'),

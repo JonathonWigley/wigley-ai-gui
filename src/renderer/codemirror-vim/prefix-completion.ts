@@ -57,6 +57,8 @@ function sameWords(left: readonly string[], right: readonly string[]): boolean {
   );
 }
 
+// The popup row for `word`: its label is `completions.prefix` plus the word,
+// and accepting it inserts that text and a space, then reports the word.
 function completionOf(
   completions: EditorCompletions,
   word: string,
@@ -106,21 +108,31 @@ function popupKeys() {
   );
 }
 
-// Completion of `completions.words()` after `completions.prefix` in insert
-// mode, reporting each newly offered list once until the popup closes. Placed
-// after `vim(...)`: `autocompletion` brings in the keymap facet, whose keydown
+// Completion of `completions.words()` after `completions.prefix` in vim's
+// insert mode (not replace mode), reporting each newly offered list once until
+// the popup closes. Each word keeps one `Completion` for the life of the
+// extension, so a word still listed after a keystroke keeps the popup's
+// selection. The result's `update` reruns the match on every keystroke, so the
+// open popup never waits on the source and Tab accepts at once. Placed after
+// `vim(...)`: `autocompletion` brings in the keymap facet, whose keydown
 // handler runs ahead of vim's when it is first met ahead of `vim(...)`. With
 // no interaction delay, Tab accepts as soon as the popup shows.
 export function prefixCompletion(completions: EditorCompletions) {
   let lastOffered: readonly string[] | null = null;
-  const source = (context: CompletionContext): CompletionResult | null => {
-    const cm = context.view ? getCM(context.view) : null;
-    if (!cm?.state.vim?.insertMode) {
-      return null;
+  const completionsByWord = new Map<string, Completion>();
+  const completionFor = (word: string): Completion => {
+    let completion = completionsByWord.get(word);
+    if (completion === undefined) {
+      completion = completionOf(completions, word);
+      completionsByWord.set(word, completion);
     }
-    const textBeforeCursor = context.state.sliceDoc(0, context.pos);
+    return completion;
+  };
+  // The match for the text before `context.pos`, reporting its list through
+  // `completions.offered` when it differs from the last list reported.
+  const offeredMatch = (context: CompletionContext): PrefixMatch | null => {
     const match = prefixMatch(
-      textBeforeCursor,
+      context.state.sliceDoc(0, context.pos),
       completions.prefix,
       completions.words(),
     );
@@ -131,12 +143,25 @@ export function prefixCompletion(completions: EditorCompletions) {
       lastOffered = match.words;
       completions.offered([...match.words]);
     }
-    return {
-      from: match.from,
-      to: match.to,
-      filter: false,
-      options: match.words.map((word) => completionOf(completions, word)),
-    };
+    return match;
+  };
+  const resultOf = (match: PrefixMatch): CompletionResult => ({
+    from: match.from,
+    to: match.to,
+    filter: false,
+    options: match.words.map(completionFor),
+    update: (_current, _from, _to, context) => {
+      const next = offeredMatch(context);
+      return next === null ? null : resultOf(next);
+    },
+  });
+  const source = (context: CompletionContext): CompletionResult | null => {
+    const cm = context.view ? getCM(context.view) : null;
+    if (cm?.state.vim?.mode !== 'insert') {
+      return null;
+    }
+    const match = offeredMatch(context);
+    return match === null ? null : resultOf(match);
   };
   return [
     autocompletion({
