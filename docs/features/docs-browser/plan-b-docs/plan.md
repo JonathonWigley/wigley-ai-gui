@@ -279,7 +279,7 @@ beside the tree's own (`memory-files.ts`, `fake-agent-harness.ts`), named for wh
 - [x] [Document editor](05-document-editor.md) — after 02
 
 ### Wave 4
-- [ ] [Docs view, Docs mode and Docs tabs](07-docs-view.md) — after 02, 04, 05, 06
+- [x] [Docs view, Docs mode and Docs tabs](07-docs-view.md) — after 02, 04, 05, 06
 
 ### Wave 5
 - [ ] [Create, rename, delete, detail views](08-docs-crud.md) — after 07
@@ -325,6 +325,12 @@ review range is this run's explicit commit list.
 - 05 · wigley-ai-gui `92330de` · proved: diff read, every Produces present, typecheck and lint pass (worker: 1359
   tests and selftest pass) · concerns: a failed language load leaves plain text and an unhandled rejection in the
   console; the editor's ex keys, read-only edits, start line and highlighting run only in a DOM, left to 09 and 11
+- 07 · wigley-ai-gui `af98bc3` · proved: diff read, every Produces present, typecheck and lint pass (worker: 1372
+  tests pass) · self-test: 38 fail / 114 pass, all after sessions gained a Docs tab — first `<A-o>` → `no other tab
+  in selftest 2`, `<A-S-i>` → `nothing shown in Codex session`, `[chat] Chat tab shown in chat-selftest` (the rest of
+  chat's follow) — task 09's to fix · concerns: `:q` destroys the editor inside its own ex handler (live check, 11);
+  each removed session leaves an inert `docChanged` listener (the channel has no `off`); `dispose()` does not pop an
+  open filter box's scope
 ### Contract changes
 - `tree.ts`: adds `compareTitles(a, b): number` (base-sensitivity `localeCompare`, code-unit tie-break), used by
   `kinds.ts` · why: places sort as tree nodes do · consumers: 08 may use it · group 04
@@ -333,6 +339,9 @@ review range is this run's explicit commit list.
 - `script-locator.ts` also exports `readIfPresent`, `installedPluginsFile`, `DOCS_CONFIG_FILE`; `index-sources.ts`
   exports `MACHINE_INDEX_FILE` · why: doc-files and the fixture share them and the Files list allowed no new shared
   module · consumers: 08, 09 · group 06
+- `Chip` gains `state` (sets `data-state`); `DocsViewDeps` gains `pushScope('conflict' | 'picker' | 'box')`;
+  `DocsViewCommands` holds all 22 view commands; new exports `createDocView`/`DocTarget`, `createTreeView`,
+  `textBoxInput` (the list picker stays internal to docs-view.ts) · consumers: 08 · group 07
 ### Rulings
 - links: an href `<no colon>:<digits>` ending or followed by `#`/`?` is a line suffix, not a scheme (the pinned test
   `resolve_ColonLine_Resolved` contradicts step 3's regex) — `x:123` would read as a file and toast — group 04
@@ -375,5 +384,8 @@ review range is this run's explicit commit list.
   highlight with `Promise.all`; repeated slugs take a numeric suffix; paths split on `/` and `\\` — group 02
 - hosted entries gain an optional `answerEx` so the shared ex handler reaches a document's events; the host
   imports `syntax.css` itself; `documentExEvent` throws on an unknown name — group 05
+- `<C-h>` with the tree hidden shows it; an index read error shows in the status line and keeps the doc; an
+  older overlapping load never overwrites a newer; the filter box, picker and conflict prompt close when the base
+  scope changes under them; the view's own write never raises the banner — group 07
 ### Review rounds
 ### Test gate

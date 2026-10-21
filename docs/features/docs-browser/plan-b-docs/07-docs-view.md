@@ -1,6 +1,6 @@
 # 07 — Docs view, Docs mode and Docs tabs
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -313,3 +313,4 @@ One commit for the group: "Docs view: Docs mode, a Docs tab per session, rendere
 
 ## Proof
 
+`af98bc3` · diff read, every Produces present, typecheck and lint pass; the self-test clause moves to the gate after 09. Concerns in plan.md's Run log.
