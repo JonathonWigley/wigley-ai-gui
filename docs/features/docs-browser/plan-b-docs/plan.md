@@ -272,7 +272,7 @@ beside the tree's own (`memory-files.ts`, `fake-agent-harness.ts`), named for wh
 - [x] [Docs pure modules](04-docs-pure-modules.md)
 
 ### Wave 2
-- [ ] [Code highlighter and markdown document render](02-highlight-and-document-render.md) — after 01 (its lint needs 01's layer entries)
+- [x] [Code highlighter and markdown document render](02-highlight-and-document-render.md) — after 01 (its lint needs 01's layer entries)
 - [x] [Docs main part](06-docs-main.md) — after 01, 04
 
 ### Wave 3
@@ -318,6 +318,10 @@ review range is this run's explicit commit list.
   typecheck and lint pass (worker: 48 new tests and selftest pass) · concerns: a dangling symlink counts as missing,
   so a write there replaces the link with a plain file; a non-missing read error during script lookup rejects
   instead of skipping that file; the start wiring has no unit test (09's steps cover it)
+- 02 · wigley-ai-gui `a2172ee` · proved: diff read, every
+  Produces present, 16 `syntax.*` tokens in theme and catppuccin, renderer wiring, typecheck and lint pass (worker:
+  1354 tests and selftest pass) · concerns: the document instance's render rules cast `env` to `DocumentEnv`, safe
+  only while `renderDocument` is that instance's one caller
 ### Contract changes
 - `tree.ts`: adds `compareTitles(a, b): number` (base-sensitivity `localeCompare`, code-unit tie-break), used by
   `kinds.ts` · why: places sort as tree nodes do · consumers: 08 may use it · group 04
@@ -364,5 +368,7 @@ review range is this run's explicit commit list.
   deleting a linked doc by typed path loses the target · group 06
 - overlapping `watchDoc` calls for one view: the later wins; `unwatchAll` also cancels a watch still starting
   · group 06
+- the table test asserts `<table data-source-line="1">` (Source lines rule puts it on `table_open`); fences
+  highlight with `Promise.all`; repeated slugs take a numeric suffix; paths split on `/` and `\\` — group 02
 ### Review rounds
 ### Test gate

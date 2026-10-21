@@ -1,6 +1,6 @@
 # 02 — Code highlighter and markdown document render
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -234,3 +234,4 @@ fences; CodeMirror code highlighter and syntax theme tokens`
 
 ## Proof
 
+`a2172ee` · diff read, every Produces present, typecheck and lint pass. Rulings and concerns in plan.md's Run log.
