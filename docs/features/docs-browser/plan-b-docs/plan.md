@@ -351,7 +351,8 @@ review range is this run's explicit commit list.
   · consumers: none · group 03
 - `script-locator.ts` also exports `readIfPresent`, `installedPluginsFile`, `DOCS_CONFIG_FILE`; `index-sources.ts`
   exports `MACHINE_INDEX_FILE` · why: doc-files and the fixture share them and the Files list allowed no new shared
-  module · consumers: 08, 09 · group 06
+  module · consumers: `readIfPresent` index-sources and doc-files, `installedPluginsFile` doc-files and the
+  fixture, `MACHINE_INDEX_FILE` the fixture, `DOCS_CONFIG_FILE` none (export dropped in review) · group 06
 - `Chip` gains `state` (sets `data-state`); `DocsViewDeps` gains `pushScope('conflict' | 'picker' | 'box')`;
   `DocsViewCommands` holds all 22 view commands; new exports `createDocView`/`DocTarget`, `createTreeView`,
   `textBoxInput` (the list picker stays internal to docs-view.ts) · consumers: 08 · group 07

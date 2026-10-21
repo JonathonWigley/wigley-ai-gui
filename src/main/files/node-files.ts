@@ -28,7 +28,8 @@ const WATCH_QUIET_MS = 100;
 const TEMP_FILE = /^\..+\.[0-9a-f]{8}\.tmp$/;
 
 export interface NodeFilesOptions {
-  // Moves a path to the OS Trash; main.ts passes Electron's shell.trashItem.
+  // Moves a path to the OS Trash; main.ts passes Electron's shell.trashItem,
+  // or a recursive rm under the self-test.
   trashItem: (path: string) => Promise<void>;
 }
 

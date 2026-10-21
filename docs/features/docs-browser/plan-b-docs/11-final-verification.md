@@ -77,7 +77,7 @@ Produces: the user's results, recorded in this document's Proof section by `wigl
     too, when Setup step 2 added it). Its sidebar row's Docs tab lists the docs that session's index finds, with the
     session's own states; `c` toasts `A session's Docs tab uses the session's own load states`. End the session: the
     Docs tab goes with its row.
-11. **Hidden mode keeps edits** — expected: in Docs mode, `i` on a doc, type without saving, `Space k s`, then
+11. **Hidden mode keeps edits** — expected: in Docs mode, `i` on a doc, type without saving, Esc to normal mode, `Space k s`, then
     `Space k d`: the editor still holds the unsaved text.
 
 ## GIVEN / WHEN / THEN

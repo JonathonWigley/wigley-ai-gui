@@ -64,9 +64,9 @@ export interface DocumentEditorEvents {
 // A whole file in vim: line numbers, the file's language, wrapped lines, and
 // its parent's full height, scrolling inside.
 export interface DocumentEditor extends TextEditor {
-  // Replaces the whole text, keeping focus and the vim mode, and puts the
-  // cursor at the start of the line it was on, clamped to the new line count;
-  // it reports no `changed`.
+  // Replaces the whole text, keeping focus and normal or insert mode (visual
+  // mode ends), and puts the cursor at the start of the line it was on,
+  // clamped to the new line count; it reports no `changed`.
   setText(text: string): void;
   // Puts the cursor at the start of the 1-based `line`, clamped to the text,
   // and scrolls it to the top.

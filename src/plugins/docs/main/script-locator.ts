@@ -5,7 +5,7 @@ export const WIGLEY_PLUGIN_KEY = 'wigley@wigley-ai-marketplace';
 export const DEFAULT_CLAUDE_CONFIG_DIRS: readonly string[] = ['~/.claude'];
 
 // The docs index's machine-local config, under the home folder.
-export const DOCS_CONFIG_FILE = '.agents/wigley-docs/config.json';
+const DOCS_CONFIG_FILE = '.agents/wigley-docs/config.json';
 
 const SCRIPT_IN_INSTALL = 'scripts/docs-index/docs_index.py';
 

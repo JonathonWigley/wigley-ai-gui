@@ -7,6 +7,7 @@ import type {
 import { errorText } from '../../../shared/error-text';
 import type { SessionsMainExports } from '../../sessions/contract';
 import type { DocChange, DocsChannel } from '../contract';
+import { EXTERNAL_SCHEME } from '../links';
 import { docsManifest } from '../manifest';
 import { createDocFiles, type DocFiles } from './doc-files';
 import { createIndexSources, type IndexSources } from './index-sources';
@@ -14,8 +15,6 @@ import { writeDocsFixture } from './selftest-fixture';
 import { docsSelfTestScript } from './selftest-script';
 
 type DocsApi = MainApi<typeof docsManifest, DocsChannel>;
-
-const EXTERNAL_SCHEME = /^(https?|mailto):/i;
 
 // What every handler serves from, once the home folder is read and, under
 // the self-test, the fixture written.
