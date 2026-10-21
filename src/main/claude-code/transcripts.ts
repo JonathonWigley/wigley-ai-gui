@@ -37,6 +37,9 @@ const LOCAL_OUTPUT_OPEN = '<local-command-stdout>';
 const LOCAL_OUTPUT_CLOSE = '</local-command-stdout>';
 const LOCAL_CAVEAT_OPEN = '<local-command-caveat>';
 const TASK_NOTIFICATION_OPEN = '<task-notification>';
+const SHELL_INPUT_OPEN = '<bash-input>';
+const SHELL_OUTPUT_OPEN = '<bash-stdout>';
+const SHELL_INPUT = /<bash-input>([\s\S]*?)<\/bash-input>/;
 const INTERRUPT_MARKER = /^\[Request interrupted by user( for tool use)?\]$/;
 const COMMAND_NAME = /<command-name>([\s\S]*?)<\/command-name>/;
 const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/;
@@ -238,8 +241,9 @@ function lineRaw(lineNumber: number, raw: unknown): ChatEntry {
 }
 
 // A `user` line the CLI wrote in the user's place: a compaction summary, a
-// background task's notification, or an interrupt marker. The live stream
-// shows such a line as an event, never as the user's message.
+// background task's notification, an interrupt marker, or the output of a `!`
+// shell command. The live stream shows such a line as an event, never as the
+// user's message.
 function isCliWrittenUserLine(line: Json): boolean {
   const content = asJson(line.message).content;
   const texts = asArray(content)
@@ -248,13 +252,14 @@ function isCliWrittenUserLine(line: Json): boolean {
     .map((block) => asString(block.text));
   const isInterruptMarker =
     texts.length > 0 && texts.every((text) => INTERRUPT_MARKER.test(text));
-  const isTaskNotification =
-    typeof content === 'string' &&
-    content.trimStart().startsWith(TASK_NOTIFICATION_OPEN);
+  const opening = typeof content === 'string' ? content.trimStart() : '';
+  const isTaskNotification = opening.startsWith(TASK_NOTIFICATION_OPEN);
+  const isShellOutput = opening.startsWith(SHELL_OUTPUT_OPEN);
   return (
     line.isCompactSummary === true ||
     line.isVisibleInTranscriptOnly === true ||
     isTaskNotification ||
+    isShellOutput ||
     isInterruptMarker
   );
 }
@@ -262,7 +267,7 @@ function isCliWrittenUserLine(line: Json): boolean {
 // What the user typed on a `user` line, or null for a line the user did not
 // type: a meta or sidechain line, a line the CLI wrote, a local command's
 // caveat or output, or a tool-result line. A slash command reads as its name
-// and its arguments.
+// and its arguments; a `!` shell command reads as `!` and the command.
 function userText(line: Json): string | null {
   const isNotTyped =
     line.isMeta === true ||
@@ -292,6 +297,12 @@ function typedText(content: string): string | null {
     opening.startsWith(LOCAL_OUTPUT_OPEN);
   if (isLocalCommandLine) {
     return null;
+  }
+  const shellInput = opening.startsWith(SHELL_INPUT_OPEN)
+    ? SHELL_INPUT.exec(opening)
+    : null;
+  if (shellInput !== null) {
+    return `!${shellInput[1].trim()}`;
   }
   const name = COMMAND_NAME.exec(content);
   if (name === null) {

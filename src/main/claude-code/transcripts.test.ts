@@ -92,6 +92,30 @@ describe('readTranscriptHead', () => {
     expect(readTranscriptHead(head).firstMessage).toBe('the real ask');
   });
 
+  it('readTranscriptHead_ShellCommandFirst_TitlesBangCommand', () => {
+    const head = jsonl([
+      userLine('u1', '<bash-input>git status</bash-input>'),
+      userLine(
+        'u2',
+        '<bash-stdout>On branch main</bash-stdout><bash-stderr></bash-stderr>',
+      ),
+    ]);
+
+    expect(readTranscriptHead(head).firstMessage).toBe('!git status');
+  });
+
+  it('readTranscriptHead_ShellOutputOnly_NeverTitles', () => {
+    const head = jsonl([
+      userLine(
+        'u1',
+        '<bash-stdout>out</bash-stdout><bash-stderr></bash-stderr>',
+      ),
+      userLine('u2', 'the real ask'),
+    ]);
+
+    expect(readTranscriptHead(head).firstMessage).toBe('the real ask');
+  });
+
   it('readTranscriptHead_NoUserLine_NullMessage', () => {
     const head = jsonl([
       { type: 'mode' },
@@ -266,6 +290,28 @@ describe('transcriptEntries', () => {
     expect(transcriptEntries(jsonl([u1, u2]))).toEqual([
       { kind: 'raw', id: 'history:u1', raw: [u1] },
       { kind: 'raw', id: 'history:u2', raw: [u2] },
+    ]);
+  });
+
+  it('transcriptEntries_ShellCommand_BangUserEntryThenRawOutput', () => {
+    const u1 = userLine('u1', '<bash-input>ls</bash-input>');
+    const u2 = userLine(
+      'u2',
+      '<bash-stdout>a.txt</bash-stdout><bash-stderr></bash-stderr>',
+    );
+
+    expect(transcriptEntries(jsonl([u1, u2]))).toEqual([
+      { kind: 'user', id: 'history:u1', text: '!ls', raw: [u1] },
+      { kind: 'raw', id: 'history:u2', raw: [u2] },
+    ]);
+  });
+
+  it('transcriptEntries_TypedTextNamingShellTags_UserEntryAsTyped', () => {
+    const typed = 'why does <bash-input>ls</bash-input> show up?';
+    const u1 = userLine('u1', typed);
+
+    expect(transcriptEntries(jsonl([u1]))).toEqual([
+      { kind: 'user', id: 'history:u1', text: typed, raw: [u1] },
     ]);
   });
 
