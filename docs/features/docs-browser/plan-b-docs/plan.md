@@ -410,3 +410,13 @@ review range is this run's explicit commit list.
   step became three `<A-o>` steps selecting each session's Chat tab; later chat steps unchanged — group 09
 ### Review rounds
 ### Test gate
+- Pass 1, tests this run wrote or edited (22 files) and pass 2, tests importing a changed module by resolved path (18
+  files: `contracts/plugin`, `contracts/theme`, `contracts/editor`, `shared/memory-files` importers); a first
+  basename grep pulled in containers (`contract`, `manifest`, `start`) and was re-derived · vitest: 40 files, 496
+  tests passed; docs-index 148 tests OK; typecheck and lint clean · `npm run selftest` 208 PASS, forms', chat's and
+  docs' results as expected, `all passed` · log scan: 4 `[Unhandled error] TypeError … 'searchState_'` from
+  `@replit/codemirror-vim` after docs editor ex commands (`:w`, refused `:q`, the editor a create opens) — fix
+  dispatched
+- Gate fix `94e9067` (the host destroys a view on the next microtask, so vim's `onPromptClose` no longer reads a
+  nulled `cm.state.vim` after `:q`; the 4 errors were the `:q`/`:q!` steps, printed above their PASS lines): no test
+  imports the host; `npm run selftest` 208 PASS, 0 FAIL, 0 unhandled errors on two runs; typecheck and lint clean
