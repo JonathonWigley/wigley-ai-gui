@@ -299,6 +299,8 @@ function createWindow(inputs: StartInputs) {
               env: process.env,
               log,
               spawn,
+              files,
+              homeDir: inputs.homeDir,
             }),
           ],
       // An offscreen self-test window can show no dialog.

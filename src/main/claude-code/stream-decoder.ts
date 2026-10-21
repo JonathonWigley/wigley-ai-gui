@@ -1,5 +1,7 @@
 import type { ChatEntry } from '../../contracts/agent';
 import type { ClaudeControlId } from './claude-controls';
+import { asArray, asJson, asString, type Json, parsed } from './json-fields';
+import { toolResultText } from './tool-result-text';
 import { toolSummary } from './tool-summary';
 
 // What one stdout line of `claude` in stream-json mode means to the chat.
@@ -20,7 +22,6 @@ export interface StreamDecoder {
   decode(line: string): DecodedLine;
 }
 
-type Json = Record<string, unknown>;
 type TextEntry = Extract<ChatEntry, { kind: 'assistant' | 'thinking' }>;
 type ToolEntry = Extract<ChatEntry, { kind: 'tool' }>;
 type RawEntry = Extract<ChatEntry, { kind: 'raw' }>;
@@ -49,28 +50,6 @@ const GATHERED_SYSTEM_SUBTYPES: ReadonlySet<string> = new Set([
   'thinking_tokens',
 ]);
 
-function asJson(value: unknown): Json {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Json)
-    : {};
-}
-
-function asString(value: unknown): string {
-  return typeof value === 'string' ? value : '';
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function parsed(line: string): { ok: true; value: unknown } | { ok: false } {
-  try {
-    return { ok: true, value: JSON.parse(line) };
-  } catch {
-    return { ok: false };
-  }
-}
-
 function emptyLine(): DecodedLine {
   return {
     entries: [],
@@ -94,22 +73,6 @@ function commandNames(init: Json): string[] {
     (name) => asString(name).replace(/^\//, ''),
   );
   return [...new Set(names)];
-}
-
-// A tool result's content as text: a string as it stands, a block array as
-// its text blocks' texts, each other block written `[<type>]`.
-function toolResultText(content: unknown): string {
-  if (typeof content === 'string') {
-    return content;
-  }
-  return asArray(content)
-    .map((block) => {
-      const fields = asJson(block);
-      return fields.type === 'text'
-        ? asString(fields.text)
-        : `[${asString(fields.type)}]`;
-    })
-    .join('\n');
 }
 
 // The text of a message's text content, a string or text blocks.

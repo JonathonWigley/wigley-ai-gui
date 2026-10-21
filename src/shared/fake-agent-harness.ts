@@ -3,6 +3,8 @@ import type {
   AgentProcess,
   AgentProcessEvents,
   AgentStart,
+  ChatEntry,
+  PastSession,
   SessionControl,
 } from '../contracts/agent';
 
@@ -30,16 +32,44 @@ export interface FakeAgentProcessRecord {
   ended: boolean;
 }
 
+// The sessions `listSessions` returns for every folder and profile, newest
+// first; `history` answers for these ids alone.
+export const FAKE_PAST_SESSIONS: readonly PastSession[] = [
+  {
+    sessionId: '00000000-0000-4000-8000-000000000001',
+    title: 'fake past session one',
+    modified: 1767323045000,
+  },
+  {
+    sessionId: '00000000-0000-4000-8000-000000000002',
+    title: 'fake past session two',
+    modified: 1767236645000,
+  },
+];
+
+// One `listSessions` or `history` call; `sessionId` is null for
+// `listSessions`.
+export interface FakePastSessionCall {
+  method: 'listSessions' | 'history';
+  sessionId: string | null;
+  projectDir: string;
+  profileDir: string | null;
+}
+
 // `processes` holds one record per `start` that did not throw, in start order:
 // the same array for the harness's life, each record changing in place.
 // `failNextStart` makes the next `start` throw `message`. Every `end` on a
 // process returns the promise its first `end` returned. Between `holdEnd` and
 // `releaseEnd`, a first `end` marks its process ended and leaves that promise
 // pending; `releaseEnd` emits `ended` for each held process in call order and
-// resolves them.
+// resolves them. `pastSessionCalls` lists every `listSessions` and `history`
+// call in call order, failed ones included; `failNextHistory` makes the next
+// `history` reject `message`.
 export interface FakeAgentHarness extends AgentHarness {
   readonly processes: readonly FakeAgentProcessRecord[];
+  readonly pastSessionCalls: readonly FakePastSessionCall[];
   failNextStart(message: string): void;
+  failNextHistory(message: string): void;
   holdEnd(): void;
   releaseEnd(): void;
 }
@@ -135,9 +165,30 @@ function emitEchoTurn(events: AgentProcessEvents, turn: number, text: string) {
   emitTurnEnd(events, turn);
 }
 
+// The two entries a fake past session's history holds.
+function fakeHistory(sessionId: string): ChatEntry[] {
+  return [
+    {
+      kind: 'user',
+      id: `history:${sessionId}-user`,
+      text: 'fake earlier message',
+      raw: [{ fake: 'history-user' }],
+    },
+    {
+      kind: 'assistant',
+      id: `history:${sessionId}-assistant`,
+      text: 'fake earlier reply',
+      streaming: false,
+      raw: [{ fake: 'history-assistant' }],
+    },
+  ];
+}
+
 export function createFakeAgentHarness(): FakeAgentHarness {
   const processes: FakeAgentProcessRecord[] = [];
+  const pastSessionCalls: FakePastSessionCall[] = [];
   let nextStartFailure: string | null = null;
+  let nextHistoryFailure: string | null = null;
   let isEndHeld = false;
   const heldEnds: (() => void)[] = [];
 
@@ -246,6 +297,7 @@ export function createFakeAgentHarness(): FakeAgentHarness {
   const harness: FakeAgentHarness = {
     id: 'claude',
     processes,
+    pastSessionCalls,
     start(request, events) {
       if (nextStartFailure !== null) {
         const message = nextStartFailure;
@@ -263,6 +315,38 @@ export function createFakeAgentHarness(): FakeAgentHarness {
     },
     failNextStart(message) {
       nextStartFailure = message;
+    },
+    async listSessions(projectDir, profileDir) {
+      pastSessionCalls.push({
+        method: 'listSessions',
+        sessionId: null,
+        projectDir,
+        profileDir,
+      });
+      return FAKE_PAST_SESSIONS.map((session) => ({ ...session }));
+    },
+    async history(sessionId, projectDir, profileDir) {
+      pastSessionCalls.push({
+        method: 'history',
+        sessionId,
+        projectDir,
+        profileDir,
+      });
+      if (nextHistoryFailure !== null) {
+        const message = nextHistoryFailure;
+        nextHistoryFailure = null;
+        throw new Error(message);
+      }
+      const isSaved = FAKE_PAST_SESSIONS.some(
+        (session) => session.sessionId === sessionId,
+      );
+      if (!isSaved) {
+        throw new Error(`fake agent has no saved session ${sessionId}`);
+      }
+      return fakeHistory(sessionId);
+    },
+    failNextHistory(message) {
+      nextHistoryFailure = message;
     },
     holdEnd() {
       isEndHeld = true;

@@ -7,6 +7,7 @@ import type {
 import {
   createFakeAgentHarness,
   FAKE_HOLD_TEXT,
+  FAKE_PAST_SESSIONS,
   FAKE_TOOL_TEXT,
   isFakeAgentHarness,
 } from './fake-agent-harness';
@@ -350,11 +351,96 @@ describe('createFakeAgentHarness', () => {
     expect(isSecondSettled).toBe(true);
   });
 
+  it('listSessions_ReturnsTheFakeSessionsAndRecords', async () => {
+    const harness = createFakeAgentHarness();
+
+    const sessions = await harness.listSessions('/a', '/p');
+
+    expect(sessions).toEqual([
+      {
+        sessionId: '00000000-0000-4000-8000-000000000001',
+        title: 'fake past session one',
+        modified: 1767323045000,
+      },
+      {
+        sessionId: '00000000-0000-4000-8000-000000000002',
+        title: 'fake past session two',
+        modified: 1767236645000,
+      },
+    ]);
+    expect(sessions).not.toBe(FAKE_PAST_SESSIONS);
+    expect(harness.pastSessionCalls).toEqual([
+      {
+        method: 'listSessions',
+        sessionId: null,
+        projectDir: '/a',
+        profileDir: '/p',
+      },
+    ]);
+  });
+
+  it('history_KnownUnknownAndFailNext', async () => {
+    const harness = createFakeAgentHarness();
+    const known = '00000000-0000-4000-8000-000000000001';
+
+    expect(await harness.history(known, '/a', null)).toEqual([
+      {
+        kind: 'user',
+        id: `history:${known}-user`,
+        text: 'fake earlier message',
+        raw: [{ fake: 'history-user' }],
+      },
+      {
+        kind: 'assistant',
+        id: `history:${known}-assistant`,
+        text: 'fake earlier reply',
+        streaming: false,
+        raw: [{ fake: 'history-assistant' }],
+      },
+    ]);
+    await expect(harness.history('nope', '/a', null)).rejects.toThrow(
+      'fake agent has no saved session nope',
+    );
+    harness.failNextHistory('cannot read');
+    await expect(harness.history(known, '/a', null)).rejects.toThrow(
+      'cannot read',
+    );
+    expect(await harness.history(known, '/a', null)).toHaveLength(2);
+    expect(harness.pastSessionCalls).toEqual([
+      {
+        method: 'history',
+        sessionId: known,
+        projectDir: '/a',
+        profileDir: null,
+      },
+      {
+        method: 'history',
+        sessionId: 'nope',
+        projectDir: '/a',
+        profileDir: null,
+      },
+      {
+        method: 'history',
+        sessionId: known,
+        projectDir: '/a',
+        profileDir: null,
+      },
+      {
+        method: 'history',
+        sessionId: known,
+        projectDir: '/a',
+        profileDir: null,
+      },
+    ]);
+  });
+
   it('isFakeAgentHarness_TellsTheFakeFromAnother', () => {
     const other: AgentHarness = {
       id: 'claude',
       start: () =>
         createFakeAgentHarness().start(request, recordingEvents().events),
+      listSessions: async () => [],
+      history: async () => [],
     };
 
     expect(isFakeAgentHarness(createFakeAgentHarness())).toBe(true);

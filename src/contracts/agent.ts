@@ -105,7 +105,28 @@ export interface AgentProcess {
   end(): Promise<void>;
 }
 
+// A session the harness saved for a folder. `title` is its first user message, whitespace collapsed to
+// single spaces, at most 80 characters (a longer one is its first 79 and `…`), or `Untitled session`;
+// `modified` is the transcript's last change, epoch milliseconds.
+export interface PastSession {
+  sessionId: string;
+  title: string;
+  modified: number;
+}
+
 export interface AgentHarness {
   id: string;
   start(request: AgentStart, events: AgentProcessEvents): AgentProcess;
+  // Every session the harness saved for `projectDir` under `profileDir`, newest first; [] when none.
+  listSessions(
+    projectDir: string,
+    profileDir: string | null,
+  ): Promise<PastSession[]>;
+  // The saved session's conversation as chat entries, oldest first. Rejects naming the path when the
+  // transcript is missing.
+  history(
+    sessionId: string,
+    projectDir: string,
+    profileDir: string | null,
+  ): Promise<ChatEntry[]>;
 }

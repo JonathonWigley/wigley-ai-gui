@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentProcessEvents, AgentStart } from '../../contracts/agent';
+import { createMemoryFiles } from '../../shared/memory-files';
 import {
   createClaudeCodeHarness,
   type ClaudeSpawn,
@@ -78,6 +79,8 @@ function started(fake = fakeChild()) {
     env: {},
     log: (source, message) => logged.push([source, message]),
     spawn,
+    files: createMemoryFiles(),
+    homeDir: '/Users/u',
   });
   const { heard, events } = recordingEvents();
   const agent = harness.start(request, events);
@@ -379,5 +382,52 @@ describe('createClaudeCodeHarness', () => {
     await ending;
 
     expect(run.heard).toEqual([['ended', { code: null, error: null }]]);
+  });
+});
+
+describe('createClaudeCodeHarness past sessions', () => {
+  const sessionId = 'aaaaaaaa-0000-4000-8000-000000000001';
+  const transcript = JSON.stringify({
+    type: 'user',
+    uuid: 'u1',
+    cwd: '/w/app',
+    message: { role: 'user', content: 'hello' },
+  });
+
+  // The ids `listSessions` finds with one transcript saved in `configFolder`.
+  async function listedFrom(
+    configFolder: string,
+    env: NodeJS.ProcessEnv,
+    profileDir: string | null,
+  ) {
+    const files = createMemoryFiles();
+    await files.write(
+      `${configFolder}/projects/-w-app/${sessionId}.jsonl`,
+      transcript,
+    );
+    const harness = createClaudeCodeHarness({
+      command: '/bin/claude',
+      permissionTool: 'tool',
+      env,
+      log: () => {},
+      spawn: () => fakeChild().child,
+      files,
+      homeDir: '/Users/u',
+    });
+    const sessions = await harness.listSessions('/w/app', profileDir);
+    return sessions.map((session) => session.sessionId);
+  }
+
+  it('listSessions_ProfileOrEnvOrHomeConfigFolder', async () => {
+    expect(await listedFrom('/Users/u/.claude', {}, null)).toEqual([sessionId]);
+    expect(await listedFrom('/c', { CLAUDE_CONFIG_DIR: '/c' }, null)).toEqual([
+      sessionId,
+    ]);
+    expect(await listedFrom('/p', { CLAUDE_CONFIG_DIR: '/c' }, '/p')).toEqual([
+      sessionId,
+    ]);
+    expect(
+      await listedFrom('/Users/u/.claude', { CLAUDE_CONFIG_DIR: '/c' }, null),
+    ).toEqual([]);
   });
 });

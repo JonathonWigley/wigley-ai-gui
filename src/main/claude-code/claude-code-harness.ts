@@ -1,4 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import path from 'node:path';
 import { createInterface } from 'node:readline';
 import type {
   AgentHarness,
@@ -9,6 +10,7 @@ import type {
   ProcessActivity,
   SessionControl,
 } from '../../contracts/agent';
+import type { Files } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import { errorText } from '../../shared/error-text';
 import { claudeLaunch } from './claude-launch';
@@ -19,7 +21,9 @@ import {
   controlValue,
   userMessage,
 } from './claude-controls';
+import { listPastSessions, readHistory } from './past-sessions';
 import { createStreamDecoder, type DecodedLine } from './stream-decoder';
+import { projectFolderName } from './transcripts';
 
 export type ClaudeSpawn = (
   command: string,
@@ -29,13 +33,16 @@ export type ClaudeSpawn = (
 
 // `command` is the `claude` binary's path; `permissionTool` the MCP tool
 // Claude asks what auto mode would still prompt; `env` the environment the
-// process inherits.
+// process inherits; `files` reads saved transcripts, and `homeDir` holds the
+// default config folder `.claude`.
 export interface ClaudeCodeHarnessDeps {
   command: string;
   permissionTool: string;
   env: NodeJS.ProcessEnv;
   log: Log;
   spawn: ClaudeSpawn;
+  files: Files;
+  homeDir: string;
 }
 
 // How long `end` waits after closing stdin before SIGTERM, and again before
@@ -394,13 +401,41 @@ function startClaudeProcess(
   };
 }
 
+// Where Claude saves `projectDir`'s transcripts: under the config folder
+// `claudeLaunch` points the CLI at, which is `profileDir`, else an inherited
+// `CLAUDE_CONFIG_DIR`, else `~/.claude`.
+function projectsFolder(
+  deps: ClaudeCodeHarnessDeps,
+  projectDir: string,
+  profileDir: string | null,
+): string {
+  const inherited = deps.env.CLAUDE_CONFIG_DIR;
+  const isInherited = inherited !== undefined && inherited !== '';
+  const configFolder =
+    profileDir ??
+    (isInherited ? inherited : path.join(deps.homeDir, '.claude'));
+  return path.join(configFolder, 'projects', projectFolderName(projectDir));
+}
+
 // The Claude Code CLI behind `AgentHarness`: one `claude` process per
-// session, the only place the app spawns it.
+// session, the only place the app spawns it, and the sessions it saved.
 export function createClaudeCodeHarness(
   deps: ClaudeCodeHarnessDeps,
 ): AgentHarness {
   return {
     id: 'claude',
     start: (request, events) => startClaudeProcess(deps, request, events),
+    listSessions: (projectDir, profileDir) =>
+      listPastSessions(
+        { files: deps.files, log: deps.log },
+        projectsFolder(deps, projectDir, profileDir),
+        projectDir,
+      ),
+    history: (sessionId, projectDir, profileDir) =>
+      readHistory(
+        deps.files,
+        projectsFolder(deps, projectDir, profileDir),
+        sessionId,
+      ),
   };
 }
