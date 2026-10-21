@@ -43,6 +43,8 @@ interface KindRule {
 }
 
 const SLUG_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+// The base name of the folder `~/wigley-agents` names, a link or a clone.
+const WIGLEY_AGENTS_FOLDER = 'wigley-agents';
 
 const KIND_RULES: Record<CreateKind, KindRule> = {
   instructions: {
@@ -169,15 +171,14 @@ function fileInFolder(place: CreatePlace, name: string): string {
 }
 
 // An instruction file's folder, a trailing `.claude` dropped for a repo's
-// own; a global one in a Claude or Codex config folder gives no place, since
-// a new file there is never loaded.
+// own. A global one gives a place only in the wigley-agents folder, whatever
+// path it resolves to, since the index reads no other global folder's new
+// files.
 function instructionsFolder(entry: IndexEntry): string | null {
   const folder = parentFolder(entry.path);
   const folderName = baseName(folder);
   if (entry.source === 'global') {
-    const inConfigFolder =
-      folderName.startsWith('.claude') || folderName.startsWith('.codex');
-    return inConfigFolder ? null : folder;
+    return folderName === WIGLEY_AGENTS_FOLDER ? folder : null;
   }
   return folderName === '.claude' ? parentFolder(folder) : folder;
 }

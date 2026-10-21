@@ -88,4 +88,56 @@ describe('resolveLink', () => {
       fragment: null,
     });
   });
+
+  it('resolve_HostPortAndTel_Unsupported', () => {
+    expect(resolve('localhost:3000')).toEqual({
+      type: 'unsupported',
+      href: 'localhost:3000',
+    });
+    expect(resolve('tel:555')).toEqual({
+      type: 'unsupported',
+      href: 'tel:555',
+    });
+  });
+
+  it('resolve_DotSlashColonLine_Resolved', () => {
+    expect(resolve('./a/b:3')).toEqual({
+      type: 'file',
+      path: '/r/docs/a/b',
+      line: 3,
+      fragment: null,
+    });
+  });
+
+  it('resolve_Empty_Unsupported', () => {
+    expect(resolve('')).toEqual({ type: 'unsupported', href: '' });
+    expect(resolve('file://')).toEqual({
+      type: 'unsupported',
+      href: 'file://',
+    });
+  });
+
+  it('resolve_HashAlone_DocTop', () => {
+    expect(resolve('#')).toEqual({
+      type: 'file',
+      path: '/r/docs/a.md',
+      line: 1,
+      fragment: null,
+    });
+  });
+
+  it('resolve_QueryOnly_SameDoc', () => {
+    expect(resolve('?')).toEqual({
+      type: 'file',
+      path: '/r/docs/a.md',
+      line: null,
+      fragment: null,
+    });
+    expect(resolve('?v=2#setup')).toEqual({
+      type: 'file',
+      path: '/r/docs/a.md',
+      line: null,
+      fragment: 'setup',
+    });
+  });
 });

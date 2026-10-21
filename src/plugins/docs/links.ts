@@ -15,26 +15,37 @@ export type LinkTarget =
 export const EXTERNAL_SCHEME = /^(https?|mailto):/i;
 const FILE_URL = /^file:\/\//i;
 const ANY_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
-// `b.md:12` reads as a scheme to ANY_SCHEME; a colon followed only by digits
-// is a line number.
-const NAME_WITH_LINE = /^[^:]*:\d+([#?]|$)/;
+// `b.md:12` reads as a scheme to ANY_SCHEME; a name holding a `.` or `/`
+// with a colon followed only by digits is a file and line (not
+// `localhost:3000` or `tel:555`).
+const NAME_WITH_LINE = /^[^:]*[./][^:]*:\d+([#?]|$)/;
 const LINE_FRAGMENT = /^L(\d+)$/;
 const LINE_SUFFIX = /:(\d+)$/;
 
-// Where a link in the doc at `fromFile` leads.
+// Where a link in the doc at `fromFile` leads. An empty href, or a
+// `file://` with no path, is unsupported; `#` alone is the doc's first line.
 export function resolveLink(
   href: string,
   fromFile: string,
   homeDir: string,
 ): LinkTarget {
+  if (href === '') {
+    return { type: 'unsupported', href };
+  }
   if (EXTERNAL_SCHEME.test(href)) {
     return { type: 'external', url: href };
   }
   if (FILE_URL.test(href)) {
-    return fileTarget(href.replace(FILE_URL, ''), fromFile, homeDir);
+    const filePath = href.replace(FILE_URL, '');
+    return filePath === ''
+      ? { type: 'unsupported', href }
+      : fileTarget(filePath, fromFile, homeDir);
   }
   if (ANY_SCHEME.test(href) && !NAME_WITH_LINE.test(href)) {
     return { type: 'unsupported', href };
+  }
+  if (href === '#') {
+    return { type: 'file', path: fromFile, line: 1, fragment: null };
   }
   if (href.startsWith('#')) {
     const fragment = href.slice(1);
@@ -52,7 +63,8 @@ export function resolveLink(
 }
 
 // A path link: `#L<n>` or a trailing `:<n>` gives the line, any other `#…`
-// the fragment; a `?query` is dropped.
+// the fragment; a `?query` is dropped, and a link that is only a `?query`
+// leads to `fromFile` itself.
 function fileTarget(
   href: string,
   fromFile: string,
@@ -71,6 +83,9 @@ function fileTarget(
       line = Number(suffix[1]);
       pathText = pathText.slice(0, suffix.index);
     }
+  }
+  if (pathText === '') {
+    return { type: 'file', path: fromFile, line, fragment };
   }
   const expanded = expandTilde(decoded(pathText), homeDir);
   const path = expanded.startsWith('/')

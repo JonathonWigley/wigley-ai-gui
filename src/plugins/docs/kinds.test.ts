@@ -52,12 +52,16 @@ describe('placesFor', () => {
     ]);
   });
 
-  it('placesFor_GlobalInstructions_SkipsConfigFolders', () => {
+  it('placesFor_GlobalInstructions_OnlyWigleyAgentsFolder', () => {
     const entries = [
       '/Users/u/.claude/CLAUDE.md',
       '/Users/u/.claude-personal/CLAUDE.md',
       '/Users/u/.codex/AGENTS.md',
+      '/Users/u/.agents/AGENTS.local.md',
+      '/Users/u/AGENTS.md',
+      '/Users/u/notes/imported.md',
       '/Users/u/wigley-agents/AGENTS.md',
+      '/Users/u/wigley-agents/Unity.md',
     ].map((path) => entry({ path, kind: 'instructions' }));
 
     expect(placesFor('instructions', entries, HOME)).toEqual([
@@ -67,6 +71,19 @@ describe('placesFor', () => {
         source: 'global',
       },
     ]);
+  });
+
+  it('placesFor_GlobalInstructionsLinkedClone_CloneFolder', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/dev/personal/wigley-agents/AGENTS.md',
+        kind: 'instructions',
+      }),
+    ];
+
+    expect(
+      placesFor('instructions', entries, HOME).map((p) => p.folder),
+    ).toEqual(['/Users/u/dev/personal/wigley-agents']);
   });
 
   it('placesFor_PluginEntries_NoPlace', () => {
