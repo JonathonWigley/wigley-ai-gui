@@ -239,7 +239,8 @@ function loadDocumentLanguage(
 // any mode (in insert mode Enter through the host's insert map, whose
 // fallback breaks the line) and CodeMirror's keymap takes Backspace. A key
 // event built in script types no text, so a character neither handles in
-// insert mode is inserted here, as the browser inserts a typed one.
+// insert mode is inserted here, as the browser inserts a typed one, unless
+// the document is read-only.
 function typeKey(view: EditorView, cm: VimEditor, key: string) {
   const event = new KeyboardEvent('keydown', {
     key,
@@ -247,7 +248,11 @@ function typeKey(view: EditorView, cm: VimEditor, key: string) {
     cancelable: true,
   });
   const isUnhandled = view.contentDOM.dispatchEvent(event);
-  const typesText = isUnhandled && key.length === 1 && cm.state.vim.insertMode;
+  const typesText =
+    isUnhandled &&
+    key.length === 1 &&
+    cm.state.vim.insertMode &&
+    !view.state.readOnly;
   if (typesText) {
     view.dispatch({
       ...view.state.replaceSelection(key),

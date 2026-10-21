@@ -523,6 +523,21 @@ describe('document()', () => {
     );
   });
 
+  it('renders a fence plain when its language fails to load', async () => {
+    const failing = createMarkdownItRenderer({
+      highlight: (code, language) =>
+        language === 'broken'
+          ? Promise.reject(new Error('import failed'))
+          : highlighter.highlight(code, language),
+    });
+    expect(
+      await failing.document('```broken\nx < y\n```\n\n```ts\nconst\n```'),
+    ).toBe(
+      '<pre data-source-line="1"><code class="language-broken">x &lt; y\n</code></pre>\n' +
+        '<pre data-source-line="5"><code class="language-ts"><span class="tok-keyword">const\n</span></code></pre>\n',
+    );
+  });
+
   it('skips the highlighter for a fence with no language', async () => {
     expect(await render('```\na\n```')).toBe(
       '<pre data-source-line="1"><code>a\n</code></pre>\n',

@@ -76,7 +76,8 @@ function createWigleyMarkdown(): Md {
 }
 
 // markdown-it's `highlight` option is synchronous, so every fence is
-// highlighted between parse and render.
+// highlighted between parse and render; a fence the highlighter rejects
+// renders plain.
 async function renderDocument(
   md: Md,
   highlighter: CodeHighlighter,
@@ -114,14 +115,21 @@ async function highlightFences(
       fences.push({ token, language });
     }
   }
-  const results = await Promise.all(
+  const results = await Promise.allSettled(
     fences.map(({ token, language }) =>
       highlighter.highlight(token.content, language),
     ),
   );
   fences.forEach(({ token }, index) =>
-    env.highlighted.set(token, results[index]),
+    env.highlighted.set(token, settledHighlight(results[index])),
   );
+}
+
+// A fence whose language failed to load renders plain, as an unknown one does.
+function settledHighlight(
+  result: PromiseSettledResult<string | null>,
+): string | null {
+  return result.status === 'fulfilled' ? result.value : null;
 }
 
 // The info string's first word, as markdown-it's own fence rule reads it.
