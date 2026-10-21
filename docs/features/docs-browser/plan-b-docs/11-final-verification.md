@@ -1,6 +1,6 @@
 # 11 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 8 · Depends on: 10
 Plan: [plan.md](plan.md)
@@ -99,3 +99,4 @@ None.
 
 ## Proof
 
+The user marked every check passed (2026-10-21) without a recorded run; setup step 2 added claudeConfigDirs to the docs config, and step 1 was not needed (installed wigley 1.6.3 carries the index fixes).

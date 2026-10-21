@@ -291,7 +291,7 @@ beside the tree's own (`memory-files.ts`, `fake-agent-harness.ts`), named for wh
 - [x] [Doc re-read](10-doc-re-read.md) — after 09
 
 ### Wave 8
-- [ ] [Final verification](11-final-verification.md) — after 10
+- [x] [Final verification](11-final-verification.md) — after 10
 
 ## Run log
 
