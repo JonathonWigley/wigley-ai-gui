@@ -1,7 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { CodeHighlighter } from '../../contracts/highlight';
 import { createMarkdownItRenderer } from './markdown-it-renderer';
 
-const markdown = createMarkdownItRenderer();
+// Knows only `ts`, which it wraps whole in a keyword span.
+const highlightCalls: { code: string; language: string }[] = [];
+const highlighter: CodeHighlighter = {
+  highlight: (code, language) => {
+    highlightCalls.push({ code, language });
+    const html =
+      language === 'ts' ? `<span class="tok-keyword">${code}</span>` : null;
+    return Promise.resolve(html);
+  },
+};
+
+const markdown = createMarkdownItRenderer(highlighter);
 
 function block(text: string): string {
   return markdown.block(text);
@@ -436,5 +448,128 @@ describe(':::details', () => {
     expect(block(':::details Full\n~~~\n:::\n~~~\nafter\n:::')).toContain(
       '<pre><code>:::\n</code></pre>\n<p>after</p>\n</details>\n',
     );
+  });
+});
+
+describe('document()', () => {
+  beforeEach(() => {
+    highlightCalls.length = 0;
+  });
+
+  const render = (text: string) => markdown.document(text);
+
+  it('renders a link as an anchor the view intercepts', async () => {
+    expect(await render('[guide](docs/a.md#L3)')).toBe(
+      '<p data-source-line="1"><a class="md-link" href="#" data-href="docs/a.md#L3" title="docs/a.md#L3">guide</a></p>\n',
+    );
+  });
+
+  it("uses the link's own title", async () => {
+    expect(await render('[x](https://e.com "Home")')).toContain('title="Home"');
+  });
+
+  it('percent-encodes a spaced path', async () => {
+    expect(await render('[a](<my doc.md>)')).toContain(
+      'data-href="my%20doc.md"',
+    );
+  });
+
+  it('renders an autolink', async () => {
+    expect(await render('<https://example.com>')).toContain(
+      'data-href="https://example.com"',
+    );
+  });
+
+  it('keeps a javascript link and a bare URL as text', async () => {
+    expect(await render('[x](javascript:alert(1))')).not.toContain('<a');
+    expect(await render('see https://e.com')).not.toContain('<a');
+  });
+
+  it('renders an image as its alt text', async () => {
+    expect(await render('![a diagram](pic.png)')).toBe(
+      '<p data-source-line="1"><span class="md-image">a diagram</span></p>\n',
+    );
+  });
+
+  it('gives headings anchors by the slug rule', async () => {
+    expect(await render('## Core services & seams')).toBe(
+      '<h2 data-anchor="core-services--seams" data-source-line="1">Core services &amp; seams</h2>\n',
+    );
+    expect(await render('# Use `npm test`')).toContain(
+      'data-anchor="use-npm-test"',
+    );
+    expect(await render('## Plan A — layout')).toContain(
+      '<h2 data-anchor="plan-a--layout" data-source-line="1">',
+    );
+    expect(await render('## Café')).toContain('data-anchor="café"');
+  });
+
+  it('numbers a repeated slug', async () => {
+    expect(await render('# A\n\n# A')).toBe(
+      '<h1 data-anchor="a" data-source-line="1">A</h1>\n' +
+        '<h1 data-anchor="a-1" data-source-line="3">A</h1>\n',
+    );
+  });
+
+  it('highlights a known fence', async () => {
+    expect(await render('```ts\nconst\n```')).toBe(
+      '<pre data-source-line="1"><code class="language-ts"><span class="tok-keyword">const\n</span></code></pre>\n',
+    );
+  });
+
+  it('renders an unknown fence plain', async () => {
+    expect(await render('```zzz\nx < y\n```')).toBe(
+      '<pre data-source-line="1"><code class="language-zzz">x &lt; y\n</code></pre>\n',
+    );
+  });
+
+  it('skips the highlighter for a fence with no language', async () => {
+    expect(await render('```\na\n```')).toBe(
+      '<pre data-source-line="1"><code>a\n</code></pre>\n',
+    );
+    expect(highlightCalls).toEqual([]);
+  });
+
+  it('keeps the diff fence', async () => {
+    expect(await render('```diff\n+ a\n- b\n~ c\n same\n```')).toBe(
+      '<pre class="md-diff" data-source-line="1"><code>' +
+        '<span class="md-diff-add">+ a</span>\n' +
+        '<span class="md-diff-del">- b</span>\n' +
+        '<span class="md-diff-mod">~ c</span>\n' +
+        ' same</code></pre>\n',
+    );
+    expect(highlightCalls).toEqual([]);
+  });
+
+  it('highlights a fence inside details', async () => {
+    const html = await render(':::details S\n```ts\nx\n```\n:::');
+    expect(html).toContain(
+      '<pre data-source-line="2"><code class="language-ts"><span class="tok-keyword">x\n</span></code></pre>',
+    );
+  });
+
+  it('escapes raw HTML', async () => {
+    const html = await render('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).not.toContain('<script>');
+  });
+
+  it('renders a table', async () => {
+    const html = await render('| a | b |\n| --- | --- |\n| one | two |');
+    expect(html).toContain('<table data-source-line="1">');
+    expect(html).toContain('<td>one</td>');
+  });
+
+  it('marks blocks and list items with their source line', async () => {
+    const html = await render('# T\n\npara\n\n- a\n- b');
+    for (const tag of [
+      '<h1 data-anchor="t" data-source-line="1">',
+      '<p data-source-line="3">',
+      '<ul data-source-line="5">',
+      '<li data-source-line="5">',
+      '<li data-source-line="6">',
+    ]) {
+      expect(html).toContain(tag);
+    }
   });
 });

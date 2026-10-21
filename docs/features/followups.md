@@ -6,7 +6,6 @@
 - A Latte (light) theme and OS light/dark following.
 - A user config file for settings and the keymap. The editor's insert remaps merge only from the core keymap, which holds none since `jk` was dropped, so the keys help's "Remaps in a text box" section stays empty until this lands.
 - A settings window, and settings that hot reload: a change applies to the open window without restarting main, which today owns the settings and serves them to the page only at load. Builds on the user config file above.
-- Syntax-highlighting theme tokens.
 - `npm run selftest` on Windows (`tee /dev/stderr` in the script).
 - An active-line band in the editors (needs the `@codemirror/view` dependency).
 - Editor key replay (a broken key sequence replayed into a box through `EditorHost.typeInto`) has three limits only a custom keymap reaches: focus moving mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on named keys.

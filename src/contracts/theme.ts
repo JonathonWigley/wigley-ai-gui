@@ -38,6 +38,22 @@ export const THEME_TOKENS = [
   'severity.critical',
   'severity.important',
   'severity.minor',
+  'syntax.keyword',
+  'syntax.atom',
+  'syntax.number',
+  'syntax.string',
+  'syntax.string2',
+  'syntax.comment',
+  'syntax.variable',
+  'syntax.variable2',
+  'syntax.definition',
+  'syntax.property',
+  'syntax.type',
+  'syntax.operator',
+  'syntax.punctuation',
+  'syntax.meta',
+  'syntax.heading',
+  'syntax.link',
 ] as const;
 
 export type ThemeToken = (typeof THEME_TOKENS)[number];

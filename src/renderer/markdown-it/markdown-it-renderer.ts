@@ -1,10 +1,20 @@
 import MarkdownIt from 'markdown-it';
+import type { CodeHighlighter } from '../../contracts/highlight';
 import type { MarkdownRenderer } from '../../contracts/markdown';
 
 type Md = InstanceType<typeof MarkdownIt>;
 type BlockRule = Parameters<Md['block']['ruler']['before']>[2];
 type StateBlock = Parameters<BlockRule>[0];
 type RenderRule = NonNullable<Md['renderer']['rules']['th_open']>;
+type Token = ReturnType<Md['parse']>[number];
+type EscapeHtml = (text: string) => string;
+type UnescapeAll = (text: string) => string;
+
+// Per-render state of one `document` call.
+type DocumentEnv = {
+  slugs: Set<string>;
+  highlighted: Map<Token, string | null>;
+};
 
 type ChangeKind = 'added' | 'changed' | 'removed';
 
@@ -31,21 +41,92 @@ const DIFF_CLASSES: Record<string, string | undefined> = {
   '~': 'md-diff-mod',
 };
 const TEXT_ALIGN = 'text-align:';
+const DIFF_LANGUAGE = 'diff';
+const SOURCE_LINE = 'data-source-line';
+const SLUG_DROPPED = /[^\p{L}\p{M}\p{N}\s_-]/gu;
+const WHITESPACE = /\s/g;
 
-export function createMarkdownItRenderer(): MarkdownRenderer {
-  const md = new MarkdownIt({ html: false, linkify: false });
+export function createMarkdownItRenderer(
+  highlighter: CodeHighlighter,
+): MarkdownRenderer {
+  const md = createWigleyMarkdown();
   md.disable(['link', 'image', 'autolink', 'linkify', 'reference']);
   md.set({
     highlight: (code, lang) => highlightFence(code, lang, md.utils.escapeHtml),
   });
-  md.block.ruler.before('fence', 'wigley_blocks', wigleyBlock, {
-    alt: ['paragraph', 'reference', 'blockquote', 'list'],
-  });
-  installRenderRules(md.renderer.rules);
+  installBlockRules(md.renderer.rules);
+  const documentMd = createWigleyMarkdown();
+  installDocumentRules(documentMd);
   return {
     block: (text) => md.render(text),
     inline: (text) => md.renderInline(text),
+    document: (text) => renderDocument(documentMd, highlighter, text),
   };
+}
+
+// Raw HTML escaped and bare URLs left as text, with the wigley blocks, table
+// alignment classes and the `diff` fence.
+function createWigleyMarkdown(): Md {
+  const md = new MarkdownIt({ html: false, linkify: false });
+  md.block.ruler.before('fence', 'wigley_blocks', wigleyBlock, {
+    alt: ['paragraph', 'reference', 'blockquote', 'list'],
+  });
+  installSharedRules(md.renderer.rules);
+  return md;
+}
+
+// markdown-it's `highlight` option is synchronous, so every fence is
+// highlighted between parse and render.
+async function renderDocument(
+  md: Md,
+  highlighter: CodeHighlighter,
+  text: string,
+): Promise<string> {
+  const env: DocumentEnv = { slugs: new Set(), highlighted: new Map() };
+  const tokens = md.parse(text, env);
+  markSourceLines(tokens);
+  await highlightFences(tokens, highlighter, md.utils.unescapeAll, env);
+  return md.renderer.render(tokens, md.options, env);
+}
+
+function markSourceLines(tokens: Token[]): void {
+  for (const token of tokens) {
+    const opensOrStandsAlone = token.nesting !== -1;
+    if (token.map !== null && opensOrStandsAlone) {
+      token.attrSet(SOURCE_LINE, String(token.map[0] + 1));
+    }
+  }
+}
+
+async function highlightFences(
+  tokens: Token[],
+  highlighter: CodeHighlighter,
+  unescapeAll: UnescapeAll,
+  env: DocumentEnv,
+): Promise<void> {
+  const fences: { token: Token; language: string }[] = [];
+  for (const token of tokens) {
+    if (token.type !== 'fence') {
+      continue;
+    }
+    const language = fenceLanguage(token, unescapeAll);
+    if (language !== '' && language !== DIFF_LANGUAGE) {
+      fences.push({ token, language });
+    }
+  }
+  const results = await Promise.all(
+    fences.map(({ token, language }) =>
+      highlighter.highlight(token.content, language),
+    ),
+  );
+  fences.forEach(({ token }, index) =>
+    env.highlighted.set(token, results[index]),
+  );
+}
+
+// The info string's first word, as markdown-it's own fence rule reads it.
+function fenceLanguage(token: Token, unescapeAll: UnescapeAll): string {
+  return unescapeAll(token.info).trim().split(/\s+/)[0];
 }
 
 // `:::changes`, `:::tree` and `:::details Summary`; a bare `:::` closes the innermost open block.
@@ -250,10 +331,7 @@ function pushInline(state: StateBlock, content: string): void {
   token.children = [];
 }
 
-function installRenderRules(rules: Md['renderer']['rules']): void {
-  rules.heading_open = (tokens, idx) =>
-    `<p class="md-h md-${tokens[idx].tag}">`;
-  rules.heading_close = () => '</p>\n';
+function installSharedRules(rules: Md['renderer']['rules']): void {
   rules.th_open = alignedCell;
   rules.td_open = alignedCell;
   rules.md_changes_open = () => '<ul class="md-changes">';
@@ -268,6 +346,73 @@ function installRenderRules(rules: Md['renderer']['rules']): void {
   rules.md_summary_open = () => '<summary>';
   rules.md_summary_close = () => '</summary>\n';
   rules.md_details_close = () => '</details>\n';
+}
+
+function installBlockRules(rules: Md['renderer']['rules']): void {
+  rules.heading_open = (tokens, idx) =>
+    `<p class="md-h md-${tokens[idx].tag}">`;
+  rules.heading_close = () => '</p>\n';
+}
+
+function installDocumentRules(md: Md): void {
+  const { escapeHtml, unescapeAll } = md.utils;
+  const rules = md.renderer.rules;
+  // Every render of this instance goes through `renderDocument`'s env.
+  rules.heading_open = (tokens, idx, _options, env, self) => {
+    const token = tokens[idx];
+    const { slugs } = env as DocumentEnv;
+    const slug = uniqueSlug(headingSlug(tokens[idx + 1]), slugs);
+    return `<${token.tag} data-anchor="${slug}"${self.renderAttrs(token)}>`;
+  };
+  rules.link_open = (tokens, idx) => {
+    const token = tokens[idx];
+    const href = String(token.attrGet('href') ?? '');
+    const title = String(token.attrGet('title') ?? href);
+    return `<a class="md-link" href="#" data-href="${escapeHtml(href)}" title="${escapeHtml(title)}">`;
+  };
+  rules.image = (tokens, idx, options, env, self) => {
+    const alt = self.renderInlineAsText(
+      tokens[idx].children ?? [],
+      options,
+      env,
+    );
+    return `<span class="md-image">${escapeHtml(alt)}</span>`;
+  };
+  rules.fence = (tokens, idx, options, env, self) => {
+    const token = tokens[idx];
+    const language = fenceLanguage(token, unescapeAll);
+    const attrs = self.renderAttrs(token);
+    if (language === DIFF_LANGUAGE) {
+      return `<pre class="md-diff"${attrs}>${diffCode(token.content, escapeHtml)}</pre>\n`;
+    }
+    const { highlighted } = env as DocumentEnv;
+    const code = highlighted.get(token) ?? escapeHtml(token.content);
+    const languageClass =
+      language === ''
+        ? ''
+        : ` class="${options.langPrefix}${escapeHtml(language)}"`;
+    return `<pre${attrs}><code${languageClass}>${code}</code></pre>\n`;
+  };
+}
+
+// GitHub's slug: the heading's plain text, lowercased, with every character but
+// letters, marks, numbers, spaces, `_` and `-` removed and each space a `-`.
+function headingSlug(inline: Token): string {
+  const text = (inline.children ?? [])
+    .filter((child) => child.type === 'text' || child.type === 'code_inline')
+    .map((child) => child.content)
+    .join('');
+  return text.toLowerCase().replace(SLUG_DROPPED, '').replace(WHITESPACE, '-');
+}
+
+// A slug already taken in the document gets `-1`, then `-2`, … .
+function uniqueSlug(slug: string, taken: Set<string>): string {
+  let unique = slug;
+  for (let count = 1; taken.has(unique); count++) {
+    unique = `${slug}-${count}`;
+  }
+  taken.add(unique);
+  return unique;
 }
 
 function changeItemOpen(meta: Record<string, unknown> | null): string {
@@ -294,19 +439,23 @@ const alignedCell: RenderRule = (tokens, idx, options, _env, self) => {
 function highlightFence(
   code: string,
   lang: string,
-  escapeHtml: (text: string) => string,
+  escapeHtml: EscapeHtml,
 ): string {
-  if (lang !== 'diff') {
+  if (lang !== DIFF_LANGUAGE) {
     return '';
   }
+  return `<pre class="md-diff">${diffCode(code, escapeHtml)}</pre>`;
+}
+
+function diffCode(code: string, escapeHtml: EscapeHtml): string {
   const lines = code
     .replace(/\n$/, '')
     .split('\n')
     .map((line) => diffLine(line, escapeHtml));
-  return `<pre class="md-diff"><code>${lines.join('\n')}</code></pre>`;
+  return `<code>${lines.join('\n')}</code>`;
 }
 
-function diffLine(line: string, escapeHtml: (text: string) => string): string {
+function diffLine(line: string, escapeHtml: EscapeHtml): string {
   const css = DIFF_CLASSES[line.charAt(0)];
   const escaped = escapeHtml(line);
   return css ? `<span class="${css}">${escaped}</span>` : escaped;

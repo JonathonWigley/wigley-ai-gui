@@ -67,6 +67,22 @@
     "origin.nit": "overlay2",
     "severity.critical": "red",
     "severity.important": "peach",
-    "severity.minor": "overlay1"
+    "severity.minor": "overlay1",
+    "syntax.keyword": "mauve",
+    "syntax.atom": "peach",
+    "syntax.number": "peach",
+    "syntax.string": "green",
+    "syntax.string2": "pink",
+    "syntax.comment": "overlay2",
+    "syntax.variable": "text",
+    "syntax.variable2": "red",
+    "syntax.definition": "blue",
+    "syntax.property": "lavender",
+    "syntax.type": "yellow",
+    "syntax.operator": "sky",
+    "syntax.punctuation": "overlay2",
+    "syntax.meta": "overlay1",
+    "syntax.heading": "blue",
+    "syntax.link": "rosewater"
   }
 }

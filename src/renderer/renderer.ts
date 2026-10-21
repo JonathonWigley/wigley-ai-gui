@@ -18,6 +18,7 @@ import { createEventBus } from '../shared/event-bus';
 import { editorBindMode } from '../shared/key-hints';
 import { startPlugins } from '../shared/plugin-host';
 import { qualify } from '../shared/plugin-manifests';
+import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
 import {
   editorBindInForce,
@@ -102,7 +103,7 @@ async function start() {
   });
   const services: PageServices = {
     editor,
-    markdown: createMarkdownItRenderer(),
+    markdown: createMarkdownItRenderer(createCodeMirrorHighlighter()),
     toast: (text, tone) => toasts.show(text, tone),
     log,
     timers,
