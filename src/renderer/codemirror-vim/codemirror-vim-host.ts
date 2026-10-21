@@ -512,7 +512,9 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
         hosted.splice(index, 1);
         cursorRedraw.disconnect();
         pendingKeys.forget(cm);
-        view.destroy();
+        // Destroying the view nulls cm.state.vim, which vim still reads after
+        // an ex command or key it is running returns: `:q` lands here.
+        queueMicrotask(() => view.destroy());
       },
     });
     hosted.push({ view, editor, answerEx });
