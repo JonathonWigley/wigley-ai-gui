@@ -6,6 +6,7 @@ import {
   FAKE_PAST_SESSIONS,
   FAKE_TOOL_TEXT,
   type FakeAgentCall,
+  type FakeAgentHarness,
   type FakeAgentProcessRecord,
   isFakeAgentHarness,
 } from '../../../shared/fake-agent-harness';
@@ -261,16 +262,30 @@ const toolCallContext = (toolUseId: string | null): ToolCallContext => ({
   signal: new AbortController().signal,
 });
 
-const fakeHarnesses = (harnesses: readonly AgentHarness[]) =>
-  harnesses.filter(isFakeAgentHarness);
+// Each fake harness with how many records it held when this run opened: a
+// fake keeps its records for the app's whole life, and the scripts run again
+// on every page load, so a run reads only the records past its mark.
+interface RunMark {
+  harness: FakeAgentHarness;
+  processes: number;
+  pastSessionCalls: number;
+}
 
-// The last fake process started for the self-test's project, resumed or new.
+const markRun = (harnesses: readonly AgentHarness[]): RunMark[] =>
+  harnesses.filter(isFakeAgentHarness).map((harness) => ({
+    harness,
+    processes: harness.processes.length,
+    pastSessionCalls: harness.pastSessionCalls.length,
+  }));
+
+// The last fake process this run started for the self-test's project, resumed
+// or new.
 function selftestProcess(
-  harnesses: readonly AgentHarness[],
+  marks: readonly RunMark[],
   resume: boolean,
 ): FakeAgentProcessRecord | null {
-  const records = fakeHarnesses(harnesses)
-    .flatMap((harness) => harness.processes)
+  const records = marks
+    .flatMap((mark) => mark.harness.processes.slice(mark.processes))
     .filter(
       (record) =>
         record.request.projectDir === SELFTEST_PROJECT_DIR &&
@@ -331,9 +346,10 @@ function resumedProblems(process: FakeAgentProcessRecord | null): string[] {
   return problems;
 }
 
-function pastSessionProblems(harnesses: readonly AgentHarness[]): string[] {
-  const calls = fakeHarnesses(harnesses).flatMap(
-    (harness) => harness.pastSessionCalls,
+// Reads only this run's calls.
+function pastSessionProblems(marks: readonly RunMark[]): string[] {
+  const calls = marks.flatMap((mark) =>
+    mark.harness.pastSessionCalls.slice(mark.pastSessionCalls),
   );
   const listedSelftestFolder = calls.some(
     (call) =>
@@ -362,17 +378,20 @@ const SELFTEST_PROJECT_DIRS = [SELFTEST_PROJECT_DIR, SECOND_PROJECT_DIR];
 // session, which the steps allow; the answer asks a forms round there over a
 // relay that joins the session, which the steps submit. The result is both
 // calls' replies; problems reads the fake processes, whose records the steps
-// keep changing in place, when it runs. The run waits on the session's Chat
+// keep changing in place, when it runs, reading only the records this run
+// added. The run waits on the session's Chat
 // tab being shown.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   const { chat, sessions, harnesses } = deps;
   let previousRelay: ConnectedSession | null = null;
   let archiveResetFailures: string[] = [];
+  let marks: RunMark[] = [];
   return {
     pageBinds: [],
     settings: {},
     scrollsItself: SCROLLS_ITSELF,
     open(run) {
+      marks = markRun(harnesses);
       previousRelay?.end();
       for (const state of chat.sessions()) {
         if (SELFTEST_PROJECT_DIRS.includes(state.projectDir)) {
@@ -395,7 +414,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         profile: 'work',
       });
       sessions.activate(id);
-      const process = selftestProcess(harnesses, false);
+      const process = selftestProcess(marks, false);
       const permission = chat
         .permissionToolSession({
           id,
@@ -442,10 +461,10 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       ...archiveResetFailures,
       ...fixtureProblems(
         result as ChatSelfTestResult,
-        selftestProcess(harnesses, false),
+        selftestProcess(marks, false),
       ),
-      ...resumedProblems(selftestProcess(harnesses, true)),
-      ...pastSessionProblems(harnesses),
+      ...resumedProblems(selftestProcess(marks, true)),
+      ...pastSessionProblems(marks),
     ],
   };
 }

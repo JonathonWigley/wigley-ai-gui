@@ -63,7 +63,9 @@ export interface ChatSessions {
   sessions(): ChatSessionState[];
   start(request: StartRequest): string;
   // The folder's saved sessions under the profile, newest first, leaving out
-  // every session open in the app.
+  // every session open in the app. When the archived-sessions file cannot be
+  // read, every row lists as not archived and the failure is logged; the
+  // file is left as it is.
   pastSessions(projectDir: string, profile: string): Promise<PastSessionRow[]>;
   setArchived(hostSessionId: string, archived: boolean): Promise<void>;
   // Opens a row for a saved session, its earlier conversation as the first
@@ -395,6 +397,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return [...openHostIds.values()].includes(hostSessionId);
   }
 
+  // A file that cannot be read marks no row archived, so every saved session
+  // can still be resumed.
+  async function archivedIdsOrNone(): Promise<ReadonlySet<string>> {
+    try {
+      return await deps.archived.ids();
+    } catch (error) {
+      log('chat', `archived sessions not read: ${errorText(error)}`);
+      return new Set();
+    }
+  }
+
   async function pastSessions(
     projectDir: string,
     profileName: string,
@@ -403,7 +416,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const harness = requireHarness();
     const [saved, archivedIds] = await Promise.all([
       harness.listSessions(projectDir, profileDirOf(profile)),
-      deps.archived.ids(),
+      archivedIdsOrNone(),
     ]);
     return saved
       .filter((past) => !isHostIdOpen(past.sessionId))

@@ -17,7 +17,10 @@ import type {
 } from '../../sessions/contract';
 import type { ChatChannel } from '../contract';
 import { DEFAULT_PROFILES } from '../manifest';
-import { createArchivedSessions } from './archived-sessions';
+import {
+  ARCHIVED_SESSIONS_FILE,
+  createArchivedSessions,
+} from './archived-sessions';
 import {
   type ChatSessionsDeps,
   createChatSessions,
@@ -271,6 +274,22 @@ describe('createChatSessions', () => {
         profileDir: '/Users/u/.claude-personal',
       },
     ]);
+  });
+
+  it('pastSessions_UnreadableArchiveFile_ListsNoneArchivedAndKeepsIt', async () => {
+    const test = setUp();
+    await test.data.write(ARCHIVED_SESSIONS_FILE, '{oops');
+
+    const rows = await test.chat.pastSessions('/w/app', 'personal');
+
+    expect(rows.map((row) => [row.hostSessionId, row.archived])).toEqual([
+      [PAST_ONE.sessionId, false],
+      [PAST_TWO.sessionId, false],
+    ]);
+    expect(test.logged).toContain(
+      `[chat] archived sessions not read: ${ARCHIVED_SESSIONS_FILE} is not a JSON array of session ids`,
+    );
+    expect(await test.data.read(ARCHIVED_SESSIONS_FILE)).toBe('{oops');
   });
 
   it('pastSessions_AfterEnded_ListsItAgain', async () => {
