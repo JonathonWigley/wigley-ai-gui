@@ -5,11 +5,14 @@
 - **Intent** — what every change is judged by: everything a plugin, everything hot reloads, macOS and Windows now,
   any agent harness or model later.
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the core and its plugins, the
-  layers, the relay and agent sessions, and where a new plugin, mode, session tab, key, event, setting, theme, plugin
-  data, layout, agent harness, session control, round source, MCP tool or third-party tool goes, and the layer
-  check.
+  layers, the relay and agent sessions, and where a new plugin, shell area, mode, session tab, key, event, setting,
+  user config file, theme, plugin data, layout, agent harness, session control, round source, MCP tool or
+  third-party tool goes, and the layer check.
 - **Running and testing** — Node version, the self-test the agent may run any time, and the visible run that is the user's.
 - **Dev quirks** — the startup reload, a session's stale forms schema, and the login-shell PATH.
+
+UI work — a view, its CSS, a theme, a primitive, a layout or a key — reads `DESIGN.md` first: it is the standard
+every view follows, and it says where a new value or primitive goes.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
 vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `wigley-forms`
@@ -54,15 +57,20 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 
 ```
 src/contracts/   interfaces and records crossing a seam, the plugin API among them; imports nothing
-src/config/      core keymap (leader, remaps, app chords) and settings, and the built-in themes  → read only by main
+src/config/      core keymap (leader, remaps, app chords), default settings, the core token registry and the built-in
+                 themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
                  theme variables, `errorText`, the fake agent harness)
   layouts/       the layout registry plugins' main parts share (forms and chat layouts)
   page/          page-only DOM builders plugins share, the layout loader among them
                  → imported only by src/renderer and plugins' page/ parts
+    ui/          the design primitives `DESIGN.md` lists, each a builder with its CSS beside it; `icon.ts` is the only
+                 module naming the Codicons font
 src/main/        core main process; main.ts is its composition root
   plugins/       the main-side plugin API: per-plugin channel routing and services
-  themes/        theme loader: parses and chooses the built-in or user theme
+  config/        the ConfigStore: watches the user config folder, layers settings, keymap and themes over the
+                 defaults, and pushes each new config to the page
+  themes/        theme loader: parses a theme by the token registry and resolves `extends`
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts
   claude-code/   Claude Code CLI adapter behind AgentHarness → the only place the app spawns `claude`
   files/         file reads, atomic writes, rename, trash, folder lists and watching, behind Files
@@ -70,11 +78,11 @@ src/main/        core main process; main.ts is its composition root
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page
 src/preload/     the Bridge, exposed as window.wigley
 src/renderer/    core page; renderer.ts is its composition root
-  shell/         the window's areas (activity bar, side bar, main, panel, status bar, overlay layer) and its modes
+  shell/         the shell registry, its areas and the default `ShellLayout`, and the modes
   plugins/       the page-side plugin API
   markdown-it/   markdown adapter behind MarkdownRenderer   → the only markdown-it import
   codemirror-vim/ editor and code-highlight adapters behind EditorHost and CodeHighlighter → the only codemirror,
-                 @codemirror, @lezer and @replit import
+                 @codemirror, @lezer, @replit and @catppuccin/codemirror import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, main.ts and page.ts the
                  parts each root starts
   sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
@@ -90,6 +98,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  chat Layout contract and the built-in `default` chat layout)
   keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the status bar's key list, and the
                  keys-for-command lookup it exports); no main part
+  gallery/       manifest.ts, page/ (Gallery mode: every primitive in every state); no main part
 ```
 
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
@@ -123,9 +132,15 @@ round), since main, not the page, decides.
   `sessions` is `sessions.activeChanged`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`. Each process has its own bus, and nothing crosses processes on it: a plugin's own
   channel does that.
-- **A mode** fills the window above the status bar, and the core shows one at a time: a plugin registers its mode
-  through the page plugin API and binds the command that shows it (Sessions on `Space k s`, Docs on `Space k d`;
-  pressed while its mode already shows, the same command toggles that mode's sidebar). A hidden mode keeps its state,
+- **The shell** is a registry of areas — title bar, activity bar, side bar, main, panel, status bar, overlay — laid
+  out by one `ShellLayout` module in `src/renderer/shell/`. A page plugin may replace the layout through the shell
+  API, and every area or contribution it registers returns a `Disposable`. Reworking the window's structure is
+  editing the default layout or adding a plugin; track sizes are theme tokens.
+- **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
+  title and an optional side bar element, through the page plugin API, and binds the command that shows it
+  (Sessions on `Space k s`, Docs on `Space k d`; pressed while its mode already shows, the same command toggles the
+  side bar). The activity bar lists every mode, the side bar slot shows the shown mode's side bar, and the mode's
+  handle sets the title bar's context. A hidden mode keeps its state,
   so leaving one never loses work in it, but it keeps no keys: each mode and each session tab is told when it becomes
   the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
   core edit.
@@ -138,8 +153,10 @@ round), since main, not the page, decides.
   `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`.
 - **A key** is a default bind in its plugin's manifest naming that plugin's command; the core qualifies both, so
   `nextItem` in plugin `forms` runs as `forms.nextItem`, and its scope `review` is `forms.review`. Keys never call
-  code directly, so rebinding never touches a handler. `src/config/keymap.ts` holds only the core's keys and is where
-  the user's overrides land. Each process checks at startup that every key it owns names a registered command, and
+  code directly, so rebinding never touches a handler. `src/config/keymap.ts` holds only the core's keys. The keymap
+  merges in layers — core, then plugins in dependency order, then the user's `keymap.json` — where a later layer's
+  bind replaces an earlier one with the same keys in the same scope and an `unbind` entry removes one; only a clash
+  inside one layer is an error. Which key type a bind takes follows `DESIGN.md` § Keys and focus. Each process checks at startup that every key it owns names a registered command, and
   the page also rejects a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
   `<D-w>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
   too, in every vim mode, ahead of the editor. A plugin's own text box may keep typed keys from the page keys while
@@ -152,7 +169,7 @@ round), since main, not the page, decides.
   scopes or on keys that begin another same-mode bind's longer keys in any scope. Esc while a sequence waits cancels
   it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout keys are
-  `Space z l …`, chat's `Space z c …`).
+  `Space z l …`, chat's `Space z c …`, the gallery `Space z g`).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
   modal view never fights the plugin under it for the scope. The pushed scope's `onBaseChanged` hears the set scope
@@ -161,13 +178,17 @@ round), since main, not the page, decides.
   `Space ?` (`<Leader>?` in a box), and the status bar's keys that don't start with the leader. A plugin declares
   its keys, labels, groups and scope titles, and draws no key hints of its own: a view that shows a key beside its
   control (every forms button whose command has a page bind) depends on `keys` and reads it from that plugin's `keysFor`
-  export, so a rebind reaches the control, and draws no hint when the command is unbound. The core and the editor
+  export, so a rebind reaches the control, and draws no hint when the command is unbound. Every hint is drawn by the
+  Kbd primitive through `formatChord`, which prints a chord for the platform the served config names. The core and the editor
   host report a pending prefix through `api.keys`; the editor host reads it from vim's pending input, behind
   `EditorHost`.
-- **A theme** is a JSON file of a `palette` and semantic `tokens` (a token names a palette entry or gives a hex).
-  Built-in themes live in `src/config/themes/`; the user's own live in the `themes` folder of Electron's per-user
-  data folder and override a built-in of the same name. Views read tokens as CSS variables and never name a
-  colour. A broken theme falls back to Catppuccin Mocha and shows its error.
+- **A theme** is a JSON file of a `palette`, `tokens`, a `reduced` block of overrides for reduced transparency, and
+  a `colorScheme`; a user theme sets `extends` to a base theme and lists only the tokens it changes. Every token —
+  colour, length, duration, shadow, filter or raw CSS — is declared with its kind and default in the core token
+  registry, or in a plugin manifest's `themeTokens` (qualified `<pluginId>.<token>`). Views read a token as
+  `--wg-<name>` and never write a raw value (`DESIGN.md` § Tokens and themes). Built-in themes live in
+  `src/config/themes/`; the user's own in the `themes` folder of the user config folder override a built-in of the
+  same name. A broken theme keeps the last good one and shows its error.
 - **An item kind** in a forms round — question, finding, notice — is a format module in a folder of its own,
   `src/plugins/forms/main/kinds/<kind>/<kind>-format.ts` and `src/plugins/forms/page/kinds/<kind>/<kind>-card.ts`,
   each listed in the typed `FORMATS` table of its process's `kinds/formats.ts`; the page module hands a layout the
@@ -190,8 +211,8 @@ round), since main, not the page, decides.
   `page/kinds/finding/verdict.ts` and its meaning in `ORIGIN_MEANINGS` in `main/kinds/finding/finding-format.ts`,
   and a new card its `CARD_TEXT` in `finding-card.ts` and its `CARD_CHOICES` in `finding-format.ts`. The card list
   in `ASK_ROUND_DESCRIPTION` is built from the table by `findingCardsText()` in `main/kinds/finding/finding-text.ts`.
-  The rest it cannot check: the `FINDING_ORIGINS` list in the contract, an `origin.*` theme token in
-  `THEME_TOKENS` and every built-in theme with its `.badge-origin` rule in `forms.css`, and retro's
+  The rest it cannot check: the `FINDING_ORIGINS` list in the contract, an `origin-*` token in forms'
+  manifest `themeTokens` with its `.badge-origin` rule in `forms.css`, and retro's
   `ORIGIN_ACTION_LABELS` in the marketplace's `answers.py`, which otherwise labels the new origin's actions with the
   Defect words. Every card shows all its choices and its action row, the recommended ones badged, and Accept (Enter)
   takes them whole: the user ruled out folding the alternatives away, since it biased answers toward the
@@ -216,8 +237,13 @@ round), since main, not the page, decides.
 - **An ambient service** — the clock, ids, the home folder, files (with watching), processes, opening a link in the default browser — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake.
 - **A setting** is a core setting in `src/contracts/settings.ts` and `src/config/settings.ts`, or a plugin's own in
-  its manifest's `settings`. Main owns the config and serves it to the page over the Bridge, so a user config file
-  later lands in `main.ts` alone.
+  its manifest's `settings`. The user overrides any of them in `settings.json` (plugin settings under the plugin id).
+- **The user config folder** is `~/.config/wigley-ai-gui/` on both OSes: `settings.json`, `keymap.json` and
+  `themes/`, each holding only what the user changes. Main's ConfigStore watches it and serves every new config to
+  the page over the Bridge, so everything hot reloads: plugins read `settings()` and `keys.keymap()` with
+  `onChanged` rather than keeping a copy, and a setting read only when something is created (window size, the claude
+  command) applies to the next one. A broken file keeps the last good config and shows the problem in the status
+  bar. App-written state, such as split widths, goes to the `uiState` service, never to the user's config.
 - **A third-party tool** gets a contract in `src/contracts/` and an adapter folder of its own; the core hands
   plugins the shared ones (editor, markdown) as services. Swapping it is a new adapter folder against the same
   contract, and one changed line in the composition root.
@@ -258,7 +284,9 @@ round), since main, not the page, decides.
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms); a step with no keys waits for its line, and a step's
-  `writeFile` writes a file under the self-test's temp home before its keys, as an outside change on disk. The script's
+  `writeFile` writes a file under the self-test's temp home before its keys, as an outside change on disk, and a
+  step's `screenshot` saves a PNG of the window for the agent to check against `DESIGN.md`. The self-test's user
+  config folder sits in its temp home. The script's
   `settings` override plugin settings in the config main serves the page (forms' sets a short
   `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Each plugin hands
   at most one script, and the scripts run in plugin start order; the keys plugin has no main part, so its steps live

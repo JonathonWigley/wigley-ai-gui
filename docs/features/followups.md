@@ -1,14 +1,25 @@
 # wigley-ai-gui follow-ups
 
+Pulled into the UI rework (`docs/features/ui-design/`, plans A–C) and removed from this list: the user config
+file, settings and keymap hot reload (the ConfigStore), the layered keymap, the shell registry, plugin-declared theme
+tokens, the platform chord formatter, the active-line band, and the sessions and forms-layouts live checks.
+
 - Command palette.
 - Move the feature primer into the app.
 - Packaging and installers for macOS and Windows.
-- A Latte (light) theme and OS light/dark following.
-- A user config file for settings and the keymap. The editor's insert remaps merge only from the core keymap, which holds none since `jk` was dropped, so the keys help's "Remaps in a text box" section stays empty until this lands.
-- A settings window, and settings that hot reload: a change applies to the open window without restarting main, which today owns the settings and serves them to the page only at load. Builds on the user config file above.
-- A setting that turns every key hint on or off (the conflict prompt, the trash y/n, chat's and forms' hints). Hints already come from `keysFor`, so one setting can blank them in one place. Builds on the user config file above.
+- A Latte (light) theme and OS light/dark following. The token model is theme-neutral (`colorScheme` per theme), so
+  this is a theme file, its `DESIGN.md` light rules, and a light/dark choice.
+- Native window vibrancy (macOS `vibrancy`, Windows 11 mica) behind a window adapter, in place of the CSS backdrop
+  under L1 glass (`docs/features/ui-design/design.md`).
+- Per-tool-call duration on chat tool cards: the harness reports duration per turn result only, so the adapter would
+  time each tool call.
+- Design skills in wigley-ai-marketplace: tailor ui-skills' baseline-ui, fixing-accessibility and
+  fixing-motion-performance (MIT) and Impeccable's critique, audit, polish and quieter guidance (Apache-2.0; keep
+  notices) into wigley skills that read a project's `DESIGN.md`, dropping the detector CLI. Plan it with
+  `wigley:feature` in that repo.
+- A settings window over the user config files.
+- A setting that turns every key hint on or off (the conflict prompt, the trash y/n, chat's and forms' hints). Hints already come from `keysFor`, so one setting can blank them in one place. Builds on the user config folder (`ui-design` plan A).
 - `npm run selftest` on Windows (`tee /dev/stderr` in the script).
-- An active-line band in the editors.
 - Editor key replay (a broken key sequence replayed into a box through `EditorHost.typeInto`) has three limits only a custom keymap reaches: focus moving mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on named keys.
 - Rail notice entries are inert in the review: clicking one could jump to the notice's comment box, as question entries jump to their question.
 - A notification click focusing its round is untested live: an unsigned dev build gets no macOS notification (the alerts adapter falls back to Dock bounce and badge), so check it on the first signed build from the packaging follow-up.
@@ -23,21 +34,8 @@
 - Images and files pasted or dropped into the chat's message box.
 - "Always allow" on a chat permission card, writing the rule to the project's local Claude settings; Claude's
   permission-prompt tool path for it is undocumented, so it starts with a spike.
-- Sessions mode's live checks have not been run: rows appearing on connect with `No session selected`, the dimmed `Claude` / `Codex` label (wigley 1.4.0's relay sends it), a round selecting its row and Form tab with the `heading 0/<total>` status line, a background round's accent dot, `Option+Shift+o` / `Option+Shift+i` / `Option+o` / `Space k s` from the real keyboard (macOS turns Option+Shift+o into `Ø`), `Cmd+W` closing a row and the row returning at the end with its next round, the `Cancel this round?` prompt over the sidebar, and the narrow window (below 680 px the sidebar hides and `Space k s` opens it over the form). Also decide whether a row click should close that overlay; today it stays open until `Space k s` or a wider window.
 - When the docs editor lands: an editor key sequence bound only in other scopes is taken from vim in every editor, so a normal-mode Esc in a docs box runs nothing and logs `<Esc> has no bind in docs.…` while forms binds `<Esc>`; a new round selects its session's Form tab, switching away from a Docs tab mid-edit; and a row removed while its round stays open rebuilds that round's Form tab in a hidden body nothing drops after the round closes.
 - A Codex process started from a shell Claude Code spawned inherits `CLAUDECODE=1`, so its row reads `Claude`.
-- Forms layouts: run `npm run selftest` on the review fixes. The run closed before it could, while a dev
-  `npm start` held the app's data folder; `1b86e3e` rewrote the preview steps (`Space z l o` waits on
-  `[sessions] activated Layout preview`, then `<D-w>` and `n` prove the preview round is the selected session's
-  and dismiss the prompt), so they have never run live.
-- Forms layouts live checks, never run. Under `npm start`: `Space z l o` shows the sample with every card kind;
-  `Space z l c` toasts the copy path, and saving a `layout.css` added to the copy redraws the open card keeping its
-  answer; saving a relatively imported `parts.js` alone shows its change; a `layout.js` syntax error toasts and keeps
-  the last look, and fixing it brings the layout back; `Space z l n` / `p` cycle and the choice survives a restart;
-  `Space z l o` twice swaps in the newest saved round, whose submit removes the row and reaches no agent; an editor
-  completes the kit's parts in a copied `layout.js` from `layouts/layout.d.ts`. In a packaged build
-  (`npm run package`, dev instance closed): repeat the copy-and-css and cycle-and-restart checks, since the
-  `wigley-data:` scheme, CORS and the CSP under `file://` are unproven.
 - Chat raw events drop the streaming deltas (text, thinking and tool input) and `message_start` / `message_delta` / `message_stop`, while `agent-chat/design.md` says every entry carries the events it was built from. Chosen: rule the deltas covered by the start and final assistant events, and say so in design.md.
 - The Claude harness counts one result per sent message (measured on 2.1.304, `agent-chat/claude-stream.md` § Queued messages); a message that gets no result would leave the session `working` and the turn alert unfired. Chosen: probe the cases that might give none (local slash commands, a rejected message) and record them in claude-stream.md before guarding.
 - Two tabs' take-overs released out of order give the session back to the first taker's tab even though its take-over has ended (pinned by `sessions/page/tabs.test.ts`); only forms takes over today, so it matters once a second plugin does.
@@ -67,14 +65,6 @@ now, any harness later). Each item names its sites.
 - Sessions' `contributeTools` and `addCloseGuard` return a `Disposable`, and a contribution reaches sessions already
   connected: start or end its `ToolSession` per live entry, rewrite `tools.json`, have `serveMcp` read a live tool list
   and send `notifications/tools/list_changed`, and keep one unknown-tool check (today both `serveMcp` and `routeCall`).
-- A main-side `ConfigStore` behind the user config file and settings hot reload above: it owns the user's
-  `settings.json`, `keymap.json` and the themes folder, watches them through `Files.watch`, rebuilds `AppConfig`, and
-  pushes it over a `Bridge.onConfigChanged`. Plugins get `settings()` / `keys.keymap()` with `onChanged` in place of the
-  snapshots; `applyTheme` re-runs; `installPageKeys` gets `setBinds`; `EditorHost.setKeymap` unmaps and remaps vim;
-  menu, intercepts and global shortcuts re-install. Today `buildConfig` runs once in `createWindow` and
-  `chooseTheme` reads the themes folder once with sync fs (the theme loader should take `Files`).
-- Settings read once at start move to the live read: forms' `deadlineSeconds` (copied into both `FormsService`s) and
-  `autosaveDelayMs`; keys' help sections and DOM (built once from the keymap, while which-key and the bar read per event).
 - A runtime plugin loader: a `PluginSource` seam (built-in list and a user folder of `manifest.json`, `main.js`,
   `page.js`), main `import()`s from disk and the page through `dataUrl`, and a `validateManifest` gives every plugin the
   checks `definePlugin` makes at compile time. `requireListed` and the static lists in `src/plugins/{main,page,manifests}.ts`
@@ -93,23 +83,15 @@ now, any harness later). Each item names its sites.
   changed, page ready, each typed in `src/contracts`.
 - Commands at runtime and around other plugins: `commands.register(id, decl, handler)`, `keys.bind(bind)`,
   `commands.intercept(id, (next, ctx) => …)`, `commands.onDidRun`, all disposable, and `MainApi.commands.run`.
-- Commands take a count or argument, so `choose1..9` and `jumpTo1..9` become one `forms.choose` and one `forms.jumpTo`
-  (and choice 10 gets a key: `DIGITS` stops at 9 while `MAX_CHOICES` is 10).
-- The keymap merges in layers (core < plugins in dependency order < user file), a later layer shadowing an earlier
-  bind with a log line and an `unbind` entry, so only a clash inside one layer throws (`key-sequences.ts:55-73`,
-  `editor-binds.ts:41-66`, `mergeKeymap`). Plugins may add editor remaps. The page leader comes from a `keymap.pageLeader`
-  rather than `PAGE_LEADER_KEY = ' '` in keys.
-- The shell becomes a registry: `addArea(id, { placement })`, `contribute(element, { order, align })`, a replaceable
-  `ShellLayout` over the fixed grid, and a mode's side bar or panel as a shell slot the core shows with the mode. No
-  plugin uses `activityBar`, `sideBar` or `panel` today; Sessions draws its own side bar inside its mode.
+- Plugins may add editor remaps, and the page leader comes from a `keymap.pageLeader` rather than
+  `PAGE_LEADER_KEY = ' '` in keys (left over from the layered keymap, which `ui-design` plan A lands).
+- Commands take a count or argument, so `choose1..9` becomes one `forms.choose` (and choice 10 gets a key: `DIGITS`
+  stops at 9 while `MAX_CHOICES` is 10).
 - Layouts as a core service: `api.layouts.define(slot, { contractText, defaultSource, read })` in both processes,
   owning the channel, the `layouts/<slot>/` folder, the CSS link, the toasts and one set of cycle/copy/preview commands.
   Replaces the hand wiring duplicated in forms and chat (`main/start.ts`, `page/start.ts`, three channel methods per
   contract, keys per manifest), and gives any view (sessions sidebar row, docs, help, status bar) a user look. A
   layout's CSS gets scoped so it can't restyle another plugin.
-- Theme tokens declared by plugins: a manifest's `themeTokens` with palette defaults, qualified `<pluginId>.<token>`;
-  the core's `THEME_TOKENS` keeps only shell tokens (it holds `whichKey.*`, `origin.*`, `severity.*` today), and a
-  missing plugin token falls back to its default.
 - `EditorHost.defineEx(name, prefix, handler)`, disposable: the document editor's write/quit become ex commands the
   docs plugin registers, replacing the closed `DOCUMENT_EX_COMMANDS` and the `switch` in `codemirror-vim-host.ts`.
 - `MarkdownRenderer.addBlock({ opener, render })` and `addFence(language, render)` in the contract's own terms; the
@@ -173,9 +155,7 @@ now, any harness later). Each item names its sites.
   `CommandOrControl`), resolved in `mergeKeymap`, used for `<D-w>` (sessions close), `<D-Enter>` (chat) and the forms
   self-test's close steps; the summon accelerator `Control+Alt+Command+W` uses `CommandOrControl`. An optional
   per-bind `platforms` field covers a truly platform-only key.
-- One `formatChord(chord, platform)` in `key-hints` used by help, the key bar, which-key and `keysFor`, printing ⌘/⌥ or
-  Cmd/Option on macOS and Ctrl/Alt on Windows; today hints print raw `<D-w>` and `chordName` (written twice, in
-  `keybindings.ts` and `key-hints.ts`) says Command everywhere. The menu labels commands by `label`, not id.
+- The app menu labels commands by `label`, not id.
 - Chord matching per platform: match the physical `code` only for Option chords on macOS, and `key` otherwise, so
   `<C-q>` lands on the right key on AZERTY and Dvorak; treat Windows AltGr (Ctrl+Alt) as typing, not a chord
   (`page-keys.ts:19-23`); allow non-letter chords (`<C-/>`, `<F5>`).
