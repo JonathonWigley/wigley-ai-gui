@@ -282,8 +282,8 @@ picker title is `Session`; the box's completion prefix is `/`.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Files: modified and readStart](01-files-modified-read-start.md)
-- [ ] [Editor completion option](02-editor-completion.md)
+- [x] [Files: modified and readStart](01-files-modified-read-start.md)
+- [x] [Editor completion option](02-editor-completion.md)
 
 ### Wave 2
 - [ ] [Harness: past sessions and history](03-harness-past-sessions.md) — after 01
@@ -308,10 +308,18 @@ picker title is `Session`; the box's completion prefix is `/`.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: ef72fe2
+
+Peer session `wigley-ai-gui-6a` shares the working tree: every commit is pathspec-scoped and the review range is this run's commit list.
 
 ### Groups
+- 01 · b395bc1 · diff read + typecheck pass · concerns: Produces comments exceed the 80-column comment width (oxfmt accepts); node readStart makes one read with no short-read retry
+- 02 · a5f2c2e · diff read + typecheck pass · concerns: plan's `editorExtensions` is `boxExtensions` in the tree (completion added there, document editors get none); `@codemirror/view`/`state` are direct deps after all (rule kept anyway); popup keys ahead of vim unverified live (tasks 07/09)
 ### Contract changes
 ### Rulings
+- memory files' read, modified and readStart share one `textOf` lookup, all rejecting `no file at <path>` — one rule for missing files — none · group 01
+- node and memory adapters each hold their own one-line cut-UTF-8 decode rather than a shared helper — node-files imports only contracts — duplicate if a third adapter appears · group 01
+- completion behaviour lives in `prefixCompletion(completions)` in `prefix-completion.ts`; the host only adds it ahead of `vim(...)` and a `vim-mode-change` listener closing the popup outside insert mode — one module for the behaviour — moving one function · group 02
+- `offered` resets when `completionStatus` is null (closed); `pending` does not reset — so `/`, `f`, `a` with one list reports once — a stale list reported once more after a close · group 02
 ### Review rounds
 ### Test gate

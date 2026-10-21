@@ -1,6 +1,6 @@
 # 01 — Files: modified and readStart
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -67,3 +67,5 @@ Done when: the typecheck and `npm run lint` pass; the test gate runs the tests a
 Commit:    one commit for the group
 
 ## Proof
+
+Commit `b395bc1`. Proof: diff read (every Produces present in `src/contracts/files.ts`, node, memory and scoped adapters) and `npm run typecheck` pass. Concerns: the contract comments run past the 80-column comment width; node `readStart` makes one `handle.read` with no short-read retry.

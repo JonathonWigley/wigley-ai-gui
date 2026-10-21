@@ -1,6 +1,6 @@
 # 02 — Editor completion option
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -87,3 +87,5 @@ Done when: the typecheck and `npm run lint` pass; the diff and `npm ls` check ab
 Commit:    one commit for the group
 
 ## Proof
+
+Commit `a5f2c2e`. Proof: diff read (every Produces present; one added line each in `package.json` and `package-lock.json`, lock entry untouched) and `npm run typecheck` pass. Concerns: completion went into `boxExtensions` (the plan's `editorExtensions`); popup keys inside vim are live checks.
