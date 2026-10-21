@@ -298,7 +298,7 @@ picker title is `Session`; the box's completion prefix is `/`.
 - [x] [Chat tab: slash completion](06-chat-tab-completion.md) — after 02, 04, 05
 
 ### Wave 6
-- [ ] [Chat self-test steps](07-selftest-steps.md) — after 05, 06
+- [x] [Chat self-test steps](07-selftest-steps.md) — after 05, 06
 
 ### Wave 7
 - [ ] [Doc re-read](08-doc-re-read.md) — after 07
@@ -319,6 +319,8 @@ Peer session `wigley-ai-gui-6a` shares the working tree: every commit is pathspe
 - 04 · 46145ab · diff read + typecheck pass · concerns: `chat-commands.test.ts` fixture gained `commands: []` (outside the Files list); `src/contracts/agent.ts:92` comment on `AgentProcessEvents.commands` still says plan B reads it (stale, for task 08 or the review); resume test compares history only as `[id, text]` pairs
 - 05 · 959f5a1 · diff read + typecheck pass · concerns: `toggleArchive`/`showArchived` from the command palette after another picker request replaced the session step would act on the old step (keys cannot, scope-bound); duplicate `resume` binds' startup key check confirmed only by task 07's self-test; edits outside the Files list in `list-picker.ts`, `chat-commands.ts`, `start-prompt.test.ts`
 - 06 · f6c9e9e · diff read + typecheck pass · concerns: no Vitest tests by design — only task 07's self-test steps 30–32 prove the wiring; the stale `AgentProcessEvents.commands` comment (`src/contracts/agent.ts:92`) rewritten here
+- 07 · 2a959ae · diff read + typecheck pass; selftest FAILS (16): with the Chat box's completions on, normal-mode Enter in the box stops sending (plan A steps 13–15 and later) and Tab does not accept (31); with completions off for one run every step but 30–33 passes · fix dispatched to `wigley:opus-high` (proof failed in 02/06's code) · concerns: none beyond the blocker
+- 07 fix · 3806289 · diff read + typecheck pass; `npm run selftest` all passed (forms, chat 34 steps, docs) · root cause: `autocompletion()` brings in the keymap facet whose keydown handler took precedence ahead of vim, so `minimalSetup`'s Enter inserted a newline in normal mode; and `acceptCompletion` refuses within the 75 ms `interactionDelay` · concerns: no DOM unit-test seam, the self-test locks both
 ### Contract changes
 - manifest editor binds in scope `resume`: `<CR>` pickerPick, `<Esc>` pickerList → those plus `{ keys: '<CR>', mode: 'insert', scope: 'resume', command: 'pickerPick' }` · why: plan A's `picker` scope gained an insert `<CR>` for its filter, and `resume` repeats the picker binds · consumers: 07 · group 05
 - `ListPicker` (`src/shared/page/list-picker.ts`) gains `cursorIndex(): number \| null` · why: the cursor lives only in its state, so `Picker.cursorIndex` delegates to it · consumers: 05 · group 05
@@ -336,5 +338,8 @@ Peer session `wigley-ai-gui-6a` shares the working tree: every commit is pathspe
 - a request with another scope replacing an open one calls `list.close()` (pops the old scope, no `picker closed` line) then pushes the new scope — matches the plan's pop-then-push — a missing close line in logs · group 05
 - the session step counts as open while the prompt last opened it, nothing in it was picked, and `picker.isOpen()` — the Decisions name no other test — see the palette concern · group 05
 - after archiving, the reopen runs when `setArchived` resolves even if the user closed the list meanwhile — none in the plan — the list reappears after an Escape · group 05
+- self-test `open(run)` closes every held state in either self-test project (`SELFTEST_PROJECT_DIR`, `SECOND_PROJECT_DIR`) — plan A closed the second project's session per run too — none · group 07
+- `ChatSelfTestResult.process` dropped; `problems` finds the fixture (last `resume: false`) and resumed (last `resume: true`) records in the fake's `processes` when it runs — resume happens after the result settles — none · group 07
+- completion extension sits after `vim(...)` with `popupKeys` in `Prec.highest` and `interactionDelay: 0` — task 02's "ahead of vim" placement made CodeMirror's keymap outrank vim — none; `prefix-completion.ts` now imports `Prec` from `@codemirror/state` (a direct dependency, against task 02's no-import line, which its worker found stale) · lead, fix 3806289
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 07 — Chat self-test steps
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 05, 06
 Plan: [plan.md](plan.md)
@@ -72,3 +72,5 @@ Done when: the typecheck and `npm run lint` pass; `npm run selftest` passes form
 Commit:    one commit for the group
 
 ## Proof
+
+Commit `2a959ae`, fix `3806289`. Proof: diff read and `npm run typecheck` pass; the first self-test failed 16 checks (the Chat box's completion broke normal-mode Enter and Tab), fixed in the adapter by `3806289`; then `npm run selftest` printed `PASS forms result as expected`, `PASS chat result as expected`, `PASS docs result as expected`, `all passed`.
