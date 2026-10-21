@@ -3,6 +3,7 @@ import type {
   CommandsDeclaredIn,
   PluginKeys,
 } from '../contracts/plugin';
+import type { TokenDecl } from '../contracts/theme';
 
 const PLUGIN_ID = /^[a-z0-9-]+$/;
 
@@ -26,6 +27,7 @@ export function definePlugin<
     NoInfer<S>
   >;
   settings: T;
+  themeTokens: Readonly<Record<string, TokenDecl>>;
 }): typeof manifest {
   if (!PLUGIN_ID.test(manifest.id)) {
     throw new Error(

@@ -7,6 +7,9 @@ import type {
   PluginManifest,
   ScopeInfo,
 } from '../contracts/plugin';
+import type { TokenDecl } from '../contracts/theme';
+
+const THEME_TOKEN_NAME = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 
 // `<pluginId>.<short>`: a plugin's command or scope under its qualified name.
 export function qualify(pluginId: string, short: string): string {
@@ -124,6 +127,26 @@ export function pluginSettings(
     settings.set(manifest.id, manifest.settings);
   }
   return Object.fromEntries(settings);
+}
+
+// Every manifest's theme tokens, each qualified as `<pluginId>.<token>`.
+// Throws on a token name that is not lowercase letters and digits joined by
+// `-` or `_`, which its CSS variable could not carry unchanged.
+export function pluginThemeTokens(
+  manifests: readonly PluginManifest[],
+): Record<string, TokenDecl> {
+  const tokens: Record<string, TokenDecl> = {};
+  for (const manifest of manifests) {
+    for (const [key, decl] of Object.entries(manifest.themeTokens)) {
+      if (!THEME_TOKEN_NAME.test(key)) {
+        throw new Error(
+          `Plugin "${manifest.id}" theme token "${key}" must be lowercase letters and digits joined by - or _`,
+        );
+      }
+      tokens[qualify(manifest.id, key)] = decl;
+    }
+  }
+  return tokens;
 }
 
 // `settingsByPlugin` with `overrides` laid over it: each override names a

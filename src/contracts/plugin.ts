@@ -15,6 +15,7 @@ import type {
 import type { Log } from './log';
 import type { MarkdownRenderer } from './markdown';
 import type { ProcessRunner } from './processes';
+import type { TokenDecl } from './theme';
 
 export type ProcessName = 'page' | 'main';
 
@@ -61,8 +62,9 @@ export interface PluginKeys<
 }
 
 // `scopes` holds each scope's title by its short id; `settings` holds the
-// plugin's settings with their defaults; `dependsOn` names plugins that start
-// before this one.
+// plugin's settings with their defaults; `themeTokens` declares the plugin's
+// own theme tokens by their unqualified names (`origin-caused`), each with its
+// kind and default; `dependsOn` names plugins that start before this one.
 export interface PluginManifest<
   C extends string = string,
   S extends string = string,
@@ -76,6 +78,7 @@ export interface PluginManifest<
   scopes: Readonly<Record<S, string>>;
   keys: PluginKeys<C, C, S>;
   settings: T;
+  themeTokens: Readonly<Record<string, TokenDecl>>;
 }
 
 // The short ids of the commands in `Cmds` that run in process `P`.

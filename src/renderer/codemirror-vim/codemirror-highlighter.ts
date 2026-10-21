@@ -1,12 +1,12 @@
-import './syntax.css';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import {
   LanguageDescription,
   type LanguageSupport,
 } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
-import { classHighlighter, highlightCode } from '@lezer/highlight';
+import { highlightCode } from '@lezer/highlight';
 import type { CodeHighlighter } from '../../contracts/highlight';
+import { codeColours } from './code-colours';
 import { findLanguageByName, loadLanguage } from './languages';
 
 const MARKDOWN = 'Markdown';
@@ -77,7 +77,7 @@ export function createCodeMirrorHighlighter(): CodeHighlighter {
       highlightCode(
         code,
         tree,
-        classHighlighter,
+        codeColours,
         (text, classes) => {
           html += classedText(text, classes);
         },

@@ -9,7 +9,7 @@ import type {
   PageCommandContext,
   PageServices,
 } from '../contracts/plugin';
-import type { AppConfig } from '../contracts/settings';
+import type { AppConfig, ConfigProblem } from '../contracts/settings';
 import { manifests } from '../plugins/manifests';
 import { pageParts } from '../plugins/page';
 import { CommandRegistry } from '../shared/command-registry';
@@ -18,6 +18,7 @@ import { createEventBus } from '../shared/event-bus';
 import { editorBindMode } from '../shared/key-hints';
 import { startPlugins } from '../shared/plugin-host';
 import { qualify } from '../shared/plugin-manifests';
+import { mountCodeColours } from './codemirror-vim/code-colours';
 import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
 import {
@@ -32,7 +33,7 @@ import { createPendingKeys } from './pending-keys';
 import { createPageApi } from './plugins/page-api';
 import { createModes } from './shell/modes';
 import { mountShell } from './shell/shell';
-import { applyTheme } from './theme';
+import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
@@ -43,13 +44,22 @@ const timers: Timers = {
   clear: (handle) => window.clearTimeout(handle),
 };
 
-// A status-bar item naming the theme problem, hidden while there is none.
-function contributeThemeError(statusBar: Area, error: string | null) {
+function problemText(problem: ConfigProblem): string {
+  return `${problem.file}: ${problem.message}`;
+}
+
+// A status-bar item naming the first config problem, every problem on its own
+// line in its tooltip; hidden while there is none.
+function contributeConfigProblems(
+  statusBar: Area,
+  problems: readonly ConfigProblem[],
+) {
   const item = document.createElement('span');
   item.className = 'status-error';
-  item.hidden = error === null;
-  item.textContent = `Theme: ${error ?? ''}`;
-  item.title = error ?? '';
+  item.hidden = problems.length === 0;
+  item.textContent =
+    problems.length === 0 ? '' : `Config: ${problemText(problems[0])}`;
+  item.title = problems.map(problemText).join('\n');
   statusBar.contribute(item);
 }
 
@@ -73,8 +83,12 @@ async function start() {
   const log = createLogView(document.getElementById('log') as HTMLOListElement);
   bridge.onLog(log);
   const config = await bridge.config();
-  const { settings, keymap, theme } = config;
-  applyTheme(theme.theme, settings.fonts, document.documentElement);
+  const { settings, keymap } = config;
+  const themeApplier = createThemeApplier(
+    document.documentElement,
+    window.matchMedia('(prefers-reduced-transparency: reduce)'),
+  );
+  themeApplier.apply(config.theme, settings);
 
   const areas = mountShell(document.getElementById('app') as HTMLElement);
   const modes = createModes((element) => areas.main.contribute(element), log);
@@ -82,7 +96,7 @@ async function start() {
   toastLayer.className = 'toasts';
   areas.overlay.contribute(toastLayer);
   const toasts = createToasts(toastLayer, timers);
-  contributeThemeError(areas.statusBar, theme.error);
+  contributeConfigProblems(areas.statusBar, config.problems);
 
   const commands = new CommandRegistry<PageCommandContext>();
   const scopeStack = createScopeStack(INITIAL_SCOPE);
@@ -101,6 +115,8 @@ async function start() {
     }
     return false;
   });
+  // Highlighted markdown has no editor to mount the code colours.
+  mountCodeColours(document);
   const services: PageServices = {
     editor,
     markdown: createMarkdownItRenderer(createCodeMirrorHighlighter()),
@@ -164,8 +180,8 @@ async function start() {
     (keys, scope) => pendingKeys.reportPage(keys, scope),
   );
 
-  if (theme.error !== null) {
-    toasts.show(`Theme error: ${theme.error}`, 'error');
+  for (const problem of config.problems) {
+    toasts.show(`Config error: ${problemText(problem)}`, 'error');
   }
   // The self-test opens its round only once the page listens; each part adds
   // its channel listeners while it starts.

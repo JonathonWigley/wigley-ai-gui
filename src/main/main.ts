@@ -18,6 +18,7 @@ import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { coreCommands, coreKeymap, coreScopes } from '../config/keymap';
 import { defaultSettings } from '../config/settings';
+import { coreThemeTokens } from '../config/theme-tokens';
 import { builtInThemes } from '../config/themes';
 import { CLAUDE_PERMISSION_TOOL } from '../contracts/agent';
 import type { Clock, RandomHex, RandomUuid } from '../contracts/ambient';
@@ -43,6 +44,7 @@ import {
   mergeKeymap,
   overrideSettings,
   pluginSettings,
+  pluginThemeTokens,
   qualify,
   requireListed,
   scopeInfos,
@@ -71,7 +73,7 @@ import { createPluginChannels } from './plugins/plugin-channel';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import type { SelfTestConfig } from './selftest-config';
-import { chooseTheme } from './themes/theme-loader';
+import { resolveTheme } from './themes/theme-loader';
 import {
   createMainWindow,
   registerWindowCommands,
@@ -155,11 +157,10 @@ function readStartInputs(): StartInputs {
   requireListed(mainParts, manifests);
   const homeDir = homeFolder();
   return {
-    theme: chooseTheme(
-      defaultSettings.theme,
-      builtInThemes,
-      path.join(app.getPath('userData'), 'themes'),
-    ),
+    theme: resolveTheme(defaultSettings.theme, builtInThemes, [], {
+      core: coreThemeTokens,
+      plugins: pluginThemeTokens(manifests),
+    }),
     settingsByPlugin: pluginSettings(manifests),
     commandsById: commandInfos(coreCommands, manifests),
     scopes: scopeInfos(coreScopes, manifests),
@@ -199,6 +200,7 @@ function buildConfig(inputs: StartInputs, selfTest: SelfTestConfig): AppConfig {
       selfTest.settings,
     ),
     theme: inputs.theme,
+    problems: [],
   };
 }
 
@@ -260,7 +262,7 @@ function disposeParts(parts: readonly MainStart<PluginManifest>[]) {
 function createWindow(inputs: StartInputs) {
   const window = createMainWindow(
     defaultSettings.window,
-    inputs.theme.theme.tokens['bg.base'],
+    inputs.theme.tokens['window-background'],
     isSelfTest,
   );
   mainWindow = window;

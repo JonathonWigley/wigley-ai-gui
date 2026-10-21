@@ -19,6 +19,7 @@ const manifest: PluginManifest = {
   scopes: { review: 'In review' },
   keys: { page: [], editor: [], app: [], global: [], intercept: [] },
   settings: {},
+  themeTokens: {},
 };
 
 interface TestChannel {

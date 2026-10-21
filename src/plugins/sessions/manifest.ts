@@ -46,4 +46,5 @@ export const sessionsManifest = definePlugin({
     intercept: [],
   },
   settings: {},
+  themeTokens: {},
 });

@@ -6,6 +6,7 @@ import {
   mergeKeymap,
   overrideSettings,
   pluginSettings,
+  pluginThemeTokens,
   requireListed,
   scopeInfos,
 } from './plugin-manifests';
@@ -29,6 +30,7 @@ function manifest(
     scopes: {},
     keys: NO_KEYS,
     settings: {},
+    themeTokens: {},
     ...overrides,
   };
 }
@@ -242,6 +244,36 @@ describe('pluginSettings', () => {
     expect(Object.hasOwn(settings, 'toString')).toBe(true);
     expect(Object.hasOwn(settings, '__proto__')).toBe(true);
     expect(Object.getPrototypeOf(settings)).toBe(Object.prototype);
+  });
+});
+
+describe('pluginThemeTokens', () => {
+  it("qualifies each plugin's tokens", () => {
+    const tokens = pluginThemeTokens([
+      manifest('forms', {
+        themeTokens: {
+          'origin-caused': { kind: 'color', default: '#ff0000' },
+        },
+      }),
+    ]);
+
+    expect(tokens).toEqual({
+      'forms.origin-caused': { kind: 'color', default: '#ff0000' },
+    });
+  });
+
+  it('rejects a key that is not a token name', () => {
+    expect(() =>
+      pluginThemeTokens([
+        manifest('forms', {
+          themeTokens: {
+            originCaused: { kind: 'color', default: '#ff0000' },
+          },
+        }),
+      ]),
+    ).toThrow(
+      'Plugin "forms" theme token "originCaused" must be lowercase letters and digits joined by - or _',
+    );
   });
 });
 

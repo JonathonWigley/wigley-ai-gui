@@ -1,14 +1,28 @@
 import { languages } from '@codemirror/language-data';
+import { type Tag, tags } from '@lezer/highlight';
 import { describe, expect, it } from 'vitest';
+import { codeColours } from './code-colours';
 import { createCodeMirrorHighlighter } from './codemirror-highlighter';
 
 const highlighter = createCodeMirrorHighlighter();
 
+// The class the code colour style gives text carrying `tag`.
+function classFor(tag: Tag): string {
+  const classes = codeColours.style([tag]);
+  if (classes === null) {
+    throw new Error('The code colour style styles no such tag');
+  }
+  return classes;
+}
+
 describe('highlight()', () => {
-  it('marks keywords and numbers', async () => {
+  it('marks keywords and numbers with the code colour classes', async () => {
     const html = await highlighter.highlight('const a = 1;', 'typescript');
-    expect(html).toContain('<span class="tok-keyword">const</span>');
-    expect(html).toContain('<span class="tok-number">1</span>');
+    expect(html).toContain(
+      `<span class="${classFor(tags.definitionKeyword)}">const</span>`,
+    );
+    expect(html).toContain(`<span class="${classFor(tags.number)}">1</span>`);
+    expect(html).not.toContain('tok-');
     expect(await highlighter.highlight('const a = 1;', 'ts')).toBe(html);
   });
 
@@ -29,13 +43,13 @@ describe('highlight()', () => {
 
   it('highlights a stream language', async () => {
     expect(await highlighter.highlight('key = "v"', 'toml')).toContain(
-      'tok-string',
+      `<span class="${classFor(tags.string)}">"v"</span>`,
     );
   });
 
   it('highlights a markdown heading', async () => {
     const html = await highlighter.highlight('# Title', 'markdown');
-    expect(html).toContain('tok-heading');
+    expect(html).toContain(classFor(tags.heading1));
     expect(html).toContain('Title');
   });
 
@@ -44,7 +58,9 @@ describe('highlight()', () => {
       '```python\ndef f(): pass\n```',
       'markdown',
     );
-    expect(html).toContain('<span class="tok-keyword">def</span>');
+    expect(html).toContain(
+      `<span class="${classFor(tags.definitionKeyword)}">def</span>`,
+    );
   });
 
   // Vitest fails the run on an unhandled rejection, so a leaked load fails

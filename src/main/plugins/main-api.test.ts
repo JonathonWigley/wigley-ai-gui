@@ -17,6 +17,7 @@ const manifest: PluginManifest = {
   scopes: {},
   keys: { page: [], editor: [], app: [], global: [], intercept: [] },
   settings: {},
+  themeTokens: {},
 };
 
 describe('createMainApi', () => {

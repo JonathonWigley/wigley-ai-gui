@@ -32,10 +32,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared'],
     packages: ['node:'],
   },
-  'src/main/themes': {
-    layers: ['src/contracts', 'src/shared'],
-    packages: ['node:'],
-  },
+  'src/main/themes': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
   'src/main/processes': { layers: ['src/contracts'], packages: ['node:'] },

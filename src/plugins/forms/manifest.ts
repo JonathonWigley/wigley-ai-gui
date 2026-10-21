@@ -219,4 +219,16 @@ export const formsManifest = definePlugin({
     intercept: [],
   },
   settings: { autosaveDelayMs: 400, deadlineSeconds: 240 },
+  themeTokens: {
+    'origin-caused': { kind: 'color', default: 'var(--wg-status-error)' },
+    'origin-pre-existing': { kind: 'color', default: '#eba0ac' },
+    'origin-design': { kind: 'color', default: 'var(--wg-accent)' },
+    'origin-nit': { kind: 'color', default: '#9399b2' },
+    'severity-critical': { kind: 'color', default: 'var(--wg-status-error)' },
+    'severity-important': {
+      kind: 'color',
+      default: 'var(--wg-status-attention)',
+    },
+    'severity-minor': { kind: 'color', default: 'var(--wg-fg-tertiary)' },
+  },
 });

@@ -1,71 +1,30 @@
-export const THEME_TOKENS = [
-  'bg.base',
-  'bg.pane',
-  'bg.deep',
-  'surface',
-  'surface.hover',
-  'surface.selected',
-  'border',
-  'border.focus',
-  'text',
-  'text.muted',
-  'text.faint',
-  'text.onAccent',
-  'accent',
-  'recommend',
-  'link',
-  'success',
-  'warning',
-  'error',
-  'info',
-  'change.added',
-  'change.changed',
-  'change.removed',
-  'selection',
-  'cursor',
-  'editor.bg',
-  'editor.fg',
-  'editor.activeLine',
-  'editor.gutter',
-  'editor.selection',
-  'editor.cursor',
-  'whichKey.command',
-  'whichKey.prefix',
-  'origin.caused',
-  'origin.preExisting',
-  'origin.design',
-  'origin.nit',
-  'severity.critical',
-  'severity.important',
-  'severity.minor',
-  'syntax.keyword',
-  'syntax.atom',
-  'syntax.number',
-  'syntax.string',
-  'syntax.string2',
-  'syntax.comment',
-  'syntax.variable',
-  'syntax.variable2',
-  'syntax.definition',
-  'syntax.property',
-  'syntax.type',
-  'syntax.operator',
-  'syntax.punctuation',
-  'syntax.meta',
-  'syntax.heading',
-  'syntax.link',
-] as const;
+// What a token's value must be, which the theme loader checks it by: `raw`
+// is any CSS text, such as a gradient, an easing curve or a font stack.
+export type TokenKind =
+  | 'color'
+  | 'length'
+  | 'duration'
+  | 'number'
+  | 'shadow'
+  | 'filter'
+  | 'raw';
 
-export type ThemeToken = (typeof THEME_TOKENS)[number];
-
-// A theme with every token resolved to a `#rrggbb` or `#rrggbbaa` colour.
-export interface Theme {
-  name: string;
-  tokens: Record<ThemeToken, string>;
+// A plugin's theme token: its kind, and the value it takes when the theme sets
+// none, written as a theme would write it.
+export interface TokenDecl {
+  kind: TokenKind;
+  default: string;
 }
 
-// The theme in use, and a theme problem to show the user, or null.
-export interface ThemeChoice {
-  theme: Theme;
-  error: string | null;
+export type ColorScheme = 'dark' | 'light';
+
+// Every token resolved: keys are core names (`fg-secondary`) and qualified
+// plugin names (`forms.origin-caused`); values are CSS text ready for a custom
+// property. `reduced` holds the overrides in force while transparency is
+// reduced.
+export interface Theme {
+  name: string;
+  colorScheme: ColorScheme;
+  tokens: Record<string, string>;
+  reduced: Record<string, string>;
 }

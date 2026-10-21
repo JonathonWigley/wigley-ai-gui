@@ -1,18 +1,70 @@
 import type { Settings } from '../contracts/settings';
-import { THEME_TOKENS, type Theme } from '../contracts/theme';
-import { FONT_VARIABLES, themeVariable } from '../shared/theme-variables';
+import type { Theme } from '../contracts/theme';
+import { FONT_TOKENS, themeVariable } from '../shared/theme-variables';
 
-// Views and editors read colours and fonts only through these variables.
-export function applyTheme(
-  theme: Theme,
-  fonts: Settings['fonts'],
+// `apply` writes the theme's tokens to the root as CSS variables, the
+// `reduced` overrides over them while transparency is reduced, and the set
+// font settings over their tokens; views and editors read every token through
+// those variables.
+export interface ThemeApplier {
+  apply(theme: Theme, settings: Pick<Settings, 'transparency' | 'fonts'>): void;
+}
+
+// `reducedTransparency` is the OS's reduce-transparency preference, which
+// re-applies the last theme when it changes under the `system` setting.
+export function createThemeApplier(
   root: HTMLElement,
-) {
-  for (const token of THEME_TOKENS) {
-    root.style.setProperty(themeVariable(token), theme.tokens[token]);
+  reducedTransparency: Pick<MediaQueryList, 'matches' | 'addEventListener'>,
+): ThemeApplier {
+  let last: {
+    theme: Theme;
+    settings: Pick<Settings, 'transparency' | 'fonts'>;
+  } | null = null;
+
+  function apply(
+    theme: Theme,
+    settings: Pick<Settings, 'transparency' | 'fonts'>,
+  ) {
+    last = { theme, settings };
+    for (const [token, value] of Object.entries(theme.tokens)) {
+      root.style.setProperty(themeVariable(token), value);
+    }
+    const isReduced =
+      settings.transparency === 'reduced' ||
+      (settings.transparency === 'system' && reducedTransparency.matches);
+    if (isReduced) {
+      for (const [token, value] of Object.entries(theme.reduced)) {
+        root.style.setProperty(themeVariable(token), value);
+      }
+    }
+    applyFonts(root, settings.fonts);
+    root.dataset.transparency = isReduced ? 'reduced' : 'full';
+    root.style.setProperty('color-scheme', theme.colorScheme);
   }
-  root.style.setProperty(FONT_VARIABLES.ui, fonts.ui);
-  root.style.setProperty(FONT_VARIABLES.mono, fonts.mono);
-  root.style.setProperty(FONT_VARIABLES.uiSize, `${fonts.uiSize}px`);
-  root.style.setProperty(FONT_VARIABLES.monoSize, `${fonts.monoSize}px`);
+
+  reducedTransparency.addEventListener('change', () => {
+    if (last !== null && last.settings.transparency === 'system') {
+      apply(last.theme, last.settings);
+    }
+  });
+  return { apply };
+}
+
+function applyFonts(root: HTMLElement, fonts: Settings['fonts']) {
+  const { ui, mono, uiSize, monoSize } = fonts;
+  if (ui !== undefined) {
+    root.style.setProperty(themeVariable(FONT_TOKENS.ui), ui);
+  }
+  if (mono !== undefined) {
+    root.style.setProperty(themeVariable(FONT_TOKENS.mono), mono);
+  }
+  if (uiSize !== undefined) {
+    root.style.setProperty(themeVariable(FONT_TOKENS.uiSize), `${uiSize}px`);
+  }
+  if (monoSize !== undefined) {
+    root.style.setProperty(
+      themeVariable(FONT_TOKENS.monoSize),
+      `${monoSize}px`,
+    );
+  }
 }

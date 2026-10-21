@@ -20,6 +20,7 @@ function part(
       scopes: {},
       keys: { page: [], editor: [], app: [], global: [], intercept: [] },
       settings: {},
+      themeTokens: {},
     },
     exports,
   };

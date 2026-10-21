@@ -1,10 +1,8 @@
-import './syntax.css';
 import { closeCompletion } from '@codemirror/autocomplete';
 import { EditorView, minimalSetup } from 'codemirror';
 import { syntaxHighlighting } from '@codemirror/language';
 import { Compartment, EditorState } from '@codemirror/state';
 import { lineNumbers } from '@codemirror/view';
-import { classHighlighter } from '@lezer/highlight';
 import { CodeMirror, getCM, Vim, vim } from '@replit/codemirror-vim';
 import type {
   CreateEditorHost,
@@ -23,6 +21,7 @@ import {
   type DocumentExEvent,
   documentExEvent,
 } from './document-ex-commands';
+import { codeColours } from './code-colours';
 import { editorTheme } from './editor-theme';
 import { exBindName } from './ex-command-name';
 import { findLanguageByFile, loadLanguage } from './languages';
@@ -447,7 +446,7 @@ function boxExtensions(
 }
 
 // A whole file: line numbers, wrapped lines, the language `language` holds once
-// it loads, highlighted through the `tok-*` classes. Read-only blocks typed
+// it loads, highlighted through the Catppuccin Mocha style. Read-only blocks typed
 // input, and vim drops every edit it dispatches under the same facet.
 function documentExtensions(
   options: DocumentOptions,
@@ -462,7 +461,7 @@ function documentExtensions(
     EditorView.lineWrapping,
     EditorState.readOnly.of(options.readOnly),
     language.of([]),
-    syntaxHighlighting(classHighlighter),
+    syntaxHighlighting(codeColours),
     editorTheme,
     EditorView.editorAttributes.of({ class: 'wg-document-editor' }),
     reportUserChanges(events.changed),

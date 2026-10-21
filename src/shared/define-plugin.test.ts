@@ -20,6 +20,7 @@ const manifest = definePlugin({
     app: [{ accelerator: 'CommandOrControl+Q', command: 'quit' }],
   },
   settings: { delayMs: 400 },
+  themeTokens: {},
 });
 
 describe('definePlugin', () => {

@@ -176,4 +176,5 @@ export const chatManifest = definePlugin({
     intercept: [],
   },
   settings: { profiles: DEFAULT_PROFILES },
+  themeTokens: {},
 });

@@ -119,4 +119,5 @@ export const docsManifest = definePlugin({
     intercept: [],
   },
   settings: { scriptPath: '' },
+  themeTokens: {},
 });
