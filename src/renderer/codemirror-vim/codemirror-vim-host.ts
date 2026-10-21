@@ -1,4 +1,5 @@
 import './syntax.css';
+import { closeCompletion } from '@codemirror/autocomplete';
 import { EditorView, minimalSetup } from 'codemirror';
 import { syntaxHighlighting } from '@codemirror/language';
 import { Compartment, EditorState } from '@codemirror/state';
@@ -11,6 +12,7 @@ import type {
   DocumentEditorEvents,
   DocumentOptions,
   EditorEvents,
+  EditorOptions,
   FocusOptions,
   TextEditor,
   VimMode,
@@ -24,6 +26,7 @@ import {
 import { editorTheme } from './editor-theme';
 import { exBindName } from './ex-command-name';
 import { findLanguageByFile, loadLanguage } from './languages';
+import { prefixCompletion } from './prefix-completion';
 import { type BindGroup, bindGroups, vimrcLines } from './vim-binds';
 
 type VimEditor = Parameters<typeof Vim.handleEx>[0];
@@ -413,14 +416,20 @@ function reportUserChanges(changed: (text: string) => void) {
   });
 }
 
-// Answer boxes are prose: no gutters, brackets or completion; lines wrap.
-// `leaving` runs on blur before the editor reports it, so a box the user
-// leaves drops its unfinished keys before any other box reports.
+// Answer boxes are prose: no gutters or brackets, and completion only when
+// `options.completions` is given, ahead of vim so its popup keys run first;
+// lines wrap. `leaving` runs on blur before the editor reports it, so a box
+// the user leaves drops its unfinished keys before any other box reports.
 function boxExtensions(
   events: EditorEvents,
+  options: EditorOptions | undefined,
   leaving: (view: EditorView) => void,
 ) {
+  const completion = options?.completions
+    ? prefixCompletion(options.completions)
+    : [];
   return [
+    completion,
     vim({ status: true }),
     minimalSetup,
     EditorView.lineWrapping,
@@ -462,6 +471,15 @@ function documentExtensions(
       },
     }),
   ];
+}
+
+// The completion popup belongs to insert mode, so any other mode closes it.
+function closeCompletionOnLeavingInsert(view: EditorView) {
+  vimEditorOf(view).on('vim-mode-change', (change: { mode: string }) => {
+    if (change.mode !== 'insert') {
+      closeCompletion(view);
+    }
+  });
 }
 
 // Vim keymaps are global to the engine; they are applied once, through the
@@ -533,13 +551,17 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
   }
 
   return {
-    create(parent, doc, events) {
+    create(parent, doc, events, options) {
       const view = new EditorView({
         doc,
-        extensions: boxExtensions(events, leaving),
+        extensions: boxExtensions(events, options, leaving),
         parent,
       });
-      return hostView(view, events.modeChanged, (shared) => shared);
+      const editor = hostView(view, events.modeChanged, (shared) => shared);
+      if (options?.completions) {
+        closeCompletionOnLeavingInsert(view);
+      }
+      return editor;
     },
     createDocument(parent, doc, options, events) {
       const language = new Compartment();

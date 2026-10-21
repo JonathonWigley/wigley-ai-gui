@@ -40,4 +40,14 @@ export const editorTheme = EditorView.theme({
   },
   '.cm-panels-bottom': { borderTop: `1px solid ${colour('border')}` },
   '.cm-vim-panel input': { color: colour('editor.fg') },
+  '.cm-tooltip.cm-tooltip-autocomplete': {
+    backgroundColor: colour('bg.pane'),
+    border: `1px solid ${colour('border')}`,
+    color: colour('editor.fg'),
+    fontFamily: `var(${FONT_VARIABLES.mono})`,
+    '& > ul > li[aria-selected]': {
+      backgroundColor: colour('surface.selected'),
+      color: colour('editor.fg'),
+    },
+  },
 });

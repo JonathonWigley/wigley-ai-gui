@@ -270,6 +270,7 @@ const LAYERS: Record<string, LayerRule> = {
       '@codemirror/view',
       '@lezer/highlight',
       '@replit/codemirror-vim',
+      '@codemirror/autocomplete',
     ],
   },
   'src/renderer/markdown-it': {

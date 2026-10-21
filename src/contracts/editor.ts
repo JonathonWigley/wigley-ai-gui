@@ -73,9 +73,31 @@ export interface DocumentEditor extends TextEditor {
   goToLine(line: number): void;
 }
 
+// While the editor is in insert mode and the text from the document's start to the cursor is `prefix`
+// followed by no whitespace, offers the `words()` that start with the text typed after `prefix`, ignoring
+// case, in the order `words()` gives them. Accepting one replaces that text with `prefix`, the word and
+// one space. `offered` hears the offered words each time the list changes while it is open; `accepted`
+// hears the word accepted.
+export interface EditorCompletions {
+  prefix: string;
+  words(): readonly string[];
+  offered(words: readonly string[]): void;
+  accepted(word: string): void;
+}
+
+export interface EditorOptions {
+  completions?: EditorCompletions;
+}
+
 export interface EditorHost {
-  // A small prose box: no gutter, no language; it reports focus and blur.
-  create(parent: HTMLElement, doc: string, events: EditorEvents): TextEditor;
+  // A small prose box: no gutter, no language; it reports focus and blur, and
+  // offers `options.completions` when given.
+  create(
+    parent: HTMLElement,
+    doc: string,
+    events: EditorEvents,
+    options?: EditorOptions,
+  ): TextEditor;
   // A full-file editor, hosted as a box is: keys, focus and pending keys
   // behave the same in both.
   createDocument(
