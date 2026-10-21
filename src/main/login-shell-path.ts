@@ -30,21 +30,33 @@ export function pathFromMarkedOutput(output: string): string | null {
 
 // The PATH an interactive login run of `shell` builds, or null when `shell`
 // is unset (as on Windows), fails to start, or prints no marked PATH within
-// the timeout, after which it is killed. Never rejects.
+// `timeoutMs`. Settles within `timeoutMs` and never rejects.
 export function readLoginShellPath(
   shell: string | undefined,
+  timeoutMs = READ_TIMEOUT_MS,
 ): Promise<string | null> {
   if (!shell) {
     return Promise.resolve(null);
   }
   return new Promise((resolve) => {
-    execFile(
+    // An interactive shell ignores SIGTERM, so a profile that blocks is
+    // killed with SIGKILL.
+    const child = execFile(
       shell,
       ['-ilc', PRINT_PATH],
-      { encoding: 'utf8', timeout: READ_TIMEOUT_MS },
+      { encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL' },
       // A profile that errors after printing still printed the PATH, so the
       // output is read whatever the exit.
-      (_error, stdout) => resolve(pathFromMarkedOutput(stdout ?? '')),
+      (_error, stdout) => {
+        clearTimeout(cap);
+        resolve(pathFromMarkedOutput(stdout ?? ''));
+      },
     );
+    // The callback waits for stdout to close, which a process the profile
+    // started can hold open after the shell exits.
+    const cap = setTimeout(() => {
+      child.kill('SIGKILL');
+      resolve(null);
+    }, timeoutMs);
   });
 }

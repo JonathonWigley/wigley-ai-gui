@@ -343,6 +343,25 @@ describe('createNodeFiles', () => {
     expect(await files.stat(path.join(root, 'a.md'))).toBeNull();
   });
 
+  it('rename_SourceMissing_RejectsAsMissingFile', async () => {
+    const error = await files
+      .rename(path.join(root, 'none.md'), path.join(root, 'b.md'))
+      .catch((caught: unknown) => caught);
+
+    expect(isMissingFile(error)).toBe(true);
+  });
+
+  it('rename_DestinationParentMissing_RejectsAsMissingFile', async () => {
+    writeFileSync(path.join(root, 'a.md'), 'one');
+
+    const error = await files
+      .rename(path.join(root, 'a.md'), path.join(root, 'none', 'b.md'))
+      .catch((caught: unknown) => caught);
+
+    expect(isMissingFile(error)).toBe(true);
+    expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
+  });
+
   it('rename_DestinationParentIsFile_RejectsWithEnotdir', async () => {
     writeFileSync(path.join(root, 'a.md'), 'one');
     writeFileSync(path.join(root, 'f'), 'file');
