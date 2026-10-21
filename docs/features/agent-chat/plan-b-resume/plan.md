@@ -292,10 +292,10 @@ picker title is `Session`; the box's completion prefix is `/`.
 - [x] [Chat main: past sessions, archive, resume, commands](04-chat-main-resume.md) — after 03
 
 ### Wave 4
-- [ ] [Start prompt: the session step](05-start-prompt-resume.md) — after 04
+- [x] [Start prompt: the session step](05-start-prompt-resume.md) — after 04
 
 ### Wave 5
-- [ ] [Chat tab: slash completion](06-chat-tab-completion.md) — after 02, 04, 05
+- [x] [Chat tab: slash completion](06-chat-tab-completion.md) — after 02, 04, 05
 
 ### Wave 6
 - [ ] [Chat self-test steps](07-selftest-steps.md) — after 05, 06
@@ -317,7 +317,12 @@ Peer session `wigley-ai-gui-6a` shares the working tree: every commit is pathspe
 - 02 · a5f2c2e · diff read + typecheck pass · concerns: plan's `editorExtensions` is `boxExtensions` in the tree (completion added there, document editors get none); `@codemirror/view`/`state` are direct deps after all (rule kept anyway); popup keys ahead of vim unverified live (tasks 07/09)
 - 03 · 7742ab6 · diff read + typecheck pass, `projects/` grep lists only `src/main/claude-code/` · concerns: task GIVEN says `firstMessage` of `fix   the\n bug` is `fix the\n bug` but its user-text rule keeps the string as is — rule followed, title still `fix the bug`; transcript facts re-checked on 2.1.306, new `system` subtype `informational` already falls to the skip rule
 - 04 · 46145ab · diff read + typecheck pass · concerns: `chat-commands.test.ts` fixture gained `commands: []` (outside the Files list); `src/contracts/agent.ts:92` comment on `AgentProcessEvents.commands` still says plan B reads it (stale, for task 08 or the review); resume test compares history only as `[id, text]` pairs
+- 05 · 959f5a1 · diff read + typecheck pass · concerns: `toggleArchive`/`showArchived` from the command palette after another picker request replaced the session step would act on the old step (keys cannot, scope-bound); duplicate `resume` binds' startup key check confirmed only by task 07's self-test; edits outside the Files list in `list-picker.ts`, `chat-commands.ts`, `start-prompt.test.ts`
+- 06 · f6c9e9e · diff read + typecheck pass · concerns: no Vitest tests by design — only task 07's self-test steps 30–32 prove the wiring; the stale `AgentProcessEvents.commands` comment (`src/contracts/agent.ts:92`) rewritten here
 ### Contract changes
+- manifest editor binds in scope `resume`: `<CR>` pickerPick, `<Esc>` pickerList → those plus `{ keys: '<CR>', mode: 'insert', scope: 'resume', command: 'pickerPick' }` · why: plan A's `picker` scope gained an insert `<CR>` for its filter, and `resume` repeats the picker binds · consumers: 07 · group 05
+- `ListPicker` (`src/shared/page/list-picker.ts`) gains `cursorIndex(): number \| null` · why: the cursor lives only in its state, so `Picker.cursorIndex` delegates to it · consumers: 05 · group 05
+- `chatCommandHandlers` omits `toggleArchive` and `showArchived` with `newSession` · why: the start prompt handles them · consumers: none · group 05
 ### Rulings
 - memory files' read, modified and readStart share one `textOf` lookup, all rejecting `no file at <path>` — one rule for missing files — none · group 01
 - node and memory adapters each hold their own one-line cut-UTF-8 decode rather than a shared helper — node-files imports only contracts — duplicate if a third adapter appears · group 01
@@ -328,5 +333,8 @@ Peer session `wigley-ai-gui-6a` shares the working tree: every commit is pathspe
 - open host ids are only what `sessions.connected` recorded and `sessions.ended` dropped, not chat's own held map — the Decisions line names that one record — a resumed session reappears in the list if owned sessions stop emitting `connected` · group 04
 - `pastSessions` and `resume` reject (async) for an unknown profile or missing harness; `start` still throws synchronously — matches the GIVENs' wording — none · group 04
 - a non-missing read failure of `archived-sessions.json` passes on unchanged; bad JSON and a non-string-array both reject the pinned message — only the shape is the user's state — none · group 04
+- a request with another scope replacing an open one calls `list.close()` (pops the old scope, no `picker closed` line) then pushes the new scope — matches the plan's pop-then-push — a missing close line in logs · group 05
+- the session step counts as open while the prompt last opened it, nothing in it was picked, and `picker.isOpen()` — the Decisions name no other test — see the palette concern · group 05
+- after archiving, the reopen runs when `setArchived` resolves even if the user closed the list meanwhile — none in the plan — the list reappears after an Escape · group 05
 ### Review rounds
 ### Test gate

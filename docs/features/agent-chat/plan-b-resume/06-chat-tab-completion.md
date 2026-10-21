@@ -1,6 +1,6 @@
 # 06 — Chat tab: slash completion
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 02, 04, 05
 Plan: [plan.md](plan.md)
@@ -37,3 +37,5 @@ Done when: the typecheck and `npm run lint` pass; the self-test steps above pass
 Commit:    one commit for the group
 
 ## Proof
+
+Commit `f6c9e9e`. Proof: diff read (box created with `{ completions: { prefix: '/', … } }`, `commands` handler, both log lines) and `npm run typecheck` pass. The self-test steps 30–32 run at the test gate.

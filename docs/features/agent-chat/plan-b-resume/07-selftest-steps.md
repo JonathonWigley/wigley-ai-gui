@@ -1,6 +1,6 @@
 # 07 — Chat self-test steps
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 05, 06
 Plan: [plan.md](plan.md)

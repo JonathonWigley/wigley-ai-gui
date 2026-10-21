@@ -1,6 +1,6 @@
 # 05 — Start prompt: the session step
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -102,3 +102,5 @@ Done when: the typecheck and `npm run lint` pass (the page's key checks accept t
 Commit:    one commit for the group
 
 ## Proof
+
+Commit `959f5a1`. Proof: diff read (every Produces present, plus the `resume` scope's insert `<CR>` bind and `ListPicker.cursorIndex`) and `npm run typecheck` pass. Concerns: a palette-run `toggleArchive` after another picker replaced the step acts on the old step; the reopen after archiving runs even after the list closed.
