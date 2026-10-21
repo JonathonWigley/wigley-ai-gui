@@ -95,14 +95,17 @@ export const SELFTEST_LAYOUT = {
 // question 2, and Space e n finds no unanswered item.
 // Space opens which-key, a moves it into the Space a group, and Esc cancels the
 // sequence and closes it. Option+Shift+o moves to the second session, where
-// Option+o finds no other tab; Cmd+W there asks to cancel its round, Esc keeps
+// Option+o wraps from its Form tab to its Docs tab and Option+o again back to
+// the Form tab; Cmd+W there asks to cancel its round, Esc keeps
 // it and returns to its form, where j moves to its question 2 and Space e p
 // finds its untouched question 1; Option+Shift+i moves back to the first
 // session, on question 2. Space k s hides the sidebar and shows it again; a
 // enters question 2's notes box, where Esc and Space k s (the editor bind)
 // hide it and Space k s in NORMAL shows it; Esc (forms' editor bind) leaves the
-// box. Option+Shift+i wraps to the last session, which has no tab, so nothing
-// shows and no form keeps its scope; Option+Shift+o wraps back to the first,
+// box. Option+Shift+i wraps to the last session, a Codex one with no folder,
+// whose only tab is its Docs tab: its first show runs the session source,
+// which knows no folder, and no form keeps its scope; Option+Shift+o wraps
+// back to the first,
 // whose form takes its scope again. Space z l n cycles to the selftest layout
 // and Space z l p back to default; each load logs every line its cards log at
 // once, so each step checks one of them: the finding card's failure, then,
@@ -207,7 +210,12 @@ const STEPS: SelfTestStep[] = [
     expect: '[sessions] activated selftest 2',
     checksFit: true,
   },
-  { keys: ['<A-o>'], expect: '[sessions] no other tab in selftest 2' },
+  {
+    keys: ['<A-o>'],
+    expect: '[sessions] showed Docs tab in selftest 2',
+    checksFit: true,
+  },
+  { keys: ['<A-o>'], expect: '[sessions] showed Form tab in selftest 2' },
   {
     keys: ['<D-w>'],
     expect:
@@ -232,7 +240,7 @@ const STEPS: SelfTestStep[] = [
   { keys: ['Escape'], expect: '[forms] left the box' },
   {
     keys: ['<A-S-i>'],
-    expect: '[sessions] nothing shown in Codex session',
+    expect: '[docs] session index: No project folder is known for this session',
     checksFit: true,
   },
   { keys: ['<A-S-o>'], expect: '[sessions] activated selftest' },
@@ -305,11 +313,15 @@ const STEPS: SelfTestStep[] = [
 ];
 
 // Code and tables scroll in their own box, and rail, row and tab titles end
-// in an ellipsis, their full text in the item heading and the tooltip.
+// in an ellipsis, their full text in the item heading and the tooltip; so do
+// a Docs tab's row titles, paths and status line.
 const SCROLLS_ITSELF = [
   '.md pre',
   '.md table',
   '.rail-title',
+  '.docs-row-title',
+  '.docs-path',
+  '.docs-status',
   '.session-row-label',
   '.session-row-status',
   '.session-tab-label',

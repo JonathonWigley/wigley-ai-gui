@@ -5,11 +5,13 @@ import type {
   MainServices,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import type { SessionsMainExports } from '../../sessions/contract';
 import type { DocChange, DocsChannel } from '../contract';
 import { docsManifest } from '../manifest';
 import { createDocFiles, type DocFiles } from './doc-files';
 import { createIndexSources, type IndexSources } from './index-sources';
 import { writeDocsFixture } from './selftest-fixture';
+import { docsSelfTestScript } from './selftest-script';
 
 type DocsApi = MainApi<typeof docsManifest, DocsChannel>;
 
@@ -152,6 +154,13 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     });
     channel.handle('pluginConfigFile', async (key, harness) =>
       (await docs).docFiles.pluginConfigFile(key, harness),
+    );
+    services.selfTest?.run(
+      docsSelfTestScript({
+        files: services.files,
+        homeDir: services.homeDir,
+        sessions: api.dependency<SessionsMainExports>('sessions'),
+      }),
     );
     return { commands: {}, dispose: () => watches.closeAll() };
   },
