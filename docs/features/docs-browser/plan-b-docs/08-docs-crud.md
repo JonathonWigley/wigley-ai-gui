@@ -1,6 +1,6 @@
 # 08 — Create, rename, delete, detail views
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -192,3 +192,4 @@ One commit for the group: "Docs: create by kind and by path, rename, delete to t
 
 ## Proof
 
+`a6abd2e` · diff read, every Produces present, typecheck and lint pass; the self-test clause moves to the gate after 09. Concerns in plan.md's Run log.

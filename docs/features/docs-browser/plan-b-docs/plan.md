@@ -282,7 +282,7 @@ beside the tree's own (`memory-files.ts`, `fake-agent-harness.ts`), named for wh
 - [x] [Docs view, Docs mode and Docs tabs](07-docs-view.md) — after 02, 04, 05, 06
 
 ### Wave 5
-- [ ] [Create, rename, delete, detail views](08-docs-crud.md) — after 07
+- [x] [Create, rename, delete, detail views](08-docs-crud.md) — after 07
 
 ### Wave 6
 - [ ] [Self-test](09-selftest.md) — after 08
@@ -331,6 +331,10 @@ review range is this run's explicit commit list.
   chat's follow) — task 09's to fix · concerns: `:q` destroys the editor inside its own ex handler (live check, 11);
   each removed session leaves an inert `docChanged` listener (the channel has no `off`); `dispose()` does not pop an
   open filter box's scope
+- 08 · wigley-ai-gui `a6abd2e` · proved: diff read, every Produces present, typecheck and lint pass (worker: 139 docs
+  tests pass; self-test fails only 07's 38 Docs-tab steps) · concerns: 07's `dispose()` filter-box scope and inert
+  `docChanged` listeners stay open; Tab in the path box may move browser focus if the keys engine lets the default
+  through (live check); the dialog flows have no unit tests (09's steps, 11's checks)
 ### Contract changes
 - `tree.ts`: adds `compareTitles(a, b): number` (base-sensitivity `localeCompare`, code-unit tie-break), used by
   `kinds.ts` · why: places sort as tree nodes do · consumers: 08 may use it · group 04
@@ -342,6 +346,10 @@ review range is this run's explicit commit list.
 - `Chip` gains `state` (sets `data-state`); `DocsViewDeps` gains `pushScope('conflict' | 'picker' | 'box')`;
   `DocsViewCommands` holds all 22 view commands; new exports `createDocView`/`DocTarget`, `createTreeView`,
   `textBoxInput` (the list picker stays internal to docs-view.ts) · consumers: 08 · group 07
+- 07's list picker moves from `docs-view.ts` to `docs-dialogs.ts` (else the two import each other);
+  `DocsPushedScope` gains `'confirm'`; `DocTarget.isHeaderOnly` → `detail: DocDetail | null`; `DocView` gains
+  `retarget`, `clear`, `edit(line?)`; `TreeView` gains `selected()` (`tree-view.ts`, outside 08's Files list)
+  · consumers: 09 · group 08
 ### Rulings
 - links: an href `<no colon>:<digits>` ending or followed by `#`/`?` is a line suffix, not a scheme (the pinned test
   `resolve_ColonLine_Resolved` contradicts step 3's regex) — `x:123` would read as a file and toast — group 04
@@ -387,5 +395,7 @@ review range is this run's explicit commit list.
 - `<C-h>` with the tree hidden shows it; an index read error shows in the status line and keeps the doc; an
   older overlapping load never overwrites a newer; the filter box, picker and conflict prompt close when the base
   scope changes under them; the view's own write never raises the banner — group 07
+- a source run that lands re-applies every change made after it was asked, on top of its document, so a run asked
+  before a create never drops the new leaf — group 08
 ### Review rounds
 ### Test gate
