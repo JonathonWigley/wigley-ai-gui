@@ -22,16 +22,24 @@ export interface PickerRequest<T> {
   picked(item: T): void;
 }
 
+// One opened request's place in the picker.
+export interface PickerHandle {
+  // True until the request is picked, closed, or replaced by another `open`.
+  isOpen(): boolean;
+}
+
 // The shared list picker with a filter box, in the window's overlay, holding
 // one request at a time: `open` replaces the open request, if any, keeping
 // the pushed scope when the new request names the same one. `pick`
 // with nothing visible does nothing; `close` and the pushed scope's base
 // changing close it unpicked and log `picker closed: <title>`.
 // `closeSessionBound` closes it only while its request is session-bound.
+// `open` returns the request's handle, so its opener can tell whether its
+// own request is still the open one.
 // `focusFilter` types into the filter box, and `leaveFilter` leaves it with
 // the filter kept.
 export interface Picker {
-  open<T>(request: PickerRequest<T>): void;
+  open<T>(request: PickerRequest<T>): PickerHandle;
   isOpen(): boolean;
   // The open request's item index under the cursor; null when closed or
   // nothing is visible.
@@ -67,6 +75,8 @@ export function createPicker(deps: PickerDeps): Picker {
   deps.overlay.contribute(list.element);
 
   let isSessionBound = false;
+  // The open request's handle; null once it is picked or closed.
+  let shown: PickerHandle | null = null;
 
   return {
     open(next) {
@@ -77,14 +87,25 @@ export function createPicker(deps: PickerDeps): Picker {
         list.close();
       }
       scope = nextScope;
+      const handle: PickerHandle = {
+        isOpen: () => shown === handle && list.isOpen(),
+      };
+      shown = handle;
       list.open({
         title: next.title,
         items: next.items,
         label: next.label,
         selected: next.selected,
-        chosen: next.picked,
-        cancelled: () => deps.log('chat', `picker closed: ${next.title}`),
+        chosen: (item) => {
+          shown = null;
+          next.picked(item);
+        },
+        cancelled: () => {
+          shown = null;
+          deps.log('chat', `picker closed: ${next.title}`);
+        },
       });
+      return handle;
     },
     isOpen: () => list.isOpen(),
     cursorIndex: () => list.cursorIndex(),

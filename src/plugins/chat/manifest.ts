@@ -8,6 +8,33 @@ export const DEFAULT_PROFILES: ChatProfile[] = [
   { name: 'personal', configDir: '~/.claude-personal' },
 ];
 
+// The scopes a picker list pushes; each holds the same list binds.
+type ListScope = 'picker' | 'resume';
+
+function listPageBinds(scope: ListScope) {
+  return [
+    { keys: ['j'], scope, command: 'pickerDown' as const },
+    { keys: ['k'], scope, command: 'pickerUp' as const },
+    { keys: ['Enter'], scope, command: 'pickerPick' as const },
+    { keys: ['Escape'], scope, command: 'pickerClose' as const },
+    { keys: ['/'], scope, command: 'pickerFilter' as const },
+  ];
+}
+
+// `<CR>` picks in insert mode too, so Enter in the filter box picks.
+function listEditorBinds(scope: ListScope) {
+  return [
+    { keys: '<CR>', scope, command: 'pickerPick' as const },
+    {
+      keys: '<CR>',
+      mode: 'insert' as const,
+      scope,
+      command: 'pickerPick' as const,
+    },
+    { keys: '<Esc>', scope, command: 'pickerList' as const },
+  ];
+}
+
 // Vim's editor binds are normal-mode maps: `<CR>` sends only in normal mode,
 // so Enter in insert mode adds a line.
 export const chatManifest = definePlugin({
@@ -117,16 +144,8 @@ export const chatManifest = definePlugin({
       { keys: [' ', 'c', 'e'], scope: 'chat', command: 'pickEffort' },
       { keys: [' ', 'c', 'o'], scope: 'chat', command: 'pickModel' },
       { keys: [' ', 'c', 'c'], scope: 'chat', command: 'pickControl' },
-      { keys: ['j'], scope: 'picker', command: 'pickerDown' },
-      { keys: ['k'], scope: 'picker', command: 'pickerUp' },
-      { keys: ['Enter'], scope: 'picker', command: 'pickerPick' },
-      { keys: ['Escape'], scope: 'picker', command: 'pickerClose' },
-      { keys: ['/'], scope: 'picker', command: 'pickerFilter' },
-      { keys: ['j'], scope: 'resume', command: 'pickerDown' },
-      { keys: ['k'], scope: 'resume', command: 'pickerUp' },
-      { keys: ['Enter'], scope: 'resume', command: 'pickerPick' },
-      { keys: ['Escape'], scope: 'resume', command: 'pickerClose' },
-      { keys: ['/'], scope: 'resume', command: 'pickerFilter' },
+      ...listPageBinds('picker'),
+      ...listPageBinds('resume'),
       { keys: ['x'], scope: 'resume', command: 'toggleArchive' },
       { keys: ['.'], scope: 'resume', command: 'showArchived' },
       { keys: ['<D-Enter>'], scope: 'reason', command: 'submitReason' },
@@ -146,12 +165,8 @@ export const chatManifest = definePlugin({
       { keys: '<Leader>ce', scope: 'chat', command: 'pickEffort' },
       { keys: '<Leader>co', scope: 'chat', command: 'pickModel' },
       { keys: '<Leader>cc', scope: 'chat', command: 'pickControl' },
-      { keys: '<CR>', scope: 'picker', command: 'pickerPick' },
-      { keys: '<CR>', mode: 'insert', scope: 'picker', command: 'pickerPick' },
-      { keys: '<Esc>', scope: 'picker', command: 'pickerList' },
-      { keys: '<CR>', scope: 'resume', command: 'pickerPick' },
-      { keys: '<CR>', mode: 'insert', scope: 'resume', command: 'pickerPick' },
-      { keys: '<Esc>', scope: 'resume', command: 'pickerList' },
+      ...listEditorBinds('picker'),
+      ...listEditorBinds('resume'),
       { keys: '<CR>', scope: 'reason', command: 'submitReason' },
       { keys: '<Esc>', scope: 'reason', command: 'cancelReason' },
       { keys: '<Leader>kn', scope: 'any', command: 'newSession' },

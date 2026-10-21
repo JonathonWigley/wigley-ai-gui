@@ -7,7 +7,7 @@ import type {
   PastSessionRow,
   RecentFolder,
 } from '../contract';
-import type { Picker } from './picker';
+import type { Picker, PickerHandle } from './picker';
 import {
   type SessionItem,
   SESSION_STEP_TITLE,
@@ -43,7 +43,8 @@ export interface StartPrompt {
   showArchived(): void;
 }
 
-// The session step shown: its saved sessions and the lines last opened.
+// The session step: its saved sessions, the lines last opened, and the
+// picker handle of the request showing them.
 interface SessionStep {
   context: PromptContext;
   projectDir: string;
@@ -51,12 +52,9 @@ interface SessionStep {
   rows: PastSessionRow[];
   showArchived: boolean;
   items: SessionItem[];
-}
-
-// The session step the prompt last opened; null once one of its lines is
-// picked.
-interface SessionStepHolder {
-  step: SessionStep | null;
+  shown: PickerHandle | null;
+  // True while a `setArchived` for this step awaits its answer.
+  isWriting: boolean;
 }
 
 // What the prompt has gathered once its first answers arrive.
@@ -65,212 +63,216 @@ interface PromptContext {
   recent: readonly RecentFolder[];
   homeDir: string;
   profiles: readonly ChatProfile[];
-  sessions: SessionStepHolder;
 }
 
 export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
-  const sessions: SessionStepHolder = { step: null };
-  return {
-    open: () => openPrompt(deps, sessions),
-    toggleArchive: () => toggleArchive(deps, sessions),
-    showArchived: () => toggleShowArchived(deps, sessions),
-  };
-}
-
-function openPrompt(deps: StartPromptDeps, sessions: SessionStepHolder) {
   const { channel, log } = deps;
-  sessions.step = null;
-  void Promise.all([
-    channel.invoke('recentFolders'),
-    channel.invoke('homeDir'),
-  ]).then(
-    ([recent, homeDir]) => {
-      const profiles = deps.profiles();
-      if (profiles.length === 0) {
-        log('chat', 'no profiles in the chat settings');
-        deps.toast("Add a profile to chat's profiles setting first", 'error');
-        return;
-      }
-      openFolderStep({ deps, recent, homeDir, profiles, sessions });
-    },
-    (error: unknown) => {
-      log('chat', `start prompt not opened: ${errorText(error)}`);
-      deps.toast(`Start prompt not opened: ${errorText(error)}`, 'error');
-    },
-  );
-}
+  // The session step the prompt last opened; null once one of its lines is
+  // picked or the prompt opens again.
+  let step: SessionStep | null = null;
 
-function openFolderStep(context: PromptContext) {
-  context.deps.picker.open<FolderItem>({
-    title: 'Folder',
-    items: folderItems(context.recent, context.homeDir),
-    label: (item) => item.label,
-    selected: 0,
-    picked: (item) =>
-      item.kind === 'recent'
-        ? openProfileStep(context, item.folder.projectDir)
-        : chooseFolder(context),
-  });
-}
+  // The session step while its own request is the picker's open one; null
+  // when the picker is closed or shows another list.
+  const shownStep = (): SessionStep | null =>
+    step?.shown?.isOpen() === true ? step : null;
 
-// The folder dialog; dismissing it returns to the folder step.
-function chooseFolder(context: PromptContext) {
-  const { deps } = context;
-  void deps.channel.invoke('chooseFolder').then(
-    (projectDir) => {
-      if (projectDir === null) {
-        deps.log('chat', 'no folder chosen');
-        openFolderStep(context);
-        return;
-      }
-      openProfileStep(context, projectDir);
-    },
-    (error: unknown) => {
-      deps.log('chat', `folder dialog failed: ${errorText(error)}`);
-      deps.toast(`Folder dialog failed: ${errorText(error)}`, 'error');
-    },
-  );
-}
-
-function openProfileStep(context: PromptContext, projectDir: string) {
-  const { profiles } = context;
-  if (profiles.length === 1) {
-    listSessions(context, projectDir, profiles[0]);
-    return;
-  }
-  context.deps.picker.open<ChatProfile>({
-    title: 'Profile',
-    items: profiles,
-    label: profileLabel,
-    selected: preselectedProfile(profiles, context.recent, projectDir),
-    picked: (profile) => listSessions(context, projectDir, profile),
-  });
-}
-
-// Opens the session step on the folder's saved sessions; with none, starts a
-// new session at once. A failed listing opens the step with the new-session
-// line alone.
-function listSessions(
-  context: PromptContext,
-  projectDir: string,
-  profile: ChatProfile,
-) {
-  const { deps } = context;
-  const openWith = (rows: PastSessionRow[]) => {
-    const step: SessionStep = {
-      context,
-      projectDir,
-      profile,
-      rows,
-      showArchived: false,
-      items: [],
-    };
-    context.sessions.step = step;
-    openSessionStep(step, 0);
+  const openPrompt = () => {
+    step = null;
+    void Promise.all([
+      channel.invoke('recentFolders'),
+      channel.invoke('homeDir'),
+    ]).then(
+      ([recent, homeDir]) => {
+        const profiles = deps.profiles();
+        if (profiles.length === 0) {
+          log('chat', 'no profiles in the chat settings');
+          deps.toast("Add a profile to chat's profiles setting first", 'error');
+          return;
+        }
+        openFolderStep({ deps, recent, homeDir, profiles });
+      },
+      (error: unknown) => {
+        log('chat', `start prompt not opened: ${errorText(error)}`);
+        deps.toast(`Start prompt not opened: ${errorText(error)}`, 'error');
+      },
+    );
   };
-  void deps.channel.invoke('pastSessions', projectDir, profile.name).then(
-    (rows) => {
-      if (rows.length === 0) {
-        startSession(context, projectDir, profile);
-        return;
-      }
-      openWith(rows);
-    },
-    (error: unknown) => {
-      deps.log('chat', `saved sessions not listed: ${errorText(error)}`);
-      deps.toast(`Saved sessions not listed: ${errorText(error)}`, 'error');
-      openWith([]);
-    },
-  );
-}
 
-// Opens, or reopens over itself, the session step on its rows with the
-// cursor on `selected`.
-function openSessionStep(step: SessionStep, selected: number) {
-  const { context } = step;
-  step.items = sessionItems(step.rows, step.showArchived);
-  context.deps.picker.open<SessionItem>({
-    title: SESSION_STEP_TITLE,
-    scope: 'resume',
-    items: step.items,
-    label: (item) => item.label,
-    selected,
-    picked: (item) => {
-      context.sessions.step = null;
-      if (item.kind === 'new') {
-        startSession(context, step.projectDir, step.profile);
-      } else {
-        resumeSession(step, item.row);
-      }
-    },
-  });
-}
+  const openFolderStep = (context: PromptContext) => {
+    deps.picker.open<FolderItem>({
+      title: 'Folder',
+      items: folderItems(context.recent, context.homeDir),
+      label: (item) => item.label,
+      selected: 0,
+      picked: (item) =>
+        item.kind === 'recent'
+          ? openProfileStep(context, item.folder.projectDir)
+          : chooseFolder(context),
+    });
+  };
 
-// The open session step; null when the prompt last opened another step or
-// the picker is closed.
-function openStep(
-  deps: StartPromptDeps,
-  sessions: SessionStepHolder,
-): SessionStep | null {
-  return deps.picker.isOpen() ? sessions.step : null;
-}
+  // The folder dialog; dismissing it returns to the folder step.
+  const chooseFolder = (context: PromptContext) => {
+    void channel.invoke('chooseFolder').then(
+      (projectDir) => {
+        if (projectDir === null) {
+          log('chat', 'no folder chosen');
+          openFolderStep(context);
+          return;
+        }
+        openProfileStep(context, projectDir);
+      },
+      (error: unknown) => {
+        log('chat', `folder dialog failed: ${errorText(error)}`);
+        deps.toast(`Folder dialog failed: ${errorText(error)}`, 'error');
+      },
+    );
+  };
 
-function toggleArchive(deps: StartPromptDeps, sessions: SessionStepHolder) {
-  const step = openStep(deps, sessions);
-  const cursor = deps.picker.cursorIndex();
-  if (step === null || cursor === null) {
-    deps.log('chat', 'no session under the cursor');
-    return;
-  }
-  const item = step.items[cursor];
-  if (item.kind === 'new') {
-    deps.log('chat', 'New session cannot be archived');
-    return;
-  }
-  const { hostSessionId, title } = item.row;
-  const archived = !item.row.archived;
-  void deps.channel.invoke('setArchived', hostSessionId, archived).then(
-    () => {
-      const before = step.items;
-      step.rows = withArchived(step.rows, hostSessionId, archived);
-      reopenSessionStep(step, before, cursor);
-      deps.log('chat', `${archived ? 'archived' : 'restored'} ${title}`);
-    },
-    (error: unknown) => {
-      deps.log('chat', `archive failed: ${errorText(error)}`);
-      deps.toast(`Archive failed: ${errorText(error)}`, 'error');
-    },
-  );
-}
+  const openProfileStep = (context: PromptContext, projectDir: string) => {
+    const { profiles } = context;
+    if (profiles.length === 1) {
+      listSessions(context, projectDir, profiles[0]);
+      return;
+    }
+    deps.picker.open<ChatProfile>({
+      title: 'Profile',
+      items: profiles,
+      label: profileLabel,
+      selected: preselectedProfile(profiles, context.recent, projectDir),
+      picked: (profile) => listSessions(context, projectDir, profile),
+    });
+  };
 
-function toggleShowArchived(
-  deps: StartPromptDeps,
-  sessions: SessionStepHolder,
-) {
-  const step = openStep(deps, sessions);
-  if (step === null) {
-    deps.log('chat', 'no session list shown');
-    return;
-  }
-  const before = step.items;
-  const cursor = deps.picker.cursorIndex();
-  step.showArchived = !step.showArchived;
-  reopenSessionStep(step, before, cursor);
-  deps.log(
-    'chat',
-    `archived sessions ${step.showArchived ? 'shown' : 'hidden'}`,
-  );
-}
+  // Opens the session step on the folder's saved sessions; with none, starts
+  // a new session at once. A failed listing opens the step with the
+  // new-session line alone.
+  const listSessions = (
+    context: PromptContext,
+    projectDir: string,
+    profile: ChatProfile,
+  ) => {
+    const openWith = (rows: PastSessionRow[]) => {
+      const opened: SessionStep = {
+        context,
+        projectDir,
+        profile,
+        rows,
+        showArchived: false,
+        items: [],
+        shown: null,
+        isWriting: false,
+      };
+      step = opened;
+      openSessionStep(opened, 0);
+    };
+    void channel.invoke('pastSessions', projectDir, profile.name).then(
+      (rows) => {
+        if (rows.length === 0) {
+          startSession(context, projectDir, profile);
+          return;
+        }
+        openWith(rows);
+      },
+      (error: unknown) => {
+        log('chat', `saved sessions not listed: ${errorText(error)}`);
+        deps.toast(`Saved sessions not listed: ${errorText(error)}`, 'error');
+        openWith([]);
+      },
+    );
+  };
 
-// Reopens the step on its changed rows, keeping the cursor on the item it
-// was on in `before` where the new lines still hold it.
-function reopenSessionStep(
-  step: SessionStep,
-  before: readonly SessionItem[],
-  cursor: number | null,
-) {
-  const after = sessionItems(step.rows, step.showArchived);
-  openSessionStep(step, selectedAfterChange(before, cursor, after));
+  // Opens, or reopens over itself, the session step on its rows with the
+  // cursor on `selected`.
+  const openSessionStep = (opened: SessionStep, selected: number) => {
+    opened.items = sessionItems(opened.rows, opened.showArchived);
+    opened.shown = deps.picker.open<SessionItem>({
+      title: SESSION_STEP_TITLE,
+      scope: 'resume',
+      items: opened.items,
+      label: (item) => item.label,
+      selected,
+      picked: (item) => {
+        step = null;
+        if (item.kind === 'new') {
+          startSession(opened.context, opened.projectDir, opened.profile);
+        } else {
+          resumeSession(opened, item.row);
+        }
+      },
+    });
+  };
+
+  // Reopens the step on its changed rows, keeping the cursor on the item it
+  // was on in `before` where the new lines still hold it.
+  const reopenSessionStep = (
+    opened: SessionStep,
+    before: readonly SessionItem[],
+    cursor: number | null,
+  ) => {
+    const after = sessionItems(opened.rows, opened.showArchived);
+    openSessionStep(opened, selectedAfterChange(before, cursor, after));
+  };
+
+  // Archives or restores the row under the cursor. A press while an earlier
+  // write for the step awaits its answer is ignored, since the row's state
+  // it would flip is not yet known. The answer reopens the list only while
+  // the step is still shown.
+  const toggleArchive = () => {
+    const shown = shownStep();
+    const cursor = deps.picker.cursorIndex();
+    if (shown === null || cursor === null) {
+      log('chat', 'no session under the cursor');
+      return;
+    }
+    const item = shown.items[cursor];
+    if (item.kind === 'new') {
+      log('chat', 'New session cannot be archived');
+      return;
+    }
+    if (shown.isWriting) {
+      log('chat', 'archive ignored: an archive write is in flight');
+      return;
+    }
+    const { hostSessionId, title } = item.row;
+    const archived = !item.row.archived;
+    shown.isWriting = true;
+    void channel.invoke('setArchived', hostSessionId, archived).then(
+      () => {
+        shown.isWriting = false;
+        shown.rows = withArchived(shown.rows, hostSessionId, archived);
+        if (shownStep() !== shown) {
+          return;
+        }
+        reopenSessionStep(shown, shown.items, deps.picker.cursorIndex());
+        log('chat', `${archived ? 'archived' : 'restored'} ${title}`);
+      },
+      (error: unknown) => {
+        shown.isWriting = false;
+        log('chat', `archive failed: ${errorText(error)}`);
+        deps.toast(`Archive failed: ${errorText(error)}`, 'error');
+      },
+    );
+  };
+
+  const toggleShowArchived = () => {
+    const shown = shownStep();
+    if (shown === null) {
+      log('chat', 'no session list shown');
+      return;
+    }
+    const before = shown.items;
+    const cursor = deps.picker.cursorIndex();
+    shown.showArchived = !shown.showArchived;
+    reopenSessionStep(shown, before, cursor);
+    log('chat', `archived sessions ${shown.showArchived ? 'shown' : 'hidden'}`);
+  };
+
+  return {
+    open: openPrompt,
+    toggleArchive,
+    showArchived: toggleShowArchived,
+  };
 }
 
 function resumeSession(step: SessionStep, row: PastSessionRow) {

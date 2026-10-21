@@ -4,9 +4,11 @@ import type {
   ChatProfile,
   PastSessionRow,
   RecentFolder,
+  ResumeRequest,
   StartRequest,
 } from '../contract';
 import type { Picker, PickerRequest } from './picker';
+import { NEW_SESSION_LABEL, sessionTime } from './resume-items';
 import { createStartPrompt } from './start-prompt';
 import { CHOOSE_FOLDER_LABEL, type FolderItem } from './start-prompt-items';
 
@@ -32,6 +34,8 @@ interface Answers {
   chooseFolder: () => Promise<string | null>;
   pastSessions: () => Promise<PastSessionRow[]>;
   start: (request: StartRequest) => Promise<string>;
+  resume: (request: ResumeRequest) => Promise<string>;
+  setArchived: (hostSessionId: string, archived: boolean) => Promise<void>;
 }
 
 interface Opened {
@@ -60,6 +64,8 @@ function setUp(
   const opened: Opened[] = [];
   const invoked: string[] = [];
   const started: StartRequest[] = [];
+  const resumed: ResumeRequest[] = [];
+  const archiveWrites: { hostSessionId: string; archived: boolean }[] = [];
   const revealed: string[] = [];
   const logs: string[] = [];
   const toasts: { text: string; tone: ToastTone }[] = [];
@@ -69,17 +75,35 @@ function setUp(
     chooseFolder: () => Promise.resolve('/Users/u/dev/new'),
     pastSessions: () => Promise.resolve([]),
     start: () => Promise.resolve('row-1'),
+    resume: () => Promise.resolve('row-2'),
+    setArchived: () => Promise.resolve(),
     ...options.answers,
   };
-  const picker: Pick<Picker, 'open'> = {
+  // Holds one request at a time, as the real picker does: a pick or `close`
+  // closes it, and a new `open` replaces it with its cursor on `selected`.
+  let shown: Opened | null = null;
+  let cursor = 0;
+  const picker: Pick<Picker, 'open' | 'isOpen' | 'cursorIndex'> = {
     open<T>(request: PickerRequest<T>) {
-      opened.push({
+      const entry: Opened = {
         title: request.title,
         labels: request.items.map((item) => request.label(item)),
         selected: request.selected,
-        request: request as PickerRequest<unknown>,
-      });
+        request: {
+          ...(request as PickerRequest<unknown>),
+          picked: (item) => {
+            shown = null;
+            request.picked(item as T);
+          },
+        },
+      };
+      opened.push(entry);
+      shown = entry;
+      cursor = request.selected ?? 0;
+      return { isOpen: () => shown === entry };
     },
+    isOpen: () => shown !== null,
+    cursorIndex: () => (shown === null ? null : cursor),
   };
   const invoke = (method: string, ...args: unknown[]): Promise<unknown> => {
     invoked.push(method);
@@ -88,17 +112,55 @@ function setUp(
       started.push(request);
       return answers.start(request);
     }
-    return answers[method as Exclude<keyof Answers, 'start'>]();
+    if (method === 'resume') {
+      const request = args[0] as ResumeRequest;
+      resumed.push(request);
+      return answers.resume(request);
+    }
+    if (method === 'setArchived') {
+      const [hostSessionId, archived] = args as [string, boolean];
+      archiveWrites.push({ hostSessionId, archived });
+      return answers.setArchived(hostSessionId, archived);
+    }
+    return answers[
+      method as Exclude<keyof Answers, 'start' | 'resume' | 'setArchived'>
+    ]();
   };
-  createStartPrompt({
+  const prompt = createStartPrompt({
     picker: picker as Picker,
     channel: { invoke } as Parameters<typeof createStartPrompt>[0]['channel'],
     profiles: () => profiles,
     reveal: (sessionId) => revealed.push(sessionId),
     log: (source, message) => logs.push(`[${source}] ${message}`),
     toast: (text, tone) => toasts.push({ text, tone }),
-  }).open();
-  return { opened, invoked, started, revealed, logs, toasts };
+  });
+  prompt.open();
+  return {
+    prompt,
+    opened,
+    invoked,
+    started,
+    resumed,
+    archiveWrites,
+    revealed,
+    logs,
+    toasts,
+    last: () => opened[opened.length - 1],
+    moveCursor: (index: number) => {
+      cursor = index;
+    },
+    close: () => {
+      shown = null;
+    },
+    // Opens another list over the prompt's, as a control picker does.
+    openOther: (title: string, items: string[]) =>
+      picker.open<string>({
+        title,
+        items,
+        label: (item) => item,
+        picked: () => undefined,
+      }),
+  };
 }
 
 function pickItem(opened: Opened, label: string) {
@@ -113,6 +175,56 @@ function pickFolder(opened: Opened, label: string) {
   const item = items.find((candidate) => candidate.label === label);
   expect(item).toBeDefined();
   opened.request.picked(item);
+}
+
+const alpha: PastSessionRow = {
+  hostSessionId: 'a',
+  title: 'Alpha',
+  modified: 3,
+  archived: false,
+};
+const beta: PastSessionRow = {
+  hostSessionId: 'b',
+  title: 'Beta',
+  modified: 2,
+  archived: false,
+};
+const gamma: PastSessionRow = {
+  hostSessionId: 'g',
+  title: 'Gamma',
+  modified: 1,
+  archived: true,
+};
+
+function rowLabel(row: PastSessionRow, archived = row.archived): string {
+  const label = `${row.title} · ${sessionTime(row.modified)}`;
+  return archived ? `${label} · archived` : label;
+}
+
+// A promise the test settles by hand.
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (error: unknown) => void = () => undefined;
+  const promise = new Promise<T>((settle, fail) => {
+    resolve = settle;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+
+// The prompt on its session step for ~/dev/app with one profile.
+async function atSessionStep(
+  answers: Partial<Answers> = {},
+  rows: PastSessionRow[] = [alpha, beta, gamma],
+) {
+  const run = setUp({
+    profiles: [work],
+    answers: { pastSessions: () => Promise.resolve(rows), ...answers },
+  });
+  await flush();
+  pickFolder(run.opened[0], '~/dev/app');
+  await flush();
+  return run;
 }
 
 describe('start prompt', () => {
@@ -271,6 +383,196 @@ describe('start prompt', () => {
     ]);
     expect(run.toasts).toEqual([
       { text: 'Session not started: no claude', tone: 'error' },
+    ]);
+  });
+
+  it('sessionStep_savedSessions_opensOnNewThenUnarchivedRows', async () => {
+    const run = await atSessionStep();
+    expect(run.last().title).toBe('Session');
+    expect(run.last().labels).toEqual([
+      NEW_SESSION_LABEL,
+      rowLabel(alpha),
+      rowLabel(beta),
+    ]);
+    expect(run.last().selected).toBe(0);
+    expect(run.started).toEqual([]);
+  });
+
+  it('pastSessionsRejects_opensNewSessionAloneAndToasts', async () => {
+    const run = await atSessionStep({
+      pastSessions: () => Promise.reject(new Error('no folder')),
+    });
+    expect(run.last().title).toBe('Session');
+    expect(run.last().labels).toEqual([NEW_SESSION_LABEL]);
+    expect(run.logs).toEqual(['[chat] saved sessions not listed: no folder']);
+    expect(run.toasts).toEqual([
+      { text: 'Saved sessions not listed: no folder', tone: 'error' },
+    ]);
+  });
+
+  it('newSessionPicked_startsThere', async () => {
+    const run = await atSessionStep();
+    pickItem(run.last(), NEW_SESSION_LABEL);
+    await flush();
+    expect(run.started).toEqual([
+      { projectDir: '/Users/u/dev/app', profile: 'work' },
+    ]);
+    expect(run.resumed).toEqual([]);
+  });
+
+  it('pastRowPicked_resumesAndRevealsIt', async () => {
+    const run = await atSessionStep();
+    pickItem(run.last(), rowLabel(beta));
+    await flush();
+    expect(run.resumed).toEqual([
+      { projectDir: '/Users/u/dev/app', profile: 'work', hostSessionId: 'b' },
+    ]);
+    expect(run.revealed).toEqual(['row-2']);
+    expect(run.logs).toEqual(['[chat] resuming Beta in ~/dev/app with work']);
+  });
+
+  it('resumeRejects_logsAndToastsAndRevealsNothing', async () => {
+    const run = await atSessionStep({
+      resume: () => Promise.reject(new Error('gone')),
+    });
+    pickItem(run.last(), rowLabel(alpha));
+    await flush();
+    expect(run.revealed).toEqual([]);
+    expect(run.logs).toContain('[chat] session not resumed: gone');
+    expect(run.toasts).toEqual([
+      { text: 'Session not resumed: gone', tone: 'error' },
+    ]);
+  });
+
+  it('toggleArchive_shownRow_archivesItAndMovesCursorToTheNextRow', async () => {
+    const run = await atSessionStep();
+    run.moveCursor(1);
+    run.prompt.toggleArchive();
+    await flush();
+    expect(run.archiveWrites).toEqual([{ hostSessionId: 'a', archived: true }]);
+    expect(run.last().labels).toEqual([NEW_SESSION_LABEL, rowLabel(beta)]);
+    expect(run.last().selected).toBe(1);
+    expect(run.logs).toEqual(['[chat] archived Alpha']);
+  });
+
+  it('toggleArchive_archivedRow_restoresItAndKeepsTheCursorOnIt', async () => {
+    const run = await atSessionStep();
+    run.prompt.showArchived();
+    run.moveCursor(3);
+    run.prompt.toggleArchive();
+    await flush();
+    expect(run.archiveWrites).toEqual([
+      { hostSessionId: 'g', archived: false },
+    ]);
+    expect(run.last().labels).toEqual([
+      NEW_SESSION_LABEL,
+      rowLabel(alpha),
+      rowLabel(beta),
+      rowLabel(gamma, false),
+    ]);
+    expect(run.last().selected).toBe(3);
+    expect(run.logs).toContain('[chat] restored Gamma');
+  });
+
+  it('toggleArchive_newSessionLine_writesNothing', async () => {
+    const run = await atSessionStep();
+    run.prompt.toggleArchive();
+    await flush();
+    expect(run.archiveWrites).toEqual([]);
+    expect(run.logs).toEqual(['[chat] New session cannot be archived']);
+  });
+
+  it('setArchivedRejects_leavesTheListAsItWas', async () => {
+    const run = await atSessionStep({
+      setArchived: () => Promise.reject(new Error('read-only')),
+    });
+    const shownBefore = run.opened.length;
+    run.moveCursor(1);
+    run.prompt.toggleArchive();
+    await flush();
+    expect(run.opened.length).toBe(shownBefore);
+    expect(run.logs).toEqual(['[chat] archive failed: read-only']);
+    expect(run.toasts).toEqual([
+      { text: 'Archive failed: read-only', tone: 'error' },
+    ]);
+  });
+
+  it('showArchived_showsThenHidesTheArchivedRows', async () => {
+    const run = await atSessionStep();
+    run.prompt.showArchived();
+    expect(run.last().labels).toEqual([
+      NEW_SESSION_LABEL,
+      rowLabel(alpha),
+      rowLabel(beta),
+      rowLabel(gamma),
+    ]);
+    run.prompt.showArchived();
+    expect(run.last().labels).toEqual([
+      NEW_SESSION_LABEL,
+      rowLabel(alpha),
+      rowLabel(beta),
+    ]);
+    expect(run.logs).toEqual([
+      '[chat] archived sessions shown',
+      '[chat] archived sessions hidden',
+    ]);
+  });
+
+  it('sessionStepReplacedByAnotherList_archiveKeysActOnNothing', async () => {
+    const run = await atSessionStep();
+    run.openOther('Mode', ['default', 'plan', 'auto', 'bypass']);
+    run.moveCursor(3);
+    run.prompt.toggleArchive();
+    run.prompt.showArchived();
+    await flush();
+    expect(run.archiveWrites).toEqual([]);
+    expect(run.last().title).toBe('Mode');
+    expect(run.logs).toEqual([
+      '[chat] no session under the cursor',
+      '[chat] no session list shown',
+    ]);
+  });
+
+  it('sessionStepClosed_archiveKeysActOnNothing', async () => {
+    const run = await atSessionStep();
+    run.close();
+    run.prompt.toggleArchive();
+    run.prompt.showArchived();
+    await flush();
+    expect(run.archiveWrites).toEqual([]);
+    expect(run.last().title).toBe('Session');
+    expect(run.logs).toEqual([
+      '[chat] no session under the cursor',
+      '[chat] no session list shown',
+    ]);
+  });
+
+  it('setArchivedAnswersAfterTheStepClosed_reopensNothing', async () => {
+    const write = deferred<void>();
+    const run = await atSessionStep({ setArchived: () => write.promise });
+    run.moveCursor(1);
+    run.prompt.toggleArchive();
+    run.close();
+    const shownBefore = run.opened.length;
+    write.resolve();
+    await flush();
+    expect(run.opened.length).toBe(shownBefore);
+    expect(run.logs).toEqual([]);
+  });
+
+  it('toggleArchive_writeInFlight_isIgnored', async () => {
+    const write = deferred<void>();
+    const run = await atSessionStep({ setArchived: () => write.promise });
+    run.moveCursor(1);
+    run.prompt.toggleArchive();
+    run.prompt.toggleArchive();
+    expect(run.archiveWrites).toEqual([{ hostSessionId: 'a', archived: true }]);
+    write.resolve();
+    await flush();
+    expect(run.last().labels).toEqual([NEW_SESSION_LABEL, rowLabel(beta)]);
+    expect(run.logs).toEqual([
+      '[chat] archive ignored: an archive write is in flight',
+      '[chat] archived Alpha',
     ]);
   });
 });
