@@ -9,6 +9,7 @@ import {
   moveCompletionSelection,
   pickedCompletion,
 } from '@codemirror/autocomplete';
+import { Prec } from '@codemirror/state';
 import { EditorView } from 'codemirror';
 import { getCM } from '@replit/codemirror-vim';
 import type { EditorCompletions } from '../../contracts/editor';
@@ -74,36 +75,42 @@ function completionOf(
 }
 
 // The popup's keys run only while it is open: Tab accepts, Ctrl+n and
-// ArrowDown move down, Ctrl+p and ArrowUp move up.
+// ArrowDown move down, Ctrl+p and ArrowUp move up. Highest precedence runs
+// them ahead of vim's and the keymap's keydown handlers wherever the
+// extension sits.
 function popupKeys() {
-  return EditorView.domEventHandlers({
-    keydown: (event, view) => {
-      if (completionStatus(view.state) !== 'active') {
-        return false;
-      }
-      const isDown =
-        event.key === 'ArrowDown' || (event.ctrlKey && event.key === 'n');
-      const isUp =
-        event.key === 'ArrowUp' || (event.ctrlKey && event.key === 'p');
-      let isHandled = false;
-      if (event.key === 'Tab') {
-        isHandled = acceptCompletion(view);
-      } else if (isDown) {
-        isHandled = moveCompletionSelection(true)(view);
-      } else if (isUp) {
-        isHandled = moveCompletionSelection(false)(view);
-      }
-      if (isHandled) {
-        event.preventDefault();
-      }
-      return isHandled;
-    },
-  });
+  return Prec.highest(
+    EditorView.domEventHandlers({
+      keydown: (event, view) => {
+        if (completionStatus(view.state) !== 'active') {
+          return false;
+        }
+        const isDown =
+          event.key === 'ArrowDown' || (event.ctrlKey && event.key === 'n');
+        const isUp =
+          event.key === 'ArrowUp' || (event.ctrlKey && event.key === 'p');
+        let isHandled = false;
+        if (event.key === 'Tab') {
+          isHandled = acceptCompletion(view);
+        } else if (isDown) {
+          isHandled = moveCompletionSelection(true)(view);
+        } else if (isUp) {
+          isHandled = moveCompletionSelection(false)(view);
+        }
+        if (isHandled) {
+          event.preventDefault();
+        }
+        return isHandled;
+      },
+    }),
+  );
 }
 
 // Completion of `completions.words()` after `completions.prefix` in insert
 // mode, reporting each newly offered list once until the popup closes. Placed
-// ahead of `vim(...)`, so the popup's keys run before vim's.
+// after `vim(...)`: `autocompletion` brings in the keymap facet, whose keydown
+// handler runs ahead of vim's when it is first met ahead of `vim(...)`. With
+// no interaction delay, Tab accepts as soon as the popup shows.
 export function prefixCompletion(completions: EditorCompletions) {
   let lastOffered: readonly string[] | null = null;
   const source = (context: CompletionContext): CompletionResult | null => {
@@ -132,7 +139,12 @@ export function prefixCompletion(completions: EditorCompletions) {
     };
   };
   return [
-    autocompletion({ override: [source], defaultKeymap: false, icons: false }),
+    autocompletion({
+      override: [source],
+      defaultKeymap: false,
+      icons: false,
+      interactionDelay: 0,
+    }),
     popupKeys(),
     EditorView.updateListener.of((update) => {
       if (completionStatus(update.state) === null) {

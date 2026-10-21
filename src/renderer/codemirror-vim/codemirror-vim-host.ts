@@ -417,9 +417,10 @@ function reportUserChanges(changed: (text: string) => void) {
 }
 
 // Answer boxes are prose: no gutters or brackets, and completion only when
-// `options.completions` is given, ahead of vim so its popup keys run first;
-// lines wrap. `leaving` runs on blur before the editor reports it, so a box
-// the user leaves drops its unfinished keys before any other box reports.
+// `options.completions` is given, after vim so CodeMirror's keymap stays
+// behind vim; lines wrap. `leaving` runs on blur before the editor reports it,
+// so a box the user leaves drops its unfinished keys before any other box
+// reports.
 function boxExtensions(
   events: EditorEvents,
   options: EditorOptions | undefined,
@@ -429,8 +430,8 @@ function boxExtensions(
     ? prefixCompletion(options.completions)
     : [];
   return [
-    completion,
     vim({ status: true }),
+    completion,
     minimalSetup,
     EditorView.lineWrapping,
     editorTheme,
