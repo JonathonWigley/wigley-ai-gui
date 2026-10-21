@@ -2,6 +2,8 @@
 
 **Contents**
 
+- **Intent** — what every change is judged by: everything a plugin, everything hot reloads, macOS and Windows now,
+  any agent harness or model later.
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the core and its plugins, the
   layers, the relay and agent sessions, and where a new plugin, mode, session tab, key, event, setting, theme, plugin
   data, layout, agent harness, session control, round source, MCP tool or third-party tool goes, and the layer
@@ -17,10 +19,32 @@ in wigley-ai-marketplace, whose README states the index schema). It also starts 
 chats with them in each session's Chat tab, a round from that session swapping in over the chat and back
 (`docs/features/agent-chat/design.md`).
 
+## Intent
+
+The user builds on this app indefinitely, as a base to grow in any direction, and expects to swap any third-party
+tool, change how a feature works, or add one, as a local edit. Every change is judged by how well it serves these
+goals; a change that closes one off is redesigned, and an existing gap found while working is raised with the user:
+
+- **Everything is a plugin, and everything is hookable.** The core supplies the shell, events, commands and keys,
+  settings, themes and services, and nothing else. Every layout, view, event and behaviour, the core's own included,
+  is something a plugin can hook into, extend or replace, and a built-in plugin has no more reach than one loaded
+  from a user folder would. A closed list, switch or union that a new plugin would have to edit is an extension
+  point waiting to become a registration.
+- **Everything hot reloads.** A changed plugin, layout, theme, keymap or setting applies to the running app without
+  a restart and without losing the user's work. So every registration a plugin makes can be undone, and state that
+  must outlive a reload is kept where the reload does not reach it. Today forms and chat layouts hot reload and
+  plugins are compiled in with no runtime loader; new code is written so the rest can land without reworking it.
+- **macOS and Windows, both working now.** A platform-specific need — key binds and their labels, paths, spawning
+  processes, file watching, notifications, the relay's transport — is an adapter behind a contract, picked in the
+  composition root, so adding one is a new adapter and features carry no `process.platform` checks.
+- **Any agent harness and model, eventually.** Claude Code is the first adapter behind `AgentHarness`; Codex,
+  wigley-harness and other models follow. Only the seams are built now, and no knowledge of one harness — its CLI,
+  events, session controls, environment variables, model names — lives outside its adapter, so a new harness or
+  model is a new adapter folder.
+
 ## Architecture
 
-The user builds on this app indefinitely and expects to swap any third-party tool, change how a feature works, or add
-one, as a local edit. So every change is designed with `wigley:codebase-design`, loaded before writing code: deep
+Every change is designed with `wigley:codebase-design`, loaded before writing code: deep
 modules behind small interfaces in `src/contracts/`, each third-party library behind one adapter, and wiring only in a
 composition root.
 
