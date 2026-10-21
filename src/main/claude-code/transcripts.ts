@@ -89,8 +89,8 @@ export function sessionTitle(message: string | null): string {
 
 // A transcript as chat entries, oldest first, every id starting `history:`.
 // A line this reader does not know, and a `user` line the CLI wrote, becomes a
-// raw entry; a sidechain line
-// (a subagent's) and the CLI's bookkeeping lines become nothing.
+// raw entry; a sidechain line (a subagent's) and the CLI's bookkeeping lines
+// become nothing.
 export function transcriptEntries(text: string): ChatEntry[] {
   const entries: ChatEntry[] = [];
   const toolEntries = new Map<string, ToolEntry>();

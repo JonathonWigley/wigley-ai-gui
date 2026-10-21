@@ -379,8 +379,7 @@ const SELFTEST_PROJECT_DIRS = [SELFTEST_PROJECT_DIR, SECOND_PROJECT_DIR];
 // relay that joins the session, which the steps submit. The result is both
 // calls' replies; problems reads the fake processes, whose records the steps
 // keep changing in place, when it runs, reading only the records this run
-// added. The run waits on the session's Chat
-// tab being shown.
+// added. The run waits on the session's Chat tab being shown.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   const { chat, sessions, harnesses } = deps;
   let previousRelay: ConnectedSession | null = null;
