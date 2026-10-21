@@ -131,7 +131,7 @@ round), since main, not the page, decides.
   core edit.
 - **A session tab** is added to a session by the plugin that fills it, through the `sessions` page export `addTab`:
   forms adds a Form tab where a session's round view is created, when the session has no Form tab, chat a Chat tab
-  to each session it starts, and the docs plugin, once it lands, a Docs tab when the session connects. A tab that
+  to each session it starts, and docs a Docs tab to each session when it connects. A tab that
   needs the user now takes over its session (`takeOver()`), and its release gives the session back to the tab shown
   before only if no tab was selected since, even back to the taking tab: forms takes over for a round and releases on submit or cancel. A session's tabs drop when its row leaves, closed by the user or ended, and
   `sessions.sessionRemoved` tells each plugin to forget the session; the user moves between tabs with `Option+o` /
@@ -142,7 +142,8 @@ round), since main, not the page, decides.
   the user's overrides land. Each process checks at startup that every key it owns names a registered command, and
   the page also rejects a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
   `<D-w>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
-  too, in every vim mode, ahead of the editor. An editor key carries a scope as a page key does and runs only while
+  too, in every vim mode, ahead of the editor. A plugin's own text box may keep typed keys from the page keys while
+  Tab, Enter, Escape and chords still reach its scope's binds (docs' `textBoxInput`). An editor key carries a scope as a page key does and runs only while
   that scope is in force, so two plugins' editors may bind one vim key in different scopes. It fires in normal mode,
   or in insert mode with `mode: 'insert'` (one key the host can type unbound, today only `<CR>`, as in the chat
   picker's filter). Vim keeps one mapping per key sequence and mode for every editor, so a sequence bound in any
@@ -212,7 +213,7 @@ round), since main, not the page, decides.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool.
-- **An ambient service** — the clock, ids, the home folder, files (with watching), processes — reaches a plugin
+- **An ambient service** — the clock, ids, the home folder, files (with watching), processes, opening a link in the default browser — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake.
 - **A setting** is a core setting in `src/contracts/settings.ts` and `src/config/settings.ts`, or a plugin's own in
   its manifest's `settings`. Main owns the config and serves it to the page over the Bridge, so a user config file
@@ -261,7 +262,9 @@ round), since main, not the page, decides.
   `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Each plugin hands
   at most one script, and the scripts run in plugin start order; the keys plugin has no main part, so its steps live
   in forms' script, whose fixture gives them scopes full of binds and a box to type in. Chat's script runs its
-  sessions over the fake agent harness.
+  sessions over the fake agent harness. Docs' (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture
+  (`selftest-fixture.ts`) that writes docs, an index and a stand-in `docs_index.py` into the self-test's temp home at
+  start, so its steps never reach the user's docs or index.
 - Forms visuals are checked live on the preview round (`Space z l o`): the built-in sample shows every card, and each
   further press swaps in the next saved real round, then back to the sample.
 - A visible `npm start` takes the user's foreground and keyboard, so that run is the user's: the agent gives the user
