@@ -9,6 +9,7 @@ import {
   link,
   lstat,
   mkdir,
+  open,
   readdir,
   readFile,
   realpath,
@@ -45,6 +46,8 @@ export interface NodeFilesOptions {
 export function createNodeFiles(options: NodeFilesOptions): Files {
   return {
     read: (file) => readFile(file, 'utf8'),
+    modified: async (file) => Math.trunc((await stat(file)).mtimeMs),
+    readStart: readFirstBytes,
     write: writeAtomically,
     list: listFolder,
     watch: watchDebounced,
@@ -56,6 +59,21 @@ export function createNodeFiles(options: NodeFilesOptions): Files {
     rename: renameWithoutReplacing,
     trash: (file) => options.trashItem(file),
   };
+}
+
+async function readFirstBytes(file: string, maxBytes: number): Promise<string> {
+  const handle = await open(file, 'r');
+  try {
+    const buffer = Buffer.alloc(maxBytes);
+    const { bytesRead } = await handle.read(buffer, 0, maxBytes, 0);
+    // `stream` holds back a multi-byte character the cut splits instead of
+    // emitting U+FFFD.
+    return new TextDecoder('utf-8').decode(buffer.subarray(0, bytesRead), {
+      stream: true,
+    });
+  } finally {
+    await handle.close();
+  }
 }
 
 async function statPath(file: string): Promise<FileStat | null> {

@@ -1,3 +1,4 @@
+import type { Clock } from '../contracts/ambient';
 import type { FileEntry, Files, FileStat } from '../contracts/files';
 import { resolveInside } from './scoped-files';
 
@@ -23,9 +24,11 @@ interface MemoryWatch {
 // under it; the top folder always exists. A path's leading `/` is optional:
 // `/a/b` and `a/b` name one file. Each call that meets a file where a folder
 // must be, or a folder where a file must be, rejects with the code Node's fs
-// gives.
-export function createMemoryFiles(): MemoryFiles {
+// gives. Each `write` stamps the file's `modified` time with `clock.now()`,
+// or `0` with no clock; `rename` carries a file's stamp to its new path.
+export function createMemoryFiles(clock?: Clock): MemoryFiles {
   const texts = new Map<string, string>();
+  const modifiedTimes = new Map<string, number>();
   const madeFolders = new Set<string>();
   const watches = new Set<MemoryWatch>();
 
@@ -90,17 +93,30 @@ export function createMemoryFiles(): MemoryFiles {
     }
     for (const file of atOrUnder(texts.keys(), target)) {
       texts.delete(file);
+      modifiedTimes.delete(file);
       report(file);
     }
   };
 
+  const textOf = (path: string): string => {
+    const text = texts.get(keyOf(path));
+    if (text === undefined) {
+      throw missingError(`no file at ${path}`);
+    }
+    return text;
+  };
+
   return {
-    read: async (path) => {
-      const text = texts.get(keyOf(path));
-      if (text === undefined) {
-        throw missingError(`no file at ${path}`);
-      }
-      return text;
+    read: async (path) => textOf(path),
+    modified: async (path) => {
+      textOf(path);
+      return modifiedTimes.get(keyOf(path)) ?? 0;
+    },
+    readStart: async (path, maxBytes) => {
+      const bytes = new TextEncoder().encode(textOf(path)).slice(0, maxBytes);
+      // `stream` holds back a multi-byte character the cut splits instead of
+      // emitting U+FFFD.
+      return new TextDecoder('utf-8').decode(bytes, { stream: true });
     },
     write: async (path, text) => {
       const file = keyOf(path);
@@ -109,6 +125,7 @@ export function createMemoryFiles(): MemoryFiles {
         throw codedError(`${path} is a folder`, 'EISDIR');
       }
       texts.set(file, text);
+      modifiedTimes.set(file, clock?.now() ?? 0);
       report(file);
     },
     list: async (folder, options) =>
@@ -168,6 +185,8 @@ export function createMemoryFiles(): MemoryFiles {
       for (const [file, text] of movedTexts) {
         texts.delete(file);
         texts.set(moved(file), text);
+        modifiedTimes.set(moved(file), modifiedTimes.get(file) ?? 0);
+        modifiedTimes.delete(file);
         report(file);
         report(moved(file));
       }

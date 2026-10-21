@@ -23,6 +23,11 @@ export interface Files {
   // Rejects when the file is missing with an error naming the path, which
   // `isMissingFile` tells from every other failure.
   read(path: string): Promise<string>;
+  // Epoch milliseconds of the file's last change. Rejects when the file is missing, naming the path.
+  modified(path: string): Promise<number>;
+  // The file's first `maxBytes` bytes as UTF-8, a character the cut splits left out; the whole file when
+  // shorter. Rejects when the file is missing, naming the path.
+  readStart(path: string, maxBytes: number): Promise<string>;
   // Atomic: writes a temp file `.<name>.<8 hex>.tmp` beside the target and
   // renames it over the target, creating missing parent folders first.
   write(path: string, text: string): Promise<void>;

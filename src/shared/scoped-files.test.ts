@@ -85,6 +85,32 @@ describe('scopedFiles', () => {
     expect(await scoped.read('a.md')).toBe('text');
   });
 
+  it('readStart_ParentEscape_RejectsBeforeReading', async () => {
+    const calls: string[] = [];
+    const recorded = recordingCalls(calls);
+
+    await expect(
+      scopedFiles(recorded, ROOT).readStart('../x', 4),
+    ).rejects.toThrow(`../x is outside ${ROOT}`);
+    expect(calls).toEqual([]);
+  });
+
+  it('modified_ParentEscape_RejectsBeforeReading', async () => {
+    const calls: string[] = [];
+    const recorded = recordingCalls(calls);
+
+    await expect(scopedFiles(recorded, ROOT).modified('../x')).rejects.toThrow(
+      `../x is outside ${ROOT}`,
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it('readStart_PathInsideRoot_ReadsUnderRoot', async () => {
+    await inner.write(`${ROOT}/a.txt`, 'abcdef');
+
+    expect(await scopedFiles(inner, ROOT).readStart('a.txt', 2)).toBe('ab');
+  });
+
   it('realPath_PathInsideRoot_ReturnsRelative', async () => {
     await inner.write(`${ROOT}/a/b.md`, 'text');
 
@@ -123,6 +149,21 @@ function withRealPaths(realPaths: Record<string, string>): MemoryFiles {
         throw new Error(`no real path for ${path}`);
       }
       return real;
+    },
+  };
+}
+
+// `inner` with `readStart` and `modified` pushing each path asked onto `calls`.
+function recordingCalls(calls: string[]): MemoryFiles {
+  return {
+    ...inner,
+    readStart: async (path, maxBytes) => {
+      calls.push(path);
+      return inner.readStart(path, maxBytes);
+    },
+    modified: async (path) => {
+      calls.push(path);
+      return inner.modified(path);
     },
   };
 }

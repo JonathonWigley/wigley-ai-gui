@@ -27,8 +27,8 @@ export function resolveInside(root: string, path: string): string | null {
 }
 
 // `files` with every path relative to `root`. A path `resolveInside` refuses
-// fails with `<path> is outside <root>` before any I/O: `read`, `write`,
-// `list`, `stat`, `realPath`, `makeFolder`, `rename` (either path) and `trash`
+// fails with `<path> is outside <root>` before any I/O: `read`, `modified`,
+// `readStart`, `write`, `list`, `stat`, `realPath`, `makeFolder`, `rename` (either path) and `trash`
 // reject, and `watch` throws. `realPath` returns the resolved path relative to
 // `root`'s own real path (`` for `root` itself), its segments joined with
 // `/` whichever separator the adapter returns, and rejects
@@ -44,6 +44,9 @@ export function scopedFiles(files: Files, root: string): Files {
   };
   return {
     read: async (path) => files.read(inside(path)),
+    modified: async (path) => files.modified(inside(path)),
+    readStart: async (path, maxBytes) =>
+      files.readStart(inside(path), maxBytes),
     write: async (path, text) => files.write(inside(path), text),
     list: async (folder, options) => files.list(inside(folder), options),
     watch: (folder, onChange, onError) =>

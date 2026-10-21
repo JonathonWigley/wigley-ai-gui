@@ -9,6 +9,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -136,6 +137,48 @@ describe('createNodeFiles', () => {
       .catch((caught: unknown) => caught);
 
     expect(isMissingFile(error)).toBe(true);
+  });
+
+  it('readStart_ShorterLimit_ReturnsTheFirstBytes', async () => {
+    const file = path.join(root, 'a.txt');
+    writeFileSync(file, 'hello');
+
+    expect(await files.readStart(file, 3)).toBe('hel');
+  });
+
+  it('readStart_LongerLimit_ReturnsTheWholeFile', async () => {
+    const file = path.join(root, 'a.txt');
+    writeFileSync(file, 'hello');
+
+    expect(await files.readStart(file, 100)).toBe('hello');
+  });
+
+  it('readStart_CutInsideACharacter_LeavesItOut', async () => {
+    const file = path.join(root, 'a.txt');
+    writeFileSync(file, Buffer.from([0x61, 0xc3, 0xa9]));
+
+    expect(await files.readStart(file, 2)).toBe('a');
+  });
+
+  it('readStart_MissingFile_RejectsNamingThePath', async () => {
+    const file = path.join(root, 'missing.txt');
+
+    await expect(files.readStart(file, 10)).rejects.toThrow(file);
+  });
+
+  it('modified_ReturnsTheMtimeInMilliseconds', async () => {
+    const file = path.join(root, 'a.txt');
+    writeFileSync(file, 'hello');
+    const mtime = new Date('2026-01-02T03:04:05.000Z');
+    utimesSync(file, mtime, mtime);
+
+    expect(await files.modified(file)).toBe(1767323045000);
+  });
+
+  it('modified_MissingFile_RejectsNamingThePath', async () => {
+    const file = path.join(root, 'missing.txt');
+
+    await expect(files.modified(file)).rejects.toThrow(file);
   });
 
   it('read_Folder_IsNotMissingFile', async () => {

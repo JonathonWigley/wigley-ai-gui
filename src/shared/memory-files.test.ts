@@ -13,6 +13,34 @@ beforeEach(() => {
 });
 
 describe('createMemoryFiles', () => {
+  it('modified_StampsTheClockAtEachWrite', async () => {
+    const clock = { now: () => 5000 };
+    const stamped = createMemoryFiles(clock);
+
+    await stamped.write('/h/a.md', 'one');
+    expect(await stamped.modified('/h/a.md')).toBe(5000);
+
+    clock.now = () => 7000;
+    await stamped.write('/h/a.md', 'two');
+    expect(await stamped.modified('/h/a.md')).toBe(7000);
+  });
+
+  it('modified_NoClock_IsZero', async () => {
+    await files.write('/h/a.md', 'one');
+
+    expect(await files.modified('/h/a.md')).toBe(0);
+  });
+
+  it('modified_MissingFile_Rejects', async () => {
+    await expect(files.modified('/nope')).rejects.toThrow('no file at /nope');
+  });
+
+  it('readStart_CutInsideACharacter_LeavesItOut', async () => {
+    await files.write('/h/a.md', 'aé');
+
+    expect(await files.readStart('/h/a.md', 2)).toBe('a');
+  });
+
   it('rename_DestinationExists_RejectsAndKeepsBoth', async () => {
     await files.write('/h/a.md', 'one');
     await files.write('/h/b.md', 'two');
