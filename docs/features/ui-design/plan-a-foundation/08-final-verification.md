@@ -77,5 +77,9 @@ defaults; start the app with `npm start`.
 | 26 | In the forms preview round, look at a recommended choice, the recommend badge, the origin and severity badges, and which-key's command and prefix colours | The recommended choice and its badge are mauve (the accent); origin, severity and which-key colours are as before the plan | **expected** |
 | 27 | Look at the side bar, title bar, status bar and activity bar over content | The translucent chrome reads clearly: no text lost against what lies behind, though nothing blurs (`backdrop-filter` arrives with plan B's material helpers) | **low-confidence**: Mocha's chrome alpha is chosen for a blurred backdrop, and plan A draws it unblurred |
 
+## Next plan
+
+When this task's checks pass, the agent ends its report by prompting the user to start plan B (primitives): run `/clear`, then `wigley:make` on `docs/features/ui-design/plan-b-primitives/`.
+
 ## Proof
 

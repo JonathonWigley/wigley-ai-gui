@@ -96,5 +96,9 @@ The agent checks two more itself, from the self-test's output, before handing ov
   02's fallback (the frame the offscreen window's `paint` event hands over) is the fix —
   low-confidence: Electron does not confirm `capturePage` for an offscreen window (02)
 
+## Next plan
+
+When this task's checks pass, the agent ends its report by prompting the user to start plan C (surfaces): run `/clear`, then `wigley:make` on `docs/features/ui-design/plan-c-surfaces/`.
+
 ## Proof
 
