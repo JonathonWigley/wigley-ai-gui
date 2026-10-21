@@ -1,7 +1,6 @@
 import type { ChatEntry } from '../../contracts/agent';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
-import { toolResultText } from './tool-result-text';
-import { toolSummary } from './tool-summary';
+import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
 
 // Claude's saved session transcripts: one JSON object per line in
 // `<config>/projects/<projectFolderName>/<session id>.jsonl`. The format is
@@ -37,11 +36,11 @@ const SKIPPED_LINE_TYPES: ReadonlySet<string> = new Set([
 const LOCAL_OUTPUT_OPEN = '<local-command-stdout>';
 const LOCAL_OUTPUT_CLOSE = '</local-command-stdout>';
 const LOCAL_CAVEAT_OPEN = '<local-command-caveat>';
+const TASK_NOTIFICATION_OPEN = '<task-notification>';
+const INTERRUPT_MARKER = /^\[Request interrupted by user( for tool use)?\]$/;
 const COMMAND_NAME = /<command-name>([\s\S]*?)<\/command-name>/;
 const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/;
 const ID_PREFIX = 'history:';
-
-type ToolEntry = Extract<ChatEntry, { kind: 'tool' }>;
 
 export interface TranscriptHead {
   cwd: string | null;
@@ -75,19 +74,22 @@ export function readTranscriptHead(head: string): TranscriptHead {
   return { cwd, firstMessage };
 }
 
-// The session list's title for a first user message.
+// The session list's title for a first user message, at most `TITLE_LENGTH`
+// code points.
 export function sessionTitle(message: string | null): string {
   const collapsed = (message ?? '').replace(/\s+/g, ' ').trim();
   if (collapsed === '') {
     return UNTITLED_SESSION;
   }
-  return collapsed.length > TITLE_LENGTH
-    ? `${collapsed.slice(0, TITLE_LENGTH - 1)}…`
+  const codePoints = [...collapsed];
+  return codePoints.length > TITLE_LENGTH
+    ? `${codePoints.slice(0, TITLE_LENGTH - 1).join('')}…`
     : collapsed;
 }
 
 // A transcript as chat entries, oldest first, every id starting `history:`.
-// A line this reader does not know becomes a raw entry; a sidechain line
+// A line this reader does not know, and a `user` line the CLI wrote, becomes a
+// raw entry; a sidechain line
 // (a subagent's) and the CLI's bookkeeping lines become nothing.
 export function transcriptEntries(text: string): ChatEntry[] {
   const entries: ChatEntry[] = [];
@@ -168,41 +170,28 @@ function systemEntries(line: Json, lineNumber: number): ChatEntry[] {
   ];
 }
 
-// The user's text, then each tool result joined to its tool entry.
+// The user's text, or a raw entry for a line the CLI wrote, then each tool
+// result joined to its tool entry.
 function addUserEntries(
   line: Json,
   entries: ChatEntry[],
   toolEntries: Map<string, ToolEntry>,
 ) {
-  const uuid = asString(line.uuid);
+  const id = `${ID_PREFIX}${asString(line.uuid)}`;
   const text = userText(line);
-  if (text !== null) {
-    entries.push({
-      kind: 'user',
-      id: `${ID_PREFIX}${uuid}`,
-      text,
-      raw: [line],
-    });
+  if (isCliWrittenUserLine(line)) {
+    entries.push({ kind: 'raw', id, raw: [line] });
+  } else if (text !== null) {
+    entries.push({ kind: 'user', id, text, raw: [line] });
   }
   for (const [index, item] of asArray(asJson(line.message).content).entries()) {
     const block = asJson(item);
     if (block.type !== 'tool_result') {
       continue;
     }
-    const entry = toolEntries.get(asString(block.tool_use_id));
-    if (entry === undefined) {
-      entries.push({
-        kind: 'raw',
-        id: `${ID_PREFIX}${uuid}-${index}`,
-        raw: [line],
-      });
-      continue;
+    if (pairToolResult(toolEntries, block, line) === undefined) {
+      entries.push({ kind: 'raw', id: `${id}-${index}`, raw: [line] });
     }
-    entry.result = {
-      text: toolResultText(block.content),
-      isError: block.is_error === true,
-    };
-    entry.raw.push(line);
   }
 }
 
@@ -235,7 +224,7 @@ function addAssistantEntries(
         });
       }
     } else if (block.type === 'tool_use') {
-      const entry = toolEntry(id, block, line);
+      const entry = toolUseEntry(id, block, line);
       toolEntries.set(entry.toolUseId, entry);
       entries.push(entry);
     } else {
@@ -244,29 +233,42 @@ function addAssistantEntries(
   }
 }
 
-function toolEntry(id: string, block: Json, line: Json): ToolEntry {
-  const name = asString(block.name);
-  return {
-    kind: 'tool',
-    id,
-    toolUseId: asString(block.id),
-    name,
-    input: block.input,
-    summary: toolSummary(name, block.input),
-    result: null,
-    raw: [line],
-  };
-}
-
 function lineRaw(lineNumber: number, raw: unknown): ChatEntry {
   return { kind: 'raw', id: `${ID_PREFIX}line-${lineNumber}`, raw: [raw] };
 }
 
+// A `user` line the CLI wrote in the user's place: a compaction summary, a
+// background task's notification, or an interrupt marker. The live stream
+// shows such a line as an event, never as the user's message.
+function isCliWrittenUserLine(line: Json): boolean {
+  const content = asJson(line.message).content;
+  const texts = asArray(content)
+    .map((block) => asJson(block))
+    .filter((block) => block.type === 'text')
+    .map((block) => asString(block.text));
+  const isInterruptMarker =
+    texts.length > 0 && texts.every((text) => INTERRUPT_MARKER.test(text));
+  const isTaskNotification =
+    typeof content === 'string' &&
+    content.trimStart().startsWith(TASK_NOTIFICATION_OPEN);
+  return (
+    line.isCompactSummary === true ||
+    line.isVisibleInTranscriptOnly === true ||
+    isTaskNotification ||
+    isInterruptMarker
+  );
+}
+
 // What the user typed on a `user` line, or null for a line the user did not
-// type: a meta or sidechain line, a local command's caveat or output, or a
-// tool-result line. A slash command reads as its name and its arguments.
+// type: a meta or sidechain line, a line the CLI wrote, a local command's
+// caveat or output, or a tool-result line. A slash command reads as its name
+// and its arguments.
 function userText(line: Json): string | null {
-  if (line.isMeta === true || line.isSidechain === true) {
+  const isNotTyped =
+    line.isMeta === true ||
+    line.isSidechain === true ||
+    isCliWrittenUserLine(line);
+  if (isNotTyped) {
     return null;
   }
   const content = asJson(line.message).content;

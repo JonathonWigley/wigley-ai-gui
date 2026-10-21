@@ -65,10 +65,23 @@ async function readFirstBytes(file: string, maxBytes: number): Promise<string> {
   const handle = await open(file, 'r');
   try {
     const buffer = Buffer.alloc(maxBytes);
-    const { bytesRead } = await handle.read(buffer, 0, maxBytes, 0);
+    // A read may return fewer bytes than asked for before the end of the file.
+    let filled = 0;
+    while (filled < maxBytes) {
+      const { bytesRead } = await handle.read(
+        buffer,
+        filled,
+        maxBytes - filled,
+        filled,
+      );
+      if (bytesRead === 0) {
+        break;
+      }
+      filled += bytesRead;
+    }
     // `stream` holds back a multi-byte character the cut splits instead of
     // emitting U+FFFD.
-    return new TextDecoder('utf-8').decode(buffer.subarray(0, bytesRead), {
+    return new TextDecoder('utf-8').decode(buffer.subarray(0, filled), {
       stream: true,
     });
   } finally {

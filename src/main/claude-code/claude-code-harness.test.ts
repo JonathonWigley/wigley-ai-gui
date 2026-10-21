@@ -429,5 +429,8 @@ describe('createClaudeCodeHarness past sessions', () => {
     expect(
       await listedFrom('/Users/u/.claude', { CLAUDE_CONFIG_DIR: '/c' }, null),
     ).toEqual([]);
+    expect(
+      await listedFrom('/Users/u/.claude', { CLAUDE_CONFIG_DIR: '' }, null),
+    ).toEqual([sessionId]);
   });
 });

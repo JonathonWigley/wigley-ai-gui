@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { AgentStart } from '../../contracts/agent';
 
 export interface ClaudeLaunch {
@@ -63,4 +64,19 @@ export function claudeLaunch(
     cwd: request.projectDir,
     env: launchEnv,
   };
+}
+
+// The config folder a session launched with `claudeLaunch` uses: `profileDir`,
+// which the launch sets as `CLAUDE_CONFIG_DIR`, else the non-empty
+// `CLAUDE_CONFIG_DIR` the launch passes through, else `<homeDir>/.claude`.
+export function claudeConfigFolder(
+  profileDir: string | null,
+  env: NodeJS.ProcessEnv,
+  homeDir: string,
+): string {
+  const inherited = env.CLAUDE_CONFIG_DIR;
+  const isInherited = inherited !== undefined && inherited !== '';
+  return (
+    profileDir ?? (isInherited ? inherited : path.join(homeDir, '.claude'))
+  );
 }

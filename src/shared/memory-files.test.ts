@@ -35,6 +35,23 @@ describe('createMemoryFiles', () => {
     await expect(files.modified('/nope')).rejects.toThrow('no file at /nope');
   });
 
+  it('modified_Rename_CarriesTheStampToTheNewPath', async () => {
+    const clock = { now: () => 5000 };
+    const stamped = createMemoryFiles(clock);
+    await stamped.write('/h/a.md', 'one');
+    await stamped.write('/h/s/b.md', 'two');
+    clock.now = () => 9000;
+
+    await stamped.rename('/h/a.md', '/h/c.md');
+    await stamped.rename('/h/s', '/h/t');
+
+    expect(await stamped.modified('/h/c.md')).toBe(5000);
+    expect(await stamped.modified('/h/t/b.md')).toBe(5000);
+    await expect(stamped.modified('/h/a.md')).rejects.toThrow(
+      'no file at /h/a.md',
+    );
+  });
+
   it('readStart_CutInsideACharacter_LeavesItOut', async () => {
     await files.write('/h/a.md', 'aé');
 

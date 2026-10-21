@@ -13,7 +13,7 @@ import type {
 import type { Files } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import { errorText } from '../../shared/error-text';
-import { claudeLaunch } from './claude-launch';
+import { claudeConfigFolder, claudeLaunch } from './claude-launch';
 import {
   CLAUDE_CONTROLS,
   type ClaudeControlId,
@@ -401,20 +401,18 @@ function startClaudeProcess(
   };
 }
 
-// Where Claude saves `projectDir`'s transcripts: under the config folder
-// `claudeLaunch` points the CLI at, which is `profileDir`, else an inherited
-// `CLAUDE_CONFIG_DIR`, else `~/.claude`.
+// Where Claude saves `projectDir`'s transcripts: under the session's config
+// folder.
 function projectsFolder(
   deps: ClaudeCodeHarnessDeps,
   projectDir: string,
   profileDir: string | null,
 ): string {
-  const inherited = deps.env.CLAUDE_CONFIG_DIR;
-  const isInherited = inherited !== undefined && inherited !== '';
-  const configFolder =
-    profileDir ??
-    (isInherited ? inherited : path.join(deps.homeDir, '.claude'));
-  return path.join(configFolder, 'projects', projectFolderName(projectDir));
+  return path.join(
+    claudeConfigFolder(profileDir, deps.env, deps.homeDir),
+    'projects',
+    projectFolderName(projectDir),
+  );
 }
 
 // The Claude Code CLI behind `AgentHarness`: one `claude` process per

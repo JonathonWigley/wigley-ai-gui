@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Files } from '../../contracts/files';
 import { createMemoryFiles } from '../../shared/memory-files';
-import { listPastSessions, readHistory } from './past-sessions';
+import {
+  listPastSessions,
+  readHistory,
+  TRANSCRIPT_READ_BATCH,
+} from './past-sessions';
 
 const FOLDER = '/config/projects/-w-app';
 const OLD_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
@@ -98,6 +102,38 @@ describe('listPastSessions', () => {
       'claude',
       `transcript ${broken} unreadable: boom`,
     ]);
+  });
+
+  it('listPastSessions_ManyTranscripts_ReadsInBoundedBatches', async () => {
+    const stored = createMemoryFiles();
+    const count = TRANSCRIPT_READ_BATCH * 2 + 1;
+    const ids = Array.from(
+      { length: count },
+      (_, index) =>
+        `bbbbbbbb-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    );
+    for (const id of ids) {
+      await stored.write(`${FOLDER}/${id}.jsonl`, transcript('/w/app', id));
+    }
+    let open = 0;
+    let mostOpen = 0;
+    const files: Files = {
+      ...stored,
+      readStart: async (path, maxBytes) => {
+        open += 1;
+        mostOpen = Math.max(mostOpen, open);
+        await Promise.resolve();
+        const head = await stored.readStart(path, maxBytes);
+        open -= 1;
+        return head;
+      },
+    };
+    const { log } = recordingLog();
+
+    const sessions = await listPastSessions({ files, log }, FOLDER, '/w/app');
+
+    expect(mostOpen).toBe(TRANSCRIPT_READ_BATCH);
+    expect(sessions.map((session) => session.sessionId)).toEqual(ids);
   });
 });
 

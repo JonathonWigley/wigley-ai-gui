@@ -1,8 +1,7 @@
 import type { ChatEntry } from '../../contracts/agent';
 import type { ClaudeControlId } from './claude-controls';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
-import { toolResultText } from './tool-result-text';
-import { toolSummary } from './tool-summary';
+import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
 
 // What one stdout line of `claude` in stream-json mode means to the chat.
 // `entries` are whole entries, each replacing an earlier one with its id;
@@ -23,7 +22,6 @@ export interface StreamDecoder {
 }
 
 type TextEntry = Extract<ChatEntry, { kind: 'assistant' | 'thinking' }>;
-type ToolEntry = Extract<ChatEntry, { kind: 'tool' }>;
 type RawEntry = Extract<ChatEntry, { kind: 'raw' }>;
 
 // Local slash commands answer with an assistant event of this model.
@@ -323,19 +321,8 @@ export function createStreamDecoder(): StreamDecoder {
   }
 
   function toolEntry(block: Json, event: Json): ToolEntry {
-    const toolUseId = asString(block.id);
-    const name = asString(block.name);
-    const entry: ToolEntry = {
-      kind: 'tool',
-      id: `tool-${toolUseId}`,
-      toolUseId,
-      name,
-      input: block.input,
-      summary: toolSummary(name, block.input),
-      result: null,
-      raw: [event],
-    };
-    toolEntries.set(toolUseId, entry);
+    const entry = toolUseEntry(`tool-${asString(block.id)}`, block, event);
+    toolEntries.set(entry.toolUseId, entry);
     return entry;
   }
 
@@ -363,16 +350,8 @@ export function createStreamDecoder(): StreamDecoder {
   }
 
   function decodeToolResult(block: Json, event: Json): ChatEntry {
-    const entry = toolEntries.get(asString(block.tool_use_id));
-    if (entry === undefined) {
-      return rawEntry(event);
-    }
-    entry.result = {
-      text: toolResultText(block.content),
-      isError: block.is_error === true,
-    };
-    entry.raw.push(event);
-    return snapshot(entry);
+    const entry = pairToolResult(toolEntries, block, event);
+    return entry === undefined ? rawEntry(event) : snapshot(entry);
   }
 
   // Tool results pair with their tool entries. Local command output (the

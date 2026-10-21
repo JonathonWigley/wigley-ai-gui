@@ -17,10 +17,14 @@ export interface PastSessionsDeps {
 }
 
 const TRANSCRIPT_EXTENSION = '.jsonl';
+// How many transcripts the session list reads at once, so a large folder
+// cannot exhaust the process's file handles.
+export const TRANSCRIPT_READ_BATCH = 16;
 
 // The sessions in `projectsFolder` whose transcript opens in `projectDir`,
-// newest first, then by session id. A transcript that cannot be read is left
-// out and logged; a missing folder lists none.
+// newest first, then by session id, read `TRANSCRIPT_READ_BATCH` at a time. A
+// transcript that cannot be read is left out and logged; a missing folder
+// lists none.
 export async function listPastSessions(
   deps: PastSessionsDeps,
   projectsFolder: string,
@@ -31,9 +35,19 @@ export async function listPastSessions(
     .filter((entry) => entry.kind === 'file')
     .map((entry) => transcriptSessionId(entry.path))
     .filter((id): id is string => id !== null);
-  const found = await Promise.all(
-    sessionIds.map((id) => pastSession(deps, projectsFolder, projectDir, id)),
-  );
+  const found: (PastSession | null)[] = [];
+  for (
+    let start = 0;
+    start < sessionIds.length;
+    start += TRANSCRIPT_READ_BATCH
+  ) {
+    const batch = sessionIds.slice(start, start + TRANSCRIPT_READ_BATCH);
+    found.push(
+      ...(await Promise.all(
+        batch.map((id) => pastSession(deps, projectsFolder, projectDir, id)),
+      )),
+    );
+  }
   return found
     .filter((session): session is PastSession => session !== null)
     .sort(

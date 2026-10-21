@@ -78,6 +78,20 @@ describe('readTranscriptHead', () => {
     expect(sessionTitle(firstMessage)).toBe('fix the bug');
   });
 
+  it('readTranscriptHead_SkipsCliWrittenUserLines', () => {
+    const head = jsonl([
+      userLine('u0', 'This session is being continued…', {
+        isCompactSummary: true,
+        isVisibleInTranscriptOnly: true,
+      }),
+      userLine('u1', '<task-notification>\n<task-id>t1</task-id>'),
+      userLine('u2', [{ type: 'text', text: '[Request interrupted by user]' }]),
+      userLine('u3', 'the real ask'),
+    ]);
+
+    expect(readTranscriptHead(head).firstMessage).toBe('the real ask');
+  });
+
   it('readTranscriptHead_NoUserLine_NullMessage', () => {
     const head = jsonl([
       { type: 'mode' },
@@ -95,6 +109,15 @@ describe('sessionTitle', () => {
   it('sessionTitle_LongMessage_CutTo80WithEllipsis', () => {
     expect(sessionTitle('a'.repeat(100))).toBe(`${'a'.repeat(79)}…`);
     expect(sessionTitle('a'.repeat(80))).toBe('a'.repeat(80));
+  });
+
+  it('sessionTitle_SurrogatePairAtTheCut_KeptWholeAndCountedOnce', () => {
+    const emoji = '😀';
+    const long = `${'a'.repeat(78)}${emoji}${'b'.repeat(10)}`;
+    const exact = `${'a'.repeat(79)}${emoji}`;
+
+    expect(sessionTitle(long)).toBe(`${'a'.repeat(78)}${emoji}…`);
+    expect(sessionTitle(exact)).toBe(exact);
   });
 
   it('sessionTitle_Null_Untitled', () => {
@@ -178,6 +201,85 @@ describe('transcriptEntries', () => {
         text: 'Set model to opus',
         tone: 'info',
         raw: [s1],
+      },
+    ]);
+  });
+
+  it('transcriptEntries_LocalCommandWithoutUuid_TakesLineId', () => {
+    const s1 = {
+      type: 'system',
+      subtype: 'local_command',
+      content: '<local-command-stdout>Set model to opus</local-command-stdout>',
+    };
+
+    expect(transcriptEntries(jsonl([{ type: 'mode' }, s1]))).toEqual([
+      {
+        kind: 'notice',
+        id: 'history:line-2',
+        text: 'Set model to opus',
+        tone: 'info',
+        raw: [s1],
+      },
+    ]);
+  });
+
+  it('transcriptEntries_CompactSummary_RawEntry', () => {
+    const u1 = userLine('u1', 'This session is being continued…', {
+      isCompactSummary: true,
+      isVisibleInTranscriptOnly: true,
+    });
+
+    expect(transcriptEntries(jsonl([u1]))).toEqual([
+      { kind: 'raw', id: 'history:u1', raw: [u1] },
+    ]);
+  });
+
+  it('transcriptEntries_VisibleInTranscriptOnly_RawEntry', () => {
+    const u1 = userLine('u1', [{ type: 'text', text: 'shown only' }], {
+      isVisibleInTranscriptOnly: true,
+    });
+
+    expect(transcriptEntries(jsonl([u1]))).toEqual([
+      { kind: 'raw', id: 'history:u1', raw: [u1] },
+    ]);
+  });
+
+  it('transcriptEntries_TaskNotification_RawEntry', () => {
+    const u1 = userLine(
+      'u1',
+      '<task-notification>\n<task-id>t1</task-id>\n<status>completed</status>',
+    );
+
+    expect(transcriptEntries(jsonl([u1]))).toEqual([
+      { kind: 'raw', id: 'history:u1', raw: [u1] },
+    ]);
+  });
+
+  it('transcriptEntries_InterruptMarkers_RawEntries', () => {
+    const u1 = userLine('u1', [
+      { type: 'text', text: '[Request interrupted by user]' },
+    ]);
+    const u2 = userLine('u2', [
+      { type: 'text', text: '[Request interrupted by user for tool use]' },
+    ]);
+
+    expect(transcriptEntries(jsonl([u1, u2]))).toEqual([
+      { kind: 'raw', id: 'history:u1', raw: [u1] },
+      { kind: 'raw', id: 'history:u2', raw: [u2] },
+    ]);
+  });
+
+  it('transcriptEntries_TypedTextNamingTheMarker_UserEntry', () => {
+    const u1 = userLine('u1', [
+      { type: 'text', text: 'why did I see [Request interrupted by user]?' },
+    ]);
+
+    expect(transcriptEntries(jsonl([u1]))).toEqual([
+      {
+        kind: 'user',
+        id: 'history:u1',
+        text: 'why did I see [Request interrupted by user]?',
+        raw: [u1],
       },
     ]);
   });
