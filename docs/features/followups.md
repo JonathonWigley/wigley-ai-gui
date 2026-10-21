@@ -109,7 +109,6 @@ now, any harness later). Each item names its sites.
   missing plugin token falls back to its default.
 - `EditorHost.defineEx(name, prefix, handler)`, disposable: the document editor's write/quit become ex commands the
   docs plugin registers, replacing the closed `DOCUMENT_EX_COMMANDS` and the `switch` in `codemirror-vim-host.ts`.
-  Run `documentExClash` at definition or move it into its test.
 - `MarkdownRenderer.addBlock({ opener, render })` and `addFence(language, render)` in the contract's own terms; the
   wigley `:::changes` / `:::tree` / `:::details` blocks move out of the core adapter into a contribution. One fence
   rule serves both `block` and `document` (the `diff` fence renders through two paths today).

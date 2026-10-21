@@ -396,6 +396,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         }
         if (result.type === 'changedOnDisk') {
           showConflict(result.diskText, after);
+          deps.log('docs', `changed on disk, not written: ${doc.name}`);
           return;
         }
         doc.text = text;
@@ -655,7 +656,11 @@ export function createDocView(deps: DocViewDeps): DocView {
       writeEditor(true, held.after);
     },
     conflictCancel() {
+      if (conflict === null || shown === null) {
+        return;
+      }
       endConflict(true);
+      deps.log('docs', `kept editing ${shown.name}`);
     },
     closeConflict() {
       endConflict(false);

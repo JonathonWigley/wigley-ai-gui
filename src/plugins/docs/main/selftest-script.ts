@@ -14,11 +14,22 @@ export interface DocsSelfTestDeps {
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
 }
 
+// The fixture's style rule, relative to the temp home, and the texts the steps
+// write over it from outside the app.
+const STYLE_RULE_FILE = '.claude/rules/style.md';
+const STYLE_RELOADED = '# Style\n\nWrite short lines.\nChanged on disk.\n';
+const STYLE_CHANGED_WHILE_EDITING =
+  '# Style\n\nWrite short lines.\nChanged while editing.\n';
+
 // Space k d shows Docs mode, whose first show builds the index: the fixture's
 // eight entries. j to Global's Instructions and l expands it; j to the
 // self-test instructions and l opens CLAUDE.md. Ctrl+l focuses the doc; Tab
-// reaches its first link, the style rule, and Enter follows it. i edits
-// style.md; o types a new line below, Esc to normal mode and :w writes it; :q
+// reaches its first link, the style rule, and Enter follows it. A change on
+// disk reloads style.md. i edits it, and a second change on disk shows the
+// changed-on-disk banner. o types a new line below, Esc to normal mode and :w
+// meets the changed-on-disk prompt, where r reloads the disk's text. Another
+// change on disk, a new line and :w again, and o overwrites the disk. A third,
+// and Esc keeps editing; :w shows the prompt again and o overwrites. :q
 // closes the editor. i again, x deletes a character, so :q is refused and :q!
 // drops the edit. Ctrl+h back to the tree; a asks for a kind, j Enter picks
 // rule, Enter its one place, and tidy names it, which creates tidy.md and opens
@@ -36,11 +47,16 @@ export interface DocsSelfTestDeps {
 // and j l opens the plugin's detail view; Ctrl+l, i edits
 // installed_plugins.json and :q closes it; Ctrl+h back. k k l expands the
 // plugin's Skills and j l opens its cached SKILL.md; Ctrl+l, j and k scroll,
-// and i toasts that the plugin cache is read-only; Ctrl+h back. a opens the
-// kind picker, j k j l picks rule, and Esc cancels its place picker. c opens
-// the context picker, j Enter picks the repo. Space k d hides the tree and
-// again shows it; Space k s shows Sessions mode on the docs session's Docs
-// tab, where R reads its session index.
+// and i refuses to edit it in the plugin cache; Ctrl+h back. a opens the kind
+// picker, j k j l picks rule, and Esc cancels its place picker. c opens the
+// context picker, j Enter picks the repo. Space k d hides the tree, focusing
+// the doc, and again shows it; Ctrl+h focuses the tree. Space k s shows
+// Sessions mode on the docs session's Docs tab, where R reads its session
+// index and a opens the kind picker. Space k d shows Docs mode, which closes
+// that picker, so j moves Docs mode's tree. / filters it to neat and Enter
+// keeps the filter; j j j j selects neat.md and r opens the path box, where
+// seven Backspaces and kept.md rename it, and the session's view reads its
+// index again.
 const STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'k', 'd'],
@@ -51,11 +67,42 @@ const STEPS: SelfTestStep[] = [
   { keys: ['j', 'l'], expect: '[docs] opened CLAUDE.md', checksFit: true },
   { keys: ['<C-l>'], expect: '[docs] doc focused' },
   { keys: ['Tab', 'Enter'], expect: '[docs] opened style.md' },
+  {
+    writeFile: { path: STYLE_RULE_FILE, text: STYLE_RELOADED },
+    keys: [],
+    expect: '[docs] reloaded style.md',
+  },
   { keys: ['i'], expect: '[docs] editing style.md', checksFit: true },
   {
-    keys: ['o', ...'new line', 'Escape', ':', 'w', 'Enter'],
-    expect: '[docs] wrote style.md',
+    writeFile: { path: STYLE_RULE_FILE, text: STYLE_CHANGED_WHILE_EDITING },
+    keys: [],
+    expect: '[docs] changed on disk: style.md',
   },
+  // Each :w below meets a disk that differs from the text the editor last
+  // read or wrote, so it shows the changed-on-disk prompt. The prompt's key
+  // goes in a step of its own, after the prompt's line.
+  {
+    keys: ['o', ...'mine', 'Escape', ':', 'w', 'Enter'],
+    expect: '[docs] changed on disk, not written: style.md',
+  },
+  { keys: ['r'], expect: '[docs] reloaded style.md' },
+  {
+    writeFile: { path: STYLE_RULE_FILE, text: STYLE_RELOADED },
+    keys: ['o', ...'mine', 'Escape', ':', 'w', 'Enter'],
+    expect: '[docs] changed on disk, not written: style.md',
+  },
+  { keys: ['o'], expect: '[docs] wrote style.md' },
+  {
+    writeFile: { path: STYLE_RULE_FILE, text: STYLE_CHANGED_WHILE_EDITING },
+    keys: ['o', ...'mine', 'Escape', ':', 'w', 'Enter'],
+    expect: '[docs] changed on disk, not written: style.md',
+  },
+  { keys: ['Escape'], expect: '[docs] kept editing style.md' },
+  {
+    keys: [':', 'w', 'Enter'],
+    expect: '[docs] changed on disk, not written: style.md',
+  },
+  { keys: ['o'], expect: '[docs] wrote style.md' },
   { keys: [':', 'q', 'Enter'], expect: '[docs] closed the editor on style.md' },
   { keys: ['i'], expect: '[docs] editing style.md' },
   {
@@ -136,8 +183,10 @@ const STEPS: SelfTestStep[] = [
   { keys: ['<C-l>'], expect: '[docs] doc focused' },
   { keys: ['j'], expect: '[page] j ran docs.scrollDown' },
   { keys: ['k'], expect: '[page] k ran docs.scrollUp' },
-  // The read-only toast logs nothing; the line proves `i` ran in doc scope.
-  { keys: ['i'], expect: '[page] i ran docs.edit' },
+  {
+    keys: ['i'],
+    expect: '[docs] refused to edit SKILL.md in the plugin cache',
+  },
   { keys: ['<C-h>'], expect: '[docs] tree focused' },
   { keys: ['a'], expect: '[docs] create: pick a kind' },
   { keys: ['j', 'k', 'j', 'l'], expect: '[docs] create rule: pick a place' },
@@ -146,19 +195,39 @@ const STEPS: SelfTestStep[] = [
   { keys: ['j', 'Enter'], expect: '[docs] context ~/dev/selftest-repo' },
   { keys: [' ', 'k', 'd'], expect: '[docs] tree hidden', checksFit: true },
   { keys: [' ', 'k', 'd'], expect: '[docs] tree shown' },
+  // Both views' pane scope is now tree, so only closing the session view's
+  // kind picker on Docs mode's show frees `j` there. The picker holds no
+  // text box, so Space reaches the leader.
+  { keys: ['<C-h>'], expect: '[docs] tree focused' },
   { keys: [' ', 'k', 's'], expect: '[docs] Docs tab shown', checksFit: true },
   { keys: ['R'], expect: '[docs] session index read: 4 entries' },
+  { keys: ['a'], expect: '[docs] create: pick a kind' },
+  { keys: [' ', 'k', 'd'], expect: '[page] showed Docs mode' },
+  { keys: ['j'], expect: '[page] j ran docs.treeDown' },
+  {
+    keys: ['/', ...'neat', 'Enter'],
+    expect: '[docs] filtered the tree: neat',
+  },
+  {
+    keys: ['j', 'j', 'j', 'j', 'r'],
+    expect: '[docs] rename: type the new path',
+  },
+  // The session view has read its index, so the rename runs it again.
+  {
+    keys: [...Array<string>(7).fill('Backspace'), ...'kept.md', 'Enter'],
+    expect: '[docs] session index read: 4 entries',
+  },
 ];
 
-// Row titles, paths and the status line end in an ellipsis; the field table,
-// the completion list and the editor scroll in their own box; and Sessions
-// mode's row and tab labels end in an ellipsis.
+// Row titles, paths, the status line and completions end in an ellipsis; the
+// field table's box and the editor scroll themselves; and Sessions mode's row
+// and tab labels end in an ellipsis.
 const SCROLLS_ITSELF = [
   '.docs-row-title',
   '.docs-path',
   '.docs-status',
-  '.docs-frontmatter',
-  '.docs-completion',
+  '.docs-completion-item',
+  '.docs-frontmatter-box',
   '.docs-editor',
   '.session-row-label',
   '.session-row-status',
