@@ -6,12 +6,10 @@ Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
 Files:     modify `src/contracts/files.ts` · modify `src/main/files/node-files.ts` · modify `src/shared/memory-files.ts` ·
-           modify `src/shared/scoped-files.ts` · modify `src/shared/layouts/layout-registry.test.ts` (its two `Files`
-           wrappers; `src/plugins/forms/main/layouts/layout-registry.test.ts` if plan A task 02 left it there) ·
-           test `src/main/files/node-files.test.ts` · test `src/shared/scoped-files.test.ts` ·
-           create test `src/shared/memory-files.test.ts`
-Consumes:  in the tree: `Files`, `FileEntry` (`src/contracts/files.ts`), `Clock` (`src/contracts/ambient.ts`),
-           `createNodeFiles()` (`src/main/files/node-files.ts`), `createMemoryFiles()` / `MemoryFiles`
+           modify `src/shared/scoped-files.ts` · test `src/main/files/node-files.test.ts` ·
+           test `src/shared/scoped-files.test.ts` · test `src/shared/memory-files.test.ts`
+Consumes:  in the tree: `Files`, `FileEntry`, `FileStat { isFolder }` (`src/contracts/files.ts`), `Clock`
+           (`src/contracts/ambient.ts`), `createNodeFiles({ trashItem })` (`src/main/files/node-files.ts`), `createMemoryFiles()` / `MemoryFiles`
            (`src/shared/memory-files.ts`), `scopedFiles(files, root)` (`src/shared/scoped-files.ts`)
 Produces:  in `src/contracts/files.ts`, on `Files`, with these comments:
            ```ts
@@ -22,22 +20,25 @@ Produces:  in `src/contracts/files.ts`, on `Files`, with these comments:
            readStart(path: string, maxBytes: number): Promise<string>;
            ```
            `export function createMemoryFiles(clock?: Clock): MemoryFiles` in `src/shared/memory-files.ts`
-           `modified` and `readStart` on the objects `createNodeFiles()` and `scopedFiles(files, root)` return
+           `modified` and `readStart` on the objects `createNodeFiles({ trashItem })` and `scopedFiles(files, root)` return
 Decisions: the Claude adapter lists transcripts of megabytes (2.5–3.5 MB each, measured at plan time, re-verify) by
            their first lines and modified time, so `Files` gains a bounded read and a modified time rather than the
            adapter reading whole files or importing `node:fs` (plan.md, Locality decision) ·
-           `modified` is a member of its own, not a `FileEntry` field, so `list` callers (layouts) pay no stat ·
+           `modified` is a member of its own, not a `FileEntry` field, so `list` callers (layouts) pay no stat, and not
+           a new `FileStat` field, since `stat` answers for folders too and memory files stamp only files ·
            node: `modified` is `Math.trunc((await stat(path)).mtimeMs)`; `readStart` opens the file, reads at most
            `maxBytes` bytes from position 0 into one buffer, closes the handle in a `finally`, and decodes the bytes
            read with `new TextDecoder('utf-8').decode(bytes, { stream: true })`, which holds back a cut multi-byte
            character instead of emitting U+FFFD · Node's own `ENOENT` error names the path (as `read` relies on today),
            so neither adds a guard ·
-           memory: each `write` stamps the path's modified time with `clock.now()`, `0` with no clock; `remove`
-           drops the stamp; `modified` and `readStart` on a missing path reject `no file at <path>` as `read` does;
+           memory: each `write` stamps the path's modified time with `clock.now()`, `0` with no clock; `rename`
+           carries each moved file's stamp to its new path; `remove` and `trash` drop the stamps of the files they
+           delete; `modified` and `readStart` on a missing path reject `no file at <path>` as `read` does;
            `readStart` encodes the text with `TextEncoder`, slices `maxBytes` bytes and decodes as node does ·
            scoped: both members resolve the path through the same `inside` check as `read`, rejecting
-           `<path> is outside <root>` before any I/O · the two test wrappers in the layout registry test pass both
-           members through to `inner` unchanged
+           `<path> is outside <root>` before any I/O · the `Files` wrappers in
+           `src/shared/layouts/layout-registry.test.ts` and `src/shared/scoped-files.test.ts` spread `...inner`, so they
+           pass both members through with no edit
 GIVEN a file holding `hello` WHEN `readStart(path, 3)` runs THEN it resolves `hel`
 GIVEN a file holding `hello` WHEN `readStart(path, 100)` runs THEN it resolves `hello`
 GIVEN a file holding `aé` (bytes `61 c3 a9`) WHEN `readStart(path, 2)` runs THEN it resolves `a`

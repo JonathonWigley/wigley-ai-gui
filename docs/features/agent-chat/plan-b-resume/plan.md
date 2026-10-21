@@ -243,7 +243,7 @@ picker title is `Session`; the box's completion prefix is `/`.
 ### Existing files modified
 
 - `src/contracts/files.ts`, `src/main/files/node-files.ts` (+test), `src/shared/memory-files.ts`,
-  `src/shared/scoped-files.ts` (+test), `src/shared/layouts/layout-registry.test.ts` (its two `Files` wrappers) — task 01.
+  `src/shared/scoped-files.ts` (+test), `src/shared/memory-files.test.ts` — task 01.
 - `src/contracts/editor.ts`, `src/renderer/codemirror-vim/codemirror-vim-host.ts`, `editor-theme.ts`, `package.json`,
   `package-lock.json` (its root `packages[""].dependencies` only), `scripts/check-layers.mts` — task 02.
 - `src/contracts/agent.ts`, `src/main/claude-code/claude-code-harness.ts` (+test), `src/main/claude-code/stream-decoder.ts`,
