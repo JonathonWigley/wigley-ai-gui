@@ -1,6 +1,6 @@
 # 09 — Self-test
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -190,3 +190,4 @@ completion, context and the session Docs tab — and forms' steps over the Docs 
 
 ## Proof
 
+`c5bc3de`, fix `e461903` · self-test 208 PASS, 0 FAIL twice. Details in plan.md's Run log.

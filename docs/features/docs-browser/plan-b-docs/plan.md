@@ -285,7 +285,7 @@ beside the tree's own (`memory-files.ts`, `fake-agent-harness.ts`), named for wh
 - [x] [Create, rename, delete, detail views](08-docs-crud.md) — after 07
 
 ### Wave 6
-- [ ] [Self-test](09-selftest.md) — after 08
+- [x] [Self-test](09-selftest.md) — after 08
 
 ### Wave 7
 - [ ] [Doc re-read](10-doc-re-read.md) — after 09
@@ -335,6 +335,11 @@ review range is this run's explicit commit list.
   tests pass; self-test fails only 07's 38 Docs-tab steps) · concerns: 07's `dispose()` filter-box scope and inert
   `docChanged` listeners stay open; Tab in the path box may move browser focus if the keys engine lets the default
   through (live check); the dialog flows have no unit tests (09's steps, 11's checks)
+- 09 · wigley-ai-gui `c5bc3de` + fix `e461903` · proved: diff read, typecheck and lint pass; the self-test exposed
+  one product bug (create by kind or path left the key scope on the tree, failing docs steps 18 and 27), fixed in
+  `e461903` (`openInEditor` calls `focusDoc`); after the fix `npm run selftest` gives 208 PASS, 0 FAIL, twice, with
+  forms', chat's and docs' results as expected · concerns: why the doc pane's `focusin` did not fire under the
+  self-test is unproven (likely no OS focus); fix holds either way
 ### Contract changes
 - `tree.ts`: adds `compareTitles(a, b): number` (base-sensitivity `localeCompare`, code-unit tie-break), used by
   `kinds.ts` · why: places sort as tree nodes do · consumers: 08 may use it · group 04
@@ -397,5 +402,7 @@ review range is this run's explicit commit list.
   scope changes under them; the view's own write never raises the banner — group 07
 - a source run that lands re-applies every change made after it was asked, on top of its document, so a run asked
   before a create never drops the new leaf — group 08
+- chat sessions open on their Docs tab; chat's `shownLine` is `[sessions] activated chat-selftest` and its first
+  step became three `<A-o>` steps selecting each session's Chat tab; later chat steps unchanged — group 09
 ### Review rounds
 ### Test gate
