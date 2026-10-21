@@ -320,9 +320,16 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
   };
 
+  const focusDoc = () => {
+    focused = 'doc';
+    doc.focus();
+    applyScope();
+  };
+
   const openInEditor = async (entry: IndexEntry, line: number) => {
     if (await doc.open(targetFor(entry.path, entry, line, null))) {
       doc.edit(line);
+      focusDoc();
     }
   };
 
@@ -549,12 +556,6 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
     const entry = entriesById.get(node.entryId);
     return entry === undefined ? null : parentFolder(entry.path);
-  };
-
-  const focusDoc = () => {
-    focused = 'doc';
-    doc.focus();
-    applyScope();
   };
 
   const pickContext = () => {
