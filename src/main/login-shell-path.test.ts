@@ -1,8 +1,18 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { pathFromMarkedOutput, readLoginShellPath } from './login-shell-path';
+import {
+  pathFromMarkedOutput,
+  readLoginShellPath,
+  shouldReadLoginShellPath,
+} from './login-shell-path';
 
 const START = '__WIGLEY_LOGIN_PATH_START__';
 const END = '__WIGLEY_LOGIN_PATH_END__';
@@ -31,6 +41,46 @@ describe('pathFromMarkedOutput', () => {
     expect(pathFromMarkedOutput(output)).toBeNull();
   });
 });
+
+describe('shouldReadLoginShellPath', () => {
+  it('reads for an app launchd started', () => {
+    expect(shouldReadLoginShellPath({ isSelfTest: false, parentPid: 1 })).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    [
+      'a terminal start, whose parent is the terminal process tree',
+      false,
+      4321,
+    ],
+    ['the self-test, even when launchd started it', true, 1],
+    ['the self-test from a terminal', true, 4321],
+  ])('keeps the inherited PATH for %s', (_case, isSelfTest, parentPid) => {
+    expect(shouldReadLoginShellPath({ isSelfTest, parentPid })).toBe(false);
+  });
+});
+
+// Whether a process with `pid` still runs, polled up to `limitMs` so a
+// killed process has time to be reaped.
+async function isRunningAfter(pid: number, limitMs: number): Promise<boolean> {
+  const deadline = Date.now() + limitMs;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+        return false;
+      }
+      throw error;
+    }
+    if (Date.now() >= deadline) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
 
 describe('readLoginShellPath', () => {
   const CAP_MS = 1000;
@@ -74,11 +124,16 @@ describe('readLoginShellPath', () => {
   );
 
   it(
-    'resolves null within the cap when a child the shell started holds stdout open',
+    'resolves null within the cap and kills the child that holds stdout open',
     async () => {
-      const shell = standInShell(`sleep 5 &\nprintf '%s' '${START}/a${END}'`);
+      const pidFile = path.join(folder, 'child.pid');
+      const shell = standInShell(
+        `sleep 5 &\necho $! > '${pidFile}'\nprintf '%s' '${START}/a${END}'`,
+      );
 
       expect(await readLoginShellPath(shell, CAP_MS)).toBeNull();
+      const childPid = Number(readFileSync(pidFile, 'utf8'));
+      expect(await isRunningAfter(childPid, 500)).toBe(false);
     },
     SETTLE_LIMIT_MS,
   );

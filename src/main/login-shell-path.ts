@@ -1,8 +1,10 @@
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 
 // An app started from Finder or the Dock inherits launchd's bare PATH, not the
 // one the user's shell profile builds, so a bare program name such as
-// `python3` resolves to the system's copy instead of the user's.
+// `python3` resolves to the system's copy instead of the user's. An app
+// started from a terminal inherits the PATH that terminal built (nvm, a
+// venv), which the login shell's PATH would undo.
 
 const START_MARKER = '__WIGLEY_LOGIN_PATH_START__';
 const END_MARKER = '__WIGLEY_LOGIN_PATH_END__';
@@ -28,9 +30,25 @@ export function pathFromMarkedOutput(output: string): string | null {
   return path === '' ? null : path;
 }
 
+// The parent pid of an app launchd started: Finder, the Dock, `open`, a
+// LaunchAgent.
+const LAUNCHD_PID = 1;
+
+// Whether main swaps in the login shell's PATH: only for an app launchd
+// started, whose inherited PATH is launchd's bare one. A terminal start
+// (`npm start` spawns Electron from the terminal's process tree) and the
+// self-test keep the PATH they inherited.
+export function shouldReadLoginShellPath(start: {
+  isSelfTest: boolean;
+  parentPid: number;
+}): boolean {
+  return !start.isSelfTest && start.parentPid === LAUNCHD_PID;
+}
+
 // The PATH an interactive login run of `shell` builds, or null when `shell`
-// is unset (as on Windows), fails to start, or prints no marked PATH within
-// `timeoutMs`. Settles within `timeoutMs` and never rejects.
+// is unset (as on Windows), fails to start, or closes its output without a
+// marked PATH within `timeoutMs`. Settles within `timeoutMs` and never
+// rejects.
 export function readLoginShellPath(
   shell: string | undefined,
   timeoutMs = READ_TIMEOUT_MS,
@@ -39,24 +57,50 @@ export function readLoginShellPath(
     return Promise.resolve(null);
   }
   return new Promise((resolve) => {
-    // An interactive shell ignores SIGTERM, so a profile that blocks is
-    // killed with SIGKILL.
-    const child = execFile(
-      shell,
-      ['-ilc', PRINT_PATH],
-      { encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL' },
-      // A profile that errors after printing still printed the PATH, so the
-      // output is read whatever the exit.
-      (_error, stdout) => {
-        clearTimeout(cap);
-        resolve(pathFromMarkedOutput(stdout ?? ''));
-      },
-    );
-    // The callback waits for stdout to close, which a process the profile
-    // started can hold open after the shell exits.
+    // Detached, the shell leads its own process group, so the cap can kill
+    // whatever its profile started along with it.
+    const child = spawn(shell, ['-ilc', PRINT_PATH], {
+      detached: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    // The output pipe alone keeps the read alive; the shell's handle never
+    // holds the app open.
+    child.unref();
+    let output = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      output += chunk;
+    });
+    child.on('error', () => {
+      clearTimeout(cap);
+      resolve(null);
+    });
+    // `close` waits for stdout to close, which a process the profile started
+    // can hold open after the shell exits. A profile that errors after
+    // printing still printed the PATH, so the output is read whatever the
+    // exit.
+    child.on('close', () => {
+      clearTimeout(cap);
+      resolve(pathFromMarkedOutput(output));
+    });
+    // An interactive shell ignores SIGTERM, so the group gets SIGKILL.
     const cap = setTimeout(() => {
-      child.kill('SIGKILL');
+      if (child.pid !== undefined) {
+        killProcessGroup(child.pid);
+      }
       resolve(null);
     }, timeoutMs);
   });
+}
+
+// SIGKILL to the process group `leaderPid` leads; a group already gone is
+// left alone.
+function killProcessGroup(leaderPid: number): void {
+  try {
+    process.kill(-leaderPid, 'SIGKILL');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+      throw error;
+    }
+  }
 }

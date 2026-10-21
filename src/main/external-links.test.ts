@@ -13,7 +13,6 @@ describe('gateExternalLinks', () => {
   it.each([
     'https://example.com/a?b=c',
     'http://example.com',
-    'mailto:someone@example.com',
     'HTTPS://example.com',
   ])('opens %s', async (url) => {
     const { open, opened } = recordingOpen();
@@ -26,6 +25,7 @@ describe('gateExternalLinks', () => {
   it.each([
     'file:///etc/passwd',
     'javascript:alert(1)',
+    'mailto:someone@example.com',
     'vscode://file/x',
     'ftp://example.com',
     'not a url',

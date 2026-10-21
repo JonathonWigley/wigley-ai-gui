@@ -274,8 +274,10 @@ round), since main, not the page, decides.
 ## Dev quirks
 
 - An app launched from Finder or the Dock inherits launchd's bare PATH, so before plugins start main swaps in the PATH
-  the user's login shell builds (`src/main/login-shell-path.ts`), keeping the inherited one when that read fails. The
-  self-test skips the read and keeps the PATH of the shell that ran it.
+  the user's login shell builds (`src/main/login-shell-path.ts`), keeping the inherited one when that read fails. Main
+  reads it only when the app's parent is launchd (`process.ppid === 1`): a terminal start (`npm start`) and the
+  self-test keep the PATH of the shell that ran them, nvm or a venv included. The read's shell leads its own process
+  group, and the 3 s cap kills that whole group.
 - Under `electron-forge start` the page loads twice at startup, the second load triggered by the dev server. Code
   that acts on page load runs on every load, as the self-test does.
 - A session's `ask_round` schema is fixed when the session starts, so after a change to the forms tool contract the

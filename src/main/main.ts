@@ -62,7 +62,10 @@ import {
   type MainCommands,
   registerGlobalShortcuts,
 } from './keybindings';
-import { readLoginShellPath } from './login-shell-path';
+import {
+  readLoginShellPath,
+  shouldReadLoginShellPath,
+} from './login-shell-path';
 import { createMainApi } from './plugins/main-api';
 import { createPluginChannels } from './plugins/plugin-channel';
 import { createNodeProcesses } from './processes/node-processes';
@@ -86,12 +89,15 @@ const isSelfTest = Boolean(process.env.PROOF_SELFTEST);
 
 registerDataScheme();
 
-// Read while the app gets ready, and applied before any plugin starts. The
-// self-test inherits the PATH of the shell that ran it and stays clear of the
-// user's shell profile.
-const loginShellPath = isSelfTest
-  ? Promise.resolve(null)
-  : readLoginShellPath(process.env.SHELL);
+// Read while the app gets ready, and applied before any plugin starts. A
+// terminal start and the self-test keep the PATH of the shell that ran them
+// and stay clear of the user's shell profile.
+const loginShellPath = shouldReadLoginShellPath({
+  isSelfTest,
+  parentPid: process.ppid,
+})
+  ? readLoginShellPath(process.env.SHELL)
+  : Promise.resolve(null);
 
 // Every self-test file sits in the temp home folder, and the user's Trash
 // must not collect them.

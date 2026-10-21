@@ -345,7 +345,7 @@ export interface SelfTestHost {
 // harness adapter the app runs, found by `id`. `window.chooseFolder` opens the
 // native folder dialog over the window and resolves to null when the user
 // cancels; `window.isFocused` is true while the app's window has focus.
-// `openExternal` opens an http, https or mailto URL in the user's default app,
+// `openExternal` opens an http or https URL in the user's default app,
 // and rejects with `Refused to open <url>: …` for any other scheme or a URL
 // that does not parse.
 export interface MainServices {

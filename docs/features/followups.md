@@ -6,6 +6,7 @@
 - A Latte (light) theme and OS light/dark following.
 - A user config file for settings and the keymap. The editor's insert remaps merge only from the core keymap, which holds none since `jk` was dropped, so the keys help's "Remaps in a text box" section stays empty until this lands.
 - A settings window, and settings that hot reload: a change applies to the open window without restarting main, which today owns the settings and serves them to the page only at load. Builds on the user config file above.
+- A setting that turns every key hint on or off (the conflict prompt, the trash y/n, chat's and forms' hints). Hints already come from `keysFor`, so one setting can blank them in one place. Builds on the user config file above.
 - `npm run selftest` on Windows (`tee /dev/stderr` in the script).
 - An active-line band in the editors.
 - Editor key replay (a broken key sequence replayed into a box through `EditorHost.typeInto`) has three limits only a custom keymap reaches: focus moving mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on named keys.

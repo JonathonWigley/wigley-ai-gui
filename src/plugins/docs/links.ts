@@ -12,7 +12,7 @@ export type LinkTarget =
   | { type: 'unsupported'; href: string };
 
 // The links the app opens outside itself, in the OS default handler.
-export const EXTERNAL_SCHEME = /^(https?|mailto):/i;
+export const EXTERNAL_SCHEME = /^https?:/i;
 const FILE_URL = /^file:\/\//i;
 const ANY_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 // `b.md:12` reads as a scheme to ANY_SCHEME; a name holding a `.` or `/`

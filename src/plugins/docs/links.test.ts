@@ -14,9 +14,9 @@ describe('resolveLink', () => {
       type: 'external',
       url: 'https://x.dev/a',
     });
-    expect(resolve('MAILTO:a@b.c')).toEqual({
+    expect(resolve('HTTP://x.dev')).toEqual({
       type: 'external',
-      url: 'MAILTO:a@b.c',
+      url: 'HTTP://x.dev',
     });
   });
 
@@ -24,6 +24,10 @@ describe('resolveLink', () => {
     expect(resolve('vscode://x')).toEqual({
       type: 'unsupported',
       href: 'vscode://x',
+    });
+    expect(resolve('mailto:a@b.c')).toEqual({
+      type: 'unsupported',
+      href: 'mailto:a@b.c',
     });
   });
 
