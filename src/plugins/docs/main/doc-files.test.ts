@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createMemoryFiles } from '../../../shared/memory-files';
+import type { Files } from '../../../contracts/files';
+import {
+  createMemoryFiles,
+  type MemoryFiles,
+} from '../../../shared/memory-files';
 import type { CreatePlace, IndexEntry } from '../contract';
+import { baseName, joinPath, parentFolder } from '../doc-paths';
 import { createDocFiles } from './doc-files';
 
 const HOME = '/Users/u';
@@ -36,16 +41,83 @@ const ENTRIES: IndexEntry[] = [
   }),
 ];
 
-function setUp() {
+function setUp(
+  options: { files?: Files; entries?: readonly IndexEntry[] } = {},
+) {
   const files = createMemoryFiles();
   const logged: string[] = [];
   const docFiles = createDocFiles({
-    files,
+    files: options.files ?? files,
     homeDir: HOME,
     log: (source, message) => logged.push(`[${source}] ${message}`),
-    entries: () => ENTRIES,
+    entries: () => options.entries ?? ENTRIES,
   });
   return { files, docFiles, logged };
+}
+
+// `files` with symlinks: each key of `links` is a link to its value. A path
+// through a link reads and writes the target; a write, rename or trash of the
+// link itself (its folder resolved) replaces, moves or removes the link, as
+// on disk.
+function withLinks(files: MemoryFiles, links: Map<string, string>): Files {
+  const resolve = (path: string): string => {
+    for (const [link, target] of links) {
+      if (path === link || path.startsWith(`${link}/`)) {
+        return resolve(target + path.slice(link.length));
+      }
+    }
+    return path;
+  };
+  const asItself = (path: string) =>
+    joinPath(resolve(parentFolder(path)), baseName(path));
+  return {
+    ...files,
+    read: (path) => files.read(resolve(path)),
+    write: async (path, text) => {
+      links.delete(asItself(path));
+      await files.write(asItself(path), text);
+    },
+    stat: (path) => files.stat(resolve(path)),
+    realPath: (path) => files.realPath(resolve(path)),
+    makeFolder: (path) => files.makeFolder(resolve(path)),
+    list: async (folder) => {
+      const linked = [...links.keys()]
+        .filter((link) => parentFolder(link) === resolve(folder))
+        .map((link) => ({ path: baseName(link), kind: 'file' as const }));
+      return [...(await files.list(resolve(folder))), ...linked];
+    },
+    rename: async (from, to) => {
+      const target = links.get(asItself(from));
+      if (target === undefined) {
+        await files.rename(asItself(from), asItself(to));
+        return;
+      }
+      links.delete(asItself(from));
+      links.set(asItself(to), target);
+    },
+    trash: async (path) => {
+      if (!links.delete(asItself(path))) {
+        await files.trash(asItself(path));
+      }
+    },
+  };
+}
+
+// `files` on a case-insensitive volume: `stat` finds a name in any case.
+function caseInsensitive(files: MemoryFiles): Files {
+  return {
+    ...files,
+    stat: async (path) => {
+      const name = baseName(path).toLowerCase();
+      const siblings = await files.list(parentFolder(path));
+      const found = siblings.find(
+        (sibling) => sibling.path.toLowerCase() === name,
+      );
+      return found === undefined
+        ? files.stat(path)
+        : files.stat(joinPath(parentFolder(path), found.path));
+    },
+  };
 }
 
 const REPO_PLACE = (folder: string): CreatePlace => ({
@@ -95,6 +167,83 @@ describe('write', () => {
     ).rejects.toThrow(
       'Refused: /Users/u/.claude/plugins/cache/m/p/1/x.md is inside the plugin cache of p@m',
     );
+  });
+
+  it('write_LinkWithTargetOutside_RejectsNamingTarget', async () => {
+    const test = setUp();
+    const links = new Map([[`${ROOT}/linked.md`, '/Users/u/Desktop/x.md']]);
+    await test.files.write('/Users/u/Desktop/x.md', 'x');
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    await expect(
+      docFiles.write(`${ROOT}/linked.md`, 'b', null),
+    ).rejects.toThrow(
+      'Refused: /Users/u/Desktop/x.md is outside the indexed folders',
+    );
+  });
+
+  it('write_DanglingLink_RejectsKeepingLink', async () => {
+    const test = setUp();
+    const links = new Map([[`${ROOT}/linked.md`, `${ROOT}/gone.md`]]);
+    await test.files.makeFolder(ROOT);
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    await expect(
+      docFiles.write(`${ROOT}/linked.md`, 'b', null),
+    ).rejects.toThrow(
+      'Refused: /Users/u/dev/r/linked.md is a link to a missing file',
+    );
+    expect(links.get(`${ROOT}/linked.md`)).toBe(`${ROOT}/gone.md`);
+    expect(await test.files.stat(`${ROOT}/gone.md`)).toBeNull();
+  });
+
+  it('write_HomeFolder_Refused', async () => {
+    const test = setUp({
+      entries: [
+        ...ENTRIES,
+        entry({ path: `${HOME}/CLAUDE.md`, source: 'global', root: null }),
+      ],
+    });
+    await test.files.makeFolder(HOME);
+
+    await expect(
+      test.docFiles.write(`${HOME}/x.md`, 'b', null),
+    ).rejects.toThrow('Refused: /Users/u/x.md is outside the indexed folders');
+    await test.docFiles.write(`${HOME}/CLAUDE.md`, 'own', null);
+    expect(await test.files.read(`${HOME}/CLAUDE.md`)).toBe('own');
+  });
+
+  it('write_UnlistedCachedVersion_RejectsNamingCache', async () => {
+    const test = setUp();
+    const path = '/Users/u/.claude/plugins/cache/m/p/0/x.md';
+
+    await expect(test.docFiles.write(path, 'b', null)).rejects.toThrow(
+      `Refused: ${path} is inside the plugin cache /Users/u/.claude/plugins/cache`,
+    );
+  });
+
+  it('write_GlobalDocFolders_Written', async () => {
+    const test = setUp();
+
+    await test.docFiles.write('~/.codex/prompts/p.md', 'p', null);
+    await test.docFiles.write('~/.agents/skills/s/SKILL.md', 's', null);
+
+    expect(await test.files.read(`${HOME}/.codex/prompts/p.md`)).toBe('p');
+    expect(await test.files.read(`${HOME}/.agents/skills/s/SKILL.md`)).toBe(
+      's',
+    );
+  });
+
+  it('write_LinkedWigleyAgentsFolder_WritesInClone', async () => {
+    const test = setUp();
+    const clone = '/Users/u/src/wa';
+    await test.files.makeFolder(clone);
+    const links = new Map([[`${HOME}/wigley-agents`, clone]]);
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    await docFiles.write('~/wigley-agents/learning/l.md', 'l', null);
+
+    expect(await test.files.read(`${clone}/learning/l.md`)).toBe('l');
   });
 
   it('write_Outside_RejectsNamingPath', async () => {
@@ -259,6 +408,30 @@ describe('rename', () => {
     ).rejects.toThrow('/Users/u/dev/r/b.md already exists');
   });
 
+  it('rename_CaseOnlyOnCaseInsensitiveVolume_Renames', async () => {
+    const test = setUp();
+    await test.files.write(`${ROOT}/a.md`, 'a');
+    const docFiles = setUp({ files: caseInsensitive(test.files) }).docFiles;
+
+    await docFiles.rename(`${ROOT}/a.md`, `${ROOT}/A.md`);
+
+    expect(await test.files.read(`${ROOT}/A.md`)).toBe('a');
+    expect(await test.files.stat(`${ROOT}/a.md`)).toBeNull();
+  });
+
+  it('rename_SymlinkedDoc_MovesLinkKeepsTarget', async () => {
+    const test = setUp();
+    const target = '/Users/u/src/clone/linked.md';
+    await test.files.write(target, 'linked');
+    const links = new Map([[`${ROOT}/linked.md`, target]]);
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    await docFiles.rename(`${ROOT}/linked.md`, `${ROOT}/sub/moved.md`);
+
+    expect([...links]).toEqual([[`${ROOT}/sub/moved.md`, target]]);
+    expect(await test.files.read(target)).toBe('linked');
+  });
+
   it('rename_UnlistedSkill_MovesFolder', async () => {
     const test = setUp();
     await test.files.write(`${ROOT}/.claude/skills/new/SKILL.md`, 'new');
@@ -286,6 +459,20 @@ describe('trash', () => {
     expect(trashed).toBe(`${ROOT}/.claude/skills/s`);
     expect(await test.files.stat(`${ROOT}/.claude/skills/s`)).toBeNull();
     expect(await test.files.stat(`${ROOT}/.claude/skills/s/ref.md`)).toBeNull();
+  });
+
+  it('trash_SymlinkedDoc_TrashesLinkKeepsTarget', async () => {
+    const test = setUp();
+    const target = '/Users/u/src/clone/linked.md';
+    await test.files.write(target, 'linked');
+    const links = new Map([[`${ROOT}/linked.md`, target]]);
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    const trashed = await docFiles.trash(`${ROOT}/linked.md`);
+
+    expect(trashed).toBe(`${ROOT}/linked.md`);
+    expect(links.size).toBe(0);
+    expect(await test.files.read(target)).toBe('linked');
   });
 });
 

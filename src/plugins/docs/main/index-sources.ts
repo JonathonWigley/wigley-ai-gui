@@ -1,11 +1,11 @@
-import type { Files } from '../../../contracts/files';
+import { type Files, readIfPresent } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
 import type { ProcessRunner } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
 import type { IndexEntry, IndexLoad, SessionSourceSpec } from '../contract';
 import { joinPath } from '../doc-paths';
 import { parseIndexDocument } from '../index-document';
-import { locateScript, readIfPresent } from './script-locator';
+import { locateScript } from './script-locator';
 
 // The machine index `docs_index.py build` writes, under the home folder.
 export const MACHINE_INDEX_FILE = '.agents/wigley-docs/index.json';
@@ -35,11 +35,16 @@ export interface IndexSources {
   // Builds the machine index, then reads it. A call while a build runs waits
   // for one more build after it, which every such call shares.
   rebuild(): Promise<IndexLoad>;
-  // A fresh index for one session; keeps no state.
+  // A fresh index for one session, its entries kept for `loadedEntries`. A
+  // Claude session whose `session` run fails, as before its transcript
+  // exists, falls back to `context` on its project folder.
   sessionIndex(spec: SessionSourceSpec): Promise<IndexLoad>;
-  // The entries of the machine document last read; [] before any read or
-  // after a failed one.
-  machineEntries(): readonly IndexEntry[];
+  // Drops the kept entries of every session not in `specs`.
+  retainSessions(specs: readonly SessionSourceSpec[]): void;
+  // The entries of the machine document last read ([] before any read or
+  // after a failed one), then those of each kept session's last index that
+  // loaded.
+  loadedEntries(): readonly IndexEntry[];
 }
 
 // The machine source (`index.json` and `docs_index.py build`) and the session
@@ -48,6 +53,8 @@ export function createIndexSources(deps: IndexSourcesDeps): IndexSources {
   const { files, homeDir } = deps;
   const indexFile = joinPath(homeDir, MACHINE_INDEX_FILE);
   let entries: readonly IndexEntry[] = [];
+  // Keyed by `sessionKey`.
+  const sessionEntries = new Map<string, readonly IndexEntry[]>();
   let runningBuild: Promise<IndexLoad> | null = null;
   let queuedBuild: Promise<IndexLoad> | null = null;
 
@@ -111,22 +118,47 @@ export function createIndexSources(deps: IndexSourcesDeps): IndexSources {
     if (run === null) {
       return { document: null, message: NO_FOLDER_MESSAGE };
     }
-    const outcome = await runScript(deps, run.command, [run.argument]);
+    let outcome = await runScript(deps, run.command, [run.argument]);
+    const fallbackDir = run.command === 'session' ? spec.projectDir : null;
+    if (!outcome.ok && fallbackDir !== null) {
+      deps.log(
+        'docs',
+        `session ${run.argument} not indexed (${outcome.message}); indexing ${fallbackDir} instead`,
+      );
+      outcome = await runScript(deps, 'context', [fallbackDir]);
+    }
     if (!outcome.ok) {
       return { document: null, message: outcome.message };
     }
     const parsed = parseIndexDocument(outcome.stdout);
-    return parsed.ok
-      ? { document: parsed.document, message: null }
-      : { document: null, message: parsed.message };
+    if (!parsed.ok) {
+      return { document: null, message: parsed.message };
+    }
+    sessionEntries.set(sessionKey(spec), parsed.document.entries);
+    return { document: parsed.document, message: null };
+  }
+
+  function retainSessions(specs: readonly SessionSourceSpec[]): void {
+    const kept = new Set(specs.map(sessionKey));
+    for (const key of sessionEntries.keys()) {
+      if (!kept.has(key)) {
+        sessionEntries.delete(key);
+      }
+    }
   }
 
   return {
     machineIndex,
     rebuild,
     sessionIndex,
-    machineEntries: () => entries,
+    retainSessions,
+    loadedEntries: () => [entries, ...sessionEntries.values()].flat(),
   };
+}
+
+// One key per distinct source, so sessions sharing a source share its entries.
+function sessionKey(spec: SessionSourceSpec): string {
+  return JSON.stringify([spec.hostSessionId, spec.projectDir, spec.harness]);
 }
 
 // Codex sets no Claude session id, so a Codex session runs `context`; a relay

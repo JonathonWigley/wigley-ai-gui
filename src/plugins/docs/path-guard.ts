@@ -1,6 +1,14 @@
 import type { IndexEntry } from './contract';
 import { isInside, parentFolder } from './doc-paths';
 
+// The folders a change may land in that no index entry names, as real paths.
+export interface GuardFolders {
+  // The folders the index walks for global docs.
+  globalDocFolders: readonly string[];
+  // Plugin install caches: nothing inside one is changed.
+  pluginCaches: readonly string[];
+}
+
 // Whether a link may open `path`: an indexed file, or a file inside an
 // entry's root (plugins included) or a global entry's folder.
 export function isIndexedPath(
@@ -11,43 +19,44 @@ export function isIndexedPath(
     (entry) =>
       path === entry.path ||
       (entry.root !== null && isInside(path, entry.root)) ||
-      insideGlobalEntryFolder(path, entry),
+      (entry.source === 'global' && isInside(path, parentFolder(entry.path))),
   );
 }
 
-// Why a write, create, rename or trash at `realTarget` (a real path) is
-// refused, or null when it is allowed. Plugin caches are refused even inside
-// an allowed folder.
+// Why a write, create, rename or trash at `target` (its folder a real path)
+// is refused, or null when it is allowed: at an entry's own file, inside a
+// repo or feature root, or inside a global docs folder. Anything inside a
+// plugin cache or a listed plugin install is refused, even inside an allowed
+// folder.
 export function changeRefusal(
-  realTarget: string,
+  target: string,
   entries: readonly IndexEntry[],
-  claudeConfigDirs: readonly string[],
+  folders: GuardFolders,
 ): string | null {
   const cachingPlugin = entries.find(
     (entry) =>
       entry.source === 'plugin' &&
       entry.root !== null &&
-      isInside(realTarget, entry.root),
+      isInside(target, entry.root),
   );
   if (cachingPlugin !== undefined) {
-    return `Refused: ${realTarget} is inside the plugin cache of ${cachingPlugin.plugin}`;
+    return `Refused: ${target} is inside the plugin cache of ${cachingPlugin.plugin}`;
   }
-  const insideIndexedFolder = entries.some(
+  const cache = folders.pluginCaches.find((folder) => isInside(target, folder));
+  if (cache !== undefined) {
+    return `Refused: ${target} is inside the plugin cache ${cache}`;
+  }
+  const isEntryOrInsideRoot = entries.some(
     (entry) =>
-      realTarget === entry.path ||
+      target === entry.path ||
       (entry.source !== 'plugin' &&
         entry.root !== null &&
-        isInside(realTarget, entry.root)) ||
-      insideGlobalEntryFolder(realTarget, entry),
+        isInside(target, entry.root)),
   );
-  const insideConfigDir = claudeConfigDirs.some((dir) =>
-    isInside(realTarget, dir),
+  const isInsideGlobalDocFolder = folders.globalDocFolders.some((folder) =>
+    isInside(target, folder),
   );
-  return insideIndexedFolder || insideConfigDir
+  return isEntryOrInsideRoot || isInsideGlobalDocFolder
     ? null
-    : `Refused: ${realTarget} is outside the indexed folders`;
-}
-
-function insideGlobalEntryFolder(path: string, entry: IndexEntry): boolean {
-  return entry.source === 'global' && isInside(path, parentFolder(entry.path));
+    : `Refused: ${target} is outside the indexed folders`;
 }

@@ -16,9 +16,6 @@ export function installedPluginsFile(configDir: string): string {
   return joinPath(configDir, 'plugins', 'installed_plugins.json');
 }
 
-// doc-files.ts and index-sources.ts import it from here.
-export { readIfPresent } from '../../../contracts/files';
-
 // Each configured Claude config folder, `~` expanded, in config order; an
 // entry that is not absolute once expanded is dropped, and the default stands
 // when no entry is left.

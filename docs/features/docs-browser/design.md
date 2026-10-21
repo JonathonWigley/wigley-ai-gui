@@ -86,7 +86,9 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   under the chosen place as the user types, and Tab completes the shared part, as a shell does.
 - **Rename** (`r`) uses the same path box, so it also moves a file. **Delete** (`d`) moves the file to the Trash after
   a confirm prompt; a skill's whole folder goes with its SKILL.md.
-- Main writes, renames and deletes only files the index lists or files inside a folder the index owns.
+- Main writes, renames and deletes only files the index lists, files inside a repo or feature home the index lists,
+  and files inside a folder the index walks for global docs: each Claude config folder, `~/.codex`, `~/.agents` and
+  `~/wigley-agents`. Never the home folder itself, and never anything inside a plugin cache.
 - **Plugin cache files** open read-only with a line naming the plugin; the source repo's copy is the one to edit.
 - **Hook and plugin entries** show a detail view (event, matcher, command / version, enabled) whose edit key opens
   the settings or config file holding it in the same editor.

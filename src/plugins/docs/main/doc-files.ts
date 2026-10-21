@@ -2,6 +2,7 @@ import {
   type Files,
   type FileWatch,
   isMissingFile,
+  readIfPresent,
 } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
@@ -16,31 +17,34 @@ import type {
 import {
   baseName,
   expandTilde,
+  isInside,
   joinPath,
   normalizePath,
   parentFolder,
 } from '../doc-paths';
 import { createTarget, nameProblem, skillFolder } from '../kinds';
-import { changeRefusal } from '../path-guard';
-import {
-  installedPluginsFile,
-  readClaudeConfigDirs,
-  readIfPresent,
-} from './script-locator';
+import { changeRefusal, type GuardFolders } from '../path-guard';
+import { installedPluginsFile, readClaudeConfigDirs } from './script-locator';
+
+// The folder `~/wigley-agents` names, a link or a clone; the index walks its
+// top level, `learning` and `decisions`.
+const WIGLEY_AGENTS_FOLDER = 'wigley-agents';
 
 export interface DocFilesDeps {
   files: Files;
   homeDir: string;
   log: Log;
-  // The machine index's, for the guard.
+  // Every loaded view's entries (the machine index's and each session's), for
+  // the guard.
   entries(): readonly IndexEntry[];
 }
 
 // Every path is `~` expanded and normalized first, and one that is not
-// absolute rejects. A write, create, rename or trash outside the indexed
-// folders and the Claude config folders, or inside a plugin install, rejects
-// with the guard's refusal; each acts on the real path, so a symlinked doc
-// stays a link.
+// absolute rejects. A write, create, rename or trash the guard refuses (see
+// `changeRefusal`) rejects with its refusal. A write or create lands on the
+// real path, so a symlinked doc stays a link, and rejects on a link whose
+// target is missing; a rename or trash acts on the path itself with only its
+// folder resolved, so a symlinked doc moves as the link and its target stays.
 export interface DocFiles {
   read(path: string): Promise<string>;
   // `expectedText` non-null: writes only while the disk (missing reads as
@@ -72,15 +76,28 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
 
   const absolute = (path: string) => absolutePath(path, homeDir);
 
-  // The real path a change at `path` lands on, once the guard allows it.
-  async function guarded(path: string): Promise<string> {
-    const target = await realTarget(files, path);
-    const configDirs = await realConfigDirs(files, homeDir, log);
-    const refusal = changeRefusal(target, deps.entries(), configDirs);
+  // `target`, once the guard allows a change there.
+  async function allowed(target: string): Promise<string> {
+    const folders = await guardFolders(files, homeDir, log);
+    const refusal = changeRefusal(target, deps.entries(), folders);
     if (refusal !== null) {
       throw new Error(refusal);
     }
     return target;
+  }
+
+  // The real path a write at `path` lands on, once the guard allows it.
+  // Rejects on a link whose target is missing, which the write would replace.
+  async function writeTarget(path: string): Promise<string> {
+    if (await isDanglingLink(files, path)) {
+      throw new Error(`Refused: ${path} is a link to a missing file`);
+    }
+    return allowed(await realTarget(files, path));
+  }
+
+  // `path` with its folder real, once the guard allows moving it.
+  async function moveTarget(path: string): Promise<string> {
+    return allowed(await folderRealTarget(files, path));
   }
 
   async function exists(path: string): Promise<boolean> {
@@ -92,7 +109,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     text: string,
     expectedText: string | null,
   ): Promise<WriteResult> {
-    const target = await guarded(absolute(path));
+    const target = await writeTarget(absolute(path));
     if (expectedText !== null) {
       const diskText = (await readIfPresent(files, target)) ?? '';
       if (diskText !== expectedText) {
@@ -117,7 +134,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
       request.name.trim(),
     );
     const path = absolute(target.path);
-    const real = await guarded(path);
+    const real = await writeTarget(path);
     const isThere = await exists(real);
     if (isThere && !target.appends) {
       throw new Error(`${path} already exists`);
@@ -136,7 +153,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     if (await exists(path)) {
       throw new Error(`${path} already exists`);
     }
-    const real = await guarded(path);
+    const real = await writeTarget(path);
     await files.makeFolder(parentFolder(real));
     await files.write(real, '');
     return { path, line: 1 };
@@ -154,9 +171,14 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     }
     const moved = skill ?? fromPath;
     const destination = skill === null ? toPath : parentFolder(toPath);
-    const realMoved = await guarded(moved);
-    const realDestination = await guarded(destination);
-    if (await exists(realDestination)) {
+    const realMoved = await moveTarget(moved);
+    const realDestination = await moveTarget(destination);
+    // Files.rename moves the entry when only the case changes on a
+    // case-insensitive volume, and refuses a distinct entry there.
+    const isCaseOnly =
+      realMoved !== realDestination &&
+      realMoved.toLowerCase() === realDestination.toLowerCase();
+    if (!isCaseOnly && (await exists(realDestination))) {
       throw new Error(`${destination} already exists`);
     }
     await files.makeFolder(parentFolder(realDestination));
@@ -167,7 +189,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
   async function trash(path: string): Promise<string> {
     const requested = absolute(path);
     const trashed = skillFolder(requested) ?? requested;
-    await files.trash(await guarded(trashed));
+    await files.trash(await moveTarget(trashed));
     return trashed;
   }
 
@@ -264,6 +286,23 @@ async function realTarget(files: Files, path: string): Promise<string> {
   return joinPath(await files.realPath(existing), ...missing);
 }
 
+// `path` with its folder's links resolved and its own name kept, so a link
+// names itself.
+async function folderRealTarget(files: Files, path: string): Promise<string> {
+  return joinPath(await realTarget(files, parentFolder(path)), baseName(path));
+}
+
+// Whether `path` is a link that leads nowhere: its folder lists it, but
+// nothing is there once links are followed.
+async function isDanglingLink(files: Files, path: string): Promise<boolean> {
+  if ((await files.stat(path)) !== null) {
+    return false;
+  }
+  const name = baseName(path);
+  const siblings = await files.list(parentFolder(path));
+  return siblings.some((sibling) => sibling.path === name);
+}
+
 async function realPathOrSelf(files: Files, path: string): Promise<string> {
   try {
     return await files.realPath(path);
@@ -275,12 +314,34 @@ async function realPathOrSelf(files: Files, path: string): Promise<string> {
   }
 }
 
-// Each Claude config folder, real when it exists.
-async function realConfigDirs(
+// The folders the index walks for global docs (each Claude config folder,
+// `~/.codex`, `~/.agents` and `~/wigley-agents`) and the plugin caches (each
+// config folder's and Codex's), all real. A docs folder at or above the home
+// folder is dropped, so the home folder itself never becomes writable.
+async function guardFolders(
   files: Files,
   homeDir: string,
   log: Log,
-): Promise<string[]> {
-  const dirs = await readClaudeConfigDirs(files, homeDir, log);
-  return Promise.all(dirs.map((dir) => realPathOrSelf(files, dir)));
+): Promise<GuardFolders> {
+  const configDirs = await readClaudeConfigDirs(files, homeDir, log);
+  const docFolders = [
+    ...configDirs,
+    joinPath(homeDir, '.codex'),
+    joinPath(homeDir, '.agents'),
+    joinPath(homeDir, WIGLEY_AGENTS_FOLDER),
+  ];
+  const caches = [
+    ...configDirs.map((dir) => joinPath(dir, 'plugins', 'cache')),
+    joinPath(homeDir, '.codex', 'plugins', 'cache'),
+  ];
+  const [realDocFolders, realCaches] = await Promise.all([
+    Promise.all(docFolders.map((folder) => realTarget(files, folder))),
+    Promise.all(caches.map((folder) => realTarget(files, folder))),
+  ]);
+  return {
+    globalDocFolders: realDocFolders.filter(
+      (folder) => !isInside(homeDir, folder),
+    ),
+    pluginCaches: realCaches,
+  };
 }

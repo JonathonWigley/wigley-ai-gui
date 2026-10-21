@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { IndexEntry } from './contract';
 import { baseName } from './doc-paths';
-import { changeRefusal, isIndexedPath } from './path-guard';
+import { changeRefusal, type GuardFolders, isIndexedPath } from './path-guard';
 
 function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
   return {
@@ -36,10 +36,21 @@ const ENTRIES = [
     root: '/Users/u/.claude/plugins/cache/m/p/1',
   }),
 ];
-const CONFIG_DIRS = ['/Users/u/.claude-personal'];
+const FOLDERS: GuardFolders = {
+  globalDocFolders: [
+    '/Users/u/.claude',
+    '/Users/u/.claude-personal',
+    '/Users/u/.codex',
+  ],
+  pluginCaches: [
+    '/Users/u/.claude/plugins/cache',
+    '/Users/u/.claude-personal/plugins/cache',
+    '/Users/u/.codex/plugins/cache',
+  ],
+};
 
 function refusal(target: string): string | null {
-  return changeRefusal(target, ENTRIES, CONFIG_DIRS);
+  return changeRefusal(target, ENTRIES, FOLDERS);
 }
 
 describe('changeRefusal', () => {
@@ -47,12 +58,43 @@ describe('changeRefusal', () => {
     expect(refusal('/Users/u/dev/r/new/AGENTS.md')).toBe(null);
   });
 
-  it('changeRefusal_InsideGlobalEntryFolder_Allowed', () => {
+  it('changeRefusal_InsideGlobalDocFolder_Allowed', () => {
     expect(refusal('/Users/u/.claude/rules/x.md')).toBe(null);
+    expect(refusal('/Users/u/.claude-personal/CLAUDE.md')).toBe(null);
   });
 
-  it('changeRefusal_InsideConfigDir_Allowed', () => {
-    expect(refusal('/Users/u/.claude-personal/CLAUDE.md')).toBe(null);
+  it('changeRefusal_GlobalEntryOutsideDocFolders_OwnFileOnly', () => {
+    const entries = [
+      ...ENTRIES,
+      entry({ path: '/Users/u/CLAUDE.md', kind: 'instructions' }),
+      entry({ path: '/Users/u/notes/imported.md', kind: 'instructions' }),
+    ];
+    const refusal = (target: string) => changeRefusal(target, entries, FOLDERS);
+
+    expect(refusal('/Users/u/CLAUDE.md')).toBe(null);
+    expect(refusal('/Users/u/notes/imported.md')).toBe(null);
+    expect(refusal('/Users/u/x.md')).toBe(
+      'Refused: /Users/u/x.md is outside the indexed folders',
+    );
+    expect(refusal('/Users/u/notes/other.md')).toBe(
+      'Refused: /Users/u/notes/other.md is outside the indexed folders',
+    );
+  });
+
+  it('changeRefusal_UnlistedCachedVersion_RefusedNamingCache', () => {
+    const target = '/Users/u/.claude/plugins/cache/m/p/0/skills/s/SKILL.md';
+
+    expect(refusal(target)).toBe(
+      `Refused: ${target} is inside the plugin cache /Users/u/.claude/plugins/cache`,
+    );
+  });
+
+  it('changeRefusal_InsideCodexCache_Refused', () => {
+    const target = '/Users/u/.codex/plugins/cache/m/p/1/SKILL.md';
+
+    expect(refusal(target)).toBe(
+      `Refused: ${target} is inside the plugin cache /Users/u/.codex/plugins/cache`,
+    );
   });
 
   it('changeRefusal_InsidePluginCache_RefusedNamingPlugin', () => {
