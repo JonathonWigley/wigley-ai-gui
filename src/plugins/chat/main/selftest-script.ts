@@ -1,7 +1,9 @@
 import type { AgentHarness } from '../../../contracts/agent';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
+import { errorText } from '../../../shared/error-text';
 import {
   FAKE_HOLD_TEXT,
+  FAKE_PAST_SESSIONS,
   FAKE_TOOL_TEXT,
   type FakeAgentCall,
   type FakeAgentProcessRecord,
@@ -24,7 +26,10 @@ export const SELFTEST_PROJECT_DIR = '/selftest/chat-selftest';
 const SECOND_PROJECT_DIR = '/selftest/chat-second';
 
 export interface ChatSelfTestDeps {
-  chat: Pick<ChatSessions, 'start' | 'closed' | 'permissionToolSession'>;
+  chat: Pick<
+    ChatSessions,
+    'start' | 'closed' | 'permissionToolSession' | 'sessions' | 'setArchived'
+  >;
   sessions: Pick<SessionsMainExports, 'activate' | 'connect'>;
   harnesses: readonly AgentHarness[];
 }
@@ -33,7 +38,6 @@ interface ChatSelfTestResult {
   permission: ToolResult;
   // Null when no fake process was found to join.
   round: ToolResult | null;
-  process: FakeAgentProcessRecord | null;
 }
 
 const ROUND_HEADING = 'Chat self-test round';
@@ -69,7 +73,12 @@ const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 // High; Space c e again, / and low filter to Low, and Enter in the filter's
 // insert mode sets it. A held turn ends on Ctrl+c in the box with the fake's
 // notice; Space k n opens the start prompt and Esc closes it. A second held
-// turn makes Cmd+W ask, and y ends the session.
+// turn makes Cmd+W ask, and y ends the session. Space k n then picks the
+// self-test's folder and the work profile, and its session step lists the
+// fake's saved sessions: j x archives session one, . shows it again, k x
+// restores it and . hides the archived again; Enter resumes it. / and fa offer
+// the fake's command, Tab accepts it, Esc Enter sends it, Esc leaves the box,
+// and Cmd+W closes the idle session without asking.
 const STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
   { keys: ['y'], expect: '[chat] no pending permission in chat-second' },
@@ -157,6 +166,37 @@ const STEPS: SelfTestStep[] = [
     checksFit: true,
   },
   { keys: ['y'], expect: '[chat] session closed: chat-selftest' },
+  { keys: [' ', 'k', 'n'], expect: '[chat] picker shown: Folder' },
+  { keys: ['Enter'], expect: '[chat] picker shown: Profile' },
+  {
+    keys: ['Enter'],
+    expect: '[chat] picker shown: Session',
+    checksFit: true,
+  },
+  { keys: ['j', 'x'], expect: '[chat] archived fake past session one' },
+  {
+    keys: ['.'],
+    expect: '[chat] archived sessions shown',
+    checksFit: true,
+  },
+  { keys: ['k', 'x'], expect: '[chat] restored fake past session one' },
+  { keys: ['.'], expect: '[chat] archived sessions hidden' },
+  {
+    keys: ['Enter'],
+    expect: '[chat] Chat tab shown in chat-selftest',
+    checksFit: true,
+  },
+  {
+    keys: ['/', 'f', 'a'],
+    expect: '[chat] completions offered: /fake-command',
+  },
+  { keys: ['Tab'], expect: '[chat] completion accepted: /fake-command' },
+  {
+    keys: ['Escape', 'Enter'],
+    expect: '[chat] result entry added in chat-selftest',
+  },
+  { keys: ['Escape'], expect: '[chat] left the box' },
+  { keys: ['<D-w>'], expect: '[chat] session closed: chat-selftest' },
 ];
 
 // Raw JSON and tool output scroll in their own box, as code and tables do, and
@@ -171,7 +211,7 @@ const SCROLLS_ITSELF = [
   '.session-tab-label',
 ];
 
-// The calls STEPS cause on the fake process, in order.
+// The calls STEPS cause on the fixture's fake process, in order.
 const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: 'hoki' },
   { method: 'send', text: 'hello' },
@@ -183,6 +223,15 @@ const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: FAKE_HOLD_TEXT },
   { method: 'interrupt' },
   { method: 'send', text: FAKE_HOLD_TEXT },
+  { method: 'end' },
+];
+
+// The saved session the steps resume, the first of the fake's.
+const RESUMED_SESSION_ID = '00000000-0000-4000-8000-000000000001';
+
+// The calls STEPS cause on the resumed session's fake process, in order.
+const EXPECTED_RESUMED_CALLS: FakeAgentCall[] = [
+  { method: 'send', text: '/fake-command ' },
   { method: 'end' },
 ];
 
@@ -212,22 +261,28 @@ const toolCallContext = (toolUseId: string | null): ToolCallContext => ({
   signal: new AbortController().signal,
 });
 
-// The last fake process started for the self-test's project.
+const fakeHarnesses = (harnesses: readonly AgentHarness[]) =>
+  harnesses.filter(isFakeAgentHarness);
+
+// The last fake process started for the self-test's project, resumed or new.
 function selftestProcess(
   harnesses: readonly AgentHarness[],
+  resume: boolean,
 ): FakeAgentProcessRecord | null {
-  const records = harnesses
-    .filter(isFakeAgentHarness)
+  const records = fakeHarnesses(harnesses)
     .flatMap((harness) => harness.processes)
-    .filter((record) => record.request.projectDir === SELFTEST_PROJECT_DIR);
+    .filter(
+      (record) =>
+        record.request.projectDir === SELFTEST_PROJECT_DIR &&
+        record.request.resume === resume,
+    );
   return records.at(-1) ?? null;
 }
 
-function resultProblems({
-  permission,
-  round,
-  process,
-}: ChatSelfTestResult): string[] {
+function fixtureProblems(
+  { permission, round }: ChatSelfTestResult,
+  process: FakeAgentProcessRecord | null,
+): string[] {
   const reply = permission.content[0]?.text;
   const problems: string[] = [];
   if (permission.isError === true) {
@@ -256,27 +311,82 @@ function resultProblems({
   return problems;
 }
 
-// Starts two chat sessions each run, closing the previous run's: the second
-// project's, then the self-test's, whose Chat tab it shows. Asks one
-// permission prompt through chat's tool in the self-test's session, which the
-// steps allow; the answer asks a forms round there over a relay that joins the
-// session, which the steps submit. The result is both calls' replies and the
-// session's fake process, whose record the steps keep changing in place.
-// The run waits on the session's Chat tab being shown.
+function resumedProblems(process: FakeAgentProcessRecord | null): string[] {
+  if (process === null) {
+    return ['no resumed fake process'];
+  }
+  const problems: string[] = [];
+  const { request } = process;
+  const resumesSessionOne =
+    request.sessionId === RESUMED_SESSION_ID &&
+    request.resume &&
+    request.projectDir === SELFTEST_PROJECT_DIR;
+  if (!resumesSessionOne) {
+    problems.push(`resumed request ${JSON.stringify(request)}`);
+  }
+  const calls = JSON.stringify(process.calls);
+  if (calls !== JSON.stringify(EXPECTED_RESUMED_CALLS)) {
+    problems.push(`resumed calls ${calls}`);
+  }
+  return problems;
+}
+
+function pastSessionProblems(harnesses: readonly AgentHarness[]): string[] {
+  const calls = fakeHarnesses(harnesses).flatMap(
+    (harness) => harness.pastSessionCalls,
+  );
+  const listedSelftestFolder = calls.some(
+    (call) =>
+      call.method === 'listSessions' &&
+      call.projectDir === SELFTEST_PROJECT_DIR,
+  );
+  const readResumedHistory = calls.some(
+    (call) =>
+      call.method === 'history' &&
+      call.sessionId === RESUMED_SESSION_ID &&
+      call.projectDir === SELFTEST_PROJECT_DIR,
+  );
+  if (listedSelftestFolder && readResumedHistory) {
+    return [];
+  }
+  return [`past session calls ${JSON.stringify(calls)}`];
+}
+
+// Every self-test project, whose sessions an earlier run may have left open.
+const SELFTEST_PROJECT_DIRS = [SELFTEST_PROJECT_DIR, SECOND_PROJECT_DIR];
+
+// Starts two chat sessions each run, first closing every session chat holds in
+// a self-test project (a resumed one included) and unarchiving the fake's
+// saved sessions: the second project's, then the self-test's, whose Chat tab
+// it shows. Asks one permission prompt through chat's tool in the self-test's
+// session, which the steps allow; the answer asks a forms round there over a
+// relay that joins the session, which the steps submit. The result is both
+// calls' replies; problems reads the fake processes, whose records the steps
+// keep changing in place, when it runs. The run waits on the session's Chat
+// tab being shown.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   const { chat, sessions, harnesses } = deps;
-  let previousIds: string[] = [];
   let previousRelay: ConnectedSession | null = null;
+  let archiveResetFailures: string[] = [];
   return {
     pageBinds: [],
     settings: {},
     scrollsItself: SCROLLS_ITSELF,
     open(run) {
       previousRelay?.end();
-      for (const previousId of previousIds) {
-        chat.closed(previousId);
+      for (const state of chat.sessions()) {
+        if (SELFTEST_PROJECT_DIRS.includes(state.projectDir)) {
+          chat.closed(state.sessionId);
+        }
       }
-      const secondId = chat.start({
+      const failures: string[] = [];
+      archiveResetFailures = failures;
+      for (const past of FAKE_PAST_SESSIONS) {
+        chat.setArchived(past.sessionId, false).catch((error: unknown) => {
+          failures.push(`archive reset failed: ${errorText(error)}`);
+        });
+      }
+      chat.start({
         projectDir: SECOND_PROJECT_DIR,
         profile: 'work',
       });
@@ -284,9 +394,8 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         projectDir: SELFTEST_PROJECT_DIR,
         profile: 'work',
       });
-      previousIds = [secondId, id];
       sessions.activate(id);
-      const process = selftestProcess(harnesses);
+      const process = selftestProcess(harnesses, false);
       const permission = chat
         .permissionToolSession({
           id,
@@ -309,7 +418,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       const result = permission.then(
         async (reply): Promise<ChatSelfTestResult> => {
           if (process === null) {
-            return { permission: reply, round: null, process };
+            return { permission: reply, round: null };
           }
           const relay = sessions.connect({
             sessionId: process.request.sessionId,
@@ -323,12 +432,20 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
             chatRound(run),
             toolCallContext(null),
           );
-          return { permission: reply, round, process };
+          return { permission: reply, round };
         },
       );
       return { shownLine: '[chat] Chat tab shown in chat-selftest', result };
     },
     steps: STEPS,
-    problems: (result) => resultProblems(result as ChatSelfTestResult),
+    problems: (result) => [
+      ...archiveResetFailures,
+      ...fixtureProblems(
+        result as ChatSelfTestResult,
+        selftestProcess(harnesses, false),
+      ),
+      ...resumedProblems(selftestProcess(harnesses, true)),
+      ...pastSessionProblems(harnesses),
+    ],
   };
 }
