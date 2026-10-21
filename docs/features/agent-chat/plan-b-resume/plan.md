@@ -304,7 +304,7 @@ picker title is `Session`; the box's completion prefix is `/`.
 - [x] [Doc re-read](08-doc-re-read.md) — after 07
 
 ### Wave 8
-- [ ] [Final verification](09-final-verification.md) — after 08
+- [x] [Final verification](09-final-verification.md) — after 08
 
 ## Run log
 
@@ -349,5 +349,7 @@ Peer session `wigley-ai-gui-6a` shares the working tree: every commit is pathspe
 ### Review rounds
 - round 1 · pinned d0f772b · lanes: correctness ×3, plan-and-design ×2 · NEEDS FIXES (13 findings) · lead-applied prose f09fab5 · fixes dispatched, one worker per file set: 3113013 (chat main: per-run self-test marks, unreadable archive file lists rows unmarked), f50ea96 (completion `update`, cached Completions, insert-mode only, list font), 043c282 (CLI-written user lines raw in history, code-point titles, looped head read, batched listing, `claudeConfigFolder`, shared `tool-entries.ts` replacing `tool-result-text.ts`), bdcd6c2 (`Picker.open` returns `PickerHandle`, step acts only while its own list is open, in-flight `x` ignored, shared list binds, start-prompt tests) · after fixes: 111 files, 1595 tests passed; selftest all passed
 - round 2 (re-review) · range f09fab5..bdcd6c2 · correctness ×2 · PASS · minor: two ragged comments (lead-applied e2663bf); no test of `isWriting` cleared after a rejected write (dispatched; test-only, read by the lead, start-prompt tests 26/26); `update` not checking vim's mode on `<Ins>` dismissed — vim-core's `toggleOverwrite` signals `vim-mode-change` `replace`, which closes the popup and sets `state.vim.mode`
+- triage round · 24 notices (20 Applied, 4 Decided) · 1 finding: `!` shell lines in history → user chose show `!<command>` as the user's message, output as an event · fixed 78002bf (lead-read diff; second and last fix cycle) · 111 files, 1600 tests passed
+- 09 · user live checks 1–7 all passed at 78002bf
 ### Test gate
 - pass 1 (written): claude-code-harness, past-sessions, transcripts, node-files, archived-sessions, chat-sessions, chat-commands, resume-items, start-prompt, prefix-completion, fake-agent-harness, memory-files, scoped-files tests · pass 2 (break): stream-decoder (decoder rule moved); recent-folders, layout-registry, index-sources, script-locator, doc-files, main-api (`createMemoryFiles` / `Files` consumers); forms-commands, editor-boxes (`EditorHost.create`) · 22 files, 380 tests passed at 3806289 · `npm run selftest` all passed (forms, chat 34 steps, docs) at 3806289

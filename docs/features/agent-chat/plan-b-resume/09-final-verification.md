@@ -1,6 +1,6 @@
 # 09 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 8 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -50,3 +50,5 @@ Done when: every check has the user's result recorded in Proof; every failure ha
 Commit:    none — the results go in this document's Proof with the run's closing commit
 
 ## Proof
+
+All seven live checks passed in `npm start` (user, 2026-10-21), run at 78002bf: saved sessions listed, resume with history, an app session in the list, work profile, archive survives a restart, slash completion, forms boxes unchanged.
