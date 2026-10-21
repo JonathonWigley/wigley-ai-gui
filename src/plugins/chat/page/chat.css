@@ -213,37 +213,9 @@
   }
 }
 
-/* The picker: a filter box over the list, the cursor's line marked. */
+/* The picker's width; dialog.css styles its filter box and list. */
 .chat-picker {
   min-width: min(28rem, calc(100vw - 2rem));
-}
-
-.chat-picker-filter .cm-editor {
-  border-radius: 0.4rem;
-}
-
-.chat-picker-list {
-  list-style: none;
-  margin: 0.75rem 0 0;
-  max-height: 50vh;
-  overflow-y: auto;
-  padding: 0;
-}
-
-.chat-picker-item {
-  border-left: 3px solid transparent;
-  cursor: pointer;
-  overflow-wrap: anywhere;
-  padding: 0.3rem 0.6rem;
-}
-
-.chat-picker-item:hover {
-  background: var(--wg-surface-hover);
-}
-
-.chat-picker-item.is-cursor {
-  background: var(--wg-surface-selected);
-  border-left-color: var(--wg-border-focus);
 }
 
 /* The deny reason box. */

@@ -205,7 +205,8 @@
   white-space: nowrap;
 }
 
-/* A dialog's overlay, over the view, and the list picker. */
+/* A dialog's overlay, over the view, and the list picker's width;
+   dialog.css styles its list. */
 .docs-overlay {
   background: color-mix(in srgb, var(--wg-bg-deep) 75%, transparent);
   display: grid;
@@ -217,30 +218,6 @@
 
 .docs-picker {
   min-width: min(28rem, calc(100% - 2rem));
-}
-
-.docs-picker-list {
-  list-style: none;
-  margin: 0;
-  max-height: 50vh;
-  overflow-y: auto;
-  padding: 0;
-}
-
-.docs-picker-item {
-  border-left: 3px solid transparent;
-  cursor: pointer;
-  overflow-wrap: anywhere;
-  padding: 0.3rem 0.6rem;
-}
-
-.docs-picker-item:hover {
-  background: var(--wg-surface-hover);
-}
-
-.docs-picker-item.is-cursor {
-  background: var(--wg-surface-selected);
-  border-left-color: var(--wg-border-focus);
 }
 
 /* The name and path boxes, the path box's completion list under it. */

@@ -1,14 +1,7 @@
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
-import { element } from '../../../shared/page/dom';
-import {
-  filterPicker,
-  movePicker,
-  openPicker,
-  type PickerState,
-  visibleIndexes,
-} from './picker-state';
+import { createListPicker } from '../../../shared/page/list-picker';
 import { blurFocusedElement } from './chat-dialogs';
 
 export interface PickerRequest<T> {
@@ -26,9 +19,10 @@ export interface PickerRequest<T> {
   picked(item: T): void;
 }
 
-// One list dialog in the overlay, holding one request at a time: `open`
-// replaces the open request, if any. `pick` with nothing visible does
-// nothing; `close` and the pushed scope's base changing close it unpicked.
+// The shared list picker with a filter box, in the window's overlay, holding
+// one request at a time: `open` replaces the open request, if any. `pick`
+// with nothing visible does nothing; `close` and the pushed scope's base
+// changing close it unpicked and log `picker closed: <title>`.
 // `closeSessionBound` closes it only while its request is session-bound.
 // `focusFilter` types into the filter box, and `leaveFilter` leaves it with
 // the filter kept.
@@ -52,129 +46,43 @@ export interface PickerDeps {
   log: Log;
 }
 
-// The open request with its item type erased: the picker reads only labels
-// and hands the picked index back.
-interface OpenRequest {
-  title: string;
-  sessionBound: boolean;
-  pickAt(index: number): void;
-}
-
 export function createPicker(deps: PickerDeps): Picker {
-  const overlay = element('div', 'overlay');
-  const dialog = element('div', 'dialog chat-picker');
-  const title = element('h2', 'dialog-title');
-  const filterBox = element('div', 'chat-picker-filter');
-  const list = element('ol', 'chat-picker-list');
-  dialog.append(title, filterBox, list);
-  overlay.append(dialog);
-  overlay.hidden = true;
-  deps.overlay.contribute(overlay);
-
-  let request: OpenRequest | null = null;
-  let state: PickerState = openPicker([], 0);
-  let pushed: PushedScope | null = null;
-
-  const draw = () => {
-    const items = visibleIndexes(state).map((index) => {
-      const item = element('li', 'chat-picker-item', state.labels[index]);
-      item.classList.toggle('is-cursor', index === state.cursor);
-      item.addEventListener('mousedown', (event) => event.preventDefault());
-      item.addEventListener('click', () => {
-        state = { ...state, cursor: index };
-        picker.pick();
-      });
-      return item;
-    });
-    list.replaceChildren(...items);
-    list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
-  };
-
-  const filter = deps.editor.create(filterBox, '', {
-    changed: (text) => {
-      state = filterPicker(state, text);
-      draw();
-    },
-    focused: () => undefined,
-    blurred: () => undefined,
-    modeChanged: () => undefined,
+  const list = createListPicker({
+    pushScope: deps.pushScope,
+    log: deps.log,
+    logSource: 'chat',
+    overlayClass: 'overlay',
+    dialogClass: 'chat-picker',
+    filterEditor: deps.editor,
   });
+  deps.overlay.contribute(list.element);
 
-  // Hides the dialog and pops its scope; returns the request it held.
-  const hide = (): OpenRequest | null => {
-    const held = request;
-    if (held === null) {
-      return null;
-    }
-    request = null;
-    if (filterBox.contains(document.activeElement)) {
-      filter.blur();
-    }
-    overlay.hidden = true;
-    pushed?.pop();
-    pushed = null;
-    return held;
-  };
+  let isSessionBound = false;
 
-  const picker: Picker = {
+  return {
     open(next) {
       blurFocusedElement();
-      filter.setText('');
-      request = {
+      isSessionBound = next.sessionBound ?? false;
+      list.open({
         title: next.title,
-        sessionBound: next.sessionBound ?? false,
-        pickAt: (index) => next.picked(next.items[index]),
-      };
-      state = openPicker(next.items.map(next.label), next.selected ?? 0);
-      if (pushed === null) {
-        const scope = deps.pushScope();
-        scope.onBaseChanged(() => {
-          if (pushed === scope) {
-            picker.close();
-          }
-        });
-        pushed = scope;
-      }
-      title.textContent = next.title;
-      overlay.hidden = false;
-      draw();
-      deps.log('chat', `picker shown: ${next.title}`);
+        items: next.items,
+        label: next.label,
+        selected: next.selected,
+        chosen: next.picked,
+        cancelled: () => deps.log('chat', `picker closed: ${next.title}`),
+      });
     },
-    isOpen: () => request !== null,
-    down() {
-      state = movePicker(state, 1);
-      draw();
-    },
-    up() {
-      state = movePicker(state, -1);
-      draw();
-    },
-    pick() {
-      if (request === null || state.cursor < 0) {
-        return;
-      }
-      const cursor = state.cursor;
-      hide()?.pickAt(cursor);
-    },
-    close() {
-      const closed = hide();
-      if (closed !== null) {
-        deps.log('chat', `picker closed: ${closed.title}`);
-      }
-    },
+    isOpen: () => list.isOpen(),
+    down: () => list.down(),
+    up: () => list.up(),
+    pick: () => list.choose(),
+    close: () => list.cancel(),
     closeSessionBound() {
-      if (request?.sessionBound === true) {
-        picker.close();
+      if (isSessionBound) {
+        list.cancel();
       }
     },
-    focusFilter() {
-      if (request !== null) {
-        filter.focus({ insertAtEnd: true });
-      }
-    },
-    leaveFilter() {
-      filter.blur();
-    },
+    focusFilter: () => list.focusFilter(),
+    leaveFilter: () => list.leaveFilter(),
   };
-  return picker;
 }

@@ -34,6 +34,40 @@
   margin-top: 1rem;
 }
 
+/* A list picker: an optional filter box over the list, the cursor's line
+   marked. Each plugin sizes its own `<plugin>-picker` dialog. */
+.list-picker-list {
+  list-style: none;
+  margin: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.list-picker-filter + .list-picker-list {
+  margin-top: 0.75rem;
+}
+
+.list-picker-filter .cm-editor {
+  border-radius: 0.4rem;
+}
+
+.list-picker-item {
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  padding: 0.3rem 0.6rem;
+}
+
+.list-picker-item:hover {
+  background: var(--wg-surface-hover);
+}
+
+.list-picker-item.is-cursor {
+  background: var(--wg-surface-selected);
+  border-left-color: var(--wg-border-focus);
+}
+
 /* Buttons */
 .button {
   background: var(--wg-surface);

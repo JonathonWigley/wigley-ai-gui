@@ -6,6 +6,10 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
+import {
+  createListPicker,
+  type ListPicker,
+} from '../../../shared/page/list-picker';
 import type {
   CreateKind,
   CreatePlace,
@@ -33,125 +37,6 @@ import { textBoxInput } from './text-box';
 
 // The scopes the dialogs push over the view's pane scope.
 export type DialogScope = 'picker' | 'box' | 'confirm';
-
-export interface PickerRequest<T> {
-  title: string;
-  items: readonly T[];
-  label(item: T): string;
-  selected: number;
-  chosen(item: T): void;
-  // Escape, or the base scope changing under the list.
-  cancelled?(): void;
-}
-
-// A list over the view, scope `docs.picker` pushed while it shows; the base
-// scope changing under it cancels it.
-export interface ListPicker {
-  element: HTMLElement;
-  open<T>(request: PickerRequest<T>): void;
-  down(): void;
-  up(): void;
-  choose(): void;
-  cancel(): void;
-  // Closes the list without hearing a cancel.
-  close(): void;
-}
-
-export function createListPicker(
-  pushScope: () => PushedScope,
-  log: Log,
-): ListPicker {
-  const overlay = element('div', 'docs-overlay');
-  const dialog = element('div', 'dialog docs-picker');
-  const title = element('h2', 'dialog-title');
-  const list = element('ol', 'docs-picker-list');
-  dialog.append(title, list);
-  overlay.append(dialog);
-  overlay.hidden = true;
-
-  let labels: string[] = [];
-  let cursor = 0;
-  let chooseAt: ((index: number) => void) | null = null;
-  let cancelled: (() => void) | null = null;
-  let pushed: PushedScope | null = null;
-
-  const draw = () => {
-    list.replaceChildren(
-      ...labels.map((label, index) => {
-        const item = element('li', 'docs-picker-item', label);
-        item.classList.toggle('is-cursor', index === cursor);
-        item.addEventListener('mousedown', (event) => event.preventDefault());
-        item.addEventListener('click', () => {
-          cursor = index;
-          picker.choose();
-        });
-        return item;
-      }),
-    );
-    list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
-  };
-
-  const hide = () => {
-    overlay.hidden = true;
-    chooseAt = null;
-    cancelled = null;
-    pushed?.pop();
-    pushed = null;
-  };
-
-  const move = (by: 1 | -1) => {
-    cursor = Math.min(Math.max(cursor + by, 0), labels.length - 1);
-    draw();
-  };
-
-  const picker: ListPicker = {
-    element: overlay,
-    open(request) {
-      if (pushed === null) {
-        const scope = pushScope();
-        scope.onBaseChanged(() => {
-          if (pushed === scope) {
-            picker.cancel();
-          }
-        });
-        pushed = scope;
-      }
-      labels = request.items.map(request.label);
-      cursor = Math.min(Math.max(request.selected, 0), labels.length - 1);
-      chooseAt = (index) => request.chosen(request.items[index]);
-      cancelled = request.cancelled ?? null;
-      title.textContent = request.title;
-      overlay.hidden = false;
-      draw();
-      log('docs', `picker shown: ${request.title}`);
-    },
-    down: () => move(1),
-    up: () => move(-1),
-    choose() {
-      const chosen = chooseAt;
-      if (chosen === null || labels.length === 0) {
-        return;
-      }
-      const index = cursor;
-      hide();
-      chosen(index);
-    },
-    cancel() {
-      if (chooseAt === null) {
-        return;
-      }
-      const heard = cancelled;
-      hide();
-      heard?.();
-    },
-    close() {
-      if (chooseAt !== null) {
-        hide();
-      }
-    },
-  };
-  return picker;
-}
 
 interface BoxRequest {
   label: string;
@@ -453,7 +338,13 @@ export interface DocsDialogs {
 
 export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
   const { channel, log, toast } = deps;
-  const picker = createListPicker(() => deps.pushScope('picker'), log);
+  const picker = createListPicker({
+    pushScope: () => deps.pushScope('picker'),
+    log,
+    logSource: 'docs',
+    overlayClass: 'docs-overlay',
+    dialogClass: 'docs-picker',
+  });
   const box = createTextBox({
     channel,
     homeDir: deps.homeDir,

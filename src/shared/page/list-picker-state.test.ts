@@ -4,7 +4,7 @@ import {
   movePicker,
   openPicker,
   visibleIndexes,
-} from './picker-state';
+} from './list-picker-state';
 
 const labels = ['~/dev/app', '~/dev/api', 'Choose folder…'];
 
