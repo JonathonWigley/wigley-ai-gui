@@ -36,7 +36,6 @@ import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { expandHome } from '../shared/expand-home';
-import { scopedFiles } from '../shared/scoped-files';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
 import { startPlugins } from '../shared/plugin-host';
 import {
@@ -48,6 +47,7 @@ import {
   requireListed,
   scopeInfos,
 } from '../shared/plugin-manifests';
+import { scopedFiles } from '../shared/scoped-files';
 import { createElectronAlerts } from './alerts/electron-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import { createClaudeCodeHarness } from './claude-code/claude-code-harness';

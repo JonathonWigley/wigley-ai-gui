@@ -352,7 +352,7 @@ review range is this run's explicit commit list.
 - `script-locator.ts` also exports `readIfPresent`, `installedPluginsFile`, `DOCS_CONFIG_FILE`; `index-sources.ts`
   exports `MACHINE_INDEX_FILE` · why: doc-files and the fixture share them and the Files list allowed no new shared
   module · consumers: `readIfPresent` index-sources and doc-files, `installedPluginsFile` doc-files and the
-  fixture, `MACHINE_INDEX_FILE` the fixture, `DOCS_CONFIG_FILE` none (export dropped in review) · group 06
+  fixture, `MACHINE_INDEX_FILE` the fixture, `DOCS_CONFIG_FILE` none (export dropped in review); `readIfPresent` moved to `src/contracts/files.ts` in review, where recent-folders uses it too · group 06
 - `Chip` gains `state` (sets `data-state`); `DocsViewDeps` gains `pushScope('conflict' | 'picker' | 'box')`;
   `DocsViewCommands` holds all 22 view commands; new exports `createDocView`/`DocTarget`, `createTreeView`,
   `textBoxInput` (the list picker stays internal to docs-view.ts) · consumers: 08 · group 07
@@ -410,6 +410,8 @@ review range is this run's explicit commit list.
 - chat sessions open on their Docs tab; chat's `shownLine` is `[sessions] activated chat-selftest` and its first
   step became three `<A-o>` steps selecting each session's Chat tab; later chat steps unchanged — group 09
 ### Review rounds
+- 1 · ceb6ea6 · NEEDS FIXES (41 findings, all fixed in bb1f57e..a240aad; 10 open ones per the user's triage)
+- 2 (re-review, correctness ×2) · a240aad · NEEDS FIXES (login-shell PATH read can hang start; 4 prose/style edits lead-applied; 2 Node rename tests missing)
 ### Test gate
 - Pass 1, tests this run wrote or edited (22 files) and pass 2, tests importing a changed module by resolved path (18
   files: `contracts/plugin`, `contracts/theme`, `contracts/editor`, `shared/memory-files` importers); a first

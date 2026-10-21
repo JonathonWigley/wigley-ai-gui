@@ -415,9 +415,10 @@ export interface SelfTestDriver {
 
 // `homeFiles` is the files service rooted at the self-test's temp home, which
 // steps' `writeFile` writes through. `cleanUp` deletes what the self-test made
-// outside the repo; it runs before the self-test exits. Each plugin hands at most one script while the parts
-// start; a host throws on its plugin's second script or one handed over late.
-// Every page load runs the handed scripts in hand-over order.
+// outside the repo; it runs before the self-test exits. Each plugin hands at
+// most one script while the parts start; a host throws on its plugin's second
+// script or one handed over late. Every page load runs the handed scripts in
+// hand-over order.
 export function startSelfTest(
   window: BrowserWindow,
   homeFiles: Files,

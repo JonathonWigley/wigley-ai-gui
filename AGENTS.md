@@ -9,7 +9,7 @@
   data, layout, agent harness, session control, round source, MCP tool or third-party tool goes, and the layer
   check.
 - **Running and testing** — Node version, the self-test the agent may run any time, and the visible run that is the user's.
-- **Dev quirks** — the startup reload, and a session's stale forms schema.
+- **Dev quirks** — the startup reload, a session's stale forms schema, and the login-shell PATH.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
 vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `wigley-forms`
