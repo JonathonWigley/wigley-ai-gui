@@ -25,6 +25,7 @@ function session(ended: boolean): ChatSession {
     entries: [],
     controls: [mode],
     activity: 'working',
+    commands: [],
   };
   return {
     sessionId: 'row-1',

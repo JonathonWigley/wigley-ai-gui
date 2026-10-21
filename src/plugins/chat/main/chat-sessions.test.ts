@@ -6,6 +6,7 @@ import type {
 } from '../../../contracts/agent';
 import {
   createFakeAgentHarness,
+  FAKE_PAST_SESSIONS,
   type FakeAgentHarness,
 } from '../../../shared/fake-agent-harness';
 import { createMemoryFiles } from '../../../shared/memory-files';
@@ -16,6 +17,7 @@ import type {
 } from '../../sessions/contract';
 import type { ChatChannel } from '../contract';
 import { DEFAULT_PROFILES } from '../manifest';
+import { createArchivedSessions } from './archived-sessions';
 import {
   type ChatSessionsDeps,
   createChatSessions,
@@ -39,6 +41,8 @@ interface Announced {
 
 const ROW_ID = 'row-1';
 const PROJECT_DIR = '/work/app';
+const PAST_ONE = FAKE_PAST_SESSIONS[0];
+const PAST_TWO = FAKE_PAST_SESSIONS[1];
 
 const BASH_ARGS = {
   tool_name: 'Bash',
@@ -71,6 +75,8 @@ function setUp(
   let windowShows = 0;
   let isFocused = true;
   let selectedSessionId: string | null = ROW_ID;
+  let uuidCalls = 0;
+  const archived = createArchivedSessions(data);
   const sessions: ChatSessionsDeps['sessions'] = {
     open: (info) => {
       opened.push(info);
@@ -90,12 +96,16 @@ function setUp(
     sessions,
     profiles: DEFAULT_PROFILES,
     homeDir: '/Users/u',
-    randomUuid: () => 'uuid-1',
+    randomUuid: () => {
+      uuidCalls++;
+      return 'uuid-1';
+    },
     recent: createRecentFolders({
       data,
       clock: { now: () => options.clockNow ?? 1000 },
       log,
     }),
+    archived,
     send: (message, data) => messages.push({ message, data } as Message),
     alerts: {
       announce: (title, body, onClick) =>
@@ -129,6 +139,8 @@ function setUp(
     announced,
     messages,
     agentSession,
+    archived,
+    uuidCalls: () => uuidCalls,
     ownedEnds: () => ownedEnds,
     windowShows: () => windowShows,
     setFocused: (focused: boolean) => {
@@ -151,6 +163,19 @@ async function started(options?: Parameters<typeof setUp>[0]) {
   const process = test.harness.processes[0];
   const activity = (value: ProcessActivity) => process.events.activity(value);
   return { ...test, process, activity };
+}
+
+// A session the sessions plugin reports connected with host id `hostId`.
+function connected(id: string, hostId: string): AgentSession {
+  return {
+    id,
+    info: {
+      sessionId: hostId,
+      projectDir: '/w/app',
+      deadlineSeconds: null,
+      harness: 'claude',
+    },
+  };
 }
 
 function assistant(id: string, text: string): ChatEntry {
@@ -215,11 +240,168 @@ describe('createChatSessions', () => {
         entries: [],
         controls: [],
         activity: 'idle',
+        commands: [],
       },
     ]);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
       { projectDir: PROJECT_DIR, profile: 'personal', lastUsed: 1000 },
     ]);
+  });
+
+  it('pastSessions_LeavesOutOpenAndMarksArchived', async () => {
+    const test = setUp();
+    await test.archived.set(PAST_ONE.sessionId, true);
+    test.chat.sessionConnected(connected('row-9', PAST_TWO.sessionId));
+
+    const rows = await test.chat.pastSessions('/w/app', 'personal');
+
+    expect(rows).toEqual([
+      {
+        hostSessionId: PAST_ONE.sessionId,
+        title: 'fake past session one',
+        modified: 1767323045000,
+        archived: true,
+      },
+    ]);
+    expect(test.harness.pastSessionCalls).toEqual([
+      {
+        method: 'listSessions',
+        sessionId: null,
+        projectDir: '/w/app',
+        profileDir: '/Users/u/.claude-personal',
+      },
+    ]);
+  });
+
+  it('pastSessions_AfterEnded_ListsItAgain', async () => {
+    const test = setUp();
+    await test.archived.set(PAST_ONE.sessionId, true);
+    test.chat.sessionConnected(connected('row-9', PAST_TWO.sessionId));
+    await test.chat.pastSessions('/w/app', 'personal');
+
+    test.chat.sessionEnded('row-9');
+    const rows = await test.chat.pastSessions('/w/app', 'personal');
+
+    expect(rows.map((row) => row.hostSessionId)).toEqual([
+      PAST_ONE.sessionId,
+      PAST_TWO.sessionId,
+    ]);
+  });
+
+  it('pastSessionsAndResume_UnknownProfile_RejectWithoutCalls', async () => {
+    const test = setUp();
+
+    await expect(test.chat.pastSessions('/w/app', 'home')).rejects.toThrow(
+      'chat has no profile "home"',
+    );
+    await expect(
+      test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'home',
+        hostSessionId: PAST_ONE.sessionId,
+      }),
+    ).rejects.toThrow('chat has no profile "home"');
+    expect(test.harness.pastSessionCalls).toEqual([]);
+    expect(test.harness.processes).toEqual([]);
+    expect(test.opened).toEqual([]);
+  });
+
+  it('resume_OpensWithHistoryAndResumesTheProcess', async () => {
+    const test = setUp();
+    const hostId = PAST_ONE.sessionId;
+
+    const sessionId = await test.chat.resume({
+      projectDir: '/w/app',
+      profile: 'work',
+      hostSessionId: hostId,
+    });
+    await flush();
+
+    expect(sessionId).toBe(ROW_ID);
+    expect(test.opened).toEqual([
+      {
+        sessionId: hostId,
+        projectDir: '/w/app',
+        deadlineSeconds: null,
+        harness: 'claude',
+      },
+    ]);
+    const [state] = test.sent('sessionStarted');
+    expect(
+      state.entries.map((entry) => [
+        entry.id,
+        'text' in entry ? entry.text : null,
+      ]),
+    ).toEqual([
+      [`history:${hostId}-user`, 'fake earlier message'],
+      [`history:${hostId}-assistant`, 'fake earlier reply'],
+    ]);
+    expect(state.commands).toEqual([]);
+    expect(test.harness.processes.at(-1)?.request).toEqual({
+      sessionId: hostId,
+      resume: true,
+      projectDir: '/w/app',
+      profileDir: '/Users/u/.claude',
+    });
+    expect(test.uuidCalls()).toBe(0);
+    expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
+      { projectDir: '/w/app', profile: 'work', lastUsed: 1000 },
+    ]);
+  });
+
+  it('resume_HistoryFails_NoticeAndStillResumes', async () => {
+    const test = setUp();
+    const hostId = PAST_ONE.sessionId;
+    test.harness.failNextHistory('cannot read');
+
+    await test.chat.resume({
+      projectDir: '/w/app',
+      profile: 'work',
+      hostSessionId: hostId,
+    });
+
+    expect(test.sent('sessionStarted')[0].entries).toEqual([
+      {
+        kind: 'notice',
+        id: 'history:unread',
+        text: 'Earlier conversation not read: cannot read',
+        tone: 'error',
+        raw: [],
+      },
+    ]);
+    expect(test.logged).toContain(
+      `[chat] history of ${hostId} not read: cannot read`,
+    );
+    expect(test.harness.processes.at(-1)?.request.resume).toBe(true);
+  });
+
+  it('resume_AlreadyOpen_Rejects', async () => {
+    const test = setUp();
+    const hostId = PAST_ONE.sessionId;
+    test.chat.sessionConnected(connected('row-9', hostId));
+
+    await expect(
+      test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: hostId,
+      }),
+    ).rejects.toThrow(`session ${hostId} is already open in the app`);
+    expect(test.harness.pastSessionCalls).toEqual([]);
+    expect(test.opened).toEqual([]);
+  });
+
+  it('commands_StoredAndSentOnChange', async () => {
+    const test = await started();
+
+    test.process.events.commands(['compact', 'model']);
+    test.process.events.commands(['compact', 'model']);
+
+    expect(test.sent('commands')).toEqual([
+      { sessionId: ROW_ID, names: ['fake-command'] },
+      { sessionId: ROW_ID, names: ['compact', 'model'] },
+    ]);
+    expect(test.chat.sessions()[0].commands).toEqual(['compact', 'model']);
   });
 
   it('start_unknownProfile_throwsAndOpensNothing', () => {
