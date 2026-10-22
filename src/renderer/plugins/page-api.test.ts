@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Bridge } from '../../contracts/bridge';
+import type { Keymap } from '../../contracts/keymap';
 import type {
   Area,
   Mode,
@@ -8,8 +9,10 @@ import type {
   PageServices,
   PluginManifest,
 } from '../../contracts/plugin';
+import type { AppConfig } from '../../contracts/settings';
 import { createEventBus } from '../../shared/event-bus';
 import { createScopeStack } from '../key-scope';
+import { createLiveConfig } from '../live-config';
 import { createPageApi, type PageApiDeps } from './page-api';
 
 const manifest: PluginManifest = {
@@ -55,6 +58,34 @@ function testChannel(bridge: Bridge): PageChannel<TestChannel> {
   return createPageApi(manifest, deps({ bridge })).channel;
 }
 
+function keymap(command: string): Keymap {
+  return {
+    page: [{ keys: ['j'], scope: 'any', command }],
+    editor: { leader: '<Space>', remaps: [], binds: [] },
+    app: [],
+    intercept: [],
+    global: [],
+  };
+}
+
+// A served config carrying what the page API reads; the rest is unused here.
+function appConfig(overrides: Partial<AppConfig> = {}): AppConfig {
+  return {
+    settings: { keySequenceTimeoutMs: 1000 },
+    keymap: keymap('p.down'),
+    commands: {},
+    scopes: [],
+    pluginSettings: { p: { delayMs: 1 }, q: { delayMs: 1 } },
+    platform: 'macos',
+    problems: [],
+    ...overrides,
+  } as AppConfig;
+}
+
+function liveConfig(initial: AppConfig = appConfig()) {
+  return createLiveConfig(initial, () => {});
+}
+
 function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
   return {
     areas: {} as PageApiDeps['areas'],
@@ -62,11 +93,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
     bridge: fakeBridge().bridge,
     scopeStack: createScopeStack('any'),
     pendingKeys: { onPending: () => {}, hold: () => {}, cancel: () => {} },
-    keymap: {} as PageApiDeps['keymap'],
-    label: (id) => id,
-    commandInfo: {},
-    scopes: [],
-    settings: {},
+    config: liveConfig(),
     services: {} as PageServices,
     run: () => {},
     dependency: <E>() => undefined as E,
@@ -240,5 +267,54 @@ describe('createPageApi', () => {
     expect(added).toEqual([
       { id: 'p.browse', title: 'Browse', element, shown, hidden },
     ]);
+  });
+
+  it('settings() reads the current config', () => {
+    const config = liveConfig();
+    const api = createPageApi(manifest, deps({ config }));
+
+    config.replace(
+      appConfig({ pluginSettings: { p: { delayMs: 5 }, q: { delayMs: 1 } } }),
+    );
+
+    expect(api.settings()).toEqual({ delayMs: 5 });
+  });
+
+  it('onSettingsChanged fires only for the plugin whose settings changed', () => {
+    const config = liveConfig();
+    const heard: [string, object][] = [];
+    const p = createPageApi(manifest, deps({ config }));
+    const q = createPageApi({ ...manifest, id: 'q' }, deps({ config }));
+    p.onSettingsChanged((settings) => heard.push(['p', settings]));
+    q.onSettingsChanged((settings) => heard.push(['q', settings]));
+
+    config.replace(
+      appConfig({ pluginSettings: { p: { delayMs: 1 }, q: { delayMs: 9 } } }),
+    );
+
+    expect(heard).toEqual([['q', { delayMs: 9 }]]);
+  });
+
+  it('onKeymapChanged fires when the keymap changes and not for a settings-only change', () => {
+    const config = liveConfig();
+    const heard: Keymap[] = [];
+    const api = createPageApi(manifest, deps({ config }));
+    api.keys.onKeymapChanged((changed) => heard.push(changed));
+
+    config.replace(
+      appConfig({ pluginSettings: { p: { delayMs: 3 }, q: { delayMs: 1 } } }),
+    );
+    config.replace(appConfig({ keymap: keymap('p.up') }));
+
+    expect(heard).toEqual([keymap('p.up')]);
+    expect(api.keys.keymap()).toEqual(keymap('p.up'));
+  });
+
+  it('platform is the served platform', () => {
+    const config = liveConfig(appConfig({ platform: 'windows' }));
+
+    const api = createPageApi(manifest, deps({ config }));
+
+    expect(api.platform).toBe('windows');
   });
 });

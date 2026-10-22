@@ -32,7 +32,7 @@ describe('barHints', () => {
       ],
     });
 
-    expect(barHints(map, 's', false, label)).toEqual([
+    expect(barHints(map, 's', false, label, 'macos')).toEqual([
       { keys: 'j', label: 'next' },
     ]);
   });
@@ -47,7 +47,7 @@ describe('barHints', () => {
       ],
     });
 
-    expect(barHints(map, 's', false, label)).toEqual([
+    expect(barHints(map, 's', false, label, 'macos')).toEqual([
       { keys: 'j', label: 'next' },
       { keys: ', x', label: 'save' },
     ]);
@@ -59,12 +59,14 @@ describe('barHints', () => {
         { keys: ['j'], scope: 's', command: 'a.next' },
         { keys: ['x'], scope: 'elsewhere', command: 'a.review' },
         { keys: ['Escape'], scope: 'any', command: 'a.close' },
+        { keys: ['<A-o>'], scope: 'any', command: 'a.leave' },
       ],
     });
 
-    expect(barHints(map, 's', false, label)).toEqual([
+    expect(barHints(map, 's', false, label, 'macos')).toEqual([
       { keys: 'j', label: 'next' },
       { keys: 'Esc', label: 'close' },
+      { keys: '⌥O', label: 'leave the box' },
     ]);
   });
 
@@ -81,7 +83,7 @@ describe('barHints', () => {
       page: [{ keys: ['j'], scope: 's', command: 'a.next' }],
     });
 
-    expect(barHints(map, 's', true, label)).toEqual([
+    expect(barHints(map, 's', true, label, 'macos')).toEqual([
       { keys: '<Esc>', label: 'leave the box' },
     ]);
   });
@@ -99,7 +101,7 @@ describe('barHints', () => {
       },
     });
 
-    expect(barHints(map, 'a.view', true, label)).toEqual([
+    expect(barHints(map, 'a.view', true, label, 'macos')).toEqual([
       { keys: '<Esc>', label: 'leave the box' },
       { keys: 'q', label: 'c.q' },
     ]);

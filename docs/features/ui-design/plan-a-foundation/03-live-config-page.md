@@ -1,6 +1,6 @@
 # 03 — Live config on the page
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -208,3 +208,4 @@ Tests:     `live-config.test.ts`: `calls listeners with the next and previous co
 
 ## Proof
 
+Proof: every Produces signature found in its file; the Done-when grep finds nothing; typecheck and lint checked by the lead after commit. The worker ran `npm test` (1666 pass) and `npm run selftest` (pass, 7 new keymap.json steps). Concerns and rulings in the Run log, group 03; commit sha there.

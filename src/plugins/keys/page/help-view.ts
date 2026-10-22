@@ -2,9 +2,11 @@ import type { Area } from '../../../contracts/plugin';
 import { button, element } from '../../../shared/page/dom';
 import type { HelpSection } from './help-sections';
 
+// `setSections` replaces the listed sections, open or closed.
 export interface HelpView {
   show(): void;
   hide(): void;
+  setSections(sections: HelpSection[]): void;
 }
 
 // The help dialog over a backdrop that blocks clicks under it, contributed to
@@ -20,17 +22,7 @@ export function mountHelpView(
   dialog.setAttribute('role', 'dialog');
   dialog.setAttribute('aria-label', 'Keys');
   const grid = element('div', 'keys-help-sections');
-  for (const section of sections) {
-    const block = element('section', 'keys-help-section');
-    const list = element('dl', 'keys-help-list');
-    for (const hint of section.hints) {
-      const term = element('dt');
-      term.append(element('kbd', '', hint.keys));
-      list.append(term, element('dd', '', hint.label));
-    }
-    block.append(element('h3', 'keys-help-title', section.title), list);
-    grid.append(block);
-  }
+  grid.append(...sections.map(renderSection));
   dialog.append(
     element('h2', 'dialog-title', 'Keys'),
     grid,
@@ -45,5 +37,20 @@ export function mountHelpView(
     hide() {
       backdrop.hidden = true;
     },
+    setSections(next) {
+      grid.replaceChildren(...next.map(renderSection));
+    },
   };
+}
+
+function renderSection(section: HelpSection): HTMLElement {
+  const block = element('section', 'keys-help-section');
+  const list = element('dl', 'keys-help-list');
+  for (const hint of section.hints) {
+    const term = element('dt');
+    term.append(element('kbd', '', hint.keys));
+    list.append(term, element('dd', '', hint.label));
+  }
+  block.append(element('h3', 'keys-help-title', section.title), list);
+  return block;
 }

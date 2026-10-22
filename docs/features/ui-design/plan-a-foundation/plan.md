@@ -392,7 +392,7 @@ list; task 06's rename map reads from it.
 - [x] [Token rename across every stylesheet](06-token-rename.md) — after 01
 
 ### Wave 3
-- [ ] [Live config on the page](03-live-config-page.md) — after 02
+- [x] [Live config on the page](03-live-config-page.md) — after 02
 
 ### Wave 4
 - [ ] [Shell registry, title bar, activity bar, mode side bars](04-shell-registry.md) — after 03, 06
@@ -413,6 +413,7 @@ Review base: 17cf5935eb176577587a6a3c230e907efdef81c9
 ### Groups
 - 01 · 943c502 · diff read + typecheck pass; lint fails only on DESIGN.md format (pre-existing) · concerns: highlighter test asserts definitionKeyword (same class as keyword); a `git rm` of syntax.css was reset to an unstaged deletion; `npx vitest` ran once (installed copy, nothing downloaded)
 - 06 · 3da1dc1 · diff read + registry check + camel-case grep clean · concerns: workers skipped skills and mandatory reads (pure rename)
+- 02 · 0cbd5d4 · diff read + typecheck pass; lint only DESIGN.md (pre-existing) · concerns: `registerGlobalShortcuts` unregisters all before registering, so a throwing user accelerator loses the earlier globals (the parser does not validate accelerator syntax); `npx vitest` ran once (installed copy)
 ### Contract changes
 ### Rulings
 - `src/main/themes` layer allows no packages now that the loader is pure — task 02 reads files through `Files` in `src/main/config` — 02 would need `node:` back if it reads files there · group 01
@@ -431,5 +432,9 @@ Review base: 17cf5935eb176577587a6a3c230e907efdef81c9
 - Only `themes/*.json` directly in the folder are read; an unreadable one is its own problem; a non-ThemeError from `resolveTheme` is a problem with file `themes` — none · group 02
 - keymap.json messages beyond the task's table follow its style; unbind entries are not checked against known names — an unbind matching nothing is ignored · group 02
 - A rebuild that throws unexpectedly logs `[config] config not read: …` and keeps the served config — none · group 02
+- `vimrcLines` takes a required `unmapsLeader` parameter — needed for re-applying a changed leader — none · group 03
+- `setKeymap` unmaps only mappings vim holds (read in `@replit/codemirror-vim-core` 0.1.0: unmapping one never made can delete a vim default) and rejects an untypeable insert key before unmapping anything — a throw leaves the old keymap whole — none · group 03
+- `PageApi.keys.scopes` stays a property, now a getter over the current config — none · group 03
+- `src/plugins/forms/page/editor-boxes.test.ts` gained `setKeymap` on its fake EditorHost (outside the Files line) — none · group 03
 ### Review rounds
 ### Test gate

@@ -24,6 +24,16 @@ const PAGE_BINDS: PageBind[] = [
 // out; long enough that the fit check under an open panel ends first.
 const SETTINGS = { keys: { whichKeyTimeoutMs: 1000 } };
 
+// The user keymap file, under the self-test's temp home.
+const USER_KEYMAP_FILE = '.config/wigley-ai-gui/keymap.json';
+
+// A user keymap binding `Q`, which nothing else binds, to `command` everywhere.
+function userKeymap(command: string): string {
+  return JSON.stringify({
+    page: [{ keys: ['Q'], scope: 'any', command }],
+  });
+}
+
 // An unbroken run of letters wider than any pane.
 const LONG_WORD = 'unbroken'.repeat(14);
 
@@ -186,6 +196,30 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape', 'Escape'], expect: '[forms] left the box' },
   { keys: ['x'], expect: '[forms] not applicable on question 2' },
+  // The user's keymap.json applies live; a broken one keeps the last good keys.
+  {
+    writeFile: { path: USER_KEYMAP_FILE, text: userKeymap('keys.toggleHelp') },
+    keys: [],
+    expect: '[config] applied a new config',
+  },
+  { keys: ['Q'], expect: '[page] Q ran keys.toggleHelp' },
+  { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
+  {
+    writeFile: {
+      path: USER_KEYMAP_FILE,
+      text: userKeymap('keys.noSuchCommand'),
+    },
+    keys: [],
+    expect:
+      '[config] keymap.json: "page[0].command" names no command "keys.noSuchCommand".',
+  },
+  { keys: ['Q'], expect: '[page] Q ran keys.toggleHelp' },
+  { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
+  {
+    writeFile: { path: USER_KEYMAP_FILE, text: '{}' },
+    keys: [],
+    expect: '[config] applied a new config',
+  },
   { keys: ['<C-h>'], expect: '[page] <C-h> ran forms.prevItem' },
   { keys: [' '], expect: '[keys] which-key shows Space' },
   { keys: [], expect: '[keys] which-key closed' },

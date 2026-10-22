@@ -50,6 +50,7 @@ function fakeHost() {
     typeInto: () => {},
     onPendingKeys: () => {},
     cancelPendingKeys: () => {},
+    setKeymap: () => {},
   };
   return { host, created };
 }

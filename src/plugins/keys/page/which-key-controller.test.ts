@@ -35,7 +35,10 @@ function modelOf(pending: PendingKeys): WhichKeyModel {
   return { title: pending.keys.join(' '), entries: [] };
 }
 
-function setup(timeoutMs: number | null = null) {
+function setup(
+  timeoutMs: number | null = null,
+  delayMs: () => number = () => DELAY_MS,
+) {
   const clock = fakeTimers();
   const calls: string[] = [];
   const logs: string[] = [];
@@ -55,8 +58,8 @@ function setup(timeoutMs: number | null = null) {
       hide: () => calls.push('hide'),
     },
     timers: clock.timers,
-    delayMs: DELAY_MS,
-    timeoutMs,
+    delayMs,
+    timeoutMs: () => timeoutMs,
     log: (source, message) => logs.push(`[${source}] ${message}`),
   });
   const pend = (...keys: string[]) =>
@@ -128,5 +131,25 @@ describe('startWhichKey', () => {
 
     expect(run.scheduled.size).toBe(0);
     expect(run.calls).not.toContain('cancel');
+  });
+
+  it('reads the delay when it schedules', () => {
+    let delayMs = 200;
+    const run = setup(null, () => delayMs);
+    run.pend('Space');
+    run.runAfter(200);
+    run.end();
+
+    delayMs = 50;
+    run.pend('Space', 'a');
+    run.runAfter(50);
+
+    expect(run.calls).toEqual([
+      'hold',
+      'show Space',
+      'hide',
+      'hold',
+      'show Space a',
+    ]);
   });
 });

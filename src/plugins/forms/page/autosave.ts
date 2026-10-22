@@ -9,7 +9,8 @@ export interface AutosaveDeps {
   store: FormsStore;
   // Resolves once main has written the draft; rejects with main's error.
   save(roundId: string, body: FormBody): Promise<void>;
-  delayMs: number;
+  // Read each time a save is scheduled.
+  delayMs(): number;
   timers: Timers;
   log: Log;
 }
@@ -46,7 +47,7 @@ export function startAutosave(deps: AutosaveDeps): void {
       const { roundId } = round;
       const handle = deps.timers.set(
         () => void saveRound(deps, pending, roundId),
-        deps.delayMs,
+        deps.delayMs(),
       );
       pending.set(roundId, { revision: round.revision, handle });
     }

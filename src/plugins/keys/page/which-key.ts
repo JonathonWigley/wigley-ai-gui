@@ -1,5 +1,6 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { Keymap, PendingKeys } from '../../../contracts/keymap';
+import type { Platform } from '../../../contracts/platform';
 import type { CommandInfo } from '../../../contracts/plugin';
 import {
   type CommandLabel,
@@ -30,13 +31,14 @@ interface Candidate {
 
 // The keys that continue `pending`, in keymap order: those firing in the
 // pending scope (or `any`), on the page or in a box.
-// Neighbouring entries of one kind and label merge into one. Null when no bind
-// continues the sequence.
+// Neighbouring entries of one kind and label merge into one, and chords print
+// for `platform`. Null when no bind continues the sequence.
 export function whichKeyModel(
   pending: PendingKeys,
   keymap: Keymap,
   command: (id: CommandId) => CommandInfo | undefined,
   label: CommandLabel,
+  platform: Platform,
 ): WhichKeyModel | null {
   const candidates = continuations(pending.keys, bindsFor(pending, keymap));
   if (candidates.length === 0) {
@@ -44,8 +46,8 @@ export function whichKeyModel(
   }
   const readKey =
     pending.where === 'page'
-      ? (key: string) => formatKeys([key])
-      : formatVimToken;
+      ? (key: string) => formatKeys([key], platform)
+      : (token: string) => formatVimToken(token, platform);
   const entries = byNextKey(candidates, pending.keys.length).map(
     ([key, binds]) =>
       entry(readKey(key), binds, pending.keys.length, command, label),

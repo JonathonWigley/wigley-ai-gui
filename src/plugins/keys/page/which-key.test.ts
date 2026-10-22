@@ -47,6 +47,7 @@ describe('whichKeyModel', () => {
       map,
       command,
       label,
+      'macos',
     );
 
     expect(model).toEqual({
@@ -71,6 +72,7 @@ describe('whichKeyModel', () => {
       map,
       command,
       label,
+      'macos',
     );
 
     expect(model?.entries).toEqual([
@@ -93,6 +95,7 @@ describe('whichKeyModel', () => {
       map,
       command,
       () => 'go to question',
+      'macos',
     );
 
     expect(model?.entries).toEqual([
@@ -114,6 +117,7 @@ describe('whichKeyModel', () => {
       map,
       command,
       label,
+      'macos',
     );
 
     expect(model).toEqual({
@@ -133,6 +137,7 @@ describe('whichKeyModel', () => {
       map,
       command,
       label,
+      'macos',
     );
 
     expect(model).toBeNull();
@@ -152,6 +157,7 @@ describe('whichKeyModel', () => {
       map,
       command,
       label,
+      'macos',
     );
 
     expect(model?.entries.map((entry) => entry.keys)).toEqual(['x']);

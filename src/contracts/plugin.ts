@@ -15,6 +15,7 @@ import type {
 } from './keymap';
 import type { Log } from './log';
 import type { MarkdownRenderer } from './markdown';
+import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
 import type { TokenDecl } from './theme';
 
@@ -245,10 +246,15 @@ export interface PushedScope {
 // the keys of an unfinished sequence on the page or in an editor, `null` once
 // none are pending; `keys.holdPending` keeps a pending page sequence past its
 // timeout until it ends, and `keys.cancelPending` drops whichever sequence is
-// pending, running nothing. `keys.keymap` is the merged keymap, every plugin's
-// binds qualified; `keys.label` falls back to the id for a command with no
-// label; `keys.command` reads a command by its qualified id; `keys.scopes`
-// lists every scope as main serves them.
+// pending, running nothing. `keys.keymap` reads the merged keymap as the user
+// config now sets it, every plugin's binds qualified, and
+// `keys.onKeymapChanged` hears it each time it changes, until its `dispose`;
+// `keys.label` falls back to the id for a command with no label;
+// `keys.command` reads a command by its qualified id; `keys.scopes` lists
+// every scope as main serves them.
+// `settings` reads the plugin's settings as the user config now sets them, and
+// `onSettingsChanged` hears them each time they change, until its `dispose`.
+// `platform` is the OS the app runs on, fixed for the page load.
 // `modes.add` qualifies the mode's id by the plugin (`browse` in plugin `p`
 // is `p.browse`), and `modes.shown` and `modes.onChanged` read qualified ids.
 // `dependency` returns the exports of a plugin the manifest lists in
@@ -275,13 +281,16 @@ export interface PageApi<
     onPending(listener: (pending: PendingKeys | null) => void): void;
     holdPending(): void;
     cancelPending(): void;
-    keymap: Keymap;
+    keymap(): Keymap;
+    onKeymapChanged(listener: (keymap: Keymap) => void): Disposable;
     label(id: CommandId): string;
     command(id: CommandId): CommandInfo | undefined;
     scopes: readonly ScopeInfo[];
   };
   modes: Modes;
-  settings: M['settings'];
+  settings(): M['settings'];
+  onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
+  platform: Platform;
   commands: { run(id: CommandId, context?: PageCommandContext): void };
   services: PageServices;
   dependency<E>(pluginId: string): E;

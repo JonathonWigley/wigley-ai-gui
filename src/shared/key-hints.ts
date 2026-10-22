@@ -10,6 +10,8 @@ import type {
   PageBind,
   ViewScope,
 } from '../contracts/keymap';
+import type { Platform } from '../contracts/platform';
+import { parseChord } from './chord-notation';
 
 export interface KeyHint {
   keys: string;
@@ -40,14 +42,65 @@ const VIM_TOKEN = /<[^<>]+>|./gu;
 
 const DIGIT_SUFFIX = /^(.*?)(\d)$/;
 
-// A page key sequence as the user reads it, e.g. `Space Space` or `z a`.
-export function formatKeys(keys: string[]): string {
-  return keys.map((key) => KEY_NAMES[key] ?? key).join(' ');
+// How each platform prints a chord: its modifier names in the order Control,
+// Alt, Shift, Meta, the text between them and the key, and the name of each
+// key that is not a letter or digit.
+interface ChordStyle {
+  modifiers: { ctrl: string; alt: string; shift: string; meta: string };
+  joiner: string;
+  keyNames: Partial<Record<string, string>>;
 }
 
-// One vim-notation token as the user reads it, e.g. `<Space>` as `Space`.
-export function formatVimToken(token: string): string {
-  return VIM_TOKEN_NAMES[token] ?? token;
+const MAC_CHORDS: ChordStyle = {
+  modifiers: { ctrl: '⌃', alt: '⌥', shift: '⇧', meta: '⌘' },
+  joiner: '',
+  keyNames: { Enter: '↩' },
+};
+
+const PC_CHORDS: ChordStyle = {
+  modifiers: { ctrl: 'Ctrl', alt: 'Alt', shift: 'Shift', meta: 'Win' },
+  joiner: '+',
+  keyNames: { Enter: 'Enter' },
+};
+
+const CHORD_STYLES: Record<Platform, ChordStyle> = {
+  macos: MAC_CHORDS,
+  windows: PC_CHORDS,
+  linux: PC_CHORDS,
+};
+
+// A page-notation chord as the user reads it on `platform`, e.g. `<S-D-k>` as
+// `⇧⌘K` on macOS and `Shift+Win+K` elsewhere. A token that is no chord returns
+// as it is.
+export function formatChord(token: string, platform: Platform): string {
+  const chord = parseChord(token);
+  if (chord === null) {
+    return token;
+  }
+  const style = CHORD_STYLES[platform];
+  const { modifiers } = style;
+  const held = [
+    chord.ctrl && modifiers.ctrl,
+    chord.alt && modifiers.alt,
+    chord.shift && modifiers.shift,
+    chord.meta && modifiers.meta,
+  ].filter((name): name is string => name !== false);
+  const key = style.keyNames[chord.key] ?? chord.key.toUpperCase();
+  return [...held, key].join(style.joiner);
+}
+
+// A page key sequence as the user reads it on `platform`, e.g. `Space Space`,
+// `z a` or `⌥O`.
+export function formatKeys(keys: string[], platform: Platform): string {
+  return keys
+    .map((key) => KEY_NAMES[key] ?? formatChord(key, platform))
+    .join(' ');
+}
+
+// One vim-notation token as the user reads it on `platform`, e.g. `<Space>` as
+// `Space`.
+export function formatVimToken(token: string, platform: Platform): string {
+  return VIM_TOKEN_NAMES[token] ?? formatChord(token, platform);
 }
 
 // A vim-notation key string as its tokens, a `<…>` group or one character
@@ -61,16 +114,21 @@ export function editorBindMode(bind: EditorBind): EditorMode {
   return bind.mode ?? 'normal';
 }
 
-// The page keys that fire in the qualified `scope`, `any` binds included.
+// The page keys that fire in the qualified `scope`, `any` binds included,
+// chords printed for `platform`.
 export function pageHints(
   binds: PageBind[],
   scope: ViewScope,
   label: CommandLabel,
+  platform: Platform,
 ): KeyHint[] {
   return mergeHints(
     binds
       .filter((bind) => bind.scope === scope || bind.scope === 'any')
-      .map((bind) => ({ keys: formatKeys(bind.keys), command: bind.command })),
+      .map((bind) => ({
+        keys: formatKeys(bind.keys, platform),
+        command: bind.command,
+      })),
     label,
   );
 }

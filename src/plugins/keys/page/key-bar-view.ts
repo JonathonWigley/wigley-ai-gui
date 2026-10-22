@@ -12,9 +12,12 @@ export interface KeyBarDeps {
 }
 
 // The status bar's key list and its `Keys` button, contributed to
-// `statusBar`; it redraws each time the scope changes or focus moves into or
-// out of a text box.
-export function mountKeyBarView(statusBar: Area, deps: KeyBarDeps): void {
+// `statusBar`; it redraws each time the scope changes, focus moves into or
+// out of a text box, or `render` runs.
+export function mountKeyBarView(
+  statusBar: Area,
+  deps: KeyBarDeps,
+): { render(): void } {
   const bar = element('div', 'keys-bar');
   const helpButton = button('keys-bar-help', 'Keys', deps.openHelp);
   const render = () => {
@@ -27,6 +30,7 @@ export function mountKeyBarView(statusBar: Area, deps: KeyBarDeps): void {
   deps.onScopeChanged(render);
   document.addEventListener('focusin', render);
   document.addEventListener('focusout', render);
+  return { render };
 }
 
 function renderHint(hint: KeyHint): HTMLElement {

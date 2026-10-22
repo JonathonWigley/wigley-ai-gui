@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { EditorBind, EditorKeymap } from '../../contracts/keymap';
 import { exBindName } from './ex-command-name';
-import { bindGroups, vimrcLines } from './vim-binds';
+import { appliedMappings, bindGroups, vimrcLines } from './vim-binds';
 
 function bind(keys: string, command: string): EditorBind {
   return { keys, scope: 'any', command };
@@ -54,7 +54,7 @@ describe('vimrcLines', () => {
   it('unmaps the leader, then maps each remap, then each group to its ex command', () => {
     const map = keymap([bind('gx', 'a.one'), bind('<Leader>y', 'a.two')]);
 
-    expect(vimrcLines(map, bindGroups(map))).toEqual([
+    expect(vimrcLines(map, bindGroups(map), true)).toEqual([
       'unmap <Space>',
       'inoremap jk <Esc>',
       'nnoremap <Space>w :w',
@@ -67,11 +67,38 @@ describe('vimrcLines', () => {
     const insert: EditorBind = { ...bind('<CR>', 'a.one'), mode: 'insert' };
     const map = keymap([insert, bind('gx', 'a.two')]);
 
-    expect(vimrcLines(map, bindGroups(map))).toEqual([
+    expect(vimrcLines(map, bindGroups(map), true)).toEqual([
       'unmap <Space>',
       'inoremap jk <Esc>',
       'nnoremap <Space>w :w',
       `nnoremap gx :${exBindName(1)}<CR>`,
+    ]);
+  });
+
+  it('leaves out the leader unmap when told the leader is already unmapped', () => {
+    const map = keymap([bind('gx', 'a.one')]);
+
+    expect(vimrcLines(map, bindGroups(map), false)[0]).toBe(
+      'inoremap jk <Esc>',
+    );
+  });
+});
+
+describe('appliedMappings', () => {
+  it('appliedMappings lists remaps then groups', () => {
+    const map: EditorKeymap = {
+      leader: '<Space>',
+      remaps: [{ mode: 'normal', keys: 'Y', to: 'y$' }],
+      binds: [
+        bind('<Leader>a', 'a.one'),
+        { ...bind('<CR>', 'a.two'), mode: 'insert' },
+      ],
+    };
+
+    expect(appliedMappings(map, bindGroups(map))).toEqual([
+      { keys: 'Y', mode: 'normal' },
+      { keys: '<Space>a', mode: 'normal' },
+      { keys: '<CR>', mode: 'insert' },
     ]);
   });
 });

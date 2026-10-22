@@ -15,7 +15,11 @@ import type {
   TextEditor,
   VimMode,
 } from '../../contracts/editor';
-import type { EditorBind } from '../../contracts/keymap';
+import type {
+  EditorBind,
+  EditorKeymap,
+  EditorMode,
+} from '../../contracts/keymap';
 import {
   DOCUMENT_EX_COMMANDS,
   type DocumentExEvent,
@@ -26,7 +30,12 @@ import { editorTheme } from './editor-theme';
 import { exBindName } from './ex-command-name';
 import { findLanguageByFile, loadLanguage } from './languages';
 import { prefixCompletion } from './prefix-completion';
-import { type BindGroup, bindGroups, vimrcLines } from './vim-binds';
+import {
+  appliedMappings,
+  type BindGroup,
+  bindGroups,
+  vimrcLines,
+} from './vim-binds';
 
 type VimEditor = Parameters<typeof Vim.handleEx>[0];
 
@@ -482,14 +491,47 @@ function closeCompletionOnLeavingInsert(view: EditorView) {
   });
 }
 
-// Vim keymaps are global to the engine; they are applied once, through the
-// first editor, since applying them needs an editor instance.
-export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
+// The mappings of `keymap` vim holds now: every one once its vimrc lines are
+// applied, and before that only the insert groups' maps, which
+// `defineBindCommands` makes with no editor.
+function heldMappings(
+  keymap: EditorKeymap,
+  groups: BindGroup[],
+  isVimrcApplied: boolean,
+): { keys: string; mode: EditorMode }[] {
+  if (isVimrcApplied) {
+    return appliedMappings(keymap, groups);
+  }
+  return appliedMappings(
+    { ...keymap, remaps: [] },
+    groups.filter((group) => group.mode === 'insert'),
+  );
+}
+
+// Vim keymaps are global to the engine; the vimrc lines are applied through
+// one hosted editor, since applying them needs an editor instance: the first
+// one created, or the first after `setKeymap` ran with none hosted.
+export const createCodeMirrorVimHost: CreateEditorHost = (
+  initialKeymap,
+  run,
+) => {
   const hosted: HostedEditor[] = [];
+  let keymap = initialKeymap;
+  let groups = bindGroups(keymap);
   let isKeymapApplied = false;
+  // The leader whose default bind vim has dropped, null before any has been.
+  let unmappedLeader: string | null = null;
   const pendingKeys = new PendingKeys();
-  const groups = bindGroups(keymap);
   defineBindCommands(groups, hosted, run);
+
+  const applyVimrc = (cm: VimEditor) => {
+    const unmapsLeader = keymap.leader !== unmappedLeader;
+    for (const line of vimrcLines(keymap, groups, unmapsLeader)) {
+      Vim.handleEx(cm, line);
+    }
+    unmappedLeader = keymap.leader;
+    isKeymapApplied = true;
+  };
 
   defineDocumentExCommands(hosted);
   const leaving = (left: EditorView) =>
@@ -508,10 +550,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
     requireKeyBuffer(cm);
     const cursorRedraw = redrawCursorOnResize(view);
     if (!isKeymapApplied) {
-      for (const line of vimrcLines(keymap, groups)) {
-        Vim.handleEx(cm, line);
-      }
-      isKeymapApplied = true;
+      applyVimrc(cm);
     }
     cm.on('vim-mode-change', (change: { mode: string; subMode?: string }) =>
       modeChanged({
@@ -597,5 +636,34 @@ export const createCodeMirrorVimHost: CreateEditorHost = (keymap, run) => {
     },
     onPendingKeys: (listener) => pendingKeys.listen(listener),
     cancelPendingKeys: () => pendingKeys.cancel(),
+    // Unmaps the old keymap's mappings, redefines each group's command under
+    // its index, and maps the new keymap through a hosted editor, or through
+    // the next one created. A changed leader's old key keeps no mapping, since
+    // restoring vim's default for it would clear every map.
+    setKeymap(next) {
+      const nextGroups = bindGroups(next);
+      // Rejects an insert key the editor cannot type unbound before anything
+      // changes, as defining its action would after the old maps are gone.
+      for (const group of nextGroups) {
+        if (group.mode === 'insert') {
+          unboundInsertKey(group);
+        }
+      }
+      for (const { keys, mode } of heldMappings(
+        keymap,
+        groups,
+        isKeymapApplied,
+      )) {
+        Vim.unmap(keys, mode);
+      }
+      keymap = next;
+      groups = nextGroups;
+      defineBindCommands(groups, hosted, run);
+      isKeymapApplied = false;
+      const first = hosted[0];
+      if (first !== undefined) {
+        applyVimrc(vimEditorOf(first.view));
+      }
+    },
   };
 };

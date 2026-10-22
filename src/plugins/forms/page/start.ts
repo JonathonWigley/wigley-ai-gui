@@ -140,7 +140,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
     startAutosave({
       store,
       save: (roundId, body) => api.channel.invoke('draft', roundId, body),
-      delayMs: api.settings.autosaveDelayMs,
+      delayMs: () => api.settings().autosaveDelayMs,
       timers: services.timers,
       log: services.log,
     });

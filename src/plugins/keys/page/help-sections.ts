@@ -1,4 +1,5 @@
 import type { Keymap } from '../../../contracts/keymap';
+import type { Platform } from '../../../contracts/platform';
 import type { ScopeInfo } from '../../../contracts/plugin';
 import {
   type CommandLabel,
@@ -17,12 +18,13 @@ export interface HelpSection {
 
 // Every bound key, for the help overlay: for each scope in `scopes` order, its
 // page binds under its title and then its text box binds; then the text box's
-// remaps and the app's and system's chords. Sections with no binds are left
-// out.
+// remaps and the app's and system's chords. Page chords print for
+// `platform`. Sections with no binds are left out.
 export function helpSections(
   keymap: Keymap,
   scopes: readonly ScopeInfo[],
   label: CommandLabel,
+  platform: Platform,
 ): HelpSection[] {
   const sections: HelpSection[] = [
     ...scopes.flatMap((info) => [
@@ -32,7 +34,7 @@ export function helpSections(
           keymap.page
             .filter((bind) => bind.scope === info.id)
             .map((bind) => ({
-              keys: formatKeys(bind.keys),
+              keys: formatKeys(bind.keys, platform),
               command: bind.command,
             })),
           label,

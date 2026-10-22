@@ -18,7 +18,14 @@ describe('keysFor', () => {
       { keys: [' ', 'Escape'], scope: 'a.s', command: 'a.close' },
     ]);
 
-    expect(keysFor(map, 'a.close', 'a.s')).toBe('Space Esc');
+    expect(keysFor(map, 'a.close', 'a.s', 'macos')).toBe('Space Esc');
+  });
+
+  it('keysFor_Chord_PrintsForThePlatform', () => {
+    const map = keymap([{ keys: ['<C-h>'], scope: 'a.s', command: 'a.prev' }]);
+
+    expect(keysFor(map, 'a.prev', 'a.s', 'macos')).toBe('⌃H');
+    expect(keysFor(map, 'a.prev', 'a.s', 'windows')).toBe('Ctrl+H');
   });
 
   it('keysFor_BoundTwice_ReturnsTheFirstBind', () => {
@@ -27,7 +34,7 @@ describe('keysFor', () => {
       { keys: ['j'], scope: 'a.s', command: 'a.next' },
     ]);
 
-    expect(keysFor(map, 'a.next', 'a.s')).toBe('x');
+    expect(keysFor(map, 'a.next', 'a.s', 'macos')).toBe('x');
   });
 
   it('keysFor_BoundInAnotherScope_SkipsThatBind', () => {
@@ -36,13 +43,13 @@ describe('keysFor', () => {
       { keys: ['j'], scope: 'a.s', command: 'a.next' },
     ]);
 
-    expect(keysFor(map, 'a.next', 'a.s')).toBe('j');
+    expect(keysFor(map, 'a.next', 'a.s', 'macos')).toBe('j');
   });
 
   it('keysFor_BoundInAnyScope_MatchesEveryScope', () => {
     const map = keymap([{ keys: ['?'], scope: 'any', command: 'a.help' }]);
 
-    expect(keysFor(map, 'a.help', 'a.s')).toBe('?');
+    expect(keysFor(map, 'a.help', 'a.s', 'macos')).toBe('?');
   });
 
   it('keysFor_NoScope_MatchesABindInAnyScope', () => {
@@ -50,13 +57,13 @@ describe('keysFor', () => {
       { keys: ['c'], scope: 'a.other', command: 'a.change' },
     ]);
 
-    expect(keysFor(map, 'a.change', undefined)).toBe('c');
+    expect(keysFor(map, 'a.change', undefined, 'macos')).toBe('c');
   });
 
   it('keysFor_Unbound_ReturnsNull', () => {
     const map = keymap([{ keys: ['j'], scope: 'a.s', command: 'a.next' }]);
 
-    expect(keysFor(map, 'a.prev', 'a.s')).toBeNull();
-    expect(keysFor(map, 'a.next', 'a.other')).toBeNull();
+    expect(keysFor(map, 'a.prev', 'a.s', 'macos')).toBeNull();
+    expect(keysFor(map, 'a.next', 'a.other', 'macos')).toBeNull();
   });
 });

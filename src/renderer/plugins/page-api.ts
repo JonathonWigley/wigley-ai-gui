@@ -1,44 +1,40 @@
 import type { Bridge } from '../../contracts/bridge';
 import type { CommandId } from '../../contracts/commands';
-import type { Keymap } from '../../contracts/keymap';
+import type { Disposable } from '../../contracts/disposable';
 import type {
   Area,
   AreaName,
   ChannelShape,
   PageChannel,
-  CommandInfo,
   Modes,
   PageApi,
   PageCommandContext,
   PageServices,
   PluginAreas,
   PluginManifest,
-  ScopeInfo,
   UntypedEvents,
 } from '../../contracts/plugin';
+import type { AppConfig } from '../../contracts/settings';
 import { dataUrl } from '../../shared/data-url';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { qualify } from '../../shared/plugin-manifests';
 import type { ScopeStack } from '../key-scope';
+import type { LiveConfig } from '../live-config';
 import type { PendingKeysHub } from '../pending-keys';
 
 // What the page core shares with every plugin's API. `scopeStack` holds
 // qualified scopes; `pendingKeys` is the page's one pending-key report;
-// `keymap` is the merged keymap; `commandInfo` and `scopes` are as main serves
-// them; `bus` is the page load's event bus; `modes` is the core's mode
-// registry, which takes qualified ids. `areas` holds every area, `main`
-// included; plugins get every area but `main`.
+// `config` is the config main serves now, which the keymap, commands, scopes
+// and settings are read from at each call; `bus` is the page load's event bus;
+// `modes` is the core's mode registry, which takes qualified ids. `areas`
+// holds every area, `main` included; plugins get every area but `main`.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
   bridge: Bridge;
   scopeStack: ScopeStack;
   pendingKeys: Pick<PendingKeysHub, 'onPending' | 'hold' | 'cancel'>;
-  keymap: Keymap;
-  label(id: CommandId): string;
-  commandInfo: Record<CommandId, CommandInfo>;
-  scopes: readonly ScopeInfo[];
-  settings: object;
+  config: LiveConfig;
   services: PageServices;
   run(id: CommandId, context?: PageCommandContext): void;
   dependency<E>(pluginId: string): E;
@@ -47,11 +43,14 @@ export interface PageApiDeps {
 
 // One plugin's page API: its channel and its events run under the manifest's
 // id, and the scopes it sets and pushes and the modes it adds are qualified by
-// it. Its areas leave out `main`, which only the mode registry fills.
+// it. Its areas leave out `main`, which only the mode registry fills. Its
+// settings are its own entry in the config's plugin settings.
 export function createPageApi(
   manifest: PluginManifest,
   deps: PageApiDeps,
 ): PageApi<PluginManifest, ChannelShape, UntypedEvents, UntypedEvents> {
+  const { config } = deps;
+  const settingsOf = (served: AppConfig) => served.pluginSettings[manifest.id];
   return {
     areas: pluginAreas(deps.areas),
     channel: pageChannel(manifest.id, deps.bridge),
@@ -64,10 +63,14 @@ export function createPageApi(
       onPending: (listener) => deps.pendingKeys.onPending(listener),
       holdPending: () => deps.pendingKeys.hold(),
       cancelPending: () => deps.pendingKeys.cancel(),
-      keymap: deps.keymap,
-      label: deps.label,
-      command: (id) => deps.commandInfo[id],
-      scopes: deps.scopes,
+      keymap: () => config.current().keymap,
+      onKeymapChanged: (listener) =>
+        onChangedPart(config, (served) => served.keymap, listener),
+      label: (id) => config.current().commands[id]?.label ?? id,
+      command: (id) => config.current().commands[id],
+      get scopes() {
+        return config.current().scopes;
+      },
     },
     modes: {
       add: (mode) =>
@@ -75,12 +78,30 @@ export function createPageApi(
       shown: () => deps.modes.shown(),
       onChanged: (listener) => deps.modes.onChanged(listener),
     },
-    settings: deps.settings,
+    settings: () => settingsOf(config.current()),
+    onSettingsChanged: (listener) =>
+      onChangedPart(config, settingsOf, listener),
+    platform: config.current().platform,
     commands: { run: deps.run },
     services: deps.services,
     dependency: deps.dependency,
     dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
   };
+}
+
+// Calls `listener` with the part of each new config `part` reads, only when
+// it differs from the previous config's, compared as JSON.
+function onChangedPart<T>(
+  config: LiveConfig,
+  part: (served: AppConfig) => T,
+  listener: (changed: T) => void,
+): Disposable {
+  return config.onChanged((next, previous) => {
+    const changed = part(next);
+    if (JSON.stringify(changed) !== JSON.stringify(part(previous))) {
+      listener(changed);
+    }
+  });
 }
 
 // Plugin `pluginId`'s channel over the bridge. The bridge has no way to drop

@@ -5,6 +5,7 @@ import { helpSections } from './help-sections';
 
 const LABELS: Record<string, string> = {
   'a.next': 'next',
+  'a.review': 'review',
   'a.close': 'close',
   'a.save': 'save',
   'a.cycle': 'cycle tabs',
@@ -34,13 +35,20 @@ describe('helpSections', () => {
       page: [
         { keys: ['Escape'], scope: 'any', command: 'a.close' },
         { keys: ['j'], scope: 'a.x', command: 'a.next' },
+        { keys: ['<S-D-k>'], scope: 'a.x', command: 'a.review' },
       ],
     });
 
-    const sections = helpSections(map, scopes, label);
+    const sections = helpSections(map, scopes, label, 'macos');
 
     expect(sections.slice(0, 2)).toEqual([
-      { title: 'In X', hints: [{ keys: 'j', label: 'next' }] },
+      {
+        title: 'In X',
+        hints: [
+          { keys: 'j', label: 'next' },
+          { keys: '⇧⌘K', label: 'review' },
+        ],
+      },
       { title: 'Everywhere', hints: [{ keys: 'Esc', label: 'close' }] },
     ]);
   });
@@ -54,7 +62,7 @@ describe('helpSections', () => {
       page: [{ keys: ['j'], scope: 'a.x', command: 'a.next' }],
     });
 
-    const sections = helpSections(map, scopes, label);
+    const sections = helpSections(map, scopes, label, 'macos');
 
     expect(sections.map((section) => section.title)).toEqual(['In X']);
   });
@@ -73,7 +81,7 @@ describe('helpSections', () => {
       { id: 'any', title: 'Everywhere', plugin: 'core' },
     ];
 
-    const sections = helpSections(map, scopes, label);
+    const sections = helpSections(map, scopes, label, 'macos');
 
     expect(sections).toEqual([
       {
@@ -112,7 +120,7 @@ describe('helpSections', () => {
       { id: 'any', title: 'Everywhere', plugin: 'core' },
     ];
 
-    const titles = helpSections(map, scopes, label).map(
+    const titles = helpSections(map, scopes, label, 'macos').map(
       (section) => section.title,
     );
 

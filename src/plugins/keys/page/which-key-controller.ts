@@ -9,7 +9,9 @@ export interface WhichKeyView {
 }
 
 // `model` gives what continues a pending sequence, null when nothing does.
-// `timeoutMs` null leaves an open panel's sequence pending until it ends.
+// `delayMs` and `timeoutMs` are read each time a wait is scheduled, so a
+// changed setting applies from the next one; `timeoutMs` null leaves an open
+// panel's sequence pending until it ends.
 export interface WhichKeyDeps {
   onPending(listener: (pending: PendingKeys | null) => void): void;
   holdPending(): void;
@@ -17,8 +19,8 @@ export interface WhichKeyDeps {
   model(pending: PendingKeys): WhichKeyModel | null;
   view: WhichKeyView;
   timers: Timers;
-  delayMs: number;
-  timeoutMs: number | null;
+  delayMs(): number;
+  timeoutMs(): number | null;
   log: Log;
 }
 
@@ -43,11 +45,12 @@ export function startWhichKey(deps: WhichKeyDeps): void {
     deps.view.show(model);
     log('keys', `which-key shows ${model.title}`);
     timeout = clearTimer(timeout);
-    if (deps.timeoutMs !== null) {
+    const timeoutMs = deps.timeoutMs();
+    if (timeoutMs !== null) {
       timeout = timers.set(() => {
         timeout = null;
         deps.cancelPending();
-      }, deps.timeoutMs);
+      }, timeoutMs);
     }
   };
 
@@ -77,6 +80,6 @@ export function startWhichKey(deps: WhichKeyDeps): void {
       deps.holdPending();
       isOpen = true;
       show(model);
-    }, deps.delayMs);
+    }, deps.delayMs());
   });
 }

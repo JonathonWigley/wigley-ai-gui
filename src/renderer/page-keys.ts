@@ -162,7 +162,9 @@ export function createPendingTimeout(
 // `currentScope` reads. `report` hears the pending page keys each time they
 // change, `[]` once none are, with the scope in force as it reports. The
 // returned `hold` keeps the pending keys past the timeout until they end, and
-// `cancel` drops them, running nothing.
+// `cancel` drops them, running nothing. `setBinds` replaces the binds and the
+// timeout, dropping any pending keys; binds it rejects, such as a key bound
+// twice in one scope, throw and leave the current ones in force.
 export function installPageKeys(
   binds: PageBind[],
   timeoutMs: number,
@@ -172,11 +174,15 @@ export function installPageKeys(
   log: Log,
   timers: Timers,
   report: (keys: string[], scope: ViewScope) => void,
-): { hold(): void; cancel(): void } {
-  const chords = createChordMatcher(binds);
-  const matcher = createSequenceMatcher(binds, timeoutMs);
+): {
+  hold(): void;
+  cancel(): void;
+  setBinds(binds: PageBind[], timeoutMs: number): void;
+} {
   const reportKeys = (keys: string[]) => report(keys, currentScope());
-  const timeout = createPendingTimeout(matcher, timers, timeoutMs, reportKeys);
+  let chords = createChordMatcher(binds);
+  let matcher = createSequenceMatcher(binds, timeoutMs);
+  let timeout = createPendingTimeout(matcher, timers, timeoutMs, reportKeys);
   const runBind = (bind: PageBind) => {
     log('page', `${bind.keys.join('')} ran ${bind.command}`);
     commands.run(bind.command, {});
@@ -241,6 +247,21 @@ export function installPageKeys(
       matcher.reset();
       timeout.arm();
       reportKeys([]);
+    },
+    setBinds(nextBinds, nextTimeoutMs) {
+      const nextChords = createChordMatcher(nextBinds);
+      const nextMatcher = createSequenceMatcher(nextBinds, nextTimeoutMs);
+      dropPendingKeys(matcher, reportKeys);
+      // Stops the old wait: with nothing pending, arming sets no new one.
+      timeout.arm();
+      chords = nextChords;
+      matcher = nextMatcher;
+      timeout = createPendingTimeout(
+        matcher,
+        timers,
+        nextTimeoutMs,
+        reportKeys,
+      );
     },
   };
 }

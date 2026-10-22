@@ -31,7 +31,10 @@ function fakeTimers() {
   return { timers, scheduled, runDue };
 }
 
-function setup(save: (roundId: string, body: FormBody) => Promise<void>) {
+function setup(
+  save: (roundId: string, body: FormBody) => Promise<void>,
+  delayMs: () => number = () => DELAY_MS,
+) {
   const store = createFormsStore(
     initialState([presentedRound('r1')], 'r1-session'),
   );
@@ -40,7 +43,7 @@ function setup(save: (roundId: string, body: FormBody) => Promise<void>) {
   startAutosave({
     store,
     save,
-    delayMs: DELAY_MS,
+    delayMs,
     timers: clock.timers,
     log: (_source, message) => logs.push(message),
   });
@@ -197,5 +200,22 @@ describe('startAutosave', () => {
     expect(scheduled.size).toBe(0);
     runDue();
     expect(saves).toBe(0);
+  });
+
+  it('reads the delay when it schedules a save', async () => {
+    let delayMs = 200;
+    const { store, scheduled, runDue } = setup(
+      async () => {},
+      () => delayMs,
+    );
+    typeNotes(store, 'a');
+    expect([...scheduled.values()].map((timer) => timer.ms)).toEqual([200]);
+    runDue();
+    await settle();
+
+    delayMs = 50;
+    typeNotes(store, 'ab');
+
+    expect([...scheduled.values()].map((timer) => timer.ms)).toEqual([50]);
   });
 });

@@ -4,6 +4,7 @@ import type { Keymap, PageBind } from '../contracts/keymap';
 import {
   type CommandLabel,
   editorHints,
+  formatChord,
   formatKeys,
   formatVimToken,
   pageHints,
@@ -53,37 +54,71 @@ const keymap: Keymap = {
   global: [{ accelerator: 'Control+Alt+Command+W', command: 'test.summon' }],
 };
 
+describe('formatChord', () => {
+  it('prints macOS chords as symbols in Control, Option, Shift, Command order', () => {
+    expect(formatChord('<S-D-k>', 'macos')).toBe('⇧⌘K');
+    expect(formatChord('<A-o>', 'macos')).toBe('⌥O');
+    expect(formatChord('<C-h>', 'macos')).toBe('⌃H');
+    expect(formatChord('<D-Enter>', 'macos')).toBe('⌘↩');
+    expect(formatChord('<C-A-S-D-1>', 'macos')).toBe('⌃⌥⇧⌘1');
+  });
+
+  it('prints Windows chords as names joined by +', () => {
+    expect(formatChord('<S-D-k>', 'windows')).toBe('Shift+Win+K');
+    expect(formatChord('<A-o>', 'windows')).toBe('Alt+O');
+    expect(formatChord('<C-h>', 'windows')).toBe('Ctrl+H');
+    expect(formatChord('<D-Enter>', 'windows')).toBe('Win+Enter');
+    expect(formatChord('<C-A-S-D-1>', 'windows')).toBe('Ctrl+Alt+Shift+Win+1');
+  });
+
+  it('prints Linux chords as Windows does', () => {
+    expect(formatChord('<A-o>', 'linux')).toBe('Alt+O');
+  });
+
+  it('returns a token that is no chord as it is', () => {
+    expect(formatChord('j', 'macos')).toBe('j');
+    expect(formatChord('<Esc>', 'macos')).toBe('<Esc>');
+    expect(formatChord('<S-k>', 'macos')).toBe('<S-k>');
+  });
+});
+
 describe('formatKeys', () => {
   it('names Space and Escape and spaces a sequence', () => {
-    expect(formatKeys([' ', ' '])).toBe('Space Space');
-    expect(formatKeys(['Escape'])).toBe('Esc');
-    expect(formatKeys(['z', 'a'])).toBe('z a');
+    expect(formatKeys([' ', ' '], 'macos')).toBe('Space Space');
+    expect(formatKeys(['Escape'], 'macos')).toBe('Esc');
+    expect(formatKeys(['z', 'a'], 'macos')).toBe('z a');
+  });
+
+  it('prints a chord for the platform', () => {
+    expect(formatKeys([' ', '<A-o>'], 'macos')).toBe('Space ⌥O');
   });
 });
 
 describe('pageHints', () => {
   it("lists the view's binds and the any-scope binds, in keymap order", () => {
     expect(
-      pageHints(keymap.page, 'forms.forms', label).map((hint) => hint.keys),
+      pageHints(keymap.page, 'forms.forms', label, 'macos').map(
+        (hint) => hint.keys,
+      ),
     ).toEqual(['j', '1–3', 'Space Space', 'F1']);
   });
 
   it('lists the review binds with their labels, leaving out other views', () => {
-    expect(pageHints(keymap.page, 'forms.review', label)).toEqual([
+    expect(pageHints(keymap.page, 'forms.review', label, 'macos')).toEqual([
       { keys: 'Esc', label: 'back to the form' },
       { keys: 'F1', label: 'test.anywhere' },
     ]);
   });
 
   it('merges a run of digits with one label into a range', () => {
-    expect(pageHints(keymap.page, 'forms.forms', label)[1]).toEqual({
+    expect(pageHints(keymap.page, 'forms.forms', label, 'macos')[1]).toEqual({
       keys: '1–3',
       label: CHOICE_LABEL,
     });
   });
 
   it('joins other neighbours with one label', () => {
-    expect(pageHints(keymap.page, 'forms.help', label)[0]).toEqual({
+    expect(pageHints(keymap.page, 'forms.help', label, 'macos')[0]).toEqual({
       keys: '? / Esc',
       label: 'test.close',
     });
@@ -126,9 +161,13 @@ describe('vimTokens', () => {
 
 describe('formatVimToken', () => {
   it('formatVimToken_NamesSpaceEscAndEnter', () => {
-    expect(formatVimToken('<Space>')).toBe('Space');
-    expect(formatVimToken('<Esc>')).toBe('Esc');
-    expect(formatVimToken('<CR>')).toBe('Enter');
-    expect(formatVimToken('a')).toBe('a');
+    expect(formatVimToken('<Space>', 'macos')).toBe('Space');
+    expect(formatVimToken('<Esc>', 'macos')).toBe('Esc');
+    expect(formatVimToken('<CR>', 'macos')).toBe('Enter');
+    expect(formatVimToken('a', 'macos')).toBe('a');
+  });
+
+  it('formatVimToken_Chord_PrintsForPlatform', () => {
+    expect(formatVimToken('<A-o>', 'windows')).toBe('Alt+O');
   });
 });

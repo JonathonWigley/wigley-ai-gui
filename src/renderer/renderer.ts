@@ -4,6 +4,8 @@ import './index.css';
 import './shell/shell.css';
 import type { Timers } from '../contracts/ambient';
 import type { CommandId } from '../contracts/commands';
+import type { EditorHost } from '../contracts/editor';
+import type { Log } from '../contracts/log';
 import type {
   Area,
   PageCommandContext,
@@ -23,6 +25,7 @@ import { mountCodeColours } from './codemirror-vim/code-colours';
 import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
 import { editorBindInForce } from './editor-binds';
+import { createLiveConfig, type LiveConfig } from './live-config';
 import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { createScopeStack } from './key-scope';
@@ -31,7 +34,7 @@ import { createPendingKeys } from './pending-keys';
 import { createPageApi } from './plugins/page-api';
 import { createModes } from './shell/modes';
 import { mountShell } from './shell/shell';
-import { createThemeApplier } from './theme';
+import { createThemeApplier, type ThemeApplier } from './theme';
 import { createToasts } from './toasts';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
@@ -46,41 +49,135 @@ function problemText(problem: ConfigProblem): string {
   return `${problem.file}: ${problem.message}`;
 }
 
-// A status-bar item naming the first config problem, every problem on its own
-// line in its tooltip; hidden while there is none.
-function contributeConfigProblems(
-  statusBar: Area,
-  problems: readonly ConfigProblem[],
-) {
+// A status-bar item over the config problems, hidden while there is none: one
+// problem reads as itself, more as their count, each listed on its own line in
+// the tooltip. `show` redraws it for a new list.
+function contributeConfigProblems(statusBar: Area): {
+  show(problems: readonly ConfigProblem[]): void;
+} {
   const item = document.createElement('span');
   item.className = 'status-error';
-  item.hidden = problems.length === 0;
-  item.textContent =
-    problems.length === 0 ? '' : `Config: ${problemText(problems[0])}`;
-  item.title = problems.map(problemText).join('\n');
+  item.hidden = true;
   statusBar.contribute(item);
+  return {
+    show(problems) {
+      item.hidden = problems.length === 0;
+      item.textContent =
+        problems.length === 1
+          ? problemText(problems[0])
+          : `${problems.length} config problems`;
+      item.title = problems.map(problemText).join('\n');
+    },
+  };
+}
+
+// Toasts and logs each problem in `problems` that `shown` does not hold, by
+// file and message.
+function announceNewProblems(
+  problems: readonly ConfigProblem[],
+  shown: readonly ConfigProblem[],
+  toasts: { show(text: string, tone: 'error'): void },
+  log: Log,
+) {
+  const shownTexts = new Set(shown.map(problemText));
+  for (const problem of problems) {
+    const text = problemText(problem);
+    if (!shownTexts.has(text)) {
+      toasts.show(text, 'error');
+      log('config', text);
+    }
+  }
+}
+
+function isSameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+// What applying a pushed config changes outside the plugins.
+interface ConfigTargets {
+  live: LiveConfig & { replace(next: AppConfig): void };
+  applier: ThemeApplier;
+  editor: EditorHost;
+  commands: CommandRegistry<PageCommandContext>;
+  pageKeys: {
+    setBinds(binds: AppConfig['keymap']['page'], timeoutMs: number): void;
+  };
+  problems: { show(problems: readonly ConfigProblem[]): void };
+  toasts: { show(text: string, tone: 'error'): void };
+  log: Log;
+}
+
+// Applies a config main pushed: its keys, after the checks main also ran, so
+// a refused keymap changes nothing; then the theme; then the plugins'
+// listeners; then the problems, toasting each one not shown before.
+function applyPushedConfig(next: AppConfig, targets: ConfigTargets) {
+  const { live, log } = targets;
+  const previous = live.current();
+  applyKeys(next, previous, targets);
+  targets.applier.apply(next.theme, next.settings);
+  live.replace(next);
+  targets.problems.show(next.problems);
+  announceNewProblems(next.problems, previous.problems, targets.toasts, log);
+  log('config', 'applied a new config');
+}
+
+// Re-installs the page keys and, when its keymap changed, the editor keymap,
+// when the keymap or the sequence timeout changed. A throw leaves the keys as
+// they were and is logged.
+function applyKeys(
+  next: AppConfig,
+  previous: AppConfig,
+  targets: ConfigTargets,
+) {
+  const isKeymapSame = isSameJson(next.keymap, previous.keymap);
+  const isTimeoutSame =
+    next.settings.keySequenceTimeoutMs ===
+    previous.settings.keySequenceTimeoutMs;
+  if (isKeymapSame && isTimeoutSame) {
+    return;
+  }
+  const { keymap } = next;
+  try {
+    requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
+    targets.commands.requireRegistered(
+      [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
+    );
+    targets.pageKeys.setBinds(keymap.page, next.settings.keySequenceTimeoutMs);
+    if (!isSameJson(keymap.editor, previous.keymap.editor)) {
+      targets.editor.setKeymap(keymap.editor);
+    }
+  } catch (error) {
+    targets.log('config', `keys not applied: ${errorText(error)}`);
+  }
 }
 
 // Throws for a page part main served nothing for: its manifest is missing from
 // the built-in manifests list, so it would get no keys, labels or settings.
-function servedSettings(config: AppConfig, pluginId: string): object {
+function requireServedSettings(config: AppConfig, pluginId: string) {
   if (!Object.hasOwn(config.pluginSettings, pluginId)) {
     throw new Error(
       `Plugin "${pluginId}" has a page part but its manifest is not in the built-in manifests list`,
     );
   }
-  return config.pluginSettings[pluginId];
-}
-
-function commandLabel(config: AppConfig, id: CommandId): string {
-  return config.commands[id]?.label ?? id;
 }
 
 async function start() {
   const bridge = window.wigley;
   const log = createLogView(document.getElementById('log') as HTMLOListElement);
   bridge.onLog(log);
+  // A push before start finishes is held, the newest replacing any older, and
+  // applied once start has run.
+  let applyPush: ((next: AppConfig) => void) | null = null;
+  let heldPush: AppConfig | null = null;
+  bridge.onConfig((next) => {
+    if (applyPush === null) {
+      heldPush = next;
+    } else {
+      applyPush(next);
+    }
+  });
   const config = await bridge.config();
+  const live = createLiveConfig(config, log);
   const { settings, keymap } = config;
   const themeApplier = createThemeApplier(
     document.documentElement,
@@ -94,7 +191,8 @@ async function start() {
   toastLayer.className = 'toasts';
   areas.overlay.contribute(toastLayer);
   const toasts = createToasts(toastLayer, timers);
-  contributeConfigProblems(areas.statusBar, config.problems);
+  const problems = contributeConfigProblems(areas.statusBar);
+  problems.show(config.problems);
 
   const commands = new CommandRegistry<PageCommandContext>();
   const scopeStack = createScopeStack(INITIAL_SCOPE);
@@ -123,7 +221,7 @@ async function start() {
     timers,
   };
   // Filled once the page keys are installed; no key reaches the engine before.
-  let pageKeys: { hold(): void; cancel(): void } | null = null;
+  let pageKeys: ReturnType<typeof installPageKeys> | null = null;
   const pendingKeys = createPendingKeys({
     page: { hold: () => pageKeys?.hold(), cancel: () => pageKeys?.cancel() },
     editor,
@@ -136,6 +234,7 @@ async function start() {
     pageParts,
     (part, dependency) => {
       const { id } = part.manifest;
+      requireServedSettings(config, id);
       const started = part.start(
         createPageApi(part.manifest, {
           areas,
@@ -143,11 +242,7 @@ async function start() {
           bridge,
           scopeStack,
           pendingKeys,
-          keymap,
-          label: (command) => commandLabel(config, command),
-          commandInfo: config.commands,
-          scopes: config.scopes,
-          settings: servedSettings(config, id),
+          config: live,
           services,
           run,
           dependency,
@@ -167,7 +262,7 @@ async function start() {
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
   );
   // Building the matcher rejects a page key bound twice in one scope.
-  pageKeys = installPageKeys(
+  const installed = installPageKeys(
     keymap.page,
     settings.keySequenceTimeoutMs,
     () => scopeStack.current(),
@@ -177,9 +272,23 @@ async function start() {
     timers,
     (keys, scope) => pendingKeys.reportPage(keys, scope),
   );
+  pageKeys = installed;
 
-  for (const problem of config.problems) {
-    toasts.show(`Config error: ${problemText(problem)}`, 'error');
+  announceNewProblems(config.problems, [], toasts, log);
+  const targets: ConfigTargets = {
+    live,
+    applier: themeApplier,
+    editor,
+    commands,
+    pageKeys: installed,
+    problems,
+    toasts,
+    log,
+  };
+  applyPush = (next) => applyPushedConfig(next, targets);
+  if (heldPush !== null) {
+    applyPush(heldPush);
+    heldPush = null;
   }
   // The self-test opens its round only once the page listens; each part adds
   // its channel listeners while it starts.

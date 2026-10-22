@@ -117,7 +117,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const startPrompt = createStartPrompt({
       picker,
       channel: api.channel,
-      profiles: () => api.settings.profiles,
+      profiles: () => api.settings().profiles,
       reveal: (sessionId) => view.reveal(sessionId),
       log: services.log,
       toast: services.toast,

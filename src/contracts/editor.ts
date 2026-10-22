@@ -123,9 +123,14 @@ export interface EditorHost {
   // Discards the unfinished sequence, as Esc does, without running the bind
   // on Esc; does nothing when no keys are pending.
   cancelPendingKeys(): void;
+  // Replaces the keymap every editor follows, at once in every open editor and
+  // in every editor created after. The caller has checked the keymap with
+  // `requireUnambiguousEditorBinds`.
+  setKeymap(keymap: EditorKeymap): void;
 }
 
-// Every editor the host creates follows the keymap; a bound key sequence calls
+// Every editor the host creates follows the keymap, until `setKeymap`
+// replaces it; a bound key sequence calls
 // `run` with every bind on those keys in its mode, in keymap order, and the
 // editor it fired in, leaving the choice among them to the caller. `run`
 // returns whether a bind ran; when none ran on an insert-mode key, the host
