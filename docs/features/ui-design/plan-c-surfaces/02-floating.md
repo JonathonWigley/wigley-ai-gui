@@ -1,6 +1,6 @@
 # 02 — Floating: pickers, dialogs, toasts
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none (plans A and B closed)
 Plan: [plan.md](plan.md)
@@ -121,3 +121,5 @@ once every user above has converted in wave 2. `dialog.css` stays on `LEGACY_FIL
 Merged into [12 — Final verification](12-final-verification.md) § Floating.
 
 ## Proof
+
+Commit `cd87ae7`. Diff read against Decisions: layer, panel, rows, filter frame, toasts and both stylesheets as specified; typecheck, lint, tests (1895) and the self-test (chat's and docs' picker steps among them) pass. Concerns: chat's and docs' layers still carry `.overlay` / `.docs-overlay` until 06 and 08; the `statusbar-height` theme token may now be unread.

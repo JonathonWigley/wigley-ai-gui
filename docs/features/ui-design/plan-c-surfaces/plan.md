@@ -172,9 +172,9 @@ core's toasts.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Floating: pickers, dialogs, toasts](02-floating.md)
-- [ ] [Sessions: session rows and session tabs](03-sessions.md)
-- [ ] [Editors, markdown prose, active-line band, log view](09-editors-and-prose.md)
+- [x] [Floating: pickers, dialogs, toasts](02-floating.md)
+- [x] [Sessions: session rows and session tabs](03-sessions.md)
+- [x] [Editors, markdown prose, active-line band, log view](09-editors-and-prose.md)
 
 ### Wave 2
 - [ ] [Chrome: title bar, activity bar, side bar, status bar, key bar, which-key, help](01-chrome.md) — after 02
@@ -199,10 +199,16 @@ core's toasts.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 
 ### Groups
+- 09 · e43a111 · proved (diff read, typecheck, lint, tests, self-test) · concerns: no hand-written token fixture exists
+- 02 · cd87ae7 · proved (same) · concerns: chat/docs layers keep `.overlay`/`.docs-overlay` until 06/08; `statusbar-height` theme token may be unread now
+- 03 · 7e42310 · proved (same) · concerns: session rows are divs not buttons; sheet's `overflow: auto` wraps tab bodies
 ### Contract changes
 ### Rulings
+- Every review triage round this run takes the agent's recommendation without a form — the user's instruction at the run's start ("go with your suggestions on all review for this session") — costs a choice the user would have made differently · lead
+- `npm run selftest` (one Electron instance) is run by the lead per group, never by parallel workers — two instances at once collide — costs nothing · lead
+- Task 01's `readVimKeys` and `editorHints(…, platform)` already stand in the tree as `formatVimKeys` and `editorHints(editor, label, platform)`, with their tests; 01 keeps `formatVimKeys` and adds no duplicate — costs a renamed helper if a later task names `readVimKeys` · lead
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 09 — Editors, markdown prose, active-line band, log view
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none (plans A and B closed)
 Plan: [plan.md](plan.md)
@@ -132,3 +132,5 @@ The tree connector keeps its geometry: the `16px` indent, a `12px` arm from `-12
 Merged into [12 — Final verification](12-final-verification.md) § Editors and prose.
 
 ## Proof
+
+Commit `e43a111`. Diff read against the theme and markdown.css tables: band, overlay ring, completion list and prose as specified; the registry check prints nothing; typecheck, lint, tests and the self-test pass. Concern: no test lists the core tokens by hand (the built-in themes test builds from `coreThemeTokens`), so no fixture changed.

@@ -1,6 +1,6 @@
 # 04 — Form tab: rail split, cards, layout kit
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 03 (the session's sheet the Form tab fills)
 Plan: [plan.md](plan.md)

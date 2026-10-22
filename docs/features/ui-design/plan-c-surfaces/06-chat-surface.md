@@ -1,6 +1,6 @@
 # 06 — Chat tab: transcript, tool and permission cards, floating composer, layout kit
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 02 (the list picker's layer), 03 (the session's sheet)
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 08 — Docs: tree and doc parts, side bar, split, keys
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 02 (the list picker), 03 (the session's sheet)
 Plan: [plan.md](plan.md)

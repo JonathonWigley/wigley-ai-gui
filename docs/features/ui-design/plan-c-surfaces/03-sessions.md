@@ -1,6 +1,6 @@
 # 03 — Sessions: session rows and session tabs
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none (plans A and B closed)
 Plan: [plan.md](plan.md)
@@ -111,3 +111,5 @@ entries match nothing. The task owning each script drops them later: forms' 05, 
 Merged into [12 — Final verification](12-final-verification.md) § Sessions mode.
 
 ## Proof
+
+Commit `7e42310`. Diff read against Decisions and the sessions.css table: rows, tab strip, sheet, empty states and the hint as specified; typecheck, lint, tests and the self-test pass. Concerns: rows are clickable divs, no longer buttons; the sheet primitive's `overflow: auto` now wraps every tab body.

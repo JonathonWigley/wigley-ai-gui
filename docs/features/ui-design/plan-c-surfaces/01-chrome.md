@@ -1,6 +1,6 @@
 # 01 — Chrome: title bar, activity bar, side bar, status bar, key bar, which-key, help
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 02 (it removed the toast rules from `shell.css`)
 Plan: [plan.md](plan.md)
