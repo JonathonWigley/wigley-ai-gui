@@ -35,8 +35,9 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 // (undefined for a setting the defaults leave unset), merged over it: objects
 // merge key by key, arrays and scalars replace whole. An array's elements are
 // each checked against the default's first element; an empty default array
-// takes any elements. Throws naming the first value that is not a setting or
-// not of its setting's kind.
+// takes any elements, and an object element must carry every key of that
+// first element except those `optionalSettings` declares. Throws naming the
+// first value that is not a setting, not of its setting's kind, or missing.
 function mergeSetting(
   path: string,
   fallback: unknown,
@@ -92,8 +93,10 @@ function mergeSetting(
 }
 
 // Throws naming the first element of `value`, the array at `path`, that is
-// not of the kind of `fallback`'s first element. An element is checked, never
-// merged: an object element missing a key stays without it.
+// not of the kind of `fallback`'s first element, or the first key of that
+// first element an object element lacks. An element is checked, never merged,
+// so it must carry every key the default element has, except a null-default
+// key `optionalSettings` declares under `<path>[]` (`p.profiles[].note`).
 function checkElements(
   path: string,
   fallback: unknown[],
@@ -103,9 +106,22 @@ function checkElements(
   if (fallback.length === 0) {
     return;
   }
-  value.forEach((element, index) =>
-    mergeSetting(`${path}[${index}]`, fallback[0], element, schema),
-  );
+  const model = fallback[0];
+  const declaredPath = `${path.replace(ELEMENT_INDEX, '[]')}[]`;
+  value.forEach((element, index) => {
+    const elementPath = `${path}[${index}]`;
+    mergeSetting(elementPath, model, element, schema);
+    if (isJsonObject(model) && isJsonObject(element)) {
+      const missing = Object.keys(model).find(
+        (key) =>
+          !Object.hasOwn(element, key) &&
+          !Object.hasOwn(schema.optionalSettings, `${declaredPath}.${key}`),
+      );
+      if (missing !== undefined) {
+        throw new Error(`"${elementPath}.${missing}" is missing.`);
+      }
+    }
+  });
 }
 
 function mergeObject(

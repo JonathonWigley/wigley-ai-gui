@@ -16,11 +16,11 @@ const SCHEMA: SettingsSchema = {
   pluginDefaults: {
     p: {
       timeoutMs: null,
-      profiles: [{ name: 'work', dir: '~/a', paths: ['x'] }],
+      profiles: [{ name: 'work', dir: '~/a', paths: ['x'], note: null }],
       anything: [],
     },
   },
-  optionalSettings: { 'p.timeoutMs': 'number' },
+  optionalSettings: { 'p.timeoutMs': 'number', 'p.profiles[].note': 'string' },
   settingChoices: {},
 };
 
@@ -63,7 +63,7 @@ describe('mergeUserSettings', () => {
 
   it('an object element names the nested key whose kind is wrong', () => {
     const text =
-      '{"p":{"profiles":[{"name":"a","dir":"b"},{"name":"c","paths":[3]}]}}';
+      '{"p":{"profiles":[{"name":"a","dir":"b","paths":[]},{"name":"c","dir":"d","paths":[3]}]}}';
 
     expect(() => pluginSettings(text)).toThrow(
       '"p.profiles[1].paths[0]" must be a string, not a number.',
@@ -77,10 +77,32 @@ describe('mergeUserSettings', () => {
   });
 
   it('matching elements replace the default array whole, unmerged', () => {
-    const settings = pluginSettings('{"p":{"profiles":[{"name":"home"}]}}');
+    const settings = pluginSettings(
+      '{"p":{"profiles":[{"name":"home","dir":"~/h","paths":[]}]}}',
+    );
 
     expect((settings as { profiles: unknown }).profiles).toEqual([
-      { name: 'home' },
+      { name: 'home', dir: '~/h', paths: [] },
+    ]);
+  });
+
+  it('an object element missing a key the default element has is a problem', () => {
+    const text =
+      '{"p":{"profiles":[{"name":"a","dir":"b","paths":[]},{"name":"c","paths":[]}]}}';
+
+    expect(() => pluginSettings(text)).toThrow(
+      '"p.profiles[1].dir" is missing.',
+    );
+  });
+
+  it('an object element may leave out a key declared optional', () => {
+    const settings = pluginSettings(
+      '{"p":{"profiles":[{"name":"a","dir":"b","paths":[],"note":"n"},{"name":"c","dir":"d","paths":[]}]}}',
+    );
+
+    expect((settings as { profiles: unknown }).profiles).toEqual([
+      { name: 'a', dir: 'b', paths: [], note: 'n' },
+      { name: 'c', dir: 'd', paths: [] },
     ]);
   });
 
