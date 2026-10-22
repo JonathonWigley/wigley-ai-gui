@@ -1,6 +1,6 @@
 # 02 — Self-test screenshot steps
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -75,3 +75,11 @@ end to end. Task 06 adds the gallery's screenshots.
   over ("the image data of the whole frame"), which `startSelfTest` already listens to.
 - expected: the PNG shows the step's state after its keys (the round with the item `j` moved to
   selected), not the state before them.
+
+## Proof
+
+Commit `bd6455e` · diff read: every Produces present (`SelfTestStep.screenshot`, `screenshotFiles`,
+`PRIMITIVE_ELLIPSIS_SELECTORS`, `withPrimitiveEllipsis`, `startSelfTest(…, screenshotFolder)`) ·
+typecheck passes · worker ran lint, test (1823) and selftest green; `forms-round.png` (900x700)
+shows the round after `j`, so offscreen `capturePage` works and the paint fallback was not needed.
+Concerns: none open.

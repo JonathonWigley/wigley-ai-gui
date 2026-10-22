@@ -233,7 +233,7 @@ when it starts; 04's and 05's new files pass the style check as written.
 
 ### Wave 1
 - [ ] [JetBrains Mono, backdrop, materials and reduced motion](01-fonts-and-materials.md)
-- [ ] [Self-test screenshot steps](02-selftest-screenshots.md)
+- [x] [Self-test screenshot steps](02-selftest-screenshots.md)
 
 ### Wave 2
 - [ ] [Style check in lint](03-check-styles.md) — after 01
@@ -251,10 +251,14 @@ when it starts; 04's and 05's new files pass the style check as written.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: ed5d846987f144614a41307b3783613533e761a8
 
 ### Groups
+- 02 · bd6455e · proved (diff read, typecheck; worker: lint, test, selftest green) · concerns: none; forms comment line over 80 columns after the edit (cosmetic, for review)
 ### Contract changes
 ### Rulings
+- Screenshot paths and the fit-check list enter the chain in `runScript` (the doc said `startRun`), where the script's list already enters — tree shape — cost if wrong: none · group 02
+- A failed capture fails the step and skips its fit check; a step whose line never came still saves its screenshot — Decisions line — cost if wrong: one line · group 02
+- `saveScreenshot` adds a third failure reason, `the page produced no frames`, when the redraw wait times out — never capture a half-drawn frame — cost: one message · group 02
 ### Review rounds
 ### Test gate
