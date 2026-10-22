@@ -1,8 +1,7 @@
 // The style rules `check-styles.mts` enforces (`DESIGN.md` § Checks): no raw
 // colour, length, duration or font stack in CSS or inline styles, and
 // `backdrop-filter` only where the caller allows it. Pure functions over text,
-// so the rules, the legacy list judgement and the argument reading are tested
-// without walking `src/`.
+// so the rules and the argument reading are tested without walking `src/`.
 import ts from 'typescript';
 
 export type StyleRule =
@@ -442,56 +441,8 @@ export function inlineStyleViolations(
   return violations;
 }
 
-// Folders fixed rather than listed: the primitives, the gallery and the shell.
-const FIXED_FOLDERS = [
-  'src/shared/page/ui/',
-  'src/plugins/gallery/',
-  'src/renderer/shell/',
-];
-
-export function legacyListProblems(
-  list: readonly string[],
-  filesInSrc: ReadonlySet<string>,
-  filesWithViolations: ReadonlySet<string>,
-): { failures: string[]; notes: string[] } {
-  const failures: string[] = [];
-  const notes: string[] = [];
-  for (const file of list) {
-    if (FIXED_FOLDERS.some((folder) => file.startsWith(folder))) {
-      failures.push(`${file}: may not be on the legacy list; fix it instead`);
-    } else if (!filesInSrc.has(file)) {
-      failures.push(
-        `${file}: on the legacy list but not in src; remove it from the legacy list`,
-      );
-    } else if (!filesWithViolations.has(file)) {
-      notes.push(`${file}: on the legacy list but passes every rule`);
-    }
-  }
-  return { failures, notes };
-}
-
-const NO_LEGACY = '--no-legacy';
-
-export function parseStyleArguments(
-  args: readonly string[],
-  filesInSrc: ReadonlySet<string>,
-): { ignoreLegacy: boolean; paths: string[]; failures: string[] } {
-  const ignoreLegacy = args.includes(NO_LEGACY);
-  const paths: string[] = [];
-  const failures: string[] = [];
-  for (const arg of args) {
-    const isUnknown = arg.startsWith('-') ? arg !== NO_LEGACY : !ignoreLegacy;
-    if (arg === NO_LEGACY) {
-      continue;
-    } else if (isUnknown) {
-      failures.push(`check-styles: unknown argument ${arg}`);
-    } else if (!arg.startsWith('src/')) {
-      failures.push(`check-styles: ${arg} is not under src/`);
-    } else if (!filesInSrc.has(arg)) {
-      failures.push(`check-styles: ${arg} is not a checked file in src`);
-    } else {
-      paths.push(arg);
-    }
-  }
-  return { ignoreLegacy, paths, failures };
+// Every argument is unknown: the check always judges every file, so a stale
+// flag fails instead of running as a plain check.
+export function argumentFailures(args: readonly string[]): string[] {
+  return args.map((arg) => `check-styles: unknown argument ${arg}`);
 }

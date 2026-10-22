@@ -1,4 +1,4 @@
-/* No key-cap boxes: overrides the global `kbd` rule the legacy hints keep. */
+/* No key-cap boxes. */
 .ui-kbd {
   display: inline-flex;
   gap: var(--wg-space-1);

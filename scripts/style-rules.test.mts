@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  argumentFailures,
   cssViolations,
   inlineStyleViolations,
-  legacyListProblems,
-  parseStyleArguments,
 } from './style-rules.mts';
 
 describe('cssViolations', () => {
@@ -223,75 +222,15 @@ describe('inlineStyleViolations', () => {
   });
 });
 
-describe('legacyListProblems', () => {
-  it('legacyListProblems_ForbiddenFolder_Fails', () => {
-    const file = 'src/shared/page/ui/row.css';
-    expect(legacyListProblems([file], new Set([file]), new Set())).toEqual({
-      failures: [
-        'src/shared/page/ui/row.css: may not be on the legacy list; fix it instead',
-      ],
-      notes: [],
-    });
-  });
-
-  it('legacyListProblems_MissingFile_Fails', () => {
-    const problems = legacyListProblems(
-      ['src/plugins/gone/page/gone.css'],
-      new Set(),
-      new Set(),
-    );
-    expect(problems.failures).toEqual([
-      'src/plugins/gone/page/gone.css: on the legacy list but not in src; remove it from the legacy list',
-    ]);
-  });
-
-  it('legacyListProblems_ListedFileThatPasses_Notes', () => {
-    const file = 'src/plugins/docs/page/docs.css';
-    expect(legacyListProblems([file], new Set([file]), new Set())).toEqual({
-      failures: [],
-      notes: [
-        'src/plugins/docs/page/docs.css: on the legacy list but passes every rule',
-      ],
-    });
-    expect(
-      legacyListProblems([file], new Set([file]), new Set([file])),
-    ).toEqual({ failures: [], notes: [] });
-  });
-});
-
-describe('parseStyleArguments', () => {
-  it('parseStyleArguments_NoLegacyWithPaths_KeepsThePaths', () => {
-    expect(
-      parseStyleArguments(['--no-legacy', 'src/a.css'], new Set(['src/a.css'])),
-    ).toEqual({ ignoreLegacy: true, paths: ['src/a.css'], failures: [] });
-  });
-
-  it('parseStyleArguments_NoLegacyAlone_JudgesEveryFile', () => {
-    expect(parseStyleArguments(['--no-legacy'], new Set())).toEqual({
-      ignoreLegacy: true,
-      paths: [],
-      failures: [],
-    });
-  });
-
-  it('parseStyleArguments_PathOutsideSrcOrMissing_Fails', () => {
-    const parsed = parseStyleArguments(
-      ['--no-legacy', 'README.md', 'src/nope.css'],
-      new Set(),
-    );
-    expect(parsed.failures).toEqual([
-      'check-styles: README.md is not under src/',
-      'check-styles: src/nope.css is not a checked file in src',
-    ]);
-  });
-
-  it('parseStyleArguments_PathWithoutFlagOrUnknownFlag_Fails', () => {
-    const filesInSrc = new Set(['src/a.css']);
-    expect(parseStyleArguments(['src/a.css'], filesInSrc).failures).toEqual([
+describe('argumentFailures', () => {
+  it('argumentFailures_AnyArgument_FailsEach', () => {
+    expect(argumentFailures(['--no-legacy', 'src/a.css'])).toEqual([
+      'check-styles: unknown argument --no-legacy',
       'check-styles: unknown argument src/a.css',
     ]);
-    expect(parseStyleArguments(['--verbose'], filesInSrc).failures).toEqual([
-      'check-styles: unknown argument --verbose',
-    ]);
+  });
+
+  it('argumentFailures_NoArguments_ReportsNothing', () => {
+    expect(argumentFailures([])).toEqual([]);
   });
 });

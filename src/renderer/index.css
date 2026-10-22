@@ -46,16 +46,6 @@ button {
   font: inherit;
 }
 
-kbd {
-  background: var(--wg-card-background);
-  border: 1px solid var(--wg-border-default);
-  border-radius: var(--wg-radius-sm);
-  color: var(--wg-fg);
-  font-family: var(--wg-font-mono);
-  font-size: var(--wg-text-mono);
-  padding: 0 var(--wg-space-1);
-}
-
 /* Why the page failed to start, shown in place of the shell. */
 .start-error {
   color: var(--wg-status-error);
