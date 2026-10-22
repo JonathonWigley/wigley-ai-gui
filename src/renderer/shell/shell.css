@@ -229,34 +229,3 @@
 .shell-overlay > * {
   pointer-events: auto;
 }
-
-/* Toasts sit above the status line. */
-.toasts {
-  bottom: calc(var(--wg-statusbar-height) + var(--wg-space-4));
-  display: flex;
-  flex-direction: column;
-  gap: var(--wg-space-2);
-  position: fixed;
-  right: var(--wg-space-4);
-  z-index: var(--wg-z-toast);
-}
-
-/* Opaque `sheet-background`, the floating material's reduced value, as nothing
-   blurs behind it yet; the material-floating helper takes it back to the
-   translucent material. */
-.toast {
-  background: var(--wg-sheet-background);
-  border: 1px solid var(--wg-border-default);
-  border-left: var(--wg-indicator-width) solid var(--wg-status-info);
-  border-radius: var(--wg-radius-lg);
-  max-width: min(calc(var(--wg-space-8) * 12), calc(100vw - var(--wg-space-8)));
-  padding: var(--wg-space-2) var(--wg-space-3);
-}
-
-.toast[data-tone='success'] {
-  border-left-color: var(--wg-status-success);
-}
-
-.toast[data-tone='error'] {
-  border-left-color: var(--wg-status-error);
-}

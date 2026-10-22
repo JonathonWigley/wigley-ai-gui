@@ -2,6 +2,10 @@ import type { EditorHost } from '../../contracts/editor';
 import type { Log } from '../../contracts/log';
 import type { PushedScope } from '../../contracts/plugin';
 import { element } from './dom';
+import { floatingPanel, openFloatingPanel } from './ui/floating-panel';
+import { inputFrame } from './ui/input-frame';
+import { row } from './ui/row';
+import './list-picker.css';
 import {
   filterPicker,
   movePicker,
@@ -11,7 +15,8 @@ import {
 } from './list-picker-state';
 
 export interface ListPickerRequest<T> {
-  // The dialog's heading and the name its log line carries.
+  // The panel's heading, its accessible name and the name its log line
+  // carries.
   title: string;
   items: readonly T[];
   // The line drawn and filtered on.
@@ -25,15 +30,17 @@ export interface ListPickerRequest<T> {
   cancelled?(): void;
 }
 
-// One modal list, holding one request at a time: `open` replaces the open
+// One floating list, holding one request at a time: `open` replaces the open
 // request, if any, without hearing its cancel. Its scope is pushed while it
-// shows, and the base scope changing under it cancels it. `choose` with
-// nothing visible does nothing; `close` hides it without hearing a cancel.
+// shows, and the base scope changing under it, or a click on the layer
+// outside the panel, cancels it. `choose` with nothing visible does nothing;
+// `close` hides it without hearing a cancel.
 // With a filter editor, `focusFilter` types into the filter box above the
 // list and `leaveFilter` leaves it with the filter kept; without one both do
 // nothing.
 export interface ListPicker {
-  // The overlay holding the dialog, for the caller to place.
+  // The transparent layer holding the panel, filling the positioned box the
+  // caller places it in.
   element: HTMLElement;
   open<T>(request: ListPickerRequest<T>): void;
   isOpen(): boolean;
@@ -55,8 +62,9 @@ export interface ListPickerDeps {
   log: Log;
   // The `[source]` of the `picker shown: <title>` line.
   logSource: string;
+  // The plugin's own class on the layer, beside `ui-picker-layer`; '' for none.
   overlayClass: string;
-  // The plugin's own class on the dialog, beside `dialog list-picker`.
+  // The plugin's own class on the panel, beside `ui-picker`; '' for none.
   dialogClass: string;
   // Adds the filter box above the list when given.
   filterEditor?: EditorHost;
@@ -70,12 +78,26 @@ interface OpenRequest {
 }
 
 export function createListPicker(deps: ListPickerDeps): ListPicker {
-  const overlay = element('div', deps.overlayClass);
-  const dialog = element('div', `dialog list-picker ${deps.dialogClass}`);
-  const title = element('h2', 'dialog-title');
-  const list = element('ol', 'list-picker-list');
-  overlay.append(dialog);
-  overlay.hidden = true;
+  const layer = element('div', 'ui-picker-layer');
+  addClass(layer, deps.overlayClass);
+  const panel = floatingPanel();
+  panel.classList.add('ui-picker');
+  addClass(panel, deps.dialogClass);
+  panel.setAttribute('role', 'dialog');
+  const title = element('h2', 'ui-picker-title');
+  const list = element('ol', 'ui-picker-list');
+  layer.append(panel);
+  layer.hidden = true;
+  layer.addEventListener('mousedown', (event) => {
+    if (event.target === layer) {
+      event.preventDefault();
+    }
+  });
+  layer.addEventListener('click', (event) => {
+    if (event.target === layer) {
+      picker.cancel();
+    }
+  });
 
   let request: OpenRequest | null = null;
   let state: PickerState = openPicker([], 0);
@@ -83,20 +105,29 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
 
   const draw = () => {
     const items = visibleIndexes(state).map((index) => {
-      const item = element('li', 'list-picker-item', state.labels[index]);
-      item.classList.toggle('is-cursor', index === state.cursor);
-      item.addEventListener('mousedown', (event) => event.preventDefault());
-      item.addEventListener('click', () => {
-        state = { ...state, cursor: index };
-        picker.choose();
+      const label = state.labels[index];
+      const item = row({
+        density: 'list',
+        label,
+        tag: 'li',
+        onClick: () => {
+          state = { ...state, cursor: index };
+          picker.choose();
+        },
       });
+      // The row ends in an ellipsis; the tooltip shows the whole label.
+      item.title = label;
+      const atCursor = index === state.cursor;
+      item.classList.toggle('is-selected', atCursor);
+      item.classList.toggle('is-cursor', atCursor);
       return item;
     });
     list.replaceChildren(...items);
     list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
   };
 
-  const filterBox = element('div', 'list-picker-filter');
+  const filterBox = inputFrame();
+  filterBox.classList.add('ui-picker-filter');
   const filter =
     deps.filterEditor?.create(filterBox, '', {
       changed: (text) => {
@@ -108,12 +139,12 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       modeChanged: () => undefined,
     }) ?? null;
   if (filter === null) {
-    dialog.append(title, list);
+    panel.append(title, list);
   } else {
-    dialog.append(title, filterBox, list);
+    panel.append(title, filterBox, list);
   }
 
-  // Hides the dialog and pops its scope; returns the request it held.
+  // Hides the layer and pops its scope; returns the request it held.
   const hide = (): OpenRequest | null => {
     const held = request;
     if (held === null) {
@@ -123,14 +154,14 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     if (filter !== null && filterBox.contains(document.activeElement)) {
       filter.blur();
     }
-    overlay.hidden = true;
+    layer.hidden = true;
     pushed?.pop();
     pushed = null;
     return held;
   };
 
   const picker: ListPicker = {
-    element: overlay,
+    element: layer,
     open(next) {
       if (pushed === null) {
         const scope = deps.pushScope();
@@ -148,7 +179,8 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       };
       state = openPicker(next.items.map(next.label), next.selected ?? 0);
       title.textContent = next.title;
-      overlay.hidden = false;
+      panel.setAttribute('aria-label', next.title);
+      openFloatingPanel(panel, layer);
       draw();
       deps.log(deps.logSource, `picker shown: ${next.title}`);
     },
@@ -186,4 +218,11 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     },
   };
   return picker;
+}
+
+// Adds the caller's `className` to `node`, unless it is ''.
+function addClass(node: HTMLElement, className: string): void {
+  if (className !== '') {
+    node.classList.add(className);
+  }
 }
