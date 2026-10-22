@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionControl } from '../../../contracts/agent';
+import type { ChatEntry, SessionControl } from '../../../contracts/agent';
 import type { TextEditor } from '../../../contracts/editor';
 import type { ChatSessionState } from '../contract';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
@@ -17,7 +17,16 @@ const mode: SessionControl = {
   value: 'auto',
 };
 
-function session(ended: boolean): ChatSession {
+const userEntry: ChatEntry = {
+  id: 'entry-1',
+  kind: 'user',
+  text: 'hi',
+  raw: [],
+};
+
+// `first` answers each call with `firstEntry` and counts it in `firstCalls`.
+function session(ended: boolean, firstEntry: ChatEntry | null = null) {
+  const counts = { firstCalls: 0 };
   const state: ChatSessionState = {
     sessionId: 'row-1',
     projectDir: '/Users/u/dev/app',
@@ -27,14 +36,21 @@ function session(ended: boolean): ChatSession {
     activity: 'working',
     commands: [],
   };
-  return {
+  const entries = {
+    first() {
+      counts.firstCalls++;
+      return firstEntry;
+    },
+  } as ChatSession['entries'];
+  const shown: ChatSession = {
     sessionId: 'row-1',
     name: 'app',
     state,
     ended,
     box: {} as TextEditor,
-    entries: {} as ChatSession['entries'],
+    entries,
   };
+  return Object.assign(shown, { counts });
 }
 
 // Lets a settled invoke's handlers run.
@@ -171,5 +187,23 @@ describe('chat commands', () => {
     expect(controls.sessionBound).toBe(true);
     expect(choices.sessionBound).toBe(true);
     expect(choices.title).toBe('Mode');
+  });
+
+  it('firstEntry_withEntries_focusesTheFirst', () => {
+    const shown = session(false, userEntry);
+    const run = setUp(shown);
+
+    run.handlers.firstEntry({});
+
+    expect(run.logs).toEqual(['[chat] focused the first entry']);
+    expect(shown.counts.firstCalls).toBe(1);
+  });
+
+  it('firstEntry_noEntries_logsNoEntries', () => {
+    const run = setUp(session(false, null));
+
+    run.handlers.firstEntry({});
+
+    expect(run.logs).toEqual(['[chat] no entries in app']);
   });
 });

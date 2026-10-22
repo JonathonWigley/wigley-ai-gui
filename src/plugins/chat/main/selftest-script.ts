@@ -57,8 +57,8 @@ const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 // so an earlier line can land before the step's wait begins. Each session
 // opens on its Chat tab: Option+Shift+i shows the second session's Chat tab,
 // where y finds no pending permission, leaving the first session's alone, and
-// Option+Shift+o goes back to the first session's Chat tab. Space c e
-// opens Effort, and showing the second session's Chat tab closes it; Space k n
+// Option+Shift+o goes back to the first session's Chat tab. e opens
+// Effort, and showing the second session's Chat tab closes it; Space k n
 // opens the start prompt, which stays open over the second session's Chat tab
 // until Esc closes it, and Option+Shift+o goes back. hi typed, Esc and v leave
 // the box in visual mode, and showing the second session's Chat tab blurs it;
@@ -69,10 +69,12 @@ const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 // allows the fixture's permission, which asks the round that takes the Chat tab
 // over; Space Space opens its review and Cmd+Enter submits, which hands the
 // Chat tab back. The tool turn's entries are user, tool, assistant, result,
-// focus following the result, so k k j k walks them; Enter opens the tool entry
-// and G follows the latest. Space c e opens Effort on Medium, j Enter sets
-// High; Space c e again, / and low filter to Low, and Enter in the filter's
-// insert mode sets it. A held turn ends on Ctrl+c in the box with the fake's
+// focus following the result, so k k j k walks them; Enter opens the tool entry,
+// gg focuses the first entry and G follows the latest. e opens Effort on
+// Medium, j Enter sets High; i Esc puts the box in normal mode, where Space c e
+// opens Effort again, / and low filter to Low, and Enter in the filter's insert
+// mode sets it. m opens Mode and Esc closes it; o finds the fake has no model
+// control; c opens every control and Esc closes it. A held turn ends on Ctrl+c in the box with the fake's
 // notice; Space k n opens the start prompt and Esc closes it. A second held
 // turn makes Cmd+W ask, and y ends the session. Space k n then picks the
 // self-test's folder and the work profile, and its session step lists the
@@ -84,7 +86,7 @@ const STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
   { keys: ['y'], expect: '[chat] no pending permission in chat-second' },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
-  { keys: [' ', 'c', 'e'], expect: '[chat] picker shown: Effort' },
+  { keys: ['e'], expect: '[chat] picker shown: Effort' },
   { keys: ['<A-S-i>'], expect: '[chat] picker closed: Effort' },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
   { keys: [' ', 'k', 'n'], expect: '[chat] picker shown: Folder' },
@@ -133,18 +135,23 @@ const STEPS: SelfTestStep[] = [
   { keys: ['j'], expect: '[chat] focused assistant entry' },
   { keys: ['k'], expect: '[chat] focused tool entry' },
   { keys: ['Enter'], expect: '[chat] expanded tool entry', checksFit: true },
+  { keys: ['g', 'g'], expect: '[chat] focused the first entry' },
   { keys: ['G'], expect: '[chat] following the latest entry' },
-  {
-    keys: [' ', 'c', 'e'],
-    expect: '[chat] picker shown: Effort',
-    checksFit: true,
-  },
+  { keys: ['e'], expect: '[chat] picker shown: Effort', checksFit: true },
   { keys: ['j', 'Enter'], expect: '[chat] Effort is High in chat-selftest' },
-  { keys: [' ', 'c', 'e'], expect: '[chat] picker shown: Effort' },
+  {
+    keys: ['i', 'Escape', ' ', 'c', 'e'],
+    expect: '[chat] picker shown: Effort',
+  },
   {
     keys: ['/', ...'low', 'Enter'],
     expect: '[chat] Effort is Low in chat-selftest',
   },
+  { keys: ['m'], expect: '[chat] picker shown: Mode' },
+  { keys: ['Escape'], expect: '[chat] picker closed: Mode' },
+  { keys: ['o'], expect: '[chat] chat-selftest has no model control' },
+  { keys: ['c'], expect: '[chat] picker shown: Controls' },
+  { keys: ['Escape'], expect: '[chat] picker closed: Controls' },
   {
     keys: sendKeys(FAKE_HOLD_TEXT),
     expect: '[chat] chat-selftest is working',
@@ -201,15 +208,13 @@ const STEPS: SelfTestStep[] = [
 ];
 
 // Raw JSON and tool output scroll in their own box, as code and tables do, and
-// row and tab titles end in an ellipsis.
+// a row's status ends in an ellipsis.
 const SCROLLS_ITSELF = [
   '.chat-json',
   '.chat-tool-result',
   '.md pre',
   '.md table',
-  '.session-row-label',
   '.session-row-status',
-  '.session-tab-label',
 ];
 
 // The calls STEPS cause on the fixture's fake process, in order.

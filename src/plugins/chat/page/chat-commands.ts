@@ -17,6 +17,7 @@ import type {
   PermissionActions,
   SessionRef,
 } from './chat-view';
+import { CONTROL_IDS } from './control-commands';
 import type { Picker } from './picker';
 
 type ChatInvoke = Pick<PageChannel<ChatChannel>, 'invoke'>;
@@ -74,13 +75,6 @@ export interface ChatCommandDeps {
 }
 
 type Handler = (context: PageCommandContext) => void;
-
-// The control ids the pick keys reach, by command.
-const CONTROL_IDS = {
-  pickMode: 'mode',
-  pickEffort: 'effort',
-  pickModel: 'model',
-} as const;
 
 // Every chat command's handler but the start prompt's (`newSession`,
 // `toggleArchive`, `showArchived`), by short id. A command acting on a
@@ -162,6 +156,15 @@ export function chatCommandHandlers(
     latestEntry: inSession((session) => {
       session.entries.latest();
       log('chat', 'following the latest entry');
+    }),
+    firstEntry: inSession((session) => {
+      const focused = session.entries.first();
+      log(
+        'chat',
+        focused === null
+          ? `no entries in ${session.name}`
+          : 'focused the first entry',
+      );
     }),
     toggleEntry: inSession((session) => {
       const toggled = session.entries.toggleFocused();
