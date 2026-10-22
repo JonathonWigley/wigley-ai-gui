@@ -5,6 +5,7 @@ import {
   type BrowserWindow,
   type BrowserWindowConstructorOptions,
   dialog,
+  type Event,
   globalShortcut,
   ipcMain,
   nativeTheme,
@@ -36,7 +37,6 @@ import type {
   MainServices,
   MainStart,
   PluginManifest,
-  RunMode,
 } from '../contracts/plugin';
 import { defaultKeymap } from '../plugins/keymap';
 import { mainParts } from '../plugins/main';
@@ -80,7 +80,11 @@ import { createPluginChannels } from './plugins/plugin-channel';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { applySelfTestConfig } from './selftest-config';
-import { runModeOf } from './run-mode';
+import {
+  type DriveHarnessName,
+  type RunEnvironment,
+  runEnvironmentOf,
+} from './run-mode';
 import { resolveTheme } from './themes/theme-loader';
 import {
   titleBarOverlayOf,
@@ -99,19 +103,28 @@ if (started) {
   app.quit();
 }
 
+// The run the environment selects, read before the app makes anything. A bad
+// value exits 1 with its reason on stderr, which the drive CLI keeps in the
+// run's `app.log`, and no native dialog.
+function readRunEnvironment(): RunEnvironment {
+  try {
+    return runEnvironmentOf(process.env);
+  } catch (error) {
+    process.stderr.write(
+      `wigley-ai-gui could not start: ${errorText(error)}\n`,
+    );
+    process.exit(1);
+  }
+}
+
 // The self-test and a drive run render offscreen as an accessory app on a
 // home of their own, so neither takes the user's foreground or touches their
 // files.
-const runMode = runModeOf(process.env);
-
-// A drive run's folder, from `WIGLEY_DRIVE_DIR`.
-function driveRunDir(): string {
-  const runDir = process.env.WIGLEY_DRIVE_DIR ?? '';
-  if (!path.isAbsolute(runDir)) {
-    throw new Error('WIGLEY_DRIVE_DIR must be an absolute path');
-  }
-  return runDir;
-}
+const runEnvironment = readRunEnvironment();
+const runMode = runEnvironment.mode;
+// A drive run's folder; null outside a drive run.
+const driveRunDir =
+  runEnvironment.mode === 'drive' ? runEnvironment.runDir : null;
 
 registerDataScheme();
 
@@ -178,80 +191,71 @@ function liveServices(): ModeServices {
   };
 }
 
-// The self-test: every file sits in the temp home folder, so trash deletes
-// for good and the user's Trash collects nothing; alerts are silent, sessions
-// run over the fake harness, the offscreen window shows no dialog, and no link
-// takes the user's foreground.
-function selfTestServices(): ModeServices {
+// A run beside the user's app, the self-test or a drive run: every file sits
+// in the run's own home, so trash deletes for good and the user's Trash
+// collects nothing; alerts are silent, the offscreen window shows no dialog,
+// and no link takes the user's foreground. `runName` names the run in the line
+// a link not opened logs; sessions run over the harness `harness` builds.
+function offscreenRunServices(
+  runName: string,
+  harness: (context: ModeServicesContext) => AgentHarness,
+): ModeServices {
   return {
     trashItem: (file) => rm(file, { recursive: true }),
-    forWindow: ({ window, log }) => ({
+    forWindow: (context) => ({
       alerts: silentAlerts,
-      agentHarnesses: [createFakeAgentHarness()],
-      window: { ...windowService(window), chooseFolder: async () => null },
+      agentHarnesses: [harness(context)],
+      window: {
+        ...windowService(context.window),
+        chooseFolder: async () => null,
+      },
       openExternal: gateExternalLinks(async (url) =>
-        log('main', `external link not opened in the self-test: ${url}`),
+        context.log('main', `external link not opened in ${runName}: ${url}`),
       ),
     }),
   };
 }
 
-// A drive run's agent harness, as `WIGLEY_DRIVE_HARNESS` names it: the fake
-// harness by default, or Claude Code logged in as the user, whose relays find
-// this run's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`.
+// A drive run's agent harness, as `WIGLEY_DRIVE_HARNESS` named it: the fake
+// harness, or Claude Code logged in as the user, whose relays find this run's
+// endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`.
 function driveHarness(
-  store: ConfigStore,
-  runHome: string,
-  log: Log,
+  name: DriveHarnessName,
+  { store, homeDir, log }: ModeServicesContext,
 ): AgentHarness {
-  const harness = process.env.WIGLEY_DRIVE_HARNESS ?? 'fake';
-  if (harness === 'fake') {
+  if (name === 'fake') {
     return createFakeAgentHarness();
   }
-  if (harness === 'claude') {
-    return claudeHarness(
-      store,
-      os.homedir(),
-      {
-        ...process.env,
-        WIGLEY_AI_GUI_ENDPOINT_DIR: path.join(
-          runHome,
-          '.agents',
-          'wigley-ai-gui',
-        ),
-      },
-      log,
-    );
-  }
-  throw new Error(
-    `WIGLEY_DRIVE_HARNESS is ${JSON.stringify(harness)}; set it to fake or claude`,
+  return claudeHarness(
+    store,
+    os.homedir(),
+    {
+      ...process.env,
+      WIGLEY_AI_GUI_ENDPOINT_DIR: path.join(
+        homeDir,
+        '.agents',
+        'wigley-ai-gui',
+      ),
+    },
+    log,
   );
 }
 
-// A drive run: every file sits in the run folder, so trash deletes for good;
-// alerts are silent, the offscreen window shows no dialog, no link takes the
-// user's foreground, and sessions run over the harness `WIGLEY_DRIVE_HARNESS`
-// names.
-function driveServices(): ModeServices {
-  return {
-    trashItem: (file) => rm(file, { recursive: true }),
-    forWindow: ({ window, store, homeDir, log }) => ({
-      alerts: silentAlerts,
-      agentHarnesses: [driveHarness(store, homeDir, log)],
-      window: { ...windowService(window), chooseFolder: async () => null },
-      openExternal: gateExternalLinks(async (url) =>
-        log('main', `external link not opened in a drive run: ${url}`),
-      ),
-    }),
-  };
+function modeServicesOf(environment: RunEnvironment): ModeServices {
+  switch (environment.mode) {
+    case 'live':
+      return liveServices();
+    case 'selfTest':
+      return offscreenRunServices('the self-test', () =>
+        createFakeAgentHarness(),
+      );
+    case 'drive':
+      return offscreenRunServices('a drive run', (context) =>
+        driveHarness(environment.harness, context),
+      );
+  }
 }
-
-const servicesByMode: Record<RunMode, () => ModeServices> = {
-  live: liveServices,
-  selfTest: selfTestServices,
-  drive: driveServices,
-};
-const modeServices = servicesByMode[runMode]();
+const modeServices = modeServicesOf(runEnvironment);
 
 const files = createNodeFiles({ trashItem: modeServices.trashItem });
 const processes = createNodeProcesses();
@@ -270,6 +274,31 @@ const cleanUpSelfTest = () => {
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+
+// The work the app does as it quits, started in the order it was added.
+const quitTasks: (() => unknown)[] = [];
+let quitWork: Promise<unknown> | null = null;
+
+function onQuit(task: () => unknown) {
+  quitTasks.push(task);
+}
+
+// Starts every quit task once, on the first will-quit. A drive run holds the
+// quit until every task settles, so a drive `restart` finds the ui-state it
+// left and a recording finishes encoding; the user's app quits without
+// waiting, so a task still running when it exits is cut short.
+function runQuitTasks(event: Event) {
+  quitWork ??= Promise.allSettled(quitTasks.map(async (task) => task())).then(
+    () => {
+      if (runMode === 'drive') {
+        app.exit(0);
+      }
+    },
+  );
+  if (runMode === 'drive') {
+    event.preventDefault();
+  }
+}
 
 // Every line main logs to the page, from before the window exists on. A line
 // waits while the page loads; with the window or its page destroyed, a line is
@@ -341,8 +370,8 @@ function homeFolder(): string {
   if (runMode === 'live') {
     return os.homedir();
   }
-  if (runMode === 'drive') {
-    const runHome = path.join(driveRunDir(), 'home');
+  if (driveRunDir !== null) {
+    const runHome = path.join(driveRunDir, 'home');
     mkdirSync(runHome, { recursive: true });
     return runHome;
   }
@@ -373,7 +402,7 @@ function readStartInputs(): StartInputs {
     homeDir,
     dataRoot: dataFolder(homeDir),
     uiStatePath: uiStateFilePath(homeDir),
-    driveRunDir: runMode === 'drive' ? driveRunDir() : null,
+    driveRunDir,
   };
 }
 
@@ -411,9 +440,8 @@ function livePage(window: BrowserWindow): WebContents | null {
 
 // Serves the ui-state file at `filePath` to the page. It loads on the page's
 // first read, when the page already hears the log, and is kept, so a reload
-// reads main's copy, the newest. On quit a pending change starts to write;
-// Electron does not wait for it, so a change made just before quit may be
-// lost.
+// reads main's copy, the newest. On quit a pending change is written as a
+// quit task, which a drive run waits for and the user's app does not.
 function serveUiState(filePath: string, log: Log) {
   let loading: Promise<UiStateFile> | null = null;
   let loaded: UiStateFile | null = null;
@@ -432,7 +460,7 @@ function serveUiState(filePath: string, log: Log) {
     (_event, key: string, value: unknown) =>
       void load().then((file) => file.set(key, value)),
   );
-  app.on('will-quit', () => void loaded?.flush());
+  onQuit(() => loaded?.flush());
 }
 
 // Starts every plugin's main part, each with its own API over one plugin
@@ -489,8 +517,8 @@ function registerPartCommands(
   }
 }
 
-// Starts every part's dispose at once, in start order. Electron does not wait
-// for the returned promise, so the app may exit before a dispose finishes.
+// Starts every part's dispose at once, in start order, and settles once every
+// dispose has.
 function disposeParts(parts: readonly MainStart<PluginManifest>[]) {
   return Promise.allSettled(parts.map(async (part) => part.dispose?.()));
 }
@@ -540,10 +568,10 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
           path.join(app.getAppPath(), '.selftest', 'screenshots'),
         )
       : null;
-  // On a normal quit, will-quit disposes the parts that started; a failed
-  // start exits through failStart, which skips will-quit.
+  // On a normal quit, a quit task disposes the parts that started; a failed
+  // start exits through failStart, which skips the quit tasks.
   const startedParts: MainStart<PluginManifest>[] = [];
-  app.on('will-quit', () => void disposeParts(startedParts));
+  onQuit(() => disposeParts(startedParts));
   const driveRun =
     inputs.driveRunDir === null
       ? null
@@ -559,7 +587,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
           log,
         });
   if (driveRun !== null) {
-    app.on('will-quit', () => void driveRun.dispose());
+    onQuit(() => driveRun.dispose());
     driveRun.listening.catch(failStart);
   }
   const started = startMainParts(
@@ -675,11 +703,11 @@ function startApp() {
   if (runMode !== 'live' && process.platform === 'darwin') {
     app.setActivationPolicy('accessory');
   }
-  if (runMode === 'drive') {
+  if (driveRunDir !== null) {
     // Chromium's profile and caches, apart from the user's app and every
     // other run; set before the app is ready.
     try {
-      app.setPath('userData', path.join(driveRunDir(), 'user-data'));
+      app.setPath('userData', path.join(driveRunDir, 'user-data'));
     } catch (error) {
       failStart(error);
       return;
@@ -703,12 +731,13 @@ function startApp() {
       const store = await loadConfig(inputs.homeDir);
       serveDataScheme(inputs.dataRoot);
       createWindow(inputs, store);
-      // After createWindow's will-quit, so the parts dispose before it.
-      app.on('will-quit', () => store.dispose());
+      // After createWindow's quit tasks, so the parts dispose before it.
+      onQuit(() => store.dispose());
       app.on('activate', () => mainWindow?.show());
     })
     .catch(failStart);
-  app.on('will-quit', () => globalShortcut.unregisterAll());
+  app.on('will-quit', runQuitTasks);
+  onQuit(() => globalShortcut.unregisterAll());
   // Quit when the window closes, except on macOS, where closing hides it.
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {

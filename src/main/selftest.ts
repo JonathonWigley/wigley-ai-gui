@@ -202,8 +202,9 @@ async function runScript(
   return failures + (problems.length === 0 ? 0 : 1);
 }
 
-// Waits for the page to be ready for keys and focuses it, then runs every
-// handed script in hand-over order; a failing script does not stop the next.
+// Waits for the page to be ready for keys and focuses it, acting as the
+// focused window as a drive run's page does, then runs every handed script in
+// hand-over order; a failing script does not stop the next.
 async function runAllScripts(
   window: DrivenWindow,
   homeFiles: Files,
@@ -235,6 +236,10 @@ async function runAllScripts(
     return;
   }
   window.focus();
+  await window.emulateFocus();
+  if (!isCurrent()) {
+    return;
+  }
 
   let failures = 0;
   for (const script of handed) {
