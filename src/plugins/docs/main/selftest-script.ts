@@ -268,10 +268,30 @@ const SCROLLS_ITSELF = [
   '.session-row-status',
 ];
 
-// Each run ends the previous run's docs session, rewrites the fixture, and
-// connects a fresh session in the fixture's repo, whose activation shows its
-// only tab, the Docs tab. The result is null once that chain has run, else
-// the error it failed with.
+// Rewrites the fixture under `homeDir` and connects a session with host id
+// `sessionId` in the fixture's repo, then activates its row, which shows its
+// only tab, the Docs tab.
+export async function connectDocsFixtureSession(
+  files: Files,
+  homeDir: string,
+  sessions: Pick<SessionsMainExports, 'connect' | 'activate'>,
+  sessionId: string,
+): Promise<ConnectedSession> {
+  await writeDocsFixture(files, homeDir);
+  const home = await files.realPath(homeDir);
+  const connected = sessions.connect({
+    sessionId,
+    projectDir: `${home}/dev/selftest-repo`,
+    deadlineSeconds: null,
+    harness: 'claude',
+  });
+  sessions.activate(connected.session.id);
+  return connected;
+}
+
+// Each run ends the previous run's docs session and connects a fresh one over
+// a rewritten fixture. The result is null once that chain has run, else the
+// error it failed with.
 export function docsSelfTestScript(deps: DocsSelfTestDeps): SelfTestScript {
   const { files, homeDir, sessions } = deps;
   let previous: ConnectedSession | null = null;
@@ -284,16 +304,12 @@ export function docsSelfTestScript(deps: DocsSelfTestDeps): SelfTestScript {
       previous = null;
       const result = (async (): Promise<string | null> => {
         try {
-          await writeDocsFixture(files, homeDir);
-          const home = await files.realPath(homeDir);
-          const connected = sessions.connect({
-            sessionId: `docs-selftest-${run}`,
-            projectDir: `${home}/dev/selftest-repo`,
-            deadlineSeconds: null,
-            harness: 'claude',
-          });
-          previous = connected;
-          sessions.activate(connected.session.id);
+          previous = await connectDocsFixtureSession(
+            files,
+            homeDir,
+            sessions,
+            `docs-selftest-${run}`,
+          );
           return null;
         } catch (error) {
           return errorText(error);

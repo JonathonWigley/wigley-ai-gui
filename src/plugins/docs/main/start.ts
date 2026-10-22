@@ -1,4 +1,7 @@
+import type { Disposable } from '../../../contracts/disposable';
+import type { Files } from '../../../contracts/files';
 import type {
+  DriveHost,
   MainApi,
   MainPart,
   MainServices,
@@ -15,7 +18,10 @@ import { docsManifest } from '../manifest';
 import { createDocFiles, type DocFiles } from './doc-files';
 import { createIndexSources, type IndexSources } from './index-sources';
 import { writeDocsFixture } from './selftest-fixture';
-import { docsSelfTestScript } from './selftest-script';
+import {
+  connectDocsFixtureSession,
+  docsSelfTestScript,
+} from './selftest-script';
 import { createViewWatches } from './view-watches';
 
 type DocsApi = MainApi<
@@ -58,6 +64,64 @@ async function startDocs(
     entries: () => sources.loadedEntries(),
   });
   return { homeDir, sources, docFiles };
+}
+
+interface DocsDriveDeps {
+  files: Files;
+  // `services.homeDir`, the drive run's temp home.
+  homeDir: string;
+  sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
+  // Settles once docs has started, so a seed never races the start's fixture.
+  started: Promise<unknown>;
+}
+
+// `docs.seed` rewrites the fixture; `docs.connectSession` rewrites it and
+// connects a session in its repo, whose row shows its Docs tab.
+function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): Disposable[] {
+  const { files, homeDir, sessions, started } = deps;
+  let connects = 0;
+  return [
+    drive.add('seed', {
+      description:
+        "Rewrites the docs fixture under the temp home, removing what earlier steps added; returns the home's real path.",
+      args: '{}',
+      async run() {
+        await started;
+        await writeDocsFixture(files, homeDir);
+        return { home: await files.realPath(homeDir) };
+      },
+    }),
+    drive.add('connectSession', {
+      description:
+        'Rewrites the docs fixture and connects a session in its repo, activating the row on its Docs tab; sessionId defaults to drive-docs-<n>.',
+      args: '{ sessionId?: string }',
+      async run(args) {
+        await started;
+        connects += 1;
+        const sessionId =
+          readSessionId(args) ?? `drive-docs-${String(connects)}`;
+        const connected = await connectDocsFixtureSession(
+          files,
+          homeDir,
+          sessions,
+          sessionId,
+        );
+        return { sessionId, rowId: connected.session.id };
+      },
+    }),
+  ];
+}
+
+// The `sessionId` a drive caller passed, or null when it passed none.
+function readSessionId(args: unknown): string | null {
+  if (typeof args !== 'object' || args === null || !('sessionId' in args)) {
+    return null;
+  }
+  const { sessionId } = args;
+  if (typeof sessionId !== 'string') {
+    throw new Error(`sessionId must be a string, got ${typeof sessionId}`);
+  }
+  return sessionId;
 }
 
 // Serves the page the machine and session indexes, the guarded doc changes,
@@ -136,13 +200,33 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     channel.handle('pluginConfigFile', async (key, harness) =>
       (await docs).docFiles.pluginConfigFile(key, harness),
     );
+    const sessions = api.dependency<SessionsMainExports>('sessions');
     services.selfTest?.run(
       docsSelfTestScript({
         files: services.files,
         homeDir: services.homeDir,
-        sessions: api.dependency<SessionsMainExports>('sessions'),
+        sessions,
       }),
     );
-    return { commands: {}, dispose: () => watches.closeAll() };
+    const driveActions: Disposable[] = [];
+    if (api.drive !== null) {
+      driveActions.push(
+        ...addDriveActions(api.drive, {
+          files: services.files,
+          homeDir: services.homeDir,
+          sessions,
+          started: docs,
+        }),
+      );
+    }
+    return {
+      commands: {},
+      dispose: () => {
+        watches.closeAll();
+        for (const action of driveActions) {
+          action.dispose();
+        }
+      },
+    };
   },
 };
