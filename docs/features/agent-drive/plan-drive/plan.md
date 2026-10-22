@@ -50,7 +50,7 @@ Each re-run by `wigley:make` before the first dispatch.
 - The self-test passes on main before the run: `npm run selftest` → `[selftest] all passed` (passed at plan time on `8678e02`).
 - ffmpeg is on PATH: `command -v ffmpeg` → `/opt/homebrew/bin/ffmpeg`. The user's yes (round 1) covers running it.
 - The marketplace is at 1.7.1 with the make edit landed: `grep '"version"' /Users/jonathonwigley/Documents/dev/personal/wigley-ai-marketplace/plugins/wigley/.claude-plugin/plugin.json` → `"version": "1.7.1"`; `git -C …/wigley-ai-marketplace log --oneline -1` → `4a2b58f`.
-- Node is pinned: `cat .nvmrc` → `24.22.0`; commands run as `source ~/.nvm/nvm.sh && nvm use && npm run …`.
+- Node is pinned: `cat .nvmrc` → `24.22.1`; commands run as `source ~/.nvm/nvm.sh && nvm use && npm run …`.
 - Only four plugins test `services.selfTest` for behaviour (measured at plan time, re-verify): `grep -rn 'services.selfTest\|selfTest }' src/plugins --include=start.ts` → forms, chat, sessions, docs.
 
 ## Docs written ahead
@@ -295,8 +295,12 @@ Review base: 03f5a8d47ac16134c3b4f5ff4f4ef0d51e36a9de
 - rows settled as stale, no code change: S3 (forms shows the heading count on the session row, not the status bar), D13 (the Docs tab reads its index when first shown, docs-browser design.md), K1's `Esc` hint (a bind without an unbind keeps the default's hint) · group 12
 - forms findings by design: a re-asked submitted round replays its answers and opens nothing (`replaysLastSubmitted`); a new round pre-fills from the newest saved round with the same content, any session (`round-store.ts`) · group 12
 ### Review rounds
+- review · pinned a0b26f3 · 5 lanes (correctness ×3, plan-and-design ×2) · NEEDS FIXES, 26 findings + F1–F3 · lead-applied prose e802585 · triage round: the user took every recommendation (4 self-test focus, 11 chat.permissionAnswer, F1 relay early exit: fix now) and said to go with the agent's suggestions for the rest of the session · fixes d9ff220 1ce99c5 9a23abc 2e7a83b aca18c3 e5c638e b0aa750 f7b5a46; marketplace cb6616f
+- re-review 1 · pinned b0aa750 · correctness ×2 · NEEDS FIXES, 8 findings + F1–F2 (quit hold swallowed SIGTERM; explicit projectDir null defaulted, a repeat of #2; reload hid wait-log lines; Windows endpoint tests; relay stderr in an unseen file; three doc/style) · fixes 3262caa 66f1da7; marketplace 150fec3
+- re-review 2 · f7b5a46 3262caa 66f1da7 + marketplace 150fec3 · correctness ×1 · NEEDS FIXES, 3 minor: two marketplace doc/test-name lines (fixed, ca47ff9, a repeat of R2#8) and start.log truncated while an earlier app holds it (open; left, by the agent's recommendation under the user's standing instruction) · fix cycles at their max of 2
 ### Test gate
 - this run's commits (peer commits excluded): 06a4960 97c24b0 4879003 57ff5ac 461984e 5a1efc6 71a4a1c 13aee03 cd49094 d2a6d4e 56182b9 ddc7889 9001c51 3062c75 2f935d9 8783fc8 d1d9dfa e684c19; marketplace 902acbb
 - typecheck clean; lint clean (layers 412, styles 301, format 463 files)
 - vitest full suite: 142 files, 2009 tests pass at e684c19, three runs; one earlier run showed 1 failed of 2009 that no re-run reproduced (name lost) — a flake, unattributed
 - `npm run selftest`: `[selftest] all passed`, 358 PASS, 0 FAIL, after e684c19 (the run before it failed 52 docs steps on 2f935d9's ResizeObserver, fixed by e684c19)
+- after the fix cycles, at 66f1da7: typecheck and lint clean; vitest 148 files, 2097 tests pass; `npm run selftest` all passed with page focus emulated; drive run `fix-hidden` (narrow window, tree focused: `j` → `tree out of sight: treeDown ran docs.scrollDown`, `r` ran nothing) and `fix-quit` (rail drag 240 → 322 kept across an immediate `restart`; a recording running at quit encoded, 0.72 s; `quit` exits); marketplace forms tests 46 OK
