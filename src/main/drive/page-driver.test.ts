@@ -21,6 +21,14 @@ describe('waitForNewLogLine', () => {
 
     expect(isLogged).toBe(true);
   });
+
+  it('waitForNewLogLine_PageReloadedToFewerLinesThanSeen_FindsTheLineAmongThemAll', async () => {
+    const { window } = fakeDrivenWindow([['#log li', () => ['[x] done']]]);
+
+    const isLogged = await waitForNewLogLine(window, '[x] done', 5, 100);
+
+    expect(isLogged).toBe(true);
+  });
 });
 
 describe('waitFor', () => {

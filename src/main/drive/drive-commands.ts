@@ -2,6 +2,8 @@ import path from 'node:path';
 import { setTimeout as wait } from 'node:timers/promises';
 import type { Disposable } from '../../contracts/disposable';
 import { type Files, readIfPresent } from '../../contracts/files';
+import type { Log } from '../../contracts/log';
+import { errorText } from '../../shared/error-text';
 import { isJsonObject, type JsonObject } from '../../shared/json';
 import type { DriveActions } from './action-registry';
 import type { Box, ConsoleMessage, DrivenWindow } from './driven-window';
@@ -45,15 +47,21 @@ export interface DriveCommandsDeps {
   // Hears each config the app publishes after a settings change.
   configChanged(listener: () => void): Disposable;
   quit(): void;
+  // The run's log, which hears when focus could not be emulated.
+  log: Log;
 }
 
 // Every command a drive run serves, behind one entry point.
 export interface DriveCommands {
   // Waits for the page to be ready for keys and gives it document focus (but
-  // for `quit`), then runs `command` with `args`; rejects on an unknown
-  // command, args of the wrong shape, a page start failure, and the command's
-  // own failures.
+  // for an unqueued command), then runs `command` with `args`; rejects on an
+  // unknown command, args of the wrong shape, a page start failure, and the
+  // command's own failures. Focus that cannot be emulated is logged, and the
+  // command runs without it.
   run(command: string, args: unknown): Promise<unknown>;
+  // The commands that run as they arrive, beside the queue, without waiting
+  // for the page.
+  unqueued: readonly string[];
   // Stops collecting console messages.
   dispose(): void;
 }
@@ -61,6 +69,9 @@ export interface DriveCommands {
 interface Command {
   args: string;
   description: string;
+  // Runs as it arrives, beside the queue, without waiting for the page or
+  // emulating focus, so a page that never loads cannot hold it.
+  unqueued?: boolean;
   run(args: JsonObject): Promise<unknown>;
 }
 
@@ -191,15 +202,15 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     'wait-log': {
       args: '{ line: string, timeoutMs?: number }',
       description:
-        'waits for a page log line equal to the whole line, its source prefix included (`[page] …`)',
-      run: async (args) => ({
-        found: await waitForNewLogLine(
-          window,
-          requiredString(args, 'line'),
-          0,
-          optionalNumber(args, 'timeoutMs') ?? STEP_TIMEOUT_MS,
-        ),
-      }),
+        'waits for a page log line, logged after the call, equal to the whole line, its source prefix included (`[page] …`)',
+      run: async (args) => {
+        const line = requiredString(args, 'line');
+        const timeoutMs = optionalNumber(args, 'timeoutMs') ?? STEP_TIMEOUT_MS;
+        const seen = (await readLog(window)).length;
+        return {
+          found: await waitForNewLogLine(window, line, seen, timeoutMs),
+        };
+      },
     },
     log: {
       args: '{ since?: number }',
@@ -311,6 +322,7 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     quit: {
       args: '{}',
       description: 'quits the app once the reply is sent',
+      unqueued: true,
       run: async () => {
         setImmediate(deps.quit);
         return {};
@@ -327,14 +339,17 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
       if (args !== undefined && !isJsonObject(args)) {
         throw new Error(`${name} takes an args object`);
       }
-      if (name !== 'quit') {
+      if (command.unqueued !== true) {
         await waitForPage(window);
         // Every command asks again: a detached debugger takes the emulation
         // with it.
-        await window.emulateFocus();
+        await emulateFocusOrLog(window, deps.log);
       }
       return command.run(args ?? {});
     },
+    unqueued: Object.entries(commands)
+      .filter(([, command]) => command.unqueued === true)
+      .map(([name]) => name),
     dispose: () => listening.dispose(),
   };
 }
@@ -369,6 +384,22 @@ async function waitForPage(window: DrivenWindow): Promise<void> {
   const startFailure = await readStartFailure(window);
   if (startFailure !== null) {
     throw new Error(startFailure);
+  }
+}
+
+// Emulates focus on the page, or logs why it could not, such as another
+// debugger holding the page.
+async function emulateFocusOrLog(
+  window: DrivenWindow,
+  log: Log,
+): Promise<void> {
+  try {
+    await window.emulateFocus();
+  } catch (error) {
+    log(
+      'main',
+      `drive: focus could not be emulated, so the page runs unfocused: ${errorText(error)}`,
+    );
   }
 }
 

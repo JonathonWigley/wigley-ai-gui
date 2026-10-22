@@ -21,12 +21,13 @@ const READY_PAGE: FakeAnswer[] = [
 ];
 
 // Commands over a fake window whose page log `log` gives, newest first, and
-// whose config changes whenever a file under the home is written; `answers`
-// come ahead of a ready page's.
+// whose config changes whenever a file under the home is written, and whose
+// run log goes to `logged`; `answers` come ahead of a ready page's.
 function setUp(log: () => string[], answers: FakeAnswer[] = []) {
   const fake = fakeDrivenWindow([...answers, ...READY_PAGE, ['#log li', log]]);
   const files = createMemoryFiles();
   const configListeners = new Set<() => void>();
+  const logged: string[] = [];
   const commands = createDriveCommands({
     window: fake.window,
     actions: createActionRegistry(),
@@ -44,6 +45,7 @@ function setUp(log: () => string[], answers: FakeAnswer[] = []) {
       return { dispose: () => configListeners.delete(listener) };
     },
     quit: () => {},
+    log: (source, message) => logged.push(`[${source}] ${message}`),
   });
   const changeConfigOnWrite = () =>
     files.watch(HOME, () => {
@@ -51,7 +53,7 @@ function setUp(log: () => string[], answers: FakeAnswer[] = []) {
         listener();
       }
     });
-  return { fake, files, commands, changeConfigOnWrite };
+  return { fake, files, commands, changeConfigOnWrite, logged };
 }
 
 afterEach(() => {
@@ -127,6 +129,41 @@ describe('createDriveCommands', () => {
     await commands.run('quit', {});
 
     expect(fake.focused.emulated).toBe(1);
+  });
+
+  it('run_AnotherDebuggerHoldsThePage_RunsTheCommandAndLogsWhyFocusIsNotEmulated', async () => {
+    const { fake, commands, logged } = setUp(() => []);
+    fake.focused.failure = new Error('Another debugger is already attached');
+
+    const result = await commands.run('ready', {});
+
+    expect(result).toEqual({ ready: true });
+    expect(logged).toEqual([
+      '[main] drive: focus could not be emulated, so the page runs unfocused: Another debugger is already attached',
+    ]);
+  });
+
+  it('waitLog_MatchingLineLoggedBeforeTheCall_ResolvesNotFound', async () => {
+    const { commands } = setUp(() => ['[a] done']);
+
+    const result = await commands.run('wait-log', {
+      line: '[a] done',
+      timeoutMs: 100,
+    });
+
+    expect(result).toEqual({ found: false });
+  });
+
+  it('waitLog_MatchingLineLoggedAfterTheCall_ResolvesFound', async () => {
+    let reads = 0;
+    const { commands } = setUp(() => {
+      reads += 1;
+      return reads <= 1 ? ['[a] done'] : ['[a] done', '[a] done'];
+    });
+
+    const result = await commands.run('wait-log', { line: '[a] done' });
+
+    expect(result).toEqual({ found: true });
   });
 
   it('ready_PageNeverAnswers_RejectsSayingItNeverFinishedLoading', async () => {

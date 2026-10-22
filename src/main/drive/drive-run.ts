@@ -58,14 +58,13 @@ export function startDriveRun(deps: DriveRunDeps): DriveRun {
     recorder,
     configChanged: deps.configChanged,
     quit: deps.quit,
+    log: deps.log,
   });
   const token = Array.from({ length: 4 }, () => deps.randomHex()).join('');
-  // `quit` skips the queue, so a command stuck on a page that never loads
-  // cannot keep the app from quitting.
   const server = startDriveServer({
     token,
     run: commands.run,
-    unqueued: ['quit'],
+    unqueued: commands.unqueued,
   });
   const listening = server.then(async ({ port }) => {
     await deps.files.write(

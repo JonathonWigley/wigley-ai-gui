@@ -55,7 +55,8 @@ export interface DrivenWindow {
   focus(): void;
   // Makes the page act as the focused window from now on, offscreen too:
   // `document.hasFocus()` holds, focus and blur events fire and focus styles
-  // apply. Safe to repeat.
+  // apply. Safe to repeat. Rejects when it cannot, such as while another
+  // debugger holds the page.
   emulateFocus(): Promise<void>;
   // Whether the page has drawn a frame since its last navigation; Chromium
   // drops input that reaches a page before its first frame.
