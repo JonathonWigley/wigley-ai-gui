@@ -8,13 +8,8 @@ import '../shared/page/ui/materials.css';
 import './shell/shell.css';
 import type { Timers } from '../contracts/ambient';
 import type { CommandId } from '../contracts/commands';
-import type {
-  PageCommandContext,
-  PageServices,
-  PageTransparency,
-} from '../contracts/plugin';
-import type { AppConfig, Settings } from '../contracts/settings';
-import type { Theme } from '../contracts/theme';
+import type { PageCommandContext, PageServices } from '../contracts/plugin';
+import type { AppConfig } from '../contracts/settings';
 import { manifests } from '../plugins/manifests';
 import { pageParts } from '../plugins/page';
 import { CommandRegistry } from '../shared/command-registry';
@@ -45,8 +40,9 @@ import { createModes, SIDE_BAR_OVER_QUERY } from './shell/modes';
 import { mountShell } from './shell/shell';
 import { defaultShellLayout } from './shell/shell-layout';
 import { mountTitleBarContext } from './shell/title-bar';
-import { createThemeApplier, type ThemeApplier } from './theme';
+import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
+import { overrideTransparency } from './transparency-override';
 import { createPageUiState } from './ui-state';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
@@ -65,46 +61,6 @@ function requireServedSettings(config: AppConfig, pluginId: string) {
       `Plugin "${pluginId}" has a page part but its manifest is not in the built-in manifests list`,
     );
   }
-}
-
-// `applier` with the page's transparency override over the `transparency`
-// setting: the returned applier keeps the theme and settings each `apply` is
-// handed and applies them with the override, while one is in force, in the
-// setting's place; `transparency.override` sets the override and applies the
-// last ones again at once. The override starts null on each page load.
-function overrideTransparency(applier: ThemeApplier): {
-  applier: ThemeApplier;
-  transparency: PageTransparency;
-} {
-  let override: 'full' | 'reduced' | null = null;
-  let last: {
-    theme: Theme;
-    settings: Pick<Settings, 'transparency' | 'fonts'>;
-  } | null = null;
-  const applyLast = () => {
-    if (last === null) {
-      return;
-    }
-    applier.apply(last.theme, {
-      transparency: override ?? last.settings.transparency,
-      fonts: last.settings.fonts,
-    });
-  };
-  return {
-    applier: {
-      apply(theme, settings) {
-        last = { theme, settings };
-        applyLast();
-      },
-    },
-    transparency: {
-      override(transparency) {
-        override = transparency;
-        applyLast();
-      },
-      overridden: () => override,
-    },
-  };
 }
 
 async function start() {
