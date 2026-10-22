@@ -241,7 +241,7 @@ when it starts; 04's and 05's new files pass the style check as written.
 - [x] [Primitives: rows, tabs, sheets, splits and floating panels](05-primitives-containers.md) — after 01
 
 ### Wave 3
-- [ ] [Gallery mode](06-gallery.md) — after 02, 04, 05
+- [x] [Gallery mode](06-gallery.md) — after 02, 04, 05
 
 ### Wave 4
 - [ ] [Doc re-read](07-doc-re-read.md) — after 01–06
@@ -259,6 +259,7 @@ Review base: ed5d846987f144614a41307b3783613533e761a8
 - 04 · 944722e · proved (diff read, typecheck; worker: test, check-layers, oxlint) · concerns: `.ui-input .cm-editor { background: transparent }` (0,2,0) may lose to the CodeMirror theme — check in 08; check-styles to run over 04 files after 03 lands
 - 05 · 9927864 · proved (diff read, typecheck; worker: test, lint) · concerns: `.ui-scrim[hidden] { display: none }` duplicates `index.css`'s global `[hidden]` !important rule; a layout read per `pointermove` in `split.ts`; check-styles to run over 05 files after 03 lands
 - 03 · 1fd6472 · proved (diff read, typecheck, lint; `--no-legacy` over every 04/05 file clean; worker: test 1868) · concerns: none
+- 06 · ff715d2 · proved (diff read, typecheck, lint; worker: test 1871, selftest green, N = 6) · concerns: seven leftover forms toasts stack over the right of every gallery and shell-layout screenshot, hiding part of IconButton and Kbd; the pinned frame height (`row-list * 6`, 168px) clips the dialog; IconButton cells cramped; the `d` steps expect exact pixel lines, brittle to layout change
 ### Contract changes
 ### Rulings
 - Screenshot paths and the fit-check list enter the chain in `runScript` (the doc said `startRun`), where the script's list already enters — tree shape — cost if wrong: none · group 02
@@ -276,5 +277,10 @@ Review base: ed5d846987f144614a41307b3783613533e761a8
 - `.shell-side-bar[data-side-bar='over']` box-shadow blur `1rem` (not in the fix table) → `var(--wg-space-4)` — the doc's rule for values outside the table — cost: none · group 03
 - A bad argument prints its failures and exits 1 before judging anything — never fall back to judging every file on a typo — cost: none · group 03
 - `raw-duration` is case-sensitive as tabled; inline writes are judged by running their CSS text through `cssViolations`, which also catches `webkitBackdropFilter` · group 03
+- Gallery page count N = 6 at the self-test window (sheet 521px, scrollHeight 2857px) · group 06
+- `d` step expects carry the exact pixel (`[gallery] scrolled to 521px` …): the driver matches whole lines, so the plan's "line's start" cannot pass — cost: a layout change breaks those steps until re-measured · group 06
+- The plan's table saved `gallery-6-reduced` twice (the `t` step and the last reduced `d`); the driver forbids that, so the `t` step keeps it and the last `d` saves nothing — the view is identical · group 06
+- The override wraps the `ThemeApplier` in `renderer.ts` (`overrideTransparency`), handed to both the start apply and `createConfigPush`; `config-push.ts` untouched — fact sheet: the push apply lives there — cost: none · group 06
+- The test shell layout styles its areas with its own `gallery-test-*` classes plus the `material-chrome` helpers, not `shell.css`'s; frames get `isolation: isolate` so the scrim and floating panel stack inside them · group 06
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 06 — Gallery mode
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 04, 05
 Plan: [plan.md](plan.md)
@@ -218,3 +218,8 @@ mode is: show the gallery, press `t`, show the mode again — no extra command.
 
 ## Proof
 
+Commit `ff715d2` · diff read: every Produces present (`galleryManifest`, `galleryPagePart`,
+`nextTransparency`, `testShellLayout`, `PageTransparency`, `PageApi.transparency`,
+`PageApiDeps.transparency`) · lead: typecheck and lint pass · worker: test 1871 pass, selftest all
+passed; N = 6 pages; 21 PNGs saved. Concerns: leftover toasts cover part of every gallery shot; the
+pinned 168px frame clips the dialog; the `d` expects pin pixel offsets.
