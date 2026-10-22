@@ -1,0 +1,107 @@
+import { describe, expect, it } from 'vitest';
+import {
+  argsObject,
+  optionalNullableNumber,
+  optionalNullableString,
+  optionalNumber,
+  optionalOneOf,
+  optionalString,
+  optionalStringList,
+  requiredNumber,
+  requiredString,
+  stringList,
+} from './drive-args';
+
+describe('argsObject', () => {
+  it('reads no args as an empty object', () => {
+    expect(argsObject(undefined)).toEqual({});
+    expect(argsObject(null)).toEqual({});
+  });
+
+  it('passes an object through', () => {
+    expect(argsObject({ a: 1 })).toEqual({ a: 1 });
+  });
+
+  it('rejects args that are not an object', () => {
+    for (const args of ['x', 1, [], true]) {
+      expect(() => argsObject(args)).toThrow('args must be an object');
+    }
+  });
+});
+
+describe('string readers', () => {
+  it('read a string field', () => {
+    expect(requiredString({ id: 'a' }, 'id')).toBe('a');
+    expect(optionalString({ id: 'a' }, 'id')).toBe('a');
+  });
+
+  it('reject a field of another type, naming it', () => {
+    expect(() => requiredString({ id: 3 }, 'id')).toThrow(
+      'id must be a string',
+    );
+    expect(() => optionalString({ id: 3 }, 'id')).toThrow(
+      'id must be a string',
+    );
+  });
+
+  it('read a missing field as missing', () => {
+    expect(() => requiredString({}, 'id')).toThrow('id must be a string');
+    expect(optionalString({}, 'id')).toBeUndefined();
+  });
+
+  it('let a nullable field hold null and reject other types', () => {
+    expect(optionalNullableString({ dir: null }, 'dir')).toBeNull();
+    expect(optionalNullableString({ dir: 'd' }, 'dir')).toBe('d');
+    expect(optionalNullableString({}, 'dir')).toBeUndefined();
+    expect(() => optionalNullableString({ dir: 1 }, 'dir')).toThrow(
+      'dir must be a string or null',
+    );
+  });
+});
+
+describe('number readers', () => {
+  it('read a finite number and reject anything else', () => {
+    expect(requiredNumber({ n: 2 }, 'n')).toBe(2);
+    expect(optionalNumber({}, 'n')).toBeUndefined();
+    for (const n of ['2', Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => requiredNumber({ n }, 'n')).toThrow('n must be a number');
+    }
+  });
+
+  it('let a nullable field hold null', () => {
+    expect(optionalNullableNumber({ n: null }, 'n')).toBeNull();
+    expect(optionalNullableNumber({ n: 5 }, 'n')).toBe(5);
+    expect(optionalNullableNumber({}, 'n')).toBeUndefined();
+    expect(() => optionalNullableNumber({ n: 'x' }, 'n')).toThrow(
+      'n must be a number',
+    );
+  });
+});
+
+describe('string list readers', () => {
+  it('read a list of strings and reject a mixed list', () => {
+    expect(stringList({ keys: ['a', 'b'] }, 'keys')).toEqual(['a', 'b']);
+    expect(optionalStringList({}, 'keys')).toBeUndefined();
+    expect(() => stringList({ keys: ['a', 1] }, 'keys')).toThrow(
+      'keys must be a list of strings',
+    );
+  });
+});
+
+describe('optionalOneOf', () => {
+  const allowed = ['claude', 'codex'] as const;
+
+  it('reads an allowed value and a missing one', () => {
+    expect(optionalOneOf({ h: 'codex' }, 'h', allowed)).toBe('codex');
+    expect(optionalOneOf({}, 'h', allowed)).toBeUndefined();
+  });
+
+  it('rejects a value outside the list, naming the list', () => {
+    expect(() => optionalOneOf({ h: 'gpt' }, 'h', allowed)).toThrow(
+      'h "gpt" is none of claude, codex',
+    );
+    expect(() => optionalOneOf({ h: 1 }, 'h', allowed)).toThrow(
+      'h 1 is none of claude, codex',
+    );
+  });
+});

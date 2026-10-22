@@ -7,6 +7,18 @@ export const HARNESSES = ['claude', 'codex'] as const;
 // The agent harness a session runs in.
 export type Harness = (typeof HARNESSES)[number];
 
+// What a drive action connects a fixture session with when its caller leaves
+// a field out.
+export const DRIVE_SESSION_DEFAULTS = {
+  projectDir: 'drive',
+  harness: 'claude',
+  deadlineSeconds: null,
+} as const satisfies {
+  projectDir: string;
+  harness: Harness;
+  deadlineSeconds: null;
+};
+
 // What a round source knows about the session it serves.
 export interface SessionInfo {
   sessionId: string | null;

@@ -3,9 +3,17 @@ import path from 'node:path';
 import type { Disposable } from '../../../contracts/disposable';
 import type { DriveHost, MainApi, MainPart } from '../../../contracts/plugin';
 import {
+  argsObject,
+  optionalNullableNumber,
+  optionalNullableString,
+  optionalOneOf,
+  optionalString,
+  requiredString,
+} from '../../../shared/drive-args';
+import {
   type ConnectedSession,
+  DRIVE_SESSION_DEFAULTS,
   HARNESSES,
-  type Harness,
   RELAY_PROTOCOL,
   type RelayEndpoint,
   type SessionsChannel,
@@ -47,8 +55,7 @@ function createList(api: SessionsApi): SessionList {
 
 // Opens the channel relay.py connects to, each relay connecting one session
 // served the tools contributed so far. A relay that finds the app gone starts
-// it again, except a drive run's (its home is `<run>/home`), which stays
-// ended.
+// it again, except a drive run's, which stays ended and names the run's home.
 function openRelay(api: SessionsApi, list: SessionList) {
   const channel = channelPath(
     process.platform,
@@ -66,10 +73,7 @@ function openRelay(api: SessionsApi, list: SessionList) {
     channel,
     launch:
       api.services.runMode === 'drive'
-        ? endedDriveRunLaunch(
-            process.platform,
-            path.dirname(api.services.homeDir),
-          )
+        ? endedDriveRunLaunch(process.platform, api.services.homeDir)
         : launchCommand(process.env, process.execPath, process.cwd()),
   };
   return { relay, endpoint };
@@ -78,34 +82,31 @@ function openRelay(api: SessionsApi, list: SessionList) {
 // Connects a drive run's sessions as a relay would, each with no round, and
 // ends or selects them. A session's id is `drive-session-<n>` unless the
 // caller names one; `rowId` is the app's own id, which `activate` takes.
-function addDriveActions(
+// Disposing removes the actions and ends every session still connected.
+export function addDriveActions(
   host: DriveHost,
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>,
-): Disposable[] {
+): Disposable {
   const connected = new Map<string, ConnectedSession>();
   let defaultIds = 0;
-  return [
+  const actions = [
     host.add('connect', {
       description:
         'Connects an agent session with no round, as a relay would, and adds its row.',
       args: '{ sessionId?: string, projectDir?: string | null, harness?: "claude" | "codex", deadlineSeconds?: number | null }',
-      async run(args) {
-        const {
-          sessionId = `drive-session-${++defaultIds}`,
-          projectDir = 'drive',
-          harness = 'claude',
-          deadlineSeconds = null,
-        } = (args ?? {}) as {
-          sessionId?: string;
-          projectDir?: string | null;
-          harness?: Harness;
-          deadlineSeconds?: number | null;
-        };
-        if (!HARNESSES.includes(harness)) {
-          throw new Error(
-            `harness ${JSON.stringify(harness)} is none of ${HARNESSES.join(', ')}`,
-          );
-        }
+      async run(rawArgs) {
+        const args = argsObject(rawArgs);
+        const sessionId =
+          optionalString(args, 'sessionId') ?? `drive-session-${++defaultIds}`;
+        const projectDir =
+          optionalNullableString(args, 'projectDir') ??
+          DRIVE_SESSION_DEFAULTS.projectDir;
+        const harness =
+          optionalOneOf(args, 'harness', HARNESSES) ??
+          DRIVE_SESSION_DEFAULTS.harness;
+        const deadlineSeconds =
+          optionalNullableNumber(args, 'deadlineSeconds') ??
+          DRIVE_SESSION_DEFAULTS.deadlineSeconds;
         if (connected.has(sessionId)) {
           throw new Error(`session ${sessionId} is already connected`);
         }
@@ -122,8 +123,8 @@ function addDriveActions(
     host.add('end', {
       description: 'Ends a session sessions.connect connected.',
       args: '{ sessionId: string }',
-      async run(args) {
-        const { sessionId } = args as { sessionId: string };
+      async run(rawArgs) {
+        const sessionId = requiredString(argsObject(rawArgs), 'sessionId');
         const session = connected.get(sessionId);
         if (session === undefined) {
           throw new Error(`no session ${sessionId} from sessions.connect`);
@@ -136,13 +137,24 @@ function addDriveActions(
     host.add('activate', {
       description: "Selects a session's row and shows it.",
       args: '{ rowId: string }',
-      async run(args) {
-        const { rowId } = args as { rowId: string };
+      async run(rawArgs) {
+        const rowId = requiredString(argsObject(rawArgs), 'rowId');
         sessions.activate(rowId);
         return { rowId };
       },
     }),
   ];
+  return {
+    dispose() {
+      for (const action of actions) {
+        action.dispose();
+      }
+      for (const session of connected.values()) {
+        session.end();
+      }
+      connected.clear();
+    },
+  };
 }
 
 // Owns agent sessions: the relay they connect through, the tools other plugins
@@ -176,14 +188,12 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       addCloseGuard: (mayClose) => list.addCloseGuard(mayClose),
     };
     const driveActions =
-      api.drive !== null ? addDriveActions(api.drive, exports) : [];
+      api.drive !== null ? addDriveActions(api.drive, exports) : null;
     return {
       commands: {},
       exports,
       dispose: () => {
-        for (const action of driveActions) {
-          action.dispose();
-        }
+        driveActions?.dispose();
         opened?.relay.close();
       },
     };

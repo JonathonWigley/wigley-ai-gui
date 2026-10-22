@@ -1,6 +1,13 @@
 import path from 'node:path';
 import type { Disposable } from '../../../contracts/disposable';
 import type { DriveHost, MainApi, MainPart } from '../../../contracts/plugin';
+import {
+  argsObject,
+  optionalNullableString,
+  optionalOneOf,
+  optionalString,
+  requiredString,
+} from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
 import {
   type LayoutRegistry,
@@ -8,6 +15,7 @@ import {
 } from '../../../shared/layouts/layout-registry';
 import {
   type ConnectedSession,
+  DRIVE_SESSION_DEFAULTS,
   HARNESSES,
   type Harness,
   type SessionsMainExports,
@@ -115,11 +123,12 @@ interface DriveFormsSession {
 
 // Opens rounds in a drive run's sessions and reads their answers. A session's
 // id is `drive-forms-<n>` unless the caller names one; a name forms opened
-// before reuses that session.
-function addDriveActions(
+// before reuses that session. Disposing removes the actions and ends every
+// session forms opened.
+export function addDriveActions(
   host: DriveHost,
   sessions: Pick<SessionsMainExports, 'connect'>,
-): Disposable[] {
+): Disposable {
   const opened = new Map<string, DriveFormsSession>();
   let defaultIds = 0;
   const sessionFor = (spec: {
@@ -134,35 +143,30 @@ function addDriveActions(
     const session: DriveFormsSession = {
       connected: connectFixtureSession(sessions, {
         ...spec,
-        deadlineSeconds: null,
+        deadlineSeconds: DRIVE_SESSION_DEFAULTS.deadlineSeconds,
       }),
       latest: { state: 'pending' },
     };
     opened.set(spec.sessionId, session);
     return session;
   };
-  return [
+  const actions = [
     host.add('openRound', {
       description:
         'Asks a round in a session forms opened before under sessionId, or in a new one, without waiting for its answers; the default round shows every card kind.',
       args: '{ sessionId?: string, projectDir?: string | null, harness?: "claude" | "codex", round?: object }',
-      async run(args) {
-        const {
-          sessionId = `drive-forms-${++defaultIds}`,
-          projectDir = 'drive',
-          harness = 'claude',
-          round = PREVIEW_ROUND_ARGS,
-        } = (args ?? {}) as {
-          sessionId?: string;
-          projectDir?: string | null;
-          harness?: Harness;
-          round?: unknown;
-        };
-        if (!HARNESSES.includes(harness)) {
-          throw new Error(
-            `harness ${JSON.stringify(harness)} is none of ${HARNESSES.join(', ')}`,
-          );
-        }
+      async run(rawArgs) {
+        const args = argsObject(rawArgs);
+        const sessionId =
+          optionalString(args, 'sessionId') ?? `drive-forms-${++defaultIds}`;
+        const projectDir =
+          optionalNullableString(args, 'projectDir') ??
+          DRIVE_SESSION_DEFAULTS.projectDir;
+        const harness =
+          optionalOneOf(args, 'harness', HARNESSES) ??
+          DRIVE_SESSION_DEFAULTS.harness;
+        const round =
+          args.round === undefined ? PREVIEW_ROUND_ARGS : args.round;
         const session = sessionFor({ sessionId, projectDir, harness });
         const pending: DriveFormsSession['latest'] = { state: 'pending' };
         session.latest = pending;
@@ -183,8 +187,8 @@ function addDriveActions(
       description:
         "The latest round's tool result once submit or cancel resolved it, else { pending: true }.",
       args: '{ sessionId: string }',
-      async run(args) {
-        const { sessionId } = args as { sessionId: string };
+      async run(rawArgs) {
+        const sessionId = requiredString(argsObject(rawArgs), 'sessionId');
         const session = opened.get(sessionId);
         if (session === undefined) {
           throw new Error(`no session ${sessionId} from forms.openRound`);
@@ -197,6 +201,17 @@ function addDriveActions(
       },
     }),
   ];
+  return {
+    dispose() {
+      for (const action of actions) {
+        action.dispose();
+      }
+      for (const session of opened.values()) {
+        session.connected.end();
+      }
+      opened.clear();
+    },
+  };
 }
 
 // Serves its two tools to every agent session, shows each session's rounds on
@@ -224,13 +239,11 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     const layouts = serveLayouts(api, fixtureWritten);
     selfTest?.run(formsSelfTestScript(sessions));
     const driveActions =
-      api.drive !== null ? addDriveActions(api.drive, sessions) : [];
+      api.drive !== null ? addDriveActions(api.drive, sessions) : null;
     return {
       commands: {},
       dispose: () => {
-        for (const action of driveActions) {
-          action.dispose();
-        }
+        driveActions?.dispose();
         return layouts.then(
           (registry) => registry.dispose(),
           () => undefined,

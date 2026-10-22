@@ -7,8 +7,10 @@ import type {
   MainServices,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { argsObject, optionalString } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
 import type {
+  ConnectedSession,
   SessionsMainEvents,
   SessionsMainExports,
 } from '../../sessions/contract';
@@ -16,7 +18,12 @@ import type { DocsChannel, SessionSourceSpec } from '../contract';
 import { EXTERNAL_SCHEME } from '../links';
 import { docsManifest } from '../manifest';
 import { createDocFiles, type DocFiles } from './doc-files';
-import { createIndexSources, type IndexSources } from './index-sources';
+import { joinPath } from '../doc-paths';
+import {
+  createIndexSources,
+  type IndexSources,
+  MACHINE_INDEX_FILE,
+} from './index-sources';
 import { writeDocsFixture } from './selftest-fixture';
 import {
   connectDocsFixtureSession,
@@ -32,22 +39,33 @@ type DocsApi = MainApi<
 >;
 
 // What every handler serves from, once the home folder is read and, under
-// the self-test or a drive run, the fixture written.
+// the self-test or a drive run, the fixture written into a home that had
+// none.
 interface DocsMain {
   homeDir: string;
   sources: IndexSources;
   docFiles: DocFiles;
 }
 
+// Whether `homeDir` holds the docs fixture: the machine index is the last
+// file the fixture writes.
+async function hasDocsFixture(files: Files, homeDir: string): Promise<boolean> {
+  return (await files.stat(joinPath(homeDir, MACHINE_INDEX_FILE))) !== null;
+}
+
 // The index uses real paths, so the home folder every `~` expands to is the
-// real one. `scriptPath` is read at each index run.
-async function startDocs(
-  services: MainServices,
+// real one. `scriptPath` is read at each index run. A drive run's restart
+// keeps the home, so the fixture is written only into a home without one.
+export async function startDocs(
+  services: Pick<
+    MainServices,
+    'files' | 'processes' | 'log' | 'homeDir' | 'runMode'
+  >,
   scriptPath: () => string,
 ): Promise<DocsMain> {
   const { files, processes, log } = services;
   const homeDir = await files.realPath(services.homeDir);
-  if (services.runMode !== 'live') {
+  if (services.runMode !== 'live' && !(await hasDocsFixture(files, homeDir))) {
     await writeDocsFixture(files, homeDir);
   }
   const sources = createIndexSources({
@@ -76,11 +94,16 @@ interface DocsDriveDeps {
 }
 
 // `docs.seed` rewrites the fixture; `docs.connectSession` rewrites it and
-// connects a session in its repo, whose row shows its Docs tab.
-function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): Disposable[] {
+// connects a session in its repo, whose row shows its Docs tab. Disposing
+// removes the actions and ends every session `docs.connectSession` connected.
+export function addDriveActions(
+  drive: DriveHost,
+  deps: DocsDriveDeps,
+): Disposable {
   const { files, homeDir, sessions, started } = deps;
+  const connected: ConnectedSession[] = [];
   let connects = 0;
-  return [
+  const actions = [
     drive.add('seed', {
       description:
         "Rewrites the docs fixture under the temp home, removing what earlier steps added; returns the home's real path.",
@@ -95,33 +118,33 @@ function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): Disposable[] {
       description:
         'Rewrites the docs fixture and connects a session in its repo, activating the row on its Docs tab; sessionId defaults to drive-docs-<n>.',
       args: '{ sessionId?: string }',
-      async run(args) {
+      async run(rawArgs) {
         await started;
         connects += 1;
         const sessionId =
-          readSessionId(args) ?? `drive-docs-${String(connects)}`;
-        const connected = await connectDocsFixtureSession(
+          optionalString(argsObject(rawArgs), 'sessionId') ??
+          `drive-docs-${String(connects)}`;
+        const session = await connectDocsFixtureSession(
           files,
           homeDir,
           sessions,
           sessionId,
         );
-        return { sessionId, rowId: connected.session.id };
+        connected.push(session);
+        return { sessionId, rowId: session.session.id };
       },
     }),
   ];
-}
-
-// The `sessionId` a drive caller passed, or null when it passed none.
-function readSessionId(args: unknown): string | null {
-  if (typeof args !== 'object' || args === null || !('sessionId' in args)) {
-    return null;
-  }
-  const { sessionId } = args;
-  if (typeof sessionId !== 'string') {
-    throw new Error(`sessionId must be a string, got ${typeof sessionId}`);
-  }
-  return sessionId;
+  return {
+    dispose() {
+      for (const action of actions) {
+        action.dispose();
+      }
+      for (const session of connected.splice(0)) {
+        session.end();
+      }
+    },
+  };
 }
 
 // Serves the page the machine and session indexes, the guarded doc changes,
@@ -208,24 +231,20 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         sessions,
       }),
     );
-    const driveActions: Disposable[] = [];
-    if (api.drive !== null) {
-      driveActions.push(
-        ...addDriveActions(api.drive, {
-          files: services.files,
-          homeDir: services.homeDir,
-          sessions,
-          started: docs,
-        }),
-      );
-    }
+    const driveActions =
+      api.drive !== null
+        ? addDriveActions(api.drive, {
+            files: services.files,
+            homeDir: services.homeDir,
+            sessions,
+            started: docs,
+          })
+        : null;
     return {
       commands: {},
       dispose: () => {
         watches.closeAll();
-        for (const action of driveActions) {
-          action.dispose();
-        }
+        driveActions?.dispose();
       },
     };
   },

@@ -1,11 +1,18 @@
 import path from 'node:path';
 import type { Disposable } from '../../../contracts/disposable';
+import type { Files } from '../../../contracts/files';
 import type {
   DriveHost,
   MainApi,
+  MainServices,
   MainPart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import {
+  argsObject,
+  optionalString,
+  requiredString,
+} from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
 import {
   type LayoutRegistry,
@@ -14,6 +21,7 @@ import {
 import type {
   SessionsMainEvents,
   SessionsMainExports,
+  ToolResult,
 } from '../../sessions/contract';
 import type { ChatChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js?raw';
@@ -64,56 +72,63 @@ const DRIVE_PROJECT_FOLDER = path.join('dev', 'drive-project');
 const DEFAULT_PERMISSION_TOOL = 'Bash';
 const DEFAULT_PERMISSION_INPUT = { command: 'ls' };
 
-// The string `field` of a drive action's args; undefined when the args leave
-// it out. Throws naming the field when it is there but not a string.
-function optionalString(args: unknown, field: string): string | undefined {
-  const value = (args as Record<string, unknown> | null | undefined)?.[field];
-  if (value !== undefined && typeof value !== 'string') {
-    throw new Error(`${field} must be a string`);
-  }
-  return value;
-}
+// Where a permission `chat.askPermission` raised stands.
+type DrivePermission =
+  | { state: 'pending' }
+  | { state: 'answered'; reply: ToolResult }
+  | { state: 'failed'; error: unknown };
 
-function requiredString(args: unknown, field: string): string {
-  const value = optionalString(args, field);
-  if (value === undefined) {
-    throw new Error(`${field} is missing`);
-  }
-  return value;
+interface ChatDriveDeps {
+  services: Pick<MainServices, 'homeDir' | 'randomUuid' | 'log'> & {
+    files: Pick<Files, 'makeFolder'>;
+  };
+  // Chat's profiles' names, in settings order, read at each `chat.start`.
+  profileNames: () => string[];
+  chat: Pick<
+    ChatSessions,
+    'start' | 'closed' | 'sessions' | 'permissionToolSession'
+  >;
+  sessions: Pick<SessionsMainExports, 'activate'>;
 }
 
 // Offers a drive run chat's fixtures: `chat.start` opens a chat session and
-// selects its row, and `chat.askPermission` raises a permission card in one.
-function addDriveActions(
+// selects its row, `chat.askPermission` raises a permission card in one, and
+// `chat.permissionAnswer` reads that card's reply.
+export function addDriveActions(
   drive: DriveHost,
-  api: ChatApi,
-  chat: ChatSessions,
-  sessions: SessionsMainExports,
+  deps: ChatDriveDeps,
 ): Disposable[] {
-  const { services } = api;
+  const { services, profileNames, chat, sessions } = deps;
+  const permissions = new Map<string, DrivePermission>();
   const start = drive.add('start', {
     description:
       'Starts a chat session in projectDir (default <home>/dev/drive-project, made if missing) under profile (default the first of chat\'s profiles) and selects its row. Under the fake harness a message of "fake: tool" runs a tool turn, "fake: hold" a turn that waits for an interrupt, and anything else an echo.',
     args: '{ projectDir?: string; profile?: string }',
-    async run(args) {
+    async run(rawArgs) {
+      const args = argsObject(rawArgs);
       const projectDir =
         optionalString(args, 'projectDir') ??
         path.join(services.homeDir, DRIVE_PROJECT_FOLDER);
-      const profile =
-        optionalString(args, 'profile') ?? api.settings().profiles[0]?.name;
+      const profile = optionalString(args, 'profile') ?? profileNames()[0];
       if (profile === undefined) {
         throw new Error('chat has no profiles');
       }
       await services.files.makeFolder(projectDir);
       const sessionId = chat.start({ projectDir, profile });
-      sessions.activate(sessionId);
+      try {
+        sessions.activate(sessionId);
+      } catch (error) {
+        chat.closed(sessionId);
+        throw error;
+      }
       return { sessionId };
     },
   });
   const askPermission = drive.add('askPermission', {
-    description: `Raises a permission card in the chat session sessionId for a call of toolName (default ${DEFAULT_PERMISSION_TOOL}) with input (default ${JSON.stringify(DEFAULT_PERMISSION_INPUT)}). Returns the call's toolUseId at once; the main output logs the reply once the user answers.`,
+    description: `Raises a permission card in the chat session sessionId for a call of toolName (default ${DEFAULT_PERMISSION_TOOL}) with input (default ${JSON.stringify(DEFAULT_PERMISSION_INPUT)}). Returns the call's toolUseId at once, which chat.permissionAnswer reads the reply by; the main output logs the reply once the user answers.`,
     args: '{ sessionId: string; toolName?: string; input?: unknown }',
-    async run(args) {
+    async run(rawArgs) {
+      const args = argsObject(rawArgs);
       const sessionId = requiredString(args, 'sessionId');
       const state = chat
         .sessions()
@@ -122,28 +137,49 @@ function addDriveActions(
         throw new Error(`chat holds no session ${sessionId}`);
       }
       const toolUseId = services.randomUuid();
-      const input =
-        (args as { input?: unknown }).input ?? DEFAULT_PERMISSION_INPUT;
+      permissions.set(toolUseId, { state: 'pending' });
       askFixturePermission(chat, sessionId, state.projectDir, {
         toolName: optionalString(args, 'toolName') ?? DEFAULT_PERMISSION_TOOL,
-        input,
+        input: args.input ?? DEFAULT_PERMISSION_INPUT,
         toolUseId,
       }).then(
-        (reply) =>
+        (reply) => {
+          permissions.set(toolUseId, { state: 'answered', reply });
           services.log(
             'chat',
             `drive permission ${toolUseId} answered: ${reply.content[0]?.text}`,
-          ),
-        (error: unknown) =>
+          );
+        },
+        (error: unknown) => {
+          permissions.set(toolUseId, { state: 'failed', error });
           services.log(
             'chat',
             `drive permission ${toolUseId} failed: ${errorText(error)}`,
-          ),
+          );
+        },
       );
       return { toolUseId };
     },
   });
-  return [start, askPermission];
+  const permissionAnswer = drive.add('permissionAnswer', {
+    description:
+      "The permission_prompt tool's reply to the card chat.askPermission raised under toolUseId once the user answered it, else { pending: true }.",
+    args: '{ toolUseId: string }',
+    async run(rawArgs) {
+      const toolUseId = requiredString(argsObject(rawArgs), 'toolUseId');
+      const permission = permissions.get(toolUseId);
+      if (permission === undefined) {
+        throw new Error(`no permission ${toolUseId} from chat.askPermission`);
+      }
+      if (permission.state === 'failed') {
+        throw permission.error;
+      }
+      return permission.state === 'answered'
+        ? permission.reply
+        : { pending: true };
+    },
+  });
+  return [start, askPermission, permissionAnswer];
 }
 
 // Starts, resumes and runs the Claude Code sessions the page asks for, lists
@@ -211,7 +247,15 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     );
     const driveActions: Disposable[] = [];
     if (api.drive !== null) {
-      driveActions.push(...addDriveActions(api.drive, api, chat, sessions));
+      driveActions.push(
+        ...addDriveActions(api.drive, {
+          services,
+          profileNames: () =>
+            api.settings().profiles.map((profile) => profile.name),
+          chat,
+          sessions,
+        }),
+      );
     }
     const layouts = serveLayouts(api);
     return {
