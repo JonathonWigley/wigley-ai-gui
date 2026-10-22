@@ -43,8 +43,8 @@ Three plans in this folder, run in order. Each one leaves a working app.
 3. **Plan C — surfaces.** Landed: every existing surface rebuilt on the primitives (chrome, floating
    surfaces, Sessions, the Form tab with its rail as a split, Chat with the floating composer, Docs
    with its tree in the side bar and in a session's Docs tab), the key changes below, the editor's
-   active-line band, and the style check judging every file. Its live checks wait in
-   [live-checks.md](live-checks.md) for the user's run.
+   active-line band, and the style check judging every file. The agent ran its live checks through
+   the drive run (`npm run drive`) in agent-drive's final verification.
 
 The design skills (Impeccable's critique, audit, polish and quieter guidance, and ui-skills'
 baseline-ui, fixing-accessibility and fixing-motion-performance) become their own feature in

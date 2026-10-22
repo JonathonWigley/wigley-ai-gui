@@ -231,13 +231,15 @@ Out of scope: real OS keyboard input, native notifications and dialogs in a driv
 - [x] [Doc re-read](11-doc-re-read.md) — after 01–10
 
 ### Wave 5
-- [ ] [Final verification](12-final-verification.md) — after 11
+- [x] [Final verification](12-final-verification.md) — after 11
 
 ## Run log
 
 Review base: 03f5a8d47ac16134c3b4f5ff4f4ef0d51e36a9de
 
 ### Groups
+- 12 · fixes 56182b9, ddc7889, 9001c51, 3062c75, 2f935d9, 8783fc8; docs commit below · proved (six drive verifiers over every reachable row, failed and blocked rows re-run after the fixes; drive tests 22, drive-args 11, docs+split 218, forms 574) · concerns: the page that never loads on ~1 restart in 3 is now caught, its cause unknown (Forge/Vite suspected); `drag` releases before it returns; focus emulation is drive-only, the self-test runs without focus events
+- peer note · a keymap plan run (docs/features/keymap/plan-keymap) shares this tree from b633318 on; every commit here is pathspec-scoped and the review range is this run's commit list, not `03f5a8d..HEAD`
 - 11 · (doc commit below) · proved (diff read against code; other two repos unchanged) · concerns: `quit` absent from the CLI-only help
 - 10 · cd49094 · proved (typecheck, 60 scripts tests, lead CLI smoke start/actions/key/screenshot/quit) · concerns: Windows .cmd shell quoting; restart's two-pid wait; inherited PROOF_SELFTEST
 - 09 · 13aee03 · proved (typecheck, 26 relay tests, offscreen ready/quit check) · concerns: ffmpeg on inherited PATH; ui-state flush unobserved. Touched `endpoint.ts` and its test beyond its list (`endedDriveRunLaunch` beside `launchCommand`)
@@ -254,6 +256,11 @@ Review base: 03f5a8d47ac16134c3b4f5ff4f4ef0d51e36a9de
 - `askFixturePermission`: `(chat: ChatSessions, …): Promise<unknown>` → `(chat: Pick<ChatSessions, 'permissionToolSession'>, …): Promise<ToolResult>` · why: the self-test holds a Pick and reads a ToolResult · consumers: 07 only · group 07
 - ffmpeg command: `-vsync vfr` → `-fps_mode vfr -vf pad=ceil(iw/2)*2:ceil(ih/2)*2` · why: ffmpeg 9.0.2 rejects `-vsync`; libx264 yuv420p refuses odd sizes · consumers: none · group 05
 - `MemoryFiles` gains `readBytes(path): Uint8Array` (test-double inspection) · consumers: none · group 05
+- `DrivenInput` mouse variant gains `modifiers: (Modifier | HeldButton)[]`, `HeldButton = 'leftbuttondown' | 'rightbuttondown'` (Electron's spelling) · why: a drag's moves carried no held button, so pointer capture ended · consumers: page driver, Electron adapter, fake · group 12 (lead ruling on 02's contract)
+- `DrivenWindow` gains `emulateFocus(): Promise<void>` (DevTools `Emulation.setFocusEmulationEnabled`) · why: an offscreen page never had document focus, so `.cm-focused` and focus events never happened · consumers: drive-commands only; the self-test does not call it · group 12
+- page driver `click(window, box, …)`/`drag(window, box, …)` → `(window, selector, …)`, rejecting on a covered, sizeless or off-window target · why: a covered click reported success · consumers: drive-commands · group 12
+- `startDriveServer` deps gain `unqueued: readonly string[]` (drive-run passes `['quit']`) · why: a stuck `ready` held `quit` in the queue · group 12
+- `Split` gains `reloadWidth()` (`src/shared/page/ui/split.ts`) · why: a session's docs tree read the stored width only when added · consumers: docs page · group 12
 ### Rulings
 - `start_app()` keeps `ENDPOINT_DIR` as its default; both entry points pass `endpoint_dir(os.environ)` — keeps the function free of env reads — a bare `start_app()` caller would ignore the variable · group 04
 - `WIGLEY_AI_GUI_ENDPOINT_DIR` is used as given, no `expanduser` — the spec says `Path(env[...])` — a literal `~/` value would be relative; 09 sets an absolute path · group 04
@@ -282,5 +289,10 @@ Review base: 03f5a8d47ac16134c3b4f5ff4f4ef0d51e36a9de
 - `fit` with one argument takes it as the width when numeric, else the selector list; `do` takes any JSON value, `wait-log` and the catch-all a JSON object · group 10
 - `restart` does not re-copy the user config; any reply to `ready` means already running; `app.log` is appended to; the 120 s timeout leaves the app running; Linux packaged binary `out/wigley-ai-gui-linux-<arch>/wigley-ai-gui` · group 10
 - the drive skill gains a run-folder layout paragraph — the task named the layout and the skill had none · group 11
+- CLI: a lone `--` ends flags (supersedes group 10's "any `--` argument is a flag"); `start --user-config` fails on a missing or empty folder; `quit` is a CLI command; a dead pid in `drive.json` is not running · group 12
+- `eval` runs the script in a `{…}` block (const/let scoped, var/function global); `key` rejects an empty list; `wait-log` keeps whole-line matching and says so · group 12
+- focus emulation runs before every drive command but `quit`, not inside `focus()` — the self-test would otherwise gain focus events it never tested against · group 12
+- rows settled as stale, no code change: S3 (forms shows the heading count on the session row, not the status bar), D13 (the Docs tab reads its index when first shown, docs-browser design.md), K1's `Esc` hint (a bind without an unbind keeps the default's hint) · group 12
+- forms findings by design: a re-asked submitted round replays its answers and opens nothing (`replaysLastSubmitted`); a new round pre-fills from the newest saved round with the same content, any session (`round-store.ts`) · group 12
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 12 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -50,3 +50,10 @@ Done when: every check above is settled; the fixes are committed; `live-checks.m
 Commit:    one commit for the doc changes; fixes per `wigley:make`
 
 ## Proof
+
+Six drive verifiers ran every reachable check, each in a run of its own; the rows the driver's own defects failed or blocked were re-run after the fixes (reports under the session scratchpad, `reports/12-*.md`).
+
+- Driver: V1–V13 pass. V3 now rejects the covered click, naming `div.ui-scrim`; V4 drags 240 → 322 and the width survives `restart`; V10 passes with `{"profile":"personal"}` (the default `work` profile is not logged in here); V12's self-test lines are identical to the pre-run baseline.
+- Rows: C1–C7, P1–P3, S1–S10, F1–F16, L1–L8, T1–T11, D1–D13, E1–E6 and K1 pass or are settled. Fixed in this run: D4b and D7 (2f935d9); S8, F8, F15 and E6's mid-word label (8783fc8); E1–E3, D5 and D6 were reached once the page had focus and drag held its button (56182b9). Stale rows with no code change: S3, D13, and K1's `Esc` hint. The unreachable halves of D11 (load states other than `launch`) and T6 (an ended session) went to `followups.md` as drive fixtures.
+- Driver fixes from the checks: 56182b9 (drag, covered click, focus, key, eval, wait-log), ddc7889 (`--`, `--user-config`, recovering a stuck run), 9001c51 (a page that never loads fails `ready`; `quit` skips the queue), 3062c75.
+- User-only checks (S5, F13, F12's box half, the summon shortcut, a real `ask_round` in a drive run) go in the wrap-up.
