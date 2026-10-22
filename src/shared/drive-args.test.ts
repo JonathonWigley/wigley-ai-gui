@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   argsObject,
-  optionalNullableNumber,
-  optionalNullableString,
+  nullableNumberOr,
+  nullableStringOr,
   optionalNumber,
   optionalOneOf,
   optionalString,
@@ -49,11 +49,11 @@ describe('string readers', () => {
     expect(optionalString({}, 'id')).toBeUndefined();
   });
 
-  it('let a nullable field hold null and reject other types', () => {
-    expect(optionalNullableString({ dir: null }, 'dir')).toBeNull();
-    expect(optionalNullableString({ dir: 'd' }, 'dir')).toBe('d');
-    expect(optionalNullableString({}, 'dir')).toBeUndefined();
-    expect(() => optionalNullableString({ dir: 1 }, 'dir')).toThrow(
+  it('let a nullable field hold null, fall back only when left out, and reject other types', () => {
+    expect(nullableStringOr({ dir: null }, 'dir', 'f')).toBeNull();
+    expect(nullableStringOr({ dir: 'd' }, 'dir', 'f')).toBe('d');
+    expect(nullableStringOr({}, 'dir', 'f')).toBe('f');
+    expect(() => nullableStringOr({ dir: 1 }, 'dir', 'f')).toThrow(
       'dir must be a string or null',
     );
   });
@@ -68,11 +68,11 @@ describe('number readers', () => {
     }
   });
 
-  it('let a nullable field hold null', () => {
-    expect(optionalNullableNumber({ n: null }, 'n')).toBeNull();
-    expect(optionalNullableNumber({ n: 5 }, 'n')).toBe(5);
-    expect(optionalNullableNumber({}, 'n')).toBeUndefined();
-    expect(() => optionalNullableNumber({ n: 'x' }, 'n')).toThrow(
+  it('let a nullable field hold null and fall back only when left out', () => {
+    expect(nullableNumberOr({ n: null }, 'n', 9)).toBeNull();
+    expect(nullableNumberOr({ n: 5 }, 'n', 9)).toBe(5);
+    expect(nullableNumberOr({}, 'n', 9)).toBe(9);
+    expect(() => nullableNumberOr({ n: 'x' }, 'n', 9)).toThrow(
       'n must be a number',
     );
   });

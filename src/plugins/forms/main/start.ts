@@ -1,9 +1,14 @@
 import path from 'node:path';
 import type { Disposable } from '../../../contracts/disposable';
-import type { DriveHost, MainApi, MainPart } from '../../../contracts/plugin';
+import type {
+  DriveHost,
+  MainApi,
+  MainPart,
+  QualifiedEvents,
+} from '../../../contracts/plugin';
 import {
   argsObject,
-  optionalNullableString,
+  nullableStringOr,
   optionalOneOf,
   optionalString,
   requiredString,
@@ -18,6 +23,7 @@ import {
   DRIVE_SESSION_DEFAULTS,
   HARNESSES,
   type Harness,
+  type SessionsMainEvents,
   type SessionsMainExports,
   type ToolResult,
 } from '../../sessions/contract';
@@ -36,7 +42,12 @@ import { formsSelfTestScript, SELFTEST_LAYOUT } from './selftest-script';
 import { FORMS_TOOLS } from './tool-definitions';
 import { createFormsToolSession } from './tool-session';
 
-type FormsApi = MainApi<typeof formsManifest, FormsChannel>;
+type FormsApi = MainApi<
+  typeof formsManifest,
+  FormsChannel,
+  Record<never, never>,
+  QualifiedEvents<'sessions', SessionsMainEvents>
+>;
 
 // How many saved rounds the preview cycles through.
 const PREVIEW_SAVED_ROUNDS = 20;
@@ -112,9 +123,11 @@ function serveLayouts(
   return layouts;
 }
 
-// A session forms opened for a drive run, and where its latest round stands.
+// A session forms opened for a drive run, whether it has since ended, and
+// where its latest round stands.
 interface DriveFormsSession {
   connected: ConnectedSession;
+  ended: boolean;
   latest:
     | { state: 'pending' }
     | { state: 'resolved'; result: ToolResult }
@@ -123,21 +136,30 @@ interface DriveFormsSession {
 
 // Opens rounds in a drive run's sessions and reads their answers. A session's
 // id is `drive-forms-<n>` unless the caller names one; a name forms opened
-// before reuses that session. Disposing removes the actions and ends every
-// session forms opened.
+// before reuses that session while it is live, and connects a fresh one once
+// it has ended. `onSessionEnded` hears each session that ends, by its row id.
+// Disposing removes the actions and ends every live session forms opened.
 export function addDriveActions(
   host: DriveHost,
   sessions: Pick<SessionsMainExports, 'connect'>,
+  onSessionEnded: (listener: (rowId: string) => void) => void,
 ): Disposable {
   const opened = new Map<string, DriveFormsSession>();
   let defaultIds = 0;
+  onSessionEnded((rowId) => {
+    for (const session of opened.values()) {
+      if (session.connected.session.id === rowId) {
+        session.ended = true;
+      }
+    }
+  });
   const sessionFor = (spec: {
     sessionId: string;
     projectDir: string | null;
     harness: Harness;
   }): DriveFormsSession => {
     const known = opened.get(spec.sessionId);
-    if (known !== undefined) {
+    if (known !== undefined && !known.ended) {
       return known;
     }
     const session: DriveFormsSession = {
@@ -145,6 +167,7 @@ export function addDriveActions(
         ...spec,
         deadlineSeconds: DRIVE_SESSION_DEFAULTS.deadlineSeconds,
       }),
+      ended: false,
       latest: { state: 'pending' },
     };
     opened.set(spec.sessionId, session);
@@ -153,15 +176,17 @@ export function addDriveActions(
   const actions = [
     host.add('openRound', {
       description:
-        'Asks a round in a session forms opened before under sessionId, or in a new one, without waiting for its answers; the default round shows every card kind.',
+        'Asks a round in the live session forms opened before under sessionId, or in a new one, without waiting for its answers; the default round shows every card kind.',
       args: '{ sessionId?: string, projectDir?: string | null, harness?: "claude" | "codex", round?: object }',
       async run(rawArgs) {
         const args = argsObject(rawArgs);
         const sessionId =
           optionalString(args, 'sessionId') ?? `drive-forms-${++defaultIds}`;
-        const projectDir =
-          optionalNullableString(args, 'projectDir') ??
-          DRIVE_SESSION_DEFAULTS.projectDir;
+        const projectDir = nullableStringOr(
+          args,
+          'projectDir',
+          DRIVE_SESSION_DEFAULTS.projectDir,
+        );
         const harness =
           optionalOneOf(args, 'harness', HARNESSES) ??
           DRIVE_SESSION_DEFAULTS.harness;
@@ -207,7 +232,9 @@ export function addDriveActions(
         action.dispose();
       }
       for (const session of opened.values()) {
-        session.connected.end();
+        if (!session.ended) {
+          session.connected.end();
+        }
       }
       opened.clear();
     },
@@ -239,7 +266,13 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     const layouts = serveLayouts(api, fixtureWritten);
     selfTest?.run(formsSelfTestScript(sessions));
     const driveActions =
-      api.drive !== null ? addDriveActions(api.drive, sessions) : null;
+      api.drive !== null
+        ? addDriveActions(api.drive, sessions, (listener) =>
+            api.events.on('sessions.ended', ({ sessionId }) =>
+              listener(sessionId),
+            ),
+          )
+        : null;
     return {
       commands: {},
       dispose: () => {

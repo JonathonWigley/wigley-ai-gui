@@ -42,6 +42,16 @@ describe('sessions drive actions', () => {
     ]);
   });
 
+  it('connect keeps an explicit null projectDir', async () => {
+    const drive = fakeDriveHost();
+    const sessions = fakeSessions();
+    addDriveActions(drive.host, sessions);
+
+    await drive.run('connect', { projectDir: null });
+
+    expect(sessions.connectedInfo[0]?.projectDir).toBeNull();
+  });
+
   it('connect rejects a field of the wrong type and an unknown harness', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();

@@ -4,8 +4,8 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { DriveHost, MainApi, MainPart } from '../../../contracts/plugin';
 import {
   argsObject,
-  optionalNullableNumber,
-  optionalNullableString,
+  nullableNumberOr,
+  nullableStringOr,
   optionalOneOf,
   optionalString,
   requiredString,
@@ -98,15 +98,19 @@ export function addDriveActions(
         const args = argsObject(rawArgs);
         const sessionId =
           optionalString(args, 'sessionId') ?? `drive-session-${++defaultIds}`;
-        const projectDir =
-          optionalNullableString(args, 'projectDir') ??
-          DRIVE_SESSION_DEFAULTS.projectDir;
+        const projectDir = nullableStringOr(
+          args,
+          'projectDir',
+          DRIVE_SESSION_DEFAULTS.projectDir,
+        );
         const harness =
           optionalOneOf(args, 'harness', HARNESSES) ??
           DRIVE_SESSION_DEFAULTS.harness;
-        const deadlineSeconds =
-          optionalNullableNumber(args, 'deadlineSeconds') ??
-          DRIVE_SESSION_DEFAULTS.deadlineSeconds;
+        const deadlineSeconds = nullableNumberOr(
+          args,
+          'deadlineSeconds',
+          DRIVE_SESSION_DEFAULTS.deadlineSeconds,
+        );
         if (connected.has(sessionId)) {
           throw new Error(`session ${sessionId} is already connected`);
         }

@@ -2,7 +2,8 @@ import { isJsonObject, type JsonObject } from './json';
 
 // Readers for a drive command's or drive action's args. Each throws naming
 // the field when the value there is of the wrong type; an `optional` reader
-// returns undefined when the args leave the field out.
+// returns undefined when the args leave the field out, and an `...Or` reader
+// its fallback.
 
 // A drive action's args as an object: none (undefined or null) reads as an
 // empty object, so every field reads as left out.
@@ -31,13 +32,18 @@ export function optionalString(
   return args[name] === undefined ? undefined : requiredString(args, name);
 }
 
-// A field that may hold null as well as a string.
-export function optionalNullableString(
+// A field that may hold null as well as a string, read as `fallback` only
+// when the args leave it out: an explicit null stays null.
+export function nullableStringOr(
   args: JsonObject,
   name: string,
-): string | null | undefined {
+  fallback: string | null,
+): string | null {
   const value = args[name];
-  if (value !== undefined && value !== null && typeof value !== 'string') {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (value !== null && typeof value !== 'string') {
     throw new Error(`${name} must be a string or null`);
   }
   return value;
@@ -58,12 +64,18 @@ export function optionalNumber(
   return args[name] === undefined ? undefined : requiredNumber(args, name);
 }
 
-// A field that may hold null as well as a number.
-export function optionalNullableNumber(
+// A field that may hold null as well as a number, read as `fallback` only
+// when the args leave it out: an explicit null stays null.
+export function nullableNumberOr(
   args: JsonObject,
   name: string,
-): number | null | undefined {
-  return args[name] === null ? null : optionalNumber(args, name);
+  fallback: number | null,
+): number | null {
+  const value = args[name];
+  if (value === undefined) {
+    return fallback;
+  }
+  return value === null ? null : requiredNumber(args, name);
 }
 
 export function stringList(args: JsonObject, name: string): string[] {

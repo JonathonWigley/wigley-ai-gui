@@ -31,13 +31,26 @@ function fakeSessions() {
   };
 }
 
+// The sessions plugin's ended event, which the test emits by row id.
+function fakeEndedEvent() {
+  const listeners: ((rowId: string) => void)[] = [];
+  return {
+    on: (listener: (rowId: string) => void) => listeners.push(listener),
+    emit: (rowId: string) => {
+      for (const listener of listeners) {
+        listener(rowId);
+      }
+    },
+  };
+}
+
 const SUBMITTED: ToolResult = { content: [{ type: 'text', text: 'done' }] };
 
 describe('forms drive actions', () => {
   it('openRound connects a session with the fixture defaults', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
-    addDriveActions(drive.host, sessions);
+    addDriveActions(drive.host, sessions, fakeEndedEvent().on);
 
     expect(await drive.run('openRound')).toEqual({
       sessionId: 'drive-forms-1',
@@ -53,9 +66,36 @@ describe('forms drive actions', () => {
     ]);
   });
 
+  it('openRound keeps an explicit null projectDir', async () => {
+    const drive = fakeDriveHost();
+    const sessions = fakeSessions();
+    addDriveActions(drive.host, sessions, fakeEndedEvent().on);
+
+    await drive.run('openRound', { projectDir: null });
+
+    expect(sessions.connectedInfo[0]?.projectDir).toBeNull();
+  });
+
+  it('openRound reuses a live session and connects a fresh one once it ended', async () => {
+    const drive = fakeDriveHost();
+    const sessions = fakeSessions();
+    const ended = fakeEndedEvent();
+    const actions = addDriveActions(drive.host, sessions, ended.on);
+    await drive.run('openRound', { sessionId: 's' });
+    await drive.run('openRound', { sessionId: 's' });
+    expect(sessions.connectedInfo).toHaveLength(1);
+
+    ended.emit('row-s');
+    await drive.run('openRound', { sessionId: 's' });
+
+    expect(sessions.connectedInfo).toHaveLength(2);
+    actions.dispose();
+    expect(sessions.ended).toEqual(['row-s']);
+  });
+
   it('openRound rejects a field of the wrong type', async () => {
     const drive = fakeDriveHost();
-    addDriveActions(drive.host, fakeSessions());
+    addDriveActions(drive.host, fakeSessions(), fakeEndedEvent().on);
 
     await expect(drive.run('openRound', { sessionId: 1 })).rejects.toThrow(
       'sessionId must be a string',
@@ -68,7 +108,7 @@ describe('forms drive actions', () => {
   it('answers is pending until the round resolves, then its result', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
-    addDriveActions(drive.host, sessions);
+    addDriveActions(drive.host, sessions, fakeEndedEvent().on);
     await drive.run('openRound', { sessionId: 's' });
 
     expect(await drive.run('answers', { sessionId: 's' })).toEqual({
@@ -86,7 +126,7 @@ describe('forms drive actions', () => {
   it('dispose removes the actions and ends each session forms opened', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
-    const actions = addDriveActions(drive.host, sessions);
+    const actions = addDriveActions(drive.host, sessions, fakeEndedEvent().on);
     await drive.run('openRound', { sessionId: 'a' });
     await drive.run('openRound', { sessionId: 'b' });
 
