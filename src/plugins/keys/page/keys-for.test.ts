@@ -9,6 +9,7 @@ function keymap(page: PageBind[]): Keymap {
     app: [],
     intercept: [],
     global: [],
+    groups: {},
   };
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Files } from '../../contracts/files';
-import type { Keymap } from '../../contracts/keymap';
+import type { DefaultKeymap } from '../../contracts/keymap';
 import type { PluginManifest } from '../../contracts/plugin';
 import type { AppConfig, Settings } from '../../contracts/settings';
 import type { Theme } from '../../contracts/theme';
@@ -28,9 +28,11 @@ const DEFAULTS: Settings = {
   claude: { command: 'claude' },
 };
 
-const CORE_KEYMAP: Keymap = {
-  editor: { leader: '<Space>', remaps: [], binds: [] },
-  page: [],
+const DEFAULT_KEYMAP: DefaultKeymap = {
+  leader: '<Space>',
+  groups: {},
+  binds: [],
+  remaps: [],
   app: [],
   intercept: [],
   global: [{ accelerator: 'Control+Alt+W', command: 'window.summon' }],
@@ -46,14 +48,10 @@ const listPlugin = definePlugin({
   },
   scopes: { list: 'In the list' },
   keys: {
-    page: [
-      { keys: ['j'], scope: 'list', command: 'down' },
-      { keys: ['k'], scope: 'list', command: 'up' },
+    binds: [
+      { keys: 'j', scope: 'list', command: 'down' },
+      { keys: 'k', scope: 'list', command: 'up' },
     ],
-    editor: [],
-    app: [],
-    global: [],
-    intercept: [],
   },
   settings: { list: ['a', 'b'], timeout: null as number | null },
   optionalSettings: { timeout: 'number' },
@@ -124,7 +122,7 @@ function load(
     defaults: DEFAULTS,
     optionalSettings: { 'fonts.uiSize': 'number' },
     settingChoices: { transparency: ['system', 'full', 'reduced'] },
-    coreKeymap: CORE_KEYMAP,
+    defaultKeymap: DEFAULT_KEYMAP,
     coreCommands: {
       'window.summon': { label: 'Summon', group: 'window', runsIn: 'main' },
     },
@@ -217,7 +215,7 @@ describe('loadConfigStore', () => {
     expect(config.pluginSettings).toEqual({
       p: { list: ['a', 'b'], timeout: null },
     });
-    expect(config.keymap.global).toEqual(CORE_KEYMAP.global);
+    expect(config.keymap.global).toEqual(DEFAULT_KEYMAP.global);
     expect(pageCommands(config)).toEqual(['j p.down', 'k p.up']);
     expect(config.theme.name).toBe('mocha');
     expect(config.problems).toEqual([]);
@@ -352,7 +350,7 @@ describe('loadConfigStore', () => {
 
   it("replaces a plugin bind with the user's same keys and scope", async () => {
     const store = await loadWithKeymap(
-      '{"page":[{"keys":["j"],"scope":"p.list","command":"p.up"}]}',
+      '{"binds":[{"keys":"j","scope":"p.list","command":"p.up"}]}',
     );
 
     expect(pageCommands(store.current())).toEqual(['j p.up', 'k p.up']);
@@ -360,7 +358,7 @@ describe('loadConfigStore', () => {
 
   it('removes a bind the user unbinds', async () => {
     const store = await loadWithKeymap(
-      '{"unbind":[{"page":["j"],"scope":"p.list"}]}',
+      '{"unbind":[{"keys":"j","scope":"p.list"}]}',
     );
 
     expect(pageCommands(store.current())).toEqual(['k p.up']);
@@ -375,9 +373,9 @@ describe('loadConfigStore', () => {
       store,
       'keymap.json',
       JSON.stringify({
-        page: [
-          { keys: ['x'], scope: 'p.list', command: 'p.down' },
-          { keys: ['x'], scope: 'p.list', command: 'p.up' },
+        binds: [
+          { keys: 'x', scope: 'p.list', command: 'p.down' },
+          { keys: 'x', scope: 'p.list', command: 'p.up' },
         ],
       }),
     );
@@ -394,40 +392,40 @@ describe('loadConfigStore', () => {
 
   it('reports a bind naming an unknown command', async () => {
     const store = await loadWithKeymap(
-      '{"page":[{"keys":["x"],"scope":"p.list","command":"p.nope"}]}',
+      '{"binds":[{"keys":"x","scope":"p.list","command":"p.nope"}]}',
     );
 
     expect(store.current().problems).toEqual([
       {
         file: 'keymap.json',
-        message: '"page[0].command" names no command "p.nope".',
+        message: '"binds[0].command" names no command "p.nope".',
       },
     ]);
   });
 
   it('reports a bind naming an unknown scope', async () => {
     const store = await loadWithKeymap(
-      '{"page":[{"keys":["x"],"scope":"p.nope","command":"p.down"}]}',
+      '{"binds":[{"keys":"x","scope":"p.nope","command":"p.down"}]}',
     );
 
     expect(store.current().problems).toEqual([
       {
         file: 'keymap.json',
-        message: '"page[0].scope" names no scope "p.nope".',
+        message: '"binds[0].scope" names no scope "p.nope".',
       },
     ]);
   });
 
   it('reports a bind naming a command of the other process', async () => {
     const store = await loadWithKeymap(
-      '{"page":[{"keys":["x"],"scope":"p.list","command":"p.close"}]}',
+      '{"binds":[{"keys":"x","scope":"p.list","command":"p.close"}]}',
     );
 
     expect(store.current().problems).toEqual([
       {
         file: 'keymap.json',
         message:
-          '"page[0].command" names "p.close", which runs in main; a page bind needs a page command.',
+          '"binds[0].command" names "p.close", which runs in main; a bind needs a page command.',
       },
     ]);
   });
@@ -462,7 +460,7 @@ describe('loadConfigStore', () => {
   it('reports a global unbind on a modifier with no key', async () => {
     const store = await loadWithKeymap('{"unbind":[{"global":"Control+Alt"}]}');
 
-    expect(store.current().keymap.global).toEqual(CORE_KEYMAP.global);
+    expect(store.current().keymap.global).toEqual(DEFAULT_KEYMAP.global);
     expect(store.current().problems).toEqual([
       {
         file: 'keymap.json',
@@ -587,10 +585,9 @@ describe('loadConfigStore', () => {
     const clashing: PluginManifest = {
       ...listPlugin,
       keys: {
-        ...listPlugin.keys,
-        page: [
-          { keys: ['j'], scope: 'list', command: 'down' },
-          { keys: ['j'], scope: 'list', command: 'up' },
+        binds: [
+          { keys: 'j', scope: 'list', command: 'down' },
+          { keys: 'j', scope: 'list', command: 'up' },
         ],
       },
     };
@@ -599,14 +596,14 @@ describe('loadConfigStore', () => {
       load(createMemoryFiles(), { manifests: [clashing] }),
     ).rejects.toThrow('share a scope');
   });
-  it('reports an empty key in a page bind', async () => {
+  it('reports a bind with empty keys', async () => {
     const store = await loadWithKeymap(
-      '{"page":[{"keys":[""],"scope":"p.list","command":"p.down"}]}',
+      '{"binds":[{"keys":"","scope":"p.list","command":"p.down"}]}',
     );
 
     expect(pageCommands(store.current())).toEqual(['j p.down', 'k p.up']);
     expect(store.current().problems).toEqual([
-      { file: 'keymap.json', message: '"page[0].keys[0]" is empty.' },
+      { file: 'keymap.json', message: '"binds[0].keys" is empty.' },
     ]);
   });
 
@@ -732,7 +729,7 @@ describe('loadConfigStore', () => {
     await memory.write(`${FOLDER}/settings.json`, '{"window":{"width":1200}}');
     await memory.write(
       `${FOLDER}/keymap.json`,
-      '{"unbind":[{"page":["j"],"scope":"p.list"}]}',
+      '{"unbind":[{"keys":"j","scope":"p.list"}]}',
     );
     const files: Files = {
       ...memory,

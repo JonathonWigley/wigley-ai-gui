@@ -31,23 +31,27 @@ function parse(keymap: unknown) {
 describe('parseUserKeymap', () => {
   it('rejects an unbind naming a scope no plugin declares', () => {
     expect(() =>
-      parse({ unbind: [{ page: ['x'], scope: 'test.nowhere' }] }),
+      parse({ unbind: [{ keys: 'x', scope: 'test.nowhere' }] }),
     ).toThrow('"unbind[0].scope" names no scope "test.nowhere".');
-  });
-
-  it('rejects an editor unbind naming a scope no plugin declares', () => {
-    expect(() =>
-      parse({ unbind: [{ editor: 'x', scope: 'nowhere' }] }),
-    ).toThrow('"unbind[0].scope" names no scope "nowhere".');
   });
 
   it('keeps an unbind in a declared scope, the any scope included', () => {
     const unbind = [
-      { page: ['x'], scope: 'test.list' },
-      { editor: 'x', scope: 'any' },
+      { keys: 'x', scope: 'test.list' },
+      { keys: '<Leader>x', scope: 'any', where: 'box' },
     ];
 
     expect(parse({ unbind }).unbind).toEqual(unbind);
+  });
+
+  it('keeps a bind with its where and mode', () => {
+    const binds = [
+      { keys: '<Leader>p', scope: 'test.list', command: 'test.pick' },
+      { keys: '<Esc>', scope: 'any', command: 'test.pick', where: 'box' },
+      { keys: 'gg', scope: 'any', command: 'test.pick', mode: 'normal' },
+    ];
+
+    expect(parse({ binds }).binds).toEqual(binds);
   });
 
   it('rejects an insert bind on a key the editor cannot type unbound', () => {
@@ -60,8 +64,8 @@ describe('parseUserKeymap', () => {
       },
     ];
 
-    expect(() => parse({ editor: { binds } })).toThrow(
-      '"editor.binds[0].keys" is "<C-a>"; an insert bind takes <CR>.',
+    expect(() => parse({ binds })).toThrow(
+      '"binds[0].keys" is "<C-a>"; an insert bind takes <CR>.',
     );
   });
 
@@ -75,7 +79,55 @@ describe('parseUserKeymap', () => {
       },
     ];
 
-    expect(parse({ editor: { binds } }).editor?.binds).toEqual(binds);
+    expect(parse({ binds }).binds).toEqual(binds);
+  });
+
+  it('parseUserKeymap_OldPageSection_NamesTheNewSection', () => {
+    expect(() =>
+      parse({ page: [{ keys: ['x'], scope: 'any', command: 'test.pick' }] }),
+    ).toThrow(
+      '"page" is an old keymap section: write its binds under "binds" in vim notation.',
+    );
+  });
+
+  it('parseUserKeymap_ModeWithWherePage_Throws', () => {
+    const binds = [
+      {
+        keys: 'x',
+        scope: 'any',
+        command: 'test.pick',
+        mode: 'normal',
+        where: 'page',
+      },
+    ];
+
+    expect(() => parse({ binds })).toThrow(/^"binds\[0\]": .*where "page"/);
+  });
+
+  it('parseUserKeymap_GroupKeyWithoutLeader_Throws', () => {
+    expect(() => parse({ groups: { k: 'windows' } })).toThrow(
+      '"groups.k" must start with <Leader>.',
+    );
+  });
+
+  it('parseUserKeymap_UnknownToken_NamesEntryPath', () => {
+    const binds = [{ keys: '<F5>', scope: 'any', command: 'test.pick' }];
+
+    expect(() => parse({ binds })).toThrow(
+      '"binds[0]": <F5> is not a key the page can bind.',
+    );
+  });
+
+  it('parseUserKeymap_ChordLeader_Throws', () => {
+    expect(() => parse({ leader: '<A-o>' })).toThrow(
+      '"leader" must be one key, such as "<Space>" or ",".',
+    );
+  });
+
+  it('keeps a leader of one key and groups under the leader', () => {
+    const keymap = { leader: ',', groups: { '<Leader>k': 'panes' } };
+
+    expect(parse(keymap)).toEqual(keymap);
   });
 
   it('rejects two app binds on one chord spelled two ways', () => {

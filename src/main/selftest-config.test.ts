@@ -99,6 +99,7 @@ describe('applySelfTestConfig', () => {
         app: [],
         intercept: [],
         global: [],
+        groups: {},
       },
       commands: {},
       scopes: [],

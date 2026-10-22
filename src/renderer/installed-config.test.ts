@@ -16,6 +16,7 @@ function pushed(command: string): AppConfig {
     app: [{ accelerator: 'CommandOrControl+X', command }],
     intercept: [{ key: 'x', meta: true, command }],
     global: [{ accelerator: 'Alt+X', command }],
+    groups: {},
   };
   return {
     keymap,
@@ -45,6 +46,7 @@ describe('installedConfig', () => {
       app: next.keymap.app,
       intercept: next.keymap.intercept,
       global: next.keymap.global,
+      groups: next.keymap.groups,
     });
   });
 

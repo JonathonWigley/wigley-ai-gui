@@ -6,7 +6,7 @@ import {
   type FileWatch,
   isMissingFile,
 } from '../../contracts/files';
-import type { Keymap } from '../../contracts/keymap';
+import type { DefaultKeymap, Keymap } from '../../contracts/keymap';
 import type { Log } from '../../contracts/log';
 import type { Platform } from '../../contracts/platform';
 import type {
@@ -60,7 +60,7 @@ export interface ConfigStoreDeps {
   defaults: Settings;
   optionalSettings: Readonly<Record<string, SettingKind>>;
   settingChoices: Readonly<Record<string, readonly string[]>>;
-  coreKeymap: Keymap;
+  defaultKeymap: DefaultKeymap;
   coreCommands: Record<CommandId, CommandDecl>;
   coreScopes: readonly ScopeInfo[];
   manifests: readonly PluginManifest[];
@@ -128,9 +128,9 @@ function inServedOrder(problems: ConfigProblem[]): ConfigProblem[] {
 }
 
 // Reads the user config folder into the served config, keeping each slice's
-// last good value when its file is broken. Rejects when the core's or a
-// plugin's own keys clash, a built-in theme is broken, or a plugin's id is a
-// core setting's name: each is a bug in the app, not in the user's files.
+// last good value when its file is broken. Rejects when the default keys
+// clash, a built-in theme is broken, or a plugin's id is a core setting's
+// name: each is a bug in the app, not in the user's files.
 export async function loadConfigStore(
   deps: ConfigStoreDeps,
 ): Promise<ConfigStore> {
@@ -144,7 +144,7 @@ export async function loadConfigStore(
       ...deps.optionalSettings,
       ...pluginOptionalSettings(deps.manifests),
     },
-    defaultKeymap: mergeKeymap(deps.coreKeymap, deps.manifests, {}),
+    defaultKeymap: mergeKeymap(deps.defaultKeymap, deps.manifests, {}),
   };
   requireUnambiguousKeymap(fixed.defaultKeymap);
   const defaultTheme = deps.resolveTheme(
@@ -248,7 +248,7 @@ export async function loadConfigStore(
     }
     try {
       const user = parseUserKeymap(read.text, fixed);
-      const keymap = mergeKeymap(deps.coreKeymap, deps.manifests, user);
+      const keymap = mergeKeymap(deps.defaultKeymap, deps.manifests, user);
       requireUnambiguousKeymap(keymap);
       return keymap;
     } catch (error) {

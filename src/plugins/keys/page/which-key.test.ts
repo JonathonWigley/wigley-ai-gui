@@ -29,6 +29,7 @@ function keymap(page: PageBind[], editor: Keymap['editor']['binds'] = []) {
     app: [],
     intercept: [],
     global: [],
+    groups: {},
   } satisfies Keymap;
 }
 

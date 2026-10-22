@@ -18,7 +18,7 @@ import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
-import { coreCommands, coreKeymap, coreScopes } from '../config/keymap';
+import { coreCommands, coreScopes } from '../config/keymap';
 import {
   defaultSettings,
   optionalSettings,
@@ -38,6 +38,7 @@ import type {
   PluginManifest,
   RunMode,
 } from '../contracts/plugin';
+import { defaultKeymap } from '../plugins/keymap';
 import { mainParts } from '../plugins/main';
 import { manifests } from '../plugins/manifests';
 import { CommandRegistry } from '../shared/command-registry';
@@ -385,7 +386,7 @@ function loadConfig(homeDir: string): Promise<ConfigStore> {
     defaults: defaultSettings,
     optionalSettings,
     settingChoices,
-    coreKeymap,
+    defaultKeymap,
     coreCommands,
     coreScopes,
     manifests,

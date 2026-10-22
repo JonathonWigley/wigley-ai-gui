@@ -2,12 +2,13 @@ import type { CommandId } from '../../contracts/commands';
 import { UNBOUND_INSERT_KEYS } from '../../contracts/editor';
 import type {
   AcceleratorBind,
-  EditorBind,
+  BindWhere,
   EditorMode,
   EditorRemap,
   InterceptBind,
+  KeyBind,
+  KeyGroups,
   KeymapUnbind,
-  PageBind,
   UserKeymap,
 } from '../../contracts/keymap';
 import type {
@@ -19,6 +20,11 @@ import {
   acceleratorProblem,
   canonicalAccelerator,
 } from '../../shared/accelerator';
+import { parseChord } from '../../shared/chord-notation';
+import { errorText } from '../../shared/error-text';
+import { vimTokens } from '../../shared/key-hints';
+import { pageKeysFor } from '../../shared/key-notation';
+import { expandBind } from '../../shared/plugin-manifests';
 import { jsonKind, parseJsonObject } from './config-json';
 
 // The commands and scopes a user bind may name, by qualified id.
@@ -27,10 +33,26 @@ export interface KeymapNames {
   scopes: readonly ScopeInfo[];
 }
 
-const SECTIONS = ['page', 'editor', 'app', 'intercept', 'global', 'unbind'];
-const EDITOR_SECTIONS = ['leader', 'remaps', 'binds'];
-const UNBIND_KINDS = ['page', 'editor', 'app', 'global', 'intercept'] as const;
+const SECTIONS = [
+  'leader',
+  'groups',
+  'binds',
+  'remaps',
+  'app',
+  'intercept',
+  'global',
+  'unbind',
+];
+// Sections of the keymap format before binds were written once in vim
+// notation; a file holding one is refused rather than read half.
+const OLD_SECTIONS = ['page', 'editor'];
+const UNBIND_KINDS = ['keys', 'app', 'global', 'intercept'] as const;
 const EDITOR_MODES: readonly EditorMode[] = ['normal', 'insert'];
+const BIND_WHERES: readonly BindWhere[] = ['page', 'box', 'both'];
+const LEADER_PROBLEM = '"leader" must be one key, such as "<Space>" or ",".';
+// The leader a bind's checks expand it with when the file sets none: which
+// keys a bind may take does not depend on the leader.
+const STAND_IN_LEADER = '<Space>';
 const MODIFIERS = ['control', 'alt', 'shift', 'meta'] as const;
 
 // The fields one kind of entry holds, and the noun a problem names it by.
@@ -40,15 +62,10 @@ interface EntryShape {
   optional: readonly string[];
 }
 
-const PAGE_BIND: EntryShape = {
-  noun: 'a page bind',
+const BIND: EntryShape = {
+  noun: 'a bind',
   required: ['keys', 'scope', 'command'],
-  optional: [],
-};
-const EDITOR_BIND: EntryShape = {
-  noun: 'an editor bind',
-  required: ['keys', 'scope', 'command'],
-  optional: ['mode'],
+  optional: ['where', 'mode'],
 };
 const EDITOR_REMAP: EntryShape = {
   noun: 'an editor remap',
@@ -72,10 +89,8 @@ function acceleratorShape(noun: string): EntryShape {
 function unbindShape(kind: (typeof UNBIND_KINDS)[number]): EntryShape {
   const noun = 'an unbind entry';
   switch (kind) {
-    case 'page':
-      return { noun, required: ['page', 'scope'], optional: [] };
-    case 'editor':
-      return { noun, required: ['editor', 'scope'], optional: ['mode'] };
+    case 'keys':
+      return { noun, required: ['keys', 'scope'], optional: ['where', 'mode'] };
     case 'intercept':
       return { noun, required: ['intercept'], optional: [] };
     default:
@@ -124,14 +139,14 @@ function requireAccelerator(path: string, value: unknown): string {
   return accelerator;
 }
 
-function requireKeyList(path: string, value: unknown): string[] {
-  const keys = requireArray(path, value).map((key, index) =>
-    requireKeysString(`${path}[${index}]`, key),
-  );
-  if (keys.length === 0) {
-    throw new Error(`"${path}" is empty.`);
+function requireWhere(path: string, value: unknown): BindWhere {
+  const isWhere = BIND_WHERES.some((where) => where === value);
+  if (!isWhere) {
+    throw new Error(
+      `"${path}" must be one of ${BIND_WHERES.join(', ')}, not ${JSON.stringify(value)}.`,
+    );
   }
-  return keys;
+  return value as BindWhere;
 }
 
 function requireMode(path: string, value: unknown): EditorMode {
@@ -231,45 +246,51 @@ function readModifiers(
   return modifiers;
 }
 
-function readPageBind(
+// `where` and `mode` of the entry at `path`, each when it sets one.
+function readWhereAndMode(
   path: string,
-  value: unknown,
-  names: KeymapNames,
-): PageBind {
-  const entry = requireFields(path, value, PAGE_BIND);
-  return {
-    keys: requireKeyList(`${path}.keys`, entry.keys),
-    scope: requireScope(`${path}.scope`, entry.scope, names),
-    command: requireCommand(
-      `${path}.command`,
-      entry.command,
-      'page',
-      PAGE_BIND.noun,
-      names,
-    ),
-  };
+  entry: Record<string, unknown>,
+): Pick<KeyBind, 'where' | 'mode'> {
+  const read: Pick<KeyBind, 'where' | 'mode'> = {};
+  if (Object.hasOwn(entry, 'where')) {
+    read.where = requireWhere(`${path}.where`, entry.where);
+  }
+  if (Object.hasOwn(entry, 'mode')) {
+    read.mode = requireMode(`${path}.mode`, entry.mode);
+  }
+  return read;
 }
 
-function readEditorBind(
+// Throws, naming `path`, on keys or a `where` the merge could not expand
+// `bind` with.
+function requireExpandable(path: string, bind: KeyBind, leader: string): void {
+  try {
+    expandBind(bind, leader);
+  } catch (error) {
+    throw new Error(`"${path}": ${errorText(error)}`, { cause: error });
+  }
+}
+
+function readBind(
   path: string,
   value: unknown,
+  leader: string,
   names: KeymapNames,
-): EditorBind {
-  const entry = requireFields(path, value, EDITOR_BIND);
-  const bind: EditorBind = {
+): KeyBind {
+  const entry = requireFields(path, value, BIND);
+  const bind: KeyBind = {
     keys: requireKeysString(`${path}.keys`, entry.keys),
     scope: requireScope(`${path}.scope`, entry.scope, names),
     command: requireCommand(
       `${path}.command`,
       entry.command,
       'page',
-      EDITOR_BIND.noun,
+      BIND.noun,
       names,
     ),
+    ...readWhereAndMode(path, entry),
   };
-  if (Object.hasOwn(entry, 'mode')) {
-    bind.mode = requireMode(`${path}.mode`, entry.mode);
-  }
+  requireExpandable(path, bind, leader);
   if (bind.mode === 'insert') {
     requireUnboundInsertKey(`${path}.keys`, bind.keys);
   }
@@ -326,6 +347,7 @@ function readInterceptBind(
 function readUnbind(
   path: string,
   value: unknown,
+  leader: string,
   names: KeymapNames,
 ): KeymapUnbind {
   const entry = requireObject(path, value);
@@ -336,19 +358,13 @@ function readUnbind(
   const kind = named[0];
   requireFields(path, entry, unbindShape(kind));
   switch (kind) {
-    case 'page':
-      return {
-        page: requireKeyList(`${path}.page`, entry.page),
+    case 'keys': {
+      const unbind = {
+        keys: requireKeysString(`${path}.keys`, entry.keys),
         scope: requireScope(`${path}.scope`, entry.scope, names),
+        ...readWhereAndMode(path, entry),
       };
-    case 'editor': {
-      const unbind: KeymapUnbind = {
-        editor: requireKeysString(`${path}.editor`, entry.editor),
-        scope: requireScope(`${path}.scope`, entry.scope, names),
-      };
-      if (Object.hasOwn(entry, 'mode')) {
-        unbind.mode = requireMode(`${path}.mode`, entry.mode);
-      }
+      requireExpandable(path, { ...unbind, command: '' }, leader);
       return unbind;
     }
     case 'intercept': {
@@ -416,51 +432,68 @@ function readList<T>(
   );
 }
 
-function readEditor(
-  value: unknown,
-  names: KeymapNames,
-): NonNullable<UserKeymap['editor']> {
-  const editor = requireObject('editor', value);
-  for (const key of Object.keys(editor)) {
-    if (!EDITOR_SECTIONS.includes(key)) {
-      throw new Error(`"editor.${key}" is not a keymap section.`);
+// The file's `leader`: one key the page can bind that is not a chord.
+function readLeader(value: unknown): string {
+  const leader = requireKeysString('leader', value);
+  let isPageKey = true;
+  try {
+    pageKeysFor(leader, leader);
+  } catch {
+    isPageKey = false;
+  }
+  const isOneKey = vimTokens(leader, leader).length === 1;
+  const isChord = parseChord(leader) !== null;
+  if (!isPageKey || !isOneKey || isChord) {
+    throw new Error(LEADER_PROBLEM);
+  }
+  return leader;
+}
+
+// The file's `groups`: each key a leader prefix, each name non-empty.
+function readGroups(value: unknown): KeyGroups {
+  const groups = requireObject('groups', value);
+  for (const [keys, name] of Object.entries(groups)) {
+    const path = `groups.${keys}`;
+    if (!keys.startsWith('<Leader>')) {
+      throw new Error(`"${path}" must start with <Leader>.`);
     }
+    requireKeysString(path, name);
   }
-  const read: NonNullable<UserKeymap['editor']> = {};
-  if (Object.hasOwn(editor, 'leader')) {
-    read.leader = requireKeysString('editor.leader', editor.leader);
-  }
-  if (Object.hasOwn(editor, 'remaps')) {
-    read.remaps = readList('editor.remaps', editor.remaps, readRemap);
-  }
-  if (Object.hasOwn(editor, 'binds')) {
-    read.binds = readList('editor.binds', editor.binds, (path, entry) =>
-      readEditorBind(path, entry, names),
-    );
-  }
-  return read;
+  return groups as KeyGroups;
 }
 
 // The user keymap `text`, a `keymap.json`, holds, each bind naming a command
-// and scope of `names` that runs in the bind's process, each unbind a scope of
-// `names`, each insert bind a key of `UNBOUND_INSERT_KEYS`, and each
-// accelerator one Electron accepts. Throws an Error whose message is the first
-// problem found, as the user reads it.
+// and scope of `names` that runs in the bind's process, each bind's and
+// unbind's keys and `where` ones the merge expands, each insert bind a key of
+// `UNBOUND_INSERT_KEYS`, and each accelerator one Electron accepts. Throws an
+// Error whose message is the first problem found, as the user reads it.
 export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
   const file = parseJsonObject(text);
   for (const key of Object.keys(file)) {
+    if (OLD_SECTIONS.includes(key)) {
+      throw new Error(
+        `"${key}" is an old keymap section: write its binds under "binds" in vim notation.`,
+      );
+    }
     if (!SECTIONS.includes(key)) {
       throw new Error(`"${key}" is not a keymap section.`);
     }
   }
   const keymap: UserKeymap = {};
-  if (Object.hasOwn(file, 'page')) {
-    keymap.page = readList('page', file.page, (path, entry) =>
-      readPageBind(path, entry, names),
+  if (Object.hasOwn(file, 'leader')) {
+    keymap.leader = readLeader(file.leader);
+  }
+  const leader = keymap.leader ?? STAND_IN_LEADER;
+  if (Object.hasOwn(file, 'groups')) {
+    keymap.groups = readGroups(file.groups);
+  }
+  if (Object.hasOwn(file, 'binds')) {
+    keymap.binds = readList('binds', file.binds, (path, entry) =>
+      readBind(path, entry, leader, names),
     );
   }
-  if (Object.hasOwn(file, 'editor')) {
-    keymap.editor = readEditor(file.editor, names);
+  if (Object.hasOwn(file, 'remaps')) {
+    keymap.remaps = readList('remaps', file.remaps, readRemap);
   }
   if (Object.hasOwn(file, 'app')) {
     keymap.app = readList('app', file.app, (path, entry) =>
@@ -487,7 +520,7 @@ export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
   }
   if (Object.hasOwn(file, 'unbind')) {
     keymap.unbind = readList('unbind', file.unbind, (path, entry) =>
-      readUnbind(path, entry, names),
+      readUnbind(path, entry, leader, names),
     );
   }
   return keymap;

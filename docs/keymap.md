@@ -52,17 +52,17 @@ hjkl is the direction in every layer; the modifier picks the verb.
 The first key after the leader is the group. The next is the item's first letter, a doubled key
 is the group's main action, `n`/`p` are next and previous, and uppercase is a variant.
 
-| Key | Group | Binds today |
-|---|---|---|
-| `<Leader><Leader>` | the current context's overview | forms review |
-| `?` | help | key help |
-| `;` | close | close session |
-| `k` | windows and modes | `ks` Sessions, `kd` Docs, `kn` new session |
-| `f` | find | reserved: `ff` file, `fs` text, `fa` command palette |
-| `c` | chat controls (box) | `cm` mode, `ce` effort, `co` model, `cc` every control |
-| `a` | forms answer (box) | `a1`…`a9`, `ac` clear, `af` fix now, `au` follow-up, `as` leave it |
-| `x` | forms not applicable (box) | `x` |
-| `z` | debug and testing | `zl` forms layouts, `zc` chat layouts, `zg` gallery, `zs` shell layout |
+| Key                | Group                          | Binds today                                                            |
+| ------------------ | ------------------------------ | ---------------------------------------------------------------------- |
+| `<Leader><Leader>` | the current context's overview | forms review                                                           |
+| `?`                | help                           | key help                                                               |
+| `;`                | close                          | close session                                                          |
+| `k`                | windows and modes              | `ks` Sessions, `kd` Docs, `kn` new session                             |
+| `f`                | find                           | reserved: `ff` file, `fs` text, `fa` command palette                   |
+| `c`                | chat controls (box)            | `cm` mode, `ce` effort, `co` model, `cc` every control                 |
+| `a`                | forms answer (box)             | `a1`…`a9`, `ac` clear, `af` fix now, `au` follow-up, `as` leave it     |
+| `x`                | forms not applicable (box)     | `x`                                                                    |
+| `z`                | debug and testing              | `zl` forms layouts, `zc` chat layouts, `zg` gallery, `zs` shell layout |
 
 Reserved to match Rider and Neovim, for when the app has the action: `.` context actions, `i`
 info, `e` errors and attention (`en`/`ep`), `j` jump to session N, `s` search, `o` open (config

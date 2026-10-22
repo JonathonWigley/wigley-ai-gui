@@ -24,20 +24,6 @@ export const galleryManifest = definePlugin({
     pageDown: { label: 'scroll down a page', group: 'gallery', runsIn: 'page' },
   },
   scopes: { gallery: 'In the gallery' },
-  keys: {
-    page: [
-      { keys: [' ', 'z', 'g'], scope: 'any', command: 'showMode' },
-      { keys: ['t'], scope: 'gallery', command: 'toggleTransparency' },
-      { keys: [' ', 'z', 's'], scope: 'any', command: 'swapShellLayout' },
-      { keys: ['g', 'g'], scope: 'gallery', command: 'scrollTop' },
-      { keys: ['G'], scope: 'gallery', command: 'scrollEnd' },
-      { keys: ['d'], scope: 'gallery', command: 'pageDown' },
-    ],
-    editor: [],
-    app: [],
-    global: [],
-    intercept: [],
-  },
   settings: {},
   themeTokens: {},
 });

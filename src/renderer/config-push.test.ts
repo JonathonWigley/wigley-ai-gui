@@ -22,6 +22,7 @@ function config(
     app: [],
     intercept: [],
     global: [],
+    groups: {},
   };
   return {
     keymap,

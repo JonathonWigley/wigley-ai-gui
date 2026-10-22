@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { Keymap } from '../contracts/keymap';
+import type { DefaultKeymap, KeyBind } from '../contracts/keymap';
 import type { PluginManifest } from '../contracts/plugin';
 import {
   commandInfos,
   dependencyOrder,
+  expandBind,
   mergeKeymap,
   overrideSettings,
   pluginOptionalSettings,
@@ -12,14 +13,6 @@ import {
   requireListed,
   scopeInfos,
 } from './plugin-manifests';
-
-const NO_KEYS: PluginManifest['keys'] = {
-  page: [],
-  editor: [],
-  app: [],
-  global: [],
-  intercept: [],
-};
 
 function manifest(
   id: string,
@@ -30,36 +23,42 @@ function manifest(
     dependsOn: [],
     commands: {},
     scopes: {},
-    keys: NO_KEYS,
     settings: {},
     themeTokens: {},
     ...overrides,
   };
 }
 
-function coreKeymap(): Keymap {
+function defaultKeymap(overrides: Partial<DefaultKeymap> = {}): DefaultKeymap {
   return {
-    editor: {
-      leader: ' ',
-      remaps: [{ mode: 'insert', keys: 'jk', to: '<Esc>' }],
-      binds: [{ keys: '<Leader>s', scope: 'any', command: 'core.save' }],
-    },
-    page: [{ keys: ['q'], scope: 'any', command: 'core.quit' }],
+    leader: '<Space>',
+    groups: {},
+    binds: [
+      { keys: '<Leader>s', scope: 'any', command: 'core.save' },
+      { keys: 'q', scope: 'any', command: 'core.quit' },
+    ],
+    remaps: [{ mode: 'insert', keys: 'jk', to: '<Esc>' }],
     app: [{ accelerator: 'CommandOrControl+W', command: 'core.close' }],
     intercept: [{ key: 'Tab', control: true, command: 'core.next' }],
     global: [{ accelerator: 'Alt+Space', command: 'window.summon' }],
+    ...overrides,
   };
+}
+
+// A default keymap holding only `binds`.
+function bindsOnly(...binds: KeyBind[]): DefaultKeymap {
+  return defaultKeymap({ binds });
 }
 
 const p = manifest('p', {
   commands: { go: { label: 'Go', group: 'Moves', runsIn: 'page' } },
   scopes: { view: 'In the view' },
   keys: {
-    page: [
-      { keys: ['g'], scope: 'view', command: 'go' },
-      { keys: ['x'], scope: 'any', command: 'go' },
+    binds: [
+      { keys: 'g', scope: 'view', command: 'go' },
+      { keys: 'x', scope: 'any', command: 'go' },
+      { keys: '<Leader>g', scope: 'view', command: 'go', where: 'box' },
     ],
-    editor: [{ keys: '<Leader>g', scope: 'view', command: 'go' }],
     app: [{ accelerator: 'CommandOrControl+G', command: 'go' }],
     global: [{ accelerator: 'Alt+G', command: 'go' }],
     intercept: [{ key: 'g', meta: true, command: 'go' }],
@@ -67,58 +66,48 @@ const p = manifest('p', {
 });
 
 describe('mergeKeymap', () => {
-  it("qualifies plugin commands and scopes and keeps the core's binds", () => {
-    const core = coreKeymap();
+  it('qualifies plugin commands and scopes and keeps the default binds', () => {
+    const defaults = defaultKeymap();
 
-    const merged = mergeKeymap(core, [p], {});
+    const merged = mergeKeymap(defaults, [p], {});
 
-    expect(merged.page).toContainEqual({
-      keys: ['g'],
-      scope: 'p.view',
-      command: 'p.go',
-    });
+    expect(merged.page).toEqual([
+      { keys: [' ', 's'], scope: 'any', command: 'core.save' },
+      { keys: ['q'], scope: 'any', command: 'core.quit' },
+      { keys: ['g'], scope: 'p.view', command: 'p.go' },
+      { keys: ['x'], scope: 'any', command: 'p.go' },
+    ]);
     expect(merged.editor).toEqual({
-      leader: ' ',
-      remaps: core.editor.remaps,
+      leader: '<Space>',
+      remaps: defaults.remaps,
       binds: [
-        ...core.editor.binds,
+        { keys: '<Leader>s', scope: 'any', command: 'core.save' },
         { keys: '<Leader>g', scope: 'p.view', command: 'p.go' },
       ],
     });
     expect(merged.app).toEqual([
-      ...core.app,
+      ...defaults.app,
       { accelerator: 'CommandOrControl+G', command: 'p.go' },
     ]);
     expect(merged.global).toEqual([
-      ...core.global,
+      ...defaults.global,
       { accelerator: 'Alt+G', command: 'p.go' },
     ]);
     expect(merged.intercept).toEqual([
-      ...core.intercept,
+      ...defaults.intercept,
       { key: 'g', meta: true, command: 'p.go' },
     ]);
-  });
-
-  it('keeps the any scope unqualified', () => {
-    const merged = mergeKeymap(coreKeymap(), [p], {});
-
-    expect(merged.page).toContainEqual({
-      keys: ['x'],
-      scope: 'any',
-      command: 'p.go',
-    });
   });
 
   it("keeps an editor bind's any scope unqualified", () => {
     const h = manifest('p', {
       commands: { go: { label: 'Go', group: 'Moves', runsIn: 'page' } },
       keys: {
-        ...NO_KEYS,
-        editor: [{ keys: '<Leader>h', scope: 'any', command: 'go' }],
+        binds: [{ keys: '<Leader>h', scope: 'any', command: 'go' }],
       },
     });
 
-    const merged = mergeKeymap(coreKeymap(), [h], {});
+    const merged = mergeKeymap(defaultKeymap(), [h], {});
 
     expect(merged.editor.binds).toContainEqual({
       keys: '<Leader>h',
@@ -127,18 +116,16 @@ describe('mergeKeymap', () => {
     });
   });
 
-  it("puts the core's binds first, then each plugin's in list order", () => {
+  it("puts the default binds first, then each plugin's in list order", () => {
     const q = manifest('q', {
       commands: { stop: { label: 'Stop', group: 'Moves', runsIn: 'page' } },
-      keys: {
-        ...NO_KEYS,
-        page: [{ keys: ['s'], scope: 'any', command: 'stop' }],
-      },
+      keys: { binds: [{ keys: 's', scope: 'any', command: 'stop' }] },
     });
 
-    const merged = mergeKeymap(coreKeymap(), [q, p], {});
+    const merged = mergeKeymap(defaultKeymap(), [q, p], {});
 
     expect(merged.page.map((bind) => bind.command)).toEqual([
+      'core.save',
       'core.quit',
       'q.stop',
       'p.go',
@@ -151,14 +138,11 @@ describe('mergeKeymap', () => {
       manifest(id, {
         dependsOn,
         commands: { go: { label: 'Go', group: 'Moves', runsIn: 'page' } },
-        keys: {
-          ...NO_KEYS,
-          page: [{ keys: ['x'], scope: 'any', command: 'go' }],
-        },
+        keys: { binds: [{ keys: 'x', scope: 'any', command: 'go' }] },
       });
 
     const merged = mergeKeymap(
-      coreKeymap(),
+      defaultKeymap(),
       [binding('a', ['b']), binding('b', [])],
       {},
     );
@@ -167,11 +151,209 @@ describe('mergeKeymap', () => {
       { keys: ['x'], scope: 'any', command: 'a.go' },
     ]);
   });
+
+  it('mergeKeymap_LeaderBind_FiresOnPageAndInBox', () => {
+    const merged = mergeKeymap(
+      bindsOnly({ keys: '<Leader>ks', scope: 'any', command: 'c' }),
+      [],
+      {},
+    );
+
+    expect(merged.page).toEqual([
+      { keys: [' ', 'k', 's'], scope: 'any', command: 'c' },
+    ]);
+    expect(merged.editor.binds).toEqual([
+      { keys: '<Leader>ks', scope: 'any', command: 'c' },
+    ]);
+  });
+
+  it('mergeKeymap_RawKeys_FirePageOnly', () => {
+    const merged = mergeKeymap(
+      bindsOnly({ keys: 'gg', scope: 'any', command: 'c' }),
+      [],
+      {},
+    );
+
+    expect(merged.page).toEqual([
+      { keys: ['g', 'g'], scope: 'any', command: 'c' },
+    ]);
+    expect(merged.editor.binds).toEqual([]);
+  });
+
+  it('mergeKeymap_NamedKey_ConvertsToPageKeyName', () => {
+    const merged = mergeKeymap(
+      bindsOnly({ keys: '<Esc>', scope: 'x', command: 'c' }),
+      [],
+      {},
+    );
+
+    expect(merged.page).toEqual([
+      { keys: ['Escape'], scope: 'x', command: 'c' },
+    ]);
+  });
+
+  it('mergeKeymap_WhereBox_FiresInBoxOnly', () => {
+    const merged = mergeKeymap(
+      bindsOnly({ keys: '<CR>', scope: 'x', command: 'c', where: 'box' }),
+      [],
+      {},
+    );
+
+    expect(merged.page).toEqual([]);
+    expect(merged.editor.binds).toEqual([
+      { keys: '<CR>', scope: 'x', command: 'c' },
+    ]);
+  });
+
+  it('mergeKeymap_InsertMode_IsEditorOnly', () => {
+    const merged = mergeKeymap(
+      bindsOnly({ keys: '<CR>', scope: 'x', command: 'c', mode: 'insert' }),
+      [],
+      {},
+    );
+
+    expect(merged.page).toEqual([]);
+    expect(merged.editor.binds).toEqual([
+      { keys: '<CR>', scope: 'x', command: 'c', mode: 'insert' },
+    ]);
+  });
+
+  it('mergeKeymap_Chord_IsPageBindOnly', () => {
+    const merged = mergeKeymap(
+      bindsOnly({ keys: '<A-o>', scope: 'any', command: 'c' }),
+      [],
+      {},
+    );
+
+    expect(merged.page).toEqual([
+      { keys: ['<A-o>'], scope: 'any', command: 'c' },
+    ]);
+    expect(merged.editor.binds).toEqual([]);
+  });
+
+  it('mergeKeymap_UserLeader_RespellsPageLeader', () => {
+    const merged = mergeKeymap(
+      bindsOnly({ keys: '<Leader>ks', scope: 'any', command: 'c' }),
+      [],
+      { leader: ',' },
+    );
+
+    expect(merged.page).toEqual([
+      { keys: [',', 'k', 's'], scope: 'any', command: 'c' },
+    ]);
+    expect(merged.editor.leader).toBe(',');
+  });
+
+  it('mergeKeymap_UserBind_ReplacesBothHalves', () => {
+    const merged = mergeKeymap(
+      bindsOnly({ keys: '<Leader>ks', scope: 'any', command: 'c' }),
+      [],
+      { binds: [{ keys: '<Leader>ks', scope: 'any', command: 'user' }] },
+    );
+
+    expect(merged.page).toEqual([
+      { keys: [' ', 'k', 's'], scope: 'any', command: 'user' },
+    ]);
+    expect(merged.editor.binds).toEqual([
+      { keys: '<Leader>ks', scope: 'any', command: 'user' },
+    ]);
+  });
+
+  it('mergeKeymap_Unbind_RemovesBothHalves', () => {
+    const merged = mergeKeymap(
+      bindsOnly({ keys: '<Leader>ks', scope: 'any', command: 'c' }),
+      [],
+      { unbind: [{ keys: '<Leader>ks', scope: 'any' }] },
+    );
+
+    expect(merged.page).toEqual([]);
+    expect(merged.editor.binds).toEqual([]);
+  });
+
+  it('mergeKeymap_UnbindWhereBox_KeepsPageHalf', () => {
+    const merged = mergeKeymap(
+      bindsOnly({ keys: '<Leader>ks', scope: 'any', command: 'c' }),
+      [],
+      { unbind: [{ keys: '<Leader>ks', scope: 'any', where: 'box' }] },
+    );
+
+    expect(merged.page).toEqual([
+      { keys: [' ', 'k', 's'], scope: 'any', command: 'c' },
+    ]);
+    expect(merged.editor.binds).toEqual([]);
+  });
+
+  it('mergeKeymap_UserGroup_ReplacesDefaultName', () => {
+    const merged = mergeKeymap(
+      defaultKeymap({
+        groups: { '<Leader>k': 'windows', '<Leader>z': 'debug' },
+      }),
+      [],
+      { groups: { '<Leader>k': 'panes' } },
+    );
+
+    expect(merged.groups).toEqual({
+      '<Leader>k': 'panes',
+      '<Leader>z': 'debug',
+    });
+  });
+
+  it('mergeKeymap_ManifestKeys_AreQualified', () => {
+    const plugin = manifest('p', {
+      commands: { c: { label: 'C', group: 'Moves', runsIn: 'page' } },
+      scopes: { s: 'In s' },
+      keys: { binds: [{ keys: 'x', scope: 's', command: 'c' }] },
+    });
+
+    const merged = mergeKeymap(bindsOnly(), [plugin], {});
+
+    expect(merged.page).toEqual([
+      { keys: ['x'], scope: 'p.s', command: 'p.c' },
+    ]);
+  });
+});
+
+describe('expandBind', () => {
+  it('expandBind_ChordInBox_Throws', () => {
+    expect(() =>
+      expandBind(
+        { keys: '<A-o>', scope: 'any', command: 'c', where: 'box' },
+        '<Space>',
+      ),
+    ).toThrow('<A-o>');
+  });
+
+  it('throws on a bind with a mode and where page', () => {
+    expect(() =>
+      expandBind(
+        {
+          keys: 'x',
+          scope: 'any',
+          command: 'c',
+          mode: 'normal',
+          where: 'page',
+        },
+        '<Space>',
+      ),
+    ).toThrow('where "page"');
+  });
+
+  it("leaves a box-only bind's keys unconverted", () => {
+    expect(
+      expandBind(
+        { keys: '<F5>', scope: 'any', command: 'c', where: 'box' },
+        '<Space>',
+      ),
+    ).toEqual({
+      page: null,
+      editor: { keys: '<F5>', scope: 'any', command: 'c' },
+    });
+  });
 });
 
 describe('mergeKeymap accelerators', () => {
-  it("replaces the core's app and global binds on one chord spelled another way", () => {
-    const merged = mergeKeymap(coreKeymap(), [], {
+  it('replaces the default app and global binds on one chord spelled another way', () => {
+    const merged = mergeKeymap(defaultKeymap(), [], {
       app: [{ accelerator: 'cmdorctrl+w', command: 'user.close' }],
       global: [{ accelerator: 'Option+space', command: 'user.summon' }],
     });
@@ -185,7 +367,7 @@ describe('mergeKeymap accelerators', () => {
   });
 
   it('removes app and global binds an unbind spells another way', () => {
-    const merged = mergeKeymap(coreKeymap(), [], {
+    const merged = mergeKeymap(defaultKeymap(), [], {
       unbind: [{ app: 'CmdOrCtrl+w' }, { global: 'option+Space' }],
     });
 
@@ -194,7 +376,7 @@ describe('mergeKeymap accelerators', () => {
   });
 
   it('keeps a bind on a chord that differs by OS', () => {
-    const merged = mergeKeymap(coreKeymap(), [], {
+    const merged = mergeKeymap(defaultKeymap(), [], {
       app: [{ accelerator: 'Command+W', command: 'user.close' }],
     });
 

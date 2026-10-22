@@ -1,10 +1,14 @@
 import type { CommandId } from '../contracts/commands';
 import type {
   AcceleratorBind,
+  BindWhere,
+  DefaultKeymap,
   EditorBind,
   EditorKeymap,
   EditorRemap,
   InterceptBind,
+  KeyBind,
+  KeyGroups,
   Keymap,
   KeymapUnbind,
   PageBind,
@@ -13,14 +17,15 @@ import type {
 import type {
   CommandDecl,
   CommandInfo,
-  PluginKeys,
   PluginManifest,
   ScopeInfo,
   SettingKind,
 } from '../contracts/plugin';
 import type { TokenDecl, TokenKind } from '../contracts/theme';
 import { canonicalAccelerator } from './accelerator';
-import { editorBindMode, withLeader } from './key-hints';
+import { parseChord } from './chord-notation';
+import { editorBindMode, vimTokens, withLeader } from './key-hints';
+import { pageKeysFor } from './key-notation';
 import { startsWith } from './keymap-checks';
 import { themeVariable } from './theme-variables';
 
@@ -29,34 +34,6 @@ const THEME_TOKEN_NAME = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 // `<pluginId>.<short>`: a plugin's command or scope under its qualified name.
 export function qualify(pluginId: string, short: string): string {
   return `${pluginId}.${short}`;
-}
-
-// Every manifest's binds from `select`, each naming its qualified command.
-function qualifiedBinds<Bind extends { command: string }>(
-  manifests: readonly PluginManifest[],
-  select: (keys: PluginKeys<string, string, string>) => readonly Bind[],
-): Bind[] {
-  return manifests.flatMap((manifest) =>
-    select(manifest.keys).map((bind) => ({
-      ...bind,
-      command: qualify(manifest.id, bind.command),
-    })),
-  );
-}
-
-// Every manifest's scoped binds from `select`, each naming its qualified
-// command and scope; the `any` scope stays unqualified.
-function qualifiedScopedBinds<Bind extends { scope: string; command: string }>(
-  manifests: readonly PluginManifest[],
-  select: (keys: PluginKeys<string, string, string>) => readonly Bind[],
-): Bind[] {
-  return manifests.flatMap((manifest) =>
-    select(manifest.keys).map((bind) => ({
-      ...bind,
-      scope: bind.scope === 'any' ? 'any' : qualify(manifest.id, bind.scope),
-      command: qualify(manifest.id, bind.command),
-    })),
-  );
 }
 
 // The manifests in the order their plugins start: repeatedly the first, in
@@ -147,23 +124,103 @@ function layerOver<B>(
   return merged.map((entry) => entry.bind);
 }
 
+// What a bind entry `where` says, or its default: a leader bind fires on the
+// page and in a box, any other bind on the page.
+function bindWhere(bind: KeyBind): BindWhere {
+  return bind.where ?? (bind.keys.startsWith('<Leader>') ? 'both' : 'page');
+}
+
+// The page bind and editor bind `bind` stands for, either null when it does
+// not fire there: a bind with `mode` fires only in a box, in that mode; a
+// chord alone fires only as a page bind, which fires inside a box already;
+// any other fires where `bindWhere` says. The page bind's keys are the page
+// keys, `<Leader>` spelled as `leader`; the editor bind keeps `keys` as
+// written. Throws on a `where` the bind cannot take, and on page keys with a
+// `<…>` token the page has no key for.
+export function expandBind(
+  bind: KeyBind,
+  leader: string,
+): { page: PageBind | null; editor: EditorBind | null } {
+  const { keys, scope, command, where, mode } = bind;
+  if (mode !== undefined) {
+    if (where !== undefined && where !== 'box') {
+      throw new Error(
+        `${keys} has a mode, so it fires in a box only; it takes no where "${where}".`,
+      );
+    }
+    return { page: null, editor: { keys, scope, command, mode } };
+  }
+  const tokens = vimTokens(keys, '<Leader>');
+  const isChord = tokens.length === 1 && parseChord(tokens[0]) !== null;
+  if (isChord && where !== undefined && where !== 'page') {
+    throw new Error(
+      `${keys} is a chord, whose page bind fires inside a box too; it takes no where "${where}".`,
+    );
+  }
+  const firesWhere = isChord ? 'page' : bindWhere(bind);
+  const page =
+    firesWhere === 'box'
+      ? null
+      : { keys: pageKeysFor(keys, leader), scope, command };
+  const editor = firesWhere === 'page' ? null : { keys, scope, command };
+  return { page, editor };
+}
+
+// The page binds and editor binds `binds` expand to, each list in the order
+// of the entries that make it.
+function expandBinds(
+  binds: readonly KeyBind[],
+  leader: string,
+): { page: PageBind[]; editor: EditorBind[] } {
+  const expanded = binds.map((bind) => expandBind(bind, leader));
+  return {
+    page: expanded.flatMap((halves) => (halves.page ? [halves.page] : [])),
+    editor: expanded.flatMap((halves) =>
+      halves.editor ? [halves.editor] : [],
+    ),
+  };
+}
+
 // The binds one layer lays over the earlier ones; the leader is the merge's.
-type KeymapLayer = Omit<Keymap, 'editor'> & {
+type KeymapLayer = Omit<Keymap, 'editor' | 'groups'> & {
   editor: Omit<EditorKeymap, 'leader'>;
 };
 
+// One layer's keys in the default keymap's shape, its binds expanded with
+// `leader`.
+function keymapLayer(
+  keys: Omit<UserKeymap, 'leader' | 'groups' | 'unbind'>,
+  leader: string,
+): KeymapLayer {
+  const binds = expandBinds(keys.binds ?? [], leader);
+  return {
+    editor: { remaps: keys.remaps ?? [], binds: binds.editor },
+    page: binds.page,
+    app: keys.app ?? [],
+    intercept: keys.intercept ?? [],
+    global: keys.global ?? [],
+  };
+}
+
 // One plugin's default keys, their commands and scopes qualified as
 // `<pluginId>.<short>`; the `any` scope stays unqualified.
-function pluginLayer(manifest: PluginManifest): KeymapLayer {
+function pluginKeys(
+  manifest: PluginManifest,
+): Omit<UserKeymap, 'leader' | 'unbind'> {
+  const keys = manifest.keys ?? {};
+  const qualifyCommand = <Bind extends { command: string }>(bind: Bind) => ({
+    ...bind,
+    command: qualify(manifest.id, bind.command),
+  });
   return {
-    editor: {
-      remaps: [],
-      binds: qualifiedScopedBinds([manifest], (keys) => keys.editor),
-    },
-    page: qualifiedScopedBinds([manifest], (keys) => keys.page),
-    app: qualifiedBinds([manifest], (keys) => keys.app),
-    intercept: qualifiedBinds([manifest], (keys) => keys.intercept),
-    global: qualifiedBinds([manifest], (keys) => keys.global),
+    groups: keys.groups ?? {},
+    binds: (keys.binds ?? []).map((bind) => ({
+      ...qualifyCommand(bind),
+      scope: bind.scope === 'any' ? 'any' : qualify(manifest.id, bind.scope),
+    })),
+    app: (keys.app ?? []).map(qualifyCommand),
+    intercept: (keys.intercept ?? []).map(qualifyCommand),
+    global: (keys.global ?? []).map(qualifyCommand),
   };
 }
 
@@ -190,45 +247,51 @@ function keymapLayerOver(
     app: layerOver(earlier.app, layer.app, same.accelerators),
     intercept: layerOver(earlier.intercept, layer.intercept, same.intercept),
     global: layerOver(earlier.global, layer.global, same.accelerators),
+    groups: earlier.groups,
   };
 }
 
+// `layers`' group names in order, a later layer's name replacing an earlier
+// one on the same keys with `leader` spelled, in the earlier one's place.
+function mergeGroups(layers: readonly KeyGroups[], leader: string): KeyGroups {
+  const merged = new Map<string, [keys: string, name: string]>();
+  for (const groups of layers) {
+    for (const [keys, name] of Object.entries(groups)) {
+      merged.set(withLeader(keys, leader), [keys, name]);
+    }
+  }
+  return Object.fromEntries(merged.values());
+}
+
 // `keymap` without each bind an entry of `unbind` names; an entry naming no
-// bind removes nothing.
+// bind removes nothing. A `keys` entry is expanded with `leader` as a bind is.
 function withoutUnbound(
   keymap: Keymap,
   unbind: readonly KeymapUnbind[],
+  leader: string,
   same: BindIdentities,
 ): Keymap {
+  const unboundBinds = expandBinds(
+    unbind.flatMap((entry) =>
+      'keys' in entry ? [{ ...entry, command: '' }] : [],
+    ),
+    leader,
+  );
   const isUnbound = (names: (entry: KeymapUnbind) => boolean) =>
     unbind.some(names);
   return {
+    ...keymap,
     editor: {
       ...keymap.editor,
       binds: keymap.editor.binds.filter(
         (bind) =>
-          !isUnbound(
-            (entry) =>
-              'editor' in entry &&
-              same.editorBinds(bind, {
-                ...entry,
-                keys: entry.editor,
-                command: '',
-              }),
+          !unboundBinds.editor.some((unbound) =>
+            same.editorBinds(bind, unbound),
           ),
       ),
     },
     page: keymap.page.filter(
-      (bind) =>
-        !isUnbound(
-          (entry) =>
-            'page' in entry &&
-            same.page(bind, {
-              keys: entry.page,
-              scope: entry.scope,
-              command: '',
-            }),
-        ),
+      (bind) => !unboundBinds.page.some((unbound) => same.page(bind, unbound)),
     ),
     app: keymap.app.filter(
       (bind) =>
@@ -255,41 +318,49 @@ function withoutUnbound(
   };
 }
 
-// The keymap in layers: `core`, then each manifest's binds in `dependencyOrder`
-// (commands and scopes qualified as `<pluginId>.<short>`, the `any` scope left
-// unqualified), then the user's. A later layer's bind replaces an earlier
+// The served keymap in layers: `defaults`, then each manifest's keys in
+// `dependencyOrder` (commands and scopes qualified as `<pluginId>.<short>`,
+// the `any` scope left unqualified), then the user's. Each layer's binds are
+// expanded with `expandBind` first. A later layer's bind replaces an earlier
 // layer's bind on the same keys in the same scope (the same chord, however its
 // accelerator is spelled, for app and global binds, the same key and modifiers
 // for intercepts), taking its place; any other appends. The user layer first
-// removes each bind its `unbind` names from the core and plugin layers, and its
-// `editor.leader` replaces the core's, which the editor binds and remaps
-// compare keys with.
+// removes each bind its `unbind` names from the default and plugin layers, and
+// its `leader` replaces the default's, on the page and in a box. Group names
+// layer the same way, by their keys.
 export function mergeKeymap(
-  core: Keymap,
+  defaults: DefaultKeymap,
   manifests: readonly PluginManifest[],
   user: UserKeymap,
 ): Keymap {
-  const leader = user.editor?.leader ?? core.editor.leader;
+  const leader = user.leader ?? defaults.leader;
   const same = bindIdentities(leader);
-  let merged: Keymap = { ...core, editor: { ...core.editor, leader } };
-  for (const manifest of dependencyOrder(manifests)) {
-    merged = keymapLayerOver(merged, pluginLayer(manifest), same);
+  const ordered = dependencyOrder(manifests).map(pluginKeys);
+  const empty: Keymap = {
+    editor: { leader, remaps: [], binds: [] },
+    page: [],
+    app: [],
+    intercept: [],
+    global: [],
+    groups: {},
+  };
+  let merged = keymapLayerOver(empty, keymapLayer(defaults, leader), same);
+  for (const keys of ordered) {
+    merged = keymapLayerOver(merged, keymapLayer(keys, leader), same);
   }
-  merged = withoutUnbound(merged, user.unbind ?? [], same);
-  return keymapLayerOver(
-    merged,
-    {
-      editor: {
-        remaps: user.editor?.remaps ?? [],
-        binds: user.editor?.binds ?? [],
-      },
-      page: user.page ?? [],
-      app: user.app ?? [],
-      intercept: user.intercept ?? [],
-      global: user.global ?? [],
-    },
-    same,
-  );
+  merged = withoutUnbound(merged, user.unbind ?? [], leader, same);
+  merged = keymapLayerOver(merged, keymapLayer(user, leader), same);
+  return {
+    ...merged,
+    groups: mergeGroups(
+      [
+        defaults.groups,
+        ...ordered.map((keys) => keys.groups ?? {}),
+        user.groups ?? {},
+      ],
+      leader,
+    ),
+  };
 }
 
 // Every command by id: the core's under their own ids with plugin `core`,

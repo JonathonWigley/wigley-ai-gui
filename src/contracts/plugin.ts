@@ -6,8 +6,9 @@ import type { Disposable } from './disposable';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
 import type {
-  EditorMode,
   InterceptBind,
+  KeyBind,
+  KeyGroups,
   Keymap,
   PageBind,
   PendingKeys,
@@ -45,23 +46,23 @@ export interface ScopeInfo {
 }
 
 // A plugin's default keys, naming its scopes `S` and its short command ids:
-// page and editor keys name commands `PageC`, run in the page; app, global and
-// intercept keys name commands `MainC`, run in main.
+// binds name commands `PageC`, run in the page; app, global and intercept keys
+// name commands `MainC`, run in main. Binds and groups take the default
+// keymap's shape. The built-in plugins keep their keys in the default keymap
+// and declare none; a plugin from outside the app brings its own here.
 export interface PluginKeys<
   PageC extends string,
   MainC extends string,
   S extends string,
 > {
-  page: { keys: string[]; scope: S | 'any'; command: PageC }[];
-  editor: {
-    keys: string;
+  binds?: (Omit<KeyBind, 'scope' | 'command'> & {
     scope: S | 'any';
     command: PageC;
-    mode?: EditorMode;
-  }[];
-  app: { accelerator: string; command: MainC }[];
-  global: { accelerator: string; command: MainC }[];
-  intercept: (Omit<InterceptBind, 'command'> & { command: MainC })[];
+  })[];
+  groups?: KeyGroups;
+  app?: { accelerator: string; command: MainC }[];
+  global?: { accelerator: string; command: MainC }[];
+  intercept?: (Omit<InterceptBind, 'command'> & { command: MainC })[];
 }
 
 // The JSON kind a setting takes when its default cannot show it: the default
@@ -86,7 +87,7 @@ export interface PluginManifest<
   dependsOn: readonly string[];
   commands: Record<C, CommandDecl>;
   scopes: Readonly<Record<S, string>>;
-  keys: PluginKeys<C, C, S>;
+  keys?: PluginKeys<C, C, S>;
   settings: T;
   optionalSettings?: Readonly<Record<string, SettingKind>>;
   themeTokens: Readonly<Record<string, TokenDecl>>;
@@ -106,6 +107,18 @@ export type CommandsRunIn<
   M extends PluginManifest,
   P extends ProcessName,
 > = CommandsDeclaredIn<M['commands'], P>;
+
+// `M`'s commands that run in process `P` under their qualified ids,
+// `<pluginId>.<short>`; a union of manifests gives every one's.
+export type QualifiedCommandId<
+  M extends PluginManifest,
+  P extends ProcessName,
+> = M extends PluginManifest ? `${M['id']}.${CommandsRunIn<M, P>}` : never;
+
+// `M`'s scopes under their qualified ids, `<pluginId>.<short>`; a union of
+// manifests gives every one's.
+export type QualifiedScopeId<M extends PluginManifest> =
+  M extends PluginManifest ? `${M['id']}.${keyof M['scopes'] & string}` : never;
 
 // A plugin's channel between its two parts: the methods its page part invokes
 // on its main part, and the messages main sends the page with their data.

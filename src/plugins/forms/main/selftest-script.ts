@@ -31,27 +31,26 @@ const USER_KEYMAP_FILE = '.config/wigley-ai-gui/keymap.json';
 // A user keymap binding `Q`, which nothing else binds, to `command` everywhere.
 function userKeymap(command: string): string {
   return JSON.stringify({
-    page: [{ keys: ['Q'], scope: 'any', command }],
+    binds: [{ keys: 'Q', scope: 'any', command }],
   });
 }
 
 // A user keymap moving the text box's not-applicable toggle in the form from
 // <Leader>x to <Leader>q, which nothing else binds.
 const MOVED_NOT_APPLICABLE_KEYMAP = JSON.stringify({
-  editor: {
-    binds: [
-      {
-        keys: '<Leader>q',
-        scope: 'forms.forms',
-        command: 'forms.toggleNotApplicable',
-      },
-    ],
-  },
-  unbind: [{ editor: '<Leader>x', scope: 'forms.forms' }],
+  binds: [
+    {
+      keys: '<Leader>q',
+      scope: 'forms.forms',
+      command: 'forms.toggleNotApplicable',
+      where: 'box',
+    },
+  ],
+  unbind: [{ keys: '<Leader>x', scope: 'forms.forms', where: 'box' }],
 });
 
-// A user keymap making `,` the text box's leader.
-const COMMA_LEADER_KEYMAP = JSON.stringify({ editor: { leader: ',' } });
+// A user keymap making `,` the leader, on the page and in a text box.
+const COMMA_LEADER_KEYMAP = JSON.stringify({ leader: ',' });
 
 // An unbroken run of letters wider than any pane.
 const LONG_WORD = 'unbroken'.repeat(14);
@@ -333,7 +332,7 @@ const STEPS: SelfTestStep[] = [
     },
     keys: [],
     expect:
-      '[config] keymap.json: "page[0].command" names no command "keys.noSuchCommand".',
+      '[config] keymap.json: "binds[0].command" names no command "keys.noSuchCommand".',
   },
   { keys: ['Q'], expect: '[page] Q ran keys.toggleHelp' },
   { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },

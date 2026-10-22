@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest';
 import type { PageStart } from '../contracts/plugin';
 import { definePlugin } from './define-plugin';
 
-const NO_KEYS = { page: [], editor: [], app: [], global: [], intercept: [] };
-
 const manifest = definePlugin({
   id: 'p',
   dependsOn: [],
@@ -15,8 +13,7 @@ const manifest = definePlugin({
   },
   scopes: { view: 'In the view' },
   keys: {
-    ...NO_KEYS,
-    page: [{ keys: ['g'], scope: 'view', command: 'go' }],
+    binds: [{ keys: 'g', scope: 'view', command: 'go' }],
     app: [{ accelerator: 'CommandOrControl+Q', command: 'quit' }],
   },
   settings: { delayMs: 400 },
@@ -38,22 +35,20 @@ describe('definePlugin', () => {
     const defined = definePlugin({
       ...manifest,
       keys: {
-        ...NO_KEYS,
         // @ts-expect-error -- `goo` is not a declared command
-        page: [{ keys: ['g'], scope: 'view', command: 'goo' }],
+        binds: [{ keys: 'g', scope: 'view', command: 'goo' }],
       },
     });
 
     expect(defined.id).toBe('p');
   });
 
-  it('a page bind naming a main command is a type error', () => {
+  it('a bind naming a main command is a type error', () => {
     const defined = definePlugin({
       ...manifest,
       keys: {
-        ...NO_KEYS,
         // @ts-expect-error -- `quit` runs in main, not the page
-        page: [{ keys: ['q'], scope: 'view', command: 'quit' }],
+        binds: [{ keys: 'q', scope: 'view', command: 'quit' }],
       },
     });
 
@@ -64,13 +59,19 @@ describe('definePlugin', () => {
     const defined = definePlugin({
       ...manifest,
       keys: {
-        ...NO_KEYS,
         // @ts-expect-error -- `go` runs in the page, not main
         app: [{ accelerator: 'CommandOrControl+G', command: 'go' }],
       },
     });
 
     expect(defined.id).toBe('p');
+  });
+
+  it('keeps the literal id in its type', () => {
+    // Compiles only while `id` is the literal 'p' rather than any string.
+    const id: 'p' = manifest.id;
+
+    expect(id).toBe('p');
   });
 
   it('settings keep plain types, not their literal defaults', () => {
@@ -92,13 +93,12 @@ describe('definePlugin', () => {
     );
   });
 
-  it('a page bind naming an undeclared scope is a type error', () => {
+  it('a bind naming an undeclared scope is a type error', () => {
     const defined = definePlugin({
       ...manifest,
       keys: {
-        ...NO_KEYS,
         // @ts-expect-error -- `veiw` is not a declared scope
-        page: [{ keys: ['g'], scope: 'veiw', command: 'go' }],
+        binds: [{ keys: 'g', scope: 'veiw', command: 'go' }],
       },
     });
 

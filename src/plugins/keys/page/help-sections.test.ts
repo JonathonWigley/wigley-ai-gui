@@ -21,6 +21,7 @@ function keymap(overrides: Partial<Keymap> = {}): Keymap {
     app: [],
     intercept: [],
     global: [],
+    groups: {},
     ...overrides,
   };
 }

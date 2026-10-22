@@ -27,24 +27,6 @@ export const sessionsManifest = definePlugin({
     },
   },
   scopes: { idle: 'Sessions' },
-  keys: {
-    page: [
-      { keys: [' ', 'k', 's'], scope: 'any', command: 'showMode' },
-      { keys: ['<A-S-o>'], scope: 'any', command: 'nextSession' },
-      { keys: ['<A-S-i>'], scope: 'any', command: 'prevSession' },
-      { keys: ['<A-o>'], scope: 'any', command: 'nextTab' },
-      { keys: ['<A-i>'], scope: 'any', command: 'prevTab' },
-      { keys: ['<D-w>'], scope: 'any', command: 'closeSession' },
-      { keys: [' ', ';'], scope: 'any', command: 'closeSession' },
-    ],
-    editor: [
-      { keys: '<Leader>ks', scope: 'any', command: 'showMode' },
-      { keys: '<Leader>;', scope: 'any', command: 'closeSession' },
-    ],
-    app: [],
-    global: [],
-    intercept: [],
-  },
   settings: {},
   themeTokens: {},
 });

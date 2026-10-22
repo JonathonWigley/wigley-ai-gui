@@ -14,16 +14,6 @@ export const keysManifest = definePlugin({
     closeHelp: { label: 'close help', group: 'help', runsIn: 'page' },
   },
   scopes: { help: 'In help' },
-  keys: {
-    page: [
-      { keys: [' ', '?'], scope: 'any', command: 'toggleHelp' },
-      { keys: ['Escape'], scope: 'help', command: 'closeHelp' },
-    ],
-    editor: [{ keys: '<Leader>?', scope: 'any', command: 'toggleHelp' }],
-    app: [],
-    global: [],
-    intercept: [],
-  },
   settings: {
     whichKeyDelayMs: 200,
     whichKeyTimeoutMs: null as number | null,

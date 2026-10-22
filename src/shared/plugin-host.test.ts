@@ -18,7 +18,6 @@ function part(
       dependsOn,
       commands: {},
       scopes: {},
-      keys: { page: [], editor: [], app: [], global: [], intercept: [] },
       settings: {},
       themeTokens: {},
     },

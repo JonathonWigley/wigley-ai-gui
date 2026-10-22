@@ -78,6 +78,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/main/drive',
       'src/plugins/main.ts',
       'src/plugins/manifests.ts',
+      'src/plugins/keymap.ts',
     ],
     packages: ['electron', 'electron-squirrel-startup', 'node:'],
   },
@@ -90,6 +91,21 @@ const LAYERS: Record<string, LayerRule> = {
       'src/main',
       'src/main/themes',
       'src/plugins/manifests.ts',
+    ],
+    packages: [],
+  },
+  // The default keymap, checked against the built-in manifests' types.
+  'src/plugins/keymap.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/manifests.ts'],
+    packages: [],
+  },
+  // Merges the default keymap with the built-in manifests.
+  'src/plugins/keymap.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/manifests.ts',
+      'src/plugins/keymap.ts',
     ],
     packages: [],
   },

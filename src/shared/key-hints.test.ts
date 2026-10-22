@@ -53,6 +53,7 @@ const keymap: Keymap = {
   app: [],
   intercept: [{ key: 'Tab', control: true, command: 'test.intercept' }],
   global: [{ accelerator: 'Control+Alt+Command+W', command: 'test.summon' }],
+  groups: {},
 };
 
 describe('formatChord', () => {

@@ -23,7 +23,6 @@ const manifest: PluginManifest = {
   dependsOn: [],
   commands: {},
   scopes: { review: 'In review' },
-  keys: { page: [], editor: [], app: [], global: [], intercept: [] },
   settings: {},
   themeTokens: {},
 };
@@ -68,6 +67,7 @@ function keymap(command: string): Keymap {
     app: [],
     intercept: [],
     global: [],
+    groups: {},
   };
 }
 

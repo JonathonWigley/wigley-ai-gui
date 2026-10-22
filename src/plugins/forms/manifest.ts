@@ -13,34 +13,6 @@ const choiceCommands = Object.fromEntries(
   ]),
 ) as Record<ChoiceCommand, { label: string; group: 'choices'; runsIn: 'page' }>;
 
-// A bare digit picks a choice on the page; in a text box, where vim reads a
-// digit as a count, `<Leader>a` and a digit picks.
-const pageChoiceBinds = DIGITS.map((digit) => ({
-  keys: [digit],
-  scope: 'forms' as const,
-  command: `choose${digit}` as const,
-}));
-
-const editorChoiceBinds = DIGITS.map((digit) => ({
-  keys: `<Leader>a${digit}`,
-  command: `choose${digit}` as const,
-}));
-
-// A text box holds focus only in the form's and the review's views, so its
-// binds fire in both.
-const EDITOR_SCOPES = ['forms', 'review'] as const;
-
-const editorBinds = [
-  { keys: '<Leader>x', command: 'toggleNotApplicable' },
-  ...editorChoiceBinds,
-  { keys: '<Leader>ac', command: 'clearChoice' },
-  { keys: '<Leader>af', command: 'actFixNow' },
-  { keys: '<Leader>au', command: 'actFollowUp' },
-  { keys: '<Leader>as', command: 'actLeaveIt' },
-  { keys: '<Leader><Leader>', command: 'openReview' },
-  { keys: '<Esc>', command: 'leaveBox' },
-] as const;
-
 // Forms' scopes are its view names, each titled for the key help.
 export const formsManifest = definePlugin({
   id: 'forms',
@@ -143,48 +115,6 @@ export const formsManifest = definePlugin({
     review: 'In the review',
     confirm: 'In the cancel confirmation',
     idle: 'With no round open',
-  },
-  keys: {
-    editor: EDITOR_SCOPES.flatMap((scope) =>
-      editorBinds.map((bind) => ({ ...bind, scope })),
-    ),
-    page: [
-      { keys: ['j'], scope: 'forms', command: 'nextItem' },
-      { keys: ['<C-l>'], scope: 'forms', command: 'nextItem' },
-      { keys: ['k'], scope: 'forms', command: 'prevItem' },
-      { keys: ['<C-h>'], scope: 'forms', command: 'prevItem' },
-      { keys: ['<C-j>'], scope: 'forms', command: 'nextBox' },
-      { keys: ['<C-k>'], scope: 'forms', command: 'prevBox' },
-      ...pageChoiceBinds,
-      { keys: ['x'], scope: 'forms', command: 'toggleNotApplicable' },
-      { keys: ['d'], scope: 'forms', command: 'toggleDontAsk' },
-      { keys: ['a'], scope: 'forms', command: 'editNotes' },
-      { keys: ['Enter'], scope: 'forms', command: 'acceptRecommendation' },
-      { keys: ['c'], scope: 'forms', command: 'clearChoice' },
-      { keys: ['f'], scope: 'forms', command: 'actFixNow' },
-      { keys: ['u'], scope: 'forms', command: 'actFollowUp' },
-      { keys: ['s'], scope: 'forms', command: 'actLeaveIt' },
-      { keys: ['<A-n>'], scope: 'forms', command: 'nextUnanswered' },
-      { keys: ['<A-p>'], scope: 'forms', command: 'prevUnanswered' },
-      { keys: [' ', ' '], scope: 'forms', command: 'openReview' },
-      { keys: ['<D-Enter>'], scope: 'review', command: 'submit' },
-      { keys: ['Escape'], scope: 'review', command: 'closeReview' },
-      { keys: ['j'], scope: 'review', command: 'reviewNext' },
-      { keys: ['k'], scope: 'review', command: 'reviewPrev' },
-      { keys: ['Enter'], scope: 'review', command: 'reviewJump' },
-      { keys: ['C'], scope: 'review', command: 'askCancel' },
-      { keys: ['o'], scope: 'review', command: 'editNote' },
-      { keys: ['y'], scope: 'confirm', command: 'confirmCancel' },
-      { keys: ['n'], scope: 'confirm', command: 'dismissConfirm' },
-      { keys: ['Escape'], scope: 'confirm', command: 'dismissConfirm' },
-      { keys: [' ', 'z', 'l', 'n'], scope: 'any', command: 'nextLayout' },
-      { keys: [' ', 'z', 'l', 'p'], scope: 'any', command: 'prevLayout' },
-      { keys: [' ', 'z', 'l', 'c'], scope: 'any', command: 'copyLayout' },
-      { keys: [' ', 'z', 'l', 'o'], scope: 'any', command: 'openPreview' },
-    ],
-    app: [],
-    global: [],
-    intercept: [],
   },
   settings: { autosaveDelayMs: 400, deadlineSeconds: 240 },
   themeTokens: {
