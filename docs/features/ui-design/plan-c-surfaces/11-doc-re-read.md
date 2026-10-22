@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10
 Plan: [plan.md](plan.md)
@@ -80,3 +80,6 @@ Line numbers measured at plan time, re-verify.
   overlay's row-click question is answered in 12, which records it.
 
 ## Proof
+
+Commit `4517890`. Diff read against the rows above: DESIGN.md (§ Layers rail exception removed; § Colour `editor-active-line`; § Type prose and band bullets; § Primitives forms rail and docs code blocks; § Checks style check and screenshots), AGENTS.md (§ Architecture docs view, key hints, Recommended tag, session controls, chat layout, forms kit, style check), `ui-design/design.md` (§ Plans, raw values, screenshots, § Keys), `agent-chat/design.md` § Controls and `plugin-framework/design.md` key lines tagged "changed by ui-design plan C", `followups.md` (wording, three entries added). The Done-when grep prints nothing (exit 1); `npm run lint` passes (`styles: 287 files clean`).
+

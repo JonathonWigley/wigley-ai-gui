@@ -192,7 +192,7 @@ core's toasts.
 - [x] [Remove the style check's legacy list](10-legacy-list.md) — after 01–09
 
 ### Wave 6
-- [ ] [Doc re-read](11-doc-re-read.md) — after 01–10
+- [x] [Doc re-read](11-doc-re-read.md) — after 01–10
 
 ### Wave 7
 - [ ] [Final verification](12-final-verification.md) — after 11
@@ -212,6 +212,7 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - 05 · 82e8635 · proved (diff read, typecheck, lint, tests, self-test) · concerns: which-key.test.ts builds made-up jumpTo commands; Option+n dead key live check
 - 07 · 8ace8a1 · proved (diff read, typecheck, lint, tests, self-test) · concerns: AGENTS.md:246 and agent-chat/design.md:120 still name Space c … (11)
 - 10 · 089f3d4 · proved (diff read, style check, typecheck, lint, tests, self-test) · concerns: dialog.css grep false positive on ui/dialog.ts; kbd.css resets redundant
+- 11 · 4517890 · proved (diff read, Done-when grep empty, lint) · concerns: none
 ### Contract changes
 - `parseStyleArguments(args, filesInSrc)` (plan B) → `argumentFailures(args): string[]`; `legacyListProblems` removed · why: the script takes no argument · consumers: check-styles.mts only · group 10
 - `readVimKeys` (01): planned → not added; `formatVimKeys` already holds its body · why: landed earlier · consumers: none · group 01
@@ -227,3 +228,4 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - check-styles drops its paths mode with `--no-legacy`: paths only ever worked behind that flag and only plan C proofs used them — costs a single-file check, which would return as a new flag · group 10
 ### Review rounds
 ### Test gate
+- `npm test` full suite (covers both passes over `ea1eb3a..HEAD`): 134 files, 1901 tests passed; `npm run typecheck` 0; `npm run lint` clean (`styles: 287 files clean`); `npm run selftest` `[selftest] all passed` · after 4517890
