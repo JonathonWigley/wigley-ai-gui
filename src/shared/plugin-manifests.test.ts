@@ -298,6 +298,26 @@ describe('mergeKeymap', () => {
     });
   });
 
+  it('mergeKeymap_ManifestGroup_LayersBetweenDefaultAndUser', () => {
+    const plugin = manifest('p', {
+      keys: { groups: { '<Leader>k': 'panes', '<Leader>m': 'moves' } },
+    });
+
+    const merged = mergeKeymap(
+      defaultKeymap({
+        groups: { '<Leader>k': 'windows', '<Leader>z': 'debug' },
+      }),
+      [plugin],
+      { groups: { '<Leader>m': 'motions' } },
+    );
+
+    expect(merged.groups).toEqual({
+      '<Leader>k': 'panes',
+      '<Leader>z': 'debug',
+      '<Leader>m': 'motions',
+    });
+  });
+
   it('mergeKeymap_ManifestKeys_AreQualified', () => {
     const plugin = manifest('p', {
       commands: { c: { label: 'C', group: 'Moves', runsIn: 'page' } },

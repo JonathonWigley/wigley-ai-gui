@@ -2,7 +2,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Keymap, PendingKeys } from '../../../contracts/keymap';
 import type { Platform } from '../../../contracts/platform';
 import type { CommandInfo } from '../../../contracts/plugin';
-import { vimTokenForPageKey } from '../../../shared/key-notation';
+import { pageKeysFor } from '../../../shared/key-notation';
 import {
   type CommandLabel,
   formatKeys,
@@ -32,7 +32,8 @@ interface Candidate {
 
 // The keys that continue `pending`, in keymap order: those firing in the
 // pending scope (or `any`), on the page or in a box. A prefix the keymap's
-// `groups` names is labelled with that name.
+// `groups` names is labelled with that name, matched in the pending keys'
+// own spelling: page keys on the page, vim tokens in a box.
 // Neighbouring entries of one kind and label merge into one, and chords print
 // for `platform`. Null when no bind continues the sequence.
 export function whichKeyModel(
@@ -50,16 +51,14 @@ export function whichKeyModel(
     pending.where === 'page'
       ? (key: string) => formatKeys([key], platform)
       : (token: string) => formatVimToken(token, platform);
-  const vimToken =
-    pending.where === 'page' ? vimTokenForPageKey : (token: string) => token;
-  const pendingTokens = pending.keys.map(vimToken);
+  const groups = groupPrefixes(pending.where, keymap);
   const entries = byNextKey(candidates, pending.keys.length).map(
     ([key, binds]) =>
       entry(
         readKey(key),
         binds,
         pending.keys.length,
-        groupName([...pendingTokens, vimToken(key)], keymap),
+        groupName([...pending.keys, key], groups),
         command,
         label,
       ),
@@ -108,15 +107,50 @@ function byNextKey(
   return [...groups];
 }
 
-// The `groups` name of the prefix `tokens` (vim tokens), if any.
-function groupName(tokens: string[], keymap: Keymap): string | undefined {
+interface GroupPrefix {
+  keys: string[];
+  name: string;
+}
+
+// The keymap's `groups`, each prefix spelled as `where` reports pending keys:
+// page keys on the page, vim tokens in a box. A prefix holding a key the page
+// cannot press names no page group.
+function groupPrefixes(
+  where: PendingKeys['where'],
+  keymap: Keymap,
+): GroupPrefix[] {
+  const { leader } = keymap.editor;
+  const prefixes: GroupPrefix[] = [];
   for (const [keys, name] of Object.entries(keymap.groups)) {
-    const groupTokens = vimTokens(keys, keymap.editor.leader);
+    const prefix =
+      where === 'page'
+        ? pressablePageKeys(keys, leader)
+        : vimTokens(keys, leader);
+    if (prefix !== null) {
+      prefixes.push({ keys: prefix, name });
+    }
+  }
+  return prefixes;
+}
+
+// The page keys `keys` press, or null when it holds a `<…>` token the page
+// has no key for.
+function pressablePageKeys(keys: string, leader: string): string[] | null {
+  try {
+    return pageKeysFor(keys, leader);
+  } catch {
+    return null;
+  }
+}
+
+// The name of the group prefix equal to `keys`, if any.
+function groupName(keys: string[], groups: GroupPrefix[]): string | undefined {
+  for (const group of groups) {
     const isThisPrefix =
-      groupTokens.length === tokens.length &&
-      groupTokens.every((token, i) => token === tokens[i]);
+      group.keys.length === keys.length &&
+      group.keys.every((key, i) => key === keys[i]);
     if (isThisPrefix) {
-      return name;
+      return group.name;
     }
   }
   return undefined;

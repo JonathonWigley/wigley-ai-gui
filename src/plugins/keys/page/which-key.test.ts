@@ -28,9 +28,10 @@ function keymap(
   page: PageBind[],
   editor: Keymap['editor']['binds'] = [],
   groups: Keymap['groups'] = {},
+  leader = '<Space>',
 ) {
   return {
-    editor: { leader: '<Space>', remaps: [], binds: editor },
+    editor: { leader, remaps: [], binds: editor },
     page,
     app: [],
     intercept: [],
@@ -205,6 +206,54 @@ describe('whichKeyModel', () => {
 
     const model = whichKeyModel(
       { where: 'editor', keys: ['<Space>'], scope: 's' },
+      map,
+      command,
+      label,
+      'macos',
+    );
+
+    expect(model?.entries).toEqual([
+      { keys: 'k', label: '+windows', kind: 'prefix' },
+    ]);
+  });
+
+  it('whichKeyModel_NamedGroupBackslashLeader_LabelsPrefix', () => {
+    const map = keymap(
+      [
+        { keys: ['\\', 'k', 's'], scope: 's', command: 'splitRight' },
+        { keys: ['\\', 'k', 'd'], scope: 's', command: 'splitDown' },
+      ],
+      [],
+      { '<Leader>k': 'windows' },
+      '\\',
+    );
+
+    const model = whichKeyModel(
+      { where: 'page', keys: ['\\'], scope: 's' },
+      map,
+      command,
+      label,
+      'macos',
+    );
+
+    expect(model?.entries).toEqual([
+      { keys: 'k', label: '+windows', kind: 'prefix' },
+    ]);
+  });
+
+  it('whichKeyModel_NamedGroupLowercaseSpaceLeader_LabelsPrefixPastUnpressableGroup', () => {
+    const map = keymap(
+      [
+        { keys: [' ', 'k', 's'], scope: 's', command: 'splitRight' },
+        { keys: [' ', 'k', 'd'], scope: 's', command: 'splitDown' },
+      ],
+      [],
+      { '<Leader><F5>': 'debug', '<Leader>k': 'windows' },
+      '<space>',
+    );
+
+    const model = whichKeyModel(
+      { where: 'page', keys: [' '], scope: 's' },
       map,
       command,
       label,
