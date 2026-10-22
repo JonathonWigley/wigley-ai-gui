@@ -22,7 +22,8 @@ or touches their data, so start one whenever a check needs it.
 
 1. `npm run drive -- start` returns once the page is ready and prints the run id and folder.
    `.drive/current` names the newest run, and a command without `--run` goes there; `start --run
-   <id>` names a run and reuses its home when the folder exists. When another run may be live —
+   <id>` names a run and reuses its home when the folder exists; a run id is one folder name
+   inside `.drive/`, with no `/`, `\` or `..`. When another run may be live —
    a second run of the agent's, or a peer agent's — pass `--run <id>` on every command, since
    any newer `start` moves `.drive/current` to its own run. `--user-config` copies the user's
    `~/.config/wigley-ai-gui` into the temp home, so their theme and keys apply; `start` fails
@@ -38,20 +39,28 @@ or touches their data, so start one whenever a check needs it.
    redrawn: `resize` with the size the window took, the others with the log lines they caused
    (`setting` also says whether the config applied). The page holds document focus as the visible app's does,
    so `document.hasFocus()`, `.cm-focused`, `:focus` styles and focus events behave as they do for
-   the user.
+   the user. When focus cannot be emulated (another debugger, such as DevTools, holds the page),
+   the command still runs, unfocused, and the run's log says why. The self-test emulates the same
+   focus, so a focus-dependent check can be kept as a self-test step.
 4. Capture and read: `screenshot` saves the window, or one element by selector, under the run
    folder; Read the PNG. `query` returns a selector's text, box and computed style.
-5. `npm run drive -- quit` when done. Run folders stay for reading back; `.drive/` is git-ignored.
+5. `npm run drive -- quit` when done; it waits for the ui-state write, part disposal and any
+   recording to finish before the app exits. Run folders stay for reading back; `.drive/` is git-ignored.
 
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something
-survives a restart runs the same way.
+survives a restart runs the same way. The docs fixture survives a `restart` as the agent left it;
+`docs.seed` rewrites it. A start with an unusable environment (a relative `WIGLEY_DRIVE_DIR`, a
+`WIGLEY_DRIVE_HARNESS` other than `fake` or `claude`) exits 1 with the reason on stderr before any
+window opens.
 
 The app runs commands one at a time, so a command that never returns blocks every later one, and
 the CLI then says the run did not answer. A page that never finishes loading (an occasional dev
 `restart` brings one up) fails a command after 30 s with "The page never finished loading";
 `restart` the run. `restart` and `quit` end a stuck run: `quit` runs beside the stuck command,
-and the CLI terminates the app when it still does not exit.
+and the CLI terminates the app when it still does not exit, skipping any recorded pid whose
+process no longer carries the run's `WIGLEY_DRIVE_DIR` (a pid reused after a crash); on Windows it
+cannot check and terminates every live recorded pid.
 
 A run folder holds `home/` (the app's home: config, plugin data, ui-state), `user-data/`
 (Chromium's profile), `screenshots/`, `videos/`, `app.log`, and `start.json` and `drive.json`
@@ -70,7 +79,10 @@ Conventions:
   the visible element (`.session-body:not([hidden]) …`). A click or drag fails, sending nothing,
   when the element has no size (it is not shown) or another element covers its centre, naming the
   cover: that is a finding, not a flake.
-- `wait-log` matches a whole page log line, its source prefix included (`[page] …`).
+- `wait-log` matches a whole page log line, its source prefix included (`[page] …`), logged after the call starts; a line already in the log does not count.
+- `chat.askPermission` returns a `toolUseId` at once; `chat.permissionAnswer` with that id answers
+  `{ pending: true }` until the card is answered, then the reply, as `forms.answers` does for a
+  round.
 - `eval` runs its script in a block of its own: `const`, `let` and `class` end with the call, while
   `var` and `function` reach the page's globals and persist to the next `eval`.
 - Flags come before a lone `--`; every argument after it is positional, for a value that begins
@@ -78,7 +90,8 @@ Conventions:
 - `screenshot <name>` takes a lowercase name in words joined by `-` and saves
   `screenshots/<name>.png`.
 - `record start [name]` and `record stop` save `videos/<name>.mp4`, for transitions and animations;
-  it encodes with `ffmpeg` from the app's PATH.
+  the video starts with the window as captured at `record start` and holds the last frame until
+  `record stop`, so a still page records too. It encodes with `ffmpeg` from the app's PATH.
 - `fit [width] [selector,…]` lists what the page cuts off at the minimum width, or at a given
   width; a lone non-numeric argument is the list of selectors that scroll themselves.
 - `start --packaged` drives the packaged build; run `npm run package` first.

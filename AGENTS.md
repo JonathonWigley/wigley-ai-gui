@@ -339,8 +339,9 @@ round), since main, not the page, decides.
   either, so its steps live in forms' and docs' scripts. Chat's script runs its
   sessions over the fake agent harness, its steps covering the resume list, archive and slash completion. Docs'
   (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture (`selftest-fixture.ts`) that writes docs, an index
-  and a stand-in `docs_index.py` into the self-test's temp home at start, so its steps never reach the user's docs or
-  index.
+  and a stand-in `docs_index.py` into the temp home at start when the home holds none yet, and again at each script run,
+  so its steps never reach the user's docs or index. The self-test emulates page focus as a drive run does, so a
+  focus-dependent check can be a self-test step.
 - A drive run (`npm run drive`) is how the agent checks a change in the running app: every change to what the app
   shows or how it reacts is driven end to end, and its captures read, before the work is done. It runs offscreen as
   an accessory app on its own temp home, beside the user's app, so the agent starts one whenever a check needs it.
