@@ -154,7 +154,7 @@ contracts (`npm run lint` runs the layer check, type-only imports included).
 - [x] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
 
 ### Wave 4
-- [ ] [Final verification](05-final-verification.md) — after 04
+- [x] [Final verification](05-final-verification.md) — after 04
 
 ## Run log
 
@@ -181,5 +181,8 @@ Review base: dd75a8ebcf51bcb1e2073700abd614f8543886e8
 - test gate and review run before task 05's live checks, so review fixes are inside what the live run checks — order only · lead
 ### Review rounds
 - round 1 · 7526fd5 · NEEDS FIXES · 10 findings, 2 follow-ups · lead-applied 8510f64 · fixes b362ef6 (4), 8fba8f0 (7), a409766 (10), f6e5fb9 (3), 486595f (8), 473f691 (9), 1ce541a (6), 0d85b5c (5, F2), de86dd7 (2), c62a431 (1) · user chose: doc editor scrolls itself; chat Ctrl+k off the bottom stops following, Ctrl+j/G at the bottom resumes (Enter is chat.toggleEntry, not free); pushed groups kept, comment corrected; ⌘↩ everywhere
+- round 2 · c62a431 · NEEDS FIXES · 3 findings (1 repeat of R1#8) · fixes 1c24160 (leader spelling, from live probe), cb1c3ab (half-page proof, visual mode, whole-line cursor), d155269 (user: macOS glyphs everywhere) · user chose: self-test measures the scroll; visual selection grows as Ctrl+d; ↩ and modifier glyphs everywhere
+- round 3 · cb1c3ab · NEEDS FIXES · 4 findings, 3 prose (lead-applied fb7f5a7), 1 open after the 2-cycle cap → user: fix now (8199369) · follow-ups the user took as fix now: mapclear re-map (1e3f700), chat list resize follow (9961299, 408a05a); `<` leader to followups (e7b3922); .nvmrc → 24.22.1 (8199369)
 ### Test gate
 - picked: every test the range added or edited except the peer's drive tests (config-store, user-keymap, main-api, selftest-config, plugins/keymap, keys' help-sections/key-bar/keys-for/which-key, config-push, installed-config, page-api, define-plugin, key-hints, key-notation, plugin-host, plugin-manifests); chat-commands (new half-page handlers); keymap-checks (fed by the new merge); page-keys (reads the expanded page binds and chords). Self-test steps and scroll behaviour left to task 05's live run · 20 files, 264 tests passed
+- final: `npm run selftest` at 408a05a all passed; typecheck clean

@@ -1,6 +1,6 @@
 # 05 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -26,3 +26,4 @@ Produces:  a pass / fail per check, with its capture path
 Done when: every check passes, or each failure is reported with its capture and a one-line cause.
 
 ## Proof
+V1–V8 passed in drive run keymap-v (report: session scratchpad live-checks-report.md); V4b/V5b (editor half-page, chat follow) added and passed. Final `npm run selftest` at 408a05a: `[selftest] all passed`. keymap-v2: help prints ↩ ⎋ ⌘↩ ⌃J.
