@@ -179,6 +179,8 @@ export const defaultKeymap = {
     { keys: '<CR>', scope: 'chat.chat', command: 'chat.toggleEntry' },
     { keys: 'G', scope: 'chat.chat', command: 'chat.latestEntry' },
     { keys: 'gg', scope: 'chat.chat', command: 'chat.firstEntry' },
+    { keys: '<C-j>', scope: 'chat.chat', command: 'chat.halfPageDown' },
+    { keys: '<C-k>', scope: 'chat.chat', command: 'chat.halfPageUp' },
     { keys: 'y', scope: 'chat.chat', command: 'chat.allowPermission' },
     { keys: 'n', scope: 'chat.chat', command: 'chat.denyPermission' },
     { keys: '<C-c>', scope: 'chat.chat', command: 'chat.interrupt' },
@@ -259,10 +261,12 @@ export const defaultKeymap = {
     { keys: 'A', scope: 'docs.tree', command: 'docs.createByPath' },
     { keys: 'r', scope: 'docs.tree', command: 'docs.rename' },
     { keys: 'd', scope: 'docs.tree', command: 'docs.trash' },
-    { keys: '<C-l>', scope: 'docs.tree', command: 'docs.focusDoc' },
-    { keys: '<C-h>', scope: 'docs.doc', command: 'docs.focusTree' },
+    { keys: '<A-l>', scope: 'docs.tree', command: 'docs.focusDoc' },
+    { keys: '<A-h>', scope: 'docs.doc', command: 'docs.focusTree' },
     { keys: 'j', scope: 'docs.doc', command: 'docs.scrollDown' },
     { keys: 'k', scope: 'docs.doc', command: 'docs.scrollUp' },
+    { keys: '<C-j>', scope: 'docs.doc', command: 'docs.halfPageDown' },
+    { keys: '<C-k>', scope: 'docs.doc', command: 'docs.halfPageUp' },
     { keys: 'i', scope: 'docs.doc', command: 'docs.edit' },
     { keys: 'r', scope: 'docs.conflict', command: 'docs.conflictReload' },
     { keys: 'o', scope: 'docs.conflict', command: 'docs.conflictOverwrite' },
@@ -287,7 +291,8 @@ export const defaultKeymap = {
     },
     { keys: 'gg', scope: 'gallery.gallery', command: 'gallery.scrollTop' },
     { keys: 'G', scope: 'gallery.gallery', command: 'gallery.scrollEnd' },
-    { keys: 'd', scope: 'gallery.gallery', command: 'gallery.pageDown' },
+    { keys: '<C-j>', scope: 'gallery.gallery', command: 'gallery.pageDown' },
+    { keys: '<C-k>', scope: 'gallery.gallery', command: 'gallery.pageUp' },
 
     // ── Debug and testing ──────────────────────────────────────────────────
     {

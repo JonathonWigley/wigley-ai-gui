@@ -22,6 +22,7 @@ export const galleryManifest = definePlugin({
     scrollTop: { label: 'scroll to the top', group: 'gallery', runsIn: 'page' },
     scrollEnd: { label: 'scroll to the end', group: 'gallery', runsIn: 'page' },
     pageDown: { label: 'scroll down a page', group: 'gallery', runsIn: 'page' },
+    pageUp: { label: 'scroll up a page', group: 'gallery', runsIn: 'page' },
   },
   scopes: { gallery: 'In the gallery' },
   settings: {},

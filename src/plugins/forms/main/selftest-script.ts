@@ -96,12 +96,13 @@ export const SELFTEST_LAYOUT = {
 // The gallery steps run first, before any step raises a toast, so no toast
 // covers their screenshots. Space z l o opens the layout preview's sample
 // round, every card kind, in a session of its own after the other three, and
-// selects its row. Space z g shows Gallery mode and d pages its sheet down to
-// the end, saving each page; G, then t switches to reduced transparency, g g
-// goes back to the top and d pages down again, saving each page reduced. Space
-// k s shows Sessions mode, on the sample round, reduced; Space z g, t back to
-// full and Space k s show it full. Space z s swaps the shell to the gallery's
-// test layout over Sessions mode, and Space z s again restores the default.
+// selects its row. Space z g shows Gallery mode and Ctrl+j pages its sheet down
+// to the end, saving each page; G, then t switches to reduced transparency, g g
+// goes back to the top and Ctrl+j pages down again, saving each page reduced.
+// Space k s shows Sessions mode, on the sample round, reduced; Space z g, t
+// back to full and Space k s show it full. Space z s swaps the shell to the
+// gallery's test layout over Sessions mode, and Space z s again restores the
+// default.
 // Option+Shift+o wraps back to the first session.
 // Then, opening on finding 1: Space k then k breaks Space k s, so the first k
 // replays to the notice and the second finds no item before it; j back to the
@@ -171,27 +172,27 @@ const STEPS: SelfTestStep[] = [
     screenshot: 'gallery-1-full',
   },
   {
-    keys: ['d'],
+    keys: ['<C-j>'],
     expect: '[gallery] paged down',
     screenshot: 'gallery-2-full',
   },
   {
-    keys: ['d'],
+    keys: ['<C-j>'],
     expect: '[gallery] paged down',
     screenshot: 'gallery-3-full',
   },
   {
-    keys: ['d'],
+    keys: ['<C-j>'],
     expect: '[gallery] paged down',
     screenshot: 'gallery-4-full',
   },
   {
-    keys: ['d'],
+    keys: ['<C-j>'],
     expect: '[gallery] paged down',
     screenshot: 'gallery-5-full',
   },
   {
-    keys: ['d'],
+    keys: ['<C-j>'],
     expect: '[gallery] reached the end',
     screenshot: 'gallery-6-full',
   },
@@ -207,27 +208,27 @@ const STEPS: SelfTestStep[] = [
     screenshot: 'gallery-1-reduced',
   },
   {
-    keys: ['d'],
+    keys: ['<C-j>'],
     expect: '[gallery] paged down',
     screenshot: 'gallery-2-reduced',
   },
   {
-    keys: ['d'],
+    keys: ['<C-j>'],
     expect: '[gallery] paged down',
     screenshot: 'gallery-3-reduced',
   },
   {
-    keys: ['d'],
+    keys: ['<C-j>'],
     expect: '[gallery] paged down',
     screenshot: 'gallery-4-reduced',
   },
   {
-    keys: ['d'],
+    keys: ['<C-j>'],
     expect: '[gallery] paged down',
     screenshot: 'gallery-5-reduced',
   },
   // Page 6 reduced is the view `t` saved, the sheet already at its end.
-  { keys: ['d'], expect: '[gallery] reached the end' },
+  { keys: ['<C-j>'], expect: '[gallery] reached the end' },
   {
     keys: [' ', 'k', 's'],
     expect: '[page] showed Sessions mode',

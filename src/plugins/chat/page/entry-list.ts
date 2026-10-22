@@ -63,6 +63,9 @@ export interface EntryList {
   // Scrolls to the bottom while following, else brings the focused entry
   // into view.
   scrollToFocus(): void;
+  // Scrolls the list by half its visible height, leaving the focus and
+  // following as they are.
+  scrollHalfPage(direction: 1 | -1): void;
   // Opens every expander of the focused entry when any is closed, else
   // closes them all; null with no focused entry.
   toggleFocused(): { entry: ChatEntry; result: ToggleResult } | null;
@@ -168,6 +171,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     },
     scrollToFocus() {
       drawFocus(focus.following ? 'bottom' : 'slot');
+    },
+    scrollHalfPage(direction) {
+      list.scrollTop += (direction * list.clientHeight) / 2;
     },
     toggleFocused() {
       const slot =

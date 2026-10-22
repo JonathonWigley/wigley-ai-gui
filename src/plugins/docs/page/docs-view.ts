@@ -60,6 +60,8 @@ export interface DocsViewCommands {
   focusTree(): void;
   scrollDown(): void;
   scrollUp(): void;
+  halfPageDown(): void;
+  halfPageUp(): void;
   edit(): void;
   conflictReload(): void;
   conflictOverwrite(): void;
@@ -645,6 +647,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     scrollDown: () => doc.scroll(1),
     scrollUp: () => doc.scroll(-1),
+    halfPageDown: () => doc.scrollHalfPage(1),
+    halfPageUp: () => doc.scrollHalfPage(-1),
     edit: () => doc.edit(),
     conflictReload: () => doc.conflictReload(),
     conflictOverwrite: () => doc.conflictOverwrite(),

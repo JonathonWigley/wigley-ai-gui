@@ -66,7 +66,10 @@ export interface ChatSession extends SessionRef {
   readonly state: ChatSessionState;
   readonly ended: boolean;
   box: TextEditor;
-  entries: Pick<EntryList, 'move' | 'latest' | 'first' | 'toggleFocused'>;
+  entries: Pick<
+    EntryList,
+    'move' | 'latest' | 'first' | 'toggleFocused' | 'scrollHalfPage'
+  >;
 }
 
 // The Chat view with what the commands read: the session a box belongs to,

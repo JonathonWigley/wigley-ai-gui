@@ -313,6 +313,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         focusTree: onActiveView('focusTree'),
         scrollDown: onActiveView('scrollDown'),
         scrollUp: onActiveView('scrollUp'),
+        halfPageDown: onActiveView('halfPageDown'),
+        halfPageUp: onActiveView('halfPageUp'),
         edit: onActiveView('edit'),
         conflictReload: onActiveView('conflictReload'),
         conflictOverwrite: onActiveView('conflictOverwrite'),

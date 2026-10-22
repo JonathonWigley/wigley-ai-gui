@@ -166,6 +166,8 @@ export function chatCommandHandlers(
           : 'focused the first entry',
       );
     }),
+    halfPageDown: inSession((session) => session.entries.scrollHalfPage(1)),
+    halfPageUp: inSession((session) => session.entries.scrollHalfPage(-1)),
     toggleEntry: inSession((session) => {
       const toggled = session.entries.toggleFocused();
       if (toggled === null) {

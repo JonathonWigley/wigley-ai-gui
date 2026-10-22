@@ -24,41 +24,42 @@ const STYLE_CHANGED_WHILE_EDITING =
 // Space k d shows Docs mode, whose first show builds the index: the fixture's
 // eight entries. G selects the last row and gg the first, Global. j to Global's
 // Instructions and l expands it; j to the self-test instructions and l opens
-// CLAUDE.md. Ctrl+l focuses the doc; Tab reaches its first link, the style
+// CLAUDE.md. Option+l focuses the doc; Tab reaches its first link, the style
 // rule, and Enter follows it. A change on disk reloads style.md. i edits it,
 // and a second change on disk shows the changed-on-disk banner. o types a new
 // line below, Esc to normal mode and :w meets the changed-on-disk prompt, where
 // r reloads the disk's text. Another change on disk, a new line and :w again,
 // and o overwrites the disk. A third, and Esc keeps editing; :w shows the
 // prompt again and o overwrites. :q closes the editor. i again, x deletes a
-// character, so :q is refused and :q! drops the edit. Ctrl+h back to the tree;
-// a asks for a kind (the kind picker's screenshot), j Enter picks rule, Enter
-// its one place, and tidy names it, which creates tidy.md and opens it in the
-// editor; :q closes it. Ctrl+h to the tree, where r opens the path box on
+// character, so :q is refused and :q! drops the edit. Option+h back to the
+// tree; a asks for a kind (the kind picker's screenshot), j Enter picks rule,
+// Enter its one place, and tidy names it, which creates tidy.md and opens it in
+// the editor; :q closes it. Option+h to the tree, where r opens the path box on
 // tidy.md: seven Backspaces leave the rules folder and neat.md renames it. A
 // opens the path box at the rules folder, n and Tab complete to neat.md (the
 // completion's screenshot), and Esc cancels; A again and fresh.md creates it,
-// :q closes its editor, Ctrl+h to the tree and d asks to move it to the Trash,
-// y does. R rescans: eight entries and neat.md. / filters the tree to neat and
-// Enter keeps the filter, leaving Global, Rules and neat.md; k k j j selects
-// neat.md and d asks to trash it, n keeps it, d again and Esc keeps it; / and
-// Esc clear the filter. h goes up to Rules and h again collapses it. j l
-// expands Hooks and j l opens the hook's detail view; Ctrl+l, i edits
-// settings.json and :q closes it; Ctrl+h back. j j l expands the plugin, j j l
-// its Plugins group and j l opens the plugin's detail view; Ctrl+l, i edits
-// installed_plugins.json and :q closes it; Ctrl+h back. k k l expands the
-// plugin's Skills and j l opens its cached SKILL.md; Ctrl+l, j and k scroll,
-// and i refuses to edit it in the plugin cache; Ctrl+h back. a opens the kind
-// picker, j k j l picks rule, and Esc cancels its place picker. c opens the
-// context picker, j Enter picks the repo. Space k d hides the side bar,
-// focusing the doc, and Ctrl+h brings it back; Space k d hides it again and
-// once more shows it; Ctrl+h focuses the tree. Space k s shows Sessions mode on
-// the docs session's Docs tab (the session tab's screenshot), where R reads its
-// session index and a opens the kind picker. Space k d shows Docs mode, which
-// closes that picker, so j moves Docs mode's tree. / filters it to neat and
-// Enter keeps the filter; j j j j selects neat.md and r opens the path box,
-// where seven Backspaces and kept.md rename it, and the session's view reads
-// its index again; / and Esc clear the filter, so the tree shows its rows.
+// :q closes its editor, Option+h to the tree and d asks to move it to the
+// Trash, y does. R rescans: eight entries and neat.md. / filters the tree to
+// neat and Enter keeps the filter, leaving Global, Rules and neat.md; k k j j
+// selects neat.md and d asks to trash it, n keeps it, d again and Esc keeps it;
+// / and Esc clear the filter. h goes up to Rules and h again collapses it. j l
+// expands Hooks and j l opens the hook's detail view; Option+l, i edits
+// settings.json and :q closes it; Option+h back. j j l expands the plugin,
+// j j l its Plugins group and j l opens the plugin's detail view; Option+l, i
+// edits installed_plugins.json and :q closes it; Option+h back. k k l expands
+// the plugin's Skills and j l opens its cached SKILL.md; Option+l, j and k
+// scroll, Ctrl+j and Ctrl+k scroll half a page, and i refuses to edit it in the
+// plugin cache; Option+h back. a opens the kind picker, j k j l picks rule, and
+// Esc cancels its place picker. c opens the context picker, j Enter picks the
+// repo. Space k d hides the side bar, focusing the doc, and Option+h brings it
+// back; Space k d hides it again and once more shows it; Option+h focuses the
+// tree. Space k s shows Sessions mode on the docs session's Docs tab (the
+// session tab's screenshot), where R reads its session index and a opens the
+// kind picker. Space k d shows Docs mode, which closes that picker, so j moves
+// Docs mode's tree. / filters it to neat and Enter keeps the filter; j j j j
+// selects neat.md and r opens the path box, where seven Backspaces and kept.md
+// rename it, and the session's view reads its index again; / and Esc clear
+// the filter, so the tree shows its rows.
 // Space z g, t and Space k d show Docs mode under reduced transparency, and
 // Space z g, t and Space k d again under full.
 const STEPS: SelfTestStep[] = [
@@ -71,7 +72,7 @@ const STEPS: SelfTestStep[] = [
   { keys: ['g', 'g'], expect: '[docs] selected Global' },
   { keys: ['j', 'l'], expect: '[docs] expanded Instructions' },
   { keys: ['j', 'l'], expect: '[docs] opened CLAUDE.md', checksFit: true },
-  { keys: ['<C-l>'], expect: '[docs] doc focused' },
+  { keys: ['<A-l>'], expect: '[docs] doc focused' },
   { keys: ['Tab', 'Enter'], expect: '[docs] opened style.md' },
   {
     writeFile: { path: STYLE_RULE_FILE, text: STYLE_RELOADED },
@@ -119,7 +120,7 @@ const STEPS: SelfTestStep[] = [
     keys: [':', 'q', '!', 'Enter'],
     expect: '[docs] dropped edits on style.md',
   },
-  { keys: ['<C-h>'], expect: '[docs] tree focused' },
+  { keys: ['<A-h>'], expect: '[docs] tree focused' },
   {
     keys: ['a'],
     expect: '[docs] create: pick a kind',
@@ -130,7 +131,7 @@ const STEPS: SelfTestStep[] = [
   { keys: ['Enter'], expect: '[docs] create rule: name it' },
   { keys: [...'tidy', 'Enter'], expect: '[docs] created tidy.md' },
   { keys: [':', 'q', 'Enter'], expect: '[docs] closed the editor on tidy.md' },
-  { keys: ['<C-h>'], expect: '[docs] tree focused' },
+  { keys: ['<A-h>'], expect: '[docs] tree focused' },
   { keys: ['r'], expect: '[docs] rename: type the new path', checksFit: true },
   {
     keys: [...Array<string>(7).fill('Backspace'), ...'neat.md', 'Enter'],
@@ -147,7 +148,7 @@ const STEPS: SelfTestStep[] = [
   { keys: ['A'], expect: '[docs] create by path: type the path' },
   { keys: [...'fresh.md', 'Enter'], expect: '[docs] created fresh.md' },
   { keys: [':', 'q', 'Enter'], expect: '[docs] closed the editor on fresh.md' },
-  { keys: ['<C-h>'], expect: '[docs] tree focused' },
+  { keys: ['<A-h>'], expect: '[docs] tree focused' },
   {
     keys: ['d'],
     expect: '[docs] asked to move fresh.md to the Trash',
@@ -170,36 +171,38 @@ const STEPS: SelfTestStep[] = [
   { keys: ['h', 'h'], expect: '[docs] collapsed Rules' },
   { keys: ['j', 'l'], expect: '[docs] expanded Hooks' },
   { keys: ['j', 'l'], expect: '[docs] opened settings.json' },
-  { keys: ['<C-l>'], expect: '[docs] doc focused' },
+  { keys: ['<A-l>'], expect: '[docs] doc focused' },
   { keys: ['i'], expect: '[docs] editing settings.json' },
   {
     keys: [':', 'q', 'Enter'],
     expect: '[docs] closed the editor on settings.json',
   },
-  { keys: ['<C-h>'], expect: '[docs] tree focused' },
+  { keys: ['<A-h>'], expect: '[docs] tree focused' },
   {
     keys: ['j', 'j', 'l'],
     expect: '[docs] expanded selftest-plugin@selftest-market',
   },
   { keys: ['j', 'j', 'l'], expect: '[docs] expanded Plugins' },
   { keys: ['j', 'l'], expect: '[docs] opened 1.0.0' },
-  { keys: ['<C-l>'], expect: '[docs] doc focused' },
+  { keys: ['<A-l>'], expect: '[docs] doc focused' },
   { keys: ['i'], expect: '[docs] editing installed_plugins.json' },
   {
     keys: [':', 'q', 'Enter'],
     expect: '[docs] closed the editor on installed_plugins.json',
   },
-  { keys: ['<C-h>'], expect: '[docs] tree focused' },
+  { keys: ['<A-h>'], expect: '[docs] tree focused' },
   { keys: ['k', 'k', 'l'], expect: '[docs] expanded Skills' },
   { keys: ['j', 'l'], expect: '[docs] opened SKILL.md' },
-  { keys: ['<C-l>'], expect: '[docs] doc focused' },
+  { keys: ['<A-l>'], expect: '[docs] doc focused' },
   { keys: ['j'], expect: '[page] j ran docs.scrollDown' },
   { keys: ['k'], expect: '[page] k ran docs.scrollUp' },
+  { keys: ['<C-j>'], expect: '[page] <C-j> ran docs.halfPageDown' },
+  { keys: ['<C-k>'], expect: '[page] <C-k> ran docs.halfPageUp' },
   {
     keys: ['i'],
     expect: '[docs] refused to edit SKILL.md in the plugin cache',
   },
-  { keys: ['<C-h>'], expect: '[docs] tree focused' },
+  { keys: ['<A-h>'], expect: '[docs] tree focused' },
   { keys: ['a'], expect: '[docs] create: pick a kind' },
   { keys: ['j', 'k', 'j', 'l'], expect: '[docs] create rule: pick a place' },
   { keys: ['Escape'], expect: '[docs] create cancelled' },
@@ -210,13 +213,13 @@ const STEPS: SelfTestStep[] = [
     expect: '[page] side bar hidden',
     checksFit: true,
   },
-  { keys: ['<C-h>'], expect: '[page] side bar shown' },
+  { keys: ['<A-h>'], expect: '[page] side bar shown' },
   { keys: [' ', 'k', 'd'], expect: '[page] side bar hidden' },
   { keys: [' ', 'k', 'd'], expect: '[page] side bar shown' },
   // Both views' pane scope is now tree, so only closing the session view's
   // kind picker on Docs mode's show frees `j` there. The picker holds no
   // text box, so Space reaches the leader.
-  { keys: ['<C-h>'], expect: '[docs] tree focused' },
+  { keys: ['<A-h>'], expect: '[docs] tree focused' },
   {
     keys: [' ', 'k', 's'],
     expect: '[docs] Docs tab shown',

@@ -31,6 +31,16 @@ export const chatManifest = definePlugin({
     },
     latestEntry: { label: 'latest entry', group: 'entries', runsIn: 'page' },
     firstEntry: { label: 'first entry', group: 'entries', runsIn: 'page' },
+    halfPageDown: {
+      label: 'scroll half a page down',
+      group: 'entries',
+      runsIn: 'page',
+    },
+    halfPageUp: {
+      label: 'scroll half a page up',
+      group: 'entries',
+      runsIn: 'page',
+    },
     allowPermission: {
       label: 'allow the tool once',
       group: 'permissions',

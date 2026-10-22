@@ -34,6 +34,16 @@ export const docsManifest = definePlugin({
     focusTree: { label: 'focus the tree', group: 'focus', runsIn: 'page' },
     scrollDown: { label: 'scroll down', group: 'doc', runsIn: 'page' },
     scrollUp: { label: 'scroll up', group: 'doc', runsIn: 'page' },
+    halfPageDown: {
+      label: 'scroll half a page down',
+      group: 'doc',
+      runsIn: 'page',
+    },
+    halfPageUp: {
+      label: 'scroll half a page up',
+      group: 'doc',
+      runsIn: 'page',
+    },
     edit: { label: 'edit the doc', group: 'doc', runsIn: 'page' },
     conflictReload: {
       label: 'reload from disk',
