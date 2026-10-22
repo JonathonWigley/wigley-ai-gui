@@ -39,8 +39,9 @@ hjkl is the direction in every layer; the modifier picks the verb.
   mnemonic verbs.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `R` rescan.
-- **Ctrl+hjkl** moves inside the content: `Ctrl+j`/`Ctrl+k` scroll half a page in the rendered doc,
-  the chat transcript and the gallery (in forms, the next and previous box), `Ctrl+h`/`Ctrl+l` the previous and next unit (forms items).
+- **Ctrl+hjkl** moves inside the content: `Ctrl+j`/`Ctrl+k` scroll half a page in the rendered doc
+  and the chat transcript, and page the gallery a whole page (in forms, the next and previous box);
+  `Ctrl+h`/`Ctrl+l` the previous and next unit (forms items).
 - **Alt+hjkl** moves focus between panes (`Alt+h`/`Alt+l` between the docs tree and the doc).
   Reserved for when the app has them: `Alt+Shift+hjkl` resize, `Ctrl+Alt+hjkl` swap,
   `Alt+'` / `Alt+;` split, `Alt+w` close a pane.
