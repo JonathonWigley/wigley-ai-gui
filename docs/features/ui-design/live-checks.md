@@ -96,11 +96,11 @@ Needs a Claude Code or Codex session started in a terminal with the wigley 1.4.0
 | # | Steps | Expect | Tag |
 |---|---|---|---|
 | D1 | `Space k d` | Docs mode: the tree in the side bar on dense chrome glass, the doc on a solid sheet with a gutter and `radius-lg`; the activity bar marks Docs; the title bar shows the open doc's `~` path | expected |
-| D2 | `Space k d`, `j`, `Space k d`; then `Space k d`, `Ctrl+h` | the side bar hides and `j` scrolls the doc; the side bar returns; hidden again, `Ctrl+h` brings it back with the tree focused | expected |
+| D2 | `Space k d`, `j`, `Space k d`; then `Space k d`, `Alt+h` | the side bar hides and `j` scrolls the doc; the side bar returns; hidden again, `Alt+h` brings it back with the tree focused | expected |
 | D3 | In the tree: `G`, then `gg` | the last row, then the first, is selected and scrolled into view | expected |
 | D4 | Narrow the window below 680 px in Docs mode, `Space k d`, widen it | the side bar hides; `Space k d` opens it over the doc; widening lays it beside | low-confidence: Docs' side bar is new wiring on plan A's narrow rule |
 | D4b | Narrow the window below 680 px while the tree pane has focus, then press `j` | the side bar hides; the doc pane takes focus and scrolls; no invisible tree row moves | low-confidence: plan A's narrow rule gives the mode no callback, so Docs checks `sideBarShown()` on each tree key |
-| D5 | Hover tree rows; `Ctrl+l` then `Ctrl+h` | hover fills with `list-hover-background`; the selected row keeps `list-active-background`, with the focus ring only while the tree holds focus; chevrons turn on expand; nested rows indent by depth | expected |
+| D5 | Hover tree rows; `Alt+l` then `Alt+h` | hover fills with `list-hover-background`; the selected row keeps `list-active-background`, with the focus ring only while the tree holds focus; chevrons turn on expand; nested rows indent by depth | expected |
 | D6 | `Space k s` to a session's Docs tab; drag the split's line past both ends | the tree sits in the split's start pane; it stops at 160 px and 480 px; the line turns `focus-border` while dragging | expected |
 | D7 | Leave the split at a new width, open another session's Docs tab, then quit and `npm start` again | the other tab opens at the same width; after the restart the width holds | low-confidence: one `sessionTree` key shared by every tab, written through the Bridge to main's ui-state file |
 | D8 | Narrow the window below 640 px on a session's Docs tab | the tree stacks above the doc, the handle gone | expected |
@@ -109,7 +109,7 @@ Needs a Claude Code or Codex session started in a terminal with the wigley 1.4.0
 | D10 | `a` (kind picker), `A` then type `~/.c` and `Tab` (path box), `d` on a doc (Trash confirm) | the kind picker floats with no scrim; the path box and the Trash confirm sit over the scrim; each covers the side bar too, with its title in sentence case; completions in mono; `Esc` closes each and focus returns to the tree | low-confidence: dialogs moved into the overlay area out of the view |
 | D11 | Open an entry with load states | the Claude and Codex tags: `launch` green, `on-demand` accent, `shadowed` and `pending` yellow, `listed` and `not-loaded` neutral; hovering a tag shows its reason | expected |
 | D12 | Edit an open doc (`i`), change its file on disk, then `:w` | a warning-tinted banner with a warning edge; then the changed-on-disk prompt, attention-tinted with an attention edge | expected |
-| D13 | A session's Docs tab before `R`; then rebind `docs.focusTree` in `keymap.json` | the doc pane says `Open a doc from the tree` centred, with `⌃H`; the tree's status line says `Not read yet`; after the rebind the hint shows the new key | expected |
+| D13 | A session's Docs tab before `R`; then rebind `docs.focusTree` in `keymap.json` | the doc pane says `Open a doc from the tree` centred, with `⌥H`; the tree's status line says `Not read yet`; after the rebind the hint shows the new key | expected |
 
 ## Editors and prose (09)
 

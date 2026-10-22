@@ -13,7 +13,8 @@
 - **Dev quirks** — the startup reload, a session's stale forms schema, and the login-shell PATH.
 
 UI work — a view, its CSS, a theme, a primitive, a layout or a key — reads `DESIGN.md` first: it is the standard
-every view follows, and it says where a new value or primitive goes.
+every view follows, and it says where a new value or primitive goes. A new or moved key also reads `docs/keymap.md`,
+the rule for which key an action takes.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
 vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `wigley-forms`
@@ -59,7 +60,7 @@ reaches the app only through the plugin API, so a new tool has the same reach as
 
 ```
 src/contracts/   interfaces and records crossing a seam, the plugin API among them; imports nothing
-src/config/      core keymap (leader, remaps, app chords), default settings, the core token registry and the built-in
+src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
                  theme variables, `errorText`, the fake agent harness)
@@ -164,12 +165,16 @@ round), since main, not the page, decides.
   before only if no tab was selected since, even back to the taking tab: forms takes over for a round and releases on submit or cancel. A session's tabs drop when its row leaves, closed by the user or ended, and
   `sessions.sessionRemoved` tells each plugin to forget the session; the user moves between tabs with `Option+o` /
   `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`.
-- **A key** is a default bind in its plugin's manifest naming that plugin's command; the core qualifies both, so
-  `nextItem` in plugin `forms` runs as `forms.nextItem`, and its scope `review` is `forms.review`. Keys never call
-  code directly, so rebinding never touches a handler. `src/config/keymap.ts` holds only the core's keys. The keymap
-  merges in layers — core, then plugins in dependency order, then the user's `keymap.json` — where a later layer's
-  bind replaces an earlier one with the same keys in the same scope and an `unbind` entry removes one; only a clash
-  inside one layer is an error. Which key type a bind takes follows `DESIGN.md` § Keys and focus. Each process checks every keymap it installs, at startup and on each config change, for a key that names no registered
+- **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
+  built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one
+  vim-notation entry (`<Leader>ks`, `gg`, `<A-o>`) written once; the merge expands it into the page bind and the box
+  bind it stands for, a leader bind into both, so the key engine reads page and editor binds as before. Keys never
+  call code directly, so rebinding never touches a handler. Built-in manifests declare commands and scopes only; a
+  manifest's optional `keys` is for a plugin from outside the repo. The keymap merges in layers — the default
+  keymap, then each manifest's `keys` in dependency order, then the user's `keymap.json`, in the same entry format —
+  where a later layer's bind replaces an earlier one with the same keys in the same scope and an `unbind` entry
+  removes one; only a clash inside one layer is an error. Which key a bind takes follows `docs/keymap.md`, and its
+  leader group is named in the file's `groups` for which-key. Each process checks every keymap it installs, at startup and on each config change, for a key that names no registered
   command, and main and the page both reject a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
   `<D-w>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
   too, in every vim mode, ahead of the editor. A plugin's own text box may keep typed keys from the page keys while

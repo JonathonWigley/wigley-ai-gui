@@ -33,8 +33,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - `Space k s` shows Sessions mode; pressed while Sessions already shows, it toggles the sessions sidebar. `Space k d`
   does the same for Docs mode and its docs tree. `<Leader>ks` / `<Leader>kd` do the same inside a box. No existing bind
   starts with `Space k`.
-- Every key is a default bind in a plugin manifest to a named command, never code reacting to a key, so the later
-  user key config needs nothing more.
+- Every key is a default bind in the default keymap (`src/plugins/keymap.ts`) to a named command, never code
+  reacting to a key, so the user's `keymap.json` rebinds any of them.
 - **Sessions sidebar**, left, Claude Code style, replacing the tab strip. It lists every connected session (a relay
   connects at session start while the app runs; a session started while the app was closed connects on its first
   form). A row: the project folder on the first line (numbered on a clash, as tabs are today), the harness (Claude /
@@ -102,7 +102,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   Images show their alt text.
 - **Keys** (scopes `docs.tree`, `docs.doc`, `docs.conflict`, `docs.picker`, `docs.box`, `docs.confirm`): tree `j`/`k`
   move, `l`/Enter open or expand, `h` collapse, `/` filter, `a`, `A`, `r`, `d`, `R` rescan, `c` pick the load-state
-  folder; `Ctrl+l` / `Ctrl+h` move focus between tree and doc. Doc `j`/`k` scroll, `i` edit. Conflict prompt `r`
+  folder; `Alt+l` / `Alt+h` move focus between tree and doc. Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll half a
+  page, `i` edit. Conflict prompt `r`
   reload, `o` overwrite, Esc keep editing. Picker `j`/`k` move, Enter or `l` choose, Esc cancel. Text box Tab
   completes the path, Enter accepts, Esc cancels. Trash confirm `y` yes, `n` or Esc keep.
 - **Packages** (the user's yes): `@codemirror/lang-markdown`, `@codemirror/language-data`; `@lezer/highlight`,

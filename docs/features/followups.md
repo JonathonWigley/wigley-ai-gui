@@ -93,8 +93,7 @@ now, any harness later). Each item names its sites.
   a command through the lifecycle above, and every state change a plugin owns is published as an event typed in its
   `contract.ts`. Today publishing is opt-in (AGENTS.md § Architecture says how to emit, not that a plugin must), and
   only `sessions` emits; forms, chat and docs shipped emitting nothing.
-- Plugins may add editor remaps, and the page leader comes from a `keymap.pageLeader` rather than
-  `PAGE_LEADER_KEY = ' '` in `keys/page/key-bar.ts` (left over from the layered keymap).
+- Plugins may add editor remaps (a manifest's `keys` has binds and groups, no remaps).
 - Commands take a count or argument, so `choose1..9` becomes one `forms.choose` (and choice 10 gets a key: `DIGITS`
   stops at 9 while `MAX_CHOICES` is 10).
 - Layouts as a core service: `api.layouts.define(slot, { contractText, defaultSource, read })` in both processes,

@@ -109,8 +109,9 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
   the plugin id. A setting read only when something is created (window size, the claude command)
   applies to the next window or session; every other setting applies live. Transparency is a core
   setting: `system`, `full` or `reduced`, default `system`.
-- **keymap.json** layers over the defaults (core, then plugins in dependency order, then the user
-  file): a user bind replaces a default with the same keys in the same scope, and `unbind` entries
+- **keymap.json** layers over the defaults (the default keymap `src/plugins/keymap.ts`, then any
+  manifest's `keys`, then the user file), in the default keymap's own entry format, so a line copies
+  across: a user bind replaces a default with the same keys in the same scope, and `unbind` entries
   remove a default. Only a clash inside one layer is an error. The user changes one key without
   copying them all, and a plugin's new keys still arrive.
 - **Everything reads live.** Plugins read `settings()` and `keys.keymap()` with `onChanged`, in both
