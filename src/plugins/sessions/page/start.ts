@@ -1,6 +1,7 @@
 import './sessions.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { kbd } from '../../../shared/page/ui/kbd';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -67,7 +68,7 @@ function createExports(
   };
 }
 
-// Sessions mode: a sidebar row for each of main's sessions, in the mode's side
+// Sessions mode: a side bar row for each of main's sessions, in the mode's side
 // bar, beside the selected session's tabs, which other plugins add; the title
 // bar shows the selected session's label and folder, and the mode's command
 // toggles the side bar while the mode shows. Main owns the rows: activating or
@@ -119,6 +120,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       activate: (sessionId) => exports.activate(sessionId),
       isModeShown: () => isModeShown,
       tabsChanged: checkVisible,
+      noSelectionHint: () => {
+        const shown = keys.keysFor(qualify(sessionsManifest.id, 'nextSession'));
+        return shown === null ? null : kbd(shown, api.platform);
+      },
     });
     const exports = createExports(api, view, () => state, labelOf);
 

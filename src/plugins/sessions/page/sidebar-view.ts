@@ -1,4 +1,6 @@
-import { button, element } from '../../../shared/page/dom';
+import { element } from '../../../shared/page/dom';
+import { row } from '../../../shared/page/ui/row';
+import { statusDot } from '../../../shared/page/ui/status-dot';
 import type { SessionRow, SessionsState } from '../contract';
 import { harnessText } from './tabs';
 
@@ -11,8 +13,10 @@ export interface SidebarView {
   ): void;
 }
 
-// Sessions mode's sidebar: one row per session in main's order, the selected
-// one marked; clicking a row activates its session.
+// Sessions mode's side bar: one row per session in main's order, each
+// reading its label, its harness dimmed, an attention dot while a round waits
+// unopened, and its status on a second line; the selected row is marked, and
+// clicking a row activates its session.
 export function mountSidebarView(
   activate: (sessionId: string) => void,
 ): SidebarView {
@@ -23,11 +27,11 @@ export function mountSidebarView(
     render(state, statusOf) {
       const selectedSessionId = state?.selectedSessionId ?? null;
       sidebar.replaceChildren(
-        ...(state?.rows ?? []).map((row) =>
+        ...(state?.rows ?? []).map((session) =>
           buildRow(
-            row,
-            row.sessionId === selectedSessionId,
-            statusOf(row.sessionId),
+            session,
+            session.sessionId === selectedSessionId,
+            statusOf(session.sessionId),
             activate,
           ),
         ),
@@ -37,30 +41,27 @@ export function mountSidebarView(
 }
 
 function buildRow(
-  row: SessionRow,
+  session: SessionRow,
   isSelected: boolean,
   status: string | null,
   activate: (sessionId: string) => void,
 ): HTMLElement {
-  const entry = button('session-row', '', () => activate(row.sessionId));
-  entry.title = status === null ? row.label : `${row.label} · ${status}`;
+  const entry = row({
+    density: 'list',
+    label: session.label,
+    detail: harnessText(session.harness) || null,
+    trailing: session.marked ? statusDot('attention') : null,
+    onClick: () => activate(session.sessionId),
+  });
+  entry.classList.add('session-row');
+  entry.title =
+    status === null ? session.label : `${session.label} · ${status}`;
   entry.classList.toggle('is-selected', isSelected);
   if (isSelected) {
     entry.setAttribute('aria-current', 'true');
   }
-  const harness = harnessText(row.harness);
-  const harnessElement = element('span', 'session-row-harness', harness);
-  harnessElement.hidden = harness === '';
-  const marker = element('span', 'session-row-marker', '●');
-  marker.hidden = !row.marked;
-  const firstLine = element('span', 'session-row-line');
-  firstLine.append(
-    element('span', 'session-row-label', row.label),
-    harnessElement,
-    marker,
-  );
-  const statusElement = element('span', 'session-row-status', status ?? '');
-  statusElement.hidden = status === null;
-  entry.append(firstLine, statusElement);
+  if (status !== null) {
+    entry.append(element('span', 'session-row-status', status));
+  }
   return entry;
 }

@@ -1,4 +1,7 @@
-import { button, element } from '../../../shared/page/dom';
+import { element } from '../../../shared/page/dom';
+import { emptyState } from '../../../shared/page/ui/empty-state';
+import { sheet } from '../../../shared/page/ui/sheet';
+import { tab as tabButton, tabStrip } from '../../../shared/page/ui/tabs';
 import type {
   SessionsState,
   SessionTabHandle,
@@ -31,10 +34,13 @@ interface SessionTabs {
 }
 
 // `isModeShown` reads whether Sessions mode shows; `changed` runs after any
-// change to a session's tabs, their selection or their statuses.
+// change to a session's tabs, their selection or their statuses;
+// `noSelectionHint` builds the key hint shown beside the text asking for a
+// session to be picked, null for none.
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
+  noSelectionHint(): HTMLElement | null;
 }
 
 export interface SessionTabsView {
@@ -51,18 +57,22 @@ export interface SessionTabsView {
   select(sessionId: string, tabId: string): void;
 }
 
-// The tab area of Sessions mode: the selected session's tab strip over one
-// body per session, only the selected session's body showing and in it only
-// its selected tab, or the text saying why nothing shows. A tab added for a
-// session with no row yet waits in a hidden body. Until `render` hands it
-// main's first state, it shows no text either.
+// The tab area of Sessions mode: the selected session's tab strip on the top
+// edge of one sheet holding a body per session, only the selected session's
+// body showing and in it only its selected tab, or the text saying why
+// nothing shows. A tab's element fills its body. A tab added for a session
+// with no row yet waits in a hidden body. Until `render` hands it main's
+// first state, it shows no text either.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   const area = element('div', 'session-area');
-  const strip = element('nav', 'session-tabs');
+  const strip = tabStrip([]);
+  strip.classList.add('session-tabs');
   strip.setAttribute('aria-label', 'Tabs');
-  const bodies = element('div', 'session-bodies');
+  const bodies = sheet();
+  bodies.classList.add('session-bodies');
   const text = buildText();
-  area.append(strip, bodies, text.element);
+  bodies.append(text.element);
+  area.append(strip, bodies);
   const sessions = new Map<string, SessionTabs>();
   let state: SessionsState | null = null;
 
@@ -77,7 +87,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       entries: new Map(),
     };
     sessions.set(sessionId, created);
-    bodies.append(created.body);
+    bodies.insertBefore(created.body, text.element);
     return created;
   };
 
@@ -92,7 +102,6 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     const selected =
       selectedSessionId === null ? undefined : sessions.get(selectedSessionId);
     const selectedTabs = [...(selected?.entries.values() ?? [])];
-    strip.hidden = selectedTabs.length === 0;
     strip.replaceChildren(
       ...selectedTabs.map((tab) =>
         buildTab(tab.view, tab.view.id === selected?.tabs.selectedTabId, () => {
@@ -102,7 +111,8 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         }),
       ),
     );
-    text.show(textFor(state, selectedTabs.length));
+    const shown = textFor(state, selectedTabs.length);
+    text.show(shown, shown?.hasHint ? deps.noSelectionHint() : null);
   };
 
   const changed = () => {
@@ -224,23 +234,23 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
 }
 
 interface Text {
-  title: string;
   text: string;
+  hasHint: boolean;
 }
 
 const EMPTY_TEXT: Text = {
-  title: 'No sessions',
-  text: 'An agent session shows here once its relay connects: when it starts while the app runs, or at its first round.',
+  text: "No sessions yet: one shows here when its agent's relay connects",
+  hasHint: false,
 };
 
 const NO_SELECTION_TEXT: Text = {
-  title: 'No session selected',
-  text: 'Pick a session in the sidebar.',
+  text: 'Pick a session in the side bar',
+  hasHint: true,
 };
 
 const NOTHING_OPEN_TEXT: Text = {
-  title: 'Nothing open',
-  text: 'This session has nothing open yet. Its first round opens a Form tab here.',
+  text: "Nothing open yet: this session's first round opens a Form tab here",
+  hasHint: false,
 };
 
 // Why the tab area shows no tab, or null when it shows one or main's first
@@ -267,29 +277,27 @@ function buildTab(
   isActive: boolean,
   select: () => void,
 ): HTMLElement {
-  const entry = button('session-tab', '', select);
+  const entry = tabButton(view.title, select);
   entry.title = view.title;
   entry.classList.toggle('is-active', isActive);
   entry.setAttribute('aria-current', String(isActive));
-  entry.append(element('span', 'session-tab-label', view.title));
   return entry;
 }
 
-// The section saying why the tab area shows no tab; `show(null)` hides it.
+// The slot saying why the tab area shows no tab, `hint` after its text;
+// `show(null, null)` hides it and empties it.
 function buildText(): {
   element: HTMLElement;
-  show(text: Text | null): void;
+  show(text: Text | null, hint: HTMLElement | null): void;
 } {
-  const section = element('section', 'sessions-empty');
-  const title = element('h1', 'sessions-empty-title');
-  const body = element('p', 'sessions-empty-text');
-  section.append(title, body);
+  const slot = element('div', 'sessions-empty');
   return {
-    element: section,
-    show(text) {
-      section.hidden = text === null;
-      title.textContent = text?.title ?? '';
-      body.textContent = text?.text ?? '';
+    element: slot,
+    show(text, hint) {
+      slot.hidden = text === null;
+      slot.replaceChildren(
+        ...(text === null ? [] : [emptyState(text.text, hint)]),
+      );
     },
   };
 }
