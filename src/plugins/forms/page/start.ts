@@ -1,4 +1,3 @@
-import '../../../shared/page/dialog.css';
 import '../../../shared/page/markdown.css';
 import './forms.css';
 import type {
@@ -127,6 +126,8 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       markdown: services.markdown,
       keys: api.dependency<KeysPageExports>('keys'),
       run: (command) => api.commands.run(command),
+      platform: api.platform,
+      uiState: services.uiState,
       log: services.log,
     });
     store.subscribe(() => {

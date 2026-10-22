@@ -1,13 +1,13 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { Platform } from '../../../contracts/platform';
 import type { PluginAreas } from '../../../contracts/plugin';
-import {
-  appendKeys,
-  button,
-  element,
-  showKeys,
-} from '../../../shared/page/dom';
+import type { UiState } from '../../../contracts/ui-state';
+import { element } from '../../../shared/page/dom';
+import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
+import { createDialog, type Dialog } from '../../../shared/page/ui/dialog';
+import { emptyState } from '../../../shared/page/ui/empty-state';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -19,6 +19,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { isBoxShown } from './boxes';
 import type { EditorBoxes } from './editor-boxes';
+import { appendKeyHint } from './kinds/card-parts';
 import {
   activeRound,
   type FormsAction,
@@ -32,7 +33,8 @@ import { createRoundView, type RoundView } from './round-view';
 import { saveLabel, sessionTitle } from './view-model';
 
 // `beforeClose` answers whether a session may close now; `formShown` runs
-// each time a session's Form tab becomes the visible tab.
+// each time a session's Form tab becomes the visible tab. `platform` is the OS
+// key hints are drawn for; `uiState` keeps each round's rail width.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'statusBar' | 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
@@ -43,6 +45,8 @@ export interface FormsViewDeps {
   markdown: MarkdownRenderer;
   keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   run(command: CommandId): void;
+  platform: Platform;
+  uiState: UiState;
   log: Log;
 }
 
@@ -66,7 +70,7 @@ export interface FormsView {
 }
 
 // A session's Form tab: it holds the session's round views and the idle
-// section, with the status last sent to the session's row.
+// state, with the status last sent to the session's row.
 interface FormTab {
   handle: SessionTabHandle;
   element: HTMLElement;
@@ -83,7 +87,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   const status = buildStatusLine(deps);
   const confirm = buildConfirm(deps);
   areas.statusBar.contribute(status.element);
-  areas.overlay.contribute(confirm);
+  areas.overlay.contribute(confirm.element);
   const roundViews = new Map<string, RoundView>();
   const formTabs = new Map<string, FormTab>();
   const takeOvers: TakeOvers = new Map();
@@ -110,7 +114,11 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     if (shown !== null) {
       roundViews.get(shown.roundId)?.update(shown, view);
     }
-    confirm.hidden = view !== 'confirm';
+    if (view === 'confirm') {
+      confirm.show();
+    } else {
+      confirm.hide();
+    }
     status.update(state);
     const box = boxes.active();
     if (box !== null && !isBoxShown(state, box)) {
@@ -217,15 +225,7 @@ function formTabOf(
     return existing;
   }
   const tab = element('div', 'form-tab');
-  const idle = element('section', 'form-idle');
-  idle.append(
-    element('h1', 'form-idle-title', 'No round open'),
-    element(
-      'p',
-      'form-idle-text',
-      "This session has no round for you now. Its agent's next round opens here.",
-    ),
-  );
+  const idle = emptyState("No round open. The agent's next round opens here.");
   tab.append(idle);
   const handle = deps.sessions.addTab(sessionId, {
     id: 'form',
@@ -257,12 +257,14 @@ function showRound(
       keys: deps.keys,
       dispatch,
       run: deps.run,
+      platform: deps.platform,
+      uiState: deps.uiState,
       log: deps.log,
     },
   );
 }
 
-// Shows each Form tab's idle section while its session has no round, and
+// Shows each Form tab's idle state while its session has no round, and
 // sends the tab's status, the round's title or '' with none, when it changed.
 function syncFormTabs(state: FormsState, formTabs: Map<string, FormTab>) {
   for (const [sessionId, formTab] of formTabs) {
@@ -297,44 +299,39 @@ function buildStatusLine(deps: FormsViewDeps): {
   };
 }
 
-// The cancel prompt; each button shows the confirm scope's keys for it, and
-// shows them again after each keymap change, for as long as the page lives,
-// as the prompt does.
-function buildConfirm(deps: Pick<FormsViewDeps, 'keys' | 'run'>): HTMLElement {
-  const overlay = element('div', 'overlay');
-  const dialog = element('div', 'dialog dialog-confirm');
-  dialog.setAttribute('role', 'alertdialog');
-  dialog.setAttribute('aria-label', 'Cancel this round?');
-  const actions = element('div', 'dialog-actions');
+// The cancel prompt, the safe action first; each button shows the confirm
+// scope's keys for it, and shows them again after each keymap change, for as
+// long as the page lives, as the prompt does.
+function buildConfirm(
+  deps: Pick<FormsViewDeps, 'keys' | 'run' | 'platform'>,
+): Dialog {
+  const dialog = createDialog('Cancel this round?');
   const confirmButton = (
-    className: string,
     label: string,
     command: FormsCommandName,
+    variant: ButtonVariant,
   ) => {
-    const control = button(className, label, () =>
-      deps.run(formsCommand(command)),
-    );
-    const readKeys = () =>
-      deps.keys.keysFor(formsCommand(command), formsScope('confirm'));
-    let hint = appendKeys(control, readKeys());
-    deps.keys.onChanged(() => {
-      hint = showKeys(control, hint, readKeys());
+    const control = textButton(label, () => deps.run(formsCommand(command)), {
+      variant,
     });
+    const redrawKeys = appendKeyHint(
+      control,
+      () => deps.keys.keysFor(formsCommand(command), formsScope('confirm')),
+      deps.platform,
+    );
+    deps.keys.onChanged(redrawKeys);
     return control;
   };
-  actions.append(
-    confirmButton('button button-danger', 'Cancel the round', 'confirmCancel'),
-    confirmButton('button', 'Keep answering', 'dismissConfirm'),
-  );
-  dialog.append(
-    element('h2', 'dialog-title', 'Cancel this round?'),
+  dialog.body.append(
     element(
       'p',
-      'dialog-text',
+      '',
       'The agent is told the round was cancelled. Your answers stay saved.',
     ),
-    actions,
   );
-  overlay.append(dialog);
-  return overlay;
+  dialog.actions.append(
+    confirmButton('Keep answering', 'dismissConfirm', 'secondary'),
+    confirmButton('Cancel round', 'confirmCancel', 'danger'),
+  );
+  return dialog;
 }

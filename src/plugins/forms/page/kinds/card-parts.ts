@@ -1,11 +1,10 @@
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import {
-  appendKeys,
-  button,
-  element,
-  markdownElement,
-  showKeys,
-} from '../../../../shared/page/dom';
+import type { Platform } from '../../../../contracts/platform';
+import { button, element, markdownElement } from '../../../../shared/page/dom';
+import { inputFrame } from '../../../../shared/page/ui/input-frame';
+import { kbd } from '../../../../shared/page/ui/kbd';
+import { sectionHeader } from '../../../../shared/page/ui/section-header';
+import { tag } from '../../../../shared/page/ui/tag';
 import type { AnswerStatus, Round } from '../../contract';
 import { numberedCommand } from '../../ids';
 import type { RoundInfo } from '../../layouts/layout';
@@ -36,19 +35,61 @@ export function roundInfo(round: Round): RoundInfo {
   return { heading: round.heading, overview: round.overview };
 }
 
-// The header naming the item's kind, with the status slot after the label.
+// The hint of `keys` as the keymap prints them, drawn for `platform`; null
+// for null keys, which draw nothing.
+export function keyHint(keys: string, platform: Platform): HTMLElement;
+export function keyHint(
+  keys: string | null,
+  platform: Platform,
+): HTMLElement | null;
+export function keyHint(
+  keys: string | null,
+  platform: Platform,
+): HTMLElement | null {
+  return keys === null ? null : kbd(keys, platform);
+}
+
+// Appends the hint of `readKeys()` to the end of `control`, and returns the
+// redraw that shows `readKeys()` there again in its place, leaving the hint
+// alone while the keys read the same.
+export function appendKeyHint(
+  control: HTMLElement,
+  readKeys: () => string | null,
+  platform: Platform,
+): () => void {
+  let shownKeys = readKeys();
+  let hint = keyHint(shownKeys, platform);
+  if (hint !== null) {
+    control.append(hint);
+  }
+  return () => {
+    const keys = readKeys();
+    if (keys === shownKeys) {
+      return;
+    }
+    hint?.remove();
+    shownKeys = keys;
+    hint = keyHint(keys, platform);
+    if (hint !== null) {
+      control.append(hint);
+    }
+  };
+}
+
+// The header naming the item's kind as a tag, with the status slot after it.
 export function buildItemHead(
   parent: HTMLElement,
   kind: string,
 ): { header: HTMLElement; status: HTMLElement } {
   const header = element('header', 'item-head');
   const status = element('span', 'item-status');
-  header.append(element('span', 'item-kind', kind), status);
+  header.append(tag(kind), status);
   parent.append(header);
   return { header, status };
 }
 
-// A labelled block of markdown; nothing and null for blank text.
+// A block of markdown under its section header; nothing and null for blank
+// text.
 export function buildSection(
   parent: HTMLElement,
   label: string,
@@ -60,7 +101,7 @@ export function buildSection(
   }
   const section = element('section', 'context');
   section.append(
-    element('div', 'context-label', label),
+    sectionHeader(label),
     markdownElement('div', 'context-body md', markdown.block(text)),
   );
   parent.append(section);
@@ -82,6 +123,8 @@ export function buildChoiceReason(
   return reason;
 }
 
+// A text box's field: its label and hint over the input frame `box`, which
+// the editor mounts into.
 export function buildField(
   parent: HTMLElement,
   className: string,
@@ -89,12 +132,9 @@ export function buildField(
   hint: string,
 ): Field {
   const field = element('div', `field ${className}`);
-  const caption = element('div', 'field-label');
-  caption.append(
-    element('span', 'label', label),
-    element('span', 'hint', hint),
-  );
-  const box = element('div', 'box');
+  const caption = sectionHeader(label, element('span', 'field-hint', hint));
+  const box = inputFrame();
+  box.classList.add('box');
   field.append(caption, box);
   parent.append(field);
   return { element: field, box };
@@ -108,14 +148,14 @@ export interface ChoiceList {
 }
 
 // Appends one choice per text to `list`, each inline markdown with the keys
-// that pick it, the recommended one badged; `pick` gets the clicked choice,
+// that pick it, the recommended one tagged; `pick` gets the clicked choice,
 // 1-based.
 export function buildChoiceList(
   list: HTMLElement,
   texts: string[],
   recommend: number,
   pick: (choice: number) => void,
-  deps: Pick<CardDeps, 'markdown' | 'keysFor'>,
+  deps: Pick<CardDeps, 'markdown' | 'keysFor' | 'platform'>,
 ): ChoiceList {
   const keyUpdaters: (() => void)[] = [];
   const entries = texts.map((text, i) => {
@@ -129,16 +169,11 @@ export function buildChoiceList(
     entry.append(choicePick);
     if (choice === recommend) {
       entry.classList.add('is-recommended');
-      choicePick.append(
-        element('span', 'badge badge-recommend', 'Recommended'),
-      );
+      choicePick.append(tag('Recommended', 'accent'));
     }
     const command = numberedCommand('choose', choice);
     const readKeys = () => (command === null ? null : deps.keysFor(command));
-    let hint = appendKeys(choicePick, readKeys());
-    keyUpdaters.push(() => {
-      hint = showKeys(choicePick, hint, readKeys());
-    });
+    keyUpdaters.push(appendKeyHint(choicePick, readKeys, deps.platform));
     list.append(entry);
     return entry;
   });

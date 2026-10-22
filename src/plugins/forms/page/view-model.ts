@@ -1,3 +1,4 @@
+import type { DotStatus } from '../../../shared/page/ui/status-dot';
 import type { AnswerableKind, AnswerStatus, FindingAction } from '../contract';
 import { findingSolution } from '../finding-pick';
 import {
@@ -144,6 +145,18 @@ function missingPick(
     return 'solution';
   }
   return answer.choice > 0 ? 'action' : null;
+}
+
+// The dot a rail entry shows for its item's status: answered is success, an
+// untouched item the review flags is warning, and every other item is idle.
+export function railDotStatus(
+  status: AnswerStatus | 'notice',
+  isFlagged: boolean,
+): DotStatus {
+  if (status === 'answered') {
+    return 'success';
+  }
+  return status === 'untouched' && isFlagged ? 'warning' : 'idle';
 }
 
 // The round's status on its session's sidebar row: its heading and how many

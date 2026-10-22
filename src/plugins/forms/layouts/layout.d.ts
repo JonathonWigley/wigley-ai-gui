@@ -58,6 +58,21 @@ export type LayoutAction =
   | { type: 'accept' }
   | { type: 'focus' };
 
+// The tones a kit tag takes and the variants a kit button takes.
+export type TagTone =
+  | 'neutral'
+  | 'accent'
+  | 'running'
+  | 'success'
+  | 'warning'
+  | 'attention'
+  | 'error';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+export interface KitButtonOptions {
+  variant?: ButtonVariant;
+  keys?: string | null;
+}
+
 // Every part appends itself to `parent` and returns what it appended, except where its comment says otherwise.
 export interface HeadKit {
   el(
@@ -84,9 +99,24 @@ export interface HeadKit {
     command: string,
     className?: string,
   ): HTMLElement;
+  // `div.ui-card` with `className` added: the card every built-in card draws on.
+  card(parent: HTMLElement, className?: string): HTMLElement;
+  // `span.ui-tag`; tone `neutral` when left out.
+  tag(parent: HTMLElement, text: string, tone?: TagTone): HTMLElement;
+  // A key hint for `keys` as `keys(command)` returns it, drawn for the platform.
+  kbd(parent: HTMLElement, keys: string): HTMLElement;
+  // `button.ui-button`, variant `secondary` when left out; never takes focus. `keys` draws its hint after the label.
+  button(
+    parent: HTMLElement,
+    label: string,
+    onClick: () => void,
+    options?: KitButtonOptions,
+  ): HTMLButtonElement;
+  // `h3.ui-section-header`: a sentence-case label over a part of the card.
+  sectionHeader(parent: HTMLElement, text: string): HTMLElement;
 }
 export interface Kit extends HeadKit {
-  // `header.item-head` holding the kind label and the status chip, which updates itself; returns the header.
+  // `header.item-head` holding the kind tag and the status label, which updates itself; returns the header.
   // A card that leaves it out still gets `data-status` on its element.
   itemHead(parent: HTMLElement, kind: string): HTMLElement;
   // Mounts the item's text box for `field`. Each box mounts once per card. Any box the card leaves unmounted, the

@@ -11,6 +11,7 @@ import {
 import { decision, finding, presentedRound, question } from './test-rounds';
 import {
   progressText,
+  railDotStatus,
   reviewRows,
   saveLabel,
   sessionTitle,
@@ -429,6 +430,17 @@ describe('reviewRows', () => {
       roundAfter({ type: 'openReview' }, { type: 'reviewNext' }),
     );
     expect(rows.map((row) => row.isCursor)).toEqual([false, true, false]);
+  });
+});
+
+describe('railDotStatus', () => {
+  it('shows an answered item as success', () => {
+    expect(railDotStatus('answered', false)).toBe('success');
+  });
+
+  it('flags an untouched item only while the review flags it', () => {
+    expect(railDotStatus('untouched', true)).toBe('warning');
+    expect(railDotStatus('untouched', false)).toBe('idle');
   });
 });
 

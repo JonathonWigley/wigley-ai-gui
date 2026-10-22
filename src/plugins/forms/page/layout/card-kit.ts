@@ -1,11 +1,9 @@
 import type { CommandId } from '../../../../contracts/commands';
-import {
-  appendKeys,
-  button,
-  element,
-  markdownElement,
-  showKeys,
-} from '../../../../shared/page/dom';
+import { element, markdownElement } from '../../../../shared/page/dom';
+import { textButton } from '../../../../shared/page/ui/button';
+import { card as cardPart } from '../../../../shared/page/ui/card';
+import { sectionHeader } from '../../../../shared/page/ui/section-header';
+import { tag as tagPart } from '../../../../shared/page/ui/tag';
 import type { FindingAction, ItemKind } from '../../contract';
 import { formsCommand, formsCommandNamed } from '../../ids';
 import type {
@@ -26,11 +24,13 @@ import {
   type TextTarget,
 } from '../form-state';
 import {
+  appendKeyHint,
   buildChoiceList,
   buildChoiceReason,
   buildField,
   buildItemHead,
   buildSection,
+  keyHint,
   statusLabel,
 } from '../kinds/card-parts';
 import type { CardDeps, CardInputs, CardKits } from '../kinds/item-format';
@@ -86,17 +86,17 @@ const FIELD_CAPTIONS: Record<
   notes: {
     className: 'field-notes',
     label: 'Notes',
-    hint: 'your own answer or your reasoning - optional, sent to the agent',
+    hint: 'Optional. Your own answer or your reasoning, sent to the agent.',
   },
   dontAskReason: {
     className: 'field-reason',
     label: 'Why not ask this',
-    hint: 'sent to the agent with your answer - optional',
+    hint: 'Optional. Sent to the agent with your answer.',
   },
   comment: {
     className: 'field-comment',
     label: 'Comment',
-    hint: 'optional - say if this needs a second look',
+    hint: 'Optional. Say if this needs a second look.',
   },
 };
 
@@ -176,13 +176,18 @@ export function answerableOf(item: RailItem): AnswerableItem | null {
   return item.kind === 'notice' ? null : { kind: item.kind, index: item.index };
 }
 
-// The parts a layout's head draws with, over the forms view's keys.
+// The parts a layout's head draws with, over the forms view's keys, each key
+// hint drawn for the platform.
 export function createHeadKit(
-  deps: Pick<CardDeps, 'markdown' | 'keysFor'>,
+  deps: Pick<CardDeps, 'markdown' | 'keysFor' | 'platform'>,
 ): HeadKit {
   return {
-    el(parent, tag, className = '', text) {
-      const node = element(tag as keyof HTMLElementTagNameMap, className, text);
+    el(parent, tagName, className = '', text) {
+      const node = element(
+        tagName as keyof HTMLElementTagNameMap,
+        className,
+        text,
+      );
       parent.append(node);
       return node;
     },
@@ -206,7 +211,38 @@ export function createHeadKit(
     keyHint(parent, command, className = '') {
       const node = element('span', className);
       parent.append(node);
-      appendKeys(node, keysOfNamed(deps, command));
+      appendKeyHint(node, () => keysOfNamed(deps, command), deps.platform);
+      return node;
+    },
+    card(parent, className = '') {
+      const node = cardPart();
+      if (className !== '') {
+        node.className = `${node.className} ${className}`;
+      }
+      parent.append(node);
+      return node;
+    },
+    tag(parent, text, tone) {
+      const node = tagPart(text, tone);
+      parent.append(node);
+      return node;
+    },
+    kbd(parent, keys) {
+      const node = keyHint(keys, deps.platform);
+      parent.append(node);
+      return node;
+    },
+    button(parent, label, onClick, options = {}) {
+      const node = textButton(label, onClick, {
+        variant: options.variant,
+        hint: keyHint(options.keys ?? null, deps.platform),
+      });
+      parent.append(node);
+      return node;
+    },
+    sectionHeader(parent, text) {
+      const node = sectionHeader(text);
+      parent.append(node);
       return node;
     },
   };
@@ -332,10 +368,13 @@ function appendCardKeys(
   control: HTMLElement,
   command: CommandId,
 ) {
-  let hint = appendKeys(control, card.deps.keysFor(command));
-  card.updaters.push(() => {
-    hint = showKeys(control, hint, card.deps.keysFor(command));
-  });
+  card.updaters.push(
+    appendKeyHint(
+      control,
+      () => card.deps.keysFor(command),
+      card.deps.platform,
+    ),
+  );
 }
 
 // Dispatches the action's FormsActions, then Don't ask's command for it.
@@ -368,10 +407,13 @@ function buildBaseKit(card: CardContext): Kit {
     keyHint(parent, command, className = '') {
       const node = element('span', className);
       parent.append(node);
-      let hint = appendKeys(node, keysOfNamed(card.deps, command));
-      card.updaters.push(() => {
-        hint = showKeys(node, hint, keysOfNamed(card.deps, command));
-      });
+      card.updaters.push(
+        appendKeyHint(
+          node,
+          () => keysOfNamed(card.deps, command),
+          card.deps.platform,
+        ),
+      );
       return node;
     },
     textBox: (parent, field) => mountTextBox(card, parent, field),
@@ -391,7 +433,7 @@ function buildAnswerKit(
     choiceList(parent, reasons) {
       const answerArea = element('div', 'answer');
       const list = element('ol', 'choices');
-      answerArea.append(element('div', 'answer-label', 'Your answer'), list);
+      answerArea.append(sectionHeader('Your answer'), list);
       parent.append(answerArea);
       const { entries, updateKeys } = buildChoiceList(
         list,
@@ -424,11 +466,15 @@ function buildAnswerKit(
     answerControls(parent) {
       kit.textBox(parent, 'notes');
       const toggles = element('div', 'toggles');
-      const notApplicable = button('toggle', 'Not applicable', () =>
-        kit.run({ type: 'toggleNotApplicable' }),
+      const notApplicable = textButton(
+        'Not applicable',
+        () => kit.run({ type: 'toggleNotApplicable' }),
+        { variant: 'ghost' },
       );
-      const dontAsk = button('toggle', "Don't ask me this", () =>
-        kit.run({ type: 'toggleDontAsk' }),
+      const dontAsk = textButton(
+        "Don't ask me this",
+        () => kit.run({ type: 'toggleDontAsk' }),
+        { variant: 'ghost' },
       );
       appendCardKeys(card, notApplicable, formsCommand('toggleNotApplicable'));
       appendCardKeys(card, dontAsk, formsCommand('toggleDontAsk'));
@@ -437,11 +483,8 @@ function buildAnswerKit(
       kit.textBox(parent, 'dontAskReason');
       card.updaters.push((current) => {
         const answer = itemAnswer(current, item);
-        notApplicable.setAttribute(
-          'aria-pressed',
-          String(answer.notApplicable),
-        );
-        dontAsk.setAttribute('aria-pressed', String(answer.dontAsk));
+        showPressed(notApplicable, answer.notApplicable);
+        showPressed(dontAsk, answer.dontAsk);
       });
       return toggles;
     },
@@ -461,9 +504,15 @@ function buildFindingKit(
   };
 }
 
-// The verdict under the finding and proof: its origin and severity chips, the
+// Shows a toggle or pick as on or off.
+function showPressed(control: HTMLElement, isPressed: boolean) {
+  control.classList.toggle('is-selected', isPressed);
+  control.setAttribute('aria-pressed', String(isPressed));
+}
+
+// The verdict under the finding and proof: its origin and severity tags, the
 // impact, and the Accept button, which focuses the finding and picks the
-// recommended action and choice the choice list and action row badge.
+// recommended action and choice the choice list and action row tag.
 function buildVerdict(
   parent: HTMLElement,
   input: CardInputs['finding'],
@@ -473,21 +522,19 @@ function buildVerdict(
   const { deps } = card;
   const block = element('section', 'verdict');
   const chips = element('div', 'verdict-chips');
-  const origin = element('span', 'badge badge-origin', input.originChip);
+  const origin = tagPart(input.originChip);
+  origin.classList.add('badge-origin');
   origin.dataset.origin = input.origin;
   chips.append(origin);
   if (input.severityChip !== null && input.severity !== null) {
-    const severity = element(
-      'span',
-      'badge badge-severity',
-      input.severityChip,
-    );
+    const severity = tagPart(input.severityChip);
+    severity.classList.add('badge-severity');
     severity.dataset.severity = input.severity;
     chips.append(severity);
   }
-  const accept = button('verdict-button verdict-accept', 'Accept', () =>
-    kit.run({ type: 'accept' }),
-  );
+  const accept = textButton('Accept', () => kit.run({ type: 'accept' }), {
+    variant: 'primary',
+  });
   appendCardKeys(card, accept, formsCommand('acceptRecommendation'));
   const buttons = element('div', 'verdict-buttons');
   buttons.append(accept);
@@ -505,7 +552,7 @@ function buildVerdict(
 }
 
 // The labelled Action row: one button per action the origin offers, in the
-// card's word, the recommended one badged; a click focuses the finding and
+// card's word, the recommended one tagged; a click focuses the finding and
 // picks that action, and shows the keys that pick it. Its updater shows the
 // picked action and locks the row while not applicable.
 function buildActionRow(
@@ -516,14 +563,14 @@ function buildActionRow(
 ): HTMLElement {
   const row = element('div', 'finding-actions');
   const buttons = element('div', 'action-picks');
-  row.append(element('div', 'answer-label', 'Action'), buttons);
+  row.append(sectionHeader('Action'), buttons);
   const picks = input.actions.map(({ action, label }) => {
-    const pick = button('action-pick', label, () =>
+    const pick = textButton(label, () =>
       kit.run({ type: 'chooseAction', action }),
     );
     if (action === input.recommendAction) {
       pick.classList.add('is-recommended');
-      pick.append(element('span', 'badge badge-recommend', 'Recommended'));
+      pick.append(tagPart('Recommended', 'accent'));
     }
     appendCardKeys(card, pick, ACTION_COMMANDS[action]);
     buttons.append(pick);
@@ -533,9 +580,7 @@ function buildActionRow(
   card.updaters.push((current) => {
     const answer = itemAnswer(current, item);
     for (const { action, pick } of picks) {
-      const isPicked = answer.action === action;
-      pick.classList.toggle('is-selected', isPicked);
-      pick.setAttribute('aria-pressed', String(isPicked));
+      showPressed(pick, answer.action === action);
     }
     buttons.classList.toggle('is-locked', answer.notApplicable);
   });

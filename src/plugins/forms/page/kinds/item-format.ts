@@ -1,6 +1,7 @@
 import type { CommandId } from '../../../../contracts/commands';
 import type { Log } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
+import type { Platform } from '../../../../contracts/platform';
 import type { AnswerableKind, ItemKind, Round } from '../../contract';
 import type { Layout } from '../../layouts/layout';
 import type { FormsAction, RoundState, TextTarget } from '../form-state';
@@ -13,7 +14,8 @@ export interface ItemCard {
 
 // What a card reaches outside itself: the round's boxes, its actions, the
 // Don't-ask command, which also focuses the reason box, the keys that run a
-// qualified command in the forms view, null when none is bound, and the log.
+// qualified command in the forms view, null when none is bound, the platform
+// key hints are drawn for, and the log.
 export interface CardDeps {
   markdown: MarkdownRenderer;
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
@@ -21,6 +23,7 @@ export interface CardDeps {
   dispatch(action: FormsAction): void;
   toggleDontAsk(): void;
   keysFor(command: CommandId): string | null;
+  platform: Platform;
   log: Log;
 }
 

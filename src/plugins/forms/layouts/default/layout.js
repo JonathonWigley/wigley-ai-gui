@@ -1,41 +1,48 @@
 // @ts-check
 
-// The built-in forms look. Every card appends its article to `parent` first,
+// The built-in forms look. Every card appends its card to `parent` first,
 // so the text boxes mount into an attached element.
+
+// A notice's badge tone; a badge not listed here is neutral.
+/** @type {Record<string, import('../layout').TagTone>} */
+const NOTICE_TONES = {
+  Applied: 'success',
+  Dispatched: 'running',
+  Decided: 'neutral',
+};
 
 /** @type {import('../layout').Layout} */
 const layout = {
   cards: {
     question(parent, input, kit) {
-      const article = kit.el(parent, 'article', 'item question');
-      kit.itemHead(article, 'Question');
-      kit.section(article, 'Question', input.question);
-      kit.section(article, 'Context', input.context);
-      const answer = kit.choiceList(article, 'recommended');
+      const card = kit.card(parent, 'item question');
+      kit.itemHead(card, 'Question');
+      kit.section(card, 'Question', input.question);
+      kit.section(card, 'Context', input.context);
+      const answer = kit.choiceList(card, 'recommended');
       kit.answerControls(answer);
-      return { element: article };
+      return { element: card };
     },
     finding(parent, input, kit) {
-      const article = kit.el(parent, 'article', 'item finding');
-      kit.itemHead(article, input.words.kind);
-      kit.section(article, input.words.finding, input.finding);
-      const proof = kit.el(article, 'div', 'finding-proof');
+      const card = kit.card(parent, 'item finding');
+      kit.itemHead(card, input.words.kind);
+      kit.section(card, input.words.finding, input.finding);
+      const proof = kit.el(card, 'div', 'finding-proof');
       kit.section(proof, input.words.proof, input.proof);
-      kit.verdict(article);
-      const answer = kit.choiceList(article, 'all');
+      kit.verdict(card);
+      const answer = kit.choiceList(card, 'all');
       kit.actionRow(answer);
       kit.answerControls(answer);
-      return { element: article };
+      return { element: card };
     },
     notice(parent, input, kit) {
-      const article = kit.el(parent, 'article', 'item notice');
-      const head = kit.el(article, 'header', 'item-head');
-      kit.el(head, 'span', 'item-kind', 'Notice');
-      const badge = kit.el(head, 'span', 'badge badge-notice', input.badge);
-      badge.dataset.badge = input.badge;
-      kit.section(article, 'Context', input.context);
-      kit.textBox(article, 'comment');
-      return { element: article };
+      const card = kit.card(parent, 'item notice');
+      const head = kit.el(card, 'header', 'item-head');
+      kit.tag(head, 'Notice');
+      kit.tag(head, input.badge, NOTICE_TONES[input.badge] ?? 'neutral');
+      kit.section(card, 'Context', input.context);
+      kit.textBox(card, 'comment');
+      return { element: card };
     },
   },
 };
