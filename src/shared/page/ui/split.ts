@@ -44,7 +44,8 @@ export function createSplit(options: SplitOptions): Split {
   showWidth(width);
 
   handle.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0) {
+    const dragInProgress = handle.classList.contains('is-active');
+    if (event.button !== 0 || dragInProgress) {
       return;
     }
     event.preventDefault();
@@ -59,20 +60,14 @@ export function createSplit(options: SplitOptions): Split {
     const left = root.getBoundingClientRect().left;
     showWidth(clampSplitWidth(event.clientX - left, options));
   });
-  const endDrag = (event: PointerEvent) => {
-    if (!handle.classList.contains('is-active')) {
-      return;
-    }
-    if (handle.hasPointerCapture(event.pointerId)) {
-      handle.releasePointerCapture(event.pointerId);
-    }
+  // The browser fires lostpointercapture after pointerup and pointercancel
+  // release capture, and on every other loss of it.
+  handle.addEventListener('lostpointercapture', () => {
     handle.classList.remove('is-active');
     if (width !== widthAtDragStart) {
       options.uiState.set(options.stateKey, width);
     }
-  };
-  handle.addEventListener('pointerup', endDrag);
-  handle.addEventListener('pointercancel', endDrag);
+  });
 
   return {
     element: root,
