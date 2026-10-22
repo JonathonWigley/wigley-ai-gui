@@ -90,6 +90,7 @@
     "cursor": "rosewater",
     "line-number": "overlay0",
     "line-number-active": "lavender",
+    "editor-active-line": "surface0 / 0.4",
     "border-subtle": "#ffffff0f",
     "border-default": "surface0",
     "border-strong": "surface1",

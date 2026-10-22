@@ -83,6 +83,7 @@ export const coreThemeTokens: Readonly<Record<string, TokenKind>> = {
   'cursor': 'color',
   'line-number': 'color',
   'line-number-active': 'color',
+  'editor-active-line': 'color',
 
   // Borders
   'border-subtle': 'color',

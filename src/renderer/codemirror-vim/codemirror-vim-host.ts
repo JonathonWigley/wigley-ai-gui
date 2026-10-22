@@ -2,7 +2,11 @@ import { closeCompletion } from '@codemirror/autocomplete';
 import { EditorView, minimalSetup } from 'codemirror';
 import { syntaxHighlighting } from '@codemirror/language';
 import { Compartment, EditorState } from '@codemirror/state';
-import { lineNumbers } from '@codemirror/view';
+import {
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  lineNumbers,
+} from '@codemirror/view';
 import { CodeMirror, getCM, Vim, vim } from '@replit/codemirror-vim';
 import {
   type CreateEditorHost,
@@ -461,7 +465,7 @@ function boxExtensions(
   ];
 }
 
-// A whole file: line numbers, wrapped lines, the language `language` holds once
+// A whole file: line numbers, the active-line band, wrapped lines, the language `language` holds once
 // it loads, highlighted through the Catppuccin Mocha style. Read-only blocks typed
 // input, and vim drops every edit it dispatches under the same facet.
 function documentExtensions(
@@ -474,6 +478,8 @@ function documentExtensions(
     vim({ status: true }),
     minimalSetup,
     lineNumbers(),
+    highlightActiveLine(),
+    highlightActiveLineGutter(),
     EditorView.lineWrapping,
     EditorState.readOnly.of(options.readOnly),
     language.of([]),

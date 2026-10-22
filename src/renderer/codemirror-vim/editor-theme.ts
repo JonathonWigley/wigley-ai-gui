@@ -9,15 +9,38 @@ export const editorTheme = EditorView.theme({
     color: 'var(--wg-fg)',
     fontSize: 'var(--wg-text-mono)',
   },
-  '&.cm-focused': { outline: '1px solid var(--wg-focus-border)' },
+  // A text box's focus ring is its frame. The document editor's ring is an
+  // overlay so the opaque gutter and vim panel cannot cover its edges.
+  '&.cm-focused': { outline: 'none' },
   '&.wg-document-editor': { height: '100%' },
+  '&.wg-document-editor.cm-focused::after': {
+    content: '""',
+    position: 'absolute',
+    inset: '0',
+    pointerEvents: 'none',
+    zIndex: '300',
+    borderRadius: 'inherit',
+    outline: '1px solid var(--wg-focus-border)',
+    outlineOffset: '-1px',
+  },
   '.cm-scroller': { fontFamily: 'var(--wg-font-mono)' },
   '.cm-gutters': {
     backgroundColor: 'var(--wg-editor-background)',
     color: 'var(--wg-line-number)',
     border: 'none',
   },
-  '.cm-lineNumbers .cm-gutterElement': { padding: '0 0.75em 0 0.5em' },
+  '.cm-lineNumbers .cm-gutterElement': {
+    padding: '0 var(--wg-space-3) 0 var(--wg-space-2)',
+  },
+  // The active-line band shows only while the editor is focused.
+  '.cm-activeLine': { backgroundColor: 'transparent' },
+  '&.cm-focused .cm-activeLine': {
+    backgroundColor: 'var(--wg-editor-active-line)',
+  },
+  '.cm-activeLineGutter': { backgroundColor: 'transparent' },
+  '&.cm-focused .cm-activeLineGutter': {
+    color: 'var(--wg-line-number-active)',
+  },
   '.cm-cursor': { borderLeftColor: 'var(--wg-cursor)' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
     { backgroundColor: 'var(--wg-selection-background)' },
@@ -35,14 +58,16 @@ export const editorTheme = EditorView.theme({
   '.cm-panels-bottom': { borderTop: '1px solid var(--wg-border-default)' },
   '.cm-vim-panel input': { color: 'var(--wg-fg)' },
   '.cm-tooltip.cm-tooltip-autocomplete': {
-    // Opaque, the floating material's reduced value, as nothing blurs behind
-    // it yet; the material-floating helper takes it back to the translucent
-    // material.
-    backgroundColor: 'var(--wg-sheet-background)',
-    border: '1px solid var(--wg-border-default)',
+    // The floating material without its blur: a theme object takes no class.
+    backgroundColor: 'var(--wg-material-floating-bg)',
+    border: '1px solid var(--wg-material-floating-edge)',
+    borderRadius: 'var(--wg-radius-md)',
+    boxShadow: 'var(--wg-material-floating-shadow)',
     color: 'var(--wg-fg)',
+    fontSize: 'var(--wg-text-mono)',
     // Autocomplete's base theme sets `monospace` on the list itself.
     '& > ul': { fontFamily: 'var(--wg-font-mono)' },
+    '& > ul > li': { padding: 'var(--wg-space-0_5) var(--wg-space-2)' },
     '& > ul > li[aria-selected]': {
       backgroundColor: 'var(--wg-list-active-background)',
       color: 'var(--wg-fg)',

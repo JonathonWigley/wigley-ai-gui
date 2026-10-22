@@ -1,6 +1,8 @@
 /* Markdown (class names from markdown-it-renderer.ts) */
 .md {
-  max-width: 80ch;
+  font-size: var(--wg-text-14);
+  line-height: var(--wg-leading-prose);
+  max-width: var(--wg-prose-measure);
 }
 
 .md > :first-child {
@@ -17,53 +19,52 @@
 .md blockquote,
 .md pre,
 .md table {
-  margin: 0.5em 0;
+  margin: var(--wg-space-2) 0;
 }
 
 .md ul,
 .md ol {
-  padding-left: 1.5em;
+  padding-left: var(--wg-space-6);
 }
 
 .md-h {
   color: var(--wg-fg);
-  font-weight: 600;
-  margin: 0.75em 0 0.25em;
+  font-weight: var(--wg-weight-semibold);
+  margin: var(--wg-space-3) 0 var(--wg-space-1);
 }
 
 .md-h1,
 .md-h2 {
-  font-size: 1.1em;
+  font-size: var(--wg-text-16);
 }
 
 .md-h3 {
-  font-size: 1em;
+  font-size: var(--wg-text-14);
 }
 
 .md-h4,
 .md-h5,
 .md-h6 {
   color: var(--wg-fg-secondary);
-  font-size: 0.95em;
+  font-size: var(--wg-text-13);
 }
 
 .md code {
   background: var(--wg-block-background);
-  border-radius: 0.25rem;
+  border-radius: var(--wg-radius-sm);
   font-family: var(--wg-font-mono);
-  font-size: 0.9em;
-  padding: 0.05em 0.3em;
+  font-size: var(--wg-text-mono);
+  padding: 0 var(--wg-space-1);
 }
 
 /* Code wraps at spaces but keeps an unbroken token whole, and a table keeps
    its columns; either scrolls in its own box when wider than the pane. */
 .md pre {
   background: var(--wg-block-background);
-  border: 1px solid var(--wg-border-default);
-  border-radius: 0.4rem;
+  border-radius: var(--wg-radius-md);
   overflow-wrap: normal;
   overflow-x: auto;
-  padding: 0.6em 0.8em;
+  padding: var(--wg-space-2) var(--wg-space-3);
   white-space: pre-wrap;
 }
 
@@ -73,10 +74,10 @@
 }
 
 .md blockquote {
-  border-left: 3px solid var(--wg-border-default);
+  border-left: var(--wg-indicator-width) solid var(--wg-border-default);
   color: var(--wg-fg-secondary);
   margin-left: 0;
-  padding-left: 0.75em;
+  padding-left: var(--wg-space-3);
 }
 
 .md table {
@@ -91,12 +92,12 @@
 .md th,
 .md td {
   border: 1px solid var(--wg-border-default);
-  padding: 0.25em 0.6em;
+  padding: var(--wg-space-1) var(--wg-space-2);
 }
 
 .md th {
   background: var(--wg-card-background);
-  font-weight: 600;
+  font-weight: var(--wg-weight-semibold);
 }
 
 .md .md-left {
@@ -135,9 +136,9 @@
 }
 
 .md-change {
-  border-left: 3px solid var(--wg-border-default);
-  margin: 0.2em 0;
-  padding: 0.1em 0.6em;
+  border-left: var(--wg-indicator-width) solid var(--wg-border-default);
+  margin: var(--wg-space-0_5) 0;
+  padding: var(--wg-space-0_5) var(--wg-space-2);
 }
 
 .md-change.added {
@@ -154,13 +155,13 @@
 
 .md-pill {
   background: var(--wg-border-strong);
-  border-radius: 999px;
+  border-radius: var(--wg-radius-sm);
   color: var(--wg-fg);
   display: inline-block;
-  font-size: 0.75em;
-  font-weight: 600;
-  margin-right: 0.5em;
-  padding: 0 0.5em;
+  font-size: var(--wg-text-11);
+  font-weight: var(--wg-weight-medium);
+  margin-right: var(--wg-space-2);
+  padding: 0 var(--wg-space-1);
 }
 
 /* A change pill's mark fill is light, so it takes dark text. */
@@ -183,7 +184,7 @@
 .md-tree ul {
   list-style: none;
   margin: 0;
-  padding-left: 1.25em;
+  padding-left: var(--wg-space-4);
 }
 
 .md-tree ul > li {
@@ -194,22 +195,36 @@
   border-bottom: 1px solid var(--wg-border-default);
   border-left: 1px solid var(--wg-border-default);
   content: '';
-  height: 0.9em;
-  left: -0.9em;
+  height: var(--wg-space-3);
+  left: calc(var(--wg-space-3) * -1);
   position: absolute;
   top: 0;
-  width: 0.7em;
+  width: var(--wg-space-2);
 }
 
 .md-details {
   border: 1px solid var(--wg-border-default);
-  border-radius: 0.4rem;
-  margin: 0.5em 0;
-  padding: 0.4em 0.75em;
+  border-radius: var(--wg-radius-md);
+  margin: var(--wg-space-2) 0;
+  padding: var(--wg-space-1_5) var(--wg-space-3);
 }
 
 .md-details > summary {
   color: var(--wg-accent);
   cursor: pointer;
-  font-weight: 600;
+  font-weight: var(--wg-weight-semibold);
+}
+
+.md-link {
+  color: var(--wg-fg-link);
+  text-decoration: none;
+}
+
+.md-link:hover {
+  text-decoration: underline;
+}
+
+/* An image's alt text. */
+.md-image {
+  color: var(--wg-fg-tertiary);
 }
