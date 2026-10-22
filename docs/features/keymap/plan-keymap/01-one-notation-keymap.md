@@ -1,6 +1,6 @@
 # 01 — One-notation keymap in one file
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -220,3 +220,5 @@ leader <leader>
 Done when: `npm run typecheck`, `npm run lint` and the test gate pass; the snapshot diff is empty; no built-in
 manifest declares `keys`; `coreKeymap` no longer exists.
 Commit:    one commit for the group
+
+Landed in dd4eba3. Snapshot diff against keymap-before.txt empty; typecheck and lint clean; every Produces signature present; no built-in manifest declares `keys`; `coreKeymap` gone. Concerns: see plan.md Run log, group 01.

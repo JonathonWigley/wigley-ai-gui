@@ -144,7 +144,7 @@ contracts (`npm run lint` runs the layer check, type-only imports included).
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [One-notation keymap in one file](01-one-notation-keymap.md)
+- [x] [One-notation keymap in one file](01-one-notation-keymap.md)
 
 ### Wave 2
 - [ ] [Which-key group names and the key bar's leader](02-which-key-groups.md) — after 01
@@ -158,10 +158,19 @@ contracts (`npm run lint` runs the layer check, type-only imports included).
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: dd75a8ebcf51bcb1e2073700abd614f8543886e8
 
 ### Groups
+- 01 · dd4eba3 · proved: snapshot diff empty, typecheck + lint clean, Produces present · concerns: served editor-bind order shifts where a page+box entry merged into one (box half now sits at the merged entry's place); installedConfig serves pushed `groups` beside old applied binds on a refused push; reader validates unknown-leader files with a stand-in `<Space>`
 ### Contract changes
+- typed manifest tuple: as planned → `builtInManifests` (`as const`) in src/plugins/manifests.ts; `BuiltInKeymap` module-private · why: naming · consumers: none · group 01
+- ConfigStore deps: `coreKeymap: Keymap` → `defaultKeymap: DefaultKeymap` · why: File Structure wording · consumers: none · group 01
+- `QualifiedCommandId<M, P>`, `QualifiedScopeId<M>` added to src/contracts/plugin.ts · why: named by File Structure · consumers: none · group 01
 ### Rulings
+- src/plugins/forms/manifest.test.ts deleted whole: its one case merged formsManifest's keys, which no longer exist; the snapshot diff pins every forms bind — task doc asks for it — none · group 01
+- every `<Leader>z…` bind sits in Debug and testing with `where: 'page'`; Gallery section holds only gallery.gallery binds — `z` group is debug — entries move between banners, no behaviour change · group 01
+- user keymap reader checks bind/unbind keys through expandBind, error prefixed with the entry path; a file with no leader checks against a stand-in `<Space>` — one rule source — error wording only · group 01
+- reader error noun is now "a bind" (was "a page bind"/"an editor bind") — one bind kind — error wording only · group 01
+- docs/keymap.md oxfmt-formatted (whitespace) — committed file failed lint, which task 01's done-when needs — none · lead
 ### Review rounds
 ### Test gate
