@@ -169,6 +169,42 @@ describe('mergeKeymap', () => {
   });
 });
 
+describe('mergeKeymap accelerators', () => {
+  it("replaces the core's app and global binds on one chord spelled another way", () => {
+    const merged = mergeKeymap(coreKeymap(), [], {
+      app: [{ accelerator: 'cmdorctrl+w', command: 'user.close' }],
+      global: [{ accelerator: 'Option+space', command: 'user.summon' }],
+    });
+
+    expect(merged.app).toEqual([
+      { accelerator: 'cmdorctrl+w', command: 'user.close' },
+    ]);
+    expect(merged.global).toEqual([
+      { accelerator: 'Option+space', command: 'user.summon' },
+    ]);
+  });
+
+  it('removes app and global binds an unbind spells another way', () => {
+    const merged = mergeKeymap(coreKeymap(), [], {
+      unbind: [{ app: 'CmdOrCtrl+w' }, { global: 'option+Space' }],
+    });
+
+    expect(merged.app).toEqual([]);
+    expect(merged.global).toEqual([]);
+  });
+
+  it('keeps a bind on a chord that differs by OS', () => {
+    const merged = mergeKeymap(coreKeymap(), [], {
+      app: [{ accelerator: 'Command+W', command: 'user.close' }],
+    });
+
+    expect(merged.app).toEqual([
+      { accelerator: 'CommandOrControl+W', command: 'core.close' },
+      { accelerator: 'Command+W', command: 'user.close' },
+    ]);
+  });
+});
+
 describe('dependencyOrder', () => {
   it('orders plugins by dependency, ties in list order', () => {
     const ordered = dependencyOrder([

@@ -155,18 +155,19 @@ export function formatKeys(keys: string[], platform: Platform): string {
 }
 
 // One vim-notation token as the user reads it on `platform`, e.g. `<Space>` as
-// `Space`, `<M-x>` as `⌘X` on macOS and `Win+X` elsewhere. A token that is
-// neither a named key nor a chord returns as it is.
+// `Space`, `<Tab>` as `Tab`, `<M-x>` as `⌘X` on macOS and `Win+X` elsewhere. A
+// token that is neither a `<…>` key nor a chord, such as `w` or `<X-a>`,
+// returns as it is.
 export function formatVimToken(token: string, platform: Platform): string {
   const chord = vimChord(token);
   if (chord !== null) {
     return printChord(chord, platform);
   }
-  const isBracketed = token.length > 2 && token.startsWith('<');
-  const name = isBracketed
-    ? VIM_KEY_NAMES[token.slice(1, -1).toLowerCase()]
-    : undefined;
-  return name ?? token;
+  const parts = VIM_KEY.exec(token);
+  if (parts === null || parts[1] !== '') {
+    return token;
+  }
+  return VIM_KEY_NAMES[parts[2].toLowerCase()] ?? parts[2];
 }
 
 // A vim-notation key string as the user reads it on `platform`, its tokens

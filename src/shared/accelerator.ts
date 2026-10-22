@@ -89,3 +89,29 @@ export function acceleratorProblem(accelerator: string): string | null {
   }
   return null;
 }
+
+// The spelling each Electron alias folds to, by lowercase spelling. Aliases
+// whose meaning differs by OS, such as CommandOrControl against Command, stay
+// apart.
+const ALIASES: Partial<Record<string, string>> = {
+  cmd: 'command',
+  ctrl: 'control',
+  cmdorctrl: 'commandorcontrol',
+  option: 'alt',
+  meta: 'super',
+  esc: 'escape',
+  return: 'enter',
+};
+
+// An accelerator `acceleratorProblem` accepts in one spelling per chord: each
+// part lowercase with its alias folded, the modifiers sorted and each named
+// once, so two accelerators Electron reads as one chord compare equal.
+export function canonicalAccelerator(accelerator: string): string {
+  const parts = accelerator.split('+').map((part) => {
+    const lower = part.toLowerCase();
+    return ALIASES[lower] ?? lower;
+  });
+  const key = parts[parts.length - 1];
+  const modifiers = [...new Set(parts.slice(0, -1))].sort();
+  return [...modifiers, key].join('+');
+}

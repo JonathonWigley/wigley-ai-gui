@@ -10,6 +10,13 @@ const NAMES: KeymapNames = {
       group: 'Test',
       runsIn: 'page',
     },
+    'test.open': {
+      id: 'test.open',
+      plugin: 'test',
+      label: 'Open',
+      group: 'Test',
+      runsIn: 'main',
+    },
   },
   scopes: [
     { id: 'any', title: 'Everywhere', plugin: 'core' },
@@ -69,5 +76,25 @@ describe('parseUserKeymap', () => {
     ];
 
     expect(parse({ editor: { binds } }).editor?.binds).toEqual(binds);
+  });
+
+  it('rejects two app binds on one chord spelled two ways', () => {
+    const app = [
+      { accelerator: 'Cmd+Shift+K', command: 'test.open' },
+      { accelerator: 'shift+command+k', command: 'test.open' },
+    ];
+
+    expect(() => parse({ app })).toThrow(
+      '"app[1]" binds shift+command+k, the same chord as "app[0]" (Cmd+Shift+K).',
+    );
+  });
+
+  it('keeps global binds on CommandOrControl and Command apart', () => {
+    const global = [
+      { accelerator: 'CommandOrControl+K', command: 'test.open' },
+      { accelerator: 'Command+K', command: 'test.open' },
+    ];
+
+    expect(parse({ global }).global).toEqual(global);
   });
 });

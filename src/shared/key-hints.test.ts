@@ -209,10 +209,14 @@ describe('formatVimToken', () => {
     expect(formatVimToken('<S-Tab>', 'windows')).toBe('Shift+Tab');
   });
 
-  it('formatVimToken_NoChord_ReturnsAsIs', () => {
-    expect(formatVimToken('<Tab>', 'macos')).toBe('<Tab>');
-    expect(formatVimToken('<X-a>', 'macos')).toBe('<X-a>');
+  it('formatVimToken_NamedKey_PrintsBareName', () => {
+    expect(formatVimToken('<Tab>', 'macos')).toBe('Tab');
+    expect(formatVimToken('<BS>', 'windows')).toBe('BS');
     expect(formatVimToken('<cr>', 'macos')).toBe('Enter');
+  });
+
+  it('formatVimToken_UnknownModifier_ReturnsAsIs', () => {
+    expect(formatVimToken('<X-a>', 'macos')).toBe('<X-a>');
   });
 });
 

@@ -19,6 +19,7 @@ import type {
   SettingKind,
 } from '../contracts/plugin';
 import type { TokenDecl, TokenKind } from '../contracts/theme';
+import { canonicalAccelerator } from './accelerator';
 import { editorBindMode, withLeader } from './key-hints';
 import { startsWith } from './keymap-checks';
 import { themeVariable } from './theme-variables';
@@ -95,6 +96,11 @@ interface BindIdentities {
   intercept: SameBind<Omit<InterceptBind, 'command'>>;
 }
 
+// Whether two accelerators name one chord, however each spells it.
+function isSameAccelerator(a: string, b: string): boolean {
+  return canonicalAccelerator(a) === canonicalAccelerator(b);
+}
+
 function bindIdentities(leader: string): BindIdentities {
   const sameKeys = (a: string, b: string) =>
     withLeader(a, leader) === withLeader(b, leader);
@@ -108,7 +114,7 @@ function bindIdentities(leader: string): BindIdentities {
       editorBindMode(a) === editorBindMode(b) &&
       sameKeys(a.keys, b.keys),
     remaps: (a, b) => a.mode === b.mode && sameKeys(a.keys, b.keys),
-    accelerators: (a, b) => a.accelerator === b.accelerator,
+    accelerators: (a, b) => isSameAccelerator(a.accelerator, b.accelerator),
     intercept: (a, b) =>
       a.key === b.key &&
       Boolean(a.control) === Boolean(b.control) &&
@@ -226,7 +232,10 @@ function withoutUnbound(
     ),
     app: keymap.app.filter(
       (bind) =>
-        !isUnbound((entry) => 'app' in entry && entry.app === bind.accelerator),
+        !isUnbound(
+          (entry) =>
+            'app' in entry && isSameAccelerator(entry.app, bind.accelerator),
+        ),
     ),
     intercept: keymap.intercept.filter(
       (bind) =>
@@ -238,7 +247,9 @@ function withoutUnbound(
     global: keymap.global.filter(
       (bind) =>
         !isUnbound(
-          (entry) => 'global' in entry && entry.global === bind.accelerator,
+          (entry) =>
+            'global' in entry &&
+            isSameAccelerator(entry.global, bind.accelerator),
         ),
     ),
   };
@@ -247,11 +258,12 @@ function withoutUnbound(
 // The keymap in layers: `core`, then each manifest's binds in `dependencyOrder`
 // (commands and scopes qualified as `<pluginId>.<short>`, the `any` scope left
 // unqualified), then the user's. A later layer's bind replaces an earlier
-// layer's bind on the same keys in the same scope (the same accelerator for
-// app and global binds, the same key and modifiers for intercepts), taking its
-// place; any other appends. The user layer first removes each bind its
-// `unbind` names from the core and plugin layers, and its `editor.leader`
-// replaces the core's, which the editor binds and remaps compare keys with.
+// layer's bind on the same keys in the same scope (the same chord, however its
+// accelerator is spelled, for app and global binds, the same key and modifiers
+// for intercepts), taking its place; any other appends. The user layer first
+// removes each bind its `unbind` names from the core and plugin layers, and its
+// `editor.leader` replaces the core's, which the editor binds and remaps
+// compare keys with.
 export function mergeKeymap(
   core: Keymap,
   manifests: readonly PluginManifest[],

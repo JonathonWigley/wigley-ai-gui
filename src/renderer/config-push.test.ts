@@ -31,9 +31,12 @@ function config(
 }
 
 // Fake targets recording each call in `calls`, in order; `requireRegistered`
-// throws for a command outside REGISTERED, as the registry does.
+// throws for a command outside REGISTERED, as the registry does, and the
+// editor or page keys throw after recording their call while `failing` holds
+// them.
 function fakeTargets(initial: AppConfig) {
   const calls: string[] = [];
+  const failing = new Set<'editor' | 'page'>();
   const toasted: string[] = [];
   let current = initial;
   const targets: PushTargets = {
@@ -44,7 +47,14 @@ function fakeTargets(initial: AppConfig) {
       },
     },
     applier: { apply: () => calls.push('theme') },
-    editor: { setKeymap: () => calls.push('editor') },
+    editor: {
+      setKeymap() {
+        calls.push('editor');
+        if (failing.has('editor')) {
+          throw new Error('editor broke');
+        }
+      },
+    },
     commands: {
       requireRegistered(ids) {
         const missing = [...new Set(ids)].filter((id) => !REGISTERED.has(id));
@@ -53,12 +63,19 @@ function fakeTargets(initial: AppConfig) {
         }
       },
     },
-    pageKeys: { setBinds: (_binds, ms) => calls.push(`page ${ms}`) },
+    pageKeys: {
+      setBinds(_binds, ms) {
+        calls.push(`page ${ms}`);
+        if (failing.has('page')) {
+          throw new Error('page broke');
+        }
+      },
+    },
     problems: { show: () => undefined },
     toasts: { show: (text) => toasted.push(text) },
     log: () => undefined,
   };
-  return { targets, calls, toasted, current: () => current };
+  return { targets, calls, failing, toasted, current: () => current };
 }
 
 function start(initial: AppConfig) {
@@ -124,5 +141,43 @@ describe('createConfigPush', () => {
     push(config('known', 500, [problem]));
 
     expect(toasted).toEqual(['settings.json: bad']);
+  });
+
+  it('refuses the keys and skips the page when the editor throws, then retries both', () => {
+    const { push, calls, failing, current } = start(config('known', 500));
+    failing.add('editor');
+
+    push(config('other', 700));
+
+    expect(calls).toEqual(['editor', 'theme']);
+    expect(current().problems).toEqual([
+      { file: 'keymap.json', message: 'Keys not applied: editor broke' },
+    ]);
+
+    failing.clear();
+    calls.length = 0;
+    push(config('other', 700));
+
+    expect(calls).toEqual(['editor', 'page 700', 'theme']);
+    expect(current().problems).toEqual([]);
+  });
+
+  it('retries only the page keys when they threw after the editor took its keymap', () => {
+    const { push, calls, failing, current } = start(config('known', 500));
+    failing.add('page');
+
+    push(config('other', 700));
+
+    expect(calls).toEqual(['editor', 'page 700', 'theme']);
+    expect(current().problems).toEqual([
+      { file: 'keymap.json', message: 'Keys not applied: page broke' },
+    ]);
+
+    failing.clear();
+    calls.length = 0;
+    push(config('other', 700));
+
+    expect(calls).toEqual(['page 700', 'theme']);
+    expect(current().problems).toEqual([]);
   });
 });

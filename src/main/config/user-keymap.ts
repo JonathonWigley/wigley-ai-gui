@@ -15,7 +15,10 @@ import type {
   ProcessName,
   ScopeInfo,
 } from '../../contracts/plugin';
-import { acceleratorProblem } from '../../shared/accelerator';
+import {
+  acceleratorProblem,
+  canonicalAccelerator,
+} from '../../shared/accelerator';
 import { jsonKind, parseJsonObject } from './config-json';
 
 // The commands and scopes a user bind may name, by qualified id.
@@ -368,18 +371,17 @@ function readUnbind(
   }
 }
 
-// Throws on two binds in `section` on one accelerator.
+// Throws on two binds in `section` on one accelerator, however each spells it.
 function requireDistinctAccelerators(
   section: string,
   binds: readonly AcceleratorBind[],
 ): void {
+  const chords = binds.map((bind) => canonicalAccelerator(bind.accelerator));
   binds.forEach((bind, index) => {
-    const first = binds.findIndex(
-      (other) => other.accelerator === bind.accelerator,
-    );
+    const first = chords.indexOf(chords[index]);
     if (first < index) {
       throw new Error(
-        `"${section}[${index}]" binds ${bind.accelerator}, as "${section}[${first}]" does.`,
+        `"${section}[${index}]" binds ${bind.accelerator}, the same chord as "${section}[${first}]" (${binds[first].accelerator}).`,
       );
     }
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { acceleratorProblem } from './accelerator';
+import { acceleratorProblem, canonicalAccelerator } from './accelerator';
 
 describe('acceleratorProblem', () => {
   it.each([
@@ -48,5 +48,28 @@ describe('acceleratorProblem', () => {
     expect(acceleratorProblem(accelerator)).toBe(
       `"${accelerator}" is not a key`,
     );
+  });
+});
+
+describe('canonicalAccelerator', () => {
+  it.each([
+    ['Cmd+K', 'Command+K'],
+    ['Ctrl+Alt+A', 'control+option+a'],
+    ['CmdOrCtrl+Esc', 'CommandOrControl+Escape'],
+    ['Meta+Return', 'Super+Enter'],
+    ['Shift+Command+K', 'command+shift+K'],
+    ['Cmd+Command+K', 'Command+K'],
+  ])('reads %s and %s as one chord', (a, b) => {
+    expect(canonicalAccelerator(a)).toBe(canonicalAccelerator(b));
+  });
+
+  it.each([
+    ['CommandOrControl+K', 'Command+K'],
+    ['CommandOrControl+K', 'Control+K'],
+    ['Command+K', 'Super+K'],
+    ['AltGr+K', 'Alt+K'],
+    ['Shift+K', 'K'],
+  ])('keeps %s and %s apart', (a, b) => {
+    expect(canonicalAccelerator(a)).not.toBe(canonicalAccelerator(b));
   });
 });
