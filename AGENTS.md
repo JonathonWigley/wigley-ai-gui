@@ -81,6 +81,8 @@ src/main/        core main process; main.ts is its composition root
                  and watching, behind Files
   processes/     runs a program and returns its exit code and output, behind ProcessRunner
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page
+  drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
+                 drive actions and the video recorder, over a `DrivenWindow` → no electron import
 src/preload/     the Bridge, exposed as window.wigley
 src/renderer/    core page; renderer.ts is its composition root
   shell/         the shell registry, its areas and the default `ShellLayout`, and the modes
