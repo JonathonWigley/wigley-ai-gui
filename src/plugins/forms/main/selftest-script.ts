@@ -34,6 +34,20 @@ function userKeymap(command: string): string {
   });
 }
 
+// A user keymap moving the text box's jump to question 2 in the form from
+// <Leader>2 to <Leader>q, which nothing else binds.
+const MOVED_JUMP_KEYMAP = JSON.stringify({
+  editor: {
+    binds: [
+      { keys: '<Leader>q', scope: 'forms.forms', command: 'forms.jumpTo2' },
+    ],
+  },
+  unbind: [{ editor: '<Leader>2', scope: 'forms.forms' }],
+});
+
+// A user keymap making `,` the text box's leader.
+const COMMA_LEADER_KEYMAP = JSON.stringify({ editor: { leader: ',' } });
+
 // An unbroken run of letters wider than any pane.
 const LONG_WORD = 'unbroken'.repeat(14);
 
@@ -220,6 +234,34 @@ const STEPS: SelfTestStep[] = [
     keys: [],
     expect: '[config] applied a new config',
   },
+  // keymap.json moves the box's jump to question 2 (the item shown) from
+  // <Leader>2 to <Leader>q in the form, so <Leader>2 now runs nothing there;
+  // then a `,` leader runs it as `,2`, and `{}` restores Space 2, the leader
+  // Space having been unmapped once already.
+  {
+    writeFile: { path: USER_KEYMAP_FILE, text: MOVED_JUMP_KEYMAP },
+    keys: [],
+    expect: '[config] applied a new config',
+  },
+  { keys: ['a'], expect: '[forms] focused notes on question 2' },
+  {
+    keys: ['Escape', ' ', '2'],
+    expect: '[page] <Leader>2 has no bind in forms.forms',
+  },
+  { keys: [' ', 'q'], expect: '[forms] already on question 2' },
+  {
+    writeFile: { path: USER_KEYMAP_FILE, text: COMMA_LEADER_KEYMAP },
+    keys: [],
+    expect: '[config] applied a new config',
+  },
+  { keys: [',', '2'], expect: '[forms] already on question 2' },
+  {
+    writeFile: { path: USER_KEYMAP_FILE, text: '{}' },
+    keys: [],
+    expect: '[config] applied a new config',
+  },
+  { keys: [' ', '2'], expect: '[forms] already on question 2' },
+  { keys: ['Escape'], expect: '[forms] left the box' },
   { keys: ['<C-h>'], expect: '[page] <C-h> ran forms.prevItem' },
   { keys: [' '], expect: '[keys] which-key shows Space' },
   { keys: [], expect: '[keys] which-key closed' },

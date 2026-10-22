@@ -1,0 +1,128 @@
+import { describe, expect, it } from 'vitest';
+import type { Keymap } from '../contracts/keymap';
+import type { AppConfig, ConfigProblem } from '../contracts/settings';
+import { createConfigPush, type PushTargets } from './config-push';
+
+const REGISTERED = new Set(['known', 'other']);
+
+// A config with one editor and one page bind on `command`, a sequence timeout
+// of `timeoutMs`, and `problems` from main; nothing here reads the rest.
+function config(
+  command: string,
+  timeoutMs = 500,
+  problems: ConfigProblem[] = [],
+): AppConfig {
+  const keymap: Keymap = {
+    editor: {
+      leader: '<Space>',
+      remaps: [],
+      binds: [{ keys: 'x', scope: 'any', command }],
+    },
+    page: [{ keys: ['x'], scope: 'any', command }],
+    app: [],
+    intercept: [],
+    global: [],
+  };
+  return {
+    keymap,
+    settings: { keySequenceTimeoutMs: timeoutMs },
+    problems,
+  } as unknown as AppConfig;
+}
+
+// Fake targets recording each call in `calls`, in order; `requireRegistered`
+// throws for a command outside REGISTERED, as the registry does.
+function fakeTargets(initial: AppConfig) {
+  const calls: string[] = [];
+  const toasted: string[] = [];
+  let current = initial;
+  const targets: PushTargets = {
+    live: {
+      current: () => current,
+      replace(next) {
+        current = next;
+      },
+    },
+    applier: { apply: () => calls.push('theme') },
+    editor: { setKeymap: () => calls.push('editor') },
+    commands: {
+      requireRegistered(ids) {
+        const missing = [...new Set(ids)].filter((id) => !REGISTERED.has(id));
+        if (missing.length > 0) {
+          throw new Error(`unknown ${missing.join(', ')}`);
+        }
+      },
+    },
+    pageKeys: { setBinds: (_binds, ms) => calls.push(`page ${ms}`) },
+    problems: { show: () => undefined },
+    toasts: { show: (text) => toasted.push(text) },
+    log: () => undefined,
+  };
+  return { targets, calls, toasted, current: () => current };
+}
+
+function start(initial: AppConfig) {
+  const fake = fakeTargets(initial);
+  const push = createConfigPush(
+    {
+      editor: initial.keymap.editor,
+      page: initial.keymap.page,
+      timeoutMs: initial.settings.keySequenceTimeoutMs,
+    },
+    fake.targets,
+  );
+  return { ...fake, push };
+}
+
+describe('createConfigPush', () => {
+  it('keeps the applied keys and timeout and adds the refusal when the keys are refused', () => {
+    const initial = config('known', 500);
+    const { push, calls, current } = start(initial);
+
+    push(config('missing', 900));
+
+    expect(calls).toEqual(['theme']);
+    expect(current().keymap.page).toEqual(initial.keymap.page);
+    expect(current().keymap.editor).toEqual(initial.keymap.editor);
+    expect(current().settings.keySequenceTimeoutMs).toBe(500);
+    expect(current().problems).toEqual([
+      { file: 'keymap.json', message: 'Keys not applied: unknown missing' },
+    ]);
+  });
+
+  it('clears the refusal when a later push applies', () => {
+    const { push, current } = start(config('known'));
+    push(config('missing'));
+
+    push(config('other'));
+
+    expect(current().problems).toEqual([]);
+    expect(current().keymap.page).toEqual(config('other').keymap.page);
+  });
+
+  it('installs the editor keymap before the page keys', () => {
+    const { push, calls } = start(config('known', 500));
+
+    push(config('other', 700));
+
+    expect(calls).toEqual(['editor', 'page 700', 'theme']);
+  });
+
+  it('re-installs nothing for a push equal to the applied keys', () => {
+    const { push, calls } = start(config('known', 500));
+
+    push(config('known', 500));
+
+    expect(calls).toEqual(['theme']);
+  });
+
+  it('toasts a new problem once across pushes that keep it', () => {
+    const problem = { file: 'settings.json', message: 'bad' };
+    const { push, toasted } = start(config('known'));
+
+    push(config('known', 500, [problem]));
+    push(config('known', 500, [problem]));
+
+    expect(toasted).toEqual(['settings.json: bad']);
+  });
+});
