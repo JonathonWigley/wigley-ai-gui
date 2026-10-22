@@ -244,7 +244,7 @@ when it starts; 04's and 05's new files pass the style check as written.
 - [x] [Gallery mode](06-gallery.md) — after 02, 04, 05
 
 ### Wave 4
-- [ ] [Doc re-read](07-doc-re-read.md) — after 01–06
+- [x] [Doc re-read](07-doc-re-read.md) — after 01–06
 
 ### Wave 5
 - [ ] [Final verification](08-final-verification.md) — after 07
@@ -260,6 +260,7 @@ Review base: ed5d846987f144614a41307b3783613533e761a8
 - 05 · 9927864 · proved (diff read, typecheck; worker: test, lint) · concerns: `.ui-scrim[hidden] { display: none }` duplicates `index.css`'s global `[hidden]` !important rule; a layout read per `pointermove` in `split.ts`; check-styles to run over 05 files after 03 lands
 - 03 · 1fd6472 · proved (diff read, typecheck, lint; `--no-legacy` over every 04/05 file clean; worker: test 1868) · concerns: none
 - 06 · ff715d2 · proved (diff read, typecheck, lint; worker: test 1871, selftest green, N = 6) · concerns: seven leftover forms toasts stack over the right of every gallery and shell-layout screenshot, hiding part of IconButton and Kbd; the pinned frame height (`row-list * 6`, 168px) clips the dialog; IconButton cells cramped; the `d` steps expect exact pixel lines, brittle to layout change
+- 07 · 833cf9e · proved (diff read, lint) · concerns: global `:focus-visible { box-shadow: var(--wg-focus-ring) }` is a second focus-ring form beside the inset `focus-border` ring DESIGN.md calls the one ring; AGENTS.md lines over the wrap width
 ### Contract changes
 ### Rulings
 - Screenshot paths and the fit-check list enter the chain in `runScript` (the doc said `startRun`), where the script's list already enters — tree shape — cost if wrong: none · group 02
@@ -284,3 +285,4 @@ Review base: ed5d846987f144614a41307b3783613533e761a8
 - The test shell layout styles its areas with its own `gallery-test-*` classes plus the `material-chrome` helpers, not `shell.css`'s; frames get `isolation: isolate` so the scrim and floating panel stack inside them · group 06
 ### Review rounds
 ### Test gate
+- Pass 1 (written in range): `scripts/style-rules.test.mts`, `src/main/selftest-config.test.ts`, `src/plugins/gallery/page/transparency-toggle.test.ts`, `src/renderer/plugins/page-api.test.ts`, `src/shared/page/ui/kbd-parts.test.ts`, `src/shared/page/ui/split-width.test.ts`; pass 2 (reference changed code): `src/main/built-in-themes.test.ts` (Mocha JSON), plus page-api and selftest-config again · every test in these 7 files references the changed code · 80 passed

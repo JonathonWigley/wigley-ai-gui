@@ -1,6 +1,6 @@
 # 07 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -62,3 +62,7 @@ element is a noun, one returning a handle `create<Name>`; root class `ui-<name>`
 
 ## Proof
 
+Commit `833cf9e` · diff read: § Primitives lists all sixteen and the convention; AGENTS.md names
+`.selftest/screenshots/` and check-styles in its lint lines · lint passes. Concerns: the global
+`:focus-visible` box-shadow (`focus-ring`) is a second ring form beside the inset `focus-border`
+ones; a few AGENTS.md lines run past the file's wrap width.
