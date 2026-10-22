@@ -125,6 +125,8 @@ export interface DocsViewDeps {
   keysFor: DocsKeysFor;
   // Hears each change to the keys `keysFor` reads, until its `dispose`.
   onKeysChanged(listener: () => void): Disposable;
+  // Draws keys `keysFor` read as a key hint.
+  kbd(keys: string): HTMLElement;
   setScope(scope: DocsPaneScope): void;
   pushScope(scope: DocsPushedScope): PushedScope;
   isActive(): boolean;
@@ -341,6 +343,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         overwrite: deps.keysFor('conflictOverwrite', 'conflict'),
         cancel: deps.keysFor('conflictCancel', 'conflict'),
       }),
+    emptyHint: () => {
+      const shown = deps.keysFor('focusTree', 'doc');
+      return shown === null ? null : deps.kbd(shown);
+    },
   });
 
   const restoreFocus = () => {
@@ -377,7 +383,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     dialogClosed: restoreFocus,
   });
   const { picker } = dialogs;
-  // A rebind reaches the prompts that show keys while they show.
+  // A rebind reaches the empty state's key and the prompts that show keys
+  // while they show.
   const keysChange = deps.onKeysChanged(() => {
     doc.keysChanged();
     dialogs.keysChanged();

@@ -27,6 +27,7 @@ import {
 } from './docs-state';
 
 const BANNER_TEXT = 'Changed on disk since you opened it';
+const EMPTY_TEXT = 'Open a doc from the tree';
 const SCROLL_STEP_PX = 48;
 
 // The file a detail view's `i` edits, read, and the 1-based line it opens at.
@@ -74,6 +75,8 @@ export interface DocViewDeps {
   pushConflictScope(): PushedScope;
   // The changed-on-disk prompt with the keys bound now.
   conflictText(): string;
+  // The key hint the empty state shows, bound now; null when none is.
+  emptyHint(): HTMLElement | null;
   // Hears the open doc's path each time a doc opens or the open one moves,
   // and null once the pane is emptied.
   openChanged(path: string | null): void;
@@ -109,8 +112,8 @@ export interface DocView {
   conflictCancel(): void;
   // Ends the changed-on-disk prompt, if it shows, without moving focus.
   closeConflict(): void;
-  // Shows the changed-on-disk prompt's keys again, if it shows, as the keymap
-  // now binds them.
+  // Shows the empty state's key and the changed-on-disk prompt's keys again,
+  // as the keymap now binds them.
   keysChanged(): void;
   dispose(): void;
 }
@@ -208,8 +211,7 @@ function sourceBlocks(body: HTMLElement): { line: number; top: number }[] {
 export function createDocView(deps: DocViewDeps): DocView {
   const pane = element('div', 'docs-doc');
   pane.tabIndex = -1;
-  const empty = emptyState('Open a doc from the tree');
-  empty.classList.add('docs-empty');
+  let empty = emptyState(EMPTY_TEXT, deps.emptyHint());
   const header = element('div', 'docs-header');
   const title = element('h1', 'docs-title');
   const path = element('div', 'docs-path');
@@ -605,6 +607,10 @@ export function createDocView(deps: DocViewDeps): DocView {
     },
     refreshChips: drawChips,
     keysChanged() {
+      const nextEmpty = emptyState(EMPTY_TEXT, deps.emptyHint());
+      nextEmpty.hidden = empty.hidden;
+      empty.replaceWith(nextEmpty);
+      empty = nextEmpty;
       if (conflict !== null) {
         prompt.textContent = deps.conflictText();
       }

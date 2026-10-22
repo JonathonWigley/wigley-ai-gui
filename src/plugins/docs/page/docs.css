@@ -78,6 +78,12 @@
   position: relative;
 }
 
+/* The empty state sits centred in the pane while no doc is open. */
+.docs-doc > .ui-empty {
+  height: 100%;
+  align-content: center;
+}
+
 .docs-doc.is-editing {
   display: flex;
   flex-direction: column;
