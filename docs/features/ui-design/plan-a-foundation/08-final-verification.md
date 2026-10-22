@@ -1,6 +1,6 @@
 # 08 — Final verification
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 7 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -77,9 +77,25 @@ defaults; start the app with `npm start`.
 | 26 | In the forms preview round, look at a recommended choice, the recommend badge, the origin and severity badges, and which-key's command and prefix colours | The recommended choice and its badge are mauve (the accent); origin, severity and which-key colours are as before the plan | **expected** |
 | 27 | Look at the side bar, title bar, status bar and activity bar over content | The translucent chrome reads clearly: no text lost against what lies behind, though nothing blurs (`backdrop-filter` arrives with plan B's material helpers) | **low-confidence**: Mocha's chrome alpha is chosen for a blurred backdrop, and plan A draws it unblurred |
 
+### Added after the review (plan A fix rounds)
+
+Checks 4 (the mark following keys), 6 and the help formatting in 13 are now covered by tests and the self-test; run
+them only in passing. Check 15 changed: an invalid accelerator is now refused when keymap.json is read.
+
+| # | Steps | Expected | Tag |
+|---|---|---|---|
+| 15′ | Set keymap.json to `{ "app": [{ "accelerator": "Command+Nope", "command": "window.summon" }] }` | A status bar problem and toast name keymap.json and the bad accelerator; the menu, global shortcuts and every other bind stay as they were | **expected** |
+| 28 | Look at the title bar with the window wide, then narrow it to ~700px | The context text stays centred on the window and never runs under the window buttons or the end items | **low-confidence**: the three-track grid is CSS no test reads |
+| 29 | Set keymap.json to `{ "page": [{ "keys": [" ", "n"], "scope": "forms.review", "command": "forms.nextItem" }] }` with the forms preview round open, then switch to a Chat tab and back; also look at the chat send button and a docs control that shows a key | Each button showing a key hint shows the new keys after the save, in a visible and in a hidden round; deleting the file puts the old hints back | **low-confidence**: hint redraw on `keys.onChanged` runs only in a DOM, which vitest lacks |
+| 30 | Open which-key (`Space`, wait), help (`Space ?`) and a toast over the docs editor | Each popup is opaque: no text from behind shows through | **low-confidence**: opaque floating surfaces are CSS |
+| 31 | Look at the main sheet and the panel in Sessions and Docs mode | Both sit on the sheet background, not on the translucent chrome | **expected** |
+| 32 | With `"transparency": "system"`, toggle macOS Reduce transparency (as in 19) and watch the title bar on Windows if at hand, or the macOS title bar | The title bar recolours with the OS switch with no restart (on Windows the overlay buttons follow) | **low-confidence**: whether Electron's `nativeTheme` `updated` fires on that toggle is unproven |
+| 33 | In DevTools (View → Toggle Developer Tools) console, after setting keymap.json `{ "editor": { "leader": "," } }` and deleting it again | No `[editor] vim held no … mapping of … to unmap` line appears for a mapping that existed | **low-confidence**: the log trusts `Vim.unmap`'s return value, which no test or read has confirmed |
+
 ## Next plan
 
 When this task's checks pass, the agent ends its report by prompting the user to start plan B (primitives): run `/clear`, then `wigley:make` on `docs/features/ui-design/plan-b-primitives/`.
 
 ## Proof
 
+Proof (agent part): on 40529b5 `npm run typecheck`, `npm run lint`, `npm test` (126 files, 1815 tests) and `npm run selftest` (all passed) pass. The live checks went to the user and wait on their results.
