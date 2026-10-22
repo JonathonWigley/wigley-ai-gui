@@ -43,13 +43,30 @@ export function createSplit(options: SplitOptions): Split {
   };
   showWidth(width);
 
+  // The pointer whose drag the handle holds, kept until its capture loss
+  // reaches the handle; a handle moved out of the document mid-drag gets no
+  // lostpointercapture, so the drag stays set with its capture gone.
+  let dragPointer: number | null = null;
+  const endDrag = () => {
+    dragPointer = null;
+    handle.classList.remove('is-active');
+    if (width !== widthAtDragStart) {
+      options.uiState.set(options.stateKey, width);
+    }
+  };
+
   handle.addEventListener('pointerdown', (event) => {
-    const dragInProgress = handle.classList.contains('is-active');
+    const dragInProgress =
+      dragPointer !== null && handle.hasPointerCapture(dragPointer);
     if (event.button !== 0 || dragInProgress) {
       return;
     }
+    if (dragPointer !== null) {
+      endDrag();
+    }
     event.preventDefault();
     handle.setPointerCapture(event.pointerId);
+    dragPointer = event.pointerId;
     handle.classList.add('is-active');
     widthAtDragStart = width;
   });
@@ -61,11 +78,11 @@ export function createSplit(options: SplitOptions): Split {
     showWidth(clampSplitWidth(event.clientX - left, options));
   });
   // The browser fires lostpointercapture after pointerup and pointercancel
-  // release capture, and on every other loss of it.
-  handle.addEventListener('lostpointercapture', () => {
-    handle.classList.remove('is-active');
-    if (width !== widthAtDragStart) {
-      options.uiState.set(options.stateKey, width);
+  // release capture, and on every other loss of it while the handle is in the
+  // document.
+  handle.addEventListener('lostpointercapture', (event) => {
+    if (event.pointerId === dragPointer) {
+      endDrag();
     }
   });
 
