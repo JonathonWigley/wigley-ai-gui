@@ -27,22 +27,42 @@ interface BoundKeys {
   command: CommandId;
 }
 
-const KEY_NAMES: Partial<Record<string, string>> = {
-  ' ': 'Space',
-  Escape: 'Esc',
-};
-
-// The vim key names a hint spells its own way, by their lowercase spelling, as
-// vim reads names in any case.
+// The KeyboardEvent.key value of each vim key name a hint prints its own way,
+// by its lowercase spelling, as vim reads names in any case.
 const VIM_KEY_NAMES: Partial<Record<string, string>> = {
-  space: 'Space',
-  esc: 'Esc',
+  space: ' ',
+  esc: 'Escape',
   cr: 'Enter',
   enter: 'Enter',
   return: 'Enter',
+  tab: 'Tab',
+  bs: 'Backspace',
+  del: 'Delete',
+  up: 'ArrowUp',
+  down: 'ArrowDown',
+  left: 'ArrowLeft',
+  right: 'ArrowRight',
   lt: '<',
   bar: '|',
   bslash: '\\',
+};
+
+// The KeyboardEvent.key value of each Electron accelerator key name a hint
+// prints its own way, by its lowercase spelling.
+const ACCELERATOR_KEY_NAMES: Partial<Record<string, string>> = {
+  space: ' ',
+  plus: '+',
+  esc: 'Escape',
+  escape: 'Escape',
+  return: 'Enter',
+  enter: 'Enter',
+  tab: 'Tab',
+  backspace: 'Backspace',
+  delete: 'Delete',
+  up: 'ArrowUp',
+  down: 'ArrowDown',
+  left: 'ArrowLeft',
+  right: 'ArrowRight',
 };
 
 const VIM_TOKEN = /<[^<>]+>|./gu;
@@ -64,9 +84,9 @@ const VIM_MODIFIERS: Partial<Record<string, keyof Omit<Chord, 'key'>>> = {
 
 const DIGIT_SUFFIX = /^(.*?)(\d)$/;
 
-// How each platform prints a chord: its modifier names in the order Control,
-// Alt, Shift, Meta, the text between them and the key, and the name of each
-// key that is not a letter or digit.
+// How each platform prints a key: a chord's modifier names in the order
+// Control, Alt, Shift, Meta, the text between them and the key, and the name
+// of each named key, by its KeyboardEvent.key value, alone or in a chord.
 interface ChordStyle {
   modifiers: { ctrl: string; alt: string; shift: string; meta: string };
   joiner: string;
@@ -76,13 +96,35 @@ interface ChordStyle {
 const MAC_CHORDS: ChordStyle = {
   modifiers: { ctrl: '⌃', alt: '⌥', shift: '⇧', meta: '⌘' },
   joiner: '',
-  keyNames: { Enter: '↩' },
+  keyNames: {
+    ' ': 'Space',
+    Enter: '↩',
+    Tab: '⇥',
+    Escape: '⎋',
+    Backspace: '⌫',
+    Delete: '⌦',
+    ArrowLeft: '←',
+    ArrowUp: '↑',
+    ArrowRight: '→',
+    ArrowDown: '↓',
+  },
 };
 
 const PC_CHORDS: ChordStyle = {
   modifiers: { ctrl: 'Ctrl', alt: 'Alt', shift: 'Shift', meta: 'Win' },
   joiner: '+',
-  keyNames: { Enter: 'Enter' },
+  keyNames: {
+    ' ': 'Space',
+    Enter: 'Enter',
+    Tab: 'Tab',
+    Escape: 'Esc',
+    Backspace: 'Backspace',
+    Delete: 'Delete',
+    ArrowLeft: 'Left',
+    ArrowUp: 'Up',
+    ArrowRight: 'Right',
+    ArrowDown: 'Down',
+  },
 };
 
 const CHORD_STYLES: Record<Platform, ChordStyle> = {
@@ -150,17 +192,18 @@ function vimChord(token: string): Chord | null {
 }
 
 // A page key sequence as the user reads it on `platform`, e.g. `Space Space`,
-// `z a` or `⌥O`.
+// `z a`, `⌥O`, or `Escape` as `⎋` on macOS and `Esc` elsewhere.
 export function formatKeys(keys: string[], platform: Platform): string {
+  const { keyNames } = CHORD_STYLES[platform];
   return keys
-    .map((key) => KEY_NAMES[key] ?? formatChord(key, platform))
+    .map((key) => keyNames[key] ?? formatChord(key, platform))
     .join(' ');
 }
 
 // One vim-notation token as the user reads it on `platform`, e.g. `<Space>` as
-// `Space`, `<Tab>` as `Tab`, `<M-x>` as `⌘X` on macOS and `Win+X` elsewhere. A
-// token that is neither a `<…>` key nor a chord, such as `w` or `<X-a>`,
-// returns as it is.
+// `Space`, `<Tab>` as `⇥` on macOS and `Tab` elsewhere, `<M-x>` as `⌘X` on
+// macOS and `Win+X` elsewhere. A token that is neither a `<…>` key nor a
+// chord, such as `w` or `<X-a>`, returns as it is.
 export function formatVimToken(token: string, platform: Platform): string {
   const chord = vimChord(token);
   if (chord !== null) {
@@ -170,7 +213,8 @@ export function formatVimToken(token: string, platform: Platform): string {
   if (parts === null || parts[1] !== '') {
     return token;
   }
-  return VIM_KEY_NAMES[parts[2].toLowerCase()] ?? parts[2];
+  const key = VIM_KEY_NAMES[parts[2].toLowerCase()] ?? parts[2];
+  return CHORD_STYLES[platform].keyNames[key] ?? key;
 }
 
 // A vim-notation key string as the user reads it on `platform`, its tokens
@@ -235,15 +279,74 @@ export function withLeader(keys: string, leader: string): string {
   return keys.replaceAll('<Leader>', leader);
 }
 
-// An intercepted chord as the user reads it, e.g. `Control+Tab`.
-export function chordName(bind: InterceptBind): string {
-  const modifiers = [
-    bind.control && 'Control',
-    bind.alt && 'Alt',
-    bind.shift && 'Shift',
-    bind.meta && 'Command',
-  ].filter(Boolean);
-  return [...modifiers, bind.key].join('+');
+// An intercepted chord as the user reads it on `platform`, e.g. Control+Tab
+// as `⌃⇥` on macOS and `Ctrl+Tab` elsewhere.
+export function chordName(bind: InterceptBind, platform: Platform): string {
+  return printChord(
+    {
+      ctrl: bind.control ?? false,
+      alt: bind.alt ?? false,
+      shift: bind.shift ?? false,
+      meta: bind.meta ?? false,
+      key: bind.key,
+    },
+    platform,
+  );
+}
+
+// An Electron accelerator as the user reads it on `platform`, e.g.
+// `CommandOrControl+Shift+K` as `⇧⌘K` on macOS and `Ctrl+Shift+K` elsewhere.
+// An accelerator with a modifier a chord cannot hold, such as AltGr, returns
+// as it is.
+export function formatAccelerator(
+  accelerator: string,
+  platform: Platform,
+): string {
+  const parts = accelerator.split('+');
+  const key = parts[parts.length - 1];
+  const chord: Chord = {
+    ctrl: false,
+    alt: false,
+    shift: false,
+    meta: false,
+    key: ACCELERATOR_KEY_NAMES[key.toLowerCase()] ?? key,
+  };
+  for (const modifier of parts.slice(0, -1)) {
+    const flag = acceleratorModifier(modifier, platform);
+    if (flag === null) {
+      return accelerator;
+    }
+    chord[flag] = true;
+  }
+  return printChord(chord, platform);
+}
+
+// The chord flag an accelerator modifier sets on `platform`; null for AltGr or
+// an unknown modifier.
+function acceleratorModifier(
+  modifier: string,
+  platform: Platform,
+): keyof Omit<Chord, 'key'> | null {
+  switch (modifier.toLowerCase()) {
+    case 'control':
+    case 'ctrl':
+      return 'ctrl';
+    case 'alt':
+    case 'option':
+      return 'alt';
+    case 'shift':
+      return 'shift';
+    case 'command':
+    case 'cmd':
+    case 'super':
+    case 'meta':
+      return 'meta';
+    case 'commandorcontrol':
+    case 'cmdorctrl':
+      return platform === 'macos' ? 'meta' : 'ctrl';
+    default:
+      return null;
+  }
 }
 
 // Neighbouring binds with one label become one hint, each key listed once.

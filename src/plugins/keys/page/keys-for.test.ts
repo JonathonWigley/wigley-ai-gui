@@ -19,7 +19,7 @@ describe('keysFor', () => {
       { keys: [' ', 'Escape'], scope: 'a.s', command: 'a.close' },
     ]);
 
-    expect(keysFor(map, 'a.close', 'a.s', 'macos')).toBe('Space Esc');
+    expect(keysFor(map, 'a.close', 'a.s', 'macos')).toBe('Space ⎋');
   });
 
   it('keysFor_Chord_PrintsForThePlatform', () => {

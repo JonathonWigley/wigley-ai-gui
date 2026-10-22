@@ -50,7 +50,7 @@ describe('helpSections', () => {
           { keys: '⇧⌘K', label: 'review' },
         ],
       },
-      { title: 'Everywhere', hints: [{ keys: 'Esc', label: 'close' }] },
+      { title: 'Everywhere', hints: [{ keys: '⎋', label: 'close' }] },
     ]);
   });
 
@@ -97,15 +97,48 @@ describe('helpSections', () => {
       },
       {
         title: 'Remaps in a text box',
+        hints: [{ keys: 'j k', label: 'sends ⎋ in insert mode' }],
+      },
+      {
+        title: 'App chords',
+        hints: [{ keys: '⌃⇥', label: 'cycle tabs' }],
+      },
+      {
+        title: 'System-wide chords',
+        hints: [{ keys: '⌃⌥⌘W', label: 'summon' }],
+      },
+    ]);
+  });
+
+  it('helpSections_ChordSectionsOffMac_PrintWords', () => {
+    const map = keymap({
+      editor: {
+        leader: '<Space>',
+        remaps: [{ mode: 'insert', keys: 'jk', to: '<Esc>' }],
+        binds: [],
+      },
+      app: [{ accelerator: 'CommandOrControl+Shift+K', command: 'a.review' }],
+      intercept: [{ key: 'Tab', control: true, command: 'a.cycle' }],
+      global: [{ accelerator: 'Control+Alt+W', command: 'a.summon' }],
+    });
+
+    const sections = helpSections(map, [], label, 'windows');
+
+    expect(sections).toEqual([
+      {
+        title: 'Remaps in a text box',
         hints: [{ keys: 'j k', label: 'sends Esc in insert mode' }],
       },
       {
         title: 'App chords',
-        hints: [{ keys: 'Control+Tab', label: 'cycle tabs' }],
+        hints: [
+          { keys: 'Ctrl+Shift+K', label: 'review' },
+          { keys: 'Ctrl+Tab', label: 'cycle tabs' },
+        ],
       },
       {
         title: 'System-wide chords',
-        hints: [{ keys: 'Control+Alt+Command+W', label: 'summon' }],
+        hints: [{ keys: 'Ctrl+Alt+W', label: 'summon' }],
       },
     ]);
   });

@@ -208,7 +208,9 @@ The keyboard is first; the mouse works everywhere.
   colour on a card or an input frame). The user must always see where the keys go.
 - **Buttons never take focus**, so Enter and Space stay with the page keys; a click runs them.
 - **Key hints** draw through the Kbd primitive, which prints chords through `formatChord` for the
-  platform (⌘ ⌥ on macOS, Ctrl Alt on Windows). A view draws a hint only when its command has a bind.
+  platform. On macOS every modifier and named key prints as its glyph (⌃ ⌥ ⇧ ⌘, ↩ ⇥ ⎋ ⌫ ⌦
+  ← ↑ → ↓), Space as the word, as macOS menus write it; elsewhere they print as words (`Ctrl+`,
+  `Enter`, `Esc`). A view draws a hint only when its command has a bind.
 - **Every new bind** is checked against this rule, against `docs/keymap.md` (which modifier and
   which leader group it takes), and against every bind in its scope.
 

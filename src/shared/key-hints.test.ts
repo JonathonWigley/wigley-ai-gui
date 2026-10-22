@@ -3,7 +3,9 @@ import type { CommandId } from '../contracts/commands';
 import type { Keymap, PageBind } from '../contracts/keymap';
 import {
   type CommandLabel,
+  chordName,
   editorHints,
+  formatAccelerator,
   formatChord,
   formatKeys,
   formatVimKeys,
@@ -87,8 +89,25 @@ describe('formatChord', () => {
 describe('formatKeys', () => {
   it('names Space and Escape and spaces a sequence', () => {
     expect(formatKeys([' ', ' '], 'macos')).toBe('Space Space');
-    expect(formatKeys(['Escape'], 'macos')).toBe('Esc');
+    expect(formatKeys(['Escape'], 'macos')).toBe('⎋');
     expect(formatKeys(['z', 'a'], 'macos')).toBe('z a');
+  });
+
+  it('formatKeys_NamedKeyOnMac_PrintsItsGlyph', () => {
+    expect(formatKeys(['Enter'], 'macos')).toBe('↩');
+    expect(formatKeys(['Tab'], 'macos')).toBe('⇥');
+    expect(formatKeys(['Backspace'], 'macos')).toBe('⌫');
+    expect(formatKeys(['Delete'], 'macos')).toBe('⌦');
+    expect(formatKeys(['ArrowUp', 'ArrowDown'], 'macos')).toBe('↑ ↓');
+    expect(formatKeys(['ArrowLeft', 'ArrowRight'], 'macos')).toBe('← →');
+  });
+
+  it('formatKeys_NamedKeyOffMac_PrintsItsName', () => {
+    expect(formatKeys([' ', 'Escape'], 'windows')).toBe('Space Esc');
+    expect(formatKeys(['Enter'], 'windows')).toBe('Enter');
+    expect(formatKeys(['Tab'], 'linux')).toBe('Tab');
+    expect(formatKeys(['Backspace'], 'windows')).toBe('Backspace');
+    expect(formatKeys(['ArrowUp'], 'windows')).toBe('Up');
   });
 
   it('prints a chord for the platform', () => {
@@ -107,7 +126,7 @@ describe('pageHints', () => {
 
   it('lists the review binds with their labels, leaving out other views', () => {
     expect(pageHints(keymap.page, 'forms.review', label, 'macos')).toEqual([
-      { keys: 'Esc', label: 'back to the form' },
+      { keys: '⎋', label: 'back to the form' },
       { keys: 'F1', label: 'test.anywhere' },
     ]);
   });
@@ -121,7 +140,7 @@ describe('pageHints', () => {
 
   it('joins other neighbours with one label', () => {
     expect(pageHints(keymap.page, 'forms.help', label, 'macos')[0]).toEqual({
-      keys: '? / Esc',
+      keys: '? / ⎋',
       label: 'test.close',
     });
   });
@@ -155,7 +174,7 @@ describe('editorHints', () => {
     } satisfies Keymap['editor'];
 
     expect(editorHints(editor, label, 'macos')).toEqual([
-      { keys: 'Enter', label: 'test.pick' },
+      { keys: '↩', label: 'test.pick' },
     ]);
   });
 });
@@ -174,9 +193,12 @@ describe('vimTokens', () => {
 describe('formatVimToken', () => {
   it('formatVimToken_NamesSpaceEscAndEnter', () => {
     expect(formatVimToken('<Space>', 'macos')).toBe('Space');
-    expect(formatVimToken('<Esc>', 'macos')).toBe('Esc');
-    expect(formatVimToken('<CR>', 'macos')).toBe('Enter');
+    expect(formatVimToken('<Esc>', 'macos')).toBe('⎋');
+    expect(formatVimToken('<CR>', 'macos')).toBe('↩');
     expect(formatVimToken('a', 'macos')).toBe('a');
+    expect(formatVimToken('<Space>', 'windows')).toBe('Space');
+    expect(formatVimToken('<Esc>', 'windows')).toBe('Esc');
+    expect(formatVimToken('<CR>', 'windows')).toBe('Enter');
   });
 
   it('formatVimToken_Chord_PrintsForPlatform', () => {
@@ -217,16 +239,46 @@ describe('formatVimToken', () => {
     expect(formatVimToken('<D-CR>', 'macos')).toBe('⌘↩');
   });
 
+  it('formatVimToken_BareReturn_PrintsAsThePageKeyDoes', () => {
+    expect(formatVimToken('<CR>', 'macos')).toBe(
+      formatKeys(['Enter'], 'macos'),
+    );
+    expect(formatVimToken('<Return>', 'macos')).toBe('↩');
+    expect(formatVimToken('<CR>', 'windows')).toBe(
+      formatKeys(['Enter'], 'windows'),
+    );
+  });
+
+  it('formatVimToken_NamedKeyChordOnMac_PrintsItsGlyph', () => {
+    expect(formatVimToken('<S-Tab>', 'macos')).toBe('⇧⇥');
+    expect(formatVimToken('<C-Esc>', 'macos')).toBe('⌃⎋');
+    expect(formatVimToken('<A-BS>', 'macos')).toBe('⌥⌫');
+    expect(formatVimToken('<C-Space>', 'macos')).toBe('⌃Space');
+  });
+
   it('formatVimToken_SpecialCharacterName_PrintsTheCharacter', () => {
     expect(formatVimToken('<lt>', 'macos')).toBe('<');
     expect(formatVimToken('<Bar>', 'windows')).toBe('|');
     expect(formatVimToken('<Bslash>', 'macos')).toBe('\\');
   });
 
-  it('formatVimToken_NamedKey_PrintsBareName', () => {
-    expect(formatVimToken('<Tab>', 'macos')).toBe('Tab');
-    expect(formatVimToken('<BS>', 'windows')).toBe('BS');
-    expect(formatVimToken('<cr>', 'macos')).toBe('Enter');
+  it('formatVimToken_NamedKeyOnMac_PrintsItsGlyph', () => {
+    expect(formatVimToken('<Tab>', 'macos')).toBe('⇥');
+    expect(formatVimToken('<BS>', 'macos')).toBe('⌫');
+    expect(formatVimToken('<Del>', 'macos')).toBe('⌦');
+    expect(formatVimToken('<cr>', 'macos')).toBe('↩');
+    expect(formatVimToken('<Up>', 'macos')).toBe('↑');
+    expect(formatVimToken('<Left>', 'macos')).toBe('←');
+  });
+
+  it('formatVimToken_NamedKeyOffMac_PrintsItsName', () => {
+    expect(formatVimToken('<Tab>', 'windows')).toBe('Tab');
+    expect(formatVimToken('<BS>', 'windows')).toBe('Backspace');
+    expect(formatVimToken('<Up>', 'linux')).toBe('Up');
+  });
+
+  it('formatVimToken_UnnamedKey_PrintsBareName', () => {
+    expect(formatVimToken('<F5>', 'macos')).toBe('F5');
   });
 
   it('formatVimToken_UnknownModifier_ReturnsAsIs', () => {
@@ -242,5 +294,48 @@ describe('formatVimKeys', () => {
     );
     expect(formatVimKeys('<CR>', ',', 'windows')).toBe('Enter');
     expect(formatVimKeys('jk', '<Space>', 'macos')).toBe('j k');
+    expect(formatVimKeys('<CR>', ',', 'macos')).toBe('↩');
+  });
+});
+
+describe('chordName', () => {
+  it('chordName_OnMac_PrintsGlyphs', () => {
+    expect(chordName(keymap.intercept[0], 'macos')).toBe('⌃⇥');
+    expect(
+      chordName(
+        { key: 'k', alt: true, shift: true, meta: true, command: 'test.x' },
+        'macos',
+      ),
+    ).toBe('⌥⇧⌘K');
+  });
+
+  it('chordName_OffMac_PrintsWords', () => {
+    expect(chordName(keymap.intercept[0], 'windows')).toBe('Ctrl+Tab');
+    expect(
+      chordName({ key: 'Enter', meta: true, command: 'test.x' }, 'linux'),
+    ).toBe('Win+Enter');
+  });
+});
+
+describe('formatAccelerator', () => {
+  it('formatAccelerator_OnMac_PrintsGlyphs', () => {
+    expect(formatAccelerator(keymap.global[0].accelerator, 'macos')).toBe(
+      '⌃⌥⌘W',
+    );
+    expect(formatAccelerator('CmdOrCtrl+Shift+Return', 'macos')).toBe('⇧⌘↩');
+    expect(formatAccelerator('Option+Esc', 'macos')).toBe('⌥⎋');
+    expect(formatAccelerator('Super+Space', 'macos')).toBe('⌘Space');
+  });
+
+  it('formatAccelerator_OffMac_PrintsWords', () => {
+    expect(formatAccelerator('CommandOrControl+Shift+k', 'windows')).toBe(
+      'Ctrl+Shift+K',
+    );
+    expect(formatAccelerator('Alt+Up', 'linux')).toBe('Alt+Up');
+    expect(formatAccelerator('Control+F5', 'windows')).toBe('Ctrl+F5');
+  });
+
+  it('formatAccelerator_AltGr_ReturnsAsWritten', () => {
+    expect(formatAccelerator('AltGr+e', 'macos')).toBe('AltGr+e');
   });
 });

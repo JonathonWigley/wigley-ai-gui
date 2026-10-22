@@ -6,6 +6,7 @@ import {
   type KeyHint,
   chordName,
   editorHints,
+  formatAccelerator,
   formatKeys,
   formatVimKeys,
   mergeHints,
@@ -18,8 +19,7 @@ export interface HelpSection {
 
 // Every bound key, for the help overlay: for each scope in `scopes` order, its
 // page binds under its title and then its text box binds; then the text box's
-// remaps and the app's and system's chords. Page and text box chords print
-// for `platform`. Sections with no binds are left out.
+// remaps and the app's and system's chords. Every key prints for `platform`. Sections with no binds are left out.
 export function helpSections(
   keymap: Keymap,
   scopes: readonly ScopeInfo[],
@@ -66,11 +66,11 @@ export function helpSections(
       hints: mergeHints(
         [
           ...keymap.app.map((bind) => ({
-            keys: bind.accelerator,
+            keys: formatAccelerator(bind.accelerator, platform),
             command: bind.command,
           })),
           ...keymap.intercept.map((bind) => ({
-            keys: chordName(bind),
+            keys: chordName(bind, platform),
             command: bind.command,
           })),
         ],
@@ -81,7 +81,7 @@ export function helpSections(
       title: 'System-wide chords',
       hints: mergeHints(
         keymap.global.map((bind) => ({
-          keys: bind.accelerator,
+          keys: formatAccelerator(bind.accelerator, platform),
           command: bind.command,
         })),
         label,

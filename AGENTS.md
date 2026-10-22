@@ -202,7 +202,9 @@ round), since main, not the page, decides.
   control (every forms or chat button whose command has a page bind) depends on `keys` and reads it from that plugin's `keysFor`
   export, again on each of its `onChanged`, so a rebind reaches the control, and draws no hint when the command is
   unbound. Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
-  which prints a chord for the platform the served config names. The core and the editor
+  which prints a chord for the platform the served config names: on macOS each modifier and named key as its glyph
+  (⌃ ⌥ ⇧ ⌘, ↩ ⇥ ⎋ ⌫), elsewhere as words. Help prints intercepted chords (`chordName`) and accelerators
+  (`formatAccelerator`) the same way. The core and the editor
   host report a pending prefix through `api.keys`; the editor host reads it from vim's pending input, behind
   `EditorHost`.
 - **A theme** is a JSON file of a `palette`, `tokens`, a `reduced` block of overrides for reduced transparency, and

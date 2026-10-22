@@ -64,7 +64,7 @@ describe('barHints', () => {
 
     expect(barHints(map, 's', false, label, 'macos')).toEqual([
       { keys: 'j', label: 'next' },
-      { keys: 'Esc', label: 'close' },
+      { keys: '⎋', label: 'close' },
       { keys: '⌥O', label: 'leave the box' },
     ]);
   });
@@ -83,7 +83,7 @@ describe('barHints', () => {
     });
 
     expect(barHints(map, 's', true, label, 'macos')).toEqual([
-      { keys: 'Esc', label: 'leave the box' },
+      { keys: '⎋', label: 'leave the box' },
     ]);
   });
 
@@ -101,7 +101,7 @@ describe('barHints', () => {
     });
 
     expect(barHints(map, 'a.view', true, label, 'macos')).toEqual([
-      { keys: 'Esc', label: 'leave the box' },
+      { keys: '⎋', label: 'leave the box' },
       { keys: 'q', label: 'c.q' },
     ]);
   });
