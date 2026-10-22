@@ -209,6 +209,12 @@ describe('formatVimToken', () => {
     expect(formatVimToken('<S-Tab>', 'windows')).toBe('Shift+Tab');
   });
 
+  it('formatVimToken_SpecialCharacterName_PrintsTheCharacter', () => {
+    expect(formatVimToken('<lt>', 'macos')).toBe('<');
+    expect(formatVimToken('<Bar>', 'windows')).toBe('|');
+    expect(formatVimToken('<Bslash>', 'macos')).toBe('\\');
+  });
+
   it('formatVimToken_NamedKey_PrintsBareName', () => {
     expect(formatVimToken('<Tab>', 'macos')).toBe('Tab');
     expect(formatVimToken('<BS>', 'windows')).toBe('BS');

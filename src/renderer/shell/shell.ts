@@ -69,6 +69,17 @@ export function insertionIndex(
   return next === -1 ? sorted.length : next;
 }
 
+// The first entry of `sorted` from `index` on whose alignment `inTrack` holds,
+// or `undefined` when none does. A layout may point alignments that do not
+// sort next to each other at one track.
+export function nextInTrack<Entry extends { placement: Placement }>(
+  sorted: readonly Entry[],
+  index: number,
+  inTrack: (align: Alignment) => boolean,
+): Entry | undefined {
+  return sorted.slice(index).find((entry) => inTrack(entry.placement.align));
+}
+
 // The window's shell: `areas` are the areas contributions go to, kept across
 // layouts. `setLayout` places them by `layout`, moving every contribution into
 // it, and returns the `Disposable` that restores the layout the shell was
@@ -207,14 +218,13 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
         const index = insertionIndex(live, placement);
         const { tracks } = mounted[name];
         const track = tracks[placement.align];
-        const following = live[index] as Contribution | undefined;
-        // Sorted by alignment first, so the next contribution lies in this
-        // track or none later in the list does.
-        const followsInTrack =
-          following !== undefined &&
-          tracks[following.placement.align] === track;
+        const following = nextInTrack(
+          live,
+          index,
+          (align) => tracks[align] === track,
+        );
         element.dataset.align = placement.align;
-        track.insertBefore(element, followsInTrack ? following.element : null);
+        track.insertBefore(element, following?.element ?? null);
         const contribution = { element, placement };
         live.splice(index, 0, contribution);
         applyHidden(name);

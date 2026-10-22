@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   comparePlacements,
   insertionIndex,
+  nextInTrack,
   type Placement,
   placementOf,
 } from './shell';
@@ -77,5 +78,29 @@ describe('insertionIndex', () => {
     expect(insertionIndex([], { align: 'start', order: 0, sequence: 0 })).toBe(
       0,
     );
+  });
+});
+
+describe('nextInTrack', () => {
+  const sorted = [
+    { placement: { align: 'start', order: 0, sequence: 0 } },
+    { placement: { align: 'center', order: 0, sequence: 1 } },
+    { placement: { align: 'end', order: 0, sequence: 2 } },
+  ] satisfies { placement: Placement }[];
+  const startOrEnd = (align: string) => align === 'start' || align === 'end';
+
+  it('skips entries in other tracks to the next one in this track', () => {
+    expect(nextInTrack(sorted, 1, startOrEnd)).toBe(sorted[2]);
+  });
+
+  it('returns the entry at index when it is in this track', () => {
+    expect(nextInTrack(sorted, 0, startOrEnd)).toBe(sorted[0]);
+  });
+
+  it('returns undefined when no later entry is in this track', () => {
+    expect(nextInTrack(sorted, 1, (align) => align === 'start')).toBe(
+      undefined,
+    );
+    expect(nextInTrack(sorted, 3, startOrEnd)).toBe(undefined);
   });
 });

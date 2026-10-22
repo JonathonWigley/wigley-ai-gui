@@ -40,6 +40,9 @@ const VIM_KEY_NAMES: Partial<Record<string, string>> = {
   cr: 'Enter',
   enter: 'Enter',
   return: 'Enter',
+  lt: '<',
+  bar: '|',
+  bslash: '\\',
 };
 
 const VIM_TOKEN = /<[^<>]+>|./gu;
