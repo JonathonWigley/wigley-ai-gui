@@ -247,10 +247,14 @@ const HALF_PAGE_KEYS = {
   up: '<WigleyHalfPageUp>',
 } as const;
 
+// Vim's mapCommand adds an entry on every call, so each key's earlier mapping,
+// when vim still holds one, is unmapped first.
 function mapHalfPageMotions() {
   for (const forward of [true, false]) {
+    const keys = forward ? HALF_PAGE_KEYS.down : HALF_PAGE_KEYS.up;
+    Vim.unmap(keys, 'visual');
     Vim.mapCommand(
-      forward ? HALF_PAGE_KEYS.down : HALF_PAGE_KEYS.up,
+      keys,
       'motion',
       'moveByScroll',
       { forward, explicitRepeat: true },
@@ -606,9 +610,10 @@ function heldMappings(
   );
 }
 
-// Vim keymaps are global to the engine; the vimrc lines are applied through
-// one hosted editor, since applying them needs an editor instance: the first
-// one created, or the first after `setKeymap` ran with none hosted.
+// Vim keymaps are global to the engine; the keymap is applied through one
+// hosted editor, since the vimrc lines need an editor instance: the first one
+// created, or the first after `setKeymap` ran with none hosted. Each apply maps
+// the half-page motions again, since `:mapclear` drops them with every map.
 export const createCodeMirrorVimHost: CreateEditorHost = (
   initialKeymap,
   run,
@@ -624,7 +629,8 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
   const pendingKeys = new PendingKeys();
   defineBindCommands(groups, hosted, run);
 
-  const applyVimrc = (cm: VimEditor) => {
+  const applyKeymap = (cm: VimEditor) => {
+    mapHalfPageMotions();
     const unmapsLeader = !unmappedLeaders.has(keymap.leader);
     for (const line of vimrcLines(keymap, groups, unmapsLeader)) {
       Vim.handleEx(cm, line);
@@ -634,7 +640,6 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
   };
 
   defineDocumentExCommands(hosted);
-  mapHalfPageMotions();
   const leaving = (left: EditorView) =>
     pendingKeys.discardIn(vimEditorOf(left));
 
@@ -651,7 +656,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
     requireKeyBuffer(cm);
     const cursorRedraw = redrawCursorOnResize(view);
     if (!isKeymapApplied) {
-      applyVimrc(cm);
+      applyKeymap(cm);
     }
     cm.on('vim-mode-change', (change: { mode: string; subMode?: string }) =>
       modeChanged({
@@ -740,7 +745,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
     onPendingKeys: (listener) => pendingKeys.listen(listener),
     cancelPendingKeys: () => pendingKeys.cancel(),
     // Unmaps the old keymap's mappings, redefines each group's command under
-    // its index, and maps the new keymap through a hosted editor, or through
+    // its index, and applies the new keymap through a hosted editor, or through
     // the next one created. A changed leader's old key keeps no mapping, since
     // restoring vim's default for it would clear every map.
     setKeymap(next) {
@@ -768,7 +773,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
       isKeymapApplied = false;
       const first = hosted[0];
       if (first !== undefined) {
-        applyVimrc(vimEditorOf(first.view));
+        applyKeymap(vimEditorOf(first.view));
       }
     },
   };
