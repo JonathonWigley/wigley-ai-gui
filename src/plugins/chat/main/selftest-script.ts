@@ -73,33 +73,33 @@ const LONG_KEYS = [
 ];
 
 // Each step expects the last line its keys cause: the fake emits in microtasks,
-// so an earlier line can land before the step's wait begins. Each session
-// opens on its Chat tab: Option+Shift+i shows the second session's Chat tab,
-// where y finds no pending permission, leaving the first session's alone, and
-// Option+Shift+o goes back to the first session's Chat tab. e opens
-// Effort, and showing the second session's Chat tab closes it; Space k n
-// opens the start prompt, which stays open over the second session's Chat tab
-// until Esc closes it, and Option+Shift+o goes back. hi typed, Esc and v leave
-// the box in visual mode, and showing the second session's Chat tab blurs it;
-// back on the first, i leaves visual mode and inserts before the cursor, so ok
-// sends hoki. hello draws its reply; Enter in insert mode breaks the line, so
-// one, two goes as one message; hello again in insert mode, sent with
-// Cmd+Enter, draws its own; Esc leaves insert mode and Esc again the box. y
-// allows the fixture's permission, which asks the round that takes the Chat tab
-// over; Space Space opens its review and Cmd+Enter submits, which hands the
-// Chat tab back. The tool turn's entries are user, tool, assistant, result,
-// focus following the result, so k k j k walks them; Enter opens the tool entry,
-// gg focuses the first entry and G follows the latest. A thirty-paragraph
-// message makes the transcript taller than the sheet; Esc leaves the box,
-// which resizes the sheet, and G scrolls back to the bottom. Ctrl+k scrolls
-// half a page up off the bottom, which stops following, and Ctrl+j back onto
-// the bottom, which follows again. e opens Effort on Medium, j Enter sets
-// High; i Esc puts the box in normal mode, where Space c e opens Effort again,
-// / and low filter to Low, and Enter in the filter's insert mode sets it. m
-// opens Mode and Esc closes it; o finds the fake has no model control; c
-// opens every control and Esc closes it. A held turn ends on
-// Ctrl+c in the box with the fake's notice; Space k n opens the start prompt and Esc closes it. A second held
-// turn makes Cmd+W ask, and y ends the session. Space k n then picks the
+// so an earlier line can land before the step's wait begins. Each session opens
+// on its Chat tab: Option+Shift+i shows the second session's Chat tab, where y
+// finds no pending permission, leaving the first session's alone, and
+// Option+Shift+o goes back to the first session's Chat tab. e opens Effort, and
+// showing the second session's Chat tab closes it; Space k n opens the start
+// prompt, which stays open over the second session's Chat tab until Esc closes
+// it, and Option+Shift+o goes back. hi typed, Esc and v leave the box in visual
+// mode, and showing the second session's Chat tab blurs it; back on the first,
+// i leaves visual mode and inserts before the cursor, so ok sends hoki. hello
+// draws its reply; Enter in insert mode breaks the line, so one, two goes as
+// one message; hello again in insert mode, sent with Cmd+Enter, draws its own;
+// Esc leaves insert mode and Esc again the box. y allows the fixture's
+// permission, which asks the round that takes the Chat tab over; Space Space
+// opens its review and Cmd+Enter submits, which hands the Chat tab back. The
+// tool turn's entries are user, tool, assistant, result, focus following the
+// result, so k k j k walks them; Enter opens the tool entry, gg focuses the
+// first entry and G follows the latest. A thirty-paragraph message makes the
+// transcript taller than the sheet; Esc leaves the box, which resizes the
+// sheet, and the following transcript stays at the bottom. Ctrl+k scrolls half
+// a page up off the bottom, which stops following, and Ctrl+j back onto the
+// bottom, which follows again. e opens Effort on Medium, j Enter sets High; i
+// Esc puts the box in normal mode, where Space c e opens Effort again, / and
+// low filter to Low, and Enter in the filter's insert mode sets it. m opens
+// Mode and Esc closes it; o finds the fake has no model control; c opens every
+// control and Esc closes it. A held turn ends on Ctrl+c in the box with the
+// fake's notice; Space k n opens the start prompt and Esc closes it. A second
+// held turn makes Cmd+W ask, and y ends the session. Space k n then picks the
 // self-test's folder and the work profile, and its session step lists the
 // fake's saved sessions: j x archives session one, . shows it again, k x
 // restores it and . hides the archived again; Enter resumes it. / and fa offer
@@ -165,7 +165,6 @@ const STEPS: SelfTestStep[] = [
     expect: '[chat] assistant entry added in chat-selftest',
   },
   { keys: ['Escape'], expect: '[chat] left the box' },
-  { keys: ['G'], expect: '[chat] following the latest entry' },
   {
     keys: ['<C-k>'],
     expect: '[chat] scrolled the transcript up half a page; not following',
