@@ -442,8 +442,8 @@ function readEditor(
 // The user keymap `text`, a `keymap.json`, holds, each bind naming a command
 // and scope of `names` that runs in the bind's process, each unbind a scope of
 // `names`, each insert bind a key of `UNBOUND_INSERT_KEYS`, and each
-// accelerator one Electron accepts. Throws an Error whose message is the first problem
-// found, as the user reads it.
+// accelerator one Electron accepts. Throws an Error whose message is the first
+// problem found, as the user reads it.
 export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
   const file = parseJsonObject(text);
   for (const key of Object.keys(file)) {

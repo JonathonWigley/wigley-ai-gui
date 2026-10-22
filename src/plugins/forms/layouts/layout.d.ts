@@ -130,6 +130,7 @@ export interface Layout {
     ): LayoutCard;
     notice(parent: HTMLElement, input: NoticeCard, kit: Kit): LayoutCard;
   };
-  // Drawn above the cards in the forms view, once per round.
+  // Drawn above the cards in the forms view, once per round and again after
+  // each keymap change.
   head?(parent: HTMLElement, round: RoundInfo, kit: HeadKit): void;
 }

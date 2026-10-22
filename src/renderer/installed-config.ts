@@ -12,8 +12,9 @@ export interface AppliedKeys {
 
 // The pushed config as the page runs it: its keymap's editor and page keys and
 // its `keySequenceTimeoutMs` are the applied ones, the rest of its keymap and
-// settings as pushed, since main applies those binds itself; and when the page refused the pushed keys, with `refusal`
-// naming why, its problems carry that refusal after main's.
+// settings as pushed, since main applies those binds itself; and when the
+// page refused the pushed keys, with `refusal` naming why, its problems carry
+// that refusal after main's.
 export function installedConfig(
   next: AppConfig,
   applied: AppliedKeys,

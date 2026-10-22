@@ -526,7 +526,8 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
   let keymap = initialKeymap;
   let groups = bindGroups(keymap);
   let isKeymapApplied = false;
-  // Every leader whose default bind vim has dropped; vim keeps none to drop again.
+  // Every leader whose default bind vim has dropped; vim keeps none to drop
+  // again.
   const unmappedLeaders = new Set<string>();
   const pendingKeys = new PendingKeys();
   defineBindCommands(groups, hosted, run);

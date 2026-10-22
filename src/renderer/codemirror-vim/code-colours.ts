@@ -58,7 +58,8 @@ const MOCHA_TAG_STYLES: readonly TagStyle[] = [
     color: '#a6e3a1',
   },
   { tag: tags.invalid, color: '#f38ba8' },
-  // Upstream colours `deleted` as plain text; red here, so removed diff lines read red.
+  // Upstream colours `deleted` as plain text; red here, so removed diff lines
+  // read red.
   { tag: tags.deleted, color: '#f38ba8' },
 ];
 
