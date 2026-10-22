@@ -2,6 +2,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Keymap, PendingKeys } from '../../../contracts/keymap';
 import type { Platform } from '../../../contracts/platform';
 import type { CommandInfo } from '../../../contracts/plugin';
+import { vimTokenForPageKey } from '../../../shared/key-notation';
 import {
   type CommandLabel,
   formatKeys,
@@ -30,7 +31,8 @@ interface Candidate {
 }
 
 // The keys that continue `pending`, in keymap order: those firing in the
-// pending scope (or `any`), on the page or in a box.
+// pending scope (or `any`), on the page or in a box. A prefix the keymap's
+// `groups` names is labelled with that name.
 // Neighbouring entries of one kind and label merge into one, and chords print
 // for `platform`. Null when no bind continues the sequence.
 export function whichKeyModel(
@@ -48,9 +50,19 @@ export function whichKeyModel(
     pending.where === 'page'
       ? (key: string) => formatKeys([key], platform)
       : (token: string) => formatVimToken(token, platform);
+  const vimToken =
+    pending.where === 'page' ? vimTokenForPageKey : (token: string) => token;
+  const pendingTokens = pending.keys.map(vimToken);
   const entries = byNextKey(candidates, pending.keys.length).map(
     ([key, binds]) =>
-      entry(readKey(key), binds, pending.keys.length, command, label),
+      entry(
+        readKey(key),
+        binds,
+        pending.keys.length,
+        groupName([...pendingTokens, vimToken(key)], keymap),
+        command,
+        label,
+      ),
   );
   return {
     title: pending.keys.map(readKey).join(' '),
@@ -96,18 +108,37 @@ function byNextKey(
   return [...groups];
 }
 
-// A key with any bind running past it is a prefix, labelled `+` and its binds'
-// groups; otherwise it runs its command.
+// The `groups` name of the prefix `tokens` (vim tokens), if any.
+function groupName(tokens: string[], keymap: Keymap): string | undefined {
+  for (const [keys, name] of Object.entries(keymap.groups)) {
+    const groupTokens = vimTokens(keys, keymap.editor.leader);
+    const isThisPrefix =
+      groupTokens.length === tokens.length &&
+      groupTokens.every((token, i) => token === tokens[i]);
+    if (isThisPrefix) {
+      return name;
+    }
+  }
+  return undefined;
+}
+
+// A key with any bind running past it is a prefix, labelled `+` and its
+// `groupName`, or without one its binds' command groups; otherwise it runs
+// its command.
 function entry(
   keys: string,
   binds: Candidate[],
   depth: number,
+  groupName: string | undefined,
   command: (id: CommandId) => CommandInfo | undefined,
   label: CommandLabel,
 ): WhichKeyEntry {
   const isPrefix = binds.some((bind) => bind.keys.length > depth + 1);
   if (!isPrefix) {
     return { keys, label: label(binds[0].command), kind: 'command' };
+  }
+  if (groupName !== undefined) {
+    return { keys, label: `+${groupName}`, kind: 'prefix' };
   }
   const groups = new Set<string>();
   for (const bind of binds) {

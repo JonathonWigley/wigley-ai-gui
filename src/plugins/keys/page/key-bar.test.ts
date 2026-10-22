@@ -38,19 +38,17 @@ describe('barHints', () => {
     ]);
   });
 
-  it('barHints_Page_LeavesOutSpaceKeysWhateverTheEditorLeader', () => {
+  it('barHints_UserLeader_LeavesOutLeaderSequences', () => {
     const map = keymap({
       editor: { leader: ',', remaps: [], binds: [] },
       page: [
+        { keys: [',', 'k', 's'], scope: 's', command: 'a.save' },
         { keys: ['j'], scope: 's', command: 'a.next' },
-        { keys: [' ', 'k'], scope: 's', command: 'a.review' },
-        { keys: [',', 'x'], scope: 's', command: 'a.save' },
       ],
     });
 
     expect(barHints(map, 's', false, label, 'macos')).toEqual([
       { keys: 'j', label: 'next' },
-      { keys: ', x', label: 'save' },
     ]);
   });
 

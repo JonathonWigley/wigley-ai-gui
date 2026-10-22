@@ -11,6 +11,8 @@ const COMMANDS: Record<string, { label: string; group: string }> = {
   submit: { label: 'submit', group: 'review' },
   closeTab: { label: 'close the tab', group: 'tabs' },
   other: { label: 'other scope', group: 'other' },
+  splitRight: { label: 'split right', group: 'panes' },
+  splitDown: { label: 'split down', group: 'panes' },
 };
 
 function command(id: string): CommandInfo | undefined {
@@ -22,14 +24,18 @@ function command(id: string): CommandInfo | undefined {
 
 const label = (id: string) => command(id)?.label ?? id;
 
-function keymap(page: PageBind[], editor: Keymap['editor']['binds'] = []) {
+function keymap(
+  page: PageBind[],
+  editor: Keymap['editor']['binds'] = [],
+  groups: Keymap['groups'] = {},
+) {
   return {
     editor: { leader: '<Space>', remaps: [], binds: editor },
     page,
     app: [],
     intercept: [],
     global: [],
-    groups: {},
+    groups,
   } satisfies Keymap;
 }
 
@@ -162,5 +168,69 @@ describe('whichKeyModel', () => {
     );
 
     expect(model?.entries.map((entry) => entry.keys)).toEqual(['x']);
+  });
+  it('whichKeyModel_NamedGroup_LabelsPrefix', () => {
+    const map = keymap(
+      [
+        { keys: [' ', 'k', 's'], scope: 's', command: 'splitRight' },
+        { keys: [' ', 'k', 'd'], scope: 's', command: 'splitDown' },
+      ],
+      [],
+      { '<Leader>k': 'windows' },
+    );
+
+    const model = whichKeyModel(
+      { where: 'page', keys: [' '], scope: 's' },
+      map,
+      command,
+      label,
+      'macos',
+    );
+
+    expect(model?.entries).toEqual([
+      { keys: 'k', label: '+windows', kind: 'prefix' },
+    ]);
+  });
+
+  it('whichKeyModel_NamedGroupInBox_LabelsPrefix', () => {
+    const map = keymap(
+      [],
+      [
+        { keys: '<Leader>ks', scope: 's', command: 'splitRight' },
+        { keys: '<Leader>kd', scope: 's', command: 'splitDown' },
+      ],
+      { '<Leader>k': 'windows' },
+    );
+
+    const model = whichKeyModel(
+      { where: 'editor', keys: ['<Space>'], scope: 's' },
+      map,
+      command,
+      label,
+      'macos',
+    );
+
+    expect(model?.entries).toEqual([
+      { keys: 'k', label: '+windows', kind: 'prefix' },
+    ]);
+  });
+
+  it('whichKeyModel_UnnamedPrefix_KeepsCommandGroups', () => {
+    const map = keymap([
+      { keys: [' ', 'k', 's'], scope: 's', command: 'splitRight' },
+      { keys: [' ', 'k', 'd'], scope: 's', command: 'splitDown' },
+    ]);
+
+    const model = whichKeyModel(
+      { where: 'page', keys: [' '], scope: 's' },
+      map,
+      command,
+      label,
+      'macos',
+    );
+
+    expect(model?.entries).toEqual([
+      { keys: 'k', label: '+panes', kind: 'prefix' },
+    ]);
   });
 });
