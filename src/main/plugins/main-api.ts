@@ -17,8 +17,9 @@ import type { PluginChannels } from './plugin-channel';
 // config changes; `services` is shared by every main part, run mode included,
 // and `selfTestFor` gives each plugin its own self-test host, null outside the
 // self-test; `driveFor` gives each plugin its own drive host, null outside a
-// drive run; `dependency` is the host's; `bus` is shared by every main part; `dataRoot` is
-// the absolute folder that holds a folder per plugin, named by its id.
+// drive run; `dependency` is the host's; `bus` is shared by every main part;
+// `dataRoot` is the absolute folder that holds a folder per plugin, named by
+// its id.
 export interface MainApiDeps {
   channels: PluginChannels;
   pluginSettings(): Record<string, object>;

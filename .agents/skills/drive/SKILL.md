@@ -35,7 +35,8 @@ or touches their data, so start one whenever a check needs it.
    a round for a session row comes from `forms.openRound` alone, never from a
    `sessions.connect` row.
 3. Act with `key`, `type`, `click`, `drag`, `resize` and `setting`. Each returns once the page has
-   redrawn, with the log lines it caused. The page holds document focus as the visible app's does,
+   redrawn: `resize` with the size the window took, the others with the log lines they caused
+   (`setting` also says whether the config applied). The page holds document focus as the visible app's does,
    so `document.hasFocus()`, `.cm-focused`, `:focus` styles and focus events behave as they do for
    the user.
 4. Capture and read: `screenshot` saves the window, or one element by selector, under the run
