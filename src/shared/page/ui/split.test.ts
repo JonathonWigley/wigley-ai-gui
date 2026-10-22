@@ -57,14 +57,15 @@ function stateOver(values: Map<string, unknown>): UiState {
   };
 }
 
-// The handle is the third element createSplit builds: root, start, handle, end.
+// The handle is the element createSplit gives the `ui-split-handle` class.
 function splitWithHandle(saved: Map<string, unknown>) {
   const split = createSplit({
     ...limits,
     uiState: stateOver(saved),
     stateKey: 'side',
   });
-  return { split, handle: created[2] };
+  const handle = created.find((node) => node.className === 'ui-split-handle')!;
+  return { split, handle };
 }
 
 function press(handle: FakeElement, pointerId: number) {
