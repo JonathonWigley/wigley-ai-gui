@@ -7,7 +7,7 @@ Plan: [plan.md](plan.md)
 
 Files:     create `src/plugins/gallery/manifest.ts` · create `src/plugins/gallery/page/start.ts` ·
            create `src/plugins/gallery/page/gallery-view.ts` · create `src/plugins/gallery/page/gallery.css` ·
-           create `src/plugins/gallery/page/transparency-toggle.ts` · test `src/plugins/gallery/page/transparency-toggle.test.ts` ·
+           create `src/plugins/gallery/page/transparency-toggle.ts` · create `src/plugins/gallery/page/test-shell-layout.ts` · test `src/plugins/gallery/page/transparency-toggle.test.ts` ·
            modify `src/plugins/manifests.ts` · modify `src/plugins/page.ts` · modify `scripts/check-layers.mts` ·
            modify `src/contracts/plugin.ts` · modify `src/renderer/plugins/page-api.ts` · modify `src/renderer/plugins/page-api.test.ts` ·
            modify `src/renderer/renderer.ts` · modify `src/plugins/forms/main/selftest-script.ts` · modify `src/plugins/docs/main/selftest-script.ts`
@@ -24,6 +24,7 @@ Consumes:  every Produces of [04](04-primitives-controls.md) and [05](05-primiti
 Produces:  `export const galleryManifest` in `src/plugins/gallery/manifest.ts` ·
            `export const galleryPagePart: PagePart<typeof galleryManifest>` in `src/plugins/gallery/page/start.ts` ·
            `export function nextTransparency(overridden: 'full' | 'reduced' | null): 'full' | 'reduced';` in `src/plugins/gallery/page/transparency-toggle.ts` ·
+           `export const testShellLayout: ShellLayout` in `src/plugins/gallery/page/test-shell-layout.ts` ·
            in `src/contracts/plugin.ts`:
            `export interface PageTransparency { override(transparency: 'full' | 'reduced' | null): void; overridden(): 'full' | 'reduced' | null }` and
            `PageApi.transparency: PageTransparency`
@@ -37,8 +38,8 @@ Tests:     `src/plugins/gallery/page/transparency-toggle.test.ts`:
 Done when: the gallery shows on `Space z g` with every primitive of 04 and 05 in every state below;
            `t` switches transparency in place without writing `settings.json`; `npm run typecheck`,
            `npm run lint` (check-layers and check-styles over `src/plugins/gallery/`) and `npm test`
-           pass; `npm run selftest` passes with the steps below and saves the screenshots
-           named there (`gallery-<n>-full` and `gallery-<n>-reduced` for every page, `sessions-*`, `docs-*`); the visual checks are 08's
+           pass; `Space z s` swaps the shell to the test layout and back; `npm run selftest` passes with the steps below and saves the screenshots
+           named there (`gallery-<n>-full` and `gallery-<n>-reduced` for every page, `shell-layout-test`, `sessions-*`, `docs-*`); the visual checks are 08's
 Commit:    one commit for the group
 
 ## Decisions
@@ -66,15 +67,29 @@ Commit:    one commit for the group
   |---|---|---|---|---|
   | `showMode` | `gallery` | `modes` | `[' ', 'z', 'g']` | `any` |
   | `toggleTransparency` | `switch transparency` | `gallery` | `['t']` | `gallery` |
+  | `swapShellLayout` | `swap the shell layout` | `gallery` | `[' ', 'z', 's']` | `any` |
   | `scrollTop` | `scroll to the top` | `gallery` | `['g', 'g']` | `gallery` |
   | `scrollEnd` | `scroll to the end` | `gallery` | `['G']` | `gallery` |
   | `pageDown` | `scroll down a page` | `gallery` | `['d']` | `gallery` |
 
   `id: 'gallery'`, `dependsOn: []`, `scopes: { gallery: 'In the gallery' }`, no editor, app,
   global or intercept keys, `settings: {}`, `themeTokens: {}`. Every command runs in the page.
-  Checked at plan time: no other bind starts with `Space z g` (`Space z l …` is forms', `Space z c …`
-  chat's), and no `any`-scope bind is `t`, `g`, `G` or `d` (chat's `G` is in `chat`; `d` is forms' in `forms` and docs' in `tree`, neither in `gallery`). No editor bind:
+  Checked at plan time: no other bind starts with `Space z g` or is `Space z s` (`Space z l …` is forms', `Space z c …`
+  chat's; re-check `src/config/keymap.ts` and every manifest when this lands), and no `any`-scope bind is `t`, `g`, `G` or `d` (chat's `G` is in `chat`; `d` is forms' in `forms` and docs' in `tree`, neither in `gallery`). No editor bind:
   the gallery is a debug view with no text box (drafter).
+- **Shell layout swap** (deferred from plan A's review, finding 8): `mountShell`'s DOM behaviour —
+  sorted insertion into alignment tracks, dispose, per-area `hidden`, `setLayout` moving live
+  contributions, rollback on a bad layout, the restore guarded by generation — has no caller of
+  `shell.setLayout` and no test, since vitest has no DOM. `swapShellLayout` (`Space z s`, a debug key
+  under `Space z`) holds a `Disposable` field: with none held it calls `api.shell.setLayout(testShellLayout)`,
+  keeps the result and logs `[gallery] shell layout swapped`; with one held it calls `dispose()`, clears
+  the field and logs `[gallery] shell layout restored`. `testShellLayout` (`test-shell-layout.ts`,
+  tokens only) mounts every `AreaName` with its tracks split by `AlignedArea` and a layout the default
+  does not make (the status bar above the main area, the activity bar on the end side), so a
+  contribution that fails to move shows in the screenshot. The gallery's `hidden` does not restore it:
+  the swap lives until `Space z s` or a page load. The rollback and stale-generation paths stay
+  unreached by the self-test; they need a layout that throws and a second `setLayout`, which this task
+  does not add.
 - **Mode** (drafter): `api.modes.add({ id: 'gallery', title: 'Gallery', icon: 'symbol-color',
   element, shown, hidden })`; `shown` sets the `gallery` scope; `hidden` does nothing; the handle's
   `setContext({ title: 'Gallery', detail: 'Every primitive in every state' })` runs once after `add`.
@@ -180,6 +195,8 @@ gains one sentence naming them:
 | `[' ', 'z', 'g']` | `[page] showed Gallery mode` | — |
 | `['t']` | `[gallery] transparency full` | — |
 | `[' ', 'k', 's']` | `[page] showed Sessions mode` | `sessions-full` |
+| `[' ', 'z', 's']` | `[gallery] shell layout swapped` | `shell-layout-test` |
+| `[' ', 'z', 's']` | `[gallery] shell layout restored` | `shell-layout-restored` |
 
 Appended to the end of `STEPS` in `src/plugins/docs/main/selftest-script.ts` (Docs mode shows the
 fixture's tree with neat.md renamed), with a sentence in its comment:
@@ -193,7 +210,9 @@ fixture's tree with neat.md renamed), with a sentence in its comment:
 | `['t']` | `[gallery] transparency full` | — |
 | `[' ', 'k', 'd']` | `[page] showed Docs mode` | `docs-full` |
 
-Forms' group leaves the override at `full`, so chat's script runs as before and docs' first `t`
+The two last forms rows run in Sessions mode, whose title bar, activity bar, side bar and status bar
+contributions the swap moves; `shell-layout-restored` is checked against `sessions-full` to prove the
+restore. Forms' group leaves the override at `full`, so chat's script runs as before and docs' first `t`
 lands on `reduced`. A reload starts with no override, as every run does. The switch from another
 mode is: show the gallery, press `t`, show the mode again — no extra command.
 

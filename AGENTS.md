@@ -104,7 +104,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout)
   keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the status bar's key list, and the
                  keys-for-command lookup it exports); no main part
-  gallery/       manifest.ts, page/ (Gallery mode: every primitive in every state); no main part
+  gallery/       planned (plan B task 06, not built yet): manifest.ts, page/ (Gallery mode: every primitive in
+                 every state); no main part
 ```
 
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
@@ -176,7 +177,7 @@ round), since main, not the page, decides.
   scopes or on keys that begin another same-mode bind's longer keys in any scope. Esc while a sequence waits cancels
   it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout keys are
-  `Space z l …`, chat's `Space z c …`, the gallery `Space z g`).
+  `Space z l …`, chat's `Space z c …`, the planned gallery `Space z g`).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
   modal view never fights the plugin under it for the scope. The pushed scope's `onBaseChanged` hears the set scope
