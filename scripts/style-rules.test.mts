@@ -72,6 +72,41 @@ describe('cssViolations', () => {
     ]);
   });
 
+  it('cssViolations_UpperCaseDuration_Reports', () => {
+    expect(
+      cssViolations('.a { transition: opacity 200MS ease; }', false),
+    ).toEqual([
+      {
+        line: 1,
+        rule: 'raw-duration',
+        text: '200MS in transition: opacity 200MS ease',
+      },
+    ]);
+  });
+
+  it('cssViolations_NegativeLength_Reports', () => {
+    expect(cssViolations('.a { margin-top: -4px; }', false)).toEqual([
+      { line: 1, rule: 'raw-length', text: '-4px in margin-top: -4px' },
+    ]);
+  });
+
+  it('cssViolations_QuotedStringHoldsRawValue_ReportsNothing', () => {
+    expect(cssViolations('.a { content: "12px 200ms"; }', false)).toEqual([]);
+  });
+
+  it('cssViolations_UrlHoldsRawValue_ReportsNothing', () => {
+    expect(
+      cssViolations('.a { background-image: url(12px.svg); }', false),
+    ).toEqual([]);
+  });
+
+  it('cssViolations_LineAfterMultiLineUrl_CountsLines', () => {
+    const css = '.a {\n  background: url(\n    a.svg\n  );\n  gap: 4px;\n}';
+    const violations = cssViolations(css, false);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toMatchObject({ line: 5, rule: 'raw-length' });
+  });
+
   it('cssViolations_ZeroDuration_ReportsNothing', () => {
     expect(cssViolations('.a { transition-delay: 0s; }', false)).toEqual([]);
   });
@@ -155,6 +190,30 @@ describe('inlineStyleViolations', () => {
       'raw-colour',
       'raw-length',
     ]);
+  });
+
+  it('inlineStyleViolations_SetAttributeStyle_Reports', () => {
+    expect(
+      inlineStyleViolations('a.ts', "el.setAttribute('style', 'gap: 8px');"),
+    ).toEqual([{ line: 1, rule: 'raw-length', text: '8px in gap: 8px' }]);
+  });
+
+  it('inlineStyleViolations_StyleAssignment_Reports', () => {
+    expect(inlineStyleViolations('a.ts', "el.style = 'margin: 4px';")).toEqual([
+      { line: 1, rule: 'raw-length', text: '4px in margin: 4px' },
+    ]);
+  });
+
+  it('inlineStyleViolations_WebkitBackdropFilter_Reports', () => {
+    const violations = inlineStyleViolations(
+      'a.ts',
+      "el.style.webkitBackdropFilter = 'var(--wg-material-chrome-filter)';",
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toMatchObject({
+      line: 1,
+      rule: 'backdrop-filter',
+    });
   });
 
   it('inlineStyleViolations_NonLiteralValue_ReportsNothing', () => {

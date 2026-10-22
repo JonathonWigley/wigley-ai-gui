@@ -186,7 +186,7 @@ const COLOUR_PROPERTY =
   /^(color|background(-color)?|border(-(top|right|bottom|left|block|inline)(-(start|end))?)?(-color)?|outline(-color)?|(box|text)-shadow|text-decoration(-color)?|caret-color|accent-color|fill|stroke|column-rule(-color)?|scrollbar-color|--.*)$/;
 const LENGTH =
   /(?<![\w.#-])-?(\d*\.)?\d+(px|rem|em|ex|ch|ic|lh|rlh|cap|pt|pc|cm|mm|q|in)\b/gi;
-const DURATION = /(?<![\w.#-])-?(\d*\.)?\d+(ms|s)\b/g;
+const DURATION = /(?<![\w.#-])-?(\d*\.)?\d+(ms|s)\b/gi;
 const FONT_PROPERTIES = new Set(['font-family', 'font']);
 const BACKDROP_FILTER_PROPERTIES = new Set([
   'backdrop-filter',
@@ -214,7 +214,10 @@ function readableCss(css: string): { written: string; judged: string } {
       QUOTED_STRING,
       (text) => `${text[0]}${' '.repeat(text.length - 2)}${text[0]}`,
     )
-    .replace(URL_ARGUMENT, (text) => `url(${' '.repeat(text.length - 5)})`);
+    .replace(
+      URL_ARGUMENT,
+      (text) => `url(${blankKeepingNewlines(text.slice(4, -1))})`,
+    );
   return { written, judged };
 }
 
