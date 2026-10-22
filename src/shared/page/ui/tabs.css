@@ -1,0 +1,43 @@
+.ui-tabs {
+  display: flex;
+  align-items: flex-end;
+  margin: var(--wg-sheet-gutter) var(--wg-sheet-gutter) 0;
+  background: transparent;
+}
+
+.ui-tab {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  height: var(--wg-tab-height);
+  padding: 0 var(--wg-space-3);
+  border: 0;
+  border-radius: var(--wg-radius-md) var(--wg-radius-md) 0 0;
+  font: inherit;
+  font-size: var(--wg-text-13);
+  background: var(--wg-tab-inactive-background);
+  color: var(--wg-tab-inactive-foreground);
+  cursor: pointer;
+  transition:
+    background-color var(--wg-duration-fast) var(--wg-ease-out),
+    color var(--wg-duration-fast) var(--wg-ease-out);
+}
+
+.ui-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-tab:hover,
+.ui-tab.is-hover {
+  color: var(--wg-fg);
+}
+
+.ui-tab.is-active {
+  background: var(--wg-tab-active-background);
+  color: var(--wg-tab-active-foreground);
+  font-weight: var(--wg-weight-medium);
+  box-shadow: inset 0 var(--wg-indicator-width) 0 var(--wg-tab-active-indicator);
+}

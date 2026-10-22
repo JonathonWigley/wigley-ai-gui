@@ -1,0 +1,37 @@
+.ui-scrim {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--wg-space-6);
+  background: var(--wg-scrim);
+  z-index: var(--wg-z-dialog);
+}
+
+.ui-scrim[hidden] {
+  display: none;
+}
+
+.ui-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-3);
+  border-radius: var(--wg-radius-xl);
+  padding: var(--wg-space-4);
+  width: min(100%, var(--wg-prose-measure));
+  max-height: 100%;
+  overflow: auto;
+}
+
+.ui-dialog-title {
+  margin: 0;
+  font-size: var(--wg-text-14);
+  font-weight: var(--wg-weight-semibold);
+  color: var(--wg-fg);
+}
+
+.ui-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--wg-space-2);
+}

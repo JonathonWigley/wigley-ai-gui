@@ -1,0 +1,11 @@
+.ui-empty {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: var(--wg-space-2);
+  margin: 0;
+  padding: var(--wg-space-6);
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-13);
+}

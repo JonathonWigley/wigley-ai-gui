@@ -1,0 +1,60 @@
+.ui-row {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  min-height: var(--wg-row-list);
+  padding: 0 var(--wg-space-2);
+  padding-left: calc(
+    var(--wg-space-2) + var(--ui-row-depth, 0) * var(--wg-space-3)
+  );
+  border-radius: var(--wg-radius-sm);
+  color: var(--wg-fg);
+  transition:
+    background-color var(--wg-duration-fast) var(--wg-ease-out),
+    color var(--wg-duration-fast) var(--wg-ease-out);
+}
+
+.ui-row--tree {
+  min-height: var(--wg-row-tree);
+}
+
+.ui-row--action {
+  cursor: pointer;
+}
+
+.ui-row-label,
+.ui-row-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-row-detail {
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
+}
+
+.ui-row-trailing {
+  margin-left: auto;
+  color: var(--wg-fg-tertiary);
+}
+
+.ui-row:not(.is-disabled, .is-selected):hover,
+.ui-row.is-hover:not(.is-disabled, .is-selected) {
+  background: var(--wg-list-hover-background);
+}
+
+.ui-row.is-selected {
+  background: var(--wg-list-active-background);
+  color: var(--wg-list-active-foreground);
+}
+
+.ui-row.is-cursor {
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
+.ui-row.is-disabled {
+  color: var(--wg-fg-disabled);
+  cursor: default;
+}

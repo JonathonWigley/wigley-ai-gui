@@ -1,0 +1,16 @@
+.ui-floating {
+  border-radius: var(--wg-radius-lg);
+  padding: var(--wg-space-1);
+  color: var(--wg-fg);
+  z-index: var(--wg-z-floating);
+  opacity: 1;
+  transition: opacity var(--wg-duration-base) var(--wg-ease-out);
+}
+
+/* Fades in on opening only: a hidden panel is not rendered, so closing is
+   instant. */
+@starting-style {
+  .ui-floating {
+    opacity: 0;
+  }
+}

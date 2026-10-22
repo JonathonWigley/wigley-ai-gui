@@ -1,0 +1,12 @@
+.ui-sheet {
+  background: var(--wg-sheet-background);
+  border-radius: var(--wg-radius-lg);
+  margin: var(--wg-sheet-gutter);
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ui-tabs + .ui-sheet {
+  margin-top: 0;
+}
