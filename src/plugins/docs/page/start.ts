@@ -199,6 +199,18 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     api.modes.onChanged((modeId) => {
       isDocsModeShown = modeId === 'docs.docs';
     });
+    // The window narrowing hides the side bar with no call to the mode, and
+    // the hidden tree drops focus to the page body; the tree's box changing
+    // size is the sign, so the doc pane takes focus before the next key.
+    new ResizeObserver(() => {
+      const isTreeFocusHidden =
+        mode.isShown() &&
+        !mode.sideBarShown() &&
+        machineView.focusScope() === 'tree';
+      if (isTreeFocusHidden) {
+        machineView.treeHidden();
+      }
+    }).observe(machineView.tree);
 
     api.events.on(
       'sessions.sessionAdded',
@@ -239,6 +251,9 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             return true;
           },
           shown() {
+            // Another tab's drag may have stored a new width since this one
+            // last showed.
+            split.reloadWidth();
             closeOverlaysBesides(held.view);
             api.keys.setScope(held.view.focusScope());
             log('docs', 'Docs tab shown');

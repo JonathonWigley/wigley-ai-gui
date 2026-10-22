@@ -137,3 +137,23 @@ describe('createSplit drag', () => {
     expect(handle.classes.has('is-active')).toBe(false);
   });
 });
+
+describe('createSplit reloadWidth', () => {
+  it('takes the width another split stored', () => {
+    const saved = new Map<string, unknown>();
+    const { split } = splitWithHandle(saved);
+    saved.set('side', 350);
+    split.reloadWidth();
+    expect(split.width()).toBe(350);
+  });
+
+  it('keeps the width of a drag in progress', () => {
+    const saved = new Map<string, unknown>();
+    const { split, handle } = splitWithHandle(saved);
+    press(handle, 1);
+    move(handle, 1, 300);
+    saved.set('side', 350);
+    split.reloadWidth();
+    expect(split.width()).toBe(300);
+  });
+});

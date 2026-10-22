@@ -17,12 +17,15 @@ export interface Split {
   start: HTMLElement;
   end: HTMLElement;
   width(): number;
+  // Shows the width stored under `stateKey` now, so a split another split's
+  // drag wrote over takes that width; a drag in progress keeps its own.
+  reloadWidth(): void;
   setStartHidden(hidden: boolean): void;
 }
 
 // Two panes side by side with a drag handle between them. The start pane's
 // width opens from `uiState` under `stateKey` and is written back once per
-// drag, when the drag changed it.
+// drag, when the drag changed it; `reloadWidth` reads it again.
 export function createSplit(options: SplitOptions): Split {
   if (options.min > options.max) {
     throw new Error(
@@ -55,10 +58,11 @@ export function createSplit(options: SplitOptions): Split {
     }
   };
 
+  const isDragging = () =>
+    dragPointer !== null && handle.hasPointerCapture(dragPointer);
+
   handle.addEventListener('pointerdown', (event) => {
-    const dragInProgress =
-      dragPointer !== null && handle.hasPointerCapture(dragPointer);
-    if (event.button !== 0 || dragInProgress) {
+    if (event.button !== 0 || isDragging()) {
       return;
     }
     if (dragPointer !== null) {
@@ -91,6 +95,11 @@ export function createSplit(options: SplitOptions): Split {
     start,
     end,
     width: () => width,
+    reloadWidth() {
+      if (!isDragging()) {
+        showWidth(storedSplitWidth(options.uiState, options.stateKey, options));
+      }
+    },
     setStartHidden(hidden) {
       root.classList.toggle('is-start-hidden', hidden);
     },
