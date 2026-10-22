@@ -443,8 +443,31 @@ export interface SelfTestHost {
   run(script: SelfTestScript): void;
 }
 
-// `selfTest` is the plugin's own self-test host, null outside the self-test.
-// `files` takes absolute paths; under the self-test, `files.trash` deletes for
+// How the app was started: by the user (`live`), by `npm run selftest`
+// (`selfTest`), or as a drive run the agent controls (`drive`). The self-test
+// and a drive run both start on a temp home, offscreen.
+export type RunMode = 'live' | 'selfTest' | 'drive';
+
+// A fixture or step a plugin offers a drive run. `description` says what it
+// does and `args` the shape of the args `run` takes, both shown to the agent;
+// `run` resolves to the result the agent reads.
+export interface DriveAction {
+  description: string;
+  args: string;
+  run(args: unknown): Promise<unknown>;
+}
+
+// `add` registers a drive action under `name` qualified by the plugin id, as
+// commands are (`openRound` in plugin `forms` is `forms.openRound`); the
+// returned `Disposable` removes it. `MainApi.drive` is null outside a drive
+// run.
+export interface DriveHost {
+  add(name: string, action: DriveAction): Disposable;
+}
+
+// `runMode` is how the app was started. `selfTest` is the plugin's own
+// self-test host, null outside the self-test.
+// `files` takes absolute paths; outside a live run, `files.trash` deletes for
 // good. `processes` runs the machine's programs. `agentHarnesses` lists every
 // harness adapter the app runs, found by `id`. `window.chooseFolder` opens the
 // native folder dialog over the window and resolves to null when the user
@@ -468,6 +491,7 @@ export interface MainServices {
     chooseFolder(): Promise<string | null>;
   };
   openExternal(url: string): Promise<void>;
+  runMode: RunMode;
   selfTest: SelfTestHost | null;
 }
 
@@ -477,7 +501,8 @@ export interface MainServices {
 // plugin's data folder: its paths are relative to that folder, and one that
 // resolves outside it fails. `settings` reads the plugin's settings as the
 // user config now sets them; `onSettingsChanged` hears them each time they
-// change, until its `dispose`.
+// change, until its `dispose`. `drive` is the plugin's own drive host, null
+// outside a drive run.
 export interface MainApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
@@ -491,6 +516,7 @@ export interface MainApi<
   services: MainServices;
   dependency<E>(pluginId: string): E;
   data: Files;
+  drive: DriveHost | null;
 }
 
 // `exports` reaches the plugins that depend on this one; `dispose` runs when

@@ -113,9 +113,10 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     // late watch report of this write, arriving while selftest is inactive,
     // changes nothing: a save in an inactive layout's folder leaves the
     // revision alone.
-    const fixtureWritten = selfTest
-      ? api.data.write(SELFTEST_LAYOUT.path, SELFTEST_LAYOUT.text)
-      : Promise.resolve();
+    const fixtureWritten =
+      api.services.runMode === 'selfTest'
+        ? api.data.write(SELFTEST_LAYOUT.path, SELFTEST_LAYOUT.text)
+        : Promise.resolve();
     const layouts = serveLayouts(api, fixtureWritten);
     selfTest?.run(formsSelfTestScript(sessions));
     return {

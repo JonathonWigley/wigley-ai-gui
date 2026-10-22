@@ -237,8 +237,6 @@ now, any harness later). Each item names its sites.
 - `timers` joins `MainServices`, taken by `FormsService` (and its 32-bit overflow clamp moves into the adapter) and the
   layout registry, replacing global `setTimeout`.
 - Each plugin gets a log already scoped to its id from `createPageApi`, retiring the hand-typed `logSource` strings.
-- The self-test picks one service set (`selfTestServices` or `liveServices`) in `main.ts` rather than an `isSelfTest`
-  ternary per service.
 - The renderer root builds the pending-keys hub without the nullable `pageKeys` (`renderer.ts:111-117`), and the
   editor-bind miss policy moves into `editor-binds.ts`.
 

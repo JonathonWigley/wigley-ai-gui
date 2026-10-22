@@ -26,7 +26,7 @@ type DocsApi = MainApi<
 >;
 
 // What every handler serves from, once the home folder is read and, under
-// the self-test, the fixture written.
+// the self-test or a drive run, the fixture written.
 interface DocsMain {
   homeDir: string;
   sources: IndexSources;
@@ -41,7 +41,7 @@ async function startDocs(
 ): Promise<DocsMain> {
   const { files, processes, log } = services;
   const homeDir = await files.realPath(services.homeDir);
-  if (services.selfTest !== null) {
+  if (services.runMode !== 'live') {
     await writeDocsFixture(files, homeDir);
   }
   const sources = createIndexSources({

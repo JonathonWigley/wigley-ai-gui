@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
   ChannelShape,
+  DriveHost,
   MainChannel,
   MainServices,
   PluginManifest,
@@ -54,6 +55,7 @@ function apiOver(settings: ReturnType<typeof liveSettings>) {
     ...settings.deps,
     services: {} as MainServices,
     selfTestFor: () => null,
+    driveFor: () => null,
     dependency: <E>() => undefined as E,
     bus: createEventBus(),
     dataRoot: '/d',
@@ -90,6 +92,7 @@ describe('createMainApi', () => {
       ...fixedSettings,
       services: {} as MainServices,
       selfTestFor: () => null,
+      driveFor: () => null,
       dependency: <E>() => undefined as E,
       bus,
       dataRoot: '/d',
@@ -109,6 +112,7 @@ describe('createMainApi', () => {
         ...fixedSettings,
         services: { files } as unknown as MainServices,
         selfTestFor: () => null,
+        driveFor: () => null,
         dependency: <E>() => undefined as E,
         bus: createEventBus(),
         dataRoot: '/d',
@@ -140,6 +144,7 @@ describe('createMainApi', () => {
           askedFor.push(pluginId);
           return host;
         },
+        driveFor: () => null,
         dependency: <E>() => undefined as E,
         bus: createEventBus(),
         dataRoot: '/d',
@@ -149,5 +154,24 @@ describe('createMainApi', () => {
     expect(askedFor).toEqual(['forms']);
     expect(api.services.selfTest).toBe(host);
     expect(api.services.clock).toBe(clock);
+  });
+
+  it('hands each plugin its own drive host', () => {
+    const formsHost: DriveHost = { add: () => ({ dispose: () => undefined }) };
+    const api = createMainApi(
+      { ...manifest, id: 'forms' },
+      {
+        channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
+        ...fixedSettings,
+        services: { files: createMemoryFiles() } as unknown as MainServices,
+        selfTestFor: () => null,
+        driveFor: (pluginId) => (pluginId === 'forms' ? formsHost : null),
+        dependency: <E>() => undefined as E,
+        bus: createEventBus(),
+        dataRoot: '/d',
+      },
+    );
+
+    expect(api.drive).toBe(formsHost);
   });
 });

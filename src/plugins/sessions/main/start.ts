@@ -65,12 +65,14 @@ function openRelay(api: SessionsApi, list: SessionList) {
 // Owns agent sessions: the relay they connect through, the tools other plugins
 // contribute for them, and their sidebar rows. Each contribution rewrites the
 // endpoint files, so a relay that starts the app finds every tool listed. In
-// the self-test it opens no relay and writes no file.
+// the self-test it opens no relay and writes no file; a drive run opens it in
+// its temp home.
 export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
     const list = createList(api);
-    const opened = api.services.selfTest ? null : openRelay(api, list);
+    const opened =
+      api.services.runMode === 'selfTest' ? null : openRelay(api, list);
     const endpointDir = path.join(
       api.services.homeDir,
       '.agents',

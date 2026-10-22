@@ -1,6 +1,7 @@
 import type { Disposable } from '../../contracts/disposable';
 import type {
   ChannelShape,
+  DriveHost,
   MainApi,
   MainServices,
   PluginManifest,
@@ -13,9 +14,10 @@ import type { PluginChannels } from './plugin-channel';
 
 // `pluginSettings` reads every plugin's settings, by plugin id, as the user
 // config now sets them, and `onPluginSettingsChanged` hears them each time the
-// config changes; `services` is shared by every main part, and `selfTestFor`
-// gives each plugin its own self-test host, null outside the self-test;
-// `dependency` is the host's; `bus` is shared by every main part; `dataRoot` is
+// config changes; `services` is shared by every main part, run mode included,
+// and `selfTestFor` gives each plugin its own self-test host, null outside the
+// self-test; `driveFor` gives each plugin its own drive host, null outside a
+// drive run; `dependency` is the host's; `bus` is shared by every main part; `dataRoot` is
 // the absolute folder that holds a folder per plugin, named by its id.
 export interface MainApiDeps {
   channels: PluginChannels;
@@ -25,6 +27,7 @@ export interface MainApiDeps {
   ): Disposable;
   services: Omit<MainServices, 'selfTest'>;
   selfTestFor(pluginId: string): SelfTestHost | null;
+  driveFor(pluginId: string): DriveHost | null;
   dependency<E>(pluginId: string): E;
   bus: EventBus;
   dataRoot: string;
@@ -55,5 +58,6 @@ export function createMainApi(
     services: { ...deps.services, selfTest: deps.selfTestFor(manifest.id) },
     dependency: deps.dependency,
     data: scopedFiles(deps.services.files, `${deps.dataRoot}/${manifest.id}`),
+    drive: deps.driveFor(manifest.id),
   };
 }

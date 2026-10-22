@@ -36,6 +36,7 @@ import type {
   MainServices,
   MainStart,
   PluginManifest,
+  RunMode,
 } from '../contracts/plugin';
 import { mainParts } from '../plugins/main';
 import { manifests } from '../plugins/manifests';
@@ -76,6 +77,7 @@ import { createPluginChannels } from './plugins/plugin-channel';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { applySelfTestConfig } from './selftest-config';
+import { runModeOf } from './run-mode';
 import { resolveTheme } from './themes/theme-loader';
 import {
   titleBarOverlayOf,
@@ -94,41 +96,105 @@ if (started) {
   app.quit();
 }
 
-// The self-test renders offscreen as an accessory app, so it never takes the
-// user's foreground.
-const isSelfTest = Boolean(process.env.PROOF_SELFTEST);
+// The self-test and a drive run render offscreen as an accessory app on a
+// temp home, so neither takes the user's foreground or touches their files.
+const runMode = runModeOf(process.env);
 
 registerDataScheme();
 
 // Read while the app gets ready, and applied before any plugin starts. A
-// terminal start and the self-test keep the PATH of the shell that ran them
-// and stay clear of the user's shell profile.
+// terminal start, the self-test and a drive run keep the PATH of the shell
+// that ran them and stay clear of the user's shell profile.
 const loginShellPath = shouldReadLoginShellPath({
-  isSelfTest,
+  isSelfTest: runMode !== 'live',
   parentPid: process.ppid,
 })
   ? readLoginShellPath(process.env.SHELL)
   : Promise.resolve(null);
 
-// Every self-test file sits in the temp home folder, and the user's Trash
-// must not collect them.
-const files = createNodeFiles({
-  trashItem: isSelfTest
-    ? (file) => rm(file, { recursive: true })
-    : (file) => shell.trashItem(file),
-});
+// The services that differ by run mode. `trashItem` backs the files service,
+// which loads the config before the window exists; `forWindow` builds the
+// rest once the window is created.
+interface ModeServices {
+  trashItem(file: string): Promise<void>;
+  forWindow(
+    context: ModeServicesContext,
+  ): Pick<
+    MainServices,
+    'alerts' | 'agentHarnesses' | 'window' | 'openExternal'
+  >;
+}
+
+interface ModeServicesContext {
+  window: BrowserWindow;
+  store: ConfigStore;
+  homeDir: string;
+  log: Log;
+}
+
+// The user's app: the OS Trash, native alerts and dialogs, Claude Code, and
+// links opened in the user's browser.
+function liveServices(): ModeServices {
+  return {
+    trashItem: (file) => shell.trashItem(file),
+    forWindow: ({ window, store, homeDir, log }) => ({
+      alerts: createElectronAlerts(window, log),
+      agentHarnesses: [
+        createClaudeCodeHarness({
+          command: () =>
+            expandHome(store.current().settings.claude.command, homeDir),
+          permissionTool: CLAUDE_PERMISSION_TOOL,
+          env: process.env,
+          log,
+          spawn,
+          files,
+          homeDir,
+        }),
+      ],
+      window: windowService(window),
+      openExternal: gateExternalLinks((url) => shell.openExternal(url)),
+    }),
+  };
+}
+
+// The self-test: every file sits in the temp home folder, so trash deletes
+// for good and the user's Trash collects nothing; alerts are silent, sessions
+// run over the fake harness, the offscreen window shows no dialog, and no link
+// takes the user's foreground.
+function selfTestServices(): ModeServices {
+  return {
+    trashItem: (file) => rm(file, { recursive: true }),
+    forWindow: ({ window, log }) => ({
+      alerts: silentAlerts,
+      agentHarnesses: [createFakeAgentHarness()],
+      window: { ...windowService(window), chooseFolder: async () => null },
+      openExternal: gateExternalLinks(async (url) =>
+        log('main', `external link not opened in the self-test: ${url}`),
+      ),
+    }),
+  };
+}
+
+const servicesByMode: Record<RunMode, () => ModeServices> = {
+  live: liveServices,
+  selfTest: selfTestServices,
+  drive: selfTestServices,
+};
+const modeServices = servicesByMode[runMode]();
+
+const files = createNodeFiles({ trashItem: modeServices.trashItem });
 const processes = createNodeProcesses();
 const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 
-// The self-test gives plugins a fresh temp folder as the home folder, and
-// their data folders inside it, never the user's, and deletes it before it
-// exits.
-let selfTestHome: string | null = null;
+// The self-test and a drive run give plugins a fresh temp folder as the home
+// folder, and their data folders inside it, never the user's; the self-test
+// deletes it before it exits.
+let tempHome: string | null = null;
 const cleanUpSelfTest = () => {
-  if (selfTestHome !== null) {
-    rmSync(selfTestHome, { recursive: true, force: true });
+  if (tempHome !== null) {
+    rmSync(tempHome, { recursive: true, force: true });
   }
 };
 
@@ -197,27 +263,27 @@ function titleBarOptions(
 }
 
 function homeFolder(): string {
-  if (!isSelfTest) {
+  if (runMode === 'live') {
     return os.homedir();
   }
-  selfTestHome = mkdtempSync(path.join(os.tmpdir(), 'wigley-forms-selftest-'));
-  return selfTestHome;
+  tempHome = mkdtempSync(path.join(os.tmpdir(), 'wigley-forms-selftest-'));
+  return tempHome;
 }
 
-// The folder that holds every plugin's data folder; in the self-test it sits
+// The folder that holds every plugin's data folder; outside a live run it sits
 // inside the temp home folder, so `homeFolder` runs first.
 function dataFolder(): string {
-  return selfTestHome === null
+  return tempHome === null
     ? path.join(app.getPath('userData'), 'plugins')
-    : path.join(selfTestHome, 'plugin-data');
+    : path.join(tempHome, 'plugin-data');
 }
 
-// The app's ui-state file; in the self-test it sits inside the temp home
+// The app's ui-state file; outside a live run it sits inside the temp home
 // folder beside the plugin data, so `homeFolder` runs first.
 function uiStateFilePath(): string {
-  return selfTestHome === null
+  return tempHome === null
     ? path.join(app.getPath('userData'), 'ui-state.json')
-    : path.join(selfTestHome, 'ui-state.json');
+    : path.join(tempHome, 'ui-state.json');
 }
 
 function readStartInputs(): StartInputs {
@@ -287,8 +353,8 @@ function serveUiState(filePath: string, log: Log) {
 // Starts every plugin's main part, each with its own API over one plugin
 // channel router to the window's page, the settings `store` serves with no
 // self-test layer, one event bus, the shared `services`,
-// its own host from `selfTest` (null outside the self-test), and its data
-// folder under `dataRoot`. `onStarted` sees each part as it starts, so a part
+// its own host from `selfTest` (null outside the self-test), no drive host,
+// and its data folder under `dataRoot`. `onStarted` sees each part as it starts, so a part
 // is known even when a later start throws.
 function startMainParts(
   window: BrowserWindow,
@@ -311,6 +377,7 @@ function startMainParts(
             store.onChanged((config) => listener(config.pluginSettings)),
           services,
           selfTestFor: (pluginId) => selfTest?.hostFor(pluginId) ?? null,
+          driveFor: () => null,
           dependency,
           bus,
           dataRoot,
@@ -350,7 +417,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
   const window = createMainWindow(
     startConfig.settings.window,
     windowBackgroundOf(startConfig.theme, isTransparencyReduced(startConfig)),
-    isSelfTest,
+    runMode !== 'live',
     titleBarOptions(startConfig, pageLog.log),
   );
   mainWindow = window;
@@ -378,15 +445,15 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
   store.onChanged(recolour);
   nativeTheme.on('updated', recolour);
 
-  const selfTest = isSelfTest
-    ? startSelfTest(
-        window,
-        scopedFiles(files, inputs.homeDir),
-        cleanUpSelfTest,
-        path.join(app.getAppPath(), '.selftest', 'screenshots'),
-      )
-    : null;
-  const pluginWindow = windowService(window);
+  const selfTest =
+    runMode === 'selfTest'
+      ? startSelfTest(
+          window,
+          scopedFiles(files, inputs.homeDir),
+          cleanUpSelfTest,
+          path.join(app.getAppPath(), '.selftest', 'screenshots'),
+        )
+      : null;
   // On a normal quit, will-quit disposes the parts that started; a failed
   // start exits through failStart, which skips will-quit.
   const startedParts: MainStart<PluginManifest>[] = [];
@@ -403,35 +470,13 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
       randomHex,
       randomUuid,
       homeDir: inputs.homeDir,
-      alerts: isSelfTest ? silentAlerts : createElectronAlerts(window, log),
-      agentHarnesses: isSelfTest
-        ? [createFakeAgentHarness()]
-        : [
-            createClaudeCodeHarness({
-              command: () =>
-                expandHome(
-                  store.current().settings.claude.command,
-                  inputs.homeDir,
-                ),
-              permissionTool: CLAUDE_PERMISSION_TOOL,
-              env: process.env,
-              log,
-              spawn,
-              files,
-              homeDir: inputs.homeDir,
-            }),
-          ],
-      // An offscreen self-test window can show no dialog.
-      window: isSelfTest
-        ? { ...pluginWindow, chooseFolder: () => Promise.resolve(null) }
-        : pluginWindow,
-      // The self-test never takes the user's foreground.
-      openExternal: gateExternalLinks(
-        isSelfTest
-          ? async (url) =>
-              log('main', `external link not opened in the self-test: ${url}`)
-          : (url) => shell.openExternal(url),
-      ),
+      runMode,
+      ...modeServices.forWindow({
+        window,
+        store,
+        homeDir: inputs.homeDir,
+        log,
+      }),
     },
     selfTest,
     (part) => startedParts.push(part),
@@ -472,7 +517,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
     }
     try {
       keybindings.setKeymap(config.keymap);
-      if (!isSelfTest && hasPageLoaded) {
+      if (runMode === 'live' && hasPageLoaded) {
         registerGlobalShortcuts(config.keymap.global, commands, log);
       }
       appliedKeymap = keymap;
@@ -481,7 +526,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
     }
   });
 
-  if (isSelfTest) {
+  if (runMode !== 'live') {
     return;
   }
   window.webContents.once('did-finish-load', () => {
@@ -500,7 +545,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
 
 // Shows why the app could not start, and exits non-zero.
 function failStart(error: unknown) {
-  if (isSelfTest) {
+  if (runMode === 'selfTest') {
     failSelfTest('the app starts', error, cleanUpSelfTest);
     return;
   }
@@ -513,7 +558,7 @@ function startApp() {
     // Windows shows a toast only for an app with an AppUserModelID.
     app.setAppUserModelId(process.execPath);
   }
-  if (isSelfTest && process.platform === 'darwin') {
+  if (runMode !== 'live' && process.platform === 'darwin') {
     app.setActivationPolicy('accessory');
   }
   // A second start (a relay starting the app) shows the window without
@@ -548,8 +593,9 @@ function startApp() {
   });
 }
 
-// The self-test runs beside the user's own app, so it takes no lock.
-if (isSelfTest || app.requestSingleInstanceLock()) {
+// The self-test and a drive run run beside the user's own app, so they take
+// no lock.
+if (runMode !== 'live' || app.requestSingleInstanceLock()) {
   startApp();
 } else {
   app.quit();
