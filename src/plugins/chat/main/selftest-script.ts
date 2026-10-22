@@ -17,6 +17,7 @@ import type {
   ToolResult,
 } from '../../sessions/contract';
 import type { ChatSessions } from './chat-sessions';
+import { askFixturePermission } from './fixtures';
 import { PERMISSION_TOOL_NAME } from './permission-tool';
 
 // Never read: the fake harness spawns nothing. Its last segment names the
@@ -262,8 +263,8 @@ function chatRound(run: number) {
   };
 }
 
-const toolCallContext = (toolUseId: string | null): ToolCallContext => ({
-  toolUseId,
+const toolCallContext = (): ToolCallContext => ({
+  toolUseId: null,
   signal: new AbortController().signal,
 });
 
@@ -419,25 +420,11 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       });
       sessions.activate(id);
       const process = selftestProcess(marks, false);
-      const permission = chat
-        .permissionToolSession({
-          id,
-          info: {
-            sessionId: null,
-            projectDir: SELFTEST_PROJECT_DIR,
-            deadlineSeconds: null,
-            harness: 'claude',
-          },
-        })
-        .call(
-          PERMISSION_TOOL_NAME,
-          {
-            tool_name: 'Bash',
-            input: PERMISSION_INPUT,
-            tool_use_id: 'selftest-tool-use',
-          },
-          toolCallContext('selftest-tool-use'),
-        );
+      const permission = askFixturePermission(chat, id, SELFTEST_PROJECT_DIR, {
+        toolName: 'Bash',
+        input: PERMISSION_INPUT,
+        toolUseId: 'selftest-tool-use',
+      });
       const result = permission.then(
         async (reply): Promise<ChatSelfTestResult> => {
           if (process === null) {
@@ -453,7 +440,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
           const round = await relay.call(
             'ask_round',
             chatRound(run),
-            toolCallContext(null),
+            toolCallContext(),
           );
           return { permission: reply, round };
         },
