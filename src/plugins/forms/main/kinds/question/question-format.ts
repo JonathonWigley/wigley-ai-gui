@@ -3,12 +3,12 @@ import { RoundError } from '../../round-error';
 import {
   fieldsMissing,
   fieldsOutside,
-  isObject,
   MIN_CHOICES,
   parseRecommend,
   requireText,
 } from '../fields';
 import type { AnswerableFormat } from '../item-format';
+import { isJsonObject } from '../../../../../shared/json';
 
 const MAX_QUESTIONS = 20;
 
@@ -62,7 +62,7 @@ function parseChoices(raw: unknown, where: string): string[] {
 }
 
 function parseQuestion(item: unknown, where: string): Question {
-  if (!isObject(item)) {
+  if (!isJsonObject(item)) {
     throw new RoundError(`${where}each question must be an object.`);
   }
   const missing = fieldsMissing(item, QUESTION_FIELDS);

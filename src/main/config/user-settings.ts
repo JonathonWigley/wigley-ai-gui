@@ -1,5 +1,6 @@
 import type { Settings } from '../../contracts/settings';
 import { jsonKind, parseJsonObject } from './config-json';
+import { isJsonObject } from '../../shared/json';
 
 // What a `settings.json` may set: the core settings with their defaults, each
 // plugin's settings under its id, the JSON kind of each setting (core or
@@ -26,10 +27,6 @@ const OPTIONAL_KINDS = {
 } as const;
 
 const ELEMENT_INDEX = /\[\d+\]/g;
-
-function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return jsonKind(value) === 'an object';
-}
 
 // `value` checked against the setting at `path` whose default is `fallback`
 // (undefined for a setting the defaults leave unset), merged over it: objects

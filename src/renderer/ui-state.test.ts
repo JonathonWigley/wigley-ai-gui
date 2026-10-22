@@ -36,4 +36,25 @@ describe('createPageUiState', () => {
     expect(forms.get('rail')).toBeUndefined();
     expect(writes).toEqual([['forms.rail', undefined]]);
   });
+
+  it('get returns a copy, so mutating it leaves the page copy unchanged', () => {
+    const { uiState, writes } = pageUiState({ 'forms.split': { rail: 240 } });
+    const forms = uiState.scoped('forms');
+
+    (forms.get('split') as { rail: number }).rail = 999;
+
+    expect(forms.get('split')).toEqual({ rail: 240 });
+    expect(writes).toEqual([]);
+  });
+
+  it('set stores a copy, so mutating the value afterwards leaves the page copy unchanged', () => {
+    const { uiState } = pageUiState({});
+    const forms = uiState.scoped('forms');
+    const split = { rail: 240 };
+
+    forms.set('split', split);
+    split.rail = 999;
+
+    expect(forms.get('split')).toEqual({ rail: 240 });
+  });
 });

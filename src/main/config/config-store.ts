@@ -3,6 +3,7 @@ import type { Disposable } from '../../contracts/disposable';
 import {
   type FileEntry,
   type Files,
+  type FileWatch,
   isMissingFile,
 } from '../../contracts/files';
 import type { Keymap } from '../../contracts/keymap';
@@ -42,7 +43,9 @@ import { mergeUserSettings, type UserSettings } from './user-settings';
 // The served config, kept current with the user config folder.
 // `onChanged` listeners run, in registration order, each time a change to a
 // config file changes the served config, after `current` returns the new one.
-export interface ConfigStore {
+// `dispose` stops watching the folder and drops every listener; `current`
+// keeps returning the last config.
+export interface ConfigStore extends Disposable {
   current(): AppConfig;
   onChanged(listener: (config: AppConfig) => void): Disposable;
 }
@@ -361,8 +364,9 @@ export async function loadConfigStore(
     relative === SETTINGS_FILE ||
     relative === KEYMAP_FILE ||
     THEME_FILE.test(relative);
+  let watch: FileWatch | null = null;
   try {
-    deps.files.watch(
+    watch = deps.files.watch(
       deps.folder,
       (relative) => {
         if (isConfigFile(relative)) {
@@ -395,6 +399,11 @@ export async function loadConfigStore(
       const registration = (config: AppConfig) => listener(config);
       listeners.add(registration);
       return { dispose: () => listeners.delete(registration) };
+    },
+    dispose() {
+      watch?.close();
+      watch = null;
+      listeners.clear();
     },
   };
 }

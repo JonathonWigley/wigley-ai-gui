@@ -20,13 +20,7 @@ import {
   findingSolution,
   isFindingAction,
 } from '../finding-pick';
-import {
-  fieldsOutside,
-  isObject,
-  type JsonObject,
-  quotedList,
-  requireText,
-} from './kinds/fields';
+import { fieldsOutside, quotedList, requireText } from './kinds/fields';
 import { ANSWERABLE_KINDS, FORMATS, ITEM_KINDS } from './kinds/formats';
 import type {
   AnswerSubject,
@@ -34,6 +28,7 @@ import type {
   PythonJsonValue,
 } from './kinds/item-format';
 import { RoundError } from './round-error';
+import { isJsonObject, type JsonObject } from '../../../shared/json';
 
 const ITEM_FIELDS = ITEM_KINDS.map((kind) => FORMATS[kind].argsKey);
 const ROUND_FIELDS = ['heading', 'overview', ...ITEM_FIELDS];
@@ -81,7 +76,7 @@ function parseItems<Item>(format: ItemFormat<Item>, raw: unknown): Item[] {
 // Every error fires here, before anything is shown, so a malformed round
 // costs the caller one retry and the user sees nothing.
 export function parseRound(args: unknown): Round {
-  if (!isObject(args)) {
+  if (!isJsonObject(args)) {
     throw new RoundError(
       `ask_round takes an object with ${quotedList(ROUND_FIELDS)}. Each list ` +
         `is optional, but the round needs at least one item.`,
@@ -136,7 +131,7 @@ function entriesByIndex(list: unknown): Map<number, JsonObject> {
     return byIndex;
   }
   for (const item of list) {
-    if (isObject(item) && Number.isInteger(item.index)) {
+    if (isJsonObject(item) && Number.isInteger(item.index)) {
       byIndex.set(item.index as number, item);
     }
   }
@@ -187,7 +182,7 @@ function readAnswerEntries<Entry>(
 // answer per question and per finding and one comment per notice, in order.
 // Never throws: a field of the wrong type reads as its empty value.
 export function readFormBody(round: Round, raw: unknown): FormBody {
-  const body = isObject(raw) ? raw : {};
+  const body = isJsonObject(raw) ? raw : {};
   const comments = entriesByIndex(body.notice_comments);
   return {
     note: textOrEmpty(body.note),

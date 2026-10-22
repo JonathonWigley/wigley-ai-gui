@@ -529,6 +529,8 @@ function startApp() {
       const store = await loadConfig(inputs.homeDir);
       serveDataScheme(inputs.dataRoot);
       createWindow(inputs, store);
+      // After createWindow's will-quit, so the parts dispose before it.
+      app.on('will-quit', () => store.dispose());
       app.on('activate', () => mainWindow?.show());
     })
     .catch(failStart);

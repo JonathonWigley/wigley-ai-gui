@@ -6,6 +6,7 @@ import type {
 } from '../../contracts/theme';
 import { errorText } from '../../shared/error-text';
 import { themeVariable } from '../../shared/theme-variables';
+import { isJsonObject, type JsonObject } from '../../shared/json';
 
 // A user theme file's text, and the file it came from for error messages.
 export interface ThemeFileText {
@@ -39,8 +40,6 @@ export class ThemeError extends Error {
     this.problem = problem;
   }
 }
-
-type JsonObject = Record<string, unknown>;
 
 // A theme file found by its name, before any of its tokens are checked.
 interface ThemeSource {
@@ -76,10 +75,6 @@ const LENGTH = new RegExp(`^(?:0|-?${NUMBER}(?:px|rem|em|ch|%|vh|vw))$`);
 const DURATION = new RegExp(`^${NUMBER}(?:ms|s)$`);
 const NUMBER_VALUE = new RegExp(`^-?${NUMBER}$`);
 const FILTER_FUNCTION_NAME = /^[a-z-]+\(/;
-
-function isJsonObject(value: unknown): value is JsonObject {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function readableName(json: unknown): string | null {
   const hasName =

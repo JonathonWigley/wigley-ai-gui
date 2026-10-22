@@ -1,11 +1,11 @@
+import { isJsonObject, type JsonObject } from '../../shared/json';
+
 // Readers for Claude's JSON lines: each reads a field as one shape, or that
 // shape's empty value when the field holds another.
-export type Json = Record<string, unknown>;
+export type Json = JsonObject;
 
 export function asJson(value: unknown): Json {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Json)
-    : {};
+  return isJsonObject(value) ? value : {};
 }
 
 export function asString(value: unknown): string {

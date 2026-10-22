@@ -6,6 +6,7 @@ import type {
   IndexDocument,
   IndexEntry,
 } from './contract';
+import { isJsonObject } from '../../shared/json';
 
 export const INDEX_SCHEMA_VERSION = 1;
 
@@ -49,7 +50,7 @@ export function parseIndexDocument(text: string): ParsedIndex {
   } catch (error) {
     return failed(`Docs index is not valid JSON: ${errorText(error)}`);
   }
-  if (!isRecord(raw) || typeof raw.schemaVersion !== 'number') {
+  if (!isJsonObject(raw) || typeof raw.schemaVersion !== 'number') {
     return failed('Docs index has no schemaVersion');
   }
   if (raw.schemaVersion !== INDEX_SCHEMA_VERSION) {
@@ -96,13 +97,9 @@ function failed(message: string): ParsedIndex {
   return { ok: false, message };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 // The first field of `entry` that breaks the schema, or null.
 function malformedEntryField(entry: unknown): string | null {
-  if (!isRecord(entry)) {
+  if (!isJsonObject(entry)) {
     return 'entry';
   }
   const source = entry.source as DocSource;
@@ -118,14 +115,14 @@ function malformedEntryField(entry: unknown): string | null {
     ['path', typeof entry.path === 'string'],
     ['line', entry.line === null || typeof entry.line === 'number'],
     ['title', typeof entry.title === 'string'],
-    ['meta', isRecord(entry.meta)],
+    ['meta', isJsonObject(entry.meta)],
   ];
   return checks.find(([, valid]) => !valid)?.[0] ?? null;
 }
 
 // The first field of `context` that breaks the schema, or null.
 function malformedContextField(context: unknown): string | null {
-  if (!isRecord(context)) {
+  if (!isJsonObject(context)) {
     return 'folder';
   }
   const checks: [string, boolean][] = [
@@ -134,7 +131,7 @@ function malformedContextField(context: unknown): string | null {
       'sessionId',
       context.sessionId === null || typeof context.sessionId === 'string',
     ],
-    ['states', isRecord(context.states)],
+    ['states', isJsonObject(context.states)],
   ];
   return checks.find(([, valid]) => !valid)?.[0] ?? null;
 }

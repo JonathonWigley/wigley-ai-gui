@@ -10,8 +10,12 @@ import type {
 // hidden.
 export type SideBarLayout = 'beside' | 'over' | 'hidden';
 
+// The media query of a narrow window, below 680 px wide, where a mode's side
+// bar lies over the content instead of beside it.
+export const SIDE_BAR_OVER_QUERY = '(max-width: 679px)';
+
 // A mode's side bar choice: hidden by the user while the window is wide, and
-// open over the content while it is narrow (below 680 px).
+// open over the content while it is narrow (`SIDE_BAR_OVER_QUERY`).
 export interface SideBarState {
   isHiddenWide: boolean;
   isOverlayOpen: boolean;
@@ -62,7 +66,7 @@ const SIDE_BAR_LOGS: Record<SideBarLayout, string> = {
 // and side bar in the window, and its item in the activity bar, once at its
 // `add`; `marked` marks the shown mode in the activity bar; `layOutSideBar`
 // lays out the side bar area; `showContext` shows the title bar's context;
-// `isNarrow` is whether the window starts narrower than 680 px.
+// `isNarrow` is whether the window starts narrow (`SIDE_BAR_OVER_QUERY`).
 export interface ModesDeps {
   place(mode: Mode, handle: ModeHandle): void;
   marked(modeId: string): void;

@@ -32,9 +32,9 @@ import { installPageKeys } from './page-keys';
 import { createPendingKeys } from './pending-keys';
 import { createPageApi } from './plugins/page-api';
 import { createActivityBar } from './shell/activity-bar';
-import { createModes } from './shell/modes';
+import { createModes, SIDE_BAR_OVER_QUERY } from './shell/modes';
 import { mountShell } from './shell/shell';
-import { defaultShellLayout, SIDE_BAR_OVER_QUERY } from './shell/shell-layout';
+import { defaultShellLayout } from './shell/shell-layout';
 import { mountTitleBarContext } from './shell/title-bar';
 import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
@@ -125,17 +125,21 @@ async function start() {
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
   // An insert-mode key with no bind in force types as it would unbound, so
   // only a normal-mode miss is logged.
-  const editor = createCodeMirrorVimHost(keymap.editor, (binds, fired) => {
-    const choice = editorBindInForce(binds, scopeStack.current());
-    if (choice.kind === 'run') {
-      commands.run(choice.bind.command, { editor: fired });
-      return true;
-    }
-    if (editorBindMode(binds[0]) === 'normal') {
-      log('page', choice.message);
-    }
-    return false;
-  });
+  const editor = createCodeMirrorVimHost(
+    keymap.editor,
+    (binds, fired) => {
+      const choice = editorBindInForce(binds, scopeStack.current());
+      if (choice.kind === 'run') {
+        commands.run(choice.bind.command, { editor: fired });
+        return true;
+      }
+      if (editorBindMode(binds[0]) === 'normal') {
+        log('page', choice.message);
+      }
+      return false;
+    },
+    log,
+  );
   // Highlighted markdown has no editor to mount the code colours.
   mountCodeColours(document);
   const services: Omit<PageServices, 'uiState'> = {

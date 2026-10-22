@@ -14,6 +14,7 @@ import { errorText } from '../../../shared/error-text';
 import type { FormBody } from '../contract';
 import type { SessionInfo } from '../../sessions/contract';
 import type { FinishedOutcome } from './round';
+import { isJsonObject } from '../../../shared/json';
 
 // retro's backfill reaches back 90 days (scripts/retro/ledger.py STALE_DAYS).
 export const RETENTION_SECONDS = 90 * 24 * 60 * 60;
@@ -113,10 +114,10 @@ function isSavedOutcome(value: unknown): value is SavedOutcome {
 // Reads the fields this version knows, so a field a newer version added never
 // hides a file from this one.
 function savedRoundFrom(data: unknown): SavedRound | null {
-  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+  if (!isJsonObject(data)) {
     return null;
   }
-  const fields = data as Record<string, unknown>;
+  const fields = data;
   const outcome = fields.outcome ?? 'open';
   const hasIdentity =
     typeof fields.id === 'string' &&

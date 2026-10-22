@@ -21,11 +21,9 @@ import { RoundError } from '../../round-error';
 import {
   fieldsMissing,
   fieldsOutside,
-  isObject,
   parseRecommend,
   quotedList,
   requireText,
-  type JsonObject,
 } from '../fields';
 import type { AnswerableFormat } from '../item-format';
 import {
@@ -37,6 +35,7 @@ import {
   originCardsText,
   unofferedActionsText,
 } from './finding-text';
+import { isJsonObject, type JsonObject } from '../../../../../shared/json';
 
 const MAX_FINDINGS = 20;
 
@@ -139,7 +138,7 @@ function parseChoice(
   where: string,
 ): FindingChoice {
   const field = `choices[${number}]`;
-  if (!isObject(raw)) {
+  if (!isJsonObject(raw)) {
     throw new RoundError(
       `${where}${field} must be an object with text and reason.`,
     );
@@ -261,7 +260,7 @@ function parseRecommendAction(
 }
 
 function parseFinding(item: unknown, where: string): Finding {
-  if (!isObject(item)) {
+  if (!isJsonObject(item)) {
     throw new RoundError(`${where}each finding must be an object.`);
   }
   const missing = fieldsMissing(item, FINDING_FIELDS);

@@ -6,10 +6,6 @@ import type {
 } from '../../contracts/plugin';
 import { ALIGNMENTS } from './shell';
 
-// The window width below which a mode's side bar lies over the content
-// instead of beside it.
-export const SIDE_BAR_OVER_QUERY = '(max-width: 679px)';
-
 // The default layout: `shell.css` places each area by its class, the title bar
 // across the top, the activity bar and side bar down the left, main with the
 // panel under it, and the status bar across the bottom.

@@ -2,6 +2,7 @@ import { type Files, readIfPresent } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 import { expandTilde, joinPath } from '../doc-paths';
+import { isJsonObject } from '../../../shared/json';
 
 export const WIGLEY_PLUGIN_KEY = 'wigley@wigley-ai-marketplace';
 export const DEFAULT_CLAUDE_CONFIG_DIRS: readonly string[] = ['~/.claude'];
@@ -29,7 +30,7 @@ export async function readClaudeConfigDirs(
     joinPath(homeDir, DOCS_CONFIG_FILE),
     log,
   );
-  const configured = isRecord(config) ? config.claudeConfigDirs : undefined;
+  const configured = isJsonObject(config) ? config.claudeConfigDirs : undefined;
   const isListOfStrings =
     Array.isArray(configured) &&
     configured.every((dir) => typeof dir === 'string');
@@ -71,15 +72,17 @@ async function installedScripts(
   log: Log,
 ): Promise<string[]> {
   const installed = await readJson(files, installedPluginsFile(configDir), log);
-  const plugins = isRecord(installed) ? installed.plugins : undefined;
-  const records = isRecord(plugins) ? plugins[WIGLEY_PLUGIN_KEY] : undefined;
+  const plugins = isJsonObject(installed) ? installed.plugins : undefined;
+  const records = isJsonObject(plugins)
+    ? plugins[WIGLEY_PLUGIN_KEY]
+    : undefined;
   if (!Array.isArray(records)) {
     return [];
   }
   return records
     .filter(
       (record): record is { installPath: string } =>
-        isRecord(record) && typeof record.installPath === 'string',
+        isJsonObject(record) && typeof record.installPath === 'string',
     )
     .map((record) => joinPath(record.installPath, SCRIPT_IN_INSTALL));
 }
@@ -98,8 +101,4 @@ async function readJson(
     log('docs', `${path} not read: ${errorText(error)}`);
     return undefined;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

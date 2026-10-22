@@ -1,6 +1,7 @@
 import { type Files, readIfPresent } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import { errorText } from '../../shared/error-text';
+import { isJsonObject } from '../../shared/json';
 
 // How long a set waits before the file is written, so a burst of sets (a
 // drag) is one write.
@@ -111,11 +112,9 @@ async function readSaved(
     );
     return new Map();
   }
-  const isObject =
-    typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed);
-  if (!isObject) {
+  if (!isJsonObject(parsed)) {
     log(LOG_SOURCE, 'ui-state.json is not a JSON object, starting empty');
     return new Map();
   }
-  return new Map(Object.entries(parsed as Record<string, unknown>));
+  return new Map(Object.entries(parsed));
 }

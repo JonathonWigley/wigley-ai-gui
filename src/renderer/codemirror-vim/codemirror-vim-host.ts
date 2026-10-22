@@ -521,6 +521,7 @@ function heldMappings(
 export const createCodeMirrorVimHost: CreateEditorHost = (
   initialKeymap,
   run,
+  log,
 ) => {
   const hosted: HostedEditor[] = [];
   let keymap = initialKeymap;
@@ -662,7 +663,10 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
         groups,
         isKeymapApplied,
       )) {
-        Vim.unmap(keys, mode);
+        // Vim's unmap returns true only when it removed a mapping.
+        if (Vim.unmap(keys, mode) !== true) {
+          log('editor', `vim held no ${mode} mapping of ${keys} to unmap`);
+        }
       }
       keymap = next;
       groups = nextGroups;

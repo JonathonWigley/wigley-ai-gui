@@ -689,6 +689,33 @@ describe('loadConfigStore', () => {
     ]);
   });
 
+  it('dispose closes the folder watch and drops every listener', async () => {
+    const memory = createMemoryFiles();
+    let closes = 0;
+    const files: Files = {
+      ...memory,
+      watch: (folder, onChange, onError) => {
+        const watch = memory.watch(folder, onChange, onError);
+        return {
+          close: () => {
+            closes++;
+            watch.close();
+          },
+        };
+      },
+    };
+    const store = await load(files);
+    const heard: AppConfig[] = [];
+    store.onChanged((config) => heard.push(config));
+
+    store.dispose();
+    await files.write(`${FOLDER}/settings.json`, '{"theme":"dusk"}');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(closes).toBe(1);
+    expect(heard).toEqual([]);
+  });
+
   it('rejects the first read when the selected built-in theme is broken', async () => {
     const files = createMemoryFiles();
     await files.write(`${FOLDER}/settings.json`, '{"theme":"dusk"}');

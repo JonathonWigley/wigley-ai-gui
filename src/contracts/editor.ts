@@ -1,4 +1,5 @@
 import type { EditorBind, EditorKeymap } from './keymap';
+import type { Log } from './log';
 
 // The keys an insert-mode editor bind may take, in vim notation: each is one
 // the host can type itself when no bind on it runs, as `CreateEditorHost`
@@ -141,8 +142,10 @@ export interface EditorHost {
 // `run` with every bind on those keys in its mode, in keymap order, and the
 // editor it fired in, leaving the choice among them to the caller. `run`
 // returns whether a bind ran; when none ran on an insert-mode key, the host
-// does what the key does unbound, so Enter still breaks the line.
+// does what the key does unbound, so Enter still breaks the line. `log`
+// takes the host's own lines, such as a mapping the editor engine had lost.
 export type CreateEditorHost = (
   keymap: EditorKeymap,
   run: (binds: EditorBind[], editor: TextEditor) => boolean,
+  log: Log,
 ) => EditorHost;

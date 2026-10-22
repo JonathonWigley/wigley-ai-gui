@@ -1,7 +1,8 @@
 import type { Notice, NoticeBadge } from '../../../contract';
 import { RoundError } from '../../round-error';
-import { fieldsMissing, fieldsOutside, isObject, requireText } from '../fields';
+import { fieldsMissing, fieldsOutside, requireText } from '../fields';
 import type { ItemFormat } from '../item-format';
+import { isJsonObject } from '../../../../../shared/json';
 
 const MAX_NOTICES = 50;
 
@@ -61,7 +62,7 @@ function isNoticeBadge(value: unknown): value is NoticeBadge {
 }
 
 function parseNotice(item: unknown, where: string): Notice {
-  if (!isObject(item)) {
+  if (!isJsonObject(item)) {
     throw new RoundError(`${where}each notice must be an object.`);
   }
   const missing = fieldsMissing(item, NOTICE_REQUIRED_FIELDS);
