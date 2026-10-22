@@ -74,9 +74,11 @@ interface RoundParts {
 
 // One open round's DOM, built with its editors: the rail, the layout's head
 // and every item's card, and the review with the round note. A render only
-// updates it; a new layout rebuilds it. A keymap change, while it shows,
-// draws the layout's head again and updates it with the round it last
-// showed, so every key hint reads the new keys. `attach` places the root in the page once, before any editor mounts.
+// updates it; a new layout rebuilds it. A keymap change draws the layout's
+// head again, shown or hidden, since showing the view only updates it; while
+// the view shows, the change also updates it with the round it last showed,
+// so every key hint reads the new keys. `attach` places the root in the page
+// once, before any editor mounts.
 export function createRoundView(
   attach: (root: HTMLElement) => void,
   round: RoundState,
@@ -154,8 +156,8 @@ export function createRoundView(
     },
   };
   const keysChange = deps.keys.onChanged(() => {
+    parts.redrawLayoutHead();
     if (shownRound !== null && !root.hidden) {
-      parts.redrawLayoutHead();
       view.update(shownRound, shownView);
     }
   });

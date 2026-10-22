@@ -74,7 +74,16 @@ export interface HeadKit {
   ): HTMLElement;
   section(parent: HTMLElement, label: string, text: string): HTMLElement | null;
   // The keys bound to a forms command (its short name, as `choose1`) in the forms view; null when unbound or unknown.
+  // It reads the keymap once, when called, so text a card draws from it keeps the keys of the card's build after a
+  // rebind; draw a hint with `keyHint` for one that follows the keymap.
   keys(command: string): string | null;
+  // `span` (with `className`) holding the hint of the keys `keys` reads for `command`, empty while unbound. The hint
+  // follows keymap changes: a card's redraws on each card update, and the head is drawn again after each change.
+  keyHint(
+    parent: HTMLElement,
+    command: string,
+    className?: string,
+  ): HTMLElement;
 }
 export interface Kit extends HeadKit {
   // `header.item-head` holding the kind label and the status chip, which updates itself; returns the header.

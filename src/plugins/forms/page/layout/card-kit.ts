@@ -202,11 +202,24 @@ export function createHeadKit(
     },
     section: (parent, label, text) =>
       buildSection(parent, label, text, deps.markdown),
-    keys(command) {
-      const id = formsCommandNamed(command);
-      return id === null ? null : deps.keysFor(id);
+    keys: (command) => keysOfNamed(deps, command),
+    keyHint(parent, command, className = '') {
+      const node = element('span', className);
+      parent.append(node);
+      appendKeys(node, keysOfNamed(deps, command));
+      return node;
     },
   };
+}
+
+// The forms view's keys for the forms command short-named `command`; null
+// when unbound or no forms command has that name.
+function keysOfNamed(
+  deps: Pick<CardDeps, 'keysFor'>,
+  command: string,
+): string | null {
+  const id = formsCommandNamed(command);
+  return id === null ? null : deps.keysFor(id);
 }
 
 // The kit for the card of `kind` item `index` at rail `position`, built
@@ -349,6 +362,17 @@ function buildBaseKit(card: CardContext): Kit {
         });
       }
       return header;
+    },
+    // A card is never rebuilt on a keymap change, so its hint reads the keys
+    // again on each card update.
+    keyHint(parent, command, className = '') {
+      const node = element('span', className);
+      parent.append(node);
+      let hint = appendKeys(node, keysOfNamed(card.deps, command));
+      card.updaters.push(() => {
+        hint = showKeys(node, hint, keysOfNamed(card.deps, command));
+      });
+      return node;
     },
     textBox: (parent, field) => mountTextBox(card, parent, field),
     run: (action) => runLayoutAction(card, action),
