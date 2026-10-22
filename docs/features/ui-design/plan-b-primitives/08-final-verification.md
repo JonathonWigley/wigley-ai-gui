@@ -1,6 +1,6 @@
 # 08 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -104,3 +104,36 @@ When this task's checks pass, the agent ends its report by prompting the user to
 
 ## Proof
 
+Commands at b2c210c: typecheck exit 0; lint exit 0 (styles: 276 files clean, 8 legacy); test 133
+files, 1895 passed; selftest `[selftest] all passed` (run at 619e1f2; b2c210c changes one test file
+only). The folder holds 19 PNGs: 12 gallery (N = 6, twice), sessions ×2, docs ×2, shell layout ×2,
+`forms-round.png`. None is blank, black or the wrong size (900×700).
+
+- `forms-gallery-1..6-full.png`: every section of 06's table appears across the six pages, page 6
+  reaching the sheet's end (EmptyState, SectionHeader). No toast on any page. Rows at list height,
+  the tree at tree height, tabs at tab height, no loose gaps. Mauve only on the primary buttons, the
+  active chip, selected/cursor rows and cards, the active tab mark, the focus frame and the
+  `Recommended` tag; the rest are statuses. Sentence case throughout. Kbd prints ⌥ ⌘ glyphs in
+  JetBrains Mono. Each state cell differs from its neighbours (hover vs live, selected vs cursor,
+  disabled dimmed, the disabled row's detail dimmed too). The dialog now shows its own radius and
+  padding and fits its frame whole on page 6; the floating panel sits on floating material with a
+  shadow. Sheet solid, gutter and `radius-lg`.
+- `forms-gallery-1..6-reduced.png`: the same pages, header reading `Transparency: reduced`. The
+  washes are not visible in either setting at this capture's contrast, so the full/reduced
+  difference is not readable from the PNGs; live check 4 and 13 carry it to the user.
+- `forms-sessions-full.png`, `-reduced.png`: Sessions mode on the layout preview's sample round
+  (Form tab, rail split, finding card). Nothing clipped or overlapping after 03's token swap;
+  transparency difference not readable, as above.
+- `docs-docs-full.png`, `-reduced.png`: Docs mode, the doc on a solid sheet; the tree is empty
+  because the docs script leaves the `neat` filter on after renaming the match. A status-line
+  tooltip from the script's last state overlaps the key hints at the bottom right: plan C's surface.
+- `forms-shell-layout-test.png`: the test layout, status bar under the title bar, the activity bar
+  on the right, side bar left; matches the test layout 06 defined.
+- `forms-shell-layout-restored.png`: identical to `forms-sessions-full.png`.
+- `forms-round.png`: the round on finding 1 after the step's keys, at the window's size; the side
+  bar shows a fourth, unselected Layout preview row (the gallery block now runs first).
+
+Run log concern from 04 (`.ui-input .cm-editor` background): the InputFrame samples show the
+frame's own fill with no editor background over it.
+
+Live checks 1–17 handed to the user in the run's final report.

@@ -247,7 +247,7 @@ when it starts; 04's and 05's new files pass the style check as written.
 - [x] [Doc re-read](07-doc-re-read.md) — after 01–06
 
 ### Wave 5
-- [ ] [Final verification](08-final-verification.md) — after 07
+- [x] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
 
@@ -279,11 +279,17 @@ Review base: ed5d846987f144614a41307b3783613533e761a8
 - A bad argument prints its failures and exits 1 before judging anything — never fall back to judging every file on a typo — cost: none · group 03
 - `raw-duration` is case-sensitive as tabled; inline writes are judged by running their CSS text through `cssViolations`, which also catches `webkitBackdropFilter` · group 03
 - Gallery page count N = 6 at the self-test window (sheet 521px, scrollHeight 2857px) · group 06
-- `d` step expects carry the exact pixel (`[gallery] scrolled to 521px` …): the driver matches whole lines, so the plan's "line's start" cannot pass — cost: a layout change breaks those steps until re-measured · group 06
+- `d` step expects carry the exact pixel (`[gallery] scrolled to 521px` …): the driver matches whole lines, so the plan's "line's start" cannot pass — cost: a layout change breaks those steps until re-measured · group 06 — resolved by review finding 3 (a795b5b): `d` logs `paged down` / `reached the end`
+- The gallery block opens the forms self-test, after `Space z l o` opens the layout preview, so no toast covers a gallery or Sessions shot; the later Option+Shift+i wrap lands on the preview and cancels it — cost: `forms-round.png` shows a fourth, unselected Layout preview row · fix a795b5b
+- The `focus-ring` token is removed with the global ring's move to an outline; plan C 09's document-editor ring is now the inset `focus-border` outline (3a164f7) · fix 49e9f5b
+- Settled by the agent under the user's word in the triage round ("take your suggestions for these and the remainder of this session"): re-review 2's test nit applied in b2c210c; step 8's deferred items decided by the agent, shown in the report · lead
 - The plan's table saved `gallery-6-reduced` twice (the `t` step and the last reduced `d`); the driver forbids that, so the `t` step keeps it and the last `d` saves nothing — the view is identical · group 06
 - The override wraps the `ThemeApplier` in `renderer.ts` (`overrideTransparency`), handed to both the start apply and `createConfigPush`; `config-push.ts` untouched — fact sheet: the push apply lives there — cost: none · group 06
 - The test shell layout styles its areas with its own `gallery-test-*` classes plus the `material-chrome` helpers, not `shell.css`'s; frames get `isolation: isolate` so the scrim and floating panel stack inside them · group 06
 ### Review rounds
 - 1 · 893d47b · NEEDS FIXES · report: 16 findings (4 Important), 2 applied by the lead in 34f20b7; 6 determined dispatched; 8 open to triage
+- 2 (re-review) · a795b5b · NEEDS FIXES · prior findings all closed; 3 Minor: split stuck-drag guard (619e1f2), two comment wraps and the 08 count (lead, 2caf0f6)
+- 3 (re-review) · 619e1f2 · NEEDS FIXES · prior findings closed; 1 Minor: split test picks the handle by build order — applied by the lead in b2c210c; fix cycles at their cap of 2
 ### Test gate
 - Pass 1 (written in range): `scripts/style-rules.test.mts`, `src/main/selftest-config.test.ts`, `src/plugins/gallery/page/transparency-toggle.test.ts`, `src/renderer/plugins/page-api.test.ts`, `src/shared/page/ui/kbd-parts.test.ts`, `src/shared/page/ui/split-width.test.ts`; pass 2 (reference changed code): `src/main/built-in-themes.test.ts` (Mocha JSON), plus page-api and selftest-config again · every test in these 7 files references the changed code · 80 passed
+- Final gate at b2c210c: `npm run typecheck` exit 0 · `npm run lint` exit 0 (styles: 276 files clean, 8 legacy) · `npm test` 133 files, 1895 passed · `npm run selftest` all passed, 19 screenshots
