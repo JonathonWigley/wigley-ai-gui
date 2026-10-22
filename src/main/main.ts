@@ -71,6 +71,7 @@ import {
   shouldReadLoginShellPath,
 } from './login-shell-path';
 import { createMainApi } from './plugins/main-api';
+import { createPageLog } from './page-log';
 import { createPluginChannels } from './plugins/plugin-channel';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
@@ -133,6 +134,15 @@ const cleanUpSelfTest = () => {
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+
+// Every line main logs to the page, from before the window exists on. A line
+// waits while the page loads; with the window or its page destroyed, a line is
+// dropped.
+const pageLog = createPageLog((source, message) => {
+  if (mainWindow !== null) {
+    livePage(mainWindow)?.send(BRIDGE_CHANNELS.log, source, message);
+  }
+});
 
 // What the window and the plugins start from besides the config, read once
 // the app is ready so that a bad manifest or temp folder fails the start
@@ -216,8 +226,8 @@ function readStartInputs(): StartInputs {
   return { homeDir, dataRoot: dataFolder(), uiStatePath: uiStateFilePath() };
 }
 
-// The ConfigStore over the user config folder in `homeDir`. Its log reaches
-// the window's page once the window exists; a line before is dropped.
+// The ConfigStore over the user config folder in `homeDir`, logging to the
+// page.
 function loadConfig(homeDir: string): Promise<ConfigStore> {
   return loadConfigStore({
     files,
@@ -237,11 +247,7 @@ function loadConfig(homeDir: string): Promise<ConfigStore> {
     resolveTheme,
     checkTokens: titleBarOverlayProblem,
     platform,
-    log: (source, message) => {
-      if (mainWindow !== null) {
-        pageLog(mainWindow)(source, message);
-      }
-    },
+    log: pageLog.log,
   });
 }
 
@@ -250,12 +256,6 @@ function loadConfig(homeDir: string): Promise<ConfigStore> {
 function livePage(window: BrowserWindow): WebContents | null {
   const isGone = window.isDestroyed() || window.webContents.isDestroyed();
   return isGone ? null : window.webContents;
-}
-
-// With the window's page destroyed, a line is dropped.
-function pageLog(window: BrowserWindow): Log {
-  return (source, message) =>
-    livePage(window)?.send(BRIDGE_CHANNELS.log, source, message);
 }
 
 // Serves the ui-state file at `filePath` to the page. It loads on the page's
@@ -347,23 +347,21 @@ function disposeParts(parts: readonly MainStart<PluginManifest>[]) {
 // overlay follow the theme and the effective transparency.
 function createWindow(inputs: StartInputs, store: ConfigStore) {
   const startConfig = store.current();
-  const startLines: [string, string][] = [];
   const window = createMainWindow(
     startConfig.settings.window,
     windowBackgroundOf(startConfig.theme, isTransparencyReduced(startConfig)),
     isSelfTest,
-    titleBarOptions(startConfig, (source, message) =>
-      startLines.push([source, message]),
-    ),
+    titleBarOptions(startConfig, pageLog.log),
   );
   mainWindow = window;
-  const log = pageLog(window);
-  // A line sent before the page loads is dropped.
-  window.webContents.once('did-finish-load', () => {
-    for (const [source, message] of startLines) {
-      log(source, message);
-    }
-  });
+  const log = pageLog.log;
+  // Registered before the self-test's own did-finish-load listener, so the
+  // lines held during the load reach the page before its first step.
+  // did-stop-loading also ends a load that failed, which no did-finish-load
+  // follows.
+  window.webContents.on('did-start-loading', pageLog.pageLoading);
+  window.webContents.on('did-finish-load', pageLog.pageLoaded);
+  window.webContents.on('did-stop-loading', pageLog.pageLoaded);
   const recolour = () => {
     const config = store.current();
     const isReduced = isTransparencyReduced(config);
