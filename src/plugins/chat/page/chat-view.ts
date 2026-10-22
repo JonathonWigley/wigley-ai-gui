@@ -1,5 +1,6 @@
 import type { ChatEntry, SessionControl } from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
+import type { Disposable } from '../../../contracts/disposable';
 import type {
   EditorHost,
   TextEditor,
@@ -106,7 +107,8 @@ export interface ChatViewDeps {
 
 // A held session's Chat tab. `handle` is null until `addTab` returns, and
 // `box` until the editor mounts into the attached tab. `composerSize` follows
-// the composer's height for as long as the tab is held.
+// the composer's height, and `keysChange` redraws the bar on each keymap
+// change, for as long as the tab is held.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -121,6 +123,7 @@ interface HeldTab {
   entries: EntryList;
   bar: ComposerBar;
   composerSize: ResizeObserver;
+  keysChange: Disposable;
 }
 
 interface ComposerBar {
@@ -248,6 +251,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     tabs.delete(sessionId);
     tab.box?.destroy();
     tab.composerSize.disconnect();
+    tab.keysChange.dispose();
     tab.entries.dispose();
     if (pendingReveal === sessionId) {
       pendingReveal = null;
@@ -357,6 +361,7 @@ function createTab(
     entries,
     bar,
     composerSize: followComposerHeight(composer, root, entries),
+    keysChange: deps.keys.onChanged(() => bar.draw(tab)),
   };
   entries.rebuild(state.entries);
   bar.draw(tab);
@@ -450,7 +455,8 @@ function mayClose(tab: HeldTab, deps: ChatViewDeps): boolean {
 
 // Writes the composer's border-box height, rounded, as the unitless
 // `--chat-composer-height` on `root`, so the entries scroll clear of it, and
-// keeps a following list on its last entry as the composer grows.
+// keeps a following list on its last entry as the composer grows. A height of
+// 0 is the tab hidden, so the last shown height stays for when it shows again.
 function followComposerHeight(
   composer: HTMLElement,
   root: HTMLElement,
@@ -458,6 +464,9 @@ function followComposerHeight(
 ): ResizeObserver {
   const observer = new ResizeObserver(([observed]) => {
     const height = Math.round(observed.borderBoxSize[0].blockSize);
+    if (height === 0) {
+      return;
+    }
     root.style.setProperty('--chat-composer-height', String(height));
     entries.followBottom();
   });
@@ -466,8 +475,8 @@ function followComposerHeight(
 }
 
 // The box's vim mode (PAGE while it has no focus), a chip per control opening
-// that control's picker, and send, with the keys bound now; the chips and
-// send are disabled once the session has ended.
+// that control's picker, and send, with the keys bound when it is drawn; the
+// chips and send are disabled once the session has ended.
 function buildComposerBar(
   deps: Pick<ChatViewDeps, 'keys' | 'platform' | 'run'>,
 ): ComposerBar {

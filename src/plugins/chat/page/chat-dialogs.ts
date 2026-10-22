@@ -19,10 +19,11 @@ export function blurFocusedElement() {
   }
 }
 
-// `platform` prints the action buttons' key hints.
+// `keys` and `platform` print the action buttons' key hints, redrawn on each
+// keymap change.
 export interface DialogDeps {
   overlay: PluginAreas['overlay'];
-  keys: Pick<KeysPageExports, 'keysFor'>;
+  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   platform: Platform;
   run(command: CommandId): void;
   // Pushes the dialog's own scope.
@@ -103,6 +104,7 @@ export function createReasonBox(
     box,
   );
   deps.overlay.contribute(dialog.element);
+  followKeymap(dialog, REASON_ACTIONS, deps);
   const editor = deps.editor.create(box, '', {
     changed: () => undefined,
     focused: () => undefined,
@@ -136,7 +138,6 @@ export function createReasonBox(
       });
       open = opened;
       dialog.setTitle(`Deny ${toolName}?`);
-      drawActions(dialog, REASON_ACTIONS, deps);
       dialog.show();
       editor.focus({ insert: true });
       deps.log('chat', `deny reason box shown for ${toolName}`);
@@ -164,6 +165,7 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
     ),
   );
   deps.overlay.contribute(dialog.element);
+  followKeymap(dialog, CONFIRM_ACTIONS, deps);
 
   let open: { name: string; end(): void; scope: PushedScope } | null = null;
   const hide = () => {
@@ -187,7 +189,6 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
         }
       });
       open = opened;
-      drawActions(dialog, CONFIRM_ACTIONS, deps);
       dialog.show();
     },
     end() {
@@ -201,6 +202,17 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
     },
   };
   return confirm;
+}
+
+// Draws the dialog's actions, and draws them again on each keymap change for
+// as long as the page lives, so a rebind reaches a dialog open or shut.
+function followKeymap(
+  dialog: Dialog,
+  actions: readonly DialogAction[],
+  deps: Pick<DialogDeps, 'keys' | 'platform' | 'run'>,
+) {
+  drawActions(dialog, actions, deps);
+  deps.keys.onChanged(() => drawActions(dialog, actions, deps));
 }
 
 // Fills the dialog's actions with one button per action, each running its
