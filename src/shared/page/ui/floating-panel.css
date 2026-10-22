@@ -7,10 +7,10 @@
   transition: opacity var(--wg-duration-base) var(--wg-ease-out);
 }
 
-/* Fades in on opening only: a hidden panel is not rendered, so closing is
-   instant. */
+/* `is-opening` is set by `openFloatingPanel` until the fade ends; a hidden
+   panel is not rendered, so closing is instant. */
 @starting-style {
-  .ui-floating {
+  .ui-floating.is-opening {
     opacity: 0;
   }
 }

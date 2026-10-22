@@ -187,7 +187,8 @@ means something.
 - **Reduced motion:** under `prefers-reduced-motion` `duration-fast`, `duration-base` and
   `duration-slow` all take `duration-instant` (`1ms` in Mocha) and the streaming indicator is
   static.
-- **A floating panel fades in on open** over `duration-base`; closing is instant.
+- **A floating panel fades in on open** (`openFloatingPanel`) over `duration-base`; showing a page
+  or mode that holds an open panel does not fade it again, and closing is instant.
 
 ## Keys and focus
 
@@ -237,7 +238,7 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Split** (`createSplit`): two panes with a drag handle; the start pane's width lives in `uiState`.
 - **Card** (`card`, with an `attention` or `error` edge) and the collapsible card
   (`createCollapsibleCard`).
-- **FloatingPanel** (`floatingPanel`): the L3 glass panel.
+- **FloatingPanel** (`floatingPanel`, opened with `openFloatingPanel`): the L3 glass panel.
 - **Dialog** (`createDialog`): a modal over the `scrim`.
 - **EmptyState** (`emptyState`): one line saying what to do, then the key that does it.
 - **SectionHeader** (`sectionHeader`): a section's heading with a trailing slot.

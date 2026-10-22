@@ -1,6 +1,6 @@
 import './dialog.css';
 import { element } from '../dom';
-import { floatingPanel } from './floating-panel';
+import { floatingPanel, openFloatingPanel } from './floating-panel';
 
 export interface Dialog {
   element: HTMLElement;
@@ -38,7 +38,7 @@ export function createDialog(title: string): Dialog {
     actions,
     setTitle,
     show() {
-      scrim.hidden = false;
+      openFloatingPanel(panel, scrim);
     },
     hide() {
       scrim.hidden = true;
