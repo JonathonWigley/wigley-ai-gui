@@ -89,6 +89,10 @@ now, any harness later). Each item names its sites.
   changed, page ready, each typed in `src/contracts`.
 - Commands at runtime and around other plugins: `commands.register(id, decl, handler)`, `keys.bind(bind)`,
   `commands.intercept(id, (next, ctx) => …)`, `commands.onDidRun`, all disposable, and `MainApi.commands.run`.
+- A standing rule in the AGENTS.md Intent, so new work stays hookable once these items land: every user action runs as
+  a command through the lifecycle above, and every state change a plugin owns is published as an event typed in its
+  `contract.ts`. Today publishing is opt-in (AGENTS.md § Architecture says how to emit, not that a plugin must), and
+  only `sessions` emits; forms, chat and docs shipped emitting nothing.
 - Plugins may add editor remaps, and the page leader comes from a `keymap.pageLeader` rather than
   `PAGE_LEADER_KEY = ' '` in `keys/page/key-bar.ts` (left over from the layered keymap).
 - Commands take a count or argument, so `choose1..9` becomes one `forms.choose` (and choice 10 gets a key: `DIGITS`
@@ -112,6 +116,9 @@ now, any harness later). Each item names its sites.
   `roundShown` / `answerChanged` / `roundFinished` / `viewChanged`. Today it exports nothing and emits nothing.
   Its layout kit gains `kit.command(qualifiedId)` and `kit.keysFor(qualifiedId)` for other plugins' commands.
 - Chat page exports `addEntryRenderer({ kind, match?, build })`, ordered user layout → plugin renderers → default.
+- Chat and docs events, typed in each `contract.ts`: chat's message sent, turn started and finished, and control
+  changed (model, permission mode, effort); docs' doc opened, saved, created, trashed, and index rebuilt. Today both
+  only listen to `sessions` events and emit none (`src/plugins/{chat,docs}/{main,page}/start.ts`).
 - Sessions: `rows()` (page) and `sessions()` (main) queries so a late plugin sees live sessions; `activeChanged` from
   main and a page `tabShown` event; `SessionTabView.hidden()` beside `shown()`; row decorations a tab contributes
   (`handle.setBadge(key, text)`) or a sidebar row layout, since tabs' `setStatus` lines overwrite each other; one close
