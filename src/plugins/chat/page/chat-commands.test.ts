@@ -24,9 +24,10 @@ const userEntry: ChatEntry = {
   raw: [],
 };
 
-// `first` answers each call with `firstEntry` and counts it in `firstCalls`.
+// `first` answers each call with `firstEntry` and counts it in `firstCalls`;
+// `scrollHalfPage` records each step in `scrolls`.
 function session(ended: boolean, firstEntry: ChatEntry | null = null) {
-  const counts = { firstCalls: 0 };
+  const counts = { firstCalls: 0, scrolls: [] as number[] };
   const state: ChatSessionState = {
     sessionId: 'row-1',
     projectDir: '/Users/u/dev/app',
@@ -40,6 +41,9 @@ function session(ended: boolean, firstEntry: ChatEntry | null = null) {
     first() {
       counts.firstCalls++;
       return firstEntry;
+    },
+    scrollHalfPage(step: 1 | -1) {
+      counts.scrolls.push(step);
     },
   } as ChatSession['entries'];
   const shown: ChatSession = {
@@ -62,14 +66,15 @@ async function flush() {
 
 // The handlers over one shown session; `invoked` records each call to chat
 // main, `opened` each picker request and `toasts` each toast. Every invoke
-// resolves, or rejects with `refusal` when one is given.
-function setUp(shown: ChatSession, refusal?: Error) {
+// resolves, or rejects with `refusal` when one is given. With `visible`
+// false no Chat tab is the visible tab.
+function setUp(shown: ChatSession, refusal?: Error, visible = true) {
   const invoked: unknown[][] = [];
   const opened: PickerRequest<unknown>[] = [];
   const logs: string[] = [];
   const toasts: string[] = [];
   const tabs = {
-    visibleSessionId: () => shown.sessionId,
+    visibleSessionId: () => (visible ? shown.sessionId : null),
     session: (sessionId: string) =>
       sessionId === shown.sessionId ? shown : undefined,
     sessionOfEditor: () => undefined,
@@ -205,5 +210,37 @@ describe('chat commands', () => {
     run.handlers.firstEntry({});
 
     expect(run.logs).toEqual(['[chat] no entries in app']);
+  });
+
+  it('halfPageDown_sessionShown_scrollsItsEntriesDown', () => {
+    const shown = session(false);
+    const run = setUp(shown);
+
+    run.handlers.halfPageDown({});
+
+    expect(shown.counts.scrolls).toEqual([1]);
+  });
+
+  it('halfPageUp_sessionShown_scrollsItsEntriesUp', () => {
+    const shown = session(false);
+    const run = setUp(shown);
+
+    run.handlers.halfPageUp({});
+
+    expect(shown.counts.scrolls).toEqual([-1]);
+  });
+
+  it('halfPageDown_noChatTabShown_scrollsNothingAndLogsIt', () => {
+    const shown = session(false);
+    const run = setUp(shown, undefined, false);
+
+    run.handlers.halfPageDown({});
+    run.handlers.halfPageUp({});
+
+    expect(shown.counts.scrolls).toEqual([]);
+    expect(run.logs).toEqual([
+      '[chat] no Chat tab shown',
+      '[chat] no Chat tab shown',
+    ]);
   });
 });
