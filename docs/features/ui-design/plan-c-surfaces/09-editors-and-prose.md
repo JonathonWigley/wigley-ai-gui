@@ -14,7 +14,7 @@ Consumes:  `editorTheme` on token names, written as literal `'var(--wg-<name>)'`
            `markdown.css` on the new token names ← plan A task 06 ·
            `.ui-input .cm-editor` with no outline while focused (the focused box's ring is its frame) ← plan B ·
            the tokens `text-14`, `text-mono`, `leading-prose`, `prose-measure`, `block-background`, `radius-sm`,
-           `radius-md`, `fg-link`, `focus-ring`, `line-number`, `line-number-active`, `material-floating-*` ← plan A ·
+           `radius-md`, `fg-link`, `focus-border`, `line-number`, `line-number-active`, `material-floating-*` ← plan A ·
            `node scripts/check-styles.mts --no-legacy`: checks every file, ignoring LEGACY_FILES ← plan B task 03
 Produces:  the core token `editor-active-line` (kind `color`) in `src/config/theme-tokens.ts`, Mocha `"surface0 / 0.4"`
 Decisions: see **Decisions** below
@@ -53,7 +53,7 @@ Commit:    one commit
   |---|---|---|
   | `'&'` | `fontSize` the mono size | `fontSize: 'var(--wg-text-mono)'` (unchanged if plan A wrote it) |
   | `'&.cm-focused'` | `outline: 1px solid` focus border | `outline: 'none'`: a box's ring is its `inputFrame` (plan B; every box sits in one once 02 in wave 1 and 04, 06, 08 in wave 2 land, so a box not yet framed shows no ring for one wave) |
-  | `'&.wg-document-editor.cm-focused::after'` | — | `content: '""'`, `position: 'absolute'`, `inset: '0'`, `pointerEvents: 'none'`, `zIndex: '300'`, `borderRadius: 'inherit'`, `boxShadow: 'var(--wg-focus-ring)'` (the one inset 1px focus ring, drawn on an overlay frame; see below) |
+  | `'&.wg-document-editor.cm-focused::after'` | — | `content: '""'`, `position: 'absolute'`, `inset: '0'`, `pointerEvents: 'none'`, `zIndex: '300'`, `borderRadius: 'inherit'`, `outline: '1px solid var(--wg-focus-border)'`, `outlineOffset: '-1px'` (the one inset 1px focus ring, drawn on an overlay frame, matching the global `:focus-visible` outline; see below) |
   | `'.cm-lineNumbers .cm-gutterElement'` | `padding: '0 0.75em 0 0.5em'` | `padding: '0 var(--wg-space-3) 0 var(--wg-space-2)'` |
   | `'.cm-activeLine'` | — | `backgroundColor: 'transparent'` (CodeMirror's base theme gives it a tint) |
   | `'&.cm-focused .cm-activeLine'` | — | `backgroundColor: 'var(--wg-editor-active-line)'` |
@@ -67,8 +67,8 @@ Commit:    one commit
   under child backgrounds, and the document editor's `.cm-gutters` (`lineNumbers()`, opaque `editor-background`,
   z-index 200) and the bottom `.cm-panels` of `vim({ status: true })` would hide it on the left and bottom
   edges. The `::after` above sits over both (`z-index: 300`, `pointer-events: none` so it takes no click) on
-  `.cm-editor`, which CodeMirror's base theme already makes `position: relative`; the ring keeps the inset 1px
-  `focus-ring` token and shows on all four edges. The gutter and panel backgrounds stay as they are.
+  `.cm-editor`, which CodeMirror's base theme already makes `position: relative`; the ring is the inset 1px
+  `focus-border` outline and shows on all four edges. The gutter and panel backgrounds stay as they are.
 
   The completion list is L3 but carries no `backdrop-filter`: that stays in `materials.css`, and an
   `EditorView.theme` object cannot take a class (DESIGN.md § Layers). Under reduced transparency
