@@ -167,13 +167,14 @@ function requireUserConfig(): string {
 function spawnApp(runDir: string, options: StartOptions): number {
   const { command, args } = appCommand(options.packaged);
   const log = openSync(path.join(runDir, 'app.log'), 'a');
-  const isWindows = process.platform === 'win32';
-  const child = spawn(command, args, {
+  // Node refuses to spawn a `.cmd` file without a shell.
+  const shell = process.platform === 'win32' && !options.packaged;
+  // The shell splits an unquoted path at a space.
+  const child = spawn(shell ? `"${command}"` : command, args, {
     cwd: REPO_DIR,
     detached: true,
     stdio: ['ignore', log, log],
-    // Node refuses to spawn a `.cmd` file without a shell.
-    shell: isWindows && !options.packaged,
+    shell,
     env: {
       ...process.env,
       WIGLEY_DRIVE_DIR: path.resolve(runDir),

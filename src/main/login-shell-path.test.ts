@@ -44,21 +44,15 @@ describe('pathFromMarkedOutput', () => {
 
 describe('shouldReadLoginShellPath', () => {
   it('reads for an app launchd started', () => {
-    expect(shouldReadLoginShellPath({ isSelfTest: false, parentPid: 1 })).toBe(
-      true,
-    );
+    expect(shouldReadLoginShellPath({ isLive: true, parentPid: 1 })).toBe(true);
   });
 
   it.each([
-    [
-      'a terminal start, whose parent is the terminal process tree',
-      false,
-      4321,
-    ],
-    ['the self-test, even when launchd started it', true, 1],
-    ['the self-test from a terminal', true, 4321],
-  ])('keeps the inherited PATH for %s', (_case, isSelfTest, parentPid) => {
-    expect(shouldReadLoginShellPath({ isSelfTest, parentPid })).toBe(false);
+    ['a terminal start, whose parent is the terminal process tree', true, 4321],
+    ['a self-test or drive run, even when launchd started it', false, 1],
+    ['a self-test or drive run from a terminal', false, 4321],
+  ])('keeps the inherited PATH for %s', (_case, isLive, parentPid) => {
+    expect(shouldReadLoginShellPath({ isLive, parentPid })).toBe(false);
   });
 });
 

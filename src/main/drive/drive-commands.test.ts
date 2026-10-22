@@ -152,4 +152,28 @@ describe('createDriveCommands', () => {
       commands.run('click', { selector: '.missing' }),
     ).rejects.toThrow('No element matches .missing');
   });
+
+  it('screenshot_MatchHasNoSize_RejectsSayingItIsNotShown', async () => {
+    const { commands } = setUp(
+      () => [],
+      [['querySelector(', () => ({ x: 10, y: 20, width: 0, height: 0 })]],
+    );
+
+    await expect(
+      commands.run('screenshot', { name: 'empty', selector: '.hidden' }),
+    ).rejects.toThrow('.hidden has no size: it is not shown');
+  });
+
+  it('record_StartNameLeavesTheVideosFolder_RejectsAndRecordsNothing', async () => {
+    const { commands } = setUp(() => []);
+
+    await expect(
+      commands.run('record', { action: 'start', name: '../escape' }),
+    ).rejects.toThrow(
+      'Recording name "../escape" is not lowercase letters and digits in words joined by -',
+    );
+    await expect(commands.run('record', { action: 'stop' })).rejects.toThrow(
+      'Not recording',
+    );
+  });
 });

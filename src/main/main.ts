@@ -119,7 +119,7 @@ registerDataScheme();
 // terminal start, the self-test and a drive run keep the PATH of the shell
 // that ran them and stay clear of the user's shell profile.
 const loginShellPath = shouldReadLoginShellPath({
-  isSelfTest: runMode !== 'live',
+  isLive: runMode === 'live',
   parentPid: process.ppid,
 })
   ? readLoginShellPath(process.env.SHELL)

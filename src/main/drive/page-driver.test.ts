@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { CHORD_NOTATION_RULE } from '../../shared/chord-notation';
 import { fakeDrivenWindow } from './fake-driven-window';
-import { click, drag, press, waitFor, waitForNewLogLine } from './page-driver';
+import {
+  click,
+  drag,
+  press,
+  waitFor,
+  waitForNewLogLine,
+  withPrimitiveEllipsis,
+} from './page-driver';
 
 describe('waitForNewLogLine', () => {
   it('waitForNewLogLine_LineLoggedOnThirdRead_ResolvesTrue', async () => {
@@ -128,5 +135,29 @@ describe('drag', () => {
       y: 40,
       modifiers: [],
     });
+  });
+});
+
+describe('withPrimitiveEllipsis', () => {
+  it('withPrimitiveEllipsis_ScriptList_AddsTheFourSelectors', () => {
+    expect(withPrimitiveEllipsis(['.scroller'])).toEqual([
+      '.scroller',
+      '.ui-row-label',
+      '.ui-row-detail',
+      '.ui-tab-label',
+      '.ui-collapsible-summary',
+    ]);
+  });
+
+  it('withPrimitiveEllipsis_ListAlreadyHoldingOne_DoesNotRepeatIt', () => {
+    const four = [
+      '.ui-row-label',
+      '.ui-row-detail',
+      '.ui-tab-label',
+      '.ui-collapsible-summary',
+    ];
+
+    expect(withPrimitiveEllipsis(['.ui-row-label'])).toEqual(four);
+    expect(withPrimitiveEllipsis([])).toEqual(four);
   });
 });

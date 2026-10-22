@@ -275,7 +275,7 @@ const SCROLLS_ITSELF = [
 
 // Rewrites the fixture under `homeDir` and connects a session with host id
 // `sessionId` in the fixture's repo, then activates its row, which shows its
-// only tab, the Docs tab.
+// only tab, the Docs tab. A failed activation ends the session it connected.
 export async function connectDocsFixtureSession(
   files: Files,
   homeDir: string,
@@ -290,7 +290,12 @@ export async function connectDocsFixtureSession(
     deadlineSeconds: null,
     harness: 'claude',
   });
-  sessions.activate(connected.session.id);
+  try {
+    sessions.activate(connected.session.id);
+  } catch (error) {
+    connected.end();
+    throw error;
+  }
   return connected;
 }
 

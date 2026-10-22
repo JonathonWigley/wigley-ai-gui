@@ -36,13 +36,13 @@ const LAUNCHD_PID = 1;
 
 // Whether main swaps in the login shell's PATH: only for an app launchd
 // started, whose inherited PATH is launchd's bare one. A terminal start
-// (`npm start` spawns Electron from the terminal's process tree) and the
-// self-test keep the PATH they inherited.
+// (`npm start` spawns Electron from the terminal's process tree), the
+// self-test and a drive run keep the PATH they inherited.
 export function shouldReadLoginShellPath(start: {
-  isSelfTest: boolean;
+  isLive: boolean;
   parentPid: number;
 }): boolean {
-  return !start.isSelfTest && start.parentPid === LAUNCHD_PID;
+  return start.isLive && start.parentPid === LAUNCHD_PID;
 }
 
 // The PATH an interactive login run of `shell` builds, or null when `shell`

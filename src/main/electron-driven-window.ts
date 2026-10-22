@@ -31,7 +31,10 @@ export function electronDrivenWindow(window: BrowserWindow): DrivenWindow {
       const [width, height] = window.getContentSize();
       return { width, height };
     },
-    minimumWidth: () => window.getMinimumSize()[0],
+    // The minimum size is the outer size, frame included.
+    minimumWidth: () =>
+      window.getMinimumSize()[0] -
+      (window.getSize()[0] - window.getContentSize()[0]),
     setContentWidth(width) {
       const [, height] = window.getContentSize();
       window.setContentSize(width, height);

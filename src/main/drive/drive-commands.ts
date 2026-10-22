@@ -79,10 +79,14 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     return { lines: await linesAfter(window, seen) };
   };
 
-  const elementBox = async (selector: string): Promise<Box> => {
+  // A capture rectangle with no width or height captures the whole window.
+  const shownElementBox = async (selector: string): Promise<Box> => {
     const box = await boxOf(window, selector);
     if (box === null) {
       throw new Error(`No element matches ${selector}`);
+    }
+    if (box.width === 0 || box.height === 0) {
+      throw new Error(`${selector} has no size: it is not shown`);
     }
     return box;
   };
@@ -224,17 +228,12 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
       description:
         "saves the window, or the selector's first match, to screenshots/<name>.png",
       run: async (args) => {
-        const name = requiredString(args, 'name');
-        if (!SCREENSHOT_NAME.test(name)) {
-          throw new Error(
-            `Screenshot name "${name}" is not lowercase letters and digits in words joined by -`,
-          );
-        }
+        const name = requiredFileName(args, 'Screenshot');
         const selector = optionalString(args, 'selector');
         const box =
           selector === undefined
             ? undefined
-            : wholePixels(await elementBox(selector));
+            : wholePixels(await shownElementBox(selector));
         const png = await capturePng(window, box);
         if (typeof png === 'string') {
           throw new Error(`Screenshot ${name} failed: ${png}`);
@@ -285,7 +284,11 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
       run: async (args) => {
         const action = requiredString(args, 'action');
         if (action === 'start') {
-          deps.recorder.start(optionalString(args, 'name'));
+          deps.recorder.start(
+            args.name === undefined
+              ? undefined
+              : requiredFileName(args, 'Recording'),
+          );
           return {};
         }
         if (action === 'stop') {
@@ -428,6 +431,19 @@ async function writeSetting(
     SETTINGS_FILE,
     `${JSON.stringify(settings, null, 2)}\n`,
   );
+}
+
+// `args.name`, refused unless it is lowercase letters and digits in words
+// joined by -, so the file it names stays in its folder; `kind` opens the
+// error.
+function requiredFileName(args: JsonObject, kind: string): string {
+  const name = requiredString(args, 'name');
+  if (!SCREENSHOT_NAME.test(name)) {
+    throw new Error(
+      `${kind} name "${name}" is not lowercase letters and digits in words joined by -`,
+    );
+  }
+  return name;
 }
 
 // `box` grown outward to whole pixels, as a capture rectangle must be.
