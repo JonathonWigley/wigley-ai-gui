@@ -14,9 +14,9 @@ type GalleryApi = PageApi<
 // Adds Gallery mode, which sets the `gallery` scope when it shows. `t` there
 // switches the page's transparency override between reduced and full, which
 // lasts until the page loads again and writes no settings; `g g`, `G` and `d`
-// scroll the gallery's sheet, logging where it landed. `Space z s` swaps the
-// whole shell to the test layout and, pressed again, back; leaving the
-// gallery keeps the swap.
+// scroll the gallery's sheet, `d` logging whether it reached the end. `Space
+// z s` swaps the whole shell to the test layout and, pressed again, back;
+// leaving the gallery keeps the swap.
 export const galleryPagePart: PagePart<typeof galleryManifest> = {
   manifest: galleryManifest,
   start(api: GalleryApi) {
@@ -76,8 +76,13 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
           log('gallery', 'scrolled to the end');
         },
         pageDown() {
-          scrollSheetTo(view.sheet.scrollTop + view.sheet.clientHeight);
-          log('gallery', `scrolled to ${Math.round(view.sheet.scrollTop)}px`);
+          const { sheet } = view;
+          scrollSheetTo(sheet.scrollTop + sheet.clientHeight);
+          // scrollTop can be fractional while scrollHeight and clientHeight
+          // are rounded to whole pixels.
+          const isAtEnd =
+            sheet.scrollHeight - sheet.clientHeight - sheet.scrollTop < 1;
+          log('gallery', isAtEnd ? 'reached the end' : 'paged down');
         },
       },
     };

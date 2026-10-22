@@ -89,7 +89,17 @@ export const SELFTEST_LAYOUT = {
 `,
 };
 
-// Opening on finding 1: Space k then k breaks Space k s, so the first k
+// The gallery steps run first, before any step raises a toast, so no toast
+// covers their screenshots. Space z l o opens the layout preview's sample
+// round, every card kind, in a session of its own after the other three, and
+// selects its row. Space z g shows Gallery mode and d pages its sheet down to
+// the end, saving each page; G, then t switches to reduced transparency, g g
+// goes back to the top and d pages down again, saving each page reduced. Space
+// k s shows Sessions mode, on the sample round, reduced; Space z g, t back to
+// full and Space k s show it full. Space z s swaps the shell to the gallery's
+// test layout over Sessions mode, and Space z s again restores the default.
+// Option+Shift+o wraps back to the first session.
+// Then, opening on finding 1: Space k then k breaks Space k s, so the first k
 // replays to the notice and the second finds no item before it; j back to the
 // finding, which opens on Fix now, saving the round's screenshot; 2 picks
 // solution 2, Space a f clears the action and Space a s sets Leave it. a types
@@ -128,7 +138,9 @@ export const SELFTEST_LAYOUT = {
 // session, on question 2. Space k s hides the side bar and shows it again; a
 // enters question 2's notes box, where Esc and Space k s (the editor bind)
 // hide it and Space k s in NORMAL shows it; Esc (forms' editor bind) leaves the
-// box. Option+Shift+i wraps to the last session, a Codex one with no folder,
+// box. Option+Shift+i wraps to the last session, the layout preview's; Cmd+W
+// there asks to cancel its sample round and y cancels it, which closes the
+// session and selects its left neighbour, a Codex session with no folder,
 // whose only tab is its Docs tab: its first show runs the session source,
 // which knows no folder, and no form keeps its scope; Option+o finds no other
 // tab there; Option+Shift+o wraps back to the first, whose form takes its
@@ -147,16 +159,99 @@ export const SELFTEST_LAYOUT = {
 // prompt. o types "note" into the Round note at
 // once (INSERT), Esc Esc out (forms' editor bind in the review's scope), Enter
 // jumps back to finding 1, review again and Space Enter submits. Space z l o
-// opens the layout preview's sample round and selects its row, which the
+// opens the sample round again, in a new preview session, and selects its row,
+// which the
 // sessions page logs; Cmd+W there asks to cancel the sample round, so the
-// selected session shows it, and n dismisses the prompt. Space z g shows
-// Gallery mode and d pages its sheet down to the end, saving each page; G,
-// then t switches to reduced transparency, g g goes back to the top and d
-// pages down again, saving each page reduced. Space k s shows Sessions mode,
-// on the sample round, reduced; Space z g, t back to full and Space k s show it
-// full. Space z s swaps the shell to the gallery's test layout over Sessions
-// mode, and Space z s again restores the default.
+// selected session shows it, and n dismisses the prompt.
 const STEPS: SelfTestStep[] = [
+  { keys: [' ', 'z', 'l', 'o'], expect: '[sessions] activated Layout preview' },
+  {
+    keys: [' ', 'z', 'g'],
+    expect: '[page] showed Gallery mode',
+    checksFit: true,
+    screenshot: 'gallery-1-full',
+  },
+  {
+    keys: ['d'],
+    expect: '[gallery] paged down',
+    screenshot: 'gallery-2-full',
+  },
+  {
+    keys: ['d'],
+    expect: '[gallery] paged down',
+    screenshot: 'gallery-3-full',
+  },
+  {
+    keys: ['d'],
+    expect: '[gallery] paged down',
+    screenshot: 'gallery-4-full',
+  },
+  {
+    keys: ['d'],
+    expect: '[gallery] paged down',
+    screenshot: 'gallery-5-full',
+  },
+  {
+    keys: ['d'],
+    expect: '[gallery] reached the end',
+    screenshot: 'gallery-6-full',
+  },
+  { keys: ['G'], expect: '[gallery] scrolled to the end' },
+  {
+    keys: ['t'],
+    expect: '[gallery] transparency reduced',
+    screenshot: 'gallery-6-reduced',
+  },
+  {
+    keys: ['g', 'g'],
+    expect: '[gallery] scrolled to the top',
+    screenshot: 'gallery-1-reduced',
+  },
+  {
+    keys: ['d'],
+    expect: '[gallery] paged down',
+    screenshot: 'gallery-2-reduced',
+  },
+  {
+    keys: ['d'],
+    expect: '[gallery] paged down',
+    screenshot: 'gallery-3-reduced',
+  },
+  {
+    keys: ['d'],
+    expect: '[gallery] paged down',
+    screenshot: 'gallery-4-reduced',
+  },
+  {
+    keys: ['d'],
+    expect: '[gallery] paged down',
+    screenshot: 'gallery-5-reduced',
+  },
+  // Page 6 reduced is the view `t` saved, the sheet already at its end.
+  { keys: ['d'], expect: '[gallery] reached the end' },
+  {
+    keys: [' ', 'k', 's'],
+    expect: '[page] showed Sessions mode',
+    screenshot: 'sessions-reduced',
+  },
+  { keys: [' ', 'z', 'g'], expect: '[page] showed Gallery mode' },
+  { keys: ['t'], expect: '[gallery] transparency full' },
+  {
+    keys: [' ', 'k', 's'],
+    expect: '[page] showed Sessions mode',
+    screenshot: 'sessions-full',
+  },
+  {
+    keys: [' ', 'z', 's'],
+    expect: '[gallery] shell layout swapped',
+    screenshot: 'shell-layout-test',
+  },
+  {
+    keys: [' ', 'z', 's'],
+    expect: '[gallery] shell layout restored',
+    screenshot: 'shell-layout-restored',
+  },
+  { keys: ['<A-S-o>'], expect: '[sessions] activated selftest' },
   {
     keys: [' ', 'k', 'k'],
     expect: '[page] k ran forms.prevItem',
@@ -327,8 +422,14 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: [' ', 'k', 's'], expect: '[page] side bar shown' },
   { keys: ['Escape'], expect: '[forms] left the box' },
+  { keys: ['<A-S-i>'], expect: '[sessions] activated Layout preview' },
   {
-    keys: ['<A-S-i>'],
+    keys: ['<D-w>'],
+    expect:
+      '[forms] closing the session asks to cancel Layout preview · Layout preview',
+  },
+  {
+    keys: ['y'],
     expect: '[docs] session index: No project folder is known for this session',
     checksFit: true,
   },
@@ -400,92 +501,6 @@ const STEPS: SelfTestStep[] = [
       '[forms] closing the session asks to cancel Layout preview · Layout preview',
   },
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
-  {
-    keys: [' ', 'z', 'g'],
-    expect: '[page] showed Gallery mode',
-    checksFit: true,
-    screenshot: 'gallery-1-full',
-  },
-  {
-    keys: ['d'],
-    expect: '[gallery] scrolled to 521px',
-    screenshot: 'gallery-2-full',
-  },
-  {
-    keys: ['d'],
-    expect: '[gallery] scrolled to 1042px',
-    screenshot: 'gallery-3-full',
-  },
-  {
-    keys: ['d'],
-    expect: '[gallery] scrolled to 1563px',
-    screenshot: 'gallery-4-full',
-  },
-  {
-    keys: ['d'],
-    expect: '[gallery] scrolled to 2084px',
-    screenshot: 'gallery-5-full',
-  },
-  {
-    keys: ['d'],
-    expect: '[gallery] scrolled to 2392px',
-    screenshot: 'gallery-6-full',
-  },
-  { keys: ['G'], expect: '[gallery] scrolled to the end' },
-  {
-    keys: ['t'],
-    expect: '[gallery] transparency reduced',
-    screenshot: 'gallery-6-reduced',
-  },
-  {
-    keys: ['g', 'g'],
-    expect: '[gallery] scrolled to the top',
-    screenshot: 'gallery-1-reduced',
-  },
-  {
-    keys: ['d'],
-    expect: '[gallery] scrolled to 521px',
-    screenshot: 'gallery-2-reduced',
-  },
-  {
-    keys: ['d'],
-    expect: '[gallery] scrolled to 1042px',
-    screenshot: 'gallery-3-reduced',
-  },
-  {
-    keys: ['d'],
-    expect: '[gallery] scrolled to 1563px',
-    screenshot: 'gallery-4-reduced',
-  },
-  {
-    keys: ['d'],
-    expect: '[gallery] scrolled to 2084px',
-    screenshot: 'gallery-5-reduced',
-  },
-  // Page 6 reduced is the view `t` saved, the sheet already at its end.
-  { keys: ['d'], expect: '[gallery] scrolled to 2392px' },
-  {
-    keys: [' ', 'k', 's'],
-    expect: '[page] showed Sessions mode',
-    screenshot: 'sessions-reduced',
-  },
-  { keys: [' ', 'z', 'g'], expect: '[page] showed Gallery mode' },
-  { keys: ['t'], expect: '[gallery] transparency full' },
-  {
-    keys: [' ', 'k', 's'],
-    expect: '[page] showed Sessions mode',
-    screenshot: 'sessions-full',
-  },
-  {
-    keys: [' ', 'z', 's'],
-    expect: '[gallery] shell layout swapped',
-    screenshot: 'shell-layout-test',
-  },
-  {
-    keys: [' ', 'z', 's'],
-    expect: '[gallery] shell layout restored',
-    screenshot: 'shell-layout-restored',
-  },
 ];
 
 // Code and tables scroll in their own box, and rail, row and tab titles end
