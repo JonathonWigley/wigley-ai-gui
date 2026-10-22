@@ -4,6 +4,7 @@ import {
   button,
   element,
   markdownElement,
+  showKeys,
 } from '../../../../shared/page/dom';
 import type { AnswerStatus, Round } from '../../contract';
 import { numberedCommand } from '../../ids';
@@ -99,6 +100,13 @@ export function buildField(
   return { element: field, box };
 }
 
+// The choice list's entries in choice order, and `updateKeys`, which shows
+// each choice's keys again as the keymap now binds them.
+export interface ChoiceList {
+  entries: HTMLLIElement[];
+  updateKeys(): void;
+}
+
 // Appends one choice per text to `list`, each inline markdown with the keys
 // that pick it, the recommended one badged; `pick` gets the clicked choice,
 // 1-based.
@@ -108,8 +116,9 @@ export function buildChoiceList(
   recommend: number,
   pick: (choice: number) => void,
   deps: Pick<CardDeps, 'markdown' | 'keysFor'>,
-): HTMLLIElement[] {
-  return texts.map((text, i) => {
+): ChoiceList {
+  const keyUpdaters: (() => void)[] = [];
+  const entries = texts.map((text, i) => {
     const choice = i + 1;
     const entry = element('li', 'choice');
     const choicePick = button('choice-pick', '', () => pick(choice));
@@ -125,8 +134,20 @@ export function buildChoiceList(
       );
     }
     const command = numberedCommand('choose', choice);
-    appendKeys(choicePick, command === null ? null : deps.keysFor(command));
+    const readKeys = () => (command === null ? null : deps.keysFor(command));
+    let hint = appendKeys(choicePick, readKeys());
+    keyUpdaters.push(() => {
+      hint = showKeys(choicePick, hint, readKeys());
+    });
     list.append(entry);
     return entry;
   });
+  return {
+    entries,
+    updateKeys() {
+      for (const update of keyUpdaters) {
+        update();
+      }
+    },
+  };
 }

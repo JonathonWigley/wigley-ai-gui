@@ -15,6 +15,7 @@ import {
   button,
   element,
   markdownElement,
+  showKeys,
 } from '../../../shared/page/dom';
 import type { EditorBoxes } from './editor-boxes';
 import {
@@ -38,18 +39,20 @@ import { progressText, type ReviewRow, reviewRows } from './view-model';
 export interface RoundViewDeps {
   markdown: MarkdownRenderer;
   boxes: Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>;
-  keys: Pick<KeysPageExports, 'keysFor'>;
+  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   dispatch(action: FormsAction): void;
   run(command: CommandId): void;
   log: Log;
 }
 
 // `setLayout` rebuilds the view's children with `layout`'s cards and head
-// from `round`, remounting every box.
+// from `round`, remounting every box. `dispose` stops the view following
+// keymap changes; its owner calls it when it drops the view.
 export interface RoundView {
   element: HTMLElement;
   update(round: RoundState, view: FormsView): void;
   setLayout(layout: Layout, layoutName: string, round: RoundState): void;
+  dispose(): void;
 }
 
 // The children of a round view one build makes.
@@ -60,6 +63,9 @@ interface RoundParts {
   main: HTMLElement;
   head: { element: HTMLElement; update(round: RoundState): void };
   layoutHead: HTMLElement | null;
+  // Draws the layout's head again in its slot; nothing for a layout with no
+  // head.
+  redrawLayoutHead(): void;
   railEntries: RailEntry[];
   itemsPane: HTMLElement;
   itemCards: ItemCard[];
@@ -68,8 +74,9 @@ interface RoundParts {
 
 // One open round's DOM, built with its editors: the rail, the layout's head
 // and every item's card, and the review with the round note. A render only
-// updates it; a new layout rebuilds it. `attach` places the root in the page
-// once, before any editor mounts.
+// updates it; a new layout rebuilds it. A keymap change, while it shows,
+// draws the layout's head again and updates it with the round it last
+// showed, so every key hint reads the new keys. `attach` places the root in the page once, before any editor mounts.
 export function createRoundView(
   attach: (root: HTMLElement) => void,
   round: RoundState,
@@ -81,6 +88,7 @@ export function createRoundView(
   // Editors mount into attached elements, so they can measure themselves.
   attach(root);
   let shownView: FormsView = 'forms';
+  let shownRound: RoundState | null = null;
   let shownFocus = -1;
   const build = (current: RoundState, cardLayout: Layout, name: string) =>
     buildRoundParts(root, current, cardLayout, name, deps, () => shownView);
@@ -90,6 +98,7 @@ export function createRoundView(
     element: root,
     update(current, viewName) {
       shownView = viewName;
+      shownRound = current;
       const isForms = viewName === 'forms';
       const isReview = viewName === 'review' || viewName === 'confirm';
       const { items, reviewRowAt } = parts;
@@ -101,9 +110,11 @@ export function createRoundView(
       parts.railEntries.forEach((entry, position) => {
         const item = items[position];
         updateRailEntry(entry, current, item, position, isReview);
-        if (entry.keys !== null) {
-          entry.keys.hidden = !isForms;
-        }
+        entry.keys = showKeys(
+          entry.pick,
+          entry.keys,
+          isForms ? entry.readKeys() : null,
+        );
         const action = railPickAction(
           viewName,
           position,
@@ -138,7 +149,16 @@ export function createRoundView(
       shownFocus = -1;
       view.update(current, shownView);
     },
+    dispose() {
+      keysChange.dispose();
+    },
   };
+  const keysChange = deps.keys.onChanged(() => {
+    if (shownRound !== null && !root.hidden) {
+      parts.redrawLayoutHead();
+      view.update(shownRound, shownView);
+    }
+  });
   return view;
 }
 
@@ -164,11 +184,8 @@ function buildRoundParts(
   const head = buildHead(main, round, deps.markdown);
   const keysFor = (command: CommandId) =>
     deps.keys.keysFor(command, formsScope('forms'));
-  const layoutHead = buildLayoutHead(main, round, layout, layoutName, {
-    markdown: deps.markdown,
-    keysFor,
-    log: deps.log,
-  });
+  const headDeps = { markdown: deps.markdown, keysFor, log: deps.log };
+  const layoutHead = buildLayoutHead(main, round, layout, layoutName, headDeps);
   const itemsPane = element('div', 'items');
   main.append(itemsPane);
   const reviewRowAt = reviewRowsByRailPosition(round);
@@ -213,6 +230,11 @@ function buildRoundParts(
     main,
     head,
     layoutHead,
+    redrawLayoutHead() {
+      if (layoutHead !== null) {
+        drawLayoutHead(layoutHead, round, layout, layoutName, headDeps);
+      }
+    },
     railEntries,
     itemsPane,
     itemCards,
@@ -220,27 +242,43 @@ function buildRoundParts(
   };
 }
 
+type HeadDeps = Pick<CardDeps, 'markdown' | 'keysFor' | 'log'>;
+
 // The slot above the cards the layout's head draws into; null for a layout
-// with no head. A head that throws is logged and leaves the slot empty.
+// with no head.
 function buildLayoutHead(
   parent: HTMLElement,
   round: RoundState,
   layout: Layout,
   layoutName: string,
-  deps: Pick<CardDeps, 'markdown' | 'keysFor' | 'log'>,
+  deps: HeadDeps,
 ): HTMLElement | null {
   if (layout.head === undefined) {
     return null;
   }
   const slot = element('div', 'layout-head');
   parent.append(slot);
+  drawLayoutHead(slot, round, layout, layoutName, deps);
+  return slot;
+}
+
+// Empties `slot` and draws the layout's head into it, with the keys the
+// keymap binds now. The head holds no text boxes, so a redraw loses no
+// answer. A head that throws is logged and leaves the slot empty.
+function drawLayoutHead(
+  slot: HTMLElement,
+  round: RoundState,
+  layout: Layout,
+  layoutName: string,
+  deps: HeadDeps,
+) {
+  slot.replaceChildren();
   try {
-    layout.head(slot, roundInfo(round.round), createHeadKit(deps));
+    layout.head?.(slot, roundInfo(round.round), createHeadKit(deps));
   } catch (error) {
     slot.replaceChildren();
     deps.log('forms', `layout ${layoutName} head failed: ${errorText(error)}`);
   }
-  return slot;
 }
 
 function buildHead(
@@ -294,12 +332,14 @@ function railPickAction(
   return isReviewItem ? { type: 'reviewJump', row: reviewRow } : null;
 }
 
-// `keys` is the hint of the keys that jump to the entry's item from the form,
-// absent when none do.
+// `keys` is the hint shown of the keys that jump to the entry's item from the
+// form, absent when none do or outside the form; `readKeys` reads those keys
+// from the keymap as it is now.
 interface RailEntry {
   element: HTMLLIElement;
   pick: HTMLButtonElement;
   keys: HTMLElement | null;
+  readKeys(): string | null;
 }
 
 // A question's entry shows the keys that jump to it, as clicking it does in
@@ -322,13 +362,12 @@ function buildRailEntry(
   );
   const command =
     item.kind === 'question' ? numberedCommand('jumpTo', item.index) : null;
-  const hint = appendKeys(
-    pick,
-    command === null ? null : keys.keysFor(command, formsScope('forms')),
-  );
+  const readKeys = () =>
+    command === null ? null : keys.keysFor(command, formsScope('forms'));
+  const hint = appendKeys(pick, readKeys());
   entry.append(pick);
   parent.append(entry);
-  return { element: entry, pick, keys: hint };
+  return { element: entry, pick, keys: hint, readKeys };
 }
 
 // While the review is open, untouched items are flagged in the rail.
@@ -379,11 +418,11 @@ function buildReview(
   const submit = button('button button-primary', 'Submit', () =>
     deps.run(formsCommand('submit')),
   );
-  appendKeys(submit, reviewKeysFor(deps, 'submit'));
+  let submitKeys = appendKeys(submit, reviewKeysFor(deps, 'submit'));
   const cancel = button('button', 'Cancel round', () =>
     deps.run(formsCommand('askCancel')),
   );
-  appendKeys(cancel, reviewKeysFor(deps, 'askCancel'));
+  let cancelKeys = appendKeys(cancel, reviewKeysFor(deps, 'askCancel'));
   actions.append(submit, cancel);
   section.append(actions);
   return {
@@ -395,6 +434,12 @@ function buildReview(
           ? ` ${counts.untouched} not answered; they are sent as untouched.`
           : '';
       summary.textContent = `${progressText(counts)}.${untouched}`;
+      submitKeys = showKeys(submit, submitKeys, reviewKeysFor(deps, 'submit'));
+      cancelKeys = showKeys(
+        cancel,
+        cancelKeys,
+        reviewKeysFor(deps, 'askCancel'),
+      );
       list.replaceChildren(
         ...reviewRows(current).map((row) => buildReviewRow(row, deps)),
       );

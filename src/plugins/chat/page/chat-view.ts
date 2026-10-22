@@ -83,7 +83,7 @@ export interface ChatViewDeps {
   onSessionRemoved(listener: (sessionId: string) => void): void;
   editor: EditorHost;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'keysFor'>;
+  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   permissions: PermissionActions;
   confirm: CloseConfirm;
   setScope(): void;
@@ -232,6 +232,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }
     tabs.delete(sessionId);
     tab.box?.destroy();
+    tab.entries.dispose();
     if (pendingReveal === sessionId) {
       pendingReveal = null;
     }

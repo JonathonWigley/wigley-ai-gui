@@ -106,6 +106,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             qualify(docsManifest.id, command),
             qualify(docsManifest.id, scope),
           ),
+        onKeysChanged: (listener) => keys.onChanged(listener),
         setScope: (scope) => api.keys.setScope(scope),
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,

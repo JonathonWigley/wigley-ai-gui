@@ -1,3 +1,4 @@
+import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
@@ -99,8 +100,8 @@ export interface DocsView {
   hasUnsavedEdits(): boolean;
   // The open doc's path while its editor holds unsaved edits, else null.
   unsavedPath(): string | null;
-  // Closes the overlays, stops the view's watch and its `docChanged`
-  // listener, and destroys its editor.
+  // Closes the overlays, stops the view's watch, its `docChanged` listener
+  // and its following of keymap changes, and destroys its editor.
   dispose(): void;
   commands: DocsViewCommands;
 }
@@ -117,6 +118,8 @@ export interface DocsViewDeps {
   toast(text: string, tone: ToastTone): void;
   log: Log;
   keysFor: DocsKeysFor;
+  // Hears each change to the keys `keysFor` reads, until its `dispose`.
+  onKeysChanged(listener: () => void): Disposable;
   setScope(scope: DocsPaneScope): void;
   pushScope(scope: DocsPushedScope): PushedScope;
   isActive(): boolean;
@@ -366,6 +369,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     dialogClosed: restoreFocus,
   });
   const { picker } = dialogs;
+  // A rebind reaches the prompts that show keys while they show.
+  const keysChange = deps.onKeysChanged(() => {
+    doc.keysChanged();
+    dialogs.keysChanged();
+  });
   root.append(tree.element, doc.element, ...dialogs.elements);
 
   for (const [pane, scope] of [
@@ -710,6 +718,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     dispose() {
       view.closeOverlays();
       listening.remove();
+      keysChange.dispose();
       doc.dispose();
     },
     commands,

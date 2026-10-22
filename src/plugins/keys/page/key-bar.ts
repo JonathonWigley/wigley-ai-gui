@@ -13,7 +13,7 @@ const PAGE_LEADER_KEY = ' ';
 
 // The status bar's key list: the keys that fire where the user is now, in a
 // text box or on the page, in `scope`, leaving out every sequence that starts
-// with the leader, which which-key shows instead. Page chords print for
+// with the leader, which which-key shows instead. Chords print for
 // `platform`.
 export function barHints(
   keymap: Keymap,
@@ -29,7 +29,7 @@ export function barHints(
         (bind.scope === scope || bind.scope === 'any') &&
         vimTokens(bind.keys, leader)[0] !== leader,
     );
-    return editorHints({ ...keymap.editor, binds }, label);
+    return editorHints({ ...keymap.editor, binds }, label, platform);
   }
   return pageHints(
     keymap.page.filter((bind) => bind.keys[0] !== PAGE_LEADER_KEY),

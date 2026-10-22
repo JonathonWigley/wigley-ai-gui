@@ -2,7 +2,12 @@ import type { CommandId } from '../../../contracts/commands';
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
-import { appendKeys, button, element } from '../../../shared/page/dom';
+import {
+  appendKeys,
+  button,
+  element,
+  showKeys,
+} from '../../../shared/page/dom';
 import type { KeysPageExports } from '../../keys/contract';
 import {
   type ChatCommandName,
@@ -21,7 +26,7 @@ export function blurFocusedElement() {
 
 export interface DialogDeps {
   overlay: PluginAreas['overlay'];
-  keys: Pick<KeysPageExports, 'keysFor'>;
+  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   run(command: CommandId): void;
   // Pushes the dialog's own scope.
   pushScope(): PushedScope;
@@ -194,7 +199,9 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
   return confirm;
 }
 
-// A dialog button running `command`, showing the keys `scope` binds to it.
+// A dialog button running `command`, showing the keys `scope` binds to it and
+// showing them again after each keymap change, for as long as the page lives,
+// as the dialog does.
 function dialogButton(
   deps: Pick<DialogDeps, 'keys' | 'run'>,
   className: string,
@@ -205,9 +212,11 @@ function dialogButton(
   const control = button(className, label, () =>
     deps.run(chatCommand(command)),
   );
-  appendKeys(
-    control,
-    deps.keys.keysFor(chatCommand(command), chatScope(scope)),
-  );
+  const readKeys = () =>
+    deps.keys.keysFor(chatCommand(command), chatScope(scope));
+  let hint = appendKeys(control, readKeys());
+  deps.keys.onChanged(() => {
+    hint = showKeys(control, hint, readKeys());
+  });
   return control;
 }

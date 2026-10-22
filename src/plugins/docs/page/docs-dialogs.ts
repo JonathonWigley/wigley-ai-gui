@@ -219,10 +219,12 @@ function createTextBox(deps: TextBoxDeps): TextBox {
 }
 
 // A yes/no prompt over the view, scope `docs.confirm` pushed while it shows;
-// the base scope changing under it answers no.
+// the base scope changing under it answers no. `open` reads its question from
+// `text`, and `refreshText` reads it again while it shows.
 interface Confirm {
   element: HTMLElement;
-  open(text: string, yes: () => void, no: () => void): void;
+  open(text: () => string, yes: () => void, no: () => void): void;
+  refreshText(): void;
   yes(): void;
   no(): void;
   // Closes the prompt without an answer.
@@ -242,9 +244,11 @@ function createConfirm(
 
   let answers: { yes(): void; no(): void } | null = null;
   let pushed: PushedScope | null = null;
+  let readQuestion: (() => string) | null = null;
 
   const hide = () => {
     answers = null;
+    readQuestion = null;
     overlay.hidden = true;
     pushed?.pop();
     pushed = null;
@@ -271,8 +275,14 @@ function createConfirm(
       });
       pushed = scope;
       answers = { yes, no };
-      text.textContent = question;
+      readQuestion = question;
+      text.textContent = question();
       overlay.hidden = false;
+    },
+    refreshText() {
+      if (readQuestion !== null) {
+        text.textContent = readQuestion();
+      }
     },
     yes: () => answer('yes'),
     no: () => answer('no'),
@@ -334,6 +344,8 @@ export interface DocsDialogs {
   confirmNo(): void;
   // Closes every dialog without hearing a cancel.
   close(): void;
+  // Shows the open Trash question's keys again as the keymap now binds them.
+  keysChanged(): void;
 }
 
 export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
@@ -530,10 +542,11 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
         .then(([targets, homeDir]) => {
           const name = baseName(targets[targets.length - 1]);
           confirm.open(
-            trashQuestion(targets, homeDir, {
-              yes: deps.keysFor('confirmYes', 'confirm'),
-              no: deps.keysFor('confirmNo', 'confirm'),
-            }),
+            () =>
+              trashQuestion(targets, homeDir, {
+                yes: deps.keysFor('confirmYes', 'confirm'),
+                no: deps.keysFor('confirmNo', 'confirm'),
+              }),
             () => {
               channel
                 .invoke('trashDoc', entry.path)
@@ -571,6 +584,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       box.close();
       confirm.close();
     },
+    keysChanged: () => confirm.refreshText(),
   };
   return dialogs;
 }

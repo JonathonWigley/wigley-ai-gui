@@ -185,8 +185,9 @@ round), since main, not the page, decides.
   `Space ?` (`<Leader>?` in a box), and the status bar's keys that don't start with the leader. A plugin declares
   its keys, labels, groups and scope titles, and draws no key hints of its own: a view that shows a key beside its
   control (every forms button whose command has a page bind) depends on `keys` and reads it from that plugin's `keysFor`
-  export, so a rebind reaches the control, and draws no hint when the command is unbound. Every hint is drawn by the
-  Kbd primitive through `formatChord`, which prints a chord for the platform the served config names. The core and the editor
+  export, again on each of its `onChanged`, so a rebind reaches the control, and draws no hint when the command is
+  unbound. Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
+  which prints a chord for the platform the served config names. The core and the editor
   host report a pending prefix through `api.keys`; the editor host reads it from vim's pending input, behind
   `EditorHost`.
 - **A theme** is a JSON file of a `palette`, `tokens`, a `reduced` block of overrides for reduced transparency, and

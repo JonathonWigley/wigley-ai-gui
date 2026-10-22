@@ -54,3 +54,18 @@ export function appendKeys(
   control.append(hint);
   return hint;
 }
+
+// Shows `keys` at the end of `control` in place of `hint`, the hint shown
+// there now, and returns the hint shown after; null when `keys` is null. Keys
+// that read as `hint` already does leave it in place.
+export function showKeys(
+  control: HTMLElement,
+  hint: HTMLElement | null,
+  keys: string | null,
+): HTMLElement | null {
+  if ((hint?.textContent ?? null) === keys) {
+    return hint;
+  }
+  hint?.remove();
+  return appendKeys(control, keys);
+}

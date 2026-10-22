@@ -2,7 +2,12 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { PluginAreas } from '../../../contracts/plugin';
-import { appendKeys, button, element } from '../../../shared/page/dom';
+import {
+  appendKeys,
+  button,
+  element,
+  showKeys,
+} from '../../../shared/page/dom';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -36,7 +41,7 @@ export interface FormsViewDeps {
   store: FormsStore;
   boxes: EditorBoxes;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'keysFor'>;
+  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   run(command: CommandId): void;
   log: Log;
 }
@@ -185,8 +190,8 @@ function destroySessionRoundViews(
   }
 }
 
-// Destroys the round's editors, removes its view, and releases its take
-// over, giving its session back.
+// Destroys the round's editors, removes its view and stops it following
+// keymap changes, and releases its take over, giving its session back.
 function destroyRoundView(
   roundId: string,
   roundViews: Map<string, RoundView>,
@@ -194,7 +199,9 @@ function destroyRoundView(
   deps: Pick<FormsViewDeps, 'boxes'>,
 ) {
   deps.boxes.destroyRound(roundId);
-  roundViews.get(roundId)?.element.remove();
+  const roundView = roundViews.get(roundId);
+  roundView?.dispose();
+  roundView?.element.remove();
   roundViews.delete(roundId);
   takeOvers.get(roundId)?.release();
   takeOvers.delete(roundId);
@@ -290,7 +297,9 @@ function buildStatusLine(deps: FormsViewDeps): {
   };
 }
 
-// The cancel prompt; each button shows the confirm scope's keys for it.
+// The cancel prompt; each button shows the confirm scope's keys for it, and
+// shows them again after each keymap change, for as long as the page lives,
+// as the prompt does.
 function buildConfirm(deps: Pick<FormsViewDeps, 'keys' | 'run'>): HTMLElement {
   const overlay = element('div', 'overlay');
   const dialog = element('div', 'dialog dialog-confirm');
@@ -305,10 +314,12 @@ function buildConfirm(deps: Pick<FormsViewDeps, 'keys' | 'run'>): HTMLElement {
     const control = button(className, label, () =>
       deps.run(formsCommand(command)),
     );
-    appendKeys(
-      control,
-      deps.keys.keysFor(formsCommand(command), formsScope('confirm')),
-    );
+    const readKeys = () =>
+      deps.keys.keysFor(formsCommand(command), formsScope('confirm'));
+    let hint = appendKeys(control, readKeys());
+    deps.keys.onChanged(() => {
+      hint = showKeys(control, hint, readKeys());
+    });
     return control;
   };
   actions.append(

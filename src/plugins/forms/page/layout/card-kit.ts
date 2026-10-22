@@ -4,6 +4,7 @@ import {
   button,
   element,
   markdownElement,
+  showKeys,
 } from '../../../../shared/page/dom';
 import type { FindingAction, ItemKind } from '../../contract';
 import { formsCommand, formsCommandNamed } from '../../ids';
@@ -44,7 +45,7 @@ interface ItemTextBox {
 }
 
 // What every part of one card's kit shares: the item, its boxes, and the
-// updaters the parts that show answer state register.
+// updaters the parts that show answer state or keys register.
 interface CardContext {
   item: RailItem;
   position: number;
@@ -310,6 +311,20 @@ function mountTextBox(
   return built.element;
 }
 
+// Shows the keys that run `command` at the end of `control`, read again on
+// each card update, so a changed keymap reaches the hint on the card's next
+// update.
+function appendCardKeys(
+  card: CardContext,
+  control: HTMLElement,
+  command: CommandId,
+) {
+  let hint = appendKeys(control, card.deps.keysFor(command));
+  card.updaters.push(() => {
+    hint = showKeys(control, hint, card.deps.keysFor(command));
+  });
+}
+
 // Dispatches the action's FormsActions, then Don't ask's command for it.
 function runLayoutAction(card: CardContext, action: LayoutAction) {
   for (const formsAction of layoutActions(action, card.position)) {
@@ -354,7 +369,7 @@ function buildAnswerKit(
       const list = element('ol', 'choices');
       answerArea.append(element('div', 'answer-label', 'Your answer'), list);
       parent.append(answerArea);
-      const entries = buildChoiceList(
+      const { entries, updateKeys } = buildChoiceList(
         list,
         choices.texts,
         choices.recommend,
@@ -368,6 +383,7 @@ function buildAnswerKit(
           );
         }
       });
+      card.updaters.push(updateKeys);
       card.updaters.push((current) => {
         const answer = itemAnswer(current, item);
         entries.forEach((entry, i) =>
@@ -390,11 +406,8 @@ function buildAnswerKit(
       const dontAsk = button('toggle', "Don't ask me this", () =>
         kit.run({ type: 'toggleDontAsk' }),
       );
-      appendKeys(
-        notApplicable,
-        card.deps.keysFor(formsCommand('toggleNotApplicable')),
-      );
-      appendKeys(dontAsk, card.deps.keysFor(formsCommand('toggleDontAsk')));
+      appendCardKeys(card, notApplicable, formsCommand('toggleNotApplicable'));
+      appendCardKeys(card, dontAsk, formsCommand('toggleDontAsk'));
       toggles.append(notApplicable, dontAsk);
       parent.append(toggles);
       kit.textBox(parent, 'dontAskReason');
@@ -419,7 +432,7 @@ function buildFindingKit(
 ): FindingKit {
   return {
     ...kit,
-    verdict: (parent) => buildVerdict(parent, input, kit, card.deps),
+    verdict: (parent) => buildVerdict(parent, input, kit, card),
     actionRow: (parent) => buildActionRow(parent, card, input, kit),
   };
 }
@@ -431,8 +444,9 @@ function buildVerdict(
   parent: HTMLElement,
   input: CardInputs['finding'],
   kit: Kit,
-  deps: CardDeps,
+  card: CardContext,
 ): HTMLElement {
+  const { deps } = card;
   const block = element('section', 'verdict');
   const chips = element('div', 'verdict-chips');
   const origin = element('span', 'badge badge-origin', input.originChip);
@@ -450,7 +464,7 @@ function buildVerdict(
   const accept = button('verdict-button verdict-accept', 'Accept', () =>
     kit.run({ type: 'accept' }),
   );
-  appendKeys(accept, deps.keysFor(formsCommand('acceptRecommendation')));
+  appendCardKeys(card, accept, formsCommand('acceptRecommendation'));
   const buttons = element('div', 'verdict-buttons');
   buttons.append(accept);
   block.append(
@@ -487,7 +501,7 @@ function buildActionRow(
       pick.classList.add('is-recommended');
       pick.append(element('span', 'badge badge-recommend', 'Recommended'));
     }
-    appendKeys(pick, card.deps.keysFor(ACTION_COMMANDS[action]));
+    appendCardKeys(card, pick, ACTION_COMMANDS[action]);
     buttons.append(pick);
     return { action, pick };
   });

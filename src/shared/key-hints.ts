@@ -11,7 +11,7 @@ import type {
   ViewScope,
 } from '../contracts/keymap';
 import type { Platform } from '../contracts/platform';
-import { parseChord } from './chord-notation';
+import { type Chord, parseChord } from './chord-notation';
 
 export interface KeyHint {
   keys: string;
@@ -32,13 +32,32 @@ const KEY_NAMES: Partial<Record<string, string>> = {
   Escape: 'Esc',
 };
 
-const VIM_TOKEN_NAMES: Partial<Record<string, string>> = {
-  '<Space>': 'Space',
-  '<Esc>': 'Esc',
-  '<CR>': 'Enter',
+// The vim key names a hint spells its own way, by their lowercase spelling, as
+// vim reads names in any case.
+const VIM_KEY_NAMES: Partial<Record<string, string>> = {
+  space: 'Space',
+  esc: 'Esc',
+  cr: 'Enter',
+  enter: 'Enter',
+  return: 'Enter',
 };
 
 const VIM_TOKEN = /<[^<>]+>|./gu;
+
+// A vim `<…>` key: its modifier prefixes, each one letter and a dash, then the
+// key.
+const VIM_KEY = /^<((?:[a-z]-)*)(.+)>$/iu;
+
+// The flag each vim modifier sets on a chord. `M-` is what
+// @replit/codemirror-vim names the Meta key (Command on macOS, Windows
+// elsewhere); `D-` is vim's Command.
+const VIM_MODIFIERS: Partial<Record<string, keyof Omit<Chord, 'key'>>> = {
+  c: 'ctrl',
+  a: 'alt',
+  s: 'shift',
+  m: 'meta',
+  d: 'meta',
+};
 
 const DIGIT_SUFFIX = /^(.*?)(\d)$/;
 
@@ -74,9 +93,12 @@ const CHORD_STYLES: Record<Platform, ChordStyle> = {
 // as it is.
 export function formatChord(token: string, platform: Platform): string {
   const chord = parseChord(token);
-  if (chord === null) {
-    return token;
-  }
+  return chord === null ? token : printChord(chord, platform);
+}
+
+// `chord` as the user reads it on `platform`: one character as its capital, a
+// named key by the platform's name for it or as it is spelled.
+function printChord(chord: Chord, platform: Platform): string {
   const style = CHORD_STYLES[platform];
   const { modifiers } = style;
   const held = [
@@ -85,8 +107,43 @@ export function formatChord(token: string, platform: Platform): string {
     chord.shift && modifiers.shift,
     chord.meta && modifiers.meta,
   ].filter((name): name is string => name !== false);
-  const key = style.keyNames[chord.key] ?? chord.key.toUpperCase();
+  const key =
+    style.keyNames[chord.key] ??
+    (chord.key.length === 1 ? chord.key.toUpperCase() : chord.key);
   return [...held, key].join(style.joiner);
+}
+
+// The chord a vim `<…>` key with at least one modifier writes, its modifiers
+// in any order and case, e.g. `<S-C-a>`; a capital letter holds Shift, so
+// `<A-O>` is Alt+Shift+O. Null for a plain key, a `<…>` key with no modifier,
+// or an unknown modifier.
+function vimChord(token: string): Chord | null {
+  const parts = VIM_KEY.exec(token);
+  if (parts === null || parts[1] === '') {
+    return null;
+  }
+  const chord: Chord = {
+    ctrl: false,
+    alt: false,
+    shift: false,
+    meta: false,
+    key: parts[2],
+  };
+  for (const prefix of parts[1].toLowerCase().split('-').slice(0, -1)) {
+    const flag = VIM_MODIFIERS[prefix];
+    if (flag === undefined) {
+      return null;
+    }
+    chord[flag] = true;
+  }
+  const isCapitalLetter =
+    chord.key.length === 1 && chord.key !== chord.key.toLowerCase();
+  if (isCapitalLetter) {
+    chord.shift = true;
+    chord.key = chord.key.toLowerCase();
+  }
+  chord.key = VIM_KEY_NAMES[chord.key.toLowerCase()] ?? chord.key;
+  return chord;
 }
 
 // A page key sequence as the user reads it on `platform`, e.g. `Space Space`,
@@ -98,9 +155,30 @@ export function formatKeys(keys: string[], platform: Platform): string {
 }
 
 // One vim-notation token as the user reads it on `platform`, e.g. `<Space>` as
-// `Space`.
+// `Space`, `<M-x>` as `⌘X` on macOS and `Win+X` elsewhere. A token that is
+// neither a named key nor a chord returns as it is.
 export function formatVimToken(token: string, platform: Platform): string {
-  return VIM_TOKEN_NAMES[token] ?? formatChord(token, platform);
+  const chord = vimChord(token);
+  if (chord !== null) {
+    return printChord(chord, platform);
+  }
+  const isBracketed = token.length > 2 && token.startsWith('<');
+  const name = isBracketed
+    ? VIM_KEY_NAMES[token.slice(1, -1).toLowerCase()]
+    : undefined;
+  return name ?? token;
+}
+
+// A vim-notation key string as the user reads it on `platform`, its tokens
+// spaced as page keys are, e.g. `<Leader>w` with leader `<Space>` as `Space w`.
+export function formatVimKeys(
+  keys: string,
+  leader: string,
+  platform: Platform,
+): string {
+  return vimTokens(keys, leader)
+    .map((token) => formatVimToken(token, platform))
+    .join(' ');
 }
 
 // A vim-notation key string as its tokens, a `<…>` group or one character
@@ -133,14 +211,16 @@ export function pageHints(
   );
 }
 
-// The binds inside a text box, `<Leader>` spelled as the leader key.
+// The binds inside a text box, `<Leader>` spelled as the leader key and
+// chords printed for `platform`.
 export function editorHints(
   editor: EditorKeymap,
   label: CommandLabel,
+  platform: Platform,
 ): KeyHint[] {
   return mergeHints(
     editor.binds.map((bind) => ({
-      keys: withLeader(bind.keys, editor.leader),
+      keys: formatVimKeys(bind.keys, editor.leader, platform),
       command: bind.command,
     })),
     label,

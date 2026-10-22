@@ -6,6 +6,7 @@ import {
   editorHints,
   formatChord,
   formatKeys,
+  formatVimKeys,
   formatVimToken,
   pageHints,
   vimTokens,
@@ -127,10 +128,20 @@ describe('pageHints', () => {
 
 describe('editorHints', () => {
   it('spells the leader and merges the digit binds', () => {
-    expect(editorHints(keymap.editor, label)).toEqual([
-      { keys: '<Space>j', label: 'test.nextBox' },
-      { keys: '<Space>1–3', label: CHOICE_LABEL },
+    expect(editorHints(keymap.editor, label, 'macos')).toEqual([
+      { keys: 'Space j', label: 'test.nextBox' },
+      { keys: 'Space 1–3', label: CHOICE_LABEL },
     ]);
+  });
+
+  it('editorHints_Chord_PrintsForPlatform', () => {
+    const editor = {
+      ...keymap.editor,
+      binds: [{ keys: '<A-o>', scope: 'any', command: 'test.next' }],
+    } satisfies Keymap['editor'];
+
+    expect(editorHints(editor, label, 'macos')[0].keys).toBe('⌥O');
+    expect(editorHints(editor, label, 'windows')[0].keys).toBe('Alt+O');
   });
 
   it('shows keys bound to one command in two modes once', () => {
@@ -142,8 +153,8 @@ describe('editorHints', () => {
       ],
     } satisfies Keymap['editor'];
 
-    expect(editorHints(editor, label)).toEqual([
-      { keys: '<CR>', label: 'test.pick' },
+    expect(editorHints(editor, label, 'macos')).toEqual([
+      { keys: 'Enter', label: 'test.pick' },
     ]);
   });
 });
@@ -169,5 +180,47 @@ describe('formatVimToken', () => {
 
   it('formatVimToken_Chord_PrintsForPlatform', () => {
     expect(formatVimToken('<A-o>', 'windows')).toBe('Alt+O');
+    expect(formatVimToken('<A-o>', 'macos')).toBe('⌥O');
+  });
+
+  it('formatVimToken_MetaChord_PrintsCommandOrWin', () => {
+    expect(formatVimToken('<M-x>', 'macos')).toBe('⌘X');
+    expect(formatVimToken('<M-x>', 'windows')).toBe('Win+X');
+    expect(formatVimToken('<D-x>', 'macos')).toBe('⌘X');
+  });
+
+  it('formatVimToken_ModifiersInAnyOrderOrCase_PrintInPlatformOrder', () => {
+    expect(formatVimToken('<S-C-a>', 'macos')).toBe('⌃⇧A');
+    expect(formatVimToken('<S-C-a>', 'windows')).toBe('Ctrl+Shift+A');
+    expect(formatVimToken('<m-a-k>', 'windows')).toBe('Alt+Win+K');
+  });
+
+  it('formatVimToken_CapitalLetter_HoldsShift', () => {
+    expect(formatVimToken('<A-O>', 'macos')).toBe('⌥⇧O');
+    expect(formatVimToken('<A-O>', 'windows')).toBe('Alt+Shift+O');
+    expect(formatVimToken('<A-o>', 'macos')).not.toBe(
+      formatVimToken('<A-O>', 'macos'),
+    );
+  });
+
+  it('formatVimToken_NamedKeyChord_PrintsItsName', () => {
+    expect(formatVimToken('<C-CR>', 'macos')).toBe('⌃↩');
+    expect(formatVimToken('<C-cr>', 'windows')).toBe('Ctrl+Enter');
+    expect(formatVimToken('<S-Tab>', 'windows')).toBe('Shift+Tab');
+  });
+
+  it('formatVimToken_NoChord_ReturnsAsIs', () => {
+    expect(formatVimToken('<Tab>', 'macos')).toBe('<Tab>');
+    expect(formatVimToken('<X-a>', 'macos')).toBe('<X-a>');
+    expect(formatVimToken('<cr>', 'macos')).toBe('Enter');
+  });
+});
+
+describe('formatVimKeys', () => {
+  it('formatVimKeys_Sequence_SpacesTokensAndSpellsLeader', () => {
+    expect(formatVimKeys('<Leader>w', '<Space>', 'macos')).toBe('Space w');
+    expect(formatVimKeys('<Leader><M-x>', '<Space>', 'windows')).toBe(
+      'Space Win+X',
+    );
   });
 });

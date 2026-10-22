@@ -1,4 +1,5 @@
 import type { ChatEntry } from '../../../contracts/agent';
+import type { Disposable } from '../../../contracts/disposable';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import {
   appendKeys,
@@ -15,7 +16,7 @@ import type { PermissionEntry } from './chat-state';
 // for it.
 export interface KitDeps {
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'keysFor'>;
+  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   allow(entry: PermissionEntry): void;
   deny(entry: PermissionEntry): void;
 }
@@ -31,11 +32,14 @@ export interface Expanders {
 }
 
 // One built entry's kit: the parts the layout drew from it, kept up to date by
-// `update` with each later version of the entry.
+// `update` with each later version of the entry and, while a permission
+// entry waits for its answer, with each keymap change. `dispose` stops the
+// kit following keymap changes; its owner calls it when it drops the kit.
 export interface EntryKit {
   kit: ChatKit;
   update(entry: ChatEntry): void;
   expanders: Expanders;
+  dispose(): void;
 }
 
 interface Expander {
@@ -47,6 +51,23 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
   let current = entry;
   const expanders: Expander[] = [];
   const permissionParts: HTMLElement[] = [];
+  // Set while an unanswered permission entry's actions show keys.
+  let keysChange: Disposable | null = null;
+  const drawPermissionParts = () => {
+    if (current.kind !== 'permission') {
+      return;
+    }
+    for (const part of permissionParts) {
+      drawPermissionActions(part, current, deps);
+    }
+    const isAnswered = current.answer !== null;
+    if (isAnswered) {
+      keysChange?.dispose();
+      keysChange = null;
+    } else {
+      keysChange ??= deps.keys.onChanged(drawPermissionParts);
+    }
+  };
   const kit: ChatKit = {
     markdown: (text) => markdownElement('div', 'md', deps.markdown.block(text)),
     json: (value) =>
@@ -61,8 +82,8 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
         throw new Error('permissionActions is only for a permission entry');
       }
       const part = element('div', 'chat-permission-actions');
-      drawPermissionActions(part, current, deps);
       permissionParts.push(part);
+      drawPermissionParts();
       return part;
     },
   };
@@ -70,11 +91,11 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
     kit,
     update(next) {
       current = next;
-      if (next.kind === 'permission') {
-        for (const part of permissionParts) {
-          drawPermissionActions(part, next, deps);
-        }
-      }
+      drawPermissionParts();
+    },
+    dispose() {
+      keysChange?.dispose();
+      keysChange = null;
     },
     expanders: {
       count: () => expanders.length,

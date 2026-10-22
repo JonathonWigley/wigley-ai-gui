@@ -7,8 +7,8 @@ import {
   chordName,
   editorHints,
   formatKeys,
+  formatVimKeys,
   mergeHints,
-  withLeader,
 } from '../../../shared/key-hints';
 
 export interface HelpSection {
@@ -18,14 +18,16 @@ export interface HelpSection {
 
 // Every bound key, for the help overlay: for each scope in `scopes` order, its
 // page binds under its title and then its text box binds; then the text box's
-// remaps and the app's and system's chords. Page chords print for
-// `platform`. Sections with no binds are left out.
+// remaps and the app's and system's chords. Page and text box chords print
+// for `platform`. Sections with no binds are left out.
 export function helpSections(
   keymap: Keymap,
   scopes: readonly ScopeInfo[],
   label: CommandLabel,
   platform: Platform,
 ): HelpSection[] {
+  const readVimKeys = (keys: string) =>
+    formatVimKeys(keys, keymap.editor.leader, platform);
   const sections: HelpSection[] = [
     ...scopes.flatMap((info) => [
       {
@@ -48,14 +50,15 @@ export function helpSections(
             binds: keymap.editor.binds.filter((bind) => bind.scope === info.id),
           },
           label,
+          platform,
         ),
       },
     ]),
     {
       title: 'Remaps in a text box',
       hints: keymap.editor.remaps.map((remap) => ({
-        keys: withLeader(remap.keys, keymap.editor.leader),
-        label: `sends ${remap.to} in ${remap.mode} mode`,
+        keys: readVimKeys(remap.keys),
+        label: `sends ${readVimKeys(remap.to)} in ${remap.mode} mode`,
       })),
     },
     {

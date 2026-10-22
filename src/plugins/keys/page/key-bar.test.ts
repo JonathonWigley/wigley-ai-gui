@@ -84,7 +84,7 @@ describe('barHints', () => {
     });
 
     expect(barHints(map, 's', true, label, 'macos')).toEqual([
-      { keys: '<Esc>', label: 'leave the box' },
+      { keys: 'Esc', label: 'leave the box' },
     ]);
   });
 
@@ -102,7 +102,7 @@ describe('barHints', () => {
     });
 
     expect(barHints(map, 'a.view', true, label, 'macos')).toEqual([
-      { keys: '<Esc>', label: 'leave the box' },
+      { keys: 'Esc', label: 'leave the box' },
       { keys: 'q', label: 'c.q' },
     ]);
   });

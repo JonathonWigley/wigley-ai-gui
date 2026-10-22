@@ -24,7 +24,8 @@ type KeysApi = PageApi<
 // scope under it changes; and the keys that fire now, leader sequences aside,
 // in the status bar. Each reads the keymap and settings as they are now, and
 // help and the key bar redraw when the keymap changes. Exports the keys bound
-// to a command, for a view that shows them beside its control.
+// to a command, and when they change, for a view that shows them beside its
+// control.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
@@ -76,6 +77,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
     const exports: KeysPageExports = {
       keysFor: (command, scope) =>
         keysFor(keys.keymap(), command, scope, platform),
+      onChanged: (listener) => keys.onKeymapChanged(() => listener()),
     };
     return {
       exports,

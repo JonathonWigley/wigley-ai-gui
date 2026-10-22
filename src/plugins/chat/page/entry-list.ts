@@ -60,6 +60,9 @@ export interface EntryList {
   // Opens every expander of the focused entry when any is closed, else
   // closes them all; null with no focused entry.
   toggleFocused(): { entry: ChatEntry; result: ToggleResult } | null;
+  // Disposes every entry's kit; the list's owner calls it when it drops the
+  // list.
+  dispose(): void;
 }
 
 // One drawn entry: its slot, the view the layout returned and the kit made
@@ -125,6 +128,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       const openStates = new Map(
         [...slots].map(([id, slot]) => [id, slot.kit.expanders.openStates()]),
       );
+      disposeKits(slots);
       slots.clear();
       list.replaceChildren();
       for (const entry of entries) {
@@ -161,7 +165,16 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       expanders.setAllOpen(opens);
       return { entry: slot.entry, result: opens ? 'expanded' : 'collapsed' };
     },
+    dispose() {
+      disposeKits(slots);
+    },
   };
+}
+
+function disposeKits(slots: Map<string, Slot>) {
+  for (const slot of slots.values()) {
+    slot.kit.dispose();
+  }
 }
 
 function focusedEntry(
@@ -217,6 +230,7 @@ function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
     ? buildDefaultEntry(entry, deps)
     : buildEntry(entry, deps);
   built.kit.expanders.restore(openStates);
+  slot.kit.dispose();
   slot.view = built.view;
   slot.kit = built.kit;
   slot.isDefaultView = built.isDefaultView;
@@ -234,6 +248,7 @@ function buildEntry(entry: ChatEntry, deps: EntryListDeps): BuiltEntry {
       const view = buildView(shown.layout, entry, kit.kit);
       return { element: view.element, view, kit, isDefaultView: false };
     } catch (error) {
+      kit.dispose();
       reportLayoutFailure(entry, deps, 'entry failed', error);
     }
   }

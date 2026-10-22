@@ -72,7 +72,10 @@ describe('helpSections', () => {
       editor: {
         leader: '<Space>',
         remaps: [{ mode: 'insert', keys: 'jk', to: '<Esc>' }],
-        binds: [{ keys: '<Leader>w', scope: 'any', command: 'a.save' }],
+        binds: [
+          { keys: '<Leader>w', scope: 'any', command: 'a.save' },
+          { keys: '<A-o>', scope: 'any', command: 'a.cycle' },
+        ],
       },
       intercept: [{ key: 'Tab', control: true, command: 'a.cycle' }],
       global: [{ accelerator: 'Control+Alt+Command+W', command: 'a.summon' }],
@@ -86,11 +89,14 @@ describe('helpSections', () => {
     expect(sections).toEqual([
       {
         title: 'Everywhere, in a text box',
-        hints: [{ keys: '<Space>w', label: 'save' }],
+        hints: [
+          { keys: 'Space w', label: 'save' },
+          { keys: '⌥O', label: 'cycle tabs' },
+        ],
       },
       {
         title: 'Remaps in a text box',
-        hints: [{ keys: 'jk', label: 'sends <Esc> in insert mode' }],
+        hints: [{ keys: 'j k', label: 'sends Esc in insert mode' }],
       },
       {
         title: 'App chords',

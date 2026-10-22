@@ -106,6 +106,9 @@ export interface DocView {
   conflictCancel(): void;
   // Ends the changed-on-disk prompt, if it shows, without moving focus.
   closeConflict(): void;
+  // Shows the changed-on-disk prompt's keys again, if it shows, as the keymap
+  // now binds them.
+  keysChanged(): void;
   dispose(): void;
 }
 
@@ -585,6 +588,11 @@ export function createDocView(deps: DocViewDeps): DocView {
       drawBody({ fields: [], html: '', bodyStartLine: 1 });
     },
     refreshChips: drawChips,
+    keysChanged() {
+      if (conflict !== null) {
+        prompt.textContent = deps.conflictText();
+      }
+    },
     diskChanged(changedPath) {
       const doc = shown;
       const isWatching =
