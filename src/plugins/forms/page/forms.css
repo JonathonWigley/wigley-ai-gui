@@ -336,6 +336,18 @@
   font-weight: var(--wg-weight-regular);
 }
 
+/* The field's label stays whole; the hint beside it wraps instead. */
+.field > .ui-section-header > .ui-section-header-text {
+  flex-shrink: 0;
+}
+
+/* A scroll container of its own, so the vim panel, which is sticky, stays at
+   the box's bottom edge instead of sticking to the round's scrolling pane over
+   the box's text. */
+.box {
+  overflow: hidden;
+}
+
 .box .cm-editor {
   max-height: calc(var(--wg-space-8) * 8);
 }

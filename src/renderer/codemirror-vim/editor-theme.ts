@@ -55,7 +55,13 @@ export const editorTheme = EditorView.theme({
     backgroundColor: 'var(--wg-editor-background)',
     color: 'var(--wg-line-number)',
   },
-  '.cm-panels-bottom': { borderTop: '1px solid var(--wg-border-default)' },
+  // CodeMirror stacks its panels at z-index 300, above the page's overlays.
+  // The bottom panel follows the scroller in the DOM, so it paints over the
+  // scroller's text with no z-index of its own.
+  '.cm-panels-bottom': {
+    borderTop: '1px solid var(--wg-border-default)',
+    zIndex: 'auto',
+  },
   '.cm-vim-panel input': { color: 'var(--wg-fg)' },
   '.cm-tooltip.cm-tooltip-autocomplete': {
     // The popup carries `.material-floating`; CodeMirror's base tooltip theme
