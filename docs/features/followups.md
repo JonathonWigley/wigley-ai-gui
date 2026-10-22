@@ -1,6 +1,6 @@
 # wigley-ai-gui follow-ups
 
-Pulled into the UI rework (`docs/features/ui-design/`, plans A–C) and removed from this list: the user config
+Landed in the UI rework (`docs/features/ui-design/`, plans A–C) and removed from this list: the user config
 file, settings and keymap hot reload (the ConfigStore), the layered keymap, the shell registry, plugin-declared theme
 tokens, the platform chord formatter, the active-line band, and the sessions and forms-layouts live checks.
 
@@ -18,7 +18,7 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
   notices) into wigley skills that read a project's `DESIGN.md`, dropping the detector CLI. Plan it with
   `wigley:feature` in that repo.
 - A settings window over the user config files.
-- A setting that turns every key hint on or off (the conflict prompt, the trash y/n, chat's and forms' hints). Hints already come from `keysFor`, so one setting can blank them in one place. Builds on the user config folder (`ui-design` plan A).
+- A setting that turns every key hint on or off (the conflict prompt, the trash y/n, chat's and forms' hints). Hints already come from `keysFor`, so one setting can blank them in one place. Builds on the user config folder.
 - `npm run selftest` on Windows (`tee /dev/stderr` in the script).
 - Editor key replay (a broken key sequence replayed into a box through `EditorHost.typeInto`) has three limits only a custom keymap reaches: focus moving mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on named keys.
 - Rail notice entries are inert in the review: clicking one could jump to the notice's comment box, as question entries jump to their question.
@@ -28,6 +28,9 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - Images in rendered docs: loading local image files into the page needs a safe file protocol of its own; today they show their alt text.
 - Docs delete trashes every link that points at a trashed target. Deleting a synced skill from the tree trashes the repo's folder and leaves `~/.claude/skills/<name>` dangling, because each index entry carries only its real path. The docs index exports the link locations it walked, which `to_json` leaves out today, and `trashTargets` adds them (wigley-ai-marketplace `plugins/wigley/scripts/docs-index` `model.py` `to_json`; `src/plugins/docs/main/doc-files.ts` `trashTargets`).
 - The docs main part watches an open doc's parent folder with the recursive `watch`, so a doc directly in `~/.claude` also sees every transcript write under `~/.claude/projects`. Kept: the watch filters by name on a debounced FSEvents stream. If it costs CPU while sessions stream, add a non-recursive option to `watch` on the Files contract (`src/plugins/docs/main/view-watches.ts`, `src/contracts/files.ts`).
+- A session Docs tab's tree has no key to hide it: the split never hides the tree, and `Space k d` toggles only Docs mode's side bar (`src/plugins/docs/page/start.ts`).
+- One `keyHint` helper in place of chat's and forms' copies: chat's `keyHint(keys, platform, command, scope)` reads `keysFor` and draws a Kbd (`src/plugins/chat/page/key-hint.ts`), and forms' overloaded `keyHint` / `appendKeyHint` does the same and redraws on keymap change (`src/plugins/forms/page/kinds/card-parts.ts`).
+- `kbd.css` restates browser defaults for a span (`background: transparent`, `border: 0`, `padding: 0`); drop them if the gallery shows no change (`src/shared/page/ui/kbd.css`).
 - A Codex harness adapter behind `AgentHarness`, declaring Codex's own session controls (`agent-chat/design.md`).
 - A wigley-harness adapter behind `AgentHarness`, so the app drives the C# harness as it drives Claude Code.
 - A read-only Chat tab for sessions started in a terminal, following the session's transcript file.
@@ -84,7 +87,7 @@ now, any harness later). Each item names its sites.
 - Commands at runtime and around other plugins: `commands.register(id, decl, handler)`, `keys.bind(bind)`,
   `commands.intercept(id, (next, ctx) => …)`, `commands.onDidRun`, all disposable, and `MainApi.commands.run`.
 - Plugins may add editor remaps, and the page leader comes from a `keymap.pageLeader` rather than
-  `PAGE_LEADER_KEY = ' '` in keys (left over from the layered keymap, which `ui-design` plan A lands).
+  `PAGE_LEADER_KEY = ' '` in `keys/page/key-bar.ts` (left over from the layered keymap).
 - Commands take a count or argument, so `choose1..9` becomes one `forms.choose` (and choice 10 gets a key: `DIGITS`
   stops at 9 while `MAX_CHOICES` is 10).
 - Layouts as a core service: `api.layouts.define(slot, { contractText, defaultSource, read })` in both processes,

@@ -80,9 +80,11 @@ Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
 - Ctrl+h / Ctrl+l move to the previous / next question, on the page and inside a box (inside a box this takes
   Ctrl+h from backspace); `<Leader>n` / `<Leader>p` go.
 - Ctrl+j / Ctrl+k move to the next / previous box, on the page and inside a box; `<Leader>j` / `<Leader>k` go.
-- `<leader>N` jumps to question N, on the page and inside a box; a bare digit on the page still picks a choice.
-- `<leader>en` / `<leader>ep` jump to the next / previous unanswered question.
-- `<leader>a<digit>` picks a choice and `<leader>ac` clears it, on the page and inside a box; `<Leader>1`–`9` and
+- There is no jump to question N; a bare digit on the page still picks a choice (changed by ui-design plan C).
+- `<A-n>` / `<A-p>` jump to the next / previous unanswered question, on the page and inside a box (changed by
+  ui-design plan C).
+- `<leader>a<digit>` picks a choice and `<leader>ac` clears it inside a box; on the page raw digits pick and raw `c`
+  `f` `u` `s` clear and act (changed by ui-design plan C). `<Leader>1`–`9` and
   `<Leader>c` inside a box go (A2 interview). Plan folder `plan-a2-sessions/` holds the rest of A2's settled design.
 - No half-page scroll.
 - Folding goes: the fold keys (`za`, `zM`, `zR`) and the collapsible context and "Why recommended" sections are

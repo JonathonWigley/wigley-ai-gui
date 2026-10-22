@@ -38,9 +38,12 @@ Three plans in this folder, run in order. Each one leaves a working app.
    colours (copied into `code-colours.ts`, no package), the `uiState` service, and Mocha's final
    values. The structure stays as it was and the colours change.
 2. **Plan B — primitives.** Landed: `DESIGN.md`'s primitives in `src/shared/page/ui/`, the gallery
-   mode, the self-test screenshots, the style check (`scripts/check-styles.mts`, with a legacy list
-   plan C empties), and `@fontsource/jetbrains-mono`.
-3. **Plan C — surfaces.** Every existing surface rebuilt on the primitives, and the key changes.
+   mode, the self-test screenshots, the style check (`scripts/check-styles.mts`), and
+   `@fontsource/jetbrains-mono`.
+3. **Plan C — surfaces.** Landed: every existing surface rebuilt on the primitives (chrome, floating
+   surfaces, Sessions, the Form tab with its rail as a split, Chat with the floating composer, Docs
+   with its tree in the side bar and in a session's Docs tab), the key changes below, the editor's
+   active-line band, and the style check judging every file.
 
 The design skills (Impeccable's critique, audit, polish and quieter guidance, and ui-skills'
 baseline-ui, fixing-accessibility and fixing-motion-performance) become their own feature in
@@ -85,8 +88,7 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
 - **Raw values live only in theme files.** CSS reads tokens. CSS cannot read a variable in
   `@media`, so breakpoints stay raw and `DESIGN.md` lists them. `0`, `1px` hairlines and percentages
   are allowed, as are `fr` tracks, viewport units and unitless numbers. `scripts/check-styles.mts`
-  enforces this in `npm run lint`, skipping the files plan C rebuilds until its final task deletes
-  that list.
+  enforces this in `npm run lint` over every file under `src/`.
 - **Backdrop.** The L0 backdrop is CSS (crust plus two faint washes) on both OSes. Native vibrancy
   (macOS) and mica (Windows 11) stay a follow-up behind a window adapter: one path keeps contrast
   checkable and the offscreen self-test faithful.
@@ -157,7 +159,8 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
   never writes `settings.json`. `Space z s` swaps the shell to a test layout and back.
 - **Screenshots:** a self-test step's `screenshot` field saves a PNG of the window to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored) for the agent to check against
-  `DESIGN.md`: the gallery's pages, Sessions and Docs, each in both transparency settings. The user
+  `DESIGN.md`: the gallery's pages, Sessions and Docs, each in both transparency settings, and Docs' kind picker,
+  completion list and session tab. The user
   still does the final visual check.
 
 ## Surfaces
@@ -187,20 +190,18 @@ The user's rule: **raw keys act on the focused scope, chords navigate the visibl
 changes scope or holds actions that need not be obvious.** Inside a text box raw keys cannot fire,
 since vim owns them, so an action reached from a box keeps a leader route there.
 
-Changes (all in forms and chat; docs already follows the rule):
+How forms, chat and docs follow it:
 
-- forms: raw `c` clear, `f` fix now, `u` follow-up, `s` leave it on the page; `<Leader>a…` stays in
-  a text box. The `Space a 1-9` page binds go (raw digits already choose).
-- forms: jump to question (`Space 1-9`, `<Leader>1-9`, the `jumpTo1..9` commands) is removed: it
-  could not reach past item 9.
-- forms: next and previous unanswered move to `<A-n>` / `<A-p>`, page and box, replacing
-  `Space e n` / `Space e p`.
-- forms: submit moves to `<D-Enter>`, as chat's send, replacing `Space Enter`.
-- chat: the session controls move to raw `m` `e` `o` `c` in the chat scope; `<Leader>c…` stays in
-  the composer box.
-- docs tree gains `gg` / `G`; chat gains `gg`.
-- Session rows stay on `<A-S-o>` / `<A-S-i>`: the sessions list has no scope of its own, and the
-  chords already move between sessions from anywhere.
+- forms: raw `c` clear, `f` fix now, `u` follow-up, `s` leave it on the page, and raw digits
+  choose; `<Leader>a…` stays in a text box.
+- forms: there is no jump to question, since a digit key could not reach past item 9.
+- forms: next and previous unanswered are `<A-n>` / `<A-p>`, page and box.
+- forms: submit is `<D-Enter>`, as chat's send.
+- chat: the session controls are raw `m` `e` `o` `c` in the chat scope; `<Leader>cm` / `ce` / `co` /
+  `cc` stay in the composer box.
+- docs' tree has `gg` / `G`; chat has `gg` beside `G`.
+- Session rows are on `<A-S-o>` / `<A-S-i>`: the sessions list has no scope of its own, and the
+  chords move between sessions from anywhere.
 
 Mouse works everywhere; the keyboard is first. Buttons keep never taking focus, and the keyboard
 cursor (the selected row, the focused box) always shows, drawn as the one focus ring. Browser Tab

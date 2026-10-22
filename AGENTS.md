@@ -97,7 +97,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   docs/          manifest.ts, contract.ts, main/ (docs index runs, file changes inside the indexed folders only,
                  watching the open file), page/ (one docs view — tree, rendered doc, document editor — shown as
-                 Docs mode over the machine's index and as each session's Docs tab over that session's)
+                 Docs mode over the machine's index and as each session's Docs tab over that session's; the
+                 view hands back its tree and its doc: the tree goes in Docs mode's side bar, and in the start
+                 pane of a split in each session's Docs tab)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
                  permission_prompt MCP tool, recent folders, archived sessions, resume), page/ (the Chat tab,
                  the start prompt with its folder, profile and session steps), layouts/ (the chat Layout contract
@@ -186,7 +188,7 @@ round), since main, not the page, decides.
 - **Key hints** belong to the `keys` plugin, which reads the merged keymap: which-key after a pending prefix, help on
   `Space ?` (`<Leader>?` in a box), and the status bar's keys that don't start with the leader. A plugin declares
   its keys, labels, groups and scope titles, and draws no key hints of its own: a view that shows a key beside its
-  control (every forms button whose command has a page bind) depends on `keys` and reads it from that plugin's `keysFor`
+  control (every forms or chat button whose command has a page bind) depends on `keys` and reads it from that plugin's `keysFor`
   export, again on each of its `onChanged`, so a rebind reaches the control, and draws no hint when the command is
   unbound. Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
   which prints a chord for the platform the served config names. The core and the editor
@@ -227,7 +229,7 @@ round), since main, not the page, decides.
   The rest it cannot check: the `FINDING_ORIGINS` list in the contract, an `origin-*` token in forms'
   manifest `themeTokens` with its `.badge-origin` rule in `forms.css`, and retro's
   `ORIGIN_ACTION_LABELS` in the marketplace's `answers.py`, which otherwise labels the new origin's actions with the
-  Defect words. Every card shows all its choices and its action row, the recommended ones badged, and Accept (Enter)
+  Defect words. Every card shows all its choices and its action row, the recommended ones tagged Recommended in the accent, and Accept (Enter)
   takes them whole: the user ruled out folding the alternatives away, since it biased answers toward the
   recommendation.
 - **An agent harness** — Claude Code today, Codex and wigley-harness next — is an adapter behind `AgentHarness` in
@@ -243,8 +245,9 @@ round), since main, not the page, decides.
   shapes.
 - **A session control** — Claude's permission mode, effort and model — is declared by the harness adapter (id,
   label, choices, current value), and the Chat tab draws whatever its adapter declares. A control gets its key as a
-  command in chat's manifest (`Space c m`, `Space c e`, `Space c o`); `Space c c` lists every control, so a new
-  adapter's controls are reachable before they get a key.
+  command in chat's manifest (raw `m`, `e`, `o` in the chat scope; `<Leader>cm`, `<Leader>ce`, `<Leader>co` in the
+  composer box, where raw keys are vim's); `c` (`<Leader>cc` in the box) lists every control, so a new adapter's
+  controls are reachable before they get a key.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly. It reads saved rounds only through a
   function the composition root injects, as the layout preview reads saved round args through `savedArgs`.
@@ -274,9 +277,14 @@ round), since main, not the page, decides.
   (`src/shared/page/`) take the plugin's data folder, contract text, default layout and validator, and each plugin
   keeps its own contract and built-in `default`. Forms' layouts build round cards and chat's build chat entries, a
   chat entry's layout reading the entry's raw events for anything the entry does not name.
+- **A chat layout** builds each entry kind's element from the entry and a `ChatKit`
+  (`src/plugins/chat/layouts/layout.d.ts`): `markdown`, `json`, `expander` (a collapsible card), `collapsibleCard`,
+  `card`, `statusDot` with `setDotStatus`, `sectionHeader`, and `permissionActions` (Allow once / Deny with their
+  keys).
 - **A forms layout** builds each item's cards, and may add a head above them. Its contract is
   `src/plugins/forms/layouts/layout.d.ts`: the card input for each kind, and the kit of ready-made parts (sections,
-  choice list, answer controls, verdict, action row), each of which keeps itself up to date. The built-in `default`
+  choice list, answer controls, verdict, action row, and the plain parts `card`, `tag`, `kbd`, `button` — variant
+  and `keys` — and `sectionHeader`), each of which keeps itself up to date. The built-in `default`
   layout is `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract, and it draws the
   forms look. The user's layouts are folders in forms' plugin data, `layouts/<name>/layout.js` and an optional
   `layout.css`, and the app writes `layouts/layout.d.ts` there at every start. Saving the active layout's code
@@ -289,9 +297,8 @@ round), since main, not the page, decides.
   not allow. A new layer, adapter or plugin folder gets a `LAYERS` entry, and the composition root's entry lists it.
   Every plugin's `page/` layer and `src/shared/page` may import `src/shared/page/ui`.
 - It also runs `scripts/check-styles.mts`, which fails on a raw colour, length, duration or font stack in CSS or an
-  inline style under `src/`, and on `backdrop-filter` outside `src/shared/page/ui/materials.css`; the files on its
-  `LEGACY_FILES` list (plan C rebuilds them) are skipped, and `--no-legacy [<path>…]` judges every file, or only the
-  paths given.
+  inline style under `src/`, and on `backdrop-filter` outside `src/shared/page/ui/materials.css`. It judges every file under
+  `src/` and takes no argument.
 
 ## Running and testing
 

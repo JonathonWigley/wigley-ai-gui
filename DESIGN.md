@@ -68,8 +68,6 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
 | L2 content  | Form tab, chat transcript, docs, editors, the forms rail, diffs         | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
 | L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts              | The `material-floating` class                                                                         |
 
-The forms rail is the one L2 exception: it stays on `--wg-block-background` until plan C restyles forms.
-
 - **Content is solid.** Glass in L2 makes text compete with whatever scrolls behind it, so cards,
   code blocks and inputs inside a sheet tint with alpha over the solid sheet and never show through.
 - **Glass sits on what is behind it, never on glass.** A control on a glass bar is a plain
@@ -129,7 +127,7 @@ means something.
 | Warning                | `status-warning`                                                        |                                                                                                                     |
 | Needs you              | `status-attention` (peach)                                              | A permission prompt, an open round: "your turn", apart from warning                                                 |
 | Error / removed        | `status-error`                                                          |                                                                                                                     |
-| Text selection, cursor | `selection-background`, `cursor`                                        | Catppuccin convention                                                                                               |
+| Text selection, cursor | `selection-background`, `cursor`, `editor-active-line`                  | Catppuccin convention; the active line's band in a focused document editor                                          |
 | Changed sections       | `diff-inserted-mark`, `diff-removed-mark`, `diff-changed-mark` (peach)  | The mark on an inserted, removed or changed section in rendered markdown                                            |
 
 - **One accent does brand work.** Any other colour on screen at rest must mean a status.
@@ -153,12 +151,15 @@ means something.
   `weight-semibold` (600) for headings. Nothing heavier.
 - **Sentence case everywhere.** A section header is `text-12`, semibold, `fg-secondary`. Capitals
   shout, and a calm tool does not shout.
-- **Prose** (chat, rendered docs): `text-14`, `leading-prose`, at most `prose-measure` wide.
+- **Prose** (rendered markdown wherever it renders: chat, docs, forms cards): `text-14`,
+  `leading-prose`, at most `prose-measure` wide. No surface overrides it.
 - **Numbers that change** (counts, timers, costs, line numbers) use tabular numerals, so they do
   not jitter.
 - The user's `fonts` settings, when set, override the theme's font families and base sizes:
   `fonts.ui` sets `font-ui`, `fonts.mono` `font-mono`, `fonts.uiSize` `text-ui` and
   `fonts.monoSize` `text-mono`.
+- **The active-line band** (`editor-active-line`) shows only in the docs document editor and only
+  while it has focus. A text box never draws it; a box's focused frame marks it.
 
 ## Space, size and shape
 
@@ -270,7 +271,7 @@ Conventions every primitive follows:
 - **Tabs:** sit on the top edge of their sheet. The active tab is solid sheet colour with a 2px
   accent top mark; others are transparent in `fg-secondary`.
 - **Status bar:** L1, `statusbar-height`, `text-12`. Status colours only on status items.
-- **Forms:** the rail is a solid pane in the Form tab's sheet. Cards are `card-background` with
+- **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Cards are `card-background` with
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
   the sheet. Tool calls are collapsible cards: a mono head with the tool and its summary, a status
@@ -280,7 +281,7 @@ Conventions every primitive follows:
   session controls as chips, and send.
 - **Docs:** in Docs mode the tree is the side bar; in a session's Docs tab it is the left pane of a
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
-  with `radius-md`.
+  with `radius-md` and no border.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
   and key hints right-aligned in `fg-tertiary`; dialogs sit over the `scrim`.
 - **Empty states:** one line saying what to do, and the key or action that does it. No
@@ -298,13 +299,13 @@ Conventions every primitive follows:
 
 - `npm run lint` runs `scripts/check-styles.mts`: no raw colour, length, duration or font stack in
   CSS or inline styles under `src/`, and `backdrop-filter` only in `materials.css`. Inline styles
-  are judged through the TypeScript AST. A plain run skips the files on its `LEGACY_FILES` list,
-  the ones plan C rebuilds on the primitives; `--no-legacy` judges every file, or only the paths
-  given after it. Plan C's final task deletes the list.
+  are judged through the TypeScript AST. The script judges every file under `src/` and takes no
+  argument.
 - A self-test step's `screenshot` field saves a PNG of the window to
   `.selftest/screenshots/<plugin>-<name>.png`. The self-test saves the gallery's pages
   (`forms-gallery-<n>-full`, `forms-gallery-<n>-reduced`), Sessions (`forms-sessions-*`) and Docs
-  (`docs-docs-*`) in both transparency settings, and the shell layout swap; the agent checks
+  (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and session
+  Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), and the shell layout swap; the agent checks
   them against this file — density, the one accent, each surface on its layer and material, sentence
   case — before handing a UI change to the user.
 - Text meets WCAG AA contrast against its opaque fallback background, in both transparency

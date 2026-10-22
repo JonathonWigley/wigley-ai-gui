@@ -117,8 +117,9 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   and output. These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows (the start
   prompt, tied to no session, stays open).
-- **Controls**: `Space c m` mode, `Space c e` effort, `Space c o` model, each opening a picker of its choices;
-  `Space c c` lists every control, so a control a new adapter declares is reachable before it gets a key.
+- **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
+  each opening a picker of its choices; raw `c` (`<Leader>cc` in the box) lists every control, so a control a new
+  adapter declares is reachable before it gets a key (changed by ui-design plan C).
 - **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder — the
   folders the app started sessions in before, most recent first, plus an entry opening the native folder dialog —
   then the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at either
