@@ -183,7 +183,7 @@ core's toasts.
 - [x] [Docs: tree and doc parts, side bar, split, keys](08-docs.md) — after 02, 03
 
 ### Wave 3
-- [ ] [Forms keys](05-forms-keys.md) — after 04
+- [x] [Forms keys](05-forms-keys.md) — after 04
 
 ### Wave 4
 - [ ] [Chat keys](07-chat-keys.md) — after 05, 06
@@ -209,6 +209,7 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - 08 · 03ebb98 + runner fix f37d5e1 · proved (diff read, typecheck, lint, tests; self-test 3 consecutive passes after the fix) — first self-test failed from its `G` step: the fit check's width restore raced the narrow media query; second dispatch BLOCKED on that root cause outside docs; fixed by opus-high in `src/main/selftest.ts` · concerns: `.docs-chips` hits the Done-when grep (expected: the table keeps it); out-of-sight guard lives in start.ts's onActiveView
 - 06 · fc54416 · proved (same) · concerns: chat-commands.ts keeps a private CONTROL_IDS until 07
 - 04 · 9045497 · proved (same) · concerns: is-disabled greys rail rows under confirm; DESIGN.md rail line and AGENTS.md kit list stale (11); `.rail-title` in forms self-test (05)
+- 05 · 82e8635 · proved (diff read, typecheck, lint, tests, self-test) · concerns: which-key.test.ts builds made-up jumpTo commands; Option+n dead key live check
 ### Contract changes
 - `readVimKeys` (01): planned → not added; `formatVimKeys` already holds its body · why: landed earlier · consumers: none · group 01
 - `DialogDeps.keys` (06): `Pick<KeysPageExports, 'keysFor' | 'onChanged'>` → `Pick<KeysPageExports, 'keysFor'>` · why: dialogs rebuild buttons on every open · consumers: none · group 06
@@ -219,5 +220,6 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - Task 01's `readVimKeys` and `editorHints(…, platform)` already stand in the tree as `formatVimKeys` and `editorHints(editor, label, platform)`, with their tests; 01 keeps `formatVimKeys` and adds no duplicate — costs a renamed helper if a later task names `readVimKeys` · lead
 - 08's Done-when grep hits `.docs-chips` (doc-view.ts, docs.css): expected, the docs.css table keeps that container — costs nothing · lead
 - The self-test runner race (fit check restoring width without a redraw wait) is fixed in `src/main/selftest.ts`, a file no task owns — a test-harness fix that changes no app behaviour — costs a slower fit check (three frames) · lead
+- The forms self-test's user-keymap block moves `toggleNotApplicable` instead of the removed `jumpTo2` — the spec's "every other step stays" could not hold once jumpTo went — costs nothing · group 05
 ### Review rounds
 ### Test gate

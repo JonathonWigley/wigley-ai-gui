@@ -1,6 +1,6 @@
 # 05 — Forms keys
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 04 (03 and 08 too, whose classes leave `SCROLLS_ITSELF`)
 Plan: [plan.md](plan.md)
@@ -165,3 +165,5 @@ moves with `store.dispatch({ type: 'focusItem', item: <position> })`:
 Merged into [12 — Final verification](12-final-verification.md) § Form tab and forms keys and § Forms layouts.
 
 ## Proof
+
+Commit `82e8635`. Diff read against the bind table, Commands and both self-test sections; typecheck, lint, tests (1904) and the self-test pass; both Done-when greps print nothing. Rulings: the forms self-test's user-keymap block now moves `toggleNotApplicable` to `<Leader>q` (its old `jumpTo2` target is gone), with one added `Space x` step keeping the payload. Concerns: `which-key.test.ts` builds made-up `jumpTo<digit>` commands (outside forms, harmless); Option+n as a dead key in an INSERT box is a live check.

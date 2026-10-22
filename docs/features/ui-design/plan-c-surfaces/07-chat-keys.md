@@ -1,6 +1,6 @@
 # 07 — Chat keys
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 05 (it moved this script's forms submit step to `<D-Enter>`), 06
 Plan: [plan.md](plan.md)
