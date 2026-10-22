@@ -35,7 +35,9 @@ or touches their data, so start one whenever a check needs it.
    a round for a session row comes from `forms.openRound` alone, never from a
    `sessions.connect` row.
 3. Act with `key`, `type`, `click`, `drag`, `resize` and `setting`. Each returns once the page has
-   redrawn, with the log lines it caused.
+   redrawn, with the log lines it caused. The page holds document focus as the visible app's does,
+   so `document.hasFocus()`, `.cm-focused`, `:focus` styles and focus events behave as they do for
+   the user.
 4. Capture and read: `screenshot` saves the window, or one element by selector, under the run
    folder; Read the PNG. `query` returns a selector's text, box and computed style.
 5. `npm run drive -- quit` when done. Run folders stay for reading back; `.drive/` is git-ignored.
@@ -45,8 +47,10 @@ temp home and the start flags and does not copy the user config again, so a chec
 survives a restart runs the same way.
 
 The app runs commands one at a time, so a command that never returns blocks every later one, and
-the CLI then says the run did not answer. `restart` and `quit` end such a run: each asks the app
-to quit and terminates it when it does not.
+the CLI then says the run did not answer. A page that never finishes loading (an occasional dev
+`restart` brings one up) fails a command after 30 s with "The page never finished loading";
+`restart` the run. `restart` and `quit` end a stuck run: `quit` runs beside the stuck command,
+and the CLI terminates the app when it still does not exit.
 
 A run folder holds `home/` (the app's home: config, plugin data, ui-state), `user-data/`
 (Chromium's profile), `screenshots/`, `videos/`, `app.log`, and `start.json` and `drive.json`
@@ -60,10 +64,14 @@ Conventions:
 - Keys take the self-test's notation: `KeyboardEvent.key` values and vim chords (`<D-w>`,
   `<A-o>`), as a sequence; a `key` argument splits on spaces, and `Space` stands for the space
   key, so a leader sequence is `key Space k s`; a blank argument such as `' '` is rejected.
-- A click or drag lands at the first element the selector matches, hidden ones included, at its
-  box through the real input pipeline; `query` returns every match. Scope the selector to the
-  visible element (`.session-body:not([hidden]) …`). An element covered by another fails the
-  click: that is a finding, not a flake.
+- A click or drag presses the centre of the first element the selector matches, hidden ones
+  included, through the real input pipeline; `query` returns every match. Scope the selector to
+  the visible element (`.session-body:not([hidden]) …`). A click or drag fails, sending nothing,
+  when the element has no size (it is not shown) or another element covers its centre, naming the
+  cover: that is a finding, not a flake.
+- `wait-log` matches a whole page log line, its source prefix included (`[page] …`).
+- `eval` runs its script in a block of its own: `const`, `let` and `class` end with the call, while
+  `var` and `function` reach the page's globals and persist to the next `eval`.
 - Flags come before a lone `--`; every argument after it is positional, for a value that begins
   with `--`: `query --run <id> -- :root --wg-accent`.
 - `screenshot <name>` takes a lowercase name in words joined by `-` and saves

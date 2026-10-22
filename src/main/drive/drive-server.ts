@@ -11,6 +11,9 @@ export interface DriveServerDeps {
   // Every request must carry `Authorization: Bearer <token>`.
   token: string;
   run(command: string, args: unknown): Promise<unknown>;
+  // The commands that run as they arrive, beside the queue, so a stuck
+  // command ahead of them cannot hold them.
+  unqueued: readonly string[];
 }
 
 export interface DriveServer {
@@ -21,7 +24,7 @@ export interface DriveServer {
 
 // The commands over HTTP on 127.0.0.1, on a port the OS picks. Only `POST /`
 // with the token and a `{ command, args? }` JSON body runs a command, one at a
-// time in arrival order; the reply is `{ ok: true, result }`, or
+// time in arrival order but for the `unqueued` ones; the reply is `{ ok: true, result }`, or
 // `{ ok: false, error }` with 200 when the command rejects, 401 for a bad
 // token, 400 for a bad body, 404 for any other method or path, and 500 when
 // the request itself fails.
@@ -30,6 +33,9 @@ export async function startDriveServer(
 ): Promise<DriveServer> {
   let queue: Promise<unknown> = Promise.resolve();
   const runInTurn = (command: string, args: unknown) => {
+    if (deps.unqueued.includes(command)) {
+      return deps.run(command, args);
+    }
     const result = queue.then(() => deps.run(command, args));
     queue = result.catch(() => {});
     return result;

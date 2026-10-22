@@ -22,6 +22,12 @@ describe('waitFor', () => {
 
     expect(holds).toBe(false);
   });
+
+  it('waitFor_CheckNeverAnswers_GivesUpAtItsTimeout', async () => {
+    const holds = await waitFor(() => new Promise<boolean>(() => {}), 100);
+
+    expect(holds).toBe(false);
+  });
 });
 
 describe('press', () => {

@@ -269,19 +269,36 @@ function cutOffScript(scrollsItself: string[]): string {
 }
 
 // Polls `check` every 50 ms; true once it holds, false when it has not within
-// `timeoutMs`.
+// `timeoutMs`, a check still unanswered at that point included.
 export async function waitFor(
   check: () => Promise<boolean>,
   timeoutMs = STEP_TIMEOUT_MS,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await check()) {
+    if (await holdsBefore(check(), deadline)) {
       return true;
     }
     await wait(50);
   }
   return false;
+}
+
+// What `check` answers, or false when `deadline` passes first; the check is
+// left running.
+async function holdsBefore(
+  check: Promise<boolean>,
+  deadline: number,
+): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined;
+  const timedOut = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), deadline - Date.now());
+  });
+  try {
+    return await Promise.race([check, timedOut]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Waits for the line among those logged after `seen` lines; the log is newest first.

@@ -21,9 +21,10 @@ const READY_PAGE: FakeAnswer[] = [
 ];
 
 // Commands over a fake window whose page log `log` gives, newest first, and
-// whose config changes whenever a file under the home is written.
+// whose config changes whenever a file under the home is written; `answers`
+// come ahead of a ready page's.
 function setUp(log: () => string[], answers: FakeAnswer[] = []) {
-  const fake = fakeDrivenWindow([...READY_PAGE, ['#log li', log], ...answers]);
+  const fake = fakeDrivenWindow([...answers, ...READY_PAGE, ['#log li', log]]);
   const files = createMemoryFiles();
   const configListeners = new Set<() => void>();
   const commands = createDriveCommands({
@@ -126,6 +127,22 @@ describe('createDriveCommands', () => {
     await commands.run('quit', {});
 
     expect(fake.focused.emulated).toBe(1);
+  });
+
+  it('ready_PageNeverAnswers_RejectsSayingItNeverFinishedLoading', async () => {
+    vi.useFakeTimers();
+    const { commands } = setUp(
+      () => [],
+      [['dataset.ready', () => new Promise(() => {})]],
+    );
+
+    const result = commands.run('ready', {});
+    const rejected = expect(result).rejects.toThrow(
+      'The page never finished loading',
+    );
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    await rejected;
   });
 
   it('click_NoElementMatches_RejectsNamingTheSelector', async () => {
