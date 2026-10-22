@@ -205,8 +205,11 @@ async function waitForRedraw(window: BrowserWindow): Promise<boolean> {
 }
 
 // Shrinks the window to its minimum width, lists what the page cuts off
-// there once the page has redrawn at that width, and restores the window's
-// size.
+// there once the page has redrawn at that width, then restores the window's
+// size and waits for the page to redraw at it, listing a restore that never
+// lands as a problem too. Chromium reports media query changes in the frame
+// before its animation-frame callbacks, so the redraw wait holds the next
+// step's keys until the page's `change` listeners have seen each width.
 async function cutOffAtMinimumWidth(
   window: BrowserWindow,
   scrollsItself: string[],
@@ -230,7 +233,16 @@ async function cutOffAtMinimumWidth(
     );
   }
   window.setSize(width, height);
-  await waitForPageWidth(window, window.getContentSize()[0]);
+  const [restoredWidth] = window.getContentSize();
+  const hasRestored = await waitForPageWidth(window, restoredWidth);
+  const hasRedrawnRestored = hasRestored && (await waitForRedraw(window));
+  if (!hasRestored) {
+    problems.push(`the page never widened back to ${restoredWidth}px`);
+  } else if (!hasRedrawnRestored) {
+    problems.push(
+      `the page produced no frames after widening back to ${restoredWidth}px`,
+    );
+  }
   return problems;
 }
 
