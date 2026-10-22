@@ -19,7 +19,8 @@ export interface HelpSection {
 
 // Every bound key, for the help overlay: for each scope in `scopes` order, its
 // page binds under its title and then its text box binds; then the text box's
-// remaps and the app's and system's chords. Every key prints for `platform`. Sections with no binds are left out.
+// remaps and the app's and system's chords. Every key prints for `platform`.
+// Sections with no binds are left out.
 export function helpSections(
   keymap: Keymap,
   scopes: readonly ScopeInfo[],

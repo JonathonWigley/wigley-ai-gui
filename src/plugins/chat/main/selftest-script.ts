@@ -91,8 +91,9 @@ const LONG_KEYS = [
 // focus following the result, so k k j k walks them; Enter opens the tool entry,
 // gg focuses the first entry and G follows the latest. A thirty-paragraph
 // message makes the transcript taller than the sheet; Esc leaves the box,
-// which resizes the sheet, and G scrolls back to the bottom. Ctrl+k scrolls half a page up off the bottom, which stops following, and
-// Ctrl+j back onto the bottom, which follows again. e opens Effort on Medium, j Enter sets
+// which resizes the sheet, and G scrolls back to the bottom. Ctrl+k scrolls
+// half a page up off the bottom, which stops following, and Ctrl+j back onto
+// the bottom, which follows again. e opens Effort on Medium, j Enter sets
 // High; i Esc puts the box in normal mode, where Space c e opens Effort again,
 // / and low filter to Low, and Enter in the filter's insert mode sets it. m
 // opens Mode and Esc closes it; o finds the fake has no model control; c

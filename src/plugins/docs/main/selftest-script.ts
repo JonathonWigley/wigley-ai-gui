@@ -29,8 +29,9 @@ const STYLE_CHANGED_WHILE_EDITING =
 // half a page, moving the cursor, and Ctrl+k back to the top, where the cursor
 // is in sight; V and Ctrl+j grow the selection with the scroll, and Ctrl+k
 // shrinks it back to the top. Esc, and :q closes the editor. Tab reaches the
-// doc's first link, the style rule, and Enter follows it. A change on disk reloads style.md. i edits it,
-// and a second change on disk shows the changed-on-disk banner. o types a new
+// doc's first link, the style rule, and Enter follows it. A change on disk
+// reloads style.md. i edits it, and a second change on disk shows the
+// changed-on-disk banner. o types a new
 // line below, Esc to normal mode and :w meets the changed-on-disk prompt, where
 // r reloads the disk's text. Another change on disk, a new line and :w again,
 // and o overwrites the disk. A third, and Esc keeps editing; :w shows the

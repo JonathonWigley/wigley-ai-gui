@@ -83,8 +83,8 @@ export interface DocumentEditor extends TextEditor {
   // the vim mode. In visual mode the cursor moves half a page with the
   // scroll, as vim's Ctrl+d and Ctrl+u do, so the selection grows or
   // shrinks. Otherwise a cursor the scroll leaves out of sight moves to the
-  // start of the first line wholly in sight (scrolling down) or the last
-  // (scrolling up), a non-empty selection keeping its anchor.
+  // start of the first line wholly in sight when it is above, or the last
+  // when it is below, a non-empty selection keeping its anchor.
   scrollHalfPage(direction: 1 | -1): EditorHalfPageScroll;
 }
 
