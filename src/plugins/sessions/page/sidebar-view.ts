@@ -15,8 +15,8 @@ export interface SidebarView {
 
 // Sessions mode's side bar: one row per session in main's order, each
 // reading its label, its harness dimmed, an attention dot while a round waits
-// unopened, and its status on a second line; the selected row is marked, and
-// clicking a row activates its session.
+// unopened, all on a first line that never wraps, and its status on a second
+// line; the selected row is marked, and clicking a row activates its session.
 export function mountSidebarView(
   activate: (sessionId: string) => void,
 ): SidebarView {

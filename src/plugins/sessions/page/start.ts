@@ -198,6 +198,15 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
     };
 
+    // A rebind redraws the hint beside the text asking for a session to be
+    // picked; before the first state there is nothing drawn to redraw. The
+    // page part lives as long as the page, so the subscription is kept.
+    keys.onChanged(() => {
+      if (published !== undefined) {
+        view.render(state);
+      }
+    });
+
     // Main sends `activated` before the state it causes, so the mode shows
     // before that state arrives and the round never toasts.
     api.channel.on('activated', () => mode.show());
