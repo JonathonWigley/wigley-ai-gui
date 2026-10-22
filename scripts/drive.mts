@@ -335,9 +335,8 @@ async function restart(runId: string): Promise<void> {
 }
 
 // Asks the run's app to quit and waits for it and the process `start` spawned
-// to exit. The app serves commands one at a time, so a stuck command keeps
-// `quit` from ever running: when the app does not exit in time, its processes
-// are terminated instead.
+// to exit; when they do not exit in time, as when the app's main process is
+// itself stuck, its processes are terminated instead.
 async function stop(runId: string): Promise<void> {
   const startFile = readStartFile(runId);
   const drive = readDriveFile(runDirOf(runId));
