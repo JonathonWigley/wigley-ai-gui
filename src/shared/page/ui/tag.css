@@ -1,0 +1,46 @@
+/* A plugin colour is the neutral tone plus the plugin's own class setting
+   `color` and `background`. */
+.ui-tag {
+  display: inline-block;
+  padding: 0 var(--wg-space-1);
+  border-radius: var(--wg-radius-sm);
+  font-size: var(--wg-text-11);
+  font-weight: var(--wg-weight-medium);
+  line-height: var(--wg-leading-tight);
+  white-space: nowrap;
+}
+
+.ui-tag--neutral {
+  border: 1px solid var(--wg-border-default);
+  color: var(--wg-fg-secondary);
+}
+
+.ui-tag--accent {
+  background: var(--wg-accent-tint);
+  color: var(--wg-accent);
+}
+
+.ui-tag--running {
+  background: var(--wg-status-running-tint);
+  color: var(--wg-status-running);
+}
+
+.ui-tag--success {
+  background: var(--wg-status-success-tint);
+  color: var(--wg-status-success);
+}
+
+.ui-tag--warning {
+  background: var(--wg-status-warning-tint);
+  color: var(--wg-status-warning);
+}
+
+.ui-tag--attention {
+  background: var(--wg-status-attention-tint);
+  color: var(--wg-status-attention);
+}
+
+.ui-tag--error {
+  background: var(--wg-status-error-tint);
+  color: var(--wg-status-error);
+}

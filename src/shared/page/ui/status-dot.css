@@ -1,0 +1,32 @@
+/* Static: only the streaming indicator moves. */
+.ui-dot {
+  display: inline-block;
+  flex: none;
+  width: var(--wg-space-2);
+  height: var(--wg-space-2);
+  border-radius: 50%;
+}
+
+.ui-dot[data-status='idle'] {
+  border: 1px solid var(--wg-fg-tertiary);
+}
+
+.ui-dot[data-status='running'] {
+  background: var(--wg-status-running);
+}
+
+.ui-dot[data-status='success'] {
+  background: var(--wg-status-success);
+}
+
+.ui-dot[data-status='warning'] {
+  background: var(--wg-status-warning);
+}
+
+.ui-dot[data-status='attention'] {
+  background: var(--wg-status-attention);
+}
+
+.ui-dot[data-status='error'] {
+  background: var(--wg-status-error);
+}

@@ -1,0 +1,47 @@
+/* A plain hover fill, so it sits on glass as on a sheet. `.is-hover` and
+   `.is-pressed` draw hover and press at rest in the gallery. */
+.ui-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--wg-icon-button);
+  height: var(--wg-icon-button);
+  padding: 0;
+  border: 0;
+  border-radius: var(--wg-radius-md);
+  background: transparent;
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-icon-size);
+  cursor: pointer;
+  transition:
+    background-color var(--wg-duration-fast) var(--wg-ease-out),
+    color var(--wg-duration-fast) var(--wg-ease-out);
+}
+
+.ui-icon-button--sm {
+  width: var(--wg-icon-button-sm);
+  height: var(--wg-icon-button-sm);
+  border-radius: var(--wg-radius-sm);
+}
+
+.ui-icon-button.is-active {
+  background: var(--wg-button-ghost-hover);
+  color: var(--wg-fg);
+}
+
+.ui-icon-button:not(:disabled):hover,
+.ui-icon-button:not(:disabled).is-hover {
+  background: var(--wg-button-ghost-hover);
+  color: var(--wg-fg);
+}
+
+.ui-icon-button:not(:disabled):active,
+.ui-icon-button:not(:disabled).is-pressed {
+  background: var(--wg-button-secondary-background);
+}
+
+.ui-icon-button:disabled {
+  color: var(--wg-fg-disabled);
+  cursor: default;
+}

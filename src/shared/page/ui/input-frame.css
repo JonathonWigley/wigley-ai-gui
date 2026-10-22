@@ -1,0 +1,30 @@
+/* `.is-hover` draws hover at rest in the gallery. */
+.ui-input {
+  background: var(--wg-input-background);
+  border: 1px solid var(--wg-input-border);
+  border-radius: var(--wg-radius-md);
+  padding: var(--wg-space-1) var(--wg-space-2);
+  transition: border-color var(--wg-duration-fast) var(--wg-ease-out);
+}
+
+.ui-input:hover,
+.ui-input.is-hover {
+  border-color: var(--wg-border-strong);
+}
+
+.ui-input:focus-within,
+.ui-input.is-cursor {
+  border-color: var(--wg-focus-border);
+}
+
+.ui-input .cm-editor {
+  background: transparent;
+}
+
+.ui-input .cm-editor.cm-focused {
+  outline: none;
+}
+
+.ui-input .cm-placeholder {
+  color: var(--wg-input-placeholder);
+}

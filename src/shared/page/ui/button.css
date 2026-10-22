@@ -1,0 +1,122 @@
+/* `.is-hover` and `.is-pressed` draw hover and press at rest in the gallery. */
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  padding: var(--wg-space-1) var(--wg-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--wg-radius-md);
+  font-family: inherit;
+  font-size: var(--wg-text-13);
+  font-weight: var(--wg-weight-medium);
+  line-height: var(--wg-leading-ui);
+  cursor: pointer;
+  transition:
+    background-color var(--wg-duration-fast) var(--wg-ease-out),
+    color var(--wg-duration-fast) var(--wg-ease-out),
+    border-color var(--wg-duration-fast) var(--wg-ease-out);
+}
+
+.ui-button:disabled {
+  cursor: default;
+}
+
+.ui-button--primary {
+  background: var(--wg-button-primary-background);
+  color: var(--wg-button-primary-foreground);
+}
+
+.ui-button--primary .ui-kbd {
+  color: var(--wg-button-primary-foreground);
+}
+
+.ui-button--primary:not(:disabled):hover,
+.ui-button--primary:not(:disabled).is-hover {
+  background: var(--wg-button-primary-hover);
+}
+
+.ui-button--primary:not(:disabled):active,
+.ui-button--primary:not(:disabled).is-pressed {
+  background: var(--wg-accent);
+}
+
+.ui-button--primary:disabled {
+  background: var(--wg-button-secondary-background);
+  color: var(--wg-fg-disabled);
+}
+
+.ui-button--primary:disabled .ui-kbd {
+  color: var(--wg-fg-disabled);
+}
+
+.ui-button--secondary {
+  background: var(--wg-button-secondary-background);
+  color: var(--wg-fg);
+}
+
+.ui-button--secondary.is-selected {
+  background: var(--wg-accent-tint-strong);
+}
+
+.ui-button--secondary:not(:disabled):hover,
+.ui-button--secondary:not(:disabled).is-hover {
+  background: var(--wg-button-secondary-hover);
+}
+
+.ui-button--secondary:not(:disabled):active,
+.ui-button--secondary:not(:disabled).is-pressed {
+  background: var(--wg-border-strong);
+}
+
+.ui-button--secondary:disabled {
+  background: var(--wg-button-secondary-background);
+  color: var(--wg-fg-disabled);
+}
+
+.ui-button--ghost {
+  background: transparent;
+  color: var(--wg-fg-secondary);
+}
+
+.ui-button--ghost.is-selected {
+  background: var(--wg-accent-tint);
+  color: var(--wg-fg);
+}
+
+.ui-button--ghost:not(:disabled):hover,
+.ui-button--ghost:not(:disabled).is-hover {
+  background: var(--wg-button-ghost-hover);
+  color: var(--wg-fg);
+}
+
+.ui-button--ghost:not(:disabled):active,
+.ui-button--ghost:not(:disabled).is-pressed {
+  background: var(--wg-button-secondary-background);
+}
+
+.ui-button--ghost:disabled {
+  background: transparent;
+  color: var(--wg-fg-disabled);
+}
+
+.ui-button--danger {
+  background: transparent;
+  border-color: var(--wg-status-error-tint);
+  color: var(--wg-status-error);
+}
+
+.ui-button--danger:not(:disabled):hover,
+.ui-button--danger:not(:disabled).is-hover {
+  background: var(--wg-status-error-tint);
+}
+
+.ui-button--danger:not(:disabled):active,
+.ui-button--danger:not(:disabled).is-pressed {
+  background: var(--wg-status-error-tint);
+  border-color: var(--wg-status-error);
+}
+
+.ui-button--danger:disabled {
+  background: transparent;
+  color: var(--wg-fg-disabled);
+}

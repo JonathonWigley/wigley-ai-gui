@@ -1,0 +1,17 @@
+/* No key-cap boxes: overrides the global `kbd` rule the legacy hints keep. */
+.ui-kbd {
+  display: inline-flex;
+  gap: var(--wg-space-1);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--wg-fg-tertiary);
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ui-kbd-or {
+  color: var(--wg-fg-disabled);
+}

@@ -1,0 +1,54 @@
+/* Hover matches `button.ui-chip` only: a span chip takes no click.
+   `.is-hover` draws hover at rest in the gallery. */
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wg-space-1);
+  min-height: var(--wg-icon-button-sm);
+  padding: 0 var(--wg-space-2);
+  border: 1px solid var(--wg-border-default);
+  border-radius: var(--wg-radius-md);
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--wg-text-12);
+  white-space: nowrap;
+  transition:
+    background-color var(--wg-duration-fast) var(--wg-ease-out),
+    color var(--wg-duration-fast) var(--wg-ease-out),
+    border-color var(--wg-duration-fast) var(--wg-ease-out);
+}
+
+button.ui-chip {
+  cursor: pointer;
+}
+
+.ui-chip-label {
+  color: var(--wg-fg-secondary);
+}
+
+.ui-chip-value {
+  color: var(--wg-fg);
+}
+
+button.ui-chip:not(:disabled):hover,
+button.ui-chip:not(:disabled).is-hover {
+  background: var(--wg-button-ghost-hover);
+}
+
+.ui-chip.is-active,
+button.ui-chip.is-active:not(:disabled):hover,
+button.ui-chip.is-active:not(:disabled).is-hover {
+  background: var(--wg-accent-tint);
+  border-color: var(--wg-accent);
+}
+
+button.ui-chip:disabled {
+  cursor: default;
+}
+
+.ui-chip:disabled .ui-chip-label,
+.ui-chip:disabled .ui-chip-value,
+.ui-chip.is-disabled .ui-chip-label,
+.ui-chip.is-disabled .ui-chip-value {
+  color: var(--wg-fg-disabled);
+}
