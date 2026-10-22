@@ -1,19 +1,28 @@
 import path from 'node:path';
-import type { MainApi, MainPart } from '../../../contracts/plugin';
+import type { Disposable } from '../../../contracts/disposable';
+import type { DriveHost, MainApi, MainPart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
   type LayoutRegistry,
   startLayoutRegistry,
 } from '../../../shared/layouts/layout-registry';
-import type { SessionsMainExports } from '../../sessions/contract';
+import {
+  type ConnectedSession,
+  HARNESSES,
+  type Harness,
+  type SessionsMainExports,
+  type ToolResult,
+} from '../../sessions/contract';
 import type { FormsChannel, FormsService } from '../contract';
 import defaultLayout from '../layouts/default/layout.js?raw';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
 import { createChannelPresenter } from './channel-presenter';
+import { askFixtureRound, connectFixtureSession } from './fixtures';
 import { createFormsService } from './forms-service';
 import { createLayoutPreview } from './preview/layout-preview';
 import { createMemoryRoundStore } from './preview/memory-round-store';
+import { PREVIEW_ROUND_ARGS } from './preview/preview-round';
 import { createRoundStore } from './round-store';
 import { formsSelfTestScript, SELFTEST_LAYOUT } from './selftest-script';
 import { FORMS_TOOLS } from './tool-definitions';
@@ -95,10 +104,105 @@ function serveLayouts(
   return layouts;
 }
 
+// A session forms opened for a drive run, and where its latest round stands.
+interface DriveFormsSession {
+  connected: ConnectedSession;
+  latest:
+    | { state: 'pending' }
+    | { state: 'resolved'; result: ToolResult }
+    | { state: 'failed'; error: unknown };
+}
+
+// Opens rounds in a drive run's sessions and reads their answers. A session's
+// id is `drive-forms-<n>` unless the caller names one; a name forms opened
+// before reuses that session.
+function addDriveActions(
+  host: DriveHost,
+  sessions: Pick<SessionsMainExports, 'connect'>,
+): Disposable[] {
+  const opened = new Map<string, DriveFormsSession>();
+  let defaultIds = 0;
+  const sessionFor = (spec: {
+    sessionId: string;
+    projectDir: string | null;
+    harness: Harness;
+  }): DriveFormsSession => {
+    const known = opened.get(spec.sessionId);
+    if (known !== undefined) {
+      return known;
+    }
+    const session: DriveFormsSession = {
+      connected: connectFixtureSession(sessions, {
+        ...spec,
+        deadlineSeconds: null,
+      }),
+      latest: { state: 'pending' },
+    };
+    opened.set(spec.sessionId, session);
+    return session;
+  };
+  return [
+    host.add('openRound', {
+      description:
+        'Asks a round in a session forms opened before under sessionId, or in a new one, without waiting for its answers; the default round shows every card kind.',
+      args: '{ sessionId?: string, projectDir?: string | null, harness?: "claude" | "codex", round?: object }',
+      async run(args) {
+        const {
+          sessionId = `drive-forms-${++defaultIds}`,
+          projectDir = 'drive',
+          harness = 'claude',
+          round = PREVIEW_ROUND_ARGS,
+        } = (args ?? {}) as {
+          sessionId?: string;
+          projectDir?: string | null;
+          harness?: Harness;
+          round?: unknown;
+        };
+        if (!HARNESSES.includes(harness)) {
+          throw new Error(
+            `harness ${JSON.stringify(harness)} is none of ${HARNESSES.join(', ')}`,
+          );
+        }
+        const session = sessionFor({ sessionId, projectDir, harness });
+        const pending: DriveFormsSession['latest'] = { state: 'pending' };
+        session.latest = pending;
+        // A round asked after this one stays the latest when this one settles.
+        const settle = (latest: DriveFormsSession['latest']) => {
+          if (session.latest === pending) {
+            session.latest = latest;
+          }
+        };
+        askFixtureRound(session.connected, round).then(
+          (result) => settle({ state: 'resolved', result }),
+          (error: unknown) => settle({ state: 'failed', error }),
+        );
+        return { sessionId, rowId: session.connected.session.id };
+      },
+    }),
+    host.add('answers', {
+      description:
+        "The latest round's tool result once submit or cancel resolved it, else { pending: true }.",
+      args: '{ sessionId: string }',
+      async run(args) {
+        const { sessionId } = args as { sessionId: string };
+        const session = opened.get(sessionId);
+        if (session === undefined) {
+          throw new Error(`no session ${sessionId} from forms.openRound`);
+        }
+        const { latest } = session;
+        if (latest.state === 'failed') {
+          throw latest.error;
+        }
+        return latest.state === 'resolved' ? latest.result : { pending: true };
+      },
+    }),
+  ];
+}
+
 // Serves its two tools to every agent session, shows each session's rounds on
 // the page, serves the page its layouts and opens the layout preview on the
 // page's ask; in the self-test it writes the fixture layout and hands the
-// driver its script.
+// driver its script, and in a drive run it adds the drive actions.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
@@ -119,13 +223,19 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
         : Promise.resolve();
     const layouts = serveLayouts(api, fixtureWritten);
     selfTest?.run(formsSelfTestScript(sessions));
+    const driveActions =
+      api.drive !== null ? addDriveActions(api.drive, sessions) : [];
     return {
       commands: {},
-      dispose: () =>
-        layouts.then(
+      dispose: () => {
+        for (const action of driveActions) {
+          action.dispose();
+        }
+        return layouts.then(
           (registry) => registry.dispose(),
           () => undefined,
-        ),
+        );
+      },
     };
   },
 };

@@ -8,6 +8,7 @@ import type {
 } from '../../sessions/contract';
 import type { AnswersPayload } from '../contract';
 import { formsCommand, formsScope } from '../ids';
+import { askFixtureRound, connectFixtureSession } from './fixtures';
 
 // Exists only for the self-test, which adds it to the keymap main serves; it
 // is never in the user's keymap. No step completes it: `q a x` then `b` breaks
@@ -721,16 +722,11 @@ export function formsSelfTestScript(
     projectDir: string | null,
     harness: Harness,
   ) =>
-    sessions.connect({
+    connectFixtureSession(sessions, {
       sessionId,
       projectDir,
-      deadlineSeconds: 120,
       harness,
-    });
-  const ask = (session: ConnectedSession, round: unknown) =>
-    session.call('ask_round', round, {
-      toolUseId: null,
-      signal: new AbortController().signal,
+      deadlineSeconds: 120,
     });
   return {
     pageBinds: PAGE_BINDS,
@@ -744,9 +740,9 @@ export function formsSelfTestScript(
       const second = connect(`selftest-${run}-2`, 'selftest', 'codex');
       const idle = connect(`selftest-${run}-3`, null, 'codex');
       connected = [first, second, idle];
-      const result = ask(first, fixtureRound(run));
+      const result = askFixtureRound(first, fixtureRound(run));
       // Nothing checks the second call's end: a later run ends its session.
-      ask(second, secondRound(run)).catch(() => undefined);
+      askFixtureRound(second, secondRound(run)).catch(() => undefined);
       return {
         shownLine: '[forms] round shown: selftest · Second self-test round',
         result,

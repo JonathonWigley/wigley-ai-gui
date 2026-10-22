@@ -1,18 +1,33 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { RelayEndpoint, ToolDefinition } from '../../contract';
 
-// Where the app listens for relays: a per-user named pipe on Windows, a Unix
-// socket in the agents folder elsewhere.
+// macOS's `sun_path` holds 104 bytes, the NUL included.
+const MAX_SOCKET_PATH_BYTES = 103;
+
+// Where the app listens for relays: a named pipe per user and home on
+// Windows; elsewhere a Unix socket in the agents folder, or a socket in `/tmp`
+// named per user and home when the agents folder's path is too long for one.
 export function channelPath(
   platform: NodeJS.Platform,
   home: string,
   username: string,
 ): string {
+  const perHome = `wigley-ai-gui-${username}-${homeHash(home)}`;
   if (platform === 'win32') {
-    return `\\\\.\\pipe\\wigley-ai-gui-${username}`;
+    return `\\\\.\\pipe\\${perHome}`;
   }
-  return path.posix.join(home, '.agents', 'wigley-ai-gui', 'app.sock');
+  const socket = path.posix.join(home, '.agents', 'wigley-ai-gui', 'app.sock');
+  if (Buffer.byteLength(socket) <= MAX_SOCKET_PATH_BYTES) {
+    return socket;
+  }
+  return `/tmp/${perHome}.sock`;
+}
+
+// The first 8 hex digits of the home's SHA-256.
+function homeHash(home: string): string {
+  return createHash('sha256').update(home).digest('hex').slice(0, 8);
 }
 
 // How a relay starts the app: `npm start` from the repo when npm started this

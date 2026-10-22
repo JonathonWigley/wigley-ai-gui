@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -23,16 +24,35 @@ function readJson(file: string): unknown {
   return JSON.parse(readFileSync(file, 'utf8'));
 }
 
+function first8HexOfSha256(text: string): string {
+  return createHash('sha256').update(text).digest('hex').slice(0, 8);
+}
+
 describe('channelPath', () => {
-  it('names a per-user named pipe on Windows', () => {
-    expect(channelPath('win32', 'C:\\Users\\jon', 'jon')).toBe(
-      '\\\\.\\pipe\\wigley-ai-gui-jon',
+  it('names the Windows pipe by user and home', () => {
+    expect(channelPath('win32', 'C:\\Users\\u', 'u')).toBe(
+      `\\\\.\\pipe\\wigley-ai-gui-u-${first8HexOfSha256('C:\\Users\\u')}`,
+    );
+  });
+
+  it('names a different Windows pipe for a different home', () => {
+    expect(channelPath('win32', 'C:\\Users\\u', 'u')).not.toBe(
+      channelPath('win32', 'D:\\drive\\home', 'u'),
     );
   });
 
   it('puts the socket in the agents folder on macOS', () => {
-    expect(channelPath('darwin', '/Users/jon', 'jon')).toBe(
-      '/Users/jon/.agents/wigley-ai-gui/app.sock',
+    expect(channelPath('darwin', '/Users/u', 'u')).toBe(
+      '/Users/u/.agents/wigley-ai-gui/app.sock',
+    );
+  });
+
+  it('falls back to a per-home socket in /tmp past 103 bytes on macOS', () => {
+    // 82 bytes of home and 31 of `/.agents/wigley-ai-gui/app.sock`: 113.
+    const home = `/Users/u/${'d'.repeat(73)}`;
+
+    expect(channelPath('darwin', home, 'u')).toBe(
+      `/tmp/wigley-ai-gui-u-${first8HexOfSha256(home)}.sock`,
     );
   });
 });
