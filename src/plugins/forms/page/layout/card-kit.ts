@@ -2,6 +2,7 @@ import type { CommandId } from '../../../../contracts/commands';
 import { element, markdownElement } from '../../../../shared/page/dom';
 import { textButton } from '../../../../shared/page/ui/button';
 import { card as cardPart } from '../../../../shared/page/ui/card';
+import { kbd } from '../../../../shared/page/ui/kbd';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag as tagPart } from '../../../../shared/page/ui/tag';
 import type { FindingAction, ItemKind } from '../../contract';
@@ -228,7 +229,7 @@ export function createHeadKit(
       return node;
     },
     kbd(parent, keys) {
-      const node = keyHint(keys, deps.platform);
+      const node = kbd(keys, deps.platform);
       parent.append(node);
       return node;
     },

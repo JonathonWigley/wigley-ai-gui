@@ -37,11 +37,6 @@ export function roundInfo(round: Round): RoundInfo {
 
 // The hint of `keys` as the keymap prints them, drawn for `platform`; null
 // for null keys, which draw nothing.
-export function keyHint(keys: string, platform: Platform): HTMLElement;
-export function keyHint(
-  keys: string | null,
-  platform: Platform,
-): HTMLElement | null;
 export function keyHint(
   keys: string | null,
   platform: Platform,

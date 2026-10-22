@@ -138,7 +138,10 @@ export function createRoundView(
           position,
           reviewRowAt[position],
         );
-        entry.element.classList.toggle('is-disabled', action === null);
+        // Under the confirm the dialog's scrim takes the pointer, so the rail
+        // keeps its colours there; only a review notice looks disabled.
+        const isInertNotice = viewName === 'review' && action === null;
+        entry.element.classList.toggle('is-disabled', isInertNotice);
       });
       parts.itemsPane.hidden = !isForms;
       parts.itemCards.forEach((card, position) => {

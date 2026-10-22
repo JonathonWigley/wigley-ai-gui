@@ -343,26 +343,6 @@ function moveItem(
   }
 }
 
-// Focuses `item` as moveItem does; nothing when the forms view shows no round
-// with that item.
-function jumpToItem(
-  deps: FormsCommandDeps,
-  context: PageCommandContext,
-  item: RailItem,
-) {
-  const state = deps.store.get();
-  const round = activeRound(state);
-  if (state.view !== 'forms' || round === null) {
-    return;
-  }
-  const position = railPosition(round.round, item);
-  if (position < 0) {
-    return;
-  }
-  moveItem(deps, context, { type: 'focusItem', item: position });
-  deps.log('forms', `jumped to ${itemName(item)}`);
-}
-
 function jumpToUnanswered(
   deps: FormsCommandDeps,
   context: PageCommandContext,
@@ -386,7 +366,11 @@ function jumpToUnanswered(
     deps.log('forms', 'no other unanswered item');
     return;
   }
-  jumpToItem(deps, context, item);
+  moveItem(deps, context, {
+    type: 'focusItem',
+    item: railPosition(round.round, item),
+  });
+  deps.log('forms', `jumped to ${itemName(item)}`);
 }
 
 // `showForm` selects the session's Form tab.
