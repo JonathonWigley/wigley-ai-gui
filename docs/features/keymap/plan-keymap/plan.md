@@ -151,7 +151,7 @@ contracts (`npm run lint` runs the layer check, type-only imports included).
 - [x] [Key changes: Alt focus, Ctrl half-page scroll, gallery paging](03-key-changes.md) — after 01
 
 ### Wave 3
-- [ ] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
+- [x] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
 
 ### Wave 4
 - [ ] [Final verification](05-final-verification.md) — after 04
@@ -164,6 +164,7 @@ Review base: dd75a8ebcf51bcb1e2073700abd614f8543886e8
 - 01 · dd4eba3 · proved: snapshot diff empty, typecheck + lint clean, Produces present · concerns: served editor-bind order shifts where a page+box entry merged into one (box half now sits at the merged entry's place); installedConfig serves pushed `groups` beside old applied binds on a refused push; reader validates unknown-leader files with a stand-in `<Space>`
 - 02 · 53431db · proved: diff read, typecheck clean with 03 landed (tree did not compile until 03's commands existed), lint clean, keys plugin tests 32/32 · concerns: group keys match vim tokens case-sensitively (`<space>` ≠ `<Space>`); a leader the page cannot bind makes barHints throw on every render rather than at keymap load
 - 03 · d53ef47 · proved: snapshot diff exactly the 3 removed + 8 added pinned rows, typecheck + lint clean · concerns: in docs edit mode `<C-j>`/`<C-k>` scroll the pane, which is `overflow: hidden` while editing, so they do nothing yet still take Ctrl+j/k from vim (DocumentEditor has no scroll); chat `<C-k>` while following snaps back to the bottom on the next entry
+- 04 · 954503d + 38327eb · proved: diff read against code; first pass claimed the gallery scrolls half a page (it pages a whole page), fixed in a second dispatch; lint clean · concerns: docs/keymap.md Leader groups table names ("windows and modes", "debug and testing") differ from the which-key names in `groups` ("windows", "debug"); DESIGN.md needed no change
 ### Contract changes
 - typed manifest tuple: as planned → `builtInManifests` (`as const`) in src/plugins/manifests.ts; `BuiltInKeymap` module-private · why: naming · consumers: none · group 01
 - ConfigStore deps: `coreKeymap: Keymap` → `defaultKeymap: DefaultKeymap` · why: File Structure wording · consumers: none · group 01
@@ -177,5 +178,6 @@ Review base: dd75a8ebcf51bcb1e2073700abd614f8543886e8
 - group-name match compares token arrays, not joined strings; a named prefix's `+<name>` replaces the command-group label; barHints_Page_LeavesOutSpaceKeysWhateverTheEditorLeader replaced by barHints_UserLeader_LeavesOutLeaderSequences — spec reading — label wording only · group 02
 - src/plugins/chat/page/chat-view.ts widened (`ChatSession.entries` Pick gains `scrollHalfPage`), outside the Files list — handlers could not reach it otherwise — none, type-only · group 03
 - half-page handlers log nothing of their own; self-test expects the page engine's `[page] <C-j> ran <command>` line — matches scrollDown/Up — expects need a plugin line if wrong · group 03
+- test gate and review run before task 05's live checks, so review fixes are inside what the live run checks — order only · lead
 ### Review rounds
 ### Test gate

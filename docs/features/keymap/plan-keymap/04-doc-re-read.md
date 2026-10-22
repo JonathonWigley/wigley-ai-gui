@@ -1,6 +1,6 @@
 # 04 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03
 Plan: [plan.md](plan.md)
@@ -32,3 +32,5 @@ Done when: every listed doc read in full against the code; fixes committed (or "
 Commit:    one commit for the group, when anything changed
 
 ## Proof
+
+Landed in 954503d and 38327eb. Changed: docs/keymap.md, AGENTS.md, docs-browser/design.md, ui-design/design.md, ui-design/live-checks.md, followups.md, plugin-framework/design.md. No change: DESIGN.md § Keys and focus.
