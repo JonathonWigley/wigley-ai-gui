@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10
 Plan: [plan.md](plan.md)
@@ -21,3 +21,4 @@ Done when: every stale line is fixed, and each repo's fixes are committed in tha
 Commit:    one commit per repo that changed
 
 ## Proof
+this commit · proved: diff read against the landed code; AGENTS.md's ambient-service and plugin-data bullets and the drive skill's home path, `start` output and `--run`, restart flags, run folder layout, `key` splitting and `Space`, screenshot naming, `record` names and ffmpeg, and `fit` forms corrected; `~/wigley-agents` and wigley-ai-marketplace checked and unchanged · concerns: `quit` shows only in a live run's `help`, not the CLI's own forms

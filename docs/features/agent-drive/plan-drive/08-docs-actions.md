@@ -1,6 +1,6 @@
 # 08 — Docs drive actions
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -24,3 +24,4 @@ Done when: typecheck and lint pass; `npm run selftest` passes with the docs line
 Commit:    one commit for the group
 
 ## Proof
+`57ff5ac` · proved: diff read against the spec, `connectDocsFixtureSession` present with the planned signature, `addDriveActions` called only inside `if (api.drive !== null)`; typecheck clean; docs tests 213 passed; self-test lines ride to the test gate · concerns: `open` now sets `previous` after `activate`, so an `activate` that throws leaves that session un-ended by the next run

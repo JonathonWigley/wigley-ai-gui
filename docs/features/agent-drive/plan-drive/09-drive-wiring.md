@@ -1,6 +1,6 @@
 # 09 — Drive mode in the composition root
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03, 05, 06
 Plan: [plan.md](plan.md)
@@ -30,3 +30,4 @@ Done when: typecheck and lint pass; `npm run selftest` passes; `WIGLEY_DRIVE_DIR
 Commit:    one commit for the group
 
 ## Proof
+`13aee03` · proved: diff read against the spec; typecheck clean; relay tests 26 passed; the worker's offscreen check wrote `drive.json`, answered `ready` with `{"ok":true,"result":{"ready":true}}`, ran `do sessions.connect`, wrote the ended-run launch into the run home's `endpoint.json`, and `quit` ended the app within 1 s leaving `home/` and `user-data/` · concerns: ffmpeg is found only on the inherited PATH (true from a terminal's `npm run drive`); the will-quit ui-state flush was not observed (nothing changed it)

@@ -1,6 +1,6 @@
 # 05 — Drive core: registry, commands, server, recorder
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -48,3 +48,4 @@ Done when: typecheck, lint and the tests pass
 Commit:    one commit for the group
 
 ## Proof
+`71a4a1c` · proved: diff read against the spec, `startDriveRun`, `DriveRunDeps`, `DriveRun` and `Files.writeBytes` present as planned; typecheck and lint clean; drive, files, memory and scoped tests 92 passed · concerns: run-folder paths use `node:path` (backslashes on Windows); ffmpeg runs by bare name, so the main process's PATH must hold it (09); the `setting` timeout test relies on fake timers not meeting a `node:timers/promises` wait; the "Self-test step" chord error reaches drive users

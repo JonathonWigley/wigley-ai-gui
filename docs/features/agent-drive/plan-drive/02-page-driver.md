@@ -1,6 +1,6 @@
 # 02 — Page driver shared with the self-test
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -34,3 +34,4 @@ Done when: typecheck, lint (the layer check included) and the tests pass; `npm r
 Commit:    one commit for the group
 
 ## Proof
+`4879003` · proved: diff read against the spec, every Produces present in the files named; typecheck and lint (layer check included) clean; page-driver and selftest-config tests 17 passed; the self-test line comparison rides to the test gate · concerns: `press`'s malformed-chord error still says "Self-test step" (kept for unchanged lines) and a drive run will show it; `capture(box)` passes fractional boxes to `capturePage`; `minimumWidth` reads the outer minimum width, equal to content only under the hidden or inset title bar; `startSelfTest` builds its own adapter, so 09 must not build a second one for the self-test window

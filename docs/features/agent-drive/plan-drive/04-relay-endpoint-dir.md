@@ -1,6 +1,6 @@
 # 04 — Relay endpoint folder variable (wigley-ai-marketplace)
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -25,3 +25,4 @@ Done when: `python3 -m unittest discover` passes in `plugins/wigley/scripts/form
 Commit:    one commit in wigley-ai-marketplace
 
 ## Proof
+wigley-ai-marketplace `902acbb` (not pushed) · proved: diff read against the spec; `python3 -m unittest discover` 40 OK (2 Windows skips), `check_manifests.py` passed · concerns: none

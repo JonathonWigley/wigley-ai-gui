@@ -212,33 +212,75 @@ Out of scope: real OS keyboard input, native notifications and dialogs in a driv
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Run modes and the drive host contract](01-run-modes.md)
-- [ ] [Page driver shared with the self-test](02-page-driver.md)
-- [ ] [Claude adapter resolves profile folders](03-claude-profile-home.md)
-- [ ] [Relay endpoint folder variable (marketplace)](04-relay-endpoint-dir.md)
+- [x] [Run modes and the drive host contract](01-run-modes.md)
+- [x] [Page driver shared with the self-test](02-page-driver.md)
+- [x] [Claude adapter resolves profile folders](03-claude-profile-home.md)
+- [x] [Relay endpoint folder variable (marketplace)](04-relay-endpoint-dir.md)
 
 ### Wave 2
-- [ ] [Drive core: registry, commands, server, recorder](05-drive-core.md) — after 01, 02
-- [ ] [Sessions and forms drive actions](06-sessions-forms-actions.md) — after 01
-- [ ] [Chat drive actions](07-chat-actions.md) — after 01, 03
-- [ ] [Docs drive actions](08-docs-actions.md) — after 01
+- [x] [Drive core: registry, commands, server, recorder](05-drive-core.md) — after 01, 02
+- [x] [Sessions and forms drive actions](06-sessions-forms-actions.md) — after 01
+- [x] [Chat drive actions](07-chat-actions.md) — after 01, 03
+- [x] [Docs drive actions](08-docs-actions.md) — after 01
 
 ### Wave 3
-- [ ] [Drive mode in the composition root](09-drive-wiring.md) — after 01, 02, 03, 05, 06
-- [ ] [The drive CLI](10-drive-cli.md) — after 05
+- [x] [Drive mode in the composition root](09-drive-wiring.md) — after 01, 02, 03, 05, 06
+- [x] [The drive CLI](10-drive-cli.md) — after 05
 
 ### Wave 4
-- [ ] [Doc re-read](11-doc-re-read.md) — after 01–10
+- [x] [Doc re-read](11-doc-re-read.md) — after 01–10
 
 ### Wave 5
 - [ ] [Final verification](12-final-verification.md) — after 11
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 03f5a8d47ac16134c3b4f5ff4f4ef0d51e36a9de
 
 ### Groups
+- 11 · (doc commit below) · proved (diff read against code; other two repos unchanged) · concerns: `quit` absent from the CLI-only help
+- 10 · cd49094 · proved (typecheck, 60 scripts tests, lead CLI smoke start/actions/key/screenshot/quit) · concerns: Windows .cmd shell quoting; restart's two-pid wait; inherited PROOF_SELFTEST
+- 09 · 13aee03 · proved (typecheck, 26 relay tests, offscreen ready/quit check) · concerns: ffmpeg on inherited PATH; ui-state flush unobserved. Touched `endpoint.ts` and its test beyond its list (`endedDriveRunLaunch` beside `launchCommand`)
+- 05 · 71a4a1c · proved (typecheck, lint, 92 tests) · concerns: Windows path separators; ffmpeg on the main process PATH; fake-timer setting test; Self-test chord wording
+- 06 · 5a1efc6 · proved (typecheck, 678 sessions+forms tests) · concerns: drive-connected sessions not ended on dispose
+- 07 · 461984e · proved (typecheck, 145 chat tests) · concerns: drive arg readers private to chat; askPermission args null guard
+- 08 · 57ff5ac · proved (typecheck, 213 docs tests) · concerns: self-test `previous` set after activate
+- 02 · 4879003 · proved (typecheck, lint, 17 tests) · concerns: "Self-test step" chord error text reaches drive; fractional capture boxes; minimumWidth is outer width; one adapter per window
+- 01 · 97c24b0 · proved (typecheck clean, 10 tests) · concerns: stale node-files.ts:39-40 comment, handed to 05
+- 03 · 06a4960 · proved (typecheck clean outside main.ts, 114 tests) · concerns: claude-code-harness.test.ts unchanged — no case named
+- 04 · marketplace 902acbb · proved (unittest 40 OK, manifests pass) · concerns: none
 ### Contract changes
+- `claudeLaunch(request, permissionTool, env)`: → `claudeLaunch(request, permissionTool, env, homeDir)` · why: the adapter expands `~/` against its home · consumers: none outside the adapter · group 03
+- `askFixturePermission`: `(chat: ChatSessions, …): Promise<unknown>` → `(chat: Pick<ChatSessions, 'permissionToolSession'>, …): Promise<ToolResult>` · why: the self-test holds a Pick and reads a ToolResult · consumers: 07 only · group 07
+- ffmpeg command: `-vsync vfr` → `-fps_mode vfr -vf pad=ceil(iw/2)*2:ceil(ih/2)*2` · why: ffmpeg 9.0.2 rejects `-vsync`; libx264 yuv420p refuses odd sizes · consumers: none · group 05
+- `MemoryFiles` gains `readBytes(path): Uint8Array` (test-double inspection) · consumers: none · group 05
 ### Rulings
+- `start_app()` keeps `ENDPOINT_DIR` as its default; both entry points pass `endpoint_dir(os.environ)` — keeps the function free of env reads — a bare `start_app()` caller would ignore the variable · group 04
+- `WIGLEY_AI_GUI_ENDPOINT_DIR` is used as given, no `expanduser` — the spec says `Path(env[...])` — a literal `~/` value would be relative; 09 sets an absolute path · group 04
+- `chat-sessions.test.ts:363`'s resume assertion is an expanded-folder one and now expects `~/.claude` — the `work` profile writes `~/.claude` — one test line if wrong · group 03
+- main.ts picks a service set through `ModeServices { trashItem; forWindow(context) }` and `servicesByMode: Record<RunMode, () => ModeServices>`, drive mapped to `selfTestServices` — files needs `trashItem` before the window exists — 09 switches one entry · group 01
+- `selfTestHome` renamed `tempHome`, still `mkdtemp`'d and removed only by the self-test until 09 points drive at `<run>/home` · group 01
+- `drag` waits 30 ms before each of its ten moves; `click` sends its three events with no gap; `typeText` waits after every character, the last included — the task names no gaps — a page needing a frame between hover and press misses it · group 02
+- `ConsoleMessage.source` is `<sourceId>:<lineNumber>` from Electron's details object · group 02
+- docs actions await docs' start before writing; `drive-docs-<n>` counts per start and a connect does not end earlier drive sessions; a non-string `sessionId` throws · group 08
+- `chat.start` makes `projectDir` with `files.makeFolder` whether defaulted or named; no profile anywhere throws `chat has no profiles` — a mistyped folder becomes an empty one · group 07
+- `chat.askPermission` resolves `{ toolUseId }` at once (id from `randomUuid`) and logs the reply as `[chat] drive permission <id> answered: …`; an unknown session throws — task 12 may want the answer through an action · group 07
+- `sessions.connect` rejects an id it already holds; `sessions.connect` and `forms.openRound` reject a harness outside `HARNESSES`; the defaults (project `drive`, harness `claude`, deadline null) are literals in both plugins — they can drift apart · group 06
+- `forms.answers` rejects when the latest `ask_round` rejected; `sessions.end` returns `{ sessionId }`, `sessions.activate` `{ rowId }` and logs on an unknown row · group 06
+- the socket limit is measured in UTF-8 bytes, `<= 103` · group 06
+- `quit` skips the ready wait; a ready wait past 30 s rejects `The page was not ready for keys within 30 s` · group 05
+- `wait-log` matches anywhere in the current page log, an older identical line included · group 05
+- `dispose` encodes a running recording rather than dropping it; frames are kept on a failed encode · group 05
+- `screenshot` with a selector rounds the box outward before capture · group 05
+- the server checks the token before method and path, answers 404 for anything but `POST /`, 500 on a request failure, `result: null` for undefined · group 05
+- ended-run launch: `/bin/sh -c 'echo "$0" >&2; exit 1' '<message>'` (Windows `cmd.exe /d /c exit 1 & rem <message>`), cwd the run folder's filesystem root so the spawn never fails into the `npm start` fallback — a Windows path holding `"` or `%` could garble the text · group 09
+- sessions finds the run folder as `path.dirname(services.homeDir)` rather than reading `WIGLEY_DRIVE_DIR` — breaks if a drive home stops being `<run>/home` · group 09
+- `WIGLEY_DRIVE_HARNESS` is checked in `driveServices().forWindow`, failing through `failStart` after the window exists; a non-absolute `WIGLEY_DRIVE_DIR` fails first in `startApp` · group 09
+- `dataFolder`/`uiStateFilePath` take the home and branch on `runMode === 'live'`; `tempHome` is the self-test's alone · group 09
+- a rejected `listening` calls `failStart` from a `.catch`, not awaited in the whenReady chain · group 09
+- CLI flags: `--run` on every command, `--packaged`/`--harness`/`--user-config` on `start` only, `--plugin` on `setting` only; any `--` argument is a flag, so `type --x` cannot type it · group 10
+- `fit` with one argument takes it as the width when numeric, else the selector list; `do` takes any JSON value, `wait-log` and the catch-all a JSON object · group 10
+- `restart` does not re-copy the user config; any reply to `ready` means already running; `app.log` is appended to; the 120 s timeout leaves the app running; Linux packaged binary `out/wigley-ai-gui-linux-<arch>/wigley-ai-gui` · group 10
+- the drive skill gains a run-folder layout paragraph — the task named the layout and the skill had none · group 11
 ### Review rounds
 ### Test gate

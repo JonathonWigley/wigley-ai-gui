@@ -1,6 +1,6 @@
 # 03 — The Claude adapter resolves profile folders
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -25,3 +25,4 @@ Done when: typecheck and the tests pass
 Commit:    one commit for the group
 
 ## Proof
+`06a4960` · proved: diff read against the spec; typecheck clean in this group's files (the one error sat in `main.ts`, task 01's in-flight edit); claude-code and chat-sessions tests 114 passed · concerns: `claude-code-harness.test.ts` unchanged (no `~/` case named; deps already pass `homeDir`)

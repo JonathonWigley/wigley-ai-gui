@@ -1,6 +1,6 @@
 # 06 — Sessions and forms drive actions
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -32,3 +32,4 @@ Done when: typecheck, lint and the tests pass; `npm run selftest` passes with th
 Commit:    one commit for the group
 
 ## Proof
+`5a1efc6` · proved: diff read against the spec, both fixture functions present with the planned signatures, `addDriveActions` gated on `api.drive !== null` in both plugins; typecheck clean; sessions and forms tests 678 passed; the relay reads the channel from `endpoint.json` (relay.py), so the Windows rename is safe; self-test lines ride to the test gate · concerns: sessions a drive action connected are not ended when the part disposes

@@ -257,7 +257,7 @@ round), since main, not the page, decides.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool.
-- **An ambient service** — the clock, ids, the home folder, files (with watching), processes, opening a link in the default browser — reaches a plugin
+- **An ambient service** — the clock, ids, the home folder, files (with watching), processes, opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake.
 - **A setting** is a core setting in `src/contracts/settings.ts` and `src/config/settings.ts`, or a plugin's own in
   its manifest's `settings`. The user overrides any of them in `settings.json` (plugin settings under the plugin id).
@@ -271,7 +271,7 @@ round), since main, not the page, decides.
   plugins the shared ones (editor, markdown) as services. Swapping it is a new adapter folder against the same
   contract, and one changed line in the composition root.
 - **Plugin data** — files a plugin keeps for the user, such as forms layouts — lives in the plugin's own folder,
-  `plugins/<id>/` in Electron's per-user data folder (a temp folder in the self-test and a drive run). Main reaches it through
+  `plugins/<id>/` in Electron's per-user data folder (in the self-test and a drive run, `plugin-data/` in the temp home). Main reaches it through
   `api.data`, the files service scoped to that folder, which refuses a path outside it. The page loads a file from
   it by the URL `api.dataUrl(path, revision)` builds on the `wigley-data:` scheme, which the page's CSP allows for
   scripts and styles; `revision` sits in the URL's path, so a changed module and every relative import under it load

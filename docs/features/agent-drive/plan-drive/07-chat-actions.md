@@ -1,6 +1,6 @@
 # 07 — Chat drive actions
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 03
 Plan: [plan.md](plan.md)
@@ -24,3 +24,4 @@ Done when: typecheck and lint pass; `npm run selftest` passes with the chat line
 Commit:    one commit for the group
 
 ## Proof
+`461984e` · proved: diff read against the spec, `askFixturePermission` present (narrowed, see the Run log's contract change), `addDriveActions` called only inside `if (api.drive !== null)`; typecheck clean; chat tests 145 passed; self-test lines ride to the test gate · concerns: arg readers `optionalString`/`requiredString` live in chat's `start.ts` (a shared drive-args reader may be wanted); `chat.askPermission` reads `(args as { input?: unknown }).input` without a null guard on `args`

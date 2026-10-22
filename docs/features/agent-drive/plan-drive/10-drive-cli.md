@@ -1,6 +1,6 @@
 # 10 — The drive CLI
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -54,3 +54,4 @@ Done when: typecheck, lint and the tests pass
 Commit:    one commit for the group
 
 ## Proof
+`cd49094` · proved: diff read against the spec, `parseDriveArgs` and the `drive` script present; typecheck clean; scripts tests 60 passed; lead smoke on `13aee03`+: `start` printed the run, `actions` listed all nine, `key j` answered `{ lines: [] }`, `screenshot smoke` wrote a PNG showing the empty sessions screen, `quit` exited 0 · concerns: Windows `.cmd` spawn uses `shell: true` (a repo path with spaces needs quoting); `restart` assumes forge exits when Electron quits; an inherited `PROOF_SELFTEST` makes `runModeOf` throw

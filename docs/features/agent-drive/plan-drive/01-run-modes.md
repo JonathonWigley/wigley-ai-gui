@@ -1,6 +1,6 @@
 # 01 — Run modes and the drive host contract
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -34,3 +34,4 @@ Done when: typecheck and lint pass; `npm run selftest` still passes (the self-te
 Commit:    one commit for the group
 
 ## Proof
+`97c24b0` · proved: diff read against the spec, every Produces present; typecheck clean; run-mode and main-api tests 10 passed; `npm run selftest` rides to the test gate · concerns: `node-files.ts:39-40` comment says trash is a recursive rm "under the self-test" — handed to task 05, which owns the file

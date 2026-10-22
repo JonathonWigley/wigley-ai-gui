@@ -15,13 +15,14 @@ description: Driving wigley-ai-gui offscreen — launch it, press keys, click, c
 
 The agent checks every change in the running app itself, as the user would, so the user never
 gets a check the agent could have run. A drive run is the app offscreen as an accessory app, on a
-fresh temp home in `.drive/<run-id>/`, beside the user's own app: it never takes the user's screen
+fresh temp home in `.drive/<run-id>/home`, beside the user's own app: it never takes the user's screen
 or touches their data, so start one whenever a check needs it.
 
 ## Loop
 
-1. `npm run drive -- start` returns once the page is ready and prints the run id. `.drive/current`
-   names the newest run, so later commands need no `--run`. `--user-config` copies the user's
+1. `npm run drive -- start` returns once the page is ready and prints the run id and folder.
+   `.drive/current` names the newest run, so later commands need no `--run`; `start --run <id>`
+   names a run and reuses its home when the folder exists. `--user-config` copies the user's
    `~/.config/wigley-ai-gui` into the temp home, so their theme and keys apply.
 2. Seed what the check needs: `npm run drive -- actions` lists every plugin's drive actions, and
    `npm run drive -- do <plugin>.<action> '<json>'` runs one (a session, a round, a chat, docs).
@@ -32,7 +33,12 @@ or touches their data, so start one whenever a check needs it.
 5. `npm run drive -- quit` when done. Run folders stay for reading back; `.drive/` is git-ignored.
 
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
-temp home, so a check that something survives a restart runs the same way.
+temp home and the start flags and does not copy the user config again, so a check that something
+survives a restart runs the same way.
+
+A run folder holds `home/` (the app's home: config, plugin data, ui-state), `user-data/`
+(Chromium's profile), `screenshots/`, `videos/`, `app.log`, and `start.json` and `drive.json`
+(the CLI's records of the start and the running app).
 
 ## Commands
 
@@ -40,11 +46,16 @@ temp home, so a check that something survives a restart runs the same way.
 Conventions:
 
 - Keys take the self-test's notation: `KeyboardEvent.key` values and vim chords (`<D-w>`,
-  `<A-o>`), as a sequence.
+  `<A-o>`), as a sequence; a `key` argument splits on spaces, and `Space` stands for the space
+  key (`key Space k s`).
 - A click or drag lands at the element's box through the real input pipeline, so an element
   covered by another fails the click: that is a finding, not a flake.
-- `record start` and `record stop` save an MP4, for transitions and animations.
-- `fit` lists what the page cuts off at the minimum width, or at a given width.
+- `screenshot <name>` takes a lowercase name in words joined by `-` and saves
+  `screenshots/<name>.png`.
+- `record start [name]` and `record stop` save `videos/<name>.mp4`, for transitions and animations;
+  it encodes with `ffmpeg` from the app's PATH.
+- `fit [width] [selector,…]` lists what the page cuts off at the minimum width, or at a given
+  width; a lone non-numeric argument is the list of selectors that scroll themselves.
 - `start --packaged` drives the packaged build; run `npm run package` first.
 
 ## Checking a screen
