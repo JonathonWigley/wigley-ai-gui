@@ -1,27 +1,33 @@
 import type { ChatEntry } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { Platform } from '../../../contracts/platform';
+import { element, markdownElement } from '../../../shared/page/dom';
+import { textButton } from '../../../shared/page/ui/button';
 import {
-  appendKeys,
-  button,
-  element,
-  markdownElement,
-} from '../../../shared/page/dom';
+  type CollapsibleCard,
+  card,
+  createCollapsibleCard,
+} from '../../../shared/page/ui/card';
+import { sectionHeader } from '../../../shared/page/ui/section-header';
+import { setDotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import type { KeysPageExports } from '../../keys/contract';
-import { chatCommand, chatScope } from '../ids';
 import type { ChatKit } from '../layouts/layout';
 import type { PermissionEntry } from './chat-state';
+import { keyHint } from './key-hint';
 
 // `allow` answers the permission entry allowed; `deny` opens the reason box
-// for it.
+// for it. `platform` prints the key hints.
 export interface KitDeps {
   markdown: MarkdownRenderer;
   keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
+  platform: Platform;
   allow(entry: PermissionEntry): void;
   deny(entry: PermissionEntry): void;
 }
 
-// The expanders one kit made, in creation order.
+// The expanders one kit made (its expanders and collapsible cards), in
+// creation order.
 export interface Expanders {
   count(): number;
   isAnyClosed(): boolean;
@@ -42,10 +48,7 @@ export interface EntryKit {
   dispose(): void;
 }
 
-interface Expander {
-  isOpen: boolean;
-  setOpen(open: boolean): void;
-}
+type Expander = Pick<CollapsibleCard, 'isOpen' | 'setOpen'>;
 
 export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
   let current = entry;
@@ -73,10 +76,17 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
     json: (value) =>
       element('pre', 'chat-json', String(JSON.stringify(value, null, 2))),
     expander(summary, body) {
-      const built = buildExpander(summary, body);
-      expanders.push(built.expander);
-      return built.element;
+      return kit.collapsibleCard({ summary, body }).element;
     },
+    collapsibleCard(options) {
+      const built = createCollapsibleCard(options);
+      expanders.push(built);
+      return built;
+    },
+    card,
+    statusDot,
+    setDotStatus,
+    sectionHeader: (text) => sectionHeader(text),
     permissionActions() {
       if (current.kind !== 'permission') {
         throw new Error('permissionActions is only for a permission entry');
@@ -99,13 +109,13 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
     },
     expanders: {
       count: () => expanders.length,
-      isAnyClosed: () => expanders.some((expander) => !expander.isOpen),
+      isAnyClosed: () => expanders.some((expander) => !expander.isOpen()),
       setAllOpen(open) {
         for (const expander of expanders) {
           expander.setOpen(open);
         }
       },
-      openStates: () => expanders.map((expander) => expander.isOpen),
+      openStates: () => expanders.map((expander) => expander.isOpen()),
       restore(states) {
         expanders.forEach((expander, index) => {
           if (states[index] === true) {
@@ -117,38 +127,8 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
   };
 }
 
-// A line that toggles `body()`'s element under it; `body` runs on each open,
-// its element replacing the last.
-function buildExpander(
-  summary: string,
-  body: () => HTMLElement,
-): { element: HTMLElement; expander: Expander } {
-  const root = element('div', 'chat-expander');
-  const marker = element('span', 'chat-expander-marker', '▸');
-  const line = button('chat-expander-line', '', () =>
-    expander.setOpen(!expander.isOpen),
-  );
-  line.append(marker, element('span', 'chat-expander-summary', summary));
-  root.append(line);
-  let shownBody: HTMLElement | null = null;
-  const expander: Expander = {
-    isOpen: false,
-    setOpen(open) {
-      if (open === expander.isOpen) {
-        return;
-      }
-      expander.isOpen = open;
-      marker.textContent = open ? '▾' : '▸';
-      shownBody?.remove();
-      shownBody = open ? body() : null;
-      if (shownBody !== null) {
-        root.append(shownBody);
-      }
-    },
-  };
-  return { element: root, expander };
-}
-
+// Allow once and Deny with the keys bound to them now, or the answer once
+// the entry carries one.
 function drawPermissionActions(
   part: HTMLElement,
   entry: PermissionEntry,
@@ -160,24 +140,20 @@ function drawPermissionActions(
     );
     return;
   }
-  const allow = button('button button-primary', 'Allow', () =>
-    deps.allow(entry),
-  );
-  appendKeys(
-    allow,
-    deps.keys.keysFor(chatCommand('allowPermission'), chatScope('chat')),
-  );
-  const deny = button('button', 'Deny', () => deps.deny(entry));
-  appendKeys(
-    deny,
-    deps.keys.keysFor(chatCommand('denyPermission'), chatScope('chat')),
-  );
+  const allow = textButton('Allow once', () => deps.allow(entry), {
+    variant: 'primary',
+    hint: keyHint(deps.keys, deps.platform, 'allowPermission', 'chat'),
+  });
+  const deny = textButton('Deny', () => deps.deny(entry), {
+    variant: 'secondary',
+    hint: keyHint(deps.keys, deps.platform, 'denyPermission', 'chat'),
+  });
   part.replaceChildren(allow, deny);
 }
 
 function answerText(answer: NonNullable<PermissionEntry['answer']>): string {
   if (answer.allowed) {
-    return 'Allowed';
+    return 'Allowed once';
   }
   return answer.reason === null ? 'Denied' : `Denied: ${answer.reason}`;
 }

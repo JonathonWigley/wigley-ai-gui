@@ -85,13 +85,49 @@ export interface EntryView<K extends EntryKind = EntryKind> {
   update?(input: EntryInput<K>): void;
 }
 
+// A status dot's state.
+export type DotStatus =
+  | 'idle'
+  | 'running'
+  | 'success'
+  | 'warning'
+  | 'attention'
+  | 'error';
+
+// A status edge on a card's leading side: `attention` for a prompt that needs the user, `error` for a failure.
+export type CardEdge = 'attention' | 'error';
+
+// `summary` is the head's one line (mono in the code font), `leading` sits before it, `open` opens it at once,
+// and `body` builds the body afresh on each open.
+export interface CollapsibleCardOptions {
+  summary: string;
+  mono?: boolean;
+  leading?: HTMLElement | null;
+  open?: boolean;
+  body(): HTMLElement;
+}
+
+export interface CollapsibleCard {
+  element: HTMLElement;
+  isOpen(): boolean;
+  setOpen(open: boolean): void;
+}
+
 export interface ChatKit {
   markdown(text: string): HTMLElement; // rendered through the app's markdown renderer
   json(value: unknown): HTMLElement; // pretty-printed, in a <pre>
-  // A compact line that opens to `body()`; Enter on the focused entry toggles the entry's expanders.
-  // `body` runs on each open; return one element and keep it to refill it in place.
+  // A collapsible card in the UI font that opens to `body()`, with no leading part; Enter on the focused entry
+  // toggles the entry's expanders and collapsible cards. `body` runs on each open; return one element and keep it
+  // to refill it in place.
   expander(summary: string, body: () => HTMLElement): HTMLElement;
-  // Allow / Deny with their keys beside them (from keys' `keysFor`); Deny opens the reason box. Draws the
+  // A card whose head toggles its body, built closed unless `open`; Enter on the focused entry toggles it with the
+  // entry's expanders. Append its `element`.
+  collapsibleCard(options: CollapsibleCardOptions): CollapsibleCard;
+  card(edge?: CardEdge | null): HTMLElement; // a solid block, with a status edge when `edge` is given
+  statusDot(status: DotStatus): HTMLElement; // a static dot showing `status`
+  setDotStatus(dot: HTMLElement, status: DotStatus): void; // shows `status` on a dot `statusDot` made
+  sectionHeader(text: string): HTMLElement; // a section's heading line, in the caller's text
+  // Allow once / Deny with their keys beside them (from keys' `keysFor`); Deny opens the reason box. Draws the
   // answer instead once the entry carries one; the part keeps itself up to date as the entry's answer arrives.
   permissionActions(): HTMLElement;
 }

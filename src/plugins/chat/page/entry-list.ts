@@ -15,6 +15,7 @@ import { createEntryKit, type EntryKit, type KitDeps } from './chat-kit';
 import {
   type EntryFocus,
   focusAfterChange,
+  focusFirst,
   focusLatest,
   moveFocus,
   START_FOCUS,
@@ -39,7 +40,7 @@ export interface EntryListDeps {
 export type ToggleResult = 'expanded' | 'collapsed' | 'nothing';
 
 // One session's entries, one slot per entry in the session's order, the
-// focused slot marked `is-focused`. After every change a following focus
+// focused slot marked `is-cursor`. After every change a following focus
 // scrolls the list to its bottom; a hidden list does not scroll, so its tab
 // calls `scrollToFocus` each time it shows.
 export interface EntryList {
@@ -54,6 +55,11 @@ export interface EntryList {
   move(step: 1 | -1): ChatEntry | null;
   // Follows the latest entry and scrolls to the bottom.
   latest(): void;
+  // Focuses the first entry and scrolls to the top; the focused entry, null
+  // with no entries.
+  first(): ChatEntry | null;
+  // Scrolls to the bottom while following, else leaves the scroll alone.
+  followBottom(): void;
   // Scrolls to the bottom while following, else brings the focused entry
   // into view.
   scrollToFocus(): void;
@@ -93,12 +99,14 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   let order: string[] = [];
   let focus: EntryFocus = START_FOCUS;
 
-  const drawFocus = (scroll: 'follow' | 'slot' | 'bottom') => {
+  const drawFocus = (scroll: 'follow' | 'slot' | 'bottom' | 'top') => {
     for (const [id, slot] of slots) {
-      slot.element.classList.toggle('is-focused', id === focus.entryId);
+      slot.element.classList.toggle('is-cursor', id === focus.entryId);
     }
     const isBottom = scroll === 'bottom' || focus.following;
-    if (scroll === 'slot' && focus.entryId !== null) {
+    if (scroll === 'top') {
+      list.scrollTop = 0;
+    } else if (scroll === 'slot' && focus.entryId !== null) {
       slots.get(focus.entryId)?.element.scrollIntoView({ block: 'nearest' });
     } else if (isBottom) {
       list.scrollTop = list.scrollHeight;
@@ -147,6 +155,16 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     latest() {
       focus = focusLatest(order);
       drawFocus('bottom');
+    },
+    first() {
+      focus = focusFirst(order);
+      drawFocus('top');
+      return focusedEntry(focus, slots);
+    },
+    followBottom() {
+      if (focus.following) {
+        list.scrollTop = list.scrollHeight;
+      }
     },
     scrollToFocus() {
       drawFocus(focus.following ? 'bottom' : 'slot');

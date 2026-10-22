@@ -1,4 +1,3 @@
-import '../../../shared/page/dialog.css';
 import '../../../shared/page/markdown.css';
 import './chat.css';
 import type {
@@ -34,8 +33,8 @@ type ChatApi = PageApi<
 >;
 
 // Shows each chat session main holds in its session's Chat tab: the entries,
-// drawn by the chat layout main chooses, a message box and the controls'
-// status line. The new-session prompt asks for a folder, a profile and a new
+// drawn by the chat layout main chooses, under a floating composer holding
+// the message box, the controls as chips and send. The new-session prompt asks for a folder, a profile and a new
 // or saved session in the picker and starts or resumes a session there. The
 // picker, the deny reason box and the end-session confirmation sit in the
 // overlay layer, each over a scope of its own; another session's Chat tab
@@ -52,6 +51,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       overlay: api.areas.overlay,
       editor: services.editor,
       keys,
+      platform: api.platform,
       run,
       pushScope: () => api.keys.pushScope('reason'),
       log: services.log,
@@ -59,6 +59,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const confirm = createCloseConfirm({
       overlay: api.areas.overlay,
       keys,
+      platform: api.platform,
       run,
       pushScope: () => api.keys.pushScope('confirm'),
       log: services.log,
@@ -84,6 +85,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       editor: services.editor,
       markdown: services.markdown,
       keys,
+      platform: api.platform,
+      run,
       permissions,
       confirm,
       setScope: () => api.keys.setScope('chat'),

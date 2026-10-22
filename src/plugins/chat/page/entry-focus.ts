@@ -23,6 +23,14 @@ export function moveFocus(
   return { entryId: ids[next], following: next === last };
 }
 
+// The first entry, following only when it is also the last.
+export function focusFirst(ids: readonly string[]): EntryFocus {
+  const first = ids.at(0);
+  return first === undefined
+    ? START_FOCUS
+    : { entryId: first, following: ids.length === 1 };
+}
+
 export function focusLatest(ids: readonly string[]): EntryFocus {
   const last = ids.at(-1);
   return last === undefined ? START_FOCUS : { entryId: last, following: true };

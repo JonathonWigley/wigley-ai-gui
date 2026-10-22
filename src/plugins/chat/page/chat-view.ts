@@ -1,4 +1,5 @@
 import type { ChatEntry, SessionControl } from '../../../contracts/agent';
+import type { CommandId } from '../../../contracts/commands';
 import type {
   EditorHost,
   TextEditor,
@@ -6,9 +7,14 @@ import type {
 } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { Platform } from '../../../contracts/platform';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
+import { textButton } from '../../../shared/page/ui/button';
+import { chip } from '../../../shared/page/ui/chip';
+import { floatingPanel } from '../../../shared/page/ui/floating-panel';
+import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -16,23 +22,25 @@ import type {
   SessionTabHandle,
 } from '../../sessions/contract';
 import type { ChatChannel, ChatSessionState } from '../contract';
+import { chatCommand } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
 import { blurFocusedElement, type CloseConfirm } from './chat-dialogs';
 import {
   applyEntry,
   changedControls,
-  controlText,
   folderName,
   type PermissionEntry,
   tabStatus,
   valueLabel,
 } from './chat-state';
+import { controlCommand } from './control-commands';
 import {
   createEntryList,
   type EntryList,
   type ShownLayout,
 } from './entry-list';
+import { keyHint } from './key-hint';
 
 export interface ChatView {
   // Shows the session's Chat tab: activates the session (Sessions mode shows),
@@ -57,7 +65,7 @@ export interface ChatSession extends SessionRef {
   readonly state: ChatSessionState;
   readonly ended: boolean;
   box: TextEditor;
-  entries: Pick<EntryList, 'move' | 'latest' | 'toggleFocused'>;
+  entries: Pick<EntryList, 'move' | 'latest' | 'first' | 'toggleFocused'>;
 }
 
 // The Chat view with what the commands read: the session a box belongs to,
@@ -76,7 +84,9 @@ export interface PermissionActions {
 
 // `setScope` sets the base scope `chat`; `otherSessionShown` runs when the
 // Chat tab shown is another session's than the Chat tab shown before;
-// `onSessionRemoved` hears the sessions plugin drop a row's tabs.
+// `onSessionRemoved` hears the sessions plugin drop a row's tabs. `run` runs
+// a command, as the composer's chips and send button do; `platform` prints
+// the key hints.
 export interface ChatViewDeps {
   channel: PageChannel<ChatChannel>;
   sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'closeSession'>;
@@ -84,6 +94,8 @@ export interface ChatViewDeps {
   editor: EditorHost;
   markdown: MarkdownRenderer;
   keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
+  platform: Platform;
+  run(command: CommandId): void;
   permissions: PermissionActions;
   confirm: CloseConfirm;
   setScope(): void;
@@ -93,7 +105,8 @@ export interface ChatViewDeps {
 }
 
 // A held session's Chat tab. `handle` is null until `addTab` returns, and
-// `box` until the editor mounts into the attached tab.
+// `box` until the editor mounts into the attached tab. `composerSize` follows
+// the composer's height for as long as the tab is held.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -106,18 +119,19 @@ interface HeldTab {
   boxMode: VimMode;
   isBoxFocused: boolean;
   entries: EntryList;
-  statusLine: StatusLine;
+  bar: ComposerBar;
+  composerSize: ResizeObserver;
 }
 
-interface StatusLine {
+interface ComposerBar {
   element: HTMLElement;
   draw(tab: HeldTab): void;
 }
 
 const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 
-// One Chat tab per chat session main holds, each with its entries, message
-// box and status line, kept up to date from chat main's messages. Each tab is
+// One Chat tab per chat session main holds, each with its entries and its
+// composer (message box, mode, control chips, send), kept up to date from chat main's messages. Each tab is
 // selected in its session when added.
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
@@ -161,7 +175,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         }
         lastShownSessionId = shownTab.sessionId;
         log('chat', `Chat tab shown in ${shownTab.name}`);
-        shownTab.statusLine.draw(shownTab);
+        shownTab.bar.draw(shownTab);
         shownTab.entries.scrollToFocus();
         focusIfRevealed(shownTab);
       },
@@ -217,6 +231,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tab.ended = true;
+    tab.bar.draw(tab);
     sendStatus(tab, '');
     if (error === null) {
       log('chat', `${tab.name} ended`);
@@ -232,6 +247,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }
     tabs.delete(sessionId);
     tab.box?.destroy();
+    tab.composerSize.disconnect();
     tab.entries.dispose();
     if (pendingReveal === sessionId) {
       pendingReveal = null;
@@ -293,11 +309,12 @@ function sessionOf(tab: HeldTab, box: TextEditor): ChatSession {
   };
 }
 
-// The tab element (`div.chat-tab`: entries, box, status line) added to its
-// session, with the box's editor mounted once the element is attached. The
-// tab then selects itself, so a chat session opens on its Chat tab whichever
-// plugin's tab the session got first. `view.shown` may run inside `addTab`,
-// before the handle and box are set.
+// The tab element (`div.chat-tab`: entries, then the floating composer
+// holding the box and its bar) added to its session, with the box's editor
+// mounted once the element is attached. The tab then selects itself, so a
+// chat session opens on its Chat tab whichever plugin's tab the session got
+// first. `view.shown` may run inside `addTab`, before the handle and box are
+// set.
 function createTab(
   state: ChatSessionState,
   shown: ShownLayout,
@@ -311,16 +328,21 @@ function createTab(
     kit: {
       markdown: deps.markdown,
       keys: deps.keys,
+      platform: deps.platform,
       allow: (entry) => deps.permissions.allow(ref, entry),
       deny: (entry) => deps.permissions.deny(ref, entry),
     },
     log: deps.log,
     toast: deps.toast,
   });
-  const boxElement = element('div', 'chat-box');
-  const statusLine = buildStatusLine();
+  const boxElement = inputFrame();
+  boxElement.classList.add('chat-box');
+  const bar = buildComposerBar(deps);
+  const composer = floatingPanel();
+  composer.classList.add('chat-composer');
+  composer.append(boxElement, bar.element);
   const root = element('div', 'chat-tab');
-  root.append(entries.element, boxElement, statusLine.element);
+  root.append(entries.element, composer);
   const tab: HeldTab = {
     sessionId: state.sessionId,
     name,
@@ -333,10 +355,11 @@ function createTab(
     boxMode: STARTING_MODE,
     isBoxFocused: false,
     entries,
-    statusLine,
+    bar,
+    composerSize: followComposerHeight(composer, root, entries),
   };
   entries.rebuild(state.entries);
-  statusLine.draw(tab);
+  bar.draw(tab);
   tab.handle = deps.sessions.addTab(state.sessionId, {
     id: 'chat',
     title: 'Chat',
@@ -351,15 +374,15 @@ function createTab(
       changed: () => undefined,
       focused: () => {
         tab.isBoxFocused = true;
-        statusLine.draw(tab);
+        bar.draw(tab);
       },
       blurred: () => {
         tab.isBoxFocused = false;
-        statusLine.draw(tab);
+        bar.draw(tab);
       },
       modeChanged: (mode) => {
         tab.boxMode = mode;
-        statusLine.draw(tab);
+        bar.draw(tab);
       },
     },
     {
@@ -393,7 +416,7 @@ function putEntry(tab: HeldTab, entry: ChatEntry, log: Log) {
 function setControls(tab: HeldTab, controls: SessionControl[], log: Log) {
   const changed = changedControls(tab.state.controls, controls);
   tab.state = { ...tab.state, controls };
-  tab.statusLine.draw(tab);
+  tab.bar.draw(tab);
   for (const control of changed) {
     log('chat', `${control.label} is ${valueLabel(control)} in ${tab.name}`);
   }
@@ -425,21 +448,52 @@ function mayClose(tab: HeldTab, deps: ChatViewDeps): boolean {
   return false;
 }
 
-// The box's vim mode, PAGE while it has no focus, then each control's value.
-function buildStatusLine(): StatusLine {
-  const line = element('div', 'chat-controls');
+// Writes the composer's border-box height, rounded, as the unitless
+// `--chat-composer-height` on `root`, so the entries scroll clear of it, and
+// keeps a following list on its last entry as the composer grows.
+function followComposerHeight(
+  composer: HTMLElement,
+  root: HTMLElement,
+  entries: Pick<EntryList, 'followBottom'>,
+): ResizeObserver {
+  const observer = new ResizeObserver(([observed]) => {
+    const height = Math.round(observed.borderBoxSize[0].blockSize);
+    root.style.setProperty('--chat-composer-height', String(height));
+    entries.followBottom();
+  });
+  observer.observe(composer);
+  return observer;
+}
+
+// The box's vim mode (PAGE while it has no focus), a chip per control opening
+// that control's picker, and send, with the keys bound now; the chips and
+// send are disabled once the session has ended.
+function buildComposerBar(
+  deps: Pick<ChatViewDeps, 'keys' | 'platform' | 'run'>,
+): ComposerBar {
+  const bar = element('div', 'chat-composer-bar');
   return {
-    element: line,
+    element: bar,
     draw(tab) {
       const mode = element(
         'span',
         'chat-box-mode',
         modeLabel(tab.isBoxFocused ? tab.boxMode : null),
       );
-      const controls = tab.state.controls.map((control) =>
-        element('span', 'chat-control', controlText(control)),
-      );
-      line.replaceChildren(mode, ...controls);
+      const chips = tab.state.controls.map((control) => {
+        const controlChip = chip(control.label, valueLabel(control), () =>
+          deps.run(chatCommand(controlCommand(control.id))),
+        );
+        controlChip.toggleAttribute('disabled', tab.ended);
+        return controlChip;
+      });
+      const send = textButton('Send', () => deps.run(chatCommand('send')), {
+        variant: 'ghost',
+        hint: keyHint(deps.keys, deps.platform, 'send', 'chat'),
+      });
+      send.classList.add('chat-send');
+      send.disabled = tab.ended;
+      bar.replaceChildren(mode, ...chips, send);
     },
   };
 }

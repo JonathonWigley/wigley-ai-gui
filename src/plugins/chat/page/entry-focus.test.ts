@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { focusAfterChange, moveFocus, START_FOCUS } from './entry-focus';
+import {
+  focusAfterChange,
+  focusFirst,
+  moveFocus,
+  START_FOCUS,
+} from './entry-focus';
 
 const ids = ['a', 'b', 'c'];
 
@@ -59,5 +64,20 @@ describe('entry focus', () => {
     const onB = { entryId: 'b', following: false };
 
     expect(focusAfterChange(onB, [])).toEqual(START_FOCUS);
+  });
+
+  it('focusFirst_FirstOfMany_NotFollowing', () => {
+    expect(focusFirst(['a', 'b', 'c'])).toEqual({
+      entryId: 'a',
+      following: false,
+    });
+  });
+
+  it('focusFirst_OnlyEntry_Follows', () => {
+    expect(focusFirst(['a'])).toEqual({ entryId: 'a', following: true });
+  });
+
+  it('focusFirst_NoIds_Start', () => {
+    expect(focusFirst([])).toEqual(START_FOCUS);
   });
 });

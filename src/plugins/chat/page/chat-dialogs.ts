@@ -1,20 +1,15 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
+import type { Platform } from '../../../contracts/platform';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
-import {
-  appendKeys,
-  button,
-  element,
-  showKeys,
-} from '../../../shared/page/dom';
+import { element } from '../../../shared/page/dom';
+import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
+import { createDialog, type Dialog } from '../../../shared/page/ui/dialog';
+import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type { KeysPageExports } from '../../keys/contract';
-import {
-  type ChatCommandName,
-  type ChatScopeName,
-  chatCommand,
-  chatScope,
-} from '../ids';
+import { type ChatCommandName, type ChatScopeName, chatCommand } from '../ids';
+import { keyHint } from './key-hint';
 
 // Blurs whatever holds focus, a text box included, so page keys fire.
 export function blurFocusedElement() {
@@ -24,13 +19,24 @@ export function blurFocusedElement() {
   }
 }
 
+// `platform` prints the action buttons' key hints.
 export interface DialogDeps {
   overlay: PluginAreas['overlay'];
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
+  keys: Pick<KeysPageExports, 'keysFor'>;
+  platform: Platform;
   run(command: CommandId): void;
   // Pushes the dialog's own scope.
   pushScope(): PushedScope;
   log: Log;
+}
+
+// One action button of a dialog: its label, look, and the command it runs,
+// whose keys in `scope` it shows.
+interface DialogAction {
+  label: string;
+  variant: ButtonVariant;
+  command: ChatCommandName;
+  scope: ChatScopeName;
 }
 
 // The deny reason box: `open` shows it for one permission and focuses its
@@ -52,37 +58,51 @@ export interface CloseConfirm {
   keep(): void;
 }
 
+const REASON_ACTIONS: readonly DialogAction[] = [
+  {
+    label: 'Back',
+    variant: 'secondary',
+    command: 'cancelReason',
+    scope: 'reason',
+  },
+  {
+    label: 'Deny',
+    variant: 'danger',
+    command: 'submitReason',
+    scope: 'reason',
+  },
+];
+
+const CONFIRM_ACTIONS: readonly DialogAction[] = [
+  {
+    label: 'Keep it running',
+    variant: 'secondary',
+    command: 'keepSession',
+    scope: 'confirm',
+  },
+  {
+    label: 'End the session',
+    variant: 'danger',
+    command: 'endSession',
+    scope: 'confirm',
+  },
+];
+
 export function createReasonBox(
   deps: DialogDeps & { editor: EditorHost },
 ): ReasonBox {
-  const overlay = element('div', 'overlay');
-  const dialog = element('div', 'dialog chat-reason');
-  const title = element('h2', 'dialog-title');
-  const box = element('div', 'chat-reason-box');
-  const actions = element('div', 'dialog-actions');
-  actions.append(
-    dialogButton(
-      deps,
-      'button button-danger',
-      'Deny',
-      'submitReason',
-      'reason',
-    ),
-    dialogButton(deps, 'button', 'Back', 'cancelReason', 'reason'),
-  );
-  dialog.append(
-    title,
+  const dialog = createDialog('Deny');
+  const box = inputFrame();
+  box.classList.add('chat-reason-box');
+  dialog.body.append(
     element(
       'p',
-      'dialog-text',
+      'chat-dialog-text',
       'Optional: tell Claude why. It reads your reason.',
     ),
     box,
-    actions,
   );
-  overlay.append(dialog);
-  overlay.hidden = true;
-  deps.overlay.contribute(overlay);
+  deps.overlay.contribute(dialog.element);
   const editor = deps.editor.create(box, '', {
     changed: () => undefined,
     focused: () => undefined,
@@ -101,7 +121,7 @@ export function createReasonBox(
     editor.blur();
     held.scope.pop();
     editor.setText('');
-    overlay.hidden = true;
+    dialog.hide();
     return held;
   };
   const reasonBox: ReasonBox = {
@@ -115,8 +135,9 @@ export function createReasonBox(
         }
       });
       open = opened;
-      title.textContent = `Deny ${toolName}?`;
-      overlay.hidden = false;
+      dialog.setTitle(`Deny ${toolName}?`);
+      drawActions(dialog, REASON_ACTIONS, deps);
+      dialog.show();
       editor.focus({ insert: true });
       deps.log('chat', `deny reason box shown for ${toolName}`);
     },
@@ -134,33 +155,15 @@ export function createReasonBox(
 }
 
 export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
-  const overlay = element('div', 'overlay');
-  const dialog = element('div', 'dialog dialog-confirm');
-  dialog.setAttribute('role', 'alertdialog');
-  dialog.setAttribute('aria-label', 'End this session?');
-  const actions = element('div', 'dialog-actions');
-  actions.append(
-    dialogButton(
-      deps,
-      'button button-danger',
-      'End the session',
-      'endSession',
-      'confirm',
-    ),
-    dialogButton(deps, 'button', 'Keep it running', 'keepSession', 'confirm'),
-  );
-  dialog.append(
-    element('h2', 'dialog-title', 'End this session?'),
+  const dialog = createDialog('End this session?');
+  dialog.body.append(
     element(
       'p',
-      'dialog-text',
+      'chat-dialog-text',
       'Claude is still working. Ending the session stops it.',
     ),
-    actions,
   );
-  overlay.append(dialog);
-  overlay.hidden = true;
-  deps.overlay.contribute(overlay);
+  deps.overlay.contribute(dialog.element);
 
   let open: { name: string; end(): void; scope: PushedScope } | null = null;
   const hide = () => {
@@ -169,7 +172,7 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
       return null;
     }
     open = null;
-    overlay.hidden = true;
+    dialog.hide();
     held.scope.pop();
     return held;
   };
@@ -184,7 +187,8 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
         }
       });
       open = opened;
-      overlay.hidden = false;
+      drawActions(dialog, CONFIRM_ACTIONS, deps);
+      dialog.show();
     },
     end() {
       hide()?.end();
@@ -199,24 +203,19 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
   return confirm;
 }
 
-// A dialog button running `command`, showing the keys `scope` binds to it and
-// showing them again after each keymap change, for as long as the page lives,
-// as the dialog does.
-function dialogButton(
-  deps: Pick<DialogDeps, 'keys' | 'run'>,
-  className: string,
-  label: string,
-  command: ChatCommandName,
-  scope: ChatScopeName,
-): HTMLButtonElement {
-  const control = button(className, label, () =>
-    deps.run(chatCommand(command)),
+// Fills the dialog's actions with one button per action, each running its
+// command and showing the keys bound to it now.
+function drawActions(
+  dialog: Dialog,
+  actions: readonly DialogAction[],
+  deps: Pick<DialogDeps, 'keys' | 'platform' | 'run'>,
+) {
+  dialog.actions.replaceChildren(
+    ...actions.map((action) =>
+      textButton(action.label, () => deps.run(chatCommand(action.command)), {
+        variant: action.variant,
+        hint: keyHint(deps.keys, deps.platform, action.command, action.scope),
+      }),
+    ),
   );
-  const readKeys = () =>
-    deps.keys.keysFor(chatCommand(command), chatScope(scope));
-  let hint = appendKeys(control, readKeys());
-  deps.keys.onChanged(() => {
-    hint = showKeys(control, hint, readKeys());
-  });
-  return control;
 }

@@ -68,8 +68,8 @@ export function createPicker(deps: PickerDeps): Picker {
     pushScope: () => deps.pushScope(scope),
     log: deps.log,
     logSource: 'chat',
-    overlayClass: 'overlay',
-    dialogClass: 'chat-picker',
+    overlayClass: '',
+    dialogClass: '',
     filterEditor: deps.editor,
   });
   deps.overlay.contribute(list.element);

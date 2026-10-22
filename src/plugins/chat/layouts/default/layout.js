@@ -1,7 +1,8 @@
 // @ts-check
 
-// The built-in chat look. Every expander's body is built on its first open and
-// kept, so an update refills it in place whether it is open or closed.
+// The built-in chat look. Every expander's and collapsible card's body is
+// built on its first open and kept, so an update refills it in place whether
+// it is open or closed.
 
 /**
  * @param {string} tag
@@ -23,20 +24,11 @@ function el(tag, className, text) {
  * @param {HTMLElement} body
  */
 function fillToolBody(input, kit, body) {
-  const parts = [
-    el('div', 'chat-section-label', 'Input'),
-    kit.json(input.input),
-  ];
+  const parts = [kit.sectionHeader('Input'), kit.json(input.input)];
   if (input.result === null) {
     parts.push(el('div', 'chat-muted', 'Running…'));
   } else {
-    parts.push(
-      el(
-        'div',
-        'chat-section-label',
-        input.result.isError ? 'Error' : 'Result',
-      ),
-    );
+    parts.push(kit.sectionHeader(input.result.isError ? 'Error' : 'Result'));
     parts.push(el('pre', 'chat-tool-result', input.result.text));
   }
   body.replaceChildren(...parts);
@@ -45,6 +37,18 @@ function fillToolBody(input, kit, body) {
 /** @param {import('../layout').ToolInput} input */
 function toolLine(input) {
   return input.summary === '' ? input.name : `${input.name} · ${input.summary}`;
+}
+
+// Running until the result arrives, then the result's outcome.
+/**
+ * @param {import('../layout').ToolInput} input
+ * @returns {import('../layout').DotStatus}
+ */
+function toolStatus(input) {
+  if (input.result === null) {
+    return 'running';
+  }
+  return input.result.isError ? 'error' : 'success';
 }
 
 /** @param {import('../layout').ResultInput} input */
@@ -69,11 +73,13 @@ const layout = {
   entries: {
     user(input, kit) {
       const root = el('div', 'chat-entry chat-user');
-      root.append(kit.markdown(input.text));
+      const turn = kit.card();
+      turn.append(kit.markdown(input.text));
+      root.append(turn);
       return {
         element: root,
         update(next) {
-          root.replaceChildren(kit.markdown(next.text));
+          turn.replaceChildren(kit.markdown(next.text));
         },
       };
     },
@@ -115,29 +121,28 @@ const layout = {
         },
       };
     },
+    // Built closed; the result arriving sets the dot and refills the body,
+    // leaving the card open or closed as it was.
     tool(input, kit) {
       let current = input;
       /** @type {HTMLElement | null} */
       let body = null;
+      const dot = kit.statusDot(toolStatus(input));
       const root = el('div', 'chat-entry chat-tool');
       root.append(
-        kit.expander(toolLine(input), () => {
-          if (body === null) {
-            body = el('div', 'chat-tool-body');
-            fillToolBody(current, kit, body);
-          }
-          return body;
-        }),
+        kit.collapsibleCard({
+          summary: toolLine(input),
+          mono: true,
+          leading: dot,
+          body: () => {
+            if (body === null) {
+              body = el('div', 'chat-tool-body');
+              fillToolBody(current, kit, body);
+            }
+            return body;
+          },
+        }).element,
       );
-      /** @param {import('../layout').ToolInput} shown */
-      const markResult = (shown) => {
-        root.classList.toggle('chat-tool-running', shown.result === null);
-        root.classList.toggle(
-          'chat-tool-error',
-          shown.result !== null && shown.result.isError,
-        );
-      };
-      markResult(input);
       return {
         element: root,
         update(next) {
@@ -145,27 +150,22 @@ const layout = {
           if (body !== null) {
             fillToolBody(next, kit, body);
           }
-          markResult(next);
+          kit.setDotStatus(dot, toolStatus(next));
         },
       };
     },
+    // No update: an answer builds the entry again, its card losing the
+    // attention edge.
     permission(input, kit) {
       const root = el('div', 'chat-entry chat-permission');
-      root.append(
+      const prompt = kit.card(input.answer === null ? 'attention' : null);
+      prompt.append(
         el('div', 'chat-permission-head', `Allow ${input.toolName}?`),
         kit.json(input.input),
         kit.permissionActions(),
       );
-      root.classList.toggle('chat-permission-answered', input.answer !== null);
-      return {
-        element: root,
-        update(next) {
-          root.classList.toggle(
-            'chat-permission-answered',
-            next.answer !== null,
-          );
-        },
-      };
+      root.append(prompt);
+      return { element: root };
     },
     result(input) {
       const root = el(

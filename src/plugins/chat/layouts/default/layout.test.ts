@@ -57,13 +57,19 @@ function fakeElement(tagName: string, part: string | null = null): FakeElement {
   return element;
 }
 
+type CardOptions = Parameters<ChatKit['collapsibleCard']>[0];
+
 // A kit whose parts return tagged fake elements and record each call; each
-// expander keeps its line and `body` so a test opens it by calling `body()`.
+// expander keeps its line and `body`, and each collapsible card its options,
+// so a test opens it by calling `body()`.
 function fakeKit() {
   const calls = {
     markdown: [] as string[],
     json: [] as unknown[],
     expanders: [] as { line: string; body: () => HTMLElement }[],
+    collapsibleCards: [] as CardOptions[],
+    setOpen: [] as boolean[],
+    setDotStatus: [] as [string | null, string][],
     permissionActions: 0,
   };
   const kit: ChatKit = {
@@ -79,6 +85,24 @@ function fakeKit() {
       calls.expanders.push({ line: summary, body });
       return asHtml(fakeElement('div', `expander:${summary}`));
     },
+    collapsibleCard(options) {
+      calls.collapsibleCards.push(options);
+      return {
+        element: asHtml(
+          fakeElement('div', `collapsibleCard:${options.summary}`),
+        ),
+        isOpen: () => false,
+        setOpen(open) {
+          calls.setOpen.push(open);
+        },
+      };
+    },
+    card: (edge) => asHtml(fakeElement('div', `card:${edge ?? 'none'}`)),
+    statusDot: (status) => asHtml(fakeElement('span', `dot:${status}`)),
+    setDotStatus(dot, status) {
+      calls.setDotStatus.push([asFake(dot).part, status]);
+    },
+    sectionHeader: (text) => asHtml(fakeElement('h3', `section:${text}`)),
     permissionActions() {
       calls.permissionActions += 1;
       return asHtml(fakeElement('div', 'permissionActions'));
@@ -115,7 +139,7 @@ afterEach(() => {
 });
 
 describe('default chat layout', () => {
-  it('user_drawsMarkdown_updateReplacesIt', () => {
+  it('user_cardHoldsMarkdown_updateReplacesIt', () => {
     const { kit } = fakeKit();
     const entry = {
       kind: 'user' as const,
@@ -127,11 +151,14 @@ describe('default chat layout', () => {
     const view = layout.entries.user(entry, kit);
     const root = asFake(view.element);
     expect(root.className).toBe('chat-entry chat-user');
-    expect(describeChildren(root)).toEqual(['markdown:hello']);
+    expect(describeChildren(root)).toEqual(['card:none']);
+    const turn = root.children[0];
+    expect(describeChildren(turn)).toEqual(['markdown:hello']);
 
     view.update?.({ ...entry, text: 'hello there' });
     expect(asFake(view.element)).toBe(root);
-    expect(describeChildren(root)).toEqual(['markdown:hello there']);
+    expect(root.children).toEqual([turn]);
+    expect(describeChildren(turn)).toEqual(['markdown:hello there']);
   });
 
   it('assistant_streamingClass_updateInPlace', () => {
@@ -190,18 +217,23 @@ describe('default chat layout', () => {
   };
   const inputJson = `json:${JSON.stringify({ command: 'ls -la' })}`;
 
-  it('tool_lineAndRunningBody', () => {
+  it('tool_closedMonoCardWithRunningDot', () => {
     const { kit, calls } = fakeKit();
 
     const view = layout.entries.tool(toolEntry, kit);
-    expect(calls.expanders[0].line).toBe('Bash · ls -la');
-    expect(asFake(view.element).classList.contains('chat-tool-running')).toBe(
-      true,
-    );
-    const body = asFake(calls.expanders[0].body());
+    expect(calls.collapsibleCards).toHaveLength(1);
+    const options = calls.collapsibleCards[0];
+    expect(options.summary).toBe('Bash · ls -la');
+    expect(options.mono).toBe(true);
+    expect(asFake(options.leading as HTMLElement).part).toBe('dot:running');
+    expect(options.open ?? false).toBe(false);
+    expect(describeChildren(asFake(view.element))).toEqual([
+      'collapsibleCard:Bash · ls -la',
+    ]);
+    const body = asFake(options.body());
     expect(body.className).toBe('chat-tool-body');
     expect(describeChildren(body)).toEqual([
-      'div.chat-section-label:Input',
+      'section:Input',
       inputJson,
       'div.chat-muted:Running…',
     ]);
@@ -211,58 +243,66 @@ describe('default chat layout', () => {
     const { kit, calls } = fakeKit();
 
     layout.entries.tool({ ...toolEntry, summary: '' }, kit);
-    expect(calls.expanders[0].line).toBe('Bash');
+    expect(calls.collapsibleCards[0].summary).toBe('Bash');
   });
 
   it.each([
-    { isError: true, label: 'Error', text: 'denied' },
-    { isError: false, label: 'Result', text: 'total 0' },
+    { isError: true, label: 'Error', status: 'error', text: 'denied' },
+    { isError: false, label: 'Result', status: 'success', text: 'total 0' },
   ])(
-    'tool_updateShowsTheResultInTheSameBody (isError $isError)',
-    ({ isError, label, text }) => {
+    'tool_updateSetsTheDotAndRefillsTheBody (isError $isError)',
+    ({ isError, label, status, text }) => {
       const { kit, calls } = fakeKit();
       const view = layout.entries.tool(toolEntry, kit);
-      const root = asFake(view.element);
-      const body = asFake(calls.expanders[0].body());
+      const options = calls.collapsibleCards[0];
+      const body = asFake(options.body());
 
       view.update?.({ ...toolEntry, result: { text, isError } });
-      expect(asFake(calls.expanders[0].body())).toBe(body);
+      expect(calls.setDotStatus).toEqual([['dot:running', status]]);
+      expect(asFake(options.body())).toBe(body);
       expect(describeChildren(body)).toEqual([
-        'div.chat-section-label:Input',
+        'section:Input',
         inputJson,
-        `div.chat-section-label:${label}`,
+        `section:${label}`,
         `pre.chat-tool-result:${text}`,
       ]);
-      expect(root.classList.contains('chat-tool-error')).toBe(isError);
-      expect(root.classList.contains('chat-tool-running')).toBe(false);
+      expect(calls.setOpen).toEqual([]);
     },
   );
 
-  it('permission_headJsonAndActions_updateMarksAnswered', () => {
-    const { kit, calls } = fakeKit();
-    const entry = {
-      kind: 'permission' as const,
-      id: 'p1',
-      toolName: 'Bash',
-      input: { command: 'rm x' } as unknown,
-      answer: null as { allowed: boolean; reason: string | null } | null,
-      raw: [] as unknown[],
-    };
+  const permissionEntry = {
+    kind: 'permission' as const,
+    id: 'p1',
+    toolName: 'Bash',
+    input: { command: 'rm x' } as unknown,
+    answer: null as { allowed: boolean; reason: string | null } | null,
+    raw: [] as unknown[],
+  };
 
-    const view = layout.entries.permission(entry, kit);
+  it('permission_unansweredAttentionCard_noUpdate', () => {
+    const { kit, calls } = fakeKit();
+
+    const view = layout.entries.permission(permissionEntry, kit);
     const root = asFake(view.element);
-    expect(describeChildren(root)).toEqual([
+    expect(describeChildren(root)).toEqual(['card:attention']);
+    expect(describeChildren(root.children[0])).toEqual([
       'div.chat-permission-head:Allow Bash?',
       `json:${JSON.stringify({ command: 'rm x' })}`,
       'permissionActions',
     ]);
     expect(calls.json).toEqual([{ command: 'rm x' }]);
     expect(calls.permissionActions).toBe(1);
-    expect(root.classList.contains('chat-permission-answered')).toBe(false);
+    expect(view.update).toBeUndefined();
+  });
 
-    view.update?.({ ...entry, answer: { allowed: false, reason: null } });
-    expect(root.classList.contains('chat-permission-answered')).toBe(true);
-    expect(calls.permissionActions).toBe(1);
+  it('permission_answeredPlainCard', () => {
+    const { kit } = fakeKit();
+
+    const view = layout.entries.permission(
+      { ...permissionEntry, answer: { allowed: true, reason: null } },
+      kit,
+    );
+    expect(describeChildren(asFake(view.element))).toEqual(['card:none']);
   });
 
   it.each([
