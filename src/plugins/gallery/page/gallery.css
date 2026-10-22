@@ -185,12 +185,33 @@
   min-width: 0;
 }
 
+/* The title bar drags the window; its controls take clicks. */
 .gallery-test-title-bar {
   grid-area: title;
   align-items: center;
   height: var(--wg-toolbar-height);
   border-bottom: 1px solid var(--wg-border-subtle);
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.gallery-test-title-bar :is(button, input, [role='button']) {
+  -webkit-app-region: no-drag;
+}
+
+/* macOS's window buttons sit at the left; the same room on the right keeps
+   the centre centred on the window. */
+:root[data-platform='macos'] .gallery-test-title-bar {
   padding-inline: var(--wg-traffic-light-inset);
+}
+
+/* The title bar overlay's buttons take the width right of the area the page
+   may draw in. */
+:root:is([data-platform='windows'], [data-platform='linux'])
+  .gallery-test-title-bar {
+  padding-inline: calc(
+    100vw - env(titlebar-area-x, 0) - env(titlebar-area-width, 100vw)
+  );
 }
 
 .gallery-test-status-bar {
@@ -226,6 +247,16 @@
   min-height: 0;
   overflow-y: auto;
   border-right: 1px solid var(--wg-border-default);
+}
+
+/* Over the content, the side bar lies on the main and panel cell while its
+   own column collapses. */
+.gallery-test-side-bar[data-side-bar='over'] {
+  box-shadow: 0 0 var(--wg-space-4) var(--wg-window-background);
+  grid-column: 2;
+  grid-row: 3 / 5;
+  justify-self: start;
+  z-index: 1;
 }
 
 .gallery-test-main {
