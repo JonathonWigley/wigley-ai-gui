@@ -248,6 +248,10 @@ Conventions every primitive follows:
 
 - A builder returning an element is a noun (`chip`); one returning a handle is `create<Name>`.
 - Root class `ui-<name>`, parts `ui-<name>-<part>`, variants `ui-<name>--<variant>`.
+- A composite primitive's element can carry another primitive's class (the dialog panel carries
+  `ui-floating`, the collapsible card carries `ui-card`). Its overriding rules use the compound
+  selector (`.ui-floating.ui-dialog`, `.ui-card.ui-collapsible`), which outranks either class
+  alone, so they win whatever order the stylesheets load in.
 - States are classes `is-selected`, `is-active`, `is-cursor` and `is-disabled` (a button's
   `disabled` attribute); an enumerated value is `data-<name>`; `is-hover` and `is-pressed` exist
   only so the gallery can show those states.
@@ -297,10 +301,10 @@ Conventions every primitive follows:
   the ones plan C rebuilds on the primitives; `--no-legacy` judges every file, or only the paths
   given after it. Plan C's final task deletes the list.
 - A self-test step's `screenshot` field saves a PNG of the window to
-  `.selftest/screenshots/<plugin>-<name>.png`. The self-test saves the gallery's six pages
+  `.selftest/screenshots/<plugin>-<name>.png`. The self-test saves the gallery's pages
   (`forms-gallery-<n>-full`, `forms-gallery-<n>-reduced`), Sessions (`forms-sessions-*`) and Docs
-  (`docs-docs-*`) in both transparency settings, and the shell layout swap; the agent checks them
-  against this file — density, the one accent, each surface on its layer and material, sentence
+  (`docs-docs-*`) in both transparency settings, and the shell layout swap; the agent checks
+  them against this file — density, the one accent, each surface on its layer and material, sentence
   case — before handing a UI change to the user.
 - Text meets WCAG AA contrast against its opaque fallback background, in both transparency
   settings.

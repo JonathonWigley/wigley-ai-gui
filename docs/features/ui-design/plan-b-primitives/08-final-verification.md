@@ -34,6 +34,8 @@ per screenshot, what was seen against each point:
 | `forms-gallery-<n>-reduced.png`, every page | the gallery, reduced, page by page |
 | `forms-sessions-full.png`, `forms-sessions-reduced.png` | Sessions mode on the layout preview's round |
 | `docs-docs-full.png`, `docs-docs-reduced.png` | Docs mode on the fixture's tree |
+| `forms-shell-layout-test.png` | the gallery's test shell layout, checked against DESIGN.md's shell layout |
+| `forms-shell-layout-restored.png` | the real shell after swapping back, checked against `forms-sessions-full.png` |
 
 The folder holds exactly these (the gallery's page count as 06 landed it, twice, plus four), plus any
 screenshot another task's step takes; a missing one is a failed step in 06.

@@ -5,12 +5,13 @@ Type: Task
 Wave: 5 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09
 Plan: [plan.md](plan.md)
 
-Files:     modify `scripts/check-styles.mts` · delete `src/shared/page/dialog.css` · modify `src/shared/page/dom.ts`
+Files:     modify `scripts/check-styles.mts` · modify `scripts/style-rules.mts` · modify `scripts/style-rules.test.mts` · delete `src/shared/page/dialog.css` · modify `src/shared/page/dom.ts`
            (`appendKeys` leaves) · modify `src/renderer/index.css` (the global `kbd` rule leaves) · modify any file
            under `src/` the full check fails (the stragglers; see **Stragglers**)
 Consumes:  `const LEGACY_FILES: string[]` and the `--no-legacy` flag in `scripts/check-styles.mts` ← plan B task 03 (after plan B) ·
            `cssViolations(css, allowsBackdropFilter)` and `inlineStyleViolations(fileName, source)` in
            `scripts/style-rules.mts` ← plan B task 03 (after plan B), unchanged here ·
+           `legacyListProblems` in `scripts/style-rules.mts` and its tests in `scripts/style-rules.test.mts` ← plan B task 03 ·
            every surface stylesheet rebuilt onto tokens ← 01–09 ·
            no file under `src/` imports `dialog.css`, uses its classes or calls `appendKeys` ← 01, 04, 06, 08 (each
            drops its own; 02's table lists every user)
@@ -26,8 +27,9 @@ Decisions: the list goes whole, not emptied, so no later change can park a file 
            (1rem = 16px) as a `space-*` step, as `calc(var(--wg-space-N) * k)` when that equals it exactly, else
            the nearest step (plan B task 03's rule) · a raw colour, duration or font stack in a straggler is a
            token no task named: stop and report it with file and line, since a new token is a `DESIGN.md` change
-           (DESIGN.md § Tokens and themes) · `scripts/style-rules.mts` and its tests are untouched: the rules do
-           not change, only which files they reach
+           (DESIGN.md § Tokens and themes) · the rules in `scripts/style-rules.mts` do not change, only
+           which files they reach · `legacyListProblems` in `scripts/style-rules.mts` and its three
+           tests in `scripts/style-rules.test.mts` check only the list, so they go in the same change as `LEGACY_FILES`
 GIVEN the list removed WHEN `npm run lint` runs THEN every file under `src/` is judged and the run prints `styles: <n> files clean`
 GIVEN `node scripts/check-styles.mts --no-legacy` WHEN it runs THEN it prints `check-styles: unknown argument --no-legacy` and exits 1
 Tests:     none new: the walk has no unit tests (plan B task 03 put the rules, which are tested, in

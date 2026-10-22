@@ -178,6 +178,9 @@ Each member's one-line comment states what it draws; `permissionActions`' names 
 
 In `chat-kit.ts` the private `Expander` type becomes `Pick<CollapsibleCard, 'isOpen' | 'setOpen'>`,
 `buildExpander` is deleted, and `Expanders` keeps its five members over the registered cards.
+`CollapsibleCard.isOpen()` is a method, where chat's `Expander` exposes `isOpen` as a property
+(`chat-kit.ts`); the callers in `Expanders` (`isAnyClosed`, `openStates`, the toggle) call it when the
+expanders move onto the cards.
 
 ## Tests
 
