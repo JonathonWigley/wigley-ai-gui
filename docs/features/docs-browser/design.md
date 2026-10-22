@@ -33,6 +33,9 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - `Space k s` shows Sessions mode; pressed while Sessions already shows, it toggles the sessions sidebar. `Space k d`
   does the same for Docs mode and its docs tree. `<Leader>ks` / `<Leader>kd` do the same inside a box. No existing bind
   starts with `Space k`.
+- While Docs mode's tree is hidden, by `Space k d` or a window too narrow for it, a tree key moves focus to the doc
+  and runs what that key runs there by the keymap in force (`j` scrolls the doc); a tree command whose keys run
+  different commands there, or none, only moves focus (`src/plugins/docs/page/hidden-tree-keys.ts`).
 - Every key is a default bind in the default keymap (`src/plugins/keymap.ts`) to a named command, never code
   reacting to a key, so the user's `keymap.json` rebinds any of them.
 - **Sessions sidebar**, left, Claude Code style, replacing the tab strip. It lists every connected session (a relay
