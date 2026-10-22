@@ -7,7 +7,6 @@ import {
   type HandedScript,
   mergeSelfTestConfigs,
   screenshotFiles,
-  withPrimitiveEllipsis,
 } from './selftest-config';
 
 function handed(
@@ -186,29 +185,5 @@ describe('screenshotFiles', () => {
       ]);
 
     expect(name).toThrow('Two self-test steps save a-b-c.png');
-  });
-});
-
-describe('withPrimitiveEllipsis', () => {
-  it('withPrimitiveEllipsis_ScriptList_AddsTheFourSelectors', () => {
-    expect(withPrimitiveEllipsis(['.scroller'])).toEqual([
-      '.scroller',
-      '.ui-row-label',
-      '.ui-row-detail',
-      '.ui-tab-label',
-      '.ui-collapsible-summary',
-    ]);
-  });
-
-  it('withPrimitiveEllipsis_ListAlreadyHoldingOne_DoesNotRepeatIt', () => {
-    const four = [
-      '.ui-row-label',
-      '.ui-row-detail',
-      '.ui-tab-label',
-      '.ui-collapsible-summary',
-    ];
-
-    expect(withPrimitiveEllipsis(['.ui-row-label'])).toEqual(four);
-    expect(withPrimitiveEllipsis([])).toEqual(four);
   });
 });

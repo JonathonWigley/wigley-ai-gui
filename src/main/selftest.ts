@@ -1,22 +1,29 @@
 import { app, type BrowserWindow } from 'electron';
 import { mkdirSync, rmSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
+import { setTimeout as wait } from 'node:timers/promises';
 import path from 'node:path';
 import type { Files } from '../contracts/files';
 import type { SelfTestHost, SelfTestStep } from '../contracts/plugin';
-import {
-  type Chord,
-  CHORD_NOTATION_RULE,
-  isChordToken,
-  parseChord,
-} from '../shared/chord-notation';
 import { errorText } from '../shared/error-text';
+import type { DrivenWindow } from './drive/driven-window';
+import {
+  capturePng,
+  cutOffAtWidth,
+  isReadyForKeys,
+  press,
+  readLog,
+  readStartFailure,
+  waitFor,
+  waitForNewLogLine,
+  withPrimitiveEllipsis,
+} from './drive/page-driver';
+import { electronDrivenWindow } from './electron-driven-window';
 import {
   type HandedScript,
   mergeSelfTestConfigs,
   type SelfTestConfig,
   screenshotFiles,
-  withPrimitiveEllipsis,
 } from './selftest-config';
 
 // Runs the plugins' self-test scripts on every page load, one after another:
@@ -25,124 +32,6 @@ import {
 // page logs, that the page fits the window's minimum width, and the result the
 // script checks, saving the screenshots steps ask for. Run with
 // `npm run selftest`; exits non-zero on failure.
-
-const KEY_CODES: Record<string, string> = { ' ': 'Space' };
-const STEP_TIMEOUT_MS = 5000;
-
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// A chord sends no `char`: its modifiers make it a command, not typed text.
-function pressChord(window: BrowserWindow, chord: Chord) {
-  const keyCode = chord.key;
-  const modifiers = [
-    ...(chord.ctrl ? ['control' as const] : []),
-    ...(chord.alt ? ['alt' as const] : []),
-    ...(chord.shift ? ['shift' as const] : []),
-    ...(chord.meta ? ['meta' as const] : []),
-  ];
-  window.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
-  window.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
-}
-
-// Presses a KeyboardEvent.key value, or a chord in the page keymap's notation;
-// throws on a chord token that does not fit the notation.
-function press(window: BrowserWindow, key: string) {
-  if (isChordToken(key)) {
-    const chord = parseChord(key);
-    if (!chord) {
-      throw new Error(
-        `Self-test step presses a malformed chord ${key}: ${CHORD_NOTATION_RULE}`,
-      );
-    }
-    pressChord(window, chord);
-    return;
-  }
-  const keyCode = KEY_CODES[key] ?? key;
-  // A capital letter's key event says Shift, as the keyboard's does.
-  const modifiers = /^[A-Z]$/.test(key) ? ['shift' as const] : [];
-  window.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
-  if (key.length === 1) {
-    window.webContents.sendInputEvent({ type: 'char', keyCode: key });
-  }
-  window.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
-}
-
-function readLog(window: BrowserWindow): Promise<string[]> {
-  return window.webContents.executeJavaScript(
-    `[...document.querySelectorAll('#log li')].map((li) => li.textContent)`,
-  );
-}
-
-function isPageReady(window: BrowserWindow): Promise<boolean> {
-  return window.webContents.executeJavaScript(
-    `document.body.dataset.ready === 'true'`,
-  );
-}
-
-// The error the page's start failed with, or null while it has not failed.
-function readStartFailure(window: BrowserWindow): Promise<string | null> {
-  return window.webContents.executeJavaScript(
-    `document.body.dataset.startFailed ?? null`,
-  );
-}
-
-// The core shell's elements that clip their own text with an ellipsis.
-const CORE_SCROLLS_ITSELF = ['.title-bar-context'];
-
-// Lists what the page cuts off on the right: an element whose content is wider
-// than its box, or that ends past the window, skipping the elements the
-// `scrollsItself` selectors and the core's own match, and everything inside
-// them.
-function cutOffScript(scrollsItself: string[]): string {
-  return `(() => {
-  const scrollsItself = ${JSON.stringify([...CORE_SCROLLS_ITSELF, ...scrollsItself])};
-  const isScroller = (node) => scrollsItself.some((selector) => node.matches(selector));
-  const name = (node) => [node.tagName.toLowerCase(), ...node.classList].join('.');
-  const problems = [];
-  const page = document.documentElement;
-  if (page.scrollWidth > innerWidth) {
-    problems.push('page is ' + page.scrollWidth + 'px wide');
-  }
-  for (const node of document.querySelectorAll('#app *')) {
-    const right = node.getBoundingClientRect().right;
-    const isInScroller = scrollsItself.some(
-      (selector) => node.parentElement.closest(selector) !== null,
-    );
-    if (isInScroller || node.getClientRects().length === 0) {
-      continue;
-    }
-    const isOverfull =
-      node.clientWidth > 0 &&
-      node.scrollWidth > node.clientWidth + 1 &&
-      !isScroller(node);
-    if (isOverfull) {
-      problems.push(name(node) + ' holds ' + node.scrollWidth + 'px in ' + node.clientWidth + 'px');
-    } else if (right > innerWidth + 1) {
-      problems.push(name(node) + ' ends at ' + Math.round(right) + 'px');
-    }
-  }
-  return problems;
-})()`;
-}
-
-async function waitFor(check: () => Promise<boolean>): Promise<boolean> {
-  const deadline = Date.now() + STEP_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    if (await check()) {
-      return true;
-    }
-    await wait(50);
-  }
-  return false;
-}
-
-// Waits for the line among those logged after `seen` lines; the log is newest first.
-function waitForNewLogLine(window: BrowserWindow, line: string, seen: number) {
-  return waitFor(async () => {
-    const lines = await readLog(window);
-    return lines.slice(0, lines.length - seen).includes(line);
-  });
-}
 
 function report(passed: boolean, what: string) {
   console.log(`[selftest] ${passed ? 'PASS' : 'FAIL'} ${what}`);
@@ -175,94 +64,18 @@ export function failSelfTest(
   exitSelfTest(1, cleanUp);
 }
 
-function waitForPageWidth(window: BrowserWindow, width: number) {
-  return waitFor(async () => {
-    const pageWidth: number =
-      await window.webContents.executeJavaScript('innerWidth');
-    return pageWidth === width;
-  });
-}
-
-// Waits for three of the page's frames, true once they have run and false when
-// they have not within the step timeout (a page that stops producing frames or
-// reloads mid-wait). The fit check waits after a resize, and a screenshot
-// before its capture: a change reaches the editors' ResizeObserver in the
-// first frame, which asks vim to redraw its cursor in the next, and the third
-// starts after that redraw.
-async function waitForRedraw(window: BrowserWindow): Promise<boolean> {
-  await window.webContents.executeJavaScript(`{
-  window.redrawFrames = 0;
-  const frame = () => {
-    window.redrawFrames += 1;
-    if (window.redrawFrames < 3) requestAnimationFrame(frame);
-  };
-  requestAnimationFrame(frame);
-}`);
-  return waitFor(
-    async () =>
-      (await window.webContents.executeJavaScript('window.redrawFrames')) >= 3,
-  );
-}
-
-// Shrinks the window to its minimum width, lists what the page cuts off
-// there once the page has redrawn at that width, then restores the window's
-// size and waits for the page to redraw at it, listing a restore that never
-// lands as a problem too. Chromium reports media query changes in the frame
-// before its animation-frame callbacks, so the redraw wait holds the next
-// step's keys until the page's `change` listeners have seen each width.
-async function cutOffAtMinimumWidth(
-  window: BrowserWindow,
-  scrollsItself: string[],
-): Promise<string[]> {
-  const [width, height] = window.getSize();
-  const [minimumWidth] = window.getMinimumSize();
-  window.setSize(minimumWidth, height);
-  const [narrowWidth] = window.getContentSize();
-  const hasNarrowed = await waitForPageWidth(window, narrowWidth);
-  const hasRedrawn = hasNarrowed && (await waitForRedraw(window));
-  let problems: string[];
-  if (!hasNarrowed) {
-    problems = [`the page never narrowed to ${narrowWidth}px`];
-  } else if (!hasRedrawn) {
-    problems = [
-      `the page produced no frames after narrowing to ${narrowWidth}px`,
-    ];
-  } else {
-    problems = await window.webContents.executeJavaScript(
-      cutOffScript(scrollsItself),
-    );
-  }
-  window.setSize(width, height);
-  const [restoredWidth] = window.getContentSize();
-  const hasRestored = await waitForPageWidth(window, restoredWidth);
-  const hasRedrawnRestored = hasRestored && (await waitForRedraw(window));
-  if (!hasRestored) {
-    problems.push(`the page never widened back to ${restoredWidth}px`);
-  } else if (!hasRedrawnRestored) {
-    problems.push(
-      `the page produced no frames after widening back to ${restoredWidth}px`,
-    );
-  }
-  return problems;
-}
-
 // Saves a PNG of the window to `png` once the page has redrawn; returns why it
 // was not saved, or null when it was.
 async function saveScreenshot(
-  window: BrowserWindow,
+  window: DrivenWindow,
   png: string,
 ): Promise<string | null> {
-  if (!(await waitForRedraw(window))) {
-    return 'the page produced no frames';
+  const capture = await capturePng(window);
+  if (typeof capture === 'string') {
+    return capture;
   }
   try {
-    const image = await window.webContents.capturePage(undefined, {
-      stayHidden: true,
-    });
-    if (image.isEmpty()) {
-      return 'the capture came back empty';
-    }
-    await writeFile(png, image.toPNG());
+    await writeFile(png, capture);
     return null;
   } catch (error) {
     return errorText(error);
@@ -272,10 +85,6 @@ async function saveScreenshot(
 // Forge's dev server can reload the page once at startup, so every load starts
 // a fresh run and a run that a reload interrupted stands down.
 let latestRun = 0;
-// Chromium drops input that reaches a page before the page's first frame.
-// `paint` fires only for an offscreen window, and self-test windows are
-// offscreen (window.ts), so a visible-window self-test would time out here.
-let hasPaintedSinceNavigation = false;
 
 // Writes the step's file through `homeFiles` (rooted at the self-test's temp
 // home, so a path outside it rejects), presses its keys, and waits for its
@@ -284,7 +93,7 @@ let hasPaintedSinceNavigation = false;
 // `png` when the step has one, and, when the line came, runs the step's fit
 // check, which resizes the window and so comes after the screenshot.
 async function runStep(
-  window: BrowserWindow,
+  window: DrivenWindow,
   homeFiles: Files,
   step: SelfTestStep,
   png: string | null,
@@ -326,7 +135,11 @@ async function runStep(
   if (!passed || !isSaved || !step.checksFit) {
     return passed && isSaved;
   }
-  const cutOff = await cutOffAtMinimumWidth(window, scrollsItself);
+  const cutOff = await cutOffAtWidth(
+    window,
+    window.minimumWidth(),
+    scrollsItself,
+  );
   if (isCurrent()) {
     report(
       cutOff.length === 0,
@@ -342,7 +155,7 @@ async function runStep(
 // primitives' ellipsis parts clip. Returns how many checks failed, or null
 // when a reload interrupted the run.
 async function runScript(
-  window: BrowserWindow,
+  window: DrivenWindow,
   homeFiles: Files,
   { pluginId, script }: HandedScript,
   screenshots: ReadonlyMap<SelfTestStep, string>,
@@ -392,7 +205,7 @@ async function runScript(
 // Waits for the page to be ready for keys and focuses it, then runs every
 // handed script in hand-over order; a failing script does not stop the next.
 async function runAllScripts(
-  window: BrowserWindow,
+  window: DrivenWindow,
   homeFiles: Files,
   handed: readonly HandedScript[],
   screenshots: ReadonlyMap<SelfTestStep, string>,
@@ -401,11 +214,12 @@ async function runAllScripts(
   cleanUp: () => void,
 ) {
   const exit = (code: number) => exitSelfTest(code, cleanUp);
-  const isReadyForKeys = async () =>
-    hasPaintedSinceNavigation && (await isPageReady(window));
+  // Chromium drops input that reaches a page before the page's first frame,
+  // and only an offscreen window reports its frames, so a visible-window
+  // self-test would time out here.
   const hasStartFailed = async () => (await readStartFailure(window)) !== null;
   const isSettled = async () =>
-    (await isReadyForKeys()) || (await hasStartFailed());
+    (await isReadyForKeys(window)) || (await hasStartFailed());
   const isReady = await waitFor(isSettled);
   if (!isCurrent()) {
     return;
@@ -420,7 +234,7 @@ async function runAllScripts(
     exit(1);
     return;
   }
-  window.webContents.focus();
+  window.focus();
 
   let failures = 0;
   for (const script of handed) {
@@ -446,7 +260,7 @@ async function runAllScripts(
 // Starts a fresh run of every handed script; a step that throws fails the
 // self-test, unless a reload already interrupted the run.
 function startRun(
-  window: BrowserWindow,
+  window: DrivenWindow,
   homeFiles: Files,
   handed: readonly HandedScript[],
   screenshots: ReadonlyMap<SelfTestStep, string>,
@@ -498,13 +312,10 @@ export function startSelfTest(
 ): SelfTestDriver {
   rmSync(screenshotFolder, { recursive: true, force: true });
   mkdirSync(screenshotFolder, { recursive: true });
+  const drivenWindow = electronDrivenWindow(window);
   window.webContents.on('did-navigate', () => {
     // A run begun on the previous page stands down before its load finishes.
     latestRun++;
-    hasPaintedSinceNavigation = false;
-  });
-  window.webContents.on('paint', () => {
-    hasPaintedSinceNavigation = true;
   });
   const handed: HandedScript[] = [];
   let isHandoverClosed = false;
@@ -551,7 +362,7 @@ export function startSelfTest(
         return { pageBinds: [], settings: {} };
       }
       window.webContents.on('did-finish-load', () =>
-        startRun(window, homeFiles, handed, screenshots, cleanUp),
+        startRun(drivenWindow, homeFiles, handed, screenshots, cleanUp),
       );
       return config;
     },

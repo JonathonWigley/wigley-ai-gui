@@ -1,6 +1,7 @@
 import type { SelfTestScript, SelfTestStep } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { overrideSettings } from '../shared/plugin-manifests';
+import { SCREENSHOT_NAME } from './drive/page-driver';
 
 // A script as the self-test received it, with the id of the plugin that handed
 // it over.
@@ -46,8 +47,6 @@ export function mergeSelfTestConfigs(
   };
 }
 
-const SCREENSHOT_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-
 // The PNG file each step with a `screenshot` saves,
 // `<pluginId>-<screenshot>.png`, walking the scripts in hand-over order.
 // Throws on a name that is not lowercase words joined by `-`, and on two steps
@@ -76,28 +75,6 @@ export function screenshotFiles(
     }
   }
   return files;
-}
-
-// The design primitives' parts that clip their text with an ellipsis on
-// purpose, which the fit check lets clip in every script.
-export const PRIMITIVE_ELLIPSIS_SELECTORS: readonly string[] = [
-  '.ui-row-label',
-  '.ui-row-detail',
-  '.ui-tab-label',
-  '.ui-collapsible-summary',
-];
-
-// A script's `scrollsItself` followed by each primitive ellipsis selector it
-// does not already hold.
-export function withPrimitiveEllipsis(
-  scrollsItself: readonly string[],
-): string[] {
-  return [
-    ...scrollsItself,
-    ...PRIMITIVE_ELLIPSIS_SELECTORS.filter(
-      (selector) => !scrollsItself.includes(selector),
-    ),
-  ];
 }
 
 // `config` as the self-test serves it: the scripts' page binds after every
