@@ -96,8 +96,8 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
   its temp home.
 - **The ConfigStore** is one main-side module behind `current()` and `onChanged()`. It watches the
   folder through the `Files` service, parses, layers and validates, keeps the last good config on a
-  broken file and reports the problem, and pushes each new `AppConfig` to the page over the
-  Bridge. The theme loader is pure: the ConfigStore reads the theme files through `Files` and hands their
+  broken file and reports the problem, and tells its listeners each new `AppConfig`, which
+  `main.ts` pushes to the page over the Bridge. The theme loader is pure: the ConfigStore reads the theme files through `Files` and hands their
   text to it.
 - **settings.json** is a partial override deep-merged over the defaults; plugin settings sit under
   the plugin id. A setting read only when something is created (window size, the claude command)

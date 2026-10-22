@@ -17,7 +17,7 @@ Consumes:  `export interface UiState { get(key: string): unknown; set(key: strin
            `export function icon(name: string): HTMLElement;` in `src/shared/page/ui/icon.ts` ← plan A task 04 ·
            `element` in `src/shared/page/dom.ts` ← tree ·
            `.material-floating` in `src/shared/page/ui/materials.css` ← 01 ·
-           the core tokens (`reference/tokens.css` names, `--wg-` prefixed) ← plan A ·
+           the core tokens (the keys of `src/config/theme-tokens.ts`, `--wg-` prefixed) ← plan A ·
            the `src/shared/page/ui` entry in `scripts/check-layers.mts` allowing `src/contracts`, `src/shared` and `src/shared/page` ← plan A task 04
 Produces:  see **Produces** below — every signature lands in the file named beside it
 Decisions: the naming, class and state convention in [04](04-primitives-controls.md) § Decisions

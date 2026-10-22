@@ -70,7 +70,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
 src/main/        core main process; main.ts is its composition root
   plugins/       the main-side plugin API: per-plugin channel routing and services
   config/        the ConfigStore: watches the user config folder, layers settings, keymap and themes over the
-                 defaults, and pushes each new config to the page
+                 defaults, and tells its listeners each new config, which main.ts pushes to the page
   themes/        theme loader: parses a theme by the token registry and resolves `extends`
   ui-state/      the uiState file: app-written view state (`ui-state.json`) in Electron's user data folder
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts

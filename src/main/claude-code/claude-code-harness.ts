@@ -33,8 +33,8 @@ export type ClaudeSpawn = (
 
 // `command` reads the `claude` binary's path, once per spawned session;
 // `permissionTool` the MCP tool Claude asks what auto mode would still prompt;
-// `env` the environment the process inherits; `files` reads saved transcripts, and `homeDir` holds the
-// default config folder `.claude`.
+// `env` the environment the process inherits; `files` reads saved transcripts,
+// and `homeDir` holds the default config folder `.claude`.
 export interface ClaudeCodeHarnessDeps {
   command(): string;
   permissionTool: string;

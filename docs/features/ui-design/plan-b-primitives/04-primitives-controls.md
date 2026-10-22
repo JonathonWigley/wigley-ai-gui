@@ -14,7 +14,7 @@ Consumes:  `export function formatChord(token: string, platform: Platform): stri
            `export type Platform = 'macos' | 'windows' | 'linux';` in `src/contracts/platform.ts` ← plan A task 02 ·
            `export function icon(name: string): HTMLElement;` in `src/shared/page/ui/icon.ts` ← plan A task 04 ·
            `element` in `src/shared/page/dom.ts` ← tree ·
-           the core tokens (`reference/tokens.css` names, `--wg-` prefixed) and JetBrains Mono behind `--wg-font-mono` ← plan A, 01 ·
+           the core tokens (the keys of `src/config/theme-tokens.ts`, `--wg-` prefixed) and JetBrains Mono behind `--wg-font-mono` ← plan A, 01 ·
            the `src/shared/page/ui` entry in `scripts/check-layers.mts` allowing `src/contracts`, `src/shared` and `src/shared/page` ← plan A task 04
 Produces:  see **Produces** below — every signature lands in the file named beside it
 Decisions: see **Decisions** below

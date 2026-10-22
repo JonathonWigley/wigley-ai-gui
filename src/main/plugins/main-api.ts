@@ -13,10 +13,10 @@ import type { PluginChannels } from './plugin-channel';
 
 // `pluginSettings` reads every plugin's settings, by plugin id, as the user
 // config now sets them, and `onPluginSettingsChanged` hears them each time the
-// config changes; `services` is shared by every main part, and `selfTestFor` gives each plugin its own self-test host, null
-// outside the self-test; `dependency` is the host's; `bus` is shared by every
-// main part; `dataRoot` is the absolute folder that holds a folder per plugin,
-// named by its id.
+// config changes; `services` is shared by every main part, and `selfTestFor`
+// gives each plugin its own self-test host, null outside the self-test;
+// `dependency` is the host's; `bus` is shared by every main part; `dataRoot` is
+// the absolute folder that holds a folder per plugin, named by its id.
 export interface MainApiDeps {
   channels: PluginChannels;
   pluginSettings(): Record<string, object>;
