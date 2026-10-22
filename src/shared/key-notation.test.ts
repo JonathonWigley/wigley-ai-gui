@@ -20,8 +20,20 @@ describe('pageKeysFor', () => {
     expect(pageKeysFor('<Enter>', '<Space>')).toEqual(['Enter']);
   });
 
+  it('converts <Return> as <CR>', () => {
+    expect(pageKeysFor('<Return>', '<Space>')).toEqual(['Enter']);
+  });
+
+  it('converts <Bar> to |', () => {
+    expect(pageKeysFor('<Bar>', '<Space>')).toEqual(['|']);
+  });
+
   it('converts a named key in any case, <cr> as <CR>', () => {
     expect(pageKeysFor('<cr>', '<Space>')).toEqual(['Enter']);
+  });
+
+  it('converts <return> as <Return>', () => {
+    expect(pageKeysFor('<return>', '<Space>')).toEqual(['Enter']);
   });
 
   it('keeps chords and single characters as written', () => {

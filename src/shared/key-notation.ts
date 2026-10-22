@@ -10,10 +10,12 @@ const PAGE_KEY_BY_VIM_NAME: Partial<Record<string, string>> = {
   space: ' ',
   cr: 'Enter',
   enter: 'Enter',
+  return: 'Enter',
   esc: 'Escape',
   tab: 'Tab',
   bs: 'Backspace',
   lt: '<',
+  bar: '|',
   bslash: '\\',
 };
 
