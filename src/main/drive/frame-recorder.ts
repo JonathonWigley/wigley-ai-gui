@@ -3,13 +3,16 @@ import type { Disposable } from '../../contracts/disposable';
 import type { Files } from '../../contracts/files';
 import type { ProcessRunner } from '../../contracts/processes';
 import type { DrivenWindow } from './driven-window';
+import { SCREENSHOT_NAME } from './page-driver';
 
 // Records the frames a window paints into an MP4 under `<runDir>/videos/`.
 // Paths are joined with `/`, which every OS's file calls and ffmpeg take.
 export interface FrameRecorder {
   // Captures the window as the first frame, then writes each painted frame to
   // `videos/<name>-frames/`; `name` defaults to `recording-<n>`, n counting
-  // from 1. Throws while a recording runs.
+  // from 1. Throws while a recording runs, and for a `name` that is not
+  // lowercase letters and digits in words joined by -, which could leave
+  // `videos/`.
   start(name?: string): void;
   // Ends the recording, encodes its frames through ffmpeg, each frame showing
   // until the next and the last until the stop, so the video lasts as long as
@@ -54,6 +57,11 @@ export function createFrameRecorder(deps: FrameRecorderDeps): FrameRecorder {
       if (recording !== null) {
         throw new Error(
           `Already recording ${recording.name}; stop it before starting another`,
+        );
+      }
+      if (name !== undefined && !SCREENSHOT_NAME.test(name)) {
+        throw new Error(
+          `Recording name "${name}" is not lowercase letters and digits in words joined by -`,
         );
       }
       started += 1;

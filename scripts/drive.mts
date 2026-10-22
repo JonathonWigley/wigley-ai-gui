@@ -29,7 +29,9 @@ const REPO_DIR = path.resolve(import.meta.dirname, '..');
 const DRIVE_DIR = path.join(REPO_DIR, '.drive');
 const CURRENT_FILE = path.join(DRIVE_DIR, 'current');
 const START_TIMEOUT_MS = 120_000;
-const QUIT_TIMEOUT_MS = 15_000;
+// How long a quit may take before the run is terminated: long enough for a
+// recording's encode to finish.
+const QUIT_TIMEOUT_MS = 60_000;
 // How long a check that only asks whether a run answers waits for its reply.
 const ANSWER_CHECK_MS = 5_000;
 const POLL_MS = 250;
@@ -337,9 +339,10 @@ async function restart(runId: string): Promise<void> {
 
 // Asks the run's app to quit and waits for it and the process `start` spawned
 // to exit; when they do not exit in time, as when the app's main process is
-// itself stuck, its processes are terminated instead. A recorded pid that is
-// alive but no longer the run's, as after a crash left the files behind and
-// the pid was reused, is skipped and named.
+// itself stuck, its processes are terminated instead (an app still holding
+// its quit takes that SIGTERM as a second quit and exits). A recorded pid
+// that is alive but no longer the run's, as after a crash left the files
+// behind and the pid was reused, is skipped and named.
 async function stop(runId: string): Promise<void> {
   const runDir = runDirOf(runId);
   const startFile = readStartFile(runId);

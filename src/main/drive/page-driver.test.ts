@@ -29,6 +29,38 @@ describe('waitForNewLogLine', () => {
 
     expect(isLogged).toBe(true);
   });
+
+  it('waitForNewLogLine_PageReloadedToAsManyLinesAsSeen_FindsTheLineAmongThemAll', async () => {
+    let reads = 0;
+    const { window, navigate } = fakeDrivenWindow([
+      [
+        '#log li',
+        () => {
+          reads += 1;
+          if (reads === 2) {
+            navigate();
+          }
+          return reads >= 2
+            ? ['[x] later', '[x] done']
+            : ['[x] old', '[x] older'];
+        },
+      ],
+    ]);
+
+    const isLogged = await waitForNewLogLine(window, '[x] done', 2, 500);
+
+    expect(isLogged).toBe(true);
+  });
+
+  it('waitForNewLogLine_NoNavigationAndNoNewLines_ResolvesFalse', async () => {
+    const { window } = fakeDrivenWindow([
+      ['#log li', () => ['[x] later', '[x] done']],
+    ]);
+
+    const isLogged = await waitForNewLogLine(window, '[x] done', 2, 100);
+
+    expect(isLogged).toBe(false);
+  });
 });
 
 describe('waitFor', () => {

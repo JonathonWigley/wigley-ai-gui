@@ -14,8 +14,10 @@ import type { ConsoleMessage, DrivenWindow } from './drive/driven-window';
 export function electronDrivenWindow(window: BrowserWindow): DrivenWindow {
   const { webContents } = window;
   let hasPainted = false;
+  let navigations = 0;
   webContents.on('did-navigate', () => {
     hasPainted = false;
+    navigations += 1;
   });
   webContents.on('paint', () => {
     hasPainted = true;
@@ -53,6 +55,7 @@ export function electronDrivenWindow(window: BrowserWindow): DrivenWindow {
       );
     },
     hasPaintedSinceNavigation: () => hasPainted,
+    navigationCount: () => navigations,
     onFrame(listener) {
       const onPaint = (
         _event: unknown,

@@ -11,7 +11,8 @@ export type FakeAnswer = [fragment: string, answer: () => unknown];
 // how often it was focused and had focus emulated, rejects `emulateFocus`
 // with `focused.failure` while a test sets one, answers each script `run`
 // gets from the first table entry whose fragment the script holds (throwing
-// when none does), resolves `capture` to `screen.captured`, and lets a test paint frames and
+// when none does), resolves `capture` to `screen.captured`, counts the
+// navigations a test makes with `navigate`, and lets a test paint frames and
 // write console messages to its listeners.
 export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
   const inputs: DrivenInput[] = [];
@@ -23,6 +24,7 @@ export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
     failure: null,
   };
   const screen: { captured: Uint8Array | null } = { captured: null };
+  let navigations = 0;
   const window: DrivenWindow = {
     sendInput: (input) => inputs.push(input),
     async run<T>(script: string) {
@@ -47,6 +49,7 @@ export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
       focused.emulated += 1;
     },
     hasPaintedSinceNavigation: () => true,
+    navigationCount: () => navigations,
     onFrame: (listener) => {
       frameListeners.add(listener);
       return { dispose: () => frameListeners.delete(listener) };
@@ -66,5 +69,8 @@ export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
       listener(message);
     }
   };
-  return { window, inputs, focused, screen, paint, writeConsole };
+  const navigate = () => {
+    navigations += 1;
+  };
+  return { window, inputs, focused, screen, navigate, paint, writeConsole };
 }

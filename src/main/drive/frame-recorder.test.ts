@@ -102,4 +102,11 @@ describe('createFrameRecorder', () => {
     expect(listLines(written, 'duration ').map(Number)).toEqual([0.5]);
     expect(video).toBe(VIDEO);
   });
+
+  it('start_NameLeavingTheVideosFolder_ThrowsAndRecordsNothing', () => {
+    const { recorder } = setUp();
+
+    expect(() => recorder.start('../escape')).toThrow('../escape');
+    expect(recorder.isRecording()).toBe(false);
+  });
 });

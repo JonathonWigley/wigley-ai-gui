@@ -73,29 +73,37 @@ describe('channelPath', () => {
     expect(Buffer.byteLength(`${tempDir}/${socketName}`)).toBe(103);
   });
 
-  it('falls back to a folder of /tmp only the user can enter when the temp folder socket would be 104 bytes', () => {
-    const username = `wigley-endpoint-test-${process.pid}`;
-    const privateDir = `/tmp/wigley-ai-gui-${username}`;
-    folders.push(privateDir);
-    const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
+  // Windows has no /tmp, no process.getuid and no POSIX mode bits.
+  it.skipIf(process.platform === 'win32')(
+    'falls back to a folder of /tmp only the user can enter when the temp folder socket would be 104 bytes',
+    () => {
+      const username = `wigley-endpoint-test-${process.pid}`;
+      const privateDir = `/tmp/wigley-ai-gui-${username}`;
+      folders.push(privateDir);
+      const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
 
-    const channel = channelPath('darwin', longHome, username, tempDir);
+      const channel = channelPath('darwin', longHome, username, tempDir);
 
-    expect(channel).toBe(`${privateDir}/${first8HexOfSha256(longHome)}.sock`);
-    expect(statSync(privateDir).mode & 0o777).toBe(0o700);
-  });
+      expect(channel).toBe(`${privateDir}/${first8HexOfSha256(longHome)}.sock`);
+      expect(statSync(privateDir).mode & 0o777).toBe(0o700);
+    },
+  );
 
-  it('throws when the /tmp folder exists open to others', () => {
-    const username = `wigley-endpoint-open-${process.pid}`;
-    const privateDir = `/tmp/wigley-ai-gui-${username}`;
-    folders.push(privateDir);
-    mkdirSync(privateDir, { mode: 0o755 });
-    const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
+  // Windows has no /tmp, no process.getuid and no POSIX mode bits.
+  it.skipIf(process.platform === 'win32')(
+    'throws when the /tmp folder exists open to others',
+    () => {
+      const username = `wigley-endpoint-open-${process.pid}`;
+      const privateDir = `/tmp/wigley-ai-gui-${username}`;
+      folders.push(privateDir);
+      mkdirSync(privateDir, { mode: 0o755 });
+      const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
 
-    expect(() => channelPath('darwin', longHome, username, tempDir)).toThrow(
-      privateDir,
-    );
-  });
+      expect(() => channelPath('darwin', longHome, username, tempDir)).toThrow(
+        privateDir,
+      );
+    },
+  );
 });
 
 describe('launchCommand', () => {

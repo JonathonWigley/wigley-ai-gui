@@ -32,9 +32,9 @@ or touches their data, so start one whenever a check needs it.
    `npm run drive -- do <plugin>.<action> '<json>'` runs one (a session, a round, a chat, docs).
    `chat.start` uses the first profile in chat's `profiles` setting, and only a profile logged in
    to Claude reaches it under `--harness claude`; `{"profile":"<name>"}` picks another.
-   `forms.openRound` opens its round in a session forms itself opened under that `sessionId`, so
-   a round for a session row comes from `forms.openRound` alone, never from a
-   `sessions.connect` row.
+   `forms.openRound` opens its round in the live session forms itself opened under that
+   `sessionId` (a fresh one once that session has ended), so a round for a session row comes
+   from `forms.openRound` alone, never from a `sessions.connect` row.
 3. Act with `key`, `type`, `click`, `drag`, `resize` and `setting`. Each returns once the page has
    redrawn: `resize` with the size the window took, the others with the log lines they caused
    (`setting` also says whether the config applied). The page holds document focus as the visible app's does,
@@ -50,7 +50,7 @@ or touches their data, so start one whenever a check needs it.
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something
 survives a restart runs the same way. The docs fixture survives a `restart` as the agent left it;
-`docs.seed` rewrites it. A start with an unusable environment (a relative `WIGLEY_DRIVE_DIR`, a
+`docs.seed` and `docs.connectSession` rewrite it. A start with an unusable environment (a relative `WIGLEY_DRIVE_DIR`, a
 `WIGLEY_DRIVE_HARNESS` other than `fake` or `claude`) exits 1 with the reason on stderr before any
 window opens.
 
@@ -58,9 +58,10 @@ The app runs commands one at a time, so a command that never returns blocks ever
 the CLI then says the run did not answer. A page that never finishes loading (an occasional dev
 `restart` brings one up) fails a command after 30 s with "The page never finished loading";
 `restart` the run. `restart` and `quit` end a stuck run: `quit` runs beside the stuck command,
-and the CLI terminates the app when it still does not exit, skipping any recorded pid whose
-process no longer carries the run's `WIGLEY_DRIVE_DIR` (a pid reused after a crash); on Windows it
-cannot check and terminates every live recorded pid.
+and the CLI waits up to 60 s for the app to exit (time for a recording's encode), then terminates
+it; the app takes that SIGTERM as a second quit and exits without waiting further. Terminating
+skips any recorded pid whose process no longer carries the run's `WIGLEY_DRIVE_DIR` (a pid reused
+after a crash); on Windows it cannot check and terminates every live recorded pid.
 
 A run folder holds `home/` (the app's home: config, plugin data, ui-state), `user-data/`
 (Chromium's profile), `screenshots/`, `videos/`, `app.log`, and `start.json` and `drive.json`

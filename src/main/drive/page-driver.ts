@@ -302,17 +302,20 @@ async function holdsBefore(
 }
 
 // Waits for the line among those logged after `seen` lines, or among all of
-// them once the log holds fewer than `seen` (the page reloaded); the log is
-// newest first.
+// them once the page has reloaded: it navigated after the wait began, or its
+// log holds fewer than `seen` lines. The log is newest first.
 export function waitForNewLogLine(
   window: DrivenWindow,
   line: string,
   seen: number,
   timeoutMs = STEP_TIMEOUT_MS,
 ): Promise<boolean> {
+  const navigation = window.navigationCount();
   return waitFor(async () => {
+    // Checked before the read, so an old log is never taken as all new.
+    const hasNavigated = window.navigationCount() !== navigation;
     const lines = await readLog(window);
-    const isReloaded = lines.length < seen;
+    const isReloaded = hasNavigated || lines.length < seen;
     const newLines = isReloaded ? lines : lines.slice(0, lines.length - seen);
     return newLines.includes(line);
   }, timeoutMs);

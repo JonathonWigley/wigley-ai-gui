@@ -61,6 +61,8 @@ export interface DrivenWindow {
   // Whether the page has drawn a frame since its last navigation; Chromium
   // drops input that reaches a page before its first frame.
   hasPaintedSinceNavigation(): boolean;
+  // How many times the page has navigated, a reload included.
+  navigationCount(): number;
   // Hears every frame the page draws, with its PNG made on demand and the
   // time it arrived in milliseconds since the epoch.
   onFrame(listener: (png: () => Uint8Array, at: number) => void): Disposable;

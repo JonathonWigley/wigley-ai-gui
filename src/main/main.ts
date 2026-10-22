@@ -285,9 +285,15 @@ function onQuit(task: () => unknown) {
 
 // Starts every quit task once, on the first will-quit. A drive run holds the
 // quit until every task settles, so a drive `restart` finds the ui-state it
-// left and a recording finishes encoding; the user's app quits without
-// waiting, so a task still running when it exits is cut short.
+// left and a recording finishes encoding; a second will-quit during the hold
+// (another quit, or the SIGTERM Electron turns into a quit) exits at once.
+// The user's app quits without waiting, so a task still running when it exits
+// is cut short.
 function runQuitTasks(event: Event) {
+  if (runMode === 'drive' && quitWork !== null) {
+    app.exit(0);
+    return;
+  }
   quitWork ??= Promise.allSettled(quitTasks.map(async (task) => task())).then(
     () => {
       if (runMode === 'drive') {
