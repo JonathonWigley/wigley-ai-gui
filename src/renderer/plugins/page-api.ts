@@ -11,6 +11,7 @@ import type {
   PageCommandContext,
   PageServices,
   PluginAreas,
+  PageTransparency,
   PluginManifest,
   ShellLayout,
   UntypedEvents,
@@ -30,12 +31,15 @@ import type { PendingKeysHub } from '../pending-keys';
 // and settings are read from at each call; `bus` is the page load's event bus;
 // `modes` is the core's mode registry, which takes qualified ids. `areas`
 // holds every area; plugins get the title bar, panel, status bar and overlay.
-// `setLayout` replaces the shell's layout. `services` are the ones every
-// plugin shares; `uiState` gives each plugin its own scope of the ui state.
+// `setLayout` replaces the shell's layout. `transparency` is the page's one
+// transparency override, handed to every plugin as it is. `services` are the
+// ones every plugin shares; `uiState` gives each plugin its own scope of the
+// ui state.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
   setLayout(layout: ShellLayout): Disposable;
+  transparency: PageTransparency;
   bridge: Bridge;
   scopeStack: ScopeStack;
   pendingKeys: Pick<PendingKeysHub, 'onPending' | 'hold' | 'cancel'>;
@@ -87,6 +91,7 @@ export function createPageApi(
       onChanged: (listener) => deps.modes.onChanged(listener),
     },
     shell: { setLayout: (layout) => deps.setLayout(layout) },
+    transparency: deps.transparency,
     settings: () => settingsOf(config.current()),
     onSettingsChanged: (listener) =>
       onChangedPart(config, settingsOf, listener),

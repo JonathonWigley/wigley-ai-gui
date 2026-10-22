@@ -308,6 +308,16 @@ export interface PushedScope {
   onBaseChanged(listener: (base: ViewScope) => void): void;
 }
 
+// The page's session override of the `transparency` setting. `override` holds
+// the page at `full` or `reduced` until the page loads again, applying it at
+// once, and `null` hands transparency back to the setting; `overridden` is the
+// override in force, null for none. A settings change under an override keeps
+// the override, and nothing is written to the user's settings.
+export interface PageTransparency {
+  override(transparency: 'full' | 'reduced' | null): void;
+  overridden(): 'full' | 'reduced' | null;
+}
+
 // `keys.setScope` sets the scope page keys fire in, under any pushed scope;
 // `keys.pushScope` lays a scope over it until the `PushedScope`'s `pop`.
 // `keys.scope` is the qualified scope keys fire in now, and
@@ -330,6 +340,8 @@ export interface PushedScope {
 // in use, moving every contribution into it, and returns the `Disposable` that
 // restores the default layout; that `dispose` does nothing once another
 // `setLayout` replaced the layout.
+// `transparency` is the page's one transparency override, shared by every
+// plugin (see `PageTransparency`).
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` is the
 // plugin's own events and `Heard` the other plugins' events it hears, as
@@ -362,6 +374,7 @@ export interface PageApi<
   };
   modes: Modes;
   shell: { setLayout(layout: ShellLayout): Disposable };
+  transparency: PageTransparency;
   settings(): M['settings'];
   onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
   platform: Platform;

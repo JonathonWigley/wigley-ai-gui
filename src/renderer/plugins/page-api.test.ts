@@ -94,6 +94,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
     areas: {} as PageApiDeps['areas'],
     modes: {} as Modes,
     setLayout: () => ({ dispose: () => {} }),
+    transparency: { override: () => {}, overridden: () => null },
     bridge: fakeBridge().bridge,
     scopeStack: createScopeStack('any'),
     pendingKeys: { onPending: () => {}, hold: () => {}, cancel: () => {} },

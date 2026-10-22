@@ -56,7 +56,8 @@ const STYLE_CHANGED_WHILE_EDITING =
 // that picker, so j moves Docs mode's tree. / filters it to neat and Enter
 // keeps the filter; j j j j selects neat.md and r opens the path box, where
 // seven Backspaces and kept.md rename it, and the session's view reads its
-// index again.
+// index again. Space z g, t and Space k d show Docs mode under reduced
+// transparency, and Space z g, t and Space k d again under full.
 const STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'k', 'd'],
@@ -216,6 +217,20 @@ const STEPS: SelfTestStep[] = [
   {
     keys: [...Array<string>(7).fill('Backspace'), ...'kept.md', 'Enter'],
     expect: '[docs] session index read: 4 entries',
+  },
+  { keys: [' ', 'z', 'g'], expect: '[page] showed Gallery mode' },
+  { keys: ['t'], expect: '[gallery] transparency reduced' },
+  {
+    keys: [' ', 'k', 'd'],
+    expect: '[page] showed Docs mode',
+    screenshot: 'docs-reduced',
+  },
+  { keys: [' ', 'z', 'g'], expect: '[page] showed Gallery mode' },
+  { keys: ['t'], expect: '[gallery] transparency full' },
+  {
+    keys: [' ', 'k', 'd'],
+    expect: '[page] showed Docs mode',
+    screenshot: 'docs-full',
   },
 ];
 

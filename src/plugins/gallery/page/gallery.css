@@ -1,0 +1,254 @@
+/* Gallery mode: the status line and the tab strip stay put while the sheet
+   under them scrolls. */
+.gallery {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.gallery > .ui-sheet {
+  flex: 1 1 auto;
+}
+
+.gallery-status {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  flex: none;
+  padding: var(--wg-space-2) var(--wg-sheet-gutter) 0;
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-secondary);
+}
+
+.gallery-sections {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(calc(var(--wg-row-list) * 12), 1fr)
+  );
+  gap: var(--wg-space-4);
+  padding: var(--wg-space-4);
+}
+
+@media (max-width: 800px) {
+  .gallery-sections {
+    padding: var(--wg-space-3);
+  }
+}
+
+.gallery-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+.gallery-section--framed {
+  grid-column: 1 / -1;
+}
+
+.gallery-states {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--wg-space-3);
+}
+
+.gallery-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--wg-space-1);
+  min-width: 0;
+  margin: 0;
+}
+
+.gallery-cell--wide {
+  align-items: stretch;
+  width: calc(var(--wg-row-list) * 8);
+  max-width: 100%;
+}
+
+.gallery-caption {
+  font-size: var(--wg-text-11);
+  color: var(--wg-fg-tertiary);
+}
+
+.gallery-material {
+  border-radius: var(--wg-radius-md);
+  padding: var(--wg-space-3);
+  color: var(--wg-fg);
+}
+
+.gallery-placeholder {
+  color: var(--wg-input-placeholder);
+}
+
+.gallery-stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.gallery-tabs > .ui-tabs,
+.gallery-tabs > .ui-sheet {
+  margin-inline: 0;
+}
+
+.gallery-tabs > .ui-tabs {
+  margin-top: 0;
+}
+
+.gallery-tabs > .ui-sheet {
+  margin-bottom: 0;
+  border: 1px solid var(--wg-border-subtle);
+}
+
+.gallery-tab-content,
+.gallery-split-text,
+.gallery-card-text {
+  margin: 0;
+}
+
+.gallery-tab-content,
+.gallery-split-text {
+  padding: var(--wg-space-3);
+}
+
+.gallery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+  margin-top: var(--wg-space-2);
+}
+
+/* A frame keeps what it holds — a split, a floating panel, a shown dialog —
+   inside its own box and stacking order. */
+.gallery-frame {
+  position: relative;
+  isolation: isolate;
+  height: calc(var(--wg-row-list) * 6);
+  border: 1px solid var(--wg-border-default);
+  border-radius: var(--wg-radius-md);
+  overflow: hidden;
+}
+
+.gallery-frame > .ui-split {
+  height: 100%;
+}
+
+.gallery-frame > .ui-floating {
+  position: absolute;
+  top: var(--wg-space-4);
+  left: var(--wg-space-4);
+  width: calc(var(--wg-row-list) * 8);
+  max-width: calc(100% - var(--wg-space-4) * 2);
+}
+
+.gallery-frame .ui-scrim {
+  position: absolute;
+}
+
+/* The test shell layout: the title bar across the top, the status bar under
+   it, the side bar down the start side, main with the panel under it, and the
+   activity bar down the end side. */
+.gallery-test-shell {
+  display: grid;
+  grid-template-areas:
+    'title title title'
+    'status status status'
+    'side main activity'
+    'side panel activity';
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: var(--wg-toolbar-height) auto minmax(0, 1fr) auto;
+  height: 100vh;
+  overflow-wrap: anywhere;
+}
+
+.gallery-test-track {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.gallery-test-track:empty {
+  display: none;
+}
+
+.gallery-test-title-bar,
+.gallery-test-status-bar {
+  display: flex;
+  min-width: 0;
+}
+
+.gallery-test-title-bar {
+  grid-area: title;
+  align-items: center;
+  height: var(--wg-toolbar-height);
+  border-bottom: 1px solid var(--wg-border-subtle);
+  padding-inline: var(--wg-traffic-light-inset);
+}
+
+.gallery-test-status-bar {
+  grid-area: status;
+  border-bottom: 1px solid var(--wg-border-subtle);
+}
+
+.gallery-test-title-bar > .gallery-test-track-center,
+.gallery-test-status-bar > .gallery-test-track-start {
+  flex: 1 1 auto;
+}
+
+.gallery-test-title-bar > .gallery-test-track-center {
+  justify-content: center;
+}
+
+.gallery-test-activity-bar {
+  grid-area: activity;
+  display: flex;
+  flex-direction: column;
+  width: var(--wg-activitybar-width);
+  border-left: 1px solid var(--wg-border-default);
+  overflow-y: auto;
+}
+
+.gallery-test-activity-bar > .gallery-test-track {
+  flex-direction: column;
+}
+
+.gallery-test-side-bar {
+  grid-area: side;
+  width: var(--wg-sidebar-width);
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--wg-border-default);
+}
+
+.gallery-test-main {
+  grid-area: main;
+  min-width: 0;
+  min-height: 0;
+  background: var(--wg-sheet-background);
+}
+
+.gallery-test-main > * {
+  height: 100%;
+  min-height: 0;
+}
+
+.gallery-test-panel {
+  grid-area: panel;
+  min-width: 0;
+  border-top: 1px solid var(--wg-border-default);
+  background: var(--wg-sheet-background);
+}
+
+.gallery-test-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--wg-z-floating);
+}
+
+.gallery-test-overlay > * {
+  pointer-events: auto;
+}
