@@ -110,6 +110,24 @@ describe('createDriveCommands', () => {
     });
   });
 
+  it('key_EmptyKeyList_RejectsNamingTheSpaceKeySpelling', async () => {
+    const { fake, commands } = setUp(() => []);
+
+    await expect(commands.run('key', { keys: [] })).rejects.toThrow(
+      'the CLI spells Space',
+    );
+    expect(fake.inputs).toEqual([]);
+  });
+
+  it('run_AnyCommandButQuit_EmulatesFocusFirst', async () => {
+    const { fake, commands } = setUp(() => []);
+
+    await commands.run('ready', {});
+    await commands.run('quit', {});
+
+    expect(fake.focused.emulated).toBe(1);
+  });
+
   it('click_NoElementMatches_RejectsNamingTheSelector', async () => {
     const { commands } = setUp(() => [], [['querySelector(', () => null]]);
 

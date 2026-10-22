@@ -49,9 +49,10 @@ export interface DriveCommandsDeps {
 
 // Every command a drive run serves, behind one entry point.
 export interface DriveCommands {
-  // Waits for the page to be ready for keys (but for `quit`), then runs
-  // `command` with `args`; rejects on an unknown command, args of the wrong
-  // shape, a page start failure, and the command's own failures.
+  // Waits for the page to be ready for keys and gives it document focus (but
+  // for `quit`), then runs `command` with `args`; rejects on an unknown
+  // command, args of the wrong shape, a page start failure, and the command's
+  // own failures.
   run(command: string, args: unknown): Promise<unknown>;
   // Stops collecting console messages.
   dispose(): void;
@@ -104,9 +105,10 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     },
     key: {
       args: '{ keys: string[] }',
-      description: 'presses each key or chord in turn',
+      description:
+        "presses each key or chord in turn; the space key is ' ', which the CLI spells Space",
       run: async (args) => {
-        const keys = stringList(args, 'keys');
+        const keys = keyList(args);
         return linesCausedBy(async () => {
           window.focus();
           for (const key of keys) {
@@ -129,27 +131,29 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     },
     click: {
       args: "{ selector: string, button?: 'left' | 'right', count?: number }",
-      description: "clicks the centre of the selector's first match",
+      description:
+        "clicks the centre of the selector's first match; rejects, naming the cover, when another element covers that point",
       run: async (args) => {
-        const box = await elementBox(requiredString(args, 'selector'));
+        const selector = requiredString(args, 'selector');
         const button = mouseButton(args);
         const count = optionalNumber(args, 'count') ?? 1;
         return linesCausedBy(async () => {
           window.focus();
-          await click(window, box, button, count);
+          await click(window, selector, button, count);
         });
       },
     },
     drag: {
       args: '{ selector: string, dx: number, dy: number }',
-      description: "drags from the centre of the selector's first match",
+      description:
+        "drags with the left button from the centre of the selector's first match; rejects, naming the cover, when another element covers that point",
       run: async (args) => {
-        const box = await elementBox(requiredString(args, 'selector'));
+        const selector = requiredString(args, 'selector');
         const dx = requiredNumber(args, 'dx');
         const dy = requiredNumber(args, 'dy');
         return linesCausedBy(async () => {
           window.focus();
-          await drag(window, box, dx, dy);
+          await drag(window, selector, dx, dy);
         });
       },
     },
@@ -182,7 +186,8 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     },
     'wait-log': {
       args: '{ line: string, timeoutMs?: number }',
-      description: 'waits for the page log to hold the line',
+      description:
+        'waits for a page log line equal to the whole line, its source prefix included (`[page] …`)',
       run: async (args) => ({
         found: await waitForNewLogLine(
           window,
@@ -268,9 +273,10 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     },
     eval: {
       args: '{ script: string }',
-      description: 'runs the script in the page and returns its value',
+      description:
+        "runs the script in a block of its own in the page and returns its last expression's value; its const, let and class stay in that block, its var and function reach the page's globals",
       run: async (args) => ({
-        value: await window.run(requiredString(args, 'script')),
+        value: await window.run(inOwnBlock(requiredString(args, 'script'))),
       }),
     },
     record: {
@@ -320,6 +326,9 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
       }
       if (name !== 'quit') {
         await waitForPage(window);
+        // Every command asks again: a detached debugger takes the emulation
+        // with it.
+        await window.emulateFocus();
       }
       return command.run(args ?? {});
     },
@@ -425,6 +434,14 @@ function wholePixels(box: Box): Box {
   };
 }
 
+// `script` wrapped in a block, so its top-level const, let and class
+// declarations end with the run while the block's completion value stays the
+// script's last expression's value. The newlines keep a closing line comment
+// from swallowing the brace.
+function inOwnBlock(script: string): string {
+  return `{\n${script}\n}`;
+}
+
 // For every element `selector` matches: its trimmed text, classes, bounding
 // box, and each of `styles` as `getComputedStyle` gives it.
 function queryScript(selector: string, styles: string[]): string {
@@ -477,6 +494,18 @@ function stringList(args: JsonObject, name: string): string[] {
     throw new Error(`${name} must be a list of strings`);
   }
   return value;
+}
+
+// The `keys` list, rejecting an empty list and an empty key, which would
+// press nothing.
+function keyList(args: JsonObject): string[] {
+  const keys = stringList(args, 'keys');
+  if (keys.length === 0 || keys.includes('')) {
+    throw new Error(
+      "keys must name at least one key, none empty; the space key is ' ', which the CLI spells Space",
+    );
+  }
+  return keys;
 }
 
 function optionalStringList(

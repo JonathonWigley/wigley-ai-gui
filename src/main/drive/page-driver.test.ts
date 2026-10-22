@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHORD_NOTATION_RULE } from '../../shared/chord-notation';
 import { fakeDrivenWindow } from './fake-driven-window';
-import { click, press, waitFor, waitForNewLogLine } from './page-driver';
+import { click, drag, press, waitFor, waitForNewLogLine } from './page-driver';
 
 describe('waitForNewLogLine', () => {
   it('waitForNewLogLine_LineLoggedOnThirdRead_ResolvesTrue', async () => {
@@ -55,18 +55,72 @@ describe('press', () => {
   });
 });
 
-describe('click', () => {
-  it('click_LeftOnce_PressesAndReleasesAtTheBoxCentre', async () => {
-    const { window, inputs } = fakeDrivenWindow();
+// A page whose element the press script finds centred at (60, 40), with
+// `cover` hit there in its place, or nothing in its place when null.
+function pageWithTargetAt60x40(cover: string | null) {
+  return fakeDrivenWindow([
+    [
+      'elementFromPoint',
+      () => ({ x: 60, y: 40, isShown: true, isInWindow: true, cover }),
+    ],
+  ]);
+}
 
-    await click(window, { x: 10, y: 20, width: 100, height: 40 }, 'left', 1);
+describe('click', () => {
+  it('click_LeftOnce_PressesHoldingTheButtonAndReleasesAtTheCentre', async () => {
+    const { window, inputs } = pageWithTargetAt60x40(null);
+
+    await click(window, '.target', 'left', 1);
 
     const buttonInputs = inputs.filter(
       (input) => input.type === 'mouseDown' || input.type === 'mouseUp',
     );
     expect(buttonInputs).toEqual([
-      { type: 'mouseDown', x: 60, y: 40, button: 'left', clickCount: 1 },
-      { type: 'mouseUp', x: 60, y: 40, button: 'left', clickCount: 1 },
+      {
+        type: 'mouseDown',
+        x: 60,
+        y: 40,
+        button: 'left',
+        clickCount: 1,
+        modifiers: ['leftbuttondown'],
+      },
+      {
+        type: 'mouseUp',
+        x: 60,
+        y: 40,
+        button: 'left',
+        clickCount: 1,
+        modifiers: [],
+      },
     ]);
+  });
+
+  it('click_AnotherElementCoversTheCentre_RejectsNamingItAndSendsNothing', async () => {
+    const { window, inputs } = pageWithTargetAt60x40('div.ui-scrim');
+
+    await expect(click(window, '.target', 'left', 1)).rejects.toThrow(
+      '.target is covered at its centre by div.ui-scrim',
+    );
+    expect(inputs).toEqual([]);
+  });
+});
+
+describe('drag', () => {
+  it('drag_ToTheRight_EveryMoveHoldsTheLeftButton', async () => {
+    const { window, inputs } = pageWithTargetAt60x40(null);
+
+    await drag(window, '.target', 80, 0);
+
+    const moves = inputs.filter((input) => input.type === 'mouseMove');
+    expect(moves).toHaveLength(10);
+    for (const move of moves) {
+      expect(move).toMatchObject({ modifiers: ['leftbuttondown'] });
+    }
+    expect(inputs.at(-1)).toMatchObject({
+      type: 'mouseUp',
+      x: 140,
+      y: 40,
+      modifiers: [],
+    });
   });
 });

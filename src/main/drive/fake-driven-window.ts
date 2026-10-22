@@ -8,14 +8,14 @@ import type {
 export type FakeAnswer = [fragment: string, answer: () => unknown];
 
 // A `DrivenWindow` for the drive tests. It records the input it is sent and
-// how often it was focused, answers each script `run` gets from the first
+// how often it was focused and had focus emulated, answers each script `run` gets from the first
 // table entry whose fragment the script holds (throwing when none does), and
 // lets a test paint frames and write console messages to its listeners.
 export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
   const inputs: DrivenInput[] = [];
   const frameListeners = new Set<(png: () => Uint8Array, at: number) => void>();
   const consoleListeners = new Set<(message: ConsoleMessage) => void>();
-  const focused = { count: 0 };
+  const focused = { count: 0, emulated: 0 };
   const window: DrivenWindow = {
     sendInput: (input) => inputs.push(input),
     async run<T>(script: string) {
@@ -32,6 +32,9 @@ export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
     setSize: () => {},
     focus: () => {
       focused.count += 1;
+    },
+    emulateFocus: async () => {
+      focused.emulated += 1;
     },
     hasPaintedSinceNavigation: () => true,
     onFrame: (listener) => {

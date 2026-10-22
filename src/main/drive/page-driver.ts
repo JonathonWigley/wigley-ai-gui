@@ -6,7 +6,7 @@ import {
   parseChord,
 } from '../../shared/chord-notation';
 import { errorText } from '../../shared/error-text';
-import type { Box, DrivenWindow, Modifier } from './driven-window';
+import type { Box, DrivenWindow, HeldButton, Modifier } from './driven-window';
 
 // Drives the page through a `DrivenWindow`, as the self-test and a drive run
 // both do: presses keys and types text, clicks and drags, reads the page's
@@ -39,7 +39,7 @@ export function press(window: DrivenWindow, key: string): void {
     const chord = parseChord(key);
     if (!chord) {
       throw new Error(
-        `Self-test step presses a malformed chord ${key}: ${CHORD_NOTATION_RULE}`,
+        `Cannot press the malformed chord ${key}: ${CHORD_NOTATION_RULE}`,
       );
     }
     pressChord(window, chord);
@@ -66,46 +66,107 @@ export async function typeText(
   }
 }
 
-function centreOf(box: Box) {
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+// The button-held modifier a press of `button` carries until its release.
+const HELD_BUTTONS: Record<'left' | 'right', HeldButton> = {
+  left: 'leftbuttondown',
+  right: 'rightbuttondown',
+};
+
+// Where a press on the first element `selector` matches lands: its box's
+// centre. Throws when nothing matches, when the match has no size (it is not
+// shown), when the centre lies outside the window, or when another element
+// covers it, naming the cover, since the press would reach that element
+// instead.
+async function pressPointOf(
+  window: DrivenWindow,
+  selector: string,
+): Promise<{ x: number; y: number }> {
+  const target = await window.run<{
+    x: number;
+    y: number;
+    isShown: boolean;
+    isInWindow: boolean;
+    cover: string | null;
+  } | null>(`(() => {
+  const node = document.querySelector(${JSON.stringify(selector)});
+  if (node === null) return null;
+  const { x, y, width, height } = node.getBoundingClientRect();
+  const centre = { x: x + width / 2, y: y + height / 2 };
+  const hit = document.elementFromPoint(centre.x, centre.y);
+  const isCovered = hit !== null && !node.contains(hit);
+  return {
+    ...centre,
+    isShown: width > 0 || height > 0,
+    isInWindow: hit !== null,
+    cover: isCovered ? [hit.tagName.toLowerCase(), ...hit.classList].join('.') : null,
+  };
+})()`);
+  if (target === null) {
+    throw new Error(`No element matches ${selector}`);
+  }
+  if (!target.isShown) {
+    throw new Error(`${selector} has no size: it is not shown`);
+  }
+  if (!target.isInWindow) {
+    throw new Error(`The centre of ${selector} lies outside the window`);
+  }
+  if (target.cover !== null) {
+    throw new Error(`${selector} is covered at its centre by ${target.cover}`);
+  }
+  return { x: target.x, y: target.y };
 }
 
-// Moves the mouse to the box's centre and presses and releases `button` there,
-// `count` being the click count (2 for a double click).
+// Moves the mouse to the centre of the first element `selector` matches and
+// presses and releases `button` there, `count` being the click count (2 for a
+// double click); throws as `pressPointOf` does before sending anything.
 export async function click(
   window: DrivenWindow,
-  box: Box,
+  selector: string,
   button: 'left' | 'right',
   count: number,
 ): Promise<void> {
-  const { x, y } = centreOf(box);
-  for (const type of ['mouseMove', 'mouseDown', 'mouseUp'] as const) {
-    window.sendInput({ type, x, y, button, clickCount: count });
-  }
+  const { x, y } = await pressPointOf(window, selector);
+  const pointer = { x, y, button, clickCount: count };
+  window.sendInput({ type: 'mouseMove', ...pointer, modifiers: [] });
+  window.sendInput({
+    type: 'mouseDown',
+    ...pointer,
+    modifiers: [HELD_BUTTONS[button]],
+  });
+  window.sendInput({ type: 'mouseUp', ...pointer, modifiers: [] });
 }
 
-// Presses the left button at the box's centre, moves by `(dx, dy)` in ten
-// even steps a key gap apart, and releases there.
+// Presses the left button at the centre of the first element `selector`
+// matches, moves by `(dx, dy)` in ten even steps a key gap apart with the
+// button held, and releases there; throws as `pressPointOf` does before
+// sending anything.
 export async function drag(
   window: DrivenWindow,
-  box: Box,
+  selector: string,
   dx: number,
   dy: number,
 ): Promise<void> {
-  const start = centreOf(box);
+  const start = await pressPointOf(window, selector);
   const pointer = { button: 'left' as const, clickCount: 1 };
-  window.sendInput({ type: 'mouseDown', ...start, ...pointer });
+  const held: HeldButton[] = [HELD_BUTTONS.left];
+  window.sendInput({
+    type: 'mouseDown',
+    ...start,
+    ...pointer,
+    modifiers: held,
+  });
   for (let move = 1; move <= DRAG_MOVES; move++) {
     await wait(KEY_GAP_MS);
     const x = start.x + (dx * move) / DRAG_MOVES;
     const y = start.y + (dy * move) / DRAG_MOVES;
-    window.sendInput({ type: 'mouseMove', x, y, ...pointer });
+    window.sendInput({ type: 'mouseMove', x, y, ...pointer, modifiers: held });
   }
   window.sendInput({
     type: 'mouseUp',
     x: start.x + dx,
     y: start.y + dy,
     ...pointer,
+    modifiers: [],
   });
 }
 

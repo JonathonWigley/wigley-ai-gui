@@ -38,6 +38,17 @@ export function electronDrivenWindow(window: BrowserWindow): DrivenWindow {
     },
     setSize: (width, height) => window.setContentSize(width, height),
     focus: () => webContents.focus(),
+    // DevTools detaches the debugger when it opens, so each call attaches it
+    // again when needed.
+    async emulateFocus() {
+      if (!webContents.debugger.isAttached()) {
+        webContents.debugger.attach();
+      }
+      await webContents.debugger.sendCommand(
+        'Emulation.setFocusEmulationEnabled',
+        { enabled: true },
+      );
+    },
     hasPaintedSinceNavigation: () => hasPainted,
     onFrame(listener) {
       const onPaint = (

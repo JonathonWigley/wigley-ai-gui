@@ -8,7 +8,9 @@ export interface Box {
   height: number;
 }
 
-// An input event sent into the page as the OS would deliver it.
+// An input event sent into the page as the OS would deliver it. A mouse
+// event's modifiers name the buttons held while it happens, as the page's
+// `buttons` reads them: a move with none held is a hover, not a drag.
 export type DrivenInput =
   | { type: 'keyDown' | 'keyUp'; keyCode: string; modifiers: Modifier[] }
   | { type: 'char'; keyCode: string }
@@ -18,9 +20,13 @@ export type DrivenInput =
       y: number;
       button: 'left' | 'right';
       clickCount: number;
+      modifiers: (Modifier | HeldButton)[];
     };
 
 export type Modifier = 'control' | 'alt' | 'shift' | 'meta';
+
+// Electron's spelling of a mouse button held down.
+export type HeldButton = 'leftbuttondown' | 'rightbuttondown';
 
 // A message the page wrote to its console.
 export interface ConsoleMessage {
@@ -43,7 +49,14 @@ export interface DrivenWindow {
   // Keeps the height.
   setContentWidth(width: number): void;
   setSize(width: number, height: number): void;
+  // Gives the page keyboard focus. An offscreen window's page still lacks
+  // document focus: `document.hasFocus()` stays false and no focus or blur
+  // event fires.
   focus(): void;
+  // Makes the page act as the focused window from now on, offscreen too:
+  // `document.hasFocus()` holds, focus and blur events fire and focus styles
+  // apply. Safe to repeat.
+  emulateFocus(): Promise<void>;
   // Whether the page has drawn a frame since its last navigation; Chromium
   // drops input that reaches a page before its first frame.
   hasPaintedSinceNavigation(): boolean;
