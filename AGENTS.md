@@ -104,8 +104,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout)
   keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the status bar's key list, and the
                  keys-for-command lookup it exports); no main part
-  gallery/       planned (plan B task 06, not built yet): manifest.ts, page/ (Gallery mode: every primitive in
-                 every state); no main part
+  gallery/       manifest.ts, page/ (Gallery mode: every primitive in every state, a transparency switch, and a
+                 swap of the shell to a test layout); no main part
 ```
 
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
@@ -177,7 +177,7 @@ round), since main, not the page, decides.
   scopes or on keys that begin another same-mode bind's longer keys in any scope. Esc while a sequence waits cancels
   it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout keys are
-  `Space z l …`, chat's `Space z c …`, the planned gallery `Space z g`).
+  `Space z l …`, chat's `Space z c …`, the gallery's `Space z g`, which shows Gallery mode, and its `Space z s`, which swaps the shell to a test layout and back).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
   modal view never fights the plugin under it for the scope. The pushed scope's `onBaseChanged` hears the set scope
@@ -286,6 +286,11 @@ round), since main, not the page, decides.
   keeps the last good layout.
 - `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its `LAYERS` table does
   not allow. A new layer, adapter or plugin folder gets a `LAYERS` entry, and the composition root's entry lists it.
+  Every plugin's `page/` layer and `src/shared/page` may import `src/shared/page/ui`.
+- It also runs `scripts/check-styles.mts`, which fails on a raw colour, length, duration or font stack in CSS or an
+  inline style under `src/`, and on `backdrop-filter` outside `src/shared/page/ui/materials.css`; the files on its
+  `LEGACY_FILES` list (plan C rebuilds them) are skipped, and `--no-legacy [<path>…]` judges every file, or only the
+  paths given.
 
 ## Running and testing
 
@@ -301,13 +306,16 @@ round), since main, not the page, decides.
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms); a step with no keys waits for its line, and a step's
   `writeFile` writes a file under the self-test's temp home before its keys, as an outside change on disk, and a
-  step's `screenshot` saves a PNG of the window for the agent to check against `DESIGN.md`. The self-test's user
+  step's `screenshot` (a lowercase name in words joined by `-`) saves a PNG of the window, once the step's line has been
+  waited for, to `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts) for the agent
+  to check against `DESIGN.md`. The self-test's user
   config folder sits in its temp home. The script's
   `settings` override plugin settings in the config main serves the page (forms' sets a short
   `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the ConfigStore's config, which under the self-test is the empty config folder in its temp
   home, so the defaults, with no script `settings` over them. Each plugin hands
   at most one script, and the scripts run in plugin start order; the keys plugin has no main part, so its steps live
-  in forms' script, whose fixture gives them scopes full of binds and a box to type in. Chat's script runs its
+  in forms' script, whose fixture gives them scopes full of binds and a box to type in. The gallery has no main part
+  either, so its steps live in forms' and docs' scripts. Chat's script runs its
   sessions over the fake agent harness, its steps covering the resume list, archive and slash completion. Docs'
   (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture (`selftest-fixture.ts`) that writes docs, an index
   and a stand-in `docs_index.py` into the self-test's temp home at start, so its steps never reach the user's docs or

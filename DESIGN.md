@@ -64,9 +64,9 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
 | Layer       | What lives here                                                         | Material                                                                                              |
 | ----------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | L0 backdrop | The window itself                                                       | `--wg-window-background` with `--wg-window-ambient`                                                   |
-| L1 chrome   | Title bar, activity bar, side bar, tab strips, status bar, panel header | The `material-chrome` helper (`material-chrome--dense` for the side bar)                              |
+| L1 chrome   | Title bar, activity bar, side bar, tab strips, status bar, panel header | The `material-chrome` class (`material-chrome--dense` for the side bar)                               |
 | L2 content  | Form tab, chat transcript, docs, editors, the forms rail, diffs         | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
-| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts              | The `material-floating` helper                                                                        |
+| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts              | The `material-floating` class                                                                         |
 
 The forms rail is the one L2 exception: it stays on `--wg-block-background` until plan C restyles forms.
 
@@ -75,8 +75,9 @@ The forms rail is the one L2 exception: it stays on `--wg-block-background` unti
 - **Glass sits on what is behind it, never on glass.** A control on a glass bar is a plain
   hover-fill control.
 - **Glass needs something behind it,** which is why L0 carries the ambient wash.
-- **`backdrop-filter` appears only in the material helpers**, so the reduced-transparency mode turns
-  every glass surface opaque in one place.
+- **`backdrop-filter` appears only in `src/shared/page/ui/materials.css`**, which holds the three
+  classes `material-chrome`, `material-chrome--dense` and `material-floating`, so the
+  reduced-transparency mode turns every glass surface opaque in one place.
 - **The layers stack** by the `number` tokens `z-chrome` (L1), `z-floating` (L3), `z-dialog` and
   `z-toast`, in that order (`10`, `100`, `200`, `300` in Mocha).
 - **Every screen looks intentional under reduced transparency**: the `transparency` setting
@@ -103,7 +104,10 @@ and a broken value is caught by the theme loader instead of shipping in a styles
   built-in base theme (Mocha) its value. A plugin token: declare its kind and default in the
   plugin's `themeTokens`. A one-off value in a stylesheet is a token not yet named.
 - **Raw values** live only in theme files. CSS may still write `0`, `1px` hairlines, percentages,
-  `fr` tracks, and breakpoints inside `@media` (CSS reads no variable there; see **Breakpoints**).
+  `fr` tracks, viewport units, unitless numbers, and breakpoints inside `@media` (CSS reads no
+  variable there; see **Breakpoints**). Code may write a unitless custom property on an element
+  (`--ui-row-depth`, `--ui-split-start`) through `style.setProperty`, which the style check does not
+  judge.
 
 ## Colour
 
@@ -139,7 +143,9 @@ means something.
 
 - **UI font:** the system stack (`font-ui`). **Mono** (`font-mono`, JetBrains Mono): only for
   code-like content — code, paths, commands, tool names and arguments, terminal output, key chords
-  inside a Kbd. A label is never mono for decoration.
+  inside a Kbd (the label beside a Kbd stays in the UI font). A label is never mono for
+  decoration. `font-mono` is JetBrains Mono from `@fontsource/jetbrains-mono`, weights 400, 500 and
+  600, bundled into the app.
 - **Scale:** `text-11`, `text-12`, `text-13`, `text-14` (prose), `text-16`, `text-20`. Nothing
   larger inside the app. `text-ui` is the UI base size and `text-mono` the code size; the UI
   default and code read these two, and `text-13` stays a fixed step of the scale.
@@ -178,8 +184,10 @@ means something.
 - **What moves:** motion answers a user action or reports agent state (the streaming indicator, a
   tool card settling from running to done). Content does not animate in, and nothing moves on its
   own.
-- **Reduced motion:** under `prefers-reduced-motion` durations drop to `duration-instant` (near
-  zero) and the streaming indicator is static.
+- **Reduced motion:** under `prefers-reduced-motion` `duration-fast`, `duration-base` and
+  `duration-slow` all take `duration-instant` (`1ms` in Mocha) and the streaming indicator is
+  static.
+- **A floating panel fades in on open** over `duration-base`; closing is instant.
 
 ## Keys and focus
 
@@ -194,11 +202,11 @@ The keyboard is first; the mouse works everywhere.
 - **Inside a text box** raw keys belong to vim, so an action reachable from a box keeps a leader
   route there (`<Leader>a…` in a forms box), and navigation chords work there unchanged.
 - **The keyboard cursor always shows:** the selected row, the focused box, the focused card, each
-  drawn with the one focus ring (`focus-border`, 1px, inside). The user must always see where the
-  keys go.
+  drawn with the one focus ring (`focus-border`, 1px, inside: an inset ring on a row, the border
+  colour on a card or an input frame). The user must always see where the keys go.
 - **Buttons never take focus**, so Enter and Space stay with the page keys; a click runs them.
-- **Key hints** draw through the Kbd primitive, which prints chords for the platform (⌘ ⌥ on macOS,
-  Ctrl Alt on Windows). A view draws a hint only when its command has a bind.
+- **Key hints** draw through the Kbd primitive, which prints chords through `formatChord` for the
+  platform (⌘ ⌥ on macOS, Ctrl Alt on Windows). A view draws a hint only when its command has a bind.
 - **Every new bind** is checked against this rule and against every bind in its scope.
 
 ## Primitives
@@ -210,8 +218,41 @@ every screen at once, and forms and chat layout kits hand the same primitives to
 - A primitive exists because a surface uses it. A new feature that needs one adds it to
   `src/shared/page/ui/`, to the gallery, and to this section.
 - The gallery (`Space z g`) shows every primitive in every state (default, hover, active, focus,
-  disabled) and switches transparency in place.
+  disabled). Raw `t` in it switches transparency in place until the page reloads, and writes
+  nothing to `settings.json`.
 - **Icon** is the one module naming the icon font. **Kbd** is the one place a key hint is drawn.
+
+The primitives, each a builder in `src/shared/page/ui/`:
+
+- **Kbd** (`kbd`): a key hint, chords in `font-mono`.
+- **Button** (`textButton`): a labelled button, variants primary, secondary, ghost, danger.
+- **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
+- **Chip** (`chip`): a session control's label and value; a button when given a click handler.
+- **Tag** (`tag`): a small static label in a tone.
+- **StatusDot** (`statusDot`): a static dot for idle, running, success, warning, attention or error.
+- **InputFrame** (`inputFrame`): the frame around a text box.
+- **Row** (`row`): a list or tree row, density `list` or `tree`.
+- **Tabs** (`tabStrip`, `tab`): the strip on a sheet's top edge, and one tab.
+- **Sheet** (`sheet`): the solid L2 content sheet.
+- **Split** (`createSplit`): two panes with a drag handle; the start pane's width lives in `uiState`.
+- **Card** (`card`, with an `attention` or `error` edge) and the collapsible card
+  (`createCollapsibleCard`).
+- **FloatingPanel** (`floatingPanel`): the L3 glass panel.
+- **Dialog** (`createDialog`): a modal over the `scrim`.
+- **EmptyState** (`emptyState`): one line saying what to do, then the key that does it.
+- **SectionHeader** (`sectionHeader`): a section's heading with a trailing slot.
+
+Icon stays the Codicon builder `icon`.
+
+Conventions every primitive follows:
+
+- A builder returning an element is a noun (`chip`); one returning a handle is `create<Name>`.
+- Root class `ui-<name>`, parts `ui-<name>-<part>`, variants `ui-<name>--<variant>`.
+- States are classes `is-selected`, `is-active`, `is-cursor` and `is-disabled` (a button's
+  `disabled` attribute); an enumerated value is `data-<name>`; `is-hover` and `is-pressed` exist
+  only so the gallery can show those states.
+- Buttons never take focus.
+- A hint is a Kbd element handed in.
 
 ## Surfaces
 
@@ -251,10 +292,16 @@ every screen at once, and forms and chat layout kits hand the same primitives to
 ## Checks
 
 - `npm run lint` runs `scripts/check-styles.mts`: no raw colour, length, duration or font stack in
-  CSS or inline styles under `src/`, and `backdrop-filter` only in the material helpers.
-- The self-test saves screenshots of the gallery and each mode in both transparency settings; the
-  agent checks them against this file — density, the one accent, each surface on its layer and
-  material, sentence case — before handing a UI change to the user.
+  CSS or inline styles under `src/`, and `backdrop-filter` only in `materials.css`. Inline styles
+  are judged through the TypeScript AST. A plain run skips the files on its `LEGACY_FILES` list,
+  the ones plan C rebuilds on the primitives; `--no-legacy` judges every file, or only the paths
+  given after it. Plan C's final task deletes the list.
+- A self-test step's `screenshot` field saves a PNG of the window to
+  `.selftest/screenshots/<plugin>-<name>.png`. The self-test saves the gallery's six pages
+  (`forms-gallery-<n>-full`, `forms-gallery-<n>-reduced`), Sessions (`forms-sessions-*`) and Docs
+  (`docs-docs-*`) in both transparency settings, and the shell layout swap; the agent checks them
+  against this file — density, the one accent, each surface on its layer and material, sentence
+  case — before handing a UI change to the user.
 - Text meets WCAG AA contrast against its opaque fallback background, in both transparency
   settings.
 - Scrolling the transcript beneath the composer stays smooth; when blur is expensive, lower the

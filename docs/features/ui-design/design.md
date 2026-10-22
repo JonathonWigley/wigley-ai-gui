@@ -37,8 +37,9 @@ Three plans in this folder, run in order. Each one leaves a working app.
    every existing CSS file, the Icon primitive with `@vscode/codicons`, the Catppuccin Mocha code
    colours (copied into `code-colours.ts`, no package), the `uiState` service, and Mocha's final
    values. The structure stays as it was and the colours change.
-2. **Plan B — primitives.** `DESIGN.md`'s primitives in `src/shared/page/ui/`, the gallery mode,
-   the self-test screenshots, the style check, and `@fontsource/jetbrains-mono`.
+2. **Plan B — primitives.** Landed: `DESIGN.md`'s primitives in `src/shared/page/ui/`, the gallery
+   mode, the self-test screenshots, the style check (`scripts/check-styles.mts`, with a legacy list
+   plan C empties), and `@fontsource/jetbrains-mono`.
 3. **Plan C — surfaces.** Every existing surface rebuilt on the primitives, and the key changes.
 
 The design skills (Impeccable's critique, audit, polish and quieter guidance, and ui-skills'
@@ -83,7 +84,9 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
   `syntax.*` tokens and `syntax.css` go. Code colours stay Mocha under any theme; that is accepted.
 - **Raw values live only in theme files.** CSS reads tokens. CSS cannot read a variable in
   `@media`, so breakpoints stay raw and `DESIGN.md` lists them. `0`, `1px` hairlines and percentages
-  are allowed. `scripts/check-styles.mts` enforces this in `npm run lint`.
+  are allowed, as are `fr` tracks, viewport units and unitless numbers. `scripts/check-styles.mts`
+  enforces this in `npm run lint`, skipping the files plan C rebuilds until its final task deletes
+  that list.
 - **Backdrop.** The L0 backdrop is CSS (crust plus two faint washes) on both OSes. Native vibrancy
   (macOS) and mica (Windows 11) stay a follow-up behind a window adapter: one path keeps contrast
   checkable and the offscreen self-test faithful.
@@ -148,11 +151,14 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
   follow-up.
 - **Icon** draws Codicons; it is the one module naming the icon font.
 - **Forms and chat layout kits** gain the primitives, so user layouts build from them too.
-- **Gallery:** a `gallery` plugin adds a Gallery mode on `Space z g` showing every primitive in every
-  state, with a raw key in its scope to switch transparency.
-- **Screenshots:** a self-test step saves a PNG of the window (the gallery, each mode, both
-  transparency settings) for the agent to check against `DESIGN.md`. The user still does the final
-  visual check.
+- **Gallery:** a `gallery` plugin (page only, no main part) adds a Gallery mode on `Space z g`
+  showing every primitive in every state, with raw `t` in its scope to switch transparency. The
+  switch is a page-only override (`PageApi.transparency`) that holds until the page reloads and
+  never writes `settings.json`. `Space z s` swaps the shell to a test layout and back.
+- **Screenshots:** a self-test step's `screenshot` field saves a PNG of the window to
+  `.selftest/screenshots/<plugin>-<name>.png` (git-ignored) for the agent to check against
+  `DESIGN.md`: the gallery's pages, Sessions and Docs, each in both transparency settings. The user
+  still does the final visual check.
 
 ## Surfaces
 
@@ -205,7 +211,8 @@ focus is not added: a focused button would take Enter and Space from the page ke
 Every package is bundled by Vite into the app, so nothing loads from the network at run time:
 
 - `@vscode/codicons` (plan A) — the one icon set, behind the Icon primitive.
-- `@fontsource/jetbrains-mono` (plan B) — weights 400, 500 and 600 only.
+- `@fontsource/jetbrains-mono` (plan B) — weights 400, 500 and 600 only, imported in
+  `src/renderer/renderer.ts`.
 
 The code colours are the copied Mocha map in `code-colours.ts`, with no package.
 
