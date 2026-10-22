@@ -15,6 +15,7 @@ import { createEntryKit, type EntryKit, type KitDeps } from './chat-kit';
 import {
   type EntryFocus,
   focusAfterChange,
+  focusAfterScroll,
   focusFirst,
   focusLatest,
   moveFocus,
@@ -63,8 +64,10 @@ export interface EntryList {
   // Scrolls to the bottom while following, else brings the focused entry
   // into view.
   scrollToFocus(): void;
-  // Scrolls the list by half its visible height, leaving the focus and
-  // following as they are.
+  // Scrolls the list by half its visible height. Scrolling up off the bottom
+  // stops following, so entries that arrive leave the scroll alone; scrolling
+  // down onto the bottom (within 1px) follows the latest entry again. The
+  // focused entry stays either way.
   scrollHalfPage(direction: 1 | -1): void;
   // Opens every expander of the focused entry when any is closed, else
   // closes them all; null with no focused entry.
@@ -174,6 +177,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     },
     scrollHalfPage(direction) {
       list.scrollTop += (direction * list.clientHeight) / 2;
+      focus = focusAfterScroll(focus, direction, isScrolledToBottom(list));
+      drawFocus('follow');
     },
     toggleFocused() {
       const slot =
@@ -199,6 +204,11 @@ function disposeKits(slots: Map<string, Slot>) {
   for (const slot of slots.values()) {
     slot.kit.dispose();
   }
+}
+
+// Within 1px of the bottom, since `scrollTop` can land on a fraction.
+function isScrolledToBottom(list: HTMLElement): boolean {
+  return list.scrollHeight - list.clientHeight - list.scrollTop <= 1;
 }
 
 function focusedEntry(

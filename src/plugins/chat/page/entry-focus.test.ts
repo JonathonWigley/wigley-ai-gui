@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   focusAfterChange,
+  focusAfterScroll,
   focusFirst,
   moveFocus,
   START_FOCUS,
@@ -79,5 +80,41 @@ describe('entry focus', () => {
 
   it('focusFirst_NoIds_Start', () => {
     expect(focusFirst([])).toEqual(START_FOCUS);
+  });
+
+  it('focusAfterScroll_UpOffTheBottom_StopsFollowingOnSameEntry', () => {
+    const onC = { entryId: 'c', following: true };
+
+    expect(focusAfterScroll(onC, -1, false)).toEqual({
+      entryId: 'c',
+      following: false,
+    });
+  });
+
+  it('focusAfterScroll_UpStillAtBottom_KeepsFollowing', () => {
+    const onC = { entryId: 'c', following: true };
+
+    expect(focusAfterScroll(onC, -1, true)).toEqual(onC);
+  });
+
+  it('focusAfterScroll_DownOntoTheBottom_FollowsOnSameEntry', () => {
+    const onB = { entryId: 'b', following: false };
+
+    expect(focusAfterScroll(onB, 1, true)).toEqual({
+      entryId: 'b',
+      following: true,
+    });
+  });
+
+  it('focusAfterScroll_DownShortOfTheBottom_StaysNotFollowing', () => {
+    const onB = { entryId: 'b', following: false };
+
+    expect(focusAfterScroll(onB, 1, false)).toEqual(onB);
+  });
+
+  it('focusAfterScroll_UpOntoTheBottom_StaysNotFollowing', () => {
+    const onB = { entryId: 'b', following: false };
+
+    expect(focusAfterScroll(onB, -1, true)).toEqual(onB);
   });
 });

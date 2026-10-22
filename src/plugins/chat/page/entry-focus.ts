@@ -36,6 +36,21 @@ export function focusLatest(ids: readonly string[]): EntryFocus {
   return last === undefined ? START_FOCUS : { entryId: last, following: true };
 }
 
+// After the list scrolled by `direction` and came to rest `isAtBottom` or not:
+// scrolling up off the bottom stops following, scrolling down onto it follows
+// again; the focused entry stays.
+export function focusAfterScroll(
+  focus: EntryFocus,
+  direction: 1 | -1,
+  isAtBottom: boolean,
+): EntryFocus {
+  const following =
+    direction === 1
+      ? focus.following || isAtBottom
+      : focus.following && isAtBottom;
+  return { entryId: focus.entryId, following };
+}
+
 // After the list changed: a following focus moves to the new last entry, a
 // focus on an entry still listed stays, and one whose entry is gone follows
 // the latest.
