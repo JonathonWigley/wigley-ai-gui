@@ -1,0 +1,178 @@
+box   any  <Leader>;  normal  sessions.closeSession
+box   any  <Leader>?  normal  keys.toggleHelp
+box   any  <Leader>kd  normal  docs.showMode
+box   any  <Leader>kn  normal  chat.newSession
+box   any  <Leader>ks  normal  sessions.showMode
+box   chat.chat  <CR>  normal  chat.send
+box   chat.chat  <Esc>  normal  chat.leaveBox
+box   chat.chat  <Leader>cc  normal  chat.pickControl
+box   chat.chat  <Leader>ce  normal  chat.pickEffort
+box   chat.chat  <Leader>cm  normal  chat.pickMode
+box   chat.chat  <Leader>co  normal  chat.pickModel
+box   chat.picker  <CR>  insert  chat.pickerPick
+box   chat.picker  <CR>  normal  chat.pickerPick
+box   chat.picker  <Esc>  normal  chat.pickerList
+box   chat.reason  <CR>  normal  chat.submitReason
+box   chat.reason  <Esc>  normal  chat.cancelReason
+box   chat.resume  <CR>  insert  chat.pickerPick
+box   chat.resume  <CR>  normal  chat.pickerPick
+box   chat.resume  <Esc>  normal  chat.pickerList
+box   forms.forms  <Esc>  normal  forms.leaveBox
+box   forms.forms  <Leader><Leader>  normal  forms.openReview
+box   forms.forms  <Leader>a1  normal  forms.choose1
+box   forms.forms  <Leader>a2  normal  forms.choose2
+box   forms.forms  <Leader>a3  normal  forms.choose3
+box   forms.forms  <Leader>a4  normal  forms.choose4
+box   forms.forms  <Leader>a5  normal  forms.choose5
+box   forms.forms  <Leader>a6  normal  forms.choose6
+box   forms.forms  <Leader>a7  normal  forms.choose7
+box   forms.forms  <Leader>a8  normal  forms.choose8
+box   forms.forms  <Leader>a9  normal  forms.choose9
+box   forms.forms  <Leader>ac  normal  forms.clearChoice
+box   forms.forms  <Leader>af  normal  forms.actFixNow
+box   forms.forms  <Leader>as  normal  forms.actLeaveIt
+box   forms.forms  <Leader>au  normal  forms.actFollowUp
+box   forms.forms  <Leader>x  normal  forms.toggleNotApplicable
+box   forms.review  <Esc>  normal  forms.leaveBox
+box   forms.review  <Leader><Leader>  normal  forms.openReview
+box   forms.review  <Leader>a1  normal  forms.choose1
+box   forms.review  <Leader>a2  normal  forms.choose2
+box   forms.review  <Leader>a3  normal  forms.choose3
+box   forms.review  <Leader>a4  normal  forms.choose4
+box   forms.review  <Leader>a5  normal  forms.choose5
+box   forms.review  <Leader>a6  normal  forms.choose6
+box   forms.review  <Leader>a7  normal  forms.choose7
+box   forms.review  <Leader>a8  normal  forms.choose8
+box   forms.review  <Leader>a9  normal  forms.choose9
+box   forms.review  <Leader>ac  normal  forms.clearChoice
+box   forms.review  <Leader>af  normal  forms.actFixNow
+box   forms.review  <Leader>as  normal  forms.actLeaveIt
+box   forms.review  <Leader>au  normal  forms.actFollowUp
+box   forms.review  <Leader>x  normal  forms.toggleNotApplicable
+glob  Control+Alt+Command+W  window.summon
+leader <Space>
+page  any  [" ",";"]  sessions.closeSession
+page  any  [" ","?"]  keys.toggleHelp
+page  any  [" ","k","d"]  docs.showMode
+page  any  [" ","k","n"]  chat.newSession
+page  any  [" ","k","s"]  sessions.showMode
+page  any  [" ","z","c","c"]  chat.copyLayout
+page  any  [" ","z","c","n"]  chat.nextLayout
+page  any  [" ","z","c","p"]  chat.prevLayout
+page  any  [" ","z","g"]  gallery.showMode
+page  any  [" ","z","l","c"]  forms.copyLayout
+page  any  [" ","z","l","n"]  forms.nextLayout
+page  any  [" ","z","l","o"]  forms.openPreview
+page  any  [" ","z","l","p"]  forms.prevLayout
+page  any  [" ","z","s"]  gallery.swapShellLayout
+page  any  ["<A-S-i>"]  sessions.prevSession
+page  any  ["<A-S-o>"]  sessions.nextSession
+page  any  ["<A-i>"]  sessions.prevTab
+page  any  ["<A-o>"]  sessions.nextTab
+page  any  ["<D-w>"]  sessions.closeSession
+page  chat.chat  ["<C-c>"]  chat.interrupt
+page  chat.chat  ["<D-Enter>"]  chat.send
+page  chat.chat  ["Enter"]  chat.toggleEntry
+page  chat.chat  ["G"]  chat.latestEntry
+page  chat.chat  ["a"]  chat.appendBox
+page  chat.chat  ["c"]  chat.pickControl
+page  chat.chat  ["e"]  chat.pickEffort
+page  chat.chat  ["g","g"]  chat.firstEntry
+page  chat.chat  ["i"]  chat.focusBox
+page  chat.chat  ["j"]  chat.nextEntry
+page  chat.chat  ["k"]  chat.prevEntry
+page  chat.chat  ["m"]  chat.pickMode
+page  chat.chat  ["n"]  chat.denyPermission
+page  chat.chat  ["o"]  chat.pickModel
+page  chat.chat  ["y"]  chat.allowPermission
+page  chat.confirm  ["Escape"]  chat.keepSession
+page  chat.confirm  ["n"]  chat.keepSession
+page  chat.confirm  ["y"]  chat.endSession
+page  chat.picker  ["/"]  chat.pickerFilter
+page  chat.picker  ["Enter"]  chat.pickerPick
+page  chat.picker  ["Escape"]  chat.pickerClose
+page  chat.picker  ["j"]  chat.pickerDown
+page  chat.picker  ["k"]  chat.pickerUp
+page  chat.reason  ["<D-Enter>"]  chat.submitReason
+page  chat.reason  ["Escape"]  chat.cancelReason
+page  chat.resume  ["."]  chat.showArchived
+page  chat.resume  ["/"]  chat.pickerFilter
+page  chat.resume  ["Enter"]  chat.pickerPick
+page  chat.resume  ["Escape"]  chat.pickerClose
+page  chat.resume  ["j"]  chat.pickerDown
+page  chat.resume  ["k"]  chat.pickerUp
+page  chat.resume  ["x"]  chat.toggleArchive
+page  docs.box  ["Enter"]  docs.boxAccept
+page  docs.box  ["Escape"]  docs.boxCancel
+page  docs.box  ["Tab"]  docs.boxComplete
+page  docs.confirm  ["Escape"]  docs.confirmNo
+page  docs.confirm  ["n"]  docs.confirmNo
+page  docs.confirm  ["y"]  docs.confirmYes
+page  docs.conflict  ["Escape"]  docs.conflictCancel
+page  docs.conflict  ["o"]  docs.conflictOverwrite
+page  docs.conflict  ["r"]  docs.conflictReload
+page  docs.doc  ["<C-h>"]  docs.focusTree
+page  docs.doc  ["i"]  docs.edit
+page  docs.doc  ["j"]  docs.scrollDown
+page  docs.doc  ["k"]  docs.scrollUp
+page  docs.picker  ["Enter"]  docs.pickerChoose
+page  docs.picker  ["Escape"]  docs.pickerCancel
+page  docs.picker  ["j"]  docs.pickerDown
+page  docs.picker  ["k"]  docs.pickerUp
+page  docs.picker  ["l"]  docs.pickerChoose
+page  docs.tree  ["/"]  docs.filter
+page  docs.tree  ["<C-l>"]  docs.focusDoc
+page  docs.tree  ["A"]  docs.createByPath
+page  docs.tree  ["Enter"]  docs.treeOpen
+page  docs.tree  ["G"]  docs.treeBottom
+page  docs.tree  ["R"]  docs.rescan
+page  docs.tree  ["a"]  docs.createByKind
+page  docs.tree  ["c"]  docs.pickContext
+page  docs.tree  ["d"]  docs.trash
+page  docs.tree  ["g","g"]  docs.treeTop
+page  docs.tree  ["h"]  docs.treeClose
+page  docs.tree  ["j"]  docs.treeDown
+page  docs.tree  ["k"]  docs.treeUp
+page  docs.tree  ["l"]  docs.treeOpen
+page  docs.tree  ["r"]  docs.rename
+page  forms.confirm  ["Escape"]  forms.dismissConfirm
+page  forms.confirm  ["n"]  forms.dismissConfirm
+page  forms.confirm  ["y"]  forms.confirmCancel
+page  forms.forms  [" "," "]  forms.openReview
+page  forms.forms  ["1"]  forms.choose1
+page  forms.forms  ["2"]  forms.choose2
+page  forms.forms  ["3"]  forms.choose3
+page  forms.forms  ["4"]  forms.choose4
+page  forms.forms  ["5"]  forms.choose5
+page  forms.forms  ["6"]  forms.choose6
+page  forms.forms  ["7"]  forms.choose7
+page  forms.forms  ["8"]  forms.choose8
+page  forms.forms  ["9"]  forms.choose9
+page  forms.forms  ["<A-n>"]  forms.nextUnanswered
+page  forms.forms  ["<A-p>"]  forms.prevUnanswered
+page  forms.forms  ["<C-h>"]  forms.prevItem
+page  forms.forms  ["<C-j>"]  forms.nextBox
+page  forms.forms  ["<C-k>"]  forms.prevBox
+page  forms.forms  ["<C-l>"]  forms.nextItem
+page  forms.forms  ["Enter"]  forms.acceptRecommendation
+page  forms.forms  ["a"]  forms.editNotes
+page  forms.forms  ["c"]  forms.clearChoice
+page  forms.forms  ["d"]  forms.toggleDontAsk
+page  forms.forms  ["f"]  forms.actFixNow
+page  forms.forms  ["j"]  forms.nextItem
+page  forms.forms  ["k"]  forms.prevItem
+page  forms.forms  ["s"]  forms.actLeaveIt
+page  forms.forms  ["u"]  forms.actFollowUp
+page  forms.forms  ["x"]  forms.toggleNotApplicable
+page  forms.review  ["<D-Enter>"]  forms.submit
+page  forms.review  ["C"]  forms.askCancel
+page  forms.review  ["Enter"]  forms.reviewJump
+page  forms.review  ["Escape"]  forms.closeReview
+page  forms.review  ["j"]  forms.reviewNext
+page  forms.review  ["k"]  forms.reviewPrev
+page  forms.review  ["o"]  forms.editNote
+page  gallery.gallery  ["G"]  gallery.scrollEnd
+page  gallery.gallery  ["d"]  gallery.pageDown
+page  gallery.gallery  ["g","g"]  gallery.scrollTop
+page  gallery.gallery  ["t"]  gallery.toggleTransparency
+page  keys.help  ["Escape"]  keys.closeHelp
