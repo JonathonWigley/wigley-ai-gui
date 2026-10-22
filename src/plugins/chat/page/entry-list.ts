@@ -48,9 +48,10 @@ export interface TranscriptScroll extends HalfPageScroll {
 }
 
 // One session's entries, one slot per entry in the session's order, the
-// focused slot marked `is-cursor`. After every change a following focus
-// scrolls the list to its bottom; a hidden list does not scroll, so its tab
-// calls `scrollToFocus` each time it shows.
+// focused slot marked `is-cursor`. After every change, and whenever the
+// list's own box resizes, a following focus scrolls the list to its bottom; a
+// hidden list does not scroll, so its tab calls `scrollToFocus` each time it
+// shows.
 export interface EntryList {
   element: HTMLOListElement;
   // Builds an entry new to the list, or redraws the one holding its id;
@@ -79,8 +80,8 @@ export interface EntryList {
   // Opens every expander of the focused entry when any is closed, else
   // closes them all; null with no focused entry.
   toggleFocused(): { entry: ChatEntry; result: ToggleResult } | null;
-  // Disposes every entry's kit; the list's owner calls it when it drops the
-  // list.
+  // Stops following the list's size and disposes every entry's kit; the
+  // list's owner calls it when it drops the list.
   dispose(): void;
 }
 
@@ -132,6 +133,13 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     drawFocus('follow');
   };
 
+  const followBottom = () => {
+    if (focus.following) {
+      list.scrollTop = list.scrollHeight;
+    }
+  };
+  const listSize = followListSize(list, followBottom);
+
   return {
     element: list,
     put(entry, entries) {
@@ -174,11 +182,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       drawFocus('top');
       return focusedEntry(focus, slots);
     },
-    followBottom() {
-      if (focus.following) {
-        list.scrollTop = list.scrollHeight;
-      }
-    },
+    followBottom,
     scrollToFocus() {
       drawFocus(focus.following ? 'bottom' : 'slot');
     },
@@ -203,9 +207,26 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       return { entry: slot.entry, result: opens ? 'expanded' : 'collapsed' };
     },
     dispose() {
+      listSize.disconnect();
       disposeKits(slots);
     },
   };
+}
+
+// Calls `followBottom` each time the list's border box resizes: the key bar,
+// the window, or its tab showing again. A height of 0 is the tab hidden.
+function followListSize(
+  list: HTMLElement,
+  followBottom: () => void,
+): ResizeObserver {
+  const observer = new ResizeObserver(([observed]) => {
+    if (observed.borderBoxSize[0].blockSize === 0) {
+      return;
+    }
+    followBottom();
+  });
+  observer.observe(list, { box: 'border-box' });
+  return observer;
 }
 
 function disposeKits(slots: Map<string, Slot>) {
