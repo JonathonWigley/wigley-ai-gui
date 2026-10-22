@@ -71,7 +71,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       harnesses: services.agentHarnesses,
       sessions,
       profiles: () => api.settings().profiles,
-      homeDir: services.homeDir,
       randomUuid: services.randomUuid,
       recent,
       archived: createArchivedSessions(api.data),

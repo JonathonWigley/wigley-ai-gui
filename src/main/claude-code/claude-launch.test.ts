@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claudeLaunch } from './claude-launch';
+import { claudeConfigFolder, claudeLaunch } from './claude-launch';
 
 const TOOL = 'mcp__plugin_wigley_wigley-forms__permission_prompt';
 
@@ -14,6 +14,7 @@ describe('claudeLaunch', () => {
       },
       TOOL,
       { HOME: '/h', CLAUDE_CONFIG_DIR: '/x' },
+      '/h',
     );
 
     expect(launch.args).toEqual([
@@ -42,6 +43,7 @@ describe('claudeLaunch', () => {
       { sessionId: 's-1', resume: true, projectDir: '/proj', profileDir: null },
       TOOL,
       env,
+      '/h',
     );
 
     expect(launch.args.slice(7, 9)).toEqual(['--resume', 's-1']);
@@ -77,6 +79,7 @@ describe('claudeLaunch', () => {
         CLAUDE_CODE_SESSION_ATTENDED: '1',
         CLAUDE_CODE_USE_BEDROCK: '1',
       },
+      '/h',
     );
 
     expect(launch.env).toEqual({
@@ -84,5 +87,33 @@ describe('claudeLaunch', () => {
       CLAUDE_CODE_USE_BEDROCK: '1',
       CLAUDE_CONFIG_DIR: '/p',
     });
+  });
+
+  it("expands a profile folder against the adapter's home", () => {
+    const launch = claudeLaunch(
+      {
+        sessionId: 's-1',
+        resume: false,
+        projectDir: '/proj',
+        profileDir: '~/.claude-personal',
+      },
+      TOOL,
+      { HOME: '/elsewhere' },
+      '/Users/u',
+    );
+
+    expect(launch.env.CLAUDE_CONFIG_DIR).toBe('/Users/u/.claude-personal');
+  });
+});
+
+describe('claudeConfigFolder', () => {
+  it("claudeConfigFolder expands a profile folder against the adapter's home", () => {
+    expect(
+      claudeConfigFolder(
+        '~/.claude-personal',
+        { CLAUDE_CONFIG_DIR: '/c' },
+        '/Users/u',
+      ),
+    ).toBe('/Users/u/.claude-personal');
   });
 });

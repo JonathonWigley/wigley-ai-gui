@@ -75,7 +75,8 @@ export type ChatEntry =
 export type ChatEntryKind = ChatEntry['kind'];
 
 // `sessionId` is the host's session id: fresh for a new session, the old one when `resume` is true.
-// `profileDir` is the harness's config folder (Claude's `CLAUDE_CONFIG_DIR`), null for the harness default.
+// `profileDir` is the harness's config folder (Claude's `CLAUDE_CONFIG_DIR`) as the profile writes it, which the
+// adapter resolves (`~` against the home the adapter was built with); null for the harness default.
 export interface AgentStart {
   sessionId: string;
   resume: boolean;
@@ -118,7 +119,8 @@ export interface PastSession {
 export interface AgentHarness {
   id: string;
   start(request: AgentStart, events: AgentProcessEvents): AgentProcess;
-  // Every session the harness saved for `projectDir` under `profileDir`, newest first; [] when none.
+  // Every session the harness saved for `projectDir` under `profileDir` (as `AgentStart` holds it), newest first;
+  // [] when none.
   listSessions(
     projectDir: string,
     profileDir: string | null,

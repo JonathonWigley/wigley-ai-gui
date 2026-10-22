@@ -11,7 +11,6 @@ import type { RandomUuid } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
 import type { MainChannel } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import { expandHome } from '../../../shared/expand-home';
 import type {
   AgentSession,
   OwnedSession,
@@ -50,7 +49,6 @@ export interface ChatSessionsDeps {
   >;
   // Read at each session start.
   profiles(): readonly ChatProfile[];
-  homeDir: string;
   randomUuid: RandomUuid;
   recent: RecentFolders;
   archived: ArchivedSessions;
@@ -322,7 +320,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   function profileDirOf(profile: ChatProfile): string {
-    return expandHome(profile.configDir, deps.homeDir);
+    return profile.configDir;
   }
 
   // Opens the row for `hostId`, stores its state with `entries`, starts its

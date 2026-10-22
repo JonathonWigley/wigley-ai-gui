@@ -98,7 +98,6 @@ function setUp(
     harnesses,
     sessions,
     profiles: () => DEFAULT_PROFILES,
-    homeDir: '/Users/u',
     randomUuid: () => {
       uuidCalls++;
       return 'uuid-1';
@@ -232,7 +231,7 @@ describe('createChatSessions', () => {
         sessionId: 'uuid-1',
         resume: false,
         projectDir: PROJECT_DIR,
-        profileDir: '/Users/u/.claude-personal',
+        profileDir: '~/.claude-personal',
       },
     ]);
     expect(test.sent('sessionStarted')).toEqual([
@@ -271,7 +270,7 @@ describe('createChatSessions', () => {
         method: 'listSessions',
         sessionId: null,
         projectDir: '/w/app',
-        profileDir: '/Users/u/.claude-personal',
+        profileDir: '~/.claude-personal',
       },
     ]);
   });
@@ -360,7 +359,7 @@ describe('createChatSessions', () => {
       sessionId: hostId,
       resume: true,
       projectDir: '/w/app',
-      profileDir: '/Users/u/.claude',
+      profileDir: '~/.claude',
     });
     expect(test.uuidCalls()).toBe(0);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([

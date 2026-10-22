@@ -34,7 +34,8 @@ export type ClaudeSpawn = (
 // `command` reads the `claude` binary's path, once per spawned session;
 // `permissionTool` the MCP tool Claude asks what auto mode would still prompt;
 // `env` the environment the process inherits; `files` reads saved transcripts,
-// and `homeDir` holds the default config folder `.claude`.
+// and `homeDir` holds the default config folder `.claude` and is what a `~/`
+// profile folder resolves against.
 export interface ClaudeCodeHarnessDeps {
   command(): string;
   permissionTool: string;
@@ -92,7 +93,12 @@ function startClaudeProcess(
   request: AgentStart,
   events: AgentProcessEvents,
 ): AgentProcess {
-  const launch = claudeLaunch(request, deps.permissionTool, deps.env);
+  const launch = claudeLaunch(
+    request,
+    deps.permissionTool,
+    deps.env,
+    deps.homeDir,
+  );
   const command = deps.command();
   const child = deps.spawn(command, launch.args, {
     cwd: launch.cwd,

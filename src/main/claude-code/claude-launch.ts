@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { AgentStart } from '../../contracts/agent';
+import { expandHome } from '../../shared/expand-home';
 
 export interface ClaudeLaunch {
   args: string[];
@@ -30,11 +31,12 @@ const NESTED_SESSION_ENV: readonly string[] = [
 // The arguments, folder and environment `claude` runs one session with:
 // stream-json both ways, partial messages streamed, auto permission mode with
 // what it would still prompt sent to `permissionTool`, and `env` without the
-// nested-session variables.
+// nested-session variables. A `~/` profile folder resolves against `homeDir`.
 export function claudeLaunch(
   request: AgentStart,
   permissionTool: string,
   env: NodeJS.ProcessEnv,
+  homeDir: string,
 ): ClaudeLaunch {
   const sessionFlag = request.resume ? '--resume' : '--session-id';
   const launchEnv = { ...env };
@@ -42,7 +44,7 @@ export function claudeLaunch(
     delete launchEnv[name];
   }
   if (request.profileDir !== null) {
-    launchEnv.CLAUDE_CONFIG_DIR = request.profileDir;
+    launchEnv.CLAUDE_CONFIG_DIR = expandHome(request.profileDir, homeDir);
   }
   return {
     args: [
@@ -66,17 +68,19 @@ export function claudeLaunch(
   };
 }
 
-// The config folder a session launched with `claudeLaunch` uses: `profileDir`,
-// which the launch sets as `CLAUDE_CONFIG_DIR`, else the non-empty
-// `CLAUDE_CONFIG_DIR` the launch passes through, else `<homeDir>/.claude`.
+// The config folder a session launched with `claudeLaunch` uses: `profileDir`
+// resolved against `homeDir`, which the launch sets as `CLAUDE_CONFIG_DIR`,
+// else the non-empty `CLAUDE_CONFIG_DIR` the launch passes through, else
+// `<homeDir>/.claude`.
 export function claudeConfigFolder(
   profileDir: string | null,
   env: NodeJS.ProcessEnv,
   homeDir: string,
 ): string {
+  if (profileDir !== null) {
+    return expandHome(profileDir, homeDir);
+  }
   const inherited = env.CLAUDE_CONFIG_DIR;
   const isInherited = inherited !== undefined && inherited !== '';
-  return (
-    profileDir ?? (isInherited ? inherited : path.join(homeDir, '.claude'))
-  );
+  return isInherited ? inherited : path.join(homeDir, '.claude');
 }
