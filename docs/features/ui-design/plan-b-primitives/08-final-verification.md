@@ -37,7 +37,7 @@ per screenshot, what was seen against each point:
 | `forms-shell-layout-test.png` | the gallery's test shell layout, checked against DESIGN.md's shell layout |
 | `forms-shell-layout-restored.png` | the real shell after swapping back, checked against `forms-sessions-full.png` |
 
-The folder holds exactly these (the gallery's page count as 06 landed it, twice, plus four), plus any
+The folder holds exactly these (the gallery's page count as 06 landed it, twice, plus six), plus any
 screenshot another task's step takes; a missing one is a failed step in 06.
 
 Judgement is scoped: the gallery shots are judged on every point below. The Sessions and Docs shots

@@ -103,66 +103,61 @@ export const SELFTEST_LAYOUT = {
 // replays to the notice and the second finds no item before it; j back to the
 // finding, which opens on Fix now, saving the round's screenshot; 2 picks
 // solution 2, Space a f clears the action and Space a s sets Leave it. a types
-// "agreed" at once (INSERT), Esc
-// to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out, as
-// every Esc out of a box in NORMAL runs forms' editor bind there. j to
-// finding 2, a Nit: Space a u is refused, since a Nit offers no follow-up, and
-// it opens on Fix anyway with its one solution, so Space a s sets Leave it and
-// Space a f sets Fix anyway again. j to finding 3, a
-// Decision: Space a u sets Plan it, and Enter accepts its recommendation. j to
-// question 1, where 2 picks 2; a types "ab" at once, Esc Esc out (the first
+// "agreed" at once (INSERT), Esc to NORMAL, where Space a u (the editor bind)
+// sets Follow-up; Esc out, as every Esc out of a box in NORMAL runs forms'
+// editor bind there. j to finding 2, a Nit: Space a u is refused, since a Nit
+// offers no follow-up, and it opens on Fix anyway with its one solution, so
+// Space a s sets Leave it and Space a f sets Fix anyway again. j to finding 3,
+// a Decision: Space a u sets Plan it, and Enter accepts its recommendation. j
+// to question 1, where 2 picks 2; a types "ab" at once, Esc Esc out (the first
 // Esc to NORMAL); d focuses its reason box, A appends a long word and Ctrl+k
-// still in INSERT moves back to its notes box, Esc out; a again types "c"
-// after "ab", Esc Esc out. a once more, Esc to NORMAL, where Space opens
-// which-key and Esc closes it without leaving the box (vim drops its pending
-// input); Space opens it again and, with no key pressed,
-// the which-key timeout closes it, and Esc then leaves the box, so the box kept
-// focus and its pending Space was dropped. a back in, Esc, Space opens
-// which-key, and Ctrl+j moving to the reason box, which it focuses in INSERT,
-// closes it; Esc Esc out. a, Esc and d, then Ctrl+j to the reason box and
-// Ctrl+k back; w and Esc leave the box, and w deleted nothing, since leaving
-// dropped the pending d. j to question 2, where q a x then b breaks the
-// self-test bind, so a opens the notes box and "xb" is typed into it; Esc Esc
-// out and x marks question 2 not applicable. Ctrl+h goes back to question 1,
-// where Space opens which-key and the timeout closes it, so 2 starts a fresh
-// sequence and clears the choice (Space 2 would jump), 2 picks it again; Space
-// a 2 clears it and picks it again, Enter replaces that pick with its
-// recommendation, Space 2 jumps to question 2, and Space e n finds no
-// unanswered item.
-// Space opens which-key, a moves it into the Space a group, and Esc cancels the
-// sequence and closes it. Option+Shift+o moves to the second session, where
-// Option+o wraps from its Form tab to its Docs tab and Option+o again back to
-// the Form tab; Cmd+W there asks to cancel its round, Esc keeps
-// it and returns to its form, where j moves to its question 2 and Space e p
-// finds its untouched question 1; Option+Shift+i moves back to the first
-// session, on question 2. Space k s hides the side bar and shows it again; a
-// enters question 2's notes box, where Esc and Space k s (the editor bind)
-// hide it and Space k s in NORMAL shows it; Esc (forms' editor bind) leaves the
-// box. Option+Shift+i wraps to the last session, the layout preview's; Cmd+W
-// there asks to cancel its sample round and y cancels it, which closes the
-// session and selects its left neighbour, a Codex session with no folder,
-// whose only tab is its Docs tab: its first show runs the session source,
-// which knows no folder, and no form keeps its scope; Option+o finds no other
-// tab there; Option+Shift+o wraps back to the first, whose form takes its
-// scope again. Space z l n cycles to the selftest layout
-// and Space z l p back to default; each load logs every line its cards log at
-// once, so each step checks one of them: the finding card's failure, then,
-// cycling backwards onto selftest, the notice card's, then, forwards to default
-// and backwards onto selftest, its shown line. The shown question 2 card's
-// update threw on that load; k shows question 1's card, whose first update
-// throws, and 2 picks 2; Enter restores the recommendation and j returns to
-// question 2. Space z l n leaves default shown for the steps after. Then
-// review, which only that scope opens,
-// proves it; Space ? opens help and Esc closes it, back in the review's
+// still in INSERT moves back to its notes box, Esc out; a again types "c" after
+// "ab", Esc Esc out. a once more, Esc to NORMAL, where Space opens which-key
+// and Esc closes it without leaving the box (vim drops its pending input);
+// Space opens it again and, with no key pressed, the which-key timeout closes
+// it, and Esc then leaves the box, so the box kept focus and its pending Space
+// was dropped. a back in, Esc, Space opens which-key, and Ctrl+j moving to the
+// reason box, which it focuses in INSERT, closes it; Esc Esc out. a, Esc and d,
+// then Ctrl+j to the reason box and Ctrl+k back; w and Esc leave the box, and w
+// deleted nothing, since leaving dropped the pending d. j to question 2, where
+// q a x then b breaks the self-test bind, so a opens the notes box and "xb" is
+// typed into it; Esc Esc out and x marks question 2 not applicable. Ctrl+h goes
+// back to question 1, where Space opens which-key and the timeout closes it, so
+// 2 starts a fresh sequence and clears the choice (Space 2 would jump), 2 picks
+// it again; Space a 2 clears it and picks it again, Enter replaces that pick
+// with its recommendation, Space 2 jumps to question 2, and Space e n finds no
+// unanswered item. Space opens which-key, a moves it into the Space a group,
+// and Esc cancels the sequence and closes it. Option+Shift+o moves to the
+// second session, where Option+o wraps from its Form tab to its Docs tab and
+// Option+o again back to the Form tab; Cmd+W there asks to cancel its round,
+// Esc keeps it and returns to its form, where j moves to its question 2 and
+// Space e p finds its untouched question 1; Option+Shift+i moves back to the
+// first session, on question 2. Space k s hides the side bar and shows it
+// again; a enters question 2's notes box, where Esc and Space k s (the editor
+// bind) hide it and Space k s in NORMAL shows it; Esc (forms' editor bind)
+// leaves the box. Option+Shift+i wraps to the last session, the layout
+// preview's; Cmd+W there asks to cancel its sample round and y cancels it,
+// which closes the session and selects its left neighbour, a Codex session with
+// no folder, whose only tab is its Docs tab: its first show runs the session
+// source, which knows no folder, and no form keeps its scope; Option+o finds no
+// other tab there; Option+Shift+o wraps back to the first, whose form takes its
+// scope again. Space z l n cycles to the selftest layout and Space z l p back
+// to default; each load logs every line its cards log at once, so each step
+// checks one of them: the finding card's failure, then, cycling backwards onto
+// selftest, the notice card's, then, forwards to default and backwards onto
+// selftest, its shown line. The shown question 2 card's update threw on that
+// load; k shows question 1's card, whose first update throws, and 2 picks 2;
+// Enter restores the recommendation and j returns to question 2. Space z l n
+// leaves default shown for the steps after. Then review, which only that scope
+// opens, proves it; Space ? opens help and Esc closes it, back in the review's
 // scope, where C opens and n dismisses the cancel prompt; Space ? opens help
 // again, Cmd+W opens the cancel prompt, which closes help, so n dismisses the
-// prompt. o types "note" into the Round note at
-// once (INSERT), Esc Esc out (forms' editor bind in the review's scope), Enter
-// jumps back to finding 1, review again and Space Enter submits. Space z l o
-// opens the sample round again, in a new preview session, and selects its row,
-// which the
-// sessions page logs; Cmd+W there asks to cancel the sample round, so the
-// selected session shows it, and n dismisses the prompt.
+// prompt. o types "note" into the Round note at once (INSERT), Esc Esc out
+// (forms' editor bind in the review's scope), Enter jumps back to finding 1,
+// review again and Space Enter submits. Space z l o opens the sample round
+// again, in a new preview session, and selects its row, which the sessions page
+// logs; Cmd+W there asks to cancel the sample round, so the selected session
+// shows it, and n dismisses the prompt.
 const STEPS: SelfTestStep[] = [
   { keys: [' ', 'z', 'l', 'o'], expect: '[sessions] activated Layout preview' },
   {
