@@ -149,7 +149,6 @@ export const coreThemeTokens: Readonly<Record<string, TokenKind>> = {
   'radius-lg': 'length',
   'radius-xl': 'length',
   'indicator-width': 'length',
-  'focus-ring': 'shadow',
 
   // Motion
   'duration-fast': 'duration',

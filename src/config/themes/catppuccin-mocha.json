@@ -144,7 +144,6 @@
     "radius-lg": "10px",
     "radius-xl": "14px",
     "indicator-width": "2px",
-    "focus-ring": "inset 0 0 0 1px var(--wg-focus-border)",
     "duration-fast": "90ms",
     "duration-base": "140ms",
     "duration-slow": "220ms",

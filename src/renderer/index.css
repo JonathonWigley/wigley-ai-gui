@@ -66,9 +66,10 @@ kbd {
   white-space: pre-wrap;
 }
 
+/* An outline, not a box-shadow, so an element's `outline: none` opts out. */
 :focus-visible {
-  outline: none;
-  box-shadow: var(--wg-focus-ring);
+  outline: 1px solid var(--wg-focus-border);
+  outline-offset: -1px;
 }
 
 /* `!important` beats the tokens ThemeApplier writes inline on <html>. */

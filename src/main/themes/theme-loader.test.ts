@@ -15,7 +15,7 @@ const registry: ThemeTokenRegistry = {
     'space-2': 'length',
     'duration-fast': 'duration',
     'leading-ui': 'number',
-    'focus-ring': 'shadow',
+    'material-floating-shadow': 'shadow',
     'material-chrome-filter': 'filter',
     'font-ui': 'raw',
   },
@@ -45,7 +45,7 @@ function rootTheme(name: string, tokens: Record<string, unknown> = {}) {
       'space-2': '8px',
       'duration-fast': '90ms',
       'leading-ui': '1.4',
-      'focus-ring': '0 0 0 1px var(--wg-focus-border)',
+      'material-floating-shadow': '0 0 0 1px var(--wg-focus-border)',
       'material-chrome-filter': 'blur(24px) saturate(160%)',
       'font-ui': 'system-ui, sans-serif',
       ...tokens,
@@ -72,7 +72,9 @@ describe('resolveTheme', () => {
     expect(theme.tokens.fg).toBe('#cba6f7');
     expect(theme.tokens.accent).toBe('#cba6f7');
     expect(theme.tokens['focus-border']).toBe('transparent');
-    expect(theme.tokens['focus-ring']).toBe('0 0 0 1px var(--wg-focus-border)');
+    expect(theme.tokens['material-floating-shadow']).toBe(
+      '0 0 0 1px var(--wg-focus-border)',
+    );
   });
 
   it.each([
@@ -105,8 +107,8 @@ describe('resolveTheme', () => {
     ['material-chrome-filter', 'filter', 'blur(24px) saturate(160%)', true],
     ['material-chrome-filter', 'filter', 'none', true],
     ['material-chrome-filter', 'filter', 'blur(24px', false],
-    ['focus-ring', 'shadow', '0 1px 2px rgb(0 0 0 / 0.30)', true],
-    ['focus-ring', 'shadow', 'a; b', false],
+    ['material-floating-shadow', 'shadow', '0 1px 2px rgb(0 0 0 / 0.30)', true],
+    ['material-floating-shadow', 'shadow', 'a; b', false],
     ['fg', 'color', 'mauve / 1.5', false],
     ['fg', 'color', 'Mauve', false],
   ])(
