@@ -67,7 +67,7 @@ const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 // one, two goes as one message; hello again in insert mode, sent with
 // Cmd+Enter, draws its own; Esc leaves insert mode and Esc again the box. y
 // allows the fixture's permission, which asks the round that takes the Chat tab
-// over; Space Space opens its review and Space Enter submits, which hands the
+// over; Space Space opens its review and Cmd+Enter submits, which hands the
 // Chat tab back. The tool turn's entries are user, tool, assistant, result,
 // focus following the result, so k k j k walks them; Enter opens the tool entry
 // and G follows the latest. Space c e opens Effort on Medium, j Enter sets
@@ -119,7 +119,7 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: [' ', ' '], expect: '[forms] review opened' },
   {
-    keys: [' ', 'Enter'],
+    keys: ['<D-Enter>'],
     expect: '[chat] Chat tab shown in chat-selftest',
     checksFit: true,
   },

@@ -393,40 +393,22 @@ describe('formsCommandHandlers', () => {
     expect(focused.at(-1)).toEqual(notes2);
   });
 
-  it('jumps to question N and logs it', () => {
-    const { run, round, logs, focused } = setup([finding('Leak')]);
+  it("moves from the active box into the next unanswered item's notes box", () => {
+    const { run, round, logs, focused, setActive } = setup();
+    setActive(notes1);
 
-    run('jumpTo2');
-
-    expect(round().focus).toBe(3);
-    expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
-    expect(logs).toEqual(['jumped to question 2']);
-    expect(focused).toEqual([]);
-  });
-
-  it('does nothing for a question the round lacks', () => {
-    const { run, store, logs } = setup();
-    const before = store.get();
-
-    run('jumpTo3');
-
-    expect(store.get()).toBe(before);
-    expect(logs).toEqual([]);
-  });
-
-  it("jumps from a box into question N's notes box", () => {
-    const { run, focused } = setup();
-
-    run('jumpTo2', { editor: editorOf(notes1) });
+    run('nextUnanswered', {});
 
     expect(focused.at(-1)).toEqual(notes2);
+    expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
+    expect(logs).toEqual(['jumped to question 2']);
   });
 
   it('stays on the focused item when it is the only unanswered one', () => {
-    const { run, round, logs } = setup();
-    run('jumpTo1');
+    const { run, store, round, logs } = setup();
+    store.dispatch({ type: 'focusItem', item: 1 });
     run('choose1');
-    run('jumpTo2');
+    store.dispatch({ type: 'focusItem', item: 2 });
     logs.length = 0;
 
     run('nextUnanswered');
@@ -443,9 +425,8 @@ describe('formsCommandHandlers', () => {
   });
 
   it('jumps to the next unanswered item, wrapping', () => {
-    const { run, round, logs } = setup([finding('Leak')]);
-    run('jumpTo2');
-    logs.length = 0;
+    const { run, store, round, logs } = setup([finding('Leak')]);
+    store.dispatch({ type: 'focusItem', item: 3 });
 
     run('nextUnanswered');
 
@@ -453,20 +434,9 @@ describe('formsCommandHandlers', () => {
     expect(logs).toEqual(['jumped to finding 1']);
   });
 
-  it('logs a jump to the focused question as no move', () => {
-    const { run, round, logs } = setup();
-    run('jumpTo2');
-    logs.length = 0;
-
-    run('jumpTo2');
-
-    expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
-    expect(logs).toEqual(['already on question 2']);
-  });
-
   it('jumps to the previous unanswered question', () => {
-    const { run, round } = setup();
-    run('jumpTo2');
+    const { run, store, round } = setup();
+    store.dispatch({ type: 'focusItem', item: 2 });
 
     run('prevUnanswered');
 

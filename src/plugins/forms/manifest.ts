@@ -3,10 +3,8 @@ import { definePlugin } from '../../shared/define-plugin';
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
 type Digit = (typeof DIGITS)[number];
 type ChoiceCommand = `choose${Digit}`;
-type JumpCommand = `jumpTo${Digit}`;
 
 const CHOICE_LABEL = 'pick a choice (again clears)';
-const JUMP_LABEL = 'go to question';
 
 const choiceCommands = Object.fromEntries(
   DIGITS.map((digit) => [
@@ -15,23 +13,10 @@ const choiceCommands = Object.fromEntries(
   ]),
 ) as Record<ChoiceCommand, { label: string; group: 'choices'; runsIn: 'page' }>;
 
-const jumpCommands = Object.fromEntries(
-  DIGITS.map((digit) => [
-    `jumpTo${digit}`,
-    { label: JUMP_LABEL, group: 'questions', runsIn: 'page' },
-  ]),
-) as Record<JumpCommand, { label: string; group: 'questions'; runsIn: 'page' }>;
-
-// A bare digit picks a choice; `Space a` and a digit picks too, as the box's
-// `<Leader>a` and a digit do.
+// A bare digit picks a choice on the page; in a text box, where vim reads a
+// digit as a count, `<Leader>a` and a digit picks.
 const pageChoiceBinds = DIGITS.map((digit) => ({
   keys: [digit],
-  scope: 'forms' as const,
-  command: `choose${digit}` as const,
-}));
-
-const pageLeaderChoiceBinds = DIGITS.map((digit) => ({
-  keys: [' ', 'a', digit],
   scope: 'forms' as const,
   command: `choose${digit}` as const,
 }));
@@ -41,26 +26,12 @@ const editorChoiceBinds = DIGITS.map((digit) => ({
   command: `choose${digit}` as const,
 }));
 
-const pageJumpBinds = DIGITS.map((digit) => ({
-  keys: [' ', digit],
-  scope: 'forms' as const,
-  command: `jumpTo${digit}` as const,
-}));
-
-const editorJumpBinds = DIGITS.map((digit) => ({
-  keys: `<Leader>${digit}`,
-  command: `jumpTo${digit}` as const,
-}));
-
 // A text box holds focus only in the form's and the review's views, so its
 // binds fire in both.
 const EDITOR_SCOPES = ['forms', 'review'] as const;
 
 const editorBinds = [
   { keys: '<Leader>x', command: 'toggleNotApplicable' },
-  ...editorJumpBinds,
-  { keys: '<Leader>en', command: 'nextUnanswered' },
-  { keys: '<Leader>ep', command: 'prevUnanswered' },
   ...editorChoiceBinds,
   { keys: '<Leader>ac', command: 'clearChoice' },
   { keys: '<Leader>af', command: 'actFixNow' },
@@ -75,17 +46,16 @@ export const formsManifest = definePlugin({
   id: 'forms',
   dependsOn: ['sessions', 'keys'],
   commands: {
-    nextItem: { label: 'next item', group: 'questions', runsIn: 'page' },
-    prevItem: { label: 'previous item', group: 'questions', runsIn: 'page' },
-    ...jumpCommands,
+    nextItem: { label: 'next item', group: 'items', runsIn: 'page' },
+    prevItem: { label: 'previous item', group: 'items', runsIn: 'page' },
     nextUnanswered: {
       label: 'next unanswered item',
-      group: 'questions',
+      group: 'items',
       runsIn: 'page',
     },
     prevUnanswered: {
       label: 'previous unanswered item',
-      group: 'questions',
+      group: 'items',
       runsIn: 'page',
     },
     ...choiceCommands,
@@ -143,7 +113,7 @@ export const formsManifest = definePlugin({
       group: 'review',
       runsIn: 'page',
     },
-    submit: { label: 'submit', group: 'review', runsIn: 'page' },
+    submit: { label: 'send answers', group: 'review', runsIn: 'page' },
     askCancel: { label: 'cancel the round', group: 'review', runsIn: 'page' },
     confirmCancel: {
       label: 'yes, cancel the round',
@@ -190,16 +160,14 @@ export const formsManifest = definePlugin({
       { keys: ['d'], scope: 'forms', command: 'toggleDontAsk' },
       { keys: ['a'], scope: 'forms', command: 'editNotes' },
       { keys: ['Enter'], scope: 'forms', command: 'acceptRecommendation' },
-      ...pageJumpBinds,
-      { keys: [' ', 'e', 'n'], scope: 'forms', command: 'nextUnanswered' },
-      { keys: [' ', 'e', 'p'], scope: 'forms', command: 'prevUnanswered' },
-      ...pageLeaderChoiceBinds,
-      { keys: [' ', 'a', 'c'], scope: 'forms', command: 'clearChoice' },
-      { keys: [' ', 'a', 'f'], scope: 'forms', command: 'actFixNow' },
-      { keys: [' ', 'a', 'u'], scope: 'forms', command: 'actFollowUp' },
-      { keys: [' ', 'a', 's'], scope: 'forms', command: 'actLeaveIt' },
+      { keys: ['c'], scope: 'forms', command: 'clearChoice' },
+      { keys: ['f'], scope: 'forms', command: 'actFixNow' },
+      { keys: ['u'], scope: 'forms', command: 'actFollowUp' },
+      { keys: ['s'], scope: 'forms', command: 'actLeaveIt' },
+      { keys: ['<A-n>'], scope: 'forms', command: 'nextUnanswered' },
+      { keys: ['<A-p>'], scope: 'forms', command: 'prevUnanswered' },
       { keys: [' ', ' '], scope: 'forms', command: 'openReview' },
-      { keys: [' ', 'Enter'], scope: 'review', command: 'submit' },
+      { keys: ['<D-Enter>'], scope: 'review', command: 'submit' },
       { keys: ['Escape'], scope: 'review', command: 'closeReview' },
       { keys: ['j'], scope: 'review', command: 'reviewNext' },
       { keys: ['k'], scope: 'review', command: 'reviewPrev' },

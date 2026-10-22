@@ -34,15 +34,19 @@ function userKeymap(command: string): string {
   });
 }
 
-// A user keymap moving the text box's jump to question 2 in the form from
-// <Leader>2 to <Leader>q, which nothing else binds.
-const MOVED_JUMP_KEYMAP = JSON.stringify({
+// A user keymap moving the text box's not-applicable toggle in the form from
+// <Leader>x to <Leader>q, which nothing else binds.
+const MOVED_NOT_APPLICABLE_KEYMAP = JSON.stringify({
   editor: {
     binds: [
-      { keys: '<Leader>q', scope: 'forms.forms', command: 'forms.jumpTo2' },
+      {
+        keys: '<Leader>q',
+        scope: 'forms.forms',
+        command: 'forms.toggleNotApplicable',
+      },
     ],
   },
-  unbind: [{ editor: '<Leader>2', scope: 'forms.forms' }],
+  unbind: [{ editor: '<Leader>x', scope: 'forms.forms' }],
 });
 
 // A user keymap making `,` the text box's leader.
@@ -102,38 +106,38 @@ export const SELFTEST_LAYOUT = {
 // Then, opening on finding 1: Space k then k breaks Space k s, so the first k
 // replays to the notice and the second finds no item before it; j back to the
 // finding, which opens on Fix now, saving the round's screenshot; 2 picks
-// solution 2, Space a f clears the action and Space a s sets Leave it. a types
-// "agreed" at once (INSERT), Esc to NORMAL, where Space a u (the editor bind)
-// sets Follow-up; Esc out, as every Esc out of a box in NORMAL runs forms'
-// editor bind there. j to finding 2, a Nit: Space a u is refused, since a Nit
-// offers no follow-up, and it opens on Fix anyway with its one solution, so
-// Space a s sets Leave it and Space a f sets Fix anyway again. j to finding 3,
-// a Decision: Space a u sets Plan it, and Enter accepts its recommendation. j
-// to question 1, where 2 picks 2; a types "ab" at once, Esc Esc out (the first
-// Esc to NORMAL); d focuses its reason box, A appends a long word and Ctrl+k
-// still in INSERT moves back to its notes box, Esc out; a again types "c" after
-// "ab", Esc Esc out. a once more, Esc to NORMAL, where Space opens which-key
-// and Esc closes it without leaving the box (vim drops its pending input);
-// Space opens it again and, with no key pressed, the which-key timeout closes
-// it, and Esc then leaves the box, so the box kept focus and its pending Space
-// was dropped. a back in, Esc, Space opens which-key, and Ctrl+j moving to the
-// reason box, which it focuses in INSERT, closes it; Esc Esc out. a, Esc and d,
-// then Ctrl+j to the reason box and Ctrl+k back; w and Esc leave the box, and w
-// deleted nothing, since leaving dropped the pending d. j to question 2, where
-// q a x then b breaks the self-test bind, so a opens the notes box and "xb" is
-// typed into it; Esc Esc out and x marks question 2 not applicable. Ctrl+h goes
-// back to question 1, where Space opens which-key and the timeout closes it, so
-// 2 starts a fresh sequence and clears the choice (Space 2 would jump), 2 picks
-// it again; Space a 2 clears it and picks it again, Enter replaces that pick
-// with its recommendation, Space 2 jumps to question 2, and Space e n finds no
-// unanswered item. Space opens which-key, a moves it into the Space a group,
-// and Esc cancels the sequence and closes it. Option+Shift+o moves to the
-// second session, where Option+o wraps from its Form tab to its Docs tab and
-// Option+o again back to the Form tab; Cmd+W there asks to cancel its round,
-// Esc keeps it and returns to its form, where j moves to its question 2 and
-// Space e p finds its untouched question 1; Option+Shift+i moves back to the
-// first session, on question 2. Space k s hides the side bar and shows it
-// again; a enters question 2's notes box, where Esc and Space k s (the editor
+// solution 2, f clears the action and s sets Leave it. a types "agreed" at once
+// (INSERT), Esc to NORMAL, where Space a u (the editor bind) sets Follow-up;
+// Esc out, as every Esc out of a box in NORMAL runs forms' editor bind there. j
+// to finding 2, a Nit: u is refused, since a Nit offers no follow-up, and it
+// opens on Fix anyway with its one solution, so s sets Leave it and f sets Fix
+// anyway again. j to finding 3, a Decision: u sets Plan it, and Enter accepts
+// its recommendation. j to question 1, where 2 picks 2; a types "ab" at once,
+// Esc Esc out (the first Esc to NORMAL); d focuses its reason box, A appends a
+// long word and Ctrl+k still in INSERT moves back to its notes box, Esc out; a
+// again types "c" after "ab", Esc Esc out. a once more, Esc to NORMAL, where
+// Space opens which-key and Esc closes it without leaving the box (vim drops
+// its pending input); Space opens it again and, with no key pressed, the
+// which-key timeout closes it, and Esc then leaves the box, so the box kept
+// focus and its pending Space was dropped. a back in, Esc, Space opens
+// which-key, and Ctrl+j moving to the reason box, which it focuses in INSERT,
+// closes it; Esc Esc out. a, Esc and d, then Ctrl+j to the reason box and
+// Ctrl+k back; w and Esc leave the box, and w deleted nothing, since leaving
+// dropped the pending d. j to question 2, where q a x then b breaks the
+// self-test bind, so a opens the notes box and "xb" is typed into it; Esc Esc
+// out and x marks question 2 not applicable. Ctrl+h goes back to question 1,
+// where Space opens which-key and the timeout closes it, so 2 starts a fresh
+// sequence and clears the choice, 2 picks it again; c clears it and 2 picks it
+// again, Enter replaces that pick with its recommendation, j moves to question
+// 2, and Option+n finds no unanswered item. Space opens which-key, z moves it
+// into the Space z group, and Esc cancels the sequence and closes it.
+// Option+Shift+o moves to the second session, where Option+o wraps from its
+// Form tab to its Docs tab and Option+o again back to the Form tab; Cmd+W there
+// asks to cancel its round, Esc keeps it and returns to its form, where j moves
+// to its question 2 and Option+p finds its untouched question 1; Option+Shift+i
+// moves back to the first session, on question 2. Space k s hides the side bar
+// and shows it again; a enters question 2's notes box, where Option+n in INSERT
+// finds no unanswered item and types nothing, and Esc and Space k s (the editor
 // bind) hide it and Space k s in NORMAL shows it; Esc (forms' editor bind)
 // leaves the box. Option+Shift+i wraps to the last session, the layout
 // preview's; Cmd+W there asks to cancel its sample round and y cancels it,
@@ -154,10 +158,10 @@ export const SELFTEST_LAYOUT = {
 // again, Cmd+W opens the cancel prompt, which closes help, so n dismisses the
 // prompt. o types "note" into the Round note at once (INSERT), Esc Esc out
 // (forms' editor bind in the review's scope), Enter jumps back to finding 1,
-// review again and Space Enter submits. Space z l o opens the sample round
-// again, in a new preview session, and selects its row, which the sessions page
-// logs; Cmd+W there asks to cancel the sample round, so the selected session
-// shows it, and n dismisses the prompt.
+// review again, and o then Cmd+Enter sends from the Round note box. Space z l o
+// opens the sample round again, in a new preview session, and selects its row,
+// which the sessions page logs; Cmd+W there asks to cancel the sample round, so
+// the selected session shows it, and n dismisses the prompt.
 const STEPS: SelfTestStep[] = [
   { keys: [' ', 'z', 'l', 'o'], expect: '[sessions] activated Layout preview' },
   {
@@ -259,8 +263,8 @@ const STEPS: SelfTestStep[] = [
     screenshot: 'round',
   },
   { keys: ['2'], expect: '[forms] chose 2 on finding 1' },
-  { keys: [' ', 'a', 'f'], expect: '[forms] cleared the action on finding 1' },
-  { keys: [' ', 'a', 's'], expect: '[forms] chose Leave it on finding 1' },
+  { keys: ['f'], expect: '[forms] cleared the action on finding 1' },
+  { keys: ['s'], expect: '[forms] chose Leave it on finding 1' },
   { keys: ['a'], expect: '[forms] focused notes on finding 1' },
   {
     keys: [...'agreed', 'Escape', ' ', 'a', 'u'],
@@ -268,11 +272,11 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[forms] left the box' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
-  { keys: [' ', 'a', 'u'], expect: '[forms] finding 2 offers no follow-up' },
-  { keys: [' ', 'a', 's'], expect: '[forms] chose Leave it on finding 2' },
-  { keys: [' ', 'a', 'f'], expect: '[forms] chose Fix anyway on finding 2' },
+  { keys: ['u'], expect: '[forms] finding 2 offers no follow-up' },
+  { keys: ['s'], expect: '[forms] chose Leave it on finding 2' },
+  { keys: ['f'], expect: '[forms] chose Fix anyway on finding 2' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
-  { keys: [' ', 'a', 'u'], expect: '[forms] chose Plan it on finding 3' },
+  { keys: ['u'], expect: '[forms] chose Plan it on finding 3' },
   {
     keys: ['Enter'],
     expect: '[forms] accepted the recommendation on finding 3',
@@ -337,52 +341,52 @@ const STEPS: SelfTestStep[] = [
     keys: [],
     expect: '[config] applied a new config',
   },
-  // keymap.json moves the box's jump to question 2 (the item shown) from
-  // <Leader>2 to <Leader>q in the form, so <Leader>2 now runs nothing there;
-  // then a `,` leader runs it as `,2`, and `{}` restores Space 2, the leader
-  // Space having been unmapped once already.
+  // keymap.json moves the box's not-applicable toggle from <Leader>x to
+  // <Leader>q in the form, so <Leader>x now runs nothing there and <Leader>q
+  // marks question 2 (the item shown) applicable; then a `,` leader runs the
+  // toggle as `,x`, and `{}` restores Space x, the leader Space having been
+  // unmapped once already, which toggles it twice, leaving question 2 not
+  // applicable.
   {
-    writeFile: { path: USER_KEYMAP_FILE, text: MOVED_JUMP_KEYMAP },
+    writeFile: { path: USER_KEYMAP_FILE, text: MOVED_NOT_APPLICABLE_KEYMAP },
     keys: [],
     expect: '[config] applied a new config',
   },
   { keys: ['a'], expect: '[forms] focused notes on question 2' },
   {
-    keys: ['Escape', ' ', '2'],
-    expect: '[page] <Leader>2 has no bind in forms.forms',
+    keys: ['Escape', ' ', 'x'],
+    expect: '[page] <Leader>x has no bind in forms.forms',
   },
-  { keys: [' ', 'q'], expect: '[forms] already on question 2' },
+  { keys: [' ', 'q'], expect: '[forms] applicable again on question 2' },
   {
     writeFile: { path: USER_KEYMAP_FILE, text: COMMA_LEADER_KEYMAP },
     keys: [],
     expect: '[config] applied a new config',
   },
-  { keys: [',', '2'], expect: '[forms] already on question 2' },
+  { keys: [',', 'x'], expect: '[forms] not applicable on question 2' },
   {
     writeFile: { path: USER_KEYMAP_FILE, text: '{}' },
     keys: [],
     expect: '[config] applied a new config',
   },
-  { keys: [' ', '2'], expect: '[forms] already on question 2' },
+  { keys: [' ', 'x'], expect: '[forms] applicable again on question 2' },
+  { keys: [' ', 'x'], expect: '[forms] not applicable on question 2' },
   { keys: ['Escape'], expect: '[forms] left the box' },
   { keys: ['<C-h>'], expect: '[page] <C-h> ran forms.prevItem' },
   { keys: [' '], expect: '[keys] which-key shows Space' },
   { keys: [], expect: '[keys] which-key closed' },
   { keys: ['2'], expect: '[forms] cleared the choice on question 1' },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
-  {
-    keys: [' ', 'a', '2'],
-    expect: '[forms] cleared the choice on question 1',
-  },
-  { keys: [' ', 'a', '2'], expect: '[forms] chose 2 on question 1' },
+  { keys: ['c'], expect: '[forms] cleared the choice on question 1' },
+  { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   {
     keys: ['Enter'],
     expect: '[forms] accepted the recommendation on question 1',
   },
-  { keys: [' ', '2'], expect: '[forms] jumped to question 2' },
-  { keys: [' ', 'e', 'n'], expect: '[forms] no unanswered item' },
+  { keys: ['j'], expect: '[page] j ran forms.nextItem' },
+  { keys: ['<A-n>'], expect: '[forms] no unanswered item' },
   { keys: [' '], expect: '[keys] which-key shows Space', checksFit: true },
-  { keys: ['a'], expect: '[keys] which-key shows Space a' },
+  { keys: ['z'], expect: '[keys] which-key shows Space z' },
   { keys: ['Escape'], expect: '[keys] which-key closed' },
   {
     keys: ['<A-S-o>'],
@@ -402,7 +406,7 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[page] Escape ran forms.dismissConfirm' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem' },
-  { keys: [' ', 'e', 'p'], expect: '[forms] jumped to question 1' },
+  { keys: ['<A-p>'], expect: '[forms] jumped to question 1' },
   { keys: ['<A-S-i>'], expect: '[sessions] activated selftest' },
   {
     keys: [' ', 'k', 's'],
@@ -411,6 +415,7 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: [' ', 'k', 's'], expect: '[page] side bar shown' },
   { keys: ['a'], expect: '[forms] focused notes on question 2' },
+  { keys: ['<A-n>'], expect: '[forms] no unanswered item' },
   {
     keys: ['Escape', ' ', 'k', 's'],
     expect: '[page] side bar hidden',
@@ -488,7 +493,7 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['Enter'], expect: '[page] Enter ran forms.reviewJump' },
   { keys: [' ', ' '], expect: '[forms] review opened' },
-  { keys: [' ', 'Enter'], expect: '[forms] submitted' },
+  { keys: ['o', '<D-Enter>'], expect: '[forms] submitted' },
   { keys: [' ', 'z', 'l', 'o'], expect: '[sessions] activated Layout preview' },
   {
     keys: ['<D-w>'],
@@ -498,19 +503,15 @@ const STEPS: SelfTestStep[] = [
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
 ];
 
-// Code and tables scroll in their own box, and rail, row and tab titles end
-// in an ellipsis, their full text in the item heading and the tooltip; so do
-// a Docs tab's row titles, paths and status line.
+// Code and tables scroll in their own box; a Docs tab's paths and status line
+// and a session row's status end in an ellipsis, their full text in the
+// tooltip.
 const SCROLLS_ITSELF = [
   '.md pre',
   '.md table',
-  '.rail-title',
-  '.docs-row-title',
   '.docs-path',
   '.docs-status',
-  '.session-row-label',
   '.session-row-status',
-  '.session-tab-label',
 ];
 
 // Each run's fixture differs in one context line, so a later run never opens

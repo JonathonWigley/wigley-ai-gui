@@ -112,11 +112,6 @@ export function formsCommandHandlers(
       );
     };
 
-  const jumpTo =
-    (question: number): Handler =>
-    (context) =>
-      jumpToItem(deps, context, { kind: 'question', index: question });
-
   const layoutCommand =
     (invoke: () => Promise<unknown>): Handler =>
     () =>
@@ -194,15 +189,6 @@ export function formsCommandHandlers(
     },
     nextItem: (context) => moveItem(deps, context, { type: 'nextItem' }),
     prevItem: (context) => moveItem(deps, context, { type: 'prevItem' }),
-    jumpTo1: jumpTo(1),
-    jumpTo2: jumpTo(2),
-    jumpTo3: jumpTo(3),
-    jumpTo4: jumpTo(4),
-    jumpTo5: jumpTo(5),
-    jumpTo6: jumpTo(6),
-    jumpTo7: jumpTo(7),
-    jumpTo8: jumpTo(8),
-    jumpTo9: jumpTo(9),
     nextUnanswered: (context) => jumpToUnanswered(deps, context, 1),
     prevUnanswered: (context) => jumpToUnanswered(deps, context, -1),
     openReview: (context) => {
@@ -374,11 +360,7 @@ function jumpToItem(
     return;
   }
   moveItem(deps, context, { type: 'focusItem', item: position });
-  const moved = round.focus !== position;
-  deps.log(
-    'forms',
-    moved ? `jumped to ${itemName(item)}` : `already on ${itemName(item)}`,
-  );
+  deps.log('forms', `jumped to ${itemName(item)}`);
 }
 
 function jumpToUnanswered(
