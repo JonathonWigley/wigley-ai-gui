@@ -238,6 +238,28 @@ function goToLine(view: EditorView, line: number) {
   });
 }
 
+// Scrolls the editor by half its visible height in `direction`, and moves a
+// cursor left wholly out of sight to the start of the nearest visible line; a
+// non-empty selection keeps its anchor.
+function scrollHalfPage(view: EditorView, direction: 1 | -1) {
+  const scroller = view.scrollDOM;
+  scroller.scrollTop += (direction * scroller.clientHeight) / 2;
+  const top = scroller.scrollTop - view.documentPadding.top;
+  const bottom = top + scroller.clientHeight;
+  const selection = view.state.selection.main;
+  const headLine = view.lineBlockAt(selection.head);
+  const isAboveSight = headLine.bottom <= top;
+  const isBelowSight = headLine.top >= bottom;
+  if (!isAboveSight && !isBelowSight) {
+    return;
+  }
+  const head = isAboveSight
+    ? view.lineBlockAtHeight(top).from
+    : view.lineBlockAtHeight(bottom - 1).from;
+  const anchor = selection.empty ? head : selection.anchor;
+  view.dispatch({ selection: { anchor, head } });
+}
+
 // Reconfigures `slot` with the file's language once it loads, unless the
 // editor was destroyed first. A file with no known language, or one whose
 // language fails to load, stays plain text: the text is still whole and
@@ -632,6 +654,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
           ...shared,
           setText: (text) => replaceTextKeepingLine(view, text),
           goToLine: (line) => goToLine(view, line),
+          scrollHalfPage: (direction) => scrollHalfPage(view, direction),
         }),
         (event) => raiseDocumentEx(events, event),
       );

@@ -102,7 +102,8 @@ export interface DocView {
   // Opens the editor at `line`, else at the top visible line.
   edit(line?: number): void;
   scroll(by: 1 | -1): void;
-  // Scrolls the pane by half its visible height.
+  // Scrolls the open editor by half its visible height, else the pane by half
+  // its own.
   scrollHalfPage(direction: 1 | -1): void;
   // Focuses the open editor, else the pane.
   focus(): void;
@@ -658,7 +659,11 @@ export function createDocView(deps: DocViewDeps): DocView {
       pane.scrollTop += by * SCROLL_STEP_PX;
     },
     scrollHalfPage(direction) {
-      pane.scrollTop += (direction * pane.clientHeight) / 2;
+      if (editor !== null) {
+        editor.scrollHalfPage(direction);
+      } else {
+        pane.scrollTop += (direction * pane.clientHeight) / 2;
+      }
     },
     focus() {
       if (editor !== null) {

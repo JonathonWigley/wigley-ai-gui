@@ -30,8 +30,9 @@ const STYLE_CHANGED_WHILE_EDITING =
 // line below, Esc to normal mode and :w meets the changed-on-disk prompt, where
 // r reloads the disk's text. Another change on disk, a new line and :w again,
 // and o overwrites the disk. A third, and Esc keeps editing; :w shows the
-// prompt again and o overwrites. :q closes the editor. i again, x deletes a
-// character, so :q is refused and :q! drops the edit. Option+h back to the
+// prompt again and o overwrites. :q closes the editor. i again, Ctrl+j scrolls
+// the editor half a page, x deletes a character, so :q is refused and :q!
+// drops the edit. Option+h back to the
 // tree; a asks for a kind (the kind picker's screenshot), j Enter picks rule,
 // Enter its one place, and tidy names it, which creates tidy.md and opens it in
 // the editor; :q closes it. Option+h to the tree, where r opens the path box on
@@ -112,6 +113,7 @@ const STEPS: SelfTestStep[] = [
   { keys: ['o'], expect: '[docs] wrote style.md' },
   { keys: [':', 'q', 'Enter'], expect: '[docs] closed the editor on style.md' },
   { keys: ['i'], expect: '[docs] editing style.md' },
+  { keys: ['<C-j>'], expect: '[page] <C-j> ran docs.halfPageDown' },
   {
     keys: ['x', ':', 'q', 'Enter'],
     expect: '[docs] refused :q with unsaved edits on style.md',

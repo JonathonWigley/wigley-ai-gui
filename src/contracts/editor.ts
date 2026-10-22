@@ -79,6 +79,10 @@ export interface DocumentEditor extends TextEditor {
   // Puts the cursor at the start of the 1-based `line`, clamped to the text,
   // and scrolls it to the top.
   goToLine(line: number): void;
+  // Scrolls by half the visible height, down for 1 and up for -1, keeping
+  // the vim mode; a cursor the scroll leaves out of sight moves to the
+  // nearest visible line's start, a non-empty selection keeping its anchor.
+  scrollHalfPage(direction: 1 | -1): void;
 }
 
 // While the editor is in insert mode and the text from the document's start to the cursor is `prefix`
