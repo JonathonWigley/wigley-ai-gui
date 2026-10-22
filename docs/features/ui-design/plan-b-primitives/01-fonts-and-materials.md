@@ -1,6 +1,6 @@
 # 01 — JetBrains Mono, backdrop, materials and reduced motion
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -82,3 +82,11 @@ font stack, so task 03 does not put it on the legacy list.
 - low-confidence (Vite inlines small assets only in a build, which no test runs): in a packaged
   build (`npm run package`), the console shows no CSP violation for a font, and mono text is
   still JetBrains Mono.
+
+## Proof
+
+Commit `d0ba3ee` · diff read: `.material-chrome`, `.material-chrome--dense`, `.material-floating` in
+`materials.css` as tabled; `duration-instant` in the registry and Mocha (`1ms`) · typecheck passes ·
+worker ran lint, test (1823) and selftest green; `backdrop-filter` only in `materials.css`; one
+`@fontsource/jetbrains-mono` (5.3.0, installed by the user since `npm install` is deny-listed).
+Concerns: none open.

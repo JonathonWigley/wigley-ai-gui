@@ -232,13 +232,13 @@ when it starts; 04's and 05's new files pass the style check as written.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [JetBrains Mono, backdrop, materials and reduced motion](01-fonts-and-materials.md)
+- [x] [JetBrains Mono, backdrop, materials and reduced motion](01-fonts-and-materials.md)
 - [x] [Self-test screenshot steps](02-selftest-screenshots.md)
 
 ### Wave 2
-- [ ] [Style check in lint](03-check-styles.md) — after 01
-- [ ] [Primitives: key hints and controls](04-primitives-controls.md) — after 01
-- [ ] [Primitives: rows, tabs, sheets, splits and floating panels](05-primitives-containers.md) — after 01
+- [x] [Style check in lint](03-check-styles.md) — after 01
+- [x] [Primitives: key hints and controls](04-primitives-controls.md) — after 01
+- [x] [Primitives: rows, tabs, sheets, splits and floating panels](05-primitives-containers.md) — after 01
 
 ### Wave 3
 - [ ] [Gallery mode](06-gallery.md) — after 02, 04, 05
@@ -254,11 +254,27 @@ when it starts; 04's and 05's new files pass the style check as written.
 Review base: ed5d846987f144614a41307b3783613533e761a8
 
 ### Groups
+- 01 · d0ba3ee · proved (diff read, typecheck; worker: lint, test, selftest green) · concerns: none
 - 02 · bd6455e · proved (diff read, typecheck; worker: lint, test, selftest green) · concerns: none; forms comment line over 80 columns after the edit (cosmetic, for review)
+- 04 · 944722e · proved (diff read, typecheck; worker: test, check-layers, oxlint) · concerns: `.ui-input .cm-editor { background: transparent }` (0,2,0) may lose to the CodeMirror theme — check in 08; check-styles to run over 04 files after 03 lands
+- 05 · 9927864 · proved (diff read, typecheck; worker: test, lint) · concerns: `.ui-scrim[hidden] { display: none }` duplicates `index.css`'s global `[hidden]` !important rule; a layout read per `pointermove` in `split.ts`; check-styles to run over 05 files after 03 lands
+- 03 · 1fd6472 · proved (diff read, typecheck, lint; `--no-legacy` over every 04/05 file clean; worker: test 1868) · concerns: none
 ### Contract changes
 ### Rulings
 - Screenshot paths and the fit-check list enter the chain in `runScript` (the doc said `startRun`), where the script's list already enters — tree shape — cost if wrong: none · group 02
 - A failed capture fails the step and skips its fit check; a step whose line never came still saves its screenshot — Decisions line — cost if wrong: one line · group 02
 - `saveScreenshot` adds a third failure reason, `the page produced no frames`, when the redraw wait times out — never capture a half-drawn frame — cost: one message · group 02
+- The font package was installed by the user (`npm install` is deny-listed for agents); the worker only imported it — no behaviour change · lead
+- Two one-line comments added in `index.css` (the html backdrop, the `!important` reason); DESIGN.md's Durations bullet left unchanged, only Reduced motion names `duration-instant` — cost if wrong: one line · group 01
+- Disabled beats hover and press (`:not(:disabled)` on every hover/press rule) and comes after `is-selected`; a disabled primary's hint reads `fg-disabled` — the plan was silent — cost: gallery state priority differs from intent · group 04
+- Chip gets `gap: var(--wg-space-1)` between label and value, and `is-active` keeps its fill under hover — the plan gave neither — cost: one rule · group 04
+- `kbdParts` reads any `<…>` with no inner angle brackets as a chord (`<Space>` too; `formatChord` returns it unchanged) — cost: none visible · group 04
+- A selected or disabled row takes no hover (`.ui-row:not(.is-disabled, .is-selected):hover`) — the plan named both backgrounds, not which wins — cost: one selector · group 05
+- UA resets added to `.ui-tab`, `.ui-collapsible-head`, `.ui-empty`, `.ui-dialog-title`; collapsible mono is the modifier `ui-collapsible-summary--mono`; `is-start-hidden` sets the grid to one column — the plan was silent — cost: gallery look only · group 05
+- Transitions (`duration-fast` / `ease-out`) on row, tab, collapsible head and split line, per the 04 convention — cost: none · group 05
+- `LEGACY_FILES` is the doc's eight, re-measured; every violation in them is `raw-length` · group 03
+- `.shell-side-bar[data-side-bar='over']` box-shadow blur `1rem` (not in the fix table) → `var(--wg-space-4)` — the doc's rule for values outside the table — cost: none · group 03
+- A bad argument prints its failures and exits 1 before judging anything — never fall back to judging every file on a typo — cost: none · group 03
+- `raw-duration` is case-sensitive as tabled; inline writes are judged by running their CSS text through `cssViolations`, which also catches `webkitBackdropFilter` · group 03
 ### Review rounds
 ### Test gate

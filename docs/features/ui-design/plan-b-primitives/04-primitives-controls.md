@@ -1,6 +1,6 @@
 # 04 — Primitives: key hints and controls
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -195,3 +195,8 @@ so no test repeats it.
 
 ## Proof
 
+Commit `944722e` · diff read: every Produces signature present in the file named beside it; each
+builder imports its own CSS · typecheck clean for these files (the only errors at proof were in 03's
+unfinished `style-rules.mts`) · worker: test 1839 pass (7 new `kbdParts`), check-layers and oxlint
+clean; check-styles did not exist yet, so the lead runs it over these files once 03 lands.
+Concerns: `.ui-input .cm-editor` transparency vs the CodeMirror theme's specificity (08 live).

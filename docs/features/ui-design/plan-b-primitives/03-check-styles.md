@@ -1,6 +1,6 @@
 # 03 — Style check in lint
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -179,3 +179,12 @@ Each builds its own CSS or TS text.
 None: the script runs in `npm run lint`. The shell's look after the token swap is part of task
 08's gallery and mode screenshots (expected: the status bar, side bar and toasts keep their places;
 sizes move to the token steps).
+
+## Proof
+
+Commit `1fd6472` · diff read: every Produces present (`StyleRule`, `StyleViolation`,
+`cssViolations`, `inlineStyleViolations`, `legacyListProblems`, `parseStyleArguments`,
+`LEGACY_FILES`, `--no-legacy`) · lead: typecheck and `npm run lint` pass (`styles: 269 files clean,
+8 on the legacy list`); `--no-legacy` over all 37 files in `src/shared/page/ui/` clean (04 and 05
+proved under it) · worker: test 1868 pass (29 new). `LEGACY_FILES` is exactly the expected eight.
+Concerns: none open; AGENTS.md's lint line is task 07's.

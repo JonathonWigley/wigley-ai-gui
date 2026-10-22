@@ -1,6 +1,6 @@
 # 05 — Primitives: rows, tabs, sheets, splits and floating panels
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -254,3 +254,8 @@ and SectionHeader decide nothing a test can see without a DOM: the test environm
 
 ## Proof
 
+Commit `9927864` · diff read: every Produces signature present in the file named beside it; each
+builder imports its own CSS; the four ellipsis classes match 02's list · typecheck clean for these
+files · worker: test 1839 pass (9 new split-width), lint clean; check-styles did not exist yet, so the
+lead runs it over these files once 03 lands. Concerns: `.ui-scrim[hidden]` repeats the global
+`[hidden]` rule (redundant); `getBoundingClientRect` per `pointermove` in `split.ts`.
