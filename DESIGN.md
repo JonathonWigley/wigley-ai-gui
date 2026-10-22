@@ -178,8 +178,8 @@ means something.
 - **What moves:** motion answers a user action or reports agent state (the streaming indicator, a
   tool card settling from running to done). Content does not animate in, and nothing moves on its
   own.
-- **Reduced motion:** under `prefers-reduced-motion` durations drop to near zero and the streaming
-  indicator is static.
+- **Reduced motion:** under `prefers-reduced-motion` durations drop to `duration-instant` (near
+  zero) and the streaming indicator is static.
 
 ## Keys and focus
 

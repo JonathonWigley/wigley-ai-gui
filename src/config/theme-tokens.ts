@@ -155,6 +155,7 @@ export const coreThemeTokens: Readonly<Record<string, TokenKind>> = {
   'duration-fast': 'duration',
   'duration-base': 'duration',
   'duration-slow': 'duration',
+  'duration-instant': 'duration',
   'ease-out': 'raw',
   'ease-in': 'raw',
 

@@ -14,12 +14,17 @@ body {
   height: 100%;
 }
 
+/* The L0 backdrop: the canvas takes html's background, so body draws none. */
+html {
+  background: var(--wg-window-ambient), var(--wg-window-background);
+}
+
 body {
-  background: var(--wg-window-background);
   color: var(--wg-fg);
   font-family: var(--wg-font-ui);
   font-size: var(--wg-text-ui);
-  line-height: 1.5;
+  line-height: var(--wg-leading-ui);
+  -webkit-font-smoothing: antialiased;
   margin: 0;
   overflow: hidden;
   scrollbar-color: var(--wg-border-strong) transparent;
@@ -44,11 +49,11 @@ button {
 kbd {
   background: var(--wg-card-background);
   border: 1px solid var(--wg-border-default);
-  border-radius: 0.25rem;
+  border-radius: var(--wg-radius-sm);
   color: var(--wg-fg);
   font-family: var(--wg-font-mono);
   font-size: var(--wg-text-mono);
-  padding: 0 0.3em;
+  padding: 0 var(--wg-space-1);
 }
 
 /* Why the page failed to start, shown in place of the shell. */
@@ -57,11 +62,20 @@ kbd {
   font-family: var(--wg-font-mono);
   font-size: var(--wg-text-mono);
   margin: 0;
-  padding: 1rem;
+  padding: var(--wg-space-4);
   white-space: pre-wrap;
 }
 
 :focus-visible {
-  outline: 1px solid var(--wg-focus-border);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--wg-focus-ring);
+}
+
+/* `!important` beats the tokens ThemeApplier writes inline on <html>. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --wg-duration-fast: var(--wg-duration-instant) !important;
+    --wg-duration-base: var(--wg-duration-instant) !important;
+    --wg-duration-slow: var(--wg-duration-instant) !important;
+  }
 }

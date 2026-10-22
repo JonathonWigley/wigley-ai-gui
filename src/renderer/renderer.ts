@@ -1,6 +1,10 @@
 // Composition root for the renderer: the one module that picks adapters and
 // starts the page parts of the plugins.
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+import '@fontsource/jetbrains-mono/600.css';
 import './index.css';
+import '../shared/page/ui/materials.css';
 import './shell/shell.css';
 import type { Timers } from '../contracts/ambient';
 import type { CommandId } from '../contracts/commands';

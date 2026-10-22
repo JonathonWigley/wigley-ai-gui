@@ -314,8 +314,9 @@ const LAYERS: Record<string, LayerRule> = {
       'src/renderer/markdown-it',
       'src/plugins/page.ts',
       'src/plugins/manifests.ts',
+      'src/shared/page/ui',
     ],
-    packages: [],
+    packages: ['@fontsource/jetbrains-mono'],
   },
 };
 

@@ -1,0 +1,17 @@
+/* The only place `backdrop-filter` is written. */
+.material-chrome {
+  background: var(--wg-material-chrome-bg);
+  backdrop-filter: var(--wg-material-chrome-filter);
+}
+
+.material-chrome--dense {
+  background: var(--wg-material-chrome-bg-dense);
+}
+
+.material-floating {
+  background: var(--wg-material-floating-bg);
+  backdrop-filter: var(--wg-material-floating-filter);
+  border: 1px solid var(--wg-material-floating-edge);
+  box-shadow:
+    var(--wg-material-floating-highlight), var(--wg-material-floating-shadow);
+}
