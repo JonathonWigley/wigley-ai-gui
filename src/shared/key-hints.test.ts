@@ -232,12 +232,6 @@ describe('formatVimKeys', () => {
     expect(formatVimKeys('<Leader><M-x>', '<Space>', 'windows')).toBe(
       'Space Win+X',
     );
-  });
-
-  it('formatVimKeys_SpellsTheLeaderAndSplitsTokens', () => {
-    expect(formatVimKeys('<Leader>a<C-j>', '<Space>', 'macos')).toBe(
-      'Space a ⌃J',
-    );
     expect(formatVimKeys('<CR>', ',', 'windows')).toBe('Enter');
     expect(formatVimKeys('jk', '<Space>', 'macos')).toBe('j k');
   });

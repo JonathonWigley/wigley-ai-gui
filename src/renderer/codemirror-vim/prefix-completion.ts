@@ -169,6 +169,7 @@ export function prefixCompletion(completions: EditorCompletions) {
       defaultKeymap: false,
       icons: false,
       interactionDelay: 0,
+      tooltipClass: () => 'material-floating',
     }),
     popupKeys(),
     EditorView.updateListener.of((update) => {

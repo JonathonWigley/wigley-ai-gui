@@ -62,10 +62,6 @@ export interface ListPickerDeps {
   log: Log;
   // The `[source]` of the `picker shown: <title>` line.
   logSource: string;
-  // The plugin's own class on the layer, beside `ui-picker-layer`; '' for none.
-  overlayClass: string;
-  // The plugin's own class on the panel, beside `ui-picker`; '' for none.
-  dialogClass: string;
   // Adds the filter box above the list when given.
   filterEditor?: EditorHost;
 }
@@ -79,10 +75,8 @@ interface OpenRequest {
 
 export function createListPicker(deps: ListPickerDeps): ListPicker {
   const layer = element('div', 'ui-picker-layer');
-  addClass(layer, deps.overlayClass);
   const panel = floatingPanel();
   panel.classList.add('ui-picker');
-  addClass(panel, deps.dialogClass);
   panel.setAttribute('role', 'dialog');
   const title = element('h2', 'ui-picker-title');
   const list = element('ol', 'ui-picker-list');
@@ -127,7 +121,6 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
   };
 
   const filterBox = inputFrame();
-  filterBox.classList.add('ui-picker-filter');
   const filter =
     deps.filterEditor?.create(filterBox, '', {
       changed: (text) => {
@@ -218,11 +211,4 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     },
   };
   return picker;
-}
-
-// Adds the caller's `className` to `node`, unless it is ''.
-function addClass(node: HTMLElement, className: string): void {
-  if (className !== '') {
-    node.classList.add(className);
-  }
 }

@@ -352,8 +352,6 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     pushScope: () => deps.pushScope('picker'),
     log,
     logSource: 'docs',
-    overlayClass: '',
-    dialogClass: '',
   });
   const box = createTextBox({
     channel,

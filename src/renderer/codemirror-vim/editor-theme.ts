@@ -58,11 +58,11 @@ export const editorTheme = EditorView.theme({
   '.cm-panels-bottom': { borderTop: '1px solid var(--wg-border-default)' },
   '.cm-vim-panel input': { color: 'var(--wg-fg)' },
   '.cm-tooltip.cm-tooltip-autocomplete': {
-    // The floating material without its blur: a theme object takes no class.
+    // The popup carries `.material-floating`; CodeMirror's base tooltip theme
+    // outranks that class on background and border, so both are restated here.
     backgroundColor: 'var(--wg-material-floating-bg)',
     border: '1px solid var(--wg-material-floating-edge)',
-    borderRadius: 'var(--wg-radius-md)',
-    boxShadow: 'var(--wg-material-floating-shadow)',
+    borderRadius: 'var(--wg-radius-lg)',
     color: 'var(--wg-fg)',
     fontSize: 'var(--wg-text-mono)',
     // Autocomplete's base theme sets `monospace` on the list itself.

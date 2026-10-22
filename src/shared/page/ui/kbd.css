@@ -2,9 +2,6 @@
 .ui-kbd {
   display: inline-flex;
   gap: var(--wg-space-1);
-  background: transparent;
-  border: 0;
-  padding: 0;
   color: var(--wg-fg-tertiary);
   font-family: var(--wg-font-mono);
   font-size: var(--wg-text-12);
