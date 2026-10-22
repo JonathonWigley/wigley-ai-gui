@@ -181,3 +181,4 @@ Review base: dd75a8ebcf51bcb1e2073700abd614f8543886e8
 - test gate and review run before task 05's live checks, so review fixes are inside what the live run checks — order only · lead
 ### Review rounds
 ### Test gate
+- picked: every test the range added or edited except the peer's drive tests (config-store, user-keymap, main-api, selftest-config, plugins/keymap, keys' help-sections/key-bar/keys-for/which-key, config-push, installed-config, page-api, define-plugin, key-hints, key-notation, plugin-host, plugin-manifests); chat-commands (new half-page handlers); keymap-checks (fed by the new merge); page-keys (reads the expanded page binds and chords). Self-test steps and scroll behaviour left to task 05's live run · 20 files, 264 tests passed
