@@ -1,5 +1,5 @@
-// Turns `npm run drive -- <command> …` arguments into what the CLI does: start
-// or restart a run, print help, or send one command to the running app. Each
+// Turns `npm run drive -- <command> …` arguments into what the CLI does: start,
+// restart or quit a run, print help, or send one command to the running app. Each
 // positional form below builds exactly the args its drive command checks.
 
 export type DriveHarness = 'fake' | 'claude';
@@ -13,6 +13,7 @@ export type DriveInvocation =
       run: string | null;
     }
   | { kind: 'restart'; run: string | null }
+  | { kind: 'quit'; run: string | null }
   | { kind: 'help'; run: string | null }
   | {
       kind: 'send';
@@ -38,6 +39,10 @@ interface PositionalForm {
 const HARNESSES: readonly DriveHarness[] = ['fake', 'claude'];
 
 const VALUE_FLAGS = ['--run', '--harness', '--plugin'];
+
+// Every argument after it is positional, so a value such as `--wg-accent`
+// reaches its command.
+const END_OF_FLAGS = '--';
 
 // The flags each command accepts beyond `--run`, which every command takes.
 const COMMAND_FLAGS: Record<string, string[]> = {
@@ -184,16 +189,19 @@ export const CLI_FORMS = [
   '',
   'start [--packaged] [--harness fake|claude] [--user-config]',
   'restart',
+  'quit',
   'help',
   ...Object.values(POSITIONAL_FORMS).map((form) => form.usage),
   '<command> [json]',
   '',
   'Without --run, a command goes to the run .drive/current names.',
+  'Arguments after a lone -- are never flags: query -- --wg-accent.',
 ].join('\n');
 
 // What `argv` (the arguments after `npm run drive --`) asks the CLI to do.
-// Throws naming the problem: an unknown or misplaced flag, a harness other
-// than fake or claude, or arguments that fit no form of the command.
+// Arguments after a lone `--` are positional. Throws naming the problem: an
+// unknown or misplaced flag, a harness other than fake or claude, or arguments
+// that fit no form of the command.
 export function parseDriveArgs(argv: string[]): DriveInvocation {
   const { flags, positionals } = splitFlags(argv);
   const [command = 'help', ...rest] = positionals;
@@ -209,7 +217,7 @@ export function parseDriveArgs(argv: string[]): DriveInvocation {
       run,
     };
   }
-  if (command === 'restart' || command === 'help') {
+  if (command === 'restart' || command === 'quit' || command === 'help') {
     requireCount(rest, 0, 0, command);
     return { kind: command, run };
   }
@@ -239,6 +247,10 @@ function splitFlags(argv: string[]): { flags: Flags; positionals: string[] } {
   const positionals: string[] = [];
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
+    if (argument === END_OF_FLAGS) {
+      positionals.push(...argv.slice(index + 1));
+      break;
+    }
     if (!argument.startsWith('--')) {
       positionals.push(argument);
       continue;
@@ -278,6 +290,9 @@ function requireFlagsOf(command: string, argv: string[]): void {
   const allowed = ['--run', ...(COMMAND_FLAGS[command] ?? [])];
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
+    if (argument === END_OF_FLAGS) {
+      return;
+    }
     if (!argument.startsWith('--')) {
       continue;
     }

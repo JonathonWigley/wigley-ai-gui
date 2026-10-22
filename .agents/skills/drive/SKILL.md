@@ -21,11 +21,19 @@ or touches their data, so start one whenever a check needs it.
 ## Loop
 
 1. `npm run drive -- start` returns once the page is ready and prints the run id and folder.
-   `.drive/current` names the newest run, so later commands need no `--run`; `start --run <id>`
-   names a run and reuses its home when the folder exists. `--user-config` copies the user's
-   `~/.config/wigley-ai-gui` into the temp home, so their theme and keys apply.
+   `.drive/current` names the newest run, and a command without `--run` goes there; `start --run
+   <id>` names a run and reuses its home when the folder exists. When another run may be live —
+   a second run of the agent's, or a peer agent's — pass `--run <id>` on every command, since
+   any newer `start` moves `.drive/current` to its own run. `--user-config` copies the user's
+   `~/.config/wigley-ai-gui` into the temp home, so their theme and keys apply; `start` fails
+   when that folder is missing or empty.
 2. Seed what the check needs: `npm run drive -- actions` lists every plugin's drive actions, and
    `npm run drive -- do <plugin>.<action> '<json>'` runs one (a session, a round, a chat, docs).
+   `chat.start` uses the first profile in chat's `profiles` setting, and only a profile logged in
+   to Claude reaches it under `--harness claude`; `{"profile":"<name>"}` picks another.
+   `forms.openRound` opens its round in a session forms itself opened under that `sessionId`, so
+   a round for a session row comes from `forms.openRound` alone, never from a
+   `sessions.connect` row.
 3. Act with `key`, `type`, `click`, `drag`, `resize` and `setting`. Each returns once the page has
    redrawn, with the log lines it caused.
 4. Capture and read: `screenshot` saves the window, or one element by selector, under the run
@@ -35,6 +43,10 @@ or touches their data, so start one whenever a check needs it.
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something
 survives a restart runs the same way.
+
+The app runs commands one at a time, so a command that never returns blocks every later one, and
+the CLI then says the run did not answer. `restart` and `quit` end such a run: each asks the app
+to quit and terminates it when it does not.
 
 A run folder holds `home/` (the app's home: config, plugin data, ui-state), `user-data/`
 (Chromium's profile), `screenshots/`, `videos/`, `app.log`, and `start.json` and `drive.json`
@@ -47,9 +59,13 @@ Conventions:
 
 - Keys take the self-test's notation: `KeyboardEvent.key` values and vim chords (`<D-w>`,
   `<A-o>`), as a sequence; a `key` argument splits on spaces, and `Space` stands for the space
-  key (`key Space k s`).
-- A click or drag lands at the element's box through the real input pipeline, so an element
-  covered by another fails the click: that is a finding, not a flake.
+  key, so a leader sequence is `key Space k s`; a blank argument such as `' '` is rejected.
+- A click or drag lands at the first element the selector matches, hidden ones included, at its
+  box through the real input pipeline; `query` returns every match. Scope the selector to the
+  visible element (`.session-body:not([hidden]) …`). An element covered by another fails the
+  click: that is a finding, not a flake.
+- Flags come before a lone `--`; every argument after it is positional, for a value that begins
+  with `--`: `query --run <id> -- :root --wg-accent`.
 - `screenshot <name>` takes a lowercase name in words joined by `-` and saves
   `screenshots/<name>.png`.
 - `record start [name]` and `record stop` save `videos/<name>.mp4`, for transitions and animations;

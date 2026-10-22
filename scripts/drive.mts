@@ -1,6 +1,6 @@
 // `npm run drive -- <command>`: starts the app offscreen as a drive run in
 // `.drive/<run-id>/`, sends commands to the running app over its local HTTP
-// server, restarts it into the same run folder, and prints help.
+// server, quits it or restarts it into the same run folder, and prints help.
 // `scripts/drive-args.mts` holds the forms; the app serves the commands.
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -10,6 +10,7 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -29,6 +30,8 @@ const DRIVE_DIR = path.join(REPO_DIR, '.drive');
 const CURRENT_FILE = path.join(DRIVE_DIR, 'current');
 const START_TIMEOUT_MS = 120_000;
 const QUIT_TIMEOUT_MS = 15_000;
+// How long a check that only asks whether a run answers waits for its reply.
+const ANSWER_CHECK_MS = 5_000;
 const POLL_MS = 250;
 const LOG_TAIL_LINES = 30;
 
@@ -48,16 +51,21 @@ interface StartFile extends StartOptions {
   pid: number;
 }
 
+// 'no answer': the app is running but did not reply, as when a command ahead
+// of this one in its one-at-a-time queue never finishes.
 type Reply =
   | { ok: true; result: unknown }
   | { ok: false; error: string }
-  | 'not running';
+  | 'not running'
+  | 'no answer';
 
 async function main(invocation: DriveInvocation): Promise<void> {
   if (invocation.kind === 'start') {
     await start(invocation.run ?? newRunId(), invocation, true);
   } else if (invocation.kind === 'restart') {
     await restart(currentRun(invocation.run));
+  } else if (invocation.kind === 'quit') {
+    await stop(currentRun(invocation.run));
   } else if (invocation.kind === 'help') {
     await printHelp(invocation.run);
   } else {
@@ -79,14 +87,24 @@ async function start(
 ): Promise<void> {
   const runDir = runDirOf(runId);
   const driveFile = path.join(runDir, 'drive.json');
-  if ((await send(runId, 'ready', {})) !== 'not running') {
+  const running = await send(runId, 'ready', {}, ANSWER_CHECK_MS);
+  if (running === 'no answer') {
+    throw new Error(
+      `Run ${runId} is running but not answering; npm run drive -- restart --run ${runId}`,
+    );
+  }
+  if (running !== 'not running') {
     throw new Error(`Run ${runId} is already running`);
   }
+  const userConfig =
+    options.userConfig && copyUserConfig ? requireUserConfig() : null;
   rmSync(driveFile, { force: true });
   const homeDir = path.join(runDir, 'home');
   mkdirSync(homeDir, { recursive: true });
-  if (options.userConfig && copyUserConfig) {
-    copyUserConfigInto(homeDir);
+  if (userConfig !== null) {
+    cpSync(userConfig, path.join(homeDir, '.config', 'wigley-ai-gui'), {
+      recursive: true,
+    });
   }
   writeFileSync(CURRENT_FILE, runId);
   const pid = spawnApp(runDir, options);
@@ -96,10 +114,12 @@ async function start(
     JSON.stringify(startFile, null, 2),
   );
   await waitForDriveFile(runDir, pid);
-  const ready = await send(runId, 'ready', {});
-  if (ready === 'not running' || !ready.ok) {
-    const why = ready === 'not running' ? 'stopped answering' : ready.error;
-    throw new Error(`Run ${runId} started but ${why}`);
+  const ready = await send(runId, 'ready', {}, START_TIMEOUT_MS);
+  if (typeof ready === 'string' || !ready.ok) {
+    const why = typeof ready === 'string' ? ready : ready.error;
+    throw new Error(
+      `Run ${runId} started but answered ready with ${why}; npm run drive -- restart --run ${runId}\n${logTail(runDir)}`,
+    );
   }
   console.log(`run ${runId}`);
   console.log(runDir);
@@ -128,15 +148,18 @@ function currentRun(run: string | null): string {
   return readFileSync(CURRENT_FILE, 'utf8').trim();
 }
 
-function copyUserConfigInto(homeDir: string): void {
+// The user's config folder, for `--user-config`; throws when it is missing or
+// empty, since the run would then show the defaults instead of their config.
+function requireUserConfig(): string {
   const userConfig = path.join(homedir(), '.config', 'wigley-ai-gui');
-  if (!existsSync(userConfig)) {
-    console.log(`No user config at ${userConfig}; starting with defaults`);
-    return;
+  const hasConfig =
+    existsSync(userConfig) && readdirSync(userConfig).length > 0;
+  if (!hasConfig) {
+    throw new Error(
+      `--user-config found no config in ${userConfig}; start without it to run on the defaults`,
+    );
   }
-  cpSync(userConfig, path.join(homeDir, '.config', 'wigley-ai-gui'), {
-    recursive: true,
-  });
+  return userConfig;
 }
 
 // Spawns the app detached, its output appended to `<runDir>/app.log`, and
@@ -242,33 +265,35 @@ function readStartFile(runId: string): StartFile {
 }
 
 // Sends one command to the run's app; 'not running' when it has no
-// `drive.json` or refuses the connection.
+// `drive.json`, the app that wrote it has exited (the app leaves it behind on
+// quit, and its port may since serve something else), or the connection is
+// refused; 'no answer' when the request fails otherwise or outlasts
+// `timeoutMs` (by default, fetch's own five-minute wait for a reply).
 async function send(
   runId: string,
   command: string,
   args: Record<string, unknown>,
+  timeoutMs?: number,
 ): Promise<Reply> {
   const drive = readDriveFile(runDirOf(runId));
-  if (drive === null) {
+  if (drive === null || !isAlive(drive.pid)) {
     return 'not running';
   }
-  let response: Response;
   try {
-    response = await fetch(`http://127.0.0.1:${drive.port}/`, {
+    const response = await fetch(`http://127.0.0.1:${drive.port}/`, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${drive.token}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify({ command, args }),
+      signal:
+        timeoutMs === undefined ? undefined : AbortSignal.timeout(timeoutMs),
     });
+    return (await response.json()) as Reply;
   } catch (error) {
-    if (isConnectionRefused(error)) {
-      return 'not running';
-    }
-    throw error;
+    return isConnectionRefused(error) ? 'not running' : 'no answer';
   }
-  return (await response.json()) as Reply;
 }
 
 function isConnectionRefused(error: unknown): boolean {
@@ -290,31 +315,60 @@ async function sendAndPrint(
   if (reply === 'not running') {
     throw new Error(`Run ${runId} is not running; npm run drive -- start`);
   }
+  if (reply === 'no answer') {
+    throw new Error(
+      `Run ${runId} did not answer ${command}, so a command ahead of it may be stuck; npm run drive -- restart --run ${runId}`,
+    );
+  }
   if (!reply.ok) {
     throw new Error(reply.error);
   }
   console.log(JSON.stringify(reply.result, null, 2));
 }
 
-// Quits the run's app, waits for its processes to exit, and starts it again
-// into the same run folder with the flags its start recorded.
+// Stops the run's app, then starts it again into the same run folder with the
+// flags its start recorded.
 async function restart(runId: string): Promise<void> {
+  const { packaged, harness, userConfig } = readStartFile(runId);
+  await stop(runId);
+  await start(runId, { packaged, harness, userConfig }, false);
+}
+
+// Asks the run's app to quit and waits for it and the process `start` spawned
+// to exit. The app serves commands one at a time, so a stuck command keeps
+// `quit` from ever running: when the app does not exit in time, its processes
+// are terminated instead.
+async function stop(runId: string): Promise<void> {
   const startFile = readStartFile(runId);
   const drive = readDriveFile(runDirOf(runId));
-  await send(runId, 'quit', {});
-  const pids = [startFile.pid, ...(drive === null ? [] : [drive.pid])];
+  const pids = [...(drive === null ? [] : [drive.pid]), startFile.pid];
+  await send(runId, 'quit', {}, ANSWER_CHECK_MS);
+  if (!(await waitForExit(pids))) {
+    console.log(
+      `Run ${runId} did not quit within ${QUIT_TIMEOUT_MS / 1000} s; terminating it`,
+    );
+    for (const pid of pids.filter(isAlive)) {
+      process.kill(pid, 'SIGTERM');
+    }
+    if (!(await waitForExit(pids))) {
+      throw new Error(
+        `Run ${runId} is still running after SIGTERM: pids ${pids.filter(isAlive).join(', ')}`,
+      );
+    }
+  }
+  rmSync(path.join(runDirOf(runId), 'drive.json'), { force: true });
+}
+
+// Whether every one of `pids` exits within the quit timeout.
+async function waitForExit(pids: number[]): Promise<boolean> {
   const deadline = Date.now() + QUIT_TIMEOUT_MS;
   while (pids.some(isAlive)) {
     if (Date.now() > deadline) {
-      throw new Error(
-        `Run ${runId} did not quit within ${QUIT_TIMEOUT_MS / 1000} s`,
-      );
+      return false;
     }
     await wait(POLL_MS);
   }
-  rmSync(path.join(runDirOf(runId), 'drive.json'), { force: true });
-  const { packaged, harness, userConfig } = startFile;
-  await start(runId, { packaged, harness, userConfig }, false);
+  return true;
 }
 
 function isAlive(pid: number): boolean {
@@ -335,8 +389,8 @@ async function printHelp(run: string | null): Promise<void> {
     return;
   }
   const runId = currentRun(run);
-  const reply = await send(runId, 'help', {});
-  if (reply === 'not running' || !reply.ok) {
+  const reply = await send(runId, 'help', {}, ANSWER_CHECK_MS);
+  if (typeof reply === 'string' || !reply.ok) {
     return;
   }
   console.log(`\nCommands of run ${runId}:`);

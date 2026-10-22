@@ -82,4 +82,34 @@ describe('parseDriveArgs', () => {
     expect(parse).toThrow(/fake/);
     expect(parse).toThrow(/claude/);
   });
+
+  it("GIVEN argv ['query', '--run', 'x', '--', ':root', '--wg-accent'] WHEN parsed THEN --wg-accent is a style and the run is x", () => {
+    const invocation = parseDriveArgs([
+      'query',
+      '--run',
+      'x',
+      '--',
+      ':root',
+      '--wg-accent',
+    ]);
+    expect(invocation).toEqual({
+      run: 'x',
+      kind: 'send',
+      command: 'query',
+      args: { selector: ':root', styles: ['--wg-accent'] },
+    });
+  });
+
+  it("GIVEN argv ['quit', '--run', 'x'] WHEN parsed THEN it is the CLI's own quit of run x", () => {
+    expect(parseDriveArgs(['quit', '--run', 'x'])).toEqual({
+      kind: 'quit',
+      run: 'x',
+    });
+  });
+
+  it("GIVEN argv ['query', ':root', '--wg-accent'] WHEN parsed THEN it throws naming --wg-accent", () => {
+    expect(() => parseDriveArgs(['query', ':root', '--wg-accent'])).toThrow(
+      '--wg-accent',
+    );
+  });
 });
