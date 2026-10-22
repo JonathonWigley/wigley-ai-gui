@@ -238,7 +238,7 @@ Out of scope: real OS keyboard input, native notifications and dialogs in a driv
 Review base: 03f5a8d47ac16134c3b4f5ff4f4ef0d51e36a9de
 
 ### Groups
-- 12 · fixes 56182b9, ddc7889, 9001c51, 3062c75, 2f935d9, 8783fc8; docs commit below · proved (six drive verifiers over every reachable row, failed and blocked rows re-run after the fixes; drive tests 22, drive-args 11, docs+split 218, forms 574) · concerns: the page that never loads on ~1 restart in 3 is now caught, its cause unknown (Forge/Vite suspected); `drag` releases before it returns; focus emulation is drive-only, the self-test runs without focus events
+- 12 · fixes 56182b9, ddc7889, 9001c51, 3062c75, 2f935d9, 8783fc8, e684c19 (D4b redo: 2f935d9's ResizeObserver broke the self-test's docs steps); docs d1d9dfa · proved (six drive verifiers over every reachable row, failed and blocked rows re-run after the fixes; drive tests 22, drive-args 11, docs+split 218, forms 574) · concerns: the page that never loads on ~1 restart in 3 is now caught, its cause unknown (Forge/Vite suspected); `drag` releases before it returns; focus emulation is drive-only, the self-test runs without focus events
 - peer note · a keymap plan run (docs/features/keymap/plan-keymap) shares this tree from b633318 on; every commit here is pathspec-scoped and the review range is this run's commit list, not `03f5a8d..HEAD`
 - 11 · (doc commit below) · proved (diff read against code; other two repos unchanged) · concerns: `quit` absent from the CLI-only help
 - 10 · cd49094 · proved (typecheck, 60 scripts tests, lead CLI smoke start/actions/key/screenshot/quit) · concerns: Windows .cmd shell quoting; restart's two-pid wait; inherited PROOF_SELFTEST
@@ -296,3 +296,7 @@ Review base: 03f5a8d47ac16134c3b4f5ff4f4ef0d51e36a9de
 - forms findings by design: a re-asked submitted round replays its answers and opens nothing (`replaysLastSubmitted`); a new round pre-fills from the newest saved round with the same content, any session (`round-store.ts`) · group 12
 ### Review rounds
 ### Test gate
+- this run's commits (peer commits excluded): 06a4960 97c24b0 4879003 57ff5ac 461984e 5a1efc6 71a4a1c 13aee03 cd49094 d2a6d4e 56182b9 ddc7889 9001c51 3062c75 2f935d9 8783fc8 d1d9dfa e684c19; marketplace 902acbb
+- typecheck clean; lint clean (layers 412, styles 301, format 463 files)
+- vitest full suite: 142 files, 2009 tests pass at e684c19, three runs; one earlier run showed 1 failed of 2009 that no re-run reproduced (name lost) — a flake, unattributed
+- `npm run selftest`: `[selftest] all passed`, 358 PASS, 0 FAIL, after e684c19 (the run before it failed 52 docs steps on 2f935d9's ResizeObserver, fixed by e684c19)
