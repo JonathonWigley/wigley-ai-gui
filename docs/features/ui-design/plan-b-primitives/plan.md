@@ -284,5 +284,6 @@ Review base: ed5d846987f144614a41307b3783613533e761a8
 - The override wraps the `ThemeApplier` in `renderer.ts` (`overrideTransparency`), handed to both the start apply and `createConfigPush`; `config-push.ts` untouched — fact sheet: the push apply lives there — cost: none · group 06
 - The test shell layout styles its areas with its own `gallery-test-*` classes plus the `material-chrome` helpers, not `shell.css`'s; frames get `isolation: isolate` so the scrim and floating panel stack inside them · group 06
 ### Review rounds
+- 1 · 893d47b · NEEDS FIXES · report: 16 findings (4 Important), 2 applied by the lead in 34f20b7; 6 determined dispatched; 8 open to triage
 ### Test gate
 - Pass 1 (written in range): `scripts/style-rules.test.mts`, `src/main/selftest-config.test.ts`, `src/plugins/gallery/page/transparency-toggle.test.ts`, `src/renderer/plugins/page-api.test.ts`, `src/shared/page/ui/kbd-parts.test.ts`, `src/shared/page/ui/split-width.test.ts`; pass 2 (reference changed code): `src/main/built-in-themes.test.ts` (Mocha JSON), plus page-api and selftest-config again · every test in these 7 files references the changed code · 80 passed
