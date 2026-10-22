@@ -58,3 +58,8 @@
   color: var(--wg-fg-disabled);
   cursor: default;
 }
+
+.ui-row.is-disabled .ui-row-detail,
+.ui-row.is-disabled .ui-row-trailing {
+  color: var(--wg-fg-disabled);
+}
