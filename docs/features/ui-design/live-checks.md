@@ -56,10 +56,10 @@ Needs a Claude Code or Codex session started in a terminal with the wigley 1.4.0
 | F9 | A wide window | `.round-main` content at `prose-measure` width reads well | low-confidence: the width changed from `60rem` |
 | F10 | A round with not-applicable and notice items | their rail rows read apart from untouched ones (idle dots, the `N` prefix, the dimmed label) | low-confidence: the dot colours changed |
 | F11 | On a focused finding: `f`, `u`, `s`, `c`; in a box `Space a f` (and `au`, `as`, `ac`) | Fix now, Follow-up, Leave it, clear; the box's leader routes still work | expected |
-| F12 | `⌥n` / `⌥p` from the page and from a box | move to the next and previous unanswered item | expected |
-| F13 | `⌥n` and `⌥p` in a box in INSERT on macOS | no `˜` or `π` left behind and no composition underline | low-confidence: Option+n is a dead key; the self-test's synthetic keys never compose |
+| F12 | `⌥N` / `⌥P` from the page and from a box | move to the next and previous unanswered item | expected |
+| F13 | `⌥N` and `⌥P` in a box in INSERT on macOS | no `˜` or `π` left behind and no composition underline | low-confidence: Option+n is a dead key; the self-test's synthetic keys never compose |
 | F14 | `⌘↵` from the review and from inside the round note box | the round is sent; the review's button shows `Send answers ⌘↵` | expected |
-| F15 | `Space` in the form; `Space ?`; the key bar | which-key shows no `a`, `e` or digit entries; help lists `c f u s`, `⌥n ⌥p` under the form and `⌘↵` under the review; the key bar shows the raw keys | expected |
+| F15 | `Space` in the form; `Space ?`; the key bar | which-key shows no `a`, `e` or digit entries; help lists `c f u s`, `⌥N ⌥P` under the form and `⌘↵` under the review; the key bar shows the raw keys | expected |
 | F16 | `Space 1` in a box in normal mode | no jump; the box is as it was (vim takes the leader, then a count) | low-confidence: vim's leader-then-count handling shows only live |
 
 ## Forms layouts (05; pulled in from the follow-ups, never run live)
@@ -109,7 +109,7 @@ Needs a Claude Code or Codex session started in a terminal with the wigley 1.4.0
 | D10 | `a` (kind picker), `A` then type `~/.c` and `Tab` (path box), `d` on a doc (Trash confirm) | the kind picker floats with no scrim; the path box and the Trash confirm sit over the scrim; each covers the side bar too, with its title in sentence case; completions in mono; `Esc` closes each and focus returns to the tree | low-confidence: dialogs moved into the overlay area out of the view |
 | D11 | Open an entry with load states | the Claude and Codex tags: `launch` green, `on-demand` accent, `shadowed` and `pending` yellow, `listed` and `not-loaded` neutral; hovering a tag shows its reason | expected |
 | D12 | Edit an open doc (`i`), change its file on disk, then `:w` | a warning-tinted banner with a warning edge; then the changed-on-disk prompt, attention-tinted with an attention edge | expected |
-| D13 | A session's Docs tab before `R`; then rebind `docs.focusTree` in `keymap.json` | the doc pane says `Open a doc from the tree` centred, with `⌥H`; the tree's status line says `Not read yet`; after the rebind the hint shows the new key | expected |
+| D13 | A session's Docs tab before `R`; then in `keymap.json` bind `docs.focusTree` in scope `docs.doc` to another key and unbind `<A-h>` there | the doc pane says `Open a doc from the tree` centred, with `⌥H`; the tree's status line says `Not read yet`; after the change the hint shows the new key | expected |
 
 ## Editors and prose (09)
 
@@ -126,4 +126,4 @@ Needs a Claude Code or Codex session started in a terminal with the wigley 1.4.0
 
 | # | Steps | Expect | Tag |
 |---|---|---|---|
-| K1 | Rebind chat's send, `nextSession` and chat's deny/end commands in `keymap.json`, with a Chat tab, a session-less sheet and the end-session dialog open | the composer's Send hint, the `Pick a session` hint and the dialog's button hints each show the new key without reopening anything | expected |
+| K1 | In `keymap.json`, bind chat's send, `nextSession` and chat's deny/end commands to other keys and unbind their default keys, with a Chat tab, a session-less sheet and the end-session dialog open | the composer's Send hint, the `Pick a session` hint and the dialog's button hints each show the new key without reopening anything | expected |

@@ -92,8 +92,8 @@ src/renderer/    core page; renderer.ts is its composition root
   codemirror-vim/ editor (with prefix completion) and code-highlight adapters behind EditorHost and CodeHighlighter,
                  and the code colours
                  → the only codemirror, @codemirror, @lezer and @replit import
-src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, main.ts and page.ts the
-                 parts each root starts
+src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds every
+                 built-in default key, main.ts and page.ts the parts each root starts
   sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
                  endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions mode: the
                  sidebar and each session's tabs)
@@ -126,8 +126,8 @@ guard (`addCloseGuard`) refuses the user's close while the plugin still has some
 round), since main, not the page, decides.
 
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
-  and the process it runs in), key scopes (each with the title help shows over its keys), default keys, settings
-  and the plugins it depends on; `main/` and
+  and the process it runs in), key scopes (each with the title help shows over its keys), settings
+  and the plugins it depends on (a built-in plugin's default keys sit in `src/plugins/keymap.ts`); `main/` and
   `page/` each export a part, the manifest with a start function that receives that process's plugin API and
   returns the handlers for the manifest's commands that run in that process, plus the `exports` its dependents read
   (and, in main, a `dispose`). The compiler checks every command that runs in a process has a handler there and
@@ -168,13 +168,14 @@ round), since main, not the page, decides.
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
   built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one
   vim-notation entry (`<Leader>ks`, `gg`, `<A-o>`) written once; the merge expands it into the page bind and the box
-  bind it stands for, a leader bind into both, so the key engine reads page and editor binds as before. Keys never
+  bind it stands for, a leader bind into both and any other bind into the page bind, unless `where` (`page`, `box`
+  or `both`) says otherwise, so the key engine reads page and editor binds as before. Keys never
   call code directly, so rebinding never touches a handler. Built-in manifests declare commands and scopes only; a
   manifest's optional `keys` is for a plugin from outside the repo. The keymap merges in layers — the default
   keymap, then each manifest's `keys` in dependency order, then the user's `keymap.json`, in the same entry format —
   where a later layer's bind replaces an earlier one with the same keys in the same scope and an `unbind` entry
   removes one; only a clash inside one layer is an error. Which key a bind takes follows `docs/keymap.md`, and its
-  leader group is named in the file's `groups` for which-key. Each process checks every keymap it installs, at startup and on each config change, for a key that names no registered
+  leader group is named in the file's `groups` for which-key (layered the same way, by prefix). Each process checks every keymap it installs, at startup and on each config change, for a key that names no registered
   command, and main and the page both reject a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
   `<D-w>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
   too, in every vim mode, ahead of the editor. A plugin's own text box may keep typed keys from the page keys while
@@ -195,7 +196,7 @@ round), since main, not the page, decides.
   change under it, so a modal view can close when the view beneath it moves on (help closes on it).
 - **Key hints** belong to the `keys` plugin, which reads the merged keymap: which-key after a pending prefix, help on
   `Space ?` (`<Leader>?` in a box), and the status bar's keys that don't start with the leader. A plugin declares
-  its keys, labels, groups and scope titles, and draws no key hints of its own: a view that shows a key beside its
+  its labels and scope titles (its keys sit in the default keymap), and draws no key hints of its own: a view that shows a key beside its
   control (every forms or chat button whose command has a page bind) depends on `keys` and reads it from that plugin's `keysFor`
   export, again on each of its `onChanged`, so a rebind reaches the control, and draws no hint when the command is
   unbound. Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),

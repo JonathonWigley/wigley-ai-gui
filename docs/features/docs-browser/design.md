@@ -102,7 +102,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   Images show their alt text.
 - **Keys** (scopes `docs.tree`, `docs.doc`, `docs.conflict`, `docs.picker`, `docs.box`, `docs.confirm`): tree `j`/`k`
   move, `l`/Enter open or expand, `h` collapse, `/` filter, `a`, `A`, `r`, `d`, `R` rescan, `c` pick the load-state
-  folder; `Alt+l` / `Alt+h` move focus between tree and doc. Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll half a
+  folder; `Alt+l` / `Alt+h` move focus between tree and doc. Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll the rendered doc half a
   page, `i` edit. Conflict prompt `r`
   reload, `o` overwrite, Esc keep editing. Picker `j`/`k` move, Enter or `l` choose, Esc cancel. Text box Tab
   completes the path, Enter accepts, Esc cancels. Trash confirm `y` yes, `n` or Esc keep.

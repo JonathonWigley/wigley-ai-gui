@@ -17,13 +17,18 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
 
 - `src/plugins/keymap.ts` holds every default key of the core and the built-in plugins, in banner
   sections by area, each command and scope named in full (`sessions.nextTab`, `docs.tree`). A
-  wrong name fails the build. Built-in manifests declare commands and scopes only.
+  wrong name fails the build. Built-in manifests declare commands and scopes only; the optional
+  manifest `keys` is for a plugin from outside the repo.
 - The user's `~/.config/wigley-ai-gui/keymap.json` takes the same entries and lays them over the
-  defaults, so a line copies across unchanged.
+  defaults and any plugin's keys, so a line copies across unchanged. A user bind replaces a bind on
+  the same keys in the same scope; `unbind` entries remove a default.
 - A bind is one entry in vim notation (`<Leader>ks`, `gg`, `<A-o>`, `<Esc>`), written once. A
   leader bind fires on the page and in a text box; any other bind fires on the page, and a chord
-  on the page fires inside a box too. `where` narrows a bind to `page` or `box`.
-- `groups` names each leader prefix for which-key (`<Leader>k` windows).
+  on the page fires inside a box too. `where` (`page`, `box` or `both`) narrows a leader bind or
+  widens another, and a chord takes only `page`. A bind with `mode` fires in a box, in that vim
+  mode.
+- `groups` names each leader prefix for which-key (`<Leader>k` windows); a later layer's name for
+  a prefix replaces an earlier one's.
 
 ## Layers
 
@@ -34,8 +39,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   mnemonic verbs.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `R` rescan.
-- **Ctrl+hjkl** moves inside the content: `Ctrl+j`/`Ctrl+k` scroll half a page (in forms, the
-  next and previous box), `Ctrl+h`/`Ctrl+l` the previous and next unit (forms items).
+- **Ctrl+hjkl** moves inside the content: `Ctrl+j`/`Ctrl+k` scroll half a page in the rendered doc,
+  the chat transcript and the gallery (in forms, the next and previous box), `Ctrl+h`/`Ctrl+l` the previous and next unit (forms items).
 - **Alt+hjkl** moves focus between panes (`Alt+h`/`Alt+l` between the docs tree and the doc).
   Reserved for when the app has them: `Alt+Shift+hjkl` resize, `Ctrl+Alt+hjkl` swap,
   `Alt+'` / `Alt+;` split, `Alt+w` close a pane.

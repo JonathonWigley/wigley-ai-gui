@@ -31,7 +31,7 @@ Each lands green on its own, the self-test passing, and is reviewed on its own.
 - Plugins are built-in folders under `src/plugins/<id>/`, compiled in, through the API a runtime loader from a user
   folder would use later. No runtime loader yet.
 - A plugin may have a main part and a page part, each started with its own process's API.
-- A typed manifest declares commands (label, group, process), scopes, default keys, settings and dependencies; each
+- A typed manifest declares commands (label, group, process), scopes, settings and dependencies, and, for a plugin from outside the repo, its own default keys (the built-ins' sit in `src/plugins/keymap.ts`); each
   part's start function returns the handlers. A missing handler is a type error.
 - Plugins never import a third-party library's adapter: the core hands them services (editor, markdown,
   notifications, log, clock, home folder). Built-in main parts use Node directly.
@@ -86,7 +86,7 @@ Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
 - `<leader>a<digit>` picks a choice and `<leader>ac` clears it inside a box; on the page raw digits pick and raw `c`
   `f` `u` `s` clear and act (changed by ui-design plan C). `<Leader>1`–`9` and
   `<Leader>c` inside a box go (A2 interview). Plan folder `plan-a2-sessions/` holds the rest of A2's settled design.
-- No half-page scroll.
+- No half-page scroll in forms (`<C-j>` / `<C-k>` are the next and previous box there; docs, chat and the gallery take them for half a page, in the keymap rework).
 - Folding goes: the fold keys (`za`, `zM`, `zR`) and the collapsible context and "Why recommended" sections are
   removed; both are always shown.
 
