@@ -99,10 +99,11 @@ export const SELFTEST_LAYOUT = {
 // selects its row. Space z g shows Gallery mode and Ctrl+j pages its sheet down
 // to the end, saving each page; G, then t switches to reduced transparency, g g
 // goes back to the top and Ctrl+j pages down again, saving each page reduced.
-// Space k s shows Sessions mode, on the sample round, reduced; Space z g, t
-// back to full and Space k s show it full. Space z s swaps the shell to the
-// gallery's test layout over Sessions mode, and Space z s again restores the
-// default.
+// Ctrl+k pages up from the end, g g goes back to the top and Ctrl+k there
+// reaches the top. Space k s shows Sessions mode, on the sample round,
+// reduced; Space z g, t back to full and Space k s show it full. Space z s
+// swaps the shell to the gallery's test layout over Sessions mode, and Space z
+// s again restores the default.
 // Option+Shift+o wraps back to the first session.
 // Then, opening on finding 1: Space k then k breaks Space k s, so the first k
 // replays to the notice and the second finds no item before it; j back to the
@@ -229,6 +230,9 @@ const STEPS: SelfTestStep[] = [
   },
   // Page 6 reduced is the view `t` saved, the sheet already at its end.
   { keys: ['<C-j>'], expect: '[gallery] reached the end' },
+  { keys: ['<C-k>'], expect: '[gallery] paged up' },
+  { keys: ['g', 'g'], expect: '[gallery] scrolled to the top' },
+  { keys: ['<C-k>'], expect: '[gallery] reached the top' },
   {
     keys: [' ', 'k', 's'],
     expect: '[page] showed Sessions mode',
