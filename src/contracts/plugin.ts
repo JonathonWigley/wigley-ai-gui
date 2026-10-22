@@ -64,10 +64,17 @@ export interface PluginKeys<
   intercept: (Omit<InterceptBind, 'command'> & { command: MainC })[];
 }
 
+// The JSON kind a setting takes when its default cannot show it: the default
+// is null, or the setting is left unset.
+export type SettingKind = 'string' | 'number' | 'boolean';
+
 // `scopes` holds each scope's title by its short id; `settings` holds the
-// plugin's settings with their defaults; `themeTokens` declares the plugin's
-// own theme tokens by their unqualified names (`origin-caused`), each with its
-// kind and default; `dependsOn` names plugins that start before this one.
+// plugin's settings with their defaults; `optionalSettings` holds the kind of
+// each setting whose default is null or unset, by its dotted path inside
+// `settings` (an array element's fields under `<path>[]`); `themeTokens`
+// declares the plugin's own theme tokens by their unqualified names
+// (`origin-caused`), each with its kind and default; `dependsOn` names plugins
+// that start before this one.
 export interface PluginManifest<
   C extends string = string,
   S extends string = string,
@@ -81,6 +88,7 @@ export interface PluginManifest<
   scopes: Readonly<Record<S, string>>;
   keys: PluginKeys<C, C, S>;
   settings: T;
+  optionalSettings?: Readonly<Record<string, SettingKind>>;
   themeTokens: Readonly<Record<string, TokenDecl>>;
 }
 

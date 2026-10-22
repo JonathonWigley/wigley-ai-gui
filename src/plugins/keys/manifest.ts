@@ -28,6 +28,7 @@ export const keysManifest = definePlugin({
     whichKeyDelayMs: 200,
     whichKeyTimeoutMs: null as number | null,
   },
+  optionalSettings: { whichKeyTimeoutMs: 'number' },
   themeTokens: {
     'which-key-command': { kind: 'color', default: 'var(--wg-status-success)' },
     'which-key-prefix': { kind: 'color', default: 'var(--wg-accent)' },

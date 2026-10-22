@@ -16,6 +16,7 @@ import type {
   PluginKeys,
   PluginManifest,
   ScopeInfo,
+  SettingKind,
 } from '../contracts/plugin';
 import type { TokenDecl, TokenKind } from '../contracts/theme';
 import { editorBindMode, withLeader } from './key-hints';
@@ -330,6 +331,60 @@ export function pluginSettings(
     settings.set(manifest.id, manifest.settings);
   }
   return Object.fromEntries(settings);
+}
+
+// Every setting `settings` holds, by its dotted path, with its default: an
+// object's settings under it, an array's first element as `<path>[]`, which
+// the user's elements are checked against.
+function settingDefaults(settings: object): Map<string, unknown> {
+  const defaults = new Map<string, unknown>();
+  const pending: { path: string; value: unknown }[] = Object.entries(
+    settings,
+  ).map(([path, value]) => ({ path, value }));
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    defaults.set(next.path, next.value);
+    if (Array.isArray(next.value)) {
+      if (next.value.length > 0) {
+        pending.push({ path: `${next.path}[]`, value: next.value[0] });
+      }
+    } else if (typeof next.value === 'object' && next.value !== null) {
+      for (const [key, child] of Object.entries(next.value)) {
+        pending.push({ path: `${next.path}.${key}`, value: child });
+      }
+    }
+  }
+  return defaults;
+}
+
+// Every manifest's `optionalSettings`, each path qualified as
+// `<pluginId>.<path>`. Throws on a setting defaulting to null whose kind its
+// manifest does not declare, which no `settings.json` value could be checked
+// against, and on a declared kind for a setting whose default already shows
+// one.
+export function pluginOptionalSettings(
+  manifests: readonly PluginManifest[],
+): Record<string, SettingKind> {
+  const kinds: Record<string, SettingKind> = {};
+  for (const manifest of manifests) {
+    const declared = manifest.optionalSettings ?? {};
+    for (const [path, value] of settingDefaults(manifest.settings)) {
+      const isDeclared = Object.hasOwn(declared, path);
+      if (value === null && !isDeclared) {
+        throw new Error(
+          `Plugin "${manifest.id}" setting "${path}" defaults to null and declares no kind in optionalSettings`,
+        );
+      }
+      if (value !== null && isDeclared) {
+        throw new Error(
+          `Plugin "${manifest.id}" setting "${path}" declares a kind in optionalSettings but defaults to a value`,
+        );
+      }
+    }
+    for (const [path, kind] of Object.entries(declared)) {
+      kinds[qualify(manifest.id, path)] = kind;
+    }
+  }
+  return kinds;
 }
 
 // Every manifest's theme tokens, each qualified as `<pluginId>.<token>`.

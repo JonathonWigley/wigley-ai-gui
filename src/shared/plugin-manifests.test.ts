@@ -6,6 +6,7 @@ import {
   dependencyOrder,
   mergeKeymap,
   overrideSettings,
+  pluginOptionalSettings,
   pluginSettings,
   pluginThemeTokens,
   requireListed,
@@ -279,6 +280,54 @@ describe('pluginSettings', () => {
     expect(Object.hasOwn(settings, 'toString')).toBe(true);
     expect(Object.hasOwn(settings, '__proto__')).toBe(true);
     expect(Object.getPrototypeOf(settings)).toBe(Object.prototype);
+  });
+});
+
+describe('pluginOptionalSettings', () => {
+  it("qualifies each plugin's declared kinds", () => {
+    const kinds = pluginOptionalSettings([
+      manifest('p', {
+        settings: { timeout: null, profiles: [{ dir: null }] },
+        optionalSettings: { timeout: 'number', 'profiles[].dir': 'string' },
+      }),
+    ]);
+
+    expect(kinds).toEqual({
+      'p.timeout': 'number',
+      'p.profiles[].dir': 'string',
+    });
+  });
+
+  it('rejects a null default with no declared kind', () => {
+    expect(() =>
+      pluginOptionalSettings([manifest('p', { settings: { timeout: null } })]),
+    ).toThrow(
+      'Plugin "p" setting "timeout" defaults to null and declares no kind in optionalSettings',
+    );
+  });
+
+  it('rejects a nested null default with no declared kind', () => {
+    expect(() =>
+      pluginOptionalSettings([
+        manifest('p', {
+          settings: { window: { size: null }, profiles: [{ dir: null }] },
+          optionalSettings: { 'window.size': 'number' },
+        }),
+      ]),
+    ).toThrow('Plugin "p" setting "profiles[].dir" defaults to null');
+  });
+
+  it('rejects a declared kind for a setting with a value default', () => {
+    expect(() =>
+      pluginOptionalSettings([
+        manifest('p', {
+          settings: { timeout: 5 },
+          optionalSettings: { timeout: 'number' },
+        }),
+      ]),
+    ).toThrow(
+      'Plugin "p" setting "timeout" declares a kind in optionalSettings but defaults to a value',
+    );
   });
 });
 

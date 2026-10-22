@@ -52,6 +52,7 @@ const listPlugin = definePlugin({
     intercept: [],
   },
   settings: { list: ['a', 'b'], timeout: null as number | null },
+  optionalSettings: { timeout: 'number' },
   themeTokens: {},
 });
 
@@ -91,6 +92,15 @@ function theme(name: string, source: string): Theme {
   return { name, colorScheme: 'dark', tokens: { source }, reduced: {} };
 }
 
+const GLOOM_PROBLEM = 'token "toolbar-height": "2em" is not a px length';
+
+// A `checkTheme` that rejects the theme named `gloom`.
+function rejectGloom(checked: Theme) {
+  if (checked.name === 'gloom') {
+    throw new Error(GLOOM_PROBLEM);
+  }
+}
+
 function load(
   files: Files,
   overrides: Partial<ConfigStoreDeps> = {},
@@ -110,6 +120,7 @@ function load(
     builtInThemes: [{ name: 'mocha' }, { name: 'dusk' }],
     themeTokens: { core: {}, plugins: {} },
     resolveTheme,
+    checkTheme: () => undefined,
     platform: 'windows',
     log: () => undefined,
     ...overrides,
@@ -264,8 +275,7 @@ describe('loadConfigStore', () => {
     expect(store.current().problems).toEqual([
       {
         file: 'settings.json',
-        message:
-          '"p.timeout" must be a number, a string, a boolean or null, not an object.',
+        message: '"p.timeout" must be a number or null, not an object.',
       },
     ]);
   });
@@ -476,6 +486,38 @@ describe('loadConfigStore', () => {
     expect(config.problems).toEqual([
       { file: 'themes/dusk.json', message: 'broken' },
     ]);
+  });
+
+  it('keeps the last good theme when the native window cannot take the selected one', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${FOLDER}/settings.json`, '{"theme":"dusk"}');
+    await files.write(`${FOLDER}/themes/dusk.json`, '{"name":"dusk"}');
+    await files.write(`${FOLDER}/themes/gloom.json`, '{"name":"gloom"}');
+    const store = await load(files, { checkTheme: rejectGloom });
+
+    const config = await writeAndWait(
+      files,
+      store,
+      'settings.json',
+      '{"theme":"gloom"}',
+    );
+
+    expect(config.theme).toEqual(theme('dusk', 'themes/dusk.json'));
+    expect(config.problems).toEqual([
+      { file: 'themes/gloom.json', message: GLOOM_PROBLEM },
+    ]);
+  });
+
+  it('rejects the first read when the native window cannot take the selected built-in theme', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${FOLDER}/settings.json`, '{"theme":"gloom"}');
+
+    await expect(
+      load(files, {
+        builtInThemes: [{ name: 'mocha' }, { name: 'gloom' }],
+        checkTheme: rejectGloom,
+      }),
+    ).rejects.toThrow(`built-in theme gloom: ${GLOOM_PROBLEM}`);
   });
 
   it('reports a theme name that names no theme', async () => {

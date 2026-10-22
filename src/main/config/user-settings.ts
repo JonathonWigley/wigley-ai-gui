@@ -2,9 +2,10 @@ import type { Settings } from '../../contracts/settings';
 import { jsonKind, parseJsonObject } from './config-json';
 
 // What a `settings.json` may set: the core settings with their defaults, each
-// plugin's settings under its id, the JSON kind of each core setting the
-// defaults leave unset, and the only strings a setting takes, both by dotted
-// path.
+// plugin's settings under its id, the JSON kind of each setting (core or
+// plugin) whose default is null or that the defaults leave unset, and the only
+// strings a setting takes, both by dotted path (an array element's fields
+// under `<path>[]`).
 export interface SettingsSchema {
   defaults: Settings;
   pluginDefaults: Record<string, object>;
@@ -17,8 +18,6 @@ export interface UserSettings {
   pluginSettings: Record<string, object>;
 }
 
-const NULL_DEFAULT_KINDS = ['a number', 'a string', 'a boolean', 'null'];
-
 // The kinds a setting named in `optionalSettings` takes, by name.
 const OPTIONAL_KINDS = {
   string: 'a string',
@@ -26,14 +25,18 @@ const OPTIONAL_KINDS = {
   boolean: 'a boolean',
 } as const;
 
+const ELEMENT_INDEX = /\[\d+\]/g;
+
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return jsonKind(value) === 'an object';
 }
 
 // `value` checked against the setting at `path` whose default is `fallback`
 // (undefined for a setting the defaults leave unset), merged over it: objects
-// merge key by key, arrays and scalars replace whole. Throws naming the first
-// value that is not a setting or not of its setting's kind.
+// merge key by key, arrays and scalars replace whole. An array's elements are
+// each checked against the default's first element; an empty default array
+// takes any elements. Throws naming the first value that is not a setting or
+// not of its setting's kind.
 function mergeSetting(
   path: string,
   fallback: unknown,
@@ -41,8 +44,9 @@ function mergeSetting(
   schema: SettingsSchema,
 ): unknown {
   const kind = jsonKind(value);
+  const declaredPath = path.replace(ELEMENT_INDEX, '[]');
   if (fallback === undefined) {
-    const optional = schema.optionalSettings[path];
+    const optional = schema.optionalSettings[declaredPath];
     if (optional === undefined) {
       throw new Error(`"${path}" is not a setting.`);
     }
@@ -53,7 +57,7 @@ function mergeSetting(
     }
     return value;
   }
-  const choices = schema.settingChoices[path];
+  const choices = schema.settingChoices[declaredPath];
   if (choices !== undefined) {
     if (typeof value !== 'string' || !choices.includes(value)) {
       throw new Error(
@@ -63,9 +67,13 @@ function mergeSetting(
     return value;
   }
   if (fallback === null) {
-    if (!NULL_DEFAULT_KINDS.includes(kind)) {
+    const optional = schema.optionalSettings[declaredPath];
+    if (optional === undefined) {
+      throw new Error(`"${path}" defaults to null and declares no kind.`);
+    }
+    if (kind !== 'null' && kind !== OPTIONAL_KINDS[optional]) {
       throw new Error(
-        `"${path}" must be a number, a string, a boolean or null, not ${kind}.`,
+        `"${path}" must be ${OPTIONAL_KINDS[optional]} or null, not ${kind}.`,
       );
     }
     return value;
@@ -77,7 +85,27 @@ function mergeSetting(
   if (isJsonObject(fallback) && isJsonObject(value)) {
     return mergeObject(path, fallback, value, schema);
   }
+  if (Array.isArray(fallback) && Array.isArray(value)) {
+    checkElements(path, fallback, value, schema);
+  }
   return value;
+}
+
+// Throws naming the first element of `value`, the array at `path`, that is
+// not of the kind of `fallback`'s first element. An element is checked, never
+// merged: an object element missing a key stays without it.
+function checkElements(
+  path: string,
+  fallback: unknown[],
+  value: unknown[],
+  schema: SettingsSchema,
+): void {
+  if (fallback.length === 0) {
+    return;
+  }
+  value.forEach((element, index) =>
+    mergeSetting(`${path}[${index}]`, fallback[0], element, schema),
+  );
 }
 
 function mergeObject(

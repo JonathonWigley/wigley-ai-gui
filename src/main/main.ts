@@ -7,6 +7,7 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  nativeTheme,
   shell,
   type WebContents,
 } from 'electron';
@@ -30,7 +31,7 @@ import type { Clock, RandomHex, RandomUuid } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { Log } from '../contracts/log';
 import type { Platform } from '../contracts/platform';
-import type { Theme } from '../contracts/theme';
+import type { AppConfig } from '../contracts/settings';
 import type {
   MainServices,
   MainStart,
@@ -75,7 +76,11 @@ import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { applySelfTestConfig } from './selftest-config';
 import { resolveTheme } from './themes/theme-loader';
-import { titleBarOverlayOf } from './title-bar-overlay';
+import {
+  checkTitleBarOverlay,
+  titleBarOverlayOf,
+  windowBackgroundOf,
+} from './title-bar-overlay';
 import { loadUiStateFile, type UiStateFile } from './ui-state/ui-state-file';
 import {
   createMainWindow,
@@ -146,14 +151,39 @@ const platform: Platform =
       ? 'windows'
       : 'linux';
 
+// Whether the page paints the theme's `reduced` values, as the page decides it
+// from the `transparency` setting and the OS preference.
+function isTransparencyReduced(config: AppConfig): boolean {
+  const setting = config.settings.transparency;
+  return (
+    setting === 'reduced' ||
+    (setting === 'system' && nativeTheme.prefersReducedTransparency)
+  );
+}
+
 // macOS keeps its window buttons inset in the page's title bar; Windows and
-// Linux draw theirs as an overlay coloured from the theme.
+// Linux draw theirs as an overlay coloured from the theme. The ConfigStore
+// serves only a theme the overlay takes, so `log` hears a failure only from a
+// bug, and the overlay falls back to the OS colours.
 function titleBarOptions(
-  theme: Theme,
+  config: AppConfig,
+  log: Log,
 ): Pick<BrowserWindowConstructorOptions, 'titleBarStyle' | 'titleBarOverlay'> {
-  return platform === 'macos'
-    ? { titleBarStyle: 'hiddenInset' }
-    : { titleBarStyle: 'hidden', titleBarOverlay: titleBarOverlayOf(theme) };
+  if (platform === 'macos') {
+    return { titleBarStyle: 'hiddenInset' };
+  }
+  try {
+    return {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: titleBarOverlayOf(
+        config.theme,
+        isTransparencyReduced(config),
+      ),
+    };
+  } catch (error) {
+    log('main', `title bar not coloured: ${errorText(error)}`);
+    return { titleBarStyle: 'hidden', titleBarOverlay: true };
+  }
 }
 
 function homeFolder(): string {
@@ -205,6 +235,7 @@ function loadConfig(homeDir: string): Promise<ConfigStore> {
       plugins: pluginThemeTokens(coreThemeTokens, manifests),
     },
     resolveTheme,
+    checkTheme: checkTitleBarOverlay,
     platform,
     log: (source, message) => {
       if (mainWindow !== null) {
@@ -311,27 +342,40 @@ function disposeParts(parts: readonly MainStart<PluginManifest>[]) {
   return Promise.allSettled(parts.map(async (part) => part.dispose?.()));
 }
 
-// The window's size and background are read once: the one window hides
-// rather than closes, so a new size applies at the next start.
+// The window's size is read once: the one window hides rather than closes,
+// so a new size applies at the next start. Its background and title bar
+// overlay follow the theme and the effective transparency.
 function createWindow(inputs: StartInputs, store: ConfigStore) {
   const startConfig = store.current();
+  const startLines: [string, string][] = [];
   const window = createMainWindow(
     startConfig.settings.window,
-    startConfig.theme.tokens['window-background'],
+    windowBackgroundOf(startConfig.theme, isTransparencyReduced(startConfig)),
     isSelfTest,
-    titleBarOptions(startConfig.theme),
+    titleBarOptions(startConfig, (source, message) =>
+      startLines.push([source, message]),
+    ),
   );
   mainWindow = window;
   const log = pageLog(window);
-  if (platform !== 'macos') {
-    store.onChanged((config) => {
-      try {
-        window.setTitleBarOverlay(titleBarOverlayOf(config.theme));
-      } catch (error) {
-        log('main', `title bar not recoloured: ${errorText(error)}`);
-      }
-    });
+  for (const [source, message] of startLines) {
+    log(source, message);
   }
+  const recolour = () => {
+    const config = store.current();
+    const isReduced = isTransparencyReduced(config);
+    window.setBackgroundColor(windowBackgroundOf(config.theme, isReduced));
+    if (platform === 'macos') {
+      return;
+    }
+    try {
+      window.setTitleBarOverlay(titleBarOverlayOf(config.theme, isReduced));
+    } catch (error) {
+      log('main', `title bar not recoloured: ${errorText(error)}`);
+    }
+  };
+  store.onChanged(recolour);
+  nativeTheme.on('updated', recolour);
 
   const selfTest = isSelfTest
     ? startSelfTest(window, scopedFiles(files, inputs.homeDir), cleanUpSelfTest)
