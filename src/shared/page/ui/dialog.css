@@ -8,10 +8,6 @@
   z-index: var(--wg-z-dialog);
 }
 
-.ui-scrim[hidden] {
-  display: none;
-}
-
 .ui-dialog {
   display: flex;
   flex-direction: column;

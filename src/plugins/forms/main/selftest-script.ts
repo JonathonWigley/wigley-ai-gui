@@ -91,8 +91,9 @@ export const SELFTEST_LAYOUT = {
 
 // Opening on finding 1: Space k then k breaks Space k s, so the first k
 // replays to the notice and the second finds no item before it; j back to the
-// finding, which opens on Fix now, saving the round's screenshot; 2 picks solution 2, Space a f clears the
-// action and Space a s sets Leave it. a types "agreed" at once (INSERT), Esc
+// finding, which opens on Fix now, saving the round's screenshot; 2 picks
+// solution 2, Space a f clears the action and Space a s sets Leave it. a types
+// "agreed" at once (INSERT), Esc
 // to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out, as
 // every Esc out of a box in NORMAL runs forms' editor bind there. j to
 // finding 2, a Nit: Space a u is refused, since a Nit offers no follow-up, and

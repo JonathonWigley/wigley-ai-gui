@@ -48,9 +48,10 @@ export function mergeSelfTestConfigs(
 
 const SCREENSHOT_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-// The PNG file each step with a `screenshot` saves, `<pluginId>-<screenshot>.png`,
-// walking the scripts in hand-over order. Throws on a name that is not
-// lowercase words joined by `-`, and on two steps that save one file.
+// The PNG file each step with a `screenshot` saves,
+// `<pluginId>-<screenshot>.png`, walking the scripts in hand-over order.
+// Throws on a name that is not lowercase words joined by `-`, and on two steps
+// that save one file.
 export function screenshotFiles(
   handed: readonly HandedScript[],
 ): Map<SelfTestStep, string> {
