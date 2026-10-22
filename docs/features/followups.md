@@ -237,6 +237,7 @@ now, any harness later). Each item names its sites.
   (`forms-commands.ts:447-475`): close on main's `roundClosed`, or restore and toast.
 - The cancel prompt can stay over Docs mode where its keys don't act (`forms-view.ts:108`): tie it to the Form tab
   showing, or push its scope and pop on hide.
+- A Split handle removed from the document mid-drag never saves the dragged width unless it is pressed again, since only its next press or its own `lostpointercapture` ends the drag (`src/shared/page/ui/split.ts`). A teardown that ends the drag when the split leaves the document would save it.
 - A background session's refused close only logs (`forms-commands.ts:422-434`): toast, or select it and confirm.
 - `form-state.ts` (995 lines) splits into session state, answers (dispatching to `PageKind.reduce`), finding rules
   (into `kinds/finding/`), a save tracker and a draft codec.
@@ -269,3 +270,4 @@ now, any harness later). Each item names its sites.
 - `titleBarOverlayProblem` blames the file at the end of a colour alias chain (`src/main/title-bar-overlay.ts`). Colour tokens accept only hex, `transparent` or an alias today, so it is right; if the colour kind widens (`rgb()`, `color-mix()`), a user alias onto a built-in token would be blamed on the built-in theme and fail start.
 - settings.json array elements are checked for the default element's top-level keys only (`checkElements`, `src/main/config/user-settings.ts`); a nested object inside an element would pass with keys missing. No setting has that shape yet.
 - `ConfigStore.dispose` during a running rebuild lets that rebuild still replace `current` once (no listener hears it) (`src/main/config/config-store.ts`).
+- The forms self-test's gallery steps pin the page count: four `d` steps expect `[gallery] paged down` and the fifth `reached the end` (`src/plugins/forms/main/selftest-script.ts`), so a gallery section that adds a page breaks the run. A step kind that repeats a key until a given line and saves one screenshot per press would remove the count.
