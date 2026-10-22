@@ -17,9 +17,9 @@
 }
 
 /* The title bar drags the window; its controls take clicks. Its padding
-   leaves room for the OS window buttons. Three tracks, `start`, `center` and
-   `end`, the outer two always equal, so the centre sits centred on the window;
-   the centre track is at most 60% of the bar. */
+   leaves room for the OS window buttons. Its three tracks, `start`, `center`
+   and `end`, sit in grid columns, the outer two always equal, so the centre
+   sits centred on the window; the centre track is at most 60% of the bar. */
 .shell-title-bar {
   align-items: center;
   background: var(--wg-material-chrome-bg);
@@ -51,49 +51,51 @@
   );
 }
 
-/* Each title bar item takes its alignment's track, on the one row: two items
-   of one alignment overlap. */
-.shell-title-bar > * {
-  grid-row: 1;
+/* A track of the title, activity or status bar holds that alignment's items
+   in a row (a column in the activity bar), in their sorted order. Main, the
+   side bar, the panel and the overlay have no tracks and ignore alignment. */
+.shell-track {
+  align-items: center;
+  display: flex;
   min-width: 0;
 }
 
-.shell-title-bar > [data-align='start'] {
-  grid-column: 1;
-  justify-self: start;
+.shell-track > * {
+  min-width: 0;
 }
 
-.shell-title-bar > [data-align='center'] {
-  grid-column: 2;
+.shell-title-bar > .shell-track-center {
+  justify-content: center;
 }
 
-.shell-title-bar > [data-align='end'] {
-  grid-column: 3;
-  justify-self: end;
+.shell-title-bar > .shell-track-end {
+  justify-content: flex-end;
 }
 
-/* Alignment in the status and activity bars: `start` items pack at the start,
-   and the first `center` item and the first `end` item each push away from
-   what precedes them. Main, the side bar, the panel and the overlay ignore
-   alignment. */
-.shell-status-bar
-  > :is(
-    :not([data-align='center']) + [data-align='center'],
-    [data-align='center']:first-child,
-    :not([data-align='end']) + [data-align='end'],
-    [data-align='end']:first-child
-  ) {
-  margin-inline-start: auto;
+/* In the status and activity bars the `start` and `end` tracks share the
+   free space, so `start` items pack at the start, `end` items at the end,
+   and `center` items midway between them. */
+:is(.shell-status-bar, .shell-activity-bar)
+  > :is(.shell-track-start, .shell-track-end) {
+  flex: 1 1 auto;
 }
 
-.shell-activity-bar
-  > :is(
-    :not([data-align='center']) + [data-align='center'],
-    [data-align='center']:first-child,
-    :not([data-align='end']) + [data-align='end'],
-    [data-align='end']:first-child
-  ) {
-  margin-block-start: auto;
+:is(.shell-status-bar, .shell-activity-bar) > .shell-track-center {
+  flex: none;
+}
+
+:is(.shell-status-bar, .shell-activity-bar) > .shell-track-end {
+  justify-content: flex-end;
+}
+
+.shell-activity-bar > .shell-track {
+  flex-direction: column;
+}
+
+/* An empty track leaves the free space to the others, so a lone `start`
+   track fills the bar. */
+:is(.shell-status-bar, .shell-activity-bar) > .shell-track:empty {
+  display: none;
 }
 
 /* The shown mode's context: one line, cut short with an ellipsis, draggable
@@ -187,12 +189,16 @@
 }
 
 /* Core items first, then what plugins contribute; an item that does not fit
-   beside the others takes a row of its own. */
+   beside the others in its track takes a row of its own. */
 .shell-status-bar {
   display: flex;
-  flex-wrap: wrap;
   grid-area: status;
   min-width: 0;
+}
+
+.shell-status-bar > .shell-track {
+  align-items: stretch;
+  flex-wrap: wrap;
 }
 
 /* The theme problem, styled as a status line part until it is fixed: it fills

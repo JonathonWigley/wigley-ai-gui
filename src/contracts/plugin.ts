@@ -188,8 +188,10 @@ export type AreaName =
 // ascending (default `0`), then in the order they were contributed.
 export interface ContributeOptions {
   order?: number;
-  align?: 'start' | 'center' | 'end';
+  align?: Alignment;
 }
+
+export type Alignment = 'start' | 'center' | 'end';
 
 // An area of the window's shell. `contribute` places `element` in the area
 // where its options sort it, until the returned handle's `dispose`; a second
@@ -262,14 +264,23 @@ export interface Modes {
   onChanged(listener: (modeId: string) => void): void;
 }
 
+// An area the layout splits by alignment: `element` is the area's own element,
+// and each contribution goes into the `tracks` container of its `align`.
+export interface AlignedArea {
+  element: HTMLElement;
+  tracks: Record<Alignment, HTMLElement>;
+}
+
 // Places the shell's areas: `mount` builds them inside `root`, which the shell
-// has emptied, and returns each area's element. The shell then fills those
-// elements: it hides an element while its area holds no contribution (the side
-// bar's while the shown mode shows none), sets `data-align` on each
-// contribution, and sets `data-side-bar` (`beside`, `over` or `hidden`) on the
-// side bar's element; the layout's CSS turns these into position.
+// has emptied, and returns each area's element, or its `AlignedArea`. The
+// shell then fills them: it puts each contribution, in sorted order, into its
+// alignment's track or else straight into the area's element, sets
+// `data-align` on each contribution, hides an area's element while the area
+// holds no contribution (the side bar's while the shown mode shows none), and
+// sets `data-side-bar` (`beside`, `over` or `hidden`) on the side bar's
+// element; the layout's CSS turns these into position.
 export interface ShellLayout {
-  mount(root: HTMLElement): Record<AreaName, HTMLElement>;
+  mount(root: HTMLElement): Record<AreaName, HTMLElement | AlignedArea>;
 }
 
 export type ToastTone = 'success' | 'info' | 'error';

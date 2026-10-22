@@ -1,5 +1,7 @@
 import type { Disposable } from '../../contracts/disposable';
 import type {
+  AlignedArea,
+  Alignment,
   Area,
   AreaName,
   ContributeOptions,
@@ -17,7 +19,9 @@ const AREA_NAMES: readonly AreaName[] = [
   'overlay',
 ];
 
-const ALIGN_RANKS: Record<Placement['align'], number> = {
+export const ALIGNMENTS: readonly Alignment[] = ['start', 'center', 'end'];
+
+const ALIGN_RANKS: Record<Alignment, number> = {
   start: 0,
   center: 1,
   end: 2,
@@ -26,7 +30,7 @@ const ALIGN_RANKS: Record<Placement['align'], number> = {
 // Where a contribution sorts in its area: `sequence` counts the area's
 // contributions from 0 in the order they were made.
 export interface Placement {
-  align: 'start' | 'center' | 'end';
+  align: Alignment;
   order: number;
   sequence: number;
 }
@@ -52,6 +56,19 @@ export function comparePlacements(a: Placement, b: Placement): number {
   );
 }
 
+// The index in `sorted`, a list kept in `comparePlacements` order, at which
+// `placement` goes: before the first entry that sorts after it, or
+// `sorted.length` when none does.
+export function insertionIndex(
+  sorted: readonly { placement: Placement }[],
+  placement: Placement,
+): number {
+  const next = sorted.findIndex(
+    (entry) => comparePlacements(entry.placement, placement) > 0,
+  );
+  return next === -1 ? sorted.length : next;
+}
+
 // The window's shell: `areas` are the areas contributions go to, kept across
 // layouts. `setLayout` places them by `layout`, moving every contribution into
 // it, and returns the `Disposable` that restores the layout the shell was
@@ -70,21 +87,51 @@ interface Contribution {
   placement: Placement;
 }
 
-// Mounts `layout` in `root`, emptied first, and returns each area's element,
-// throwing when the layout returned none for an area.
+// An area's element and the container each alignment's contributions go in:
+// the element itself for all three when the layout did not split the area.
+interface MountedArea {
+  element: HTMLElement;
+  tracks: Record<Alignment, HTMLElement>;
+}
+
+// Mounts `layout` in `root`, emptied first, and returns each area's element
+// and tracks, throwing when the layout returned no element for an area or for
+// one of its tracks.
 function mountLayout(
   root: HTMLElement,
   layout: ShellLayout,
-): Record<AreaName, HTMLElement> {
+): Record<AreaName, MountedArea> {
   root.replaceChildren();
   root.removeAttribute('class');
-  const elements = layout.mount(root);
+  const returned = layout.mount(root);
+  const mounted = {} as Record<AreaName, MountedArea>;
   for (const name of AREA_NAMES) {
-    if (!(elements[name] instanceof HTMLElement)) {
-      throw new Error(`Shell layout returned no element for ${name}`);
+    mounted[name] = mountedArea(name, returned[name]);
+  }
+  return mounted;
+}
+
+// The area the layout returned for `name`, its tracks all the area's element
+// when the layout returned an element alone.
+function mountedArea(
+  name: AreaName,
+  returned: HTMLElement | AlignedArea | undefined,
+): MountedArea {
+  if (returned instanceof HTMLElement) {
+    return {
+      element: returned,
+      tracks: { start: returned, center: returned, end: returned },
+    };
+  }
+  if (!(returned?.element instanceof HTMLElement)) {
+    throw new Error(`Shell layout returned no element for ${name}`);
+  }
+  for (const align of ALIGNMENTS) {
+    if (!(returned.tracks?.[align] instanceof HTMLElement)) {
+      throw new Error(`Shell layout returned no ${align} track for ${name}`);
     }
   }
-  return elements;
+  return returned;
 }
 
 // Keeps `--wg-status-bar-height` on the document root equal to the status
@@ -109,8 +156,9 @@ function createStatusBarHeight(): { observe(statusBar: HTMLElement): void } {
 }
 
 // Builds the window's areas inside `root` by `layout`. Each area keeps its
-// contributions sorted, places each one directly in the area's element with
-// its alignment as `data-align`, and hides the element while it holds none;
+// contributions sorted, places each one in its alignment's track (the area's
+// element when the layout gave the area no tracks) with its alignment as
+// `data-align`, and hides the area's element while it holds none;
 // the side bar's element shows or hides only by `layOutSideBar`, hidden until
 // the first call.
 export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
@@ -119,32 +167,34 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
   // Counts layout replacements, so a restore knows whether its layout is
   // still the one mounted.
   let generation = 0;
-  let elements = mountLayout(root, layout);
+  let mounted = mountLayout(root, layout);
   let sideBarLayout: SideBarLayout = 'hidden';
   const contributions = {} as Record<AreaName, Contribution[]>;
   const statusBarHeight = createStatusBarHeight();
 
   const applyHidden = (name: AreaName) => {
-    elements[name].hidden =
+    mounted[name].element.hidden =
       name === 'sideBar'
         ? sideBarLayout === 'hidden'
         : contributions[name].length === 0;
   };
 
   const applySideBar = () => {
-    elements.sideBar.dataset.sideBar = sideBarLayout;
+    mounted.sideBar.element.dataset.sideBar = sideBarLayout;
     applyHidden('sideBar');
   };
 
   const fillElements = () => {
     for (const name of AREA_NAMES) {
-      elements[name].append(
-        ...contributions[name].map((contribution) => contribution.element),
-      );
+      for (const contribution of contributions[name]) {
+        mounted[name].tracks[contribution.placement.align].append(
+          contribution.element,
+        );
+      }
       applyHidden(name);
     }
     applySideBar();
-    statusBarHeight.observe(elements.statusBar);
+    statusBarHeight.observe(mounted.statusBar.element);
   };
 
   const createArea = (name: AreaName): Area => {
@@ -154,19 +204,19 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
       contribute(element, options) {
         const placement = placementOf(options, sequence);
         sequence += 1;
-        const next = live.findIndex(
-          (contribution) =>
-            comparePlacements(contribution.placement, placement) > 0,
-        );
+        const index = insertionIndex(live, placement);
+        const { tracks } = mounted[name];
+        const track = tracks[placement.align];
+        const following = live[index] as Contribution | undefined;
+        // Sorted by alignment first, so the next contribution lies in this
+        // track or none later in the list does.
+        const followsInTrack =
+          following !== undefined &&
+          tracks[following.placement.align] === track;
         element.dataset.align = placement.align;
+        track.insertBefore(element, followsInTrack ? following.element : null);
         const contribution = { element, placement };
-        if (next === -1) {
-          live.push(contribution);
-          elements[name].append(element);
-        } else {
-          elements[name].insertBefore(element, live[next].element);
-          live.splice(next, 0, contribution);
-        }
+        live.splice(index, 0, contribution);
         applyHidden(name);
         let isDisposed = false;
         return {
@@ -194,9 +244,9 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
   const replaceLayout = (next: ShellLayout) => {
     const previous = currentLayout;
     try {
-      elements = mountLayout(root, next);
+      mounted = mountLayout(root, next);
     } catch (error) {
-      elements = mountLayout(root, previous);
+      mounted = mountLayout(root, previous);
       fillElements();
       throw error;
     }
