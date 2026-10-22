@@ -9,6 +9,7 @@ import {
   conflictText,
   contextChoices,
   detailFields,
+  edgeSelection,
   noPlaceText,
   parentId,
   provisionalEntry,
@@ -119,6 +120,21 @@ describe('stepSelection', () => {
   it('stepSelection_SelectedNotShown_FirstRow', () => {
     expect(stepSelection(rowsOf('a', 'b', 'c'), 'z', 1)).toBe('a');
     expect(stepSelection([], 'z', 1)).toBeNull();
+  });
+});
+
+describe('edgeSelection', () => {
+  it('edgeSelection_First_FirstRow', () => {
+    expect(edgeSelection(rowsOf('a', 'b', 'c'), 'first')).toBe('a');
+  });
+
+  it('edgeSelection_Last_LastRow', () => {
+    expect(edgeSelection(rowsOf('a', 'b', 'c'), 'last')).toBe('c');
+  });
+
+  it('edgeSelection_NoRows_Null', () => {
+    expect(edgeSelection([], 'first')).toBeNull();
+    expect(edgeSelection([], 'last')).toBeNull();
   });
 });
 

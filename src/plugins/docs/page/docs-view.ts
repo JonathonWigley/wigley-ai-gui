@@ -8,7 +8,6 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import { element } from '../../../shared/page/dom';
 import type {
   DocsChannel,
   IndexContext,
@@ -50,6 +49,8 @@ export type DocsPushedScope = 'conflict' | 'picker' | 'box' | 'confirm';
 export interface DocsViewCommands {
   treeDown(): void;
   treeUp(): void;
+  treeTop(): void;
+  treeBottom(): void;
   treeOpen(): void;
   treeClose(): void;
   filter(): void;
@@ -78,8 +79,11 @@ export interface DocsViewCommands {
   confirmNo(): void;
 }
 
+// `tree` and `doc` are the two panes; the caller places them (a side bar and
+// a sheet, or a split's two sides) and the view never moves them.
 export interface DocsView {
-  element: HTMLElement;
+  tree: HTMLElement;
+  doc: HTMLElement;
   // Runs the source the first time; later calls do nothing (Docs mode's
   // build, a tab's first show).
   showFirstTime(): void;
@@ -93,15 +97,16 @@ export interface DocsView {
   // scope they pushed popped, without moving focus: another docs view is
   // about to show, and its pane scope may equal this one's.
   closeOverlays(): void;
-  // Returns whether the tree now shows.
-  toggleTree(): boolean;
+  // The tree's container hid it: the doc pane takes focus and the doc scope.
+  treeHidden(): void;
   // The scope this view's keys use now.
   focusScope(): DocsPaneScope;
   hasUnsavedEdits(): boolean;
   // The open doc's path while its editor holds unsaved edits, else null.
   unsavedPath(): string | null;
-  // Closes the overlays, stops the view's watch, its `docChanged` listener
-  // and its following of keymap changes, and destroys its editor.
+  // Closes the overlays, takes the dialogs off the window, stops the view's
+  // watch, its `docChanged` listener and its following of keymap changes, and
+  // destroys its editor.
   dispose(): void;
   commands: DocsViewCommands;
 }
@@ -130,6 +135,10 @@ export interface DocsViewDeps {
   // Hears the open doc's path each time a doc opens or the open one moves,
   // and null once the doc pane is emptied.
   openChanged(path: string | null): void;
+  // Shows the tree when its container hides it; nothing while it shows.
+  revealTree(): void;
+  // Places a dialog element over the window, until the handle's `dispose`.
+  addOverlay(element: HTMLElement): Disposable;
 }
 
 const SESSION_CONTEXT_TEXT =
@@ -188,15 +197,14 @@ interface AppliedChange {
   record: DocChangeRecord;
 }
 
-// One docs view over an index source: the tree pane and the doc pane, the
-// dialogs over them. A machine view reads the last index at creation; a
+// One docs view over an index source: the tree pane and the doc pane, its
+// dialogs placed over the window through `addOverlay`. A machine view reads the last index at creation; a
 // session view reads nothing until its first show. A change made here shows
 // at once and its paths stay pending until a source run asked after it lands;
 // every other view hears it through `changed`.
 export function createDocsView(deps: DocsViewDeps): DocsView {
   const { log, toast } = deps;
   const run = sourceRun(deps);
-  const root = element('div', 'docs-view');
   let document: IndexDocument | null = null;
   let entriesById = new Map<string, IndexEntry>();
   // Set from the first document shown, before any entry can be opened.
@@ -208,7 +216,6 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   let unsettled: AppliedChange[] = [];
   let contextFolder: string | null = null;
   let focused: DocsPaneScope = 'tree';
-  let isTreeShown = true;
   let hasRun = false;
   // Each load's number; a load older than the one shown is dropped.
   let startedLoads = 0;
@@ -374,7 +381,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     doc.keysChanged();
     dialogs.keysChanged();
   });
-  root.append(tree.element, doc.element, ...dialogs.elements);
+  const overlays = dialogs.elements.map((dialog) => deps.addOverlay(dialog));
 
   for (const [pane, scope] of [
     [tree.element, 'tree'],
@@ -610,6 +617,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   const commands: DocsViewCommands = {
     treeDown: () => tree.down(),
     treeUp: () => tree.up(),
+    treeTop: () => tree.top(),
+    treeBottom: () => tree.bottom(),
     treeOpen: () => tree.open(),
     treeClose: () => tree.close(),
     filter: () => tree.openFilter(),
@@ -620,9 +629,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       log('docs', 'doc focused');
     },
     focusTree: () => {
-      if (!isTreeShown) {
-        view.toggleTree();
-      }
+      deps.revealTree();
       focused = 'tree';
       tree.focus();
       applyScope();
@@ -676,7 +683,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   });
 
   const view: DocsView = {
-    element: root,
+    tree: tree.element,
+    doc: doc.element,
     showFirstTime() {
       if (!hasRun) {
         hasRun = true;
@@ -703,15 +711,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       dialogs.close();
       doc.closeConflict();
     },
-    toggleTree() {
-      isTreeShown = !isTreeShown;
-      root.classList.toggle('is-tree-hidden', !isTreeShown);
-      tree.element.hidden = !isTreeShown;
-      if (!isTreeShown) {
-        focusDoc();
-      }
-      return isTreeShown;
-    },
+    treeHidden: focusDoc,
     focusScope: () => focused,
     hasUnsavedEdits: () => doc.hasUnsavedEdits(),
     unsavedPath: () => (doc.hasUnsavedEdits() ? doc.openPath() : null),
@@ -719,6 +719,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       view.closeOverlays();
       listening.remove();
       keysChange.dispose();
+      for (const overlay of overlays) {
+        overlay.dispose();
+      }
       doc.dispose();
     },
     commands,

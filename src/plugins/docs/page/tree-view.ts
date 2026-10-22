@@ -1,8 +1,12 @@
 import type { Log } from '../../../contracts/log';
 import type { PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
+import { icon } from '../../../shared/page/ui/icon';
+import { inputFrame } from '../../../shared/page/ui/input-frame';
+import { row as rowPart } from '../../../shared/page/ui/row';
 import type { TreeLeaf, TreeNode } from '../tree';
 import {
+  edgeSelection,
   parentId,
   rootIds,
   stepSelection,
@@ -25,7 +29,8 @@ export interface TreeViewDeps {
 
 // The tree pane: a status line, the filter box and the rows. `setTree` keeps
 // the expanded ids, the selection and the filter; the first tree with rows
-// expands its roots and selects its first row.
+// expands its roots and selects its first row. The selected row draws as the
+// keyboard cursor while focus is inside the pane.
 export interface TreeView {
   element: HTMLElement;
   setStatus(text: string | null): void;
@@ -34,6 +39,10 @@ export interface TreeView {
   up(): void;
   open(): void;
   close(): void;
+  // Selects the first or last visible row, logging its title; nothing on an
+  // empty tree.
+  top(): void;
+  bottom(): void;
   // The selected row's node, or null when no row is selected.
   selected(): TreeNode | null;
   // Selects the entry's leaf, expanding the groups above it; nothing when no
@@ -54,10 +63,13 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   pane.tabIndex = -1;
   const status = element('div', 'docs-status');
   status.hidden = true;
-  const filterBox = textBoxInput('docs-box docs-filter');
-  filterBox.hidden = true;
+  const filterFrame = inputFrame();
+  filterFrame.classList.add('docs-filter');
+  filterFrame.hidden = true;
+  const filterBox = textBoxInput('docs-box');
+  filterFrame.append(filterBox);
   const list = element('ol', 'docs-rows');
-  pane.append(status, filterBox, list);
+  pane.append(status, filterFrame, list);
 
   let tree: TreeNode[] = [];
   let pathOf: (entryId: string) => string = () => '';
@@ -65,6 +77,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   let rows: TreeRow[] = [];
   let hasRows = false;
   let filterScope: PushedScope | null = null;
+  let hasFocus = false;
 
   const draw = () => {
     rows = visibleRows(tree, state, pathOf);
@@ -73,18 +86,25 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   };
 
   const rowElement = (row: TreeRow) => {
-    const item = element('li', 'docs-row');
-    item.style.paddingLeft = `${row.depth}rem`;
-    item.classList.toggle('is-selected', row.node.id === state.selectedId);
-    const caret = row.node.type === 'entry' ? '' : row.isExpanded ? '▾' : '▸';
-    item.append(
-      element('span', 'docs-row-caret', caret),
-      element('span', 'docs-row-title', row.node.title),
-    );
-    item.addEventListener('click', () => {
-      state = { ...state, selectedId: row.node.id };
-      view.open();
+    const caret = element('span', 'docs-row-caret');
+    if (row.node.type === 'group') {
+      caret.append(icon(row.isExpanded ? 'chevron-down' : 'chevron-right'));
+    }
+    const item = rowPart({
+      density: 'tree',
+      tag: 'li',
+      label: row.node.title,
+      depth: row.depth,
+      leading: caret,
+      onClick: () => {
+        state = { ...state, selectedId: row.node.id };
+        pane.focus();
+        view.open();
+      },
     });
+    const isSelected = row.node.id === state.selectedId;
+    item.classList.toggle('is-selected', isSelected);
+    item.classList.toggle('is-cursor', isSelected && hasFocus);
     return item;
   };
 
@@ -106,11 +126,21 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     draw();
   };
 
+  const selectEdge = (edge: 'first' | 'last') => {
+    const selectedId = edgeSelection(rows, edge);
+    if (selectedId === null) {
+      return;
+    }
+    state = { ...state, selectedId };
+    draw();
+    deps.log('docs', `selected ${selectedRow()?.node.title}`);
+  };
+
   // Pops the box's scope; `refocus` returns focus to the tree.
   const closeFilter = (refocus: boolean) => {
     filterScope?.pop();
     filterScope = null;
-    filterBox.hidden = true;
+    filterFrame.hidden = true;
     if (refocus) {
       pane.focus();
       deps.filterClosed();
@@ -138,6 +168,8 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     },
     down: () => step(1),
     up: () => step(-1),
+    top: () => selectEdge('first'),
+    bottom: () => selectEdge('last'),
     open() {
       const row = selectedRow();
       if (row === undefined) {
@@ -206,7 +238,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       });
       filterScope = scope;
       filterBox.value = state.filter;
-      filterBox.hidden = false;
+      filterFrame.hidden = false;
       filterBox.focus();
     },
     acceptFilter() {
@@ -236,6 +268,21 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       }
     },
   };
+
+  pane.addEventListener('focusin', () => {
+    if (!hasFocus) {
+      hasFocus = true;
+      draw();
+    }
+  });
+  pane.addEventListener('focusout', (event) => {
+    const next = event.relatedTarget;
+    const isLeavingPane = !(next instanceof Node && pane.contains(next));
+    if (hasFocus && isLeavingPane) {
+      hasFocus = false;
+      draw();
+    }
+  });
 
   filterBox.addEventListener('input', () => {
     state = { ...state, filter: filterBox.value };

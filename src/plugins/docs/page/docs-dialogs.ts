@@ -10,6 +10,9 @@ import {
   createListPicker,
   type ListPicker,
 } from '../../../shared/page/list-picker';
+import { createDialog } from '../../../shared/page/ui/dialog';
+import { inputFrame } from '../../../shared/page/ui/input-frame';
+import { row } from '../../../shared/page/ui/row';
 import type {
   CreateKind,
   CreatePlace,
@@ -48,7 +51,7 @@ interface BoxRequest {
   cancelled(): void;
 }
 
-// A one-line text box over the view, scope `docs.box` pushed while it shows,
+// A one-line text box in a dialog, scope `docs.box` pushed while it shows,
 // with the completion list under it for a path.
 interface TextBox {
   element: HTMLElement;
@@ -70,14 +73,12 @@ interface TextBoxDeps {
 }
 
 function createTextBox(deps: TextBoxDeps): TextBox {
-  const overlay = element('div', 'docs-overlay');
-  const dialog = element('div', 'dialog docs-box-dialog');
-  const label = element('h2', 'dialog-title');
-  const input = textBoxInput('docs-box docs-path-box');
+  const dialog = createDialog('');
+  const frame = inputFrame();
+  const input = textBoxInput('docs-box');
+  frame.append(input);
   const list = element('ol', 'docs-completion');
-  dialog.append(label, input, list);
-  overlay.append(dialog);
-  overlay.hidden = true;
+  dialog.body.append(frame, list);
   list.hidden = true;
 
   let request: BoxRequest | null = null;
@@ -117,7 +118,7 @@ function createTextBox(deps: TextBoxDeps): TextBox {
     }
     const texts = matches.slice(0, COMPLETION_LIMIT).map((match) => match.text);
     list.replaceChildren(
-      ...texts.map((text) => element('li', 'docs-completion-item', text)),
+      ...texts.map((text) => row({ density: 'list', tag: 'li', label: text })),
     );
     list.hidden = texts.length === 0;
   };
@@ -131,7 +132,7 @@ function createTextBox(deps: TextBoxDeps): TextBox {
   };
 
   const hide = () => {
-    overlay.hidden = true;
+    dialog.hide();
     list.hidden = true;
     list.replaceChildren();
     request = null;
@@ -146,7 +147,7 @@ function createTextBox(deps: TextBoxDeps): TextBox {
   input.addEventListener('input', refreshQuietly);
 
   const box: TextBox = {
-    element: overlay,
+    element: dialog.element,
     open(next) {
       if (pushed === null) {
         const scope = deps.pushScope();
@@ -160,9 +161,9 @@ function createTextBox(deps: TextBoxDeps): TextBox {
       request = next;
       listings = new Map();
       isAccepting = false;
-      label.textContent = next.label;
+      dialog.setTitle(next.label);
       input.value = next.text;
-      overlay.hidden = false;
+      dialog.show();
       list.hidden = true;
       input.focus();
       cursorToEnd();
@@ -218,7 +219,7 @@ function createTextBox(deps: TextBoxDeps): TextBox {
   return box;
 }
 
-// A yes/no prompt over the view, scope `docs.confirm` pushed while it shows;
+// A yes/no prompt in a dialog, scope `docs.confirm` pushed while it shows;
 // the base scope changing under it answers no. `open` reads its question from
 // `text`, and `refreshText` reads it again while it shows.
 interface Confirm {
@@ -235,12 +236,9 @@ function createConfirm(
   pushScope: () => PushedScope,
   closed: () => void,
 ): Confirm {
-  const overlay = element('div', 'docs-overlay');
-  const dialog = element('div', 'dialog docs-confirm');
+  const dialog = createDialog('Move to the Trash');
   const text = element('p', 'docs-confirm-text');
-  dialog.append(text);
-  overlay.append(dialog);
-  overlay.hidden = true;
+  dialog.body.append(text);
 
   let answers: { yes(): void; no(): void } | null = null;
   let pushed: PushedScope | null = null;
@@ -249,7 +247,7 @@ function createConfirm(
   const hide = () => {
     answers = null;
     readQuestion = null;
-    overlay.hidden = true;
+    dialog.hide();
     pushed?.pop();
     pushed = null;
     closed();
@@ -264,7 +262,7 @@ function createConfirm(
   };
 
   const confirm: Confirm = {
-    element: overlay,
+    element: dialog.element,
     open(question, yes, no) {
       confirm.close();
       const scope = pushScope();
@@ -277,7 +275,7 @@ function createConfirm(
       answers = { yes, no };
       readQuestion = question;
       text.textContent = question();
-      overlay.hidden = false;
+      dialog.show();
     },
     refreshText() {
       if (readQuestion !== null) {
@@ -354,8 +352,8 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     pushScope: () => deps.pushScope('picker'),
     log,
     logSource: 'docs',
-    overlayClass: 'docs-overlay',
-    dialogClass: 'docs-picker',
+    overlayClass: '',
+    dialogClass: '',
   });
   const box = createTextBox({
     channel,

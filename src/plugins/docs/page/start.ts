@@ -1,4 +1,3 @@
-import '../../../shared/page/dialog.css';
 import '../../../shared/page/markdown.css';
 import './docs.css';
 import type {
@@ -7,6 +6,8 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { sheet } from '../../../shared/page/ui/sheet';
+import { createSplit } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -38,11 +39,34 @@ interface SessionDocs {
   handle: SessionTabHandle | null;
 }
 
-// Docs mode over the machine's index, and a Docs tab in every session over
-// that session's index. Each command acts on the active view: the machine
-// view while Docs mode shows, else the session view whose tab is visible. A
-// change made in one view reaches every other, and a view showing closes the
-// others' overlays, since two views' pane scopes may be equal.
+// The tree commands that need the tree in sight; on Docs mode with its side
+// bar hidden, each moves focus to the doc pane instead.
+const TREE_COMMANDS_IN_SIGHT: ReadonlySet<keyof DocsViewCommands> = new Set([
+  'treeDown',
+  'treeUp',
+  'treeOpen',
+  'treeClose',
+  'treeTop',
+  'treeBottom',
+  'filter',
+  'rescan',
+  'pickContext',
+  'createByKind',
+  'createByPath',
+  'rename',
+  'trash',
+] as const);
+
+// A session Docs tab's tree width limits in CSS pixels; every session's tab
+// reads and writes the one stored width.
+const SESSION_TREE_SPLIT = { initial: 288, min: 160, max: 480 };
+
+// Docs mode over the machine's index, its tree in the side bar and its doc in
+// the sheet, and a Docs tab in every session over that session's index, its
+// tree and doc side by side in a split. Each command acts on the active view:
+// the machine view while Docs mode shows, else the session view whose tab is
+// visible. A change made in one view reaches every other, and a view showing
+// closes the others' overlays, since two views' pane scopes may be equal.
 export const docsPagePart: PagePart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
@@ -91,6 +115,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       source: DocsSource,
       isActive: () => boolean,
       openChanged: (path: string | null) => void,
+      revealTree: () => void,
     ): DocsView => {
       const view: DocsView = createDocsView({
         viewId,
@@ -111,6 +136,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,
         openChanged,
+        revealTree,
+        addOverlay: (element) => api.areas.overlay.contribute(element),
         changed: (change) => changedIn(view, change),
         unsavedPaths: () =>
           allViews()
@@ -122,7 +149,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
 
     // The title bar shows the machine view's open doc while Docs mode shows.
     // Every context waits on the one home folder promise, so contexts apply in
-    // the order the doc changed.
+    // the order the doc changed. `revealTree` reads `mode` once a key runs,
+    // after `add`.
     const machineView = createView(
       'machine',
       { type: 'machine' },
@@ -136,18 +164,32 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           ),
         );
       },
+      () => {
+        if (!mode.sideBarShown()) {
+          mode.toggleSideBar();
+        }
+      },
     );
 
-    // `add` may call `shown` before it returns, so `shown` reads no handle.
+    const docsSheet = sheet();
+    docsSheet.classList.add('docs-sheet');
+    docsSheet.append(machineView.doc);
+    // `add` calls `shown` before it returns only for the first mode added;
+    // Sessions mode starts before Docs mode, so `shown` may read `mode`. A
+    // mode shown in a narrow window reveals with its side bar hidden.
     const mode = api.modes.add({
       id: 'docs',
       title: 'Docs',
       icon: 'book',
-      element: machineView.element,
+      element: docsSheet,
+      sideBar: machineView.tree,
       shown() {
         isDocsModeShown = true;
         closeOverlaysBesides(machineView);
         api.keys.setScope(machineView.focusScope());
+        if (!mode.sideBarShown()) {
+          machineView.treeHidden();
+        }
         machineView.showFirstTime();
       },
       hidden: () => undefined,
@@ -165,9 +207,19 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             { type: 'session', spec: { hostSessionId, projectDir, harness } },
             () => held.handle?.isVisible() === true,
             () => undefined,
+            // The split never hides the tree.
+            () => undefined,
           ),
           handle: null,
         };
+        const split = createSplit({
+          ...SESSION_TREE_SPLIT,
+          uiState: services.uiState,
+          stateKey: 'sessionTree',
+        });
+        split.element.classList.add('docs-split');
+        split.start.append(held.view.tree);
+        split.end.append(held.view.doc);
         sessionDocs.set(sessionId, held);
         log(
           'docs',
@@ -176,7 +228,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         held.handle = sessions.addTab(sessionId, {
           id: 'docs',
           title: 'Docs',
-          element: held.view.element,
+          element: split.element,
           beforeClose() {
             if (held.view.hasUnsavedEdits()) {
               services.toast(UNSAVED_TEXT, 'error');
@@ -215,15 +267,32 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       return null;
     };
 
-    const onActiveView = (command: keyof DocsViewCommands) => () =>
-      activeView()?.commands[command]();
+    // On Docs mode with its side bar hidden, by `Space k d` or a narrow
+    // window, a tree command moves focus to the doc pane, so no key moves a
+    // selection out of sight.
+    const onActiveView = (command: keyof DocsViewCommands) => () => {
+      const view = activeView();
+      const isTreeOutOfSight =
+        view === machineView &&
+        TREE_COMMANDS_IN_SIGHT.has(command) &&
+        !mode.sideBarShown();
+      if (isTreeOutOfSight) {
+        machineView.treeHidden();
+        return;
+      }
+      view?.commands[command]();
+    };
 
+    // The core logs the side bar's hiding and showing.
     const showMode = () => {
       if (!mode.isShown()) {
         mode.show();
         return;
       }
-      log('docs', machineView.toggleTree() ? 'tree shown' : 'tree hidden');
+      mode.toggleSideBar();
+      if (!mode.sideBarShown()) {
+        machineView.treeHidden();
+      }
     };
 
     return {
@@ -231,6 +300,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         showMode,
         treeDown: onActiveView('treeDown'),
         treeUp: onActiveView('treeUp'),
+        treeTop: onActiveView('treeTop'),
+        treeBottom: onActiveView('treeBottom'),
         treeOpen: onActiveView('treeOpen'),
         treeClose: onActiveView('treeClose'),
         filter: onActiveView('filter'),

@@ -96,6 +96,15 @@ export function stepSelection(
   return rows[next].node.id;
 }
 
+// The first or last row's id; null when no row shows.
+export function edgeSelection(
+  rows: readonly TreeRow[],
+  edge: 'first' | 'last',
+): string | null {
+  const row = edge === 'first' ? rows[0] : rows[rows.length - 1];
+  return row?.node.id ?? null;
+}
+
 // The id of the group holding `nodeId`, or null for a root (or an id the
 // tree does not hold).
 export function parentId(

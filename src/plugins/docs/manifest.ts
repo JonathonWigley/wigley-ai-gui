@@ -15,6 +15,8 @@ export const docsManifest = definePlugin({
     },
     treeDown: { label: 'next row', group: 'tree', runsIn: 'page' },
     treeUp: { label: 'previous row', group: 'tree', runsIn: 'page' },
+    treeTop: { label: 'first row', group: 'tree', runsIn: 'page' },
+    treeBottom: { label: 'last row', group: 'tree', runsIn: 'page' },
     treeOpen: { label: 'open or expand', group: 'tree', runsIn: 'page' },
     treeClose: {
       label: 'collapse or go to the parent',
@@ -83,6 +85,8 @@ export const docsManifest = definePlugin({
       { keys: [' ', 'k', 'd'], scope: 'any', command: 'showMode' },
       { keys: ['j'], scope: 'tree', command: 'treeDown' },
       { keys: ['k'], scope: 'tree', command: 'treeUp' },
+      { keys: ['g', 'g'], scope: 'tree', command: 'treeTop' },
+      { keys: ['G'], scope: 'tree', command: 'treeBottom' },
       { keys: ['l'], scope: 'tree', command: 'treeOpen' },
       { keys: ['Enter'], scope: 'tree', command: 'treeOpen' },
       { keys: ['h'], scope: 'tree', command: 'treeClose' },

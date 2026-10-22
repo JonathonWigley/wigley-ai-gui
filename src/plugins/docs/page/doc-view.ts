@@ -12,6 +12,8 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element, markdownElement } from '../../../shared/page/dom';
+import { emptyState } from '../../../shared/page/ui/empty-state';
+import { type TagTone, tag } from '../../../shared/page/ui/tag';
 import type { DocsChannel } from '../contract';
 import { baseName, tildePath } from '../doc-paths';
 import { splitFrontmatter } from '../frontmatter';
@@ -77,8 +79,9 @@ export interface DocViewDeps {
   openChanged(path: string | null): void;
 }
 
-// The doc pane: the header with its chips, the plugin cache line, the
-// frontmatter table and the rendered body (a detail's field table), swapped
+// The doc pane: an empty state while no doc is open; then the header with its
+// chips, the plugin cache line, the frontmatter table and the rendered body (a
+// detail's field table), swapped
 // for the document editor on `edit`; the editor's `:q` returns to them.
 // Opening another doc is refused while the editor holds unsaved edits.
 // `open` resolves to whether the doc opened.
@@ -176,9 +179,18 @@ function frontmatterTable(fields: [string, string][]): HTMLElement {
   return box;
 }
 
+const CHIP_TONES: Record<Chip['state'], TagTone> = {
+  launch: 'success',
+  'on-demand': 'accent',
+  listed: 'neutral',
+  shadowed: 'warning',
+  pending: 'warning',
+  'not-loaded': 'neutral',
+  none: 'neutral',
+};
+
 function chipElement(chip: Chip): HTMLElement {
-  const node = element('span', 'docs-chip', chip.text);
-  node.dataset.state = chip.state;
+  const node = tag(chip.text, CHIP_TONES[chip.state]);
   node.title = chip.tooltip;
   return node;
 }
@@ -196,6 +208,8 @@ function sourceBlocks(body: HTMLElement): { line: number; top: number }[] {
 export function createDocView(deps: DocViewDeps): DocView {
   const pane = element('div', 'docs-doc');
   pane.tabIndex = -1;
+  const empty = emptyState('Open a doc from the tree');
+  empty.classList.add('docs-empty');
   const header = element('div', 'docs-header');
   const title = element('h1', 'docs-title');
   const path = element('div', 'docs-path');
@@ -210,7 +224,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   readOnlyLine.hidden = true;
   banner.hidden = true;
   prompt.hidden = true;
-  pane.append(header, readOnlyLine, banner, prompt, frontmatter, body);
+  pane.append(empty, header, readOnlyLine, banner, prompt, frontmatter, body);
 
   let shown: ShownDoc | null = null;
   let editor: DocumentEditor | null = null;
@@ -539,6 +553,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         bodyStartLine: rendered.bodyStartLine,
       };
       deps.openChanged(target.path);
+      empty.hidden = true;
       drawHeader(target, homeDir);
       drawChips();
       drawBody(rendered);
@@ -582,6 +597,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       watchFile(null, shown.name);
       shown = null;
       deps.openChanged(null);
+      empty.hidden = false;
       header.hidden = true;
       readOnlyLine.hidden = true;
       drawChips();
