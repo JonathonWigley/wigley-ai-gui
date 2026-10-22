@@ -30,7 +30,7 @@ export const keysManifest = definePlugin({
   },
   optionalSettings: { whichKeyTimeoutMs: 'number' },
   themeTokens: {
-    'which-key-command': { kind: 'color', default: 'var(--wg-status-success)' },
-    'which-key-prefix': { kind: 'color', default: 'var(--wg-accent)' },
+    'which-key-command': { kind: 'color', default: 'var(--wg-fg)' },
+    'which-key-prefix': { kind: 'color', default: 'var(--wg-fg-secondary)' },
   },
 });

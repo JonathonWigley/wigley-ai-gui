@@ -1,5 +1,11 @@
+import type { Platform } from '../../../contracts/platform';
 import type { Area } from '../../../contracts/plugin';
-import { button, element } from '../../../shared/page/dom';
+import { element } from '../../../shared/page/dom';
+import { textButton } from '../../../shared/page/ui/button';
+import { createDialog } from '../../../shared/page/ui/dialog';
+import { kbd } from '../../../shared/page/ui/kbd';
+import { row } from '../../../shared/page/ui/row';
+import { sectionHeader } from '../../../shared/page/ui/section-header';
 import type { HelpSection } from './help-sections';
 
 // `setSections` replaces the listed sections, open or closed.
@@ -9,48 +15,49 @@ export interface HelpView {
   setSections(sections: HelpSection[]): void;
 }
 
-// The help dialog over a backdrop that blocks clicks under it, contributed to
-// `overlay` and hidden while closed. `close` runs on its Close button.
+// The help dialog, contributed to `overlay` and hidden while closed, its keys
+// printed for `platform`. `close` runs on its Close button, which shows
+// `closeHint`, read again on each `setSections` so a rebind reaches it.
 export function mountHelpView(
   overlay: Area,
   sections: HelpSection[],
   close: () => void,
+  platform: Platform,
+  closeHint: () => HTMLElement | null,
 ): HelpView {
-  const backdrop = element('div', 'overlay');
-  backdrop.hidden = true;
-  const dialog = element('div', 'dialog dialog-help');
-  dialog.setAttribute('role', 'dialog');
-  dialog.setAttribute('aria-label', 'Keys');
+  const dialog = createDialog('Keys');
   const grid = element('div', 'keys-help-sections');
-  grid.append(...sections.map(renderSection));
-  dialog.append(
-    element('h2', 'dialog-title', 'Keys'),
-    grid,
-    button('button', 'Close', close),
-  );
-  backdrop.append(dialog);
-  overlay.contribute(backdrop);
+  dialog.body.append(grid);
+  const setSections = (next: HelpSection[]) => {
+    grid.replaceChildren(
+      ...next.map((section) => renderSection(section, platform)),
+    );
+    dialog.actions.replaceChildren(
+      textButton('Close', close, { variant: 'secondary', hint: closeHint() }),
+    );
+  };
+  setSections(sections);
+  overlay.contribute(dialog.element);
   return {
-    show() {
-      backdrop.hidden = false;
-    },
-    hide() {
-      backdrop.hidden = true;
-    },
-    setSections(next) {
-      grid.replaceChildren(...next.map(renderSection));
-    },
+    show: dialog.show,
+    hide: dialog.hide,
+    setSections,
   };
 }
 
-function renderSection(section: HelpSection): HTMLElement {
+function renderSection(section: HelpSection, platform: Platform): HTMLElement {
   const block = element('section', 'keys-help-section');
-  const list = element('dl', 'keys-help-list');
-  for (const hint of section.hints) {
-    const term = element('dt');
-    term.append(element('kbd', '', hint.keys));
-    list.append(term, element('dd', '', hint.label));
-  }
-  block.append(element('h3', 'keys-help-title', section.title), list);
+  const list = element('ul', 'keys-help-list');
+  list.append(
+    ...section.hints.map((hint) =>
+      row({
+        density: 'list',
+        label: hint.label,
+        trailing: kbd(hint.keys, platform),
+        tag: 'li',
+      }),
+    ),
+  );
+  block.append(sectionHeader(section.title), list);
   return block;
 }

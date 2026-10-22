@@ -269,7 +269,7 @@ export function mergeHints(bound: BoundKeys[], label: CommandLabel): KeyHint[] {
 }
 
 // Three or more keys ending in consecutive digits after one prefix read as a
-// range, e.g. `1–9` or `<Space>1–9`.
+// range, e.g. `1–9` or `Space 1–9`.
 export function joinKeys(keys: string[]): string {
   const first = DIGIT_SUFFIX.exec(keys[0]);
   if (first === null || keys.length < 3) {

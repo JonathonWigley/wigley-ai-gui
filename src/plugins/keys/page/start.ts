@@ -1,6 +1,6 @@
-import '../../../shared/page/dialog.css';
 import './keys.css';
 import type { PageApi, PagePart, PushedScope } from '../../../contracts/plugin';
+import { kbd } from '../../../shared/page/ui/kbd';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../contract';
 import { keysManifest } from '../manifest';
@@ -42,7 +42,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
           keys.label,
           platform,
         ),
-      view: mountWhichKeyView(api.areas.overlay),
+      view: mountWhichKeyView(api.areas.overlay, platform),
       timers: services.timers,
       delayMs: () => api.settings().whichKeyDelayMs,
       timeoutMs: () => api.settings().whichKeyTimeoutMs,
@@ -51,8 +51,22 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
 
     const currentHelpSections = () =>
       helpSections(keys.keymap(), keys.scopes, keys.label, platform);
-    const help = mountHelpView(api.areas.overlay, currentHelpSections(), () =>
-      api.commands.run(qualify(keysManifest.id, 'closeHelp')),
+    const closeHelpCommand = qualify(keysManifest.id, 'closeHelp');
+    const closeHelpHint = () => {
+      const closeKeys = keysFor(
+        keys.keymap(),
+        closeHelpCommand,
+        qualify(keysManifest.id, 'help'),
+        platform,
+      );
+      return closeKeys === null ? null : kbd(closeKeys, platform);
+    };
+    const help = mountHelpView(
+      api.areas.overlay,
+      currentHelpSections(),
+      () => api.commands.run(closeHelpCommand),
+      platform,
+      closeHelpHint,
     );
     // The pushed `help` scope while help is open, `null` while it is closed.
     let helpScope: PushedScope | null = null;
@@ -68,6 +82,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       isInBox: (element) => services.editor.contains(element),
       onScopeChanged: (listener) => keys.onScopeChanged(listener),
       openHelp: () => api.commands.run(qualify(keysManifest.id, 'toggleHelp')),
+      platform,
     });
     keys.onKeymapChanged(() => {
       help.setSections(currentHelpSections());
@@ -89,7 +104,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
           }
           helpScope = keys.pushScope('help');
           // A view that changes under help, such as a prompt opening, shows at
-          // once rather than behind help's backdrop.
+          // once rather than behind help's scrim.
           helpScope.onBaseChanged(closeHelp);
           context.editor?.blur();
           help.show();

@@ -1,111 +1,76 @@
-/* Which-key: docked full width just above the status bar, over the content
-   and over an open dialog's backdrop (`.overlay`, z-index 10) in the same
-   layer. Opaque `sheet-background`, the floating material's reduced value, as
-   nothing blurs behind it yet; the material-floating helper takes it back to
-   the translucent material. */
-.which-key {
-  background: var(--wg-sheet-background);
-  border-top: 1px solid var(--wg-border-default);
-  bottom: var(--wg-status-bar-height);
-  font-family: var(--wg-font-mono);
-  font-size: var(--wg-text-mono);
-  left: 0;
+/* Which-key: a floating panel docked above the status bar, over the content
+   and over an open dialog's scrim. Display only: the overlay layer gives its
+   children the pointer, and this panel takes none. Compounded with
+   `ui-floating` so its placement wins over the panel's own layer. */
+.ui-floating.which-key {
+  bottom: calc(var(--wg-status-bar-height) + var(--wg-sheet-gutter));
+  left: var(--wg-sheet-gutter);
   max-height: 50vh;
   overflow: hidden;
-  padding: 0.5rem 0.75rem;
-  /* The overlay layer gives its children the pointer; this panel takes none. */
   pointer-events: none !important;
   position: fixed;
-  right: 0;
-  z-index: 11;
-}
-
-.which-key-title {
-  color: var(--wg-fg-secondary);
-  margin-bottom: 0.35rem;
+  right: var(--wg-sheet-gutter);
+  z-index: calc(var(--wg-z-dialog) + 1);
 }
 
 .which-key-list {
-  column-gap: 1.5rem;
-  columns: 14rem;
+  column-gap: var(--wg-space-4);
+  columns: calc(var(--wg-space-8) * 7);
 }
 
-.which-key-entry {
+.which-key-row {
   break-inside: avoid;
-  display: flex;
-  gap: 0.4rem;
-  min-width: 0;
-  padding: 0.1rem 0;
 }
 
-.which-key-arrow {
-  color: var(--wg-fg-tertiary);
-}
-
-.which-key-label {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.which-key-label.is-command {
+.which-key-row.is-command .ui-row-label {
   color: var(--wg-keys-which-key-command);
 }
 
-.which-key-label.is-prefix {
+.which-key-row.is-prefix .ui-row-label {
   color: var(--wg-keys-which-key-prefix);
 }
 
-/* Help: every bound key, in a dialog over the shared backdrop. */
-.keys-help-sections {
-  display: grid;
-  gap: 1rem 1.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
-  margin-bottom: 1rem;
+/* Help: every bound key, in a dialog wider than a prose one so its sections
+   sit side by side. */
+.ui-dialog:has(> .ui-dialog-body > .keys-help-sections) {
+  width: min(100%, calc(var(--wg-space-8) * 28));
 }
 
-.keys-help-title {
-  color: var(--wg-fg-secondary);
-  font-size: 0.85rem;
-  margin-bottom: 0.35rem;
+.keys-help-sections {
+  display: grid;
+  gap: var(--wg-space-4) var(--wg-space-6);
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(calc(var(--wg-space-8) * 8), 100%), 1fr)
+  );
 }
 
 .keys-help-list {
-  column-gap: 0.75rem;
-  display: grid;
-  grid-template-columns: auto 1fr;
+  list-style: none;
   margin: 0;
-  row-gap: 0.2rem;
+  padding: 0;
 }
 
-.keys-help-list dd {
-  margin: 0;
-}
-
-/* The key list continues the status line before it: it takes the row's spare
-   width, so the two read as one strip, takes a row of its own when it no
+/* The key list continues the status line before it, on the status bar's
+   material: it takes the row's spare width, takes a row of its own when it no
    longer fits beside it, and its hints wrap onto more lines when narrow. */
 .keys-bar {
   align-items: center;
-  background: var(--wg-material-chrome-bg);
-  border-top: 1px solid var(--wg-border-default);
-  color: var(--wg-fg-secondary);
-  column-gap: 0.9rem;
+  column-gap: var(--wg-space-3);
   display: flex;
-  flex: 999 1 12rem;
+  flex: 999 1 calc(var(--wg-space-8) * 6);
   flex-wrap: wrap;
-  font-family: var(--wg-font-mono);
-  font-size: var(--wg-text-mono);
   min-width: 0;
-  padding: 0.2rem 0.75rem;
-  row-gap: 0.2rem;
+  padding: 0 var(--wg-space-2);
 }
 
-.keys-bar-help {
-  background: transparent;
-  border: 1px solid var(--wg-border-default);
-  border-radius: 0.25rem;
-  /* Reads in the text colour, not the list's muted one. */
-  color: var(--wg-fg);
-  cursor: pointer;
-  padding: 0 0.5rem;
+.keys-bar-hint {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--wg-space-1);
+}
+
+.keys-bar-label {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
 }

@@ -19,11 +19,11 @@
 /* The title bar drags the window; its controls take clicks. Its padding
    leaves room for the OS window buttons. Its three tracks, `start`, `center`
    and `end`, sit in grid columns, the outer two always equal, so the centre
-   sits centred on the window; the centre track is at most 60% of the bar. */
+   sits centred on the window; the centre track is at most 60% of the bar.
+   The layout gives it its material. */
 .shell-title-bar {
   align-items: center;
-  background: var(--wg-material-chrome-bg);
-  border-bottom: 1px solid var(--wg-border-subtle);
+  border-bottom: 1px solid var(--wg-material-chrome-edge);
   display: grid;
   grid-area: title;
   grid-template-columns: minmax(0, 1fr) fit-content(60%) minmax(0, 1fr);
@@ -106,14 +106,18 @@
   white-space: nowrap;
 }
 
+.title-bar-context-title {
+  font-weight: var(--wg-weight-medium);
+}
+
 .title-bar-context-detail {
   color: var(--wg-fg-secondary);
   margin-inline-start: var(--wg-space-2);
 }
 
+/* Each chrome bar draws one hairline, on its edge toward the content. */
 .shell-activity-bar {
-  background: var(--wg-material-chrome-bg);
-  border-right: 1px solid var(--wg-border-default);
+  border-right: 1px solid var(--wg-material-chrome-edge);
   display: flex;
   flex-direction: column;
   grid-area: activity;
@@ -122,7 +126,7 @@
 }
 
 /* A mode's icon button; the shown mode's carries the accent mark along its
-   window-side edge. */
+   window-side edge. Hover is a plain fill, as for any control on glass. */
 .activity-item {
   align-items: center;
   background: transparent;
@@ -142,26 +146,29 @@
   color: var(--wg-fg);
 }
 
+.activity-item:hover {
+  background: var(--wg-button-ghost-hover);
+}
+
 .activity-item.is-shown {
   box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-accent);
 }
 
-/* Opaque `block-background`, the dense chrome material's reduced value, as
-   nothing blurs behind it yet; the material-chrome--dense helper takes it
-   back to the translucent material. */
+/* Its padding insets the rounded hover and selection fills of the list in
+   it. */
 .shell-side-bar {
-  background: var(--wg-block-background);
-  border-right: 1px solid var(--wg-border-default);
+  border-right: 1px solid var(--wg-material-chrome-edge);
   grid-area: side;
   min-height: 0;
   overflow-y: auto;
+  padding: var(--wg-space-1);
   width: var(--wg-sidebar-width);
 }
 
 /* Over the content, the side bar lies on the main and panel cell while its
-   own column collapses. */
+   own column collapses; it keeps its glass and hairline, and casts no
+   shadow. */
 .shell-side-bar[data-side-bar='over'] {
-  box-shadow: 0 0 var(--wg-space-4) var(--wg-window-background);
   grid-column: 3;
   grid-row: 2 / 4;
   justify-self: start;
@@ -183,7 +190,7 @@
 
 .shell-panel {
   background: var(--wg-sheet-background);
-  border-top: 1px solid var(--wg-border-default);
+  border-top: 1px solid var(--wg-material-chrome-edge);
   grid-area: panel;
   min-width: 0;
 }
@@ -191,8 +198,13 @@
 /* Core items first, then what plugins contribute; an item that does not fit
    beside the others in its track takes a row of its own. */
 .shell-status-bar {
+  align-items: center;
+  border-top: 1px solid var(--wg-material-chrome-edge);
+  color: var(--wg-fg-secondary);
   display: flex;
+  font-size: var(--wg-text-12);
   grid-area: status;
+  min-height: var(--wg-statusbar-height);
   min-width: 0;
 }
 
@@ -201,20 +213,15 @@
   flex-wrap: wrap;
 }
 
-/* The theme problem, styled as a status line part until it is fixed: it fills
-   its row when alone on it, and its text wraps inside that row. */
+/* The config problem, on the status bar's material until it is fixed: it
+   fills its row when alone on it, and its text wraps inside that row. */
 .status-error {
   align-items: center;
-  background: var(--wg-material-chrome-bg);
-  border-top: 1px solid var(--wg-border-default);
   color: var(--wg-status-error);
   display: flex;
   flex: 1 1 auto;
-  font-family: var(--wg-font-mono);
-  font-size: var(--wg-text-mono);
   min-width: 0;
-  padding: var(--wg-space-0_5) var(--wg-space-1) var(--wg-space-0_5)
-    var(--wg-space-3);
+  padding: 0 var(--wg-space-3);
 }
 
 /* Over everything, with no hit area of its own: only what is drawn in it
