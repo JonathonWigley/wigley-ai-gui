@@ -98,6 +98,17 @@ describe('createNodeFiles', () => {
     expect(await files.read(file)).toBe('hello');
   });
 
+  it('writeBytes_BinaryBytes_ReadBackTheSameBytes', async () => {
+    const file = path.join(root, 'x', 'shot.png');
+
+    await files.writeBytes(file, new Uint8Array([0, 255, 137]));
+
+    expect([...readFileSync(file)]).toEqual([0, 255, 137]);
+    expect(await files.list(path.join(root, 'x'))).toEqual([
+      { path: 'shot.png', kind: 'file' },
+    ]);
+  });
+
   it('write_ExistingFile_LeavesNoTempFileBehind', async () => {
     const file = path.join(root, 'z.txt');
 

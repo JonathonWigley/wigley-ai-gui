@@ -2,16 +2,20 @@ import type { Clock } from '../contracts/ambient';
 import type { FileEntry, Files, FileStat } from '../contracts/files';
 import { resolveInside } from './scoped-files';
 
-// `Files` held in memory, the double plugin tests use. `write`, `rename`,
-// `trash` and `remove` report each changed file's path to the watches over it
-// at once, with no debounce, so a test drives a save by writing; a rename
-// reports each moved file's old path and its new one. A watch never fails, so
-// it never calls its `onError`. There are no links, so `stat` reports none and
-// `realPath` returns the path's stored spelling. Names are case-sensitive.
+// `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
+// `rename`, `trash` and `remove` report each changed file's path to the
+// watches over it at once, with no debounce, so a test drives a save by
+// writing; a rename reports each moved file's old path and its new one. A
+// watch never fails, so it never calls its `onError`. There are no links, so
+// `stat` reports none and `realPath` returns the path's stored spelling. Names
+// are case-sensitive.
 export interface MemoryFiles extends Files {
   // Deletes the file at `path`, or the folder at `path` and everything under
   // it; the folder holding `path` stays.
   remove(path: string): void;
+  // The file's bytes as `writeBytes` stored them, or its text as UTF-8.
+  // Throws, as `isMissingFile` tells, when the file is missing.
+  readBytes(path: string): Uint8Array;
 }
 
 interface MemoryWatch {
@@ -24,10 +28,11 @@ interface MemoryWatch {
 // under it; the top folder always exists. A path's leading `/` is optional:
 // `/a/b` and `a/b` name one file. Each call that meets a file where a folder
 // must be, or a folder where a file must be, rejects with the code Node's fs
-// gives. Each `write` stamps the file's `modified` time with `clock.now()`,
-// or `0` with no clock; `rename` carries a file's stamp to its new path.
+// gives. Each `write` and `writeBytes` stamps the file's `modified` time with
+// `clock.now()`, or `0` with no clock; `rename` carries a file's stamp to its
+// new path.
 export function createMemoryFiles(clock?: Clock): MemoryFiles {
-  const texts = new Map<string, string>();
+  const contents = new Map<string, string | Uint8Array>();
   const modifiedTimes = new Map<string, number>();
   const madeFolders = new Set<string>();
   const watches = new Set<MemoryWatch>();
@@ -44,12 +49,12 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
   const isFolder = (key: string): boolean =>
     key === '' ||
     madeFolders.has(key) ||
-    [...texts.keys(), ...madeFolders].some(
+    [...contents.keys(), ...madeFolders].some(
       (inside) => relativeUnder(key, inside) !== null,
     );
 
   const statKey = (key: string): FileStat | null => {
-    if (texts.has(key)) {
+    if (contents.has(key)) {
       return { isFolder: false, isLink: false };
     }
     return isFolder(key) ? { isFolder: true, isLink: false } : null;
@@ -57,7 +62,7 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
 
   const hasFileAbove = (key: string): boolean => {
     for (let above = parentOf(key); above !== ''; above = parentOf(above)) {
-      if (texts.has(above)) {
+      if (contents.has(above)) {
         return true;
       }
     }
@@ -67,7 +72,7 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
   // Rejects as Node's recursive `mkdir` does when a file is at `key` or above
   // it.
   const requireFolderCanBeMade = (key: string, path: string) => {
-    if (texts.has(key)) {
+    if (contents.has(key)) {
       throw codedError(`${path} is a file`, 'EEXIST');
     }
     if (hasFileAbove(key)) {
@@ -91,19 +96,39 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
     for (const folder of atOrUnder(madeFolders, target)) {
       madeFolders.delete(folder);
     }
-    for (const file of atOrUnder(texts.keys(), target)) {
-      texts.delete(file);
+    for (const file of atOrUnder(contents.keys(), target)) {
+      contents.delete(file);
       modifiedTimes.delete(file);
       report(file);
     }
   };
 
-  const textOf = (path: string): string => {
-    const text = texts.get(keyOf(path));
-    if (text === undefined) {
+  const contentOf = (path: string): string | Uint8Array => {
+    const content = contents.get(keyOf(path));
+    if (content === undefined) {
       throw missingError(`no file at ${path}`);
     }
-    return text;
+    return content;
+  };
+
+  const textOf = (path: string): string => {
+    const content = contentOf(path);
+    return typeof content === 'string'
+      ? content
+      : new TextDecoder('utf-8').decode(content);
+  };
+
+  // Stores `content` at `path` and reports it, as `write` and `writeBytes`
+  // both do.
+  const store = (path: string, content: string | Uint8Array) => {
+    const file = keyOf(path);
+    requireFolderCanBeMade(parentOf(file), parentOf(file));
+    if (isFolder(file)) {
+      throw codedError(`${path} is a folder`, 'EISDIR');
+    }
+    contents.set(file, content);
+    modifiedTimes.set(file, clock?.now() ?? 0);
+    report(file);
   };
 
   return {
@@ -118,19 +143,12 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
       // emitting U+FFFD.
       return new TextDecoder('utf-8').decode(bytes, { stream: true });
     },
-    write: async (path, text) => {
-      const file = keyOf(path);
-      requireFolderCanBeMade(parentOf(file), parentOf(file));
-      if (isFolder(file)) {
-        throw codedError(`${path} is a folder`, 'EISDIR');
-      }
-      texts.set(file, text);
-      modifiedTimes.set(file, clock?.now() ?? 0);
-      report(file);
-    },
+    write: async (path, text) => store(path, text),
+    // A copy, so the caller may reuse its buffer.
+    writeBytes: async (path, bytes) => store(path, bytes.slice()),
     list: async (folder, options) =>
       listUnder(
-        texts.keys(),
+        contents.keys(),
         madeFolders,
         keyOf(folder),
         options?.recursive ?? false,
@@ -179,12 +197,12 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
         madeFolders.delete(folder);
         madeFolders.add(moved(folder));
       }
-      const movedTexts = [...texts].filter(([file]) =>
+      const movedContents = [...contents].filter(([file]) =>
         isAtOrUnder(fromKey, file),
       );
-      for (const [file, text] of movedTexts) {
-        texts.delete(file);
-        texts.set(moved(file), text);
+      for (const [file, content] of movedContents) {
+        contents.delete(file);
+        contents.set(moved(file), content);
         modifiedTimes.set(moved(file), modifiedTimes.get(file) ?? 0);
         modifiedTimes.delete(file);
         report(file);
@@ -199,6 +217,12 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
       removeKey(key);
     },
     remove: (path) => removeKey(keyOf(path)),
+    readBytes: (path) => {
+      const content = contentOf(path);
+      return typeof content === 'string'
+        ? new TextEncoder().encode(content)
+        : content.slice();
+    },
   };
 }
 

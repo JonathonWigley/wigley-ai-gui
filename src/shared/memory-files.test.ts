@@ -25,6 +25,12 @@ describe('createMemoryFiles', () => {
     expect(await stamped.modified('/h/a.md')).toBe(7000);
   });
 
+  it('writeBytes_BinaryBytes_HoldsTheSameBytes', async () => {
+    await files.writeBytes('/h/shot.png', new Uint8Array([0, 255, 137]));
+
+    expect([...files.readBytes('/h/shot.png')]).toEqual([0, 255, 137]);
+  });
+
   it('modified_NoClock_IsZero', async () => {
     await files.write('/h/a.md', 'one');
 

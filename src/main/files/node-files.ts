@@ -37,7 +37,7 @@ const TEMP_FILE = /^\..+\.[0-9a-f]{8}\.tmp$/;
 
 export interface NodeFilesOptions {
   // Moves a path to the OS Trash; main.ts passes Electron's shell.trashItem,
-  // or a recursive rm under the self-test.
+  // or a recursive rm under the self-test and a drive run.
   trashItem: (path: string) => Promise<void>;
 }
 
@@ -49,6 +49,7 @@ export function createNodeFiles(options: NodeFilesOptions): Files {
     modified: async (file) => Math.trunc((await stat(file)).mtimeMs),
     readStart: readFirstBytes,
     write: writeAtomically,
+    writeBytes: writeAtomically,
     list: listFolder,
     watch: watchDebounced,
     stat: statPath,
@@ -176,7 +177,11 @@ async function lstatOrNull(file: string): Promise<Stats | null> {
   }
 }
 
-async function writeAtomically(file: string, text: string): Promise<void> {
+// Text is written as UTF-8.
+async function writeAtomically(
+  file: string,
+  content: string | Uint8Array,
+): Promise<void> {
   const folder = path.dirname(file);
   const temp = path.join(
     folder,
@@ -184,7 +189,7 @@ async function writeAtomically(file: string, text: string): Promise<void> {
   );
   await mkdir(folder, { recursive: true });
   try {
-    await writeFile(temp, text, 'utf8');
+    await writeFile(temp, content, 'utf8');
     await rename(temp, file);
   } catch (error) {
     await rm(temp, { force: true });

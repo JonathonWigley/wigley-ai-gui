@@ -28,11 +28,12 @@ export function resolveInside(root: string, path: string): string | null {
 
 // `files` with every path relative to `root`. A path `resolveInside` refuses
 // fails with `<path> is outside <root>` before any I/O: `read`, `modified`,
-// `readStart`, `write`, `list`, `stat`, `realPath`, `makeFolder`, `rename`
-// (either path) and `trash` reject, and `watch` throws. `realPath` returns the resolved path relative to
-// `root`'s own real path (`` for `root` itself), its segments joined with
-// `/` whichever separator the adapter returns, and rejects
-// `<path> is outside <root>` when a link leads out of `root`.
+// `readStart`, `write`, `writeBytes`, `list`, `stat`, `realPath`,
+// `makeFolder`, `rename` (either path) and `trash` reject, and `watch` throws.
+// `realPath` returns the resolved path relative to `root`'s own real path (``
+// for `root` itself), its segments joined with `/` whichever separator the
+// adapter returns, and rejects `<path> is outside <root>` when a link leads
+// out of `root`.
 export function scopedFiles(files: Files, root: string): Files {
   const outside = (path: string) => new Error(`${path} is outside ${root}`);
   const inside = (path: string): string => {
@@ -48,6 +49,7 @@ export function scopedFiles(files: Files, root: string): Files {
     readStart: async (path, maxBytes) =>
       files.readStart(inside(path), maxBytes),
     write: async (path, text) => files.write(inside(path), text),
+    writeBytes: async (path, bytes) => files.writeBytes(inside(path), bytes),
     list: async (folder, options) => files.list(inside(folder), options),
     watch: (folder, onChange, onError) =>
       files.watch(inside(folder), onChange, onError),

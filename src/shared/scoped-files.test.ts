@@ -30,6 +30,15 @@ describe('scopedFiles', () => {
     expect(await inner.list('/', { recursive: true })).toEqual([]);
   });
 
+  it('writeBytes_ParentEscape_RejectsBeforeWriting', async () => {
+    const scoped = scopedFiles(inner, ROOT);
+
+    await expect(
+      scoped.writeBytes('../x.png', new Uint8Array([1])),
+    ).rejects.toThrow(`../x.png is outside ${ROOT}`);
+    expect(await inner.list('/', { recursive: true })).toEqual([]);
+  });
+
   it('write_AbsolutePath_Rejects', async () => {
     const scoped = scopedFiles(inner, ROOT);
 

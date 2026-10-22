@@ -1,38 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { CHORD_NOTATION_RULE } from '../../shared/chord-notation';
-import type { DrivenInput, DrivenWindow } from './driven-window';
+import { fakeDrivenWindow } from './fake-driven-window';
 import { click, press, waitFor, waitForNewLogLine } from './page-driver';
-
-// A window that records the input it is sent and answers each script `run`
-// gets from the first table entry whose fragment the script holds.
-function fakeWindow(answers: [fragment: string, answer: () => unknown][] = []) {
-  const inputs: DrivenInput[] = [];
-  const window: DrivenWindow = {
-    sendInput: (input) => inputs.push(input),
-    async run<T>(script: string) {
-      const entry = answers.find(([fragment]) => script.includes(fragment));
-      if (entry === undefined) {
-        throw new Error(`The fake window has no answer for ${script}`);
-      }
-      return entry[1]() as T;
-    },
-    capture: async () => null,
-    contentSize: () => ({ width: 800, height: 600 }),
-    minimumWidth: () => 400,
-    setContentWidth: () => {},
-    setSize: () => {},
-    focus: () => {},
-    hasPaintedSinceNavigation: () => true,
-    onFrame: () => ({ dispose: () => {} }),
-    onConsole: () => ({ dispose: () => {} }),
-  };
-  return { window, inputs };
-}
 
 describe('waitForNewLogLine', () => {
   it('waitForNewLogLine_LineLoggedOnThirdRead_ResolvesTrue', async () => {
     let reads = 0;
-    const { window } = fakeWindow([
+    const { window } = fakeDrivenWindow([
       ['#log li', () => (++reads >= 3 ? ['[x] done'] : [])],
     ]);
 
@@ -52,7 +26,7 @@ describe('waitFor', () => {
 
 describe('press', () => {
   it('press_AltChord_SendsKeyDownAndUpWithAltAndNoChar', () => {
-    const { window, inputs } = fakeWindow();
+    const { window, inputs } = fakeDrivenWindow();
 
     press(window, '<A-o>');
 
@@ -63,7 +37,7 @@ describe('press', () => {
   });
 
   it('press_CapitalLetter_SendsShiftAndTheChar', () => {
-    const { window, inputs } = fakeWindow();
+    const { window, inputs } = fakeDrivenWindow();
 
     press(window, 'G');
 
@@ -75,7 +49,7 @@ describe('press', () => {
   });
 
   it('press_MalformedChord_ThrowsNamingTheChordRule', () => {
-    const { window } = fakeWindow();
+    const { window } = fakeDrivenWindow();
 
     expect(() => press(window, '<X-q>')).toThrow(CHORD_NOTATION_RULE);
   });
@@ -83,7 +57,7 @@ describe('press', () => {
 
 describe('click', () => {
   it('click_LeftOnce_PressesAndReleasesAtTheBoxCentre', async () => {
-    const { window, inputs } = fakeWindow();
+    const { window, inputs } = fakeDrivenWindow();
 
     await click(window, { x: 10, y: 20, width: 100, height: 40 }, 'left', 1);
 

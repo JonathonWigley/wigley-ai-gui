@@ -18,8 +18,8 @@ export interface FileWatch {
   close(): void;
 }
 
-// UTF-8 text files, read whole or by their first bytes and written whole, and
-// the folders that hold them.
+// UTF-8 text files, read whole or by their first bytes and written whole,
+// binary files written whole, and the folders that hold them.
 export interface Files {
   // Rejects when the file is missing with an error naming the path, which
   // `isMissingFile` tells from every other failure.
@@ -34,6 +34,9 @@ export interface Files {
   // Atomic: writes a temp file `.<name>.<8 hex>.tmp` beside the target and
   // renames it over the target, creating missing parent folders first.
   write(path: string, text: string): Promise<void>;
+  // `write` for bytes: atomic through the same temp file, creating missing
+  // parent folders first.
+  writeBytes(path: string, bytes: Uint8Array): Promise<void>;
   // The entries under `folder`, every level of them when `recursive`, in no
   // set order. A missing folder lists as `[]`.
   list(folder: string, options?: { recursive?: boolean }): Promise<FileEntry[]>;
