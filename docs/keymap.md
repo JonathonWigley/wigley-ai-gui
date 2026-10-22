@@ -41,7 +41,9 @@ hjkl is the direction in every layer; the modifier picks the verb.
   create by path beside `a`, `R` rescan.
 - **Ctrl+hjkl** moves inside the content: `Ctrl+j`/`Ctrl+k` scroll half a page in the rendered doc
   and the chat transcript, and page the gallery a whole page (in forms, the next and previous box);
-  `Ctrl+h`/`Ctrl+l` the previous and next unit (forms items).
+  `Ctrl+h`/`Ctrl+l` the previous and next unit (forms items). A chord bind takes the key from vim
+  inside a box too, as forms' `Ctrl+j` does: in the chat box vim's insert-mode `Ctrl+j` and
+  `Ctrl+k` (digraph) do not reach vim, by design.
 - **Alt+hjkl** moves focus between panes (`Alt+h`/`Alt+l` between the docs tree and the doc).
   Reserved for when the app has them: `Alt+Shift+hjkl` resize, `Ctrl+Alt+hjkl` swap,
   `Alt+'` / `Alt+;` split, `Alt+w` close a pane.
@@ -58,17 +60,22 @@ hjkl is the direction in every layer; the modifier picks the verb.
 The first key after the leader is the group. The next is the item's first letter, a doubled key
 is the group's main action, `n`/`p` are next and previous, and uppercase is a variant.
 
-| Key                | Group                          | Binds today                                                            |
-| ------------------ | ------------------------------ | ---------------------------------------------------------------------- |
-| `<Leader><Leader>` | the current context's overview | forms review                                                           |
-| `?`                | help                           | key help                                                               |
-| `;`                | close                          | close session                                                          |
-| `k`                | windows and modes              | `ks` Sessions, `kd` Docs, `kn` new session                             |
-| `f`                | find                           | reserved: `ff` file, `fs` text, `fa` command palette                   |
-| `c`                | chat controls (box)            | `cm` mode, `ce` effort, `co` model, `cc` every control                 |
-| `a`                | forms answer (box)             | `a1`…`a9`, `ac` clear, `af` fix now, `au` follow-up, `as` leave it     |
-| `x`                | forms not applicable (box)     | `x`                                                                    |
-| `z`                | debug and testing              | `zl` forms layouts, `zc` chat layouts, `zg` gallery, `zs` shell layout |
+| Key                | which-key name                       | Binds today                                                                       |
+| ------------------ | ------------------------------------ | --------------------------------------------------------------------------------- |
+| `<Leader><Leader>` | none: the current context's overview | forms review, on the page and in a box                                            |
+| `?`                | none: help                           | key help                                                                          |
+| `;`                | none: close                          | close session                                                                     |
+| `k`                | windows                              | `ks` Sessions, `kd` Docs, `kn` new session                                        |
+| `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                              |
+| `c`                | chat controls                        | in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control             |
+| `a`                | answer                               | in a box only: `a1`…`a9`, `ac` clear, `af` fix now, `au` follow-up, `as` leave it |
+| `x`                | none: forms not applicable           | in a box only: `x`                                                                |
+| `z`                | debug                                | `zg` gallery, `zs` shell layout                                                   |
+| `zl`               | forms layouts                        | `zln` next, `zlp` previous, `zlc` copy, `zlo` open preview                        |
+| `zc`               | chat layouts                         | `zcn` next, `zcp` previous, `zcc` copy                                            |
+
+A row named `none` is a prefix without a `groups` entry; which-key labels it from its commands'
+groups, and its description here is only for readers of this table.
 
 Reserved to match Rider and Neovim, for when the app has the action: `.` context actions, `i`
 info, `e` errors and attention (`en`/`ep`), `j` jump to session N, `s` search, `o` open (config
