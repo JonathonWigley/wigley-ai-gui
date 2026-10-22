@@ -277,12 +277,29 @@ function splitFlags(argv: string[]): { flags: Flags; positionals: string[] } {
 
 function setValueFlag(flags: Flags, flag: string, value: string): void {
   if (flag === '--run') {
-    flags.run = value;
+    flags.run = runIdOf(value);
   } else if (flag === '--harness') {
     flags.harness = value;
   } else {
     flags.plugin = value;
   }
+}
+
+// A `--run` id names one folder inside `.drive/`: it is not empty or `.`, and
+// holds no `/`, `\` or `..`.
+function runIdOf(value: string): string {
+  const leavesItsFolder =
+    value === '' ||
+    value === '.' ||
+    value.includes('..') ||
+    value.includes('/') ||
+    value.includes('\\');
+  if (leavesItsFolder) {
+    throw new Error(
+      `--run takes a run id inside .drive/, with no /, \\ or .., not ${JSON.stringify(value)}`,
+    );
+  }
+  return value;
 }
 
 // Throws on a flag `command` does not take; every command takes `--run`.

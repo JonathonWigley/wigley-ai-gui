@@ -107,6 +107,20 @@ describe('parseDriveArgs', () => {
     });
   });
 
+  it.each(['../x', '..', 'a/b', 'a\\b', '.', ''])(
+    'GIVEN --run %j WHEN parsed THEN it throws naming --run, so the run folder stays inside .drive/',
+    (run) => {
+      expect(() => parseDriveArgs(['quit', '--run', run])).toThrow('--run');
+    },
+  );
+
+  it("GIVEN --run '20261022-101500-ab12' WHEN parsed THEN the run is that id", () => {
+    expect(parseDriveArgs(['quit', '--run', '20261022-101500-ab12'])).toEqual({
+      kind: 'quit',
+      run: '20261022-101500-ab12',
+    });
+  });
+
   it("GIVEN argv ['query', ':root', '--wg-accent'] WHEN parsed THEN it throws naming --wg-accent", () => {
     expect(() => parseDriveArgs(['query', ':root', '--wg-accent'])).toThrow(
       '--wg-accent',

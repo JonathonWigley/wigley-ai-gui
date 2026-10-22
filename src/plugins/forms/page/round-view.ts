@@ -85,8 +85,9 @@ interface RoundParts {
 
 // One open round's DOM, built with its editors: a split with the rail in its
 // start pane, and the layout's head, every item's card and the review with
-// the round note in its end pane. A render only updates it; a new layout
-// rebuilds both panes, keeping the rail's dragged width. A keymap change
+// the round note in its end pane. A render only updates it, the rail taking
+// the latest dragged width of any round; a new layout rebuilds both panes,
+// keeping the rail's dragged width. A keymap change
 // draws the layout's head again, shown or hidden, since showing the view only
 // updates it; while the view shows, the change also updates it with the round
 // it last showed, so every key hint reads the new keys. `attach` places the
@@ -120,6 +121,9 @@ export function createRoundView(
   const view: RoundView = {
     element: root,
     update(current, viewName) {
+      // Every round's rail shares one stored width, and the view is updated
+      // each time it is shown, so this picks up another round's drag.
+      split.reloadWidth();
       shownView = viewName;
       shownRound = current;
       const isForms = viewName === 'forms';

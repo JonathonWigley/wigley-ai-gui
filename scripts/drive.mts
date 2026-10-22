@@ -2,7 +2,7 @@
 // `.drive/<run-id>/`, sends commands to the running app over its local HTTP
 // server, quits it or restarts it into the same run folder, and prints help.
 // `scripts/drive-args.mts` holds the forms; the app serves the commands.
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import {
   closeSync,
@@ -337,17 +337,29 @@ async function restart(runId: string): Promise<void> {
 
 // Asks the run's app to quit and waits for it and the process `start` spawned
 // to exit; when they do not exit in time, as when the app's main process is
-// itself stuck, its processes are terminated instead.
+// itself stuck, its processes are terminated instead. A recorded pid that is
+// alive but no longer the run's, as after a crash left the files behind and
+// the pid was reused, is skipped and named.
 async function stop(runId: string): Promise<void> {
+  const runDir = runDirOf(runId);
   const startFile = readStartFile(runId);
-  const drive = readDriveFile(runDirOf(runId));
-  const pids = [...(drive === null ? [] : [drive.pid]), startFile.pid];
+  const drive = readDriveFile(runDir);
+  const recorded = [...(drive === null ? [] : [drive.pid]), startFile.pid];
+  const pids = recorded.filter((pid) => {
+    const isOthers = isAlive(pid) && !isRunProcess(pid, runDir);
+    if (isOthers) {
+      console.log(
+        `Run ${runId} recorded pid ${pid}, which is now another process; leaving it alone`,
+      );
+    }
+    return !isOthers;
+  });
   await send(runId, 'quit', {}, ANSWER_CHECK_MS);
   if (!(await waitForExit(pids))) {
     console.log(
       `Run ${runId} did not quit within ${QUIT_TIMEOUT_MS / 1000} s; terminating it`,
     );
-    for (const pid of pids.filter(isAlive)) {
+    for (const pid of pids.filter((pid) => isRunProcess(pid, runDir))) {
       process.kill(pid, 'SIGTERM');
     }
     if (!(await waitForExit(pids))) {
@@ -369,6 +381,35 @@ async function waitForExit(pids: number[]): Promise<boolean> {
     await wait(POLL_MS);
   }
   return true;
+}
+
+// Whether `pid` is a live process of the run in `runDir`: its environment
+// carries the WIGLEY_DRIVE_DIR `spawnApp` set, which the app and every
+// process it starts inherit. `ps -E` (macOS) and `ps e` (Linux) print the
+// environment after the command line. Windows has no cheap way to read
+// another process's environment or command line, so there every live pid
+// counts as the run's.
+function isRunProcess(pid: number, runDir: string): boolean {
+  if (process.platform === 'win32') {
+    return isAlive(pid);
+  }
+  const environmentFlag = process.platform === 'darwin' ? '-E' : 'e';
+  let commandLine: string;
+  try {
+    commandLine = execFileSync(
+      'ps',
+      [environmentFlag, '-o', 'command=', '-p', String(pid)],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+  } catch {
+    // ps exits 1 when no process has the pid.
+    return false;
+  }
+  // The variables are space-separated, so the value ends at a space or the
+  // line's end; that keeps run `a` from matching run `ab`.
+  return ` ${commandLine.trim()} `.includes(
+    ` WIGLEY_DRIVE_DIR=${path.resolve(runDir)} `,
+  );
 }
 
 function isAlive(pid: number): boolean {

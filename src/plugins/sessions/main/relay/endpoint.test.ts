@@ -1,5 +1,12 @@
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -52,12 +59,41 @@ describe('channelPath', () => {
     );
   });
 
-  it('falls back to a per-home socket in /tmp past 103 bytes on macOS', () => {
-    // 82 bytes of home and 31 of `/.agents/wigley-ai-gui/app.sock`: 113.
-    const home = `/Users/u/${'d'.repeat(73)}`;
+  // 82 bytes of home and 31 of `/.agents/wigley-ai-gui/app.sock`: 113.
+  const longHome = `/Users/u/${'d'.repeat(73)}`;
+  // `wigley-ai-gui-u-<8 hex>.sock` is 29 bytes, 30 with its `/`.
+  const socketName = `wigley-ai-gui-u-${first8HexOfSha256(longHome)}.sock`;
 
-    expect(channelPath('darwin', home, 'u')).toBe(
-      `/tmp/wigley-ai-gui-u-${first8HexOfSha256(home)}.sock`,
+  it('falls back to a per-home socket in the temp folder when it fits in 103 bytes', () => {
+    const tempDir = `/T${'t'.repeat(103 - 30 - 2)}`;
+
+    expect(channelPath('darwin', longHome, 'u', tempDir)).toBe(
+      `${tempDir}/${socketName}`,
+    );
+    expect(Buffer.byteLength(`${tempDir}/${socketName}`)).toBe(103);
+  });
+
+  it('falls back to a folder of /tmp only the user can enter when the temp folder socket would be 104 bytes', () => {
+    const username = `wigley-endpoint-test-${process.pid}`;
+    const privateDir = `/tmp/wigley-ai-gui-${username}`;
+    folders.push(privateDir);
+    const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
+
+    const channel = channelPath('darwin', longHome, username, tempDir);
+
+    expect(channel).toBe(`${privateDir}/${first8HexOfSha256(longHome)}.sock`);
+    expect(statSync(privateDir).mode & 0o777).toBe(0o700);
+  });
+
+  it('throws when the /tmp folder exists open to others', () => {
+    const username = `wigley-endpoint-open-${process.pid}`;
+    const privateDir = `/tmp/wigley-ai-gui-${username}`;
+    folders.push(privateDir);
+    mkdirSync(privateDir, { mode: 0o755 });
+    const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
+
+    expect(() => channelPath('darwin', longHome, username, tempDir)).toThrow(
+      privateDir,
     );
   });
 });
