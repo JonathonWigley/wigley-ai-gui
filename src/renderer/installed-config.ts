@@ -11,10 +11,11 @@ export interface AppliedKeys {
 }
 
 // The pushed config as the page runs it: its keymap's editor and page keys and
-// its `keySequenceTimeoutMs` are the applied ones, the rest of its keymap and
-// settings as pushed, since main applies those binds itself; and when the
-// page refused the pushed keys, with `refusal` naming why, its problems carry
-// that refusal after main's.
+// its `keySequenceTimeoutMs` are the applied ones, the rest as pushed: main
+// applies the app, intercept and global binds itself, and a `groups` name only
+// labels prefixes the installed binds make, so a refused push shows at most a
+// renamed label over the old keys. When the page refused the pushed keys, with
+// `refusal` naming why, its problems carry that refusal after main's.
 export function installedConfig(
   next: AppConfig,
   applied: AppliedKeys,

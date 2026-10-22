@@ -210,6 +210,13 @@ describe('formatVimToken', () => {
     expect(formatVimToken('<S-Tab>', 'windows')).toBe('Shift+Tab');
   });
 
+  it('formatVimToken_ReturnChord_PrintsAsThePageChordDoes', () => {
+    expect(formatVimToken('<D-CR>', 'macos')).toBe(
+      formatChord('<D-Enter>', 'macos'),
+    );
+    expect(formatVimToken('<D-CR>', 'macos')).toBe('⌘↩');
+  });
+
   it('formatVimToken_SpecialCharacterName_PrintsTheCharacter', () => {
     expect(formatVimToken('<lt>', 'macos')).toBe('<');
     expect(formatVimToken('<Bar>', 'windows')).toBe('|');
