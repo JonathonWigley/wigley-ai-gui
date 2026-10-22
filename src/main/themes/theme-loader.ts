@@ -20,6 +20,13 @@ export interface ThemeTokenRegistry {
   plugins: Readonly<Record<string, TokenDecl>>;
 }
 
+// A check of resolved token values, by token, beyond each value's kind:
+// null when it takes them, or the token whose own set value it rejects and
+// why.
+export type TokenCheck = (
+  tokens: Record<string, string>,
+) => { token: string; message: string } | null;
+
 // `message` is `<file>: <problem>`.
 export class ThemeError extends Error {
   readonly file: string;
@@ -597,6 +604,20 @@ function checkWindowBackground(
   }
 }
 
+// Runs `check` on `values`, throwing its problem on the file that set the
+// token it names, or on `selectedFile` for a token no file set.
+function runTokenCheck(
+  check: TokenCheck,
+  values: Map<string, SetValue & { value: string }>,
+  selectedFile: string,
+): void {
+  const problem = check(plainValues(values));
+  if (problem !== null) {
+    const file = values.get(problem.token)?.file ?? selectedFile;
+    throw new ThemeError(file, problem.message);
+  }
+}
+
 function plainValues(
   values: Map<string, SetValue & { value: string }>,
 ): Record<string, string> {
@@ -609,13 +630,15 @@ function plainValues(
 // by its kind. `builtIns` are the built-in themes' parsed JSON; `userThemes`
 // the user's theme files, which win over a built-in of the same name except
 // for a theme extending its own name. Only the chain is checked, beyond a user
-// file that does not parse or has no name. Throws `ThemeError` on any
+// file that does not parse or has no name. `check` runs on the resolved
+// tokens and on them with `reduced` over them. Throws `ThemeError` on any
 // failure, naming the file that set the bad value.
 export function resolveTheme(
   name: string,
   builtIns: readonly unknown[],
   userThemes: readonly ThemeFileText[],
   tokens: ThemeTokenRegistry,
+  check: TokenCheck = () => null,
 ): Theme {
   const builtInByName = builtInSources(builtIns);
   const users = userSources(userThemes);
@@ -648,6 +671,8 @@ export function resolveTheme(
   checkReferences(tokensUnderReduced, tokens, byVariable, order, selectedFile);
   checkWindowBackground(resolvedTokens);
   checkWindowBackground(resolvedReduced);
+  runTokenCheck(check, resolvedTokens, selectedFile);
+  runTokenCheck(check, tokensUnderReduced, selectedFile);
 
   return {
     name: chain[0].name,

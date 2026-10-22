@@ -34,6 +34,7 @@ import {
   ThemeError,
   type ThemeFileText,
   type ThemeTokenRegistry,
+  type TokenCheck,
 } from '../themes/theme-loader';
 import { parseUserKeymap } from './user-keymap';
 import { mergeUserSettings, type UserSettings } from './user-settings';
@@ -47,8 +48,8 @@ export interface ConfigStore {
 }
 
 // `folder` is the absolute user config folder; `resolveTheme` resolves a
-// theme as the theme loader does; `checkTheme` throws on a resolved theme the
-// native window cannot take, its message naming the token; `log` takes the
+// theme as the theme loader does, running `checkTokens`, the check of the
+// tokens the native window takes, on every theme it resolves; `log` takes the
 // store's own lines.
 export interface ConfigStoreDeps {
   files: Files;
@@ -62,8 +63,8 @@ export interface ConfigStoreDeps {
   manifests: readonly PluginManifest[];
   builtInThemes: readonly unknown[];
   themeTokens: ThemeTokenRegistry;
-  resolveTheme: typeof resolveTheme;
-  checkTheme: (theme: Theme) => void;
+  resolveTheme: (...args: Required<Parameters<typeof resolveTheme>>) => Theme;
+  checkTokens: TokenCheck;
   platform: Platform;
   log: Log;
 }
@@ -103,18 +104,6 @@ function requireNoCoreSettingIds(
         `Plugin "${manifest.id}" has the name of a core setting, so its settings cannot sit under its id`,
       );
     }
-  }
-}
-
-// The `name` a theme file's JSON holds, or null when it has none; the theme
-// loader has already rejected a selected file that does not parse.
-function themeNameOf(text: ThemeFileText): string | null {
-  try {
-    const json: unknown = JSON.parse(text.text);
-    const name = (json as { name?: unknown } | null)?.name;
-    return typeof name === 'string' ? name : null;
-  } catch {
-    return null;
   }
 }
 
@@ -160,8 +149,8 @@ export async function loadConfigStore(
     deps.builtInThemes,
     [],
     deps.themeTokens,
+    deps.checkTokens,
   );
-  deps.checkTheme(defaultTheme);
   let slices: Slices = {
     settings: { settings: deps.defaults, pluginSettings: fixed.pluginDefaults },
     keymap: fixed.defaultKeymap,
@@ -265,29 +254,6 @@ export async function loadConfigStore(
     }
   };
 
-  // The theme `name` names, resolved and checked. A `checkTheme` failure is a
-  // ThemeError on the user file holding the theme, or on the built-in.
-  const checkedTheme = (
-    name: string,
-    userTexts: readonly ThemeFileText[],
-  ): Theme => {
-    const theme = deps.resolveTheme(
-      name,
-      deps.builtInThemes,
-      userTexts,
-      deps.themeTokens,
-    );
-    try {
-      deps.checkTheme(theme);
-    } catch (error) {
-      const file =
-        userTexts.find((text) => themeNameOf(text) === name)?.file ??
-        `built-in theme ${name}`;
-      throw new ThemeError(file, errorText(error));
-    }
-    return theme;
-  };
-
   // A theme error naming `settings.json` or a user file is the user's to fix;
   // any other is the app's, which fails the first read and after it only
   // reports, since a running app never stops on a config edit.
@@ -298,7 +264,13 @@ export async function loadConfigStore(
     problems: ConfigProblem[],
   ) => {
     try {
-      return checkedTheme(name, userTexts);
+      return deps.resolveTheme(
+        name,
+        deps.builtInThemes,
+        userTexts,
+        deps.themeTokens,
+        deps.checkTokens,
+      );
     } catch (error) {
       const isUsersFile =
         error instanceof ThemeError &&

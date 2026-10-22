@@ -3,6 +3,7 @@ import {
   resolveTheme,
   type ThemeFileText,
   type ThemeTokenRegistry,
+  type TokenCheck,
 } from './theme-loader';
 
 const registry: ThemeTokenRegistry = {
@@ -162,6 +163,38 @@ describe('resolveTheme', () => {
     expect(() => resolveTheme('child', [], [base, child], registry)).toThrow(
       'base.json: token "space-2": "8" is not a length value',
     );
+  });
+
+  it("names the base's file for a value set in the base that the token check rejects", () => {
+    const rejectEm: TokenCheck = (tokens) =>
+      tokens['space-2'] === '2em'
+        ? { token: 'space-2', message: 'em is out' }
+        : null;
+    const base = userFile(rootTheme('base', { 'space-2': '2em' }));
+    const child = userFile({ name: 'child', extends: 'base' });
+    const reducedBase = userFile({
+      ...rootTheme('base'),
+      reduced: { 'space-2': '2em' },
+    });
+
+    expect(() =>
+      resolveTheme('child', [], [base, child], registry, rejectEm),
+    ).toThrow('base.json: em is out');
+    expect(() =>
+      resolveTheme('child', [], [reducedBase, child], registry, rejectEm),
+    ).toThrow('base.json: em is out');
+  });
+
+  it('runs the token check on the tokens with reduced over them', () => {
+    const seen: Record<string, string>[] = [];
+    const json = { ...rootTheme('mine'), reduced: { 'space-2': '4px' } };
+
+    resolveTheme('mine', [], [userFile(json)], registry, (tokens) => {
+      seen.push(tokens);
+      return null;
+    });
+
+    expect(seen.map((tokens) => tokens['space-2'])).toEqual(['8px', '4px']);
   });
 
   it('names an alias cycle', () => {

@@ -73,6 +73,18 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: ['electron', 'electron-squirrel-startup', 'node:'],
   },
+  // Checks the shipped themes against the loader and the title bar overlay.
+  'src/main/built-in-themes.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/config',
+      'src/main',
+      'src/main/themes',
+      'src/plugins/manifests.ts',
+    ],
+    packages: [],
+  },
   'src/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/plugins/chat': {
     layers: [

@@ -77,8 +77,8 @@ import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { applySelfTestConfig } from './selftest-config';
 import { resolveTheme } from './themes/theme-loader';
 import {
-  checkTitleBarOverlay,
   titleBarOverlayOf,
+  titleBarOverlayProblem,
   windowBackgroundOf,
 } from './title-bar-overlay';
 import { loadUiStateFile, type UiStateFile } from './ui-state/ui-state-file';
@@ -235,7 +235,7 @@ function loadConfig(homeDir: string): Promise<ConfigStore> {
       plugins: pluginThemeTokens(coreThemeTokens, manifests),
     },
     resolveTheme,
-    checkTheme: checkTitleBarOverlay,
+    checkTokens: titleBarOverlayProblem,
     platform,
     log: (source, message) => {
       if (mainWindow !== null) {
@@ -358,9 +358,12 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
   );
   mainWindow = window;
   const log = pageLog(window);
-  for (const [source, message] of startLines) {
-    log(source, message);
-  }
+  // A line sent before the page loads is dropped.
+  window.webContents.once('did-finish-load', () => {
+    for (const [source, message] of startLines) {
+      log(source, message);
+    }
+  });
   const recolour = () => {
     const config = store.current();
     const isReduced = isTransparencyReduced(config);

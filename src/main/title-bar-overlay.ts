@@ -24,6 +24,22 @@ export interface TitleBarOverlay {
   height: number;
 }
 
+// A token whose own set value the overlay cannot take, and why.
+export interface OverlayTokenProblem {
+  token: string;
+  message: string;
+}
+
+class OverlayTokenError extends Error {
+  readonly token: string;
+
+  constructor(token: string, message: string) {
+    super(message);
+    this.name = 'OverlayTokenError';
+    this.token = token;
+  }
+}
+
 interface Rgba {
   red: number;
   green: number;
@@ -41,38 +57,48 @@ function tokensInForce(
 }
 
 // `token`'s value in `tokens`, following whole `var(--wg-…)` aliases (a
-// plugin token's variable dashes its dot) to a value that is not one; the
-// theme loader has already rejected alias cycles under both token sets.
-function resolvedToken(tokens: Record<string, string>, token: string): string {
+// plugin token's variable dashes its dot) to a value that is not one, and the
+// token that set that value; the theme loader has already rejected alias
+// cycles under both token sets.
+function resolvedToken(
+  tokens: Record<string, string>,
+  token: string,
+): { setBy: string; value: string } {
   const byVariable = new Map(
     Object.keys(tokens).map((name) => [
       themeVariable(name).slice('--wg-'.length),
       name,
     ]),
   );
+  let aliasedBy = token;
   let name = token;
   for (;;) {
     const value = tokens[name];
     if (value === undefined) {
-      throw new Error(`token "${token}": ${name} has no value`);
+      throw new OverlayTokenError(
+        aliasedBy,
+        `token "${token}": ${name} has no value`,
+      );
     }
     const alias = WHOLE_ALIAS.exec(value);
     if (alias === null) {
-      return value;
+      return { setBy: name, value };
     }
+    aliasedBy = name;
     name = byVariable.get(alias[1]) ?? alias[1];
   }
 }
 
 // A resolved colour token's value: `#rrggbb`, `#rrggbbaa` or `transparent`.
 function colourOf(tokens: Record<string, string>, token: string): Rgba {
-  const value = resolvedToken(tokens, token);
+  const { setBy, value } = resolvedToken(tokens, token);
   if (value === 'transparent') {
     return { red: 0, green: 0, blue: 0, alpha: 0 };
   }
   const hex = HEX_COLOUR.exec(value);
   if (hex === null) {
-    throw new Error(
+    throw new OverlayTokenError(
+      setBy,
       `token "${token}": "${value}" is not a #rrggbb, #rrggbbaa or transparent colour, which the title bar overlay needs`,
     );
   }
@@ -105,7 +131,7 @@ function hexOf(colour: Rgba): string {
 // A length token in whole px: px as written, rem against the root font size.
 // Other units hang off the element or the window, which main cannot know.
 function pxOf(tokens: Record<string, string>, token: string): number {
-  const value = resolvedToken(tokens, token);
+  const { setBy, value } = resolvedToken(tokens, token);
   const px = PX_LENGTH.exec(value);
   const rem = REM_LENGTH.exec(value);
   if (value === '0') {
@@ -117,7 +143,8 @@ function pxOf(tokens: Record<string, string>, token: string): number {
   if (rem !== null) {
     return Math.round(Number(rem[1]) * ROOT_FONT_PX);
   }
-  throw new Error(
+  throw new OverlayTokenError(
+    setBy,
     `token "${token}": "${value}" is not a px or rem length, which the title bar overlay needs`,
   );
 }
@@ -137,7 +164,10 @@ export function titleBarOverlayOf(
   theme: Theme,
   isReduced: boolean,
 ): TitleBarOverlay {
-  const tokens = tokensInForce(theme, isReduced);
+  return overlayOfTokens(tokensInForce(theme, isReduced));
+}
+
+function overlayOfTokens(tokens: Record<string, string>): TitleBarOverlay {
   const bar = composited(
     colourOf(tokens, BAR_BACKGROUND),
     colourOf(tokens, WINDOW_BACKGROUND),
@@ -149,10 +179,21 @@ export function titleBarOverlayOf(
   };
 }
 
-// Throws, naming the token, when the overlay cannot take `theme` under full
-// or reduced transparency; checked on every platform so a theme stays
-// portable.
-export function checkTitleBarOverlay(theme: Theme): void {
-  titleBarOverlayOf(theme, false);
-  titleBarOverlayOf(theme, true);
+// The problem with the first value in `tokens`, the token values the page
+// paints, that the overlay cannot take, naming the token whose own set value
+// it is (the end of an alias chain), or null when it takes them all. The theme
+// loader runs it under full and under reduced transparency on every platform,
+// so a theme stays portable.
+export function titleBarOverlayProblem(
+  tokens: Record<string, string>,
+): OverlayTokenProblem | null {
+  try {
+    overlayOfTokens(tokens);
+    return null;
+  } catch (error) {
+    if (error instanceof OverlayTokenError) {
+      return { token: error.token, message: error.message };
+    }
+    throw error;
+  }
 }

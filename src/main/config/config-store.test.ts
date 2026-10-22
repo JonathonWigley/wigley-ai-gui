@@ -6,7 +6,11 @@ import type { AppConfig, Settings } from '../../contracts/settings';
 import type { Theme } from '../../contracts/theme';
 import { definePlugin } from '../../shared/define-plugin';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
-import { ThemeError, type ThemeFileText } from '../themes/theme-loader';
+import {
+  ThemeError,
+  type ThemeFileText,
+  type TokenCheck,
+} from '../themes/theme-loader';
 import {
   type ConfigStore,
   type ConfigStoreDeps,
@@ -58,12 +62,22 @@ const listPlugin = definePlugin({
 
 // Task 01's signature: a theme named `name`, a user text of that name over a
 // built-in, `"broken": true` in the selected user text failing on its file
-// and in the selected built-in failing on a file of the app's.
+// and in the selected built-in failing on a file of the app's, and `check`'s
+// problem failing on the selected theme's file.
 function resolveTheme(
   name: string,
   builtIns: readonly unknown[],
   userThemes: readonly ThemeFileText[],
+  _tokens: unknown,
+  check: TokenCheck,
 ): Theme {
+  const checked = (resolved: Theme, file: string) => {
+    const problem = check(resolved.tokens);
+    if (problem !== null) {
+      throw new ThemeError(file, problem.message);
+    }
+    return resolved;
+  };
   const user = userThemes.find(
     (theme) => (JSON.parse(theme.text) as { name: string }).name === name,
   );
@@ -71,7 +85,7 @@ function resolveTheme(
     if ((JSON.parse(user.text) as { broken?: boolean }).broken) {
       throw new ThemeError(user.file, 'broken');
     }
-    return theme(name, user.file);
+    return checked(theme(name, user.file), user.file);
   }
   const builtIn = builtIns.find(
     (candidate) => (candidate as { name: string }).name === name,
@@ -80,7 +94,7 @@ function resolveTheme(
     if (builtIn.broken) {
       throw new ThemeError(`built-in ${name}`, 'broken');
     }
-    return theme(name, 'built-in');
+    return checked(theme(name, 'built-in'), `built-in theme ${name}`);
   }
   throw new ThemeError(
     'settings.json',
@@ -89,17 +103,16 @@ function resolveTheme(
 }
 
 function theme(name: string, source: string): Theme {
-  return { name, colorScheme: 'dark', tokens: { source }, reduced: {} };
+  return { name, colorScheme: 'dark', tokens: { name, source }, reduced: {} };
 }
 
 const GLOOM_PROBLEM = 'token "toolbar-height": "2em" is not a px length';
 
-// A `checkTheme` that rejects the theme named `gloom`.
-function rejectGloom(checked: Theme) {
-  if (checked.name === 'gloom') {
-    throw new Error(GLOOM_PROBLEM);
-  }
-}
+// A `checkTokens` that rejects the theme named `gloom`.
+const rejectGloom: TokenCheck = (tokens) =>
+  tokens.name === 'gloom'
+    ? { token: 'toolbar-height', message: GLOOM_PROBLEM }
+    : null;
 
 function load(
   files: Files,
@@ -120,7 +133,7 @@ function load(
     builtInThemes: [{ name: 'mocha' }, { name: 'dusk' }],
     themeTokens: { core: {}, plugins: {} },
     resolveTheme,
-    checkTheme: () => undefined,
+    checkTokens: () => null,
     platform: 'windows',
     log: () => undefined,
     ...overrides,
@@ -493,7 +506,7 @@ describe('loadConfigStore', () => {
     await files.write(`${FOLDER}/settings.json`, '{"theme":"dusk"}');
     await files.write(`${FOLDER}/themes/dusk.json`, '{"name":"dusk"}');
     await files.write(`${FOLDER}/themes/gloom.json`, '{"name":"gloom"}');
-    const store = await load(files, { checkTheme: rejectGloom });
+    const store = await load(files, { checkTokens: rejectGloom });
 
     const config = await writeAndWait(
       files,
@@ -515,7 +528,7 @@ describe('loadConfigStore', () => {
     await expect(
       load(files, {
         builtInThemes: [{ name: 'mocha' }, { name: 'gloom' }],
-        checkTheme: rejectGloom,
+        checkTokens: rejectGloom,
       }),
     ).rejects.toThrow(`built-in theme gloom: ${GLOOM_PROBLEM}`);
   });

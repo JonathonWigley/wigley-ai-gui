@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Theme } from '../contracts/theme';
 import {
-  checkTitleBarOverlay,
   titleBarOverlayOf,
+  titleBarOverlayProblem,
   windowBackgroundOf,
 } from './title-bar-overlay';
 
@@ -115,12 +115,31 @@ describe('titleBarOverlayOf', () => {
   });
 });
 
-describe('checkTitleBarOverlay', () => {
-  it('rejects a bad value set only under reduced transparency', () => {
-    const reducedOnly = theme(BASE, { 'toolbar-height': '10%' });
+describe('titleBarOverlayProblem', () => {
+  it('takes tokens the overlay can paint', () => {
+    expect(titleBarOverlayProblem(BASE)).toBeNull();
+  });
 
-    expect(() => checkTitleBarOverlay(reducedOnly)).toThrow(
-      'token "toolbar-height": "10%"',
+  it('names the token whose own value it rejects', () => {
+    expect(
+      titleBarOverlayProblem({ ...BASE, 'toolbar-height': '10%' }),
+    ).toEqual({
+      token: 'toolbar-height',
+      message:
+        'token "toolbar-height": "10%" is not a px or rem length, which the title bar overlay needs',
+    });
+  });
+
+  it('names the end of an alias chain as the token that set the value', () => {
+    const problem = titleBarOverlayProblem({
+      ...BASE,
+      'material-chrome-bg': 'var(--wg-forms-bar_tone)',
+      'forms.bar_tone': 'rgb(1 2 3)',
+    });
+
+    expect(problem?.token).toBe('forms.bar_tone');
+    expect(problem?.message).toContain(
+      'token "material-chrome-bg": "rgb(1 2 3)" is not a #rrggbb',
     );
   });
 });
