@@ -132,25 +132,25 @@ describe('launchCommand', () => {
 });
 
 describe('endedDriveRunLaunch', () => {
-  it('exits 1 from the run folder root, naming the run, on macOS and Linux', () => {
-    expect(endedDriveRunLaunch('darwin', '/work/app/.drive/r1')).toEqual({
+  it('exits 1 from the home filesystem root, naming the home, on macOS and Linux', () => {
+    expect(endedDriveRunLaunch('darwin', '/work/app/.drive/r1/home')).toEqual({
       command: [
         '/bin/sh',
         '-c',
         'echo "$0" >&2; exit 1',
-        'The drive run /work/app/.drive/r1 has ended',
+        'The drive run whose home is /work/app/.drive/r1/home has ended',
       ],
       cwd: '/',
     });
   });
 
-  it('exits 1 from the run folder drive root, naming the run, on Windows', () => {
-    expect(endedDriveRunLaunch('win32', 'C:\\work\\.drive\\r1')).toEqual({
+  it('exits 1 from the home drive root, naming the home, on Windows', () => {
+    expect(endedDriveRunLaunch('win32', 'C:\\work\\.drive\\r1\\home')).toEqual({
       command: [
         'cmd.exe',
         '/d',
         '/c',
-        'exit 1 & rem The drive run C:\\work\\.drive\\r1 has ended',
+        'exit 1 & rem The drive run whose home is C:\\work\\.drive\\r1\\home has ended',
       ],
       cwd: 'C:\\',
     });

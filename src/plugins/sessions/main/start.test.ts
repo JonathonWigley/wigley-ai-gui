@@ -1,25 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DriveAction, DriveHost } from '../../../contracts/plugin';
+import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import type { ConnectedSession, SessionInfo } from '../contract';
 import { addDriveActions } from './start';
-
-function fakeDriveHost() {
-  const actions = new Map<string, DriveAction>();
-  const host: DriveHost = {
-    add(name, action) {
-      actions.set(name, action);
-      return { dispose: () => actions.delete(name) };
-    },
-  };
-  const run = (name: string, args?: unknown) => {
-    const action = actions.get(name);
-    if (action === undefined) {
-      throw new Error(`no drive action ${name}`);
-    }
-    return action.run(args);
-  };
-  return { host, actions, run };
-}
 
 function fakeSessions() {
   const connectedInfo: SessionInfo[] = [];

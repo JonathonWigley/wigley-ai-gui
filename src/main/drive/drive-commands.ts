@@ -3,6 +3,14 @@ import { setTimeout as wait } from 'node:timers/promises';
 import type { Disposable } from '../../contracts/disposable';
 import { type Files, readIfPresent } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
+import {
+  optionalNumber,
+  optionalString,
+  optionalStringList,
+  requiredNumber,
+  requiredString,
+  stringList,
+} from '../../shared/drive-args';
 import { errorText } from '../../shared/error-text';
 import { isJsonObject, type JsonObject } from '../../shared/json';
 import type { DriveActions } from './action-registry';
@@ -517,40 +525,6 @@ function queryScript(selector: string, styles: string[]): string {
 })()`;
 }
 
-function requiredString(args: JsonObject, name: string): string {
-  const value = args[name];
-  if (typeof value !== 'string') {
-    throw new Error(`${name} must be a string`);
-  }
-  return value;
-}
-
-function optionalString(args: JsonObject, name: string): string | undefined {
-  return args[name] === undefined ? undefined : requiredString(args, name);
-}
-
-function requiredNumber(args: JsonObject, name: string): number {
-  const value = args[name];
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error(`${name} must be a number`);
-  }
-  return value;
-}
-
-function optionalNumber(args: JsonObject, name: string): number | undefined {
-  return args[name] === undefined ? undefined : requiredNumber(args, name);
-}
-
-function stringList(args: JsonObject, name: string): string[] {
-  const value = args[name];
-  const isStringList =
-    Array.isArray(value) && value.every((item) => typeof item === 'string');
-  if (!isStringList) {
-    throw new Error(`${name} must be a list of strings`);
-  }
-  return value;
-}
-
 // The `keys` list, rejecting an empty list and an empty key, which would
 // press nothing.
 function keyList(args: JsonObject): string[] {
@@ -561,13 +535,6 @@ function keyList(args: JsonObject): string[] {
     );
   }
   return keys;
-}
-
-function optionalStringList(
-  args: JsonObject,
-  name: string,
-): string[] | undefined {
-  return args[name] === undefined ? undefined : stringList(args, name);
 }
 
 function mouseButton(args: JsonObject): 'left' | 'right' {
