@@ -192,6 +192,20 @@ describe('parseUserKeymap', () => {
     expect(parse({ leader: '<space>' }).leader).toBe('<Space>');
   });
 
+  it.each([
+    ['<Bslash>', '\\'],
+    ['\\', '\\'],
+    ['<Bar>', '|'],
+    ['|', '|'],
+    ['<lt>', '<'],
+    ['<', '<'],
+  ])(
+    'parseUserKeymap_LeaderTypingOneCharacter_StoresTheCharacter (%s)',
+    (written, stored) => {
+      expect(parse({ leader: written }).leader).toBe(stored);
+    },
+  );
+
   it('rejects two app binds on one chord spelled two ways', () => {
     const app = [
       { accelerator: 'Cmd+Shift+K', command: 'test.open' },

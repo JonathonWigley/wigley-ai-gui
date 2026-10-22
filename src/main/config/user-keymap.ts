@@ -438,9 +438,10 @@ function readList<T>(
   );
 }
 
-// The file's `leader`: one key the page can bind that is not a chord. A named
-// key comes back spelled as vim reports it (`<space>` is `<Space>`); one
-// character comes back as written.
+// The file's `leader`: one key the page can bind that is not a chord. A key
+// that types one visible character comes back as that character, however it
+// is written (`<Bslash>` is `\`, `<lt>` is `<`); any other key comes back
+// spelled as vim reports it (`<space>` is `<Space>`).
 function readLeader(value: unknown): string {
   const leader = requireKeysString('leader', value);
   let isPageKey = true;
@@ -454,10 +455,9 @@ function readLeader(value: unknown): string {
   if (!isPageKey || !isOneKey || isChord) {
     throw new Error(LEADER_PROBLEM);
   }
-  const isNamedKey = leader.length > 1;
-  return isNamedKey
-    ? vimTokenForPageKey(pageKeysFor(leader, leader)[0])
-    : leader;
+  const pageKey = pageKeysFor(leader, leader)[0];
+  const isVisibleCharacter = /^\S$/u.test(pageKey);
+  return isVisibleCharacter ? pageKey : vimTokenForPageKey(pageKey);
 }
 
 // The file's `groups`: each key a leader prefix, each name non-empty.
