@@ -169,6 +169,7 @@ describe('whichKeyModel', () => {
 
     expect(model?.entries.map((entry) => entry.keys)).toEqual(['x']);
   });
+
   it('whichKeyModel_NamedGroup_LabelsPrefix', () => {
     const map = keymap(
       [

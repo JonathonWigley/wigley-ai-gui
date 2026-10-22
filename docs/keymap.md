@@ -24,9 +24,9 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
   the same keys in the same scope; `unbind` entries remove a default.
 - A bind is one entry in vim notation (`<Leader>ks`, `gg`, `<A-o>`, `<Esc>`), written once. A
   leader bind fires on the page and in a text box; any other bind fires on the page, and a chord
-  on the page fires inside a box too. `where` (`page`, `box` or `both`) narrows a leader bind or
-  widens another, and a chord takes only `page`. A bind with `mode` fires in a box, in that vim
-  mode.
+  on the page fires inside a box too. `where` (`page`, `box` or `both`) sets where a bind fires in
+  place of that default, and a chord takes only `page`. A bind with `mode` fires in a box, in that
+  vim mode.
 - `groups` names each leader prefix for which-key (`<Leader>k` windows); a later layer's name for
   a prefix replaces an earlier one's.
 

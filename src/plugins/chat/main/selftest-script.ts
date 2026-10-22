@@ -74,8 +74,9 @@ const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 // gg focuses the first entry and G follows the latest; Ctrl+j and Ctrl+k
 // scroll the transcript half a page. e opens Effort on Medium, j Enter sets
 // High; i Esc puts the box in normal mode, where Space c e opens Effort again,
-// / and low filter to Low, and Enter in the filter's insert mode sets it. m opens Mode and Esc closes it; o finds the fake has no model
-// control; c opens every control and Esc closes it. A held turn ends on
+// / and low filter to Low, and Enter in the filter's insert mode sets it. m
+// opens Mode and Esc closes it; o finds the fake has no model control; c
+// opens every control and Esc closes it. A held turn ends on
 // Ctrl+c in the box with the fake's notice; Space k n opens the start prompt and Esc closes it. A second held
 // turn makes Cmd+W ask, and y ends the session. Space k n then picks the
 // self-test's folder and the work profile, and its session step lists the

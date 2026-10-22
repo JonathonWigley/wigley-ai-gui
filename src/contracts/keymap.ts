@@ -75,9 +75,9 @@ export type BindWhere = 'page' | 'box' | 'both';
 // `keymap.json` write it, in vim notation (`<Leader>ks`, `gg`, `<A-o>`,
 // `<Esc>`). With no `where`, a bind whose first token is `<Leader>` fires on
 // the page and in a box, and any other bind fires on the page; a chord on the
-// page fires inside a box too. `where` narrows that, and a bind with `mode`
-// fires only in a box, in that vim mode. The merge expands each into the
-// `PageBind` and `EditorBind` it stands for.
+// page fires inside a box too. `where` overrides that (a chord takes only
+// `page`), and a bind with `mode` fires only in a box, in that vim mode. The
+// merge expands each into the `PageBind` and `EditorBind` it stands for.
 export interface KeyBind {
   keys: string;
   scope: ViewScope;
