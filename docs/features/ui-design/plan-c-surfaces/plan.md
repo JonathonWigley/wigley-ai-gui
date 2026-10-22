@@ -195,7 +195,7 @@ core's toasts.
 - [x] [Doc re-read](11-doc-re-read.md) — after 01–10
 
 ### Wave 7
-- [ ] [Final verification](12-final-verification.md) — after 11
+- [x] [Final verification](12-final-verification.md) — after 11
 
 ## Run log
 
@@ -213,11 +213,17 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - 07 · 8ace8a1 · proved (diff read, typecheck, lint, tests, self-test) · concerns: AGENTS.md:246 and agent-chat/design.md:120 still name Space c … (11)
 - 10 · 089f3d4 · proved (diff read, style check, typecheck, lint, tests, self-test) · concerns: dialog.css grep false positive on ui/dialog.ts; kbd.css resets redundant
 - 11 · 4517890 · proved (diff read, Done-when grep empty, lint) · concerns: none
+- 12 · no code · proved (four commands, 22 screenshots read, live checks carried to live-checks.md) · concerns: none
+- review fixes · 1f87a66 chat, 15d99fc forms, 6431e2e sessions, 4bc8528 docs, c47cdb3 shared · proved (diff read, typecheck, lint, 1900 tests, self-test, screenshots) · concerns: no DOM unit tests (vitest has no DOM); two workers ran `npx --version` by mistake, nothing installed
 ### Contract changes
 - `parseStyleArguments(args, filesInSrc)` (plan B) → `argumentFailures(args): string[]`; `legacyListProblems` removed · why: the script takes no argument · consumers: check-styles.mts only · group 10
 - `readVimKeys` (01): planned → not added; `formatVimKeys` already holds its body · why: landed earlier · consumers: none · group 01
 - `DialogDeps.keys` (06): `Pick<KeysPageExports, 'keysFor' | 'onChanged'>` → `Pick<KeysPageExports, 'keysFor'>` · why: dialogs rebuild buttons on every open · consumers: none · group 06
 - `keyHint` (04): gains a non-null overload; card-parts.ts also exports `appendKeyHint(control, readKeys, platform): () => void` replacing `showKeys` · why: hints that redraw on keymap change · consumers: none outside forms · group 04
+- `DialogDeps.keys` (06, review fix): back to `Pick<KeysPageExports, 'keysFor' | 'onChanged'>` · why: dialog hints follow a rebind · consumers: chat start.ts · review
+- `keyHint` (04, review fix): the non-null overload removed; the kit's `kbd` calls the Kbd primitive · consumers: card-kit · review
+- `ListPickerDeps` (02, review fix): `overlayClass` and `dialogClass` removed · consumers: chat picker, docs dialogs · review
+- `DocViewDeps.emptyHint()` and `DocsViewDeps.kbd(keys)` added (08, review fix) · consumers: docs-view, start.ts · review
 ### Rulings
 - Every review triage round this run takes the agent's recommendation without a form — the user's instruction at the run's start ("go with your suggestions on all review for this session") — costs a choice the user would have made differently · lead
 - `npm run selftest` (one Electron instance) is run by the lead per group, never by parallel workers — two instances at once collide — costs nothing · lead
@@ -228,5 +234,6 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - check-styles drops its paths mode with `--no-legacy`: paths only ever worked behind that flag and only plan C proofs used them — costs a single-file check, which would return as a new flag · group 10
 ### Review rounds
 - Round 1 · implementation review of ea1eb3a..586ca5a · 6 lanes (correctness ×4, plan-and-design ×2) · NEEDS FIXES · report `review-586ca5a….md` in the session scratchpad · applied (prose-only) c0b2f39 · 15 findings: fix now 1–6, 9–15 (five fix workers: chat, sessions, forms, docs, shared); follow-up 7 (empty docs tree), 8 (on-demand accent tag) and O1 (docs keys in sentences); O2, O3 left · the chat/pd-B contradiction on `DialogDeps.keys` resolved toward AGENTS.md § Key hints (redraw on `onChanged`) · triage took the agent's recommendations (lead ruling)
+- Round 2 · correctness re-review of 4a5c132..c47cdb3 · PASS · all 13 sent findings closed, no new findings
 ### Test gate
 - `npm test` full suite (covers both passes over `ea1eb3a..HEAD`): 134 files, 1901 tests passed; `npm run typecheck` 0; `npm run lint` clean (`styles: 287 files clean`); `npm run selftest` `[selftest] all passed` · after 4517890

@@ -1,6 +1,6 @@
 # 12 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -185,3 +185,28 @@ Needs a Claude Code or Codex session started in a terminal with the wigley 1.4.0
 | E6 | A forms card with long context text, at the window's minimum width | the 14px context text still fits its card without cutting off | low-confidence: shared stylesheet, forms cards grew from 13px |
 
 ## Proof
+
+Commands at 586ca5a and again at c47cdb3 after the review fixes: `npm run typecheck` 0; `npm run lint` clean
+(`styles: 287 files clean`, no legacy count); `npm test` 1901 then 1900 tests passed (a duplicate folded);
+`npm run selftest` `[selftest] all passed`.
+
+Screenshots, read against DESIGN.md:
+- `forms-round`, `forms-sessions-full/reduced`: rows dense in the side bar, the selected row tinted, the open-round
+  dot peach; tabs on the sheet's top edge with the accent top mark on Form; the rail split with dots and numbers;
+  cards on `card-background`; tags in origin/severity colours; Accept primary accent; Recommended tag accent. Full
+  and reduced read the same offscreen (backdrop washes are live check C1).
+- `forms-gallery-1..6-full/reduced`: every primitive in its states; one accent; dialog over its frame; sentence case.
+- `docs-docs-full/reduced`: first run showed an empty side bar — the self-test left the tree filtered to nothing
+  (review finding 9, fixed 4bc8528); after the fix the tree sits in the side bar on dense chrome, kept.md selected,
+  the doc solid.
+- `docs-kind-picker`: floating near the top, no scrim, over the side bar too; cursor row ringed.
+- `docs-completion`: the path box over the scrim, focused input frame, completion row in mono.
+- `docs-session-tab`: tab strip on the sheet's top edge, tree in the split's start pane, the handle line, the empty
+  doc pane — after fix 4bc8528 centred with its `^H` hint.
+- Every shot first showed a horizontal scrollbar under the activity bar, a 1px overflow predating plan C (review
+  finding 15, fixed c47cdb3); gone after.
+
+Live checks: carried to `docs/features/ui-design/live-checks.md` for the user, updated for the review fixes (S10,
+F5, D13, E5, K1). S9: recorded as the follow-up `f9f862e` with the agent's recommendation (close on click); the
+user drops it to keep today's behaviour.
+
