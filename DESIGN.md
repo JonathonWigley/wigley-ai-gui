@@ -275,7 +275,7 @@ Conventions every primitive follows:
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
   the sheet. Tool calls are collapsible cards: a mono head with the tool and its summary, a status
-  dot (running, success, error), collapsed once done. Permission prompts are cards with a
+  dot (running, success, error), built closed; a result changes only the dot. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds the box, the
   session controls as chips, and send.

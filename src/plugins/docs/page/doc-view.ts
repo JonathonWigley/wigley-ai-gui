@@ -81,8 +81,8 @@ export interface DocViewDeps {
 
 // The doc pane: an empty state while no doc is open; then the header with its
 // chips, the plugin cache line, the frontmatter table and the rendered body (a
-// detail's field table), swapped
-// for the document editor on `edit`; the editor's `:q` returns to them.
+// detail's field table), swapped for the document editor on `edit`; the
+// editor's `:q` returns to them.
 // Opening another doc is refused while the editor holds unsaved edits.
 // `open` resolves to whether the doc opened.
 export interface DocView {

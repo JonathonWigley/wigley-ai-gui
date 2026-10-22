@@ -110,8 +110,8 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 
 - `src/plugins/chat/`, depending on `sessions` and `keys`. Main keeps every owned session's entries, so a page
   reload redraws the chat whole (the dev server reloads twice at start).
-- **Chat tab**: the entries, a vim message box, and a status line under it with the box's vim mode and each
-  control's value. Enter in normal mode sends, Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
+- **Chat tab**: the entries under a floating composer: a vim message box, the box's vim mode, each control's value
+  as a chip, and send (changed by ui-design plan C). Enter in normal mode sends, Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
   `a` focus the box, `j` / `k` move between entries, `Enter` expands a tool call, `G` jumps to the latest, Ctrl+C
   interrupts. Tool calls show one compact line (tool name and a short input summary) that expands to the full input
   and output. These keys act only on the Chat tab on screen and its session: on any other tab or mode they do

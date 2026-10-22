@@ -34,8 +34,9 @@ type ChatApi = PageApi<
 
 // Shows each chat session main holds in its session's Chat tab: the entries,
 // drawn by the chat layout main chooses, under a floating composer holding
-// the message box, the controls as chips and send. The new-session prompt asks for a folder, a profile and a new
-// or saved session in the picker and starts or resumes a session there. The
+// the message box, the controls as chips and send. The new-session prompt
+// asks for a folder, a profile and a new or saved session in the picker and
+// starts or resumes a session there. The
 // picker, the deny reason box and the end-session confirmation sit in the
 // overlay layer, each over a scope of its own; another session's Chat tab
 // showing closes the dialogs and a control picker, and leaves the start prompt

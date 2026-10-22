@@ -198,8 +198,9 @@ interface AppliedChange {
 }
 
 // One docs view over an index source: the tree pane and the doc pane, its
-// dialogs placed over the window through `addOverlay`. A machine view reads the last index at creation; a
-// session view reads nothing until its first show. A change made here shows
+// dialogs placed over the window through `addOverlay`. A machine view reads
+// the last index at creation; a session view reads nothing until its first
+// show. A change made here shows
 // at once and its paths stay pending until a source run asked after it lands;
 // every other view hears it through `changed`.
 export function createDocsView(deps: DocsViewDeps): DocsView {

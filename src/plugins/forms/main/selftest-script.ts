@@ -137,7 +137,7 @@ export const SELFTEST_LAYOUT = {
 // to its question 2 and Option+p finds its untouched question 1; Option+Shift+i
 // moves back to the first session, on question 2. Space k s hides the side bar
 // and shows it again; a enters question 2's notes box, where Option+n in INSERT
-// finds no unanswered item and types nothing, and Esc and Space k s (the editor
+// finds no unanswered item, and Esc and Space k s (the editor
 // bind) hide it and Space k s in NORMAL shows it; Esc (forms' editor bind)
 // leaves the box. Option+Shift+i wraps to the last session, the layout
 // preview's; Cmd+W there asks to cancel its sample round and y cancels it,

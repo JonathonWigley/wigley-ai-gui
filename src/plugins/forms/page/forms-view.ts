@@ -34,7 +34,8 @@ import { saveLabel, sessionTitle } from './view-model';
 
 // `beforeClose` answers whether a session may close now; `formShown` runs
 // each time a session's Form tab becomes the visible tab. `platform` is the OS
-// key hints are drawn for; `uiState` keeps each round's rail width.
+// key hints are drawn for; `uiState` keeps the rail's dragged width, which
+// every round's rail opens at.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'statusBar' | 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;

@@ -465,9 +465,10 @@ function boxExtensions(
   ];
 }
 
-// A whole file: line numbers, the active-line band, wrapped lines, the language `language` holds once
-// it loads, highlighted through the Catppuccin Mocha style. Read-only blocks typed
-// input, and vim drops every edit it dispatches under the same facet.
+// A whole file: line numbers, the active-line band, wrapped lines, the
+// language `language` holds once it loads, highlighted through the Catppuccin
+// Mocha style. Read-only blocks typed input, and vim drops every edit it
+// dispatches under the same facet.
 function documentExtensions(
   options: DocumentOptions,
   language: Compartment,

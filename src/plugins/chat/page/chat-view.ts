@@ -131,8 +131,8 @@ interface ComposerBar {
 const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 
 // One Chat tab per chat session main holds, each with its entries and its
-// composer (message box, mode, control chips, send), kept up to date from chat main's messages. Each tab is
-// selected in its session when added.
+// composer (message box, mode, control chips, send), kept up to date from
+// chat main's messages. Each tab is selected in its session when added.
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
