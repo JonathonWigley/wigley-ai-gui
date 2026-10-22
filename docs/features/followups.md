@@ -264,3 +264,8 @@ now, any harness later). Each item names its sites.
 - `form-state.test.ts` uses the shared `test-rounds.ts` builders.
 - One test naming style: sentences. `Name_Case_Result` names remain in `main-api.test.ts`, `layout-loader.test.ts`,
   `layout-registry.test.ts`, `card-input.test.ts`, `which-key.test.ts`, `key-bar.test.ts`, `help-sections.test.ts`.
+- Shell layout swap failure paths are untested: `mountShell`'s rollback when a layout throws or misses an area, and the generation-guarded restore after a later `setLayout` (`src/renderer/shell/shell.ts`). Plan B's gallery `Space z s` covers only a good swap and its restore; a throwing test layout and a second swap would cover the rest.
+- Under reduced transparency the floating surfaces (which-key, help, toasts, dialogs) borrow `sheet-background` and `block-background`; no opaque floating token exists. Give them one if a theme wants floating surfaces distinct from the sheet.
+- `titleBarOverlayProblem` blames the file at the end of a colour alias chain (`src/main/title-bar-overlay.ts`). Colour tokens accept only hex, `transparent` or an alias today, so it is right; if the colour kind widens (`rgb()`, `color-mix()`), a user alias onto a built-in token would be blamed on the built-in theme and fail start.
+- settings.json array elements are checked for the default element's top-level keys only (`checkElements`, `src/main/config/user-settings.ts`); a nested object inside an element would pass with keys missing. No setting has that shape yet.
+- `ConfigStore.dispose` during a running rebuild lets that rebuild still replace `current` once (no listener hears it) (`src/main/config/config-store.ts`).
