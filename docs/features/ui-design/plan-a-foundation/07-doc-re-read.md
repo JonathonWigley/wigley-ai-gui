@@ -1,6 +1,6 @@
 # 07 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 6 · Depends on: 01, 02, 03, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -86,3 +86,4 @@ Mandatory Reads, which say task 07 deletes it, and this task). design.md's two m
 
 ## Proof
 
+Proof: every Known correction made or already true; corrections beyond the table listed in the commit message; `reference/` deleted; `npm run lint` passes fully (DESIGN.md formatted). No doc line contradicting a recorded decision was found. Commit sha in the Run log.

@@ -61,12 +61,12 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
   L0 backdrop: crust with two faint washes, seen only through L1
 ```
 
-| Layer | What lives here | Material |
-|---|---|---|
-| L0 backdrop | The window itself | `--wg-window-background` with `--wg-window-ambient` |
-| L1 chrome | Title bar, activity bar, side bar, tab strips, status bar, panel header | The `material-chrome` helper (`material-chrome--dense` for the side bar) |
-| L2 content | Form tab, chat transcript, docs, editors, the forms rail, diffs | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
-| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts | The `material-floating` helper |
+| Layer       | What lives here                                                         | Material                                                                                              |
+| ----------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| L0 backdrop | The window itself                                                       | `--wg-window-background` with `--wg-window-ambient`                                                   |
+| L1 chrome   | Title bar, activity bar, side bar, tab strips, status bar, panel header | The `material-chrome` helper (`material-chrome--dense` for the side bar)                              |
+| L2 content  | Form tab, chat transcript, docs, editors, the forms rail, diffs         | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
+| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts              | The `material-floating` helper                                                                        |
 
 - **Content is solid.** Glass in L2 makes text compete with whatever scrolls behind it, so cards,
   code blocks and inputs inside a sheet tint with alpha over the solid sheet and never show through.
@@ -75,6 +75,8 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
 - **Glass needs something behind it,** which is why L0 carries the ambient wash.
 - **`backdrop-filter` appears only in the material helpers**, so the reduced-transparency mode turns
   every glass surface opaque in one place.
+- **The layers stack** by the `number` tokens `z-chrome` (L1), `z-floating` (L3), `z-dialog` and
+  `z-toast`, in that order (`10`, `100`, `200`, `300` in Mocha).
 - **Every screen looks intentional under reduced transparency**: the `transparency` setting
   (`system`, `full`, `reduced`) and the OS preference under `system` both make materials opaque
   through the theme's `reduced` block.
@@ -95,8 +97,9 @@ and a broken value is caught by the theme loader instead of shipping in a styles
 - Views name roles, never palette entries: a view reads `--wg-status-error`, and only the theme
   maps that role to `red`.
 - **Adding a token:** add it to this file's matching section with its role and reason, declare it
-  in the core token registry (or the plugin's `themeTokens`) with its kind and default, give
-  Mocha its value, then use it. A one-off value in a stylesheet is a token not yet named.
+  as below, then use it. A core token: declare its kind in the core token registry and give every
+  built-in base theme (Mocha) its value. A plugin token: declare its kind and default in the
+  plugin's `themeTokens`. A one-off value in a stylesheet is a token not yet named.
 - **Raw values** live only in theme files. CSS may still write `0`, `1px` hairlines, percentages,
   `fr` tracks, and breakpoints inside `@media` (CSS reads no variable there; see **Breakpoints**).
 
@@ -105,22 +108,23 @@ and a broken value is caught by the theme loader instead of shipping in a styles
 Catppuccin Mocha by role. At rest a screen is neutral with one accent; colour appears where it
 means something.
 
-| Role | Tokens | Use |
-|---|---|---|
-| Backdrop | `window-background` (crust) | L0 only |
-| Chrome | `material-chrome-bg` (translucent mantle) | L1 |
-| Sheet | `sheet-background`, `editor-background`, `transcript-background` (base) | L2, solid |
-| Raised in content | `card-background`, `input-background`, `block-background` | Cards, inputs, code blocks: a tint over the sheet |
-| Lines | `border-subtle`, `border-default`, `border-strong` | Hairlines on L1 edges; gutters elsewhere |
-| Text | `fg`, `fg-secondary`, `fg-tertiary`, `fg-disabled` | Primary, labels and metadata, hints, disabled and placeholder |
-| **Accent (the one)** | `accent`, `accent-tint`, `accent-tint-strong`, `focus-border` | Focus ring, selection, the primary button, the active tab and activity mark, the active row, the recommended choice |
-| Links and info | `fg-link`, `status-info` | |
-| Running | `status-running` (sapphire) | An agent working, a tool running |
-| Success / added | `status-success` | |
-| Warning | `status-warning` | |
-| Needs you | `status-attention` (peach) | A permission prompt, an open round: "your turn", apart from warning |
-| Error / removed | `status-error` | |
-| Text selection, cursor | `selection-background`, `cursor` | Catppuccin convention |
+| Role                   | Tokens                                                                  | Use                                                                                                                 |
+| ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Backdrop               | `window-background` (crust)                                             | L0 only                                                                                                             |
+| Chrome                 | `material-chrome-bg` (translucent mantle)                               | L1                                                                                                                  |
+| Sheet                  | `sheet-background`, `editor-background`, `transcript-background` (base) | L2, solid                                                                                                           |
+| Raised in content      | `card-background`, `input-background`, `block-background`               | Cards, inputs, code blocks: a tint over the sheet                                                                   |
+| Lines                  | `border-subtle`, `border-default`, `border-strong`                      | Hairlines on L1 edges; gutters elsewhere                                                                            |
+| Text                   | `fg`, `fg-secondary`, `fg-tertiary`, `fg-disabled`                      | Primary, labels and metadata, hints, disabled and placeholder                                                       |
+| **Accent (the one)**   | `accent`, `accent-tint`, `accent-tint-strong`, `focus-border`           | Focus ring, selection, the primary button, the active tab and activity mark, the active row, the recommended choice |
+| Links and info         | `fg-link`, `status-info`                                                |                                                                                                                     |
+| Running                | `status-running` (sapphire)                                             | An agent working, a tool running                                                                                    |
+| Success / added        | `status-success`                                                        |                                                                                                                     |
+| Warning                | `status-warning`                                                        |                                                                                                                     |
+| Needs you              | `status-attention` (peach)                                              | A permission prompt, an open round: "your turn", apart from warning                                                 |
+| Error / removed        | `status-error`                                                          |                                                                                                                     |
+| Text selection, cursor | `selection-background`, `cursor`                                        | Catppuccin convention                                                                                               |
+| Changed sections       | `diff-inserted-mark`, `diff-removed-mark`, `diff-changed-mark` (peach)  | The mark on an inserted, removed or changed section in rendered markdown                                            |
 
 - **One accent does brand work.** Any other colour on screen at rest must mean a status.
 - **Status colours only where status exists**, and as small marks at full strength (dots, icons,
@@ -134,8 +138,9 @@ means something.
 - **UI font:** the system stack (`font-ui`). **Mono** (`font-mono`, JetBrains Mono): only for
   code-like content — code, paths, commands, tool names and arguments, terminal output, key chords
   inside a Kbd. A label is never mono for decoration.
-- **Scale:** `text-11`, `text-12`, `text-13` (the UI default), `text-14` (prose), `text-16`,
-  `text-20`. Nothing larger inside the app.
+- **Scale:** `text-11`, `text-12`, `text-13`, `text-14` (prose), `text-16`, `text-20`. Nothing
+  larger inside the app. `text-ui` is the UI base size and `text-mono` the code size; the UI
+  default and code read these two, and `text-13` stays a fixed step of the scale.
 - **Weights:** `weight-regular` (400), `weight-medium` (500) for labels and active items,
   `weight-semibold` (600) for headings. Nothing heavier.
 - **Sentence case everywhere.** A section header is `text-12`, semibold, `fg-secondary`. Capitals
@@ -143,14 +148,18 @@ means something.
 - **Prose** (chat, rendered docs): `text-14`, `leading-prose`, at most `prose-measure` wide.
 - **Numbers that change** (counts, timers, costs, line numbers) use tabular numerals, so they do
   not jitter.
-- The user's `fonts` settings, when set, override the theme's font families and base sizes.
+- The user's `fonts` settings, when set, override the theme's font families and base sizes:
+  `fonts.ui` sets `font-ui`, `fonts.mono` `font-mono`, `fonts.uiSize` `text-ui` and
+  `fonts.monoSize` `text-mono`.
 
 ## Space, size and shape
 
 - **Spacing** is the `space-*` scale only (2, 4, 6, 8, 12, 16, 24, 32 in Mocha).
 - **Density:** tree rows `row-tree`, list and menu rows `row-list`, tabs `tab-height`, the title
   bar `toolbar-height`, the status bar `statusbar-height`, the activity bar `activitybar-width`,
-  icon buttons `icon-button-sm` and `icon-button`, icons `icon-size`.
+  the side bar `sidebar-width`, icon buttons `icon-button-sm` and `icon-button`, icons
+  `icon-size`. The title bar leaves `traffic-light-inset` at its left for macOS's window
+  buttons.
 - **Radii by hierarchy:** `radius-sm` for rows, tags and inline code; `radius-md` for buttons,
   inputs, cards and code blocks; `radius-lg` for sheets, menus and pickers; `radius-xl` for
   dialogs and the composer. One radius on everything flattens the hierarchy.
@@ -206,7 +215,7 @@ every screen at once, and forms and chat layout kits hand the same primitives to
 
 - **Title bar:** L1, `toolbar-height`, draggable; the shown mode's context centred; actions on the
   right as `icon-button` buttons when a feature contributes one. The OS window buttons stay native.
-- **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its inner edge.
+- **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
 - **Side bar:** L1 dense glass. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
   cursor adds the focus ring.

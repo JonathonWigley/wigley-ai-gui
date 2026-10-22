@@ -401,7 +401,7 @@ list; task 06's rename map reads from it.
 - [x] [uiState service](05-ui-state.md) — after 04
 
 ### Wave 6
-- [ ] [Doc re-read](07-doc-re-read.md) — after 01–06
+- [x] [Doc re-read](07-doc-re-read.md) — after 01–06
 
 ### Wave 7
 - [ ] [Final verification](08-final-verification.md) — after 07
@@ -416,7 +416,8 @@ Review base: 17cf5935eb176577587a6a3c230e907efdef81c9
 - 02 · 0cbd5d4 · diff read + typecheck pass; lint only DESIGN.md (pre-existing) · concerns: `registerGlobalShortcuts` unregisters all before registering, so a throwing user accelerator loses the earlier globals (the parser does not validate accelerator syntax); `npx vitest` ran once (installed copy)
 - 03 · 2d4f5e7 · diff read + typecheck pass; lint only DESIGN.md · concerns: no self-test step changes the editor keymap, so `setKeymap` on open editors is covered only by `appliedMappings` (task 08 live check); `Vim.unmap` result ignored; which-key's editor path now prints editor chord tokens like `<A-o>` as `⌥O`
 - 04 · 137f40a · diff read + typecheck · concerns: task doc's call-site line numbers were stale (all sites handled); activity bar `mark` log falls back to the mode id for an unknown id (unreachable today); title context, glyphs, drag regions and the Windows overlay are live checks only (task 08)
-- 05 · SHA05 · diff read + typecheck · concerns: the JSON-object check is inline — `jsonKind` sits in `src/main/config`, which `src/main/ui-state` may not import, and about seven private copies of the check exist (a shared helper is out of scope); `npx --version` ran once
+- 05 · e0722ba · diff read + typecheck · concerns: the JSON-object check is inline — `jsonKind` sits in `src/main/config`, which `src/main/ui-state` may not import, and about seven private copies of the check exist (a shared helper is out of scope); `npx --version` ran once
+- 07 · SHA07 · diff read + lint pass · concerns: plan B task docs 04 and 05 still cite `reference/tokens.css` names, now deleted (the names are the keys of `src/config/theme-tokens.ts`)
 ### Contract changes
 ### Rulings
 - `src/main/themes` layer allows no packages now that the loader is pure — task 02 reads files through `Files` in `src/main/config` — 02 would need `node:` back if it reads files there · group 01
@@ -448,5 +449,6 @@ Review base: 17cf5935eb176577587a6a3c230e907efdef81c9
 - The side bar element stays hidden until the first `layOutSideBar`; `setLayout`'s restore uses a generation counter so it does nothing after any later set — none · group 04
 - A failed ui-state write stays pending, retried by the next set and the quit flush; a set during the load waits for it — no lost writes — none · group 05
 - The ui-state path is a new `StartInputs.uiStatePath`, set beside `dataFolder()` — none · group 05
+- DESIGN.md § Activity bar: the accent mark sits on the window-side edge, as task 04 draws it — the code settled a drafter call — a one-line look change if wrong · group 07
 ### Review rounds
 ### Test gate

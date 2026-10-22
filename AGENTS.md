@@ -35,8 +35,9 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
   point waiting to become a registration.
 - **Everything hot reloads.** A changed plugin, layout, theme, keymap or setting applies to the running app without
   a restart and without losing the user's work. So every registration a plugin makes can be undone, and state that
-  must outlive a reload is kept where the reload does not reach it. Today forms and chat layouts hot reload and
-  plugins are compiled in with no runtime loader; new code is written so the rest can land without reworking it.
+  must outlive a reload is kept where the reload does not reach it. Today settings, keymap, themes, and forms and
+  chat layouts hot reload and plugins are compiled in with no runtime loader; new code is written so the rest can land
+  without reworking it.
 - **macOS and Windows, both working now.** A platform-specific need — key binds and their labels, paths, spawning
   processes, file watching, notifications, the relay's transport — is an adapter behind a contract, picked in the
   composition root, so adding one is a new adapter and features carry no `process.platform` checks.
@@ -71,6 +72,7 @@ src/main/        core main process; main.ts is its composition root
   config/        the ConfigStore: watches the user config folder, layers settings, keymap and themes over the
                  defaults, and pushes each new config to the page
   themes/        theme loader: parses a theme by the token registry and resolves `extends`
+  ui-state/      the uiState file: app-written view state (`ui-state.json`) in Electron's user data folder
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions
                  → the only place the app spawns `claude`
@@ -138,7 +140,8 @@ round), since main, not the page, decides.
   channel does that.
 - **The shell** is a registry of areas — title bar, activity bar, side bar, main, panel, status bar, overlay — laid
   out by one `ShellLayout` module in `src/renderer/shell/`. A page plugin may replace the layout through the shell
-  API, and every area or contribution it registers returns a `Disposable`. Reworking the window's structure is
+  API (`shell.setLayout`); every contribution it makes returns a `Disposable`, and so does replacing the layout. The
+  areas are the fixed set `AreaName` names, and a contribution carries an order and an alignment. Reworking the window's structure is
   editing the default layout or adding a plugin; track sizes are theme tokens.
 - **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
   title and an optional side bar element, through the page plugin API, and binds the command that shows it
@@ -160,8 +163,8 @@ round), since main, not the page, decides.
   code directly, so rebinding never touches a handler. `src/config/keymap.ts` holds only the core's keys. The keymap
   merges in layers — core, then plugins in dependency order, then the user's `keymap.json` — where a later layer's
   bind replaces an earlier one with the same keys in the same scope and an `unbind` entry removes one; only a clash
-  inside one layer is an error. Which key type a bind takes follows `DESIGN.md` § Keys and focus. Each process checks at startup that every key it owns names a registered command, and
-  the page also rejects a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
+  inside one layer is an error. Which key type a bind takes follows `DESIGN.md` § Keys and focus. Each process checks every keymap it installs, at startup and on each config change, for a key that names no registered
+  command, and main and the page both reject a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
   `<D-w>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
   too, in every vim mode, ahead of the editor. A plugin's own text box may keep typed keys from the page keys while
   Tab, Enter, Escape and chords still reach its scope's binds (docs' `textBoxInput`). An editor key carries a scope as a page key does and runs only while
@@ -187,9 +190,12 @@ round), since main, not the page, decides.
   host report a pending prefix through `api.keys`; the editor host reads it from vim's pending input, behind
   `EditorHost`.
 - **A theme** is a JSON file of a `palette`, `tokens`, a `reduced` block of overrides for reduced transparency, and
-  a `colorScheme`; a user theme sets `extends` to a base theme and lists only the tokens it changes. Every token —
-  colour, length, duration, shadow, filter or raw CSS — is declared with its kind and default in the core token
-  registry, or in a plugin manifest's `themeTokens` (qualified `<pluginId>.<token>`). Views read a token as
+  a `colorScheme`; a user theme sets `extends` to a base theme and lists only the tokens it changes. Every token has
+  a kind: colour, length, duration, number, shadow, filter or raw CSS. A core token is declared with its kind in the
+  core token registry, and a theme with no `extends` sets every core token (the loader rejects one that misses any).
+  A plugin token is declared with its kind and default in its manifest's `themeTokens` (qualified
+  `<pluginId>.<token>`), so a theme written before the plugin still loads. A colour token may name another as
+  `var(--wg-<name>)`, which the loader checks exists. Views read a token as
   `--wg-<name>` and never write a raw value (`DESIGN.md` § Tokens and themes). Built-in themes live in
   `src/config/themes/`; the user's own in the `themes` folder of the user config folder override a built-in of the
   same name. A broken theme keeps the last good one and shows its error.
@@ -296,7 +302,8 @@ round), since main, not the page, decides.
   step's `screenshot` saves a PNG of the window for the agent to check against `DESIGN.md`. The self-test's user
   config folder sits in its temp home. The script's
   `settings` override plugin settings in the config main serves the page (forms' sets a short
-  `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on their defaults. Each plugin hands
+  `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the ConfigStore's config, which under the self-test is the empty config folder in its temp
+  home, so the defaults, with no script `settings` over them. Each plugin hands
   at most one script, and the scripts run in plugin start order; the keys plugin has no main part, so its steps live
   in forms' script, whose fixture gives them scopes full of binds and a box to type in. Chat's script runs its
   sessions over the fake agent harness, its steps covering the resume list, archive and slash completion. Docs'

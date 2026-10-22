@@ -33,11 +33,12 @@ Three plans in this folder, run in order. Each one leaves a working app.
 
 1. **Plan A — foundation.** The ConfigStore (user config files, everything hot reloads, the layered
    keymap), the theme model and token registry, plugin-declared tokens, the shell registry with the
-   title bar, activity bar and mode side bars, the chord formatter, and the token rename across
-   every existing CSS file. The app looks about the same as before at the end of it, on the new
-   tokens.
+   title bar, activity bar and mode side bars, the chord formatter, the token rename across
+   every existing CSS file, the Icon primitive with `@vscode/codicons`, the Catppuccin Mocha code
+   colours (copied into `code-colours.ts`, no package), the `uiState` service, and Mocha's final
+   values. The structure stays as it was and the colours change.
 2. **Plan B — primitives.** `DESIGN.md`'s primitives in `src/shared/page/ui/`, the gallery mode,
-   the self-test screenshots, the style check, and the three packages.
+   the self-test screenshots, the style check, and `@fontsource/jetbrains-mono`.
 3. **Plan C — surfaces.** Every existing surface rebuilt on the primitives, and the key changes.
 
 The design skills (Impeccable's critique, audit, polish and quieter guidance, and ui-skills'
@@ -51,16 +52,20 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
 - **A user theme extends a base.** The built-in `catppuccin-mocha` lists every core token. A user
   theme sets `extends` to a theme name and lists only the tokens it changes. Today every theme had
   to list every token.
-- **One token registry.** Every token declares a kind and a default: colour, length, duration,
-  number, shadow, filter, or raw CSS (the backdrop gradient, easing curves, font stacks). The
+- **One token registry.** Every token declares a kind: colour, length, duration, number, shadow,
+  filter, or raw CSS (the backdrop gradient, easing curves, font stacks). Core tokens declare a
+  kind only, and a base theme sets every one, so the theme file holds each core value. Plugin
+  tokens declare a kind and a default, so a theme written before the plugin still loads. The
   loader checks each value by its kind, and `applyTheme` walks the registry. Core tokens are the
-  design-system roles; each plugin declares its own in its manifest's `themeTokens` with defaults,
-  qualified `<pluginId>.<token>`. A theme may set a plugin token; a missing one takes its default.
+  design-system roles; each plugin declares its own in its manifest's `themeTokens`, qualified
+  `<pluginId>.<token>`. A theme may set a plugin token; a missing one takes its default.
   This retires `whichKey.*`, `origin.*` and `severity.*` from the core list.
 - **Names.** The brief's role names with the `--wg-` prefix (`--wg-fg`, `--wg-fg-secondary`,
   `--wg-accent`, `--wg-material-chrome-bg`). The theme JSON key is the name without the prefix
   (`fg-secondary`). A plugin token `forms.origin-caused` is `--wg-forms-origin-caused`. The prefix
   keeps the app's variables apart from CodeMirror's and any library's.
+- **Aliases.** A colour token may name another as `var(--wg-<name>)`, which the loader checks
+  exists.
 - **Colour values** are a palette name, `#rrggbb` / `#rrggbbaa`, or a palette name with alpha
   (`"mauve / 0.16"`), which keeps the palette link that tokens.css kept with `rgb(var(--x-rgb) / a)`.
 - **Reduced transparency** is a `reduced` block in the theme: token overrides applied while
@@ -92,7 +97,8 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
 - **The ConfigStore** is one main-side module behind `current()` and `onChanged()`. It watches the
   folder through the `Files` service, parses, layers and validates, keeps the last good config on a
   broken file and reports the problem, and pushes each new `AppConfig` to the page over the
-  Bridge. The theme loader reads through `Files` instead of sync fs.
+  Bridge. The theme loader is pure: the ConfigStore reads the theme files through `Files` and hands their
+  text to it.
 - **settings.json** is a partial override deep-merged over the defaults; plugin settings sit under
   the plugin id. A setting read only when something is created (window size, the claude command)
   applies to the next window or session; every other setting applies live. Transparency is a core
@@ -112,8 +118,9 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
 
 ## Shell
 
-- **A registry.** The shell's areas are registered (`addArea`), contributions carry an order and an
-  alignment, and every registration returns a `Disposable`. The core ships the default
+- **A registry.** The shell's areas are the fixed set `AreaName` names, placed by the
+  `ShellLayout`; contributions carry an order and an alignment and return a `Disposable`, as does
+  `shell.setLayout`. The core ships the default
   `ShellLayout` module (where each area sits, on token track sizes); a page plugin may replace it
   through the shell API. Reworking the structure is editing that module or adding a plugin: the
   structure changes rarely, and sizes are already themeable.
@@ -136,7 +143,7 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
 - **Only what the existing surfaces use.** Each later feature adds its primitive to the gallery and
   `DESIGN.md`. A primitive built with no screen using it gets reworked when its first feature
   arrives.
-- **Kbd** draws key hints through one `formatChord(chord, platform)`: ⌘ ⌥ on macOS, Ctrl Alt on
+- **Kbd** draws key hints through one `formatChord(token, platform)`: ⌘ ⌥ on macOS, Ctrl Alt on
   Windows. The page learns its platform from the served config; the full Platform record stays a
   follow-up.
 - **Icon** draws Codicons; it is the one module naming the icon font.
@@ -197,8 +204,10 @@ focus is not added: a focused button would take Enter and Space from the page ke
 
 Every package is bundled by Vite into the app, so nothing loads from the network at run time:
 
-- `@vscode/codicons` — the one icon set, behind the Icon primitive.
-- `@fontsource/jetbrains-mono` — weights 400, 500 and 600 only.
+- `@vscode/codicons` (plan A) — the one icon set, behind the Icon primitive.
+- `@fontsource/jetbrains-mono` (plan B) — weights 400, 500 and 600 only.
+
+The code colours are the copied Mocha map in `code-colours.ts`, with no package.
 
 ## Out of scope
 
