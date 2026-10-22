@@ -408,6 +408,7 @@ for (const violation of violations) {
   console.error(violation);
 }
 if (violations.length > 0) {
-  process.exit(1);
+  process.exitCode = 1;
+} else {
+  console.log(`layers: ${files.length} files clean`);
 }
-console.log(`layers: ${files.length} files clean`);

@@ -52,51 +52,56 @@ const { ignoreLegacy, paths, failures } = parseStyleArguments(
   process.argv.slice(2),
   filesInSrc,
 );
+function judgeFiles(): void {
+  const judgedFiles =
+    paths.length > 0
+      ? paths
+      : checkedFiles.filter(
+          (file) => ignoreLegacy || !LEGACY_FILES.includes(file),
+        );
+  const violationLines = judgedFiles.flatMap((file) =>
+    violationsIn(file).map(
+      ({ line, rule, text }) => `${file}:${line} ${rule}: ${text}`,
+    ),
+  );
+
+  if (!ignoreLegacy) {
+    const legacyFilesWithViolations = new Set(
+      LEGACY_FILES.filter(
+        (file) => filesInSrc.has(file) && violationsIn(file).length > 0,
+      ),
+    );
+    const legacy = legacyListProblems(
+      LEGACY_FILES,
+      filesInSrc,
+      legacyFilesWithViolations,
+    );
+    failures.push(...legacy.failures);
+    for (const note of legacy.notes) {
+      console.log(note);
+    }
+  }
+
+  for (const line of [...violationLines, ...failures]) {
+    console.error(line);
+  }
+  if (violationLines.length > 0 || failures.length > 0) {
+    process.exitCode = 1;
+    return;
+  }
+  const listed = ignoreLegacy
+    ? 'legacy list ignored'
+    : `${LEGACY_FILES.length} on the legacy list`;
+  console.log(`styles: ${judgedFiles.length} files clean, ${listed}`);
+}
+
 // A bad argument stops the run before judging, so a mistyped path never
 // falls back to judging every file.
 if (failures.length > 0) {
   for (const failure of failures) {
     console.error(failure);
   }
-  process.exit(1);
+  process.exitCode = 1;
+} else {
+  judgeFiles();
 }
-
-const judgedFiles =
-  paths.length > 0
-    ? paths
-    : checkedFiles.filter(
-        (file) => ignoreLegacy || !LEGACY_FILES.includes(file),
-      );
-const violationLines = judgedFiles.flatMap((file) =>
-  violationsIn(file).map(
-    ({ line, rule, text }) => `${file}:${line} ${rule}: ${text}`,
-  ),
-);
-
-if (!ignoreLegacy) {
-  const legacyFilesWithViolations = new Set(
-    LEGACY_FILES.filter(
-      (file) => filesInSrc.has(file) && violationsIn(file).length > 0,
-    ),
-  );
-  const legacy = legacyListProblems(
-    LEGACY_FILES,
-    filesInSrc,
-    legacyFilesWithViolations,
-  );
-  failures.push(...legacy.failures);
-  for (const note of legacy.notes) {
-    console.log(note);
-  }
-}
-
-for (const line of [...violationLines, ...failures]) {
-  console.error(line);
-}
-if (violationLines.length > 0 || failures.length > 0) {
-  process.exit(1);
-}
-const listed = ignoreLegacy
-  ? 'legacy list ignored'
-  : `${LEGACY_FILES.length} on the legacy list`;
-console.log(`styles: ${judgedFiles.length} files clean, ${listed}`);

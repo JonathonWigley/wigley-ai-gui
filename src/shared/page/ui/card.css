@@ -17,7 +17,7 @@
   border-color: var(--wg-focus-border);
 }
 
-.ui-collapsible {
+.ui-card.ui-collapsible {
   padding: 0;
 }
 
