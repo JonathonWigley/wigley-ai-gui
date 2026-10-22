@@ -80,9 +80,24 @@ export interface DocumentEditor extends TextEditor {
   // and scrolls it to the top.
   goToLine(line: number): void;
   // Scrolls by half the visible height, down for 1 and up for -1, keeping
-  // the vim mode; a cursor the scroll leaves out of sight moves to the
-  // nearest visible line's start, a non-empty selection keeping its anchor.
-  scrollHalfPage(direction: 1 | -1): void;
+  // the vim mode. In visual mode the cursor moves half a page with the
+  // scroll, as vim's Ctrl+d and Ctrl+u do, so the selection grows or
+  // shrinks. Otherwise a cursor the scroll leaves out of sight moves to the
+  // start of the first line wholly in sight (scrolling down) or the last
+  // (scrolling up), a non-empty selection keeping its anchor.
+  scrollHalfPage(direction: 1 | -1): EditorHalfPageScroll;
+}
+
+// What a half-page scroll did: `moved` when the view scrolled at all, and
+// `atEnd` when it rests at the end it scrolled toward, the top for up and the
+// bottom for down.
+export interface HalfPageScroll {
+  moved: boolean;
+  atEnd: boolean;
+}
+
+export interface EditorHalfPageScroll extends HalfPageScroll {
+  cursorMoved: boolean;
 }
 
 // While the editor is in insert mode and the text from the document's start to the cursor is `prefix`

@@ -14,6 +14,7 @@ import {
   type DocumentEditorEvents,
   type DocumentOptions,
   type EditorEvents,
+  type EditorHalfPageScroll,
   type EditorOptions,
   type FocusOptions,
   type TextEditor,
@@ -34,6 +35,7 @@ import {
 import { codeColours } from './code-colours';
 import { editorTheme } from './editor-theme';
 import { exBindName } from './ex-command-name';
+import { isScrolledToEnd } from '../../shared/half-page';
 import { findLanguageByFile, loadLanguage } from './languages';
 import { prefixCompletion } from './prefix-completion';
 import {
@@ -238,12 +240,56 @@ function goToLine(view: EditorView, line: number) {
   });
 }
 
-// Scrolls the editor by half its visible height in `direction`, and moves a
-// cursor left wholly out of sight to the start of the nearest visible line; a
-// non-empty selection keeps its anchor.
-function scrollHalfPage(view: EditorView, direction: 1 | -1) {
+// Keys no user can type, mapped in visual mode to vim's own Ctrl+d and Ctrl+u
+// motion, so a remap of those keys never changes the half-page scroll.
+const HALF_PAGE_KEYS = {
+  down: '<WigleyHalfPageDown>',
+  up: '<WigleyHalfPageUp>',
+} as const;
+
+function mapHalfPageMotions() {
+  for (const forward of [true, false]) {
+    Vim.mapCommand(
+      forward ? HALF_PAGE_KEYS.down : HALF_PAGE_KEYS.up,
+      'motion',
+      'moveByScroll',
+      { forward, explicitRepeat: true },
+      { context: 'visual' },
+    );
+  }
+}
+
+// Scrolls the editor by half its visible height in `direction`. Visual mode
+// runs vim's own half-page motion, which moves the cursor with the scroll;
+// any other mode keeps the cursor where it is unless the scroll leaves it out
+// of sight.
+function scrollHalfPage(
+  view: EditorView,
+  cm: VimEditor,
+  direction: 1 | -1,
+): EditorHalfPageScroll {
   const scroller = view.scrollDOM;
-  scroller.scrollTop += (direction * scroller.clientHeight) / 2;
+  const scrollTop = scroller.scrollTop;
+  const { head } = view.state.selection.main;
+  if (cm.state.vim.visualMode) {
+    const key = direction === 1 ? HALF_PAGE_KEYS.down : HALF_PAGE_KEYS.up;
+    Vim.handleKey(cm, key, 'user');
+  } else {
+    scroller.scrollTop += (direction * scroller.clientHeight) / 2;
+    bringCursorIntoSight(view);
+  }
+  return {
+    moved: scroller.scrollTop !== scrollTop,
+    atEnd: isScrolledToEnd(scroller, direction),
+    cursorMoved: view.state.selection.main.head !== head,
+  };
+}
+
+// Moves a cursor wholly out of sight to the start of the first line wholly in
+// sight when it is above, or the last when below; a non-empty selection keeps
+// its anchor.
+function bringCursorIntoSight(view: EditorView) {
+  const scroller = view.scrollDOM;
   const top = scroller.scrollTop - view.documentPadding.top;
   const bottom = top + scroller.clientHeight;
   const selection = view.state.selection.main;
@@ -254,10 +300,26 @@ function scrollHalfPage(view: EditorView, direction: 1 | -1) {
     return;
   }
   const head = isAboveSight
-    ? view.lineBlockAtHeight(top).from
-    : view.lineBlockAtHeight(bottom - 1).from;
+    ? firstWholeLineFrom(view, top)
+    : lastWholeLineTo(view, bottom);
   const anchor = selection.empty ? head : selection.anchor;
   view.dispatch({ selection: { anchor, head } });
+}
+
+// The start of the first line whose top is at or below `top`, or of the line
+// `top` cuts when it is the last.
+function firstWholeLineFrom(view: EditorView, top: number): number {
+  const line = view.lineBlockAtHeight(top);
+  const isCutOff = line.top < top && line.to < view.state.doc.length;
+  return isCutOff ? view.lineBlockAt(line.to + 1).from : line.from;
+}
+
+// The start of the last line whose bottom is at or above `bottom`, or of the
+// line `bottom` cuts when it is the first.
+function lastWholeLineTo(view: EditorView, bottom: number): number {
+  const line = view.lineBlockAtHeight(bottom - 1);
+  const isCutOff = line.bottom > bottom && line.from > 0;
+  return isCutOff ? view.lineBlockAt(line.from - 1).from : line.from;
 }
 
 // Reconfigures `slot` with the file's language once it loads, unless the
@@ -572,6 +634,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
   };
 
   defineDocumentExCommands(hosted);
+  mapHalfPageMotions();
   const leaving = (left: EditorView) =>
     pendingKeys.discardIn(vimEditorOf(left));
 
@@ -654,7 +717,8 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
           ...shared,
           setText: (text) => replaceTextKeepingLine(view, text),
           goToLine: (line) => goToLine(view, line),
-          scrollHalfPage: (direction) => scrollHalfPage(view, direction),
+          scrollHalfPage: (direction) =>
+            scrollHalfPage(view, vimEditorOf(view), direction),
         }),
         (event) => raiseDocumentEx(events, event),
       );

@@ -10,6 +10,12 @@ import { installedPluginsFile, WIGLEY_PLUGIN_KEY } from './script-locator';
 import { MACHINE_INDEX_FILE } from './index-sources';
 
 const FIXTURE_PLUGIN_KEY = 'selftest-plugin@selftest-market';
+// Makes CLAUDE.md several pages long, rendered and in the editor, so a
+// half-page scroll moves it.
+const LONG_SECTION = `\n## Long section\n\n${Array.from(
+  { length: 80 },
+  (_, index) => `Line ${index + 1}.\n`,
+).join('\n')}`;
 const KEPT_RULE = 'style.md';
 
 // Writes the self-test's docs, index and stand-in docs_index.py under
@@ -30,7 +36,8 @@ export async function writeDocsFixture(
   const writes: [string, string][] = [
     [
       paths.claudeMd,
-      '# Self-test instructions\n\nSee [the style rule](rules/style.md) and [the web](https://example.com).\n\n## Second heading\n\nBack [to the top](#self-test-instructions).\n',
+      '# Self-test instructions\n\nSee [the style rule](rules/style.md) and [the web](https://example.com).\n\n## Second heading\n\nBack [to the top](#self-test-instructions).\n' +
+        LONG_SECTION,
     ],
     [paths.styleRule, '# Style\n\nWrite short lines.\n'],
     [

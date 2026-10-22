@@ -54,6 +54,24 @@ const ALLOW_REPLY = JSON.stringify({
 // sends.
 const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 
+// Thirty paragraphs, so the message and its echo make the transcript several
+// sheets tall.
+const LONG_PARAGRAPHS = Array.from(
+  { length: 30 },
+  (_, index) => `${index + 1}`,
+);
+const LONG_TEXT = LONG_PARAGRAPHS.join('\n\n');
+// Enter in insert mode breaks the line.
+const LONG_KEYS = [
+  'i',
+  ...LONG_PARAGRAPHS.flatMap((paragraph, index) => [
+    ...(index === 0 ? [] : ['Enter', 'Enter']),
+    ...paragraph,
+  ]),
+  'Escape',
+  'Enter',
+];
+
 // Each step expects the last line its keys cause: the fake emits in microtasks,
 // so an earlier line can land before the step's wait begins. Each session
 // opens on its Chat tab: Option+Shift+i shows the second session's Chat tab,
@@ -71,8 +89,10 @@ const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 // over; Space Space opens its review and Cmd+Enter submits, which hands the
 // Chat tab back. The tool turn's entries are user, tool, assistant, result,
 // focus following the result, so k k j k walks them; Enter opens the tool entry,
-// gg focuses the first entry and G follows the latest; Ctrl+j and Ctrl+k
-// scroll the transcript half a page. e opens Effort on Medium, j Enter sets
+// gg focuses the first entry and G follows the latest. A thirty-paragraph
+// message makes the transcript taller than the sheet; Esc leaves the box,
+// which resizes the sheet, and G scrolls back to the bottom. Ctrl+k scrolls half a page up off the bottom, which stops following, and
+// Ctrl+j back onto the bottom, which follows again. e opens Effort on Medium, j Enter sets
 // High; i Esc puts the box in normal mode, where Space c e opens Effort again,
 // / and low filter to Low, and Enter in the filter's insert mode sets it. m
 // opens Mode and Esc closes it; o finds the fake has no model control; c
@@ -139,8 +159,21 @@ const STEPS: SelfTestStep[] = [
   { keys: ['Enter'], expect: '[chat] expanded tool entry', checksFit: true },
   { keys: ['g', 'g'], expect: '[chat] focused the first entry' },
   { keys: ['G'], expect: '[chat] following the latest entry' },
-  { keys: ['<C-j>'], expect: '[page] <C-j> ran chat.halfPageDown' },
-  { keys: ['<C-k>'], expect: '[page] <C-k> ran chat.halfPageUp' },
+  {
+    keys: LONG_KEYS,
+    expect: '[chat] assistant entry added in chat-selftest',
+  },
+  { keys: ['Escape'], expect: '[chat] left the box' },
+  { keys: ['G'], expect: '[chat] following the latest entry' },
+  {
+    keys: ['<C-k>'],
+    expect: '[chat] scrolled the transcript up half a page; not following',
+  },
+  {
+    keys: ['<C-j>'],
+    expect:
+      '[chat] scrolled the transcript down half a page to the bottom; following the latest entry',
+  },
   { keys: ['e'], expect: '[chat] picker shown: Effort', checksFit: true },
   { keys: ['j', 'Enter'], expect: '[chat] Effort is High in chat-selftest' },
   {
@@ -228,6 +261,7 @@ const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: 'one\ntwo' },
   { method: 'send', text: 'hello' },
   { method: 'send', text: FAKE_TOOL_TEXT },
+  { method: 'send', text: LONG_TEXT },
   { method: 'setControl', id: 'effort', value: 'high' },
   { method: 'setControl', id: 'effort', value: 'low' },
   { method: 'send', text: FAKE_HOLD_TEXT },

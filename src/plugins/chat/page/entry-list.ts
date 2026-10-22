@@ -1,8 +1,10 @@
 import type { ChatEntry, ChatEntryKind } from '../../../contracts/agent';
 import type { Log } from '../../../contracts/log';
+import type { HalfPageScroll } from '../../../contracts/editor';
 import type { ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
+import { isScrolledToEnd, scrollHalfPage } from '../../../shared/half-page';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   ChatKit,
@@ -40,6 +42,11 @@ export interface EntryListDeps {
 
 export type ToggleResult = 'expanded' | 'collapsed' | 'nothing';
 
+// A half-page scroll, and whether the list follows the latest entry after it.
+export interface TranscriptScroll extends HalfPageScroll {
+  following: boolean;
+}
+
 // One session's entries, one slot per entry in the session's order, the
 // focused slot marked `is-cursor`. After every change a following focus
 // scrolls the list to its bottom; a hidden list does not scroll, so its tab
@@ -68,7 +75,7 @@ export interface EntryList {
   // stops following, so entries that arrive leave the scroll alone; scrolling
   // down onto the bottom (within 1px) follows the latest entry again. The
   // focused entry stays either way.
-  scrollHalfPage(direction: 1 | -1): void;
+  scrollHalfPage(direction: 1 | -1): TranscriptScroll;
   // Opens every expander of the focused entry when any is closed, else
   // closes them all; null with no focused entry.
   toggleFocused(): { entry: ChatEntry; result: ToggleResult } | null;
@@ -176,9 +183,10 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       drawFocus(focus.following ? 'bottom' : 'slot');
     },
     scrollHalfPage(direction) {
-      list.scrollTop += (direction * list.clientHeight) / 2;
-      focus = focusAfterScroll(focus, direction, isScrolledToBottom(list));
+      const scroll = scrollHalfPage(list, direction);
+      focus = focusAfterScroll(focus, direction, isScrolledToEnd(list, 1));
       drawFocus('follow');
+      return { ...scroll, following: focus.following };
     },
     toggleFocused() {
       const slot =
@@ -204,11 +212,6 @@ function disposeKits(slots: Map<string, Slot>) {
   for (const slot of slots.values()) {
     slot.kit.dispose();
   }
-}
-
-// Within 1px of the bottom, since `scrollTop` can land on a fraction.
-function isScrolledToBottom(list: HTMLElement): boolean {
-  return list.scrollHeight - list.clientHeight - list.scrollTop <= 1;
 }
 
 function focusedEntry(

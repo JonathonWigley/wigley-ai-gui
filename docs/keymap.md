@@ -40,7 +40,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `R` rescan.
 - **Ctrl+hjkl** moves inside the content: `Ctrl+j`/`Ctrl+k` scroll half a page in the doc, its
-  editor too while editing, and the chat transcript, and page the gallery a whole page (in forms,
+  editor too while editing (in visual mode the selection grows or shrinks with the scroll, as vim's
+  `Ctrl+d`/`Ctrl+u` do), and the chat transcript, and page the gallery a whole page (in forms,
   the next and previous box); `Ctrl+h`/`Ctrl+l` the previous and next unit (forms items). A chord
   bind takes the key from vim inside a box too, as forms' `Ctrl+j` does: in the chat box and the
   doc editor vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by design.

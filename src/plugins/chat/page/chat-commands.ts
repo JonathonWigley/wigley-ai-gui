@@ -7,6 +7,7 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { halfPageText } from '../../../shared/half-page';
 import type { ChatChannel } from '../contract';
 import type { chatManifest } from '../manifest';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
@@ -166,8 +167,8 @@ export function chatCommandHandlers(
           : 'focused the first entry',
       );
     }),
-    halfPageDown: inSession((session) => session.entries.scrollHalfPage(1)),
-    halfPageUp: inSession((session) => session.entries.scrollHalfPage(-1)),
+    halfPageDown: inSession((session) => scrollTranscript(session, 1, log)),
+    halfPageUp: inSession((session) => scrollTranscript(session, -1, log)),
     toggleEntry: inSession((session) => {
       const toggled = session.entries.toggleFocused();
       if (toggled === null) {
@@ -276,6 +277,18 @@ function moveEntry(session: ChatSession, step: 1 | -1, log: Log) {
     focused === null
       ? `no entries in ${session.name}`
       : `focused ${focused.kind} entry`,
+  );
+}
+
+// Logs e.g. `scrolled the transcript up half a page; not following`.
+function scrollTranscript(session: ChatSession, direction: 1 | -1, log: Log) {
+  const scroll = session.entries.scrollHalfPage(direction);
+  const following = scroll.following
+    ? 'following the latest entry'
+    : 'not following';
+  log(
+    'chat',
+    `${halfPageText('the transcript', direction, scroll)}; ${following}`,
   );
 }
 

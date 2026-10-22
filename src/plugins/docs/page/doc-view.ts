@@ -12,6 +12,7 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element, markdownElement } from '../../../shared/page/dom';
+import { halfPageText, scrollHalfPage } from '../../../shared/half-page';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { type TagTone, tag } from '../../../shared/page/ui/tag';
 import type { DocsChannel } from '../contract';
@@ -103,7 +104,7 @@ export interface DocView {
   edit(line?: number): void;
   scroll(by: 1 | -1): void;
   // Scrolls the open editor by half its visible height, else the pane by half
-  // its own.
+  // its own, and logs how far it moved and whether the editor's cursor moved.
   scrollHalfPage(direction: 1 | -1): void;
   // Focuses the open editor, else the pane.
   focus(): void;
@@ -659,11 +660,18 @@ export function createDocView(deps: DocViewDeps): DocView {
       pane.scrollTop += by * SCROLL_STEP_PX;
     },
     scrollHalfPage(direction) {
-      if (editor !== null) {
-        editor.scrollHalfPage(direction);
-      } else {
-        pane.scrollTop += (direction * pane.clientHeight) / 2;
+      const name = shown?.name ?? 'the doc pane';
+      if (editor === null) {
+        const scroll = scrollHalfPage(pane, direction);
+        deps.log('docs', halfPageText(name, direction, scroll));
+        return;
       }
+      const scroll = editor.scrollHalfPage(direction);
+      const cursor = scroll.cursorMoved ? 'moved' : 'stayed';
+      deps.log(
+        'docs',
+        `${halfPageText(`the editor on ${name}`, direction, scroll)}; the cursor ${cursor}`,
+      );
     },
     focus() {
       if (editor !== null) {

@@ -24,15 +24,18 @@ const STYLE_CHANGED_WHILE_EDITING =
 // Space k d shows Docs mode, whose first show builds the index: the fixture's
 // eight entries. G selects the last row and gg the first, Global. j to Global's
 // Instructions and l expands it; j to the self-test instructions and l opens
-// CLAUDE.md. Option+l focuses the doc; Tab reaches its first link, the style
-// rule, and Enter follows it. A change on disk reloads style.md. i edits it,
+// CLAUDE.md. Option+l focuses the doc; Ctrl+j scrolls it half a page and
+// Ctrl+k back to the top. i edits it at the top: Ctrl+j scrolls the editor
+// half a page, moving the cursor, and Ctrl+k back to the top, where the cursor
+// is in sight; V and Ctrl+j grow the selection with the scroll, and Ctrl+k
+// shrinks it back to the top. Esc, and :q closes the editor. Tab reaches the
+// doc's first link, the style rule, and Enter follows it. A change on disk reloads style.md. i edits it,
 // and a second change on disk shows the changed-on-disk banner. o types a new
 // line below, Esc to normal mode and :w meets the changed-on-disk prompt, where
 // r reloads the disk's text. Another change on disk, a new line and :w again,
 // and o overwrites the disk. A third, and Esc keeps editing; :w shows the
-// prompt again and o overwrites. :q closes the editor. i again, Ctrl+j scrolls
-// the editor half a page, x deletes a character, so :q is refused and :q!
-// drops the edit. Option+h back to the
+// prompt again and o overwrites. :q closes the editor. i again, x deletes a
+// character, so :q is refused and :q! drops the edit. Option+h back to the
 // tree; a asks for a kind (the kind picker's screenshot), j Enter picks rule,
 // Enter its one place, and tidy names it, which creates tidy.md and opens it in
 // the editor; :q closes it. Option+h to the tree, where r opens the path box on
@@ -74,6 +77,36 @@ const STEPS: SelfTestStep[] = [
   { keys: ['j', 'l'], expect: '[docs] expanded Instructions' },
   { keys: ['j', 'l'], expect: '[docs] opened CLAUDE.md', checksFit: true },
   { keys: ['<A-l>'], expect: '[docs] doc focused' },
+  { keys: ['<C-j>'], expect: '[docs] scrolled CLAUDE.md down half a page' },
+  {
+    keys: ['<C-k>'],
+    expect: '[docs] scrolled CLAUDE.md up half a page to the top',
+  },
+  { keys: ['i'], expect: '[docs] editing CLAUDE.md' },
+  {
+    keys: ['<C-j>'],
+    expect:
+      '[docs] scrolled the editor on CLAUDE.md down half a page; the cursor moved',
+  },
+  {
+    keys: ['<C-k>'],
+    expect:
+      '[docs] scrolled the editor on CLAUDE.md up half a page to the top; the cursor stayed',
+  },
+  {
+    keys: ['V', '<C-j>'],
+    expect:
+      '[docs] scrolled the editor on CLAUDE.md down half a page; the cursor moved',
+  },
+  {
+    keys: ['<C-k>'],
+    expect:
+      '[docs] scrolled the editor on CLAUDE.md up half a page to the top; the cursor moved',
+  },
+  {
+    keys: ['Escape', ':', 'q', 'Enter'],
+    expect: '[docs] closed the editor on CLAUDE.md',
+  },
   { keys: ['Tab', 'Enter'], expect: '[docs] opened style.md' },
   {
     writeFile: { path: STYLE_RULE_FILE, text: STYLE_RELOADED },
@@ -113,7 +146,6 @@ const STEPS: SelfTestStep[] = [
   { keys: ['o'], expect: '[docs] wrote style.md' },
   { keys: [':', 'q', 'Enter'], expect: '[docs] closed the editor on style.md' },
   { keys: ['i'], expect: '[docs] editing style.md' },
-  { keys: ['<C-j>'], expect: '[page] <C-j> ran docs.halfPageDown' },
   {
     keys: ['x', ':', 'q', 'Enter'],
     expect: '[docs] refused :q with unsaved edits on style.md',

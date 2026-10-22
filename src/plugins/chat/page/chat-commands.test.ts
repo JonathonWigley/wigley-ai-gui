@@ -5,6 +5,7 @@ import type { ChatSessionState } from '../contract';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
 import { type ChatCommandDeps, chatCommandHandlers } from './chat-commands';
 import type { ChatSession, ChatTabs, PermissionActions } from './chat-view';
+import type { TranscriptScroll } from './entry-list';
 import type { Picker, PickerRequest } from './picker';
 
 const mode: SessionControl = {
@@ -25,8 +26,12 @@ const userEntry: ChatEntry = {
 };
 
 // `first` answers each call with `firstEntry` and counts it in `firstCalls`;
-// `scrollHalfPage` records each step in `scrolls`.
-function session(ended: boolean, firstEntry: ChatEntry | null = null) {
+// `scrollHalfPage` records each step in `scrolls` and answers with `scroll`.
+function session(
+  ended: boolean,
+  firstEntry: ChatEntry | null = null,
+  scroll: TranscriptScroll = { moved: true, atEnd: false, following: false },
+) {
   const counts = { firstCalls: 0, scrolls: [] as number[] };
   const state: ChatSessionState = {
     sessionId: 'row-1',
@@ -44,6 +49,7 @@ function session(ended: boolean, firstEntry: ChatEntry | null = null) {
     },
     scrollHalfPage(step: 1 | -1) {
       counts.scrolls.push(step);
+      return scroll;
     },
   } as ChatSession['entries'];
   const shown: ChatSession = {
@@ -212,22 +218,51 @@ describe('chat commands', () => {
     expect(run.logs).toEqual(['[chat] no entries in app']);
   });
 
-  it('halfPageDown_sessionShown_scrollsItsEntriesDown', () => {
-    const shown = session(false);
+  it('halfPageDown_scrollsOntoTheBottom_logsItFollows', () => {
+    const shown = session(false, null, {
+      moved: true,
+      atEnd: true,
+      following: true,
+    });
     const run = setUp(shown);
 
     run.handlers.halfPageDown({});
 
     expect(shown.counts.scrolls).toEqual([1]);
+    expect(run.logs).toEqual([
+      '[chat] scrolled the transcript down half a page to the bottom; following the latest entry',
+    ]);
   });
 
-  it('halfPageUp_sessionShown_scrollsItsEntriesUp', () => {
-    const shown = session(false);
+  it('halfPageUp_scrollsOffTheBottom_logsItStoppedFollowing', () => {
+    const shown = session(false, null, {
+      moved: true,
+      atEnd: false,
+      following: false,
+    });
     const run = setUp(shown);
 
     run.handlers.halfPageUp({});
 
     expect(shown.counts.scrolls).toEqual([-1]);
+    expect(run.logs).toEqual([
+      '[chat] scrolled the transcript up half a page; not following',
+    ]);
+  });
+
+  it('halfPageDown_alreadyAtTheBottom_logsItDidNotScroll', () => {
+    const shown = session(false, null, {
+      moved: false,
+      atEnd: true,
+      following: true,
+    });
+    const run = setUp(shown);
+
+    run.handlers.halfPageDown({});
+
+    expect(run.logs).toEqual([
+      '[chat] the transcript did not scroll down; following the latest entry',
+    ]);
   });
 
   it('halfPageDown_noChatTabShown_scrollsNothingAndLogsIt', () => {
