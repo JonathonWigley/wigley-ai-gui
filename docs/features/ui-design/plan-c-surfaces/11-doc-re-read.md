@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10
 Plan: [plan.md](plan.md)

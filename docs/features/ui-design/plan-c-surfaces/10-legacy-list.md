@@ -1,6 +1,6 @@
 # 10 — Remove the style check's legacy list
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09
 Plan: [plan.md](plan.md)
@@ -85,3 +85,5 @@ the task whose file it was.
 None of its own; a straggler fixed in a stylesheet adds its surface to [12](12-final-verification.md)'s screenshot read as "spacing moved to a token step" (expected).
 
 ## Proof
+
+Commit `089f3d4`. Diff read against the script table and Retired dialog styles; `styles: 287 files clean`; `--no-legacy` exits 1 with the unknown-argument line; typecheck, lint, tests (1901) and the self-test pass. Stragglers: none (the pre-edit run reported only `dialog.css`, deleted). Ruling: the paths mode goes too, so the script takes no argument. Concerns: the `dialog.css` grep matches `ui/dialog.ts`'s own `./dialog.css` import (false positive); `kbd.css`'s resets now restate browser defaults.

@@ -189,7 +189,7 @@ core's toasts.
 - [x] [Chat keys](07-chat-keys.md) — after 05, 06
 
 ### Wave 5
-- [ ] [Remove the style check's legacy list](10-legacy-list.md) — after 01–09
+- [x] [Remove the style check's legacy list](10-legacy-list.md) — after 01–09
 
 ### Wave 6
 - [ ] [Doc re-read](11-doc-re-read.md) — after 01–10
@@ -211,7 +211,9 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - 04 · 9045497 · proved (same) · concerns: is-disabled greys rail rows under confirm; DESIGN.md rail line and AGENTS.md kit list stale (11); `.rail-title` in forms self-test (05)
 - 05 · 82e8635 · proved (diff read, typecheck, lint, tests, self-test) · concerns: which-key.test.ts builds made-up jumpTo commands; Option+n dead key live check
 - 07 · 8ace8a1 · proved (diff read, typecheck, lint, tests, self-test) · concerns: AGENTS.md:246 and agent-chat/design.md:120 still name Space c … (11)
+- 10 · 089f3d4 · proved (diff read, style check, typecheck, lint, tests, self-test) · concerns: dialog.css grep false positive on ui/dialog.ts; kbd.css resets redundant
 ### Contract changes
+- `parseStyleArguments(args, filesInSrc)` (plan B) → `argumentFailures(args): string[]`; `legacyListProblems` removed · why: the script takes no argument · consumers: check-styles.mts only · group 10
 - `readVimKeys` (01): planned → not added; `formatVimKeys` already holds its body · why: landed earlier · consumers: none · group 01
 - `DialogDeps.keys` (06): `Pick<KeysPageExports, 'keysFor' | 'onChanged'>` → `Pick<KeysPageExports, 'keysFor'>` · why: dialogs rebuild buttons on every open · consumers: none · group 06
 - `keyHint` (04): gains a non-null overload; card-parts.ts also exports `appendKeyHint(control, readKeys, platform): () => void` replacing `showKeys` · why: hints that redraw on keymap change · consumers: none outside forms · group 04
@@ -222,5 +224,6 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - 08's Done-when grep hits `.docs-chips` (doc-view.ts, docs.css): expected, the docs.css table keeps that container — costs nothing · lead
 - The self-test runner race (fit check restoring width without a redraw wait) is fixed in `src/main/selftest.ts`, a file no task owns — a test-harness fix that changes no app behaviour — costs a slower fit check (three frames) · lead
 - The forms self-test's user-keymap block moves `toggleNotApplicable` instead of the removed `jumpTo2` — the spec's "every other step stays" could not hold once jumpTo went — costs nothing · group 05
+- check-styles drops its paths mode with `--no-legacy`: paths only ever worked behind that flag and only plan C proofs used them — costs a single-file check, which would return as a new flag · group 10
 ### Review rounds
 ### Test gate
