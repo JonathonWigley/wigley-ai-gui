@@ -1,5 +1,6 @@
 import '../../../shared/page/markdown.css';
 import './docs.css';
+import type { CommandId } from '../../../contracts/commands';
 import type {
   PageApi,
   PagePart,
@@ -26,6 +27,7 @@ import {
   type DocsView,
   type DocsViewCommands,
 } from './docs-view';
+import { commandOfKeysIn } from './hidden-tree-keys';
 
 type DocsApi = PageApi<
   typeof docsManifest,
@@ -40,27 +42,32 @@ interface SessionDocs {
   handle: SessionTabHandle | null;
 }
 
-// The tree commands that need the tree in sight, each with the doc pane
-// command its key runs instead while Docs mode's side bar is hidden, or null
-// when the key only moves focus to the doc pane.
-const TREE_COMMANDS_IN_SIGHT: ReadonlyMap<
-  keyof DocsViewCommands,
-  keyof DocsViewCommands | null
-> = new Map<keyof DocsViewCommands, keyof DocsViewCommands | null>([
-  ['treeDown', 'scrollDown'],
-  ['treeUp', 'scrollUp'],
-  ['treeOpen', null],
-  ['treeClose', null],
-  ['treeTop', null],
-  ['treeBottom', null],
-  ['filter', null],
-  ['rescan', null],
-  ['pickContext', null],
-  ['createByKind', null],
-  ['createByPath', null],
-  ['rename', null],
-  ['trash', null],
+// The tree commands that need the tree in sight. While Docs mode's side bar
+// is hidden, each moves focus to the doc pane and runs what its key runs
+// there, by the keymap in force.
+const TREE_COMMANDS_IN_SIGHT: ReadonlySet<keyof DocsViewCommands> = new Set<
+  keyof DocsViewCommands
+>([
+  'treeDown',
+  'treeUp',
+  'treeOpen',
+  'treeClose',
+  'treeTop',
+  'treeBottom',
+  'filter',
+  'rescan',
+  'pickContext',
+  'createByKind',
+  'createByPath',
+  'rename',
+  'trash',
 ]);
+
+const TREE_COMMAND_IDS: ReadonlySet<CommandId> = new Set(
+  [...TREE_COMMANDS_IN_SIGHT].map((command) =>
+    qualify(docsManifest.id, command),
+  ),
+);
 
 // A session Docs tab's tree width limits in CSS pixels; every session's tab
 // reads and writes the one stored width.
@@ -277,22 +284,41 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     };
 
     // On Docs mode with its side bar hidden, by `Space k d` or a narrow
-    // window, a tree command moves focus to the doc pane and runs the doc
-    // command it stands for there, so no key moves a selection out of sight
-    // and `j` scrolls the doc on its first press. The narrowing itself gives
-    // the mode no callback, so the check runs on each key.
+    // window, a tree command moves focus to the doc pane and runs the command
+    // its key runs there, so no key moves a selection out of sight and `j`
+    // scrolls the doc on its first press. The handler is not told which key
+    // fired, so it runs one only when every key of the tree command runs the
+    // same command in the doc pane, and never a tree command, which would
+    // land here again. The narrowing itself gives the mode no callback, so
+    // the check runs on each key.
+    const runInDocPane = (command: keyof DocsViewCommands) => {
+      const treeScope = api.keys.scope();
+      machineView.treeHidden();
+      const docCommand = commandOfKeysIn(
+        api.keys.keymap(),
+        qualify(docsManifest.id, command),
+        treeScope,
+        api.keys.scope(),
+      );
+      const isRunnable =
+        docCommand !== null && !TREE_COMMAND_IDS.has(docCommand);
+      log(
+        'docs',
+        `tree out of sight: ${command} ran ${isRunnable ? docCommand : 'nothing'} in the doc`,
+      );
+      if (isRunnable) {
+        api.commands.run(docCommand);
+      }
+    };
+
     const onActiveView = (command: keyof DocsViewCommands) => () => {
       const view = activeView();
-      const docCommand = TREE_COMMANDS_IN_SIGHT.get(command);
       const isTreeOutOfSight =
         view === machineView &&
-        docCommand !== undefined &&
+        TREE_COMMANDS_IN_SIGHT.has(command) &&
         !mode.sideBarShown();
       if (isTreeOutOfSight) {
-        machineView.treeHidden();
-        if (docCommand !== null) {
-          machineView.commands[docCommand]();
-        }
+        runInDocPane(command);
         return;
       }
       view?.commands[command]();
