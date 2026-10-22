@@ -1,6 +1,6 @@
 # 07 — Chat keys
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 05 (it moved this script's forms submit step to `<D-Enter>`), 06
 Plan: [plan.md](plan.md)
@@ -98,3 +98,4 @@ Merged into [12 — Final verification](12-final-verification.md) § Chat.
 
 ## Proof
 
+Commit `8ace8a1`. Diff read against the Keys table, Handler and Self-test steps; typecheck, lint, tests (1906, the two firstEntry tests among them) and the self-test pass. Concerns: AGENTS.md and agent-chat/design.md still name `Space c …` (task 11).

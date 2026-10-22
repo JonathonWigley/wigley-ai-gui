@@ -186,7 +186,7 @@ core's toasts.
 - [x] [Forms keys](05-forms-keys.md) — after 04
 
 ### Wave 4
-- [ ] [Chat keys](07-chat-keys.md) — after 05, 06
+- [x] [Chat keys](07-chat-keys.md) — after 05, 06
 
 ### Wave 5
 - [ ] [Remove the style check's legacy list](10-legacy-list.md) — after 01–09
@@ -210,6 +210,7 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - 06 · fc54416 · proved (same) · concerns: chat-commands.ts keeps a private CONTROL_IDS until 07
 - 04 · 9045497 · proved (same) · concerns: is-disabled greys rail rows under confirm; DESIGN.md rail line and AGENTS.md kit list stale (11); `.rail-title` in forms self-test (05)
 - 05 · 82e8635 · proved (diff read, typecheck, lint, tests, self-test) · concerns: which-key.test.ts builds made-up jumpTo commands; Option+n dead key live check
+- 07 · 8ace8a1 · proved (diff read, typecheck, lint, tests, self-test) · concerns: AGENTS.md:246 and agent-chat/design.md:120 still name Space c … (11)
 ### Contract changes
 - `readVimKeys` (01): planned → not added; `formatVimKeys` already holds its body · why: landed earlier · consumers: none · group 01
 - `DialogDeps.keys` (06): `Pick<KeysPageExports, 'keysFor' | 'onChanged'>` → `Pick<KeysPageExports, 'keysFor'>` · why: dialogs rebuild buttons on every open · consumers: none · group 06

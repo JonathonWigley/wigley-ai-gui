@@ -1,6 +1,6 @@
 # 10 — Remove the style check's legacy list
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09
 Plan: [plan.md](plan.md)
