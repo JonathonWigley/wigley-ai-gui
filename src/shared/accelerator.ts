@@ -18,7 +18,10 @@ const MODIFIERS = new Set([
   'meta',
 ]);
 
-const PUNCTUATION = ')!@#$%^&*(:;+=<,_->.?/~`{][|\\}"';
+// Electron's docs list `"` but not `'`; its key-code mapping
+// (`KeyboardCodeFromCharCode` in shell/common/keyboard_util.cc) maps both to
+// the same key.
+const PUNCTUATION = ')!@#$%^&*(:;+=<,_->.?/~`{][|\\}"\'';
 
 const NAMED_KEYS = [
   'plus',

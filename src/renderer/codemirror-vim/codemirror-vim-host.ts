@@ -4,16 +4,18 @@ import { syntaxHighlighting } from '@codemirror/language';
 import { Compartment, EditorState } from '@codemirror/state';
 import { lineNumbers } from '@codemirror/view';
 import { CodeMirror, getCM, Vim, vim } from '@replit/codemirror-vim';
-import type {
-  CreateEditorHost,
-  DocumentEditor,
-  DocumentEditorEvents,
-  DocumentOptions,
-  EditorEvents,
-  EditorOptions,
-  FocusOptions,
-  TextEditor,
-  VimMode,
+import {
+  type CreateEditorHost,
+  type DocumentEditor,
+  type DocumentEditorEvents,
+  type DocumentOptions,
+  type EditorEvents,
+  type EditorOptions,
+  type FocusOptions,
+  type TextEditor,
+  UNBOUND_INSERT_KEYS,
+  type UnboundInsertKey,
+  type VimMode,
 } from '../../contracts/editor';
 import type {
   EditorBind,
@@ -70,19 +72,24 @@ type RunBinds = (binds: EditorBind[], editor: TextEditor) => boolean;
 
 // What each key an insert-mode bind may take does in insert mode with no bind
 // on it, as CodeMirror's own key handling does it.
-const UNBOUND_INSERT_KEYS: Partial<Record<string, (cm: CodeMirror) => void>> = {
+const UNBOUND_INSERT_ACTIONS: Record<
+  UnboundInsertKey,
+  (cm: CodeMirror) => void
+> = {
   '<CR>': (cm) => CodeMirror.commands.newlineAndIndent(cm),
 };
 
+function isUnboundInsertKey(keys: string): keys is UnboundInsertKey {
+  return UNBOUND_INSERT_KEYS.some((key) => key === keys);
+}
+
 function unboundInsertKey(group: BindGroup): (cm: CodeMirror) => void {
-  const unbound = UNBOUND_INSERT_KEYS[group.keys];
-  if (!unbound) {
-    const supported = Object.keys(UNBOUND_INSERT_KEYS).join(', ');
+  if (!isUnboundInsertKey(group.keys)) {
     throw new Error(
-      `Insert-mode bind "${group.keys}" names a key the editor cannot type when no bind is in force; insert binds take ${supported}`,
+      `Insert-mode bind "${group.keys}" names a key the editor cannot type when no bind is in force; insert binds take ${UNBOUND_INSERT_KEYS.join(', ')}`,
     );
   }
-  return unbound;
+  return UNBOUND_INSERT_ACTIONS[group.keys];
 }
 
 // An insert-mode group maps its key to a vim action, which runs without

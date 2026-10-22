@@ -1,4 +1,5 @@
 import type { CommandId } from '../../contracts/commands';
+import { UNBOUND_INSERT_KEYS } from '../../contracts/editor';
 import type {
   AcceleratorBind,
   EditorBind,
@@ -197,6 +198,16 @@ function requireScope(
   return scope;
 }
 
+// Throws unless an insert bind's `keys` are one the editor types itself when
+// the bind does not run.
+function requireUnboundInsertKey(path: string, keys: string): void {
+  if (!UNBOUND_INSERT_KEYS.some((key) => key === keys)) {
+    throw new Error(
+      `"${path}" is ${JSON.stringify(keys)}; an insert bind takes ${UNBOUND_INSERT_KEYS.join(', ')}.`,
+    );
+  }
+}
+
 function readModifiers(
   path: string,
   entry: Record<string, unknown>,
@@ -256,6 +267,9 @@ function readEditorBind(
   if (Object.hasOwn(entry, 'mode')) {
     bind.mode = requireMode(`${path}.mode`, entry.mode);
   }
+  if (bind.mode === 'insert') {
+    requireUnboundInsertKey(`${path}.keys`, bind.keys);
+  }
   return bind;
 }
 
@@ -306,7 +320,11 @@ function readInterceptBind(
   };
 }
 
-function readUnbind(path: string, value: unknown): KeymapUnbind {
+function readUnbind(
+  path: string,
+  value: unknown,
+  names: KeymapNames,
+): KeymapUnbind {
   const entry = requireObject(path, value);
   const named = UNBIND_KINDS.filter((kind) => Object.hasOwn(entry, kind));
   if (named.length !== 1) {
@@ -318,12 +336,12 @@ function readUnbind(path: string, value: unknown): KeymapUnbind {
     case 'page':
       return {
         page: requireKeyList(`${path}.page`, entry.page),
-        scope: requireString(`${path}.scope`, entry.scope),
+        scope: requireScope(`${path}.scope`, entry.scope, names),
       };
     case 'editor': {
       const unbind: KeymapUnbind = {
         editor: requireKeysString(`${path}.editor`, entry.editor),
-        scope: requireString(`${path}.scope`, entry.scope),
+        scope: requireScope(`${path}.scope`, entry.scope, names),
       };
       if (Object.hasOwn(entry, 'mode')) {
         unbind.mode = requireMode(`${path}.mode`, entry.mode);
@@ -422,8 +440,9 @@ function readEditor(
 }
 
 // The user keymap `text`, a `keymap.json`, holds, each bind naming a command
-// and scope of `names` that runs in the bind's process, and each accelerator
-// one Electron accepts. Throws an Error whose message is the first problem
+// and scope of `names` that runs in the bind's process, each unbind a scope of
+// `names`, each insert bind a key of `UNBOUND_INSERT_KEYS`, and each
+// accelerator one Electron accepts. Throws an Error whose message is the first problem
 // found, as the user reads it.
 export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
   const file = parseJsonObject(text);
@@ -465,7 +484,9 @@ export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
     requireDistinctAccelerators('global', keymap.global);
   }
   if (Object.hasOwn(file, 'unbind')) {
-    keymap.unbind = readList('unbind', file.unbind, readUnbind);
+    keymap.unbind = readList('unbind', file.unbind, (path, entry) =>
+      readUnbind(path, entry, names),
+    );
   }
   return keymap;
 }

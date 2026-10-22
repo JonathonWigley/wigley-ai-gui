@@ -10,6 +10,7 @@ describe('acceleratorProblem', () => {
     'Super+num7',
     'AltGr+Plus',
     'Command+/',
+    "Command+'",
     'Meta+MediaPlayPause',
     'F24',
   ])('accepts %s', (accelerator) => {

@@ -1,5 +1,12 @@
 import type { EditorBind, EditorKeymap } from './keymap';
 
+// The keys an insert-mode editor bind may take, in vim notation: each is one
+// the host can type itself when no bind on it runs, as `CreateEditorHost`
+// requires.
+export const UNBOUND_INSERT_KEYS = ['<CR>'] as const;
+
+export type UnboundInsertKey = (typeof UNBOUND_INSERT_KEYS)[number];
+
 // `insertAtEnd` focuses in insert mode with the cursor after the last
 // character, as vim's `GA` does; `insert` focuses in insert mode with the
 // cursor where it was, as vim's `i` does; `insertAtEnd` wins when both are

@@ -138,7 +138,10 @@ describe('requireUnambiguousEditorBinds', () => {
   });
 
   it("requireUnambiguousEditorBinds accepts a normal bind beginning with an insert bind's key", () => {
-    const binds = [insertBind('g', 'a.one', 'a.x'), bind('gx', 'b.two', 'b.y')];
+    const binds = [
+      insertBind('<CR>', 'a.one', 'a.x'),
+      bind('<CR>x', 'b.two', 'b.y'),
+    ];
 
     expect(() => requireUnambiguousEditorBinds(binds, '<Space>')).not.toThrow();
   });
@@ -148,6 +151,14 @@ describe('requireUnambiguousEditorBinds', () => {
 
     expect(() => requireUnambiguousEditorBinds(binds, '<Space>')).toThrow(
       'must be one key',
+    );
+  });
+
+  it('requireUnambiguousEditorBinds rejects an insert bind on a key outside the unbound insert keys', () => {
+    const binds = [insertBind('<C-a>', 'a.one', 'a.x')];
+
+    expect(() => requireUnambiguousEditorBinds(binds, '<Space>')).toThrow(
+      'insert binds take <CR>',
     );
   });
 });

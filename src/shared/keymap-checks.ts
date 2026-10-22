@@ -1,6 +1,7 @@
 // The checks a keymap must pass before any key is installed. Main runs them on
 // each merged keymap and the page runs them again as it installs its keys, so
 // main never serves a keymap the page would throw on.
+import { UNBOUND_INSERT_KEYS } from '../contracts/editor';
 import type {
   EditorBind,
   Keymap,
@@ -80,12 +81,20 @@ function describeScopedEditorBind(bind: EditorBind): string {
   return `"${bind.keys}" [${bind.scope}] ${bind.command}`;
 }
 
-function requireOneKeyInsertBind(bind: EditorBind, tokens: string[]): void {
-  const isMultiKeyInsert =
-    editorBindMode(bind) === 'insert' && tokens.length !== 1;
-  if (isMultiKeyInsert) {
+// Throws on an insert-mode bind of more than one key, or on a key the editor
+// cannot type itself when the bind does not run.
+function requireTypableInsertBind(bind: EditorBind, tokens: string[]): void {
+  if (editorBindMode(bind) !== 'insert') {
+    return;
+  }
+  if (tokens.length !== 1) {
     throw new Error(
       `Insert-mode editor bind ${describeScopedEditorBind(bind)} must be one key; vim types the earlier keys of a sequence before it matches`,
+    );
+  }
+  if (!UNBOUND_INSERT_KEYS.some((key) => key === tokens[0])) {
+    throw new Error(
+      `Insert-mode editor bind ${describeScopedEditorBind(bind)} names a key the editor cannot type when no bind runs; insert binds take ${UNBOUND_INSERT_KEYS.join(', ')}`,
     );
   }
 }
@@ -105,14 +114,15 @@ function beginsLonger(shorter: string[], longer: string[]): boolean {
 // `leader`, in overlapping scopes; on a bind whose keys begin another's longer
 // keys in the same mode in any scopes, since vim maps are global to every
 // editor and vim runs a complete map at once instead of waiting for a longer
-// one; and on an insert-mode bind of more than one key.
+// one; and on an insert-mode bind of more than one key or on a key outside
+// `UNBOUND_INSERT_KEYS`.
 export function requireUnambiguousEditorBinds(
   binds: EditorBind[],
   leader: string,
 ): void {
   const tokens = binds.map((bind) => vimTokens(bind.keys, leader));
   binds.forEach((bind, index) => {
-    requireOneKeyInsertBind(bind, tokens[index]);
+    requireTypableInsertBind(bind, tokens[index]);
     binds.forEach((other, otherIndex) => {
       const isLaterBind = otherIndex > index;
       const sameMode = editorBindMode(bind) === editorBindMode(other);
