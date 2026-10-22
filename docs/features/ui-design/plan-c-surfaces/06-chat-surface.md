@@ -1,6 +1,6 @@
 # 06 — Chat tab: transcript, tool and permission cards, floating composer, layout kit
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 02 (the list picker's layer), 03 (the session's sheet)
 Plan: [plan.md](plan.md)
@@ -240,3 +240,4 @@ Merged into [12 — Final verification](12-final-verification.md) § Chat.
 
 ## Proof
 
+Commit `fc54416`. Diff read against Decisions, Layout kit and Changes by file; typecheck, lint, tests and the self-test's chat script pass. Concerns: chat-commands.ts keeps a private CONTROL_IDS copy until 07; the Send hint and the composer's stacking are judged on screen.

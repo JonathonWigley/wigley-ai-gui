@@ -1,6 +1,6 @@
 # 01 — Chrome: title bar, activity bar, side bar, status bar, key bar, which-key, help
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02 (it removed the toast rules from `shell.css`)
 Plan: [plan.md](plan.md)
@@ -194,3 +194,5 @@ Space`, `[keys] which-key closed`) and help steps must still pass unchanged.
 Merged into [12 — Final verification](12-final-verification.md) § Chrome.
 
 ## Proof
+
+Commit `85cfdd8`. Diff read against Decisions and the shell.css, shell-layout.ts and keys.css tables: materials, hairlines, which-key, help and key bar as specified; typecheck, lint, tests (1907) and the self-test's forms which-key and help steps pass. Concerns: the editor-hint conversion had already landed as `formatVimKeys` (lead ruling); the `record-keys` codicon is judged on screen; dialog.css keeps `.dialog-help` until task 10.

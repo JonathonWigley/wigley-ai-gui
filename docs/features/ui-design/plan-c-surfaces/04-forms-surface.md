@@ -1,6 +1,6 @@
 # 04 — Form tab: rail split, cards, layout kit
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 03 (the session's sheet the Form tab fills)
 Plan: [plan.md](plan.md)
@@ -234,3 +234,5 @@ environment is `node`); it is judged live in 12. `layout-actions.test.ts`, `card
 Merged into [12 — Final verification](12-final-verification.md) § Form tab and forms keys.
 
 ## Proof
+
+Commit `9045497`. Diff read against Decisions, the button and copy tables and Produces; typecheck, lint, tests (the `railDotStatus` block among them) and the self-test's forms script pass. Concerns: plan B's `is-disabled` row style greys rail rows under the confirm dialog (judge live); DESIGN.md's rail `block-background` line and AGENTS.md's kit-part list are stale (task 11); `.rail-title` in the forms self-test script (task 05).
