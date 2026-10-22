@@ -1,6 +1,6 @@
 # 08 — Docs: tree and doc parts, side bar, split, keys
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02 (the list picker), 03 (the session's sheet)
 Plan: [plan.md](plan.md)
@@ -231,3 +231,5 @@ clip, so no `.ui-*` entry joins); `.docs-path`, `.docs-status`, `.docs-frontmatt
 Merged into [12 — Final verification](12-final-verification.md) § Docs (D1–D13).
 
 ## Proof
+
+Commit `03ebb98`, with the runner fix `f37d5e1`. Diff read against every section; typecheck, lint, tests (the edgeSelection tests among them) pass. The self-test first failed from the new `G` step: a race in `src/main/selftest.ts`, whose fit check restored the window width without waiting for the narrow media query's change to reach the core. With the runner waiting for a redraw after the restore, the self-test passes in three consecutive runs. Concerns: `.docs-chips` hits the Done-when grep (the table keeps it); Docs' `shown` reads `mode` only because Sessions mode is added first.

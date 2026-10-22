@@ -180,7 +180,7 @@ core's toasts.
 - [x] [Chrome: title bar, activity bar, side bar, status bar, key bar, which-key, help](01-chrome.md) — after 02
 - [x] [Form tab: rail split, cards, layout kit](04-forms-surface.md) — after 03
 - [x] [Chat tab: transcript, tool and permission cards, floating composer, layout kit](06-chat-surface.md) — after 02, 03
-- [ ] [Docs: tree and doc parts, side bar, split, keys](08-docs.md) — after 02, 03
+- [x] [Docs: tree and doc parts, side bar, split, keys](08-docs.md) — after 02, 03
 
 ### Wave 3
 - [ ] [Forms keys](05-forms-keys.md) — after 04
@@ -206,7 +206,7 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - 02 · cd87ae7 · proved (same) · concerns: chat/docs layers keep `.overlay`/`.docs-overlay` until 06/08; `statusbar-height` theme token may be unread now
 - 03 · 7e42310 · proved (same) · concerns: session rows are divs not buttons; sheet's `overflow: auto` wraps tab bodies
 - 01 · 85cfdd8 · proved (diff read, typecheck, lint, tests, self-test) · concerns: record-keys icon unchecked; dialog.css `.dialog-help` leftover
-- 08 · 03ebb98 · self-test FAILS from its new `G` step (24 failures, docs only) — re-dispatched with the failure named · concerns: `.docs-chips` hits the Done-when grep (expected: the table keeps it); out-of-sight guard lives in start.ts's onActiveView
+- 08 · 03ebb98 + runner fix f37d5e1 · proved (diff read, typecheck, lint, tests; self-test 3 consecutive passes after the fix) — first self-test failed from its `G` step: the fit check's width restore raced the narrow media query; second dispatch BLOCKED on that root cause outside docs; fixed by opus-high in `src/main/selftest.ts` · concerns: `.docs-chips` hits the Done-when grep (expected: the table keeps it); out-of-sight guard lives in start.ts's onActiveView
 - 06 · fc54416 · proved (same) · concerns: chat-commands.ts keeps a private CONTROL_IDS until 07
 - 04 · 9045497 · proved (same) · concerns: is-disabled greys rail rows under confirm; DESIGN.md rail line and AGENTS.md kit list stale (11); `.rail-title` in forms self-test (05)
 ### Contract changes
@@ -218,5 +218,6 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - `npm run selftest` (one Electron instance) is run by the lead per group, never by parallel workers — two instances at once collide — costs nothing · lead
 - Task 01's `readVimKeys` and `editorHints(…, platform)` already stand in the tree as `formatVimKeys` and `editorHints(editor, label, platform)`, with their tests; 01 keeps `formatVimKeys` and adds no duplicate — costs a renamed helper if a later task names `readVimKeys` · lead
 - 08's Done-when grep hits `.docs-chips` (doc-view.ts, docs.css): expected, the docs.css table keeps that container — costs nothing · lead
+- The self-test runner race (fit check restoring width without a redraw wait) is fixed in `src/main/selftest.ts`, a file no task owns — a test-harness fix that changes no app behaviour — costs a slower fit check (three frames) · lead
 ### Review rounds
 ### Test gate

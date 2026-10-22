@@ -1,6 +1,6 @@
 # 05 — Forms keys
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 3 · Depends on: 04 (03 and 08 too, whose classes leave `SCROLLS_ITSELF`)
 Plan: [plan.md](plan.md)
