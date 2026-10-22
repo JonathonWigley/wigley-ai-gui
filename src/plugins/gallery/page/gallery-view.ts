@@ -422,7 +422,10 @@ function dialogSection(): HTMLElement {
     textButton('Cancel the round', ignore, { variant: 'danger' }),
   );
   dialog.show();
-  return framedSection('Dialog', frame(dialog.element));
+  return framedSection(
+    'Dialog',
+    withClass(frame(dialog.element), 'gallery-frame--dialog'),
+  );
 }
 
 function emptyStateSection(platform: Platform): HTMLElement {

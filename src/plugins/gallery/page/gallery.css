@@ -132,6 +132,11 @@
   overflow: hidden;
 }
 
+/* A shown dialog sits inside the scrim's padding. */
+.gallery-frame--dialog {
+  height: calc(var(--wg-row-list) * 8);
+}
+
 .gallery-frame > .ui-split {
   height: 100%;
 }

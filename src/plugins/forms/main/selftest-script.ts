@@ -113,11 +113,12 @@ export const SELFTEST_LAYOUT = {
 // Ctrl+k back; w and Esc leave the box, and w deleted nothing, since leaving
 // dropped the pending d. j to question 2, where q a x then b breaks the
 // self-test bind, so a opens the notes box and "xb" is typed into it; Esc Esc
-// out and x marks question 2 not applicable. Ctrl+h goes back to question 1, where Space opens which-key and
-// the timeout closes it, so 2 starts a fresh sequence and clears the choice
-// (Space 2 would jump), 2 picks it again; Space a 2 clears it and picks it
-// again, Enter replaces that pick with its recommendation, Space 2 jumps to
-// question 2, and Space e n finds no unanswered item.
+// out and x marks question 2 not applicable. Ctrl+h goes back to question 1,
+// where Space opens which-key and the timeout closes it, so 2 starts a fresh
+// sequence and clears the choice (Space 2 would jump), 2 picks it again; Space
+// a 2 clears it and picks it again, Enter replaces that pick with its
+// recommendation, Space 2 jumps to question 2, and Space e n finds no
+// unanswered item.
 // Space opens which-key, a moves it into the Space a group, and Esc cancels the
 // sequence and closes it. Option+Shift+o moves to the second session, where
 // Option+o wraps from its Form tab to its Docs tab and Option+o again back to
@@ -427,7 +428,7 @@ const STEPS: SelfTestStep[] = [
   },
   {
     keys: ['d'],
-    expect: '[gallery] scrolled to 2336px',
+    expect: '[gallery] scrolled to 2392px',
     screenshot: 'gallery-6-full',
   },
   { keys: ['G'], expect: '[gallery] scrolled to the end' },
@@ -462,7 +463,7 @@ const STEPS: SelfTestStep[] = [
     screenshot: 'gallery-5-reduced',
   },
   // Page 6 reduced is the view `t` saved, the sheet already at its end.
-  { keys: ['d'], expect: '[gallery] scrolled to 2336px' },
+  { keys: ['d'], expect: '[gallery] scrolled to 2392px' },
   {
     keys: [' ', 'k', 's'],
     expect: '[page] showed Sessions mode',
