@@ -155,12 +155,17 @@
 .md-pill {
   background: var(--wg-border-strong);
   border-radius: 999px;
-  color: var(--wg-fg-on-accent);
+  color: var(--wg-fg);
   display: inline-block;
   font-size: 0.75em;
   font-weight: 600;
   margin-right: 0.5em;
   padding: 0 0.5em;
+}
+
+/* A change pill's mark fill is light, so it takes dark text. */
+.md-change:is(.added, .changed, .removed) > .md-pill {
+  color: var(--wg-fg-on-accent);
 }
 
 .md-change.added > .md-pill {

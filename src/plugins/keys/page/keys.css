@@ -1,8 +1,10 @@
 /* Which-key: docked full width just above the status bar, over the content
    and over an open dialog's backdrop (`.overlay`, z-index 10) in the same
-   layer. */
+   layer. Opaque `sheet-background`, the floating material's reduced value, as
+   nothing blurs behind it yet; the material-floating helper takes it back to
+   the translucent material. */
 .which-key {
-  background: var(--wg-material-floating-bg);
+  background: var(--wg-sheet-background);
   border-top: 1px solid var(--wg-border-default);
   bottom: var(--wg-status-bar-height);
   font-family: var(--wg-font-mono);

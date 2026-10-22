@@ -8,8 +8,11 @@
   z-index: 10;
 }
 
+/* Opaque `sheet-background`, the floating material's reduced value, as nothing
+   blurs behind it yet; the material-floating helper takes it back to the
+   translucent material. */
 .dialog {
-  background: var(--wg-material-floating-bg);
+  background: var(--wg-sheet-background);
   border: 1px solid var(--wg-border-default);
   border-radius: 0.75rem;
   max-height: calc(100vh - 4rem);

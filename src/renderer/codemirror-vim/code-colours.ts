@@ -10,7 +10,6 @@ const MOCHA_TAG_STYLES: readonly TagStyle[] = [
     tag: [
       tags.name,
       tags.definition(tags.name),
-      tags.deleted,
       tags.character,
       tags.macroName,
     ],
@@ -59,6 +58,8 @@ const MOCHA_TAG_STYLES: readonly TagStyle[] = [
     color: '#a6e3a1',
   },
   { tag: tags.invalid, color: '#f38ba8' },
+  // Upstream colours `deleted` as plain text; red here, so removed diff lines read red.
+  { tag: tags.deleted, color: '#f38ba8' },
 ];
 
 // Catppuccin Mocha's code colours, fixed under any theme: editors highlight

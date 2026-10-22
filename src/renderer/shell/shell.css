@@ -17,13 +17,16 @@
 }
 
 /* The title bar drags the window; its controls take clicks. Its padding
-   leaves room for the OS window buttons. */
+   leaves room for the OS window buttons. Three tracks, `start`, `center` and
+   `end`, the outer two always equal, so the centre sits centred on the window;
+   the centre track is at most 60% of the bar. */
 .shell-title-bar {
   align-items: center;
   background: var(--wg-material-chrome-bg);
   border-bottom: 1px solid var(--wg-border-subtle);
-  display: flex;
+  display: grid;
   grid-area: title;
+  grid-template-columns: minmax(0, 1fr) fit-content(60%) minmax(0, 1fr);
   height: var(--wg-toolbar-height);
   min-width: 0;
   user-select: none;
@@ -48,10 +51,32 @@
   );
 }
 
-/* Alignment in the bars: `start` items pack at the start, and the first
-   `center` item and the first `end` item each push away from what precedes
-   them. Main, the side bar, the panel and the overlay ignore alignment. */
-:is(.shell-title-bar, .shell-status-bar)
+/* Each title bar item takes its alignment's track, on the one row: two items
+   of one alignment overlap. */
+.shell-title-bar > * {
+  grid-row: 1;
+  min-width: 0;
+}
+
+.shell-title-bar > [data-align='start'] {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.shell-title-bar > [data-align='center'] {
+  grid-column: 2;
+}
+
+.shell-title-bar > [data-align='end'] {
+  grid-column: 3;
+  justify-self: end;
+}
+
+/* Alignment in the status and activity bars: `start` items pack at the start,
+   and the first `center` item and the first `end` item each push away from
+   what precedes them. Main, the side bar, the panel and the overlay ignore
+   alignment. */
+.shell-status-bar
   > :is(
     :not([data-align='center']) + [data-align='center'],
     [data-align='center']:first-child,
@@ -74,7 +99,6 @@
 /* The shown mode's context: one line, cut short with an ellipsis, draggable
    like the bar under it. */
 .title-bar-context {
-  max-width: 60%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -120,8 +144,11 @@
   box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-accent);
 }
 
+/* Opaque `block-background`, the dense chrome material's reduced value, as
+   nothing blurs behind it yet; the material-chrome--dense helper takes it
+   back to the translucent material. */
 .shell-side-bar {
-  background: var(--wg-material-chrome-bg-dense);
+  background: var(--wg-block-background);
   border-right: 1px solid var(--wg-border-default);
   grid-area: side;
   min-height: 0;
@@ -140,6 +167,7 @@
 }
 
 .shell-main {
+  background: var(--wg-sheet-background);
   grid-area: main;
   min-height: 0;
   min-width: 0;
@@ -152,6 +180,7 @@
 }
 
 .shell-panel {
+  background: var(--wg-sheet-background);
   border-top: 1px solid var(--wg-border-default);
   grid-area: panel;
   min-width: 0;
@@ -205,8 +234,11 @@
   z-index: 20;
 }
 
+/* Opaque `sheet-background`, the floating material's reduced value, as nothing
+   blurs behind it yet; the material-floating helper takes it back to the
+   translucent material. */
 .toast {
-  background: var(--wg-material-floating-bg);
+  background: var(--wg-sheet-background);
   border: 1px solid var(--wg-border-default);
   border-left: 3px solid var(--wg-status-info);
   border-radius: 0.5rem;

@@ -68,6 +68,8 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
 | L2 content  | Form tab, chat transcript, docs, editors, the forms rail, diffs         | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
 | L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts              | The `material-floating` helper                                                                        |
 
+The forms rail is the one L2 exception: it stays on `--wg-block-background` until plan C restyles forms.
+
 - **Content is solid.** Glass in L2 makes text compete with whatever scrolls behind it, so cards,
   code blocks and inputs inside a sheet tint with alpha over the solid sheet and never show through.
 - **Glass sits on what is behind it, never on glass.** A control on a glass bar is a plain

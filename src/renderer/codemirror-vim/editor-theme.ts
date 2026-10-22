@@ -35,7 +35,10 @@ export const editorTheme = EditorView.theme({
   '.cm-panels-bottom': { borderTop: '1px solid var(--wg-border-default)' },
   '.cm-vim-panel input': { color: 'var(--wg-fg)' },
   '.cm-tooltip.cm-tooltip-autocomplete': {
-    backgroundColor: 'var(--wg-material-floating-bg)',
+    // Opaque, the floating material's reduced value, as nothing blurs behind
+    // it yet; the material-floating helper takes it back to the translucent
+    // material.
+    backgroundColor: 'var(--wg-sheet-background)',
     border: '1px solid var(--wg-border-default)',
     color: 'var(--wg-fg)',
     // Autocomplete's base theme sets `monospace` on the list itself.
