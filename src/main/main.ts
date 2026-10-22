@@ -13,7 +13,7 @@ import {
 } from 'electron';
 import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,7 +26,7 @@ import {
 } from '../config/settings';
 import { coreThemeTokens } from '../config/theme-tokens';
 import { builtInThemes } from '../config/themes';
-import { CLAUDE_PERMISSION_TOOL } from '../contracts/agent';
+import { type AgentHarness, CLAUDE_PERMISSION_TOOL } from '../contracts/agent';
 import type { Clock, RandomHex, RandomUuid } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { Log } from '../contracts/log';
@@ -60,6 +60,8 @@ import {
   registerDataScheme,
   serveDataScheme,
 } from './data-protocol/data-protocol';
+import { type DriveRun, startDriveRun } from './drive/drive-run';
+import { electronDrivenWindow } from './electron-driven-window';
 import { gateExternalLinks } from './external-links';
 import { createNodeFiles } from './files/node-files';
 import {
@@ -97,8 +99,18 @@ if (started) {
 }
 
 // The self-test and a drive run render offscreen as an accessory app on a
-// temp home, so neither takes the user's foreground or touches their files.
+// home of their own, so neither takes the user's foreground or touches their
+// files.
 const runMode = runModeOf(process.env);
+
+// A drive run's folder, from `WIGLEY_DRIVE_DIR`.
+function driveRunDir(): string {
+  const runDir = process.env.WIGLEY_DRIVE_DIR ?? '';
+  if (!path.isAbsolute(runDir)) {
+    throw new Error('WIGLEY_DRIVE_DIR must be an absolute path');
+  }
+  return runDir;
+}
 
 registerDataScheme();
 
@@ -132,6 +144,25 @@ interface ModeServicesContext {
   log: Log;
 }
 
+// Claude Code run as the user of `homeDir`, its command and profile folders
+// expanded against that home.
+function claudeHarness(
+  store: ConfigStore,
+  homeDir: string,
+  env: NodeJS.ProcessEnv,
+  log: Log,
+) {
+  return createClaudeCodeHarness({
+    command: () => expandHome(store.current().settings.claude.command, homeDir),
+    permissionTool: CLAUDE_PERMISSION_TOOL,
+    env,
+    log,
+    spawn,
+    files,
+    homeDir,
+  });
+}
+
 // The user's app: the OS Trash, native alerts and dialogs, Claude Code, and
 // links opened in the user's browser.
 function liveServices(): ModeServices {
@@ -139,18 +170,7 @@ function liveServices(): ModeServices {
     trashItem: (file) => shell.trashItem(file),
     forWindow: ({ window, store, homeDir, log }) => ({
       alerts: createElectronAlerts(window, log),
-      agentHarnesses: [
-        createClaudeCodeHarness({
-          command: () =>
-            expandHome(store.current().settings.claude.command, homeDir),
-          permissionTool: CLAUDE_PERMISSION_TOOL,
-          env: process.env,
-          log,
-          spawn,
-          files,
-          homeDir,
-        }),
-      ],
+      agentHarnesses: [claudeHarness(store, homeDir, process.env, log)],
       window: windowService(window),
       openExternal: gateExternalLinks((url) => shell.openExternal(url)),
     }),
@@ -175,10 +195,60 @@ function selfTestServices(): ModeServices {
   };
 }
 
+// A drive run's agent harness, as `WIGLEY_DRIVE_HARNESS` names it: the fake
+// harness by default, or Claude Code logged in as the user, whose relays find
+// this run's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`.
+function driveHarness(
+  store: ConfigStore,
+  runHome: string,
+  log: Log,
+): AgentHarness {
+  const harness = process.env.WIGLEY_DRIVE_HARNESS ?? 'fake';
+  if (harness === 'fake') {
+    return createFakeAgentHarness();
+  }
+  if (harness === 'claude') {
+    return claudeHarness(
+      store,
+      os.homedir(),
+      {
+        ...process.env,
+        WIGLEY_AI_GUI_ENDPOINT_DIR: path.join(
+          runHome,
+          '.agents',
+          'wigley-ai-gui',
+        ),
+      },
+      log,
+    );
+  }
+  throw new Error(
+    `WIGLEY_DRIVE_HARNESS is ${JSON.stringify(harness)}; set it to fake or claude`,
+  );
+}
+
+// A drive run: every file sits in the run folder, so trash deletes for good;
+// alerts are silent, the offscreen window shows no dialog, no link takes the
+// user's foreground, and sessions run over the harness `WIGLEY_DRIVE_HARNESS`
+// names.
+function driveServices(): ModeServices {
+  return {
+    trashItem: (file) => rm(file, { recursive: true }),
+    forWindow: ({ window, store, homeDir, log }) => ({
+      alerts: silentAlerts,
+      agentHarnesses: [driveHarness(store, homeDir, log)],
+      window: { ...windowService(window), chooseFolder: async () => null },
+      openExternal: gateExternalLinks(async (url) =>
+        log('main', `external link not opened in a drive run: ${url}`),
+      ),
+    }),
+  };
+}
+
 const servicesByMode: Record<RunMode, () => ModeServices> = {
   live: liveServices,
   selfTest: selfTestServices,
-  drive: selfTestServices,
+  drive: driveServices,
 };
 const modeServices = servicesByMode[runMode]();
 
@@ -188,8 +258,7 @@ const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 
-// The self-test and a drive run give plugins a fresh temp folder as the home
-// folder, and their data folders inside it, never the user's; the self-test
+// The self-test gives plugins a fresh temp folder as the home folder, and
 // deletes it before it exits.
 let tempHome: string | null = null;
 const cleanUpSelfTest = () => {
@@ -211,12 +280,14 @@ const pageLog = createPageLog((source, message) => {
 });
 
 // What the window and the plugins start from besides the config, read once
-// the app is ready so that a bad manifest or temp folder fails the start
-// through failStart.
+// the app is ready so that a bad manifest, temp folder or run folder fails the
+// start through failStart.
 interface StartInputs {
   homeDir: string;
   dataRoot: string;
   uiStatePath: string;
+  // The drive run's folder; null outside a drive run.
+  driveRunDir: string | null;
 }
 
 // The OS as the served config names it.
@@ -262,34 +333,47 @@ function titleBarOptions(
   }
 }
 
+// The user's home in a live run; the self-test's fresh temp folder; a drive
+// run's `<run>/home`, made if missing and kept, so a restart finds the same
+// ui-state, plugin data and config.
 function homeFolder(): string {
   if (runMode === 'live') {
     return os.homedir();
+  }
+  if (runMode === 'drive') {
+    const runHome = path.join(driveRunDir(), 'home');
+    mkdirSync(runHome, { recursive: true });
+    return runHome;
   }
   tempHome = mkdtempSync(path.join(os.tmpdir(), 'wigley-forms-selftest-'));
   return tempHome;
 }
 
 // The folder that holds every plugin's data folder; outside a live run it sits
-// inside the temp home folder, so `homeFolder` runs first.
-function dataFolder(): string {
-  return tempHome === null
+// inside the run's own home folder.
+function dataFolder(homeDir: string): string {
+  return runMode === 'live'
     ? path.join(app.getPath('userData'), 'plugins')
-    : path.join(tempHome, 'plugin-data');
+    : path.join(homeDir, 'plugin-data');
 }
 
-// The app's ui-state file; outside a live run it sits inside the temp home
-// folder beside the plugin data, so `homeFolder` runs first.
-function uiStateFilePath(): string {
-  return tempHome === null
+// The app's ui-state file; outside a live run it sits inside the run's own
+// home folder beside the plugin data.
+function uiStateFilePath(homeDir: string): string {
+  return runMode === 'live'
     ? path.join(app.getPath('userData'), 'ui-state.json')
-    : path.join(tempHome, 'ui-state.json');
+    : path.join(homeDir, 'ui-state.json');
 }
 
 function readStartInputs(): StartInputs {
   requireListed(mainParts, manifests);
   const homeDir = homeFolder();
-  return { homeDir, dataRoot: dataFolder(), uiStatePath: uiStateFilePath() };
+  return {
+    homeDir,
+    dataRoot: dataFolder(homeDir),
+    uiStatePath: uiStateFilePath(homeDir),
+    driveRunDir: runMode === 'drive' ? driveRunDir() : null,
+  };
 }
 
 // The ConfigStore over the user config folder in `homeDir`, logging to the
@@ -353,8 +437,8 @@ function serveUiState(filePath: string, log: Log) {
 // Starts every plugin's main part, each with its own API over one plugin
 // channel router to the window's page, the settings `store` serves with no
 // self-test layer, one event bus, the shared `services`,
-// its own host from `selfTest` (null outside the self-test), no drive host,
-// and its data folder under `dataRoot`. `onStarted` sees each part as it starts, so a part
+// its own host from `selfTest` (null outside the self-test), its own host from
+// `driveRun` (null outside a drive run), and its data folder under `dataRoot`. `onStarted` sees each part as it starts, so a part
 // is known even when a later start throws.
 function startMainParts(
   window: BrowserWindow,
@@ -362,6 +446,7 @@ function startMainParts(
   dataRoot: string,
   services: Omit<MainServices, 'selfTest'>,
   selfTest: SelfTestDriver | null,
+  driveRun: DriveRun | null,
   onStarted: (part: MainStart<PluginManifest>) => void,
 ) {
   const channels = createPluginChannels(ipcMain, () => livePage(window));
@@ -377,7 +462,7 @@ function startMainParts(
             store.onChanged((config) => listener(config.pluginSettings)),
           services,
           selfTestFor: (pluginId) => selfTest?.hostFor(pluginId) ?? null,
-          driveFor: () => null,
+          driveFor: (pluginId) => driveRun?.driveFor(pluginId) ?? null,
           dependency,
           bus,
           dataRoot,
@@ -458,6 +543,24 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
   // start exits through failStart, which skips will-quit.
   const startedParts: MainStart<PluginManifest>[] = [];
   app.on('will-quit', () => void disposeParts(startedParts));
+  const driveRun =
+    inputs.driveRunDir === null
+      ? null
+      : startDriveRun({
+          window: electronDrivenWindow(window),
+          runDir: inputs.driveRunDir,
+          files,
+          homeDir: inputs.homeDir,
+          processes,
+          randomHex,
+          configChanged: (listener) => store.onChanged(listener),
+          quit: () => app.quit(),
+          log,
+        });
+  if (driveRun !== null) {
+    app.on('will-quit', () => void driveRun.dispose());
+    driveRun.listening.catch(failStart);
+  }
   const started = startMainParts(
     window,
     store,
@@ -479,6 +582,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
       }),
     },
     selfTest,
+    driveRun,
     (part) => startedParts.push(part),
   );
   // The config needs the page binds and settings of the scripts the plugins
@@ -543,10 +647,19 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
   });
 }
 
-// Shows why the app could not start, and exits non-zero.
+// Shows why the app could not start, and exits non-zero. A drive run's window
+// is offscreen, so it writes the reason to stderr, which the drive CLI keeps
+// in the run's `app.log`.
 function failStart(error: unknown) {
   if (runMode === 'selfTest') {
     failSelfTest('the app starts', error, cleanUpSelfTest);
+    return;
+  }
+  if (runMode === 'drive') {
+    process.stderr.write(
+      `wigley-ai-gui could not start: ${errorText(error)}\n`,
+    );
+    app.exit(1);
     return;
   }
   dialog.showErrorBox('wigley-ai-gui could not start', errorText(error));
@@ -560,6 +673,16 @@ function startApp() {
   }
   if (runMode !== 'live' && process.platform === 'darwin') {
     app.setActivationPolicy('accessory');
+  }
+  if (runMode === 'drive') {
+    // Chromium's profile and caches, apart from the user's app and every
+    // other run; set before the app is ready.
+    try {
+      app.setPath('userData', path.join(driveRunDir(), 'user-data'));
+    } catch (error) {
+      failStart(error);
+      return;
+    }
   }
   // A second start (a relay starting the app) shows the window without
   // taking the user's focus.

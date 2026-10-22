@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RelayEndpoint, ToolDefinition } from '../../contract';
-import { channelPath, launchCommand, writeEndpointFiles } from './endpoint';
+import {
+  channelPath,
+  endedDriveRunLaunch,
+  launchCommand,
+  writeEndpointFiles,
+} from './endpoint';
 
 const folders: string[] = [];
 
@@ -86,6 +91,32 @@ describe('launchCommand', () => {
     expect(launchCommand({}, '/opt/electron', '/work/app')).toEqual({
       command: ['/opt/electron'],
       cwd: '/work/app',
+    });
+  });
+});
+
+describe('endedDriveRunLaunch', () => {
+  it('exits 1 from the run folder root, naming the run, on macOS and Linux', () => {
+    expect(endedDriveRunLaunch('darwin', '/work/app/.drive/r1')).toEqual({
+      command: [
+        '/bin/sh',
+        '-c',
+        'echo "$0" >&2; exit 1',
+        'The drive run /work/app/.drive/r1 has ended',
+      ],
+      cwd: '/',
+    });
+  });
+
+  it('exits 1 from the run folder drive root, naming the run, on Windows', () => {
+    expect(endedDriveRunLaunch('win32', 'C:\\work\\.drive\\r1')).toEqual({
+      command: [
+        'cmd.exe',
+        '/d',
+        '/c',
+        'exit 1 & rem The drive run C:\\work\\.drive\\r1 has ended',
+      ],
+      cwd: 'C:\\',
     });
   });
 });

@@ -44,6 +44,28 @@ export function launchCommand(
   return { command: [execPath], cwd };
 }
 
+// How a relay that finds a drive run gone "starts" it: a shell that exits 1
+// with the run named in the command's text, which the relay reports, so the
+// relay never starts the user's own app in the run's place. Runs in the run
+// folder's root, which outlives the run folder.
+export function endedDriveRunLaunch(
+  platform: NodeJS.Platform,
+  runDir: string,
+): RelayEndpoint['launch'] {
+  const ended = `The drive run ${runDir} has ended`;
+  if (platform === 'win32') {
+    // cmd reads everything after `rem` as a comment, `&` included.
+    return {
+      command: ['cmd.exe', '/d', '/c', `exit 1 & rem ${ended}`],
+      cwd: path.win32.parse(runDir).root,
+    };
+  }
+  return {
+    command: ['/bin/sh', '-c', 'echo "$0" >&2; exit 1', ended],
+    cwd: path.posix.parse(runDir).root,
+  };
+}
+
 // Through a temp file and a rename, so a relay never reads half a file.
 function writeJsonWhole(file: string, value: unknown) {
   const temp = `${file}.tmp`;

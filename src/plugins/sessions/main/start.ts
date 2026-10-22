@@ -16,6 +16,7 @@ import { sessionsManifest } from '../manifest';
 import { serveMcp } from './mcp/mcp-server';
 import {
   channelPath,
+  endedDriveRunLaunch,
   launchCommand,
   writeEndpointFiles,
 } from './relay/endpoint';
@@ -45,7 +46,9 @@ function createList(api: SessionsApi): SessionList {
 }
 
 // Opens the channel relay.py connects to, each relay connecting one session
-// served the tools contributed so far.
+// served the tools contributed so far. A relay that finds the app gone starts
+// it again, except a drive run's (its home is `<run>/home`), which stays
+// ended.
 function openRelay(api: SessionsApi, list: SessionList) {
   const channel = channelPath(
     process.platform,
@@ -61,7 +64,13 @@ function openRelay(api: SessionsApi, list: SessionList) {
   const endpoint: RelayEndpoint = {
     protocol: RELAY_PROTOCOL,
     channel,
-    launch: launchCommand(process.env, process.execPath, process.cwd()),
+    launch:
+      api.services.runMode === 'drive'
+        ? endedDriveRunLaunch(
+            process.platform,
+            path.dirname(api.services.homeDir),
+          )
+        : launchCommand(process.env, process.execPath, process.cwd()),
   };
   return { relay, endpoint };
 }
