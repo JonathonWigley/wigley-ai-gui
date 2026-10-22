@@ -95,6 +95,7 @@ interface Fixed {
   pluginDefaults: Record<string, object>;
   optionalSettings: Readonly<Record<string, SettingKind>>;
   defaultKeymap: Keymap;
+  defaultLeader: string;
 }
 
 function requireNoCoreSettingIds(
@@ -145,6 +146,7 @@ export async function loadConfigStore(
       ...pluginOptionalSettings(deps.manifests),
     },
     defaultKeymap: mergeKeymap(deps.defaultKeymap, deps.manifests, {}),
+    defaultLeader: deps.defaultKeymap.leader,
   };
   requireUnambiguousKeymap(fixed.defaultKeymap);
   const defaultTheme = deps.resolveTheme(

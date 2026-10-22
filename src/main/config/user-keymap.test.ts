@@ -22,6 +22,7 @@ const NAMES: KeymapNames = {
     { id: 'any', title: 'Everywhere', plugin: 'core' },
     { id: 'test.list', title: 'List', plugin: 'test' },
   ],
+  defaultLeader: '<Space>',
 };
 
 function parse(keymap: unknown) {
@@ -120,6 +121,31 @@ describe('parseUserKeymap', () => {
     );
   });
 
+  it('parseUserKeymap_OldSectionAfterUnknownSection_NamesTheOldSection', () => {
+    expect(() => parse({ foo: 1, page: [] })).toThrow(
+      '"page" is an old keymap section: write its binds under "binds" in vim notation.',
+    );
+  });
+
+  it('parseUserKeymap_OldPageUnbind_NamesTheKeysField', () => {
+    const unbind = [{ page: ['j'], scope: 'test.list' }];
+
+    expect(() => parse({ unbind })).toThrow(
+      '"unbind[0]" is an old unbind: name its keys in vim notation under "keys".',
+    );
+  });
+
+  it('parseUserKeymap_OldEditorUnbind_NamesTheKeysField', () => {
+    const unbind = [
+      { keys: 'x', scope: 'any' },
+      { editor: 'x', scope: 'any' },
+    ];
+
+    expect(() => parse({ unbind })).toThrow(
+      '"unbind[1]" is an old unbind: name its keys in vim notation under "keys".',
+    );
+  });
+
   it('parseUserKeymap_UnknownWhere_Throws', () => {
     const binds = [
       { keys: 'x', scope: 'any', command: 'test.pick', where: 'nowhere' },
@@ -160,6 +186,10 @@ describe('parseUserKeymap', () => {
     const keymap = { leader: ',', groups: { '<Leader>k': 'panes' } };
 
     expect(parse(keymap)).toEqual(keymap);
+  });
+
+  it('parseUserKeymap_LowercaseNamedLeader_SpellsItAsVimReportsIt', () => {
+    expect(parse({ leader: '<space>' }).leader).toBe('<Space>');
   });
 
   it('rejects two app binds on one chord spelled two ways', () => {

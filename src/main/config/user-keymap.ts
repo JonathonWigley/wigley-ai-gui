@@ -23,14 +23,17 @@ import {
 import { parseChord } from '../../shared/chord-notation';
 import { errorText } from '../../shared/error-text';
 import { vimTokens } from '../../shared/key-hints';
-import { pageKeysFor } from '../../shared/key-notation';
+import { pageKeysFor, vimTokenForPageKey } from '../../shared/key-notation';
 import { expandBind } from '../../shared/plugin-manifests';
 import { jsonKind, parseJsonObject } from './config-json';
 
-// The commands and scopes a user bind may name, by qualified id.
+// The commands and scopes a user bind may name, by qualified id, and the
+// default keymap's leader, which a bind's checks expand it with when the file
+// sets none.
 export interface KeymapNames {
   commands: Record<CommandId, CommandInfo>;
   scopes: readonly ScopeInfo[];
+  defaultLeader: string;
 }
 
 const SECTIONS = [
@@ -44,15 +47,13 @@ const SECTIONS = [
   'unbind',
 ];
 // Sections of the keymap format before binds were written once in vim
-// notation; a file holding one is refused rather than read half.
+// notation, and the fields an old unbind entry named its keys by; a file
+// holding one is refused rather than read half.
 const OLD_SECTIONS = ['page', 'editor'];
 const UNBIND_KINDS = ['keys', 'app', 'global', 'intercept'] as const;
 const EDITOR_MODES: readonly EditorMode[] = ['normal', 'insert'];
 const BIND_WHERES: readonly BindWhere[] = ['page', 'box', 'both'];
 const LEADER_PROBLEM = '"leader" must be one key, such as "<Space>" or ",".';
-// The leader a bind's checks expand it with when the file sets none: which
-// keys a bind may take does not depend on the leader.
-const STAND_IN_LEADER = '<Space>';
 const MODIFIERS = ['control', 'alt', 'shift', 'meta'] as const;
 
 // The fields one kind of entry holds, and the noun a problem names it by.
@@ -351,6 +352,11 @@ function readUnbind(
   names: KeymapNames,
 ): KeymapUnbind {
   const entry = requireObject(path, value);
+  if (OLD_SECTIONS.some((section) => Object.hasOwn(entry, section))) {
+    throw new Error(
+      `"${path}" is an old unbind: name its keys in vim notation under "keys".`,
+    );
+  }
   const named = UNBIND_KINDS.filter((kind) => Object.hasOwn(entry, kind));
   if (named.length !== 1) {
     throw new Error(`"${path}" must name one of ${UNBIND_KINDS.join(', ')}.`);
@@ -432,7 +438,9 @@ function readList<T>(
   );
 }
 
-// The file's `leader`: one key the page can bind that is not a chord.
+// The file's `leader`: one key the page can bind that is not a chord. A named
+// key comes back spelled as vim reports it (`<space>` is `<Space>`); one
+// character comes back as written.
 function readLeader(value: unknown): string {
   const leader = requireKeysString('leader', value);
   let isPageKey = true;
@@ -446,7 +454,10 @@ function readLeader(value: unknown): string {
   if (!isPageKey || !isOneKey || isChord) {
     throw new Error(LEADER_PROBLEM);
   }
-  return leader;
+  const isNamedKey = leader.length > 1;
+  return isNamedKey
+    ? vimTokenForPageKey(pageKeysFor(leader, leader)[0])
+    : leader;
 }
 
 // The file's `groups`: each key a leader prefix, each name non-empty.
@@ -462,7 +473,8 @@ function readGroups(value: unknown): KeyGroups {
   return groups as KeyGroups;
 }
 
-// The user keymap `text`, a `keymap.json`, holds, each bind naming a command
+// The user keymap `text`, a `keymap.json`, holds, its leader spelled as
+// `readLeader` gives it, each bind naming a command
 // and scope of `names` that runs in the bind's process, each bind's and
 // unbind's keys and `where` ones the merge expands, each insert bind a key of
 // `UNBOUND_INSERT_KEYS`, and each accelerator one Electron accepts. Throws an
@@ -475,6 +487,8 @@ export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
         `"${key}" is an old keymap section: write its binds under "binds" in vim notation.`,
       );
     }
+  }
+  for (const key of Object.keys(file)) {
     if (!SECTIONS.includes(key)) {
       throw new Error(`"${key}" is not a keymap section.`);
     }
@@ -483,7 +497,7 @@ export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
   if (Object.hasOwn(file, 'leader')) {
     keymap.leader = readLeader(file.leader);
   }
-  const leader = keymap.leader ?? STAND_IN_LEADER;
+  const leader = keymap.leader ?? names.defaultLeader;
   if (Object.hasOwn(file, 'groups')) {
     keymap.groups = readGroups(file.groups);
   }
