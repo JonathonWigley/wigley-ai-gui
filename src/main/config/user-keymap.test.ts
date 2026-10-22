@@ -104,6 +104,32 @@ describe('parseUserKeymap', () => {
     expect(() => parse({ binds })).toThrow(/^"binds\[0\]": .*where "page"/);
   });
 
+  it('parseUserKeymap_UnbindModeWithWherePage_Throws', () => {
+    const unbind = [{ keys: 'x', scope: 'any', mode: 'normal', where: 'page' }];
+
+    expect(() => parse({ unbind })).toThrow(
+      '"unbind[0]": x has a mode, so it fires in a box only; it takes no where "page".',
+    );
+  });
+
+  it('parseUserKeymap_OldEditorSection_NamesTheNewSection', () => {
+    expect(() =>
+      parse({ editor: [{ keys: ['x'], scope: 'any', command: 'test.pick' }] }),
+    ).toThrow(
+      '"editor" is an old keymap section: write its binds under "binds" in vim notation.',
+    );
+  });
+
+  it('parseUserKeymap_UnknownWhere_Throws', () => {
+    const binds = [
+      { keys: 'x', scope: 'any', command: 'test.pick', where: 'nowhere' },
+    ];
+
+    expect(() => parse({ binds })).toThrow(
+      '"binds[0].where" must be one of page, box, both, not "nowhere".',
+    );
+  });
+
   it('parseUserKeymap_GroupKeyWithoutLeader_Throws', () => {
     expect(() => parse({ groups: { k: 'windows' } })).toThrow(
       '"groups.k" must start with <Leader>.',
@@ -120,6 +146,12 @@ describe('parseUserKeymap', () => {
 
   it('parseUserKeymap_ChordLeader_Throws', () => {
     expect(() => parse({ leader: '<A-o>' })).toThrow(
+      '"leader" must be one key, such as "<Space>" or ",".',
+    );
+  });
+
+  it('parseUserKeymap_TwoKeyLeader_Throws', () => {
+    expect(() => parse({ leader: 'ab' })).toThrow(
       '"leader" must be one key, such as "<Space>" or ",".',
     );
   });
