@@ -4,10 +4,12 @@ import type { Keymap } from '../../contracts/keymap';
 import type {
   Area,
   Mode,
+  ModeHandle,
   Modes,
   PageChannel,
   PageServices,
   PluginManifest,
+  ShellLayout,
 } from '../../contracts/plugin';
 import type { AppConfig } from '../../contracts/settings';
 import { createEventBus } from '../../shared/event-bus';
@@ -90,6 +92,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
   return {
     areas: {} as PageApiDeps['areas'],
     modes: {} as Modes,
+    setLayout: () => ({ dispose: () => {} }),
     bridge: fakeBridge().bridge,
     scopeStack: createScopeStack('any'),
     pendingKeys: { onPending: () => {}, hold: () => {}, cancel: () => {} },
@@ -226,9 +229,10 @@ describe('createPageApi', () => {
     expect(heard).toEqual([4]);
   });
 
-  it('hands the plugin every area but main', () => {
-    const area = (): Area => ({ contribute: () => ({ remove: () => {} }) });
+  it('hands the plugin the title bar, panel, status bar and overlay areas', () => {
+    const area = (): Area => ({ contribute: () => ({ dispose: () => {} }) });
     const areas: PageApiDeps['areas'] = {
+      titleBar: area(),
       activityBar: area(),
       sideBar: area(),
       main: area(),
@@ -240,13 +244,34 @@ describe('createPageApi', () => {
     const api = createPageApi(manifest, deps({ areas }));
 
     expect(api.areas).toEqual({
-      activityBar: areas.activityBar,
-      sideBar: areas.sideBar,
+      titleBar: areas.titleBar,
       panel: areas.panel,
       statusBar: areas.statusBar,
       overlay: areas.overlay,
     });
     expect(api.areas).not.toHaveProperty('main');
+    expect(api.areas).not.toHaveProperty('activityBar');
+    expect(api.areas).not.toHaveProperty('sideBar');
+  });
+
+  it('shell.setLayout hands the layout to the shell and returns its Disposable', () => {
+    const layouts: ShellLayout[] = [];
+    const restore = { dispose: () => {} };
+    const api = createPageApi(
+      manifest,
+      deps({
+        setLayout: (layout) => {
+          layouts.push(layout);
+          return restore;
+        },
+      }),
+    );
+    const layout: ShellLayout = { mount: () => ({}) as never };
+
+    const returned = api.shell.setLayout(layout);
+
+    expect(layouts).toEqual([layout]);
+    expect(returned).toBe(restore);
   });
 
   it("qualifies a mode's id by the plugin", () => {
@@ -254,7 +279,7 @@ describe('createPageApi', () => {
     const modes = {
       add: (mode) => {
         added.push(mode);
-        return { show: () => {}, isShown: () => false };
+        return {} as ModeHandle;
       },
     } as Pick<Modes, 'add'> as Modes;
     const api = createPageApi(manifest, deps({ modes }));
@@ -262,10 +287,17 @@ describe('createPageApi', () => {
     const shown = () => {};
     const hidden = () => {};
 
-    api.modes.add({ id: 'browse', title: 'Browse', element, shown, hidden });
+    api.modes.add({
+      id: 'browse',
+      title: 'Browse',
+      icon: 'x',
+      element,
+      shown,
+      hidden,
+    });
 
     expect(added).toEqual([
-      { id: 'p.browse', title: 'Browse', element, shown, hidden },
+      { id: 'p.browse', title: 'Browse', icon: 'x', element, shown, hidden },
     ]);
   });
 

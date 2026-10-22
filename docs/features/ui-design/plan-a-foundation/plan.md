@@ -395,7 +395,7 @@ list; task 06's rename map reads from it.
 - [x] [Live config on the page](03-live-config-page.md) — after 02
 
 ### Wave 4
-- [ ] [Shell registry, title bar, activity bar, mode side bars](04-shell-registry.md) — after 03, 06
+- [x] [Shell registry, title bar, activity bar, mode side bars](04-shell-registry.md) — after 03, 06
 
 ### Wave 5
 - [ ] [uiState service](05-ui-state.md) — after 04
@@ -414,6 +414,8 @@ Review base: 17cf5935eb176577587a6a3c230e907efdef81c9
 - 01 · 943c502 · diff read + typecheck pass; lint fails only on DESIGN.md format (pre-existing) · concerns: highlighter test asserts definitionKeyword (same class as keyword); a `git rm` of syntax.css was reset to an unstaged deletion; `npx vitest` ran once (installed copy, nothing downloaded)
 - 06 · 3da1dc1 · diff read + registry check + camel-case grep clean · concerns: workers skipped skills and mandatory reads (pure rename)
 - 02 · 0cbd5d4 · diff read + typecheck pass; lint only DESIGN.md (pre-existing) · concerns: `registerGlobalShortcuts` unregisters all before registering, so a throwing user accelerator loses the earlier globals (the parser does not validate accelerator syntax); `npx vitest` ran once (installed copy)
+- 03 · 2d4f5e7 · diff read + typecheck pass; lint only DESIGN.md · concerns: no self-test step changes the editor keymap, so `setKeymap` on open editors is covered only by `appliedMappings` (task 08 live check); `Vim.unmap` result ignored; which-key's editor path now prints editor chord tokens like `<A-o>` as `⌥O`
+- 04 · SHA04 · diff read + typecheck · concerns: task doc's call-site line numbers were stale (all sites handled); activity bar `mark` log falls back to the mode id for an unknown id (unreachable today); title context, glyphs, drag regions and the Windows overlay are live checks only (task 08)
 ### Contract changes
 ### Rulings
 - `src/main/themes` layer allows no packages now that the loader is pure — task 02 reads files through `Files` in `src/main/config` — 02 would need `node:` back if it reads files there · group 01
@@ -436,5 +438,12 @@ Review base: 17cf5935eb176577587a6a3c230e907efdef81c9
 - `setKeymap` unmaps only mappings vim holds (read in `@replit/codemirror-vim-core` 0.1.0: unmapping one never made can delete a vim default) and rejects an untypeable insert key before unmapping anything — a throw leaves the old keymap whole — none · group 03
 - `PageApi.keys.scopes` stays a property, now a getter over the current config — none · group 03
 - `src/plugins/forms/page/editor-boxes.test.ts` gained `setKeymap` on its fake EditorHost (outside the Files line) — none · group 03
+- `@vscode/codicons` 0.0.46-24 installed by the user: `npm install` is deny-listed for agents in `~/.claude/settings.json` · lead
+- `CORE_SCROLLS_ITSELF = ['.title-bar-context']` in `src/main/selftest.ts` (outside the Files line) exempts the clipping title context from the fit check in every script — one core list, not three plugin lists — a two-line move if the scripts should own it · group 04
+- A `titleBarOverlayOf` throw on a config change is caught and logged `[main] title bar not recoloured: …`; at window creation it still fails start — one bad user theme does not break other ConfigStore listeners — a quieter failure on hot reload · group 04
+- Title bar takes `material-chrome-bg` with a `border-subtle` hairline (L1 chrome); activity bar is a flex column — the task named no background — a look change in plan B/C · group 04
+- The over-content side bar shadow (raw `1rem`) moved from sessions.css to `.shell-side-bar[data-side-bar='over']` — kept today's look — plan B's style check will flag the raw value · group 04
+- `.sessions` keeps a one-column grid so the tab area fills the mode — none · group 04
+- The side bar element stays hidden until the first `layOutSideBar`; `setLayout`'s restore uses a generation counter so it does nothing after any later set — none · group 04
 ### Review rounds
 ### Test gate

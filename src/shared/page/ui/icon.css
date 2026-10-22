@@ -1,0 +1,5 @@
+/* Codicons' own selector, loaded after its stylesheet, so the theme sets the
+   icon size. */
+.codicon[class*='codicon-'] {
+  font-size: var(--wg-icon-size);
+}

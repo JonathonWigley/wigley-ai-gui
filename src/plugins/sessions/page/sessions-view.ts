@@ -5,7 +5,7 @@ import {
   type SessionTabsView,
 } from './session-tabs-view';
 import { mountSidebarView } from './sidebar-view';
-import { rowStatus, type SidebarLayout } from './tabs';
+import { rowStatus } from './tabs';
 
 // `activate` runs on a row click; `isModeShown` reads whether Sessions mode
 // shows; `tabsChanged` runs after any change to a session's tabs, their
@@ -16,17 +16,18 @@ export interface SessionsViewDeps {
   tabsChanged(): void;
 }
 
+// `element` is the mode's root, the selected session's tab area; `sideBar` is
+// the mode's side bar, the list of session rows.
 export interface SessionsView {
   element: HTMLElement;
+  sideBar: HTMLElement;
   tabs: SessionTabsView;
   render(state: SessionsState): void;
-  layOut(layout: SidebarLayout): void;
 }
 
-// Sessions mode's root: the sidebar of session rows beside the selected
-// session's tab area. The sidebar sits beside the tab area, over it, or
-// hidden, as `layOut` says; each row's second line follows its tabs'
-// statuses.
+// Sessions mode's two parts: the sidebar of session rows, which the shell
+// draws in its side bar, and the root holding the selected session's tab
+// area. Each row's second line follows its tabs' statuses.
 export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const root = element('div', 'sessions');
   const sidebar = mountSidebarView(deps.activate);
@@ -40,19 +41,15 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       deps.tabsChanged();
     },
   });
-  root.append(sidebar.element, tabs.element);
+  root.append(tabs.element);
   return {
     element: root,
+    sideBar: sidebar.element,
     tabs,
     render(next) {
       state = next;
       drawSidebar();
       tabs.render(next);
-    },
-    layOut(layout) {
-      root.classList.toggle('is-sidebar-hidden', layout === 'hidden');
-      root.classList.toggle('is-sidebar-over', layout === 'over');
-      sidebar.element.hidden = layout === 'hidden';
     },
   };
 }

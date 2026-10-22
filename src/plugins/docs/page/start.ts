@@ -15,6 +15,7 @@ import type {
   SessionsPageExports,
 } from '../../sessions/contract';
 import type { DocsChannel } from '../contract';
+import { tildePath } from '../doc-paths';
 import { docsManifest } from '../manifest';
 import { type DocChangeRecord, UNSAVED_TEXT } from './docs-state';
 import {
@@ -89,6 +90,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       viewId: string,
       source: DocsSource,
       isActive: () => boolean,
+      openChanged: (path: string | null) => void,
     ): DocsView => {
       const view: DocsView = createDocsView({
         viewId,
@@ -107,6 +109,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         setScope: (scope) => api.keys.setScope(scope),
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,
+        openChanged,
         changed: (change) => changedIn(view, change),
         unsavedPaths: () =>
           allViews()
@@ -116,16 +119,29 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       return view;
     };
 
+    // The title bar shows the machine view's open doc while Docs mode shows.
+    // Every context waits on the one home folder promise, so contexts apply in
+    // the order the doc changed.
     const machineView = createView(
       'machine',
       { type: 'machine' },
       () => isDocsModeShown,
+      (path) => {
+        void homeDir.then((home) =>
+          mode.setContext(
+            path === null
+              ? null
+              : { title: tildePath(path, home), detail: null },
+          ),
+        );
+      },
     );
 
     // `add` may call `shown` before it returns, so `shown` reads no handle.
     const mode = api.modes.add({
       id: 'docs',
       title: 'Docs',
+      icon: 'book',
       element: machineView.element,
       shown() {
         isDocsModeShown = true;
@@ -147,6 +163,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             `session:${sessionId}`,
             { type: 'session', spec: { hostSessionId, projectDir, harness } },
             () => held.handle?.isVisible() === true,
+            () => undefined,
           ),
           handle: null,
         };

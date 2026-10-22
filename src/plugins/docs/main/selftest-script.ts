@@ -202,7 +202,7 @@ const STEPS: SelfTestStep[] = [
   { keys: [' ', 'k', 's'], expect: '[docs] Docs tab shown', checksFit: true },
   { keys: ['R'], expect: '[docs] session index read: 4 entries' },
   { keys: ['a'], expect: '[docs] create: pick a kind' },
-  { keys: [' ', 'k', 'd'], expect: '[page] showed Docs mode' },
+  { keys: [' ', 'k', 'd'], expect: '[page] marked Docs in the activity bar' },
   { keys: ['j'], expect: '[page] j ran docs.treeDown' },
   {
     keys: ['/', ...'neat', 'Enter'],

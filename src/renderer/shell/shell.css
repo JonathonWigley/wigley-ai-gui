@@ -1,26 +1,123 @@
-/* Layout: activity bar and side bar down the left, main with the panel under
-   it, status bar across the bottom. Areas are placed by name so a hidden area
-   leaves its track empty instead of shifting the others. The main column never
-   grows past the window, so content wraps to fit it; long unbroken words break
-   anywhere. */
+/* Layout: the title bar across the top, the activity bar and side bar down
+   the left, main with the panel under it, the status bar across the bottom.
+   Areas are placed by name so a hidden area leaves its track empty instead of
+   shifting the others. The main column never grows past the window, so
+   content wraps to fit it; long unbroken words break anywhere. */
 .shell {
   display: grid;
   grid-template-areas:
+    'title title title'
     'activity side main'
     'activity side panel'
     'status status status';
   grid-template-columns: auto auto minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: var(--wg-toolbar-height) minmax(0, 1fr) auto auto;
   height: 100vh;
   overflow-wrap: anywhere;
+}
+
+/* The title bar drags the window; its controls take clicks. Its padding
+   leaves room for the OS window buttons. */
+.shell-title-bar {
+  align-items: center;
+  background: var(--wg-material-chrome-bg);
+  border-bottom: 1px solid var(--wg-border-subtle);
+  display: flex;
+  grid-area: title;
+  height: var(--wg-toolbar-height);
+  min-width: 0;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.shell-title-bar :is(button, input, [role='button']) {
+  -webkit-app-region: no-drag;
+}
+
+/* macOS's buttons sit at the left; the same room on the right keeps the
+   centre centred on the window. */
+:root[data-platform='macos'] .shell-title-bar {
+  padding-inline: var(--wg-traffic-light-inset);
+}
+
+/* The title bar overlay's buttons take the width right of the area the page
+   may draw in. */
+:root:is([data-platform='windows'], [data-platform='linux']) .shell-title-bar {
+  padding-inline: calc(
+    100vw - env(titlebar-area-x, 0) - env(titlebar-area-width, 100vw)
+  );
+}
+
+/* Alignment in the bars: `start` items pack at the start, and the first
+   `center` item and the first `end` item each push away from what precedes
+   them. Main, the side bar, the panel and the overlay ignore alignment. */
+:is(.shell-title-bar, .shell-status-bar)
+  > :is(
+    :not([data-align='center']) + [data-align='center'],
+    [data-align='center']:first-child,
+    :not([data-align='end']) + [data-align='end'],
+    [data-align='end']:first-child
+  ) {
+  margin-inline-start: auto;
+}
+
+.shell-activity-bar
+  > :is(
+    :not([data-align='center']) + [data-align='center'],
+    [data-align='center']:first-child,
+    :not([data-align='end']) + [data-align='end'],
+    [data-align='end']:first-child
+  ) {
+  margin-block-start: auto;
+}
+
+/* The shown mode's context: one line, cut short with an ellipsis, draggable
+   like the bar under it. */
+.title-bar-context {
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title-bar-context-detail {
+  color: var(--wg-fg-secondary);
+  margin-inline-start: var(--wg-space-2);
 }
 
 .shell-activity-bar {
   background: var(--wg-material-chrome-bg);
   border-right: 1px solid var(--wg-border-default);
+  display: flex;
+  flex-direction: column;
   grid-area: activity;
   overflow-y: auto;
-  width: 3rem;
+  width: var(--wg-activitybar-width);
+}
+
+/* A mode's icon button; the shown mode's carries the accent mark along its
+   window-side edge. */
+.activity-item {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--wg-fg-secondary);
+  cursor: pointer;
+  display: flex;
+  flex: none;
+  height: var(--wg-activitybar-width);
+  justify-content: center;
+  padding: 0;
+  width: var(--wg-activitybar-width);
+}
+
+.activity-item:hover,
+.activity-item.is-shown {
+  color: var(--wg-fg);
+}
+
+.activity-item.is-shown {
+  box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-accent);
 }
 
 .shell-side-bar {
@@ -29,7 +126,17 @@
   grid-area: side;
   min-height: 0;
   overflow-y: auto;
-  width: 16rem;
+  width: var(--wg-sidebar-width);
+}
+
+/* Over the content, the side bar lies on the main and panel cell while its
+   own column collapses. */
+.shell-side-bar[data-side-bar='over'] {
+  box-shadow: 0 0 1rem var(--wg-window-background);
+  grid-column: 3;
+  grid-row: 2 / 4;
+  justify-self: start;
+  z-index: 1;
 }
 
 .shell-main {

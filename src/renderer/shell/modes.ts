@@ -1,20 +1,119 @@
 import type { Log } from '../../contracts/log';
-import type { Mode, ModeHandle, Modes } from '../../contracts/plugin';
+import type {
+  Mode,
+  ModeContext,
+  ModeHandle,
+  Modes,
+} from '../../contracts/plugin';
 
-// The core's mode registry: `attach` places each mode's element in the window
-// once, and showing a mode only toggles `hidden`, so a hidden mode keeps its
-// DOM and state.
-export function createModes(
-  attach: (element: HTMLElement) => void,
-  log: Log,
-): Modes {
-  const added = new Map<string, Mode>();
+// Where the shown mode's side bar lies: beside the content, over it, or
+// hidden.
+export type SideBarLayout = 'beside' | 'over' | 'hidden';
+
+// A mode's side bar choice: hidden by the user while the window is wide, and
+// open over the content while it is narrow (below 680 px).
+export interface SideBarState {
+  isHiddenWide: boolean;
+  isOverlayOpen: boolean;
+}
+
+export const SIDE_BAR_START: SideBarState = {
+  isHiddenWide: false,
+  isOverlayOpen: false,
+};
+
+export function sideBarLayout(
+  state: SideBarState,
+  isNarrow: boolean,
+): SideBarLayout {
+  if (isNarrow) {
+    return state.isOverlayOpen ? 'over' : 'hidden';
+  }
+  return state.isHiddenWide ? 'hidden' : 'beside';
+}
+
+// The toggle key flips the hidden choice while wide and the overlay while
+// narrow; the other field stays.
+export function toggledSideBar(
+  state: SideBarState,
+  isNarrow: boolean,
+): SideBarState {
+  return isNarrow
+    ? { ...state, isOverlayOpen: !state.isOverlayOpen }
+    : { ...state, isHiddenWide: !state.isHiddenWide };
+}
+
+// The window widening ends the overlay; the user's hidden choice always
+// stays.
+export function sideBarAfterResize(
+  state: SideBarState,
+  isNarrow: boolean,
+): SideBarState {
+  return isNarrow ? state : { ...state, isOverlayOpen: false };
+}
+
+const SIDE_BAR_LOGS: Record<SideBarLayout, string> = {
+  beside: 'side bar shown',
+  over: 'side bar shown over the content',
+  hidden: 'side bar hidden',
+};
+
+// What the mode registry drives outside itself. `place` puts a mode's element
+// and side bar in the window, and its item in the activity bar, once at its
+// `add`; `marked` marks the shown mode in the activity bar; `layOutSideBar`
+// lays out the side bar area; `showContext` shows the title bar's context;
+// `isNarrow` is whether the window starts narrower than 680 px.
+export interface ModesDeps {
+  place(mode: Mode, handle: ModeHandle): void;
+  marked(modeId: string): void;
+  layOutSideBar(layout: SideBarLayout): void;
+  showContext(context: ModeContext | null): void;
+  isNarrow: boolean;
+  log: Log;
+}
+
+// The core's own view of the registry: `narrowChanged` hears the window cross
+// the 680 px breakpoint, closing every mode's overlay on widening and laying
+// out the shown mode's side bar again.
+export interface CoreModes extends Modes {
+  narrowChanged(isNarrow: boolean): void;
+}
+
+interface AddedMode {
+  mode: Mode;
+  sideBar: SideBarState;
+  context: ModeContext | null;
+}
+
+// The core's mode registry: each mode is placed once, and showing a mode only
+// toggles `hidden`, so a hidden mode keeps its DOM and state. Each mode keeps
+// its own side bar choice and title bar context, applied while it shows.
+export function createModes(deps: ModesDeps): CoreModes {
+  const { log } = deps;
+  const added = new Map<string, AddedMode>();
   const listeners: ((modeId: string) => void)[] = [];
-  let shownMode: Mode | null = null;
+  let shownMode: AddedMode | null = null;
+  let isNarrow = deps.isNarrow;
 
-  const reveal = (mode: Mode) => {
-    mode.element.hidden = false;
-    shownMode = mode;
+  const layoutOf = (entry: AddedMode): SideBarLayout =>
+    entry.mode.sideBar === undefined
+      ? 'hidden'
+      : sideBarLayout(entry.sideBar, isNarrow);
+
+  const setHidden = (mode: Mode, hidden: boolean) => {
+    mode.element.hidden = hidden;
+    if (mode.sideBar !== undefined) {
+      mode.sideBar.hidden = hidden;
+    }
+  };
+
+  const reveal = (entry: AddedMode) => {
+    const { mode } = entry;
+    setHidden(mode, false);
+    shownMode = entry;
+    deps.marked(mode.id);
+    deps.layOutSideBar(layoutOf(entry));
+    deps.showContext(entry.context);
     log('page', `showed ${mode.title} mode`);
     mode.shown();
   };
@@ -24,39 +123,67 @@ export function createModes(
       if (added.has(mode.id)) {
         throw new Error(`Mode "${mode.id}" is added twice`);
       }
-      added.set(mode.id, mode);
-      attach(mode.element);
-      if (shownMode === null) {
-        reveal(mode);
-      } else {
-        mode.element.hidden = true;
-      }
+      const entry: AddedMode = { mode, sideBar: SIDE_BAR_START, context: null };
+      added.set(mode.id, entry);
       const handle: ModeHandle = {
         show() {
-          if (shownMode === mode) {
+          if (shownMode === entry) {
             return;
           }
           if (shownMode !== null) {
-            shownMode.element.hidden = true;
-            shownMode.hidden();
+            setHidden(shownMode.mode, true);
+            shownMode.mode.hidden();
           }
-          reveal(mode);
+          reveal(entry);
           for (const listener of listeners) {
             listener(mode.id);
           }
         },
-        isShown: () => shownMode === mode,
+        isShown: () => shownMode === entry,
+        setContext(context) {
+          entry.context = context;
+          if (shownMode === entry) {
+            deps.showContext(context);
+          }
+        },
+        toggleSideBar() {
+          if (mode.sideBar === undefined) {
+            throw new Error(`Mode "${mode.id}" has no side bar`);
+          }
+          entry.sideBar = toggledSideBar(entry.sideBar, isNarrow);
+          if (shownMode === entry) {
+            const layout = layoutOf(entry);
+            deps.layOutSideBar(layout);
+            log('page', SIDE_BAR_LOGS[layout]);
+          }
+        },
+        sideBarShown: () => shownMode === entry && layoutOf(entry) !== 'hidden',
       };
+      deps.place(mode, handle);
+      if (shownMode === null) {
+        reveal(entry);
+      } else {
+        setHidden(mode, true);
+      }
       return handle;
     },
     shown() {
       if (shownMode === null) {
         throw new Error('No mode is added yet');
       }
-      return shownMode.id;
+      return shownMode.mode.id;
     },
     onChanged(listener) {
       listeners.push(listener);
+    },
+    narrowChanged(next) {
+      isNarrow = next;
+      for (const entry of added.values()) {
+        entry.sideBar = sideBarAfterResize(entry.sideBar, isNarrow);
+      }
+      if (shownMode !== null) {
+        deps.layOutSideBar(layoutOf(shownMode));
+      }
     },
   };
 }

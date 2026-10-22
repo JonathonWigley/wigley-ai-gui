@@ -3,6 +3,7 @@
 import {
   app,
   type BrowserWindow,
+  type BrowserWindowConstructorOptions,
   dialog,
   globalShortcut,
   ipcMain,
@@ -29,6 +30,7 @@ import type { Clock, RandomHex, RandomUuid } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { Log } from '../contracts/log';
 import type { Platform } from '../contracts/platform';
+import type { Theme } from '../contracts/theme';
 import type {
   MainServices,
   MainStart,
@@ -73,6 +75,7 @@ import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { applySelfTestConfig } from './selftest-config';
 import { resolveTheme } from './themes/theme-loader';
+import { titleBarOverlayOf } from './title-bar-overlay';
 import {
   createMainWindow,
   registerWindowCommands,
@@ -140,6 +143,16 @@ const platform: Platform =
     : process.platform === 'win32'
       ? 'windows'
       : 'linux';
+
+// macOS keeps its window buttons inset in the page's title bar; Windows and
+// Linux draw theirs as an overlay coloured from the theme.
+function titleBarOptions(
+  theme: Theme,
+): Pick<BrowserWindowConstructorOptions, 'titleBarStyle' | 'titleBarOverlay'> {
+  return platform === 'macos'
+    ? { titleBarStyle: 'hiddenInset' }
+    : { titleBarStyle: 'hidden', titleBarOverlay: titleBarOverlayOf(theme) };
+}
 
 function homeFolder(): string {
   if (!isSelfTest) {
@@ -270,9 +283,19 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
     startConfig.settings.window,
     startConfig.theme.tokens['window-background'],
     isSelfTest,
+    titleBarOptions(startConfig.theme),
   );
   mainWindow = window;
   const log = pageLog(window);
+  if (platform !== 'macos') {
+    store.onChanged((config) => {
+      try {
+        window.setTitleBarOverlay(titleBarOverlayOf(config.theme));
+      } catch (error) {
+        log('main', `title bar not recoloured: ${errorText(error)}`);
+      }
+    });
+  }
 
   const selfTest = isSelfTest
     ? startSelfTest(window, scopedFiles(files, inputs.homeDir), cleanUpSelfTest)

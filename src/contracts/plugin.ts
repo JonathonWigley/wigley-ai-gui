@@ -166,6 +166,7 @@ export interface PluginEvents<
 }
 
 export type AreaName =
+  | 'titleBar'
   | 'activityBar'
   | 'sideBar'
   | 'main'
@@ -173,47 +174,93 @@ export type AreaName =
   | 'statusBar'
   | 'overlay';
 
-// An area of the window's shell; it shows while anything is contributed to it.
-export interface Area {
-  contribute(element: HTMLElement): { remove(): void };
+// Where a contribution sits in its area: contributions sort by `align`
+// (`start`, then `center`, then `end`; default `start`), then by `order`
+// ascending (default `0`), then in the order they were contributed.
+export interface ContributeOptions {
+  order?: number;
+  align?: 'start' | 'center' | 'end';
 }
 
-// The areas a plugin contributes to: every area but `main`, which belongs to
-// the modes and is filled through `modes.add`.
-export type PluginAreas = Record<Exclude<AreaName, 'main'>, Area>;
+// An area of the window's shell. `contribute` places `element` in the area
+// where its options sort it, until the returned handle's `dispose`; a second
+// `dispose` does nothing. The area hides while it holds no contribution.
+export interface Area {
+  contribute(element: HTMLElement, options?: ContributeOptions): Disposable;
+}
 
-// A view that fills the window above the status bar; the core shows one mode at
-// a time. `shown` runs each time this mode becomes the shown one, the first
-// mode's at its `add` included; the mode's plugin sets its base key scope
-// there, so a hidden view never keeps the scope. `hidden` runs each time
-// another mode's `show` hides this one, after its element is hidden and before
-// the other mode's `shown`.
+// The areas a plugin contributes to: the core draws the activity bar and the
+// side bar from the modes, and `main` belongs to the modes, filled through
+// `modes.add`.
+export type PluginAreas = Record<
+  'titleBar' | 'panel' | 'statusBar' | 'overlay',
+  Area
+>;
+
+// What the title bar shows for a mode at its centre: `title`, with `detail`
+// after it in the secondary text colour when it is not null.
+export interface ModeContext {
+  title: string;
+  detail: string | null;
+}
+
+// A view that fills the window's content sheet; the core shows one mode at a
+// time. `icon` is a Codicon name the activity bar draws for the mode, with
+// `title` as its label and tooltip. `sideBar`, when set, shows in the window's
+// side bar while this mode shows. `shown` runs each time this mode becomes the
+// shown one, the first mode's at its `add` included; the mode's plugin sets
+// its base key scope there, so a hidden view never keeps the scope. `hidden`
+// runs each time another mode's `show` hides this one, after its element and
+// side bar are hidden and before the other mode's `shown`.
 export interface Mode {
   id: string;
   title: string;
+  icon: string;
   element: HTMLElement;
+  sideBar?: HTMLElement;
   shown(): void;
   hidden(): void;
 }
 
 // `show` hides the shown mode and shows this one; on the shown mode it does
-// nothing.
+// nothing. `setContext` keeps the mode's title bar context, starting null,
+// and shows it while the mode shows. `toggleSideBar` flips the mode's side bar
+// choice: while the window is wide it hides or shows the side bar beside the
+// content, while narrow it opens or closes it over the content; each mode
+// keeps its own choice, and a hidden mode's toggle applies at its next show.
+// It throws `Mode "<id>" has no side bar` on a mode without one.
+// `sideBarShown` is true while the mode shows and its side bar lies beside or
+// over the content.
 export interface ModeHandle {
   show(): void;
   isShown(): boolean;
+  setContext(context: ModeContext | null): void;
+  toggleSideBar(): void;
+  sideBarShown(): boolean;
 }
 
 // The first mode added shows and every later one is added hidden; a hidden
 // mode keeps its DOM and state. `add` throws on an id already added, and calls
 // the first mode's `shown` before it returns, so that `shown` cannot read the
 // handle. `shown` is the shown mode's id and throws before any `add`. A `show`
-// that changes the shown mode hides the old mode's element, calls the old
-// mode's `hidden`, unhides the new mode's element and calls its `shown`, then
-// `onChanged` listeners hear the new id.
+// that changes the shown mode hides the old mode's element and side bar, calls
+// the old mode's `hidden`, unhides the new mode's element and side bar, marks
+// it in the activity bar, lays out its side bar, shows its context, calls its
+// `shown`, then `onChanged` listeners hear the new id.
 export interface Modes {
   add(mode: Mode): ModeHandle;
   shown(): string;
   onChanged(listener: (modeId: string) => void): void;
+}
+
+// Places the shell's areas: `mount` builds them inside `root`, which the shell
+// has emptied, and returns each area's element. The shell then fills those
+// elements: it hides an element while its area holds no contribution (the side
+// bar's while the shown mode shows none), sets `data-align` on each
+// contribution, and sets `data-side-bar` (`beside`, `over` or `hidden`) on the
+// side bar's element; the layout's CSS turns these into position.
+export interface ShellLayout {
+  mount(root: HTMLElement): Record<AreaName, HTMLElement>;
 }
 
 export type ToastTone = 'success' | 'info' | 'error';
@@ -257,6 +304,10 @@ export interface PushedScope {
 // `platform` is the OS the app runs on, fixed for the page load.
 // `modes.add` qualifies the mode's id by the plugin (`browse` in plugin `p`
 // is `p.browse`), and `modes.shown` and `modes.onChanged` read qualified ids.
+// `shell.setLayout` places the shell's areas by `layout` in place of the one
+// in use, moving every contribution into it, and returns the `Disposable` that
+// restores the default layout; that `dispose` does nothing once another
+// `setLayout` replaced the layout.
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` is the
 // plugin's own events and `Heard` the other plugins' events it hears, as
@@ -288,6 +339,7 @@ export interface PageApi<
     scopes: readonly ScopeInfo[];
   };
   modes: Modes;
+  shell: { setLayout(layout: ShellLayout): Disposable };
   settings(): M['settings'];
   onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
   platform: Platform;

@@ -17,13 +17,8 @@ import {
   mayClose,
   roundToastText,
   rowChanges,
-  SIDEBAR_START,
-  type SidebarLayout,
-  sidebarAfterResize,
-  sidebarLayout,
   stepSession,
   stepTab,
-  toggledSidebar,
   type VisibleTab,
   visibleTab,
 } from './tabs';
@@ -33,16 +28,6 @@ type SessionsApi = PageApi<
   SessionsChannel,
   SessionsPageEvents
 >;
-
-// The window width below which the sidebar leaves the tab area the whole
-// width: 420 px, where the form was fitted, plus the sidebar's 16rem.
-const NARROW_QUERY = '(max-width: 679px)';
-
-const SIDEBAR_LOGS: Record<SidebarLayout, string> = {
-  beside: 'sidebar shown',
-  over: 'sidebar shown over the content',
-  hidden: 'sidebar hidden',
-};
 
 function createExports(
   api: SessionsApi,
@@ -82,8 +67,10 @@ function createExports(
   };
 }
 
-// Sessions mode: a sidebar row for each of main's sessions beside the selected
-// session's tabs, which other plugins add. Main owns the rows: activating or
+// Sessions mode: a sidebar row for each of main's sessions, in the mode's side
+// bar, beside the selected session's tabs, which other plugins add; the title
+// bar shows the selected session's label and folder, and the mode's command
+// toggles the side bar while the mode shows. Main owns the rows: activating or
 // closing one asks main, and the page redraws from the state main sends back,
 // publishing sessions arriving and leaving and the selected session changing.
 // The visible tab, the selected tab of the selected session while the mode
@@ -100,9 +87,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     let published: string | null | undefined;
     let isModeShown = false;
     let lastVisible: VisibleTab = null;
-    const narrow = window.matchMedia(NARROW_QUERY);
-    let isNarrow = narrow.matches;
-    let sidebar = SIDEBAR_START;
 
     const labelOf = (sessionId: string) =>
       state.rows.find((row) => row.sessionId === sessionId)?.label ?? sessionId;
@@ -137,19 +121,14 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       tabsChanged: checkVisible,
     });
     const exports = createExports(api, view, () => state, labelOf);
-    const layOut = () => view.layOut(sidebarLayout(sidebar, isNarrow));
-    layOut();
-    narrow.addEventListener('change', (event) => {
-      isNarrow = event.matches;
-      sidebar = sidebarAfterResize(sidebar, isNarrow);
-      layOut();
-    });
 
     // The first mode's `shown` runs inside `add`, before `mode` is assigned.
     const mode = api.modes.add({
       id: 'sessions',
       title: 'Sessions',
+      icon: 'comment-discussion',
       element: view.element,
+      sideBar: view.sideBar,
       shown() {
         isModeShown = true;
         checkVisible();
@@ -164,6 +143,14 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       const before = state;
       state = next;
       view.render(next);
+      const selected = next.rows.find(
+        (row) => row.sessionId === next.selectedSessionId,
+      );
+      mode.setContext(
+        selected === undefined
+          ? null
+          : { title: selected.label, detail: selected.projectDir },
+      );
       const changes = rowChanges(before.rows, next.rows);
       for (const sessionId of changes.removed) {
         view.tabs.drop(sessionId);
@@ -231,10 +218,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         mode.show();
         return;
       }
-      sidebar = toggledSidebar(sidebar, isNarrow);
-      const layout = sidebarLayout(sidebar, isNarrow);
-      view.layOut(layout);
-      log('sessions', SIDEBAR_LOGS[layout]);
+      mode.toggleSideBar();
     };
 
     const stepToSession = (by: 1 | -1) => {

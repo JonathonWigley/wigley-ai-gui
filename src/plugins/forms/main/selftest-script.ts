@@ -109,7 +109,7 @@ export const SELFTEST_LAYOUT = {
 // the Form tab; Cmd+W there asks to cancel its round, Esc keeps
 // it and returns to its form, where j moves to its question 2 and Space e p
 // finds its untouched question 1; Option+Shift+i moves back to the first
-// session, on question 2. Space k s hides the sidebar and shows it again; a
+// session, on question 2. Space k s hides the side bar and shows it again; a
 // enters question 2's notes box, where Esc and Space k s (the editor bind)
 // hide it and Space k s in NORMAL shows it; Esc (forms' editor bind) leaves the
 // box. Option+Shift+i wraps to the last session, a Codex one with no folder,
@@ -261,16 +261,16 @@ const STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[sessions] activated selftest' },
   {
     keys: [' ', 'k', 's'],
-    expect: '[sessions] sidebar hidden',
+    expect: '[page] side bar hidden',
     checksFit: true,
   },
-  { keys: [' ', 'k', 's'], expect: '[sessions] sidebar shown' },
+  { keys: [' ', 'k', 's'], expect: '[page] side bar shown' },
   { keys: ['a'], expect: '[forms] focused notes on question 2' },
   {
     keys: ['Escape', ' ', 'k', 's'],
-    expect: '[sessions] sidebar hidden',
+    expect: '[page] side bar hidden',
   },
-  { keys: [' ', 'k', 's'], expect: '[sessions] sidebar shown' },
+  { keys: [' ', 'k', 's'], expect: '[page] side bar shown' },
   { keys: ['Escape'], expect: '[forms] left the box' },
   {
     keys: ['<A-S-i>'],

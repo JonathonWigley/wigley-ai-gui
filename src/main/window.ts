@@ -1,4 +1,9 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  type BrowserWindowConstructorOptions,
+  dialog,
+} from 'electron';
 import path from 'node:path';
 import type { Log } from '../contracts/log';
 import type { MainServices } from '../contracts/plugin';
@@ -6,13 +11,19 @@ import type { Settings } from '../contracts/settings';
 import type { MainCommands } from './keybindings';
 
 // `offscreen` renders without showing the window or taking focus;
-// `backgroundColor` shows before the page paints.
+// `backgroundColor` shows before the page paints; `titleBar` hides the native
+// title bar the platform's way, keeping the OS window buttons.
 export function createMainWindow(
   settings: Settings['window'],
   backgroundColor: string,
   offscreen: boolean,
+  titleBar: Pick<
+    BrowserWindowConstructorOptions,
+    'titleBarStyle' | 'titleBarOverlay'
+  >,
 ): BrowserWindow {
   const window = new BrowserWindow({
+    ...titleBar,
     width: settings.width,
     height: settings.height,
     minWidth: settings.minWidth,

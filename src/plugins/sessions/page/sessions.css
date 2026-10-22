@@ -1,32 +1,14 @@
-/* Sessions mode: the sidebar beside the tab area. Hidden, the sidebar leaves
-   the tab area the whole width; over, it is drawn on top of the tab area. */
+/* Sessions mode: the selected session's tab area. Its session list is the
+   mode's side bar, which the shell's side bar area draws. */
 .sessions {
   display: grid;
-  grid-template-columns: 16rem minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
-  position: relative;
-}
-
-.sessions.is-sidebar-hidden,
-.sessions.is-sidebar-over {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 .session-sidebar {
-  background: var(--wg-material-chrome-bg-dense);
-  border-right: 1px solid var(--wg-border-default);
   min-height: 0;
-  overflow-y: auto;
-}
-
-.sessions.is-sidebar-over .session-sidebar {
-  box-shadow: 0 0 1rem var(--wg-window-background);
-  inset-block: 0;
-  left: 0;
-  position: absolute;
-  width: 16rem;
-  z-index: 1;
 }
 
 /* Rows: the label, the harness and the round dot on the first line, the

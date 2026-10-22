@@ -32,8 +32,11 @@ import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
 import { createPendingKeys } from './pending-keys';
 import { createPageApi } from './plugins/page-api';
+import { createActivityBar } from './shell/activity-bar';
 import { createModes } from './shell/modes';
 import { mountShell } from './shell/shell';
+import { defaultShellLayout, SIDE_BAR_OVER_QUERY } from './shell/shell-layout';
+import { mountTitleBarContext } from './shell/title-bar';
 import { createThemeApplier, type ThemeApplier } from './theme';
 import { createToasts } from './toasts';
 
@@ -185,8 +188,32 @@ async function start() {
   );
   themeApplier.apply(config.theme, settings);
 
-  const areas = mountShell(document.getElementById('app') as HTMLElement);
-  const modes = createModes((element) => areas.main.contribute(element), log);
+  document.documentElement.dataset.platform = config.platform;
+  const shell = mountShell(
+    document.getElementById('app') as HTMLElement,
+    defaultShellLayout,
+  );
+  const { areas } = shell;
+  const activityBar = createActivityBar(areas.activityBar, log);
+  const titleContext = mountTitleBarContext(areas.titleBar);
+  const narrow = window.matchMedia(SIDE_BAR_OVER_QUERY);
+  const modes = createModes({
+    place(mode, handle) {
+      areas.main.contribute(mode.element);
+      if (mode.sideBar !== undefined) {
+        areas.sideBar.contribute(mode.sideBar);
+      }
+      activityBar.add(mode, handle);
+    },
+    marked: (modeId) => activityBar.mark(modeId),
+    layOutSideBar: (layout) => shell.layOutSideBar(layout),
+    showContext: (context) => titleContext.show(context),
+    isNarrow: narrow.matches,
+    log,
+  });
+  narrow.addEventListener('change', (event) =>
+    modes.narrowChanged(event.matches),
+  );
   const toastLayer = document.createElement('div');
   toastLayer.className = 'toasts';
   areas.overlay.contribute(toastLayer);
@@ -239,6 +266,7 @@ async function start() {
         createPageApi(part.manifest, {
           areas,
           modes,
+          setLayout: (layout) => shell.setLayout(layout),
           bridge,
           scopeStack,
           pendingKeys,

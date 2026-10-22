@@ -1,6 +1,6 @@
 # 04 — Shell registry, title bar, activity bar, mode side bars
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03, 06
 Plan: [plan.md](plan.md)
@@ -360,3 +360,4 @@ layout and returns its `Disposable`.
 
 ## Proof
 
+Proof: every Produces signature found in its file; `@vscode/codicons` imported only by `icon.ts` and listed only under `src/shared/page/ui`; install run by the user (agent installs are denied). The worker ran `npm test` (1681 pass), `npm run selftest` (pass), task 06's registry check (clean, no runtime variable added) and the contribute grep (clean). Rulings and concerns in the Run log, group 04; commit sha there.

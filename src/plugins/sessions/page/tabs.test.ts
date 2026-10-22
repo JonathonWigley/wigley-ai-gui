@@ -9,11 +9,8 @@ import {
   roundToastText,
   rowChanges,
   rowStatus,
-  SIDEBAR_START,
   showsEmptyText,
   showsNoSelectionText,
-  sidebarAfterResize,
-  sidebarLayout,
   stepSession,
   stepTab,
   type TabsState,
@@ -22,7 +19,6 @@ import {
   tabsAfterRemove,
   tabsAfterSelect,
   tabsAfterTakeOver,
-  toggledSidebar,
   visibleTab,
 } from './tabs';
 
@@ -423,43 +419,6 @@ describe('tabs', () => {
     expect(calls).toEqual([0, 1]);
     expect(mayClose([])).toBe(true);
     expect(mayClose(guards([true, true]))).toBe(true);
-  });
-
-  it('sidebarLayout draws beside or hidden while wide, over or hidden while narrow', () => {
-    expect(sidebarLayout(SIDEBAR_START, false)).toBe('beside');
-    expect(
-      sidebarLayout({ isHiddenWide: true, isOverlayOpen: false }, false),
-    ).toBe('hidden');
-    expect(sidebarLayout(SIDEBAR_START, true)).toBe('hidden');
-    expect(
-      sidebarLayout({ isHiddenWide: false, isOverlayOpen: true }, true),
-    ).toBe('over');
-    expect(
-      sidebarLayout({ isHiddenWide: true, isOverlayOpen: true }, true),
-    ).toBe('over');
-  });
-
-  it('toggledSidebar flips the hidden flag while wide and the overlay while narrow', () => {
-    expect(toggledSidebar(SIDEBAR_START, false)).toEqual({
-      isHiddenWide: true,
-      isOverlayOpen: false,
-    });
-    expect(toggledSidebar(SIDEBAR_START, true)).toEqual({
-      isHiddenWide: false,
-      isOverlayOpen: true,
-    });
-    expect(
-      toggledSidebar({ isHiddenWide: true, isOverlayOpen: true }, true),
-    ).toEqual({ isHiddenWide: true, isOverlayOpen: false });
-  });
-
-  it("sidebarAfterResize closes the overlay when the window widens and keeps the user's hidden choice", () => {
-    expect(
-      sidebarAfterResize({ isHiddenWide: true, isOverlayOpen: true }, false),
-    ).toEqual({ isHiddenWide: true, isOverlayOpen: false });
-    expect(
-      sidebarAfterResize({ isHiddenWide: false, isOverlayOpen: true }, true),
-    ).toEqual({ isHiddenWide: false, isOverlayOpen: true });
   });
 
   it('visibleTab is null while the mode is hidden, none with no tab, else the selected tab', () => {

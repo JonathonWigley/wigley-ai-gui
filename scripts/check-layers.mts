@@ -19,6 +19,10 @@ const LAYERS: Record<string, LayerRule> = {
   'src/config': { layers: ['src/contracts'], packages: [] },
   'src/shared': { layers: ['src/contracts'], packages: [] },
   'src/shared/page': { layers: ['src/contracts', 'src/shared'], packages: [] },
+  'src/shared/page/ui': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/page'],
+    packages: ['@vscode/codicons'],
+  },
   'src/declarations.d.ts': { layers: ['src/contracts'], packages: [] },
   'src/preload': {
     layers: ['src/contracts', 'src/shared'],
@@ -258,7 +262,12 @@ const LAYERS: Record<string, LayerRule> = {
     packages: [],
   },
   'src/renderer': {
-    layers: ['src/contracts', 'src/shared', 'src/shared/page'],
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page',
+      'src/shared/page/ui',
+    ],
     packages: [],
   },
   'src/renderer/codemirror-vim': {

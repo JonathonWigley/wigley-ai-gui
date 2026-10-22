@@ -80,12 +80,16 @@ function readStartFailure(window: BrowserWindow): Promise<string | null> {
   );
 }
 
+// The core shell's elements that clip their own text with an ellipsis.
+const CORE_SCROLLS_ITSELF = ['.title-bar-context'];
+
 // Lists what the page cuts off on the right: an element whose content is wider
 // than its box, or that ends past the window, skipping the elements the
-// `scrollsItself` selectors match and everything inside them.
+// `scrollsItself` selectors and the core's own match, and everything inside
+// them.
 function cutOffScript(scrollsItself: string[]): string {
   return `(() => {
-  const scrollsItself = ${JSON.stringify(scrollsItself)};
+  const scrollsItself = ${JSON.stringify([...CORE_SCROLLS_ITSELF, ...scrollsItself])};
   const isScroller = (node) => scrollsItself.some((selector) => node.matches(selector));
   const name = (node) => [node.tagName.toLowerCase(), ...node.classList].join('.');
   const problems = [];

@@ -124,6 +124,9 @@ export interface DocsViewDeps {
   changed(change: DocChangeRecord): void;
   // Every docs view's `unsavedPath`, this one's included.
   unsavedPaths(): string[];
+  // Hears the open doc's path each time a doc opens or the open one moves,
+  // and null once the doc pane is emptied.
+  openChanged(path: string | null): void;
 }
 
 const SESSION_CONTEXT_TEXT =
@@ -296,6 +299,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   const doc = createDocView({
     viewId: deps.viewId,
+    openChanged: deps.openChanged,
     channel: deps.channel,
     homeDir: deps.homeDir,
     editor: deps.editor,

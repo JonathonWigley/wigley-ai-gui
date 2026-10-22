@@ -72,6 +72,9 @@ export interface DocViewDeps {
   pushConflictScope(): PushedScope;
   // The changed-on-disk prompt with the keys bound now.
   conflictText(): string;
+  // Hears the open doc's path each time a doc opens or the open one moves,
+  // and null once the pane is emptied.
+  openChanged(path: string | null): void;
 }
 
 // The doc pane: the header with its chips, the plugin cache line, the
@@ -532,6 +535,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         text,
         bodyStartLine: rendered.bodyStartLine,
       };
+      deps.openChanged(target.path);
       drawHeader(target, homeDir);
       drawChips();
       drawBody(rendered);
@@ -553,6 +557,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         return;
       }
       doc.target = target;
+      deps.openChanged(target.path);
       if (target.detail === null) {
         doc.filePath = target.path;
         doc.name = baseName(target.path);
@@ -573,6 +578,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       dropEditor();
       watchFile(null, shown.name);
       shown = null;
+      deps.openChanged(null);
       header.hidden = true;
       readOnlyLine.hidden = true;
       drawChips();

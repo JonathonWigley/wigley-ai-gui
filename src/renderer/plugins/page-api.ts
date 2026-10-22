@@ -12,6 +12,7 @@ import type {
   PageServices,
   PluginAreas,
   PluginManifest,
+  ShellLayout,
   UntypedEvents,
 } from '../../contracts/plugin';
 import type { AppConfig } from '../../contracts/settings';
@@ -27,10 +28,12 @@ import type { PendingKeysHub } from '../pending-keys';
 // `config` is the config main serves now, which the keymap, commands, scopes
 // and settings are read from at each call; `bus` is the page load's event bus;
 // `modes` is the core's mode registry, which takes qualified ids. `areas`
-// holds every area, `main` included; plugins get every area but `main`.
+// holds every area; plugins get the title bar, panel, status bar and overlay.
+// `setLayout` replaces the shell's layout.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
+  setLayout(layout: ShellLayout): Disposable;
   bridge: Bridge;
   scopeStack: ScopeStack;
   pendingKeys: Pick<PendingKeysHub, 'onPending' | 'hold' | 'cancel'>;
@@ -43,7 +46,8 @@ export interface PageApiDeps {
 
 // One plugin's page API: its channel and its events run under the manifest's
 // id, and the scopes it sets and pushes and the modes it adds are qualified by
-// it. Its areas leave out `main`, which only the mode registry fills. Its
+// it. Its areas leave out `main`, which only the mode registry fills, and the
+// activity bar and side bar, which the core draws from the modes. Its
 // settings are its own entry in the config's plugin settings.
 export function createPageApi(
   manifest: PluginManifest,
@@ -78,6 +82,7 @@ export function createPageApi(
       shown: () => deps.modes.shown(),
       onChanged: (listener) => deps.modes.onChanged(listener),
     },
+    shell: { setLayout: (layout) => deps.setLayout(layout) },
     settings: () => settingsOf(config.current()),
     onSettingsChanged: (listener) =>
       onChangedPart(config, settingsOf, listener),
@@ -151,8 +156,7 @@ function pageChannel(
 
 function pluginAreas(areas: Record<AreaName, Area>): PluginAreas {
   return {
-    activityBar: areas.activityBar,
-    sideBar: areas.sideBar,
+    titleBar: areas.titleBar,
     panel: areas.panel,
     statusBar: areas.statusBar,
     overlay: areas.overlay,
