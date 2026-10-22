@@ -227,5 +227,6 @@ Review base: ea1eb3afb84a0b22ac33df3436d17dc5e786d305
 - The forms self-test's user-keymap block moves `toggleNotApplicable` instead of the removed `jumpTo2` — the spec's "every other step stays" could not hold once jumpTo went — costs nothing · group 05
 - check-styles drops its paths mode with `--no-legacy`: paths only ever worked behind that flag and only plan C proofs used them — costs a single-file check, which would return as a new flag · group 10
 ### Review rounds
+- Round 1 · implementation review of ea1eb3a..586ca5a · 6 lanes (correctness ×4, plan-and-design ×2) · NEEDS FIXES · report `review-586ca5a….md` in the session scratchpad · applied (prose-only) c0b2f39 · 15 findings: fix now 1–6, 9–15 (five fix workers: chat, sessions, forms, docs, shared); follow-up 7 (empty docs tree), 8 (on-demand accent tag) and O1 (docs keys in sentences); O2, O3 left · the chat/pd-B contradiction on `DialogDeps.keys` resolved toward AGENTS.md § Key hints (redraw on `onChanged`) · triage took the agent's recommendations (lead ruling)
 ### Test gate
 - `npm test` full suite (covers both passes over `ea1eb3a..HEAD`): 134 files, 1901 tests passed; `npm run typecheck` 0; `npm run lint` clean (`styles: 287 files clean`); `npm run selftest` `[selftest] all passed` · after 4517890
