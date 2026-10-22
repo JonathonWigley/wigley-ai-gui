@@ -294,6 +294,20 @@ describe('resolveTheme', () => {
     },
   );
 
+  it.each(['glass', 'var(--wg-fg)'])(
+    'rejects a reduced window background that is not opaque hex: %s',
+    (value) => {
+      const json = {
+        ...rootTheme('mine'),
+        reduced: { 'window-background': value },
+      };
+
+      expect(() => resolveMine(json)).toThrow(
+        'mine.json: token "window-background": must be an opaque #rrggbb colour or a palette name holding one, since the native window paints it',
+      );
+    },
+  );
+
   it('names an unknown key and a bad colorScheme', () => {
     expect(() => resolveMine({ ...rootTheme('mine'), foo: 1 })).toThrow(
       'mine.json: unknown key "foo"; a theme has only name, extends, colorScheme, palette, tokens and reduced',

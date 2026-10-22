@@ -1,6 +1,10 @@
 import type { CommandId } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
-import { type Files, isMissingFile } from '../../contracts/files';
+import {
+  type FileEntry,
+  type Files,
+  isMissingFile,
+} from '../../contracts/files';
 import type { Keymap } from '../../contracts/keymap';
 import type { Log } from '../../contracts/log';
 import type { Platform } from '../../contracts/platform';
@@ -165,7 +169,20 @@ export async function loadConfigStore(
     texts: ThemeFileText[];
     problems: ConfigProblem[];
   }> => {
-    const entries = await deps.files.list(pathOf(THEMES_FOLDER));
+    let entries: FileEntry[];
+    try {
+      entries = await deps.files.list(pathOf(THEMES_FOLDER));
+    } catch (error) {
+      return {
+        texts: [],
+        problems: [
+          {
+            file: THEMES_FOLDER,
+            message: `Could not read the folder: ${errorText(error)}`,
+          },
+        ],
+      };
+    }
     const names = entries
       .filter((entry) => entry.kind === 'file' && entry.path.endsWith('.json'))
       .filter((entry) => !entry.path.includes('/'))

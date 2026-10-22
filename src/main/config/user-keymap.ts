@@ -14,6 +14,7 @@ import type {
   ProcessName,
   ScopeInfo,
 } from '../../contracts/plugin';
+import { acceleratorProblem } from '../../shared/accelerator';
 import { jsonKind, parseJsonObject } from './config-json';
 
 // The commands and scopes a user bind may name, by qualified id.
@@ -110,9 +111,18 @@ function requireKeysString(path: string, value: unknown): string {
   return keys;
 }
 
+function requireAccelerator(path: string, value: unknown): string {
+  const accelerator = requireKeysString(path, value);
+  const problem = acceleratorProblem(accelerator);
+  if (problem !== null) {
+    throw new Error(`"${path}" is not an accelerator: ${problem}.`);
+  }
+  return accelerator;
+}
+
 function requireKeyList(path: string, value: unknown): string[] {
   const keys = requireArray(path, value).map((key, index) =>
-    requireString(`${path}[${index}]`, key),
+    requireKeysString(`${path}[${index}]`, key),
   );
   if (keys.length === 0) {
     throw new Error(`"${path}" is empty.`);
@@ -266,7 +276,7 @@ function readAcceleratorBind(
 ): AcceleratorBind {
   const entry = requireFields(path, value, shape);
   return {
-    accelerator: requireKeysString(`${path}.accelerator`, entry.accelerator),
+    accelerator: requireAccelerator(`${path}.accelerator`, entry.accelerator),
     command: requireCommand(
       `${path}.command`,
       entry.command,
@@ -334,9 +344,9 @@ function readUnbind(path: string, value: unknown): KeymapUnbind {
       };
     }
     case 'app':
-      return { app: requireKeysString(`${path}.app`, entry.app) };
+      return { app: requireAccelerator(`${path}.app`, entry.app) };
     case 'global':
-      return { global: requireKeysString(`${path}.global`, entry.global) };
+      return { global: requireAccelerator(`${path}.global`, entry.global) };
   }
 }
 
@@ -412,8 +422,9 @@ function readEditor(
 }
 
 // The user keymap `text`, a `keymap.json`, holds, each bind naming a command
-// and scope of `names` that runs in the bind's process. Throws an Error whose
-// message is the first problem found, as the user reads it.
+// and scope of `names` that runs in the bind's process, and each accelerator
+// one Electron accepts. Throws an Error whose message is the first problem
+// found, as the user reads it.
 export function parseUserKeymap(text: string, names: KeymapNames): UserKeymap {
   const file = parseJsonObject(text);
   for (const key of Object.keys(file)) {

@@ -17,9 +17,10 @@ import type {
   PluginManifest,
   ScopeInfo,
 } from '../contracts/plugin';
-import type { TokenDecl } from '../contracts/theme';
+import type { TokenDecl, TokenKind } from '../contracts/theme';
 import { editorBindMode, withLeader } from './key-hints';
 import { startsWith } from './keymap-checks';
+import { themeVariable } from './theme-variables';
 
 const THEME_TOKEN_NAME = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 
@@ -333,10 +334,16 @@ export function pluginSettings(
 
 // Every manifest's theme tokens, each qualified as `<pluginId>.<token>`.
 // Throws on a token name that is not lowercase letters and digits joined by
-// `-` or `_`, which its CSS variable could not carry unchanged.
+// `-` or `_`, which its CSS variable could not carry unchanged, and on a token
+// whose CSS variable is a `core` token's or an earlier plugin token's
+// (`status`.`error` and core `status-error` are both `--wg-status-error`).
 export function pluginThemeTokens(
+  core: Readonly<Record<string, TokenKind>>,
   manifests: readonly PluginManifest[],
 ): Record<string, TokenDecl> {
+  const tokenByVariable = new Map(
+    Object.keys(core).map((token) => [themeVariable(token), token]),
+  );
   const tokens: Record<string, TokenDecl> = {};
   for (const manifest of manifests) {
     for (const [key, decl] of Object.entries(manifest.themeTokens)) {
@@ -345,7 +352,16 @@ export function pluginThemeTokens(
           `Plugin "${manifest.id}" theme token "${key}" must be lowercase letters and digits joined by - or _`,
         );
       }
-      tokens[qualify(manifest.id, key)] = decl;
+      const token = qualify(manifest.id, key);
+      const variable = themeVariable(token);
+      const holder = tokenByVariable.get(variable);
+      if (holder !== undefined) {
+        throw new Error(
+          `Theme token "${token}" and theme token "${holder}" share the CSS variable ${variable}`,
+        );
+      }
+      tokenByVariable.set(variable, token);
+      tokens[token] = decl;
     }
   }
   return tokens;

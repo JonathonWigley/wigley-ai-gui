@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { Files } from '../../contracts/files';
 import type { Keymap } from '../../contracts/keymap';
 import type { PluginManifest } from '../../contracts/plugin';
 import type { AppConfig, Settings } from '../../contracts/settings';
@@ -6,7 +7,11 @@ import type { Theme } from '../../contracts/theme';
 import { definePlugin } from '../../shared/define-plugin';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
 import { ThemeError, type ThemeFileText } from '../themes/theme-loader';
-import { type ConfigStore, loadConfigStore } from './config-store';
+import {
+  type ConfigStore,
+  type ConfigStoreDeps,
+  loadConfigStore,
+} from './config-store';
 
 const FOLDER = '/home/.config/wigley-ai-gui';
 
@@ -51,7 +56,8 @@ const listPlugin = definePlugin({
 });
 
 // Task 01's signature: a theme named `name`, a user text of that name over a
-// built-in, `"broken": true` in the selected user text failing on its file.
+// built-in, `"broken": true` in the selected user text failing on its file
+// and in the selected built-in failing on a file of the app's.
 function resolveTheme(
   name: string,
   builtIns: readonly unknown[],
@@ -66,7 +72,13 @@ function resolveTheme(
     }
     return theme(name, user.file);
   }
-  if (builtIns.some((builtIn) => (builtIn as { name: string }).name === name)) {
+  const builtIn = builtIns.find(
+    (candidate) => (candidate as { name: string }).name === name,
+  ) as { name: string; broken?: boolean } | undefined;
+  if (builtIn !== undefined) {
+    if (builtIn.broken) {
+      throw new ThemeError(`built-in ${name}`, 'broken');
+    }
     return theme(name, 'built-in');
   }
   throw new ThemeError(
@@ -80,8 +92,8 @@ function theme(name: string, source: string): Theme {
 }
 
 function load(
-  files: MemoryFiles,
-  manifests: readonly PluginManifest[] = [listPlugin],
+  files: Files,
+  overrides: Partial<ConfigStoreDeps> = {},
 ): Promise<ConfigStore> {
   return loadConfigStore({
     files,
@@ -94,13 +106,44 @@ function load(
       'window.summon': { label: 'Summon', group: 'window', runsIn: 'main' },
     },
     coreScopes: [{ id: 'any', title: 'Everywhere', plugin: 'core' }],
-    manifests,
+    manifests: [listPlugin],
     builtInThemes: [{ name: 'mocha' }, { name: 'dusk' }],
     themeTokens: { core: {}, plugins: {} },
     resolveTheme,
     platform: 'windows',
     log: () => undefined,
+    ...overrides,
   });
+}
+
+// `files` whose reads take the text at the call and, while `hold` is in
+// force, return it only on `release`, so a test can change a file mid-read.
+// `reads` lists every path read, in call order.
+function heldReads(files: MemoryFiles) {
+  let held: Promise<void> | null = null;
+  let open = () => undefined as void;
+  const reads: string[] = [];
+  const read = async (path: string) => {
+    reads.push(path);
+    const text = await files.read(path);
+    if (held !== null) {
+      await held;
+    }
+    return text;
+  };
+  return {
+    files: { ...files, read },
+    reads,
+    hold() {
+      held = new Promise((resolve) => {
+        open = resolve;
+      });
+    },
+    release() {
+      held = null;
+      open();
+    },
+  };
 }
 
 function nextChange(store: ConfigStore): Promise<AppConfig> {
@@ -366,6 +409,46 @@ describe('loadConfigStore', () => {
     ]);
   });
 
+  it('keeps the last good keymap over an app bind on an unknown key', async () => {
+    const files = createMemoryFiles();
+    await files.write(
+      `${FOLDER}/keymap.json`,
+      '{"app":[{"accelerator":"Command+K","command":"window.summon"}]}',
+    );
+    const store = await load(files);
+
+    const config = await writeAndWait(
+      files,
+      store,
+      'keymap.json',
+      '{"app":[{"accelerator":"Command+Nope","command":"window.summon"}]}',
+    );
+
+    expect(config.keymap.app).toEqual([
+      { accelerator: 'Command+K', command: 'window.summon' },
+    ]);
+    expect(config.problems).toEqual([
+      {
+        file: 'keymap.json',
+        message:
+          '"app[0].accelerator" is not an accelerator: "Nope" is not a key.',
+      },
+    ]);
+  });
+
+  it('reports a global unbind on a modifier with no key', async () => {
+    const store = await loadWithKeymap('{"unbind":[{"global":"Control+Alt"}]}');
+
+    expect(store.current().keymap.global).toEqual(CORE_KEYMAP.global);
+    expect(store.current().problems).toEqual([
+      {
+        file: 'keymap.json',
+        message:
+          '"unbind[0].global" is not an accelerator: it ends on a modifier, not a key.',
+      },
+    ]);
+  });
+
   it('uses a user theme over a built-in of the same name', async () => {
     const files = createMemoryFiles();
     await files.write(`${FOLDER}/settings.json`, '{"theme":"dusk"}');
@@ -457,8 +540,135 @@ describe('loadConfigStore', () => {
       },
     };
 
-    await expect(load(createMemoryFiles(), [clashing])).rejects.toThrow(
-      'share a scope',
+    await expect(
+      load(createMemoryFiles(), { manifests: [clashing] }),
+    ).rejects.toThrow('share a scope');
+  });
+  it('reports an empty key in a page bind', async () => {
+    const store = await loadWithKeymap(
+      '{"page":[{"keys":[""],"scope":"p.list","command":"p.down"}]}',
     );
+
+    expect(pageCommands(store.current())).toEqual(['j p.down', 'k p.up']);
+    expect(store.current().problems).toEqual([
+      { file: 'keymap.json', message: '"page[0].keys[0]" is empty.' },
+    ]);
+  });
+
+  it('runs one more rebuild for changes during a rebuild, serving the latest file', async () => {
+    const memory = createMemoryFiles();
+    const held = heldReads(memory);
+    const store = await load(held.files);
+    const widths: number[] = [];
+    store.onChanged((config) => widths.push(config.settings.window.width));
+    const settingsReads = () =>
+      held.reads.filter((path) => path.endsWith('/settings.json')).length;
+    const readsAtLoad = settingsReads();
+
+    held.hold();
+    await memory.write(`${FOLDER}/settings.json`, '{"window":{"width":1000}}');
+    await memory.write(`${FOLDER}/settings.json`, '{"window":{"width":1100}}');
+    await memory.write(`${FOLDER}/settings.json`, '{"window":{"width":1200}}');
+    held.release();
+
+    await vi.waitFor(() => expect(widths).toEqual([1000, 1200]));
+    expect(settingsReads() - readsAtLoad).toBe(2);
+  });
+
+  it('applies a change made during the first read once loaded', async () => {
+    const memory = createMemoryFiles();
+    await memory.write(`${FOLDER}/settings.json`, '{"window":{"width":1000}}');
+    const held = heldReads(memory);
+
+    held.hold();
+    const loading = load(held.files);
+    await memory.write(`${FOLDER}/settings.json`, '{"window":{"width":1200}}');
+    held.release();
+    const store = await loading;
+
+    await vi.waitFor(() =>
+      expect(store.current().settings.window.width).toBe(1200),
+    );
+  });
+
+  it('reports a folder it cannot watch', async () => {
+    const memory = createMemoryFiles();
+    const files: Files = {
+      ...memory,
+      watch: () => {
+        throw new Error('no watcher');
+      },
+    };
+
+    const store = await load(files);
+
+    expect(store.current().problems).toEqual([
+      {
+        file: FOLDER,
+        message:
+          'Cannot watch this folder, so edits apply on the next start: no watcher',
+      },
+    ]);
+  });
+
+  it('reports a watch that fails after it starts', async () => {
+    let fail: (error: unknown) => void = () => undefined;
+    const files: Files = {
+      ...createMemoryFiles(),
+      watch: (_folder, _onChange, onError) => {
+        fail = onError ?? fail;
+        return { close: () => undefined };
+      },
+    };
+    const store = await load(files);
+    const changed = nextChange(store);
+
+    fail(new Error('watcher died'));
+
+    expect((await changed).problems).toEqual([
+      {
+        file: FOLDER,
+        message:
+          'Cannot watch this folder, so edits apply on the next start: watcher died',
+      },
+    ]);
+  });
+
+  it('rejects the first read when the selected built-in theme is broken', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${FOLDER}/settings.json`, '{"theme":"dusk"}');
+
+    await expect(
+      load(files, {
+        builtInThemes: [{ name: 'mocha' }, { name: 'dusk', broken: true }],
+      }),
+    ).rejects.toThrow('broken');
+  });
+
+  it('reports a themes folder it cannot list and applies the rest', async () => {
+    const memory = createMemoryFiles();
+    await memory.write(`${FOLDER}/settings.json`, '{"window":{"width":1200}}');
+    await memory.write(
+      `${FOLDER}/keymap.json`,
+      '{"unbind":[{"page":["j"],"scope":"p.list"}]}',
+    );
+    const files: Files = {
+      ...memory,
+      list: async (folder) => {
+        if (folder === `${FOLDER}/themes`) {
+          throw new Error('not a folder');
+        }
+        return memory.list(folder);
+      },
+    };
+
+    const store = await load(files);
+
+    expect(store.current().settings.window.width).toBe(1200);
+    expect(pageCommands(store.current())).toEqual(['k p.up']);
+    expect(store.current().theme.name).toBe('mocha');
+    expect(store.current().problems).toEqual([
+      { file: 'themes', message: 'Could not read the folder: not a folder' },
+    ]);
   });
 });

@@ -202,7 +202,7 @@ function loadConfig(homeDir: string): Promise<ConfigStore> {
     builtInThemes,
     themeTokens: {
       core: coreThemeTokens,
-      plugins: pluginThemeTokens(manifests),
+      plugins: pluginThemeTokens(coreThemeTokens, manifests),
     },
     resolveTheme,
     platform,

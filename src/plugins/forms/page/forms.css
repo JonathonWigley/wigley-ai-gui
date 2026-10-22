@@ -650,7 +650,7 @@
    when narrow. */
 .status-line {
   align-items: center;
-  background: var(--wg-block-background);
+  background: var(--wg-material-chrome-bg);
   border-top: 1px solid var(--wg-border-default);
   display: flex;
   flex: 1 1 auto;

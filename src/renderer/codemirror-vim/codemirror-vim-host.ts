@@ -519,17 +519,17 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
   let keymap = initialKeymap;
   let groups = bindGroups(keymap);
   let isKeymapApplied = false;
-  // The leader whose default bind vim has dropped, null before any has been.
-  let unmappedLeader: string | null = null;
+  // Every leader whose default bind vim has dropped; vim keeps none to drop again.
+  const unmappedLeaders = new Set<string>();
   const pendingKeys = new PendingKeys();
   defineBindCommands(groups, hosted, run);
 
   const applyVimrc = (cm: VimEditor) => {
-    const unmapsLeader = keymap.leader !== unmappedLeader;
+    const unmapsLeader = !unmappedLeaders.has(keymap.leader);
     for (const line of vimrcLines(keymap, groups, unmapsLeader)) {
       Vim.handleEx(cm, line);
     }
-    unmappedLeader = keymap.leader;
+    unmappedLeaders.add(keymap.leader);
     isKeymapApplied = true;
   };
 

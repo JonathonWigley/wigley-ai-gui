@@ -284,7 +284,7 @@ describe('pluginSettings', () => {
 
 describe('pluginThemeTokens', () => {
   it("qualifies each plugin's tokens", () => {
-    const tokens = pluginThemeTokens([
+    const tokens = pluginThemeTokens({}, [
       manifest('forms', {
         themeTokens: {
           'origin-caused': { kind: 'color', default: '#ff0000' },
@@ -299,7 +299,7 @@ describe('pluginThemeTokens', () => {
 
   it('rejects a key that is not a token name', () => {
     expect(() =>
-      pluginThemeTokens([
+      pluginThemeTokens({}, [
         manifest('forms', {
           themeTokens: {
             originCaused: { kind: 'color', default: '#ff0000' },
@@ -308,6 +308,33 @@ describe('pluginThemeTokens', () => {
       ]),
     ).toThrow(
       'Plugin "forms" theme token "originCaused" must be lowercase letters and digits joined by - or _',
+    );
+  });
+
+  it("rejects a token whose CSS variable is a core token's", () => {
+    expect(() =>
+      pluginThemeTokens({ 'status-error': 'color' }, [
+        manifest('status', {
+          themeTokens: { error: { kind: 'color', default: '#ff0000' } },
+        }),
+      ]),
+    ).toThrow(
+      'Theme token "status.error" and theme token "status-error" share the CSS variable --wg-status-error',
+    );
+  });
+
+  it("rejects a token whose CSS variable is another plugin token's", () => {
+    expect(() =>
+      pluginThemeTokens({}, [
+        manifest('a-b', {
+          themeTokens: { c: { kind: 'color', default: '#ff0000' } },
+        }),
+        manifest('a', {
+          themeTokens: { 'b-c': { kind: 'color', default: '#00ff00' } },
+        }),
+      ]),
+    ).toThrow(
+      'Theme token "a.b-c" and theme token "a-b.c" share the CSS variable --wg-a-b-c',
     );
   });
 });

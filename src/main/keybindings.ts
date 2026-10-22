@@ -12,6 +12,7 @@ import type {
 } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
 import type { CommandRegistry } from '../shared/command-registry';
+import { errorText } from '../shared/error-text';
 
 // Main-process commands receive the chord that fired them, e.g. `Control+Tab`.
 export type MainCommands = CommandRegistry<string>;
@@ -94,7 +95,8 @@ export function installWindowKeybindings(
 }
 
 // Registers `binds` system-wide, replacing every shortcut an earlier call
-// registered.
+// registered. A bind Electron refuses or throws on is logged by its
+// accelerator, and the rest still register.
 export function registerGlobalShortcuts(
   binds: AcceleratorBind[],
   commands: MainCommands,
@@ -102,11 +104,15 @@ export function registerGlobalShortcuts(
 ) {
   globalShortcut.unregisterAll();
   for (const bind of binds) {
-    const registered = globalShortcut.register(bind.accelerator, () =>
-      commands.run(bind.command, bind.accelerator),
-    );
-    if (!registered) {
-      log('global', `${bind.accelerator} is taken by another app`);
+    try {
+      const registered = globalShortcut.register(bind.accelerator, () =>
+        commands.run(bind.command, bind.accelerator),
+      );
+      if (!registered) {
+        log('global', `${bind.accelerator} is taken by another app`);
+      }
+    } catch (error) {
+      log('global', `${bind.accelerator} not registered: ${errorText(error)}`);
     }
   }
 }

@@ -647,6 +647,7 @@ export function resolveTheme(
   const tokensUnderReduced = new Map([...resolvedTokens, ...resolvedReduced]);
   checkReferences(tokensUnderReduced, tokens, byVariable, order, selectedFile);
   checkWindowBackground(resolvedTokens);
+  checkWindowBackground(resolvedReduced);
 
   return {
     name: chain[0].name,
