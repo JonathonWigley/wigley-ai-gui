@@ -76,6 +76,7 @@ import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { applySelfTestConfig } from './selftest-config';
 import { resolveTheme } from './themes/theme-loader';
 import { titleBarOverlayOf } from './title-bar-overlay';
+import { loadUiStateFile, type UiStateFile } from './ui-state/ui-state-file';
 import {
   createMainWindow,
   registerWindowCommands,
@@ -134,6 +135,7 @@ let isQuitting = false;
 interface StartInputs {
   homeDir: string;
   dataRoot: string;
+  uiStatePath: string;
 }
 
 // The OS as the served config names it.
@@ -170,10 +172,18 @@ function dataFolder(): string {
     : path.join(selfTestHome, 'plugin-data');
 }
 
+// The app's ui-state file; in the self-test it sits inside the temp home
+// folder beside the plugin data, so `homeFolder` runs first.
+function uiStateFilePath(): string {
+  return selfTestHome === null
+    ? path.join(app.getPath('userData'), 'ui-state.json')
+    : path.join(selfTestHome, 'ui-state.json');
+}
+
 function readStartInputs(): StartInputs {
   requireListed(mainParts, manifests);
   const homeDir = homeFolder();
-  return { homeDir, dataRoot: dataFolder() };
+  return { homeDir, dataRoot: dataFolder(), uiStatePath: uiStateFilePath() };
 }
 
 // The ConfigStore over the user config folder in `homeDir`. Its log reaches
@@ -215,6 +225,32 @@ function livePage(window: BrowserWindow): WebContents | null {
 function pageLog(window: BrowserWindow): Log {
   return (source, message) =>
     livePage(window)?.send(BRIDGE_CHANNELS.log, source, message);
+}
+
+// Serves the ui-state file at `filePath` to the page. It loads on the page's
+// first read, when the page already hears the log, and is kept, so a reload
+// reads main's copy, the newest. On quit a pending change starts to write;
+// Electron does not wait for it, so a change made just before quit may be
+// lost.
+function serveUiState(filePath: string, log: Log) {
+  let loading: Promise<UiStateFile> | null = null;
+  let loaded: UiStateFile | null = null;
+  const load = () => {
+    loading ??= loadUiStateFile({ files, path: filePath, log }).then((file) => {
+      loaded = file;
+      return file;
+    });
+    return loading;
+  };
+  ipcMain.handle(BRIDGE_CHANNELS.uiStateRead, async () =>
+    (await load()).snapshot(),
+  );
+  ipcMain.on(
+    BRIDGE_CHANNELS.uiStateWrite,
+    (_event, key: string, value: unknown) =>
+      void load().then((file) => file.set(key, value)),
+  );
+  app.on('will-quit', () => void loaded?.flush());
 }
 
 // Starts every plugin's main part, each with its own API over one plugin
@@ -365,6 +401,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
   const served = () => applySelfTestConfig(store.current(), selfTestConfig);
   const startServed = served();
   ipcMain.handle(BRIDGE_CHANNELS.config, () => served());
+  serveUiState(inputs.uiStatePath, log);
   const keybindings = installWindowKeybindings(
     window,
     startServed.keymap,

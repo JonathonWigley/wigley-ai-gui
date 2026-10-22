@@ -1,6 +1,6 @@
 # 05 — uiState service
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -103,3 +103,4 @@ Tests:     `ui-state-file.test.ts` (memory files at `/data/ui-state.json`, `vi.u
 
 ## Proof
 
+Proof: every Produces signature found in its file. The worker ran `npm test` (1693 pass) and `npm run selftest` (pass). Rulings and concerns in the Run log, group 05; commit sha there.

@@ -18,6 +18,7 @@ import type { MarkdownRenderer } from './markdown';
 import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
 import type { TokenDecl } from './theme';
+import type { UiState } from './ui-state';
 
 export type ProcessName = 'page' | 'main';
 
@@ -276,6 +277,8 @@ export interface PageServices {
   toast(text: string, tone: ToastTone): void;
   log: Log;
   timers: Timers;
+  // This plugin's own ui state, its keys kept apart from every other plugin's.
+  uiState: UiState;
 }
 
 // A scope `keys.pushScope` laid over the set scope. `pop` removes it wherever

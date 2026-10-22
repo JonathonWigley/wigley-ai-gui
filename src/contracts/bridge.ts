@@ -7,6 +7,8 @@ export const BRIDGE_CHANNELS = {
   log: 'bridge:log',
   pluginInvoke: 'plugin:invoke',
   pluginMessage: 'plugin:message',
+  uiStateRead: 'bridge:ui-state-read',
+  uiStateWrite: 'bridge:ui-state-write',
 } as const;
 
 // What the preload exposes to the renderer as `window.wigley`.
@@ -16,6 +18,12 @@ export interface Bridge {
   // changes.
   onConfig(listener: (config: AppConfig) => void): void;
   onLog(listener: Log): void;
+  // Every saved ui-state key, qualified by its plugin id (`forms.rail`), and
+  // its value.
+  uiState(): Promise<Record<string, unknown>>;
+  // Saves one qualified ui-state key; `undefined` deletes it. Throws at the
+  // caller for a value IPC cannot clone.
+  setUiState(key: string, value: unknown): void;
   // Calls `method` on the main part of plugin `pluginId`; rejects with main's
   // own error text when the handler throws.
   invoke(pluginId: string, method: string, args: unknown[]): Promise<unknown>;

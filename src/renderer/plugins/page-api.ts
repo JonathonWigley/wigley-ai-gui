@@ -16,6 +16,7 @@ import type {
   UntypedEvents,
 } from '../../contracts/plugin';
 import type { AppConfig } from '../../contracts/settings';
+import type { UiState } from '../../contracts/ui-state';
 import { dataUrl } from '../../shared/data-url';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { qualify } from '../../shared/plugin-manifests';
@@ -29,7 +30,8 @@ import type { PendingKeysHub } from '../pending-keys';
 // and settings are read from at each call; `bus` is the page load's event bus;
 // `modes` is the core's mode registry, which takes qualified ids. `areas`
 // holds every area; plugins get the title bar, panel, status bar and overlay.
-// `setLayout` replaces the shell's layout.
+// `setLayout` replaces the shell's layout. `services` are the ones every
+// plugin shares; `uiState` gives each plugin its own scope of the ui state.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
@@ -38,7 +40,8 @@ export interface PageApiDeps {
   scopeStack: ScopeStack;
   pendingKeys: Pick<PendingKeysHub, 'onPending' | 'hold' | 'cancel'>;
   config: LiveConfig;
-  services: PageServices;
+  services: Omit<PageServices, 'uiState'>;
+  uiState: { scoped(prefix: string): UiState };
   run(id: CommandId, context?: PageCommandContext): void;
   dependency<E>(pluginId: string): E;
   bus: EventBus;
@@ -48,7 +51,8 @@ export interface PageApiDeps {
 // id, and the scopes it sets and pushes and the modes it adds are qualified by
 // it. Its areas leave out `main`, which only the mode registry fills, and the
 // activity bar and side bar, which the core draws from the modes. Its
-// settings are its own entry in the config's plugin settings.
+// settings are its own entry in the config's plugin settings, and its ui state
+// is scoped to its id.
 export function createPageApi(
   manifest: PluginManifest,
   deps: PageApiDeps,
@@ -88,7 +92,7 @@ export function createPageApi(
       onChangedPart(config, settingsOf, listener),
     platform: config.current().platform,
     commands: { run: deps.run },
-    services: deps.services,
+    services: { ...deps.services, uiState: deps.uiState.scoped(manifest.id) },
     dependency: deps.dependency,
     dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
   };

@@ -398,7 +398,7 @@ list; task 06's rename map reads from it.
 - [x] [Shell registry, title bar, activity bar, mode side bars](04-shell-registry.md) — after 03, 06
 
 ### Wave 5
-- [ ] [uiState service](05-ui-state.md) — after 04
+- [x] [uiState service](05-ui-state.md) — after 04
 
 ### Wave 6
 - [ ] [Doc re-read](07-doc-re-read.md) — after 01–06
@@ -415,7 +415,8 @@ Review base: 17cf5935eb176577587a6a3c230e907efdef81c9
 - 06 · 3da1dc1 · diff read + registry check + camel-case grep clean · concerns: workers skipped skills and mandatory reads (pure rename)
 - 02 · 0cbd5d4 · diff read + typecheck pass; lint only DESIGN.md (pre-existing) · concerns: `registerGlobalShortcuts` unregisters all before registering, so a throwing user accelerator loses the earlier globals (the parser does not validate accelerator syntax); `npx vitest` ran once (installed copy)
 - 03 · 2d4f5e7 · diff read + typecheck pass; lint only DESIGN.md · concerns: no self-test step changes the editor keymap, so `setKeymap` on open editors is covered only by `appliedMappings` (task 08 live check); `Vim.unmap` result ignored; which-key's editor path now prints editor chord tokens like `<A-o>` as `⌥O`
-- 04 · SHA04 · diff read + typecheck · concerns: task doc's call-site line numbers were stale (all sites handled); activity bar `mark` log falls back to the mode id for an unknown id (unreachable today); title context, glyphs, drag regions and the Windows overlay are live checks only (task 08)
+- 04 · 137f40a · diff read + typecheck · concerns: task doc's call-site line numbers were stale (all sites handled); activity bar `mark` log falls back to the mode id for an unknown id (unreachable today); title context, glyphs, drag regions and the Windows overlay are live checks only (task 08)
+- 05 · SHA05 · diff read + typecheck · concerns: the JSON-object check is inline — `jsonKind` sits in `src/main/config`, which `src/main/ui-state` may not import, and about seven private copies of the check exist (a shared helper is out of scope); `npx --version` ran once
 ### Contract changes
 ### Rulings
 - `src/main/themes` layer allows no packages now that the loader is pure — task 02 reads files through `Files` in `src/main/config` — 02 would need `node:` back if it reads files there · group 01
@@ -445,5 +446,7 @@ Review base: 17cf5935eb176577587a6a3c230e907efdef81c9
 - The over-content side bar shadow (raw `1rem`) moved from sessions.css to `.shell-side-bar[data-side-bar='over']` — kept today's look — plan B's style check will flag the raw value · group 04
 - `.sessions` keeps a one-column grid so the tab area fills the mode — none · group 04
 - The side bar element stays hidden until the first `layOutSideBar`; `setLayout`'s restore uses a generation counter so it does nothing after any later set — none · group 04
+- A failed ui-state write stays pending, retried by the next set and the quit flush; a set during the load waits for it — no lost writes — none · group 05
+- The ui-state path is a new `StartInputs.uiStatePath`, set beside `dataFolder()` — none · group 05
 ### Review rounds
 ### Test gate

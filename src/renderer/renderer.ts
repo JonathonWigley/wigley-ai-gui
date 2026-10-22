@@ -39,6 +39,7 @@ import { defaultShellLayout, SIDE_BAR_OVER_QUERY } from './shell/shell-layout';
 import { mountTitleBarContext } from './shell/title-bar';
 import { createThemeApplier, type ThemeApplier } from './theme';
 import { createToasts } from './toasts';
+import { createPageUiState } from './ui-state';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
 const INITIAL_SCOPE = 'any';
@@ -180,6 +181,10 @@ async function start() {
     }
   });
   const config = await bridge.config();
+  // Read before the plugins start, so each reads its state as it starts.
+  const uiState = createPageUiState(await bridge.uiState(), (key, value) =>
+    bridge.setUiState(key, value),
+  );
   const live = createLiveConfig(config, log);
   const { settings, keymap } = config;
   const themeApplier = createThemeApplier(
@@ -240,7 +245,7 @@ async function start() {
   });
   // Highlighted markdown has no editor to mount the code colours.
   mountCodeColours(document);
-  const services: PageServices = {
+  const services: Omit<PageServices, 'uiState'> = {
     editor,
     markdown: createMarkdownItRenderer(createCodeMirrorHighlighter()),
     toast: (text, tone) => toasts.show(text, tone),
@@ -272,6 +277,7 @@ async function start() {
           pendingKeys,
           config: live,
           services,
+          uiState,
           run,
           dependency,
           bus,

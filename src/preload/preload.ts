@@ -24,6 +24,10 @@ const bridge: Bridge = {
       (_event, source: string, message: string) => listener(source, message),
     );
   },
+  uiState: () => ipcRenderer.invoke(BRIDGE_CHANNELS.uiStateRead),
+  setUiState: (key, value) => {
+    ipcRenderer.send(BRIDGE_CHANNELS.uiStateWrite, key, value);
+  },
   invoke: async (pluginId, method, args) => {
     try {
       return await ipcRenderer.invoke(

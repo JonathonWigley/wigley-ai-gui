@@ -41,6 +41,10 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/main/themes'],
     packages: ['node:'],
   },
+  'src/main/ui-state': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
   'src/main/processes': { layers: ['src/contracts'], packages: ['node:'] },
@@ -59,6 +63,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/main/plugins',
       'src/main/themes',
       'src/main/config',
+      'src/main/ui-state',
       'src/main/alerts',
       'src/main/files',
       'src/main/processes',

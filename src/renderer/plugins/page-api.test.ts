@@ -15,6 +15,7 @@ import type { AppConfig } from '../../contracts/settings';
 import { createEventBus } from '../../shared/event-bus';
 import { createScopeStack } from '../key-scope';
 import { createLiveConfig } from '../live-config';
+import { createPageUiState } from '../ui-state';
 import { createPageApi, type PageApiDeps } from './page-api';
 
 const manifest: PluginManifest = {
@@ -97,7 +98,8 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
     scopeStack: createScopeStack('any'),
     pendingKeys: { onPending: () => {}, hold: () => {}, cancel: () => {} },
     config: liveConfig(),
-    services: {} as PageServices,
+    services: {} as Omit<PageServices, 'uiState'>,
+    uiState: createPageUiState({}, () => {}),
     run: () => {},
     dependency: <E>() => undefined as E,
     bus: createEventBus(),
@@ -340,6 +342,18 @@ describe('createPageApi', () => {
 
     expect(heard).toEqual([keymap('p.up')]);
     expect(api.keys.keymap()).toEqual(keymap('p.up'));
+  });
+
+  it('hands each plugin uiState scoped to its id', () => {
+    const writes: [string, unknown][] = [];
+    const uiState = createPageUiState({}, (key, value) =>
+      writes.push([key, value]),
+    );
+    const api = createPageApi({ ...manifest, id: 'forms' }, deps({ uiState }));
+
+    api.services.uiState.set('rail', 300);
+
+    expect(writes).toEqual([['forms.rail', 300]]);
   });
 
   it('platform is the served platform', () => {
