@@ -379,7 +379,12 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
   nativeTheme.on('updated', recolour);
 
   const selfTest = isSelfTest
-    ? startSelfTest(window, scopedFiles(files, inputs.homeDir), cleanUpSelfTest)
+    ? startSelfTest(
+        window,
+        scopedFiles(files, inputs.homeDir),
+        cleanUpSelfTest,
+        path.join(app.getAppPath(), '.selftest', 'screenshots'),
+      )
     : null;
   const pluginWindow = windowService(window);
   // On a normal quit, will-quit disposes the parts that started; a failed

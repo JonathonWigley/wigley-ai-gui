@@ -1,4 +1,7 @@
 import { app, type BrowserWindow } from 'electron';
+import { mkdirSync, rmSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import type { Files } from '../contracts/files';
 import type { SelfTestHost, SelfTestStep } from '../contracts/plugin';
 import {
@@ -12,13 +15,16 @@ import {
   type HandedScript,
   mergeSelfTestConfigs,
   type SelfTestConfig,
+  screenshotFiles,
+  withPrimitiveEllipsis,
 } from './selftest-config';
 
 // Runs the plugins' self-test scripts on every page load, one after another:
 // opens each script's fixture, writes the files a step writes, drives its keys
 // into the page through Electron's input pipeline, and checks the lines the
 // page logs, that the page fits the window's minimum width, and the result the
-// script checks. Run with `npm run selftest`; exits non-zero on failure.
+// script checks, saving the screenshots steps ask for. Run with
+// `npm run selftest`; exits non-zero on failure.
 
 const KEY_CODES: Record<string, string> = { ' ': 'Space' };
 const STEP_TIMEOUT_MS = 5000;
@@ -179,23 +185,22 @@ function waitForPageWidth(window: BrowserWindow, width: number) {
 
 // Waits for three of the page's frames, true once they have run and false when
 // they have not within the step timeout (a page that stops producing frames or
-// reloads mid-wait): a resize reaches the editors' ResizeObserver in the first,
-// which asks vim to redraw its cursor in the next, and the third starts after
-// that redraw.
-async function waitForResizeRedraw(window: BrowserWindow): Promise<boolean> {
+// reloads mid-wait). The fit check waits after a resize, and a screenshot
+// before its capture: a change reaches the editors' ResizeObserver in the
+// first frame, which asks vim to redraw its cursor in the next, and the third
+// starts after that redraw.
+async function waitForRedraw(window: BrowserWindow): Promise<boolean> {
   await window.webContents.executeJavaScript(`{
-  window.resizeRedrawFrames = 0;
+  window.redrawFrames = 0;
   const frame = () => {
-    window.resizeRedrawFrames += 1;
-    if (window.resizeRedrawFrames < 3) requestAnimationFrame(frame);
+    window.redrawFrames += 1;
+    if (window.redrawFrames < 3) requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
 }`);
   return waitFor(
     async () =>
-      (await window.webContents.executeJavaScript(
-        'window.resizeRedrawFrames',
-      )) >= 3,
+      (await window.webContents.executeJavaScript('window.redrawFrames')) >= 3,
   );
 }
 
@@ -211,7 +216,7 @@ async function cutOffAtMinimumWidth(
   window.setSize(minimumWidth, height);
   const [narrowWidth] = window.getContentSize();
   const hasNarrowed = await waitForPageWidth(window, narrowWidth);
-  const hasRedrawn = hasNarrowed && (await waitForResizeRedraw(window));
+  const hasRedrawn = hasNarrowed && (await waitForRedraw(window));
   let problems: string[];
   if (!hasNarrowed) {
     problems = [`the page never narrowed to ${narrowWidth}px`];
@@ -229,6 +234,29 @@ async function cutOffAtMinimumWidth(
   return problems;
 }
 
+// Saves a PNG of the window to `png` once the page has redrawn; returns why it
+// was not saved, or null when it was.
+async function saveScreenshot(
+  window: BrowserWindow,
+  png: string,
+): Promise<string | null> {
+  if (!(await waitForRedraw(window))) {
+    return 'the page produced no frames';
+  }
+  try {
+    const image = await window.webContents.capturePage(undefined, {
+      stayHidden: true,
+    });
+    if (image.isEmpty()) {
+      return 'the capture came back empty';
+    }
+    await writeFile(png, image.toPNG());
+    return null;
+  } catch (error) {
+    return errorText(error);
+  }
+}
+
 // Forge's dev server can reload the page once at startup, so every load starts
 // a fresh run and a run that a reload interrupted stands down.
 let latestRun = 0;
@@ -240,11 +268,14 @@ let hasPaintedSinceNavigation = false;
 // Writes the step's file through `homeFiles` (rooted at the self-test's temp
 // home, so a path outside it rejects), presses its keys, and waits for its
 // line; the log is counted before the write, so a line the write alone
-// causes counts.
+// causes counts. Then, whether the line came or not, saves the window to
+// `png` when the step has one, and, when the line came, runs the step's fit
+// check, which resizes the window and so comes after the screenshot.
 async function runStep(
   window: BrowserWindow,
   homeFiles: Files,
   step: SelfTestStep,
+  png: string | null,
   scrollsItself: string[],
   isCurrent: () => boolean,
 ): Promise<boolean> {
@@ -272,8 +303,16 @@ async function runStep(
   if (isCurrent()) {
     report(passed, `${keys} -> ${step.expect}`);
   }
-  if (!passed || !step.checksFit) {
-    return passed;
+  let isSaved = true;
+  if (png !== null && isCurrent()) {
+    const failure = await saveScreenshot(window, png);
+    isSaved = failure === null;
+    if (isCurrent()) {
+      report(isSaved, `screenshot ${png}${isSaved ? '' : `: ${failure}`}`);
+    }
+  }
+  if (!passed || !isSaved || !step.checksFit) {
+    return passed && isSaved;
   }
   const cutOff = await cutOffAtMinimumWidth(window, scrollsItself);
   if (isCurrent()) {
@@ -286,12 +325,15 @@ async function runStep(
 }
 
 // Opens the script's fixture, runs its steps and checks its result, reporting
-// each under `pluginId`; returns how many checks failed, or null when a reload
-// interrupted the run.
+// each under `pluginId`; `screenshots` maps each step that saves a PNG to its
+// path, and the fit check lets the script's `scrollsItself` and the
+// primitives' ellipsis parts clip. Returns how many checks failed, or null
+// when a reload interrupted the run.
 async function runScript(
   window: BrowserWindow,
   homeFiles: Files,
   { pluginId, script }: HandedScript,
+  screenshots: ReadonlyMap<SelfTestStep, string>,
   run: number,
   isCurrent: () => boolean,
 ): Promise<number | null> {
@@ -306,6 +348,7 @@ async function runScript(
     report(failures === 0, shownLine);
   }
 
+  const scrollsItself = withPrimitiveEllipsis(script.scrollsItself);
   for (const step of script.steps) {
     if (!isCurrent()) {
       return null;
@@ -314,7 +357,8 @@ async function runScript(
       window,
       homeFiles,
       step,
-      script.scrollsItself,
+      screenshots.get(step) ?? null,
+      scrollsItself,
       isCurrent,
     );
     if (!passed) {
@@ -339,6 +383,7 @@ async function runAllScripts(
   window: BrowserWindow,
   homeFiles: Files,
   handed: readonly HandedScript[],
+  screenshots: ReadonlyMap<SelfTestStep, string>,
   run: number,
   isCurrent: () => boolean,
   cleanUp: () => void,
@@ -371,6 +416,7 @@ async function runAllScripts(
       window,
       homeFiles,
       script,
+      screenshots,
       run,
       isCurrent,
     );
@@ -391,6 +437,7 @@ function startRun(
   window: BrowserWindow,
   homeFiles: Files,
   handed: readonly HandedScript[],
+  screenshots: ReadonlyMap<SelfTestStep, string>,
   cleanUp: () => void,
 ) {
   if (hasExited) {
@@ -398,20 +445,27 @@ function startRun(
   }
   const run = ++latestRun;
   const isCurrent = () => run === latestRun;
-  runAllScripts(window, homeFiles, handed, run, isCurrent, cleanUp).catch(
-    (error) => {
-      if (isCurrent()) {
-        failSelfTest('the steps run', error, cleanUp);
-      }
-    },
-  );
+  runAllScripts(
+    window,
+    homeFiles,
+    handed,
+    screenshots,
+    run,
+    isCurrent,
+    cleanUp,
+  ).catch((error) => {
+    if (isCurrent()) {
+      failSelfTest('the steps run', error, cleanUp);
+    }
+  });
 }
 
 // What the composition root holds: `hostFor` gives each plugin the host its
 // part hands its script to, and `closeHandover`, called once every part has
 // started, returns the merged page binds and settings of every handed script.
-// With no script handed over, or scripts whose settings clash, `closeHandover`
-// fails the self-test and exits.
+// With no script handed over, scripts whose settings clash, or steps whose
+// screenshot names are malformed or save one file, `closeHandover` fails the
+// self-test and exits.
 export interface SelfTestDriver {
   hostFor(pluginId: string): SelfTestHost;
   closeHandover(): SelfTestConfig;
@@ -419,15 +473,19 @@ export interface SelfTestDriver {
 
 // `homeFiles` is the files service rooted at the self-test's temp home, which
 // steps' `writeFile` writes through. `cleanUp` deletes what the self-test made
-// outside the repo; it runs before the self-test exits. Each plugin hands at
-// most one script while the parts start; a host throws on its plugin's second
-// script or one handed over late. Every page load runs the handed scripts in
-// hand-over order.
+// outside the repo; it runs before the self-test exits. `screenshotFolder` is
+// emptied here, so it ends the run holding only that run's PNGs. Each plugin
+// hands at most one script while the parts start; a host throws on its
+// plugin's second script or one handed over late. Every page load runs the
+// handed scripts in hand-over order.
 export function startSelfTest(
   window: BrowserWindow,
   homeFiles: Files,
   cleanUp: () => void,
+  screenshotFolder: string,
 ): SelfTestDriver {
+  rmSync(screenshotFolder, { recursive: true, force: true });
+  mkdirSync(screenshotFolder, { recursive: true });
   window.webContents.on('did-navigate', () => {
     // A run begun on the previous page stands down before its load finishes.
     latestRun++;
@@ -468,8 +526,20 @@ export function startSelfTest(
         failSelfTest('the self-test scripts merge', error, cleanUp);
         return { pageBinds: [], settings: {} };
       }
+      let screenshots: Map<SelfTestStep, string>;
+      try {
+        screenshots = new Map(
+          [...screenshotFiles(handed)].map(([step, file]) => [
+            step,
+            path.join(screenshotFolder, file),
+          ]),
+        );
+      } catch (error) {
+        failSelfTest('the self-test screenshots name', error, cleanUp);
+        return { pageBinds: [], settings: {} };
+      }
       window.webContents.on('did-finish-load', () =>
-        startRun(window, homeFiles, handed, cleanUp),
+        startRun(window, homeFiles, handed, screenshots, cleanUp),
       );
       return config;
     },

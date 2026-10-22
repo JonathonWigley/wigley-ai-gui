@@ -91,7 +91,7 @@ export const SELFTEST_LAYOUT = {
 
 // Opening on finding 1: Space k then k breaks Space k s, so the first k
 // replays to the notice and the second finds no item before it; j back to the
-// finding, which opens on Fix now; 2 picks solution 2, Space a f clears the
+// finding, which opens on Fix now, saving the round's screenshot; 2 picks solution 2, Space a f clears the
 // action and Space a s sets Leave it. a types "agreed" at once (INSERT), Esc
 // to NORMAL, where Space a u (the editor bind) sets Follow-up; Esc out, as
 // every Esc out of a box in NORMAL runs forms' editor bind there. j to
@@ -154,7 +154,12 @@ const STEPS: SelfTestStep[] = [
     expect: '[page] k ran forms.prevItem',
     checksFit: true,
   },
-  { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
+  {
+    keys: ['j'],
+    expect: '[page] j ran forms.nextItem',
+    checksFit: true,
+    screenshot: 'round',
+  },
   { keys: ['2'], expect: '[forms] chose 2 on finding 1' },
   { keys: [' ', 'a', 'f'], expect: '[forms] cleared the action on finding 1' },
   { keys: [' ', 'a', 's'], expect: '[forms] chose Leave it on finding 1' },

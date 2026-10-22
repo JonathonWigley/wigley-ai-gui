@@ -1,23 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import type { PageBind } from '../contracts/keymap';
-import type { SelfTestScript } from '../contracts/plugin';
+import type { SelfTestScript, SelfTestStep } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import {
   applySelfTestConfig,
   type HandedScript,
   mergeSelfTestConfigs,
+  screenshotFiles,
+  withPrimitiveEllipsis,
 } from './selftest-config';
 
 function handed(
   pluginId: string,
   pageBinds: PageBind[],
   settings: Record<string, object>,
+  steps: SelfTestStep[] = [],
 ): HandedScript {
   const script: SelfTestScript = {
     pageBinds,
     settings,
     open: () => ({ shownLine: 'shown', result: Promise.resolve(null) }),
-    steps: [],
+    steps,
     scrollsItself: [],
     problems: () => [],
   };
@@ -113,5 +116,99 @@ describe('applySelfTestConfig', () => {
 
     expect(served.keymap.page).toEqual([userBind, scriptBind]);
     expect(served.pluginSettings).toEqual({ p: { size: 1, speed: 9 } });
+  });
+});
+
+describe('screenshotFiles', () => {
+  it('screenshotFiles_NamedStep_MapsToPluginDashName', () => {
+    const step: SelfTestStep = {
+      keys: ['j'],
+      expect: 'x',
+      screenshot: 'gallery-full',
+    };
+
+    const files = screenshotFiles([handed('forms', [], {}, [step])]);
+
+    expect(files.get(step)).toBe('forms-gallery-full.png');
+  });
+
+  it('screenshotFiles_StepWithoutScreenshot_IsAbsent', () => {
+    const files = screenshotFiles([
+      handed('forms', [], {}, [{ keys: ['j'], expect: 'x' }]),
+    ]);
+
+    expect(files.size).toBe(0);
+  });
+
+  it('screenshotFiles_NameWithCapitalsAndSpace_Throws', () => {
+    const name = () =>
+      screenshotFiles([
+        handed('forms', [], {}, [
+          { keys: ['j'], expect: 'x', screenshot: 'Gallery full' },
+        ]),
+      ]);
+
+    expect(name).toThrow(
+      'Self-test step of forms names screenshot "Gallery full": a screenshot name is lowercase letters and digits in words joined by -',
+    );
+  });
+
+  it('screenshotFiles_NameEndingInDash_Throws', () => {
+    const name = () =>
+      screenshotFiles([
+        handed('forms', [], {}, [
+          { keys: ['j'], expect: 'x', screenshot: 'gallery-' },
+        ]),
+      ]);
+
+    expect(name).toThrow(
+      'Self-test step of forms names screenshot "gallery-": a screenshot name is lowercase letters and digits in words joined by -',
+    );
+  });
+
+  it('screenshotFiles_SameNameTwiceInOneScript_Throws', () => {
+    const name = () =>
+      screenshotFiles([
+        handed('forms', [], {}, [
+          { keys: ['j'], expect: 'x', screenshot: 'round' },
+          { keys: ['k'], expect: 'y', screenshot: 'round' },
+        ]),
+      ]);
+
+    expect(name).toThrow('Two self-test steps save forms-round.png');
+  });
+
+  it('screenshotFiles_DifferentPluginsSameFile_Throws', () => {
+    const name = () =>
+      screenshotFiles([
+        handed('a', [], {}, [{ keys: ['j'], expect: 'x', screenshot: 'b-c' }]),
+        handed('a-b', [], {}, [{ keys: ['k'], expect: 'y', screenshot: 'c' }]),
+      ]);
+
+    expect(name).toThrow('Two self-test steps save a-b-c.png');
+  });
+});
+
+describe('withPrimitiveEllipsis', () => {
+  it('withPrimitiveEllipsis_ScriptList_AddsTheFourSelectors', () => {
+    expect(withPrimitiveEllipsis(['.scroller'])).toEqual([
+      '.scroller',
+      '.ui-row-label',
+      '.ui-row-detail',
+      '.ui-tab-label',
+      '.ui-collapsible-summary',
+    ]);
+  });
+
+  it('withPrimitiveEllipsis_ListAlreadyHoldingOne_DoesNotRepeatIt', () => {
+    const four = [
+      '.ui-row-label',
+      '.ui-row-detail',
+      '.ui-tab-label',
+      '.ui-collapsible-summary',
+    ];
+
+    expect(withPrimitiveEllipsis(['.ui-row-label'])).toEqual(four);
+    expect(withPrimitiveEllipsis([])).toEqual(four);
   });
 });

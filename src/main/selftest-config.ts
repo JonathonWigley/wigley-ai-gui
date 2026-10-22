@@ -1,4 +1,4 @@
-import type { SelfTestScript } from '../contracts/plugin';
+import type { SelfTestScript, SelfTestStep } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { overrideSettings } from '../shared/plugin-manifests';
 
@@ -44,6 +44,59 @@ export function mergeSelfTestConfigs(
     pageBinds: handed.flatMap(({ script }) => script.pageBinds),
     settings,
   };
+}
+
+const SCREENSHOT_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+// The PNG file each step with a `screenshot` saves, `<pluginId>-<screenshot>.png`,
+// walking the scripts in hand-over order. Throws on a name that is not
+// lowercase words joined by `-`, and on two steps that save one file.
+export function screenshotFiles(
+  handed: readonly HandedScript[],
+): Map<SelfTestStep, string> {
+  const files = new Map<SelfTestStep, string>();
+  const savedFiles = new Set<string>();
+  for (const { pluginId, script } of handed) {
+    for (const step of script.steps) {
+      if (step.screenshot === undefined) {
+        continue;
+      }
+      if (!SCREENSHOT_NAME.test(step.screenshot)) {
+        throw new Error(
+          `Self-test step of ${pluginId} names screenshot "${step.screenshot}": a screenshot name is lowercase letters and digits in words joined by -`,
+        );
+      }
+      const file = `${pluginId}-${step.screenshot}.png`;
+      if (savedFiles.has(file)) {
+        throw new Error(`Two self-test steps save ${file}`);
+      }
+      savedFiles.add(file);
+      files.set(step, file);
+    }
+  }
+  return files;
+}
+
+// The design primitives' parts that clip their text with an ellipsis on
+// purpose, which the fit check lets clip in every script.
+export const PRIMITIVE_ELLIPSIS_SELECTORS: readonly string[] = [
+  '.ui-row-label',
+  '.ui-row-detail',
+  '.ui-tab-label',
+  '.ui-collapsible-summary',
+];
+
+// A script's `scrollsItself` followed by each primitive ellipsis selector it
+// does not already hold.
+export function withPrimitiveEllipsis(
+  scrollsItself: readonly string[],
+): string[] {
+  return [
+    ...scrollsItself,
+    ...PRIMITIVE_ELLIPSIS_SELECTORS.filter(
+      (selector) => !scrollsItself.includes(selector),
+    ),
+  ];
 }
 
 // `config` as the self-test serves it: the scripts' page binds after every
