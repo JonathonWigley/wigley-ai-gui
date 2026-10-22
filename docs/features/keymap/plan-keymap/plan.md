@@ -180,5 +180,6 @@ Review base: dd75a8ebcf51bcb1e2073700abd614f8543886e8
 - half-page handlers log nothing of their own; self-test expects the page engine's `[page] <C-j> ran <command>` line — matches scrollDown/Up — expects need a plugin line if wrong · group 03
 - test gate and review run before task 05's live checks, so review fixes are inside what the live run checks — order only · lead
 ### Review rounds
+- round 1 · 7526fd5 · NEEDS FIXES · 10 findings, 2 follow-ups · lead-applied 8510f64 · fixes b362ef6 (4), 8fba8f0 (7), a409766 (10), f6e5fb9 (3), 486595f (8), 473f691 (9), 1ce541a (6), 0d85b5c (5, F2), de86dd7 (2), c62a431 (1) · user chose: doc editor scrolls itself; chat Ctrl+k off the bottom stops following, Ctrl+j/G at the bottom resumes (Enter is chat.toggleEntry, not free); pushed groups kept, comment corrected; ⌘↩ everywhere
 ### Test gate
 - picked: every test the range added or edited except the peer's drive tests (config-store, user-keymap, main-api, selftest-config, plugins/keymap, keys' help-sections/key-bar/keys-for/which-key, config-push, installed-config, page-api, define-plugin, key-hints, key-notation, plugin-host, plugin-manifests); chat-commands (new half-page handlers); keymap-checks (fed by the new merge); page-keys (reads the expanded page binds and chords). Self-test steps and scroll behaviour left to task 05's live run · 20 files, 264 tests passed
