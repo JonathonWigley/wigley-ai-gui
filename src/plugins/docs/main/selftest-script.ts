@@ -24,47 +24,47 @@ const STYLE_CHANGED_WHILE_EDITING =
 // Space k d shows Docs mode, whose first show builds the index: the fixture's
 // eight entries. G selects the last row and gg the first, Global. j to Global's
 // Instructions and l expands it; j to the self-test instructions and l opens
-// CLAUDE.md. Option+l focuses the doc; Ctrl+j scrolls it half a page and
-// Ctrl+k back to the top. i edits it at the top: Ctrl+j scrolls the editor
-// half a page, moving the cursor, and Ctrl+k back to the top, where the cursor
-// is in sight; V and Ctrl+j grow the selection with the scroll, and Ctrl+k
-// shrinks it back to the top. Esc, and :q closes the editor. Tab reaches the
-// doc's first link, the style rule, and Enter follows it. A change on disk
-// reloads style.md. i edits it, and a second change on disk shows the
-// changed-on-disk banner. o types a new
-// line below, Esc to normal mode and :w meets the changed-on-disk prompt, where
-// r reloads the disk's text. Another change on disk, a new line and :w again,
-// and o overwrites the disk. A third, and Esc keeps editing; :w shows the
-// prompt again and o overwrites. :q closes the editor. i again, x deletes a
-// character, so :q is refused and :q! drops the edit. Option+h back to the
-// tree; a asks for a kind (the kind picker's screenshot), j Enter picks rule,
-// Enter its one place, and tidy names it, which creates tidy.md and opens it in
-// the editor; :q closes it. Option+h to the tree, where r opens the path box on
-// tidy.md: seven Backspaces leave the rules folder and neat.md renames it. A
-// opens the path box at the rules folder, n and Tab complete to neat.md (the
-// completion's screenshot), and Esc cancels; A again and fresh.md creates it,
-// :q closes its editor, Option+h to the tree and d asks to move it to the
-// Trash, y does. R rescans: eight entries and neat.md. / filters the tree to
-// neat and Enter keeps the filter, leaving Global, Rules and neat.md; k k j j
-// selects neat.md and d asks to trash it, n keeps it, d again and Esc keeps it;
-// / and Esc clear the filter. h goes up to Rules and h again collapses it. j l
-// expands Hooks and j l opens the hook's detail view; Option+l, i edits
-// settings.json and :q closes it; Option+h back. j j l expands the plugin,
-// j j l its Plugins group and j l opens the plugin's detail view; Option+l, i
-// edits installed_plugins.json and :q closes it; Option+h back. k k l expands
-// the plugin's Skills and j l opens its cached SKILL.md; Option+l, j and k
-// scroll, Ctrl+j and Ctrl+k scroll half a page, and i refuses to edit it in the
-// plugin cache; Option+h back. a opens the kind picker, j k j l picks rule, and
-// Esc cancels its place picker. c opens the context picker, j Enter picks the
-// repo. Space k d hides the side bar, focusing the doc, and Option+h brings it
-// back; Space k d hides it again and once more shows it; Option+h focuses the
-// tree. Space k s shows Sessions mode on the docs session's Docs tab (the
-// session tab's screenshot), where R reads its session index and a opens the
-// kind picker. Space k d shows Docs mode, which closes that picker, so j moves
-// Docs mode's tree. / filters it to neat and Enter keeps the filter; j j j j
-// selects neat.md and r opens the path box, where seven Backspaces and kept.md
-// rename it, and the session's view reads its index again; / and Esc clear
-// the filter, so the tree shows its rows.
+// CLAUDE.md. Option+l focuses the doc; Ctrl+j scrolls it half a page and Ctrl+k
+// back to the top. i edits it at the top: Ctrl+j scrolls the editor half a
+// page, moving the cursor, and Ctrl+k back to the top, where the cursor is in
+// sight; G and Ctrl+k scroll up from the bottom, moving the cursor into sight.
+// gg, V and Ctrl+j grow the selection with the scroll, and Ctrl+k shrinks it
+// back to the top. Esc, and :q closes the editor. Tab reaches the doc's first
+// link, the style rule, and Enter follows it. A change on disk reloads
+// style.md. i edits it, and a second change on disk shows the changed-on-disk
+// banner. o types a new line below, Esc to normal mode and :w meets the
+// changed-on-disk prompt, where r reloads the disk's text. Another change on
+// disk, a new line and :w again, and o overwrites the disk. A third, and Esc
+// keeps editing; :w shows the prompt again and o overwrites. :q closes the
+// editor. i again, x deletes a character, so :q is refused and :q! drops the
+// edit. Option+h back to the tree; a asks for a kind (the kind picker's
+// screenshot), j Enter picks rule, Enter its one place, and tidy names it,
+// which creates tidy.md and opens it in the editor; :q closes it. Option+h to
+// the tree, where r opens the path box on tidy.md: seven Backspaces leave the
+// rules folder and neat.md renames it. A opens the path box at the rules
+// folder, n and Tab complete to neat.md (the completion's screenshot), and Esc
+// cancels; A again and fresh.md creates it, :q closes its editor, Option+h to
+// the tree and d asks to move it to the Trash, y does. R rescans: eight entries
+// and neat.md. / filters the tree to neat and Enter keeps the filter, leaving
+// Global, Rules and neat.md; k k j j selects neat.md and d asks to trash it, n
+// keeps it, d again and Esc keeps it; / and Esc clear the filter. h goes up to
+// Rules and h again collapses it. j l expands Hooks and j l opens the hook's
+// detail view; Option+l, i edits settings.json and :q closes it; Option+h back.
+// j j l expands the plugin, j j l its Plugins group and j l opens the plugin's
+// detail view; Option+l, i edits installed_plugins.json and :q closes it;
+// Option+h back. k k l expands the plugin's Skills and j l opens its cached
+// SKILL.md; Option+l, j and k scroll, Ctrl+j and Ctrl+k scroll half a page, and
+// i refuses to edit it in the plugin cache; Option+h back. a opens the kind
+// picker, j k j l picks rule, and Esc cancels its place picker. c opens the
+// context picker, j Enter picks the repo. Space k d hides the side bar,
+// focusing the doc, and Option+h brings it back; Space k d hides it again and
+// once more shows it; Option+h focuses the tree. Space k s shows Sessions mode
+// on the docs session's Docs tab (the session tab's screenshot), where R reads
+// its session index and a opens the kind picker. Space k d shows Docs mode,
+// which closes that picker, so j moves Docs mode's tree. / filters it to neat
+// and Enter keeps the filter; j j j j selects neat.md and r opens the path box,
+// where seven Backspaces and kept.md rename it, and the session's view reads
+// its index again; / and Esc clear the filter, so the tree shows its rows.
 // Space z g, t and Space k d show Docs mode under reduced transparency, and
 // Space z g, t and Space k d again under full.
 const STEPS: SelfTestStep[] = [
@@ -95,7 +95,12 @@ const STEPS: SelfTestStep[] = [
       '[docs] scrolled the editor on CLAUDE.md up half a page to the top; the cursor stayed',
   },
   {
-    keys: ['V', '<C-j>'],
+    keys: ['G', '<C-k>'],
+    expect:
+      '[docs] scrolled the editor on CLAUDE.md up half a page; the cursor moved',
+  },
+  {
+    keys: ['g', 'g', 'V', '<C-j>'],
     expect:
       '[docs] scrolled the editor on CLAUDE.md down half a page; the cursor moved',
   },
