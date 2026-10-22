@@ -147,8 +147,8 @@ contracts (`npm run lint` runs the layer check, type-only imports included).
 - [x] [One-notation keymap in one file](01-one-notation-keymap.md)
 
 ### Wave 2
-- [ ] [Which-key group names and the key bar's leader](02-which-key-groups.md) — after 01
-- [ ] [Key changes: Alt focus, Ctrl half-page scroll, gallery paging](03-key-changes.md) — after 01
+- [x] [Which-key group names and the key bar's leader](02-which-key-groups.md) — after 01
+- [x] [Key changes: Alt focus, Ctrl half-page scroll, gallery paging](03-key-changes.md) — after 01
 
 ### Wave 3
 - [ ] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
@@ -162,6 +162,8 @@ Review base: dd75a8ebcf51bcb1e2073700abd614f8543886e8
 
 ### Groups
 - 01 · dd4eba3 · proved: snapshot diff empty, typecheck + lint clean, Produces present · concerns: served editor-bind order shifts where a page+box entry merged into one (box half now sits at the merged entry's place); installedConfig serves pushed `groups` beside old applied binds on a refused push; reader validates unknown-leader files with a stand-in `<Space>`
+- 02 · 53431db · proved: diff read, typecheck clean with 03 landed (tree did not compile until 03's commands existed), lint clean, keys plugin tests 32/32 · concerns: group keys match vim tokens case-sensitively (`<space>` ≠ `<Space>`); a leader the page cannot bind makes barHints throw on every render rather than at keymap load
+- 03 · d53ef47 · proved: snapshot diff exactly the 3 removed + 8 added pinned rows, typecheck + lint clean · concerns: in docs edit mode `<C-j>`/`<C-k>` scroll the pane, which is `overflow: hidden` while editing, so they do nothing yet still take Ctrl+j/k from vim (DocumentEditor has no scroll); chat `<C-k>` while following snaps back to the bottom on the next entry
 ### Contract changes
 - typed manifest tuple: as planned → `builtInManifests` (`as const`) in src/plugins/manifests.ts; `BuiltInKeymap` module-private · why: naming · consumers: none · group 01
 - ConfigStore deps: `coreKeymap: Keymap` → `defaultKeymap: DefaultKeymap` · why: File Structure wording · consumers: none · group 01
@@ -172,5 +174,8 @@ Review base: dd75a8ebcf51bcb1e2073700abd614f8543886e8
 - user keymap reader checks bind/unbind keys through expandBind, error prefixed with the entry path; a file with no leader checks against a stand-in `<Space>` — one rule source — error wording only · group 01
 - reader error noun is now "a bind" (was "a page bind"/"an editor bind") — one bind kind — error wording only · group 01
 - docs/keymap.md oxfmt-formatted (whitespace) — committed file failed lint, which task 01's done-when needs — none · lead
+- group-name match compares token arrays, not joined strings; a named prefix's `+<name>` replaces the command-group label; barHints_Page_LeavesOutSpaceKeysWhateverTheEditorLeader replaced by barHints_UserLeader_LeavesOutLeaderSequences — spec reading — label wording only · group 02
+- src/plugins/chat/page/chat-view.ts widened (`ChatSession.entries` Pick gains `scrollHalfPage`), outside the Files list — handlers could not reach it otherwise — none, type-only · group 03
+- half-page handlers log nothing of their own; self-test expects the page engine's `[page] <C-j> ran <command>` line — matches scrollDown/Up — expects need a plugin line if wrong · group 03
 ### Review rounds
 ### Test gate

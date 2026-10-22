@@ -1,6 +1,6 @@
 # 02 — Which-key group names and the key bar's leader
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -35,3 +35,5 @@ Done when: compiles; the test gate runs the tests above.
 Commit:    one commit for the group
 
 ## Proof
+
+Landed in 53431db. Diff read; typecheck clean once 03 landed; lint clean; keys plugin tests 32/32. Concerns: plan.md Run log, group 02.

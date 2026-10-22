@@ -1,6 +1,6 @@
 # 03 — Key changes: Alt focus, Ctrl half-page scroll, gallery paging
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -75,3 +75,5 @@ Done when: compiles; `npm run lint`; the test gate passes; the snapshot recipe i
 Commit:    one commit for the group
 
 ## Proof
+
+Landed in d53ef47. Snapshot diff exactly the pinned rows; typecheck and lint clean. Concerns: plan.md Run log, group 03.
