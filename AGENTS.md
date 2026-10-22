@@ -8,7 +8,8 @@
   layers, the relay and agent sessions, and where a new plugin, shell area, mode, session tab, key, event, setting,
   user config file, theme, plugin data, layout, agent harness, session control, round source, MCP tool or
   third-party tool goes, and the layer check.
-- **Running and testing** — Node version, the self-test the agent may run any time, and the visible run that is the user's.
+- **Running and testing** — Node version, the self-test and the drive run the agent may start any time, and the
+  checks only a real keyboard proves.
 - **Dev quirks** — the startup reload, a session's stale forms schema, and the login-shell PATH.
 
 UI work — a view, its CSS, a theme, a primitive, a layout or a key — reads `DESIGN.md` first: it is the standard
@@ -268,7 +269,7 @@ round), since main, not the page, decides.
   plugins the shared ones (editor, markdown) as services. Swapping it is a new adapter folder against the same
   contract, and one changed line in the composition root.
 - **Plugin data** — files a plugin keeps for the user, such as forms layouts — lives in the plugin's own folder,
-  `plugins/<id>/` in Electron's per-user data folder (a temp folder in the self-test). Main reaches it through
+  `plugins/<id>/` in Electron's per-user data folder (a temp folder in the self-test and a drive run). Main reaches it through
   `api.data`, the files service scoped to that folder, which refuses a path outside it. The page loads a file from
   it by the URL `api.dataUrl(path, revision)` builds on the `wigley-data:` scheme, which the page's CSP allows for
   scripts and styles; `revision` sits in the URL's path, so a changed module and every relative import under it load
@@ -328,10 +329,16 @@ round), since main, not the page, decides.
   (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture (`selftest-fixture.ts`) that writes docs, an index
   and a stand-in `docs_index.py` into the self-test's temp home at start, so its steps never reach the user's docs or
   index.
+- A drive run (`npm run drive`) is how the agent checks a change in the running app: every change to what the app
+  shows or how it reacts is driven end to end, and its captures read, before the work is done. It runs offscreen as
+  an accessory app on its own temp home, beside the user's app, so the agent starts one whenever a check needs it.
+  The `drive` skill (`.agents/skills/drive/SKILL.md`) holds the loop. A plugin offers its fixtures to a drive run as
+  drive actions (`api.drive`), so a new plugin's fixtures need no core edit.
 - Forms visuals are checked live on the preview round (`Space z l o`): the built-in sample shows every card, and each
   further press swaps in the next saved real round, then back to the sample.
-- A visible `npm start` takes the user's foreground and keyboard, so that run is the user's: the agent gives the user
-  the steps to try. The global shortcut needs it — macOS keys reach a global shortcut only from the real keyboard.
+- Synthetic keys never reach a global shortcut, never compose a dead key (macOS Option+n) and never meet IME
+  composition, and an offscreen window shows no native notification or dialog. Those checks are the user's, in a
+  visible `npm start`: the agent lists them in its wrap-up with their steps and does not wait on them.
 
 ## Dev quirks
 
