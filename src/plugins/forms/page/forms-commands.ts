@@ -374,18 +374,20 @@ function jumpToUnanswered(
   deps.log('forms', `jumped to ${itemName(item)}`);
 }
 
-// `showForm` selects the session's Form tab.
+// `showForm` selects the session's Form tab; `activate` selects the session.
 export interface GuardCloseDeps extends Pick<
   FormsCommandDeps,
-  'store' | 'log'
+  'store' | 'toast' | 'log'
 > {
   showForm(sessionId: string): void;
+  activate(sessionId: string): void;
 }
 
 // A session closes only once its round is gone: with its round active it
 // selects the session's Form tab, so the confirm scope's keys are in force,
 // and asks to cancel the round; confirming closes the session. A round open in
-// the background keeps its session with no prompt, and the refusal is logged.
+// the background keeps its session with no prompt: the guard logs the refusal,
+// toasts why, and selects the session.
 export function guardClose(deps: GuardCloseDeps, sessionId: string): boolean {
   const { store } = deps;
   const round = roundOfSession(store.get(), sessionId);
@@ -397,6 +399,8 @@ export function guardClose(deps: GuardCloseDeps, sessionId: string): boolean {
       'forms',
       `session close kept: ${round.label} is open in the background`,
     );
+    deps.toast(`Finish or cancel ${round.label}'s round first`, 'info');
+    deps.activate(sessionId);
     return false;
   }
   deps.showForm(sessionId);

@@ -2,7 +2,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Platform } from '../../../contracts/platform';
-import type { PluginAreas } from '../../../contracts/plugin';
+import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
@@ -32,15 +32,17 @@ import type { FormsStore } from './forms-store';
 import { createRoundView, type RoundView } from './round-view';
 import { roundSaveLabel, sessionTitle } from './view-model';
 
-// `beforeClose` answers whether a session may close now; `formShown` runs
-// each time a session's Form tab becomes the visible tab. `platform` is the OS
-// key hints are drawn for; `uiState` keeps the rail's dragged width, which
+// `beforeClose` answers whether a session may close now. `setScope` sets the
+// key scope to the forms view while a Form tab is the visible tab;
+// `pushConfirmScope` lays the cancel prompt's scope over it. `platform` is the
+// OS key hints are drawn for; `uiState` keeps the rail's dragged width, which
 // every round's rail opens at.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'statusBar' | 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
   beforeClose(sessionId: string): boolean;
-  formShown(): void;
+  setScope(view: FormsState['view']): void;
+  pushConfirmScope(): PushedScope;
   store: FormsStore;
   boxes: EditorBoxes;
   markdown: MarkdownRenderer;
@@ -60,13 +62,11 @@ interface ActiveLayout {
 // `forgetSession` drops a session's Form tab entry and destroys its round
 // views once sessions dropped the tab, so the next render rebuilds a round
 // still open for the session in a new Form tab. `showForm` selects the
-// session's Form tab, a no-op when it has none. `isFormShown` reads whether a
-// Form tab is the visible tab. `setLayout` rebuilds every open round view with
-// `layout`, and rounds that open later are built with it.
+// session's Form tab, a no-op when it has none. `setLayout` rebuilds every
+// open round view with `layout`, and rounds that open later are built with it.
 export interface FormsView {
   forgetSession(sessionId: string): void;
   showForm(sessionId: string): void;
-  isFormShown(): boolean;
   setLayout(layout: Layout, layoutName: string): void;
 }
 
@@ -82,7 +82,10 @@ interface FormTab {
 // The whole forms UI: each round in its session's Form tab, the status line in
 // the status bar, the cancel prompt in the overlay layer, all serving the
 // active round. Every store change re-renders it; editors live in the round
-// views and survive every render. Round views start on the default layout.
+// views and survive every render. While a Form tab is the visible tab the key
+// scope follows the view; the cancel prompt pushes its own scope over it and
+// is dismissed when another view sets the scope. Round views start on the
+// default layout.
 export function mountFormsView(deps: FormsViewDeps): FormsView {
   const { areas, store, boxes } = deps;
   const status = buildStatusLine(deps);
@@ -94,6 +97,23 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   const takeOvers: TakeOvers = new Map();
   const dispatch = (action: FormsAction) => store.dispatch(action);
   const active: ActiveLayout = { layout: defaultLayout, name: 'default' };
+  // The cancel prompt's pushed scope while the prompt shows, else null.
+  let confirmScope: PushedScope | null = null;
+  const isFormShown = () =>
+    [...formTabs.values()].some((tab) => tab.handle.isVisible());
+  const pushConfirmScope = () => {
+    const pushed = deps.pushConfirmScope();
+    pushed.onBaseChanged(() => {
+      if (confirmScope !== pushed) {
+        return;
+      }
+      dispatch({ type: 'dismissConfirm' });
+      if (store.get().view !== 'confirm') {
+        deps.log('forms', 'cancel prompt dismissed: the view moved on');
+      }
+    });
+    confirmScope = pushed;
+  };
 
   const render = () => {
     const state = store.get();
@@ -115,10 +135,19 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     if (shown !== null) {
       roundViews.get(shown.roundId)?.update(shown, view);
     }
-    if (view === 'confirm') {
-      confirm.show();
-    } else {
+    // The prompt's scope comes off before the base changes, so forms' own view
+    // change never reaches its listener, and goes on after, over `confirm`.
+    if (view !== 'confirm' && confirmScope !== null) {
       confirm.hide();
+      confirmScope.pop();
+      confirmScope = null;
+    }
+    if (isFormShown()) {
+      deps.setScope(view);
+    }
+    if (view === 'confirm' && confirmScope === null) {
+      confirm.show();
+      pushConfirmScope();
     }
     status.update(state);
     const box = boxes.active();
@@ -141,8 +170,6 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       );
     },
     showForm: (sessionId) => formTabs.get(sessionId)?.handle.select(),
-    isFormShown: () =>
-      [...formTabs.values()].some((tab) => tab.handle.isVisible()),
     setLayout(layout, layoutName) {
       active.layout = layout;
       active.name = layoutName;
@@ -233,7 +260,7 @@ function formTabOf(
     title: 'Form',
     element: tab,
     beforeClose: () => deps.beforeClose(sessionId),
-    shown: () => deps.formShown(),
+    shown: () => deps.setScope(deps.store.get().view),
   });
   const created: FormTab = { handle, element: tab, idle, status: '' };
   formTabs.set(sessionId, created);

@@ -102,8 +102,8 @@ function listenForRounds(
 }
 
 // Shows each agent round in its session's Form tab and sends the user's
-// answers back to main; while a Form tab is the visible tab, the scope follows
-// the forms view. A session with an open round closes only through the cancel
+// answers back to main; while a Form tab is the visible tab, the key scope
+// follows the forms view. A session with an open round closes only through the cancel
 // prompt. Rounds draw in the layout main chooses.
 export const formsPagePart: PagePart<typeof formsManifest> = {
   manifest: formsManifest,
@@ -121,12 +121,15 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         guardClose(
           {
             store,
+            toast: services.toast,
             log: services.log,
             showForm: (formSessionId) => view.showForm(formSessionId),
+            activate: (activeSessionId) => sessions.activate(activeSessionId),
           },
           sessionId,
         ),
-      formShown: () => api.keys.setScope(store.get().view),
+      setScope: (formsView) => api.keys.setScope(formsView),
+      pushConfirmScope: () => api.keys.pushScope('confirm'),
       store,
       boxes,
       markdown: services.markdown,
@@ -135,11 +138,6 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       platform: api.platform,
       uiState: services.uiState,
       log: services.log,
-    });
-    store.subscribe(() => {
-      if (view.isFormShown()) {
-        api.keys.setScope(store.get().view);
-      }
     });
     api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
       view.forgetSession(sessionId),

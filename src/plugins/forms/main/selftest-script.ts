@@ -156,9 +156,11 @@ export const SELFTEST_LAYOUT = {
 // Enter restores the recommendation and j returns to question 2. Space z l n
 // leaves default shown for the steps after. Then review, which only that scope
 // opens, proves it; Space ? opens help and Esc closes it, back in the review's
-// scope, where C opens and n dismisses the cancel prompt; Space ? opens help
-// again, Cmd+W opens the cancel prompt, which closes help, so n dismisses the
-// prompt. o types "note" into the Round note at once (INSERT), Esc Esc out
+// scope, where C opens and n dismisses the cancel prompt; C opens it again and
+// Space k d shows Docs mode, which dismisses it, and Space k s shows Sessions
+// mode, back in the review's scope, where C opens it and n dismisses it;
+// Space ? opens help again, Cmd+W opens the cancel prompt, which closes help,
+// so n dismisses the prompt. o types "note" into the Round note at once (INSERT), Esc Esc out
 // (forms' editor bind in the review's scope), Enter jumps back to finding 1,
 // review again, and o then Cmd+Enter sends from the Round note box. Space z l o
 // opens the sample round again, in a new preview session, and selects its row,
@@ -483,6 +485,14 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
   { keys: ['C'], expect: '[page] C ran forms.askCancel', checksFit: true },
+  { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
+  { keys: ['C'], expect: '[page] C ran forms.askCancel' },
+  {
+    keys: [' ', 'k', 'd'],
+    expect: '[forms] cancel prompt dismissed: the view moved on',
+  },
+  { keys: [' ', 'k', 's'], expect: '[page] showed Sessions mode' },
+  { keys: ['C'], expect: '[page] C ran forms.askCancel' },
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
   { keys: [' ', '?'], expect: '[page]  ? ran keys.toggleHelp' },
   {
