@@ -192,10 +192,10 @@ Boundary rules: everything stays in this repo; `src/main/drive/` keeps no `elect
 - [x] [Docs fixture with every load state](06-docs-load-states.md)
 
 ### Wave 2
-- [ ] [Log mark](02-log-mark.md) — after 01
+- [x] [Log mark](02-log-mark.md) — after 01
 
 ### Wave 3
-- [ ] [Self-test groups, why, width, repeat](07-selftest-steps.md) — after 02
+- [x] [Self-test groups, why, width, repeat](07-selftest-steps.md) — after 02
 
 ### Wave 4
 - [ ] [Drag hold and release](03-drag-hold.md) — after 02, 07 (shares `page-driver.ts`)
@@ -218,9 +218,13 @@ Review base: 5b2bc38096dafc34abedca7cf3e261e5117ffdd1
 - 01 · 0187f44 · diff read matches spec; PageNavigatedError and CHECK_TIMEOUT_MS present; typecheck passes · concerns: pending-reject set and reject loop duplicated in the Electron adapter and the fake; render-process-gone listener ignores its (event, webContents, details) args
 - 04 · a976d99 · diff read matches spec; takeStartLock, StartLock, StartLockOptions present; typecheck passes · concerns: stale-lock clear is not atomic (two takers vs one dead holder can delete a fresh lock); temp file name shared within one process, safe only while write/link/unlink stay synchronous; a throwing runSelfTest leaves the lock to be cleared as a dead holder's
 - 06 · 88bb0f5 · diff read matches spec; DocsFixtureOptions, writeDocsFixture options, connectDocsFixtureSession options, optionalBoolean, both action args present; typecheck passes · concerns: .agents/skills/drive/SKILL.md line 53 names docs.seed and docs.connectSession without args, so loadStates is undocumented (task 11)
+- 02 · 9f238ce · diff read matches spec; LogMark, markLog, waitForNewLogLine(mark), linesAfter present; typecheck passes · concerns: markLog still rejects on a reload mid-read and callers do not retry (unchanged behaviour); the mark-to-wait race is covered at waitForNewLogLine level only, not through the commands
+- 07 · b8710cf · diff read matches spec; SelfTestGroup, step why/width/repeat, groups, resizeContentWidth, waitForAnyNewLogLine, screenshotFiles string[], checkGroups present; typecheck passes · concerns: no runner test waits out a 5 s timeout (width never landing, a press logging neither); elementFromPoint answer unused; fake-driven-window comment rewrapped raggedly
 ### Contract changes
 - StartLock.release(): deletes the file → deletes it on the first call only · why: selftest releases at the first [selftest] line and again on close, and a second delete could remove another start's lock · consumers: 04 · group 04
 - takeStartLock timeout message: names .drive/start.lock literally → names the lockFile path passed in (absolute from both CLIs) · why: the path is a parameter · consumers: 04, 11 (docs quoting the message) · group 04
+- runScript (not a listed Produces): gains startWidth after screenshots; screenshots is ReadonlyMap<SelfTestStep, readonly string[]> · why: the runner owns the held width · consumers: selftest.ts and its tests only · group 07
+- checkGroups: also rejects a non-integer repeat.max; blank name/why/until judged after trim · why: a fractional max gives a file list that does not match the presses · consumers: none · group 07
 ### Rulings
 - a self-end marks the process ended synchronously in send, emitting entry and ended in the microtask — a call between send and the microtask must see an ended process — a caller reading record.ended right after send sees true · group 05 · group 05
 - a FAKE_END_TEXT exit ignores holdEnd — a CLI exiting on its own is not held by the test's end gate — a test holding ends sees a self-end early · group 05 · group 05
@@ -231,5 +235,12 @@ Review base: 5b2bc38096dafc34abedca7cf3e261e5117ffdd1
 - load-state entries carry meta { imports: [] } like the fixture's other instructions entries — the plan named no meta — only four drive-only entries change if wrong · group 06 · group 06
 - flag-off cleanup trashes the whole .claude/load-states folder when it exists — leaves no empty folder — none · group 06 · group 06
 - the four entries go after the existing eight, so sessionDocument's positions and the self-test index are unchanged with the flag off — none · group 06 · group 06
+- linesAfter returns every line when the log is shorter than the mark (was none) — same rule as the wait — key/type/click/drag/setting return the whole new log after a reload that shortened it · group 02 · group 02
+- ported waitForNewLogLine_* tests use literal marks to keep their read counts; new cases use markLog — none · group 02 · group 02
+- an interrupted run does not restore the start width itself; the next run restores it on open — a late restore could overwrite the new run's held width — a self-test ending right after an interruption leaves the window at the held width, read by nothing · group 07 · group 07
+- every press of a repeating step, the first included, waits for until or expect, until winning a tie — the spec presses again after the first expect — a first press logging until passes as x1 · group 07 · group 07
+- the log is marked before the width resize, so a line the resize alone causes counts — as writeFile does — a stale resize line could satisfy expect · group 07 · group 07
+- resizeContentWidth waits for the asked width, not the one the window took — a clamped width fails the step as never landed — a width below the minimum fails rather than clamps · group 07 · group 07
+- unnamed report texts: width never landed as <label> -> <expect>: width <n> never landed; failed restore as <pluginId> start width <n> never landed; checkGroups throw as the self-test groups check — none · group 07 · group 07
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 08 — Forms' self-test in named groups; the gallery pages with `repeat`
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 07
 Plan: [plan.md](plan.md)

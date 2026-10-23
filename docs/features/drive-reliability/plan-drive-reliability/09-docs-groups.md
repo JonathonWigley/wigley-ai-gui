@@ -1,6 +1,6 @@
 # 09 — Docs' self-test in named groups, and the hidden-tree step in a narrow window
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 07
 Plan: [plan.md](plan.md)

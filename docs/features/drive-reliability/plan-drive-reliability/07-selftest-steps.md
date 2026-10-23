@@ -1,6 +1,6 @@
 # 07 — Self-test steps in named groups, with `why`, a held `width` and `repeat`
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -112,3 +112,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit b8710cf · proof: diff read matches spec; SelfTestGroup, step why/width/repeat, groups, resizeContentWidth, waitForAnyNewLogLine, screenshotFiles string[], checkGroups present; typecheck passes · concerns: no runner test waits out a 5 s timeout (width never landing, a press logging neither); elementFromPoint answer unused; fake-driven-window comment rewrapped raggedly

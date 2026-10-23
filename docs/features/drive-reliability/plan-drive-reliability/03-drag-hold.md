@@ -1,6 +1,6 @@
 # 03 — `drag --hold` leaves the button down until `release`
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 02, 07
 Plan: [plan.md](plan.md)

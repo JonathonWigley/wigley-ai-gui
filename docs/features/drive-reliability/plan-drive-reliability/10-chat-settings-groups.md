@@ -1,6 +1,6 @@
 # 10 — Chat's and settings' self-tests in named groups
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 4 · Depends on: 07
 Plan: [plan.md](plan.md)

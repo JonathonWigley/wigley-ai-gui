@@ -1,6 +1,6 @@
 # 02 — A log mark carries the navigation count, so no reload slips between the read and the wait
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -50,3 +50,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 9f238ce · proof: diff read matches spec; LogMark, markLog, waitForNewLogLine(mark), linesAfter present; typecheck passes · concerns: markLog still rejects on a reload mid-read and callers do not retry (unchanged behaviour); the mark-to-wait race is covered at waitForNewLogLine level only, not through the commands
