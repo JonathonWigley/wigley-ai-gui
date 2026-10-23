@@ -16,7 +16,7 @@ Consumes:  `accountStatus`, `logIn`, `logInCode`, `cancelLogIn`, `logOut`, `noti
            `logInEnded` messages on `ChatChannel` ← 04 · `AccountStatus` ← 01 · `Disposable` (tree) ·
            the reason box in `chat-dialogs.ts` as the pattern for a dialog with a vim box (tree)
 Produces:  in `src/plugins/chat/contract.ts`:
-           `export interface SlashCommandContext { sessionId: string; profile: string; args: string }`
+           `export interface SlashCommandContext { sessionId: string; profile: string; args: string; ended: boolean }`
            `export interface AppSlashCommand { name: string; description: string; run(context: SlashCommandContext): Promise<void> | void }`
            `export interface ChatPageExports { addSlashCommand(command: AppSlashCommand): Disposable }`
            in `src/plugins/chat/page/slash-commands.ts`:
@@ -61,15 +61,21 @@ pass the registry (or a `names` function) in `ChatViewDeps`.
 - `/logout` (`Sign out of this session's profile`): `logOut(profile)`, then notice `Signed out of <profile>` (info).
 - `/status` (`Show this session's account`): `accountStatus(profile)`, then notice `<profile>: signed in as <account>`
   or `<profile>: not signed in` (info); `<account>` falls back to `an unnamed account` when null.
+- In an ended session main holds no entries, so a notice would show nowhere: `SlashCommandContext` gains
+  `ended: boolean`, and for an ended session the same texts show as info toasts instead of notices.
 
 **Sign-in dialog** (`sign-in-dialog.ts`, the reason box's shape): in the overlay layer, scope `chat.signIn`. Title
 `Sign in to <profile>`; text `Finish sign-in in your browser.`; the link as selectable mono text, `Waiting for the
 sign-in link…` until `logInLink` for this profile arrives, with a `Copy` text button
-(`navigator.clipboard.writeText`); the line `If the page shows a code, paste it here.` over a one-line vim box. Cmd+Enter
-(`submitCode`) sends the box's trimmed text through `logInCode` when not empty; Esc (`cancelSignIn`) calls
-`cancelLogIn`. On `logInEnded` for the open profile the dialog closes, calls `finished(signedIn)` where `signedIn` is
-`status?.signedIn === true`, and toasts `Signed in to <profile> as <account>` (success tone) or
-`Sign-in failed: <error>` (error tone; for a cancel, log only — the user pressed Esc). `open` while the dialog is open
+(`navigator.clipboard.writeText`); the line `If the page shows a code, paste it here.` over a one-line vim box. Buttons: `Cancel` (secondary, `cancelSignIn`) and
+`Send code` (primary, `submitCode`), hints through `keyHint`; Copy toasts nothing and logs `sign-in link copied`.
+Cmd+Enter (`submitCode`) sends the box's trimmed text through `logInCode` when not empty. Esc (`cancelSignIn`) calls
+`cancelLogIn`, closes the dialog at once and calls `finished(false)`; a `logInEnded` arriving for a closed dialog is
+logged and shows nothing. On `logInEnded` for the open profile the dialog closes, calls `finished(signedIn)` where
+`signedIn` is `status?.signedIn === true`, and toasts `Signed in to <profile> as <account>` (success tone) or
+`Sign-in failed: <error>` (error tone). The dialog belongs to a profile, not a session: another session's Chat tab
+showing leaves it open (it stays out of `otherSessionShown`), and it registers no cancel on the scope's base
+change. `open` while the dialog is open
 focuses its box and starts nothing; `open` whose `logIn` rejects closes the dialog and toasts the error. Key hints
 draw through `keyHint` as the reason box's do. CSS in `chat.css`, tokens only (`DESIGN.md` § Tokens and themes).
 
@@ -78,8 +84,12 @@ draw through `keyHint` as the reason box's do. CSS in `chat.css`, tokens only (`
 signed in and starting nothing otherwise; a rejected read is logged and goes on to `listSessions`. Add `signIn` to
 `StartPromptDeps`.
 
-**Keys** (`src/plugins/keymap.ts`, the chat section): `<D-Enter>` → `chat.submitCode` and `<Esc>` → `chat.cancelSignIn`
-in `chat.signIn`, matching `chat.reason`'s binds and their `where`/`mode` settings.
+**Keys** (`src/plugins/keymap.ts`, the chat section), mirroring all four of `chat.reason`'s binds: on the page
+`<D-Enter>` → `chat.submitCode` and `<Esc>` → `chat.cancelSignIn` in `chat.signIn`; in the box (`where: 'box'`, the
+same mode settings as the reason box's) `<CR>` → `chat.submitCode` and `<Esc>` → `chat.cancelSignIn`.
+
+**Manifest labels**: `submitCode` `send the sign-in code`, `cancelSignIn` `cancel the sign-in`, both in group
+`signIn`.
 
 ## Tests
 
@@ -91,6 +101,7 @@ GIVEN a signed-out profile WHEN the start prompt's profile is picked THEN the si
 - `add_Twice_Throws`; `dispose_RemovesCommand`
 - `completionWords_AppFirstNoRepeats` — app `['login','status']`, agent `['status','model']` → `['login','status','model']`
 - `send_AppCommand_RunsAndClearsBox` and `send_AppCommandRejects_Toasts` in `chat-commands.test.ts`
+- `status_EndedSession_Toasts` — a recording toast gets `<profile>: not signed in`; no `notice` invoke
 - `startPrompt_SignedOut_OpensSignIn`, `startPrompt_SignInFinished_OpensSessionStep`,
   `startPrompt_StatusReadFails_GoesOn` in `start-prompt.test.ts`, with a recording sign-in fake
 

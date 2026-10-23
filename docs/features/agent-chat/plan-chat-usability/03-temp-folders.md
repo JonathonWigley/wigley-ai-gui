@@ -23,7 +23,9 @@ Commit:    one commit for the group
 - `tempFolders(osTemp, platform)`: on `macos` and `linux`, `osTemp`, `/tmp` and `/private/tmp`, without repeats; on
   `windows`, `osTemp` alone.
 - `main.ts` builds it once from the real path of `os.tmpdir()` (`files.realPath`, as `homeDir` is) and the platform
-  the served config names, and passes it in the services object for every run mode.
+  the served config names, and passes it in the services object for the live and drive modes. The self-test passes
+  `tempFolders: []`: its home is a `mkdtemp` under `os.tmpdir()`, and its chat steps open folders in that home
+  (task 04).
 
 ## Tests
 

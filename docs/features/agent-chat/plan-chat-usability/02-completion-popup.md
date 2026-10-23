@@ -6,7 +6,8 @@ Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
 Files:     modify `src/renderer/codemirror-vim/codemirror-vim-host.ts` (where a box's extensions are assembled;
-           `prefix-completion.ts` instead if the completion extension is built there)
+           `prefix-completion.ts` instead if the completion extension is built there) ·
+           modify `src/renderer/codemirror-vim/editor-theme.ts`
 Consumes:  `tooltips` from `@codemirror/view` (a direct dependency)
 Produces:  no new symbol: every editor the host creates mounts its CodeMirror tooltips on `document.body`
 Decisions: fix in the editor adapter, for every box (round 1 Decided notice)
@@ -20,9 +21,9 @@ floating composer (`src/plugins/chat/page/chat.css`). Add `tooltips({ parent: do
 every editor the host creates (boxes and document editors), so CodeMirror mounts tooltips in a container on the body
 that still carries the editor's theme classes (CodeMirror reference, `tooltips` config `parent`). The editor theme's
 `.cm-tooltip.cm-tooltip-autocomplete` rule in `editor-theme.ts` must still apply; check that it is not scoped under a
-selector the body container misses (such as `.chat-box`). The overlay layer's `z-dialog` stacking must keep the popup
-above the composer: check the container's stacking against the `z-floating` token in `DESIGN.md` § Layers and set a
-token-based `z-index` on the tooltip rule in `editor-theme.ts` when it falls under the composer.
+selector the body container misses (such as `.chat-box`). Vim boxes sit in the floating composer and in dialogs (the reason box, the
+sign-in box), so the tooltip rule in `editor-theme.ts` always sets `z-index: calc(var(--wg-z-dialog) + 1)`, the
+pattern `src/plugins/keys/page/keys.css:13` uses: above every surface a box sits in, below `z-toast`.
 
 The `document` read is the page adapter's own (the host already lives in the renderer); pass `document.body` where
 the host is built if the file takes its DOM from parameters.

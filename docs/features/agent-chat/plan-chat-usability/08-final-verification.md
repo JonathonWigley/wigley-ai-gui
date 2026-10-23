@@ -24,17 +24,19 @@ touches the user's own app, config or Claude profiles: the drive run has its own
    composer's edge; `query` the popup's box against the composer's box. Also check that the popup takes the editor
    theme (background, row height) rather than CodeMirror's defaults.
 2. **Folder step lists harness folders** — low-confidence: new wiring across main and page. After check 1's session
-   started in `<home>/dev/drive-project`, open the start prompt (`Space k n`): that folder is listed, and
-   `Choose folder…` is last.
-3. **Sign-in from the start prompt** — expected path. In a session's box send `/logout`: a notice `Signed out of
-   <profile>` shows. Open the start prompt, pick the folder: the sign-in dialog opens showing
-   `https://example.invalid/fake-sign-in`; type `wrong` and Cmd+Enter → the dialog closes with a `Sign-in failed`
-   toast. Repeat with `fake-code` → toast `Signed in to <profile> as fake@example.invalid` and the session step opens.
+   started in `<home>/dev/drive-project`, delete `<run>/home/plugin-data/chat/recent-folders.json` (drive-run debug
+   state; list the deletion in the report), so the folder can only come from the fake's `listProjects`. Open the
+   start prompt (`Space k n`): that folder is listed, and `Choose folder…` is last.
+3. **Sign-in from the start prompt** — expected path. In check 1's session (profile `work`, `chat.start`'s default) send `/logout`: a notice
+   `Signed out of work` shows. Open the start prompt, pick the folder, Enter on the Profile step (`work` pre-selected): the sign-in
+   dialog opens showing `https://example.invalid/fake-sign-in`; `i`, type `wrong`, Cmd+Enter → the dialog closes with
+   a `Sign-in failed` toast. Repeat with `fake-code` → toast `Signed in to work as fake@example.invalid` and the session
+   step opens.
    Open it once more and press Esc → it closes, nothing starts.
 4. **`/status` and completion of app commands** — low-confidence: the registry joins the completion list. Type `/st`
    in the box: `status` is offered. Send `/status`: a notice `<profile>: signed in as fake@example.invalid`. Reload
    the page (drive reload): the notice is still in the chat.
-5. **Attached images** — expected path. Through `eval`, dispatch a `paste` event on the composer whose
+5. **Attached images** — expected path; also proves the CSP lets `data:` images draw. Through `eval`, dispatch a `paste` event on the composer whose
    `clipboardData` holds a generated 16×16 PNG `File`, and a `drop` event holding a second one: two thumbnails show
    above the box. Click one's remove button → one left. Dispatch a paste holding a `text/plain` file → the refusal
    toast. Send with text `hi`: the user entry shows the text and one thumbnail; the strip is empty.

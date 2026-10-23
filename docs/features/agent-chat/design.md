@@ -167,7 +167,7 @@ interview on 2026-10-23; this file is the record of both.
   the agent's, without repeats. A handler reports through chat's `notice` channel call, which adds a notice entry
   main keeps. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile
   out; a notice says so) and `/status` (a notice: `<profile>: signed in as <account>` or `<profile>: not signed in`).
-- **Images**: pasting or dropping an image file on the composer attaches it: PNG, JPEG, GIF and WebP up to 5 MB each
+- **Images**: pasting an image file into the composer, or dropping one anywhere on the Chat tab, attaches it: PNG, JPEG, GIF and WebP up to 5 MB each
   (the API's per-image limit); any other file is refused with a toast. Attached images show as a strip of
   thumbnails above the message box, each with a remove button; `<Leader>cx` removes the last one. Send sends the
   text with the images, or the images alone. A sent user entry shows its images as thumbnails under its text;

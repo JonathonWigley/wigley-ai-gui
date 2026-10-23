@@ -10,6 +10,11 @@ Files:     modify `src/contracts/agent.ts` · modify `src/main/claude-code/claud
            modify `src/main/claude-code/past-sessions.ts` · create `src/main/claude-code/claude-auth.ts` ·
            modify `src/shared/fake-agent-harness.ts` · modify `src/plugins/chat/main/chat-sessions.ts` (call site only) ·
            modify `src/plugins/chat/main/selftest-script.ts` (expectations only) ·
+           modify `src/main/claude-code/claude-launch.ts` ·
+           test `src/main/claude-code/claude-controls.test.ts` · test `src/main/claude-code/claude-launch.test.ts` ·
+           test `src/plugins/chat/page/chat-state.test.ts` and `src/plugins/chat/page/chat-commands.test.ts`
+           (add `images: []` to built user entries only) · test `src/plugins/chat/main/chat-sessions.test.ts`
+           (add `imageCount: 0` to recorded sends only) ·
            test `src/main/claude-code/claude-auth.test.ts` · test `src/main/claude-code/claude-code-harness.test.ts` ·
            test `src/main/claude-code/transcripts.test.ts` · test `src/main/claude-code/past-sessions.test.ts` ·
            test `src/shared/fake-agent-harness.test.ts`
@@ -30,6 +35,10 @@ Produces:  in `src/contracts/agent.ts`:
            `listProjects(profileDir: string | null): Promise<ProjectFolder[]>`
            in `src/main/claude-code/claude-auth.ts`: `export function readAccountStatus(stdout: string): AccountStatus`,
            `export function signInLink(output: string): string | null`
+           in `src/main/claude-code/claude-launch.ts`: `export function claudeEnv(env: NodeJS.ProcessEnv, profileDir: string | null, homeDir: string, paths: Paths): NodeJS.ProcessEnv`
+           (the nested-session strip and `CLAUDE_CONFIG_DIR`; `claudeLaunch` calls it)
+           in `src/shared/fake-agent-harness.ts`: the `send` member of the `FakeAgentCall` union becomes
+           `{ method: 'send'; text: string; imageCount: number }`
            in `src/shared/fake-agent-harness.ts`: `export const FAKE_SIGN_IN_URL = 'https://example.invalid/fake-sign-in'`,
            `export const FAKE_SIGN_IN_CODE = 'fake-code'`
 Decisions: images ride `send` (round 2) · accounts and projects on `AgentHarness` (round 1, design review) ·
@@ -52,18 +61,21 @@ content is the plain string when `images` is empty (the shape every existing pro
 
 **Claude: transcripts.** `addUserEntries` gives a user entry `images` from the line's `image` blocks whose source is
 `base64` (`media_type` → `mediaType`); a line holding only images and no text still makes a user entry (text `''`).
-Every other built user entry gets `images: []`. The `isMeta` `[Image: source: …]` companion line
-(`claude-stream.md` § Images) makes no user entry; check what the reader does with `isMeta` lines today and keep the
-line as a raw entry or skip it to match.
+The entry's `text` is the line's text blocks alone, joined by `\n`: `userText` stops writing `[image]` for an image
+block, so a resumed entry matches the live one, and an images-only line gives `text: ''` and the session title
+`Untitled session` (`readTranscriptHead` reads titles through `userText`). Every other built user entry gets
+`images: []`. The `isMeta` `[Image: source: …]` companion line
+(`claude-stream.md` § Images) already makes no entry (`userText` returns null for `isMeta`); keep it so.
 
 **Claude: accounts** (`claude-auth.ts` holds the parsing; the harness wires the processes through `deps.spawn` with
-`claudeLaunch`'s environment rules — the nested-session strip and `CLAUDE_CONFIG_DIR` from `profileDir` — and
-`cwd` the home folder):
+`claudeEnv(deps.env, profileDir, deps.homeDir, deps.paths)` and `cwd` the home folder). A spawn `error` event (a bad
+`claude.command`, ENOENT) gives `claude was not found at <command>; set claude.command` (the other errno texts pass
+through): `accountStatus` and `logOut` reject with it, `logIn` ends `{ status: null, error }` with it.
 
 - `accountStatus`: runs `claude auth status --json`; `readAccountStatus` reads `loggedIn` into `signedIn` and builds
   `account` as `<email> · Claude <subscriptionType>` when both are strings, `<email>` alone when only the email is,
   `null` when signed out. Unparseable output or a non-zero exit rejects naming the stderr.
-- `logIn`: spawns `claude auth login`, stdin a pipe. `signInLink` takes the accumulated stdout and returns the URL
+- `logIn`: spawns `claude auth login`, stdin a pipe. `signInLink` takes the accumulated stdout and stderr together (the probe did not separate the streams) and returns the URL
   after `visit: ` with the OSC 8 escape sequences stripped (the URL shows twice on the line; return it once), or
   null until that line is complete. `link` fires once. `sendCode(code)` writes `code` and a newline to stdin.
   On exit, run `accountStatus`: `ended({ status, error })` with `error` null when `status.signedIn`, else the last
@@ -94,14 +106,16 @@ GIVEN a message with one PNG and text WHEN `userMessage` builds it THEN content 
 GIVEN a status JSON with `loggedIn: true`, email and `subscriptionType: "max"` WHEN read THEN `{ signedIn: true, account: '<email> · Claude max' }`
 
 - `userMessage_WithImages_ImageBlocksThenText` — the array, media type and data as given
-- `userMessage_TextOnly_PlainStringContent` — content is the string
+- `userMessage_TextOnly_PlainStringContent` — content is the string (both in `claude-controls.test.ts`)
+- `claudeEnv_ProfileDir_SetsConfigDirAndStripsNested` in `claude-launch.test.ts`
+- `accountStatus_SpawnFails_RejectsWithCommandHint`
 - `readAccountStatus_SignedIn_LabelsEmailAndPlan` / `readAccountStatus_SignedOut_NullAccount` — built from JSON the
   test writes in the shape of `claude-stream.md` § Auth
 - `signInLink_OscWrappedLine_ReturnsUrlOnce` — a line built with `\x1b]8;;<url>\x07<url>\x1b]8;;\x07` and with the
   `\x1b\\` terminator; `signInLink_NoVisitLine_Null`
 - harness tests over a fake spawn: `logIn_ProcessExitsSignedIn_EndsWithStatus`, `logIn_Cancel_EndsOnceCancelled`,
   `logIn_SendCode_WritesCodeLine`
-- `transcriptEntries_UserImageLine_EntryCarriesImages`, `transcriptEntries_ImageCompanionLine_NoUserEntry`
+- `transcriptEntries_UserImageLine_EntryCarriesImages` (also pins `text` as the typed text, no `[image]`), `transcriptEntries_ImageCompanionLine_NoUserEntry`
 - `listProjects_NewestTranscriptCwd_PerFolder` over `memory-files` — two project folders, newest first
 - fake: `logIn_RightCode_SignsIn`, `logOut_ThenStatus_SignedOut`, `listProjects_StartedFolders_NewestFirst`
 
