@@ -1,6 +1,6 @@
 # 06 — `docs.seed` and `docs.connectSession` can seed a doc in every index load state
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -62,3 +62,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 88bb0f5 · proof: diff read matches spec; DocsFixtureOptions, writeDocsFixture options, connectDocsFixtureSession options, optionalBoolean, both action args present; typecheck passes · concerns: .agents/skills/drive/SKILL.md line 53 names docs.seed and docs.connectSession without args, so loadStates is undocumented (task 11)

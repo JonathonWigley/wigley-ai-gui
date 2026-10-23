@@ -186,10 +186,10 @@ Boundary rules: everything stays in this repo; `src/main/drive/` keeps no `elect
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Script calls reject on navigation; capped checks](01-navigation-rejects-runs.md)
-- [ ] [Start lock for dev starts](04-start-lock.md)
+- [x] [Script calls reject on navigation; capped checks](01-navigation-rejects-runs.md)
+- [x] [Start lock for dev starts](04-start-lock.md)
 - [x] [Fake session that ends itself](05-fake-end.md)
-- [ ] [Docs fixture with every load state](06-docs-load-states.md)
+- [x] [Docs fixture with every load state](06-docs-load-states.md)
 
 ### Wave 2
 - [ ] [Log mark](02-log-mark.md) — after 01
@@ -215,9 +215,21 @@ Review base: 5b2bc38096dafc34abedca7cf3e261e5117ffdd1
 
 ### Groups
 - 05 · 0558ba9 · diff read matches spec; FAKE_END_TEXT present; typecheck passes · concerns: user-entry emit moved to a local closure shared by both branches; one interface-comment line left unwrapped
+- 01 · 0187f44 · diff read matches spec; PageNavigatedError and CHECK_TIMEOUT_MS present; typecheck passes · concerns: pending-reject set and reject loop duplicated in the Electron adapter and the fake; render-process-gone listener ignores its (event, webContents, details) args
+- 04 · a976d99 · diff read matches spec; takeStartLock, StartLock, StartLockOptions present; typecheck passes · concerns: stale-lock clear is not atomic (two takers vs one dead holder can delete a fresh lock); temp file name shared within one process, safe only while write/link/unlink stay synchronous; a throwing runSelfTest leaves the lock to be cleared as a dead holder's
+- 06 · 88bb0f5 · diff read matches spec; DocsFixtureOptions, writeDocsFixture options, connectDocsFixtureSession options, optionalBoolean, both action args present; typecheck passes · concerns: .agents/skills/drive/SKILL.md line 53 names docs.seed and docs.connectSession without args, so loadStates is undocumented (task 11)
 ### Contract changes
+- StartLock.release(): deletes the file → deletes it on the first call only · why: selftest releases at the first [selftest] line and again on close, and a second delete could remove another start's lock · consumers: 04 · group 04
+- takeStartLock timeout message: names .drive/start.lock literally → names the lockFile path passed in (absolute from both CLIs) · why: the path is a parameter · consumers: 04, 11 (docs quoting the message) · group 04
 ### Rulings
 - a self-end marks the process ended synchronously in send, emitting entry and ended in the microtask — a call between send and the microtask must see an ended process — a caller reading record.ended right after send sees true · group 05 · group 05
 - a FAKE_END_TEXT exit ignores holdEnd — a CLI exiting on its own is not held by the test's end gate — a test holding ends sees a self-end early · group 05 · group 05
+- the fake registers a run as pending before asking for its answer, so an answer that calls navigate() rejects its own call — mirrors a commit mid-script — a test navigating inside an answer sees a rejection, not the answer · group 01 · group 01
+- the cap is computed in waitFor and passed as holdsBefore's deadline; holdsBefore maps PageNavigatedError to false — keeps holdsBefore a plain answer-before-deadline helper — none · group 01 · group 01
+- drive start takes the lock after .drive/current is written and the home prepared, right before spawnApp; the ready send runs outside the lock — the lock guards the build, not readiness — a second start could spawn while the first is still answering ready · group 04 · group 04
+- the two-takers test waits 30 ms after the winner resolves before asserting the loser still waits — the one wall-clock wait — on a slow machine it proves less, never fails falsely · group 04 · group 04
+- load-state entries carry meta { imports: [] } like the fixture's other instructions entries — the plan named no meta — only four drive-only entries change if wrong · group 06 · group 06
+- flag-off cleanup trashes the whole .claude/load-states folder when it exists — leaves no empty folder — none · group 06 · group 06
+- the four entries go after the existing eight, so sessionDocument's positions and the self-test index are unchanged with the flag off — none · group 06 · group 06
 ### Review rounds
 ### Test gate

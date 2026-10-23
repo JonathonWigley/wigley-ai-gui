@@ -1,6 +1,6 @@
 # 04 — Dev drive and self-test starts take one lock
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -61,3 +61,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit a976d99 · proof: diff read matches spec; takeStartLock, StartLock, StartLockOptions present; typecheck passes · concerns: stale-lock clear is not atomic (two takers vs one dead holder can delete a fresh lock); temp file name shared within one process, safe only while write/link/unlink stay synchronous; a throwing runSelfTest leaves the lock to be cleared as a dead holder's

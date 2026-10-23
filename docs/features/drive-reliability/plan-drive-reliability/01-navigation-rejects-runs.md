@@ -1,6 +1,6 @@
 # 01 — A script call rejects when the page navigates under it; each wait check is capped
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -60,3 +60,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 0187f44 · proof: diff read matches spec; PageNavigatedError and CHECK_TIMEOUT_MS present; typecheck passes · concerns: pending-reject set and reject loop duplicated in the Electron adapter and the fake; render-process-gone listener ignores its (event, webContents, details) args
