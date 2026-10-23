@@ -7,6 +7,7 @@ import type {
 } from '../contracts/agent';
 import {
   createFakeAgentHarness,
+  FAKE_HISTORY_IMAGES,
   FAKE_HOLD_TEXT,
   FAKE_PAST_SESSIONS,
   FAKE_SIGN_IN_CODE,
@@ -398,7 +399,7 @@ describe('createFakeAgentHarness', () => {
         kind: 'user',
         id: `history:${known}-user`,
         text: 'fake earlier message',
-        images: [],
+        images: FAKE_HISTORY_IMAGES,
         raw: [{ fake: 'history-user' }],
       },
       {

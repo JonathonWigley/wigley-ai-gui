@@ -39,9 +39,6 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - A read-only Chat tab for sessions started in a terminal, following the session's transcript file.
 - Files other than images (PDFs, text files) pasted or dropped into the chat's message box; images land in agent-chat
   plan C.
-- An app-wide navigation guard (`will-navigate` / drop outside a drop target): a file dropped anywhere the page does not
-  take a drop makes Electron navigate the window to the file and the app page is lost. Chat's tab takes drops from plan
-  C on; every other view does not (`src/main/window.ts`).
 - Drive fixtures for two live checks the agent could not reach: docs load states other than `launch` (`on-demand`, `shadowed`, `pending`, `listed`, `not-loaded`, with their reasons) from `docs.seed` or `docs.connectSession` (`src/plugins/docs/main/start.ts`), and a fake-harness message that ends its own session, so the ended composer's disabled chips and send show (`sessionEnded`; the fake harness in chat main). Until then those two halves are settled only in code (`CHIP_TONES`, `src/plugins/docs/page/doc-view.ts`).
 - The doc editor's focus ring (`.wg-document-editor.cm-focused::after`) sits at z-index 300, set in `src/renderer/codemirror-vim/editor-theme.ts`, and can draw over the side bar overlay and help, as the vim panel did before its fix; seen in code, not yet on screen.
 - A dev drive run's page sometimes never finishes loading after `restart` (about 1 in 3 in the final verification of agent-drive): `executeJavaScript` never resolves, so `ready` rejects with "The page never finished loading within 30 s" and `restart` or `quit` ends the run by SIGTERM. The cause is unknown; every dev run's `electron-forge start` rebuilding the shared `.vite/build` is the suspect (`src/main/drive/page-driver.ts` `waitFor`, `scripts/drive.mts` `stop`).

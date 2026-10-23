@@ -125,8 +125,11 @@ const SIGNED_IN_LINE = '[chat] sign-in for work ended';
 // again cancels, the fake's end reaching a closed dialog. /login again, the
 // fake's code and Cmd+Enter sign in; /logout, /login, the code and Esc Enter,
 // Enter sending from the box's normal mode, sign in again, so the profile ends
-// signed in, as /status then reports. Space c x finds no attached image, Esc
-// leaves the box, and Cmd+W closes the idle session without asking.
+// signed in, as /status then reports. Space c x finds no attached image and Esc
+// leaves the box. gg focuses the first entry, the resumed history's message
+// with the fake's two images: Enter opens the viewer on the first, l steps to
+// the second and stops there, h steps back and stops at the first, and Esc
+// closes the viewer. Cmd+W closes the idle session without asking.
 const STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
   { keys: ['y'], expect: '[chat] no pending permission in chat-second' },
@@ -284,6 +287,17 @@ const STEPS: SelfTestStep[] = [
   { keys: sendKeys('/status'), expect: NOTICE_LINE },
   { keys: [' ', 'c', 'x'], expect: '[chat] no attached image' },
   { keys: ['Escape'], expect: '[chat] left the box' },
+  { keys: ['g', 'g'], expect: '[chat] focused the first entry' },
+  {
+    keys: ['Enter'],
+    expect: '[chat] image viewer showing 1 of 2',
+    checksFit: true,
+  },
+  { keys: ['l'], expect: '[chat] image viewer showing 2 of 2' },
+  { keys: ['l'], expect: '[chat] no next image' },
+  { keys: ['h'], expect: '[chat] image viewer showing 1 of 2' },
+  { keys: ['h'], expect: '[chat] no previous image' },
+  { keys: ['Escape'], expect: '[chat] image viewer closed' },
   { keys: ['<D-w>'], expect: '[chat] session closed: chat-selftest' },
 ];
 
@@ -474,10 +488,9 @@ interface SelfTestProjects {
 // chat's tool in the self-test's session, which the steps allow; the answer
 // asks a forms round there over a relay that joins the session, which the
 // steps submit. The result is both calls' replies and the self-test project's
-// folder; problems reads the fake
-// processes, whose records the steps keep changing in place, when it runs,
-// reading only the records this run added. The run waits on the session's
-// Chat tab being shown.
+// folder; problems reads the fake processes, whose records the steps keep
+// changing in place, when it runs, reading only the records this run added.
+// The run waits on the session's Chat tab being shown.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   const { chat, sessions, harnesses, files } = deps;
   // Cleared when making them fails, so a later run tries again.

@@ -34,7 +34,7 @@ export function readAccountStatus(stdout: string): AccountStatus {
 
 // The sign-in URL `claude auth login` prints after `visit: `, its OSC 8
 // hyperlink wrapping stripped so the URL shows once; null until that line has
-// ended. `output` is everything the process printed so far, both streams.
+// ended. `output` is everything the process printed so far on one stream.
 export function signInLink(output: string): string | null {
   const start = output.indexOf(VISIT_PREFIX);
   if (start === -1) {

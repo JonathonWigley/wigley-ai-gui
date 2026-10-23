@@ -5,6 +5,7 @@ import type {
   AgentProcessEvents,
   AgentStart,
   ChatEntry,
+  ChatImage,
   LogInEvents,
   LogInProcess,
   PastSession,
@@ -178,14 +179,28 @@ function emitEchoTurn(events: AgentProcessEvents, turn: number, text: string) {
   emitTurnEnd(events, turn);
 }
 
-// The two entries a fake past session's history holds.
+// The images on a fake past session's user message: a red and a blue 16×16
+// PNG.
+export const FAKE_HISTORY_IMAGES: readonly ChatImage[] = [
+  {
+    mediaType: 'image/png',
+    data: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR42mO44OBAEmIY1TCqYfhqAAAxPVAQGiLq9QAAAABJRU5ErkJggg==',
+  },
+  {
+    mediaType: 'image/png',
+    data: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR42mNwSLhAEmIY1TCqYfhqAAAUDXAQquIenAAAAABJRU5ErkJggg==',
+  },
+];
+
+// The two entries a fake past session's history holds, the user message
+// carrying `FAKE_HISTORY_IMAGES`.
 function fakeHistory(sessionId: string): ChatEntry[] {
   return [
     {
       kind: 'user',
       id: `history:${sessionId}-user`,
       text: 'fake earlier message',
-      images: [],
+      images: FAKE_HISTORY_IMAGES.map((image) => ({ ...image })),
       raw: [{ fake: 'history-user' }],
     },
     {
