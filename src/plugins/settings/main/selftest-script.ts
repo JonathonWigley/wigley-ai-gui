@@ -1,5 +1,9 @@
 import type { Disposable } from '../../../contracts/disposable';
-import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
+import type {
+  SelfTestGroup,
+  SelfTestScript,
+  SelfTestStep,
+} from '../../../contracts/plugin';
 import type {
   UserConfig,
   UserConfigRead,
@@ -24,24 +28,13 @@ const ADDED_KEYS = '<Leader>zh';
 // settings.json until the last step resets it.
 const STALE_TIMEOUT_MS = 900;
 
-// Open empties both user files, then settings mode shows on the first
-// section, Core, with focus on the side bar. Space k , hides the side bar,
-// focusing the rows, and again shows it. / and sequence filter Core to the key
-// sequence timeout first; Enter opens its box and 750 writes it. Enter again,
-// abc is refused under the box, and Esc closes it. 800 written on disk redraws
-// the rows, and r resets the row. Enter opens the box again, and a key the
-// settings do not declare breaks settings.json and closes it; {} mends the
-// file. Enter opens the box, 900 written on disk makes the box's 600 stale,
-// and Esc closes it. / and theme filter Core to the Theme row first, whose
-// Enter shows the theme picker. Esc, Option+h, G and Enter open Keymap; / and
-// help filter it to the help command first, where a and <Leader>zh open the
-// scope picker, and Enter picks the preselected scope. d picks the user bind,
-// listed last, to remove; r then finds nothing to reset. Option+h, gg and
-// Enter open Core, where / and sequence filter to the timeout again and r
-// clears the 900.
-const STEPS: SelfTestStep[] = [
+// Settings mode opens on the first section, Core, with focus on the side bar.
+const SIDE_BAR_STEPS: SelfTestStep[] = [
   { keys: [' ', 'k', ','], expect: '[page] side bar hidden' },
   { keys: [' ', 'k', ','], expect: '[page] side bar shown' },
+];
+
+const NUMBER_BOX_STEPS: SelfTestStep[] = [
   {
     keys: ['/', ...'sequence', 'Enter'],
     expect: '[settings] filter "sequence" first row keySequenceTimeoutMs',
@@ -57,6 +50,9 @@ const STEPS: SelfTestStep[] = [
     screenshot: 'box-problem',
   },
   { keys: ['Escape'], expect: '[settings] box closed keySequenceTimeoutMs' },
+];
+
+const OUTSIDE_EDITS_STEPS: SelfTestStep[] = [
   {
     writeFile: { path: SETTINGS_FILE, text: '{"keySequenceTimeoutMs": 800}' },
     keys: [],
@@ -69,6 +65,7 @@ const STEPS: SelfTestStep[] = [
     keys: [],
     expect: '[settings] box closed keySequenceTimeoutMs',
     screenshot: 'broken',
+    why: 'A key the settings do not declare breaks settings.json, which closes the open box.',
   },
   {
     writeFile: { path: SETTINGS_FILE, text: '{}' },
@@ -83,13 +80,20 @@ const STEPS: SelfTestStep[] = [
     },
     keys: [...'600', 'Enter'],
     expect: '[settings] changed on disk settings.json',
+    why: "The timeout written on disk under the open box makes the box's 600 stale.",
   },
   { keys: ['Escape'], expect: '[settings] box closed keySequenceTimeoutMs' },
+];
+
+const THEME_PICKER_STEPS: SelfTestStep[] = [
   {
     keys: ['/', ...'theme', 'Enter'],
     expect: '[settings] filter "theme" first row theme',
   },
   { keys: ['Enter'], expect: '[settings] picker shown: Theme' },
+];
+
+const KEYMAP_STEPS: SelfTestStep[] = [
   {
     keys: ['Escape', '<A-h>', 'G', 'Enter'],
     expect: '[settings] section keymap',
@@ -105,14 +109,58 @@ const STEPS: SelfTestStep[] = [
     keys: [...ADDED_KEYS, 'Enter'],
     expect: '[settings] picker shown: Scope',
   },
-  { keys: ['Enter'], expect: '[settings] wrote keymap.json' },
+  {
+    keys: ['Enter'],
+    expect: '[settings] wrote keymap.json',
+    why: 'Enter picks the preselected scope.',
+  },
   { keys: ['d'], expect: '[settings] picker shown: Key to remove' },
-  { keys: ['j', 'Enter'], expect: '[settings] wrote keymap.json' },
+  {
+    keys: ['j', 'Enter'],
+    expect: '[settings] wrote keymap.json',
+    why: 'The user bind is listed last.',
+  },
   { keys: ['r'], expect: '[settings] unchanged' },
+];
+
+const TIMEOUT_RESET_STEPS: SelfTestStep[] = [
   { keys: ['<A-h>', 'g', 'g', 'Enter'], expect: '[settings] section core' },
   {
     keys: ['/', ...'sequence', 'Enter', 'r'],
     expect: '[settings] wrote settings.json',
+  },
+];
+
+const GROUPS: SelfTestGroup[] = [
+  {
+    name: 'side bar',
+    why: 'Space k , hides the side bar, focusing the rows, and shows it again.',
+    steps: SIDE_BAR_STEPS,
+  },
+  {
+    name: 'number box',
+    why: 'Filtering Core to the key sequence timeout, its box writes a number to settings.json, refuses text that is not a number under the box, and Esc closes it.',
+    steps: NUMBER_BOX_STEPS,
+  },
+  {
+    name: 'outside edits',
+    why: 'settings.json written on disk redraws the rows, breaking it closes the open box and mending it redraws them, and a write under the open box makes its value stale; r resets a row.',
+    steps: OUTSIDE_EDITS_STEPS,
+  },
+  {
+    name: 'theme picker',
+    why: 'Filtering Core to the Theme row, Enter shows the theme picker.',
+    steps: THEME_PICKER_STEPS,
+  },
+  {
+    name: 'keymap',
+    why: 'In the Keymap section, a adds a key to the help command under a picked scope and d removes the user bind, each writing keymap.json, and r then finds nothing to reset.',
+    steps: KEYMAP_STEPS,
+  },
+  {
+    name: 'timeout reset',
+    why: 'Back in Core, r on the key sequence timeout clears the stale timeout from settings.json.',
+    steps: TIMEOUT_RESET_STEPS,
   },
 ];
 
@@ -201,13 +249,7 @@ export function settingsSelfTestScript(
       });
       return { shownLine: '[settings] shown', result };
     },
-    groups: [
-      {
-        name: 'settings',
-        why: 'The settings form editing settings.json and keymap.json, and outside edits to both',
-        steps: STEPS,
-      },
-    ],
+    groups: GROUPS,
     problems: (result) => resultProblems(result as UserConfigRead),
   };
 }

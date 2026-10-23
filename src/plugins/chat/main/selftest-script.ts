@@ -1,7 +1,11 @@
 import path from 'node:path';
 import type { AgentHarness } from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
-import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
+import type {
+  SelfTestGroup,
+  SelfTestScript,
+  SelfTestStep,
+} from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
   FAKE_HOLD_TEXT,
@@ -89,59 +93,25 @@ const SIGNED_IN_LINE = '[chat] signed in to work';
 
 // Each step expects the last line its keys cause: the fake emits in microtasks,
 // so an earlier line can land before the step's wait begins. Each session opens
-// on its Chat tab: Option+Shift+i shows the second session's Chat tab, where y
-// finds no pending permission, leaving the first session's alone, and
-// Option+Shift+o goes back to the first session's Chat tab. e opens Effort, and
-// showing the second session's Chat tab closes it; Space k n opens the start
-// prompt, which stays open over the second session's Chat tab until Esc closes
-// it, and Option+Shift+o goes back. hi typed, Esc and v leave the box in visual
-// mode, and showing the second session's Chat tab blurs it; back on the first,
-// i leaves visual mode and inserts before the cursor, so ok sends hoki. hello
-// draws its reply; Enter in insert mode breaks the line, so one, two goes as
-// one message; hello again in insert mode, sent with Cmd+Enter, draws its own;
-// Esc leaves insert mode and Esc again the box. y allows the fixture's
-// permission, which asks the round that takes the Chat tab over; Space Space
-// opens its review and Cmd+Enter submits, which hands the Chat tab back. The
-// tool turn's entries are user, tool, assistant, result, focus following the
-// result, so k k j k walks them; Enter opens the tool entry, gg focuses the
-// first entry and G follows the latest. A thirty-paragraph message makes the
-// transcript taller than the sheet; Esc leaves the box, which resizes the
-// sheet, and the following transcript stays at the bottom. Ctrl+k scrolls half
-// a page up off the bottom, which stops following, and Ctrl+j back onto the
-// bottom, which follows again. e opens Effort on Medium, j Enter sets High; i
-// Esc puts the box in normal mode, where Space c e opens Effort again, / and
-// low filter to Low, and Enter in the filter's insert mode sets it. m opens
-// Mode and Esc closes it; o finds the fake has no model control; c opens every
-// control and Esc closes it. A held turn ends on Ctrl+c in the box with the
-// fake's notice; Space k n opens the start prompt and Esc closes it. A second
-// held turn makes Cmd+W ask, and y ends the session. Space k n then picks the
-// self-test's folder and the work profile, and its session step lists the
-// fake's saved sessions: j x archives session one, . shows it again, k x
-// restores it and . hides the archived again; Enter resumes it. / and fa offer
-// the fake's command, Tab accepts it and Esc Enter sends it. The fake starts
-// every profile signed in: /status reports it in a notice, /logout signs the
-// work profile out and /status reports that. /login opens the sign-in dialog
-// on the fake's link, its box in insert mode: Esc leaves insert mode, Space c y
-// copies the link, and Esc again cancels, main logging the cancelled end it
-// sends no page. /login again, the fake's code and Cmd+Enter sign in;
-// /logout, /login, the code and Esc Enter, Enter sending from the box's normal
-// mode, sign in again; /logout, /login, the code and Enter, Enter sending from
-// insert mode, sign in again. /login on the signed-in profile and a wrong code
-// fail with the fake's Wrong code though the profile still reads signed in,
-// as /status then reports. Space c x finds no attached image and Esc
-// leaves the box. gg focuses the first entry, the resumed history's message
-// with the fake's two images: Enter opens the viewer on the first, l steps to
-// the second and stops there, h steps back and stops at the first, and Esc
-// closes the viewer. Cmd+W closes the idle session without asking.
-const STEPS: SelfTestStep[] = [
+// on its Chat tab, and the first session holds the fixture's pending
+// permission.
+const TWO_SESSIONS_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
-  { keys: ['y'], expect: '[chat] no pending permission in chat-second' },
+  {
+    keys: ['y'],
+    expect: '[chat] no pending permission in chat-second',
+    why: "The first session's pending permission stays pending.",
+  },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
   { keys: ['e'], expect: '[chat] picker shown: Effort' },
   { keys: ['<A-S-i>'], expect: '[chat] picker closed: Effort' },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
   { keys: [' ', 'k', 'n'], expect: '[chat] picker shown: Folder' },
-  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  {
+    keys: ['<A-S-i>'],
+    expect: '[chat] Chat tab shown in chat-second',
+    why: "The start prompt stays open over the second session's Chat tab.",
+  },
   { keys: ['Escape'], expect: '[chat] picker closed: Folder' },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
   {
@@ -152,7 +122,11 @@ const STEPS: SelfTestStep[] = [
   {
     keys: ['i', ...'ok', 'Escape', 'Enter'],
     expect: '[chat] assistant entry added in chat-selftest',
+    why: 'Back on the first session, i leaves visual mode and inserts before the cursor, so ok sends hoki.',
   },
+];
+
+const SENDING_STEPS: SelfTestStep[] = [
   {
     keys: sendKeys('hello'),
     expect: '[chat] assistant entry added in chat-selftest',
@@ -160,12 +134,16 @@ const STEPS: SelfTestStep[] = [
   {
     keys: ['i', ...'one', 'Enter', ...'two', 'Escape', 'Enter'],
     expect: '[chat] assistant entry added in chat-selftest',
+    why: 'Enter in insert mode breaks the line, so one and two go as one message.',
   },
   {
     keys: ['i', ...'hello', '<D-Enter>'],
     expect: '[chat] assistant entry added in chat-selftest',
   },
   { keys: ['Escape', 'Escape'], expect: '[chat] left the box' },
+];
+
+const PERMISSION_CARD_STEPS: SelfTestStep[] = [
   {
     keys: ['y'],
     expect: `[forms] round shown: chat-selftest · ${ROUND_HEADING}`,
@@ -176,6 +154,9 @@ const STEPS: SelfTestStep[] = [
     expect: '[chat] Chat tab shown in chat-selftest',
     checksFit: true,
   },
+];
+
+const TRANSCRIPT_FOCUS_STEPS: SelfTestStep[] = [
   {
     keys: sendKeys(FAKE_TOOL_TEXT),
     expect: '[chat] result entry added in chat-selftest',
@@ -188,11 +169,18 @@ const STEPS: SelfTestStep[] = [
   { keys: ['Enter'], expect: '[chat] expanded tool entry', checksFit: true },
   { keys: ['g', 'g'], expect: '[chat] focused the first entry' },
   { keys: ['G'], expect: '[chat] following the latest entry' },
+];
+
+const TRANSCRIPT_SCROLL_STEPS: SelfTestStep[] = [
   {
     keys: LONG_KEYS,
     expect: '[chat] assistant entry added in chat-selftest',
   },
-  { keys: ['Escape'], expect: '[chat] left the box' },
+  {
+    keys: ['Escape'],
+    expect: '[chat] left the box',
+    why: 'Leaving the box resizes the sheet, and the transcript stays at the bottom, following.',
+  },
   {
     keys: ['<C-k>'],
     expect: '[chat] scrolled the transcript up half a page; not following',
@@ -202,8 +190,15 @@ const STEPS: SelfTestStep[] = [
     expect:
       '[chat] scrolled the transcript down half a page to the bottom; following the latest entry',
   },
+];
+
+const CONTROLS_STEPS: SelfTestStep[] = [
   { keys: ['e'], expect: '[chat] picker shown: Effort', checksFit: true },
-  { keys: ['j', 'Enter'], expect: '[chat] Effort is High in chat-selftest' },
+  {
+    keys: ['j', 'Enter'],
+    expect: '[chat] Effort is High in chat-selftest',
+    why: 'Effort opens on Medium, so j picks High.',
+  },
   {
     keys: ['i', 'Escape', ' ', 'c', 'e'],
     expect: '[chat] picker shown: Effort',
@@ -211,12 +206,16 @@ const STEPS: SelfTestStep[] = [
   {
     keys: ['/', ...'low', 'Enter'],
     expect: '[chat] Effort is Low in chat-selftest',
+    why: "Enter in the filter's insert mode sets the filtered choice.",
   },
   { keys: ['m'], expect: '[chat] picker shown: Mode' },
   { keys: ['Escape'], expect: '[chat] picker closed: Mode' },
   { keys: ['o'], expect: '[chat] chat-selftest has no model control' },
   { keys: ['c'], expect: '[chat] picker shown: Controls' },
   { keys: ['Escape'], expect: '[chat] picker closed: Controls' },
+];
+
+const INTERRUPT_AND_CLOSE_STEPS: SelfTestStep[] = [
   {
     keys: sendKeys(FAKE_HOLD_TEXT),
     expect: '[chat] chat-selftest is working',
@@ -239,6 +238,9 @@ const STEPS: SelfTestStep[] = [
     checksFit: true,
   },
   { keys: ['y'], expect: '[chat] session closed: chat-selftest' },
+];
+
+const RESUME_LIST_STEPS: SelfTestStep[] = [
   { keys: [' ', 'k', 'n'], expect: '[chat] picker shown: Folder' },
   { keys: ['Enter'], expect: '[chat] picker shown: Profile' },
   {
@@ -246,6 +248,9 @@ const STEPS: SelfTestStep[] = [
     expect: '[chat] picker shown: Session',
     checksFit: true,
   },
+];
+
+const ARCHIVE_STEPS: SelfTestStep[] = [
   { keys: ['j', 'x'], expect: '[chat] archived fake past session one' },
   {
     keys: ['.'],
@@ -258,7 +263,11 @@ const STEPS: SelfTestStep[] = [
     keys: ['Enter'],
     expect: '[chat] Chat tab shown in chat-selftest',
     checksFit: true,
+    why: 'Enter resumes the restored session one.',
   },
+];
+
+const SLASH_COMPLETION_STEPS: SelfTestStep[] = [
   {
     keys: ['/', 'f', 'a'],
     expect: '[chat] completions offered: /fake-command',
@@ -268,14 +277,25 @@ const STEPS: SelfTestStep[] = [
     keys: ['Escape', 'Enter'],
     expect: '[chat] result entry added in chat-selftest',
   },
+];
+
+const ACCOUNT_STATUS_STEPS: SelfTestStep[] = [
   { keys: sendKeys('/status'), expect: NOTICE_LINE },
   { keys: sendKeys('/logout'), expect: NOTICE_LINE },
   { keys: sendKeys('/status'), expect: NOTICE_LINE },
+];
+
+const SIGN_IN_STEPS: SelfTestStep[] = [
   { keys: sendKeys('/login'), expect: SIGN_IN_LINK_LINE, checksFit: true },
-  { keys: ['Escape', ' ', 'c', 'y'], expect: '[chat] sign-in link copied' },
+  {
+    keys: ['Escape', ' ', 'c', 'y'],
+    expect: '[chat] sign-in link copied',
+    why: "The dialog's box opens in insert mode, so Esc leaves insert mode before Space c y.",
+  },
   {
     keys: ['Escape'],
     expect: '[chat] sign-in for work ended: Sign-in cancelled',
+    why: 'Main logs the cancelled end, which it sends the page nothing for.',
   },
   { keys: sendKeys('/login'), expect: SIGN_IN_LINK_LINE },
   {
@@ -296,7 +316,14 @@ const STEPS: SelfTestStep[] = [
     keys: ['x', 'Enter'],
     expect: '[chat] sign-in failed for work: Wrong code',
   },
-  { keys: sendKeys('/status'), expect: NOTICE_LINE },
+  {
+    keys: sendKeys('/status'),
+    expect: NOTICE_LINE,
+    why: 'The profile still reads signed in after the wrong code.',
+  },
+];
+
+const IMAGES_STEPS: SelfTestStep[] = [
   { keys: [' ', 'c', 'x'], expect: '[chat] no attached image' },
   { keys: ['Escape'], expect: '[chat] left the box' },
   { keys: ['g', 'g'], expect: '[chat] focused the first entry' },
@@ -304,13 +331,90 @@ const STEPS: SelfTestStep[] = [
     keys: ['Enter'],
     expect: '[chat] image viewer showing 1 of 2',
     checksFit: true,
+    why: "The first entry is the resumed history's message with the fake's two images.",
   },
   { keys: ['l'], expect: '[chat] image viewer showing 2 of 2' },
   { keys: ['l'], expect: '[chat] no next image' },
   { keys: ['h'], expect: '[chat] image viewer showing 1 of 2' },
   { keys: ['h'], expect: '[chat] no previous image' },
   { keys: ['Escape'], expect: '[chat] image viewer closed' },
+];
+
+const IDLE_CLOSE_STEPS: SelfTestStep[] = [
   { keys: ['<D-w>'], expect: '[chat] session closed: chat-selftest' },
+];
+
+const GROUPS: SelfTestGroup[] = [
+  {
+    name: 'two sessions',
+    why: "Each session keeps its own state across switching Chat tabs: y in the second leaves the first's permission alone, a picker closes, the start prompt stays open, and the box's visual mode survives a blur.",
+    steps: TWO_SESSIONS_STEPS,
+  },
+  {
+    name: 'sending',
+    why: 'Enter in normal mode and Cmd+Enter in insert mode send from the box, each message drawing its reply, and Esc leaves insert mode then the box.',
+    steps: SENDING_STEPS,
+  },
+  {
+    name: 'permission card',
+    why: "y allows the fixture's permission, whose answer asks a round that takes the Chat tab over until Cmd+Enter submits it from its review.",
+    steps: PERMISSION_CARD_STEPS,
+  },
+  {
+    name: 'transcript focus',
+    why: "A tool turn's entries are user, tool, assistant and result, focus following the result: k and j walk them, Enter opens the tool entry, gg focuses the first entry and G follows the latest.",
+    steps: TRANSCRIPT_FOCUS_STEPS,
+  },
+  {
+    name: 'transcript scroll',
+    why: 'A thirty-paragraph message makes the transcript taller than the sheet; scrolling half a page up off the bottom stops following, and back onto the bottom follows again.',
+    steps: TRANSCRIPT_SCROLL_STEPS,
+  },
+  {
+    name: 'session controls',
+    why: "The Effort picker sets the session's effort from the transcript and from the box's normal mode, its filter included; Mode and Controls open and close, and the fake has no model control.",
+    steps: CONTROLS_STEPS,
+  },
+  {
+    name: 'interrupt and close',
+    why: "Ctrl+c in the box ends a held turn with the fake's notice, and Cmd+W on a working session asks before y ends it.",
+    steps: INTERRUPT_AND_CLOSE_STEPS,
+  },
+  {
+    name: 'resume list',
+    why: "The start prompt's folder and profile steps lead to a session step listing the fake's saved sessions for the self-test's folder.",
+    steps: RESUME_LIST_STEPS,
+  },
+  {
+    name: 'archive',
+    why: 'x archives and restores a saved session in the resume list, . shows and hides the archived ones, and Enter resumes the restored session.',
+    steps: ARCHIVE_STEPS,
+  },
+  {
+    name: 'slash completion',
+    why: "/ and fa offer the fake's command, Tab accepts it and Esc Enter sends it.",
+    steps: SLASH_COMPLETION_STEPS,
+  },
+  {
+    name: 'account status',
+    why: 'The fake starts every profile signed in: /status reports it in a notice, /logout signs the work profile out and /status reports that.',
+    steps: ACCOUNT_STATUS_STEPS,
+  },
+  {
+    name: 'sign-in',
+    why: "/login opens the sign-in dialog on the fake's link, which Space c y copies and Esc cancels; the fake's code signs in sent with Cmd+Enter, Enter from normal mode and Enter from insert mode, and a wrong code fails.",
+    steps: SIGN_IN_STEPS,
+  },
+  {
+    name: 'images',
+    why: "Space c x finds no attached image; the image viewer opens on the first of a message's two images, steps between them and stops at either end, and Esc closes it.",
+    steps: IMAGES_STEPS,
+  },
+  {
+    name: 'idle close',
+    why: 'Cmd+W closes an idle session without asking.',
+    steps: IDLE_CLOSE_STEPS,
+  },
 ];
 
 // Raw JSON and tool output scroll in their own box, as code and tables do, and
@@ -323,7 +427,7 @@ const SCROLLS_ITSELF = [
   '.session-row-status',
 ];
 
-// The calls STEPS cause on the fixture's fake process, in order.
+// The calls the steps cause on the fixture's fake process, in order.
 const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: 'hoki', imageCount: 0 },
   { method: 'send', text: 'hello', imageCount: 0 },
@@ -342,7 +446,7 @@ const EXPECTED_CALLS: FakeAgentCall[] = [
 // The saved session the steps resume, the first of the fake's.
 const RESUMED_SESSION_ID = '00000000-0000-4000-8000-000000000001';
 
-// The calls STEPS cause on the resumed session's fake process, in order.
+// The calls the steps cause on the resumed session's fake process, in order.
 const EXPECTED_RESUMED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: '/fake-command ', imageCount: 0 },
   { method: 'end' },
@@ -604,13 +708,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         result,
       };
     },
-    groups: [
-      {
-        name: 'chat',
-        why: 'Every chat key path over the fake agent harness',
-        steps: STEPS,
-      },
-    ],
+    groups: GROUPS,
     problems: (result) => [
       ...archiveResetFailures,
       ...runProblems(result as ChatSelfTestResult),
