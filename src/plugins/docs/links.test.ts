@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { posixPaths } from '../../shared/paths/posix-paths';
+import { windowsPaths } from '../../shared/paths/windows-paths';
 import { resolveLink } from './links';
 
 const HOME = '/Users/u';
 const FROM = '/r/docs/a.md';
 
 function resolve(href: string) {
-  return resolveLink(href, FROM, HOME);
+  return resolveLink(href, FROM, HOME, posixPaths);
 }
 
 describe('resolveLink', () => {
@@ -142,6 +144,55 @@ describe('resolveLink', () => {
       path: '/r/docs/a.md',
       line: null,
       fragment: 'setup',
+    });
+  });
+});
+
+describe('resolveLink on Windows', () => {
+  const WINDOWS_HOME = 'C:\\Users\\u';
+  const WINDOWS_FROM = 'C:\\r\\docs\\a.md';
+
+  function resolveOnWindows(href: string) {
+    return resolveLink(href, WINDOWS_FROM, WINDOWS_HOME, windowsPaths);
+  }
+
+  it('resolve_WindowsRelativeParent_Resolved', () => {
+    expect(resolveOnWindows('../x.md')).toEqual({
+      type: 'file',
+      path: 'C:\\r\\x.md',
+      line: null,
+      fragment: null,
+    });
+  });
+
+  it('resolve_WindowsTildeWithLine_Expanded', () => {
+    expect(resolveOnWindows('~/notes/b.md:4')).toEqual({
+      type: 'file',
+      path: 'C:\\Users\\u\\notes\\b.md',
+      line: 4,
+      fragment: null,
+    });
+  });
+
+  it('resolve_WindowsDrivePath_File', () => {
+    expect(resolveOnWindows('C:/r/y.md')).toEqual({
+      type: 'file',
+      path: 'C:\\r\\y.md',
+      line: null,
+      fragment: null,
+    });
+    expect(resolve('C:/r/y.md')).toEqual({
+      type: 'unsupported',
+      href: 'C:/r/y.md',
+    });
+  });
+
+  it('resolve_WindowsFileUrl_DropsSlashBeforeDrive', () => {
+    expect(resolveOnWindows('file:///C:/r/y.md')).toEqual({
+      type: 'file',
+      path: 'C:\\r\\y.md',
+      line: null,
+      fragment: null,
     });
   });
 });

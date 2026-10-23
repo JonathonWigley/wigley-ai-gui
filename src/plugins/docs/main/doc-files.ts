@@ -5,6 +5,7 @@ import {
   readIfPresent,
 } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
+import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import type {
   CreatedDoc,
@@ -15,14 +16,6 @@ import type {
   TrashResult,
   WriteResult,
 } from '../contract';
-import {
-  baseName,
-  expandTilde,
-  isInside,
-  joinPath,
-  normalizePath,
-  parentFolder,
-} from '../doc-paths';
 import {
   createTarget,
   nameProblem,
@@ -36,6 +29,7 @@ export interface DocFilesDeps {
   files: Files;
   homeDir: string;
   log: Log;
+  paths: Paths;
   // Every loaded view's entries (the machine index's and each session's), for
   // the guard.
   entries(): readonly IndexEntry[];
@@ -82,14 +76,14 @@ export interface DocFiles {
 }
 
 export function createDocFiles(deps: DocFilesDeps): DocFiles {
-  const { files, homeDir, log } = deps;
+  const { files, homeDir, log, paths } = deps;
 
-  const absolute = (path: string) => absolutePath(path, homeDir);
+  const absolute = (path: string) => absolutePath(path, homeDir, paths);
 
   // `target`, once the guard allows a change there.
   async function allowed(target: string): Promise<string> {
-    const folders = await guardFolders(files, homeDir, log);
-    const refusal = changeRefusal(target, deps.entries(), folders);
+    const folders = await guardFolders(files, homeDir, log, paths);
+    const refusal = changeRefusal(target, deps.entries(), folders, paths);
     if (refusal !== null) {
       throw new Error(refusal);
     }
@@ -99,15 +93,15 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
   // The real path a write at `path` lands on, once the guard allows it.
   // Rejects on a link whose target is missing, which the write would replace.
   async function writeTarget(path: string): Promise<string> {
-    if (await isDanglingLink(files, path)) {
+    if (await isDanglingLink(files, path, paths)) {
       throw new Error(`Refused: ${path} is a link to a missing file`);
     }
-    return allowed(await realTarget(files, path));
+    return allowed(await realTarget(files, path, paths));
   }
 
   // `path` with its folder real, once the guard allows moving it.
   async function moveTarget(path: string): Promise<string> {
-    return allowed(await folderRealTarget(files, path));
+    return allowed(await folderRealTarget(files, path, paths));
   }
 
   async function exists(path: string): Promise<boolean> {
@@ -142,6 +136,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
       request.kind,
       request.place,
       request.name.trim(),
+      paths,
     );
     const path = absolute(target.path);
     const real = await writeTarget(path);
@@ -150,13 +145,15 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
       throw new Error(`${path} already exists`);
     }
     const contents = target.contents(isThere ? await files.read(real) : null);
-    await files.makeFolder(parentFolder(real));
+    await files.makeFolder(paths.parent(real));
     await files.write(real, contents.text);
     return { path, line: contents.line };
   }
 
   async function createAtPath(requested: string): Promise<CreatedDoc> {
-    if (requested.endsWith('/')) {
+    const namesFolder =
+      requested.endsWith('/') || requested.endsWith(paths.separator);
+    if (namesFolder) {
       throw new Error('A path names a file, not a folder');
     }
     const path = absolute(requested);
@@ -164,7 +161,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
       throw new Error(`${path} already exists`);
     }
     const real = await writeTarget(path);
-    await files.makeFolder(parentFolder(real));
+    await files.makeFolder(paths.parent(real));
     await files.write(real, '');
     return { path, line: 1 };
   }
@@ -175,12 +172,12 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     if (toPath === fromPath) {
       return fromPath;
     }
-    const skill = skillFolder(fromPath);
-    if (skill !== null && baseName(toPath) !== 'SKILL.md') {
+    const skill = skillFolder(fromPath, paths);
+    if (skill !== null && paths.base(toPath) !== 'SKILL.md') {
       throw new Error("A skill's SKILL.md keeps its name; rename its folder");
     }
     const moved = skill ?? fromPath;
-    const destination = skill === null ? toPath : parentFolder(toPath);
+    const destination = skill === null ? toPath : paths.parent(toPath);
     const realMoved = await moveTarget(moved);
     const realDestination = await moveTarget(destination);
     // Files.rename moves the entry when only the case changes on a
@@ -191,13 +188,17 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     if (!isCaseOnly && (await exists(realDestination))) {
       throw new Error(`${destination} already exists`);
     }
-    await files.makeFolder(parentFolder(realDestination));
+    await files.makeFolder(paths.parent(realDestination));
     await files.rename(realMoved, realDestination);
     return toPath;
   }
 
   async function trashTargets(path: string): Promise<string[]> {
-    const itself = await folderRealTarget(files, trashedPath(absolute(path)));
+    const itself = await folderRealTarget(
+      files,
+      trashedPath(absolute(path), paths),
+      paths,
+    );
     const found = await files.stat(itself);
     if (found === null || !found.isLink) {
       return [itself];
@@ -224,8 +225,8 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
       }
       trashed.push(target);
     }
-    const asked = trashedPath(absolute(path));
-    if (!trashed.includes(asked)) {
+    const asked = trashedPath(absolute(path), paths);
+    if (!trashed.some((target) => paths.samePath(target, asked))) {
       trashed.push(asked);
     }
     return { trashed, error: null };
@@ -248,9 +249,9 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
   async function watch(path: string, changed: () => void): Promise<FileWatch> {
     const requested = absolute(path);
     const real = await realPathOrSelf(files, requested);
-    const name = baseName(real);
+    const name = paths.base(real);
     return files.watch(
-      parentFolder(real),
+      paths.parent(real),
       (changedPath) => {
         if (changedPath === name) {
           changed();
@@ -266,10 +267,10 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
   ): Promise<{ path: string; line: number } | null> {
     const candidates =
       harness === 'claude'
-        ? (await readClaudeConfigDirs(files, homeDir, log)).map(
-            installedPluginsFile,
+        ? (await readClaudeConfigDirs(files, homeDir, log, paths)).map((dir) =>
+            installedPluginsFile(dir, paths),
           )
-        : [joinPath(homeDir, '.codex', 'config.toml')];
+        : [paths.join(homeDir, '.codex', 'config.toml')];
     const quotedKeys = quotedKeyForms(key, harness);
     for (const path of candidates) {
       const text = await readIfPresent(files, path);
@@ -286,7 +287,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
   }
 
   return {
-    read: (path) => files.read(absolute(path)),
+    read: async (path) => files.read(absolute(path)),
     write,
     create,
     rename,
@@ -307,44 +308,62 @@ function quotedKeyForms(key: string, harness: IndexHarness): string[] {
 
 // What a trash of the doc at `path` moves: a skill's whole folder for its
 // `SKILL.md`, else the doc.
-function trashedPath(path: string): string {
-  return skillFolder(path) ?? path;
+function trashedPath(path: string, paths: Paths): string {
+  return skillFolder(path, paths) ?? path;
 }
 
-function absolutePath(path: string, homeDir: string): string {
-  const normal = normalizePath(expandTilde(path, homeDir));
-  if (!normal.startsWith('/')) {
-    throw new Error('A path starts with / or ~');
+function absolutePath(path: string, homeDir: string, paths: Paths): string {
+  const full = paths.expandTilde(path, homeDir);
+  if (!paths.isAbsolute(full)) {
+    throw new Error('A path is absolute or starts with ~');
   }
-  return normal;
+  return paths.normalize(full);
 }
 
 // `path` with every link resolved: the real path of its nearest existing
 // ancestor, joined with the segments not there yet.
-async function realTarget(files: Files, path: string): Promise<string> {
+async function realTarget(
+  files: Files,
+  path: string,
+  paths: Paths,
+): Promise<string> {
   const missing: string[] = [];
   let existing = path;
-  while (existing !== '/' && (await files.stat(existing)) === null) {
-    missing.unshift(baseName(existing));
-    existing = parentFolder(existing);
+  while (
+    paths.parent(existing) !== existing &&
+    (await files.stat(existing)) === null
+  ) {
+    missing.unshift(paths.base(existing));
+    existing = paths.parent(existing);
   }
-  return joinPath(await files.realPath(existing), ...missing);
+  return paths.join(await files.realPath(existing), ...missing);
 }
 
 // `path` with its folder's links resolved and its own name kept, so a link
 // names itself.
-async function folderRealTarget(files: Files, path: string): Promise<string> {
-  return joinPath(await realTarget(files, parentFolder(path)), baseName(path));
+async function folderRealTarget(
+  files: Files,
+  path: string,
+  paths: Paths,
+): Promise<string> {
+  return paths.join(
+    await realTarget(files, paths.parent(path), paths),
+    paths.base(path),
+  );
 }
 
 // Whether `path` is a link that leads nowhere: its folder lists it, but
 // nothing is there once links are followed.
-async function isDanglingLink(files: Files, path: string): Promise<boolean> {
+async function isDanglingLink(
+  files: Files,
+  path: string,
+  paths: Paths,
+): Promise<boolean> {
   if ((await files.stat(path)) !== null) {
     return false;
   }
-  const name = baseName(path);
-  const siblings = await files.list(parentFolder(path));
+  const name = paths.base(path);
+  const siblings = await files.list(paths.parent(path));
   return siblings.some((sibling) => sibling.path === name);
 }
 
@@ -367,25 +386,26 @@ async function guardFolders(
   files: Files,
   homeDir: string,
   log: Log,
+  paths: Paths,
 ): Promise<GuardFolders> {
-  const configDirs = await readClaudeConfigDirs(files, homeDir, log);
+  const configDirs = await readClaudeConfigDirs(files, homeDir, log, paths);
   const docFolders = [
     ...configDirs,
-    joinPath(homeDir, '.codex'),
-    joinPath(homeDir, '.agents'),
-    joinPath(homeDir, WIGLEY_AGENTS_FOLDER),
+    paths.join(homeDir, '.codex'),
+    paths.join(homeDir, '.agents'),
+    paths.join(homeDir, WIGLEY_AGENTS_FOLDER),
   ];
   const caches = [
-    ...configDirs.map((dir) => joinPath(dir, 'plugins', 'cache')),
-    joinPath(homeDir, '.codex', 'plugins', 'cache'),
+    ...configDirs.map((dir) => paths.join(dir, 'plugins', 'cache')),
+    paths.join(homeDir, '.codex', 'plugins', 'cache'),
   ];
   const [realDocFolders, realCaches] = await Promise.all([
-    Promise.all(docFolders.map((folder) => realTarget(files, folder))),
-    Promise.all(caches.map((folder) => realTarget(files, folder))),
+    Promise.all(docFolders.map((folder) => realTarget(files, folder, paths))),
+    Promise.all(caches.map((folder) => realTarget(files, folder, paths))),
   ]);
   return {
     globalDocFolders: realDocFolders.filter(
-      (folder) => !isInside(homeDir, folder),
+      (folder) => !paths.isInside(homeDir, folder),
     ),
     pluginCaches: realCaches,
   };

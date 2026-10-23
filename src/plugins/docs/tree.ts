@@ -1,5 +1,5 @@
+import type { Paths } from '../../contracts/paths';
 import type { DocKind, IndexEntry } from './contract';
-import { commonFolder, isInside, normalizePath, tildePath } from './doc-paths';
 import { DOC_KINDS, metaString } from './index-document';
 
 export type TreeNode = TreeGroup | TreeLeaf;
@@ -9,8 +9,9 @@ export interface TreeGroup {
   type: 'group';
   id: string;
   title: string;
-  // The common folder of every descendant entry's path.
-  folder: string;
+  // The common folder of every descendant entry's path; null when the
+  // entries are on different roots.
+  folder: string | null;
   children: TreeNode[];
 }
 
@@ -54,21 +55,32 @@ export function compareTitles(a: string, b: string): number {
 export function buildTree(
   entries: readonly IndexEntry[],
   homeDir: string,
+  paths: Paths,
 ): TreeNode[] {
   const roots: TreeNode[] = [];
   const global = entries.filter((entry) => entry.source === 'global');
   if (global.length > 0) {
-    roots.push(group('global', 'Global', global, kindGroups('global', global)));
+    roots.push(
+      group(
+        'global',
+        'Global',
+        global,
+        kindGroups('global', global, paths),
+        paths,
+      ),
+    );
   }
   const plugins = entries.filter((entry) => entry.source === 'plugin');
   if (plugins.length > 0) {
-    roots.push(group('plugins', 'Plugins', plugins, pluginNodes(plugins)));
+    roots.push(
+      group('plugins', 'Plugins', plugins, pluginNodes(plugins, paths), paths),
+    );
   }
   const repoOwned = entries.filter(
     (entry) => entry.source === 'repo' || entry.source === 'features',
   );
   for (const [name, repoEntries] of groupedBy(repoOwned, (e) => e.repo ?? '')) {
-    roots.push(repoNode(name, repoEntries, homeDir));
+    roots.push(repoNode(name, repoEntries, homeDir, paths));
   }
   return roots;
 }
@@ -78,8 +90,9 @@ function group(
   title: string,
   entries: readonly IndexEntry[],
   children: TreeNode[],
+  paths: Paths,
 ): TreeGroup {
-  const folder = commonFolder(entries.map((entry) => entry.path));
+  const folder = paths.commonFolder(entries.map((entry) => entry.path));
   return { type: 'group', id, title, folder, children };
 }
 
@@ -120,6 +133,7 @@ function byTitleThenId(a: IndexEntry, b: IndexEntry): number {
 function kindGroups(
   parentId: string,
   entries: readonly IndexEntry[],
+  paths: Paths,
 ): TreeNode[] {
   const groups: TreeNode[] = [];
   for (const kind of DOC_KINDS) {
@@ -127,18 +141,24 @@ function kindGroups(
     if (ofKind.length > 0) {
       const leaves = [...ofKind].sort(byTitleThenId).map(leaf);
       groups.push(
-        group(`${parentId}/${kind}`, KIND_TITLES[kind], ofKind, leaves),
+        group(`${parentId}/${kind}`, KIND_TITLES[kind], ofKind, leaves, paths),
       );
     }
   }
   return groups;
 }
 
-function pluginNodes(entries: readonly IndexEntry[]): TreeNode[] {
+function pluginNodes(entries: readonly IndexEntry[], paths: Paths): TreeNode[] {
   return groupedBy(entries, (entry) => entry.plugin ?? '').map(
     ([plugin, pluginEntries]) => {
       const id = `plugins/${plugin}`;
-      return group(id, plugin, pluginEntries, kindGroups(id, pluginEntries));
+      return group(
+        id,
+        plugin,
+        pluginEntries,
+        kindGroups(id, pluginEntries, paths),
+        paths,
+      );
     },
   );
 }
@@ -149,6 +169,7 @@ function repoNode(
   name: string,
   entries: readonly IndexEntry[],
   homeDir: string,
+  paths: Paths,
 ): TreeGroup {
   const id = `repo:${name}`;
   const cloneEntries = entries.filter((entry) => entry.source === 'repo');
@@ -156,24 +177,31 @@ function repoNode(
   const clones = groupedBy(cloneEntries, (entry) => entry.root ?? '');
   const children: TreeNode[] =
     clones.length > 1
-      ? cloneNodes(id, clones, homeDir)
-      : kindGroups(id, cloneEntries);
+      ? cloneNodes(id, clones, homeDir, paths)
+      : kindGroups(id, cloneEntries, paths);
   if (featureEntries.length > 0) {
-    children.push(featuresNode(id, featureEntries));
+    children.push(featuresNode(id, featureEntries, paths));
   }
-  return group(id, name, entries, children);
+  return group(id, name, entries, children, paths);
 }
 
 function cloneNodes(
   repoId: string,
   clones: [string, IndexEntry[]][],
   homeDir: string,
+  paths: Paths,
 ): TreeNode[] {
   return clones
     .map(([root, cloneEntries]) => {
       const id = `${repoId}/clone:${root}`;
-      const title = tildePath(root, homeDir);
-      return group(id, title, cloneEntries, kindGroups(id, cloneEntries));
+      const title = paths.tilde(root, homeDir);
+      return group(
+        id,
+        title,
+        cloneEntries,
+        kindGroups(id, cloneEntries, paths),
+        paths,
+      );
     })
     .sort((a, b) => compareTitles(a.title, b.title));
 }
@@ -183,21 +211,29 @@ function cloneNodes(
 function featuresNode(
   repoId: string,
   entries: readonly IndexEntry[],
+  paths: Paths,
 ): TreeGroup {
   const id = `${repoId}/features`;
-  const withSlug = entries.filter((entry) => featureSlug(entry) !== null);
-  const withoutSlug = entries.filter((entry) => featureSlug(entry) === null);
+  const withSlug = entries.filter(
+    (entry) => featureSlug(entry, paths) !== null,
+  );
+  const withoutSlug = entries.filter(
+    (entry) => featureSlug(entry, paths) === null,
+  );
   const slugNodes = groupedBy(
     withSlug,
-    (entry) => featureSlug(entry) ?? '',
+    (entry) => featureSlug(entry, paths) ?? '',
   ).map(([slug, slugEntries]) => {
     const leaves = [...slugEntries].sort(byKindThenTitle).map(leaf);
-    return group(`${id}/feature:${slug}`, slug, slugEntries, leaves);
+    return group(`${id}/feature:${slug}`, slug, slugEntries, leaves, paths);
   });
-  return group(id, 'Features', entries, [
-    ...slugNodes,
-    ...kindGroups(id, withoutSlug),
-  ]);
+  return group(
+    id,
+    'Features',
+    entries,
+    [...slugNodes, ...kindGroups(id, withoutSlug, paths)],
+    paths,
+  );
 }
 
 function byKindThenTitle(a: IndexEntry, b: IndexEntry): number {
@@ -208,16 +244,17 @@ function byKindThenTitle(a: IndexEntry, b: IndexEntry): number {
 
 // `meta.feature` (task, plan), else `meta.slug` (feature), else the first
 // folder below the home's root other than `followups`.
-function featureSlug(entry: IndexEntry): string | null {
+function featureSlug(entry: IndexEntry, paths: Paths): string | null {
   const named = metaString(entry, 'feature') ?? metaString(entry, 'slug');
   if (named !== null) {
     return named;
   }
-  if (entry.root === null || !isInside(entry.path, entry.root)) {
+  const below =
+    entry.root === null ? null : paths.segmentsBelow(entry.path, entry.root);
+  if (below === null) {
     return null;
   }
-  const below = normalizePath(entry.path.slice(entry.root.length)).split('/');
-  // `below` is ['', <first segment>, …]; a file directly in the root has two.
-  const inSubfolder = below.length > 2;
-  return inSubfolder && below[1] !== 'followups' ? below[1] : null;
+  // A file directly in the root has one segment below it.
+  const inSubfolder = below.length > 1;
+  return inSubfolder && below[0] !== 'followups' ? below[0] : null;
 }

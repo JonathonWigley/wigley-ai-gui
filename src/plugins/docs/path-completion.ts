@@ -1,4 +1,4 @@
-import { expandTilde, joinPath, normalizePath } from './doc-paths';
+import type { Paths } from '../../contracts/paths';
 
 // The most completions the path box shows.
 export const COMPLETION_LIMIT = 12;
@@ -11,7 +11,7 @@ export interface CompletionQuery {
 export interface Completion {
   name: string;
   isFolder: boolean;
-  // `name`, with a trailing '/' for a folder.
+  // `name`, with a trailing separator for a folder.
   text: string;
 }
 
@@ -20,13 +20,14 @@ export interface Completion {
 export function completionQuery(
   typed: string,
   homeDir: string,
+  paths: Paths,
 ): CompletionQuery {
-  const folderPart = typedFolderPart(typed);
+  const folderPart = typedFolderPart(typed, paths);
   const prefix = typed.slice(folderPart.length);
-  const expanded = expandTilde(folderPart, homeDir);
-  const folder = expanded.startsWith('/')
-    ? normalizePath(expanded)
-    : joinPath(homeDir, expanded);
+  const expanded = paths.expandTilde(folderPart, homeDir);
+  const folder = paths.isAbsolute(expanded)
+    ? paths.normalize(expanded)
+    : paths.join(homeDir, expanded);
   return { folder, prefix };
 }
 
@@ -35,6 +36,7 @@ export function completionQuery(
 export function completions(
   entries: readonly { name: string; isFolder: boolean }[],
   prefix: string,
+  paths: Paths,
 ): Completion[] {
   const showsHidden = prefix.startsWith('.');
   return entries
@@ -51,7 +53,7 @@ export function completions(
     .map(({ name, isFolder }) => ({
       name,
       isFolder,
-      text: isFolder ? `${name}/` : name,
+      text: isFolder ? `${name}${paths.separator}` : name,
     }));
 }
 
@@ -60,8 +62,9 @@ export function completions(
 export function completeTyped(
   typed: string,
   matches: readonly Completion[],
+  paths: Paths,
 ): string {
-  const folderPart = typedFolderPart(typed);
+  const folderPart = typedFolderPart(typed, paths);
   if (matches.length === 0) {
     return typed;
   }
@@ -73,9 +76,14 @@ export function completeTyped(
   return common.length > prefix.length ? folderPart + common : typed;
 }
 
-// The typed text up to and including its last '/'; '' when it has none.
-function typedFolderPart(typed: string): string {
-  return typed.slice(0, typed.lastIndexOf('/') + 1);
+// The typed text up to and including its last '/' or OS separator; '' when it
+// has neither.
+function typedFolderPart(typed: string, paths: Paths): string {
+  const lastSeparator = Math.max(
+    typed.lastIndexOf('/'),
+    typed.lastIndexOf(paths.separator),
+  );
+  return typed.slice(0, lastSeparator + 1);
 }
 
 function commonPrefix(names: readonly string[]): string {

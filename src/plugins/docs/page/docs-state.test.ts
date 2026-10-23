@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { posixPaths } from '../../../shared/paths/posix-paths';
+import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type { IndexContext, IndexDocument, IndexEntry } from '../contract';
 import type { TreeGroup, TreeLeaf, TreeNode } from '../tree';
 import {
@@ -202,9 +204,32 @@ describe('contextChoices', () => {
       ],
     };
 
-    const folders = contextChoices(document, '/Users/u').map((c) => c.folder);
+    const folders = contextChoices(document, '/Users/u', posixPaths).map(
+      (c) => c.folder,
+    );
 
     expect(folders).toEqual(['/Users/u', '/Users/u/dev/a', '/Users/u/dev/b']);
+  });
+
+  it('contextChoices_WindowsHomeOtherCase_First', () => {
+    const document = documentOf(
+      [],
+      [
+        context('C:\\Users\\u\\dev\\b'),
+        context('c:\\users\\u'),
+        context('C:\\Users\\u\\dev\\a'),
+      ],
+    );
+
+    const folders = contextChoices(document, 'C:\\Users\\u', windowsPaths).map(
+      (c) => c.folder,
+    );
+
+    expect(folders).toEqual([
+      'c:\\users\\u',
+      'C:\\Users\\u\\dev\\a',
+      'C:\\Users\\u\\dev\\b',
+    ]);
   });
 });
 
@@ -255,19 +280,23 @@ function documentOf(
   };
 }
 
-const paths = (document: IndexDocument) =>
+const pathsOf = (document: IndexDocument) =>
   document.entries.map((each) => each.path);
 
 describe('applyChange', () => {
   it('applyChange_Created_AddsEntry', () => {
     const before = documentOf([entry({ path: '/Users/u/dev/r/a.md' })]);
 
-    const after = applyChange(before, {
-      type: 'created',
-      entry: entry({ path: '/Users/u/dev/r/b.md' }),
-    });
+    const after = applyChange(
+      before,
+      {
+        type: 'created',
+        entry: entry({ path: '/Users/u/dev/r/b.md' }),
+      },
+      posixPaths,
+    );
 
-    expect(paths(after)).toEqual([
+    expect(pathsOf(after)).toEqual([
       '/Users/u/dev/r/a.md',
       '/Users/u/dev/r/b.md',
     ]);
@@ -279,16 +308,24 @@ describe('applyChange', () => {
       entry({ path: '/r/c.md', title: 'Alpha' }),
     ]);
 
-    const renamedA = applyChange(before, {
-      type: 'renamed',
-      from: '/r/a.md',
-      to: '/r/sub/b.md',
-    });
-    const renamedC = applyChange(before, {
-      type: 'renamed',
-      from: '/r/c.md',
-      to: '/r/d.md',
-    });
+    const renamedA = applyChange(
+      before,
+      {
+        type: 'renamed',
+        from: '/r/a.md',
+        to: '/r/sub/b.md',
+      },
+      posixPaths,
+    );
+    const renamedC = applyChange(
+      before,
+      {
+        type: 'renamed',
+        from: '/r/c.md',
+        to: '/r/d.md',
+      },
+      posixPaths,
+    );
 
     expect(renamedA.entries[0]).toMatchObject({
       id: '/r/sub/b.md',
@@ -303,13 +340,42 @@ describe('applyChange', () => {
       entry({ path: '/r/skills/s/SKILL.md', kind: 'skill', title: 's' }),
     ]);
 
-    const after = applyChange(before, {
-      type: 'renamed',
-      from: '/r/skills/s',
-      to: '/r/skills/t',
-    });
+    const after = applyChange(
+      before,
+      {
+        type: 'renamed',
+        from: '/r/skills/s',
+        to: '/r/skills/t',
+      },
+      posixPaths,
+    );
 
-    expect(paths(after)).toEqual(['/r/skills/t/SKILL.md']);
+    expect(pathsOf(after)).toEqual(['/r/skills/t/SKILL.md']);
+  });
+
+  it('applyChange_WindowsRenamedFolder_MovesEntriesInside', () => {
+    const before = documentOf([
+      entry({ path: 'C:\\r\\.claude\\skills\\old\\SKILL.md', title: 'old' }),
+      entry({
+        path: 'C:\\r\\.claude\\skills\\older\\SKILL.md',
+        title: 'older',
+      }),
+    ]);
+
+    const after = applyChange(
+      before,
+      {
+        type: 'renamed',
+        from: 'C:\\r\\.claude\\skills\\old',
+        to: 'C:\\r\\.claude\\skills\\new',
+      },
+      windowsPaths,
+    );
+
+    expect(pathsOf(after)).toEqual([
+      'C:\\r\\.claude\\skills\\new\\SKILL.md',
+      'C:\\r\\.claude\\skills\\older\\SKILL.md',
+    ]);
   });
 
   it('applyChange_Renamed_StatesFollowId', () => {
@@ -319,11 +385,15 @@ describe('applyChange', () => {
       [{ folder: '/r', sessionId: null, states: { '/r/a.md': launch } }],
     );
 
-    const after = applyChange(before, {
-      type: 'renamed',
-      from: '/r/a.md',
-      to: '/r/sub/b.md',
-    });
+    const after = applyChange(
+      before,
+      {
+        type: 'renamed',
+        from: '/r/a.md',
+        to: '/r/sub/b.md',
+      },
+      posixPaths,
+    );
 
     expect(after.contexts[0].states).toEqual({ '/r/sub/b.md': launch });
   });
@@ -335,12 +405,16 @@ describe('applyChange', () => {
       entry({ path: '/r/other.md' }),
     ]);
 
-    const after = applyChange(before, {
-      type: 'trashed',
-      paths: ['/r/skills/s'],
-    });
+    const after = applyChange(
+      before,
+      {
+        type: 'trashed',
+        paths: ['/r/skills/s'],
+      },
+      posixPaths,
+    );
 
-    expect(paths(after)).toEqual(['/r/other.md']);
+    expect(pathsOf(after)).toEqual(['/r/other.md']);
   });
 
   it('applyChange_TrashedLinkAndTarget_DropsEntriesUnderBoth', () => {
@@ -350,12 +424,16 @@ describe('applyChange', () => {
       entry({ path: '/h/.claude/skills/t/SKILL.md' }),
     ]);
 
-    const after = applyChange(before, {
-      type: 'trashed',
-      paths: ['/r/skills/s', '/h/.claude/skills/s'],
-    });
+    const after = applyChange(
+      before,
+      {
+        type: 'trashed',
+        paths: ['/r/skills/s', '/h/.claude/skills/s'],
+      },
+      posixPaths,
+    );
 
-    expect(paths(after)).toEqual(['/h/.claude/skills/t/SKILL.md']);
+    expect(pathsOf(after)).toEqual(['/h/.claude/skills/t/SKILL.md']);
   });
 });
 
@@ -369,10 +447,14 @@ describe('reapplyChange', () => {
     });
     const provisional = entry({ path: '/r/rules/a.md', kind: 'reference' });
 
-    const after = reapplyChange(documentOf([built]), {
-      type: 'created',
-      entry: provisional,
-    });
+    const after = reapplyChange(
+      documentOf([built]),
+      {
+        type: 'created',
+        entry: provisional,
+      },
+      posixPaths,
+    );
 
     expect(after.entries).toEqual([built]);
   });
@@ -380,12 +462,16 @@ describe('reapplyChange', () => {
   it('reapplyChange_CreatedIdMissing_AddsEntry', () => {
     const created = entry({ path: '/r/b.md' });
 
-    const after = reapplyChange(documentOf([entry({ path: '/r/a.md' })]), {
-      type: 'created',
-      entry: created,
-    });
+    const after = reapplyChange(
+      documentOf([entry({ path: '/r/a.md' })]),
+      {
+        type: 'created',
+        entry: created,
+      },
+      posixPaths,
+    );
 
-    expect(paths(after)).toEqual(['/r/a.md', '/r/b.md']);
+    expect(pathsOf(after)).toEqual(['/r/a.md', '/r/b.md']);
   });
 
   it('reapplyChange_RenamedToListed_FileMadeAtFromStays', () => {
@@ -394,35 +480,47 @@ describe('reapplyChange', () => {
       entry({ path: '/r/y.md' }),
     ]);
 
-    const after = reapplyChange(before, {
-      type: 'renamed',
-      from: '/r/x.md',
-      to: '/r/y.md',
-    });
+    const after = reapplyChange(
+      before,
+      {
+        type: 'renamed',
+        from: '/r/x.md',
+        to: '/r/y.md',
+      },
+      posixPaths,
+    );
 
-    expect(paths(after)).toEqual(['/r/x.md', '/r/y.md']);
+    expect(pathsOf(after)).toEqual(['/r/x.md', '/r/y.md']);
   });
 
   it('reapplyChange_RenamedToMissing_Moves', () => {
-    const after = reapplyChange(documentOf([entry({ path: '/r/x.md' })]), {
-      type: 'renamed',
-      from: '/r/x.md',
-      to: '/r/y.md',
-    });
+    const after = reapplyChange(
+      documentOf([entry({ path: '/r/x.md' })]),
+      {
+        type: 'renamed',
+        from: '/r/x.md',
+        to: '/r/y.md',
+      },
+      posixPaths,
+    );
 
-    expect(paths(after)).toEqual(['/r/y.md']);
+    expect(pathsOf(after)).toEqual(['/r/y.md']);
   });
 
   it('reapplyChange_RenamedFolderToListed_Skipped', () => {
     const before = documentOf([entry({ path: '/r/skills/t/SKILL.md' })]);
 
-    const after = reapplyChange(before, {
-      type: 'renamed',
-      from: '/r/skills/s',
-      to: '/r/skills/t',
-    });
+    const after = reapplyChange(
+      before,
+      {
+        type: 'renamed',
+        from: '/r/skills/s',
+        to: '/r/skills/t',
+      },
+      posixPaths,
+    );
 
-    expect(paths(after)).toEqual(['/r/skills/t/SKILL.md']);
+    expect(pathsOf(after)).toEqual(['/r/skills/t/SKILL.md']);
   });
 
   it('reapplyChange_TrashedLinkAndTargetStillListed_DropsBoth', () => {
@@ -432,18 +530,22 @@ describe('reapplyChange', () => {
       entry({ path: '/r/other.md' }),
     ]);
 
-    const after = reapplyChange(before, {
-      type: 'trashed',
-      paths: ['/r/skills/s', '/h/.claude/skills/s'],
-    });
+    const after = reapplyChange(
+      before,
+      {
+        type: 'trashed',
+        paths: ['/r/skills/s', '/h/.claude/skills/s'],
+      },
+      posixPaths,
+    );
 
-    expect(paths(after)).toEqual(['/r/other.md']);
+    expect(pathsOf(after)).toEqual(['/r/other.md']);
   });
 });
 
 describe('renameRecord', () => {
   it('renameRecord_File_NamesFiles', () => {
-    expect(renameRecord('/r/rules/a.md', '/r/rules/b.md')).toEqual({
+    expect(renameRecord('/r/rules/a.md', '/r/rules/b.md', posixPaths)).toEqual({
       type: 'renamed',
       from: '/r/rules/a.md',
       to: '/r/rules/b.md',
@@ -455,6 +557,7 @@ describe('renameRecord', () => {
       renameRecord(
         '/r/.claude/skills/s/SKILL.md',
         '/r/.claude/skills/t/SKILL.md',
+        posixPaths,
       ),
     ).toEqual({
       type: 'renamed',
@@ -496,6 +599,7 @@ describe('changeableEntry', () => {
       (id) => byId.get(id),
       'Select a doc',
       unsavedPaths,
+      posixPaths,
     );
 
   it('changeableEntry_Doc_Allowed', () => {
@@ -503,7 +607,13 @@ describe('changeableEntry', () => {
   });
 
   it('changeableEntry_NothingSelectedOrGone_Null', () => {
-    const none = changeableEntry(null, (id) => byId.get(id), 'Select', []);
+    const none = changeableEntry(
+      null,
+      (id) => byId.get(id),
+      'Select',
+      [],
+      posixPaths,
+    );
 
     expect(none).toBe(null);
     expect(check('/r/gone.md')).toBe(null);
@@ -515,6 +625,7 @@ describe('changeableEntry', () => {
       (id) => byId.get(id),
       'Select a doc to rename',
       [],
+      posixPaths,
     );
 
     expect(checked).toEqual({
@@ -576,22 +687,42 @@ describe('key hint texts', () => {
 
   it('trashQuestion_Keys_AfterQuestion', () => {
     const targets = ['/h/r/a.md'];
-    expect(trashQuestion(targets, '/h', { yes: 'y', no: 'n' })).toBe(
-      'Move a.md to the Trash? y/n',
-    );
-    expect(trashQuestion(targets, '/h', { yes: 'Y', no: null })).toBe(
-      'Move a.md to the Trash? Y',
-    );
-    expect(trashQuestion(targets, '/h', { yes: null, no: null })).toBe(
-      'Move a.md to the Trash?',
-    );
+    expect(
+      trashQuestion(targets, '/h', { yes: 'y', no: 'n' }, posixPaths),
+    ).toBe('Move a.md to the Trash? y/n');
+    expect(
+      trashQuestion(targets, '/h', { yes: 'Y', no: null }, posixPaths),
+    ).toBe('Move a.md to the Trash? Y');
+    expect(
+      trashQuestion(targets, '/h', { yes: null, no: null }, posixPaths),
+    ).toBe('Move a.md to the Trash?');
   });
 
   it('trashQuestion_LinkAndTarget_NamesBothByPath', () => {
     const targets = ['/h/r/skills/s', '/h/.claude/skills/s'];
 
-    expect(trashQuestion(targets, '/h', { yes: 'y', no: 'n' })).toBe(
+    expect(
+      trashQuestion(targets, '/h', { yes: 'y', no: 'n' }, posixPaths),
+    ).toBe(
       'Move ~/r/skills/s and its link ~/.claude/skills/s to the Trash? y/n',
+    );
+  });
+
+  it('trashQuestion_WindowsLinkAndTarget_TildePaths', () => {
+    const targets = [
+      'C:\\Users\\u\\wigley-agents\\CLAUDE.md',
+      'C:\\Users\\u\\.claude\\CLAUDE.md',
+    ];
+
+    expect(
+      trashQuestion(
+        targets,
+        'C:\\Users\\u',
+        { yes: null, no: null },
+        windowsPaths,
+      ),
+    ).toBe(
+      'Move ~\\wigley-agents\\CLAUDE.md and its link ~\\.claude\\CLAUDE.md to the Trash?',
     );
   });
 
@@ -624,6 +755,7 @@ describe('provisionalEntry', () => {
       '/Users/u/dev/r/nested/x.md',
       null,
       repoEntries,
+      posixPaths,
     );
 
     expect(made).toMatchObject({
@@ -639,7 +771,8 @@ describe('provisionalEntry', () => {
   });
 
   it('provisionalEntry_GuessesKindFromPath', () => {
-    const guessed = (path: string) => provisionalEntry(path, null, repoEntries);
+    const guessed = (path: string) =>
+      provisionalEntry(path, null, repoEntries, posixPaths);
 
     expect(
       guessed('/Users/u/dev/r/.claude/skills/tidy/SKILL.md'),
@@ -664,6 +797,7 @@ describe('provisionalEntry', () => {
       '/Users/u/wigley-features/r/f/notes.md',
       null,
       [owner],
+      posixPaths,
     );
 
     expect(made.kind).toBe('feature-doc');
@@ -674,6 +808,7 @@ describe('provisionalEntry', () => {
       '/Users/u/.claude/rules/x.md',
       'rule',
       repoEntries,
+      posixPaths,
     );
 
     expect(made).toMatchObject({
@@ -696,9 +831,21 @@ describe('provisionalEntry', () => {
       '/Users/u/.claude/plugins/cache/m/p/1/notes.md',
       null,
       [pluginEntry],
+      posixPaths,
     );
 
     expect(made.source).toBe('global');
+  });
+
+  it('provisionalEntry_WindowsRulesFolder_Rule', () => {
+    const made = provisionalEntry(
+      'C:\\Users\\u\\.claude\\rules\\x.md',
+      null,
+      [],
+      windowsPaths,
+    );
+
+    expect(made).toMatchObject({ kind: 'rule', title: 'x.md' });
   });
 });
 
@@ -722,7 +869,7 @@ describe('detailFields', () => {
       meta: { event: 'PreToolUse', matcher: null, command: 'lint' },
     });
 
-    expect(detailFields(hook, '/Users/u')).toEqual([
+    expect(detailFields(hook, '/Users/u', posixPaths)).toEqual([
       ['Event', 'PreToolUse'],
       ['Matcher', '—'],
       ['Command', 'lint'],
@@ -743,7 +890,7 @@ describe('detailFields', () => {
       },
     });
 
-    expect(detailFields(plugin, '/Users/u')).toEqual([
+    expect(detailFields(plugin, '/Users/u', posixPaths)).toEqual([
       ['Harness', 'Claude'],
       ['Version', '1.0.0'],
       ['Enabled', '—'],

@@ -1,5 +1,6 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
+import type { Paths } from '../../../contracts/paths';
 import type {
   DriveHost,
   MainApi,
@@ -18,7 +19,6 @@ import type { DocsChannel, SessionSourceSpec } from '../contract';
 import { EXTERNAL_SCHEME } from '../links';
 import { docsManifest } from '../manifest';
 import { createDocFiles, type DocFiles } from './doc-files';
-import { joinPath } from '../doc-paths';
 import {
   createIndexSources,
   type IndexSources,
@@ -49,8 +49,12 @@ interface DocsMain {
 
 // Whether `homeDir` holds the docs fixture: the machine index is the last
 // file the fixture writes.
-async function hasDocsFixture(files: Files, homeDir: string): Promise<boolean> {
-  return (await files.stat(joinPath(homeDir, MACHINE_INDEX_FILE))) !== null;
+async function hasDocsFixture(
+  files: Files,
+  homeDir: string,
+  paths: Paths,
+): Promise<boolean> {
+  return (await files.stat(paths.join(homeDir, MACHINE_INDEX_FILE))) !== null;
 }
 
 // The index uses real paths, so the home folder every `~` expands to is the
@@ -59,14 +63,17 @@ async function hasDocsFixture(files: Files, homeDir: string): Promise<boolean> {
 export async function startDocs(
   services: Pick<
     MainServices,
-    'files' | 'processes' | 'log' | 'homeDir' | 'runMode'
+    'files' | 'processes' | 'log' | 'homeDir' | 'runMode' | 'paths'
   >,
   scriptPath: () => string,
 ): Promise<DocsMain> {
-  const { files, processes, log } = services;
+  const { files, processes, log, paths } = services;
   const homeDir = await files.realPath(services.homeDir);
-  if (services.runMode !== 'live' && !(await hasDocsFixture(files, homeDir))) {
-    await writeDocsFixture(files, homeDir);
+  const needsFixture =
+    services.runMode !== 'live' &&
+    !(await hasDocsFixture(files, homeDir, paths));
+  if (needsFixture) {
+    await writeDocsFixture(files, homeDir, paths);
   }
   const sources = createIndexSources({
     files,
@@ -74,11 +81,13 @@ export async function startDocs(
     homeDir,
     scriptPath,
     log,
+    paths,
   });
   const docFiles = createDocFiles({
     files,
     homeDir,
     log,
+    paths,
     entries: () => sources.loadedEntries(),
   });
   return { homeDir, sources, docFiles };
@@ -91,6 +100,7 @@ interface DocsDriveDeps {
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
   // Settles once docs has started, so a seed never races the start's fixture.
   started: Promise<unknown>;
+  paths: Paths;
 }
 
 // `docs.seed` rewrites the fixture; `docs.connectSession` rewrites it and
@@ -100,7 +110,7 @@ export function addDriveActions(
   drive: DriveHost,
   deps: DocsDriveDeps,
 ): Disposable {
-  const { files, homeDir, sessions, started } = deps;
+  const { files, homeDir, sessions, started, paths } = deps;
   const connected: ConnectedSession[] = [];
   let connects = 0;
   const actions = [
@@ -110,7 +120,7 @@ export function addDriveActions(
       args: '{}',
       async run() {
         await started;
-        await writeDocsFixture(files, homeDir);
+        await writeDocsFixture(files, homeDir, paths);
         return { home: await files.realPath(homeDir) };
       },
     }),
@@ -129,6 +139,7 @@ export function addDriveActions(
           homeDir,
           sessions,
           sessionId,
+          paths,
         );
         connected.push(session);
         return { sessionId, rowId: session.session.id };
@@ -229,6 +240,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         files: services.files,
         homeDir: services.homeDir,
         sessions,
+        paths: services.paths,
       }),
     );
     const driveActions =
@@ -238,6 +250,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
             homeDir: services.homeDir,
             sessions,
             started: docs,
+            paths: services.paths,
           })
         : null;
     return {

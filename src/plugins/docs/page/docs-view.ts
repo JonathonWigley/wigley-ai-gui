@@ -16,7 +16,7 @@ import type {
   IndexLoad,
   SessionSourceSpec,
 } from '../contract';
-import { baseName, isInside, parentFolder, tildePath } from '../doc-paths';
+import type { Paths } from '../../../contracts/paths';
 import { metaString } from '../index-document';
 import { isIndexedPath } from '../path-guard';
 import { buildTree, type TreeLeaf } from '../tree';
@@ -122,6 +122,7 @@ export interface DocsViewDeps {
   homeDir: Promise<string>;
   editor: EditorHost;
   markdown: MarkdownRenderer;
+  paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: Log;
   keysFor: DocsKeysFor;
@@ -178,12 +179,13 @@ function sourceRun(deps: DocsViewDeps): SourceRun {
 function cachingPlugin(
   document: IndexDocument | null,
   path: string,
+  paths: Paths,
 ): string | null {
   const entry = document?.entries.find(
     (candidate) =>
       candidate.source === 'plugin' &&
       candidate.root !== null &&
-      isInside(path, candidate.root),
+      paths.isInside(path, candidate.root),
   );
   return entry?.plugin ?? null;
 }
@@ -269,11 +271,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   const detailOf = (entry: IndexEntry | null): DocDetail | null => {
     if (entry?.kind === 'hook') {
-      const fields = detailFields(entry, homeDirNow);
+      const fields = detailFields(entry, homeDirNow, deps.paths);
       return { fields, editFile: () => hookFile(entry) };
     }
     if (entry?.kind === 'plugin') {
-      const fields = detailFields(entry, homeDirNow);
+      const fields = detailFields(entry, homeDirNow, deps.paths);
       return { fields, editFile: () => pluginFile(entry) };
     }
     return null;
@@ -287,11 +289,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   ): DocTarget => {
     return {
       path,
-      title: entry?.title ?? baseName(path),
+      title: entry?.title ?? deps.paths.base(path),
       entryId: entry?.id ?? null,
       detail: detailOf(entry),
       cachePlugin:
-        entry?.kind === 'plugin' ? null : cachingPlugin(document, path),
+        entry?.kind === 'plugin'
+          ? null
+          : cachingPlugin(document, path, deps.paths),
       line,
       fragment,
     };
@@ -319,6 +323,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     homeDir: deps.homeDir,
     editor: deps.editor,
     markdown: deps.markdown,
+    paths: deps.paths,
     toast,
     log,
     chipsOf: (entryId) => {
@@ -326,12 +331,17 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       return chips(context(), entryId, path !== undefined && pending.has(path));
     },
     followFile(path, line, fragment) {
-      if (document === null || !isIndexedPath(path, document.entries)) {
+      if (
+        document === null ||
+        !isIndexedPath(path, document.entries, deps.paths)
+      ) {
         toast(`Not an indexed doc: ${path}`, 'error');
         return;
       }
       const entry =
-        document.entries.find((candidate) => candidate.path === path) ?? null;
+        document.entries.find((candidate) =>
+          deps.paths.samePath(candidate.path, path),
+        ) ?? null;
       void doc.open(targetFor(path, entry, line, fragment)).then((opened) => {
         if (opened && entry !== null) {
           tree.selectEntry(entry.id);
@@ -375,6 +385,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   const dialogs = createDocsDialogs({
     channel: deps.channel,
     homeDir: deps.homeDir,
+    paths: deps.paths,
     toast,
     log,
     keysFor: deps.keysFor,
@@ -414,13 +425,16 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
     homeDirNow = homeDir;
     if (next !== null && deps.source.type === 'machine') {
-      const choices = contextChoices(next, homeDir);
+      const choices = contextChoices(next, homeDir, deps.paths);
       const kept = choices.some((choice) => choice.folder === contextFolder);
       contextFolder = kept ? contextFolder : (choices[0]?.folder ?? null);
     }
-    tree.setTree(buildTree(next?.entries ?? [], homeDir), (entryId) => {
-      return entriesById.get(entryId)?.path ?? '';
-    });
+    tree.setTree(
+      buildTree(next?.entries ?? [], homeDir, deps.paths),
+      (entryId) => {
+        return entriesById.get(entryId)?.path ?? '';
+      },
+    );
     doc.refreshChips();
   };
 
@@ -449,7 +463,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           built === null
             ? null
             : unsettled.reduce(
-                (shown, change) => reapplyChange(shown, change.record),
+                (shown, change) =>
+                  reapplyChange(shown, change.record, deps.paths),
                 built,
               ),
         );
@@ -494,7 +509,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         return [record.entry.path];
       case 'renamed':
         return next.entries
-          .filter((entry) => isInside(entry.path, record.to))
+          .filter((entry) => deps.paths.isInside(entry.path, record.to))
           .map((entry) => entry.path);
       case 'trashed':
         return [];
@@ -503,7 +518,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   const entryAt = (path: string) =>
     document?.entries.find(
-      (entry) => entry.path === path && entry.line === null,
+      (entry) => deps.paths.samePath(entry.path, path) && entry.line === null,
     ) ?? null;
 
   // The doc pane follows a move of its file and empties when it is trashed.
@@ -512,12 +527,15 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (openPath === null) {
       return;
     }
-    if (record.type === 'renamed' && isInside(openPath, record.from)) {
-      const moved = record.to + openPath.slice(record.from.length);
-      doc.retarget(targetFor(moved, entryAt(moved), null, null));
+    if (record.type === 'renamed') {
+      const below = deps.paths.segmentsBelow(openPath, record.from);
+      if (below !== null) {
+        const moved = deps.paths.join(record.to, ...below);
+        doc.retarget(targetFor(moved, entryAt(moved), null, null));
+      }
     } else if (
       record.type === 'trashed' &&
-      record.paths.some((path) => isInside(openPath, path))
+      record.paths.some((path) => deps.paths.isInside(openPath, path))
     ) {
       doc.clear();
     }
@@ -532,7 +550,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (document === null) {
       return null;
     }
-    const next = applyChange(document, record);
+    const next = applyChange(document, record, deps.paths);
     for (const path of changedPaths(record, next)) {
       pending.set(path, seq);
     }
@@ -569,6 +587,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       (entryId) => entriesById.get(entryId),
       groupText,
       deps.unsavedPaths(),
+      deps.paths,
     );
     if (checked === null) {
       return null;
@@ -591,7 +610,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       return node.folder;
     }
     const entry = entriesById.get(node.entryId);
-    return entry === undefined ? null : parentFolder(entry.path);
+    return entry === undefined ? null : deps.paths.parent(entry.path);
   };
 
   const pickContext = () => {
@@ -604,21 +623,21 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       return;
     }
     void deps.homeDir.then((homeDir) => {
-      const choices = contextChoices(shown, homeDir);
+      const choices = contextChoices(shown, homeDir, deps.paths);
       if (choices.length === 0) {
         return;
       }
       picker.open({
         title: 'Load states for',
         items: choices,
-        label: (choice) => tildePath(choice.folder, homeDir),
+        label: (choice) => deps.paths.tilde(choice.folder, homeDir),
         selected: choices.findIndex(
           (choice) => choice.folder === contextFolder,
         ),
         chosen: (choice) => {
           contextFolder = choice.folder;
           doc.refreshChips();
-          log('docs', `context ${tildePath(choice.folder, homeDir)}`);
+          log('docs', `context ${deps.paths.tilde(choice.folder, homeDir)}`);
         },
       });
     });

@@ -3,6 +3,7 @@ import type { RunMode } from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { createMemoryFiles } from '../../../shared/memory-files';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { ConnectedSession, SessionInfo } from '../../sessions/contract';
 import { MACHINE_INDEX_FILE } from './index-sources';
 import { addDriveActions, startDocs } from './start';
@@ -23,6 +24,7 @@ function start(files: ReturnType<typeof createMemoryFiles>, runMode: RunMode) {
       log: () => undefined,
       homeDir: HOME,
       runMode,
+      paths: posixPaths,
     },
     () => '/script.py',
   );
@@ -65,6 +67,7 @@ describe('docs drive actions', () => {
       files,
       homeDir: HOME,
       started: Promise.resolve(),
+      paths: posixPaths,
       sessions: {
         activate: () => undefined,
         connect(info: SessionInfo): ConnectedSession {
@@ -93,6 +96,7 @@ describe('docs drive actions', () => {
       files,
       homeDir: HOME,
       started: Promise.resolve(),
+      paths: posixPaths,
       sessions: {
         activate: () => undefined,
         connect: () => {

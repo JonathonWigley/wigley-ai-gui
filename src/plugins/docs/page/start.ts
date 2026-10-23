@@ -18,7 +18,6 @@ import type {
   SessionsPageExports,
 } from '../../sessions/contract';
 import type { DocsChannel } from '../contract';
-import { tildePath } from '../doc-paths';
 import { docsManifest } from '../manifest';
 import { type DocChangeRecord, UNSAVED_TEXT } from './docs-state';
 import {
@@ -136,6 +135,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         homeDir,
         editor: services.editor,
         markdown: services.markdown,
+        paths: services.paths,
         toast: services.toast,
         log,
         keysFor: (command, scope) =>
@@ -173,7 +173,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           mode.setContext(
             path === null
               ? null
-              : { title: tildePath(path, home), detail: null },
+              : { title: services.paths.tilde(path, home), detail: null },
           ),
         );
       },

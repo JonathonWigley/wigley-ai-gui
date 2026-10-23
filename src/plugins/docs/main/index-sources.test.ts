@@ -2,13 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ProcessResult } from '../../../contracts/processes';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { createMemoryFiles } from '../../../shared/memory-files';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { IndexDocument, IndexEntry } from '../contract';
 import { createIndexSources } from './index-sources';
 
 const HOME = '/Users/u';
 const SCRIPT = '/s/docs_index.py';
 const INDEX_FILE = '/Users/u/.agents/wigley-docs/index.json';
-const BUILD = [SCRIPT, 'build'];
+const BUILD = ['-X', 'utf8', SCRIPT, 'build'];
 
 const ENTRY: IndexEntry = {
   id: '/Users/u/.claude/CLAUDE.md',
@@ -54,6 +55,7 @@ function setUp(scriptPath = SCRIPT) {
     homeDir: HOME,
     scriptPath: () => scriptPath,
     log: (source, message) => logged.push([source, message]),
+    paths: posixPaths,
   });
   return { files, processes, logged, sources };
 }
@@ -98,6 +100,7 @@ describe('machine source', () => {
       homeDir: HOME,
       scriptPath: () => SCRIPT,
       log: () => undefined,
+      paths: posixPaths,
     });
 
     const load = await sources.rebuild();
@@ -182,7 +185,7 @@ describe('session source', () => {
     const document = documentOf([ENTRY]);
     test.processes.script(
       'python3',
-      [SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
       exited(0, '', JSON.stringify(document)),
     );
 
@@ -193,14 +196,18 @@ describe('session source', () => {
     });
 
     expect(test.processes.runs.map((run) => run.args)).toEqual([
-      [SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
     ]);
     expect(load).toEqual({ document, message: null });
   });
 
   it('sessionIndex_NullHarnessWithHostId_RunsSession', async () => {
     const test = setUp();
-    test.processes.script('python3', [SCRIPT, 'session', 'abc'], exited(0));
+    test.processes.script(
+      'python3',
+      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
+      exited(0),
+    );
 
     await test.sources.sessionIndex({
       hostSessionId: 'abc',
@@ -209,13 +216,17 @@ describe('session source', () => {
     });
 
     expect(test.processes.runs.map((run) => run.args)).toEqual([
-      [SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
     ]);
   });
 
   it('sessionIndex_CodexWithFolder_RunsContext', async () => {
     const test = setUp();
-    test.processes.script('python3', [SCRIPT, 'context', '/p'], exited(0));
+    test.processes.script(
+      'python3',
+      ['-X', 'utf8', SCRIPT, 'context', '/p'],
+      exited(0),
+    );
 
     await test.sources.sessionIndex({
       hostSessionId: null,
@@ -224,7 +235,7 @@ describe('session source', () => {
     });
 
     expect(test.processes.runs.map((run) => run.args)).toEqual([
-      [SCRIPT, 'context', '/p'],
+      ['-X', 'utf8', SCRIPT, 'context', '/p'],
     ]);
   });
 
@@ -248,7 +259,7 @@ describe('session source', () => {
     const test = setUp();
     test.processes.script(
       'python3',
-      [SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
       exited(0, 'warn', JSON.stringify(documentOf([]))),
     );
 
@@ -268,12 +279,12 @@ describe('session source', () => {
     const document = documentOf([ENTRY]);
     test.processes.script(
       'python3',
-      [SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
       exited(1, 'LookupError: no transcript for abc'),
     );
     test.processes.script(
       'python3',
-      [SCRIPT, 'context', '/p'],
+      ['-X', 'utf8', SCRIPT, 'context', '/p'],
       exited(0, '', JSON.stringify(document)),
     );
 
@@ -285,8 +296,8 @@ describe('session source', () => {
 
     expect(load).toEqual({ document, message: null });
     expect(test.processes.runs.map((run) => run.args)).toEqual([
-      [SCRIPT, 'session', 'abc'],
-      [SCRIPT, 'context', '/p'],
+      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, 'context', '/p'],
     ]);
     expect(test.logged).toContainEqual([
       'docs',
@@ -315,7 +326,7 @@ describe('session source', () => {
     const test = setUp();
     test.processes.script(
       'python3',
-      [SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
       exited(1, 'LookupError: no transcript for abc'),
     );
 
@@ -350,7 +361,7 @@ describe('loadedEntries', () => {
     await test.sources.machineIndex();
     test.processes.script(
       'python3',
-      [SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
       exited(0, '', JSON.stringify(documentOf([SESSION_ENTRY]))),
     );
     await test.sources.sessionIndex({ ...SPEC, harness: 'claude' });
@@ -367,7 +378,7 @@ describe('loadedEntries', () => {
     const test = setUp();
     test.processes.script(
       'python3',
-      [SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
       exited(0, '', JSON.stringify(documentOf([SESSION_ENTRY]))),
     );
 

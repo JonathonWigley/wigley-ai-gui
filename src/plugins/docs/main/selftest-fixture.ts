@@ -1,11 +1,11 @@
 import type { Files } from '../../../contracts/files';
+import type { Paths } from '../../../contracts/paths';
 import type {
   IndexContext,
   IndexDocument,
   IndexEntry,
   LoadStateRecord,
 } from '../contract';
-import { joinPath } from '../doc-paths';
 import { installedPluginsFile, WIGLEY_PLUGIN_KEY } from './script-locator';
 import { MACHINE_INDEX_FILE } from './index-sources';
 
@@ -24,79 +24,80 @@ const KEPT_RULE = 'style.md';
 export async function writeDocsFixture(
   files: Files,
   homeDir: string,
+  paths: Paths,
 ): Promise<void> {
   const home = await files.realPath(homeDir);
-  const paths = fixturePaths(home);
-  for (const entry of await files.list(paths.rules)) {
+  const fixture = fixturePaths(home, paths);
+  for (const entry of await files.list(fixture.rules)) {
     if (entry.path !== KEPT_RULE) {
-      await files.trash(joinPath(paths.rules, entry.path));
+      await files.trash(paths.join(fixture.rules, entry.path));
     }
   }
-  const index = indexDocument(paths);
+  const index = indexDocument(fixture);
   const writes: [string, string][] = [
     [
-      paths.claudeMd,
+      fixture.claudeMd,
       '# Self-test instructions\n\nSee [the style rule](rules/style.md) and [the web](https://example.com).\n\n## Second heading\n\nBack [to the top](#self-test-instructions).\n' +
         LONG_SECTION,
     ],
-    [paths.styleRule, '# Style\n\nWrite short lines.\n'],
+    [fixture.styleRule, '# Style\n\nWrite short lines.\n'],
     [
-      paths.settings,
+      fixture.settings,
       '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"lint"}]}]}}\n',
     ],
-    [paths.repoAgentsMd, '# Repo instructions\n'],
+    [fixture.repoAgentsMd, '# Repo instructions\n'],
     [
-      paths.repoSkill,
+      fixture.repoSkill,
       '---\nname: demo\ndescription: A self-test skill.\n---\n\n# Demo\n',
     ],
     [
-      paths.pluginSkill,
+      fixture.pluginSkill,
       '---\nname: cached\ndescription: A plugin skill.\n---\n\n# Cached\n',
     ],
-    [paths.followups, '# Follow-ups\n\n- **First follow-up** — waits.\n'],
-    [installedPluginsFile(paths.claudeDir), installedPlugins(paths)],
-    [joinPath(paths.scriptFolder, 'index.fixture.json'), json(index)],
+    [fixture.followups, '# Follow-ups\n\n- **First follow-up** — waits.\n'],
+    [installedPluginsFile(fixture.claudeDir, paths), installedPlugins(fixture)],
+    [paths.join(fixture.scriptFolder, 'index.fixture.json'), json(index)],
     [
-      joinPath(paths.scriptFolder, 'session.fixture.json'),
-      json(sessionDocument(paths, index)),
+      paths.join(fixture.scriptFolder, 'session.fixture.json'),
+      json(sessionDocument(fixture, index)),
     ],
-    [joinPath(paths.scriptFolder, 'docs_index.py'), standInScript(home)],
+    [paths.join(fixture.scriptFolder, 'docs_index.py'), standInScript(home)],
   ];
   for (const [path, text] of writes) {
     await files.write(path, text);
   }
   // Last, so a reader never sees an index whose files are missing.
-  await files.write(joinPath(home, MACHINE_INDEX_FILE), json(index));
+  await files.write(paths.join(home, MACHINE_INDEX_FILE), json(index));
 }
 
 type FixturePaths = ReturnType<typeof fixturePaths>;
 
-function fixturePaths(home: string) {
-  const claudeDir = joinPath(home, '.claude');
-  const repo = joinPath(home, 'dev', 'selftest-repo');
-  const pluginRoot = joinPath(
+function fixturePaths(home: string, paths: Paths) {
+  const claudeDir = paths.join(home, '.claude');
+  const repo = paths.join(home, 'dev', 'selftest-repo');
+  const pluginRoot = paths.join(
     claudeDir,
     'plugins/cache/selftest-market/selftest-plugin/1.0.0',
   );
   return {
     home,
     claudeDir,
-    rules: joinPath(claudeDir, 'rules'),
-    claudeMd: joinPath(claudeDir, 'CLAUDE.md'),
-    styleRule: joinPath(claudeDir, 'rules', KEPT_RULE),
-    settings: joinPath(claudeDir, 'settings.json'),
+    rules: paths.join(claudeDir, 'rules'),
+    claudeMd: paths.join(claudeDir, 'CLAUDE.md'),
+    styleRule: paths.join(claudeDir, 'rules', KEPT_RULE),
+    settings: paths.join(claudeDir, 'settings.json'),
     repo,
-    repoAgentsMd: joinPath(repo, 'AGENTS.md'),
-    repoSkill: joinPath(repo, '.claude/skills/demo/SKILL.md'),
+    repoAgentsMd: paths.join(repo, 'AGENTS.md'),
+    repoSkill: paths.join(repo, '.claude/skills/demo/SKILL.md'),
     pluginRoot,
-    pluginSkill: joinPath(pluginRoot, 'skills/cached/SKILL.md'),
-    featuresHome: joinPath(home, 'wigley-features', 'selftest-repo'),
-    followups: joinPath(home, 'wigley-features/selftest-repo/followups.md'),
-    wigleyInstall: joinPath(
+    pluginSkill: paths.join(pluginRoot, 'skills/cached/SKILL.md'),
+    featuresHome: paths.join(home, 'wigley-features', 'selftest-repo'),
+    followups: paths.join(home, 'wigley-features/selftest-repo/followups.md'),
+    wigleyInstall: paths.join(
       claudeDir,
       'plugins/cache/wigley-ai-marketplace/wigley/0.0.0',
     ),
-    scriptFolder: joinPath(
+    scriptFolder: paths.join(
       claudeDir,
       'plugins/cache/wigley-ai-marketplace/wigley/0.0.0/scripts/docs-index',
     ),
@@ -104,13 +105,13 @@ function fixturePaths(home: string) {
 }
 
 // The plugin's key sits on line 3.
-function installedPlugins(paths: FixturePaths): string {
+function installedPlugins(fixture: FixturePaths): string {
   const install = (installPath: string) =>
     `[{"scope":"user","installPath":${JSON.stringify(installPath)}}]`;
   return (
     '{"version":2,"plugins":{\n' +
-    `"${WIGLEY_PLUGIN_KEY}":${install(paths.wigleyInstall)},\n` +
-    `"${FIXTURE_PLUGIN_KEY}":${install(paths.pluginRoot)}\n` +
+    `"${WIGLEY_PLUGIN_KEY}":${install(fixture.wigleyInstall)},\n` +
+    `"${FIXTURE_PLUGIN_KEY}":${install(fixture.pluginRoot)}\n` +
     '}}\n'
   );
 }
@@ -136,29 +137,29 @@ function state(
   return codex === undefined ? { claude } : { claude, codex };
 }
 
-function indexDocument(paths: FixturePaths): IndexDocument {
-  const repoOwned = { repo: 'selftest-repo', root: paths.repo };
-  const pluginOwned = { root: paths.pluginRoot, plugin: FIXTURE_PLUGIN_KEY };
+function indexDocument(fixture: FixturePaths): IndexDocument {
+  const repoOwned = { repo: 'selftest-repo', root: fixture.repo };
+  const pluginOwned = { root: fixture.pluginRoot, plugin: FIXTURE_PLUGIN_KEY };
   const entries: IndexEntry[] = [
     entry({
       kind: 'instructions',
       source: 'global',
-      path: paths.claudeMd,
+      path: fixture.claudeMd,
       title: 'Self-test instructions',
       meta: { imports: [] },
     }),
     entry({
       kind: 'rule',
       source: 'global',
-      path: paths.styleRule,
+      path: fixture.styleRule,
       title: 'Style',
       meta: { paths: [] },
     }),
     entry({
-      id: `${paths.settings}#hook:PreToolUse:0`,
+      id: `${fixture.settings}#hook:PreToolUse:0`,
       kind: 'hook',
       source: 'global',
-      path: paths.settings,
+      path: fixture.settings,
       title: 'PreToolUse Bash → lint',
       meta: { event: 'PreToolUse', matcher: 'Bash', command: 'lint' },
     }),
@@ -166,7 +167,7 @@ function indexDocument(paths: FixturePaths): IndexDocument {
       kind: 'plugin',
       source: 'plugin',
       ...pluginOwned,
-      path: paths.pluginRoot,
+      path: fixture.pluginRoot,
       title: FIXTURE_PLUGIN_KEY,
       meta: {
         harness: 'claude',
@@ -178,7 +179,7 @@ function indexDocument(paths: FixturePaths): IndexDocument {
       kind: 'instructions',
       source: 'repo',
       ...repoOwned,
-      path: paths.repoAgentsMd,
+      path: fixture.repoAgentsMd,
       title: 'Repo instructions',
       meta: { imports: [] },
     }),
@@ -186,7 +187,7 @@ function indexDocument(paths: FixturePaths): IndexDocument {
       kind: 'skill',
       source: 'repo',
       ...repoOwned,
-      path: paths.repoSkill,
+      path: fixture.repoSkill,
       title: 'demo',
       meta: { name: 'demo', description: 'A self-test skill.' },
     }),
@@ -194,17 +195,17 @@ function indexDocument(paths: FixturePaths): IndexDocument {
       kind: 'skill',
       source: 'plugin',
       ...pluginOwned,
-      path: paths.pluginSkill,
+      path: fixture.pluginSkill,
       title: 'cached',
       meta: { name: 'cached', description: 'A plugin skill.' },
     }),
     entry({
-      id: `${paths.followups}#L3`,
+      id: `${fixture.followups}#L3`,
       kind: 'followup',
       source: 'features',
       repo: 'selftest-repo',
-      root: paths.featuresHome,
-      path: paths.followups,
+      root: fixture.featuresHome,
+      path: fixture.followups,
       line: 3,
       title: 'First follow-up',
       meta: { status: 'open', gist: 'waits.', section: null },
@@ -212,24 +213,24 @@ function indexDocument(paths: FixturePaths): IndexDocument {
   ];
   const contexts: IndexContext[] = [
     {
-      folder: paths.home,
+      folder: fixture.home,
       sessionId: null,
       states: {
-        [paths.claudeMd]: state(
+        [fixture.claudeMd]: state(
           { state: 'launch', reason: 'user CLAUDE.md' },
           { state: 'not-loaded', reason: 'Claude Code file' },
         ),
-        [paths.styleRule]: state({
+        [fixture.styleRule]: state({
           state: 'launch',
           reason: 'rule without paths',
         }),
       },
     },
     {
-      folder: paths.repo,
+      folder: fixture.repo,
       sessionId: null,
       states: {
-        [paths.repoAgentsMd]: state(
+        [fixture.repoAgentsMd]: state(
           { state: 'launch', reason: 'AGENTS.md in the folder' },
           { state: 'launch', reason: 'AGENTS.md in the folder' },
         ),
@@ -247,7 +248,7 @@ function indexDocument(paths: FixturePaths): IndexDocument {
 // The first, second, fifth and sixth machine entries, judged for one session
 // in the repo.
 function sessionDocument(
-  paths: FixturePaths,
+  fixture: FixturePaths,
   index: IndexDocument,
 ): IndexDocument {
   const inTranscript = {
@@ -259,11 +260,11 @@ function sessionDocument(
     entries: [0, 1, 4, 5].map((position) => index.entries[position]),
     contexts: [
       {
-        folder: paths.repo,
+        folder: fixture.repo,
         sessionId: 'selftest-session',
         states: {
-          [paths.claudeMd]: state(inTranscript),
-          [paths.repoAgentsMd]: state(inTranscript),
+          [fixture.claudeMd]: state(inTranscript),
+          [fixture.repoAgentsMd]: state(inTranscript),
         },
       },
     ],

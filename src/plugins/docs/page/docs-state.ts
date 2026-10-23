@@ -4,6 +4,7 @@
 // build lists them, which docs may be renamed or trashed, the texts the view
 // shows with their keys, and a hook's or plugin's detail fields.
 
+import type { Paths } from '../../../contracts/paths';
 import type {
   DocKind,
   IndexContext,
@@ -13,7 +14,6 @@ import type {
   LoadState,
   LoadStateRecord,
 } from '../contract';
-import { baseName, isInside, parentFolder, tildePath } from '../doc-paths';
 import { metaString } from '../index-document';
 import { skillFolder } from '../kinds';
 import type { docsManifest } from '../manifest';
@@ -184,12 +184,13 @@ function chip(
 export function contextChoices(
   document: IndexDocument,
   homeDir: string,
+  paths: Paths,
 ): IndexContext[] {
-  const home = document.contexts.filter(
-    (context) => context.folder === homeDir,
-  );
+  const isHome = (context: IndexContext) =>
+    paths.samePath(context.folder, homeDir);
+  const home = document.contexts.filter(isHome);
   const rest = document.contexts
-    .filter((context) => context.folder !== homeDir)
+    .filter((context) => !isHome(context))
     .sort((a, b) => (a.folder < b.folder ? -1 : a.folder > b.folder ? 1 : 0));
   return [...home, ...rest];
 }
@@ -231,6 +232,7 @@ export type DocChangeRecord =
 export function applyChange(
   document: IndexDocument,
   change: DocChangeRecord,
+  paths: Paths,
 ): IndexDocument {
   switch (change.type) {
     case 'created': {
@@ -240,12 +242,13 @@ export function applyChange(
       return { ...document, entries: [...kept, change.entry] };
     }
     case 'renamed':
-      return renamedDocument(document, change.from, change.to);
+      return renamedDocument(document, change.from, change.to, paths);
     case 'trashed':
       return {
         ...document,
         entries: document.entries.filter(
-          (entry) => !change.paths.some((path) => isInside(entry.path, path)),
+          (entry) =>
+            !change.paths.some((path) => paths.isInside(entry.path, path)),
         ),
       };
   }
@@ -255,11 +258,13 @@ function renamedDocument(
   document: IndexDocument,
   from: string,
   to: string,
+  paths: Paths,
 ): IndexDocument {
   const movedIds = new Map<string, string>();
-  const oldName = baseName(from);
+  const oldName = paths.base(from);
   const entries = document.entries.map((entry) => {
-    if (!isInside(entry.path, from)) {
+    const below = paths.segmentsBelow(entry.path, from);
+    if (below === null) {
       return entry;
     }
     const id = entry.id.startsWith(from)
@@ -269,8 +274,8 @@ function renamedDocument(
     return {
       ...entry,
       id,
-      path: to + entry.path.slice(from.length),
-      title: entry.title === oldName ? baseName(to) : entry.title,
+      path: paths.join(to, ...below),
+      title: entry.title === oldName ? paths.base(to) : entry.title,
     };
   });
   const contexts = document.contexts.map((context) => ({
@@ -293,13 +298,14 @@ function renamedDocument(
 export function reapplyChange(
   document: IndexDocument,
   change: DocChangeRecord,
+  paths: Paths,
 ): IndexDocument {
   const isReflected =
     (change.type === 'created' &&
       document.entries.some((entry) => entry.id === change.entry.id)) ||
     (change.type === 'renamed' &&
-      document.entries.some((entry) => isInside(entry.path, change.to)));
-  return isReflected ? document : applyChange(document, change);
+      document.entries.some((entry) => paths.isInside(entry.path, change.to)));
+  return isReflected ? document : applyChange(document, change, paths);
 }
 
 // The record of renaming the doc at `path` to the file `renamed`: a skill's
@@ -307,11 +313,12 @@ export function reapplyChange(
 export function renameRecord(
   path: string,
   renamed: string,
+  paths: Paths,
 ): Extract<DocChangeRecord, { type: 'renamed' }> {
-  const skill = skillFolder(path);
+  const skill = skillFolder(path, paths);
   return skill === null
     ? { type: 'renamed', from: path, to: renamed }
-    : { type: 'renamed', from: skill, to: parentFolder(renamed) };
+    : { type: 'renamed', from: skill, to: paths.parent(renamed) };
 }
 
 export const UNSAVED_TEXT = 'Unsaved changes — :w to save, :q! to discard';
@@ -336,6 +343,7 @@ export function changeableEntry(
   entryOf: (entryId: string) => IndexEntry | undefined,
   groupText: string,
   unsavedPaths: readonly string[],
+  paths: Paths,
 ): { entry: IndexEntry } | { refusal: ChangeRefusal } | null {
   if (node === null) {
     return null;
@@ -350,15 +358,15 @@ export function changeableEntry(
   const isItemInFile =
     entry.line !== null || entry.kind === 'hook' || entry.kind === 'plugin';
   if (isItemInFile) {
-    const text = `${entry.title} is an item inside ${baseName(entry.path)}; it cannot be renamed or moved to the Trash alone`;
+    const text = `${entry.title} is an item inside ${paths.base(entry.path)}; it cannot be renamed or moved to the Trash alone`;
     return { refusal: { text, tone: 'info' } };
   }
   if (entry.source === 'plugin') {
     const text = readOnlyText(entry.plugin ?? entry.title);
     return { refusal: { text, tone: 'info' } };
   }
-  const changed = skillFolder(entry.path) ?? entry.path;
-  if (unsavedPaths.some((path) => isInside(path, changed))) {
+  const changed = skillFolder(entry.path, paths) ?? entry.path;
+  if (unsavedPaths.some((path) => paths.isInside(path, changed))) {
     return { refusal: { text: UNSAVED_TEXT, tone: 'error' } };
   }
   return { entry };
@@ -402,6 +410,7 @@ export function trashQuestion(
   targets: readonly string[],
   homeDir: string,
   keys: { yes: string | null; no: string | null },
+  paths: Paths,
 ): string {
   const hints = keyHints(
     [
@@ -413,8 +422,8 @@ export function trashQuestion(
   const [target, link] = targets;
   const names =
     link === undefined
-      ? baseName(target)
-      : `${tildePath(target, homeDir)} and its link ${tildePath(link, homeDir)}`;
+      ? paths.base(target)
+      : `${paths.tilde(target, homeDir)} and its link ${paths.tilde(link, homeDir)}`;
   const question = `Move ${names} to the Trash?`;
   return hints === '' ? question : `${question} ${hints}`;
 }
@@ -444,19 +453,20 @@ export function provisionalEntry(
   path: string,
   kind: DocKind | null,
   entries: readonly IndexEntry[],
+  paths: Paths,
 ): IndexEntry {
-  const owner = owningEntry(path, entries);
-  const skill = skillFolder(path);
+  const owner = owningEntry(path, entries, paths);
+  const skill = skillFolder(path, paths);
   return {
     id: path,
-    kind: kind ?? guessedKind(path, skill, owner),
+    kind: kind ?? guessedKind(path, skill, owner, paths),
     source: owner?.source ?? 'global',
     repo: owner?.repo ?? null,
     root: owner?.root ?? null,
     plugin: null,
     path,
     line: null,
-    title: skill === null ? baseName(path) : baseName(skill),
+    title: skill === null ? paths.base(path) : paths.base(skill),
     meta: {},
   };
 }
@@ -464,13 +474,14 @@ export function provisionalEntry(
 function owningEntry(
   path: string,
   entries: readonly IndexEntry[],
+  paths: Paths,
 ): IndexEntry | null {
   let owner: IndexEntry | null = null;
   let ownerRoot = '';
   for (const entry of entries) {
     const { root } = entry;
     const holdsPath =
-      root !== null && entry.source !== 'plugin' && isInside(path, root);
+      root !== null && entry.source !== 'plugin' && paths.isInside(path, root);
     if (holdsPath && root.length > ownerRoot.length) {
       owner = entry;
       ownerRoot = root;
@@ -483,20 +494,22 @@ function guessedKind(
   path: string,
   skill: string | null,
   owner: IndexEntry | null,
+  paths: Paths,
 ): DocKind {
+  const separator = paths.separator;
   if (skill !== null) {
     return 'skill';
   }
-  if (path.includes('/rules/')) {
+  if (path.includes(`${separator}rules${separator}`)) {
     return 'rule';
   }
-  if (path.includes('/agents/')) {
+  if (path.includes(`${separator}agents${separator}`)) {
     return 'subagent';
   }
-  if (path.includes('/commands/')) {
+  if (path.includes(`${separator}commands${separator}`)) {
     return 'command';
   }
-  if (INSTRUCTION_NAMES.has(baseName(path))) {
+  if (INSTRUCTION_NAMES.has(paths.base(path))) {
     return 'instructions';
   }
   return owner?.source === 'features' ? 'feature-doc' : 'reference';
@@ -518,6 +531,7 @@ const NO_VALUE = '—';
 export function detailFields(
   entry: IndexEntry,
   homeDir: string,
+  paths: Paths,
 ): [string, string][] {
   if (entry.kind === 'hook') {
     return [
@@ -543,11 +557,15 @@ export function detailFields(
       'Enabled',
       typeof enabled === 'boolean' ? (enabled ? 'yes' : 'no') : NO_VALUE,
     ],
-    ['Installs', installsText(entry.meta.installs, homeDir)],
+    ['Installs', installsText(entry.meta.installs, homeDir, paths)],
   ];
 }
 
-function installsText(installs: unknown, homeDir: string): string {
+function installsText(
+  installs: unknown,
+  homeDir: string,
+  paths: Paths,
+): string {
   if (!Array.isArray(installs) || installs.length === 0) {
     return NO_VALUE;
   }
@@ -555,7 +573,7 @@ function installsText(installs: unknown, homeDir: string): string {
     .map((install: { scope?: unknown; projectPath?: unknown }) => {
       const scope = String(install.scope);
       return typeof install.projectPath === 'string'
-        ? `${scope} · ${tildePath(install.projectPath, homeDir)}`
+        ? `${scope} · ${paths.tilde(install.projectPath, homeDir)}`
         : scope;
     })
     .join(', ');

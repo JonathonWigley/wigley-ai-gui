@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { posixPaths } from '../../shared/paths/posix-paths';
+import { windowsPaths } from '../../shared/paths/windows-paths';
 import type { CreatePlace, IndexEntry } from './contract';
-import { baseName } from './doc-paths';
 import { createTarget, nameProblem, placesFor, skillFolder } from './kinds';
 
 const HOME = '/Users/u';
@@ -14,7 +15,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     root: null,
     plugin: null,
     line: null,
-    title: baseName(overrides.path),
+    title: posixPaths.base(overrides.path),
     meta: {},
     ...overrides,
   };
@@ -38,7 +39,7 @@ describe('placesFor', () => {
       entry({ path: '/Users/u/.claude/skills/b/SKILL.md', kind: 'skill' }),
     ];
 
-    expect(placesFor('skill', entries, HOME)).toEqual([
+    expect(placesFor('skill', entries, HOME, posixPaths)).toEqual([
       {
         title: 'Global · ~/.claude/skills',
         folder: '/Users/u/.claude/skills',
@@ -64,7 +65,7 @@ describe('placesFor', () => {
       '/Users/u/wigley-agents/Unity.md',
     ].map((path) => entry({ path, kind: 'instructions' }));
 
-    expect(placesFor('instructions', entries, HOME)).toEqual([
+    expect(placesFor('instructions', entries, HOME, posixPaths)).toEqual([
       {
         title: 'Global · ~/wigley-agents',
         folder: '/Users/u/wigley-agents',
@@ -82,7 +83,7 @@ describe('placesFor', () => {
     ];
 
     expect(
-      placesFor('instructions', entries, HOME).map((p) => p.folder),
+      placesFor('instructions', entries, HOME, posixPaths).map((p) => p.folder),
     ).toEqual(['/Users/u/dev/personal/wigley-agents']);
   });
 
@@ -97,7 +98,7 @@ describe('placesFor', () => {
       }),
     ];
 
-    expect(placesFor('skill', entries, HOME)).toEqual([]);
+    expect(placesFor('skill', entries, HOME, posixPaths)).toEqual([]);
   });
 
   it('placesFor_InstructionsInDotClaude_DropsDotClaude', () => {
@@ -112,7 +113,7 @@ describe('placesFor', () => {
     ];
 
     expect(
-      placesFor('instructions', entries, HOME).map((p) => p.folder),
+      placesFor('instructions', entries, HOME, posixPaths).map((p) => p.folder),
     ).toEqual(['/Users/u/dev/r']);
   });
 
@@ -139,7 +140,7 @@ describe('placesFor', () => {
       }),
     ];
 
-    expect(placesFor('followup', entries, HOME)).toEqual([
+    expect(placesFor('followup', entries, HOME, posixPaths)).toEqual([
       {
         title: 'r features · ~/wigley-features/r',
         folder: root,
@@ -151,11 +152,11 @@ describe('placesFor', () => {
 
 describe('skillFolder', () => {
   it('skillFolder_SkillMdUnderSkills_Folder', () => {
-    expect(skillFolder('/r/.claude/skills/tidy/SKILL.md')).toBe(
+    expect(skillFolder('/r/.claude/skills/tidy/SKILL.md', posixPaths)).toBe(
       '/r/.claude/skills/tidy',
     );
-    expect(skillFolder('/r/skills/x/README.md')).toBe(null);
-    expect(skillFolder('/r/docs/x/SKILL.md')).toBe(null);
+    expect(skillFolder('/r/skills/x/README.md', posixPaths)).toBe(null);
+    expect(skillFolder('/r/docs/x/SKILL.md', posixPaths)).toBe(null);
   });
 });
 
@@ -165,6 +166,7 @@ describe('createTarget', () => {
       'skill',
       place('/Users/u/.claude/skills', 'global'),
       'tidy',
+      posixPaths,
     );
 
     expect(target.path).toBe('/Users/u/.claude/skills/tidy/SKILL.md');
@@ -180,11 +182,13 @@ describe('createTarget', () => {
       'instructions',
       place('/Users/u/wigley-agents', 'global'),
       'Unity',
+      posixPaths,
     );
     const repo = createTarget(
       'instructions',
       place('/Users/u/dev/r', 'repo'),
       'web',
+      posixPaths,
     );
 
     expect(global.path).toBe('/Users/u/wigley-agents/Unity.md');
@@ -196,6 +200,7 @@ describe('createTarget', () => {
       'followup',
       place('/Users/u/wigley-features/r', 'features'),
       'new',
+      posixPaths,
     );
 
     expect(target.path).toBe('/Users/u/wigley-features/r/followups.md');
@@ -216,14 +221,61 @@ describe('nameProblem', () => {
       'A skill name is lowercase letters, digits and hyphens',
     );
     expect(nameProblem('rule', 'a/b')).toBe(
-      'A name holds no / and does not start with .',
+      'A name holds no / or \\ and does not start with .',
+    );
+    expect(nameProblem('rule', 'a\\b')).toBe(
+      'A name holds no / or \\ and does not start with .',
     );
     expect(nameProblem('rule', '.x')).toBe(
-      'A name holds no / and does not start with .',
+      'A name holds no / or \\ and does not start with .',
     );
     expect(nameProblem('followup', 'a\nb')).toBe(
       'A follow-up title is one line',
     );
     expect(nameProblem('rule', 'style')).toBe(null);
+  });
+});
+
+describe('kinds on Windows', () => {
+  it('createTarget_WindowsSkill_NativePath', () => {
+    const target = createTarget(
+      'skill',
+      place('C:\\Users\\u\\dev\\r\\.claude\\skills', 'repo'),
+      'demo',
+      windowsPaths,
+    );
+
+    expect(target.path).toBe(
+      'C:\\Users\\u\\dev\\r\\.claude\\skills\\demo\\SKILL.md',
+    );
+  });
+
+  it('skillFolder_WindowsSkillMd_Folder', () => {
+    expect(
+      skillFolder(
+        'C:\\Users\\u\\dev\\r\\.claude\\skills\\demo\\SKILL.md',
+        windowsPaths,
+      ),
+    ).toBe('C:\\Users\\u\\dev\\r\\.claude\\skills\\demo');
+  });
+
+  it('placesFor_WindowsGlobalInstructions_TildeTitle', () => {
+    const entries = [
+      entry({
+        path: 'C:\\Users\\u\\wigley-agents\\AGENTS.md',
+        kind: 'instructions',
+        title: 'AGENTS.md',
+      }),
+    ];
+
+    expect(
+      placesFor('instructions', entries, 'C:\\Users\\u', windowsPaths),
+    ).toEqual([
+      {
+        title: 'Global · ~\\wigley-agents',
+        folder: 'C:\\Users\\u\\wigley-agents',
+        source: 'global',
+      },
+    ]);
   });
 });

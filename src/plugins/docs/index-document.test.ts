@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { posixPaths } from '../../shared/paths/posix-paths';
 import type { IndexEntry } from './contract';
-import { baseName } from './doc-paths';
 import { metaString, parseIndexDocument } from './index-document';
 
 function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
@@ -12,7 +12,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     root: null,
     plugin: null,
     line: null,
-    title: baseName(overrides.path),
+    title: posixPaths.base(overrides.path),
     meta: {},
     ...overrides,
   };

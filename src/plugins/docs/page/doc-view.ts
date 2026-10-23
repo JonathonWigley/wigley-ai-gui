@@ -5,6 +5,7 @@ import type {
 } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { Paths } from '../../../contracts/paths';
 import type {
   PageChannel,
   PushedScope,
@@ -16,7 +17,6 @@ import { halfPageText, scrollHalfPage } from '../../../shared/half-page';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { type TagTone, tag } from '../../../shared/page/ui/tag';
 import type { DocsChannel } from '../contract';
-import { baseName, tildePath } from '../doc-paths';
 import { splitFrontmatter } from '../frontmatter';
 import { resolveLink } from '../links';
 import {
@@ -67,6 +67,7 @@ export interface DocViewDeps {
   homeDir: Promise<string>;
   editor: EditorHost;
   markdown: MarkdownRenderer;
+  paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: Log;
   chipsOf(entryId: string): { claude: Chip; codex: Chip };
@@ -153,13 +154,14 @@ async function renderText(
   markdown: MarkdownRenderer,
   path: string,
   text: string,
+  paths: Paths,
 ): Promise<Rendered> {
   if (path.endsWith('.md')) {
     const split = splitFrontmatter(text);
     const html = await markdown.document(split.body);
     return { fields: split.fields, html, bodyStartLine: split.bodyStartLine };
   }
-  const name = baseName(path);
+  const name = paths.base(path);
   const dot = name.lastIndexOf('.');
   const language = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
   const fence = codeFence(text);
@@ -264,7 +266,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   const drawHeader = (target: DocTarget, homeDir: string) => {
     header.hidden = false;
     title.textContent = target.title;
-    path.textContent = tildePath(target.path, homeDir);
+    path.textContent = deps.paths.tilde(target.path, homeDir);
     path.title = target.path;
     readOnlyLine.hidden = target.cachePlugin === null;
     readOnlyLine.textContent =
@@ -310,7 +312,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     const href = anchor.dataset.href ?? '';
     const fromFile = shown.target.path;
     void deps.homeDir.then((homeDir) => {
-      const target = resolveLink(href, fromFile, homeDir);
+      const target = resolveLink(href, fromFile, homeDir, deps.paths);
       switch (target.type) {
         case 'external':
           deps.channel
@@ -370,7 +372,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   // Shows the detail's field table, the file it edits let go.
   const showDetail = (doc: ShownDoc, detail: DocDetail) => {
     doc.filePath = doc.target.path;
-    doc.name = baseName(doc.target.path);
+    doc.name = deps.paths.base(doc.target.path);
     doc.text = '';
     drawBody(detailRendered(detail));
     watchFile(null, doc.name);
@@ -396,7 +398,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       showDetail(doc, doc.target.detail);
       return;
     }
-    renderText(deps.markdown, doc.filePath, doc.text)
+    renderText(deps.markdown, doc.filePath, doc.text, deps.paths)
       .then((rendered) => {
         if (shown === doc && editor === null) {
           doc.bodyStartLine = rendered.bodyStartLine;
@@ -481,7 +483,12 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (doc.target.detail !== null) {
       return;
     }
-    const rendered = await renderText(deps.markdown, doc.filePath, diskText);
+    const rendered = await renderText(
+      deps.markdown,
+      doc.filePath,
+      diskText,
+      deps.paths,
+    );
     if (shown !== doc || editor !== null) {
       return;
     }
@@ -515,7 +522,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       return;
     }
     doc.filePath = file.path;
-    doc.name = baseName(file.path);
+    doc.name = deps.paths.base(file.path);
     doc.text = file.text;
     watchFile(file.path, doc.name);
     openEditor(doc, file.line);
@@ -534,12 +541,17 @@ export function createDocView(deps: DocViewDeps): DocView {
       try {
         if (target.detail === null) {
           text = await deps.channel.invoke('readDoc', target.path);
-          rendered = await renderText(deps.markdown, target.path, text);
+          rendered = await renderText(
+            deps.markdown,
+            target.path,
+            text,
+            deps.paths,
+          );
         } else {
           rendered = detailRendered(target.detail);
         }
       } catch (error) {
-        const failure = `Could not open ${tildePath(target.path, homeDir)}: ${errorText(error)}`;
+        const failure = `Could not open ${deps.paths.tilde(target.path, homeDir)}: ${errorText(error)}`;
         deps.toast(failure, 'error');
         deps.log('docs', failure);
         return false;
@@ -550,7 +562,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       if (shown !== null && editor !== null) {
         closeEditor(shown);
       }
-      const name = baseName(target.path);
+      const name = deps.paths.base(target.path);
       shown = {
         target,
         filePath: target.path,
@@ -584,7 +596,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       deps.openChanged(target.path);
       if (target.detail === null) {
         doc.filePath = target.path;
-        doc.name = baseName(target.path);
+        doc.name = deps.paths.base(target.path);
         watchFile(target.path, doc.name);
       }
       drawChips();

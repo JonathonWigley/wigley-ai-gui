@@ -1,6 +1,6 @@
 # 05 — Chat and forms on Paths
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -43,3 +43,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 9c2315f. Proof: diff read — folderName, displayPath, folderItems, preselectedProfile, addRecentFolder, createRecentFolders and createRoundStore take paths as Produces gives; every projectDir compare is samePath; no typecheck error in chat or forms; chat and forms suites 742 passed. Concerns: six test or preview files outside the Files list took only the new argument.

@@ -1,9 +1,4 @@
-import {
-  expandTilde,
-  joinPath,
-  normalizePath,
-  parentFolder,
-} from './doc-paths';
+import type { Paths } from '../../contracts/paths';
 
 export type LinkTarget =
   | { type: 'external'; url: string }
@@ -24,10 +19,13 @@ const LINE_SUFFIX = /:(\d+)$/;
 
 // Where a link in the doc at `fromFile` leads. An empty href, or a
 // `file://` with no path, is unsupported; `#` alone is the doc's first line.
+// An absolute path is a file link, so a Windows drive path never reads as a
+// scheme.
 export function resolveLink(
   href: string,
   fromFile: string,
   homeDir: string,
+  paths: Paths,
 ): LinkTarget {
   if (href === '') {
     return { type: 'unsupported', href };
@@ -36,10 +34,17 @@ export function resolveLink(
     return { type: 'external', url: href };
   }
   if (FILE_URL.test(href)) {
-    const filePath = href.replace(FILE_URL, '');
+    const urlPath = href.replace(FILE_URL, '');
+    // `file:///C:/x` carries a '/' before the drive.
+    const filePath = paths.isAbsolute(urlPath.slice(1))
+      ? urlPath.slice(1)
+      : urlPath;
     return filePath === ''
       ? { type: 'unsupported', href }
-      : fileTarget(filePath, fromFile, homeDir);
+      : fileTarget(filePath, fromFile, homeDir, paths);
+  }
+  if (paths.isAbsolute(href)) {
+    return fileTarget(href, fromFile, homeDir, paths);
   }
   if (ANY_SCHEME.test(href) && !NAME_WITH_LINE.test(href)) {
     return { type: 'unsupported', href };
@@ -59,7 +64,7 @@ export function resolveLink(
           fragment: null,
         };
   }
-  return fileTarget(href, fromFile, homeDir);
+  return fileTarget(href, fromFile, homeDir, paths);
 }
 
 // A path link: `#L<n>` or a trailing `:<n>` gives the line, any other `#…`
@@ -69,6 +74,7 @@ function fileTarget(
   href: string,
   fromFile: string,
   homeDir: string,
+  paths: Paths,
 ): LinkTarget {
   const hash = href.indexOf('#');
   let pathText = (hash === -1 ? href : href.slice(0, hash)).split('?')[0];
@@ -87,10 +93,10 @@ function fileTarget(
   if (pathText === '') {
     return { type: 'file', path: fromFile, line, fragment };
   }
-  const expanded = expandTilde(decoded(pathText), homeDir);
-  const path = expanded.startsWith('/')
-    ? normalizePath(expanded)
-    : joinPath(parentFolder(fromFile), expanded);
+  const expanded = paths.expandTilde(decoded(pathText), homeDir);
+  const path = paths.isAbsolute(expanded)
+    ? paths.normalize(expanded)
+    : paths.join(paths.parent(fromFile), expanded);
   return { type: 'file', path, line, fragment };
 }
 

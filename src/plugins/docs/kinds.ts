@@ -1,10 +1,10 @@
+import type { Paths } from '../../contracts/paths';
 import type {
   CreateKind,
   CreatePlace,
   DocSource,
   IndexEntry,
 } from './contract';
-import { baseName, joinPath, parentFolder, tildePath } from './doc-paths';
 import { compareTitles } from './tree';
 
 // The order the kind list shows.
@@ -37,8 +37,8 @@ export interface CreateTarget {
 interface KindRule {
   // The folder a new doc of this kind goes in, from an indexed one; null
   // when this entry gives no place.
-  placeFolder(entry: IndexEntry): string | null;
-  targetPath(place: CreatePlace, name: string): string;
+  placeFolder(entry: IndexEntry, paths: Paths): string | null;
+  targetPath(place: CreatePlace, name: string, paths: Paths): string;
   contents(name: string, existing: string | null): CreateContents;
 }
 
@@ -51,23 +51,24 @@ export const WIGLEY_AGENTS_FOLDER = 'wigley-agents';
 const KIND_RULES: Record<CreateKind, KindRule> = {
   instructions: {
     placeFolder: instructionsFolder,
-    targetPath: (place, name) =>
+    targetPath: (place, name, paths) =>
       place.source === 'global'
-        ? joinPath(place.folder, `${name}.md`)
-        : joinPath(place.folder, name, 'AGENTS.md'),
+        ? paths.join(place.folder, `${name}.md`)
+        : paths.join(place.folder, name, 'AGENTS.md'),
     contents: (name) => ({ text: `# ${name}\n\n`, line: 3 }),
   },
   rule: titledFileRule(),
   skill: {
-    placeFolder: (entry) => parentFolder(parentFolder(entry.path)),
-    targetPath: (place, name) => joinPath(place.folder, name, 'SKILL.md'),
+    placeFolder: (entry, paths) => paths.parent(paths.parent(entry.path)),
+    targetPath: (place, name, paths) =>
+      paths.join(place.folder, name, 'SKILL.md'),
     contents: (name) => ({
       text: `---\nname: ${name}\ndescription: \n---\n\n# ${name}\n\n`,
       line: 3,
     }),
   },
   subagent: {
-    placeFolder: (entry) => parentFolder(entry.path),
+    placeFolder: (entry, paths) => paths.parent(entry.path),
     targetPath: fileInFolder,
     contents: (name) => ({
       text: `---\nname: ${name}\ndescription: \n---\n\n`,
@@ -75,7 +76,7 @@ const KIND_RULES: Record<CreateKind, KindRule> = {
     }),
   },
   command: {
-    placeFolder: (entry) => parentFolder(entry.path),
+    placeFolder: (entry, paths) => paths.parent(entry.path),
     targetPath: fileInFolder,
     contents: () => ({ text: '---\ndescription: \n---\n\n', line: 2 }),
   },
@@ -83,9 +84,12 @@ const KIND_RULES: Record<CreateKind, KindRule> = {
   reference: titledFileRule(),
   'feature-doc': titledFileRule(),
   followup: {
-    placeFolder: (entry) =>
-      baseName(entry.path) === 'followups.md' ? parentFolder(entry.path) : null,
-    targetPath: (place) => joinPath(place.folder, 'followups.md'),
+    placeFolder: (entry, paths) =>
+      paths.base(entry.path) === 'followups.md'
+        ? paths.parent(entry.path)
+        : null,
+    targetPath: (place, _name, paths) =>
+      paths.join(place.folder, 'followups.md'),
     contents: appendedFollowup,
   },
 };
@@ -96,17 +100,18 @@ export function placesFor(
   kind: CreateKind,
   entries: readonly IndexEntry[],
   homeDir: string,
+  paths: Paths,
 ): CreatePlace[] {
   const places = new Map<string, CreatePlace>();
   for (const entry of entries) {
     if (entry.kind !== kind || entry.source === 'plugin') {
       continue;
     }
-    const folder = KIND_RULES[kind].placeFolder(entry);
+    const folder = KIND_RULES[kind].placeFolder(entry, paths);
     if (folder === null || places.has(folder)) {
       continue;
     }
-    const title = placeTitle(entry, tildePath(folder, homeDir));
+    const title = placeTitle(entry, paths.tilde(folder, homeDir));
     places.set(folder, { title, folder, source: entry.source });
   }
   return [...places.values()].sort(
@@ -129,8 +134,9 @@ export function nameProblem(kind: CreateKind, name: string): string | null {
   if (kind === 'followup') {
     return /[\r\n]/.test(trimmed) ? 'A follow-up title is one line' : null;
   }
-  if (trimmed.includes('/') || trimmed.startsWith('.')) {
-    return 'A name holds no / and does not start with .';
+  const holdsSeparator = trimmed.includes('/') || trimmed.includes('\\');
+  if (holdsSeparator || trimmed.startsWith('.')) {
+    return 'A name holds no / or \\ and does not start with .';
   }
   return null;
 }
@@ -140,11 +146,12 @@ export function createTarget(
   kind: CreateKind,
   place: CreatePlace,
   name: string,
+  paths: Paths,
 ): CreateTarget {
   const rule = KIND_RULES[kind];
   const trimmed = name.trim();
   return {
-    path: rule.targetPath(place, trimmed),
+    path: rule.targetPath(place, trimmed, paths),
     appends: kind === 'followup',
     contents: (existing) => rule.contents(trimmed, existing),
   };
@@ -152,37 +159,37 @@ export function createTarget(
 
 // The skill folder `path` heads: its folder when it is a `SKILL.md` in a
 // folder under `skills`; else null.
-export function skillFolder(path: string): string | null {
-  const folder = parentFolder(path);
+export function skillFolder(path: string, paths: Paths): string | null {
+  const folder = paths.parent(path);
   const headsSkill =
-    baseName(path) === 'SKILL.md' &&
-    baseName(parentFolder(folder)) === 'skills';
+    paths.base(path) === 'SKILL.md' &&
+    paths.base(paths.parent(folder)) === 'skills';
   return headsSkill ? folder : null;
 }
 
 function titledFileRule(): KindRule {
   return {
-    placeFolder: (entry) => parentFolder(entry.path),
+    placeFolder: (entry, paths) => paths.parent(entry.path),
     targetPath: fileInFolder,
     contents: (name) => ({ text: `# ${name}\n\n`, line: 3 }),
   };
 }
 
-function fileInFolder(place: CreatePlace, name: string): string {
-  return joinPath(place.folder, `${name}.md`);
+function fileInFolder(place: CreatePlace, name: string, paths: Paths): string {
+  return paths.join(place.folder, `${name}.md`);
 }
 
 // An instruction file's folder, a trailing `.claude` dropped for a repo's
 // own. A global one gives a place only in the wigley-agents folder, whatever
 // path it resolves to, since the index reads no other global folder's new
 // files.
-function instructionsFolder(entry: IndexEntry): string | null {
-  const folder = parentFolder(entry.path);
-  const folderName = baseName(folder);
+function instructionsFolder(entry: IndexEntry, paths: Paths): string | null {
+  const folder = paths.parent(entry.path);
+  const folderName = paths.base(folder);
   if (entry.source === 'global') {
     return folderName === WIGLEY_AGENTS_FOLDER ? folder : null;
   }
-  return folderName === '.claude' ? parentFolder(folder) : folder;
+  return folderName === '.claude' ? paths.parent(folder) : folder;
 }
 
 function placeTitle(entry: IndexEntry, tildeFolder: string): string {

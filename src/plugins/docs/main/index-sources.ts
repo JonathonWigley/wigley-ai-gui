@@ -1,9 +1,9 @@
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
+import type { Paths } from '../../../contracts/paths';
 import type { ProcessRunner } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
 import type { IndexEntry, IndexLoad, SessionSourceSpec } from '../contract';
-import { joinPath } from '../doc-paths';
 import { parseIndexDocument } from '../index-document';
 import { locateScript } from './script-locator';
 
@@ -29,6 +29,7 @@ export interface IndexSourcesDeps {
   // Read at each index run.
   scriptPath(): string;
   log: Log;
+  paths: Paths;
 }
 
 export interface IndexSources {
@@ -54,7 +55,7 @@ export interface IndexSources {
 // source (`docs_index.py session` or `context`).
 export function createIndexSources(deps: IndexSourcesDeps): IndexSources {
   const { files, homeDir } = deps;
-  const indexFile = joinPath(homeDir, MACHINE_INDEX_FILE);
+  const indexFile = deps.paths.join(homeDir, MACHINE_INDEX_FILE);
   let entries: readonly IndexEntry[] = [];
   // Keyed by `sessionKey`.
   const sessionEntries = new Map<string, readonly IndexEntry[]>();
@@ -178,9 +179,10 @@ function sessionRun(
   return null;
 }
 
-// Runs `python3 <script> <command> <args>`, logging what it wrote to stderr. A
-// failed run's message is stderr's last non-empty line, where a traceback
-// puts its cause.
+// Runs `python3 -X utf8 <script> <command> <args>`, logging what it wrote to
+// stderr. UTF-8 mode lets the script print the index's `→` to a Windows
+// console's cp1252 pipe. A failed run's message is stderr's last non-empty
+// line, where a traceback puts its cause.
 async function runScript(
   deps: IndexSourcesDeps,
   command: ScriptCommand,
@@ -191,13 +193,20 @@ async function runScript(
     deps.homeDir,
     deps.scriptPath(),
     deps.log,
+    deps.paths,
   );
   if (script === null) {
     return { ok: false, message: NO_SCRIPT_MESSAGE, isScriptMissing: true };
   }
   let result;
   try {
-    result = await deps.processes.run('python3', [script, command, ...args]);
+    result = await deps.processes.run('python3', [
+      '-X',
+      'utf8',
+      script,
+      command,
+      ...args,
+    ]);
   } catch (error) {
     return { ok: false, message: errorText(error), isScriptMissing: false };
   }

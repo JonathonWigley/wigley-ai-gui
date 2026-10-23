@@ -1,5 +1,5 @@
+import type { Paths } from '../../contracts/paths';
 import type { IndexEntry } from './contract';
-import { isInside } from './doc-paths';
 
 // The folders a change may land in that no index entry names, as real paths.
 export interface GuardFolders {
@@ -14,11 +14,12 @@ export interface GuardFolders {
 export function isIndexedPath(
   path: string,
   entries: readonly IndexEntry[],
+  paths: Paths,
 ): boolean {
   return entries.some(
     (entry) =>
-      path === entry.path ||
-      (entry.root !== null && isInside(path, entry.root)),
+      paths.samePath(path, entry.path) ||
+      (entry.root !== null && paths.isInside(path, entry.root)),
   );
 }
 
@@ -31,29 +32,32 @@ export function changeRefusal(
   target: string,
   entries: readonly IndexEntry[],
   folders: GuardFolders,
+  paths: Paths,
 ): string | null {
   const cachingPlugin = entries.find(
     (entry) =>
       entry.source === 'plugin' &&
       entry.root !== null &&
-      isInside(target, entry.root),
+      paths.isInside(target, entry.root),
   );
   if (cachingPlugin !== undefined) {
     return `Refused: ${target} is inside the plugin cache of ${cachingPlugin.plugin}`;
   }
-  const cache = folders.pluginCaches.find((folder) => isInside(target, folder));
+  const cache = folders.pluginCaches.find((folder) =>
+    paths.isInside(target, folder),
+  );
   if (cache !== undefined) {
     return `Refused: ${target} is inside the plugin cache ${cache}`;
   }
   const isEntryOrInsideRoot = entries.some(
     (entry) =>
-      target === entry.path ||
+      paths.samePath(target, entry.path) ||
       (entry.source !== 'plugin' &&
         entry.root !== null &&
-        isInside(target, entry.root)),
+        paths.isInside(target, entry.root)),
   );
   const isInsideGlobalDocFolder = folders.globalDocFolders.some((folder) =>
-    isInside(target, folder),
+    paths.isInside(target, folder),
   );
   return isEntryOrInsideRoot || isInsideGlobalDocFolder
     ? null

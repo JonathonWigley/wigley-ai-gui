@@ -1,7 +1,7 @@
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
+import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
-import { expandTilde, joinPath } from '../doc-paths';
 import { isJsonObject } from '../../../shared/json';
 
 export const WIGLEY_PLUGIN_KEY = 'wigley@wigley-ai-marketplace';
@@ -13,21 +13,22 @@ const DOCS_CONFIG_FILE = '.agents/wigley-docs/config.json';
 const SCRIPT_IN_INSTALL = 'scripts/docs-index/docs_index.py';
 
 // The file a Claude config folder lists its installed plugins in.
-export function installedPluginsFile(configDir: string): string {
-  return joinPath(configDir, 'plugins', 'installed_plugins.json');
+export function installedPluginsFile(configDir: string, paths: Paths): string {
+  return paths.join(configDir, 'plugins', 'installed_plugins.json');
 }
 
-// Each configured Claude config folder, `~` expanded, in config order; an
-// entry that is not absolute once expanded is dropped, and the default stands
-// when no entry is left.
+// Each configured Claude config folder, `~` expanded and normalized, in config
+// order; an entry that is not absolute once expanded is dropped, and the
+// default stands when no entry is left.
 export async function readClaudeConfigDirs(
   files: Files,
   homeDir: string,
   log: Log,
+  paths: Paths,
 ): Promise<string[]> {
   const config = await readJson(
     files,
-    joinPath(homeDir, DOCS_CONFIG_FILE),
+    paths.join(homeDir, DOCS_CONFIG_FILE),
     log,
   );
   const configured = isJsonObject(config) ? config.claudeConfigDirs : undefined;
@@ -36,12 +37,13 @@ export async function readClaudeConfigDirs(
     configured.every((dir) => typeof dir === 'string');
   const absoluteDirs = isListOfStrings
     ? (configured as string[])
-        .map((dir) => expandTilde(dir, homeDir))
-        .filter((dir) => dir.startsWith('/'))
+        .map((dir) => paths.expandTilde(dir, homeDir))
+        .filter((dir) => paths.isAbsolute(dir))
+        .map((dir) => paths.normalize(dir))
     : [];
   return absoluteDirs.length > 0
     ? absoluteDirs
-    : DEFAULT_CLAUDE_CONFIG_DIRS.map((dir) => expandTilde(dir, homeDir));
+    : DEFAULT_CLAUDE_CONFIG_DIRS.map((dir) => paths.expandTilde(dir, homeDir));
 }
 
 // The docs_index.py to run, or null when none is found.
@@ -50,12 +52,13 @@ export async function locateScript(
   homeDir: string,
   scriptPath: string,
   log: Log,
+  paths: Paths,
 ): Promise<string | null> {
   if (scriptPath !== '') {
-    return expandTilde(scriptPath, homeDir);
+    return paths.expandTilde(scriptPath, homeDir);
   }
-  for (const dir of await readClaudeConfigDirs(files, homeDir, log)) {
-    for (const candidate of await installedScripts(files, dir, log)) {
+  for (const dir of await readClaudeConfigDirs(files, homeDir, log, paths)) {
+    for (const candidate of await installedScripts(files, dir, log, paths)) {
       const found = await files.stat(candidate);
       if (found !== null && !found.isFolder) {
         return candidate;
@@ -70,8 +73,13 @@ async function installedScripts(
   files: Files,
   configDir: string,
   log: Log,
+  paths: Paths,
 ): Promise<string[]> {
-  const installed = await readJson(files, installedPluginsFile(configDir), log);
+  const installed = await readJson(
+    files,
+    installedPluginsFile(configDir, paths),
+    log,
+  );
   const plugins = isJsonObject(installed) ? installed.plugins : undefined;
   const records = isJsonObject(plugins)
     ? plugins[WIGLEY_PLUGIN_KEY]
@@ -84,7 +92,7 @@ async function installedScripts(
       (record): record is { installPath: string } =>
         isJsonObject(record) && typeof record.installPath === 'string',
     )
-    .map((record) => joinPath(record.installPath, SCRIPT_IN_INSTALL));
+    .map((record) => paths.join(record.installPath, SCRIPT_IN_INSTALL));
 }
 
 // The JSON at `path`; undefined when the file is missing, unreadable or

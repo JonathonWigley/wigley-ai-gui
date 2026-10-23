@@ -1,6 +1,6 @@
 # 02 — Paths as a service in both processes
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 06
 Plan: [plan.md](plan.md)
@@ -56,3 +56,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 870a649. Proof: diff read — every Produces present (MainServices/PageServices.paths, scopedFiles(files, root, paths), relativeSegments, dataFilePath(url, dataRoot, paths), serveDataScheme(dataRoot, paths)); adapters imported only by main.ts, renderer.ts and tests; typecheck clean; 5 touched test files 70 passed. Concerns: past-sessions and claude-code-harness still fail on Windows (task 03's ground); the worker's shell writes briefly turned LF to CRLF and \ to \, fixed before report (no CRLF in the tree).

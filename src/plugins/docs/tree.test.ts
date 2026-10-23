@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { posixPaths } from '../../shared/paths/posix-paths';
+import { windowsPaths } from '../../shared/paths/windows-paths';
 import type { IndexEntry } from './contract';
-import { baseName } from './doc-paths';
 import { buildTree, type TreeGroup, type TreeNode } from './tree';
 
 const HOME = '/Users/u';
@@ -14,7 +15,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     root: null,
     plugin: null,
     line: null,
-    title: baseName(overrides.path),
+    title: posixPaths.base(overrides.path),
     meta: {},
     ...overrides,
   };
@@ -59,7 +60,7 @@ describe('buildTree', () => {
       }),
     ];
 
-    expect(titles(buildTree(entries, HOME))).toEqual([
+    expect(titles(buildTree(entries, HOME, posixPaths))).toEqual([
       'Global',
       'Plugins',
       'Alpha',
@@ -78,7 +79,7 @@ describe('buildTree', () => {
       }),
     ];
 
-    expect(titles(buildTree(entries, HOME))).toEqual(['r']);
+    expect(titles(buildTree(entries, HOME, posixPaths))).toEqual(['r']);
   });
 
   it('buildTree_KindGroups_InKindsOrder', () => {
@@ -88,7 +89,7 @@ describe('buildTree', () => {
       entry({ path: '/Users/u/.claude/CLAUDE.md', kind: 'instructions' }),
     ];
 
-    const global = child(buildTree(entries, HOME), 'Global');
+    const global = child(buildTree(entries, HOME, posixPaths), 'Global');
 
     expect(titles(global.children)).toEqual([
       'Instructions',
@@ -115,7 +116,7 @@ describe('buildTree', () => {
       }),
     ];
 
-    const repo = child(buildTree(entries, HOME), 'r');
+    const repo = child(buildTree(entries, HOME, posixPaths), 'r');
 
     expect(titles(repo.children)).toEqual(['~/dev/r', '~/work/r']);
     expect(repo.children.map((node) => node.id)).toEqual([
@@ -142,7 +143,7 @@ describe('buildTree', () => {
       }),
     ];
 
-    const repo = child(buildTree(entries, HOME), 'r');
+    const repo = child(buildTree(entries, HOME, posixPaths), 'r');
 
     expect(repo.children[0].id).toBe('repo:r/instructions');
     expect(titles(repo.children)).toEqual(['Instructions', 'Rules']);
@@ -181,7 +182,7 @@ describe('buildTree', () => {
     ];
 
     const features = child(
-      child(buildTree(entries, HOME), 'r').children,
+      child(buildTree(entries, HOME, posixPaths), 'r').children,
       'Features',
     );
 
@@ -217,7 +218,7 @@ describe('buildTree', () => {
     ];
 
     const features = child(
-      child(buildTree(entries, HOME), 'r').children,
+      child(buildTree(entries, HOME, posixPaths), 'r').children,
       'Features',
     );
 
@@ -235,7 +236,7 @@ describe('buildTree', () => {
     ];
 
     const rules = child(
-      child(buildTree(entries, HOME), 'Global').children,
+      child(buildTree(entries, HOME, posixPaths), 'Global').children,
       'Rules',
     );
 
@@ -249,7 +250,7 @@ describe('buildTree', () => {
     ];
 
     const rules = child(
-      child(buildTree(entries, HOME), 'Global').children,
+      child(buildTree(entries, HOME, posixPaths), 'Global').children,
       'Rules',
     );
 
@@ -260,7 +261,7 @@ describe('buildTree', () => {
     const entries = [entry({ path: '/x.md', id: '/x.md#L3', line: 3 })];
 
     const rules = child(
-      child(buildTree(entries, HOME), 'Global').children,
+      child(buildTree(entries, HOME, posixPaths), 'Global').children,
       'Rules',
     );
 
@@ -270,5 +271,83 @@ describe('buildTree', () => {
       title: 'x.md',
       entryId: '/x.md#L3',
     });
+  });
+});
+
+describe('buildTree on Windows', () => {
+  const WINDOWS_HOME = 'C:\\Users\\u';
+
+  it('buildTree_WindowsTwoDrives_GroupFolderNull', () => {
+    const entries = [
+      entry({
+        path: 'C:\\Users\\u\\.claude\\CLAUDE.md',
+        kind: 'instructions',
+        title: 'CLAUDE.md',
+      }),
+      entry({
+        path: 'D:\\agents\\AGENTS.md',
+        kind: 'instructions',
+        title: 'AGENTS.md',
+      }),
+    ];
+
+    const global = child(
+      buildTree(entries, WINDOWS_HOME, windowsPaths),
+      'Global',
+    );
+
+    expect(global.folder).toBe(null);
+    expect(child(global.children, 'Instructions').folder).toBe(null);
+  });
+
+  it('buildTree_WindowsFeatureSlug_FromFolderBelowRoot', () => {
+    const root = 'C:\\Users\\u\\wigley-features\\r';
+    const feature = { source: 'features', repo: 'r', root } as const;
+    const entries = [
+      entry({
+        ...feature,
+        path: `${root}\\login\\design.md`,
+        kind: 'feature-doc',
+        title: 'Design',
+      }),
+      entry({
+        ...feature,
+        path: `${root}\\followups.md`,
+        kind: 'followup',
+        title: 'followups.md',
+      }),
+    ];
+
+    const features = child(
+      child(buildTree(entries, WINDOWS_HOME, windowsPaths), 'r').children,
+      'Features',
+    );
+
+    expect(titles(features.children)).toEqual(['login', 'Follow-ups']);
+  });
+
+  it('buildTree_WindowsTwoClones_TildeTitles', () => {
+    const entries = [
+      entry({
+        path: 'C:\\Users\\u\\dev\\r\\AGENTS.md',
+        kind: 'instructions',
+        source: 'repo',
+        repo: 'r',
+        root: 'C:\\Users\\u\\dev\\r',
+        title: 'AGENTS.md',
+      }),
+      entry({
+        path: 'C:\\Users\\u\\src\\r\\AGENTS.md',
+        kind: 'instructions',
+        source: 'repo',
+        repo: 'r',
+        root: 'C:\\Users\\u\\src\\r',
+        title: 'AGENTS.md',
+      }),
+    ];
+
+    const repo = child(buildTree(entries, WINDOWS_HOME, windowsPaths), 'r');
+
+    expect(titles(repo.children)).toEqual(['~\\dev\\r', '~\\src\\r']);
   });
 });

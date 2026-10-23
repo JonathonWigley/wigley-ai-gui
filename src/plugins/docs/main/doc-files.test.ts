@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Files } from '../../../contracts/files';
+import type { Paths } from '../../../contracts/paths';
 import {
   createMemoryFiles,
   type MemoryFiles,
 } from '../../../shared/memory-files';
+import { posixPaths } from '../../../shared/paths/posix-paths';
+import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type { CreatePlace, IndexEntry } from '../contract';
-import { baseName, joinPath, parentFolder } from '../doc-paths';
 import { createDocFiles } from './doc-files';
 
 const HOME = '/Users/u';
@@ -42,14 +44,20 @@ const ENTRIES: IndexEntry[] = [
 ];
 
 function setUp(
-  options: { files?: Files; entries?: readonly IndexEntry[] } = {},
+  options: {
+    files?: Files;
+    entries?: readonly IndexEntry[];
+    homeDir?: string;
+    paths?: Paths;
+  } = {},
 ) {
   const files = createMemoryFiles();
   const logged: string[] = [];
   const docFiles = createDocFiles({
     files: options.files ?? files,
-    homeDir: HOME,
+    homeDir: options.homeDir ?? HOME,
     log: (source, message) => logged.push(`[${source}] ${message}`),
+    paths: options.paths ?? posixPaths,
     entries: () => options.entries ?? ENTRIES,
   });
   return { files, docFiles, logged };
@@ -69,7 +77,7 @@ function withLinks(files: MemoryFiles, links: Map<string, string>): Files {
     return path;
   };
   const asItself = (path: string) =>
-    joinPath(resolve(parentFolder(path)), baseName(path));
+    posixPaths.join(resolve(posixPaths.parent(path)), posixPaths.base(path));
   return {
     ...files,
     read: (path) => files.read(resolve(path)),
@@ -85,8 +93,11 @@ function withLinks(files: MemoryFiles, links: Map<string, string>): Files {
     makeFolder: (path) => files.makeFolder(resolve(path)),
     list: async (folder) => {
       const linked = [...links.keys()]
-        .filter((link) => parentFolder(link) === resolve(folder))
-        .map((link) => ({ path: baseName(link), kind: 'file' as const }));
+        .filter((link) => posixPaths.parent(link) === resolve(folder))
+        .map((link) => ({
+          path: posixPaths.base(link),
+          kind: 'file' as const,
+        }));
       return [...(await files.list(resolve(folder))), ...linked];
     },
     rename: async (from, to) => {
@@ -110,14 +121,14 @@ function withLinks(files: MemoryFiles, links: Map<string, string>): Files {
 // `realPath` returns the name in its case on disk.
 function caseInsensitive(files: MemoryFiles): Files {
   const onDisk = async (path: string): Promise<string> => {
-    const name = baseName(path).toLowerCase();
-    const siblings = await files.list(parentFolder(path));
+    const name = posixPaths.base(path).toLowerCase();
+    const siblings = await files.list(posixPaths.parent(path));
     const found = siblings.find(
       (sibling) => sibling.path.toLowerCase() === name,
     );
     return found === undefined
       ? path
-      : joinPath(parentFolder(path), found.path);
+      : posixPaths.join(posixPaths.parent(path), found.path);
   };
   return {
     ...files,
@@ -344,7 +355,7 @@ describe('create', () => {
 
     await expect(
       test.docFiles.create({ type: 'path', path: 'dev/x.md' }),
-    ).rejects.toThrow('A path starts with / or ~');
+    ).rejects.toThrow('A path is absolute or starts with ~');
   });
 
   it('create_Path_EmptyFileWithParents', async () => {
@@ -770,5 +781,64 @@ describe('watch', () => {
     await test.files.write(path, 'b');
 
     expect(changes).toBe(0);
+  });
+});
+
+describe('on Windows', () => {
+  const WINDOWS_HOME = 'C:\\Users\\u';
+
+  // The memory files refuse Windows paths, so `read` records each path asked
+  // and serves 'x'.
+  function setUpWindows() {
+    const reads: string[] = [];
+    const files: Files = {
+      ...createMemoryFiles(),
+      read: async (path) => {
+        reads.push(path);
+        return 'x';
+      },
+    };
+    const { docFiles } = setUp({
+      files,
+      homeDir: WINDOWS_HOME,
+      paths: windowsPaths,
+    });
+    return { docFiles, reads };
+  }
+
+  it('read_WindowsDrivePath_ReadsNormalized', async () => {
+    const test = setUpWindows();
+
+    expect(await test.docFiles.read('C:/Users/u/dev/r/a.md')).toBe('x');
+    expect(await test.docFiles.read('~/dev/r/a.md')).toBe('x');
+    expect(await test.docFiles.read('~\\dev\\r\\a.md')).toBe('x');
+    expect(test.reads).toEqual([
+      'C:\\Users\\u\\dev\\r\\a.md',
+      'C:\\Users\\u\\dev\\r\\a.md',
+      'C:\\Users\\u\\dev\\r\\a.md',
+    ]);
+  });
+
+  it('read_WindowsNotAbsolute_Rejects', async () => {
+    const test = setUpWindows();
+
+    await expect(test.docFiles.read('\\dev\\r\\a.md')).rejects.toThrow(
+      'A path is absolute or starts with ~',
+    );
+    await expect(test.docFiles.read('C:dev\\a.md')).rejects.toThrow(
+      'A path is absolute or starts with ~',
+    );
+    expect(test.reads).toEqual([]);
+  });
+
+  it('create_WindowsTrailingBackslash_RejectsFolder', async () => {
+    const test = setUpWindows();
+
+    await expect(
+      test.docFiles.create({
+        type: 'path',
+        path: 'C:\\Users\\u\\dev\\r\\new\\',
+      }),
+    ).rejects.toThrow('A path names a file, not a folder');
   });
 });

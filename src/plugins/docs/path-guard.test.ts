@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { posixPaths } from '../../shared/paths/posix-paths';
+import { windowsPaths } from '../../shared/paths/windows-paths';
 import type { IndexEntry } from './contract';
-import { baseName } from './doc-paths';
 import { changeRefusal, type GuardFolders, isIndexedPath } from './path-guard';
 
 function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
@@ -12,7 +13,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     root: null,
     plugin: null,
     line: null,
-    title: baseName(overrides.path),
+    title: posixPaths.base(overrides.path),
     meta: {},
     ...overrides,
   };
@@ -50,7 +51,7 @@ const FOLDERS: GuardFolders = {
 };
 
 function refusal(target: string): string | null {
-  return changeRefusal(target, ENTRIES, FOLDERS);
+  return changeRefusal(target, ENTRIES, FOLDERS, posixPaths);
 }
 
 describe('changeRefusal', () => {
@@ -69,7 +70,8 @@ describe('changeRefusal', () => {
       entry({ path: '/Users/u/CLAUDE.md', kind: 'instructions' }),
       entry({ path: '/Users/u/notes/imported.md', kind: 'instructions' }),
     ];
-    const refusal = (target: string) => changeRefusal(target, entries, FOLDERS);
+    const refusal = (target: string) =>
+      changeRefusal(target, entries, FOLDERS, posixPaths);
 
     expect(refusal('/Users/u/CLAUDE.md')).toBe(null);
     expect(refusal('/Users/u/notes/imported.md')).toBe(null);
@@ -112,16 +114,76 @@ describe('changeRefusal', () => {
 
 describe('isIndexedPath', () => {
   it('isIndexedPath_PluginFile_Openable', () => {
-    expect(isIndexedPath(PLUGIN_SKILL, ENTRIES)).toBe(true);
-    expect(isIndexedPath('/Users/u/Desktop/x.md', ENTRIES)).toBe(false);
+    expect(isIndexedPath(PLUGIN_SKILL, ENTRIES, posixPaths)).toBe(true);
+    expect(isIndexedPath('/Users/u/Desktop/x.md', ENTRIES, posixPaths)).toBe(
+      false,
+    );
   });
 
   it('isIndexedPath_InsideRepoRoot_Openable', () => {
-    expect(isIndexedPath('/Users/u/dev/r/docs/notes.md', ENTRIES)).toBe(true);
+    expect(
+      isIndexedPath('/Users/u/dev/r/docs/notes.md', ENTRIES, posixPaths),
+    ).toBe(true);
   });
 
   it('isIndexedPath_BesideGlobalEntry_NotOpenable', () => {
-    expect(isIndexedPath('/Users/u/.claude/CLAUDE.md', ENTRIES)).toBe(true);
-    expect(isIndexedPath('/Users/u/.claude/notes.md', ENTRIES)).toBe(false);
+    expect(
+      isIndexedPath('/Users/u/.claude/CLAUDE.md', ENTRIES, posixPaths),
+    ).toBe(true);
+    expect(
+      isIndexedPath('/Users/u/.claude/notes.md', ENTRIES, posixPaths),
+    ).toBe(false);
+  });
+});
+
+describe('path guard on Windows', () => {
+  const NO_FOLDERS: GuardFolders = { globalDocFolders: [], pluginCaches: [] };
+  const REPO_ENTRIES = [
+    entry({
+      path: 'C:\\Users\\u\\dev\\r\\AGENTS.md',
+      kind: 'instructions',
+      source: 'repo',
+      repo: 'r',
+      root: 'C:\\Users\\u\\dev\\r',
+      title: 'AGENTS.md',
+    }),
+  ];
+
+  it('changeRefusal_WindowsOtherCase_Allowed', () => {
+    expect(
+      changeRefusal(
+        'c:\\users\\u\\dev\\r\\docs\\notes.md',
+        REPO_ENTRIES,
+        NO_FOLDERS,
+        windowsPaths,
+      ),
+    ).toBe(null);
+  });
+
+  it('changeRefusal_WindowsSiblingPrefix_Refused', () => {
+    expect(
+      changeRefusal(
+        'C:\\Users\\u\\dev\\rx\\a.md',
+        REPO_ENTRIES,
+        NO_FOLDERS,
+        windowsPaths,
+      ),
+    ).toBe(
+      'Refused: C:\\Users\\u\\dev\\rx\\a.md is outside the indexed folders',
+    );
+  });
+
+  it('isIndexedPath_WindowsOtherCase_Openable', () => {
+    const entries = [
+      entry({
+        path: 'C:\\Users\\u\\.claude\\CLAUDE.md',
+        kind: 'instructions',
+        title: 'CLAUDE.md',
+      }),
+    ];
+
+    expect(
+      isIndexedPath('c:\\users\\u\\.claude\\claude.md', entries, windowsPaths),
+    ).toBe(true);
   });
 });

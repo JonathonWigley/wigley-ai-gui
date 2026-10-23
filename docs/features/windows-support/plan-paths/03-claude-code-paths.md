@@ -1,6 +1,6 @@
 # 03 — Claude Code adapter on Paths
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -41,3 +41,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit ff56bba. Proof: diff read — ClaudeCodeHarnessDeps.paths, claudeLaunch/claudeConfigFolder/listPastSessions/readHistory take paths as Produces gives; cwd matched by samePath; expand-home.ts and its test deleted; no typecheck error in src/main, src/shared, src/contracts or src/renderer; src/main/claude-code and src/shared/paths 163 passed. Concerns: an inherited CLAUDE_CONFIG_DIR is returned unnormalized.

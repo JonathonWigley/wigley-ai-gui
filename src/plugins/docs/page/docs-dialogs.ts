@@ -1,4 +1,5 @@
 import type { Log } from '../../../contracts/log';
+import type { Paths } from '../../../contracts/paths';
 import type {
   PageChannel,
   PushedScope,
@@ -20,7 +21,6 @@ import type {
   FolderEntry,
   IndexEntry,
 } from '../contract';
-import { baseName, tildePath } from '../doc-paths';
 import { CREATE_KINDS, nameProblem, placesFor } from '../kinds';
 import {
   COMPLETION_LIMIT,
@@ -67,6 +67,7 @@ interface TextBox {
 interface TextBoxDeps {
   channel: PageChannel<DocsChannel>;
   homeDir: Promise<string>;
+  paths: Paths;
   log: Log;
   pushScope(): PushedScope;
   closed(): void;
@@ -104,8 +105,8 @@ function createTextBox(deps: TextBoxDeps): TextBox {
 
   // The matches for `typed`, once its folder is listed.
   const matchesFor = async (typed: string) => {
-    const query = completionQuery(typed, await deps.homeDir);
-    return completions(await listing(query.folder), query.prefix);
+    const query = completionQuery(typed, await deps.homeDir, deps.paths);
+    return completions(await listing(query.folder), query.prefix, deps.paths);
   };
 
   // Draws the matches for the box's text, unless it changed meanwhile.
@@ -181,7 +182,7 @@ function createTextBox(deps: TextBoxDeps): TextBox {
           if (request !== shown || input.value !== typed) {
             return;
           }
-          input.value = completeTyped(typed, matches);
+          input.value = completeTyped(typed, matches, deps.paths);
           cursorToEnd();
           await refresh();
           deps.log('docs', `completed to ${input.value}`);
@@ -308,6 +309,7 @@ const CREATE_KIND_TITLES: Record<CreateKind, string> = {
 export interface DocsDialogsDeps {
   channel: PageChannel<DocsChannel>;
   homeDir: Promise<string>;
+  paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: Log;
   keysFor: DocsKeysFor;
@@ -347,7 +349,7 @@ export interface DocsDialogs {
 }
 
 export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
-  const { channel, log, toast } = deps;
+  const { channel, log, paths, toast } = deps;
   const picker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
     log,
@@ -356,6 +358,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
   const box = createTextBox({
     channel,
     homeDir: deps.homeDir,
+    paths,
     log,
     pushScope: () => deps.pushScope('box'),
     closed: deps.dialogClosed,
@@ -374,7 +377,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
 
   const pickPlace = async (kind: CreateKind) => {
     const kindTitle = CREATE_KIND_TITLES[kind];
-    const places = placesFor(kind, deps.entries(), await deps.homeDir);
+    const places = placesFor(kind, deps.entries(), await deps.homeDir, paths);
     if (places.length === 0) {
       toast(
         noPlaceText(kindTitle, deps.keysFor('createByPath', 'tree')),
@@ -425,15 +428,16 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
                   created.line,
                   name.trim(),
                   deps.entries(),
+                  paths,
                 )
-              : provisionalEntry(created.path, kind, deps.entries());
+              : provisionalEntry(created.path, kind, deps.entries(), paths);
           deps.changed({ type: 'created', entry }, null);
           await deps.openInEditor(entry, created.line);
           log(
             'docs',
             kind === 'followup'
               ? `created follow-up ${name.trim()}`
-              : `created ${baseName(created.path)}`,
+              : `created ${paths.base(created.path)}`,
           );
         } catch (error) {
           failed(error);
@@ -467,7 +471,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       void deps.homeDir.then((homeDir) => {
         box.open({
           label: 'New file',
-          text: `${tildePath(folder ?? homeDir, homeDir)}/`,
+          text: `${paths.tilde(folder ?? homeDir, homeDir)}${paths.separator}`,
           completes: true,
           accept: async (path) => {
             try {
@@ -480,10 +484,11 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
                 created.path,
                 null,
                 deps.entries(),
+                paths,
               );
               deps.changed({ type: 'created', entry }, null);
               await deps.openInEditor(entry, created.line);
-              log('docs', `created ${baseName(created.path)}`);
+              log('docs', `created ${paths.base(created.path)}`);
             } catch (error) {
               failed(error);
             }
@@ -497,7 +502,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       void deps.homeDir.then((homeDir) => {
         box.open({
           label: 'Rename to',
-          text: tildePath(entry.path, homeDir),
+          text: paths.tilde(entry.path, homeDir),
           completes: true,
           accept: async (typed) => {
             try {
@@ -507,11 +512,11 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
                 typed,
               );
               box.close();
-              const record = renameRecord(entry.path, renamed);
+              const record = renameRecord(entry.path, renamed, paths);
               deps.changed(record, renamed);
               log(
                 'docs',
-                `renamed ${baseName(record.from)} to ${baseName(record.to)}`,
+                `renamed ${paths.base(record.from)} to ${paths.base(record.to)}`,
               );
             } catch (error) {
               failed(error);
@@ -536,13 +541,18 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
           isTrashAsking = false;
         })
         .then(([targets, homeDir]) => {
-          const name = baseName(targets[targets.length - 1]);
+          const name = paths.base(targets[targets.length - 1]);
           confirm.open(
             () =>
-              trashQuestion(targets, homeDir, {
-                yes: deps.keysFor('confirmYes', 'confirm'),
-                no: deps.keysFor('confirmNo', 'confirm'),
-              }),
+              trashQuestion(
+                targets,
+                homeDir,
+                {
+                  yes: deps.keysFor('confirmYes', 'confirm'),
+                  no: deps.keysFor('confirmNo', 'confirm'),
+                },
+                paths,
+              ),
             () => {
               channel
                 .invoke('trashDoc', entry.path)
@@ -557,7 +567,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
                     failed(result.error);
                     log(
                       'docs',
-                      `moved ${result.trashed.map(baseName).join(', ')} to the Trash, then failed: ${result.error}`,
+                      `moved ${result.trashed.map((path) => paths.base(path)).join(', ')} to the Trash, then failed: ${result.error}`,
                     );
                   }
                 })
@@ -592,9 +602,10 @@ function followupEntry(
   line: number,
   title: string,
   entries: readonly IndexEntry[],
+  paths: Paths,
 ): IndexEntry {
   return {
-    ...provisionalEntry(path, 'followup', entries),
+    ...provisionalEntry(path, 'followup', entries, paths),
     id: `${path}#L${line}`,
     line,
     title,

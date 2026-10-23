@@ -188,12 +188,12 @@ Shared signatures parts use:
 - [x] [Windows-only test and self-test fixes](06-windows-test-fixes.md)
 
 ### Wave 2
-- [ ] [Paths as a service in both processes](02-paths-service.md) — after 01, 06
+- [x] [Paths as a service in both processes](02-paths-service.md) — after 01, 06
 
 ### Wave 3
-- [ ] [Claude Code adapter paths](03-claude-code-paths.md) — after 02
+- [x] [Claude Code adapter paths](03-claude-code-paths.md) — after 02
 - [ ] [Docs plugin on Paths](04-docs-paths.md) — after 02
-- [ ] [Chat and forms on Paths](05-chat-forms-sessions-paths.md) — after 02
+- [x] [Chat and forms on Paths](05-chat-forms-sessions-paths.md) — after 02
 
 ### Wave 4
 - [ ] [Doc re-read](07-doc-re-read.md) — after 03, 04, 05
@@ -206,8 +206,12 @@ Review base: 4cadb24
 ### Groups
 - 06 · 3ea3e97 · diff read + worker compile/lint, 3 files 61 pass 10 skip · concerns: self-test exit unproved until task 08
 - 01 · 2e62c84 · diff read + typecheck, paths.test.ts 84 pass · concerns: worker's npx fetched prettier into the npx cache (reported to user); table rows typed at run time only
+- 02 · 870a649 · diff read + typecheck, 5 files 70 pass · concerns: 5 claude-code failures remain for task 03
+- 03 · ff56bba · diff read + typecheck (own layers), 8 files 163 pass · concerns: inherited CLAUDE_CONFIG_DIR not normalized
+- 05 · 9c2315f · diff read + typecheck (own plugins), chat+forms 742 pass · concerns: 6 files outside the list took only the new argument
 ### Contract changes
 - posixPaths, windowsPaths: two standalone adapter files → two PathSyntax records handed to rootedPaths(syntax): Paths in a new src/shared/paths/rooted-paths.ts · why: the adapters share every rule but root parsing and case folding · consumers: none (02–05 import the constants) · group 01
+- paths in createRoundStore's deps: as planned, plus roundQueries(readAll) → roundQueries(readAll, paths) and createMemoryRoundStore(clock, randomHex) → (clock, randomHex, paths) · why: isOwnedBy runs inside roundQueries, which the disk and preview stores both spread · consumers: forms only · group 05
 ### Rulings
 - login-shell-path: a 4th /bin/sh test (ignores SIGTERM) also skipped where there is no /bin/sh — it spawns the same stand-in and proved nothing on Windows — Windows loses one empty pass · group 06
 - relay test duplicates the \.\pipe\ prefix literal, since PIPE_PREFIX in relay-server.ts is not exported and was out of scope — a changed prefix would mis-skip one test · group 06
@@ -216,5 +220,10 @@ Review base: 4cadb24
 - '..' above nothing is kept only for an unrooted path, dropped at any root including Windows' '\' and 'C:' — '\..\x' normalizes to '\x' · group 01
 - commonFolder is null on POSIX too for a list mixing absolute and relative paths (roots differ) · group 01
 - src/shared/paths added to the 13 LAYERS entries the Approach names, not src/main (selftest.ts) or src/shared/page — a later task importing an adapter there needs one more listing · group 01
+- dataFilePath joins dataRoot, plugin segments and file segments in one paths.join; a plugin id folding to no segment is refused (the old 'resolves to the data root' rule) · group 02
+- no test fake was compiler-flagged (all are casts or Picks), so paths: posixPaths went only into main-api.test.ts's casts, since main-api now calls services.paths.join — a later task whose code reads services.paths through another cast fake must add it there · group 02
+- task 04 dispatched as two workers, 04a (items 1, 2, 4, 5: shared modules, main part, self-test, removal) and 04b (item 3: page part), on disjoint files, proved together — the docs reads ran past the 60k-token split line (≈66k) — none, the Produces signatures are fixed in the task doc · lead
+- an inherited CLAUDE_CONFIG_DIR is returned as the env gives it, not normalized — the env is the user's own and paths.join normalizes the projects path built from it — only claudeConfigFolder's raw return keeps a mixed separator · group 03
+- displayPath outside home now returns the normalized path (tilde's contract), so a trailing separator drops from the label; folderName on a root returns the folder as written · group 05
 ### Review rounds
 ### Test gate
