@@ -192,7 +192,7 @@ Shared signatures parts use:
 
 ### Wave 3
 - [x] [Claude Code adapter paths](03-claude-code-paths.md) — after 02
-- [ ] [Docs plugin on Paths](04-docs-paths.md) — after 02
+- [x] [Docs plugin on Paths](04-docs-paths.md) — after 02
 - [x] [Chat and forms on Paths](05-chat-forms-sessions-paths.md) — after 02
 
 ### Wave 4
@@ -209,6 +209,7 @@ Review base: 4cadb24
 - 02 · 870a649 · diff read + typecheck, 5 files 70 pass · concerns: 5 claude-code failures remain for task 03
 - 03 · ff56bba · diff read + typecheck (own layers), 8 files 163 pass · concerns: inherited CLAUDE_CONFIG_DIR not normalized
 - 05 · 9c2315f · diff read + typecheck (own plugins), chat+forms 742 pass · concerns: 6 files outside the list took only the new argument
+- 04 · 9b94c49 · diff read + typecheck + lint, docs 243 pass · concerns: realTarget root stop on Windows untested until task 08
 ### Contract changes
 - posixPaths, windowsPaths: two standalone adapter files → two PathSyntax records handed to rootedPaths(syntax): Paths in a new src/shared/paths/rooted-paths.ts · why: the adapters share every rule but root parsing and case folding · consumers: none (02–05 import the constants) · group 01
 - paths in createRoundStore's deps: as planned, plus roundQueries(readAll) → roundQueries(readAll, paths) and createMemoryRoundStore(clock, randomHex) → (clock, randomHex, paths) · why: isOwnedBy runs inside roundQueries, which the disk and preview stores both spread · consumers: forms only · group 05
@@ -225,5 +226,9 @@ Review base: 4cadb24
 - task 04 dispatched as two workers, 04a (items 1, 2, 4, 5: shared modules, main part, self-test, removal) and 04b (item 3: page part), on disjoint files, proved together — the docs reads ran past the 60k-token split line (≈66k) — none, the Produces signatures are fixed in the task doc · lead
 - an inherited CLAUDE_CONFIG_DIR is returned as the env gives it, not normalized — the env is the user's own and paths.join normalizes the projects path built from it — only claudeConfigFolder's raw return keeps a mixed separator · group 03
 - displayPath outside home now returns the normalized path (tilde's contract), so a trailing separator drops from the label; folderName on a root returns the folder as written · group 05
+- DocFiles.read became async, so an unabsolute path rejects rather than throws synchronously, as the GIVEN requires · group 04a
+- trash checks the asked path against the trashed list by samePath, not includes · group 04a
+- followChange builds a renamed open doc's new path with paths.join over segmentsBelow in place of string slicing (beyond the named isInside swap) — the task forbids hand-built full paths · group 04b
+- context lookups (each.folder === contextFolder) stay ===: both sides come from one index document, not two spellings · group 04b
 ### Review rounds
 ### Test gate

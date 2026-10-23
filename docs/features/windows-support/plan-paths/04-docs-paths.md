@@ -1,6 +1,6 @@
 # 04 — Docs plugin on Paths
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -320,4 +320,4 @@ Commit: one commit for the group.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 9b94c49 (04a and 04b together). Proof: diff read — every Produces present with paths last; no doc-paths import or process.platform read under src/; python3 -X utf8; self-test path lines built from the adapter; whole-repo typecheck and lint clean; docs suite 14 files 243 passed. Concerns: realTarget's root stop on Windows is unit-untested (memory files refuse Windows paths), first proved by task 08's self-test.
