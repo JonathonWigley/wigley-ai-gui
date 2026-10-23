@@ -256,17 +256,17 @@ const SCROLLS_ITSELF = [
 
 // The calls STEPS cause on the fixture's fake process, in order.
 const EXPECTED_CALLS: FakeAgentCall[] = [
-  { method: 'send', text: 'hoki' },
-  { method: 'send', text: 'hello' },
-  { method: 'send', text: 'one\ntwo' },
-  { method: 'send', text: 'hello' },
-  { method: 'send', text: FAKE_TOOL_TEXT },
-  { method: 'send', text: LONG_TEXT },
+  { method: 'send', text: 'hoki', imageCount: 0 },
+  { method: 'send', text: 'hello', imageCount: 0 },
+  { method: 'send', text: 'one\ntwo', imageCount: 0 },
+  { method: 'send', text: 'hello', imageCount: 0 },
+  { method: 'send', text: FAKE_TOOL_TEXT, imageCount: 0 },
+  { method: 'send', text: LONG_TEXT, imageCount: 0 },
   { method: 'setControl', id: 'effort', value: 'high' },
   { method: 'setControl', id: 'effort', value: 'low' },
-  { method: 'send', text: FAKE_HOLD_TEXT },
+  { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'interrupt' },
-  { method: 'send', text: FAKE_HOLD_TEXT },
+  { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'end' },
 ];
 
@@ -275,7 +275,7 @@ const RESUMED_SESSION_ID = '00000000-0000-4000-8000-000000000001';
 
 // The calls STEPS cause on the resumed session's fake process, in order.
 const EXPECTED_RESUMED_CALLS: FakeAgentCall[] = [
-  { method: 'send', text: '/fake-command ' },
+  { method: 'send', text: '/fake-command ', imageCount: 0 },
   { method: 'end' },
 ];
 

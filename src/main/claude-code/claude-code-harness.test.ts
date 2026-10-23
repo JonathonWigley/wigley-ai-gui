@@ -2,7 +2,11 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AgentProcessEvents, AgentStart } from '../../contracts/agent';
+import type {
+  AgentProcessEvents,
+  AgentStart,
+  LogInEvents,
+} from '../../contracts/agent';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import {
@@ -162,14 +166,15 @@ describe('createClaudeCodeHarness', () => {
   it('send_WritesUserMessageAndEmitsWorking', async () => {
     const run = await startedQuiet();
 
-    run.agent.send('hi');
+    run.agent.send({ text: 'hi', images: [] });
     await settle();
 
-    expect(run.written).toEqual([userMessage('hi')]);
+    const message = userMessage({ text: 'hi', images: [] });
+    expect(run.written).toEqual([message]);
     expect(run.heard).toEqual([
       [
         'entry',
-        { kind: 'user', id: 'user-1', text: 'hi', raw: [userMessage('hi')] },
+        { kind: 'user', id: 'user-1', text: 'hi', images: [], raw: [message] },
       ],
       ['activity', 'working'],
     ]);
@@ -199,7 +204,7 @@ describe('createClaudeCodeHarness', () => {
 
   it('setControl_EffortWhileWorking_Throws', async () => {
     const run = await startedQuiet();
-    run.agent.send('hi');
+    run.agent.send({ text: 'hi', images: [] });
 
     expect(() => run.agent.setControl('effort', 'high')).toThrow(
       'Claude is working; change Effort when the turn ends',
@@ -235,10 +240,10 @@ describe('createClaudeCodeHarness', () => {
 
   it('interrupt_AfterErrorResult_UsesDistinctNoticeIds', async () => {
     const run = await startedQuiet();
-    run.agent.send('one');
+    run.agent.send({ text: 'one', images: [] });
     writeLine(run.stdout, errorResult);
     await settle();
-    run.agent.send('two');
+    run.agent.send({ text: 'two', images: [] });
 
     run.agent.interrupt();
     await settle();
@@ -257,8 +262,8 @@ describe('createClaudeCodeHarness', () => {
 
   it('send_TwoMessagesOneResult_StaysWorking', async () => {
     const run = await startedQuiet();
-    run.agent.send('one');
-    run.agent.send('two');
+    run.agent.send({ text: 'one', images: [] });
+    run.agent.send({ text: 'two', images: [] });
 
     writeLine(run.stdout, successResult('1'));
     await settle();
@@ -268,8 +273,8 @@ describe('createClaudeCodeHarness', () => {
 
   it('send_TwoMessagesTwoResults_GoesIdle', async () => {
     const run = await startedQuiet();
-    run.agent.send('one');
-    run.agent.send('two');
+    run.agent.send({ text: 'one', images: [] });
+    run.agent.send({ text: 'two', images: [] });
 
     writeLine(run.stdout, successResult('1'));
     writeLine(run.stdout, successResult('2'));
@@ -280,8 +285,8 @@ describe('createClaudeCodeHarness', () => {
 
   it('interrupt_WhileQueuedTurnRuns_WritesRequest', async () => {
     const run = await startedQuiet();
-    run.agent.send('one');
-    run.agent.send('two');
+    run.agent.send({ text: 'one', images: [] });
+    run.agent.send({ text: 'two', images: [] });
     writeLine(run.stdout, successResult('1'));
     await settle();
 
@@ -296,8 +301,8 @@ describe('createClaudeCodeHarness', () => {
 
   it('send_ControlCommandQueuedBehindTurn_TakesItsOwnResult', async () => {
     const run = await startedQuiet();
-    run.agent.send('one');
-    run.agent.send('/effort high');
+    run.agent.send({ text: 'one', images: [] });
+    run.agent.send({ text: '/effort high', images: [] });
 
     writeLine(run.stdout, successResult('1'));
     await settle();
@@ -319,7 +324,7 @@ describe('createClaudeCodeHarness', () => {
     await settle();
     expect(effortValue(run.heard)).toBe('high');
 
-    run.agent.send('/effort auto');
+    run.agent.send({ text: '/effort auto', images: [] });
     writeLine(run.stdout, successResult('Set effort level to auto'));
     await settle();
 
@@ -338,7 +343,9 @@ describe('createClaudeCodeHarness', () => {
     expect(run.heard).toEqual([
       ['ended', { code: 1, error: 'claude exited with code 1: oops' }],
     ]);
-    expect(() => run.agent.send('hi')).toThrow('Claude Code process has ended');
+    expect(() => run.agent.send({ text: 'hi', images: [] })).toThrow(
+      'Claude Code process has ended',
+    );
   });
 
   it('spawnNotFound_EndsWithHint', async () => {
@@ -435,5 +442,186 @@ describe('createClaudeCodeHarness past sessions', () => {
     expect(
       await listedFrom('/Users/u/.claude', { CLAUDE_CONFIG_DIR: '' }, null),
     ).toEqual([sessionId]);
+  });
+});
+
+describe('createClaudeCodeHarness accounts', () => {
+  const signedInStatus = JSON.stringify({
+    loggedIn: true,
+    email: 'jo@example.com',
+    subscriptionType: 'max',
+  });
+
+  // A `claude auth` child: stdin kept as raw lines, since a pasted code is not
+  // JSON.
+  function authChild() {
+    const emitter = new EventEmitter();
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const lines: string[] = [];
+    const signals: string[] = [];
+    stdin.on('data', (chunk: Buffer) => {
+      lines.push(...chunk.toString().split('\n').filter(Boolean));
+    });
+    const child = Object.assign(emitter, {
+      stdin,
+      stdout,
+      stderr,
+      pid: 1 as number | undefined,
+      kill(signal = 'SIGTERM') {
+        signals.push(signal);
+        return true;
+      },
+    });
+    return {
+      child: child as unknown as ChildProcessWithoutNullStreams,
+      emitter,
+      stdout,
+      lines,
+      signals,
+      setPid(pid: number | undefined) {
+        child.pid = pid;
+      },
+    };
+  }
+
+  // A harness whose spawns hand out `children` in order, recording each
+  // spawn's arguments and options.
+  function authHarness(children: ReturnType<typeof authChild>[]) {
+    const spawned: {
+      args: readonly string[];
+      options: { cwd: string; env: NodeJS.ProcessEnv };
+    }[] = [];
+    const queue = [...children];
+    const harness = createClaudeCodeHarness({
+      command: () => '/bin/claude',
+      permissionTool: 'tool',
+      env: { HOME: '/Users/u', CLAUDECODE: '1' },
+      log: () => {},
+      spawn: (_command, args, options) => {
+        spawned.push({ args, options });
+        const next = queue.shift();
+        if (next === undefined) {
+          throw new Error('no child left to spawn');
+        }
+        return next.child;
+      },
+      files: createMemoryFiles(),
+      homeDir: '/Users/u',
+      paths: posixPaths,
+    });
+    return { harness, spawned };
+  }
+
+  function recordingLogIn() {
+    const heard: [string, unknown][] = [];
+    const events: LogInEvents = {
+      link: (url) => heard.push(['link', url]),
+      ended: (end) => heard.push(['ended', end]),
+    };
+    return { heard, events };
+  }
+
+  it('accountStatus_SpawnFails_RejectsWithCommandHint', async () => {
+    const child = authChild();
+    child.setPid(undefined);
+    const { harness } = authHarness([child]);
+
+    const status = harness.accountStatus(null);
+    child.emitter.emit(
+      'error',
+      Object.assign(new Error('spawn /bin/claude ENOENT'), { code: 'ENOENT' }),
+    );
+
+    await expect(status).rejects.toThrow(
+      'claude was not found at /bin/claude; set claude.command',
+    );
+  });
+
+  it('accountStatus_SignedIn_ReadsStatusWithProfileEnv', async () => {
+    const child = authChild();
+    const { harness, spawned } = authHarness([child]);
+
+    const status = harness.accountStatus('~/.claude-work');
+    child.stdout.write(`${signedInStatus}\n`);
+    await settle();
+    child.emitter.emit('close', 0, null);
+
+    expect(await status).toEqual({
+      signedIn: true,
+      account: 'jo@example.com · Claude max',
+    });
+    expect(spawned).toEqual([
+      {
+        args: ['auth', 'status', '--json'],
+        options: {
+          cwd: '/Users/u',
+          env: { HOME: '/Users/u', CLAUDE_CONFIG_DIR: '/Users/u/.claude-work' },
+        },
+      },
+    ]);
+  });
+
+  it('logIn_ProcessExitsSignedIn_EndsWithStatus', async () => {
+    const login = authChild();
+    const status = authChild();
+    const { harness, spawned } = authHarness([login, status]);
+    const { heard, events } = recordingLogIn();
+    const url = 'https://claude.ai/oauth/authorize?code=true';
+
+    harness.logIn(null, events);
+    login.stdout.write(
+      `Opening browser to sign in…\nIf the browser didn't open, visit: \x1b]8;;${url}\x07${url}\x1b]8;;\x07\n`,
+    );
+    await settle();
+    login.emitter.emit('close', 0, null);
+    status.stdout.write(signedInStatus);
+    await settle();
+    status.emitter.emit('close', 0, null);
+    await settle();
+
+    expect(heard).toEqual([
+      ['link', url],
+      [
+        'ended',
+        {
+          status: { signedIn: true, account: 'jo@example.com · Claude max' },
+          error: null,
+        },
+      ],
+    ]);
+    expect(spawned.map((spawn) => spawn.args)).toEqual([
+      ['auth', 'login'],
+      ['auth', 'status', '--json'],
+    ]);
+  });
+
+  it('logIn_Cancel_EndsOnceCancelled', async () => {
+    const login = authChild();
+    const { harness, spawned } = authHarness([login]);
+    const { heard, events } = recordingLogIn();
+
+    const process = harness.logIn(null, events);
+    process.cancel();
+    process.cancel();
+    login.emitter.emit('close', null, 'SIGTERM');
+    await settle();
+
+    expect(heard).toEqual([
+      ['ended', { status: null, error: 'Sign-in cancelled' }],
+    ]);
+    expect(login.signals).toEqual(['SIGTERM']);
+    expect(spawned).toHaveLength(1);
+  });
+
+  it('logIn_SendCode_WritesCodeLine', async () => {
+    const login = authChild();
+    const { harness } = authHarness([login]);
+
+    harness.logIn(null, recordingLogIn().events).sendCode('abc#123');
+    await settle();
+
+    expect(login.lines).toEqual(['abc#123']);
   });
 });

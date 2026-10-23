@@ -649,7 +649,7 @@ describe('createChatSessions', () => {
     test.chat.setControl(ROW_ID, 'mode', 'plan');
 
     expect(test.process.calls).toEqual([
-      { method: 'send', text: 'hi' },
+      { method: 'send', text: 'hi', imageCount: 0 },
       { method: 'interrupt' },
       { method: 'setControl', id: 'mode', value: 'plan' },
     ]);

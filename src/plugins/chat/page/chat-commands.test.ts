@@ -22,6 +22,7 @@ const userEntry: ChatEntry = {
   id: 'entry-1',
   kind: 'user',
   text: 'hi',
+  images: [],
   raw: [],
 };
 

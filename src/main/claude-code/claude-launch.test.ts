@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
-import { claudeConfigFolder, claudeLaunch } from './claude-launch';
+import { claudeConfigFolder, claudeEnv, claudeLaunch } from './claude-launch';
 
 const TOOL = 'mcp__plugin_wigley_wigley-forms__permission_prompt';
 
@@ -145,5 +145,24 @@ describe('claudeConfigFolder', () => {
     expect(claudeConfigFolder(null, {}, 'C:\\Users\\jo', windowsPaths)).toBe(
       'C:\\Users\\jo\\.claude',
     );
+  });
+});
+
+describe('claudeEnv', () => {
+  it('claudeEnv_ProfileDir_SetsConfigDirAndStripsNested', () => {
+    const env = {
+      HOME: '/h',
+      CLAUDECODE: '1',
+      CLAUDE_CODE_SESSION_ID: 'parent-session',
+      CLAUDE_CONFIG_DIR: '/x',
+    };
+
+    const result = claudeEnv(env, '~/.claude-work', '/Users/u', posixPaths);
+
+    expect(result).toEqual({
+      HOME: '/h',
+      CLAUDE_CONFIG_DIR: '/Users/u/.claude-work',
+    });
+    expect(env.CLAUDECODE).toBe('1');
   });
 });

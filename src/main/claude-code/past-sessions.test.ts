@@ -5,6 +5,7 @@ import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
 import {
   listPastSessions,
+  listProjectFolders,
   readHistory,
   TRANSCRIPT_READ_BATCH,
 } from './past-sessions';
@@ -207,5 +208,54 @@ describe('readHistory', () => {
     await expect(
       readHistory(createMemoryFiles(), posixPaths, FOLDER, OLD_ID),
     ).rejects.toThrow(`${FOLDER}/${OLD_ID}.jsonl`);
+  });
+});
+
+describe('listProjectFolders', () => {
+  it('listProjects_NewestTranscriptCwd_PerFolder', async () => {
+    let now = 1000;
+    const files = createMemoryFiles({ now: () => now });
+    await files.write(
+      `/config/projects/-w-app/${OLD_ID}.jsonl`,
+      transcript('/w/app-before-move', 'old'),
+    );
+    now = 3000;
+    await files.write(
+      `/config/projects/-w-app/${NEW_ID}.jsonl`,
+      transcript('/w/app', 'new'),
+    );
+    now = 2000;
+    await files.write(
+      `/config/projects/-w-other/${OTHER_ID}.jsonl`,
+      transcript('/w/other', 'elsewhere'),
+    );
+    now = 4000;
+    await files.write('/config/projects/-w-empty/notes.txt', 'notes');
+    const { log, logged } = recordingLog();
+
+    const projects = await listProjectFolders(
+      { files, paths: posixPaths, log },
+      '/config/projects',
+    );
+
+    expect(projects).toEqual([
+      { projectDir: '/w/app', modified: 3000 },
+      { projectDir: '/w/other', modified: 2000 },
+    ]);
+    expect(logged).toContainEqual([
+      'claude',
+      'project folder /config/projects/-w-empty has no readable transcript',
+    ]);
+  });
+
+  it('listProjects_MissingProjectsFolder_Empty', async () => {
+    const { log } = recordingLog();
+
+    const projects = await listProjectFolders(
+      { files: createMemoryFiles(), paths: posixPaths, log },
+      '/config/projects',
+    );
+
+    expect(projects).toEqual([]);
   });
 });

@@ -3,11 +3,14 @@ import type {
   AgentHarness,
   AgentProcessEvents,
   AgentStart,
+  LogInEvents,
 } from '../contracts/agent';
 import {
   createFakeAgentHarness,
   FAKE_HOLD_TEXT,
   FAKE_PAST_SESSIONS,
+  FAKE_SIGN_IN_CODE,
+  FAKE_SIGN_IN_URL,
   FAKE_TOOL_TEXT,
   isFakeAgentHarness,
 } from './fake-agent-harness';
@@ -103,7 +106,7 @@ describe('createFakeAgentHarness', () => {
   it('send_PlainText_StreamsReplyThenResult', async () => {
     const { agent, heard, record } = await startedProcess();
 
-    agent.send('hi');
+    agent.send({ text: 'hi', images: [] });
     await flush();
 
     expect(heard).toEqual([
@@ -113,6 +116,7 @@ describe('createFakeAgentHarness', () => {
           kind: 'user',
           id: 'user-1',
           text: 'hi',
+          images: [],
           raw: [{ fake: 'user', text: 'hi' }],
         },
       ],
@@ -153,13 +157,15 @@ describe('createFakeAgentHarness', () => {
       ],
       ['activity', 'idle'],
     ]);
-    expect(record.calls).toEqual([{ method: 'send', text: 'hi' }]);
+    expect(record.calls).toEqual([
+      { method: 'send', text: 'hi', imageCount: 0 },
+    ]);
   });
 
   it('send_ToolText_EmitsToolWithResult', async () => {
     const { agent, heard } = await startedProcess();
 
-    agent.send(FAKE_TOOL_TEXT);
+    agent.send({ text: FAKE_TOOL_TEXT, images: [] });
     await flush();
 
     const tool = {
@@ -210,6 +216,7 @@ describe('createFakeAgentHarness', () => {
           kind: 'user',
           id: 'user-1',
           text: FAKE_TOOL_TEXT,
+          images: [],
           raw: [{ fake: 'user', text: FAKE_TOOL_TEXT }],
         },
       ],
@@ -220,7 +227,7 @@ describe('createFakeAgentHarness', () => {
   it('send_HoldText_HoldsTurnOpen', async () => {
     const { agent, heard } = await startedProcess();
 
-    agent.send(FAKE_HOLD_TEXT);
+    agent.send({ text: FAKE_HOLD_TEXT, images: [] });
     await flush();
 
     expect(heard).toEqual([
@@ -230,6 +237,7 @@ describe('createFakeAgentHarness', () => {
           kind: 'user',
           id: 'user-1',
           text: FAKE_HOLD_TEXT,
+          images: [],
           raw: [{ fake: 'user', text: FAKE_HOLD_TEXT }],
         },
       ],
@@ -239,7 +247,7 @@ describe('createFakeAgentHarness', () => {
 
   it('interrupt_HeldTurn_EndsWithNotice', async () => {
     const { agent, heard, record } = await startedProcess();
-    agent.send(FAKE_HOLD_TEXT);
+    agent.send({ text: FAKE_HOLD_TEXT, images: [] });
     await flush();
     heard.length = 0;
 
@@ -312,7 +320,9 @@ describe('createFakeAgentHarness', () => {
 
     expect(heard).toEqual([['ended', { code: 0, error: null }]]);
     expect(record.ended).toBe(true);
-    expect(() => agent.send('x')).toThrow('fake agent process has ended');
+    expect(() => agent.send({ text: 'x', images: [] })).toThrow(
+      'fake agent process has ended',
+    );
   });
 
   it('holdEnd_KeepsEndPendingUntilRelease', async () => {
@@ -388,6 +398,7 @@ describe('createFakeAgentHarness', () => {
         kind: 'user',
         id: `history:${known}-user`,
         text: 'fake earlier message',
+        images: [],
         raw: [{ fake: 'history-user' }],
       },
       {
@@ -435,15 +446,88 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('isFakeAgentHarness_TellsTheFakeFromAnother', () => {
-    const other: AgentHarness = {
-      id: 'claude',
-      start: () =>
-        createFakeAgentHarness().start(request, recordingEvents().events),
-      listSessions: async () => [],
-      history: async () => [],
-    };
+    // A copy has every member of the fake but is not the object it made.
+    const other: AgentHarness = { ...createFakeAgentHarness() };
 
     expect(isFakeAgentHarness(createFakeAgentHarness())).toBe(true);
     expect(isFakeAgentHarness(other)).toBe(false);
+  });
+});
+
+describe('createFakeAgentHarness accounts and projects', () => {
+  // Every event a sign-in emits, as `[event name, payload]`, in emit order.
+  function recordingLogIn() {
+    const heard: [string, unknown][] = [];
+    const events: LogInEvents = {
+      link: (url) => heard.push(['link', url]),
+      ended: (end) => heard.push(['ended', end]),
+    };
+    return { heard, events };
+  }
+
+  it('logIn_RightCode_SignsIn', async () => {
+    const harness = createFakeAgentHarness();
+    await harness.logOut('/p');
+    const { heard, events } = recordingLogIn();
+
+    const login = harness.logIn('/p', events);
+    await flush();
+    login.sendCode(FAKE_SIGN_IN_CODE);
+    await flush();
+
+    const signedIn = { signedIn: true, account: 'fake@example.invalid' };
+    expect(heard).toEqual([
+      ['link', FAKE_SIGN_IN_URL],
+      ['ended', { status: signedIn, error: null }],
+    ]);
+    expect(await harness.accountStatus('/p')).toEqual(signedIn);
+  });
+
+  it('logIn_WrongCodeThenCancel_EndsOnceSignedOut', async () => {
+    const harness = createFakeAgentHarness();
+    const { heard, events } = recordingLogIn();
+
+    const login = harness.logIn(null, events);
+    login.sendCode('nope');
+    login.cancel();
+    await flush();
+
+    expect(heard).toEqual([
+      ['link', FAKE_SIGN_IN_URL],
+      [
+        'ended',
+        { status: { signedIn: false, account: null }, error: 'Wrong code' },
+      ],
+    ]);
+  });
+
+  it('logOut_ThenStatus_SignedOut', async () => {
+    const harness = createFakeAgentHarness();
+    expect(await harness.accountStatus(null)).toEqual({
+      signedIn: true,
+      account: 'fake@example.invalid',
+    });
+
+    await harness.logOut(null);
+
+    expect(await harness.accountStatus(null)).toEqual({
+      signedIn: false,
+      account: null,
+    });
+    expect((await harness.accountStatus('/other')).signedIn).toBe(true);
+  });
+
+  it('listProjects_StartedFolders_NewestFirst', async () => {
+    const harness = createFakeAgentHarness();
+    const { events } = recordingEvents();
+    harness.start({ ...request, projectDir: '/a', profileDir: '/p' }, events);
+    harness.start({ ...request, projectDir: '/b', profileDir: '/p' }, events);
+    harness.start({ ...request, projectDir: '/c', profileDir: null }, events);
+    harness.start({ ...request, projectDir: '/a', profileDir: '/p' }, events);
+
+    const projects = await harness.listProjects('/p');
+
+    expect(projects.map((project) => project.projectDir)).toEqual(['/a', '/b']);
+    expect(projects[0].modified).toBeGreaterThan(projects[1].modified);
   });
 });

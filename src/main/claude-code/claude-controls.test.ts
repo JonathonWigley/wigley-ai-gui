@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { controlMessage, controlValue } from './claude-controls';
+import { controlMessage, controlValue, userMessage } from './claude-controls';
 
 describe('claude-controls', () => {
   it('controlValue_Model_MapsFullNameToAlias', () => {
@@ -25,6 +25,62 @@ describe('claude-controls', () => {
     expect(controlMessage('effort', 'high', 'wigley-1')).toEqual({
       type: 'user',
       message: { role: 'user', content: '/effort high' },
+      parent_tool_use_id: null,
+    });
+  });
+
+  it('userMessage_WithImages_ImageBlocksThenText', () => {
+    const message = userMessage({
+      text: 'What colour?',
+      images: [
+        { mediaType: 'image/png', data: 'iVBORw0KGgo=' },
+        { mediaType: 'image/jpeg', data: '/9j/4AAQ' },
+      ],
+    });
+
+    expect(message).toEqual({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: 'image/png',
+              data: 'iVBORw0KGgo=',
+            },
+          },
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: 'image/jpeg',
+              data: '/9j/4AAQ',
+            },
+          },
+          { type: 'text', text: 'What colour?' },
+        ],
+      },
+      parent_tool_use_id: null,
+    });
+  });
+
+  it('userMessage_ImagesNoText_OmitsTextBlock', () => {
+    const message = userMessage({
+      text: '',
+      images: [{ mediaType: 'image/png', data: 'iVBORw0KGgo=' }],
+    }) as { message: { content: { type: string }[] } };
+
+    expect(message.message.content.map((block) => block.type)).toEqual([
+      'image',
+    ]);
+  });
+
+  it('userMessage_TextOnly_PlainStringContent', () => {
+    expect(userMessage({ text: 'hi', images: [] })).toEqual({
+      type: 'user',
+      message: { role: 'user', content: 'hi' },
       parent_tool_use_id: null,
     });
   });

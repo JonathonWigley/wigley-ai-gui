@@ -521,7 +521,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       deps.archived.set(hostSessionId, archived),
     resume,
     send(sessionId, text) {
-      heldFor('send', sessionId)?.process?.send(text);
+      heldFor('send', sessionId)?.process?.send({ text, images: [] });
     },
     interrupt(sessionId) {
       heldFor('interrupt', sessionId)?.process?.interrupt();

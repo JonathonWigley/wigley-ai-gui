@@ -19,10 +19,30 @@ export interface SessionControl {
 
 export type ProcessActivity = 'idle' | 'working' | 'waiting';
 
+// An image in a user message: `mediaType` such as `image/png`, `data` the
+// file's bytes in base64 with no `data:` prefix.
+export interface ChatImage {
+  mediaType: string;
+  data: string;
+}
+
+// What the user sends: `images` go before `text`, in order; either may be
+// empty.
+export interface UserMessage {
+  text: string;
+  images: ChatImage[];
+}
+
 // `id` is unique within its session; an entry sent again with the same id replaces the earlier one.
 // `raw` holds the harness events the entry was built from, oldest first.
 export type ChatEntry =
-  | { kind: 'user'; id: string; text: string; raw: unknown[] }
+  | {
+      kind: 'user';
+      id: string;
+      text: string;
+      images: ChatImage[];
+      raw: unknown[];
+    }
   | {
       kind: 'assistant';
       id: string;
@@ -100,7 +120,7 @@ export interface AgentProcessEvents {
 // throws for a control or choice the harness did not declare, or when the
 // harness cannot change that control now.
 export interface AgentProcess {
-  send(text: string): void;
+  send(message: UserMessage): void;
   interrupt(): void;
   setControl(id: string, value: string): void;
   // Resolves once the process has exited, after `ended` has fired.
@@ -113,6 +133,37 @@ export interface AgentProcess {
 export interface PastSession {
   sessionId: string;
   title: string;
+  modified: number;
+}
+
+// A profile's sign-in: `account` is the adapter's one-line label for the
+// signed-in account, null when signed out.
+export interface AccountStatus {
+  signedIn: boolean;
+  account: string | null;
+}
+
+// Events of a `logIn`, each in a later microtask, never inside the call that
+// caused it. `link` is the page the user opens to sign in when the harness
+// cannot open it itself. `ended` fires once, after `cancel` too: `status` is
+// the profile's status once the sign-in ends, null when it was cancelled or
+// could not be read, and `error` is null only for a finished sign-in.
+export interface LogInEvents {
+  link(url: string): void;
+  ended(end: { status: AccountStatus | null; error: string | null }): void;
+}
+
+// A running sign-in. `sendCode` passes the code the sign-in page showed the
+// user; `cancel` stops the sign-in. Both do nothing after `ended`.
+export interface LogInProcess {
+  sendCode(code: string): void;
+  cancel(): void;
+}
+
+// A folder the harness saved sessions in; `modified` is its newest session's
+// last change, epoch milliseconds.
+export interface ProjectFolder {
+  projectDir: string;
   modified: number;
 }
 
@@ -132,4 +183,13 @@ export interface AgentHarness {
     projectDir: string,
     profileDir: string | null,
   ): Promise<ChatEntry[]>;
+  // Whether `profileDir` (as `AgentStart` holds it) is signed in, and as whom.
+  accountStatus(profileDir: string | null): Promise<AccountStatus>;
+  // Starts a sign-in to `profileDir`.
+  logIn(profileDir: string | null, events: LogInEvents): LogInProcess;
+  // Signs `profileDir` out.
+  logOut(profileDir: string | null): Promise<void>;
+  // Every folder with saved sessions under `profileDir`, newest `modified`
+  // first; [] when none.
+  listProjects(profileDir: string | null): Promise<ProjectFolder[]>;
 }

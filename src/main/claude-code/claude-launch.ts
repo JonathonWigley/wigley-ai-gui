@@ -27,10 +27,29 @@ const NESTED_SESSION_ENV: readonly string[] = [
   'CLAUDE_CODE_SESSION_ATTENDED',
 ];
 
+// The environment every `claude` run for `profileDir` gets: a copy of `env`
+// without the nested-session variables, with `CLAUDE_CONFIG_DIR` set to
+// `profileDir` resolved against `homeDir` when one is given.
+export function claudeEnv(
+  env: NodeJS.ProcessEnv,
+  profileDir: string | null,
+  homeDir: string,
+  paths: Paths,
+): NodeJS.ProcessEnv {
+  const launchEnv = { ...env };
+  for (const name of NESTED_SESSION_ENV) {
+    delete launchEnv[name];
+  }
+  if (profileDir !== null) {
+    launchEnv.CLAUDE_CONFIG_DIR = paths.expandTilde(profileDir, homeDir);
+  }
+  return launchEnv;
+}
+
 // The arguments, folder and environment `claude` runs one session with:
 // stream-json both ways, partial messages streamed, auto permission mode with
-// what it would still prompt sent to `permissionTool`, and `env` without the
-// nested-session variables. A `~` profile folder resolves against `homeDir`.
+// what it would still prompt sent to `permissionTool`, and `claudeEnv`'s
+// environment.
 export function claudeLaunch(
   request: AgentStart,
   permissionTool: string,
@@ -39,16 +58,6 @@ export function claudeLaunch(
   paths: Paths,
 ): ClaudeLaunch {
   const sessionFlag = request.resume ? '--resume' : '--session-id';
-  const launchEnv = { ...env };
-  for (const name of NESTED_SESSION_ENV) {
-    delete launchEnv[name];
-  }
-  if (request.profileDir !== null) {
-    launchEnv.CLAUDE_CONFIG_DIR = paths.expandTilde(
-      request.profileDir,
-      homeDir,
-    );
-  }
   return {
     args: [
       '-p',
@@ -67,7 +76,7 @@ export function claudeLaunch(
       permissionTool,
     ],
     cwd: request.projectDir,
-    env: launchEnv,
+    env: claudeEnv(env, request.profileDir, homeDir, paths),
   };
 }
 

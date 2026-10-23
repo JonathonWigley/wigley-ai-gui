@@ -1,10 +1,14 @@
 import type {
+  AccountStatus,
   AgentHarness,
   AgentProcess,
   AgentProcessEvents,
   AgentStart,
   ChatEntry,
+  LogInEvents,
+  LogInProcess,
   PastSession,
+  ProjectFolder,
   SessionControl,
 } from '../contracts/agent';
 
@@ -16,9 +20,15 @@ import type {
 export const FAKE_HOLD_TEXT = 'fake: hold';
 // A send of this text runs one tool before the reply.
 export const FAKE_TOOL_TEXT = 'fake: tool';
+// The link every `logIn` reports, and the one code that finishes it.
+export const FAKE_SIGN_IN_URL = 'https://example.invalid/fake-sign-in';
+export const FAKE_SIGN_IN_CODE = 'fake-code';
+// The account every profile is signed in as until `logOut`.
+const FAKE_ACCOUNT = 'fake@example.invalid';
+const SIGNED_OUT: AccountStatus = { signedIn: false, account: null };
 
 export type FakeAgentCall =
-  | { method: 'send'; text: string }
+  | { method: 'send'; text: string; imageCount: number }
   | { method: 'interrupt' }
   | { method: 'setControl'; id: string; value: string }
   | { method: 'end' };
@@ -64,7 +74,10 @@ export interface FakePastSessionCall {
 // pending; `releaseEnd` emits `ended` for each held process in call order and
 // resolves them. `pastSessionCalls` lists every `listSessions` and `history`
 // call in call order, failed ones included; `failNextHistory` makes the next
-// `history` reject `message`.
+// `history` reject `message`. Every profile starts signed in as
+// `fake@example.invalid`; `logOut` signs it out and a `logIn` given
+// `FAKE_SIGN_IN_CODE` signs it back in. `listProjects` lists the folders
+// `start` ran under the profile, the last started first.
 export interface FakeAgentHarness extends AgentHarness {
   readonly processes: readonly FakeAgentProcessRecord[];
   readonly pastSessionCalls: readonly FakePastSessionCall[];
@@ -172,6 +185,7 @@ function fakeHistory(sessionId: string): ChatEntry[] {
       kind: 'user',
       id: `history:${sessionId}-user`,
       text: 'fake earlier message',
+      images: [],
       raw: [{ fake: 'history-user' }],
     },
     {
@@ -191,6 +205,58 @@ export function createFakeAgentHarness(): FakeAgentHarness {
   let nextHistoryFailure: string | null = null;
   let isEndHeld = false;
   const heldEnds: (() => void)[] = [];
+  // Profiles `logOut` signed out and no sign-in has signed in since.
+  const signedOutProfiles = new Set<string | null>();
+  // Each profile's started folders, by the count of `start` calls when each
+  // last started: the fake's stand-in for a modified time.
+  const startedFolders = new Map<string | null, Map<string, number>>();
+  let startCount = 0;
+
+  const statusOf = (profileDir: string | null): AccountStatus =>
+    signedOutProfiles.has(profileDir)
+      ? SIGNED_OUT
+      : { signedIn: true, account: FAKE_ACCOUNT };
+
+  function recordStart(request: AgentStart) {
+    startCount += 1;
+    const folders =
+      startedFolders.get(request.profileDir) ?? new Map<string, number>();
+    folders.set(request.projectDir, startCount);
+    startedFolders.set(request.profileDir, folders);
+  }
+
+  // Emits `link` at once; `FAKE_SIGN_IN_CODE` signs the profile in, any other
+  // code ends signed out with `Wrong code`.
+  function startLogIn(
+    profileDir: string | null,
+    events: LogInEvents,
+  ): LogInProcess {
+    let hasEnded = false;
+    const end = (status: AccountStatus | null, error: string | null) => {
+      hasEnded = true;
+      queueMicrotask(() => events.ended({ status, error }));
+    };
+    queueMicrotask(() => events.link(FAKE_SIGN_IN_URL));
+    return {
+      sendCode(code) {
+        if (hasEnded) {
+          return;
+        }
+        if (code !== FAKE_SIGN_IN_CODE) {
+          end(SIGNED_OUT, 'Wrong code');
+          return;
+        }
+        signedOutProfiles.delete(profileDir);
+        end(statusOf(profileDir), null);
+      },
+      cancel() {
+        if (hasEnded) {
+          return;
+        }
+        end(null, 'Sign-in cancelled');
+      },
+    };
+  }
 
   function startProcess(record: FakeAgentProcessRecord): AgentProcess {
     const { events, calls } = record;
@@ -209,8 +275,9 @@ export function createFakeAgentHarness(): FakeAgentHarness {
       events.activity('idle');
     });
     return {
-      send(text) {
-        calls.push({ method: 'send', text });
+      send(message) {
+        const { text, images } = message;
+        calls.push({ method: 'send', text, imageCount: images.length });
         requireRunning();
         turn += 1;
         const sentTurn = turn;
@@ -221,6 +288,7 @@ export function createFakeAgentHarness(): FakeAgentHarness {
             kind: 'user',
             id: `user-${sentTurn}`,
             text,
+            images,
             raw: [{ fake: 'user', text }],
           });
           events.activity('working');
@@ -311,6 +379,7 @@ export function createFakeAgentHarness(): FakeAgentHarness {
         ended: false,
       };
       processes.push(record);
+      recordStart(request);
       return startProcess(record);
     },
     failNextStart(message) {
@@ -347,6 +416,20 @@ export function createFakeAgentHarness(): FakeAgentHarness {
     },
     failNextHistory(message) {
       nextHistoryFailure = message;
+    },
+    async accountStatus(profileDir) {
+      return statusOf(profileDir);
+    },
+    logIn: startLogIn,
+    async logOut(profileDir) {
+      signedOutProfiles.add(profileDir);
+    },
+    async listProjects(profileDir) {
+      const folders = startedFolders.get(profileDir) ?? new Map();
+      const projects: ProjectFolder[] = [...folders].map(
+        ([projectDir, modified]) => ({ projectDir, modified }),
+      );
+      return projects.sort((a, b) => b.modified - a.modified);
     },
     holdEnd() {
       isEndHeld = true;

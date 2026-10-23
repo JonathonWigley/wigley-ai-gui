@@ -186,7 +186,7 @@ describe('transcriptEntries', () => {
     ]);
 
     expect(transcriptEntries(text)).toEqual([
-      { kind: 'user', id: 'history:u1', text: 'hi', raw: [u1] },
+      { kind: 'user', id: 'history:u1', text: 'hi', images: [], raw: [u1] },
       {
         kind: 'assistant',
         id: 'history:a2-0',
@@ -301,7 +301,7 @@ describe('transcriptEntries', () => {
     );
 
     expect(transcriptEntries(jsonl([u1, u2]))).toEqual([
-      { kind: 'user', id: 'history:u1', text: '!ls', raw: [u1] },
+      { kind: 'user', id: 'history:u1', text: '!ls', images: [], raw: [u1] },
       { kind: 'raw', id: 'history:u2', raw: [u2] },
     ]);
   });
@@ -311,7 +311,7 @@ describe('transcriptEntries', () => {
     const u1 = userLine('u1', typed);
 
     expect(transcriptEntries(jsonl([u1]))).toEqual([
-      { kind: 'user', id: 'history:u1', text: typed, raw: [u1] },
+      { kind: 'user', id: 'history:u1', text: typed, images: [], raw: [u1] },
     ]);
   });
 
@@ -325,8 +325,57 @@ describe('transcriptEntries', () => {
         kind: 'user',
         id: 'history:u1',
         text: 'why did I see [Request interrupted by user]?',
+        images: [],
         raw: [u1],
       },
     ]);
+  });
+
+  it('transcriptEntries_UserImageLine_EntryCarriesImages', () => {
+    const u1 = userLine('u1', [
+      {
+        type: 'image',
+        source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0K' },
+      },
+      { type: 'text', text: 'What colour is this?' },
+    ]);
+    const u2 = userLine('u2', [
+      {
+        type: 'image',
+        source: { type: 'base64', media_type: 'image/jpeg', data: '/9j/4AAQ' },
+      },
+    ]);
+
+    expect(transcriptEntries(jsonl([u1, u2]))).toEqual([
+      {
+        kind: 'user',
+        id: 'history:u1',
+        text: 'What colour is this?',
+        images: [{ mediaType: 'image/png', data: 'iVBORw0K' }],
+        raw: [u1],
+      },
+      {
+        kind: 'user',
+        id: 'history:u2',
+        text: '',
+        images: [{ mediaType: 'image/jpeg', data: '/9j/4AAQ' }],
+        raw: [u2],
+      },
+    ]);
+  });
+
+  it('transcriptEntries_ImageCompanionLine_NoUserEntry', () => {
+    const u1 = userLine(
+      'u1',
+      [
+        {
+          type: 'text',
+          text: '[Image: source: /config/projects/-w-app/s/images/1.png]',
+        },
+      ],
+      { isMeta: true, turnCompanion: true },
+    );
+
+    expect(transcriptEntries(jsonl([u1]))).toEqual([]);
   });
 });

@@ -1,4 +1,4 @@
-import type { ControlChoice } from '../../contracts/agent';
+import type { ControlChoice, UserMessage } from '../../contracts/agent';
 
 export type ClaudeControlId = 'mode' | 'effort' | 'model';
 
@@ -62,13 +62,29 @@ export function controlValue(id: ClaudeControlId, reported: string): string {
   return alias?.value ?? reported;
 }
 
-// One stdin line sending `text` as the user's message.
-export function userMessage(text: string): object {
+// One stdin line sending the user's message: plain text content when it has
+// no images, else each image's block in order, then a text block when the
+// text is not empty.
+export function userMessage(message: UserMessage): object {
   return {
     type: 'user',
-    message: { role: 'user', content: text },
+    message: { role: 'user', content: messageContent(message) },
     parent_tool_use_id: null,
   };
+}
+
+function messageContent(message: UserMessage): string | object[] {
+  if (message.images.length === 0) {
+    return message.text;
+  }
+  const blocks: object[] = message.images.map((image) => ({
+    type: 'image',
+    source: { type: 'base64', media_type: image.mediaType, data: image.data },
+  }));
+  if (message.text !== '') {
+    blocks.push({ type: 'text', text: message.text });
+  }
+  return blocks;
 }
 
 // The stdin line that sets control `id` to `value`: the mode by a control
@@ -85,5 +101,5 @@ export function controlMessage(
       request: { subtype: 'set_permission_mode', mode: value },
     };
   }
-  return userMessage(`/${id} ${value}`);
+  return userMessage({ text: `/${id} ${value}`, images: [] });
 }

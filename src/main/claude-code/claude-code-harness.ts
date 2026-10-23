@@ -1,11 +1,14 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import type {
+  AccountStatus,
   AgentHarness,
   AgentProcess,
   AgentProcessEvents,
   AgentStart,
   ChatEntry,
+  LogInEvents,
+  LogInProcess,
   ProcessActivity,
   SessionControl,
 } from '../../contracts/agent';
@@ -13,7 +16,8 @@ import type { Files } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
 import { errorText } from '../../shared/error-text';
-import { claudeConfigFolder, claudeLaunch } from './claude-launch';
+import { readAccountStatus, signInLink } from './claude-auth';
+import { claudeConfigFolder, claudeEnv, claudeLaunch } from './claude-launch';
 import {
   CLAUDE_CONTROLS,
   type ClaudeControlId,
@@ -21,7 +25,11 @@ import {
   controlValue,
   userMessage,
 } from './claude-controls';
-import { listPastSessions, readHistory } from './past-sessions';
+import {
+  listPastSessions,
+  listProjectFolders,
+  readHistory,
+} from './past-sessions';
 import { createStreamDecoder, type DecodedLine } from './stream-decoder';
 import { projectFolderName } from './transcripts';
 
@@ -34,8 +42,8 @@ export type ClaudeSpawn = (
 // `command` reads the `claude` binary's path, once per spawned session;
 // `permissionTool` the MCP tool Claude asks what auto mode would still prompt;
 // `env` the environment the process inherits; `files` reads saved transcripts,
-// `homeDir` holds the default config folder `.claude` and is what a `~` profile
-// folder resolves against, and `paths` joins and compares paths by the rules
+// `homeDir` holds the default config folder `.claude`, is what a `~` profile
+// folder resolves against and is where `claude auth` runs, and `paths` joins and compares paths by the rules
 // of the OS `claude` runs on.
 export interface ClaudeCodeHarnessDeps {
   command(): string;
@@ -69,12 +77,16 @@ function isChoice(id: ClaudeControlId, value: string): boolean {
   return choices.some((choice) => choice.value === value);
 }
 
+function exitText(code: number | null, signal: NodeJS.Signals | null): string {
+  return code === null ? `signal ${signal}` : `code ${code}`;
+}
+
 function exitError(
   code: number | null,
   signal: NodeJS.Signals | null,
   lastStderr: string | null,
 ): string {
-  const how = code === null ? `signal ${signal}` : `code ${code}`;
+  const how = exitText(code, signal);
   const why = lastStderr === null ? '' : `: ${lastStderr}`;
   return `claude exited with ${how}${why}`;
 }
@@ -330,18 +342,19 @@ function startClaudeProcess(
   setActivity('idle');
 
   return {
-    send(text) {
+    send(userInput) {
       requireRunning();
-      const message = userMessage(text);
+      const message = userMessage(userInput);
       write(message);
       sendCount += 1;
       emitEntry({
         kind: 'user',
         id: `user-${sendCount}`,
-        text,
+        text: userInput.text,
+        images: userInput.images,
         raw: [message],
       });
-      const typed = CONTROL_COMMAND.exec(text);
+      const typed = CONTROL_COMMAND.exec(userInput.text);
       pendingTurns.push(
         typed === null
           ? null
@@ -411,22 +424,202 @@ function startClaudeProcess(
   };
 }
 
-// Where Claude saves `projectDir`'s transcripts: under the session's config
-// folder.
+// A finished `claude auth` run: its exit code and what it printed, stderr
+// trimmed.
+interface AuthRun {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+// The auth commands run in the home folder, so ENOENT names the binary alone.
+function authSpawnError(error: Error, command: string): string {
+  const isMissing = (error as NodeJS.ErrnoException).code === 'ENOENT';
+  return isMissing
+    ? `claude was not found at ${command}; set claude.command`
+    : error.message;
+}
+
+function withStderr(message: string, stderr: string): string {
+  return stderr === '' ? message : `${message}: ${stderr}`;
+}
+
+// `claude auth <args>` for `profileDir`, in the home folder with the session
+// launch's environment.
+function spawnAuth(
+  deps: ClaudeCodeHarnessDeps,
+  args: readonly string[],
+  profileDir: string | null,
+): { command: string; child: ChildProcessWithoutNullStreams } {
+  const command = deps.command();
+  const child = deps.spawn(command, ['auth', ...args], {
+    cwd: deps.homeDir,
+    env: claudeEnv(deps.env, profileDir, deps.homeDir, deps.paths),
+  });
+  child.stdin.on('error', (error) => deps.log('claude', errorText(error)));
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  return { command, child };
+}
+
+// Runs `claude auth <args>` to its exit, stdin closed. Rejects with the
+// `claude.command` hint when the process cannot start.
+function runAuth(
+  deps: ClaudeCodeHarnessDeps,
+  args: readonly string[],
+  profileDir: string | null,
+): Promise<AuthRun> {
+  const { command, child } = spawnAuth(deps, args, profileDir);
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+  child.stdin.end();
+  return new Promise((resolve, reject) => {
+    child.on('error', (error: Error) =>
+      reject(new Error(authSpawnError(error, command))),
+    );
+    child.on('close', (code: number | null) =>
+      resolve({ code, stdout, stderr: stderr.trim() }),
+    );
+  });
+}
+
+async function readAuthStatus(
+  deps: ClaudeCodeHarnessDeps,
+  profileDir: string | null,
+): Promise<AccountStatus> {
+  const run = await runAuth(deps, ['status', '--json'], profileDir);
+  if (run.code !== 0) {
+    throw new Error(
+      withStderr(`claude auth status exited with code ${run.code}`, run.stderr),
+    );
+  }
+  try {
+    return readAccountStatus(run.stdout);
+  } catch (error) {
+    throw new Error(withStderr(errorText(error), run.stderr));
+  }
+}
+
+async function logOut(
+  deps: ClaudeCodeHarnessDeps,
+  profileDir: string | null,
+): Promise<void> {
+  const run = await runAuth(deps, ['logout'], profileDir);
+  if (run.code !== 0) {
+    throw new Error(
+      withStderr(`claude auth logout exited with code ${run.code}`, run.stderr),
+    );
+  }
+}
+
+// `claude auth login` with stdin a pipe for the pasted code. Its exit code
+// after a finished sign-in is unmeasured, so every exit is confirmed by a
+// status read.
+function startLogIn(
+  deps: ClaudeCodeHarnessDeps,
+  profileDir: string | null,
+  events: LogInEvents,
+): LogInProcess {
+  const { command, child } = spawnAuth(deps, ['login'], profileDir);
+  let output = '';
+  let stderr = '';
+  let hasLink = false;
+  let hasEnded = false;
+
+  const end = (status: AccountStatus | null, error: string | null) => {
+    if (hasEnded) {
+      return;
+    }
+    hasEnded = true;
+    queueMicrotask(() => events.ended({ status, error }));
+  };
+
+  // The link line may arrive on either stream, split across chunks.
+  const addOutput = (chunk: string) => {
+    output += chunk;
+    if (hasLink) {
+      return;
+    }
+    const url = signInLink(output);
+    if (url !== null) {
+      hasLink = true;
+      queueMicrotask(() => events.link(url));
+    }
+  };
+
+  child.stdout.on('data', addOutput);
+  child.stderr.on('data', (chunk: string) => {
+    stderr += chunk;
+    addOutput(chunk);
+  });
+  child.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+    if (hasEnded) {
+      return;
+    }
+    const lastStderr = stderr.trim().split('\n').at(-1) ?? '';
+    const failure =
+      lastStderr === ''
+        ? `claude auth login exited with ${exitText(code, signal)}`
+        : lastStderr;
+    readAuthStatus(deps, profileDir).then(
+      (status) => end(status, status.signedIn ? null : failure),
+      (error: unknown) => end(null, errorText(error)),
+    );
+  });
+  child.on('error', (error: Error) =>
+    end(null, authSpawnError(error, command)),
+  );
+
+  return {
+    sendCode(code) {
+      if (hasEnded) {
+        return;
+      }
+      child.stdin.write(`${code}\n`);
+    },
+    cancel() {
+      if (hasEnded) {
+        return;
+      }
+      child.kill();
+      end(null, 'Sign-in cancelled');
+    },
+  };
+}
+
+// Where Claude saves every project's transcripts: `projects` in the
+// session's config folder.
+function projectsRoot(
+  deps: ClaudeCodeHarnessDeps,
+  profileDir: string | null,
+): string {
+  return deps.paths.join(
+    claudeConfigFolder(profileDir, deps.env, deps.homeDir, deps.paths),
+    'projects',
+  );
+}
+
+// Where Claude saves `projectDir`'s transcripts.
 function projectsFolder(
   deps: ClaudeCodeHarnessDeps,
   projectDir: string,
   profileDir: string | null,
 ): string {
   return deps.paths.join(
-    claudeConfigFolder(profileDir, deps.env, deps.homeDir, deps.paths),
-    'projects',
+    projectsRoot(deps, profileDir),
     projectFolderName(projectDir),
   );
 }
 
 // The Claude Code CLI behind `AgentHarness`: one `claude` process per
-// session, the only place the app spawns it, and the sessions it saved.
+// session, the only place the app spawns it, the sessions and project folders
+// it saved, and its `claude auth` sign-in.
 export function createClaudeCodeHarness(
   deps: ClaudeCodeHarnessDeps,
 ): AgentHarness {
@@ -445,6 +638,14 @@ export function createClaudeCodeHarness(
         deps.paths,
         projectsFolder(deps, projectDir, profileDir),
         sessionId,
+      ),
+    accountStatus: (profileDir) => readAuthStatus(deps, profileDir),
+    logIn: (profileDir, events) => startLogIn(deps, profileDir, events),
+    logOut: (profileDir) => logOut(deps, profileDir),
+    listProjects: (profileDir) =>
+      listProjectFolders(
+        { files: deps.files, paths: deps.paths, log: deps.log },
+        projectsRoot(deps, profileDir),
       ),
   };
 }

@@ -1,4 +1,4 @@
-import type { ChatEntry } from '../../contracts/agent';
+import type { ChatEntry, ChatImage } from '../../contracts/agent';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
 import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
 
@@ -173,8 +173,8 @@ function systemEntries(line: Json, lineNumber: number): ChatEntry[] {
   ];
 }
 
-// The user's text, or a raw entry for a line the CLI wrote, then each tool
-// result joined to its tool entry.
+// The user's text and images, or a raw entry for a line the CLI wrote, then
+// each tool result joined to its tool entry.
 function addUserEntries(
   line: Json,
   entries: ChatEntry[],
@@ -185,7 +185,13 @@ function addUserEntries(
   if (isCliWrittenUserLine(line)) {
     entries.push({ kind: 'raw', id, raw: [line] });
   } else if (text !== null) {
-    entries.push({ kind: 'user', id, text, raw: [line] });
+    entries.push({
+      kind: 'user',
+      id,
+      text,
+      images: userImages(line),
+      raw: [line],
+    });
   }
   for (const [index, item] of asArray(asJson(line.message).content).entries()) {
     const block = asJson(item);
@@ -265,9 +271,11 @@ function isCliWrittenUserLine(line: Json): boolean {
 }
 
 // What the user typed on a `user` line, or null for a line the user did not
-// type: a meta or sidechain line, a line the CLI wrote, a local command's
-// caveat or output, or a tool-result line. A slash command reads as its name
-// and its arguments; a `!` shell command reads as `!` and the command.
+// type: a meta or sidechain line (the `[Image: source: …]` line that follows
+// an image is meta), a line the CLI wrote, a local command's caveat or output,
+// or a tool-result line. A slash command reads as its name and its arguments;
+// a `!` shell command reads as `!` and the command. A line of text and image
+// blocks reads as its text blocks alone, `''` when it holds only images.
 function userText(line: Json): string | null {
   const isNotTyped =
     line.isMeta === true ||
@@ -281,13 +289,32 @@ function userText(line: Json): string | null {
     return typedText(content);
   }
   const blocks = asArray(content).map((block) => asJson(block));
-  if (!blocks.some((block) => block.type === 'text')) {
+  const isTyped = blocks.some(
+    (block) => block.type === 'text' || block.type === 'image',
+  );
+  if (!isTyped) {
     return null;
   }
   return blocks
-    .filter((block) => block.type === 'text' || block.type === 'image')
-    .map((block) => (block.type === 'text' ? asString(block.text) : '[image]'))
+    .filter((block) => block.type === 'text')
+    .map((block) => asString(block.text))
     .join('\n');
+}
+
+// The base64 images a `user` line's content blocks hold, in order.
+function userImages(line: Json): ChatImage[] {
+  const images: ChatImage[] = [];
+  for (const item of asArray(asJson(line.message).content)) {
+    const block = asJson(item);
+    const source = asJson(block.source);
+    if (block.type === 'image' && source.type === 'base64') {
+      images.push({
+        mediaType: asString(source.media_type),
+        data: asString(source.data),
+      });
+    }
+  }
+  return images;
 }
 
 function typedText(content: string): string | null {
