@@ -8,7 +8,7 @@
 - **Tier 2: harness and platform** — harness registry, harness-neutral app, Codex, platform, packaging.
 - **Tier 3: open the plugins** — plugin host, layouts service, forms kinds, sessions, chat and docs hooks.
 - **Tier 4: features on top** — chat features, themes, docs features.
-- **Tier 5: cleanup** — test cleanup, design skills.
+- **Tier 5: cleanup** — test cleanup, design skills, per-run drive build.
 
 This file orders every entry in `followups.md` into steps. Each step is sized for one `wigley:feature` plan, and the
 steps are ordered so that the foundations other work builds on come first. Item names here are short labels:
@@ -32,7 +32,7 @@ after the steps it needs.
               │                16 Forms kinds ── 17 Sessions decoupling ── 18 Chat/markdown hooks
               │
  Tier 4  features on top       19 Chat features   20 Themes   21 Docs features
- Tier 5  cleanup               22 Test cleanup    23 Design skills (other repo)
+ Tier 5  cleanup               22 Test cleanup    23 Design skills (other repo)    24 Per-run drive build
 ```
 
 Start with step 1, then step 3, since step 3 must land before docs task 07. Step 2 can run beside them. Step 4 unblocks
@@ -62,7 +62,7 @@ stuck UI.
 - Raw events: reword `design.md` so the deltas count as covered
 
 **2. Drive reliability and tooling.** Every later step's live checks run through it.
-- Restart sometimes never finishes loading (about 1 in 3, cause unknown; debug it first)
+- Restart sometimes never finishes loading (root-caused; the per-run build is step 24)
 - `wait-log` misses a reload between the length read and the wait
 - `drag --hold` / `release`
 - `SelfTestStep` width, plus the docs hidden-tree self-test step
@@ -214,3 +214,7 @@ stuck UI.
 - The latent `titleBarOverlayProblem` and settings-array notes, revisited only if their trigger appears
 
 **23. Design skills in wigley-ai-marketplace.** No dependencies, so this can run any time. Plan it in that repo.
+
+**24. Per-run drive build.** Builds on 2. Only if the user's `npm start` keeps getting hit by drive or self-test
+starts, which the step-2 start lock does not cover.
+- Each dev drive run builds into its own `.drive/<run>/build` and launches Electron on it directly

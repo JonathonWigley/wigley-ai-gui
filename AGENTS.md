@@ -354,7 +354,13 @@ round), since main, not the page, decides.
   `writeFile` writes a file under the self-test's temp home before its keys, as an outside change on disk, and a
   step's `screenshot` (a lowercase name in words joined by `-`) saves a PNG of the window, once the step's line has
   been waited for, to `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)
-  for the agent to check against `DESIGN.md`. The self-test's user
+  for the agent to check against `DESIGN.md`. A script's steps sit in named groups, each with a `why` saying what
+  the group proves, and a step may add its own `why`; the report prints the group's name before its steps, and a
+  failed step prints both whys. A step's `width` sets the window's content width before its keys and holds it,
+  the fit check returning to it, until a later step sets another or the script ends, which restores the start
+  width. A step's `repeat: { until, max }` presses its keys again after each `expect` line until the `until` line
+  is logged, failing past `max` presses, and its `screenshot` saves one PNG per press as `<name>-<n>`. The
+  self-test's user
   config folder sits in its temp home. The script's
   `settings` override plugin settings in the config main serves the page (forms' sets a short
   `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the ConfigStore's config, which under the self-test is the empty config folder in its temp
@@ -389,6 +395,11 @@ round), since main, not the page, decides.
   group, and the 3 s cap kills that whole group.
 - Under `electron-forge start` the page loads twice at startup, the second load triggered by the dev server. Code
   that acts on page load runs on every load, as the self-test does.
+- Every `electron-forge start` (a dev drive run, the self-test, the user's `npm start`) empties and rewrites the one
+  `.vite/build` and bakes its own dev-server URL into `main.cjs`. Two starts that overlap launch Electron on a
+  missing `main.cjs` (Electron's "Error launching app" dialog, on the user's screen) or point one app's page at the
+  other's dev server. Drive and self-test starts take a lock under `.drive/` for this; the user's `npm start` is
+  outside it, so work that runs drive checks beside a peer's runs in a worktree, which has its own `.vite`.
 - A session's `ask_round` schema is fixed when the session starts, so after a change to the forms tool contract the
   running session still offers the old shape. Take the fields the server now requires from its error, and send a
   sample round that needs the new schema from a new session.

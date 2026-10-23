@@ -55,9 +55,12 @@ survives a restart runs the same way. The docs fixture survives a `restart` as t
 window opens.
 
 The app runs commands one at a time, so a command that never returns blocks every later one, and
-the CLI then says the run did not answer. A page that never finishes loading (an occasional dev
-`restart` brings one up) fails a command after 30 s with "The page never finished loading";
-`restart` the run. `restart` and `quit` end a stuck run: `quit` runs beside the stuck command,
+the CLI then says the run did not answer. A script the drive runs in the page rejects when the
+page navigates under it, and each wait re-polls after a capped check, so a reload during a command
+costs one poll rather than the whole 30 s wait. Dev starts (`start`, `restart`, `npm run
+selftest`) take one lock under `.drive/` from spawn until the app is up, because each
+`electron-forge start` empties and rewrites the shared `.vite/build`; a start waits while another
+holds it. `restart` and `quit` end a stuck run: `quit` runs beside the stuck command,
 and the CLI waits up to 60 s for the app to exit (time for a recording's encode), then terminates
 it; the app takes that SIGTERM as a second quit and exits without waiting further. Terminating
 skips any recorded pid whose process no longer carries the run's `WIGLEY_DRIVE_DIR` (a pid reused
@@ -80,6 +83,9 @@ Conventions:
   the visible element (`.session-body:not([hidden]) …`). A click or drag fails, sending nothing,
   when the element has no size (it is not shown) or another element covers its centre, naming the
   cover: that is a finding, not a flake.
+- `drag --hold` leaves the left button down at the drag's end point, so `query` and `screenshot`
+  can read a style that shows only while the button is held; `release` lifts it there and returns
+  the lines it caused. Until `release`, another `drag` or a `click` rejects, naming the held drag.
 - `wait-log` matches a whole page log line, its source prefix included (`[page] …`), logged after the call starts; a line already in the log does not count.
 - `chat.askPermission` returns a `toolUseId` at once; `chat.permissionAnswer` with that id answers
   `{ pending: true }` until the card is answered, then the reply, as `forms.answers` does for a
