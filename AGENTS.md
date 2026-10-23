@@ -307,7 +307,9 @@ round), since main, not the page, decides.
   are written by hand. App-written state, such as split widths, goes to the `uiState` service, never to the user's config.
 - **A third-party tool** gets a contract in `src/contracts/` and an adapter folder of its own; the core hands
   plugins the shared ones (editor, markdown, fuzzy matcher) as services. Swapping it is a new adapter folder against the same
-  contract, and one changed line in the composition root.
+  contract, and one changed line in the composition root. Reach for a maintained library behind an adapter, and the
+  upstream tool's own behaviour (vim's for keys, neovim's pickers), before porting a subset or writing custom logic:
+  the user picks the established behaviour every time.
 - **Plugin data** — files a plugin keeps for the user, such as forms layouts — lives in the plugin's own folder,
   `plugins/<id>/` in Electron's per-user data folder (in the self-test and a drive run, `plugin-data/` in the temp home). Main reaches it through
   `api.data`, the files service scoped to that folder, which refuses a path outside it. The page loads a file from
