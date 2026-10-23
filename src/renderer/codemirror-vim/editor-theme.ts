@@ -11,9 +11,11 @@ export const editorTheme = EditorView.theme({
   },
   // A text box's focus ring is its frame. The document editor's ring is an
   // overlay so the opaque gutter and vim panel cannot cover its edges; an
-  // input frame around a document editor hides it and rings it instead.
+  // input frame around a document editor hides it and rings it instead. The
+  // document editor isolates its stacking, so the ring's z-index orders it
+  // only above the editor's own gutter and panels.
   '&.cm-focused': { outline: 'none' },
-  '&.wg-document-editor': { height: '100%' },
+  '&.wg-document-editor': { height: '100%', isolation: 'isolate' },
   '&.wg-document-editor.cm-focused::after': {
     content: '""',
     position: 'absolute',
