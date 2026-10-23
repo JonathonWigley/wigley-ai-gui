@@ -582,6 +582,33 @@ describe('createChatSessions', () => {
     expect(test.logged).toContain(`[chat] session ${ROW_ID} closed (code 0)`);
   });
 
+  it('killAll_KillsAHeldSessionsProcess', async () => {
+    const test = await started();
+
+    test.chat.killAll();
+
+    expect(test.process.calls).toContainEqual({ method: 'kill' });
+  });
+
+  it('killAll_KillsAClosedSessionStillEnding', async () => {
+    const test = await started();
+    test.harness.holdEnd();
+    test.chat.closed(ROW_ID);
+
+    test.chat.killAll();
+
+    expect(test.process.calls).toContainEqual({ method: 'kill' });
+  });
+
+  it('killAll_SkipsAnExitedProcess', async () => {
+    const test = await started();
+    test.process.events.ended({ code: 0, error: null });
+
+    test.chat.killAll();
+
+    expect(test.process.calls).not.toContainEqual({ method: 'kill' });
+  });
+
   it('closed_processExitsWithAnError_logsTheExit', async () => {
     const fake = createFakeAgentHarness();
     const failingExit: FakeAgentHarness = {

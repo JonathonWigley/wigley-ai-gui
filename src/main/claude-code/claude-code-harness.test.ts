@@ -392,6 +392,20 @@ describe('createClaudeCodeHarness', () => {
 
     expect(run.heard).toEqual([['ended', { code: null, error: null }]]);
   });
+
+  it('kill_SendsSigtermAtOnceAndEndsClean', async () => {
+    const run = await startedQuiet();
+
+    run.agent.kill();
+    expect(run.signals).toEqual(['SIGTERM']);
+    run.emitter.emit('close', null, 'SIGTERM');
+    await settle();
+
+    expect(run.heard).toEqual([['ended', { code: null, error: null }]]);
+    expect(() => run.agent.send({ text: 'hi', images: [] })).toThrow(
+      'Claude Code process has ended',
+    );
+  });
 });
 
 describe('createClaudeCodeHarness past sessions', () => {

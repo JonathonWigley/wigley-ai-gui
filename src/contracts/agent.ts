@@ -126,6 +126,9 @@ export interface AgentProcess {
   setControl(id: string, value: string): void;
   // Resolves once the process has exited, after `ended` has fired.
   end(): Promise<void>;
+  // Stops the process at once, mid-turn included, for a caller that cannot
+  // wait for `end`, such as an app quit; `ended` follows once it exits.
+  kill(): void;
 }
 
 // A session the harness saved for a folder. `title` is its first user message, whitespace collapsed to

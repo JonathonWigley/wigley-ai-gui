@@ -32,7 +32,8 @@ export type FakeAgentCall =
   | { method: 'send'; text: string; imageCount: number }
   | { method: 'interrupt' }
   | { method: 'setControl'; id: string; value: string }
-  | { method: 'end' };
+  | { method: 'end' }
+  | { method: 'kill' };
 
 // `request` and `events` are the very objects `start` received; `calls` lists
 // every call on the process in call order, refused ones included.
@@ -373,6 +374,20 @@ export function createFakeAgentHarness(): FakeAgentHarness {
           }
         });
         return endPromise;
+      },
+      kill() {
+        calls.push({ method: 'kill' });
+        if (endPromise !== null) {
+          return;
+        }
+        record.ended = true;
+        isTurnOpen = false;
+        endPromise = new Promise<void>((resolve) => {
+          queueMicrotask(() => {
+            events.ended({ code: null, error: null });
+            resolve();
+          });
+        });
       },
     };
   }

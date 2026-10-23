@@ -298,6 +298,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     return {
       commands: {},
       dispose: () => {
+        chat.killAll();
         accounts.cancelRunning();
         for (const action of driveActions) {
           action.dispose();

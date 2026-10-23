@@ -87,6 +87,9 @@ export interface ChatSessions {
   ): void;
   // The sessions plugin's `closed` event for `sessionId`.
   closed(sessionId: string): void;
+  // Kills every process not yet exited, a closed session's still ending
+  // included, for an app quit, which does not wait for `end`.
+  killAll(): void;
   // The sessions plugin's `connected` event: records the session's host id
   // as open in the app.
   sessionConnected(session: AgentSession): void;
@@ -168,6 +171,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   const held = new Map<string, HeldSession>();
   // Row id → host session id of every session open in the app, owned or not.
   const openHostIds = new Map<string, string>();
+  // Every started process until its `ended`, held or closed.
+  const running = new Set<AgentProcess>();
 
   function isHeld(session: HeldSession): boolean {
     return held.get(session.state.sessionId) === session;
@@ -292,6 +297,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       },
       ended({ code, error }) {
         session.exit = { code, error };
+        if (session.process !== null) {
+          running.delete(session.process);
+        }
         if (!isHeld(session)) {
           return;
         }
@@ -359,6 +367,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         },
         processEvents(session),
       );
+      running.add(session.process);
     } catch (error) {
       owned.end();
       drop(session);
@@ -567,6 +576,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           session.owned.end();
         },
       );
+    },
+    killAll() {
+      for (const process of running) {
+        process.kill();
+      }
     },
     sessionConnected(session) {
       if (session.info.sessionId !== null) {

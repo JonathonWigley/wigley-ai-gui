@@ -421,6 +421,13 @@ function startClaudeProcess(
       );
       return endPromise;
     },
+    kill() {
+      if (hasClosed) {
+        return;
+      }
+      isEndCalled = true;
+      child.kill('SIGTERM');
+    },
   };
 }
 
