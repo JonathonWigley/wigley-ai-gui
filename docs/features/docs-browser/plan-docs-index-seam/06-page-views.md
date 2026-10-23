@@ -61,8 +61,8 @@ Decisions: `addView` returns one element holding the split (design review: depth
 - **main/start.ts**: the drive action `openDoc`, args `{ path: string; line?: number }`, description
   `Shows Docs mode and opens the doc at path (line 1-based), or toasts that the machine index does not list it.` It
   waits for `started`, then sends the `openDoc` message with `line ?? null` and returns `{}`.
-- **selftest-script.ts**: lines 46 and 190's `[docs] index rebuilt: <n> entries` become
-  `[docs] machine index rebuilt: <n> entries`, with the counts unchanged. Lines 301 and 343, and forms line 416, keep
+- **selftest-script.ts**: lines 46 and 190's (measured at `440140d`, re-verify) `[docs] index rebuilt: <n> entries` become
+  `[docs] machine index rebuilt: <n> entries`, with the counts unchanged. Lines 303 and 353 (measured at `440140d`, re-verify), and forms line 415, keep
   their text: the session title is `session index`.
 
 GIVEN the drive action `docs.openDoc` with a path the machine index lists WHEN it runs THEN the channel sends

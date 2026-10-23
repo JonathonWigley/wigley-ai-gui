@@ -48,8 +48,8 @@ Systems touched:
   Re-read both; task 02 bumps the patch version in both manifests only if they match.
 - Self-test lines this plan changes, measured at plan time, re-verify:
   `grep -n "index rebuilt\|session index" src/plugins/docs/main/selftest-script.ts src/plugins/forms/main/selftest-script.ts`
-  prints docs lines 46 and 190 (`[docs] index rebuilt: …`), docs 301 and 343 and forms 416 (`[docs] session index …`),
-  and docs 416 (a `why:` naming "its own session index", unchanged).
+  prints docs lines 46 and 190 (`[docs] index rebuilt: …`), docs 303 and 353 and forms 415 (`[docs] session index …`),
+  and docs 427 (a `why:` naming "its own session index", unchanged).
 
 ## Docs written ahead
 
