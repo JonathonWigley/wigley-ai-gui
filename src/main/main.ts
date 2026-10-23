@@ -350,8 +350,8 @@ const pageLog = createPageLog((source, message) => {
 });
 
 // What the window and the plugins start from besides the config, read once
-// the app is ready so that a bad manifest, temp folder or run folder fails the
-// start through failStart.
+// the app is ready so that a bad manifest or run folder fails the start
+// through failStart.
 interface StartInputs {
   homeDir: string;
   dataRoot: string;
@@ -437,12 +437,23 @@ function uiStateFilePath(homeDir: string): string {
 }
 
 // The OS's temp folders as real paths; none in the self-test, whose home is
-// itself a temp folder its chat steps open folders in.
+// itself a temp folder its chat steps open folders in. A temp folder whose
+// real path cannot be read is logged and listed as given, since the list only
+// filters the folder picker.
 async function runTempFolders(): Promise<string[]> {
   if (runMode === 'selfTest') {
     return [];
   }
-  return tempFolders(await files.realPath(os.tmpdir()), platform);
+  const tempDir = os.tmpdir();
+  try {
+    return tempFolders(await files.realPath(tempDir), platform);
+  } catch (error) {
+    pageLog.log(
+      'main',
+      `temp folder ${tempDir} not resolved: ${errorText(error)}`,
+    );
+    return tempFolders(tempDir, platform);
+  }
 }
 
 async function readStartInputs(): Promise<StartInputs> {
@@ -608,6 +619,7 @@ function createWindow(
     windowBackgroundOf(startConfig.theme, isTransparencyReduced(startConfig)),
     runMode !== 'live',
     titleBarOptions(startConfig, pageLog.log),
+    pageLog.log,
   );
   mainWindow = window;
   const log = pageLog.log;

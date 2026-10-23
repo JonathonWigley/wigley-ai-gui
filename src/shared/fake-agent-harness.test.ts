@@ -483,7 +483,7 @@ describe('createFakeAgentHarness accounts and projects', () => {
     expect(await harness.accountStatus('/p')).toEqual(signedIn);
   });
 
-  it('logIn_WrongCodeThenCancel_EndsOnceSignedOut', async () => {
+  it('logIn_WrongCodeThenCancel_EndsOnceWithStatusUnchanged', async () => {
     const harness = createFakeAgentHarness();
     const { heard, events } = recordingLogIn();
 
@@ -496,7 +496,10 @@ describe('createFakeAgentHarness accounts and projects', () => {
       ['link', FAKE_SIGN_IN_URL],
       [
         'ended',
-        { status: { signedIn: false, account: null }, error: 'Wrong code' },
+        {
+          status: { signedIn: true, account: 'fake@example.invalid' },
+          error: 'Wrong code',
+        },
       ],
     ]);
   });

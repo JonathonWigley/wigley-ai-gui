@@ -226,7 +226,7 @@ export function createFakeAgentHarness(): FakeAgentHarness {
   }
 
   // Emits `link` at once; `FAKE_SIGN_IN_CODE` signs the profile in, any other
-  // code ends signed out with `Wrong code`.
+  // code ends with `Wrong code` and the profile's status unchanged.
   function startLogIn(
     profileDir: string | null,
     events: LogInEvents,
@@ -243,7 +243,7 @@ export function createFakeAgentHarness(): FakeAgentHarness {
           return;
         }
         if (code !== FAKE_SIGN_IN_CODE) {
-          end(SIGNED_OUT, 'Wrong code');
+          end(statusOf(profileDir), 'Wrong code');
           return;
         }
         signedOutProfiles.delete(profileDir);

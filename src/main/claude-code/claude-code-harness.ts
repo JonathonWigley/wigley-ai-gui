@@ -518,16 +518,32 @@ async function logOut(
   }
 }
 
+// Whether the status `after` a login that exited with `code` is a sign-in
+// that login made, given the status `before` it (null when unknown).
+function isNewSignIn(
+  before: AccountStatus | null,
+  after: AccountStatus,
+  code: number | null,
+): boolean {
+  const wasSignedIn = before?.signedIn === true;
+  const isOtherAccount = before?.account !== after.account;
+  return after.signedIn && (code === 0 || !wasSignedIn || isOtherAccount);
+}
+
 // `claude auth login` with stdin a pipe for the pasted code. Its exit code
-// after a finished sign-in is unmeasured, so every exit is confirmed by a
-// status read.
+// after a finished sign-in is unmeasured, so every exit reads the status, and
+// a status read as the login starts tells a new sign-in from the profile's
+// old one: a signed-in status ends the sign-in finished when the login exited
+// 0, the profile was signed out before, or the account changed.
 function startLogIn(
   deps: ClaudeCodeHarnessDeps,
   profileDir: string | null,
   events: LogInEvents,
 ): LogInProcess {
+  // A failed read leaves the earlier status unknown, read as signed out.
+  const statusBefore = readAuthStatus(deps, profileDir).catch(() => null);
   const { command, child } = spawnAuth(deps, ['login'], profileDir);
-  let output = '';
+  let stdout = '';
   let stderr = '';
   let hasLink = false;
   let hasEnded = false;
@@ -540,9 +556,9 @@ function startLogIn(
     queueMicrotask(() => events.ended({ status, error }));
   };
 
-  // The link line may arrive on either stream, split across chunks.
-  const addOutput = (chunk: string) => {
-    output += chunk;
+  // The link line may arrive on either stream, split across chunks; each
+  // stream is searched alone, so the other's chunks cannot split the line.
+  const findLink = (output: string) => {
     if (hasLink) {
       return;
     }
@@ -553,10 +569,13 @@ function startLogIn(
     }
   };
 
-  child.stdout.on('data', addOutput);
+  child.stdout.on('data', (chunk: string) => {
+    stdout += chunk;
+    findLink(stdout);
+  });
   child.stderr.on('data', (chunk: string) => {
     stderr += chunk;
-    addOutput(chunk);
+    findLink(stderr);
   });
   child.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
     if (hasEnded) {
@@ -567,8 +586,9 @@ function startLogIn(
       lastStderr === ''
         ? `claude auth login exited with ${exitText(code, signal)}`
         : lastStderr;
-    readAuthStatus(deps, profileDir).then(
-      (status) => end(status, status.signedIn ? null : failure),
+    Promise.all([statusBefore, readAuthStatus(deps, profileDir)]).then(
+      ([before, after]) =>
+        end(after, isNewSignIn(before, after, code) ? null : failure),
       (error: unknown) => end(null, errorText(error)),
     );
   });

@@ -248,6 +248,38 @@ describe('listProjectFolders', () => {
     ]);
   });
 
+  it('listProjects_UnlistableFolder_LeftOutAndLogged', async () => {
+    const stored = createMemoryFiles();
+    await stored.write(
+      `/config/projects/-w-app/${NEW_ID}.jsonl`,
+      transcript('/w/app', 'new'),
+    );
+    await stored.write(
+      `/config/projects/-w-locked/${OLD_ID}.jsonl`,
+      transcript('/w/locked', 'old'),
+    );
+    const locked = '/config/projects/-w-locked';
+    const files: Files = {
+      ...stored,
+      list: (path) =>
+        path === locked
+          ? Promise.reject(new Error('EACCES'))
+          : stored.list(path),
+    };
+    const { log, logged } = recordingLog();
+
+    const projects = await listProjectFolders(
+      { files, paths: posixPaths, log },
+      '/config/projects',
+    );
+
+    expect(projects.map((project) => project.projectDir)).toEqual(['/w/app']);
+    expect(logged).toContainEqual([
+      'claude',
+      `project folder ${locked} unreadable: EACCES`,
+    ]);
+  });
+
   it('listProjects_MissingProjectsFolder_Empty', async () => {
     const { log } = recordingLog();
 

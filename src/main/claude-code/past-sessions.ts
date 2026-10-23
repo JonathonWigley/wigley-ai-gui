@@ -137,13 +137,22 @@ async function pastSession(
   return { sessionId, title: sessionTitle(firstMessage), modified };
 }
 
-// Null, logged, for a folder whose newest transcript cannot be read or names
-// no folder.
+// Null, logged, for a folder that cannot be listed, or whose newest
+// transcript cannot be read or names no folder.
 async function projectFolder(
   deps: PastSessionsDeps,
   folder: string,
 ): Promise<ProjectFolder | null> {
-  const newest = await newestTranscript(deps, folder);
+  let newest: { path: string; modified: number } | null;
+  try {
+    newest = await newestTranscript(deps, folder);
+  } catch (error) {
+    deps.log(
+      'claude',
+      `project folder ${folder} unreadable: ${errorText(error)}`,
+    );
+    return null;
+  }
   if (newest === null) {
     deps.log('claude', `project folder ${folder} has no readable transcript`);
     return null;

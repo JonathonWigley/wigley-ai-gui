@@ -12,7 +12,9 @@ import type { MainCommands } from './keybindings';
 
 // `offscreen` renders without showing the window or taking focus;
 // `backgroundColor` shows before the page paints; `titleBar` hides the native
-// title bar the platform's way, keeping the OS window buttons.
+// title bar the platform's way, keeping the OS window buttons. The window
+// stays on the app's page: a navigation the page starts to another URL, such
+// as Chromium opening a file dropped on the window, is refused and logged.
 export function createMainWindow(
   settings: Settings['window'],
   backgroundColor: string,
@@ -21,6 +23,7 @@ export function createMainWindow(
     BrowserWindowConstructorOptions,
     'titleBarStyle' | 'titleBarOverlay'
   >,
+  log: Log,
 ): BrowserWindow {
   const window = new BrowserWindow({
     ...titleBar,
@@ -35,6 +38,12 @@ export function createMainWindow(
       offscreen,
     },
   });
+  window.webContents.on('will-navigate', (event) => {
+    if (!isSamePage(event.url, window.webContents.getURL())) {
+      event.preventDefault();
+      log('main', `navigation refused: ${event.url}`);
+    }
+  });
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     window.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
@@ -43,6 +52,17 @@ export function createMainWindow(
     );
   }
   return window;
+}
+
+// Whether `target` is the page at `current`, apart from its hash, as a page
+// reload is.
+function isSamePage(target: string, current: string): boolean {
+  return withoutHash(target) === withoutHash(current);
+}
+
+function withoutHash(url: string): string {
+  const hashAt = url.indexOf('#');
+  return hashAt === -1 ? url : url.slice(0, hashAt);
 }
 
 // Plugins' window service: `show` shows the window and gives it focus, for a

@@ -478,6 +478,7 @@ describe('createClaudeCodeHarness accounts', () => {
       child: child as unknown as ChildProcessWithoutNullStreams,
       emitter,
       stdout,
+      stderr,
       lines,
       signals,
       setPid(pid: number | undefined) {
@@ -513,6 +514,20 @@ describe('createClaudeCodeHarness accounts', () => {
     });
     return { harness, spawned };
   }
+
+  // Ends `child` as a run that printed `stdout` and exited with `code`.
+  async function exitWith(
+    child: ReturnType<typeof authChild>,
+    stdout: string,
+    code: number,
+  ) {
+    child.stdout.write(stdout);
+    await settle();
+    child.emitter.emit('close', code, null);
+    await settle();
+  }
+
+  const signedOutStatus = JSON.stringify({ loggedIn: false });
 
   function recordingLogIn() {
     const heard: [string, unknown][] = [];
@@ -564,22 +579,21 @@ describe('createClaudeCodeHarness accounts', () => {
   });
 
   it('logIn_ProcessExitsSignedIn_EndsWithStatus', async () => {
+    const before = authChild();
     const login = authChild();
     const status = authChild();
-    const { harness, spawned } = authHarness([login, status]);
+    const { harness, spawned } = authHarness([before, login, status]);
     const { heard, events } = recordingLogIn();
     const url = 'https://claude.ai/oauth/authorize?code=true';
 
     harness.logIn(null, events);
+    await exitWith(before, signedOutStatus, 0);
     login.stdout.write(
       `Opening browser to sign in…\nIf the browser didn't open, visit: \x1b]8;;${url}\x07${url}\x1b]8;;\x07\n`,
     );
     await settle();
     login.emitter.emit('close', 0, null);
-    status.stdout.write(signedInStatus);
-    await settle();
-    status.emitter.emit('close', 0, null);
-    await settle();
+    await exitWith(status, signedInStatus, 0);
 
     expect(heard).toEqual([
       ['link', url],
@@ -592,14 +606,16 @@ describe('createClaudeCodeHarness accounts', () => {
       ],
     ]);
     expect(spawned.map((spawn) => spawn.args)).toEqual([
+      ['auth', 'status', '--json'],
       ['auth', 'login'],
       ['auth', 'status', '--json'],
     ]);
   });
 
   it('logIn_Cancel_EndsOnceCancelled', async () => {
+    const before = authChild();
     const login = authChild();
-    const { harness, spawned } = authHarness([login]);
+    const { harness, spawned } = authHarness([before, login]);
     const { heard, events } = recordingLogIn();
 
     const process = harness.logIn(null, events);
@@ -612,16 +628,172 @@ describe('createClaudeCodeHarness accounts', () => {
       ['ended', { status: null, error: 'Sign-in cancelled' }],
     ]);
     expect(login.signals).toEqual(['SIGTERM']);
-    expect(spawned).toHaveLength(1);
+    expect(spawned.map((spawn) => spawn.args)).toEqual([
+      ['auth', 'status', '--json'],
+      ['auth', 'login'],
+    ]);
   });
 
   it('logIn_SendCode_WritesCodeLine', async () => {
+    const before = authChild();
     const login = authChild();
-    const { harness } = authHarness([login]);
+    const { harness } = authHarness([before, login]);
 
     harness.logIn(null, recordingLogIn().events).sendCode('abc#123');
     await settle();
 
     expect(login.lines).toEqual(['abc#123']);
+  });
+
+  it('logIn_LinkOnStderrSplitAcrossChunks_LinksOnce', async () => {
+    const before = authChild();
+    const login = authChild();
+    const { harness } = authHarness([before, login]);
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events);
+    login.stderr.write('visit: https://claude.ai/oau');
+    await settle();
+    login.stderr.write('th/authorize\n');
+    await settle();
+    login.stderr.write('visit: https://claude.ai/other\n');
+    await settle();
+
+    expect(heard).toEqual([['link', 'https://claude.ai/oauth/authorize']]);
+  });
+
+  it('logIn_StderrChunkBetweenStdoutHalves_LinksStdoutLine', async () => {
+    const before = authChild();
+    const login = authChild();
+    const { harness } = authHarness([before, login]);
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events);
+    login.stdout.write('visit: https://claude.ai/oau');
+    await settle();
+    login.stderr.write('warning: slow network\n');
+    await settle();
+    login.stdout.write('th/authorize\n');
+    await settle();
+
+    expect(heard).toEqual([['link', 'https://claude.ai/oauth/authorize']]);
+  });
+
+  it('logIn_ExitsStillSignedOut_EndsWithLastStderrLine', async () => {
+    const before = authChild();
+    const login = authChild();
+    const status = authChild();
+    const { harness } = authHarness([before, login, status]);
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events);
+    await exitWith(before, signedOutStatus, 0);
+    login.stderr.write('Starting sign-in\nInvalid code\n');
+    await settle();
+    login.emitter.emit('close', 1, null);
+    await exitWith(status, signedOutStatus, 0);
+
+    expect(heard).toEqual([
+      [
+        'ended',
+        { status: { signedIn: false, account: null }, error: 'Invalid code' },
+      ],
+    ]);
+  });
+
+  it('logIn_ExitsStillSignedOutNoStderr_EndsWithExitCode', async () => {
+    const before = authChild();
+    const login = authChild();
+    const status = authChild();
+    const { harness } = authHarness([before, login, status]);
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events);
+    await exitWith(before, signedOutStatus, 0);
+    login.emitter.emit('close', 3, null);
+    await exitWith(status, signedOutStatus, 0);
+
+    expect(heard).toEqual([
+      [
+        'ended',
+        {
+          status: { signedIn: false, account: null },
+          error: 'claude auth login exited with code 3',
+        },
+      ],
+    ]);
+  });
+
+  it('logIn_SignedInProfileFailsSameAccount_EndsWithError', async () => {
+    const before = authChild();
+    const login = authChild();
+    const status = authChild();
+    const { harness } = authHarness([before, login, status]);
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events);
+    await exitWith(before, signedInStatus, 0);
+    login.emitter.emit('close', 1, null);
+    await exitWith(status, signedInStatus, 0);
+
+    expect(heard).toEqual([
+      [
+        'ended',
+        {
+          status: { signedIn: true, account: 'jo@example.com · Claude max' },
+          error: 'claude auth login exited with code 1',
+        },
+      ],
+    ]);
+  });
+
+  it('logIn_SignedInProfileFailsOtherAccount_EndsSignedIn', async () => {
+    const before = authChild();
+    const login = authChild();
+    const status = authChild();
+    const { harness } = authHarness([before, login, status]);
+    const { heard, events } = recordingLogIn();
+    const otherAccount = JSON.stringify({
+      loggedIn: true,
+      email: 'sam@example.com',
+    });
+
+    harness.logIn(null, events);
+    await exitWith(before, signedInStatus, 0);
+    login.emitter.emit('close', 1, null);
+    await exitWith(status, otherAccount, 0);
+
+    expect(heard).toEqual([
+      [
+        'ended',
+        { status: { signedIn: true, account: 'sam@example.com' }, error: null },
+      ],
+    ]);
+  });
+
+  it('logOut_NonZeroExit_RejectsWithStderr', async () => {
+    const child = authChild();
+    const { harness } = authHarness([child]);
+
+    const rejected = expect(harness.logOut(null)).rejects.toThrow(
+      'claude auth logout exited with code 2: not signed in',
+    );
+    child.stderr.write('not signed in\n');
+    await exitWith(child, '', 2);
+
+    await rejected;
+  });
+
+  it('accountStatus_NonZeroExit_RejectsWithStderr', async () => {
+    const child = authChild();
+    const { harness } = authHarness([child]);
+
+    const rejected = expect(harness.accountStatus(null)).rejects.toThrow(
+      'claude auth status exited with code 1: config unreadable',
+    );
+    child.stderr.write('config unreadable\n');
+    await exitWith(child, '', 1);
+
+    await rejected;
   });
 });
