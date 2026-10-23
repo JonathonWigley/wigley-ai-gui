@@ -967,24 +967,49 @@ describe('review', () => {
     expect(active(last).reviewRow).toBe(2);
   });
 
-  it('jumps from a finding row to the finding in the forms view', () => {
-    const opened = apply(
-      initialState(
-        [
-          presented('r1', {
-            notices: [notice('N1')],
-            findings: [finding('F1')],
-            questions: [question('Q1')],
-          }),
-        ],
-        'r1-session',
-      ),
-      { type: 'openReview' },
+  // Rail positions: 0 notice N1, 1 finding F1, 2 question Q1.
+  function noticeFindingQuestion(): FormsState {
+    return initialState(
+      [
+        presented('r1', {
+          notices: [notice('N1')],
+          findings: [finding('F1')],
+          questions: [question('Q1')],
+        }),
+      ],
+      'r1-session',
     );
+  }
+
+  it('jumps from a finding row to the finding in the forms view', () => {
+    const opened = apply(noticeFindingQuestion(), { type: 'openReview' });
     const onFinding = apply(opened, { type: 'reviewJump', row: 0 });
     expect(onFinding.view).toBe('forms');
     expect(active(onFinding).focus).toBe(1);
     expect(active(apply(opened, { type: 'reviewJump', row: 1 })).focus).toBe(2);
+  });
+
+  it('jumps from a notice in the rail to its card, keeping the review cursor', () => {
+    const state = run(
+      noticeFindingQuestion(),
+      { type: 'openReview' },
+      { type: 'reviewNext' },
+      { type: 'reviewJumpItem', item: 0 },
+    );
+    expect(state.view).toBe('forms');
+    expect(active(state).focus).toBe(0);
+    expect(active(state).reviewRow).toBe(1);
+  });
+
+  it('ignores a rail jump outside the review', () => {
+    const state = noticeFindingQuestion();
+    expect(apply(state, { type: 'reviewJumpItem', item: 0 })).toBe(state);
+  });
+
+  it('ignores a rail jump to a position outside the rail', () => {
+    const opened = apply(noticeFindingQuestion(), { type: 'openReview' });
+    expect(apply(opened, { type: 'reviewJumpItem', item: 3 })).toBe(opened);
+    expect(apply(opened, { type: 'reviewJumpItem', item: -1 })).toBe(opened);
   });
 
   it('jumps to the cursor’s question in the forms view', () => {

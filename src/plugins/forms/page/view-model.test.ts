@@ -7,12 +7,15 @@ import {
   type FormsState,
   initialState,
   type RoundState,
+  type TextTarget,
 } from './form-state';
 import { decision, finding, presentedRound, question } from './test-rounds';
 import {
   progressText,
   railDotStatus,
+  railPickAction,
   reviewRows,
+  reviewRowsChanged,
   roundSaveLabel,
   saveLabel,
   sessionTitle,
@@ -47,7 +50,12 @@ function roundWithFindingAfter(
   delta: Finding,
   ...actions: FormsAction[]
 ): RoundState {
-  const start = initialState(
+  return activeOf(actions.reduce(apply, stateWithFinding(delta)));
+}
+
+// Question Alpha and the given finding, before any action.
+function stateWithFinding(delta: Finding): FormsState {
+  return initialState(
     [
       presentedRound('r1', {
         questions: [question('Alpha')],
@@ -56,7 +64,10 @@ function roundWithFindingAfter(
     ],
     'r1-session',
   );
-  const round = activeRound(actions.reduce(apply, start));
+}
+
+function activeOf(state: FormsState): RoundState {
+  const round = activeRound(state);
   if (round === null) {
     throw new Error('The test round is not active');
   }
@@ -482,6 +493,88 @@ describe('roundSaveLabel', () => {
 
   it('reads the save state while the round is not sending', () => {
     expect(roundSaveLabel(roundAfter())).toBe('Saved');
+  });
+});
+
+describe('reviewRowsChanged', () => {
+  // Questions Alpha and Beta, in the review.
+  const reviewing = stateAfter({ type: 'openReview' });
+  const round = activeOf(reviewing);
+  const edit = (state: FormsState, target: TextTarget, value: string) =>
+    apply(state, { type: 'setText', roundId: 'r1', target, value });
+
+  it('is true with nothing drawn', () => {
+    expect(reviewRowsChanged(null, round)).toBe(true);
+  });
+
+  it('is false after a Round note edit', () => {
+    const noted = activeOf(edit(reviewing, { field: 'note' }, 'checked'));
+    expect(reviewRowsChanged(round, noted)).toBe(false);
+  });
+
+  it('is false after a draft save starts and finishes', () => {
+    const noted = edit(reviewing, { field: 'note' }, 'checked');
+    const saved = [
+      { type: 'saveStarted', roundId: 'r1', revision: 1 },
+      { type: 'saveFinished', roundId: 'r1', revision: 1, ok: true },
+    ] satisfies FormsAction[];
+    const afterSave = activeOf(saved.reduce(apply, noted));
+    expect(reviewRowsChanged(activeOf(noted), afterSave)).toBe(false);
+  });
+
+  it('is true after the review cursor moves', () => {
+    const moved = activeOf(apply(reviewing, { type: 'reviewNext' }));
+    expect(reviewRowsChanged(round, moved)).toBe(true);
+  });
+
+  it("is true after a question's notes change", () => {
+    const target: TextTarget = {
+      field: 'notes',
+      item: { kind: 'question', index: 1 },
+    };
+    const noted = activeOf(edit(reviewing, target, 'why'));
+    expect(reviewRowsChanged(round, noted)).toBe(true);
+  });
+
+  it("is true after a finding's answer changes", () => {
+    const withFinding = apply(stateWithFinding(finding('Delta')), {
+      type: 'openReview',
+    });
+    const target: TextTarget = {
+      field: 'notes',
+      item: { kind: 'finding', index: 1 },
+    };
+    const noted = activeOf(edit(withFinding, target, 'why'));
+    expect(reviewRowsChanged(activeOf(withFinding), noted)).toBe(true);
+  });
+});
+
+describe('railPickAction', () => {
+  it('focuses the clicked item in the forms view', () => {
+    expect(railPickAction('forms', 2, 1)).toEqual({
+      type: 'focusItem',
+      item: 2,
+    });
+  });
+
+  it("jumps to a finding's or question's row in the review", () => {
+    expect(railPickAction('review', 2, 1)).toEqual({
+      type: 'reviewJump',
+      row: 1,
+    });
+  });
+
+  it("leaves the review for a notice's card", () => {
+    expect(railPickAction('review', 0, undefined)).toEqual({
+      type: 'reviewJumpItem',
+      item: 0,
+    });
+  });
+
+  it('does nothing under the cancel prompt or with no round', () => {
+    expect(railPickAction('confirm', 0, undefined)).toBeNull();
+    expect(railPickAction('confirm', 2, 1)).toBeNull();
+    expect(railPickAction('idle', 0, undefined)).toBeNull();
   });
 });
 

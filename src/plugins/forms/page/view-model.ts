@@ -7,6 +7,8 @@ import {
   answerStatus,
   findingActionOf,
   findingActionWord,
+  type FormsAction,
+  type FormsView,
   itemAnswer,
   pickIsComplete,
   type Progress,
@@ -186,4 +188,44 @@ export function roundSaveLabel(round: RoundState): string {
   return round.sending === null
     ? saveLabel(saveState(round), round.saveError)
     : 'Sending…';
+}
+
+// Whether the review's rows differ from those drawn from `drawn`: a row reads
+// only the round, its answers, its finding answers and the review cursor.
+// Null `drawn` is nothing drawn yet.
+export function reviewRowsChanged(
+  drawn: RoundState | null,
+  current: RoundState,
+): boolean {
+  if (drawn === null) {
+    return true;
+  }
+  return (
+    drawn.round !== current.round ||
+    drawn.answers !== current.answers ||
+    drawn.findingAnswers !== current.findingAnswers ||
+    drawn.reviewRow !== current.reviewRow
+  );
+}
+
+// What clicking a rail item does: focus it in the forms view; in the review,
+// jump to its row's item, as Enter on the row does, or show a notice's card,
+// which has no row; null under the confirm, whose scrim takes the pointer, and
+// with no round.
+export function railPickAction(
+  view: FormsView,
+  position: number,
+  reviewRow: number | undefined,
+): FormsAction | null {
+  switch (view) {
+    case 'forms':
+      return { type: 'focusItem', item: position };
+    case 'review':
+      return reviewRow === undefined
+        ? { type: 'reviewJumpItem', item: position }
+        : { type: 'reviewJump', row: reviewRow };
+    case 'confirm':
+    case 'idle':
+      return null;
+  }
 }

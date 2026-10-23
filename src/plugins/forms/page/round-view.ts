@@ -39,8 +39,10 @@ import { buildLayoutCard } from './layout/layout-cards';
 import {
   progressText,
   railDotStatus,
+  railPickAction,
   type ReviewRow,
   reviewRows,
+  reviewRowsChanged,
 } from './view-model';
 
 // `platform` is the OS key hints are drawn for; `uiState` keeps the rail's
@@ -69,8 +71,6 @@ export interface RoundView {
 // The children of a round view one build makes.
 interface RoundParts {
   items: RailItem[];
-  // Each rail position's review row.
-  reviewRowAt: (number | undefined)[];
   main: HTMLElement;
   head: { element: HTMLElement; update(round: RoundState): void };
   layoutHead: HTMLElement | null;
@@ -80,7 +80,15 @@ interface RoundParts {
   railEntries: RailEntry[];
   itemsPane: HTMLElement;
   itemCards: ItemCard[];
-  review: { element: HTMLElement; update(round: RoundState): void };
+  review: ReviewPart;
+}
+
+// `update` rebuilds the rows only when reviewRowsChanged says they differ
+// from the last draw; `forgetRows` makes the next `update` rebuild them.
+interface ReviewPart {
+  element: HTMLElement;
+  update(round: RoundState): void;
+  forgetRows(): void;
 }
 
 // One open round's DOM, built with its editors: a split with the rail in its
@@ -89,8 +97,9 @@ interface RoundParts {
 // the latest dragged width of any round; a new layout rebuilds both panes,
 // keeping the rail's dragged width. A keymap change
 // draws the layout's head again, shown or hidden, since showing the view only
-// updates it; while the view shows, the change also updates it with the round
-// it last showed, so every key hint reads the new keys. `attach` places the
+// updates it, and has the review rebuild its rows at its next update; while
+// the view shows, the change also updates it with the round it last showed,
+// so every key hint reads the new keys. `attach` places the
 // root in the page once, before any editor mounts.
 export function createRoundView(
   attach: (root: HTMLElement) => void,
@@ -128,24 +137,14 @@ export function createRoundView(
       shownRound = current;
       const isForms = viewName === 'forms';
       const isReview = viewName === 'review' || viewName === 'confirm';
-      const { items, reviewRowAt } = parts;
+      const { items } = parts;
       parts.head.element.hidden = !isReview;
       parts.head.update(current);
       if (parts.layoutHead !== null) {
         parts.layoutHead.hidden = !isForms;
       }
       parts.railEntries.forEach((entry, position) => {
-        const item = items[position];
-        updateRailEntry(entry, current, item, position, isReview);
-        const action = railPickAction(
-          viewName,
-          position,
-          reviewRowAt[position],
-        );
-        // Under the confirm the dialog's scrim takes the pointer, so the rail
-        // keeps its colours there; only a review notice looks disabled.
-        const isInertNotice = viewName === 'review' && action === null;
-        entry.element.classList.toggle('is-disabled', isInertNotice);
+        updateRailEntry(entry, current, items[position], position, isReview);
       });
       parts.itemsPane.hidden = !isForms;
       parts.itemCards.forEach((card, position) => {
@@ -180,6 +179,7 @@ export function createRoundView(
     },
   };
   const keysChange = deps.keys.onChanged(() => {
+    parts.review.forgetRows();
     parts.redrawLayoutHead();
     if (shownRound !== null && !root.hidden) {
       view.update(shownRound, shownView);
@@ -259,7 +259,6 @@ function buildRoundParts(
   const review = buildReview(main, round, deps);
   return {
     items,
-    reviewRowAt,
     main,
     head,
     layoutHead,
@@ -350,21 +349,6 @@ function reviewRowsByRailPosition(round: RoundState): (number | undefined)[] {
   return rows;
 }
 
-// What clicking a rail item does: focus it in the forms view, jump to its
-// row's item in the review, as Enter on the row does; null where the rail is
-// inert, at a notice in the review and under the confirm overlay.
-function railPickAction(
-  view: FormsView,
-  position: number,
-  reviewRow: number | undefined,
-): FormsAction | null {
-  if (view === 'forms') {
-    return { type: 'focusItem', item: position };
-  }
-  const isReviewItem = view === 'review' && reviewRow !== undefined;
-  return isReviewItem ? { type: 'reviewJump', row: reviewRow } : null;
-}
-
 // An item's row in the rail, and the status dot it leads with.
 interface RailEntry {
   element: HTMLElement;
@@ -418,12 +402,14 @@ function updateRailEntry(
 
 // The review's rows, then the round note, then Send answers and Cancel round
 // with the review's keys for them; the note shows only while the review or the
-// cancel prompt does.
+// cancel prompt does. The summary and the buttons' keys redraw on every
+// update; the rows, and the scroll to the cursor row, only when they change.
 function buildReview(
   parent: HTMLElement,
   round: RoundState,
   deps: RoundViewDeps,
-): { element: HTMLElement; update(round: RoundState): void } {
+): ReviewPart {
+  let drawn: RoundState | null = null;
   const section = element('section', 'review');
   const summary = element('p', 'review-summary');
   const list = element('ol', 'review-rows');
@@ -472,10 +458,17 @@ function buildReview(
       summary.textContent = `${progressText(counts)}.${untouched}`;
       redrawSubmitKeys();
       redrawCancelKeys();
+      if (!reviewRowsChanged(drawn, current)) {
+        return;
+      }
+      drawn = current;
       list.replaceChildren(
         ...reviewRows(current).map((row) => buildReviewRow(row, deps)),
       );
       list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
+    },
+    forgetRows() {
+      drawn = null;
     },
   };
 }

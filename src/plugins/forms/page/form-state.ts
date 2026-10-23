@@ -135,6 +135,9 @@ export type FormsAction =
   | { type: 'reviewPrev' }
   // Without `row`, jumps to the review cursor's row.
   | { type: 'reviewJump'; row?: number }
+  // `item` is a rail position; the review's rail sends it for a notice, which
+  // has no review row.
+  | { type: 'reviewJumpItem'; item: number }
   | { type: 'askCancel' }
   | { type: 'dismissConfirm' }
   // The round's finish went to main; it closes on main's roundClosed.
@@ -262,6 +265,8 @@ export function apply(state: FormsState, action: FormsAction): FormsState {
       return moveReviewRow(state, -1);
     case 'reviewJump':
       return jumpToReviewRow(state, action.row);
+    case 'reviewJumpItem':
+      return jumpToRailItem(state, action.item);
     case 'askCancel':
       return state.view === 'review'
         ? {
@@ -715,6 +720,22 @@ function jumpToReviewRow(
     reviewRow: target,
     focus: railPosition(current.round, item),
   }));
+  return { ...jumped, view: 'forms' };
+}
+
+// Shows the item's card and leaves the review cursor where it was.
+function jumpToRailItem(state: FormsState, item: number): FormsState {
+  const round = activeRound(state);
+  if (state.view !== 'review' || round === null) {
+    return state;
+  }
+  const isRailPosition = item >= 0 && item < railItems(round.round).length;
+  if (!isRailPosition) {
+    return state;
+  }
+  const jumped = updateRound(state, round.roundId, (current) =>
+    current.focus === item ? current : { ...current, focus: item },
+  );
   return { ...jumped, view: 'forms' };
 }
 
