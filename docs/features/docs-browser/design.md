@@ -80,7 +80,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   in the background on launch and on Rescan. After create, rename or delete the tree updates at once and a background
   build fills in load states; until then the changed entry's chips read `pending`.
 - **Tree**: Global, then Plugins, then one node per repo; a repo holds its docs by kind and its feature home, and
-  splits by clone only when it has more than one. Follow-up items open at their `line`. A filter that matches nothing
+  splits by clone only when it has more than one. Follow-up items open at their `line`. The filter fuzzy-matches each
+  doc's title and path through the `FuzzyMatcher` page service and keeps the tree's order. A filter that matches nothing
   shows `No docs match "<filter>"` with `/` then `Esc` to clear it; an empty index shows `No docs in this index` with
   `R` to rescan; while a filter is on and rows show, one muted line above them reads `Filtered: <filter>` with `/` to
   change it. Each key shows as a Kbd and follows a rebind.

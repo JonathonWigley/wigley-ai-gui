@@ -104,6 +104,12 @@ interview on 2026-10-23; this file is the record of both.
   calls, so Claude's undocumented transcript format stays in the adapter. A line it cannot read becomes a raw entry.
 - Slash commands typed in the chat run as in the terminal (`/model`, `/compact`, `/wigley:feature …`), except the
   app slash commands, which the app runs itself (§ Chat plugin).
+- **Commands**: `AgentProcessEvents.commands` reports the session's commands and skills as `AgentCommand` records
+  (`name`, `description`, `argumentHint`, `aliases`), names without a leading `/`. The Claude adapter sends an
+  `initialize` control request at process start and reports its `commands` within half a second
+  (`claude-stream.md` § Initialize), since `init` waits for the first message. Each later `init` replaces the list: a
+  name it lists that matches an earlier record's name or alias keeps that record, and a new name gets a record with
+  empty text. A failed `initialize` is logged, and the list then waits for `init`.
 - **Messages carry images**: `AgentProcess.send` takes `{ text, images }`, each image `{ mediaType, data }` (base64,
   no `data:` prefix), and the `user` chat entry carries the same `images`. Claude sends them as `image` content blocks
   before the text block (`claude-stream.md` § Images); a resumed transcript's image blocks come back as the user
@@ -181,8 +187,8 @@ interview on 2026-10-23; this file is the record of both.
 - **App slash commands**: chat's page exports `addSlashCommand({ name, description, run })`, returning a
   `Disposable`. Sending a box whose trimmed text is `/name` or `/name <args>` with `name` registered runs
   `run({ sessionId, profile, args, ended })` in place of sending, and clears the box; attached images stay. A registered
-  name wins over the agent's command of the same name. The `/` completion offers the registered names first, then
-  the agent's, without repeats. A handler reports through chat's `notice` channel call, which adds a notice entry
+  name wins over the agent's command of the same name. The `/` completion offers the registered commands and the
+  agent's, without repeats (§ Slash completion). A handler reports through chat's `notice` channel call, which adds a notice entry
   main keeps, or through a toast in an ended session, which has no entries to show it. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile
   out; a notice says so) and `/status` (a notice: `<profile>: signed in as <account>` or `<profile>: not signed in`).
 - **Images**: pasting an image file into the composer, or dropping one anywhere on the Chat tab, attaches it: PNG, JPEG, GIF and WebP whose base64 text is at most
@@ -202,9 +208,18 @@ interview on 2026-10-23; this file is the record of both.
   while idle.
 - **Turn finished**: when the window is not focused or the session is not on screen, the same alert as a round, and
   the row is marked.
-- **Slash completion**: typing `/` at the start of the box offers the session's commands and skills, from Claude's
-  startup event, and Tab accepts. It runs through CodeMirror's completion (`@codemirror/autocomplete` 6.20.3, already
-  on disk, added as a direct dependency) inside the editor adapter, behind an option on the editor contract.
+- **Slash completion**: typing `/` at the start of the box offers the app slash commands and the session's commands
+  and skills (§ Agent harness seam, Commands), and Tab accepts. The typed word fuzzy-matches each command's name and
+  aliases through the app's fuzzy matcher (fzf), best match first, the list's own order breaking ties; a row shows
+  and inserts the full name, so `/feature` offers `/wigley:feature`. It runs through CodeMirror's completion
+  (`@codemirror/autocomplete` 6.20.3, already on disk, added as a direct dependency) inside the editor adapter,
+  behind an option on the editor contract.
+- **Completion rows**: chat's page exports `addCompletionRow(draw)`, returning a `Disposable`. `draw(command, row)`
+  gets the row's command (name, description, argument hint, aliases, and whether it is the app's or the agent's)
+  and the row's element, which holds the drawn name, and returns `true` when it drew. The most recently added draw
+  goes first, and the first to return `true` ends the row; a row no draw takes shows the name alone. Chat adds its own
+  draw through the same export: the description in a dim column cut to one line, while the `completionDescriptions`
+  setting is on (default on), else `false`.
 - **Resume and archive**: after the folder and profile, the start prompt offers a new session or one of the folder's
   saved sessions (terminal and app alike, newest first, labelled by first message and time; one the app has open is
   left out), resumed with its earlier conversation read from the transcript. `x` archives the entry under the
@@ -233,6 +248,9 @@ interview on 2026-10-23; this file is the record of both.
   completion.
 - **Plan C — chat usability** (landed 2026-10-23, its plan folder closed): sign-in from the app, app slash commands,
   the merged folder list, pasted images with previews, and the completion popup drawn outside the composer.
+- **Plan D — slash completion** (`plan-slash-completion/`, settled in a four-round interview on 2026-10-23): the
+  command list from `initialize` at start, alias and fuzzy matching on the fzf matcher (shared with every list picker
+  and the Settings, keymap and Docs filters), descriptions behind a setting, and the completion row hook.
 
 ## Out of scope
 

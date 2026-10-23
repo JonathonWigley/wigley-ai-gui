@@ -32,8 +32,10 @@ plan is written from them. A decision here stands unless the user changes it.
 - The side bar lists sections: Core, then one per plugin that declares settings, in manifest order, then Keymap.
   `j`/`k` move the cursor and Enter opens the section in the content sheet. `Alt+l` / `Alt+h` move focus between the
   side bar and the form, as in Docs mode.
-- `/` filters the open section's rows: setting rows by label, dotted path and description, command rows by label,
-  qualified id, keys and accelerators, and the Leader row by "leader" and its keys. Esc on the rows clears a kept filter; opening a section clears it too.
+- `/` filters the open section's rows, keeping their order: setting rows by label and dotted path (fuzzy, through
+  the `FuzzyMatcher` page service) and by description (plain substring, since a fuzzy match over a sentence matches
+  almost any query), command rows by label, qualified id, keys and accelerators, and the Leader row by "leader" and
+  its keys, all fuzzy. Esc on the rows clears a kept filter; opening a section clears it too.
 
 ## Setting rows
 

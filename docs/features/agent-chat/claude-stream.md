@@ -92,8 +92,9 @@ Measured on 2.1.309, 2026-10-23, `--model haiku`, in a scratch project folder.
 
 ## Init
 
-**When.** `system/init` arrives only after the first stdin message, never at process start. It then arrives again
-at the start of **every** turn, local slash commands included (§ Effort, § Model).
+**When.** `system/init` arrives only after the first stdin message, never at process start; the command list at
+start comes from § Initialize. It then arrives again at the start of **every** turn, local slash commands included
+(§ Effort, § Model).
 
 - Base plus cheap flags, 15 s idle sending nothing: stdout holds only `system/hook_started` and
   `system/hook_response` (at 0.54 s). At 15.01 s the driver sends `U(Reply with the single word ok.)`. `init` follows
@@ -137,6 +138,37 @@ effort level (§ Effort).
 - With `--permission-mode manual`, `tools` also lists `AskUserQuestion`, `EnterPlanMode` and `ExitPlanMode`, which the
   `auto` sessions did not list.
 - `init.model` does **not** follow plan mode's model switch (§ Mode change), but it does follow `/model` (§ Model).
+
+## Initialize
+
+Measured on `2.1.309`, 2026-10-23, base flags without `--include-partial-messages` and `--session-id`.
+
+**The command list at process start.** `init` waits for the first message (§ Init); an `initialize` control request
+does not. Sent as the first stdin line, before any message:
+
+```
+stdin  {"type":"control_request","request_id":"probe-init","request":{"subtype":"initialize"}}
+0.43   system/hook_started
+0.45   system/hook_response
+0.45   {"type":"control_response","response":{"subtype":"success","request_id":"probe-init","response":{…}},
+        "pending_permission_requests":…,"pending_user_dialog_requests":…}
+```
+
+The inner `response` keys: `commands`, `agents`, `output_style`, `available_output_styles`, `user_output_styles_dir`,
+`models`, `account`, `pid`, `claude_code_version`, `current_permission_mode`, `feedback_mode`, `analytics_disabled`,
+`remote_control_*` (6 keys), `ide_rc_auto_enable_gate`, `fast_mode_state`, `fast_mode_disabled_reason`,
+`session_state`, `capabilities`.
+
+- `commands` holds the same 89 entries as `init.slash_commands`, each an object, without a leading `/`:
+  `{"name":"wigley:clean-up-branches","description":"(wigley) Delete the user's branches…","argumentHint":"integration branch patterns, e.g. protos/*","aliases":["clean-up-branches"]}`.
+  `description` and `argumentHint` are strings (`""` when none); `aliases` is absent when a command has none; a
+  built-in skill carries `"builtin":true`.
+- A plugin skill's alias is its bare name (`wigley:feature` → `feature`); a built-in command's aliases are other words
+  (`usage` → `cost`, `stats`; `clear` → `reset`, `new`). The `anthropic-skills` skills reverse it: `name` is the bare
+  word and the alias the qualified one (`docx` → `anthropic-skills:docx`), while `init.slash_commands` lists the
+  qualified one.
+- Anthropic's Agent SDK sends this request at every start; the app's Claude adapter sends it too and reads
+  `commands` from its answer.
 
 ## Stream events
 

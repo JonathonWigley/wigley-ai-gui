@@ -114,7 +114,7 @@ stuck UI.
 
 **8. Command palette and fuzzy finders.** Builds on 5 (command labels) and 7 (picker).
 - Command palette
-- `Space f f` / `Space f s`, on a vetted matcher (installing it is an ask)
+- `Space f f` / `Space f s`, on the `FuzzyMatcher` page service (fzf, landed by agent-chat plan D)
 - The app menu labels commands by `label`
 
 ## Tier 2: harness and platform

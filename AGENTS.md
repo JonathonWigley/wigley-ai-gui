@@ -92,7 +92,9 @@ src/renderer/    core page; renderer.ts is its composition root
   shell/         the shell registry, its areas and the default `ShellLayout`, and the modes
   plugins/       the page-side plugin API
   markdown-it/   markdown adapter behind MarkdownRenderer   → the only markdown-it import
-  codemirror-vim/ editor (with prefix completion) and code-highlight adapters behind EditorHost and CodeHighlighter,
+  fzf/           fuzzy matcher adapter behind FuzzyMatcher, which every `/` filter and the slash completion rank
+                 with                                       → the only fzf import
+  codemirror-vim/ editor (with fuzzy slash completion) and code-highlight adapters behind EditorHost and CodeHighlighter,
                  and the code colours
                  → the only codemirror, @codemirror, @lezer and @replit import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds
@@ -301,7 +303,7 @@ round), since main, not the page, decides.
   ConfigStore's check on the new layer and refuses one that fails, so a write never leaves a broken file; themes
   are written by hand. App-written state, such as split widths, goes to the `uiState` service, never to the user's config.
 - **A third-party tool** gets a contract in `src/contracts/` and an adapter folder of its own; the core hands
-  plugins the shared ones (editor, markdown) as services. Swapping it is a new adapter folder against the same
+  plugins the shared ones (editor, markdown, fuzzy matcher) as services. Swapping it is a new adapter folder against the same
   contract, and one changed line in the composition root.
 - **Plugin data** — files a plugin keeps for the user, such as forms layouts — lives in the plugin's own folder,
   `plugins/<id>/` in Electron's per-user data folder (in the self-test and a drive run, `plugin-data/` in the temp home). Main reaches it through

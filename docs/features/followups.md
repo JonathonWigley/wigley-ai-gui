@@ -23,7 +23,7 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - Editor key replay (a broken key sequence replayed into a box through `EditorHost.typeInto`) has three limits only a custom keymap reaches: focus moving mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on named keys.
 - Rail notice entries are inert in the review: clicking one could jump to the notice's comment box, as question entries jump to their question.
 - A notification click focusing its round is untested live: an unsigned dev build gets no macOS notification (the alerts adapter falls back to Dock bounce and badge), so check it on the first signed build from the packaging follow-up.
-- Fuzzy finders: `Space f f` finds a file, `Space f s` searches text, built on a fast Neovim finder's matcher (fzf/fzy style) rather than a home-made one. Deferred from the docs browser (`docs-browser/design.md`).
+- Fuzzy finders: `Space f f` finds a file, `Space f s` searches text, ranked by the `FuzzyMatcher` page service (the fzf adapter, `src/renderer/fzf/`). Deferred from the docs browser (`docs-browser/design.md`).
 - Keyboard link hints (vimium style) in rendered docs, if Tab between links is not enough.
 - Images in rendered docs: loading local image files into the page needs a safe file protocol of its own; today they show their alt text.
 - Docs delete trashes every link that points at a trashed target. Deleting a synced skill from the tree trashes the repo's folder and leaves `~/.claude/skills/<name>` dangling, because each index entry carries only its real path. The docs index exports the link locations it walked, which `to_json` leaves out today, and `trashTargets` adds them (wigley-ai-marketplace `plugins/wigley/scripts/docs-index` `model.py` `to_json`; `src/plugins/docs/main/doc-files.ts` `trashTargets`).
@@ -82,6 +82,9 @@ now, any harness later). Each item names its sites.
 - Sessions' `contributeTools` and `addCloseGuard` return a `Disposable`, and a contribution reaches sessions already
   connected: start or end its `ToolSession` per live entry, rewrite `tools.json`, have `serveMcp` read a live tool list
   and send `notifications/tools/list_changed`, and keep one unknown-tool check (today both `serveMcp` and `routeCall`).
+- View and interaction behaviours ship as plugins the user switches on and off (the completion row's description,
+  key hints and the like): a per-plugin enable switch in Settings mode, built on `PluginHost.stop` above, so a
+  behaviour is a plugin to enable rather than a setting inside the plugin it changes.
 - A runtime plugin loader: a `PluginSource` seam (built-in list and a user folder of `manifest.json`, `main.js`,
   `page.js`), main `import()`s from disk and the page through `dataUrl`, and a `validateManifest` gives every plugin the
   checks `definePlugin` makes at compile time. `requireListed` and the static lists in `src/plugins/{main,page,manifests}.ts`
@@ -205,6 +208,8 @@ now, any harness later). Each item names its sites.
   `controls()` readable before start with `AgentStart.initialControls` (model chosen at start), a harness-minted
   session id (`events.sessionId` or returned from `start`), resume listing, and `costUsd` defined per turn with the
   adapter normalising Claude's cumulative value.
+- The Claude adapter's `initialize` answer also carries `models` and `current_permission_mode` (`claude-stream.md`
+  § Initialize): the model and mode controls could read them at start instead of waiting for the first `init`.
 - Controls carry a `role` (`model`, `permissionMode`, `effort`) that chat's pick commands find them by, rather than the
   fixed ids `mode` / `effort` / `model`.
 - Harness settings live with the harness: `claude.command` leaves core `Settings` for the Claude harness plugin's
