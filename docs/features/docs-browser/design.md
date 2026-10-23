@@ -82,7 +82,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   unknown id rejects naming it. A view runs `load` on its first show, then `rebuild` when the source has one; Rescan
   runs `rebuild`, or `load` for a source with none. The write guard below reads the entries each registered source
   last loaded, so a source's entries stop allowing changes once it is disposed.
-- **Page exports**: `addView(sourceId, { isVisible })` returns `{ element, shown(), dispose() }`: one element holding
+- **Page exports**: `addView(sourceId, { isVisible })` returns `{ element, shown(), hasUnsavedEdits(), dispose() }`: one element holding
   the view's tree and doc in a split, its keys, `Space v t` and its changes reaching the other views as a session
   tab's do (each session's Docs tab is built through it). `openDoc(path, line?)` shows Docs mode and opens the doc
   there at that 1-based line; a path the machine index does not list is refused with a toast.

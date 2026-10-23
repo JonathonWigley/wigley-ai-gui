@@ -50,7 +50,7 @@ or touches their data, so start one whenever a check needs it.
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something
 survives a restart runs the same way. The docs fixture survives a `restart` as the agent left it;
-`docs.seed` and `docs.connectSession` rewrite it (`loadStates: true` on either adds one doc per index load state other than `launch`, under `.claude/load-states/`). A start with an unusable environment (a relative `WIGLEY_DRIVE_DIR`, a
+`docs.seed` and `docs.connectSession` rewrite it (`loadStates: true` on either adds one doc per index load state other than `launch`, under `.claude/load-states/`). `docs.openDoc` (`{ path, line? }`) calls the docs page export `openDoc`: Docs mode shows and opens the doc at that line, or toasts that the machine index does not list it. A start with an unusable environment (a relative `WIGLEY_DRIVE_DIR`, a
 `WIGLEY_DRIVE_HARNESS` other than `fake` or `claude`) exits 1 with the reason on stderr before any
 window opens.
 
