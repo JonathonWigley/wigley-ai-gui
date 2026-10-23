@@ -120,6 +120,8 @@ export interface SettingsViewDeps {
   kbd(keys: string): HTMLElement;
   // The open section's title, for the title bar.
   sectionShown(title: string): void;
+  // Hears each section the user opens from the side bar, by click or Enter.
+  sectionPicked(): void;
 }
 
 export type SettingsCommand =
@@ -176,6 +178,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       sectionsCursor = index;
       focusSections();
       openSection(index);
+      deps.sectionPicked();
     },
   });
   const rowsSheet = sheet();
@@ -728,6 +731,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     open() {
       if (focus === 'sections') {
         openSection(sectionsCursor);
+        deps.sectionPicked();
         return;
       }
       runQuietly('open', true)();

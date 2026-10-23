@@ -142,6 +142,8 @@ export interface DocsViewDeps {
   openChanged(path: string | null): void;
   // Shows the tree when its container hides it; nothing while it shows.
   revealTree(): void;
+  // Hears each doc opened from the tree, by a leaf's click, `l` or Enter.
+  leafOpened(): void;
   // Places a dialog element over the window, until the handle's `dispose`.
   addOverlay(element: HTMLElement): Disposable;
 }
@@ -304,7 +306,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     openLeaf: (leaf: TreeLeaf) => {
       const entry = entriesById.get(leaf.entryId);
       if (entry !== undefined) {
-        void doc.open(targetFor(entry.path, entry, entry.line, null));
+        void doc
+          .open(targetFor(entry.path, entry, entry.line, null))
+          .then((opened) => {
+            if (opened) {
+              deps.leafOpened();
+            }
+          });
       }
     },
     pushBoxScope: () => deps.pushScope('box'),

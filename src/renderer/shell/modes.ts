@@ -56,6 +56,12 @@ export function sideBarAfterResize(
   return isNarrow ? state : { ...state, isOverlayOpen: false };
 }
 
+// A pick in the side bar ends the overlay; the user's hidden choice always
+// stays.
+export function sideBarAfterPick(state: SideBarState): SideBarState {
+  return { ...state, isOverlayOpen: false };
+}
+
 const SIDE_BAR_LOGS: Record<SideBarLayout, string> = {
   beside: 'side bar shown',
   over: 'side bar shown over the content',
@@ -157,6 +163,15 @@ export function createModes(deps: ModesDeps): CoreModes {
           entry.sideBar = toggledSideBar(entry.sideBar, isNarrow);
           if (shownMode === entry) {
             const layout = layoutOf(entry);
+            deps.layOutSideBar(layout);
+            log('page', SIDE_BAR_LOGS[layout]);
+          }
+        },
+        picked() {
+          const before = layoutOf(entry);
+          entry.sideBar = sideBarAfterPick(entry.sideBar);
+          const layout = layoutOf(entry);
+          if (shownMode === entry && layout !== before) {
             deps.layOutSideBar(layout);
             log('page', SIDE_BAR_LOGS[layout]);
           }

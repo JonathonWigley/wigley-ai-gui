@@ -116,8 +116,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
     };
 
+    // A row click closes the side bar's overlay; `activate` reads `mode` only
+    // on a click, after `add`.
     const view = mountSessionsView({
-      activate: (sessionId) => exports.activate(sessionId),
+      activate: (sessionId) => {
+        exports.activate(sessionId);
+        mode.picked();
+      },
       isModeShown: () => isModeShown,
       tabsChanged: checkVisible,
       noSelectionHint: () => {

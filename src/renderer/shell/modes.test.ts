@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createModes,
   SIDE_BAR_START,
+  sideBarAfterPick,
   sideBarAfterResize,
   sideBarLayout,
   toggledSideBar,
@@ -223,6 +224,41 @@ describe('createModes', () => {
     );
   });
 
+  it('picked closes the overlay while narrow, logging it', () => {
+    const { logs, calls, add } = setup(true);
+    const one = add('a.one', 'One', true);
+    one.handle.toggleSideBar();
+
+    calls.length = 0;
+    one.handle.picked();
+
+    expect(calls).toEqual(['side bar hidden']);
+    expect(logs.at(-1)).toBe('[page] side bar hidden');
+    expect(one.handle.sideBarShown()).toBe(false);
+  });
+
+  it('picked does nothing while wide', () => {
+    const { logs, calls, add } = setup();
+    const one = add('a.one', 'One', true);
+    calls.length = 0;
+    const logged = logs.length;
+
+    one.handle.picked();
+
+    expect(calls).toEqual([]);
+    expect(logs).toHaveLength(logged);
+    expect(one.handle.sideBarShown()).toBe(true);
+  });
+
+  it('picked on a mode with no side bar does nothing', () => {
+    const { calls, add } = setup(true);
+    const one = add('a.one', 'One');
+    calls.length = 0;
+
+    expect(() => one.handle.picked()).not.toThrow();
+    expect(calls).toEqual([]);
+  });
+
   it("shows the shown mode's context and keeps a hidden mode's for its show", () => {
     const { calls, add } = setup();
     const one = add('a.one', 'One');
@@ -285,5 +321,14 @@ describe('side bar layout', () => {
     expect(
       sideBarAfterResize({ isHiddenWide: false, isOverlayOpen: true }, true),
     ).toEqual({ isHiddenWide: false, isOverlayOpen: true });
+  });
+
+  it("sideBarAfterPick closes the overlay and keeps the user's hidden choice", () => {
+    expect(
+      sideBarAfterPick({ isHiddenWide: true, isOverlayOpen: true }),
+    ).toEqual({ isHiddenWide: true, isOverlayOpen: false });
+    expect(
+      sideBarAfterPick({ isHiddenWide: false, isOverlayOpen: false }),
+    ).toEqual({ isHiddenWide: false, isOverlayOpen: false });
   });
 });

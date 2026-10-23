@@ -34,11 +34,19 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
         keys.keysFor('settings.clearFilter', 'settings.rows'),
       kbd: (shown) => kbd(shown, api.platform),
       sectionShown: (title) => mode.setContext({ title: TITLE, detail: title }),
+      // A section opened from the side bar closes its overlay, and focus
+      // leaves the hidden side bar for the rows.
+      sectionPicked: () => {
+        mode.picked();
+        if (!mode.sideBarShown()) {
+          view.sideBarHidden();
+        }
+      },
     });
     keys.onChanged(() => view.keysChanged());
 
-    // `sectionShown` and `shown` read `mode` only once the mode shows, after
-    // `add`: Settings mode is never the first mode added.
+    // `sectionShown`, `sectionPicked` and `shown` read `mode` only once the
+    // mode shows, after `add`: Settings mode is never the first mode added.
     const mode = api.modes.add({
       id: 'main',
       title: TITLE,

@@ -283,6 +283,9 @@ export interface Mode {
 // content, while narrow it opens or closes it over the content; each mode
 // keeps its own choice, and a hidden mode's toggle applies at its next show.
 // It throws `Mode "<id>" has no side bar` on a mode without one.
+// `picked` tells the core the user picked something in the mode's side bar:
+// in a narrow window it closes the side bar's overlay, logging
+// `side bar hidden`; otherwise it does nothing.
 // `sideBarShown` is true while the mode shows and its side bar lies beside or
 // over the content.
 export interface ModeHandle {
@@ -290,6 +293,7 @@ export interface ModeHandle {
   isShown(): boolean;
   setContext(context: ModeContext | null): void;
   toggleSideBar(): void;
+  picked(): void;
   sideBarShown(): boolean;
 }
 

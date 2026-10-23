@@ -123,6 +123,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       isActive: () => boolean,
       openChanged: (path: string | null) => void,
       revealTree: () => void,
+      leafOpened: () => void,
     ): DocsView => {
       const view: DocsView = createDocsView({
         viewId,
@@ -146,6 +147,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         isActive,
         openChanged,
         revealTree,
+        leafOpened,
         addOverlay: (element) => api.areas.overlay.contribute(element),
         changed: (change) => changedIn(view, change),
         unsavedPaths: () =>
@@ -157,8 +159,9 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     };
 
     // The title bar shows the machine view's open doc while Docs mode shows.
-    // `openChanged` and `revealTree` read `mode` once a doc opens or a key
-    // runs, after `add`.
+    // `openChanged`, `revealTree` and `leafOpened` read `mode` once a doc
+    // opens or a key runs, after `add`. A doc opened from the tree closes the
+    // side bar's overlay, and focus leaves the hidden tree for the doc.
     const machineView = createView(
       'machine',
       { type: 'machine' },
@@ -175,6 +178,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       () => {
         if (!mode.sideBarShown()) {
           mode.toggleSideBar();
+        }
+      },
+      () => {
+        mode.picked();
+        if (!mode.sideBarShown()) {
+          machineView.treeHidden();
         }
       },
     );
@@ -216,6 +225,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             () => held.handle?.isVisible() === true,
             () => undefined,
             // The split never hides the tree.
+            () => undefined,
             () => undefined,
           ),
           handle: null,
