@@ -8,118 +8,121 @@
   align-content: center;
 }
 
+/* :where() scopes these rules to the Form tab and adds no specificity, so a
+   layout's own layout.css overrides them. */
+
 /* A round fills its session's Form tab: a split with the rail in its start
    pane, on the sheet colour, and the round's main column in its end pane. */
-.round {
+:where(.form-tab) .round {
   height: 100%;
 }
 
-.round-main {
+:where(.form-tab) .round-main {
   padding: var(--wg-space-4) var(--wg-space-6) var(--wg-space-8);
 }
 
-.round-main > * {
+:where(.form-tab) .round-main > * {
   max-width: var(--wg-prose-measure);
 }
 
 @media (max-width: 800px) {
-  .round-main {
+  :where(.form-tab) .round-main {
     padding: var(--wg-space-3) var(--wg-space-4) var(--wg-space-6);
   }
 }
 
 /* Rail */
-.rail-list {
+:where(.form-tab) .rail-list {
   list-style: none;
   margin: 0;
   padding: var(--wg-space-2);
 }
 
-.rail-lead {
+:where(.form-tab) .rail-lead {
   align-items: center;
   display: inline-flex;
   flex: none;
   gap: var(--wg-space-2);
 }
 
-.rail-number {
+:where(.form-tab) .rail-number {
   color: var(--wg-fg-tertiary);
   font-family: var(--wg-font-mono);
   font-size: var(--wg-text-12);
   min-width: var(--wg-space-6);
 }
 
-.rail-entry.is-flagged .ui-row-label {
+:where(.form-tab) .rail-entry.is-flagged .ui-row-label {
   color: var(--wg-status-warning);
 }
 
-.rail-entry[data-status='not_applicable'] .ui-row-label {
+:where(.form-tab) .rail-entry[data-status='not_applicable'] .ui-row-label {
   color: var(--wg-fg-tertiary);
 }
 
 /* Round head */
-.round-head {
+:where(.form-tab) .round-head {
   margin-bottom: var(--wg-space-4);
 }
 
-.round-heading {
+:where(.form-tab) .round-heading {
   font-size: var(--wg-text-20);
   font-weight: var(--wg-weight-semibold);
   margin: 0 0 var(--wg-space-2);
 }
 
-.round-overview {
+:where(.form-tab) .round-overview {
   color: var(--wg-fg-secondary);
 }
 
-.round-progress {
+:where(.form-tab) .round-progress {
   color: var(--wg-fg-tertiary);
   font-size: var(--wg-text-13);
 }
 
 /* Items */
-.item-head {
+:where(.form-tab) .item-head {
   align-items: center;
   display: flex;
   gap: var(--wg-space-2);
   margin-bottom: var(--wg-space-3);
 }
 
-.item-status {
+:where(.form-tab) .item-status {
   color: var(--wg-status-success);
   font-size: var(--wg-text-12);
 }
 
-.item[data-status='not_applicable'] .item-status {
+:where(.form-tab) .item[data-status='not_applicable'] .item-status {
   color: var(--wg-fg-secondary);
 }
 
-.item[data-status='not_applicable'] .context {
+:where(.form-tab) .item[data-status='not_applicable'] .context {
   opacity: 0.6;
 }
 
 /* An item's text sits open under its section headers; a hairline sets the
    answer apart below it. */
-.context {
+:where(.form-tab) .context {
   margin-bottom: var(--wg-space-4);
 }
 
-.context-body {
+:where(.form-tab) .context-body {
   margin-top: var(--wg-space-1);
 }
 
-.finding-proof .context-body {
+:where(.form-tab) .finding-proof .context-body {
   color: var(--wg-fg-secondary);
 }
 
-.answer {
+:where(.form-tab) .answer {
   border-top: 1px solid var(--wg-border-default);
   margin-top: var(--wg-space-4);
   padding-top: var(--wg-space-3);
 }
 
 /* Choices: rows split by hairlines, each reason inline under its choice. */
-.choices {
+:where(.form-tab) .choices {
   display: flex;
   flex-direction: column;
   list-style: none;
@@ -127,12 +130,12 @@
   padding: 0;
 }
 
-.choice {
+:where(.form-tab) .choice {
   border-bottom: 1px solid var(--wg-border-default);
   padding: var(--wg-space-1) 0 var(--wg-space-2);
 }
 
-.choice-pick {
+:where(.form-tab) .choice-pick {
   align-items: baseline;
   background: none;
   border: 0;
@@ -148,15 +151,15 @@
   width: 100%;
 }
 
-.choice-pick:hover {
+:where(.form-tab) .choice-pick:hover {
   background: var(--wg-list-hover-background);
 }
 
-.choice.is-selected .choice-pick {
+:where(.form-tab) .choice.is-selected .choice-pick {
   background: var(--wg-list-active-background);
 }
 
-.choice-number {
+:where(.form-tab) .choice-number {
   border: 1px solid var(--wg-border-default);
   border-radius: 50%;
   display: inline-grid;
@@ -168,24 +171,24 @@
   width: var(--wg-icon-button-sm);
 }
 
-.choice.is-recommended .choice-number {
+:where(.form-tab) .choice.is-recommended .choice-number {
   border-color: var(--wg-accent);
   color: var(--wg-accent);
 }
 
-.choice.is-selected .choice-number {
+:where(.form-tab) .choice.is-selected .choice-number {
   background: var(--wg-accent);
   border-color: var(--wg-accent);
   color: var(--wg-fg-on-accent);
 }
 
-.choice-text {
+:where(.form-tab) .choice-text {
   flex: 1;
   min-width: 0;
 }
 
-.choice-text code,
-.round-overview code {
+:where(.form-tab) .choice-text code,
+:where(.form-tab) .round-overview code {
   background: var(--wg-block-background);
   border-radius: var(--wg-radius-sm);
   font-family: var(--wg-font-mono);
@@ -193,117 +196,117 @@
   padding: 0 var(--wg-space-1);
 }
 
-.choices.is-locked {
+:where(.form-tab) .choices.is-locked {
   opacity: 0.55;
 }
 
-.choices.is-locked .choice-pick {
+:where(.form-tab) .choices.is-locked .choice-pick {
   pointer-events: none;
 }
 
 /* A finding left alone keeps its solution, shown dimmed. */
-.choices.is-dimmed {
+:where(.form-tab) .choices.is-dimmed {
   opacity: 0.55;
 }
 
 /* The reason lines up under its choice's text: past the number, the gap and
    the pick's padding. */
-.choice-reason {
+:where(.form-tab) .choice-reason {
   color: var(--wg-fg-secondary);
   margin-left: calc(var(--wg-icon-button-sm) + var(--wg-space-2) * 2);
 }
 
-.choice-reason-label {
+:where(.form-tab) .choice-reason-label {
   color: var(--wg-fg);
   display: inline;
   font-weight: var(--wg-weight-semibold);
 }
 
-.choice-reason-label::after {
+:where(.form-tab) .choice-reason-label::after {
   content: ' — ';
   font-weight: var(--wg-weight-regular);
 }
 
-.choice-reason-body,
-.choice-reason-body > p:first-child {
+:where(.form-tab) .choice-reason-body,
+:where(.form-tab) .choice-reason-body > p:first-child {
   display: inline;
 }
 
 /* A finding's Action row, under its solutions. */
-.finding-actions {
+:where(.form-tab) .finding-actions {
   margin-top: var(--wg-space-3);
 }
 
-.action-picks {
+:where(.form-tab) .action-picks {
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-2);
 }
 
-.action-picks.is-locked {
+:where(.form-tab) .action-picks.is-locked {
   opacity: 0.55;
 }
 
-.action-picks.is-locked .ui-button {
+:where(.form-tab) .action-picks.is-locked .ui-button {
   pointer-events: none;
 }
 
 /* Origin and severity tags: the plugin's full-strength colour as text and
    border. */
-.badge-origin[data-origin='caused'] {
+:where(.form-tab) .badge-origin[data-origin='caused'] {
   border-color: var(--wg-forms-origin-caused);
   color: var(--wg-forms-origin-caused);
 }
 
-.badge-origin[data-origin='pre_existing'] {
+:where(.form-tab) .badge-origin[data-origin='pre_existing'] {
   border-color: var(--wg-forms-origin-pre-existing);
   color: var(--wg-forms-origin-pre-existing);
 }
 
-.badge-origin[data-origin='design'] {
+:where(.form-tab) .badge-origin[data-origin='design'] {
   border-color: var(--wg-forms-origin-design);
   color: var(--wg-forms-origin-design);
 }
 
-.badge-origin[data-origin='nit'] {
+:where(.form-tab) .badge-origin[data-origin='nit'] {
   border-color: var(--wg-forms-origin-nit);
   color: var(--wg-forms-origin-nit);
 }
 
-.badge-severity[data-severity='critical'] {
+:where(.form-tab) .badge-severity[data-severity='critical'] {
   border-color: var(--wg-forms-severity-critical);
   color: var(--wg-forms-severity-critical);
 }
 
-.badge-severity[data-severity='important'] {
+:where(.form-tab) .badge-severity[data-severity='important'] {
   border-color: var(--wg-forms-severity-important);
   color: var(--wg-forms-severity-important);
 }
 
-.badge-severity[data-severity='minor'] {
+:where(.form-tab) .badge-severity[data-severity='minor'] {
   border-color: var(--wg-forms-severity-minor);
   color: var(--wg-forms-severity-minor);
 }
 
 /* A finding's verdict: its tags, the impact and the Accept button, under the
    finding's sections. */
-.verdict {
+:where(.form-tab) .verdict {
   margin-bottom: var(--wg-space-4);
 }
 
-.verdict-chips {
+:where(.form-tab) .verdict-chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-1_5);
   margin-bottom: var(--wg-space-2);
 }
 
-.verdict-impact {
+:where(.form-tab) .verdict-impact {
   color: var(--wg-fg-secondary);
   margin-top: var(--wg-space-1_5);
 }
 
-.verdict-buttons {
+:where(.form-tab) .verdict-buttons {
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-2);
@@ -311,7 +314,7 @@
 }
 
 /* Toggles */
-.toggles {
+:where(.form-tab) .toggles {
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-2);
@@ -321,64 +324,64 @@
 /* Text boxes: the input frame owns background, border, radius and the focus
    ring; this sets the editor's height only. Editors grow with their text up
    to a cap, then scroll. */
-.field {
+:where(.form-tab) .field {
   margin-top: var(--wg-space-3);
 }
 
-.field > .ui-section-header {
+:where(.form-tab) .field > .ui-section-header {
   gap: var(--wg-space-2);
   justify-content: flex-start;
 }
 
-.field-hint {
+:where(.form-tab) .field-hint {
   color: var(--wg-fg-tertiary);
   font-size: var(--wg-text-12);
   font-weight: var(--wg-weight-regular);
 }
 
 /* The field's label stays whole; the hint beside it wraps instead. */
-.field > .ui-section-header > .ui-section-header-text {
+:where(.form-tab) .field > .ui-section-header > .ui-section-header-text {
   flex-shrink: 0;
 }
 
 /* A scroll container of its own, so the vim panel, which is sticky, stays at
    the box's bottom edge instead of sticking to the round's scrolling pane over
    the box's text. */
-.box {
+:where(.form-tab) .box {
   overflow: hidden;
 }
 
-.box .cm-editor {
+:where(.form-tab) .box .cm-editor {
   max-height: calc(var(--wg-space-8) * 8);
 }
 
-.box .cm-scroller {
+:where(.form-tab) .box .cm-scroller {
   overflow: auto;
 }
 
-.box .cm-content {
+:where(.form-tab) .box .cm-content {
   min-height: var(--wg-row-list);
 }
 
-.review .field-note {
+:where(.form-tab) .review .field-note {
   border-top: 1px solid var(--wg-border-default);
   margin-top: var(--wg-space-6);
   padding-top: var(--wg-space-4);
 }
 
 /* Review */
-.review-title {
+:where(.form-tab) .review-title {
   font-size: var(--wg-text-16);
   font-weight: var(--wg-weight-semibold);
   margin: 0;
 }
 
-.review-summary {
+:where(.form-tab) .review-summary {
   color: var(--wg-fg-secondary);
   margin: var(--wg-space-1) 0 var(--wg-space-3);
 }
 
-.review-rows {
+:where(.form-tab) .review-rows {
   display: flex;
   flex-direction: column;
   gap: var(--wg-space-0_5);
@@ -388,26 +391,26 @@
 }
 
 /* Two-line rows: the answer text carries the status. */
-.review-row {
+:where(.form-tab) .review-row {
   border-radius: var(--wg-radius-sm);
   padding: var(--wg-space-1) var(--wg-space-2);
   transition: background-color var(--wg-duration-fast) var(--wg-ease-out);
 }
 
-.review-row:hover {
+:where(.form-tab) .review-row:hover {
   background: var(--wg-list-hover-background);
 }
 
-.review-row.is-cursor {
+:where(.form-tab) .review-row.is-cursor {
   background: var(--wg-list-active-background);
   box-shadow: inset 0 0 0 1px var(--wg-focus-border);
 }
 
-.review-row[data-status='untouched'] .review-answer {
+:where(.form-tab) .review-row[data-status='untouched'] .review-answer {
   color: var(--wg-status-warning);
 }
 
-.review-pick {
+:where(.form-tab) .review-pick {
   align-items: baseline;
   background: none;
   border: 0;
@@ -422,19 +425,19 @@
   width: 100%;
 }
 
-.review-number {
+:where(.form-tab) .review-number {
   color: var(--wg-fg-tertiary);
   font-family: var(--wg-font-mono);
   font-size: var(--wg-text-12);
 }
 
-.review-question {
+:where(.form-tab) .review-question {
   font-weight: var(--wg-weight-semibold);
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.review-answer {
+:where(.form-tab) .review-answer {
   align-items: baseline;
   color: var(--wg-fg-secondary);
   display: inline-flex;
@@ -445,19 +448,19 @@
   overflow-wrap: anywhere;
 }
 
-.review-action {
+:where(.form-tab) .review-action {
   color: var(--wg-fg);
   font-weight: var(--wg-weight-semibold);
 }
 
-.review-detail {
+:where(.form-tab) .review-detail {
   color: var(--wg-fg-secondary);
   font-size: var(--wg-text-12);
   margin: 0 0 var(--wg-space-1);
   overflow-wrap: anywhere;
 }
 
-.review-actions {
+:where(.form-tab) .review-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-2);

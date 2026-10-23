@@ -31,6 +31,12 @@ describe('cssViolations', () => {
     expect(cssViolations(css, false)).toEqual([]);
   });
 
+  it('cssViolations_WhereSelector_ReportsNothing', () => {
+    const css =
+      ':where(.form-tab) .choice {\n  padding: var(--wg-space-1) 0;\n}\n';
+    expect(cssViolations(css, false)).toEqual([]);
+  });
+
   it('cssViolations_HexInIdSelector_ReportsNothing', () => {
     expect(cssViolations('#add { color: var(--wg-fg); }', false)).toEqual([]);
   });
