@@ -771,6 +771,52 @@ describe('createClaudeCodeHarness accounts', () => {
     ]);
   });
 
+  it('logIn_SignedInProfileSameAccountExitsZero_EndsSignedIn', async () => {
+    const before = authChild();
+    const login = authChild();
+    const status = authChild();
+    const { harness } = authHarness([before, login, status]);
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events);
+    await exitWith(before, signedInStatus, 0);
+    login.emitter.emit('close', 0, null);
+    await exitWith(status, signedInStatus, 0);
+
+    expect(heard).toEqual([
+      [
+        'ended',
+        {
+          status: { signedIn: true, account: 'jo@example.com · Claude max' },
+          error: null,
+        },
+      ],
+    ]);
+  });
+
+  it('logIn_StatusBeforeFails_SignedInAfter_EndsSignedIn', async () => {
+    const before = authChild();
+    const login = authChild();
+    const status = authChild();
+    const { harness } = authHarness([before, login, status]);
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events);
+    await exitWith(before, '', 1);
+    login.emitter.emit('close', 1, null);
+    await exitWith(status, signedInStatus, 0);
+
+    expect(heard).toEqual([
+      [
+        'ended',
+        {
+          status: { signedIn: true, account: 'jo@example.com · Claude max' },
+          error: null,
+        },
+      ],
+    ]);
+  });
+
   it('logOut_NonZeroExit_RejectsWithStderr', async () => {
     const child = authChild();
     const { harness } = authHarness([child]);
