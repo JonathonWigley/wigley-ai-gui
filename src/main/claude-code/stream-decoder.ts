@@ -93,7 +93,10 @@ function messageText(content: unknown): string {
 // included, except a thinking entry's `system/thinking_tokens`: those arrive
 // once per delta, so they ride with the entry's next send, which the block's
 // `content_block_stop` brings, or the turn's result when an interrupt ends the
-// block with no stop.
+// block with no stop. An entry's `raw` leaves out `content_block_delta`,
+// `content_block_stop`, `message_start`, `message_delta` and `message_stop`
+// stream events, whose content the block's `content_block_start` and the final
+// `assistant` event hold.
 export function createStreamDecoder(): StreamDecoder {
   const textEntries = new Map<string, TextEntry>();
   const toolEntries = new Map<string, ToolEntry>();

@@ -5,21 +5,25 @@ import type { ChatSessionState } from '../contract';
 import { addDriveActions, chatMainPart } from './start';
 
 // A chat holding one session, `held`, whose permission calls wait until the
-// test replies to them.
+// test replies to them; `calls` holds each call's tool args.
 function fakeChat() {
   const replies: ((result: ToolResult) => void)[] = [];
+  const calls: unknown[] = [];
   return {
     replies,
+    calls,
     closed: vi.fn<(sessionId: string) => void>(),
     start: () => 'started',
     sessions: () => [
       { sessionId: 'held', projectDir: '/p' } as ChatSessionState,
     ],
     permissionToolSession: () => ({
-      call: () =>
-        new Promise<ToolResult>((resolve) => {
+      call: (_name: string, args: unknown) => {
+        calls.push(args);
+        return new Promise<ToolResult>((resolve) => {
           replies.push(resolve);
-        }),
+        });
+      },
       end: () => undefined,
     }),
   };
@@ -75,6 +79,32 @@ describe('chat drive actions', () => {
     );
   });
 
+  it('askPermission passes an explicit null input on', async () => {
+    const chat = fakeChat();
+    const drive = chatDriveActions(chat);
+
+    await drive.run('askPermission', { sessionId: 'held', input: null });
+
+    expect(chat.calls[0]).toEqual({
+      tool_name: 'Bash',
+      input: null,
+      tool_use_id: 'use-1',
+    });
+  });
+
+  it('askPermission defaults input when the args leave it out', async () => {
+    const chat = fakeChat();
+    const drive = chatDriveActions(chat);
+
+    await drive.run('askPermission', { sessionId: 'held' });
+
+    expect(chat.calls[0]).toEqual({
+      tool_name: 'Bash',
+      input: { command: 'ls' },
+      tool_use_id: 'use-1',
+    });
+  });
+
   it('permissionAnswer rejects a toolUseId askPermission never returned', async () => {
     const drive = chatDriveActions(fakeChat());
 
@@ -126,13 +156,22 @@ function startChatPart() {
 }
 
 describe('chat main part', () => {
-  it('sessions_SignInRunning_CancelsIt', () => {
+  it('loaded_SignInRunning_CancelsIt', () => {
+    const chat = startChatPart();
+    chat.invoke('logIn', 1, 'work');
+
+    chat.invoke('loaded');
+
+    expect(chat.cancelLogIn).toHaveBeenCalledOnce();
+  });
+
+  it('sessions_SignInRunning_LeavesItRunning', () => {
     const chat = startChatPart();
     chat.invoke('logIn', 1, 'work');
 
     chat.invoke('sessions');
 
-    expect(chat.cancelLogIn).toHaveBeenCalledOnce();
+    expect(chat.cancelLogIn).not.toHaveBeenCalled();
   });
 
   it('dispose_SignInRunning_CancelsIt', async () => {

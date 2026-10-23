@@ -143,7 +143,7 @@ export function addDriveActions(
       permissions.set(toolUseId, { state: 'pending' });
       askFixturePermission(chat, sessionId, state.projectDir, {
         toolName: optionalString(args, 'toolName') ?? DEFAULT_PERMISSION_TOOL,
-        input: args.input ?? DEFAULT_PERMISSION_INPUT,
+        input: args.input === undefined ? DEFAULT_PERMISSION_INPUT : args.input,
         toolUseId,
       }).then(
         (reply) => {
@@ -231,12 +231,10 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       window: services.window,
       log: services.log,
     });
-    // The page reads its sessions once on each load: a sign-in running then
-    // was started by a page that is gone, and would refuse every later one.
-    api.channel.handle('sessions', () => {
-      accounts.cancelRunning();
-      return chat.sessions();
-    });
+    // The page announces each load: a sign-in running then was started by a
+    // page that is gone, and would refuse every later one.
+    api.channel.handle('loaded', () => accounts.cancelRunning());
+    api.channel.handle('sessions', () => chat.sessions());
     api.channel.handle('start', (request) => chat.start(request));
     api.channel.handle('pastSessions', (projectDir, profile) =>
       chat.pastSessions(projectDir, profile),

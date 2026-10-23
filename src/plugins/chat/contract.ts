@@ -60,8 +60,10 @@ export interface PermissionAnswer {
 
 export interface ChatChannel extends ChannelShape {
   invoke: {
-    // Read once on each page load, which also cancels any running sign-in:
-    // the page that started it is gone.
+    // Sent once on each page load; cancels any running sign-in, since the page
+    // that started it is gone.
+    loaded(): void;
+    // Every session chat holds.
     sessions(): ChatSessionState[];
     // Newest first: the folders chat started sessions in merged with every
     // folder each profile's harness saved sessions in, one per folder, missing

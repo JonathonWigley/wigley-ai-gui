@@ -9,6 +9,7 @@ import {
   createLayoutLoader,
   showLayouts,
 } from '../../../shared/page/layout-loader';
+import { errorText } from '../../../shared/error-text';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
   SessionsPageEvents,
@@ -54,6 +55,11 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
     const { services } = api;
+    void api.channel
+      .invoke('loaded')
+      .catch((error: unknown) =>
+        services.log('chat', `chat page load not sent: ${errorText(error)}`),
+      );
     const sessions = api.dependency<SessionsPageExports>('sessions');
     const keys = api.dependency<KeysPageExports>('keys');
     const run = (command: string) => api.commands.run(command);
