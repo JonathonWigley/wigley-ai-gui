@@ -177,7 +177,7 @@ the settings plugin imports only `src/contracts`, `src/shared`, its own folder a
 - [x] [Row and edit logic](04-row-and-edit-logic.md) — after 01
 
 ### Wave 3
-- [ ] [Settings plugin skeleton](03-plugin-skeleton.md) — after 01, 02
+- [x] [Settings plugin skeleton](03-plugin-skeleton.md) — after 01, 02
 
 ### Wave 4
 - [ ] [Settings mode views](05-settings-views.md) — after 03, 04
@@ -199,6 +199,7 @@ Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is thi
 - 01 · efd5ab5 · proved (diff read, typecheck, lint) · concerns: pluginSettingInfo never run over the built-in manifests; SettingPath does not distribute over object|scalar unions
 - 04 · 19ca2d7 · proved (diff read, typecheck) · concerns: isSameJson copied from renderer/config-push.ts; fallback compare key-order sensitive; oxfmt needed two writes on keymap-rows.ts
 - 02 · 890695e · proved (diff read, typecheck, lint) · concerns: configSchema built twice (store and userConfig); pluginSettingInfo over the built-ins verified only in a deleted throwaway test
+- 03 · 62370c9 · proved (diff read, typecheck, lint) · concerns: first app accelerator → plugin main command path, unexercised at runtime until 06
 ### Contract changes
 - keymap-rows.ts: as planned → adds `keymapLeader(schema, layer)` and `isSameKeys(a, b, leader)` · why: keymap-edits shares the leader rule and key compare · consumers: 05 · group 04
 - withAdvanced: as planned → also `"unbind" must be a list` · why: keys unbinds merge into it · consumers: 05 · group 04
@@ -220,5 +221,6 @@ Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is thi
 - Only a ThemeError naming settings.json refuses a write; a broken unrelated user theme lets it through — matches the ConfigStore — none · group 02
 - themes: built-ins in list order then user names sorted, first kept on duplicates — a user theme overriding a built-in shows once — none · group 02
 - requireNoCoreSettingIds moved into configSchema; requireUnambiguousKeymap(defaultKeymap) stays a store start check — userConfig fails as the store does — none · group 02
+- check-layers settings root allows contracts, shared, shared/paths and its contract (docs' shape minus sessions); main keeps docs' `node:` allowance; page.ts's layer entry lists settings ahead of task 05 — mirrors docs — a looser allow-list · group 03
 ### Review rounds
 ### Test gate

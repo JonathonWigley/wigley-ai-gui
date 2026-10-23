@@ -1,11 +1,13 @@
-import { element } from '../../../shared/page/dom';
+import { element } from './dom';
 
-// Keys a docs text box leaves to the page's binds; every other key, Space
+// Keys a plugin's text box leaves to the page's binds; every other key, Space
 // included, stays in the box.
 const BOX_KEYS = new Set(['Tab', 'Enter', 'Escape']);
 
-// A one-line docs text box. Typed keys never reach the page keys; Tab, Enter,
-// Escape and every chord do, so the box's binds in scope `box` run.
+// A one-line text box for a plugin's own small box (docs' filter and dialogs,
+// Settings mode's boxes). Typed keys never reach the page keys; Tab, Enter,
+// Escape and every chord do, so the binds of the box scope the plugin pushes
+// run.
 export function textBoxInput(className: string): HTMLInputElement {
   const input = element('input', className);
   input.type = 'text';

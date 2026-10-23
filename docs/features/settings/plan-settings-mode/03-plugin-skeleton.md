@@ -1,6 +1,6 @@
 # 03 — Settings plugin skeleton
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -88,3 +88,5 @@ What earns neither); the self-test drives it (task 06).
   `src/shared/page/ui`), and the main and page composition roots' lists gain them as they list docs'.
 
 ## Proof
+
+62370c9 · typecheck and lint pass; worker ran the full suite (2370 tests) green · concerns: settings.show is the first plugin main command run from an app accelerator (task 06 self-test should exercise it).

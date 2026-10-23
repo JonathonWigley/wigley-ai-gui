@@ -5,6 +5,7 @@ import { formsPagePart } from './forms/page/start';
 import { galleryPagePart } from './gallery/page/start';
 import { keysPagePart } from './keys/page/start';
 import { sessionsPagePart } from './sessions/page/start';
+import { settingsPagePart } from './settings/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
 // otherwise.
@@ -15,4 +16,5 @@ export const pageParts: readonly PagePart[] = [
   chatPagePart,
   docsPagePart,
   galleryPagePart,
+  settingsPagePart,
 ];

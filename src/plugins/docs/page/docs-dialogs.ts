@@ -36,7 +36,7 @@ import {
   renameRecord,
   trashQuestion,
 } from './docs-state';
-import { textBoxInput } from './text-box';
+import { textBoxInput } from '../../../shared/page/text-box';
 
 // The scopes the dialogs push over the view's pane scope.
 export type DialogScope = 'picker' | 'box' | 'confirm';

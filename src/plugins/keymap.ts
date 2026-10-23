@@ -117,6 +117,7 @@ export const defaultKeymap = {
     { keys: '<Leader>ks', scope: 'any', command: 'sessions.showMode' },
     { keys: '<Leader>kn', scope: 'any', command: 'chat.newSession' },
     { keys: '<Leader>kd', scope: 'any', command: 'docs.showMode' },
+    { keys: '<Leader>k,', scope: 'any', command: 'settings.showMode' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────
     { keys: '<A-S-o>', scope: 'any', command: 'sessions.nextSession' },
@@ -305,6 +306,45 @@ export const defaultKeymap = {
     { keys: 'y', scope: 'docs.confirm', command: 'docs.confirmYes' },
     { keys: 'n', scope: 'docs.confirm', command: 'docs.confirmNo' },
     { keys: '<Esc>', scope: 'docs.confirm', command: 'docs.confirmNo' },
+
+    // ── Settings ───────────────────────────────────────────────────────────
+    ...(['settings.sections', 'settings.rows'] as const).flatMap((scope) => [
+      { keys: 'j', scope, command: 'settings.down' as const },
+      { keys: 'k', scope, command: 'settings.up' as const },
+      { keys: 'gg', scope, command: 'settings.top' as const },
+      { keys: 'G', scope, command: 'settings.bottom' as const },
+      { keys: '<CR>', scope, command: 'settings.open' as const },
+      { keys: '/', scope, command: 'settings.filter' as const },
+      { keys: '<Esc>', scope, command: 'settings.clearFilter' as const },
+    ]),
+    { keys: 'i', scope: 'settings.rows', command: 'settings.edit' },
+    { keys: 'r', scope: 'settings.rows', command: 'settings.reset' },
+    { keys: 'a', scope: 'settings.rows', command: 'settings.addBind' },
+    { keys: 'd', scope: 'settings.rows', command: 'settings.removeBind' },
+    {
+      keys: '<A-l>',
+      scope: 'settings.sections',
+      command: 'settings.focusRows',
+    },
+    {
+      keys: '<A-h>',
+      scope: 'settings.rows',
+      command: 'settings.focusSections',
+    },
+    { keys: '<CR>', scope: 'settings.box', command: 'settings.boxAccept' },
+    { keys: '<Esc>', scope: 'settings.box', command: 'settings.boxCancel' },
+    { keys: 'j', scope: 'settings.picker', command: 'settings.pickerDown' },
+    { keys: 'k', scope: 'settings.picker', command: 'settings.pickerUp' },
+    {
+      keys: '<CR>',
+      scope: 'settings.picker',
+      command: 'settings.pickerChoose',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'settings.picker',
+      command: 'settings.pickerCancel',
+    },
 
     // ── Gallery ────────────────────────────────────────────────────────────
     {

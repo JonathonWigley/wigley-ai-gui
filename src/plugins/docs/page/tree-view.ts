@@ -14,7 +14,7 @@ import {
   type TreeState,
   visibleRows,
 } from './docs-state';
-import { textBoxInput } from './text-box';
+import { textBoxInput } from '../../../shared/page/text-box';
 
 export interface TreeViewDeps {
   log: Log;
