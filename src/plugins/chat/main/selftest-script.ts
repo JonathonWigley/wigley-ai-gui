@@ -6,6 +6,7 @@ import { errorText } from '../../../shared/error-text';
 import {
   FAKE_HOLD_TEXT,
   FAKE_PAST_SESSIONS,
+  FAKE_SIGN_IN_CODE,
   FAKE_TOOL_TEXT,
   type FakeAgentCall,
   type FakeAgentHarness,
@@ -43,6 +44,8 @@ export interface ChatSelfTestDeps {
 }
 
 interface ChatSelfTestResult {
+  // The self-test project's folder.
+  selftest: string;
   permission: ToolResult;
   // Null when no fake process was found to join.
   round: ToolResult | null;
@@ -78,6 +81,12 @@ const LONG_KEYS = [
   'Enter',
 ];
 
+// The line an account command's notice adds; the notice's text is not logged.
+const NOTICE_LINE = '[chat] notice entry added in chat-selftest';
+const SIGN_IN_LINK_LINE = '[chat] sign-in link shown for work';
+// Main's line for a sign-in that ended with no error, so signed in.
+const SIGNED_IN_LINE = '[chat] sign-in for work ended';
+
 // Each step expects the last line its keys cause: the fake emits in microtasks,
 // so an earlier line can land before the step's wait begins. Each session opens
 // on its Chat tab: Option+Shift+i shows the second session's Chat tab, where y
@@ -109,8 +118,15 @@ const LONG_KEYS = [
 // self-test's folder and the work profile, and its session step lists the
 // fake's saved sessions: j x archives session one, . shows it again, k x
 // restores it and . hides the archived again; Enter resumes it. / and fa offer
-// the fake's command, Tab accepts it, Esc Enter sends it, Esc leaves the box,
-// and Cmd+W closes the idle session without asking.
+// the fake's command, Tab accepts it and Esc Enter sends it. The fake starts
+// every profile signed in: /status reports it in a notice, /logout signs the
+// work profile out and /status reports that. /login opens the sign-in dialog
+// on the fake's link, its box in insert mode: Esc leaves insert mode and Esc
+// again cancels, the fake's end reaching a closed dialog. /login again, the
+// fake's code and Cmd+Enter sign in; /logout, /login, the code and Esc Enter,
+// Enter sending from the box's normal mode, sign in again, so the profile ends
+// signed in, as /status then reports. Space c x finds no attached image, Esc
+// leaves the box, and Cmd+W closes the idle session without asking.
 const STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
   { keys: ['y'], expect: '[chat] no pending permission in chat-second' },
@@ -246,6 +262,27 @@ const STEPS: SelfTestStep[] = [
     keys: ['Escape', 'Enter'],
     expect: '[chat] result entry added in chat-selftest',
   },
+  { keys: sendKeys('/status'), expect: NOTICE_LINE },
+  { keys: sendKeys('/logout'), expect: NOTICE_LINE },
+  { keys: sendKeys('/status'), expect: NOTICE_LINE },
+  { keys: sendKeys('/login'), expect: SIGN_IN_LINK_LINE, checksFit: true },
+  {
+    keys: ['Escape', 'Escape'],
+    expect: '[chat] sign-in for work ended with its dialog closed',
+  },
+  { keys: sendKeys('/login'), expect: SIGN_IN_LINK_LINE },
+  {
+    keys: [...FAKE_SIGN_IN_CODE, '<D-Enter>'],
+    expect: SIGNED_IN_LINE,
+  },
+  { keys: sendKeys('/logout'), expect: NOTICE_LINE },
+  { keys: sendKeys('/login'), expect: SIGN_IN_LINK_LINE },
+  {
+    keys: [...FAKE_SIGN_IN_CODE, 'Escape', 'Enter'],
+    expect: SIGNED_IN_LINE,
+  },
+  { keys: sendKeys('/status'), expect: NOTICE_LINE },
+  { keys: [' ', 'c', 'x'], expect: '[chat] no attached image' },
   { keys: ['Escape'], expect: '[chat] left the box' },
   { keys: ['<D-w>'], expect: '[chat] session closed: chat-selftest' },
 ];
@@ -436,15 +473,15 @@ interface SelfTestProjects {
 // self-test's, whose Chat tab it shows. Asks one permission prompt through
 // chat's tool in the self-test's session, which the steps allow; the answer
 // asks a forms round there over a relay that joins the session, which the
-// steps submit. The result is both calls' replies; problems reads the fake
+// steps submit. The result is both calls' replies and the self-test project's
+// folder; problems reads the fake
 // processes, whose records the steps keep changing in place, when it runs,
 // reading only the records this run added. The run waits on the session's
 // Chat tab being shown.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   const { chat, sessions, harnesses, files } = deps;
+  // Cleared when making them fails, so a later run tries again.
   let made: Promise<SelfTestProjects> | null = null;
-  // Set once `made` resolves, before any session starts.
-  let projects: SelfTestProjects | null = null;
   let previousRelay: ConnectedSession | null = null;
   let archiveResetFailures: string[] = [];
   let marks: RunMark[] = [];
@@ -484,7 +521,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     });
     return permission.then(async (reply): Promise<ChatSelfTestResult> => {
       if (process === null) {
-        return { permission: reply, round: null };
+        return { selftest, permission: reply, round: null };
       }
       const relay = sessions.connect({
         sessionId: process.request.sessionId,
@@ -498,11 +535,12 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         chatRound(run),
         toolCallContext(),
       );
-      return { permission: reply, round };
+      return { selftest, permission: reply, round };
     });
   }
 
-  function runProblems(result: ChatSelfTestResult, selftest: string): string[] {
+  function runProblems(result: ChatSelfTestResult): string[] {
+    const { selftest } = result;
     return [
       ...fixtureProblems(
         result,
@@ -528,9 +566,11 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
           failures.push(`archive reset failed: ${errorText(error)}`);
         });
       }
-      made ??= makeProjects();
+      made ??= makeProjects().catch((error: unknown) => {
+        made = null;
+        throw error;
+      });
       const result = made.then((madeProjects) => {
-        projects = madeProjects;
         closeEarlierSessions(madeProjects);
         return openSessions(run, madeProjects);
       });
@@ -542,9 +582,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     steps: STEPS,
     problems: (result) => [
       ...archiveResetFailures,
-      ...(projects === null
-        ? ['self-test project folders not made']
-        : runProblems(result as ChatSelfTestResult, projects.selftest)),
+      ...runProblems(result as ChatSelfTestResult),
     ],
   };
 }
