@@ -309,7 +309,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   };
 
   // Redraws the rows, the open box moving into its row's new element with
-  // its focus and text kept; a box whose row is no longer drawn closes.
+  // its focus and text kept; a box whose row is no longer drawn, or whose
+  // file is now broken, closes, so it never writes over the broken file.
   const draw = () => {
     const held = openBox;
     if (held === null) {
@@ -322,7 +323,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         .find((row) => row.key === held.box.key)
         ?.element.append(held.box.element);
     });
-    if (!rows.some((row) => row.key === held.box.key)) {
+    const isRowGone = !rows.some((row) => row.key === held.box.key);
+    if (isRowGone || isBroken(held.file)) {
       closeBox(held.box);
     }
   };
@@ -659,7 +661,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     });
   };
 
-  const logFilter = () => log(`filter "${query}": ${rows.length} rows`);
+  // Logs the count, then the first row's key (`none` with no rows).
+  const logFilter = () => {
+    log(`filter "${query}": ${rows.length} rows`);
+    log(`filter "${query}" first row ${rows[0]?.key ?? 'none'}`);
+  };
 
   const closeFilter = () => {
     filterScope?.pop();

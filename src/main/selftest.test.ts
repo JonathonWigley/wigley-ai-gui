@@ -99,3 +99,41 @@ describe('failSelfTest', () => {
     expect(secondCleanUp).not.toHaveBeenCalled();
   });
 });
+
+describe('settleWithin', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns the value of a result that settles in time', async () => {
+    const { settleWithin } = await import('./selftest');
+
+    expect(await settleWithin(Promise.resolve('done'), 1000)).toEqual({
+      timedOut: false,
+      value: 'done',
+    });
+  });
+
+  it('times out on a result that never settles', async () => {
+    vi.useFakeTimers();
+    const { settleWithin } = await import('./selftest');
+    let outcome: unknown = null;
+
+    void settleWithin(new Promise(() => {}), 1000).then((settled) => {
+      outcome = settled;
+    });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(outcome).toBeNull();
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(outcome).toEqual({ timedOut: true });
+  });
+
+  it('rejects with a result that rejects', async () => {
+    const { settleWithin } = await import('./selftest');
+
+    await expect(
+      settleWithin(Promise.reject(new Error('boom')), 1000),
+    ).rejects.toThrow('boom');
+  });
+});

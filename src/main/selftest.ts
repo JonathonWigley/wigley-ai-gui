@@ -14,6 +14,7 @@ import {
   press,
   readLog,
   readStartFailure,
+  STEP_TIMEOUT_MS,
   waitFor,
   waitForNewLogLine,
   withPrimitiveEllipsis,
@@ -89,6 +90,26 @@ async function saveScreenshot(
   }
 }
 
+// What `result` resolves to, or `timedOut` when it has not settled within
+// `timeoutMs`; a rejection rejects. The result is left running.
+export async function settleWithin<T>(
+  result: Promise<T>,
+  timeoutMs: number,
+): Promise<{ timedOut: false; value: T } | { timedOut: true }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<{ timedOut: true }>((resolve) => {
+    timer = setTimeout(() => resolve({ timedOut: true }), timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      result.then((value) => ({ timedOut: false as const, value })),
+      timedOut,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Forge's dev server can reload the page once at startup, so every load starts
 // a fresh run and a run that a reload interrupted stands down.
 let latestRun = 0;
@@ -157,9 +178,10 @@ async function runStep(
 }
 
 // Opens the script's fixture, runs its steps and checks its result, reporting
-// each under `pluginId`; `screenshots` maps each step that saves a PNG to its
-// path, and the fit check lets the script's `scrollsItself` and the
-// primitives' ellipsis parts clip. Returns how many checks failed, or null
+// each under `pluginId`; a result that has not settled within the step
+// timeout once the steps end fails as timed out. `screenshots` maps each step
+// that saves a PNG to its path, and the fit check lets the script's
+// `scrollsItself` and the primitives' ellipsis parts clip. Returns how many checks failed, or null
 // when a reload interrupted the run.
 async function runScript(
   window: DrivenWindow,
@@ -197,11 +219,18 @@ async function runScript(
       failures++;
     }
   }
-  const outcome = await result;
+  const outcome = await settleWithin(result, STEP_TIMEOUT_MS);
   if (!isCurrent()) {
     return null;
   }
-  const problems = script.problems(outcome);
+  if (outcome.timedOut) {
+    report(
+      false,
+      `${pluginId} result did not settle within ${STEP_TIMEOUT_MS} ms`,
+    );
+    return failures + 1;
+  }
+  const problems = script.problems(outcome.value);
   report(
     problems.length === 0,
     `${pluginId} result ${problems.join(', ') || 'as expected'}`,

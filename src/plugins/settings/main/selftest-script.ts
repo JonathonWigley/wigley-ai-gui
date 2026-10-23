@@ -6,7 +6,10 @@ import type {
 } from '../../../contracts/user-config';
 
 export interface SettingsSelfTestDeps {
-  userConfig: Pick<UserConfig, 'read' | 'onChanged'>;
+  userConfig: Pick<
+    UserConfig,
+    'read' | 'onChanged' | 'writeSettings' | 'writeKeymap'
+  >;
   // What `settings.show` runs: brings the window forward and shows the mode.
   show(): void;
 }
@@ -17,26 +20,27 @@ const SETTINGS_FILE = '.config/wigley-ai-gui/settings.json';
 // A key no default binds, added to the help command and removed again.
 const ADDED_KEYS = '<Leader>zh';
 
-// Settings mode shows on the first section, Core, with focus on the side bar.
-// Space k , hides the side bar, focusing the rows, and again shows it. / and
-// sequence filter Core to the key sequence timeout; Enter opens its box and
-// 750 writes it. Enter again, abc is refused under the box, and Esc closes
-// it. 800 written on disk redraws the rows, and r resets the row. A key the
-// settings do not declare breaks settings.json, and {} mends it. Enter opens
-// the box, 900 written on disk makes the box's 600 stale, and Esc closes it.
-// / and theme filter Core to the three rows naming the theme, the Theme row
-// first, whose Enter shows the theme picker. Esc, Option+h, G and Enter open
-// Keymap; / and help filter it to the two help rows, the help command first,
-// where a and <Leader>zh open the scope picker, and Enter picks the
-// preselected scope. d picks the user bind, listed last, to remove; r then
-// finds nothing to reset. Option+h, gg and Enter open Core, where / and
-// sequence filter to the timeout again and r clears the 900.
+// Open empties both user files, then settings mode shows on the first
+// section, Core, with focus on the side bar. Space k , hides the side bar,
+// focusing the rows, and again shows it. / and sequence filter Core to the key
+// sequence timeout first; Enter opens its box and 750 writes it. Enter again,
+// abc is refused under the box, and Esc closes it. 800 written on disk redraws
+// the rows, and r resets the row. Enter opens the box again, and a key the
+// settings do not declare breaks settings.json and closes it; {} mends the
+// file. Enter opens the box, 900 written on disk makes the box's 600 stale,
+// and Esc closes it. / and theme filter Core to the Theme row first, whose
+// Enter shows the theme picker. Esc, Option+h, G and Enter open Keymap; / and
+// help filter it to the help command first, where a and <Leader>zh open the
+// scope picker, and Enter picks the preselected scope. d picks the user bind,
+// listed last, to remove; r then finds nothing to reset. Option+h, gg and
+// Enter open Core, where / and sequence filter to the timeout again and r
+// clears the 900.
 const STEPS: SelfTestStep[] = [
   { keys: [' ', 'k', ','], expect: '[page] side bar hidden' },
   { keys: [' ', 'k', ','], expect: '[page] side bar shown' },
   {
     keys: ['/', ...'sequence', 'Enter'],
-    expect: '[settings] filter "sequence": 1 rows',
+    expect: '[settings] filter "sequence" first row keySequenceTimeoutMs',
     checksFit: true,
     screenshot: 'core-filtered',
   },
@@ -55,10 +59,11 @@ const STEPS: SelfTestStep[] = [
     expect: '[settings] redrawn',
   },
   { keys: ['r'], expect: '[settings] wrote settings.json' },
+  { keys: ['Enter'], expect: '[settings] box open keySequenceTimeoutMs' },
   {
     writeFile: { path: SETTINGS_FILE, text: '{"nope": 1}' },
     keys: [],
-    expect: '[settings] broken settings.json',
+    expect: '[settings] box closed keySequenceTimeoutMs',
     screenshot: 'broken',
   },
   {
@@ -75,7 +80,7 @@ const STEPS: SelfTestStep[] = [
   { keys: ['Escape'], expect: '[settings] box closed keySequenceTimeoutMs' },
   {
     keys: ['/', ...'theme', 'Enter'],
-    expect: '[settings] filter "theme": 3 rows',
+    expect: '[settings] filter "theme" first row theme',
   },
   { keys: ['Enter'], expect: '[settings] picker shown: Theme' },
   {
@@ -86,7 +91,7 @@ const STEPS: SelfTestStep[] = [
   },
   {
     keys: ['/', ...'help', 'Enter'],
-    expect: '[settings] filter "help": 2 rows',
+    expect: '[settings] filter "help" first row keys.toggleHelp',
   },
   { keys: ['a'], expect: '[settings] box open keys.toggleHelp' },
   {
@@ -108,8 +113,8 @@ function isEmptyLayer(layer: unknown): boolean {
   return JSON.stringify(layer) === '{}';
 }
 
-// Whether both files hold an empty user layer: the state the steps end in,
-// and first reach at the last step.
+// Whether both files hold an empty user layer: the state the steps start
+// from and end in.
 function isEmptyConfig(read: UserConfigRead): boolean {
   return (
     read.settings.state === 'ok' &&
@@ -117,6 +122,32 @@ function isEmptyConfig(read: UserConfigRead): boolean {
     read.keymap.state === 'ok' &&
     isEmptyLayer(read.keymap.layer)
   );
+}
+
+// Whether keymap.json holds the bind the keymap steps add.
+function holdsAddedBind(read: UserConfigRead): boolean {
+  return (
+    read.keymap.state === 'ok' &&
+    (read.keymap.layer?.binds ?? []).some((bind) => bind.keys === ADDED_KEYS)
+  );
+}
+
+// Writes an empty layer to both user files, whatever a run before this one
+// left in them, broken text included.
+async function emptyUserFiles(
+  userConfig: SettingsSelfTestDeps['userConfig'],
+): Promise<void> {
+  const read = await userConfig.read();
+  const results = [
+    await userConfig.writeSettings({}, read.settings.text),
+    await userConfig.writeKeymap({}, read.keymap.text),
+  ];
+  const failed = results.find((result) => result.type !== 'written');
+  if (failed !== undefined) {
+    throw new Error(
+      `Emptying the user files before the settings steps failed: ${JSON.stringify(failed)}`,
+    );
+  }
 }
 
 function resultProblems(read: UserConfigRead): string[] {
@@ -140,9 +171,11 @@ function resultProblems(read: UserConfigRead): string[] {
   return problems;
 }
 
-// `open` shows Settings mode as `settings.show` does. The result is the user
-// config read on the first change after which both layers are empty, which
-// only the last step brings about.
+// `open` empties both user files, then shows Settings mode as
+// `settings.show` does. The result is the user config read on the first
+// change after which both layers are empty that follows one where keymap.json
+// held the added bind: the steps reach that state only at the last step,
+// whatever the files held before. It rejects when emptying the files fails.
 export function settingsSelfTestScript(
   deps: SettingsSelfTestDeps,
 ): SelfTestScript {
@@ -154,10 +187,15 @@ export function settingsSelfTestScript(
     scrollsItself: ['.settings-sheet'],
     open() {
       watching?.dispose();
+      let hasSeenAddedBind = false;
       const result = new Promise<UserConfigRead>((resolve, reject) => {
         const watch = userConfig.onChanged(() => {
           userConfig.read().then((read) => {
-            if (watching === watch && isEmptyConfig(read)) {
+            if (watching !== watch) {
+              return;
+            }
+            hasSeenAddedBind ||= holdsAddedBind(read);
+            if (hasSeenAddedBind && isEmptyConfig(read)) {
               watch.dispose();
               watching = null;
               resolve(read);
@@ -165,8 +203,8 @@ export function settingsSelfTestScript(
           }, reject);
         });
         watching = watch;
+        emptyUserFiles(userConfig).then(deps.show, reject);
       });
-      deps.show();
       return { shownLine: '[settings] shown', result };
     },
     steps: STEPS,
