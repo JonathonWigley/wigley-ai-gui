@@ -31,6 +31,7 @@ import { type AgentHarness, CLAUDE_PERMISSION_TOOL } from '../contracts/agent';
 import type { Clock, RandomHex, RandomUuid } from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { Log } from '../contracts/log';
+import type { Paths } from '../contracts/paths';
 import type { Platform } from '../contracts/platform';
 import type { AppConfig } from '../contracts/settings';
 import type {
@@ -44,7 +45,6 @@ import { manifests } from '../plugins/manifests';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
-import { expandHome } from '../shared/expand-home';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
 import { startPlugins } from '../shared/plugin-host';
 import {
@@ -52,6 +52,8 @@ import {
   qualify,
   requireListed,
 } from '../shared/plugin-manifests';
+import { posixPaths } from '../shared/paths/posix-paths';
+import { windowsPaths } from '../shared/paths/windows-paths';
 import { scopedFiles } from '../shared/scoped-files';
 import { createElectronAlerts } from './alerts/electron-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
@@ -167,7 +169,8 @@ function claudeHarness(
   log: Log,
 ) {
   return createClaudeCodeHarness({
-    command: () => expandHome(store.current().settings.claude.command, homeDir),
+    command: () =>
+      paths.expandTilde(store.current().settings.claude.command, homeDir),
     permissionTool: CLAUDE_PERMISSION_TOOL,
     env,
     log,
@@ -262,6 +265,7 @@ const processes = createNodeProcesses();
 const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
+const paths: Paths = process.platform === 'win32' ? windowsPaths : posixPaths;
 
 // The self-test gives plugins a fresh temp folder as the home folder, and
 // deletes it before it exits. Node retries the removal on `EBUSY`,
@@ -576,7 +580,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
     runMode === 'selfTest'
       ? startSelfTest(
           window,
-          scopedFiles(files, inputs.homeDir),
+          scopedFiles(files, inputs.homeDir, paths),
           cleanUpSelfTest,
           path.join(app.getAppPath(), '.selftest', 'screenshots'),
         )
@@ -593,6 +597,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
           runDir: inputs.driveRunDir,
           files,
           homeDir: inputs.homeDir,
+          paths,
           processes,
           randomHex,
           configChanged: (listener) => store.onChanged(listener),
@@ -615,6 +620,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
       randomHex,
       randomUuid,
       homeDir: inputs.homeDir,
+      paths,
       runMode,
       ...modeServices.forWindow({
         window,
@@ -742,7 +748,7 @@ function startApp() {
       }
       const inputs = readStartInputs();
       const store = await loadConfig(inputs.homeDir);
-      serveDataScheme(inputs.dataRoot);
+      serveDataScheme(inputs.dataRoot, paths);
       createWindow(inputs, store);
       // After createWindow's quit tasks, so the parts dispose before it.
       onQuit(() => store.dispose());

@@ -9,6 +9,7 @@ import type {
 } from '../../contracts/plugin';
 import { createEventBus } from '../../shared/event-bus';
 import { createMemoryFiles } from '../../shared/memory-files';
+import { posixPaths } from '../../shared/paths/posix-paths';
 import { createMainApi } from './main-api';
 
 const manifest: PluginManifest = {
@@ -52,7 +53,7 @@ function apiOver(settings: ReturnType<typeof liveSettings>) {
   return createMainApi(manifest, {
     channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
     ...settings.deps,
-    services: {} as MainServices,
+    services: { paths: posixPaths } as MainServices,
     selfTestFor: () => null,
     driveFor: () => null,
     dependency: <E>() => undefined as E,
@@ -89,7 +90,7 @@ describe('createMainApi', () => {
     const api = createMainApi(manifest, {
       channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
       ...fixedSettings,
-      services: {} as MainServices,
+      services: { paths: posixPaths } as MainServices,
       selfTestFor: () => null,
       driveFor: () => null,
       dependency: <E>() => undefined as E,
@@ -109,7 +110,7 @@ describe('createMainApi', () => {
       {
         channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
         ...fixedSettings,
-        services: { files } as unknown as MainServices,
+        services: { files, paths: posixPaths } as unknown as MainServices,
         selfTestFor: () => null,
         driveFor: () => null,
         dependency: <E>() => undefined as E,
@@ -126,6 +127,35 @@ describe('createMainApi', () => {
     );
   });
 
+  it('createMainApi_Data_JoinsThePluginIdOntoTheDataRoot', async () => {
+    const inner = createMemoryFiles();
+    const written: string[] = [];
+    const files = {
+      ...inner,
+      write: async (path: string, text: string) => {
+        written.push(path);
+        return inner.write(path, text);
+      },
+    };
+    const api = createMainApi(
+      { ...manifest, id: 'forms' },
+      {
+        channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
+        ...fixedSettings,
+        services: { files, paths: posixPaths } as unknown as MainServices,
+        selfTestFor: () => null,
+        driveFor: () => null,
+        dependency: <E>() => undefined as E,
+        bus: createEventBus(),
+        dataRoot: '/data',
+      },
+    );
+
+    await api.data.write('x.txt', 'text');
+
+    expect(written).toEqual(['/data/forms/x.txt']);
+  });
+
   it('createMainApi_SelfTest_IsTheHostForThePlugin', () => {
     const host: SelfTestHost = { run: () => undefined };
     const clock = { now: () => 0 };
@@ -138,6 +168,7 @@ describe('createMainApi', () => {
         services: {
           files: createMemoryFiles(),
           clock,
+          paths: posixPaths,
         } as unknown as MainServices,
         selfTestFor: (pluginId) => {
           askedFor.push(pluginId);
@@ -162,7 +193,10 @@ describe('createMainApi', () => {
       {
         channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
         ...fixedSettings,
-        services: { files: createMemoryFiles() } as unknown as MainServices,
+        services: {
+          files: createMemoryFiles(),
+          paths: posixPaths,
+        } as unknown as MainServices,
         selfTestFor: () => null,
         driveFor: (pluginId) => (pluginId === 'forms' ? formsHost : null),
         dependency: <E>() => undefined as E,

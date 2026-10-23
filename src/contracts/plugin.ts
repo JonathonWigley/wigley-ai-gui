@@ -16,6 +16,7 @@ import type {
 } from './keymap';
 import type { Log } from './log';
 import type { MarkdownRenderer } from './markdown';
+import type { Paths } from './paths';
 import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
 import type { TokenDecl } from './theme';
@@ -309,6 +310,8 @@ export interface PageServices {
   toast(text: string, tone: ToastTone): void;
   log: Log;
   timers: Timers;
+  // Full paths by the rules of the OS the served config names.
+  paths: Paths;
   // This plugin's own ui state, its keys kept apart from every other plugin's.
   uiState: UiState;
 }
@@ -481,7 +484,8 @@ export interface DriveHost {
 // `runMode` is how the app was started. `selfTest` is the plugin's own
 // self-test host, null outside the self-test.
 // `files` takes absolute paths; outside a live run, `files.trash` deletes for
-// good. `processes` runs the machine's programs. `agentHarnesses` lists every
+// good. `paths` handles full paths by the rules of the OS main runs on.
+// `processes` runs the machine's programs. `agentHarnesses` lists every
 // harness adapter the app runs, found by `id`. `window.chooseFolder` opens the
 // native folder dialog over the window and resolves to null when the user
 // cancels; `window.isFocused` is true while the app's window has focus.
@@ -496,6 +500,7 @@ export interface MainServices {
   randomHex: RandomHex;
   randomUuid: RandomUuid;
   homeDir: string;
+  paths: Paths;
   alerts: Alerts;
   agentHarnesses: readonly AgentHarness[];
   window: {
@@ -511,8 +516,8 @@ export interface MainServices {
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` and
 // `Heard` are as on `PageApi`. `data` is the files service scoped to the
-// plugin's data folder: its paths are relative to that folder, and one that
-// resolves outside it fails. `settings` reads the plugin's settings as the
+// plugin's data folder: its paths are `/`-separated and relative to that
+// folder on every OS, and one that resolves outside it fails. `settings` reads the plugin's settings as the
 // user config now sets them; `onSettingsChanged` hears them each time they
 // change, until its `dispose`. `drive` is the plugin's own drive host, null
 // outside a drive run.

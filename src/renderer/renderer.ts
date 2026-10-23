@@ -18,6 +18,8 @@ import { createEventBus } from '../shared/event-bus';
 import { editorBindMode } from '../shared/key-hints';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
 import { startPlugins } from '../shared/plugin-host';
+import { posixPaths } from '../shared/paths/posix-paths';
+import { windowsPaths } from '../shared/paths/windows-paths';
 import { qualify } from '../shared/plugin-manifests';
 import { mountCodeColours } from './codemirror-vim/code-colours';
 import {
@@ -155,6 +157,7 @@ async function start() {
     toast: (text, tone) => toasts.show(text, tone),
     log,
     timers,
+    paths: config.platform === 'windows' ? windowsPaths : posixPaths,
   };
   // Filled once the page keys are installed; no key reaches the engine before.
   let pageKeys: ReturnType<typeof installPageKeys> | null = null;

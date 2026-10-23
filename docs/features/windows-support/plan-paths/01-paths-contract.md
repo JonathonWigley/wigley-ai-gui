@@ -1,6 +1,6 @@
 # 01 — Paths contract and its POSIX and Windows adapters
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -73,3 +73,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 2e62c84. Proof: diff read — contract member for member as plan.md § File Structure; both adapters built on rootedPaths; LAYERS entry plus 13 listings; typecheck clean; paths.test.ts 84 passed. Concerns: a worker's npx fetched prettier@3.9.10 into the npx cache (hard-gate breach, reported to the user); the shared test table casts its calls, so a mistyped row fails at run time.

@@ -184,7 +184,7 @@ Shared signatures parts use:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Paths contract and adapters](01-paths-contract.md)
+- [x] [Paths contract and adapters](01-paths-contract.md)
 - [x] [Windows-only test and self-test fixes](06-windows-test-fixes.md)
 
 ### Wave 2
@@ -205,9 +205,16 @@ Review base: 4cadb24
 
 ### Groups
 - 06 · 3ea3e97 · diff read + worker compile/lint, 3 files 61 pass 10 skip · concerns: self-test exit unproved until task 08
+- 01 · 2e62c84 · diff read + typecheck, paths.test.ts 84 pass · concerns: worker's npx fetched prettier into the npx cache (reported to user); table rows typed at run time only
 ### Contract changes
+- posixPaths, windowsPaths: two standalone adapter files → two PathSyntax records handed to rootedPaths(syntax): Paths in a new src/shared/paths/rooted-paths.ts · why: the adapters share every rule but root parsing and case folding · consumers: none (02–05 import the constants) · group 01
 ### Rulings
 - login-shell-path: a 4th /bin/sh test (ignores SIGTERM) also skipped where there is no /bin/sh — it spawns the same stand-in and proved nothing on Windows — Windows loses one empty pass · group 06
 - relay test duplicates the \.\pipe\ prefix literal, since PIPE_PREFIX in relay-server.ts is not exported and was out of scope — a changed prefix would mis-skip one test · group 06
+- join takes its root only from folder: join('', 'a') is 'a' (old joinPath gave '/a'), parent('a') is '' (old parentFolder gave '/') — follows 'never resets to a root' and 'works on its segments' — a caller relying on the old '/' gets an unrooted path · group 01
+- tilde with a non-absolute homeDir (the page's '' before docs delivers the home) matches nothing and returns normalize(path) — otherwise every unrooted path shows as ~/… — none unless a relative home is meant · group 01
+- '..' above nothing is kept only for an unrooted path, dropped at any root including Windows' '\' and 'C:' — '\..\x' normalizes to '\x' · group 01
+- commonFolder is null on POSIX too for a list mixing absolute and relative paths (roots differ) · group 01
+- src/shared/paths added to the 13 LAYERS entries the Approach names, not src/main (selftest.ts) or src/shared/page — a later task importing an adapter there needs one more listing · group 01
 ### Review rounds
 ### Test gate

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMemoryFiles, type MemoryFiles } from './memory-files';
+import { posixPaths } from './paths/posix-paths';
+import { windowsPaths } from './paths/windows-paths';
 import { scopedFiles } from './scoped-files';
 
 const ROOT = '/data/plugins/forms';
@@ -14,7 +16,7 @@ describe('scopedFiles', () => {
   it('read_PathInsideRoot_ReadsUnderRoot', async () => {
     await inner.write(`${ROOT}/layouts/a/layout.js`, 'text');
 
-    const text = await scopedFiles(inner, ROOT).read(
+    const text = await scopedFiles(inner, ROOT, posixPaths).read(
       'layouts/./b/../a/layout.js',
     );
 
@@ -22,7 +24,7 @@ describe('scopedFiles', () => {
   });
 
   it('write_ParentEscape_RejectsBeforeWriting', async () => {
-    const scoped = scopedFiles(inner, ROOT);
+    const scoped = scopedFiles(inner, ROOT, posixPaths);
 
     await expect(scoped.write('../x', 'text')).rejects.toThrow(
       `../x is outside ${ROOT}`,
@@ -31,7 +33,7 @@ describe('scopedFiles', () => {
   });
 
   it('writeBytes_ParentEscape_RejectsBeforeWriting', async () => {
-    const scoped = scopedFiles(inner, ROOT);
+    const scoped = scopedFiles(inner, ROOT, posixPaths);
 
     await expect(
       scoped.writeBytes('../x.png', new Uint8Array([1])),
@@ -40,7 +42,7 @@ describe('scopedFiles', () => {
   });
 
   it('write_AbsolutePath_Rejects', async () => {
-    const scoped = scopedFiles(inner, ROOT);
+    const scoped = scopedFiles(inner, ROOT, posixPaths);
 
     await expect(scoped.write('/etc/x', 'text')).rejects.toThrow(
       `/etc/x is outside ${ROOT}`,
@@ -49,7 +51,7 @@ describe('scopedFiles', () => {
   });
 
   it('write_BackslashPath_Rejects', async () => {
-    const scoped = scopedFiles(inner, ROOT);
+    const scoped = scopedFiles(inner, ROOT, posixPaths);
 
     await expect(scoped.write('a\\..\\..\\x', 'text')).rejects.toThrow(
       `a\\..\\..\\x is outside ${ROOT}`,
@@ -58,7 +60,7 @@ describe('scopedFiles', () => {
   });
 
   it('write_DrivePrefixPath_Rejects', async () => {
-    const scoped = scopedFiles(inner, ROOT);
+    const scoped = scopedFiles(inner, ROOT, posixPaths);
 
     await expect(scoped.write('C:x', 'text')).rejects.toThrow(
       `C:x is outside ${ROOT}`,
@@ -67,7 +69,7 @@ describe('scopedFiles', () => {
   });
 
   it('watch_ParentEscape_Throws', () => {
-    const scoped = scopedFiles(inner, ROOT);
+    const scoped = scopedFiles(inner, ROOT, posixPaths);
 
     expect(() => scoped.watch('layouts/../..', () => {})).toThrow(
       `layouts/../.. is outside ${ROOT}`,
@@ -75,7 +77,7 @@ describe('scopedFiles', () => {
   });
 
   it('watch_WriteUnderFolder_ReportsRelativePath', async () => {
-    const scoped = scopedFiles(inner, ROOT);
+    const scoped = scopedFiles(inner, ROOT, posixPaths);
     const reports: string[] = [];
     scoped.watch('layouts', (changed) => reports.push(changed));
 
@@ -86,7 +88,7 @@ describe('scopedFiles', () => {
 
   it('rename_DestinationOutsideRoot_RejectsBeforeMoving', async () => {
     await inner.write(`${ROOT}/a.md`, 'text');
-    const scoped = scopedFiles(inner, ROOT);
+    const scoped = scopedFiles(inner, ROOT, posixPaths);
 
     await expect(scoped.rename('a.md', '../x')).rejects.toThrow(
       `../x is outside ${ROOT}`,
@@ -99,7 +101,7 @@ describe('scopedFiles', () => {
     const recorded = recordingCalls(calls);
 
     await expect(
-      scopedFiles(recorded, ROOT).readStart('../x', 4),
+      scopedFiles(recorded, ROOT, posixPaths).readStart('../x', 4),
     ).rejects.toThrow(`../x is outside ${ROOT}`);
     expect(calls).toEqual([]);
   });
@@ -108,22 +110,26 @@ describe('scopedFiles', () => {
     const calls: string[] = [];
     const recorded = recordingCalls(calls);
 
-    await expect(scopedFiles(recorded, ROOT).modified('../x')).rejects.toThrow(
-      `../x is outside ${ROOT}`,
-    );
+    await expect(
+      scopedFiles(recorded, ROOT, posixPaths).modified('../x'),
+    ).rejects.toThrow(`../x is outside ${ROOT}`);
     expect(calls).toEqual([]);
   });
 
   it('readStart_PathInsideRoot_ReadsUnderRoot', async () => {
     await inner.write(`${ROOT}/a.txt`, 'abcdef');
 
-    expect(await scopedFiles(inner, ROOT).readStart('a.txt', 2)).toBe('ab');
+    expect(
+      await scopedFiles(inner, ROOT, posixPaths).readStart('a.txt', 2),
+    ).toBe('ab');
   });
 
   it('realPath_PathInsideRoot_ReturnsRelative', async () => {
     await inner.write(`${ROOT}/a/b.md`, 'text');
 
-    expect(await scopedFiles(inner, ROOT).realPath('a/./b.md')).toBe('a/b.md');
+    expect(
+      await scopedFiles(inner, ROOT, posixPaths).realPath('a/./b.md'),
+    ).toBe('a/b.md');
   });
 
   it('realPath_LinkLeadingOutsideRoot_Rejects', async () => {
@@ -132,19 +138,64 @@ describe('scopedFiles', () => {
       [`${ROOT}/link.md`]: '/elsewhere/x.md',
     });
 
-    await expect(scopedFiles(linked, ROOT).realPath('link.md')).rejects.toThrow(
-      `link.md is outside ${ROOT}`,
-    );
+    await expect(
+      scopedFiles(linked, ROOT, posixPaths).realPath('link.md'),
+    ).rejects.toThrow(`link.md is outside ${ROOT}`);
   });
 
   it('realPath_WindowsSeparators_ReturnsSlashJoinedRelative', async () => {
     const root = 'C:\\data\\forms';
     const windows = withRealPaths({
       [root]: root,
-      [`${root}/a/b.md`]: 'C:\\data\\forms\\a\\b.md',
+      [`${root}\\a\\b.md`]: 'C:\\data\\forms\\a\\b.md',
     });
 
-    expect(await scopedFiles(windows, root).realPath('a/b.md')).toBe('a/b.md');
+    expect(
+      await scopedFiles(windows, root, windowsPaths).realPath('a/b.md'),
+    ).toBe('a/b.md');
+  });
+
+  it('scopedFiles_WindowsRoot_JoinsWithBackslash', async () => {
+    const root =
+      'C:\\Users\\jo\\AppData\\Roaming\\wigley-ai-gui\\plugins\\forms';
+    const calls: string[] = [];
+    const recorded: MemoryFiles = {
+      ...inner,
+      read: async (path) => {
+        calls.push(path);
+        return 'text';
+      },
+    };
+
+    await scopedFiles(recorded, root, windowsPaths).read(
+      'layouts/default/layout.js',
+    );
+
+    expect(calls).toEqual([
+      'C:\\Users\\jo\\AppData\\Roaming\\wigley-ai-gui\\plugins\\forms\\layouts\\default\\layout.js',
+    ]);
+  });
+
+  it('realPath_WindowsCaseDiffers_ReturnsSlashRelative', async () => {
+    const windows = withRealPaths({
+      'C:\\Root': 'c:\\root',
+      'C:\\Root\\a\\b.md': 'C:\\Root\\a\\b.md',
+    });
+
+    expect(
+      await scopedFiles(windows, 'C:\\Root', windowsPaths).realPath('a/b.md'),
+    ).toBe('a/b.md');
+  });
+
+  it('realPath_WindowsLinkOutside_Rejects', async () => {
+    const windows = withRealPaths({
+      'C:\\Root': 'C:\\Root',
+      'C:\\Root\\link.md': 'C:\\Elsewhere\\x.md',
+    });
+
+    await expect(
+      scopedFiles(windows, 'C:\\Root', windowsPaths).realPath('link.md'),
+    ).rejects.toThrow('link.md is outside C:\\Root');
   });
 });
 

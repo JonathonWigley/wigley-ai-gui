@@ -3,6 +3,7 @@ import type { RandomHex } from '../../contracts/ambient';
 import type { Disposable } from '../../contracts/disposable';
 import type { Files } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
+import type { Paths } from '../../contracts/paths';
 import type { DriveHost } from '../../contracts/plugin';
 import type { ProcessRunner } from '../../contracts/processes';
 import { errorText } from '../../shared/error-text';
@@ -20,6 +21,7 @@ export interface DriveRunDeps {
   files: Files;
   // The run's temp home, absolute.
   homeDir: string;
+  paths: Paths;
   processes: ProcessRunner;
   randomHex: RandomHex;
   // Hears each config the app publishes after a settings change.
@@ -52,7 +54,7 @@ export function startDriveRun(deps: DriveRunDeps): DriveRun {
   const commands = createDriveCommands({
     window: deps.window,
     actions: registry,
-    homeFiles: scopedFiles(deps.files, deps.homeDir),
+    homeFiles: scopedFiles(deps.files, deps.homeDir, deps.paths),
     runDir: deps.runDir,
     files: deps.files,
     recorder,

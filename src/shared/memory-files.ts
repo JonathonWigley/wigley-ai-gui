@@ -1,6 +1,6 @@
 import type { Clock } from '../contracts/ambient';
 import type { FileEntry, Files, FileStat } from '../contracts/files';
-import { resolveInside } from './scoped-files';
+import { relativeSegments } from './scoped-files';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
 // `rename`, `trash` and `remove` report each changed file's path to the
@@ -227,13 +227,13 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
 }
 
 // The one spelling a path is stored under: `/`-led, normalized, or `` for the
-// top folder. Throws on a path `resolveInside` refuses.
+// top folder. Throws on a path `relativeSegments` refuses.
 function keyOf(path: string): string {
-  const key = resolveInside('', path.replace(/^\/+/, ''));
-  if (key === null) {
+  const segments = relativeSegments(path.replace(/^\/+/, ''));
+  if (segments === null) {
     throw new Error(`${path} is outside /`);
   }
-  return key;
+  return segments.length === 0 ? '' : `/${segments.join('/')}`;
 }
 
 // An error `isMissingFile` accepts, as a Node fs call's `ENOENT`.

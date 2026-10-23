@@ -2,6 +2,7 @@ import { net, protocol } from 'electron';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type { Paths } from '../../contracts/paths';
 import { DATA_SCHEME, dataFilePath } from '../../shared/data-url';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -37,13 +38,13 @@ export function registerDataScheme(): void {
   ]);
 }
 
-// Serves each plugin's data folder under `dataRoot` on the default session,
-// open to any origin, so the page imports modules from it in dev and packaged
-// alike. A URL outside a plugin's folder, or naming anything but a file,
+// Serves each plugin's data folder under `dataRoot`, joined by `paths`, on
+// the default session, open to any origin, so the page imports modules from it
+// in dev and packaged alike. A URL outside a plugin's folder, or naming anything but a file,
 // answers 404.
-export function serveDataScheme(dataRoot: string): void {
+export function serveDataScheme(dataRoot: string, paths: Paths): void {
   protocol.handle(DATA_SCHEME, async (request) => {
-    const file = dataFilePath(request.url, dataRoot);
+    const file = dataFilePath(request.url, dataRoot, paths);
     if (file === null) {
       return notFound();
     }

@@ -1,13 +1,14 @@
 import type { Files } from '../contracts/files';
+import type { Paths } from '../contracts/paths';
 
 // Windows reads `\` as a separator and `C:` as a drive.
 const WINDOWS_PATH_SYNTAX = /\\|^[A-Za-z]:/;
 
-// `path` resolved under `root`, its `.` and `..` segments normalized and its
-// segments joined with `/`; null when `path` is absolute (a leading `/`),
-// holds a `\` or starts with a drive prefix such as `C:`, or its `..`
-// segments climb above `root`. An empty `path` resolves to `root`.
-export function resolveInside(root: string, path: string): string | null {
+// The segments of the `/`-separated relative `path`, its `.` and `..`
+// segments folded, `[]` for an empty path; null when `path` is absolute (a
+// leading `/`), holds a `\` or starts with a drive prefix such as `C:`, or its
+// `..` segments climb above its start.
+export function relativeSegments(path: string): string[] | null {
   if (path.startsWith('/') || WINDOWS_PATH_SYNTAX.test(path)) {
     return null;
   }
@@ -22,26 +23,26 @@ export function resolveInside(root: string, path: string): string | null {
       segments.push(segment);
     }
   }
-  const base = root.replace(/\/+$/, '');
-  return segments.length === 0 ? root : `${base}/${segments.join('/')}`;
+  return segments;
 }
 
-// `files` with every path relative to `root`. A path `resolveInside` refuses
-// fails with `<path> is outside <root>` before any I/O: `read`, `modified`,
-// `readStart`, `write`, `writeBytes`, `list`, `stat`, `realPath`,
-// `makeFolder`, `rename` (either path) and `trash` reject, and `watch` throws.
-// `realPath` returns the resolved path relative to `root`'s own real path (``
-// for `root` itself), its segments joined with `/` whichever separator the
-// adapter returns, and rejects `<path> is outside <root>` when a link leads
-// out of `root`.
-export function scopedFiles(files: Files, root: string): Files {
+// `files` with every path a `/`-separated path relative to `root`, joined
+// onto `root` by `paths` (`root` itself for an empty path). A path
+// `relativeSegments` refuses fails with `<path> is outside <root>` before any
+// I/O: `read`, `modified`, `readStart`, `write`, `writeBytes`, `list`, `stat`,
+// `realPath`, `makeFolder`, `rename` (either path) and `trash` reject, and
+// `watch` throws. `realPath` returns the resolved path relative to `root`'s
+// own real path (`` for `root` itself), as `paths` compares them, its
+// segments joined with `/`, and rejects `<path> is outside <root>` when a link
+// leads out of `root`.
+export function scopedFiles(files: Files, root: string, paths: Paths): Files {
   const outside = (path: string) => new Error(`${path} is outside ${root}`);
   const inside = (path: string): string => {
-    const resolved = resolveInside(root, path);
-    if (resolved === null) {
+    const segments = relativeSegments(path);
+    if (segments === null) {
       throw outside(path);
     }
-    return resolved;
+    return segments.length === 0 ? root : paths.join(root, ...segments);
   };
   return {
     read: async (path) => files.read(inside(path)),
@@ -59,32 +60,14 @@ export function scopedFiles(files: Files, root: string): Files {
         files.realPath(inside(path)),
         files.realPath(root),
       ]);
-      const relative = relativeToFolder(
-        slashJoined(realRoot),
-        slashJoined(real),
-      );
+      const relative = paths.segmentsBelow(real, realRoot);
       if (relative === null) {
         throw outside(path);
       }
-      return relative;
+      return relative.join('/');
     },
     makeFolder: async (path) => files.makeFolder(inside(path)),
     rename: async (from, to) => files.rename(inside(from), inside(to)),
     trash: async (path) => files.trash(inside(path)),
   };
-}
-
-// `path` with each Windows `\` separator written as `/`.
-function slashJoined(path: string): string {
-  return path.replaceAll('\\', '/');
-}
-
-// `path` relative to `folder`, both joined with `/`, `` for `folder` itself;
-// null when `path` is not inside `folder`.
-function relativeToFolder(folder: string, path: string): string | null {
-  if (path === folder) {
-    return '';
-  }
-  const prefix = folder.endsWith('/') ? folder : `${folder}/`;
-  return path.startsWith(prefix) ? path.slice(prefix.length) : null;
 }

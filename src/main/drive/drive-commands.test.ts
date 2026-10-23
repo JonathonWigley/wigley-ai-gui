@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeProcesses } from '../../shared/fake-processes';
 import { createMemoryFiles } from '../../shared/memory-files';
+import { posixPaths } from '../../shared/paths/posix-paths';
 import { scopedFiles } from '../../shared/scoped-files';
 import { createActionRegistry } from './action-registry';
 import { createDriveCommands } from './drive-commands';
@@ -31,7 +32,7 @@ function setUp(log: () => string[], answers: FakeAnswer[] = []) {
   const commands = createDriveCommands({
     window: fake.window,
     actions: createActionRegistry(),
-    homeFiles: scopedFiles(files, HOME),
+    homeFiles: scopedFiles(files, HOME, posixPaths),
     runDir: '/run',
     files,
     recorder: createFrameRecorder({

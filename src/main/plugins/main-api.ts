@@ -58,7 +58,11 @@ export function createMainApi(
     },
     services: { ...deps.services, selfTest: deps.selfTestFor(manifest.id) },
     dependency: deps.dependency,
-    data: scopedFiles(deps.services.files, `${deps.dataRoot}/${manifest.id}`),
+    data: scopedFiles(
+      deps.services.files,
+      deps.services.paths.join(deps.dataRoot, manifest.id),
+      deps.services.paths,
+    ),
     drive: deps.driveFor(manifest.id),
   };
 }

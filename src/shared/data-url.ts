@@ -1,4 +1,5 @@
-import { resolveInside } from './scoped-files';
+import type { Paths } from '../contracts/paths';
+import { relativeSegments } from './scoped-files';
 
 // The scheme that serves the page the files in each plugin's data folder.
 export const DATA_SCHEME = 'wigley-data';
@@ -16,17 +17,21 @@ export function dataUrl(
   return `${DATA_SCHEME}://${pluginId}/~${revision}/${encoded}`;
 }
 
-// The file a `dataUrl` names, `<dataRoot>/<pluginId>/<decoded path>` with the
-// revision dropped; null when `url` is not a data URL with a plugin and a
-// revision, or `resolveInside` refuses its decoded path under the plugin's
-// folder.
-export function dataFilePath(url: string, dataRoot: string): string | null {
+// The file a `dataUrl` names, `<dataRoot>/<pluginId>/<decoded path>` joined
+// by `paths` with the revision dropped; null when `url` is not a data URL with
+// a plugin and a revision, or `relativeSegments` refuses its plugin id, finds
+// no segment in it, or refuses its decoded path.
+export function dataFilePath(
+  url: string,
+  dataRoot: string,
+  paths: Paths,
+): string | null {
   const parsed = URL.parse(url);
   if (parsed === null || parsed.protocol !== `${DATA_SCHEME}:`) {
     return null;
   }
-  const pluginRoot = resolveInside(dataRoot, parsed.hostname);
-  if (pluginRoot === null || pluginRoot === dataRoot) {
+  const pluginSegments = relativeSegments(parsed.hostname);
+  if (pluginSegments === null || pluginSegments.length === 0) {
     return null;
   }
   const [revision, ...segments] = parsed.pathname.slice(1).split('/');
@@ -34,7 +39,10 @@ export function dataFilePath(url: string, dataRoot: string): string | null {
     return null;
   }
   const decoded = decodedPath(segments.join('/'));
-  return decoded === null ? null : resolveInside(pluginRoot, decoded);
+  const fileSegments = decoded === null ? null : relativeSegments(decoded);
+  return fileSegments === null
+    ? null
+    : paths.join(dataRoot, ...pluginSegments, ...fileSegments);
 }
 
 // Null for a malformed escape such as a lone `%`.
