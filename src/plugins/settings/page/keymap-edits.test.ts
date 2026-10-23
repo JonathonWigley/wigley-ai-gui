@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { KeyBind, UserKeymap } from '../../../contracts/keymap';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import {
+  advancedText,
   withAddedBind,
   withAdvanced,
   withCommandReset,
@@ -128,6 +129,22 @@ describe('withAdvanced', () => {
     ).toEqual({
       type: 'layer',
       layer: { unbind: [keysEntry, { app: 'CommandOrControl+W' }] },
+    });
+  });
+
+  it('withAdvanced_UneditedText_KeepsInterleavedUnbindOrder', () => {
+    const layer: UserKeymap = {
+      unbind: [
+        { app: 'CommandOrControl+Q' },
+        { keys: 'x', scope: 'p.s' },
+        { global: 'CommandOrControl+Shift+Space' },
+        { keys: 'y', scope: 'p.s' },
+      ],
+    };
+
+    expect(withAdvanced(layer, advancedText(layer))).toEqual({
+      type: 'layer',
+      layer,
     });
   });
 });

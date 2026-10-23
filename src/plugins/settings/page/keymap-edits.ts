@@ -153,8 +153,8 @@ function advancedKeyProblem(key: string): string | null {
 }
 
 // `layer` with the advanced box's sections replaced by those `text` holds,
-// keeping `binds`, `leader` and the `keys` unbind entries; a problem when the
-// text is not a JSON object of advanced sections.
+// keeping `binds`, `leader` and the `keys` unbind entries in their places; a
+// problem when the text is not a JSON object of advanced sections.
 export function withAdvanced(
   layer: UserKeymap | null,
   text: string,
@@ -189,7 +189,25 @@ export function withAdvanced(
       delete result[section];
     }
   }
-  const keysEntries = (layer?.unbind ?? []).filter(isKeysUnbind);
-  result.unbind = [...keysEntries, ...unbind];
+  result.unbind = withBoxUnbinds(layer?.unbind ?? [], unbind);
   return { type: 'layer', layer: tidied(result as UserKeymap) };
+}
+
+// `unbind` with its accelerator entries replaced by `boxEntries`: each box
+// entry takes the place of the next accelerator entry in order, the `keys`
+// entries keep theirs, and box entries past the last place go at the end.
+function withBoxUnbinds(
+  unbind: KeymapUnbind[],
+  boxEntries: unknown[],
+): unknown[] {
+  const pending = [...boxEntries];
+  const merged: unknown[] = [];
+  for (const entry of unbind) {
+    if (isKeysUnbind(entry)) {
+      merged.push(entry);
+    } else if (pending.length > 0) {
+      merged.push(pending.shift());
+    }
+  }
+  return [...merged, ...pending];
 }

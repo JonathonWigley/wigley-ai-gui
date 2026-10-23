@@ -54,6 +54,11 @@ function commandLabel(ctx: RowContext, command: CommandId): string {
   return ctx.schema.commands[command]?.label ?? command;
 }
 
+// `text` with its first letter capitalised, as a row's label shows it.
+function sentenceCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function leader(ctx: RowContext): string {
   return keymapLeader(ctx.schema, ctx.keymapLayer());
 }
@@ -258,7 +263,7 @@ function commandRow(ctx: RowContext, row: CommandRow): SettingsRow {
     key: row.command.id,
     file: 'keymap',
     element: settingsRowElement({
-      label: row.command.label,
+      label: sentenceCase(row.command.label),
       description: '',
       end,
       isSet: false,
