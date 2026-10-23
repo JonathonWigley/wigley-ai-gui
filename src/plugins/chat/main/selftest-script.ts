@@ -1,4 +1,6 @@
+import path from 'node:path';
 import type { AgentHarness } from '../../../contracts/agent';
+import type { Files } from '../../../contracts/files';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
@@ -20,14 +22,18 @@ import type { ChatSessions } from './chat-sessions';
 import { askFixturePermission } from './fixtures';
 import { PERMISSION_TOOL_NAME } from './permission-tool';
 
-// Never read: the fake harness spawns nothing. Its last segment names the
-// session in every page line.
-export const SELFTEST_PROJECT_DIR = '/selftest/chat-selftest';
+// The names of the self-test's project folders, made under the self-test's
+// home so the start prompt's folder step, which leaves out missing folders,
+// lists them. The fake harness spawns nothing in them. The folder's name names
+// the session in every page line.
+const SELFTEST_PROJECT_NAME = 'chat-selftest';
 // A second session whose Chat tab the steps show while the first holds a
 // pending permission.
-const SECOND_PROJECT_DIR = '/selftest/chat-second';
+const SECOND_PROJECT_NAME = 'chat-second';
 
 export interface ChatSelfTestDeps {
+  homeDir: string;
+  files: Pick<Files, 'makeFolder' | 'realPath'>;
   chat: Pick<
     ChatSessions,
     'start' | 'closed' | 'permissionToolSession' | 'sessions' | 'setArchived'
@@ -325,13 +331,14 @@ const markRun = (harnesses: readonly AgentHarness[]): RunMark[] =>
 // or new.
 function selftestProcess(
   marks: readonly RunMark[],
+  projectDir: string,
   resume: boolean,
 ): FakeAgentProcessRecord | null {
   const records = marks
     .flatMap((mark) => mark.harness.processes.slice(mark.processes))
     .filter(
       (record) =>
-        record.request.projectDir === SELFTEST_PROJECT_DIR &&
+        record.request.projectDir === projectDir &&
         record.request.resume === resume,
     );
   return records.at(-1) ?? null;
@@ -340,6 +347,7 @@ function selftestProcess(
 function fixtureProblems(
   { permission, round }: ChatSelfTestResult,
   process: FakeAgentProcessRecord | null,
+  projectDir: string,
 ): string[] {
   const reply = permission.content[0]?.text;
   const problems: string[] = [];
@@ -350,7 +358,7 @@ function fixtureProblems(
     problems.push(`permission reply ${reply}`);
   }
   if (process === null || round === null) {
-    problems.push(`no fake process for ${SELFTEST_PROJECT_DIR}`);
+    problems.push(`no fake process for ${projectDir}`);
     return problems;
   }
   const outcome = round.structuredContent?.outcome;
@@ -369,7 +377,10 @@ function fixtureProblems(
   return problems;
 }
 
-function resumedProblems(process: FakeAgentProcessRecord | null): string[] {
+function resumedProblems(
+  process: FakeAgentProcessRecord | null,
+  projectDir: string,
+): string[] {
   if (process === null) {
     return ['no resumed fake process'];
   }
@@ -378,7 +389,7 @@ function resumedProblems(process: FakeAgentProcessRecord | null): string[] {
   const resumesSessionOne =
     request.sessionId === RESUMED_SESSION_ID &&
     request.resume &&
-    request.projectDir === SELFTEST_PROJECT_DIR;
+    request.projectDir === projectDir;
   if (!resumesSessionOne) {
     problems.push(`resumed request ${JSON.stringify(request)}`);
   }
@@ -390,20 +401,21 @@ function resumedProblems(process: FakeAgentProcessRecord | null): string[] {
 }
 
 // Reads only this run's calls.
-function pastSessionProblems(marks: readonly RunMark[]): string[] {
+function pastSessionProblems(
+  marks: readonly RunMark[],
+  projectDir: string,
+): string[] {
   const calls = marks.flatMap((mark) =>
     mark.harness.pastSessionCalls.slice(mark.pastSessionCalls),
   );
   const listedSelftestFolder = calls.some(
-    (call) =>
-      call.method === 'listSessions' &&
-      call.projectDir === SELFTEST_PROJECT_DIR,
+    (call) => call.method === 'listSessions' && call.projectDir === projectDir,
   );
   const readResumedHistory = calls.some(
     (call) =>
       call.method === 'history' &&
       call.sessionId === RESUMED_SESSION_ID &&
-      call.projectDir === SELFTEST_PROJECT_DIR,
+      call.projectDir === projectDir,
   );
   if (listedSelftestFolder && readResumedHistory) {
     return [];
@@ -411,23 +423,97 @@ function pastSessionProblems(marks: readonly RunMark[]): string[] {
   return [`past session calls ${JSON.stringify(calls)}`];
 }
 
-// Every self-test project, whose sessions an earlier run may have left open.
-const SELFTEST_PROJECT_DIRS = [SELFTEST_PROJECT_DIR, SECOND_PROJECT_DIR];
+// The self-test's two project folders.
+interface SelfTestProjects {
+  selftest: string;
+  second: string;
+}
 
-// Starts two chat sessions each run, first closing every session chat holds in
-// a self-test project (a resumed one included) and unarchiving the fake's
-// saved sessions: the second project's, then the self-test's, whose Chat tab
-// it shows. Asks one permission prompt through chat's tool in the self-test's
-// session, which the steps allow; the answer asks a forms round there over a
-// relay that joins the session, which the steps submit. The result is both
-// calls' replies; problems reads the fake processes, whose records the steps
-// keep changing in place, when it runs, reading only the records this run
-// added. The run waits on the session's Chat tab being shown.
+// Makes both self-test project folders under the home's real path, the one
+// the page shows as `~`, then starts two chat sessions each run, first closing
+// every session chat holds in a self-test project (a resumed one included)
+// and unarchiving the fake's saved sessions: the second project's, then the
+// self-test's, whose Chat tab it shows. Asks one permission prompt through
+// chat's tool in the self-test's session, which the steps allow; the answer
+// asks a forms round there over a relay that joins the session, which the
+// steps submit. The result is both calls' replies; problems reads the fake
+// processes, whose records the steps keep changing in place, when it runs,
+// reading only the records this run added. The run waits on the session's
+// Chat tab being shown.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
-  const { chat, sessions, harnesses } = deps;
+  const { chat, sessions, harnesses, files } = deps;
+  let made: Promise<SelfTestProjects> | null = null;
+  // Set once `made` resolves, before any session starts.
+  let projects: SelfTestProjects | null = null;
   let previousRelay: ConnectedSession | null = null;
   let archiveResetFailures: string[] = [];
   let marks: RunMark[] = [];
+
+  async function makeProjects(): Promise<SelfTestProjects> {
+    const home = await files.realPath(deps.homeDir);
+    const madeProjects = {
+      selftest: path.join(home, SELFTEST_PROJECT_NAME),
+      second: path.join(home, SECOND_PROJECT_NAME),
+    };
+    await files.makeFolder(madeProjects.selftest);
+    await files.makeFolder(madeProjects.second);
+    return madeProjects;
+  }
+
+  // Closes every session an earlier run left open in a self-test project.
+  function closeEarlierSessions({ selftest, second }: SelfTestProjects) {
+    for (const state of chat.sessions()) {
+      if ([selftest, second].includes(state.projectDir)) {
+        chat.closed(state.sessionId);
+      }
+    }
+  }
+
+  function openSessions(
+    run: number,
+    { selftest, second }: SelfTestProjects,
+  ): Promise<ChatSelfTestResult> {
+    chat.start({ projectDir: second, profile: 'work' });
+    const id = chat.start({ projectDir: selftest, profile: 'work' });
+    sessions.activate(id);
+    const process = selftestProcess(marks, selftest, false);
+    const permission = askFixturePermission(chat, id, selftest, {
+      toolName: 'Bash',
+      input: PERMISSION_INPUT,
+      toolUseId: 'selftest-tool-use',
+    });
+    return permission.then(async (reply): Promise<ChatSelfTestResult> => {
+      if (process === null) {
+        return { permission: reply, round: null };
+      }
+      const relay = sessions.connect({
+        sessionId: process.request.sessionId,
+        projectDir: selftest,
+        deadlineSeconds: null,
+        harness: 'claude',
+      });
+      previousRelay = relay;
+      const round = await relay.call(
+        'ask_round',
+        chatRound(run),
+        toolCallContext(),
+      );
+      return { permission: reply, round };
+    });
+  }
+
+  function runProblems(result: ChatSelfTestResult, selftest: string): string[] {
+    return [
+      ...fixtureProblems(
+        result,
+        selftestProcess(marks, selftest, false),
+        selftest,
+      ),
+      ...resumedProblems(selftestProcess(marks, selftest, true), selftest),
+      ...pastSessionProblems(marks, selftest),
+    ];
+  }
+
   return {
     pageBinds: [],
     settings: {},
@@ -435,11 +521,6 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     open(run) {
       marks = markRun(harnesses);
       previousRelay?.end();
-      for (const state of chat.sessions()) {
-        if (SELFTEST_PROJECT_DIRS.includes(state.projectDir)) {
-          chat.closed(state.sessionId);
-        }
-      }
       const failures: string[] = [];
       archiveResetFailures = failures;
       for (const past of FAKE_PAST_SESSIONS) {
@@ -447,52 +528,23 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
           failures.push(`archive reset failed: ${errorText(error)}`);
         });
       }
-      chat.start({
-        projectDir: SECOND_PROJECT_DIR,
-        profile: 'work',
+      made ??= makeProjects();
+      const result = made.then((madeProjects) => {
+        projects = madeProjects;
+        closeEarlierSessions(madeProjects);
+        return openSessions(run, madeProjects);
       });
-      const id = chat.start({
-        projectDir: SELFTEST_PROJECT_DIR,
-        profile: 'work',
-      });
-      sessions.activate(id);
-      const process = selftestProcess(marks, false);
-      const permission = askFixturePermission(chat, id, SELFTEST_PROJECT_DIR, {
-        toolName: 'Bash',
-        input: PERMISSION_INPUT,
-        toolUseId: 'selftest-tool-use',
-      });
-      const result = permission.then(
-        async (reply): Promise<ChatSelfTestResult> => {
-          if (process === null) {
-            return { permission: reply, round: null };
-          }
-          const relay = sessions.connect({
-            sessionId: process.request.sessionId,
-            projectDir: SELFTEST_PROJECT_DIR,
-            deadlineSeconds: null,
-            harness: 'claude',
-          });
-          previousRelay = relay;
-          const round = await relay.call(
-            'ask_round',
-            chatRound(run),
-            toolCallContext(),
-          );
-          return { permission: reply, round };
-        },
-      );
-      return { shownLine: '[chat] Chat tab shown in chat-selftest', result };
+      return {
+        shownLine: `[chat] Chat tab shown in ${SELFTEST_PROJECT_NAME}`,
+        result,
+      };
     },
     steps: STEPS,
     problems: (result) => [
       ...archiveResetFailures,
-      ...fixtureProblems(
-        result as ChatSelfTestResult,
-        selftestProcess(marks, false),
-      ),
-      ...resumedProblems(selftestProcess(marks, true)),
-      ...pastSessionProblems(marks),
+      ...(projects === null
+        ? ['self-test project folders not made']
+        : runProblems(result as ChatSelfTestResult, projects.selftest)),
     ],
   };
 }

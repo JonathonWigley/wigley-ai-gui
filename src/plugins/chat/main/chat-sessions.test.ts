@@ -644,7 +644,7 @@ describe('createChatSessions', () => {
   it('processCalls_passThrough', async () => {
     const test = await started();
 
-    test.chat.send(ROW_ID, 'hi');
+    test.chat.send(ROW_ID, { text: 'hi', images: [] });
     test.chat.interrupt(ROW_ID);
     test.chat.setControl(ROW_ID, 'mode', 'plan');
 
@@ -655,10 +655,52 @@ describe('createChatSessions', () => {
     ]);
   });
 
+  it('send_PassesImagesToProcess', async () => {
+    const test = await started();
+
+    test.chat.send(ROW_ID, {
+      text: 'look',
+      images: [{ mediaType: 'image/png', data: 'iVBORw0K' }],
+    });
+
+    expect(test.process.calls).toEqual([
+      { method: 'send', text: 'look', imageCount: 1 },
+    ]);
+  });
+
+  it('notice_AddsEntryKeptBySessions', async () => {
+    const test = await started();
+
+    test.chat.notice(ROW_ID, 'Signed out of work', 'info');
+    test.chat.notice(ROW_ID, 'Status not read', 'error');
+
+    const notices: ChatEntry[] = [
+      {
+        kind: 'notice',
+        id: 'app-notice-1',
+        text: 'Signed out of work',
+        tone: 'info',
+        raw: [],
+      },
+      {
+        kind: 'notice',
+        id: 'app-notice-2',
+        text: 'Status not read',
+        tone: 'error',
+        raw: [],
+      },
+    ];
+    expect(test.chat.sessions()[0].entries).toEqual(notices);
+    expect(test.sent('entry')).toEqual(
+      notices.map((entry) => ({ sessionId: ROW_ID, entry })),
+    );
+  });
+
   it('unknownSession_loggedAndIgnored', async () => {
     const test = await started();
 
-    test.chat.send('row-x', 'hi');
+    test.chat.send('row-x', { text: 'hi', images: [] });
+    test.chat.notice('row-x', 'note', 'info');
     test.chat.interrupt('row-x');
     test.chat.answerPermission('row-x', 'permission-1', {
       allowed: true,
@@ -668,6 +710,7 @@ describe('createChatSessions', () => {
     expect(test.logged).toEqual(
       expect.arrayContaining([
         '[chat] send for unknown session row-x ignored',
+        '[chat] notice for unknown session row-x ignored',
         '[chat] interrupt for unknown session row-x ignored',
         '[chat] answerPermission for unknown session row-x ignored',
       ]),

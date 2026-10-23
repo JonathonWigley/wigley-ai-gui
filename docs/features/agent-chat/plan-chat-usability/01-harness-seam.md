@@ -1,6 +1,6 @@
 # 01 — Harness seam: images, accounts, project folders
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -120,3 +120,5 @@ GIVEN a status JSON with `loggedIn: true`, email and `subscriptionType: "max"` W
 - fake: `logIn_RightCode_SignsIn`, `logOut_ThenStatus_SignedOut`, `listProjects_StartedFolders_NewestFirst`
 
 ## Proof
+
+Commit c37acaa · diff read, every Produces present · typecheck and lint pass · worker ran 12 test files, 180 passed · concerns: layout.d.ts UserInput lacks images (task 06 owns it); AGENTS.md claude-code line undersells the adapter; sign-in link on stderr or split chunks untested

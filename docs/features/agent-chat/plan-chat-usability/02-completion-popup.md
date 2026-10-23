@@ -1,6 +1,6 @@
 # 02 — Completion popup on the page body
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -33,3 +33,5 @@ the host is built if the file takes its DOM from parameters.
 None: where the popup draws is a live check (task 08), and no test can see clipping.
 
 ## Proof
+
+Commit 63e9972 · diff read · typecheck and lint pass · concerns: EditorHost.contains / hostedViewOf no longer see the popup DOM — check mouse clicks on popup rows in task 08

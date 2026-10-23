@@ -1,7 +1,9 @@
 import type {
+  AccountStatus,
   ChatEntry,
   ProcessActivity,
   SessionControl,
+  UserMessage,
 } from '../../contracts/agent';
 import type { LayoutChoice } from '../../contracts/layouts';
 import type { ChannelShape } from '../../contracts/plugin';
@@ -58,6 +60,9 @@ export interface PermissionAnswer {
 export interface ChatChannel extends ChannelShape {
   invoke: {
     sessions(): ChatSessionState[];
+    // Newest first: the folders chat started sessions in merged with every
+    // folder each profile's harness saved sessions in, one per folder, missing
+    // folders and those in the OS's temp folders left out.
     recentFolders(): Promise<RecentFolder[]>;
     chooseFolder(): Promise<string | null>;
     // The new row's sessionId.
@@ -70,7 +75,17 @@ export interface ChatChannel extends ChannelShape {
     setArchived(hostSessionId: string, archived: boolean): Promise<void>;
     // Resolves to the new row's sessionId.
     resume(request: ResumeRequest): Promise<string>;
-    send(sessionId: string, text: string): void;
+    send(sessionId: string, message: UserMessage): void;
+    // Adds a notice entry to the session's chat, kept across a page reload.
+    notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
+    accountStatus(profile: string): Promise<AccountStatus>;
+    // Starts the profile's sign-in; throws while any sign-in runs. Its link
+    // arrives as `logInLink` and its end as `logInEnded`.
+    logIn(profile: string): void;
+    // The code the sign-in page showed, for the running sign-in.
+    logInCode(code: string): void;
+    cancelLogIn(): void;
+    logOut(profile: string): Promise<void>;
     interrupt(sessionId: string): void;
     setControl(sessionId: string, controlId: string, value: string): void;
     answerPermission(
@@ -90,5 +105,14 @@ export interface ChatChannel extends ChannelShape {
     commands: { sessionId: string; names: string[] };
     sessionEnded: { sessionId: string; error: string | null };
     layoutChanged: LayoutChoice;
+    // The page the user opens to finish the running sign-in.
+    logInLink: { profile: string; url: string };
+    // `status` is null when the sign-in was cancelled or its status could not
+    // be read; `error` is null only for a finished sign-in.
+    logInEnded: {
+      profile: string;
+      status: AccountStatus | null;
+      error: string | null;
+    };
   };
 }

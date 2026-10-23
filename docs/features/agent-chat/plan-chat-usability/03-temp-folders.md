@@ -1,6 +1,6 @@
 # 03 — Temp folders as a main service
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -35,3 +35,5 @@ GIVEN macOS and an OS temp of `/private/var/folders/x/T` WHEN `tempFolders` runs
 - `tempFolders_Windows_OsTempOnly` — `['C:\\Users\\u\\AppData\\Local\\Temp']`
 
 ## Proof
+
+Commit 7c28b58 · diff read · typecheck and lint pass · temp-folders.test.ts 2 passed (worker) · concerns: test names in the task doc style rather than the repo prose style

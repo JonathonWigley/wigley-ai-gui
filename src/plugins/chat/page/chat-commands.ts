@@ -261,7 +261,7 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
     return;
   }
   void deps.channel
-    .invoke('send', session.sessionId, text)
+    .invoke('send', session.sessionId, { text, images: [] })
     .catch((error: unknown) => {
       log('chat', `send failed: ${errorText(error)}`);
       deps.toast(`Message not sent: ${errorText(error)}`, 'error');

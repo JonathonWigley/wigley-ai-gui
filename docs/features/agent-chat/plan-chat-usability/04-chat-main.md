@@ -1,6 +1,6 @@
 # 04 — Chat main: image messages, notices, sign-in, merged folders
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 01, 03
 Plan: [plan.md](plan.md)

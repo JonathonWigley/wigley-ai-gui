@@ -151,9 +151,9 @@ nothing; chat's page imports only `src/contracts`, `src/shared`, its own folder 
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Harness seam: images, accounts, project folders](01-harness-seam.md)
-- [ ] [Completion popup on the page body](02-completion-popup.md)
-- [ ] [Temp folders as a main service](03-temp-folders.md)
+- [x] [Harness seam: images, accounts, project folders](01-harness-seam.md)
+- [x] [Completion popup on the page body](02-completion-popup.md)
+- [x] [Temp folders as a main service](03-temp-folders.md)
 
 ### Wave 2
 - [ ] [Chat main: image messages, notices, sign-in, merged folders](04-chat-main.md) — after 01, 03
@@ -171,3 +171,22 @@ nothing; chat's page imports only `src/contracts`, `src/shared`, its own folder 
 - [ ] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
+
+Review base: a0e7aebc036aed1714fb1422459501b1d4d7319d
+
+### Groups
+- 03 temp folders · 7c28b58 · proved (diff read, typecheck, lint) · concerns: test names use the task-doc style, not the repo prose style
+- 02 completion popup · 63e9972 · proved (diff read, typecheck, lint) · concerns: popup DOM sits outside EditorHost.contains — check clicks on rows in 08
+- 01 harness seam · c37acaa · proved (diff read, typecheck, lint) · concerns: layout.d.ts UserInput lacks images (06); AGENTS.md claude-code line stale (07); link-on-stderr untested
+### Contract changes
+### Rulings
+- plan.py is absent from wigley 1.8.0; the Run log, boxes and Status lines are edited by hand — no tooling to lean on — a malformed entry, caught at Close · lead
+- A peer session shares the working tree; every commit is pathspec-scoped and the review range is this run's commit list — a swept peer edit — lead
+- listProjects lives in past-sessions.ts (listProjectFolders) with a shared inBatches helper; a folder whose newest transcript head fails to read is left out, no fallback — the spec says newest only — a folder with one corrupt newest transcript is missing from the folder step · group 01
+- Auth error texts: `claude auth status|logout exited with code <n>: <stderr>`; login failure is the last stderr line else `claude auth login exited with code <n>|signal <s>`; ENOENT gives `claude was not found at <command>; set claude.command` — spec named the hint only — copy only · group 01
+- readAccountStatus with loggedIn true and no email gives account null; the fake ends a wrong code with signed-out status and leaves the stored sign-in unchanged — spec silent — copy only · group 01
+- claude-auth.ts carries the repo's first `oxlint-disable-next-line no-control-regex`, for the OSC 8 regex — the control characters are the point — a lint precedent · group 01
+- The tooltip z-index sits on the autocomplete rule only — the only tooltip the app styles — a later tooltip type may sit under a dialog · group 02
+- readStartInputs became async to await the real path of os.tmpdir(); the self-test gets [] — realPath is async — a failed realPath now fails start through failStart · group 03
+### Review rounds
+### Test gate

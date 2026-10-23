@@ -5,6 +5,7 @@ import type {
   AgentProcessEvents,
   ChatEntry,
   ProcessActivity,
+  UserMessage,
 } from '../../../contracts/agent';
 import type { Alerts } from '../../../contracts/alerts';
 import type { RandomUuid } from '../../../contracts/ambient';
@@ -70,7 +71,10 @@ export interface ChatSessions {
   // Opens a row for a saved session, its earlier conversation as the first
   // entries, and resumes its process; resolves to the row's sessionId.
   resume(request: ResumeRequest): Promise<string>;
-  send(sessionId: string, text: string): void;
+  send(sessionId: string, message: UserMessage): void;
+  // Adds an app notice to the session's entries and sends it as harness
+  // entries travel, so `sessions()` keeps it.
+  notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
   interrupt(sessionId: string): void;
   // Throws for a session chat no longer holds, as the process's own
   // `setControl` throws for a value it refuses, so the caller learns the
@@ -112,6 +116,7 @@ interface HeldSession {
   harnessActivity: ProcessActivity;
   pending: Map<string, PendingPermission>;
   permissionCount: number;
+  noticeCount: number;
   // How the process exited, once its `ended` arrives; a user close logs it.
   exit: { code: number | null; error: string | null } | null;
 }
@@ -147,6 +152,30 @@ function sameNames(held: readonly string[], names: readonly string[]): boolean {
     held.length === names.length &&
     held.every((name, index) => name === names[index])
   );
+}
+
+export function requireProfile(
+  profiles: readonly ChatProfile[],
+  name: string,
+): ChatProfile {
+  const profile = profiles.find((held) => held.name === name);
+  if (!profile) {
+    throw new Error(`chat has no profile "${name}"`);
+  }
+  return profile;
+}
+
+// The harness chat runs its sessions on.
+export function requireChatHarness(
+  harnesses: readonly AgentHarness[],
+): AgentHarness {
+  const harness = harnesses.find(
+    (candidate) => candidate.id === CHAT_HARNESS_ID,
+  );
+  if (!harness) {
+    throw new Error(`no agent harness "${CHAT_HARNESS_ID}"`);
+  }
+  return harness;
 }
 
 function shownActivity(held: HeldSession): ProcessActivity {
@@ -301,23 +330,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     };
   }
 
-  function requireProfile(name: string): ChatProfile {
-    const profile = deps.profiles().find((held) => held.name === name);
-    if (!profile) {
-      throw new Error(`chat has no profile "${name}"`);
-    }
-    return profile;
-  }
-
-  function requireHarness(): AgentHarness {
-    const harness = deps.harnesses.find(
-      (candidate) => candidate.id === CHAT_HARNESS_ID,
-    );
-    if (!harness) {
-      throw new Error(`no agent harness "${CHAT_HARNESS_ID}"`);
-    }
-    return harness;
-  }
+  const profileNamed = (name: string) => requireProfile(deps.profiles(), name);
+  const requireHarness = () => requireChatHarness(deps.harnesses);
 
   function profileDirOf(profile: ChatProfile): string {
     return profile.configDir;
@@ -354,6 +368,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       harnessActivity: 'idle',
       pending: new Map(),
       permissionCount: 0,
+      noticeCount: 0,
       exit: null,
     };
     held.set(sessionId, session);
@@ -383,7 +398,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   function start(request: StartRequest): string {
-    const profile = requireProfile(request.profile);
+    const profile = profileNamed(request.profile);
     const harness = requireHarness();
     return openSession(harness, profile, request.projectDir, {
       hostId: deps.randomUuid(),
@@ -411,7 +426,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     projectDir: string,
     profileName: string,
   ): Promise<PastSessionRow[]> {
-    const profile = requireProfile(profileName);
+    const profile = profileNamed(profileName);
     const harness = requireHarness();
     const [saved, archivedIds] = await Promise.all([
       harness.listSessions(projectDir, profileDirOf(profile)),
@@ -453,7 +468,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   async function resume(request: ResumeRequest): Promise<string> {
-    const profile = requireProfile(request.profile);
+    const profile = profileNamed(request.profile);
     const harness = requireHarness();
     const { hostSessionId, projectDir } = request;
     if (isHostIdOpen(hostSessionId)) {
@@ -520,8 +535,22 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     setArchived: (hostSessionId, archived) =>
       deps.archived.set(hostSessionId, archived),
     resume,
-    send(sessionId, text) {
-      heldFor('send', sessionId)?.process?.send({ text, images: [] });
+    send(sessionId, message) {
+      heldFor('send', sessionId)?.process?.send(message);
+    },
+    notice(sessionId, text, tone) {
+      const session = heldFor('notice', sessionId);
+      if (session === null) {
+        return;
+      }
+      session.noticeCount += 1;
+      sendEntry(session, {
+        kind: 'notice',
+        id: `app-notice-${session.noticeCount}`,
+        text,
+        tone,
+        raw: [],
+      });
     },
     interrupt(sessionId) {
       heldFor('interrupt', sessionId)?.process?.interrupt();

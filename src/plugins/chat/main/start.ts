@@ -27,9 +27,15 @@ import type { ChatChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js?raw';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { chatManifest } from '../manifest';
+import { createAccounts } from './accounts';
 import { createArchivedSessions } from './archived-sessions';
-import { type ChatSessions, createChatSessions } from './chat-sessions';
+import {
+  type ChatSessions,
+  createChatSessions,
+  requireChatHarness,
+} from './chat-sessions';
 import { askFixturePermission } from './fixtures';
+import { createFolderChoices } from './folder-choices';
 import { PERMISSION_TOOLS } from './permission-tool';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript } from './selftest-script';
@@ -184,8 +190,9 @@ export function addDriveActions(
 
 // Starts, resumes and runs the Claude Code sessions the page asks for, lists
 // and archives the saved ones, answers their permission prompts through the
-// `permission_prompt` tool, keeps the recent project folders, serves the
-// page its chat layouts, and offers a drive run its fixtures.
+// `permission_prompt` tool, keeps the recent project folders and serves them
+// merged with the harness's, signs profiles in and out, serves the page its
+// chat layouts, and offers a drive run its fixtures.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -197,10 +204,27 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       paths: services.paths,
       log: services.log,
     });
+    const harness = () => requireChatHarness(services.agentHarnesses);
+    const profiles = () => api.settings().profiles;
+    const folderChoices = createFolderChoices({
+      recent,
+      harness,
+      profiles,
+      files: services.files,
+      paths: services.paths,
+      tempFolders: services.tempFolders,
+      log: services.log,
+    });
+    const accounts = createAccounts({
+      harness,
+      profiles,
+      send: (message, data) => api.channel.send(message, data),
+      log: services.log,
+    });
     const chat = createChatSessions({
       harnesses: services.agentHarnesses,
       sessions,
-      profiles: () => api.settings().profiles,
+      profiles,
       randomUuid: services.randomUuid,
       recent,
       archived: createArchivedSessions(api.data),
@@ -218,7 +242,17 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       chat.setArchived(hostSessionId, archived),
     );
     api.channel.handle('resume', (request) => chat.resume(request));
-    api.channel.handle('send', (sessionId, text) => chat.send(sessionId, text));
+    api.channel.handle('send', (sessionId, message) =>
+      chat.send(sessionId, message),
+    );
+    api.channel.handle('notice', (sessionId, text, tone) =>
+      chat.notice(sessionId, text, tone),
+    );
+    api.channel.handle('accountStatus', (profile) => accounts.status(profile));
+    api.channel.handle('logIn', (profile) => accounts.logIn(profile));
+    api.channel.handle('logInCode', (code) => accounts.sendCode(code));
+    api.channel.handle('cancelLogIn', () => accounts.cancel());
+    api.channel.handle('logOut', (profile) => accounts.logOut(profile));
     api.channel.handle('interrupt', (sessionId) => chat.interrupt(sessionId));
     api.channel.handle('setControl', (sessionId, controlId, value) =>
       chat.setControl(sessionId, controlId, value),
@@ -226,7 +260,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.channel.handle('answerPermission', (sessionId, entryId, answer) =>
       chat.answerPermission(sessionId, entryId, answer),
     );
-    api.channel.handle('recentFolders', () => recent.list());
+    api.channel.handle('recentFolders', () => folderChoices.list());
     api.channel.handle('chooseFolder', () => services.window.chooseFolder());
     api.events.on('sessions.closed', ({ sessionId }) => chat.closed(sessionId));
     api.events.on('sessions.connected', (session) =>
@@ -240,6 +274,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     );
     services.selfTest?.run(
       chatSelfTestScript({
+        homeDir: services.homeDir,
+        files: services.files,
         chat,
         sessions,
         harnesses: services.agentHarnesses,
