@@ -1,6 +1,6 @@
 # 08 — Final verification on Windows
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -39,3 +39,4 @@ Commit:    none
 
 ## Proof
 
+Checks run at 206d9ad on Windows. 1: lint, typecheck clean; vitest 148 files, 2236 passed, 12 skipped (2 prior + task 06's 10). 2: npm run selftest exits 0 with [selftest] all passed, docs steps included, no cleanup failure (run outside the Bash sandbox). 3: drive run 20261022-233931-24ca: Docs mode lists the fixture and opens CLAUDE.md titled ~\.claude\CLAUDE.md; Sessions mode's title reads drive-project ~\dev\drive-project; the start prompt lists ~\dev\drive-project; the Chat tab is named drive-project. macOS and real-keyboard checks go to the wrap-up.

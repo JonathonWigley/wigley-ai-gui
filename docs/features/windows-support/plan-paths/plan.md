@@ -197,7 +197,7 @@ Shared signatures parts use:
 
 ### Wave 4
 - [x] [Doc re-read](07-doc-re-read.md) — after 03, 04, 05
-- [ ] [Final verification](08-final-verification.md) — after 07
+- [x] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
 
@@ -211,6 +211,7 @@ Review base: 4cadb24
 - 05 · 9c2315f · diff read + typecheck (own plugins), chat+forms 742 pass · concerns: 6 files outside the list took only the new argument
 - 04 · 9b94c49 · diff read + typecheck + lint, docs 243 pass · concerns: realTarget root stop on Windows untested until task 08
 - 07 · 7e32a80 · diff read + lint · concerns: none
+- 08 · no commit · lint/typecheck/suite/selftest/drive pass · concerns: none
 ### Contract changes
 - posixPaths, windowsPaths: two standalone adapter files → two PathSyntax records handed to rootedPaths(syntax): Paths in a new src/shared/paths/rooted-paths.ts · why: the adapters share every rule but root parsing and case folding · consumers: none (02–05 import the constants) · group 01
 - paths in createRoundStore's deps: as planned, plus roundQueries(readAll) → roundQueries(readAll, paths) and createMemoryRoundStore(clock, randomHex) → (clock, randomHex, paths) · why: isOwnedBy runs inside roundQueries, which the disk and preview stores both spread · consumers: forms only · group 05
@@ -232,5 +233,8 @@ Review base: 4cadb24
 - followChange builds a renamed open doc's new path with paths.join over segmentsBelow in place of string slicing (beyond the named isInside swap) — the task forbids hand-built full paths · group 04b
 - context lookups (each.folder === contextFolder) stay ===: both sides come from one index document, not two spellings · group 04b
 ### Review rounds
+- R1 implementation review · 9007593 · NEEDS FIXES (10 findings: 3 Important, 7 Minor; 4 applied by the lead in 4e401c2; report C:/Users/jonat/AppData/Local/Temp/claude/C---root-dev-wigley-ai-gui/d10e46ff-eb24-42b8-8ab5-156d5f495fed/scratchpad/review-9007593.md)
+- R2 re-review (correctness) · 4230c4e · NEEDS FIXES (3 Minor survive; #1 a repeat of R1#1; report C:/Users/jonat/AppData/Local/Temp/claude/C---root-dev-wigley-ai-gui/d10e46ff-eb24-42b8-8ab5-156d5f495fed/scratchpad/review-4230c4e.md)
+- R3 re-review (correctness) · d87b648 · PASS after one lead-applied style fix (showChange's void); R2#1 repeat with the user
 ### Test gate
 - full vitest suite (the range touches shared modules every plugin's tests reach, and task 08 names it; it runs in about a minute, not hours) · 147 files, 2197 passed, 12 skipped (2 already skipped + task 06's 10) · plus typecheck and lint clean · plus npm run selftest outside the Bash sandbox: [selftest] all passed, exit 0 (in the sandbox Electron's mkdir of .selftest/screenshots hit EPERM); cleanup reported EPERM on the temp home and left it behind, the exit code kept
