@@ -54,7 +54,7 @@ dialog. Measured: about 1 in 60 restarts for one run alone; 8 in 36 for three ru
 - The self-test scripts hand `steps` today: `grep -n 'steps:' src/plugins/*/main/selftest-script.ts` prints forms
   `STEPS`, docs `docsSteps(paths, homeDir)`, chat `STEPS`, settings `STEPS` (measured at plan time, re-verify).
 - Step counts per script, re-measured at preflight with `grep -c 'expect:'`, since step 1 landed steps while this
-  plan was written: forms 145, docs 113, chat 88, settings 28 (measured at plan time on `dc9bdae`).
+  plan was written: forms 145, docs 118, chat 88, settings 28 (measured on `8b399a5`, step 1's last fix).
 
 ## Docs written ahead
 
