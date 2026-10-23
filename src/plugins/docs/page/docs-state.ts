@@ -2,7 +2,8 @@
 // the load-state chips and context choices, the editor's opening line, the
 // fence a non-markdown file renders in, the changes the view applies before a
 // build lists them, which docs may be renamed or trashed, the texts the view
-// shows with their keys, and a hook's or plugin's detail fields.
+// shows with their keys (the tree's line among them), and a hook's or
+// plugin's detail fields.
 
 import type { Paths } from '../../../contracts/paths';
 import type {
@@ -439,6 +440,78 @@ export function noPlaceText(
   return createByPathKeys === null
     ? text
     : `${text} — ${createByPathKeys} creates a file by path`;
+}
+
+// One piece of a key hint: keys drawn as a Kbd, or words between them.
+export type TreeLineHintPart = { keys: string } | { words: string };
+
+// A line the tree pane shows: in place of its rows (`empty`) or above them.
+export interface TreeLine {
+  placement: 'empty' | 'above';
+  text: string;
+  hint: readonly TreeLineHintPart[];
+}
+
+export interface TreeLineState {
+  hasTree: boolean;
+  isIndexEmpty: boolean;
+  filter: string;
+  rowCount: number;
+  isFilterOpen: boolean;
+}
+
+export interface TreeLineKeys {
+  filter: string | null;
+  clear: string | null;
+  rescan: string | null;
+}
+
+// The line the tree pane shows for its state, with its keys; null for none.
+export function treeLine(
+  state: TreeLineState,
+  keys: TreeLineKeys,
+): TreeLine | null {
+  if (!state.hasTree) {
+    return null;
+  }
+  if (state.isIndexEmpty) {
+    return {
+      placement: 'empty',
+      text: 'No docs in this index',
+      hint:
+        keys.rescan === null
+          ? []
+          : [{ keys: keys.rescan }, { words: 'to rescan' }],
+    };
+  }
+  const isFiltered = state.filter !== '';
+  if (isFiltered && state.rowCount === 0) {
+    const { filter, clear } = keys;
+    return {
+      placement: 'empty',
+      text: `No docs match "${state.filter}"`,
+      hint:
+        filter === null || clear === null
+          ? []
+          : [
+              { keys: filter },
+              { words: 'then' },
+              { keys: clear },
+              { words: 'to clear it' },
+            ],
+    };
+  }
+  if (isFiltered && !state.isFilterOpen) {
+    return {
+      placement: 'above',
+      text: `Filtered: ${state.filter}`,
+      hint:
+        keys.filter === null
+          ? []
+          : [{ keys: keys.filter }, { words: 'to change it' }],
+    };
+  }
+  return null;
 }
 
 const INSTRUCTION_NAMES = new Set([

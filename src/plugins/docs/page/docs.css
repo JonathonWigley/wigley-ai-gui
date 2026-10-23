@@ -1,8 +1,9 @@
 /* The tree pane: Docs mode's side bar, or a session Docs tab's split start
-   pane, whose container draws its edge. */
+   pane, whose container draws its edge. Its tracks: the status, the filter,
+   the line between the filter and the rows, and the rows. */
 .docs-tree {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   min-width: 0;
@@ -16,6 +17,33 @@
   padding: var(--wg-space-1) var(--wg-space-3);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The muted line above the rows while a filter is on. */
+.docs-filtered {
+  align-items: baseline;
+  color: var(--wg-fg-tertiary);
+  display: flex;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-2);
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--wg-space-1) var(--wg-space-3);
+  white-space: nowrap;
+}
+
+.docs-filtered-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A tree line's keys and words, kept whole. */
+.docs-hint {
+  align-items: baseline;
+  display: inline-flex;
+  flex: none;
+  gap: var(--wg-space-1);
 }
 
 .docs-filter {

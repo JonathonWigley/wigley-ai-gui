@@ -312,6 +312,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       focused = 'tree';
       applyScope();
     },
+    hasIndex: () => document !== null,
+    keysFor: deps.keysFor,
+    kbd: deps.kbd,
   });
 
   const doc = createDocView({
@@ -394,10 +397,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     dialogClosed: restoreFocus,
   });
   const { picker } = dialogs;
-  // A rebind reaches the empty state's key and the prompts that show keys
-  // while they show.
+  // A rebind reaches the empty state's key, the tree's line and the prompts
+  // that show keys while they show.
   const keysChange = deps.onKeysChanged(() => {
     doc.keysChanged();
+    tree.keysChanged();
     dialogs.keysChanged();
   });
   const overlays = dialogs.elements.map((dialog) => deps.addOverlay(dialog));

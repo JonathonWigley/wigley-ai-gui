@@ -25,6 +25,8 @@ import {
   type TreeState,
   topVisibleLine,
   trashQuestion,
+  treeLine,
+  type TreeLineState,
   UNSAVED_TEXT,
   visibleRows,
 } from './docs-state';
@@ -770,6 +772,148 @@ describe('key hint texts', () => {
       'No place holds a learning yet — A creates a file by path',
     );
     expect(noPlaceText('learning', null)).toBe('No place holds a learning yet');
+  });
+});
+
+describe('treeLine', () => {
+  it('treeLine_BeforeFirstTree_Null', () => {
+    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
+    const emptyIndex: TreeLineState = {
+      hasTree: false,
+      isIndexEmpty: true,
+      filter: '',
+      rowCount: 0,
+      isFilterOpen: false,
+    };
+    const filtered: TreeLineState = {
+      hasTree: false,
+      isIndexEmpty: true,
+      filter: 'neat',
+      rowCount: 0,
+      isFilterOpen: false,
+    };
+
+    expect(treeLine(emptyIndex, keys)).toBeNull();
+    expect(treeLine(filtered, keys)).toBeNull();
+  });
+
+  it('treeLine_EmptyIndex_RescanHint', () => {
+    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
+    const lineState: TreeLineState = {
+      hasTree: true,
+      isIndexEmpty: true,
+      filter: 'neat',
+      rowCount: 0,
+      isFilterOpen: false,
+    };
+
+    expect(treeLine(lineState, keys)).toEqual({
+      placement: 'empty',
+      text: 'No docs in this index',
+      hint: [{ keys: 'R' }, { words: 'to rescan' }],
+    });
+  });
+
+  it('treeLine_FilterMatchesNothing_ClearHint', () => {
+    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
+    const closed: TreeLineState = {
+      hasTree: true,
+      isIndexEmpty: false,
+      filter: 'zqzq',
+      rowCount: 0,
+      isFilterOpen: false,
+    };
+    const open: TreeLineState = { ...closed, isFilterOpen: true };
+    const expected = {
+      placement: 'empty',
+      text: 'No docs match "zqzq"',
+      hint: [
+        { keys: '/' },
+        { words: 'then' },
+        { keys: '⎋' },
+        { words: 'to clear it' },
+      ],
+    };
+
+    expect(treeLine(closed, keys)).toEqual(expected);
+    expect(treeLine(open, keys)).toEqual(expected);
+  });
+
+  it('treeLine_FilterWithRows_FilteredAbove', () => {
+    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
+    const lineState: TreeLineState = {
+      hasTree: true,
+      isIndexEmpty: false,
+      filter: 'neat',
+      rowCount: 3,
+      isFilterOpen: false,
+    };
+
+    expect(treeLine(lineState, keys)).toEqual({
+      placement: 'above',
+      text: 'Filtered: neat',
+      hint: [{ keys: '/' }, { words: 'to change it' }],
+    });
+  });
+
+  it('treeLine_FilterBoxOpenWithRows_Null', () => {
+    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
+    const lineState: TreeLineState = {
+      hasTree: true,
+      isIndexEmpty: false,
+      filter: 'neat',
+      rowCount: 3,
+      isFilterOpen: true,
+    };
+
+    expect(treeLine(lineState, keys)).toBeNull();
+  });
+
+  it('treeLine_NoFilterWithRows_Null', () => {
+    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
+    const lineState: TreeLineState = {
+      hasTree: true,
+      isIndexEmpty: false,
+      filter: '',
+      rowCount: 3,
+      isFilterOpen: false,
+    };
+
+    expect(treeLine(lineState, keys)).toBeNull();
+  });
+
+  it('treeLine_KeyUnbound_TextAlone', () => {
+    const noMatch: TreeLineState = {
+      hasTree: true,
+      isIndexEmpty: false,
+      filter: 'zqzq',
+      rowCount: 0,
+      isFilterOpen: false,
+    };
+    const emptyIndex: TreeLineState = {
+      hasTree: true,
+      isIndexEmpty: true,
+      filter: '',
+      rowCount: 0,
+      isFilterOpen: false,
+    };
+    const filtered: TreeLineState = {
+      hasTree: true,
+      isIndexEmpty: false,
+      filter: 'neat',
+      rowCount: 3,
+      isFilterOpen: false,
+    };
+
+    expect(
+      treeLine(noMatch, { filter: '/', clear: null, rescan: 'R' }),
+    ).toEqual({ placement: 'empty', text: 'No docs match "zqzq"', hint: [] });
+    expect(
+      treeLine(emptyIndex, { filter: '/', clear: '⎋', rescan: null }),
+    ).toEqual({ placement: 'empty', text: 'No docs in this index', hint: [] });
+    expect(
+      treeLine(filtered, { filter: null, clear: '⎋', rescan: 'R' }),
+    ).toEqual({ placement: 'above', text: 'Filtered: neat', hint: [] });
   });
 });
 

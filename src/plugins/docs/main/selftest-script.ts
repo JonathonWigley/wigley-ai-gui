@@ -49,9 +49,11 @@ const STYLE_CHANGED_WHILE_EDITING =
 // the tree and d asks to move it to the Trash, y does. R rescans: eight entries
 // and neat.md. / filters the tree to neat and Enter keeps the filter, leaving
 // Global, Rules and neat.md; k k j j selects neat.md and d asks to trash it, n
-// keeps it, d again and Esc keeps it; / and Esc clear the filter. h goes up to
-// Rules and h again collapses it. j l expands Hooks and j l opens the hook's
-// detail view; Option+l, i edits settings.json and :q closes it; Option+h back.
+// keeps it, d again and Esc keeps it; / and Esc clear the filter. / filters
+// to zqzq, which matches nothing, and Enter keeps it; / and Esc clear it. h
+// goes up to Rules and h again collapses it. j l expands Hooks and j l opens
+// the hook's detail view; Option+l, i edits settings.json and :q closes it;
+// Option+h back.
 // j j l expands the plugin, j j l its Plugins group and j l opens the plugin's
 // detail view; Option+l, i edits installed_plugins.json and :q closes it;
 // Option+h back. k k l expands the plugin's Skills and j l opens its cached
@@ -227,6 +229,12 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
     { keys: ['d'], expect: '[docs] asked to move neat.md to the Trash' },
     { keys: ['Escape'], expect: '[docs] kept neat.md' },
     { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
+    {
+      keys: ['/', ...'zqzq', 'Enter'],
+      expect: '[docs] no docs match "zqzq"',
+      checksFit: true,
+    },
+    { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
     { keys: ['h', 'h'], expect: '[docs] collapsed Rules' },
     { keys: ['j', 'l'], expect: '[docs] expanded Hooks' },
     { keys: ['j', 'l'], expect: '[docs] opened settings.json' },
@@ -323,12 +331,13 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
   ];
 }
 
-// Paths and the status line end in an ellipsis; the field table's box and
-// the editor scroll themselves; and Sessions mode's row status ends in an
-// ellipsis.
+// Paths, the status line and the filtered line end in an ellipsis; the field
+// table's box and the editor scroll themselves; and Sessions mode's row status
+// ends in an ellipsis.
 const SCROLLS_ITSELF = [
   '.docs-path',
   '.docs-status',
+  '.docs-filtered',
   '.docs-frontmatter-box',
   '.docs-editor',
   '.session-row-status',

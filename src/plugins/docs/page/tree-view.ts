@@ -1,15 +1,20 @@
 import type { Log } from '../../../contracts/log';
 import type { PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
+import { emptyState } from '../../../shared/page/ui/empty-state';
 import { icon } from '../../../shared/page/ui/icon';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { row as rowPart } from '../../../shared/page/ui/row';
 import type { TreeLeaf, TreeNode } from '../tree';
 import {
+  type DocsKeysFor,
   edgeSelection,
   parentId,
   rootIds,
   stepSelection,
+  type TreeLine,
+  type TreeLineHintPart,
+  treeLine,
   type TreeRow,
   type TreeState,
   visibleRows,
@@ -25,12 +30,19 @@ export interface TreeViewDeps {
   // Runs once an accepted or cancelled filter box has closed and focus is
   // back on the tree.
   filterClosed(): void;
+  // Whether the index read last returned a document; false before the first
+  // read and after a failed one.
+  hasIndex(): boolean;
+  keysFor: DocsKeysFor;
+  // Draws keys `keysFor` read as a key hint.
+  kbd(keys: string): HTMLElement;
 }
 
-// The tree pane: a status line, the filter box and the rows. `setTree` keeps
-// the expanded ids, the selection and the filter; the first tree with rows
-// expands its roots and selects its first row. The selected row draws as the
-// keyboard cursor while focus is inside the pane.
+// The tree pane: a status line, the filter box, a line for an empty index, a
+// filter matching nothing or a filter on, and the rows. `setTree` keeps the
+// expanded ids, the selection and the filter; the first tree with rows expands
+// its roots and selects its first row. The selected row draws as the keyboard
+// cursor while focus is inside the pane.
 export interface TreeView {
   element: HTMLElement;
   setStatus(text: string | null): void;
@@ -56,6 +68,62 @@ export interface TreeView {
   // Closes the filter box, keeping its filter, without moving focus or
   // hearing `filterClosed`.
   dismissFilter(): void;
+  // Shows the line again with the keys bound now.
+  keysChanged(): void;
+}
+
+function isSameLine(a: TreeLine | null, b: TreeLine | null): boolean {
+  if (a === null || b === null) {
+    return a === b;
+  }
+  const isSameHint =
+    a.hint.length === b.hint.length &&
+    a.hint.every((part, index) => isSamePart(part, b.hint[index]));
+  return a.placement === b.placement && a.text === b.text && isSameHint;
+}
+
+function isSamePart(a: TreeLineHintPart, b: TreeLineHintPart): boolean {
+  return 'keys' in a
+    ? 'keys' in b && a.keys === b.keys
+    : 'words' in b && a.words === b.words;
+}
+
+// Each key part as a Kbd and each words part as text; null for no parts.
+function hintElement(
+  parts: readonly TreeLineHintPart[],
+  kbd: (keys: string) => HTMLElement,
+): HTMLElement | null {
+  if (parts.length === 0) {
+    return null;
+  }
+  const hint = element('span', 'docs-hint');
+  hint.append(
+    ...parts.map((part) =>
+      'keys' in part ? kbd(part.keys) : element('span', '', part.words),
+    ),
+  );
+  return hint;
+}
+
+function lineElement(
+  line: TreeLine | null,
+  kbd: (keys: string) => HTMLElement,
+): HTMLElement {
+  if (line === null) {
+    const slot = element('div');
+    slot.hidden = true;
+    return slot;
+  }
+  const hint = hintElement(line.hint, kbd);
+  if (line.placement === 'empty') {
+    return emptyState(line.text, hint);
+  }
+  const above = element('div', 'docs-filtered');
+  above.append(element('span', 'docs-filtered-text', line.text));
+  if (hint !== null) {
+    above.append(hint);
+  }
+  return above;
 }
 
 export function createTreeView(deps: TreeViewDeps): TreeView {
@@ -69,13 +137,16 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   const filterBox = textBoxInput('docs-box');
   filterFrame.append(filterBox);
   const list = element('ol', 'docs-rows');
-  pane.append(status, filterFrame, list);
+  let shownLine: TreeLine | null = null;
+  let line = lineElement(shownLine, deps.kbd);
+  pane.append(status, filterFrame, line, list);
 
   let tree: TreeNode[] = [];
   let pathOf: (entryId: string) => string = () => '';
   let state: TreeState = { expanded: new Set(), selectedId: null, filter: '' };
   let rows: TreeRow[] = [];
   let hasRows = false;
+  let hasTree = false;
   let filterScope: PushedScope | null = null;
   let hasFocus = false;
 
@@ -84,6 +155,32 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     rows = visibleRows(tree, state, pathOf);
     list.replaceChildren(...rows.map(rowElement));
     list.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
+    showLine();
+  };
+
+  // Replaces the line only when it changed, so a selection move leaves it.
+  const showLine = () => {
+    const next = treeLine(
+      {
+        hasTree,
+        isIndexEmpty: tree.length === 0,
+        filter: state.filter,
+        rowCount: rows.length,
+        isFilterOpen: filterScope !== null,
+      },
+      {
+        filter: deps.keysFor('filter', 'tree'),
+        clear: deps.keysFor('boxCancel', 'box'),
+        rescan: deps.keysFor('rescan', 'tree'),
+      },
+    );
+    if (isSameLine(next, shownLine)) {
+      return;
+    }
+    shownLine = next;
+    const nextLine = lineElement(next, deps.kbd);
+    line.replaceWith(nextLine);
+    line = nextLine;
   };
 
   const rowElement = (row: TreeRow) => {
@@ -142,6 +239,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     filterScope?.pop();
     filterScope = null;
     filterFrame.hidden = true;
+    showLine();
     if (refocus) {
       pane.focus();
       deps.filterClosed();
@@ -158,6 +256,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     setTree(next, nextPathOf) {
       tree = next;
       pathOf = nextPathOf;
+      hasTree = deps.hasIndex();
       const isFirstTree = !hasRows && next.length > 0;
       if (isFirstTree) {
         hasRows = true;
@@ -240,6 +339,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       filterScope = scope;
       filterBox.value = state.filter;
       filterFrame.hidden = false;
+      showLine();
       filterBox.focus();
     },
     acceptFilter() {
@@ -252,6 +352,9 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
           ? 'cleared the filter'
           : `filtered the tree: ${state.filter}`,
       );
+      if (state.filter !== '' && rows.length === 0) {
+        deps.log('docs', `no docs match "${state.filter}"`);
+      }
       closeFilter(true);
     },
     cancelFilter() {
@@ -268,6 +371,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
         closeFilter(false);
       }
     },
+    keysChanged: () => showLine(),
   };
 
   pane.addEventListener('focusin', () => {
