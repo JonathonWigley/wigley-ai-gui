@@ -13,6 +13,11 @@ export const docsManifest = definePlugin({
       group: 'modes',
       runsIn: 'page',
     },
+    toggleTree: {
+      label: 'hide or show the docs tree',
+      group: 'view',
+      runsIn: 'page',
+    },
     treeDown: { label: 'next row', group: 'tree', runsIn: 'page' },
     treeUp: { label: 'previous row', group: 'tree', runsIn: 'page' },
     treeTop: { label: 'first row', group: 'tree', runsIn: 'page' },

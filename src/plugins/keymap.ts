@@ -106,6 +106,7 @@ export const defaultKeymap = {
   leader: '<Space>',
   groups: {
     '<Leader>k': 'windows',
+    '<Leader>v': 'view',
     '<Leader>z': 'debug',
     '<Leader>zl': 'forms layouts',
     '<Leader>zc': 'chat layouts',
@@ -117,6 +118,7 @@ export const defaultKeymap = {
     { keys: '<Leader>ks', scope: 'any', command: 'sessions.showMode' },
     { keys: '<Leader>kn', scope: 'any', command: 'chat.newSession' },
     { keys: '<Leader>kd', scope: 'any', command: 'docs.showMode' },
+    { keys: '<Leader>vt', scope: 'any', command: 'docs.toggleTree' },
     { keys: '<Leader>k,', scope: 'any', command: 'settings.showMode' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────

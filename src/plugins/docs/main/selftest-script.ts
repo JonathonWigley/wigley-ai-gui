@@ -62,9 +62,11 @@ const STYLE_CHANGED_WHILE_EDITING =
 // picker, j k j l picks rule, and Esc cancels its place picker. c opens the
 // context picker, j Enter picks the repo. Space k d hides the side bar,
 // focusing the doc, and Option+h brings it back; Space k d hides it again and
-// once more shows it; Option+h focuses the tree. Space k s shows Sessions mode
-// on the docs session's Docs tab (the session tab's screenshot), where R reads
-// its session index and a opens the kind picker. Space k d shows Docs mode,
+// once more shows it; Space v t hides it and shows it again; Option+h focuses
+// the tree. Space k s shows Sessions mode on the docs session's Docs tab (the
+// session tab's screenshot), where R reads its session index, Space v t hides
+// its tree, Option+h shows it, Space v t hides and shows it again, and
+// Option+h focuses the tree; a opens the kind picker. Space k d shows Docs mode,
 // which closes that picker, so j moves Docs mode's tree. / filters it to neat
 // and Enter keeps the filter; j j j j selects neat.md and r opens the path box,
 // where seven Backspaces and kept.md rename it, and the session's view reads
@@ -286,6 +288,8 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
     { keys: ['<A-h>'], expect: '[page] side bar shown' },
     { keys: [' ', 'k', 'd'], expect: '[page] side bar hidden' },
     { keys: [' ', 'k', 'd'], expect: '[page] side bar shown' },
+    { keys: [' ', 'v', 't'], expect: '[page] side bar hidden' },
+    { keys: [' ', 'v', 't'], expect: '[page] side bar shown' },
     // Both views' pane scope is now tree, so only closing the session view's
     // kind picker on Docs mode's show frees `j` there. The picker holds no
     // text box, so Space reaches the leader.
@@ -297,6 +301,13 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
       screenshot: 'session-tab',
     },
     { keys: ['R'], expect: '[docs] session index read: 4 entries' },
+    { keys: [' ', 'v', 't'], expect: '[docs] tree hidden', checksFit: true },
+    // Option+h reveals the hidden tree.
+    { keys: ['<A-h>'], expect: '[docs] tree shown' },
+    { keys: [' ', 'v', 't'], expect: '[docs] tree hidden' },
+    { keys: [' ', 'v', 't'], expect: '[docs] tree shown' },
+    // The tree scope back for the kind picker.
+    { keys: ['<A-h>'], expect: '[docs] tree focused' },
     { keys: ['a'], expect: '[docs] create: pick a kind' },
     { keys: [' ', 'k', 'd'], expect: '[page] marked Docs in the activity bar' },
     { keys: ['j'], expect: '[page] j ran docs.treeDown' },

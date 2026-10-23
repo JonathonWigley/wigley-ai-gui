@@ -9,7 +9,7 @@ import type {
 import { errorText } from '../../../shared/error-text';
 import { kbd } from '../../../shared/page/ui/kbd';
 import { sheet } from '../../../shared/page/ui/sheet';
-import { createSplit } from '../../../shared/page/ui/split';
+import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -39,11 +39,14 @@ interface SessionDocs {
   view: DocsView;
   // Null until `addTab` returns.
   handle: SessionTabHandle | null;
+  split: Split;
+  // Per tab and never stored: each connect starts with the tree shown.
+  isTreeHidden: boolean;
 }
 
-// The tree commands that need the tree in sight. While Docs mode's side bar
-// is hidden, each moves focus to the doc pane and runs what its key runs
-// there, by the keymap in force.
+// The tree commands that need the tree in sight. While a docs view's tree is
+// hidden, each moves focus to the doc pane and runs what its key runs there,
+// by the keymap in force.
 const TREE_COMMANDS_IN_SIGHT: ReadonlySet<keyof DocsViewCommands> = new Set<
   keyof DocsViewCommands
 >([
@@ -78,6 +81,7 @@ const SESSION_TREE_SPLIT = { initial: 288, min: 160, max: 480 };
 // the machine view while Docs mode shows, else the session view whose tab is
 // visible. A change made in one view reaches every other, and a view showing
 // closes the others' overlays, since two views' pane scopes may be equal.
+// `toggleTree` hides or shows the active view's tree.
 export const docsPagePart: PagePart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
@@ -218,23 +222,28 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     api.events.on(
       'sessions.sessionAdded',
       ({ sessionId, projectDir, harness, hostSessionId }) => {
+        const split = createSplit({
+          ...SESSION_TREE_SPLIT,
+          uiState: services.uiState,
+          stateKey: 'sessionTree',
+        });
         const held: SessionDocs = {
           view: createView(
             `session:${sessionId}`,
             { type: 'session', spec: { hostSessionId, projectDir, harness } },
             () => held.handle?.isVisible() === true,
             () => undefined,
-            // The split never hides the tree.
-            () => undefined,
+            () => {
+              if (held.isTreeHidden) {
+                setSessionTreeHidden(held, false);
+              }
+            },
             () => undefined,
           ),
           handle: null,
+          split,
+          isTreeHidden: false,
         };
-        const split = createSplit({
-          ...SESSION_TREE_SPLIT,
-          uiState: services.uiState,
-          stateKey: 'sessionTree',
-        });
         split.element.classList.add('docs-split');
         split.start.append(held.view.tree);
         split.end.append(held.view.doc);
@@ -276,6 +285,24 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       held.view.dispose();
     });
 
+    // Showing leaves focus where it is, as Docs mode's side bar showing does.
+    const setSessionTreeHidden = (held: SessionDocs, isHidden: boolean) => {
+      held.split.setStartHidden(isHidden);
+      held.isTreeHidden = isHidden;
+      log('docs', isHidden ? 'tree hidden' : 'tree shown');
+      if (isHidden) {
+        held.view.treeHidden();
+      }
+    };
+
+    const sessionDocsOf = (view: DocsView): SessionDocs | undefined =>
+      [...sessionDocs.values()].find((held) => held.view === view);
+
+    const isTreeHiddenIn = (view: DocsView): boolean =>
+      view === machineView
+        ? !mode.sideBarShown()
+        : sessionDocsOf(view)?.isTreeHidden === true;
+
     const activeView = (): DocsView | null => {
       if (isDocsModeShown) {
         return machineView;
@@ -288,17 +315,18 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       return null;
     };
 
-    // On Docs mode with its side bar hidden, by `Space k d` or a narrow
-    // window, a tree command moves focus to the doc pane and runs the command
+    // On a docs view whose tree is hidden — Docs mode's side bar by `Space k
+    // d`, `Space v t` or a narrow window, or a session tab's tree by `Space v
+    // t` — a tree command moves focus to the doc pane and runs the command
     // its key runs there, so no key moves a selection out of sight and `j`
     // scrolls the doc on its first press. The handler is not told which key
     // fired, so it runs one only when every key of the tree command runs the
     // same command in the doc pane, and never a tree command, which would
     // land here again. The narrowing itself gives the mode no callback, so
     // the check runs on each key.
-    const runInDocPane = (command: keyof DocsViewCommands) => {
+    const runInDocPane = (view: DocsView, command: keyof DocsViewCommands) => {
       const treeScope = api.keys.scope();
-      machineView.treeHidden();
+      view.treeHidden();
       const docCommand = commandOfKeysIn(
         api.keys.keymap(),
         qualify(docsManifest.id, command),
@@ -318,32 +346,53 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
 
     const onActiveView = (command: keyof DocsViewCommands) => () => {
       const view = activeView();
-      const isTreeOutOfSight =
-        view === machineView &&
-        TREE_COMMANDS_IN_SIGHT.has(command) &&
-        !mode.sideBarShown();
-      if (isTreeOutOfSight) {
-        runInDocPane(command);
+      if (view === null) {
         return;
       }
-      view?.commands[command]();
+      const isTreeOutOfSight =
+        TREE_COMMANDS_IN_SIGHT.has(command) && isTreeHiddenIn(view);
+      if (isTreeOutOfSight) {
+        runInDocPane(view, command);
+        return;
+      }
+      view.commands[command]();
     };
 
     // The core logs the side bar's hiding and showing.
-    const showMode = () => {
-      if (!mode.isShown()) {
-        mode.show();
-        return;
-      }
+    const toggleSideBar = () => {
       mode.toggleSideBar();
       if (!mode.sideBarShown()) {
         machineView.treeHidden();
       }
     };
 
+    const showMode = () => {
+      if (!mode.isShown()) {
+        mode.show();
+        return;
+      }
+      toggleSideBar();
+    };
+
+    const toggleTree = () => {
+      const view = activeView();
+      if (view === null) {
+        return;
+      }
+      if (view === machineView) {
+        toggleSideBar();
+        return;
+      }
+      const held = sessionDocsOf(view);
+      if (held !== undefined) {
+        setSessionTreeHidden(held, !held.isTreeHidden);
+      }
+    };
+
     return {
       commands: {
         showMode,
+        toggleTree,
         treeDown: onActiveView('treeDown'),
         treeUp: onActiveView('treeUp'),
         treeTop: onActiveView('treeTop'),
