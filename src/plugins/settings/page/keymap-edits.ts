@@ -7,12 +7,8 @@ import type {
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { errorText } from '../../../shared/error-text';
 import { isJsonObject, type JsonObject } from '../../../shared/json';
-import {
-  type BindLine,
-  isSameKeys,
-  keymapLeader,
-  sameBind,
-} from './keymap-rows';
+import { sharedHalves } from '../../../shared/plugin-manifests';
+import { type BindLine, isExpandable, keymapLeader } from './keymap-rows';
 
 // The sections the advanced box edits, in the order it shows them.
 const ADVANCED_SECTIONS = [
@@ -46,25 +42,36 @@ function tidied(layer: UserKeymap): UserKeymap {
   return kept as UserKeymap;
 }
 
-// `layer` with `bind` appended, after dropping every user bind in its scope on
-// its keys, `<Leader>` spelled as the layer's leader, else the schema's
-// default.
+// Whether the bind or `keys` unbind entry `a` shares a page or editor half
+// with `b`, as the merge tells binds apart.
+function sharesAHalf(
+  a: KeyBind | KeymapUnbind,
+  b: KeyBind,
+  leader: string,
+): boolean {
+  const shared = sharedHalves(a, b, leader);
+  return shared.page || shared.editor;
+}
+
+// `layer` with `bind` appended, after dropping every user bind sharing a half
+// with it under the layer's leader, else the schema's default. Keys the merge
+// cannot expand drop nothing; writing the layer reports them.
 export function withAddedBind(
   layer: UserKeymap | null,
   bind: KeyBind,
   schema: UserConfigSchema,
 ): UserKeymap {
   const leader = keymapLeader(schema, layer);
+  const isValid = isExpandable(bind, leader);
   const kept = (layer?.binds ?? []).filter(
-    (user) =>
-      user.scope !== bind.scope || !isSameKeys(user.keys, bind.keys, leader),
+    (user) => !isValid || !sharesAHalf(user, bind, leader),
   );
   return tidied({ ...layer, binds: [...kept, bind] });
 }
 
-// `layer` without `line`'s bind: a user bind leaves `binds`, matched with
-// `<Leader>` spelled as the layer's leader, else the schema's default; a
-// default gets a `keys` unbind entry.
+// `layer` without `line`'s bind: a user bind leaves `binds` with every user
+// bind sharing a half with it under the layer's leader, else the schema's
+// default; a default gets a `keys` unbind entry.
 export function withRemovedBind(
   layer: UserKeymap | null,
   line: BindLine,
@@ -75,7 +82,7 @@ export function withRemovedBind(
     return tidied({
       ...layer,
       binds: (layer?.binds ?? []).filter(
-        (user) => !sameBind(user, line.bind, leader),
+        (user) => !sharesAHalf(user, line.bind, leader),
       ),
     });
   }
@@ -89,8 +96,10 @@ export function withRemovedBind(
   return tidied({ ...layer, unbind: [...(layer?.unbind ?? []), entry] });
 }
 
-// `layer` without each user bind naming `command` and each `keys` unbind
-// entry that removes one of `command`'s default binds.
+// `layer` with `command`'s default binds firing again: without each user bind
+// naming `command`, each other command's user bind sharing a half with one of
+// `command`'s default binds, and each `keys` unbind entry removing a half of
+// one.
 export function withCommandReset(
   layer: UserKeymap | null,
   command: CommandId,
@@ -100,12 +109,14 @@ export function withCommandReset(
   const defaults = schema.defaultBinds.filter(
     (bind) => bind.command === command,
   );
+  const isOnDefault = (entry: KeyBind | KeymapUnbind) =>
+    defaults.some((bind) => sharesAHalf(entry, bind, leader));
   return tidied({
     ...layer,
-    binds: (layer?.binds ?? []).filter((bind) => bind.command !== command),
-    unbind: (layer?.unbind ?? []).filter(
-      (entry) => !defaults.some((bind) => sameBind(entry, bind, leader)),
+    binds: (layer?.binds ?? []).filter(
+      (bind) => bind.command !== command && !isOnDefault(bind),
     ),
+    unbind: (layer?.unbind ?? []).filter((entry) => !isOnDefault(entry)),
   });
 }
 

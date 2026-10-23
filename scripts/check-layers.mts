@@ -114,6 +114,11 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
+  // Checks the built-in manifests' setting declarations.
+  'src/plugins/manifests.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/manifests.ts'],
+    packages: [],
+  },
   'src/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/plugins/chat': {
     layers: [

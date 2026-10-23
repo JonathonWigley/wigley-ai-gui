@@ -5,6 +5,7 @@ import { element } from '../../../shared/page/dom';
 import { kbd } from '../../../shared/page/ui/kbd';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { tag } from '../../../shared/page/ui/tag';
+import type { HalfStanding } from '../../../shared/plugin-manifests';
 import {
   chordName,
   formatAccelerator,
@@ -22,6 +23,7 @@ import {
   type AcceleratorLine,
   type BindLine,
   type CommandRow,
+  firesAnywhere,
   keymapLeader,
   keymapRows,
   replacedBy,
@@ -75,6 +77,43 @@ function lineElement(
   return node;
 }
 
+const HALF_PLACES = { page: 'on the page', editor: 'in the editor' } as const;
+
+// What covers one half, in lower case; null for a half still firing.
+function coverText(ctx: RowContext, standing: HalfStanding): string | null {
+  if (standing.state === 'removed') {
+    return 'removed';
+  }
+  if (standing.state === 'replaced') {
+    return `replaced by ${commandLabel(ctx, standing.by.command)}`;
+  }
+  return null;
+}
+
+// The tags naming what covers `line`'s halves: with every half covered,
+// Removed and Replaced by its command; with one half still firing, Partly
+// removed or Partly replaced, naming where it still fires.
+function coverTags(ctx: RowContext, line: BindLine): string[] {
+  const halves = (['page', 'editor'] as const).flatMap((half) => {
+    const standing = line[half];
+    return standing === null ? [] : [{ half, standing }];
+  });
+  const firing = halves.find(({ standing }) => standing.state === 'active');
+  const tags: string[] = [];
+  for (const { standing } of halves) {
+    const text = coverText(ctx, standing);
+    if (text === null) {
+      continue;
+    }
+    tags.push(
+      firing === undefined
+        ? capitalised(text)
+        : `Partly ${text} — still fires ${HALF_PLACES[firing.half]}`,
+    );
+  }
+  return [...new Set(tags)];
+}
+
 function bindLineElement(ctx: RowContext, line: BindLine): HTMLElement {
   const { bind } = line;
   const tags = [tag(scopeTitle(ctx, bind.scope))];
@@ -87,13 +126,8 @@ function bindLineElement(ctx: RowContext, line: BindLine): HTMLElement {
   if (line.origin === 'user') {
     tags.push(tag('Set'));
   }
-  if (line.state === 'unbound') {
-    tags.push(tag('Removed'));
-  }
-  if (line.state === 'replaced' && line.replacedBy !== null) {
-    tags.push(tag(`Replaced by ${commandLabel(ctx, line.replacedBy)}`));
-  }
-  return lineElement(keysKbd(ctx, bind.keys), tags, line.state !== 'active');
+  tags.push(...coverTags(ctx, line).map((text) => tag(text)));
+  return lineElement(keysKbd(ctx, bind.keys), tags, !firesAnywhere(line));
 }
 
 function acceleratorLineElement(
@@ -105,10 +139,13 @@ function acceleratorLineElement(
       ? chordName(line.bind, ctx.platform)
       : formatAccelerator(line.bind.accelerator, ctx.platform);
   const tags = [tag(ACCELERATOR_TAGS[line.kind])];
-  if (line.state === 'unbound') {
+  if (line.state === 'removed') {
     tags.push(tag('Removed'));
   }
-  return lineElement(kbd(text, ctx.platform), tags, line.state === 'unbound');
+  if (line.state === 'replaced' && line.replacedBy !== null) {
+    tags.push(tag(`Replaced by ${commandLabel(ctx, line.replacedBy)}`));
+  }
+  return lineElement(kbd(text, ctx.platform), tags, line.state !== 'active');
 }
 
 // The typed keys as Kbd, and the command a bind on them in `scope` replaces.
@@ -190,7 +227,7 @@ function addBind(ctx: RowContext, command: CommandId) {
 }
 
 function removeBind(ctx: RowContext, row: CommandRow) {
-  const active = row.binds.filter((line) => line.state === 'active');
+  const active = row.binds.filter(firesAnywhere);
   if (active.length === 0) {
     return;
   }

@@ -62,10 +62,13 @@ plan is written from them. A decision here stands unless the user changes it.
 - One row per command, every command included so an unbound one can get a key, grouped by plugin under a section
   header (core first), each with its label. A row lists each bind in force as Kbd with its scope as a Tag, and `where`
   or `mode` as a further Tag when set. A bind the user added shows "Set"; a default the user removed shows struck
-  through with "Removed", and one a user bind on the same keys displaced shows "Replaced by <label>". A command with
-  no keys shows "Not bound".
+  through with "Removed", and one a user bind on the same keys displaced shows "Replaced by <label>", each judged per
+  half (page and editor) as the merge judges it. A default with one half still firing is not struck and shows "Partly
+  removed — still fires in the editor" or "Partly replaced by <label> — still fires on the page". A command with no
+  keys shows "Not bound".
 - A main command's row (`settings.show`, `window.summon`) lists its app menu, global or intercepted accelerators
-  read-only; they are edited in the advanced box.
+  read-only; they are edited in the advanced box. A default accelerator shows "Removed" when unbound and "Replaced by
+  <label>" when a user accelerator of the same kind takes its keys.
 - On a command row (Enter or `i` opens the add-bind box, as `a` does; on a main command's row they toast
   "Accelerators are edited in the advanced box", as `a`, `d` and `r` do):
   - `a` adds a bind: a box takes vim notation and shows a live Kbd preview and, when a bind on the same keys and scope
@@ -73,7 +76,8 @@ plan is written from them. A decision here stands unless the user changes it.
     scope of the command's first default bind, else `any`. A bind added here carries no `where` or `mode`.
   - `d` removes a bind (the list picker chooses which when the row has several): a default becomes an `unbind`
     entry, a user bind leaves `binds`.
-  - `r` resets the row: every user `binds` entry and `unbind` entry naming that command's binds is removed.
+  - `r` resets the row: every user `binds` entry naming that command, every other command's user bind sharing a half
+    with one of its default binds, and every `unbind` entry removing a half of one is removed.
   - Adding a bind that another user bind already holds in that scope replaces that one in the user layer too.
 - An `Advanced` row at the bottom opens a JSON document box that edits `groups`, `remaps`, `app`, `intercept`, `global` and the
   accelerator `unbind` entries (`app`, `global`, `intercept`); the command rows own `binds`, `leader` and the `keys`

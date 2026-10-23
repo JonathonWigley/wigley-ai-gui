@@ -1,28 +1,29 @@
 import type { CommandId } from '../../../contracts/commands';
 import type {
   AcceleratorBind,
-  BindWhere,
   InterceptBind,
   KeyBind,
-  KeymapUnbind,
   UserKeymap,
 } from '../../../contracts/keymap';
 import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { capitalised } from '../../../shared/capitalised';
-import { withLeader } from '../../../shared/key-hints';
 import {
   bindIdentities,
+  defaultBindStanding,
+  expandBind,
+  type HalfStanding,
   isSameAccelerator,
+  sharedHalves,
 } from '../../../shared/plugin-manifests';
 
-export type BindState = 'active' | 'unbound' | 'replaced';
+// A bind's page and editor halves, each null when the bind does not fire
+// there; a user bind's halves are active.
 export interface BindLine {
   bind: KeyBind;
   origin: 'default' | 'user';
-  state: BindState;
-  // The command whose user bind replaced this default; null unless `state` is `replaced`.
-  replacedBy: CommandId | null;
+  page: HalfStanding | null;
+  editor: HalfStanding | null;
 }
 // `accelerators`: a main command's `app`, `global` and `intercept` binds, read-only in the rows (the advanced box
 // edits them); the view prints them with `formatAccelerator` and `chordName`.
@@ -36,16 +37,21 @@ export interface CommandGroup {
   title: string;
   rows: CommandRow[];
 }
+// `replacedBy`: the command of the user accelerator of the same kind on this
+// default's keys; null unless `state` is `replaced`.
+export type AcceleratorState = 'active' | 'removed' | 'replaced';
 export type AcceleratorLine =
   | {
       kind: 'app' | 'global';
       bind: AcceleratorBind;
-      state: 'active' | 'unbound';
+      state: AcceleratorState;
+      replacedBy: CommandId | null;
     }
   | {
       kind: 'intercept';
       bind: InterceptBind;
-      state: 'active' | 'unbound';
+      state: AcceleratorState;
+      replacedBy: CommandId | null;
     };
 
 // The leader `<Leader>` stands for under `layer`.
@@ -56,72 +62,65 @@ export function keymapLeader(
   return layer?.leader ?? schema.defaultLeader;
 }
 
-// Whether two key strings are one sequence once `<Leader>` is spelled as
-// `leader` in both.
-export function isSameKeys(a: string, b: string, leader: string): boolean {
-  return withLeader(a, leader) === withLeader(b, leader);
+// Whether any half of `line`'s bind still fires.
+export function firesAnywhere(line: BindLine): boolean {
+  return line.page?.state === 'active' || line.editor?.state === 'active';
 }
 
-// Where a bind or `keys` unbind entry fires: its `where`, else `both` when its
-// keys, `<Leader>` spelled as `leader`, start with the leader, else `page`.
-function whereOf(
-  bind: { keys: string; where?: BindWhere },
-  leader: string,
-): BindWhere {
-  const startsWithLeader = withLeader(bind.keys, leader).startsWith(leader);
-  return bind.where ?? (startsWithLeader ? 'both' : 'page');
-}
-
-// Whether the bind or `keys` unbind entry `a` stands for the same bind as
-// `b`, as the keymap merge tells them apart: keys with `<Leader>` spelled as
-// `leader`, scope, mode (normal when absent) and where after its default.
-// An accelerator unbind entry matches no bind.
-export function sameBind(
-  a: KeyBind | KeymapUnbind,
-  b: KeyBind,
-  leader: string,
-): boolean {
-  if (!('keys' in a)) {
+// Whether the merge can expand `bind` under `leader`; keys the user is still
+// typing may not be.
+export function isExpandable(bind: KeyBind, leader: string): boolean {
+  try {
+    expandBind(bind, leader);
+    return true;
+  } catch {
     return false;
   }
-  return (
-    isSameKeys(a.keys, b.keys, leader) &&
-    a.scope === b.scope &&
-    (a.mode ?? 'normal') === (b.mode ?? 'normal') &&
-    whereOf(a, leader) === whereOf(b, leader)
-  );
 }
 
-// A default bind's line: unbound by a `keys` unbind entry, replaced by a user
-// bind on its keys in its scope, else active.
 function defaultLine(
   bind: KeyBind,
   layer: UserKeymap | null,
   leader: string,
 ): BindLine {
-  const isUnbound = (layer?.unbind ?? []).some((entry) =>
-    sameBind(entry, bind, leader),
-  );
-  const replacing = (layer?.binds ?? []).find(
-    (user) =>
-      user.scope === bind.scope && isSameKeys(user.keys, bind.keys, leader),
-  );
-  if (isUnbound) {
-    return { bind, origin: 'default', state: 'unbound', replacedBy: null };
-  }
-  if (replacing) {
-    return {
-      bind,
-      origin: 'default',
-      state: 'replaced',
-      replacedBy: replacing.command,
-    };
-  }
-  return { bind, origin: 'default', state: 'active', replacedBy: null };
+  return {
+    bind,
+    origin: 'default',
+    ...defaultBindStanding(bind, layer ?? {}, leader),
+  };
 }
 
-// `command`'s app, global and intercept binds: the defaults, each unbound
-// when an unbind entry names it, then the user layer's own.
+function userLine(bind: KeyBind, leader: string): BindLine {
+  const halves = expandBind(bind, leader);
+  const active = { state: 'active' } as const;
+  return {
+    bind,
+    origin: 'user',
+    page: halves.page === null ? null : active,
+    editor: halves.editor === null ? null : active,
+  };
+}
+
+// A default accelerator's state: removed when an unbind entry names it, else
+// replaced by the first user accelerator of its kind on its keys, else active.
+function acceleratorStanding<B extends { command: CommandId }>(
+  bind: B,
+  isRemoved: boolean,
+  userBinds: readonly B[],
+  same: (a: B, b: B) => boolean,
+): { state: AcceleratorState; replacedBy: CommandId | null } {
+  if (isRemoved) {
+    return { state: 'removed', replacedBy: null };
+  }
+  const replacer = userBinds.find((user) => same(user, bind));
+  if (replacer !== undefined) {
+    return { state: 'replaced', replacedBy: replacer.command };
+  }
+  return { state: 'active', replacedBy: null };
+}
+
+// `command`'s app, global and intercept binds: the defaults, each removed or
+// replaced as the merge decides, then the user layer's own.
 function acceleratorLines(
   schema: UserConfigSchema,
   layer: UserKeymap | null,
@@ -129,56 +128,60 @@ function acceleratorLines(
   leader: string,
 ): AcceleratorLine[] {
   const unbind = layer?.unbind ?? [];
-  const sameIntercept = bindIdentities(leader).intercept;
-  const stateOf = (isUnbound: boolean) =>
-    isUnbound ? ('unbound' as const) : ('active' as const);
+  const same = bindIdentities(leader);
   const defaults = schema.defaultAccelerators;
   const names = (bind: { command: CommandId }) => bind.command === command;
+  const active = { state: 'active', replacedBy: null } as const;
   return [
     ...defaults.app.filter(names).map((bind): AcceleratorLine => ({
       kind: 'app',
       bind,
-      state: stateOf(
+      ...acceleratorStanding(
+        bind,
         unbind.some(
           (entry) =>
             'app' in entry && isSameAccelerator(entry.app, bind.accelerator),
         ),
+        layer?.app ?? [],
+        same.accelerators,
       ),
     })),
     ...defaults.global.filter(names).map((bind): AcceleratorLine => ({
       kind: 'global',
       bind,
-      state: stateOf(
+      ...acceleratorStanding(
+        bind,
         unbind.some(
           (entry) =>
             'global' in entry &&
             isSameAccelerator(entry.global, bind.accelerator),
         ),
+        layer?.global ?? [],
+        same.accelerators,
       ),
     })),
     ...defaults.intercept.filter(names).map((bind): AcceleratorLine => ({
       kind: 'intercept',
       bind,
-      state: stateOf(
+      ...acceleratorStanding(
+        bind,
         unbind.some(
           (entry) =>
-            'intercept' in entry && sameIntercept(bind, entry.intercept),
+            'intercept' in entry && same.intercept(bind, entry.intercept),
         ),
+        layer?.intercept ?? [],
+        same.intercept,
       ),
     })),
     ...(layer?.app ?? [])
       .filter(names)
-      .map((bind): AcceleratorLine => ({ kind: 'app', bind, state: 'active' })),
-    ...(layer?.global ?? []).filter(names).map((bind): AcceleratorLine => ({
-      kind: 'global',
-      bind,
-      state: 'active',
-    })),
-    ...(layer?.intercept ?? []).filter(names).map((bind): AcceleratorLine => ({
-      kind: 'intercept',
-      bind,
-      state: 'active',
-    })),
+      .map((bind): AcceleratorLine => ({ kind: 'app', bind, ...active })),
+    ...(layer?.global ?? [])
+      .filter(names)
+      .map((bind): AcceleratorLine => ({ kind: 'global', bind, ...active })),
+    ...(layer?.intercept ?? [])
+      .filter(names)
+      .map((bind): AcceleratorLine => ({ kind: 'intercept', bind, ...active })),
   ];
 }
 
@@ -202,12 +205,7 @@ export function keymapRows(
       .map((bind) => defaultLine(bind, layer, leader));
     const userLines = (layer?.binds ?? [])
       .filter((bind) => bind.command === command.id)
-      .map((bind): BindLine => ({
-        bind,
-        origin: 'user',
-        state: 'active',
-        replacedBy: null,
-      }));
+      .map((bind) => userLine(bind, leader));
     const row: CommandRow = {
       command,
       binds: [...defaultLines, ...userLines],
@@ -227,8 +225,9 @@ export function keymapRows(
   return [...groups.values()].filter((group) => group.rows.length > 0);
 }
 
-// The command of the active line, default or user, on `keys` in `scope`;
-// null when none.
+// The command whose firing bind, default or user, a new bind on `keys` in
+// `scope` would take, judged half by half as the merge does; null when none,
+// or when the merge cannot expand those keys.
 export function replacedBy(
   schema: UserConfigSchema,
   layer: UserKeymap | null,
@@ -236,14 +235,18 @@ export function replacedBy(
   scope: string,
 ): CommandInfo | null {
   const leader = keymapLeader(schema, layer);
+  const typed: KeyBind = { keys, scope, command: '' };
+  if (!isExpandable(typed, leader)) {
+    return null;
+  }
   for (const group of keymapRows(schema, layer)) {
     for (const row of group.rows) {
-      const holdsKeys = row.binds.some(
-        (line) =>
-          line.state === 'active' &&
-          line.bind.scope === scope &&
-          isSameKeys(line.bind.keys, keys, leader),
-      );
+      const holdsKeys = row.binds.some((line) => {
+        const shared = sharedHalves(typed, line.bind, leader);
+        const takesPage = shared.page && line.page?.state === 'active';
+        const takesEditor = shared.editor && line.editor?.state === 'active';
+        return takesPage || takesEditor;
+      });
       if (holdsKeys) {
         return row.command;
       }

@@ -320,6 +320,71 @@ function withoutUnbound(
   };
 }
 
+// Which of `bind`'s halves `other` matches as the merge tells binds apart:
+// each expanded with `expandBind` under `leader`, page halves compared as page
+// binds and editor halves as editor binds. A `keys` unbind entry expands as a
+// bind does; an accelerator unbind entry matches neither half. Throws as
+// `expandBind` does.
+export function sharedHalves(
+  other: KeyBind | KeymapUnbind,
+  bind: KeyBind,
+  leader: string,
+): { page: boolean; editor: boolean } {
+  if (!('keys' in other)) {
+    return { page: false, editor: false };
+  }
+  const same = bindIdentities(leader);
+  const a = expandBind({ command: '', ...other }, leader);
+  const b = expandBind(bind, leader);
+  return {
+    page: a.page !== null && b.page !== null && same.page(a.page, b.page),
+    editor:
+      a.editor !== null &&
+      b.editor !== null &&
+      same.editorBinds(a.editor, b.editor),
+  };
+}
+
+// Where one half of a default bind stands under the user's layer: still
+// firing, taken by a user bind, or removed by a `keys` unbind entry.
+export type HalfStanding =
+  | { state: 'active' }
+  | { state: 'replaced'; by: KeyBind }
+  | { state: 'removed'; by: KeymapUnbind };
+
+// Where each half of the default bind `bind` stands under `user`, as
+// `mergeKeymap` decides it: removed by the first `keys` unbind entry matching
+// that half, else replaced by the first user bind matching it, else active;
+// null for a half `bind` does not have. `leader` is the merge's.
+export function defaultBindStanding(
+  bind: KeyBind,
+  user: UserKeymap,
+  leader: string,
+): { page: HalfStanding | null; editor: HalfStanding | null } {
+  const halves = expandBind(bind, leader);
+  const unbind = user.unbind ?? [];
+  const binds = user.binds ?? [];
+  const standing = (half: 'page' | 'editor'): HalfStanding | null => {
+    if (halves[half] === null) {
+      return null;
+    }
+    const remover = unbind.find(
+      (entry) => sharedHalves(entry, bind, leader)[half],
+    );
+    if (remover !== undefined) {
+      return { state: 'removed', by: remover };
+    }
+    const replacer = binds.find(
+      (other) => sharedHalves(other, bind, leader)[half],
+    );
+    if (replacer !== undefined) {
+      return { state: 'replaced', by: replacer };
+    }
+    return { state: 'active' };
+  };
+  return { page: standing('page'), editor: standing('editor') };
+}
+
 // The served keymap in layers: `defaults`, then each manifest's keys in
 // `dependencyOrder` (commands and scopes qualified as `<pluginId>.<short>`,
 // the `any` scope left unqualified), then the user's. Each layer's binds are

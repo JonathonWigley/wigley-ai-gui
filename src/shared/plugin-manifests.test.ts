@@ -3,6 +3,7 @@ import type { DefaultKeymap, KeyBind } from '../contracts/keymap';
 import type { PluginManifest } from '../contracts/plugin';
 import {
   commandInfos,
+  defaultBindStanding,
   dependencyOrder,
   expandBind,
   mergeKeymap,
@@ -370,6 +371,141 @@ describe('expandBind', () => {
       page: null,
       editor: { keys: '<F5>', scope: 'any', command: 'c' },
     });
+  });
+});
+
+describe('defaultBindStanding', () => {
+  const leader = '<Space>';
+
+  it('defaultBindStanding_EnterSpelledCR_IsReplaced', () => {
+    const user = { keys: 'g<Enter>', scope: 's', command: 'b' };
+
+    expect(
+      defaultBindStanding(
+        { keys: 'g<CR>', scope: 's', command: 'a' },
+        { binds: [user] },
+        leader,
+      ),
+    ).toEqual({ page: { state: 'replaced', by: user }, editor: null });
+  });
+
+  it('defaultBindStanding_SpaceInLowerCase_IsReplaced', () => {
+    const user = { keys: '<space>x', scope: 's', command: 'b' };
+
+    expect(
+      defaultBindStanding(
+        { keys: '<Space>x', scope: 's', command: 'a' },
+        { binds: [user] },
+        leader,
+      ).page,
+    ).toEqual({ state: 'replaced', by: user });
+  });
+
+  it('defaultBindStanding_PageUserBindOverBoxDefault_StaysActive', () => {
+    expect(
+      defaultBindStanding(
+        { keys: 'x', scope: 's', command: 'a', where: 'box' },
+        { binds: [{ keys: 'x', scope: 's', command: 'b' }] },
+        leader,
+      ),
+    ).toEqual({ page: null, editor: { state: 'active' } });
+  });
+
+  it('defaultBindStanding_InsertUserBindOverPageDefault_StaysActive', () => {
+    expect(
+      defaultBindStanding(
+        { keys: '<CR>', scope: 's', command: 'a' },
+        { binds: [{ keys: '<CR>', scope: 's', command: 'b', mode: 'insert' }] },
+        leader,
+      ),
+    ).toEqual({ page: { state: 'active' }, editor: null });
+  });
+
+  it('defaultBindStanding_ModeUnbindWithoutWhere_RemovesBoxModeDefault', () => {
+    const entry = { keys: '<CR>', scope: 's', mode: 'insert' as const };
+
+    expect(
+      defaultBindStanding(
+        {
+          keys: '<CR>',
+          scope: 's',
+          command: 'a',
+          mode: 'insert',
+          where: 'box',
+        },
+        { unbind: [entry] },
+        leader,
+      ),
+    ).toEqual({ page: null, editor: { state: 'removed', by: entry } });
+  });
+
+  it('defaultBindStanding_LeaderSpelledOut_FiresOnThePageOnly', () => {
+    const entry = { keys: '<Space>x', scope: 's', where: 'page' as const };
+
+    expect(
+      defaultBindStanding(
+        { keys: '<Space>x', scope: 's', command: 'a' },
+        { unbind: [entry] },
+        leader,
+      ),
+    ).toEqual({ page: { state: 'removed', by: entry }, editor: null });
+  });
+
+  it('defaultBindStanding_PageUnbindOverBothDefault_RemovesPageHalf', () => {
+    const entry = { keys: 'x', scope: 's' };
+
+    expect(
+      defaultBindStanding(
+        { keys: 'x', scope: 's', command: 'a', where: 'both' },
+        { unbind: [entry] },
+        leader,
+      ),
+    ).toEqual({
+      page: { state: 'removed', by: entry },
+      editor: { state: 'active' },
+    });
+  });
+
+  it('defaultBindStanding_PageUserBindOverLeaderDefault_ReplacesPageHalf', () => {
+    const user = {
+      keys: '<Leader>x',
+      scope: 's',
+      command: 'b',
+      where: 'page' as const,
+    };
+
+    expect(
+      defaultBindStanding(
+        { keys: '<Leader>x', scope: 's', command: 'a' },
+        { binds: [user] },
+        leader,
+      ),
+    ).toEqual({
+      page: { state: 'replaced', by: user },
+      editor: { state: 'active' },
+    });
+  });
+
+  it('defaultBindStanding_UnbindAndUserBind_IsRemoved', () => {
+    const entry = { keys: 'x', scope: 's' };
+
+    expect(
+      defaultBindStanding(
+        { keys: 'x', scope: 's', command: 'a' },
+        { unbind: [entry], binds: [{ keys: 'x', scope: 's', command: 'b' }] },
+        leader,
+      ).page,
+    ).toEqual({ state: 'removed', by: entry });
+  });
+
+  it('defaultBindStanding_OtherScope_StaysActive', () => {
+    expect(
+      defaultBindStanding(
+        { keys: 'x', scope: 's', command: 'a' },
+        { binds: [{ keys: 'x', scope: 't', command: 'b' }] },
+        leader,
+      ).page,
+    ).toEqual({ state: 'active' });
   });
 });
 

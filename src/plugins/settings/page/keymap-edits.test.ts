@@ -36,6 +36,27 @@ describe('withAddedBind', () => {
 
     expect(withAddedBind(layer, added, schema())).toEqual({ binds: [added] });
   });
+
+  it('withAddedBind_EnterSpellingOfCR_ReplacesUserBind', () => {
+    const layer = { binds: [{ keys: 'g<CR>', scope: 'p.s', command: 'p.a' }] };
+    const added = { keys: 'g<Enter>', scope: 'p.s', command: 'p.b' };
+
+    expect(withAddedBind(layer, added, schema())).toEqual({ binds: [added] });
+  });
+
+  it('withAddedBind_InsertModeBind_KeepsPageBindOnSameKeys', () => {
+    const page = { keys: '<CR>', scope: 'p.s', command: 'p.a' };
+    const added = {
+      keys: '<CR>',
+      scope: 'p.s',
+      command: 'p.b',
+      mode: 'insert' as const,
+    };
+
+    expect(withAddedBind({ binds: [page] }, added, schema())).toEqual({
+      binds: [page, added],
+    });
+  });
 });
 
 describe('withRemovedBind', () => {
@@ -50,8 +71,8 @@ describe('withRemovedBind', () => {
     const line = {
       bind,
       origin: 'default' as const,
-      state: 'active' as const,
-      replacedBy: null,
+      page: null,
+      editor: { state: 'active' as const },
     };
 
     expect(withRemovedBind(null, line, schema())).toEqual({
@@ -63,8 +84,8 @@ describe('withRemovedBind', () => {
     const line = {
       bind,
       origin: 'user' as const,
-      state: 'active' as const,
-      replacedBy: null,
+      page: null,
+      editor: { state: 'active' as const },
     };
 
     expect(withRemovedBind({ binds: [bind] }, line, schema())).toEqual({});
@@ -75,8 +96,8 @@ describe('withRemovedBind', () => {
     const line = {
       bind: { ...user, keys: '<Space>x' },
       origin: 'user' as const,
-      state: 'active' as const,
-      replacedBy: null,
+      page: { state: 'active' as const },
+      editor: { state: 'active' as const },
     };
 
     expect(withRemovedBind({ binds: [user] }, line, schema())).toEqual({});
@@ -97,6 +118,29 @@ describe('withCommandReset', () => {
       binds: [other],
       unbind: [{ app: 'CommandOrControl+Q' }],
     });
+  });
+
+  it('withCommandReset_RemovesOtherCommandsBindOnDefaultKeys', () => {
+    const elsewhere = { keys: 'x', scope: 'p.t', command: 'p.b' };
+    const layer: UserKeymap = {
+      binds: [{ keys: 'x', scope: 'p.s', command: 'p.b' }, elsewhere],
+    };
+
+    const given = schema([{ keys: 'x', scope: 'p.s', command: 'p.a' }]);
+
+    expect(withCommandReset(layer, 'p.a', given)).toEqual({
+      binds: [elsewhere],
+    });
+  });
+
+  it('withCommandReset_RemovesWiderUnbind', () => {
+    const layer: UserKeymap = { unbind: [{ keys: 'x', scope: 'p.s' }] };
+
+    const given = schema([
+      { keys: 'x', scope: 'p.s', command: 'p.a', where: 'both' },
+    ]);
+
+    expect(withCommandReset(layer, 'p.a', given)).toEqual({});
   });
 });
 

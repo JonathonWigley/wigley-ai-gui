@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { AcceleratorBind, KeyBind } from '../../../contracts/keymap';
+import type {
+  AcceleratorBind,
+  InterceptBind,
+  KeyBind,
+} from '../../../contracts/keymap';
 import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
-import { keymapRows, sameBind, type CommandRow } from './keymap-rows';
+import { keymapRows, replacedBy, type CommandRow } from './keymap-rows';
 
 function command(id: string, runsIn: 'page' | 'main' = 'page'): CommandInfo {
   const [plugin] = id.split('.');
@@ -13,13 +17,14 @@ function schema(
   commands: CommandInfo[],
   defaultBinds: KeyBind[],
   app: AcceleratorBind[] = [],
+  intercept: InterceptBind[] = [],
 ): UserConfigSchema {
   return {
     sections: [],
     commands: Object.fromEntries(commands.map((info) => [info.id, info])),
     scopes: [],
     defaultBinds,
-    defaultAccelerators: { app, global: [], intercept: [] },
+    defaultAccelerators: { app, global: [], intercept },
     defaultLeader: '<Space>',
   };
 }
@@ -43,7 +48,10 @@ describe('keymapRows', () => {
 
     const groups = keymapRows(given, { unbind: [{ keys: 'x', scope: 'p.s' }] });
 
-    expect(row(groups, 'p.a').binds[0].state).toBe('unbound');
+    expect(row(groups, 'p.a').binds[0]).toMatchObject({
+      page: { state: 'removed' },
+      editor: null,
+    });
   });
 
   it('keymapRows_UserBindReplacesOtherCommandsDefault', () => {
@@ -57,11 +65,15 @@ describe('keymapRows', () => {
 
     expect(row(groups, 'p.a').binds[0]).toMatchObject({
       origin: 'default',
-      state: 'replaced',
-      replacedBy: 'p.b',
+      page: { state: 'replaced', by: userBind },
     });
     expect(row(groups, 'p.b').binds).toEqual([
-      { bind: userBind, origin: 'user', state: 'active', replacedBy: null },
+      {
+        bind: userBind,
+        origin: 'user',
+        page: { state: 'active' },
+        editor: null,
+      },
     ]);
   });
 
@@ -83,30 +95,75 @@ describe('keymapRows', () => {
     const groups = keymapRows(given, null);
 
     expect(row(groups, 'settings.show').accelerators).toEqual([
-      { kind: 'app', bind: show, state: 'active' },
+      { kind: 'app', bind: show, state: 'active', replacedBy: null },
     ]);
+  });
+
+  it('keymapRows_UserAcceleratorOnDefaultsKeys_MarksDefaultReplaced', () => {
+    const show = { accelerator: 'CommandOrControl+,', command: 'p.a' };
+    const given = schema([command('p.a', 'main')], [], [show]);
+
+    const groups = keymapRows(given, {
+      app: [{ accelerator: 'CmdOrCtrl+,', command: 'p.b' }],
+    });
+
+    expect(row(groups, 'p.a').accelerators).toEqual([
+      { kind: 'app', bind: show, state: 'replaced', replacedBy: 'p.b' },
+    ]);
+  });
+
+  it('keymapRows_UserInterceptOnDefaultsChord_MarksDefaultReplaced', () => {
+    const tab = { key: 'Tab', control: true, command: 'p.a' };
+    const given = schema([command('p.a', 'main')], [], [], [tab]);
+
+    const groups = keymapRows(given, {
+      intercept: [{ key: 'Tab', control: true, shift: false, command: 'p.b' }],
+    });
+
+    expect(row(groups, 'p.a').accelerators).toEqual([
+      { kind: 'intercept', bind: tab, state: 'replaced', replacedBy: 'p.b' },
+    ]);
+  });
+
+  it('keymapRows_UnbindAndUserAccelerator_MarksDefaultRemoved', () => {
+    const show = { accelerator: 'CommandOrControl+,', command: 'p.a' };
+    const given = schema([command('p.a', 'main')], [], [show]);
+
+    const groups = keymapRows(given, {
+      unbind: [{ app: 'CommandOrControl+,' }],
+      app: [{ accelerator: 'CommandOrControl+,', command: 'p.b' }],
+    });
+
+    expect(row(groups, 'p.a').accelerators[0].state).toBe('removed');
   });
 });
 
-describe('sameBind', () => {
-  it('sameBind_LeaderSpelledOut_Matches', () => {
-    const fallback = { keys: '<Leader>?', scope: 'any', command: 'help' };
-    const user = { keys: '<Space>?', scope: 'any', command: 'help' };
+describe('replacedBy', () => {
+  it('replacedBy_EnterSpellingOfDefaultsCR_NamesDefaultsCommand', () => {
+    const given = schema(
+      [command('p.a')],
+      [{ keys: 'g<CR>', scope: 'p.s', command: 'p.a' }],
+    );
 
-    expect(sameBind(user, fallback, '<Space>')).toBe(true);
+    expect(replacedBy(given, null, 'g<Enter>', 'p.s')?.id).toBe('p.a');
   });
 
-  it('sameBind_ModeAbsent_MatchesNormal', () => {
-    const absent = { keys: 'x', scope: 'p.s', command: 'p.a' };
-    const normal = { ...absent, mode: 'normal' as const };
+  it('replacedBy_RemovedDefault_NamesNone', () => {
+    const given = schema(
+      [command('p.a')],
+      [{ keys: 'x', scope: 'p.s', command: 'p.a' }],
+    );
+    const layer = { unbind: [{ keys: 'x', scope: 'p.s' }] };
 
-    expect(sameBind(absent, normal, '<Space>')).toBe(true);
+    expect(replacedBy(given, layer, 'x', 'p.s')).toBeNull();
   });
 
-  it('sameBind_WhereDefault_MatchesBoth', () => {
-    const absent = { keys: '<Leader>x', scope: 'p.s', command: 'p.a' };
-    const both = { ...absent, where: 'both' as const };
+  it('replacedBy_KeysThePageCannotBind_NamesNone', () => {
+    const given = schema(
+      [command('p.a')],
+      [{ keys: 'x', scope: 'p.s', command: 'p.a' }],
+    );
 
-    expect(sameBind(absent, both, '<Space>')).toBe(true);
+    expect(replacedBy(given, null, '<Nope>', 'p.s')).toBeNull();
   });
 });
