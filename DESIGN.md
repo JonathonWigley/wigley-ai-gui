@@ -314,7 +314,7 @@ Conventions every primitive follows:
   argument.
 - A self-test step's `screenshot` field saves a PNG of the window to
   `.selftest/screenshots/<plugin>-<name>.png`. The self-test saves the gallery's pages
-  (`forms-gallery-<n>-full`, `forms-gallery-<n>-reduced`), Sessions (`forms-sessions-*`) and Docs
+  (`forms-gallery-full-0` for the opening page, `forms-gallery-full-1` onward for each page press, `forms-gallery-reduced-end`, `forms-gallery-reduced-0`, `forms-gallery-reduced-1` onward), Sessions (`forms-sessions-*`) and Docs
   (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and session
   Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), and the shell layout swap; the agent checks
   them against this file — density, the one accent, each surface on its layer and material, sentence
