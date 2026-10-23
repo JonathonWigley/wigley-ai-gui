@@ -1,6 +1,10 @@
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
-import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
+import type {
+  SelfTestGroup,
+  SelfTestScript,
+  SelfTestStep,
+} from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type {
   ConnectedSession,
@@ -27,71 +31,21 @@ const STYLE_CHANGED_WHILE_EDITING =
 // split's narrowest tree pane.
 const UNMATCHED_FILTER = 'zqzq'.repeat(10);
 
-// Space k d shows Docs mode. Its first show built the index during an earlier
-// plugin's steps, before this script rewrote the fixture, so R rescans: the
-// fixture's eight entries. G selects the last row and gg the first, Global. j
-// to Global's Instructions and l expands it; j to the self-test instructions
-// and l opens CLAUDE.md. Option+l focuses the doc; Ctrl+j scrolls it half a
-// page and Ctrl+k back to the top. i edits it at the top: Ctrl+j scrolls the
-// editor half a page, moving the cursor, and Ctrl+k back to the top, where the
-// cursor is in sight; G and Ctrl+k scroll up from the bottom, moving the cursor
-// into sight. gg, V and Ctrl+j grow the selection with the scroll, and Ctrl+k
-// shrinks it back to the top. Esc, and :q closes the editor. Tab reaches the
-// doc's first link, the style rule, and Enter follows it. A change on disk
-// reloads style.md. i edits it, and a second change on disk shows the
-// changed-on-disk banner. o types a new line below, Esc to normal mode and :w
-// meets the changed-on-disk prompt, where r reloads the disk's text. Another
-// change on disk, a new line and :w again, and o overwrites the disk. A third,
-// and Esc keeps editing; :w shows the prompt again and o overwrites. :q closes
-// the editor. i again, x deletes a character, so :q is refused and :q! drops
-// the edit. Option+h back to the tree; a asks for a kind (the kind picker's
-// screenshot), j Enter picks rule, Enter its one place, and tidy names it,
-// which creates tidy.md and opens it in the editor; :q closes it. Option+h to
-// the tree, where r opens the path box on tidy.md: seven Backspaces leave the
-// rules folder and neat.md renames it. A opens the path box at the rules
-// folder, n and Tab complete to neat.md (the completion's screenshot), and Esc
-// cancels; A again and fresh.md creates it, :q closes its editor, Option+h to
-// the tree and d asks to move it to the Trash, y does. R rescans: eight entries
-// and neat.md. / filters the tree to neat and Enter keeps the filter, leaving
-// Global, Rules and neat.md; gg selects Global, Enter steps into Rules, the
-// first child the filter shows, and Enter again into neat.md; k k j j selects
-// neat.md and d asks to trash it, n keeps it, d again and Esc keeps it; / and
-// Esc clear the filter. / filters to zqzq, which matches nothing, and Enter
-// keeps it; / and Esc clear it. h goes up to Rules and h again collapses it. j
-// l expands Hooks and j l opens the hook's detail view; Option+l, i edits
-// settings.json and :q closes it; Option+h back. j j l expands the plugin, j j
-// l its Plugins group and j l opens the plugin's detail view; Option+l, i edits
-// installed_plugins.json and :q closes it; Option+h back. k k l expands the
-// plugin's Skills and j l opens its cached SKILL.md; Option+l, j and k scroll,
-// Ctrl+j and Ctrl+k scroll half a page, and i refuses to edit it in the plugin
-// cache; Option+h back. a opens the kind picker, j k j l picks rule, and Esc
-// cancels its place picker. c opens the context picker, Space v t hides the
-// side bar under it, j Enter picks the repo, and Space v t shows the side bar
-// again. Space k d hides the side bar, focusing the doc, and Option+h brings it
-// back; Space k d hides it again and once more shows it; Space v t hides it and
-// shows it again; Option+h focuses the tree. Space k s shows Sessions mode on
-// the docs session's Docs tab (the session tab's screenshot), where R reads its
-// session index, Space v t hides its tree, Option+h shows it, Space v t hides
-// and shows it again, and Option+h focuses the tree. / filters it to a long
-// filter matching nothing and Enter keeps it, / and Esc clear it; / filters it
-// to style and Enter keeps it, and / and Esc clear it. a opens the kind picker.
-// Space k d shows Docs mode, which closes that picker, so j moves Docs mode's
-// tree. / filters it to neat and Enter keeps the filter; j j j j selects
-// neat.md and r opens the path box, where seven Backspaces and kept.md rename
-// it, and the session's view reads its index again; / and Esc clear the filter,
-// so the tree shows its rows. Space z g, t and Space k d show Docs mode under
-// reduced transparency, and Space z g, t and Space k d again under full.
-function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
+function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   // A path below the home as the page shows it.
   const shown = (relative: string) =>
     paths.tilde(paths.join(homeDir, relative), homeDir);
-  return [
+  const docEditor: SelfTestStep[] = [
     {
       keys: [' ', 'k', 'd'],
       expect: '[page] showed Docs mode',
       checksFit: true,
     },
-    { keys: ['R'], expect: '[docs] index rebuilt: 8 entries' },
+    {
+      keys: ['R'],
+      expect: '[docs] index rebuilt: 8 entries',
+      why: "Docs mode's first show built the index during an earlier plugin's steps, before this script rewrote the fixture",
+    },
     { keys: ['G'], expect: '[docs] selected Features' },
     { keys: ['g', 'g'], expect: '[docs] selected Global' },
     { keys: ['j', 'l'], expect: '[docs] expanded Instructions' },
@@ -132,6 +86,8 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
       keys: ['Escape', ':', 'q', 'Enter'],
       expect: '[docs] closed the editor on CLAUDE.md',
     },
+  ];
+  const linksAndDiskChanges: SelfTestStep[] = [
     { keys: ['Tab', 'Enter'], expect: '[docs] opened style.md' },
     {
       writeFile: { path: STYLE_RULE_FILE, text: STYLE_RELOADED },
@@ -182,6 +138,8 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
       keys: [':', 'q', '!', 'Enter'],
       expect: '[docs] dropped edits on style.md',
     },
+  ];
+  const createAndRename: SelfTestStep[] = [
     { keys: ['<A-h>'], expect: '[docs] tree focused' },
     {
       keys: ['a'],
@@ -220,6 +178,8 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
       keys: [':', 'q', 'Enter'],
       expect: '[docs] closed the editor on fresh.md',
     },
+  ];
+  const trashAndRescan: SelfTestStep[] = [
     { keys: ['<A-h>'], expect: '[docs] tree focused' },
     {
       keys: ['d'],
@@ -228,6 +188,8 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
     },
     { keys: ['y'], expect: '[docs] moved fresh.md to the Trash' },
     { keys: ['R'], expect: '[docs] index rebuilt: 9 entries' },
+  ];
+  const treeFilter: SelfTestStep[] = [
     {
       keys: ['/', ...'neat', 'Enter'],
       expect: '[docs] filtered the tree: neat',
@@ -251,6 +213,8 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
     },
     { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
     { keys: ['h', 'h'], expect: '[docs] collapsed Rules' },
+  ];
+  const detailViews: SelfTestStep[] = [
     { keys: ['j', 'l'], expect: '[docs] expanded Hooks' },
     { keys: ['j', 'l'], expect: '[docs] opened settings.json' },
     { keys: ['<A-l>'], expect: '[docs] doc focused' },
@@ -273,6 +237,8 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
       expect: '[docs] closed the editor on installed_plugins.json',
     },
     { keys: ['<A-h>'], expect: '[docs] tree focused' },
+  ];
+  const pluginCache: SelfTestStep[] = [
     { keys: ['k', 'k', 'l'], expect: '[docs] expanded Skills' },
     { keys: ['j', 'l'], expect: '[docs] opened SKILL.md' },
     { keys: ['<A-l>'], expect: '[docs] doc focused' },
@@ -285,6 +251,8 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
       expect: '[docs] refused to edit SKILL.md in the plugin cache',
     },
     { keys: ['<A-h>'], expect: '[docs] tree focused' },
+  ];
+  const pickers: SelfTestStep[] = [
     { keys: ['a'], expect: '[docs] create: pick a kind' },
     { keys: ['j', 'k', 'j', 'l'], expect: '[docs] create rule: pick a place' },
     { keys: ['Escape'], expect: '[docs] create cancelled' },
@@ -296,6 +264,8 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
       expect: `[docs] context ${shown('dev/selftest-repo')}`,
     },
     { keys: [' ', 'v', 't'], expect: '[page] side bar shown' },
+  ];
+  const sideBar: SelfTestStep[] = [
     {
       keys: [' ', 'k', 'd'],
       expect: '[page] side bar hidden',
@@ -310,6 +280,18 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
     // kind picker on Docs mode's show frees `j` there. The picker holds no
     // text box, so Space reaches the leader.
     { keys: ['<A-h>'], expect: '[docs] tree focused' },
+  ];
+  const narrowWindow: SelfTestStep[] = [
+    {
+      width: 600,
+      keys: ['j'],
+      expect:
+        '[docs] tree out of sight: treeDown ran docs.scrollDown in the doc',
+      why: 'Below 680 px the side bar hides, so a tree key runs in the doc pane by the keymap',
+    },
+    { width: 'start', keys: ['<A-h>'], expect: '[docs] tree focused' },
+  ];
+  const sessionDocsTab: SelfTestStep[] = [
     {
       keys: [' ', 'k', 's'],
       expect: '[docs] Docs tab shown',
@@ -338,9 +320,15 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
       checksFit: true,
     },
     { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
+  ];
+  const docsModeFromSession: SelfTestStep[] = [
     { keys: ['a'], expect: '[docs] create: pick a kind' },
     { keys: [' ', 'k', 'd'], expect: '[page] marked Docs in the activity bar' },
-    { keys: ['j'], expect: '[page] j ran docs.treeDown' },
+    {
+      keys: ['j'],
+      expect: '[page] j ran docs.treeDown',
+      why: "Showing Docs mode closed the session view's kind picker, which frees j for Docs mode's tree",
+    },
     {
       keys: ['/', ...'neat', 'Enter'],
       expect: '[docs] filtered the tree: neat',
@@ -355,6 +343,8 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
       expect: '[docs] session index read: 4 entries',
     },
     { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
+  ];
+  const transparency: SelfTestStep[] = [
     { keys: [' ', 'z', 'g'], expect: '[page] showed Gallery mode' },
     { keys: ['t'], expect: '[gallery] transparency reduced' },
     {
@@ -368,6 +358,73 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
       keys: [' ', 'k', 'd'],
       expect: '[page] showed Docs mode',
       screenshot: 'docs-full',
+    },
+  ];
+  return [
+    {
+      name: 'doc editor',
+      why: "Docs mode shows and opens CLAUDE.md from a fresh index; the doc and its editor scroll by half pages, the editor's cursor and a visual selection following the scroll.",
+      steps: docEditor,
+    },
+    {
+      name: 'links and disk changes',
+      why: "A doc's link opens its target. A change on disk reloads it, or while editing shows the changed-on-disk banner and a prompt on :w that reloads, overwrites or keeps editing; :q refuses unsaved edits and :q! drops them.",
+      steps: linksAndDiskChanges,
+    },
+    {
+      name: 'create and rename',
+      why: 'a creates a doc by kind and place and opens it in the editor, r renames it through the path box, and A creates one by path, Tab completing it.',
+      steps: createAndRename,
+    },
+    {
+      name: 'trash and rescan',
+      why: 'd asks to move a doc to the Trash and y does, and R rescans the index to match the disk.',
+      steps: trashAndRescan,
+    },
+    {
+      name: 'tree filter',
+      why: '/ filters the tree and Enter keeps the filter: Enter steps into the first child it shows, a trash asked on a match is kept by n or Esc, a filter matching nothing says so, and / Esc clear it; h goes up and collapses.',
+      steps: treeFilter,
+    },
+    {
+      name: 'detail views',
+      why: 'A hook and a plugin open as detail views, which i edits as settings.json and installed_plugins.json.',
+      steps: detailViews,
+    },
+    {
+      name: 'plugin cache',
+      why: "A plugin's cached SKILL.md scrolls by line and half page, and i refuses to edit it in the plugin cache.",
+      steps: pluginCache,
+    },
+    {
+      name: 'pickers',
+      why: "The kind picker's place picker cancels on Esc, and the context picker keeps its keys through the side bar hiding under it and picks the repo.",
+      steps: pickers,
+    },
+    {
+      name: 'side bar',
+      why: "Space k d and Space v t hide and show Docs mode's side bar, hiding it focuses the doc, and Option+h brings it back and focuses the tree.",
+      steps: sideBar,
+    },
+    {
+      name: 'narrow window',
+      why: 'In a window too narrow for the side bar, a tree key reaches the doc pane instead of moving a selection out of sight, and Option+h focuses the tree once the window is back at its start width.',
+      steps: narrowWindow,
+    },
+    {
+      name: 'session Docs tab',
+      why: "Space k s shows the docs session's Docs tab over its own session index; Space v t hides and shows its tree, Option+h reveals it, and its filter keeps and clears like Docs mode's.",
+      steps: sessionDocsTab,
+    },
+    {
+      name: 'Docs mode from a session',
+      why: "Showing Docs mode from a session tab closes that view's kind picker, so tree keys move Docs mode's tree, and a rename there makes the session view read its index again.",
+      steps: docsModeFromSession,
+    },
+    {
+      name: 'transparency',
+      why: 'Docs mode shows under reduced and full transparency, each set in Gallery mode.',
+      steps: transparency,
     },
   ];
 }
@@ -442,13 +499,7 @@ export function docsSelfTestScript(deps: DocsSelfTestDeps): SelfTestScript {
       })();
       return { shownLine: '[sessions] activated selftest-repo', result };
     },
-    groups: [
-      {
-        name: 'docs',
-        why: 'Every docs key path over the docs fixture, in Docs mode and a session Docs tab',
-        steps: docsSteps(paths, homeDir),
-      },
-    ],
+    groups: docsGroups(paths, homeDir),
     problems: (result) =>
       result === null ? [] : [`fixture not ready: ${String(result)}`],
   };
