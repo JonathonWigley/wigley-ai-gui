@@ -2,6 +2,7 @@ import type { ChatImage } from '../../../contracts/agent';
 import type { Log } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
+import '../../../shared/page/ui/dialog.css';
 import { imageUrl } from './attachments';
 import { blurFocusedElement } from './chat-dialogs';
 
@@ -35,7 +36,7 @@ interface OpenImages {
 // one.
 export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
   const { log } = deps;
-  const backdrop = element('div', 'chat-image-viewer');
+  const backdrop = element('div', 'ui-scrim chat-image-viewer');
   backdrop.hidden = true;
   backdrop.setAttribute('role', 'dialog');
   backdrop.setAttribute('aria-modal', 'true');
