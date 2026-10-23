@@ -152,9 +152,13 @@ function setup(
     failFinish: (error: Error) => {
       finishFailure = error;
     },
-    // Main's roundClosed for `roundId` reaching the page.
-    closeFromMain: (roundId: string) =>
-      closeRoundFromMain({ store, closeSession, toast, log }, roundId),
+    // Main's roundClosed for `roundId` reaching the page; `byFinish` false is
+    // main closing it on its own.
+    closeFromMain: (roundId: string, byFinish = true) =>
+      closeRoundFromMain(
+        { store, closeSession, toast, log },
+        { roundId, byFinish },
+      ),
     closedSessions,
     shownForms,
     activated,
@@ -703,12 +707,65 @@ describe('formsCommandHandlers', () => {
   it('closing a round main closed on its own shows no toast and closes no session', () => {
     const { store, toasts, logs, closedSessions, closeFromMain } = setup();
 
-    closeFromMain('r1');
+    closeFromMain('r1', false);
 
     expect(store.get().rounds).toEqual([]);
     expect(toasts).toEqual([]);
     expect(logs).toEqual([]);
     expect(closedSessions).toEqual([]);
+  });
+
+  it('main closing a round on its own while its cancel sends shows no toast and closes no session', () => {
+    const {
+      run,
+      store,
+      toasts,
+      logs,
+      closedSessions,
+      guardClose,
+      closeFromMain,
+    } = setup();
+    guardClose('r1-session');
+    run('confirmCancel');
+    logs.length = 0;
+
+    closeFromMain('r1', false);
+
+    expect(store.get().rounds).toEqual([]);
+    expect(toasts).toEqual([]);
+    expect(logs).toEqual([]);
+    expect(closedSessions).toEqual([]);
+  });
+
+  it('the close guard keeps the session of the active round while it sends, and says so', () => {
+    const { run, store, logs, shownForms, toasts, toastTones, guardClose } =
+      setup();
+    run('openReview');
+    run('submit');
+    logs.length = 0;
+    const before = store.get();
+
+    expect(guardClose('r1-session')).toBe(false);
+
+    expect(store.get()).toBe(before);
+    expect(shownForms).toEqual([]);
+    expect(logs).toEqual(['session close kept: project · r1 is sending']);
+    expect(toasts).toEqual(["Sending project · r1's round…"]);
+    expect(toastTones).toEqual(['info']);
+  });
+
+  it('the close guard keeps the session of a background round while it sends, and says so', () => {
+    const { store, logs, toasts, activated, guardClose } = setup();
+    store.dispatch({ type: 'roundShown', round: presentedRound('r2') });
+    store.dispatch({ type: 'sendStarted', roundId: 'r2', kind: 'submitted' });
+    const before = store.get();
+
+    expect(guardClose('r2-session')).toBe(false);
+
+    expect(store.get()).toBe(before);
+    expect(logs).toEqual(['session close kept: project · r2 is sending']);
+    expect(toasts).toEqual(["Sending project · r2's round…"]);
+    expect(activated).toEqual([]);
   });
 
   it('nextLayout_InvokesCycleLayoutForward', () => {

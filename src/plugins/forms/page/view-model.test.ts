@@ -17,6 +17,7 @@ import {
   reviewRows,
   reviewRowsChanged,
   roundSaveLabel,
+  roundSaveState,
   saveLabel,
   sessionTitle,
 } from './view-model';
@@ -493,6 +494,27 @@ describe('roundSaveLabel', () => {
 
   it('reads the save state while the round is not sending', () => {
     expect(roundSaveLabel(roundAfter())).toBe('Saved');
+  });
+});
+
+describe('roundSaveState', () => {
+  it('is null while the round is sending, an edit unsaved', () => {
+    const round = roundAfter(
+      { type: 'openReview' },
+      { type: 'sendStarted', roundId: 'r1', kind: 'submitted' },
+      { type: 'setText', roundId: 'r1', target: { field: 'note' }, value: 'x' },
+    );
+    expect(roundSaveState(round)).toBeNull();
+  });
+
+  it('is the save state while the round is not sending', () => {
+    const round = roundAfter({
+      type: 'setText',
+      roundId: 'r1',
+      target: { field: 'note' },
+      value: 'x',
+    });
+    expect(roundSaveState(round)).toBe('unsaved');
   });
 });
 

@@ -84,10 +84,11 @@ interface RoundParts {
 }
 
 // `update` rebuilds the rows only when reviewRowsChanged says they differ
-// from the last draw; `forgetRows` makes the next `update` rebuild them.
+// from the last draw, and scrolls the cursor row into view on a rebuild and
+// when `isNewlyShown`; `forgetRows` makes the next `update` rebuild them.
 interface ReviewPart {
   element: HTMLElement;
-  update(round: RoundState): void;
+  update(round: RoundState, isNewlyShown: boolean): void;
   forgetRows(): void;
 }
 
@@ -154,9 +155,10 @@ export function createRoundView(
           card.update(current);
         }
       });
+      const wasReviewHidden = parts.review.element.hidden === true;
       parts.review.element.hidden = !isReview;
       if (isReview) {
-        parts.review.update(current);
+        parts.review.update(current, wasReviewHidden);
       }
       if (current.focus !== shownFocus) {
         shownFocus = current.focus;
@@ -403,7 +405,8 @@ function updateRailEntry(
 // The review's rows, then the round note, then Send answers and Cancel round
 // with the review's keys for them; the note shows only while the review or the
 // cancel prompt does. The summary and the buttons' keys redraw on every
-// update; the rows, and the scroll to the cursor row, only when they change.
+// update; the rows only when they change. The cursor row scrolls into view
+// when the rows change and each time the review is shown again.
 function buildReview(
   parent: HTMLElement,
   round: RoundState,
@@ -449,7 +452,7 @@ function buildReview(
   section.append(actions);
   return {
     element: section,
-    update(current) {
+    update(current, isNewlyShown) {
       const counts = progress(current);
       const untouched =
         counts.untouched > 0
@@ -458,14 +461,16 @@ function buildReview(
       summary.textContent = `${progressText(counts)}.${untouched}`;
       redrawSubmitKeys();
       redrawCancelKeys();
-      if (!reviewRowsChanged(drawn, current)) {
-        return;
+      const isRowsChanged = reviewRowsChanged(drawn, current);
+      if (isRowsChanged) {
+        drawn = current;
+        list.replaceChildren(
+          ...reviewRows(current).map((row) => buildReviewRow(row, deps)),
+        );
       }
-      drawn = current;
-      list.replaceChildren(
-        ...reviewRows(current).map((row) => buildReviewRow(row, deps)),
-      );
-      list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
+      if (isRowsChanged || isNewlyShown) {
+        list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
+      }
     },
     forgetRows() {
       drawn = null;

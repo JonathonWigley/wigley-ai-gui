@@ -194,7 +194,10 @@ describe('createChannelPresenter', () => {
     presenter.quiet.close('round-q2');
 
     expect(attention.counts).toEqual([1]);
-    expect(page.sent.at(-1)).toEqual(['roundClosed', 'round-q2']);
+    expect(page.sent.at(-1)).toEqual([
+      'roundClosed',
+      { roundId: 'round-q2', byFinish: false },
+    ]);
     expect(openRounds()).toEqual([ROUND]);
   });
 
@@ -271,7 +274,10 @@ describe('createChannelPresenter', () => {
     expect(drafts).toEqual([]);
     expect(openRounds()).toEqual([]);
     expect(attention.counts).toEqual([1, 0]);
-    expect(page.sent.at(-1)).toEqual(['roundClosed', 'round-1']);
+    expect(page.sent.at(-1)).toEqual([
+      'roundClosed',
+      { roundId: 'round-1', byFinish: true },
+    ]);
   });
 
   it("keeps a round open and rejects the page's finish when its listener throws", () => {
@@ -293,7 +299,7 @@ describe('createChannelPresenter', () => {
     expect(mayClose('app-1')).toBe(false);
   });
 
-  it('sends the page one close for a round its own finish closes', () => {
+  it('sends the page one close, by its finish, for a round its own finish closes', () => {
     const { page, presenter, finish } = setUp();
     const end: RoundEnd = { kind: 'cancelled', body: BODY };
     presenter.show(ROUND, {
@@ -305,18 +311,20 @@ describe('createChannelPresenter', () => {
 
     expect(page.sent).toEqual([
       ['roundShown', ROUND],
-      ['roundClosed', 'round-1'],
+      ['roundClosed', { roundId: 'round-1', byFinish: true }],
     ]);
   });
 
-  it('closes an open round on the page, and ignores a round already gone', () => {
+  it('closes an open round on the page, not by its finish, and ignores a round already gone', () => {
     const { page, attention, presenter, openRounds } = setUp();
     presenter.show(ROUND, fakeListener().listener);
 
     presenter.close('round-1');
     presenter.close('round-1');
 
-    expect(page.sent.slice(1)).toEqual([['roundClosed', 'round-1']]);
+    expect(page.sent.slice(1)).toEqual([
+      ['roundClosed', { roundId: 'round-1', byFinish: false }],
+    ]);
     expect(attention.counts).toEqual([1, 0]);
     expect(openRounds()).toEqual([]);
   });

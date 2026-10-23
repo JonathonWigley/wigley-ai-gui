@@ -23,8 +23,9 @@ export interface ChannelPresenter extends RoundPresenter {
 }
 
 // Shows rounds on the page over the forms channel, each marked on its
-// session's row, and keeps that row from closing while the round is open; registers its
-// channel handlers and close guard once, so it lives as long as the app.
+// session's row, and keeps that row from closing while the round is open;
+// registers its channel handlers and close guard once, so it lives as long as
+// the app.
 export function createChannelPresenter(
   channel: MainChannel<FormsChannel>,
   alerts: Alerts,
@@ -39,6 +40,9 @@ export function createChannelPresenter(
     );
   const hasOpenRound = (sessionId: string) =>
     [...open.values()].some((entry) => entry.round.sessionId === sessionId);
+
+  // The round whose `finish` the page invoked, while that handler runs.
+  let finishingRoundId: string | null = null;
 
   sessions.addCloseGuard((sessionId) => !hasOpenRound(sessionId));
 
@@ -55,13 +59,19 @@ export function createChannelPresenter(
     entry.listener.draft(body);
   });
   // A listener that throws leaves the round open and rejects the page's invoke.
+  // The close this finish makes reaches the page marked `byFinish`.
   channel.handle('finish', (roundId, end) => {
     const entry = open.get(roundId);
     if (!entry) {
       return;
     }
-    entry.listener.finish(end);
-    close(roundId);
+    finishingRoundId = roundId;
+    try {
+      entry.listener.finish(end);
+      close(roundId);
+    } finally {
+      finishingRoundId = null;
+    }
   });
 
   const show = (
@@ -90,7 +100,10 @@ export function createChannelPresenter(
       return;
     }
     open.delete(roundId);
-    channel.send('roundClosed', roundId);
+    channel.send('roundClosed', {
+      roundId,
+      byFinish: roundId === finishingRoundId,
+    });
     if (!entry.quiet) {
       updateOpenCount();
     }

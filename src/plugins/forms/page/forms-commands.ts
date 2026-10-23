@@ -6,7 +6,7 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import type { FindingAction, RoundEnd } from '../contract';
+import type { FindingAction, RoundClosed, RoundEnd } from '../contract';
 import { actionLabel } from '../finding-origins';
 import type { formsManifest } from '../manifest';
 import {
@@ -88,8 +88,8 @@ export function formsCommandHandlers(
       );
 
   // Acts only on a focused finding in the forms view, so a question or another
-  // view logs nothing. A finding whose card lacks the action logs that and keeps
-  // its answer.
+  // view logs nothing. A finding whose card lacks the action logs that and
+  // keeps its answer.
   const act =
     (action: FindingAction): Handler =>
     (context) => {
@@ -387,12 +387,18 @@ export interface GuardCloseDeps extends Pick<
 // selects the session's Form tab, so the confirm scope's keys are in force,
 // and asks to cancel the round; confirming closes the session. A round open in
 // the background keeps its session with no prompt: the guard logs the refusal,
-// toasts why, and selects the session.
+// toasts why, and selects the session. A round being sent, active or not,
+// keeps its session: the guard logs and toasts the send, and selects nothing.
 export function guardClose(deps: GuardCloseDeps, sessionId: string): boolean {
   const { store } = deps;
   const round = roundOfSession(store.get(), sessionId);
   if (round === undefined) {
     return true;
+  }
+  if (round.sending !== null) {
+    deps.log('forms', `session close kept: ${round.label} is sending`);
+    deps.toast(`Sending ${round.label}'s round…`, 'info');
+    return false;
   }
   if (round.roundId !== store.get().activeRoundId) {
     deps.log(
@@ -440,19 +446,21 @@ export type CloseRoundFromMainDeps = Pick<
   'store' | 'closeSession' | 'toast' | 'log'
 >;
 
-// Closes a round main closed. A round the page was sending logs and toasts
+// Closes a round main closed. A round the page's finish closed logs and toasts
 // its send, and closes its session when the close prompt asked the cancel; a
-// round main closed on its own closes quietly.
+// round main closed on its own closes quietly, even while the page's finish
+// for it is in flight, since main dropped those answers.
 export function closeRoundFromMain(
   deps: CloseRoundFromMainDeps,
-  roundId: string,
+  closed: RoundClosed,
 ): void {
+  const { roundId } = closed;
   const round = deps.store
     .get()
     .rounds.find((candidate) => candidate.roundId === roundId);
   deps.store.dispatch({ type: 'roundClosed', roundId });
   const sending = round?.sending ?? null;
-  if (round === undefined || sending === null) {
+  if (!closed.byFinish || round === undefined || sending === null) {
     return;
   }
   const isSubmit = sending.kind === 'submitted';

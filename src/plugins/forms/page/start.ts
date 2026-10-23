@@ -75,7 +75,7 @@ function listenForRounds(
   api.channel.on('roundShown', (round) =>
     store.dispatch({ type: 'roundShown', round }),
   );
-  api.channel.on('roundClosed', (roundId) =>
+  api.channel.on('roundClosed', (closed) =>
     closeRoundFromMain(
       {
         store,
@@ -83,7 +83,7 @@ function listenForRounds(
         toast,
         log,
       },
-      roundId,
+      closed,
     ),
   );
   api.events.on('sessions.activeChanged', ({ sessionId }) =>

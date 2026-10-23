@@ -179,17 +179,17 @@ export interface AnswersPayload {
 
 // One connected session; the app keeps at most one open round per session.
 export interface FormsSession {
-  // `args` is the raw tool input; invalid input rejects with a RoundError message.
-  // A call runs only after every earlier call has returned, and a call for a
-  // round other than the one the user is answering opens its round only once
-  // that round finishes. Its own deadline passing first returns, without a
+  // `args` is the raw tool input; invalid input rejects with a RoundError
+  // message. A call runs only after every earlier call has returned, and a call
+  // for a round other than the one the user is answering opens its round only
+  // once that round finishes. Its own deadline passing first returns, without a
   // second wait, the open round's draft when that round is its own, or else a
-  // draft that opens nothing and names the open round. A new round never
-  // closes or replaces an unfinished one. A call that waits on its round, in
-  // ask_round or collect_last_round, and that the host cancels when no other
-  // call waits on that round, closes the unfinished round in the window as end
-  // does, so the session's next round shows; a re-send of that round queued
-  // behind the call counts as waiting on it.
+  // draft that opens nothing and names the open round. A new round never closes
+  // or replaces an unfinished one. A call that waits on its round, in ask_round
+  // or collect_last_round, and that the host cancels when no other call waits on
+  // that round, closes the unfinished round in the window as end does, so the
+  // session's next round shows; a re-send of that round queued behind the call
+  // counts as waiting on it.
   askRound(
     args: unknown,
     toolUseId: string | null,
@@ -241,14 +241,14 @@ export interface RoundPresenter {
 // The layout the Form tab builds cards with.
 export type { LayoutChoice } from '../../contracts/layouts';
 
-// The forms page part invokes `openRounds` and `layout` on load, `draft` as
-// the user types, `finish` on submit or cancel, and `cycleLayout`,
-// `copyLayout` and `openPreview` from the layout keys; main sends each round
-// as it opens, the id of each round that closes, a round the page finished
-// included, and each layout change, the page's own cycles and copies
-// included. A `draft` whose save failed rejects with the reason; a `finish`
-// whose answers main could not take rejects with the reason and leaves the
-// round open; `layout` rejects when the layouts failed to start.
+// The forms page part invokes `openRounds` and `layout` on load, `draft` as the
+// user types, `finish` on submit or cancel, and `cycleLayout`, `copyLayout` and
+// `openPreview` from the layout keys; main sends each round as it opens, each
+// round that closes, a round the page finished included, and each layout
+// change, the page's own cycles and copies included. A `draft` whose save
+// failed rejects with the reason; a `finish` whose answers main could not take
+// rejects with the reason and leaves the round open; `layout` rejects when the
+// layouts failed to start.
 export interface FormsChannel extends ChannelShape {
   invoke: {
     openRounds(): PresentedRound[];
@@ -261,7 +261,14 @@ export interface FormsChannel extends ChannelShape {
   };
   messages: {
     roundShown: PresentedRound;
-    roundClosed: string;
+    roundClosed: RoundClosed;
     layoutChanged: LayoutChoice;
   };
+}
+
+// A round that left the window. `byFinish` is true when the page's `finish`
+// for the round closed it, false when main closed it on its own.
+export interface RoundClosed {
+  roundId: string;
+  byFinish: boolean;
 }

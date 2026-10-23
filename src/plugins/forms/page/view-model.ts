@@ -190,6 +190,12 @@ export function roundSaveLabel(round: RoundState): string {
     : 'Sending…';
 }
 
+// The status line's save state, which colours its text; null while the
+// round's finish is with main, so `Sending…` takes no save state's colour.
+export function roundSaveState(round: RoundState): SaveState | null {
+  return round.sending === null ? saveState(round) : null;
+}
+
 // Whether the review's rows differ from those drawn from `drawn`: a row reads
 // only the round, its answers, its finding answers and the review cursor.
 // Null `drawn` is nothing drawn yet.

@@ -26,11 +26,10 @@ import {
   type FormsState,
   type RoundState,
   roundOfSession,
-  saveState,
 } from './form-state';
 import type { FormsStore } from './forms-store';
 import { createRoundView, type RoundView } from './round-view';
-import { roundSaveLabel, sessionTitle } from './view-model';
+import { roundSaveLabel, roundSaveState, sessionTitle } from './view-model';
 
 // `beforeClose` answers whether a session may close now. `setScope` sets the
 // key scope to the forms view while a Form tab is the visible tab;
@@ -84,8 +83,9 @@ interface FormTab {
 // active round. Every store change re-renders it; editors live in the round
 // views and survive every render. While a Form tab is the visible tab the key
 // scope follows the view; the cancel prompt pushes its own scope over it and
-// is dismissed when another view sets the scope. Round views start on the
-// default layout.
+// is dismissed when another view sets the scope. While the round sends, that
+// dismiss waits: a failed send dismisses the prompt, and a sent round closes
+// it with the round. Round views start on the default layout.
 export function mountFormsView(deps: FormsViewDeps): FormsView {
   const { areas, store, boxes } = deps;
   const status = buildStatusLine(deps);
@@ -99,6 +99,9 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   const active: ActiveLayout = { layout: defaultLayout, name: 'default' };
   // The cancel prompt's pushed scope while the prompt shows, else null.
   let confirmScope: PushedScope | null = null;
+  // Whether the base scope changed while the prompt's round was sending, so
+  // the prompt is dismissed once the send fails.
+  let isDismissOwed = false;
   const isFormShown = () =>
     [...formTabs.values()].some((tab) => tab.handle.isVisible());
   const pushConfirmScope = () => {
@@ -110,6 +113,8 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       dispatch({ type: 'dismissConfirm' });
       if (store.get().view !== 'confirm') {
         deps.log('forms', 'cancel prompt dismissed: the view moved on');
+      } else if ((activeRound(store.get())?.sending ?? null) !== null) {
+        isDismissOwed = true;
       }
     });
     confirmScope = pushed;
@@ -117,6 +122,14 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
 
   const render = () => {
     const state = store.get();
+    if (state.view !== 'confirm') {
+      isDismissOwed = false;
+    } else if (isDismissOwed && activeRound(state)?.sending === null) {
+      isDismissOwed = false;
+      dispatch({ type: 'dismissConfirm' });
+      deps.log('forms', 'cancel prompt dismissed: the view moved on');
+      return;
+    }
     syncRoundViews(
       state,
       roundViews,
@@ -319,7 +332,7 @@ function buildStatusLine(deps: FormsViewDeps): {
     update(state) {
       mode.textContent = modeLabel(deps.boxes.activeMode());
       const round = activeRound(state);
-      const roundSave = round === null ? null : saveState(round);
+      const roundSave = round === null ? null : roundSaveState(round);
       save.textContent = round === null ? '' : roundSaveLabel(round);
       save.dataset.state = roundSave ?? '';
     },
