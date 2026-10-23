@@ -40,7 +40,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Sign-in** — signing a profile in to its harness account, run by the harness adapter (`claude auth login` for
   Claude) and shown by chat in the sign-in dialog. **Account status** is whether a profile is signed in, and as whom.
 - **Attached image** — an image pasted or dropped into the composer, shown as a thumbnail above the message box and
-  sent with the next message.
+  sent with the next message. A paste that also holds text is a text paste: the text goes to the editor and no image
+  is attached (spreadsheet and word-processor copies carry a picture beside the text).
 
 ## Flow
 

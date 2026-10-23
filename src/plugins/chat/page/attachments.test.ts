@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatImage } from '../../../contracts/agent';
-import { createAttachments, refusalOf, refusalOfFile } from './attachments';
+import {
+  createAttachments,
+  listenForImages,
+  refusalOf,
+  refusalOfFile,
+} from './attachments';
 
 const FIVE_MB = 5 * 1024 * 1024;
 
@@ -67,5 +72,55 @@ describe('attachments', () => {
 
     expect(removed).toBe(true);
     expect(reported).toEqual([[png], [png, gif], [gif], []]);
+  });
+});
+
+describe('listenForImages paste', () => {
+  // A PNG over the size limit: attaching it is refused, which toasts, so a
+  // toast shows the paste was taken without reading the file.
+  const oversizePng = { type: 'image/png', size: FIVE_MB * 2, name: 'a.png' };
+
+  function pasteWith(text: string) {
+    let onPaste: (event: Event) => void = () => {};
+    const composer = {
+      addEventListener: (type: string, listener: (event: Event) => void) => {
+        if (type === 'paste') {
+          onPaste = listener;
+        }
+      },
+    } as unknown as HTMLElement;
+    const root = { addEventListener: () => {} } as unknown as HTMLElement;
+    const toasts: string[] = [];
+    listenForImages(
+      { name: 'Chat 1', ended: false, attachments: createAttachments() },
+      composer,
+      root,
+      { log: () => {}, toast: (message) => toasts.push(message) },
+    );
+    let prevented = false;
+    onPaste({
+      clipboardData: {
+        files: [oversizePng],
+        getData: () => text,
+      },
+      preventDefault: () => {
+        prevented = true;
+      },
+    } as unknown as Event);
+    return { toasts, prevented };
+  }
+
+  it('paste_FileAndText_LeftToEditor', () => {
+    const { toasts, prevented } = pasteWith('a1\tb1');
+
+    expect(prevented).toBe(false);
+    expect(toasts).toEqual([]);
+  });
+
+  it('paste_FileAndNoText_Attached', () => {
+    const { toasts, prevented } = pasteWith('');
+
+    expect(prevented).toBe(true);
+    expect(toasts).toHaveLength(1);
   });
 });

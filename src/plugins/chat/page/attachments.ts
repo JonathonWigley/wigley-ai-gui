@@ -178,9 +178,11 @@ export interface ImageListenerDeps {
 
 // Attaches the image files pasted into the composer or dropped on the tab.
 // The composer hears paste in the capture phase, ahead of the editor; a paste
-// with no files reaches the editor untouched. The whole tab hears drop, so a
-// file dropped just outside the composer attaches instead of the window
-// navigating to it. An ended tab takes no files and logs it.
+// with no files, or one that also holds text, reaches the editor untouched
+// (Excel, Numbers, Word and Pages put a picture beside copied text). The
+// whole tab hears drop, so a file dropped just outside the composer attaches
+// instead of the window navigating to it. An ended tab takes no files and logs
+// it.
 export function listenForImages(
   tab: ImageTab,
   composer: HTMLElement,
@@ -212,7 +214,11 @@ export function listenForImages(
   };
   composer.addEventListener(
     'paste',
-    (event) => take(event, filesOf(event.clipboardData), 'pasted'),
+    (event) => {
+      if (!holdsText(event.clipboardData)) {
+        take(event, filesOf(event.clipboardData), 'pasted');
+      }
+    },
     { capture: true },
   );
   root.addEventListener('dragover', (event) => {
@@ -223,6 +229,10 @@ export function listenForImages(
   root.addEventListener('drop', (event) =>
     take(event, filesOf(event.dataTransfer), 'dropped'),
   );
+}
+
+function holdsText(transfer: DataTransfer | null): boolean {
+  return transfer !== null && transfer.getData('text/plain') !== '';
 }
 
 function filesOf(transfer: DataTransfer | null): File[] {
