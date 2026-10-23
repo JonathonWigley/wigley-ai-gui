@@ -407,7 +407,7 @@ function importViolations(file: string): string[] {
       }
       continue;
     }
-    const target = path.join(path.dirname(file), specifier);
+    const target = path.posix.join(path.posix.dirname(file), specifier);
     const targetLayer = layerOfImport(target);
     const isAllowed =
       targetLayer === layer ||
@@ -423,7 +423,7 @@ function importViolations(file: string): string[] {
 
 const files = readdirSync('src', { recursive: true, encoding: 'utf8' })
   .filter((file) => file.endsWith('.ts') || file.endsWith('.js'))
-  .map((file) => path.join('src', file));
+  .map((file) => `src/${file.replaceAll(path.sep, '/')}`);
 const violations = files.flatMap(importViolations);
 for (const violation of violations) {
   console.error(violation);

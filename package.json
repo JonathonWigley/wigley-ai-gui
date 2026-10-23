@@ -13,7 +13,7 @@
   "main": ".vite/build/main.cjs",
   "scripts": {
     "start": "electron-forge start",
-    "selftest": "PROOF_SELFTEST=1 electron-forge start 2>&1 | tee /dev/stderr | grep '\\[selftest\\] all passed' > /dev/null",
+    "selftest": "node scripts/selftest.mts",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "release": "electron-forge release",
