@@ -19,6 +19,7 @@ import type {
   CommandInfo,
   PluginManifest,
   ScopeInfo,
+  SettingInfo,
   SettingKind,
 } from '../contracts/plugin';
 import type { TokenDecl, TokenKind } from '../contracts/theme';
@@ -468,6 +469,55 @@ export function pluginOptionalSettings(
     }
   }
   return kinds;
+}
+
+// The dotted path of each leaf setting `manifest` declares, as `SettingPath`
+// names them: each default that is no plain object, an array taken whole, and
+// each `optionalSettings` path; a path inside an array's elements (`[]`) is
+// none.
+function settingLeafPaths(manifest: PluginManifest): Set<string> {
+  const leaves = new Set<string>();
+  for (const [path, value] of settingDefaults(manifest.settings)) {
+    const isPlainObject =
+      typeof value === 'object' && value !== null && !Array.isArray(value);
+    if (!path.includes('[]') && !isPlainObject) {
+      leaves.add(path);
+    }
+  }
+  for (const path of Object.keys(manifest.optionalSettings ?? {})) {
+    if (!path.includes('[]')) {
+      leaves.add(path);
+    }
+  }
+  return leaves;
+}
+
+// Every manifest's `settingInfo`, each path qualified as `<pluginId>.<path>`,
+// in declaration order. Throws on a leaf setting with no declaration and on a
+// declaration naming no leaf setting.
+export function pluginSettingInfo(
+  manifests: readonly PluginManifest[],
+): Record<string, SettingInfo> {
+  const infos: Record<string, SettingInfo> = {};
+  for (const manifest of manifests) {
+    const leaves = settingLeafPaths(manifest);
+    for (const path of leaves) {
+      if (!Object.hasOwn(manifest.settingInfo, path)) {
+        throw new Error(
+          `Plugin "${manifest.id}" setting "${path}" has no declaration in settingInfo`,
+        );
+      }
+    }
+    for (const [path, info] of Object.entries(manifest.settingInfo)) {
+      if (!leaves.has(path)) {
+        throw new Error(
+          `Plugin "${manifest.id}" settingInfo declares "${path}", which is no leaf setting`,
+        );
+      }
+      infos[qualify(manifest.id, path)] = info;
+    }
+  }
+  return infos;
 }
 
 // Every manifest's theme tokens, each qualified as `<pluginId>.<token>`.

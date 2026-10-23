@@ -56,6 +56,10 @@ const listPlugin = definePlugin({
   },
   settings: { list: ['a', 'b'], timeout: null as number | null },
   optionalSettings: { timeout: 'number' },
+  settingInfo: {
+    list: { label: 'List', description: 'The list.' },
+    timeout: { label: 'Timeout', description: 'The timeout.' },
+  },
   themeTokens: {},
 });
 

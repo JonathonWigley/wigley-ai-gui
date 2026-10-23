@@ -28,5 +28,6 @@ export const sessionsManifest = definePlugin({
   },
   scopes: { idle: 'Sessions' },
   settings: {},
+  settingInfo: {},
   themeTokens: {},
 });

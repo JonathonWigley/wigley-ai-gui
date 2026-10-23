@@ -1,7 +1,7 @@
 // Each `@ts-expect-error` below is checked by `npm run typecheck`: the line
 // after it must fail to compile.
 import { describe, expect, it } from 'vitest';
-import type { PageStart } from '../contracts/plugin';
+import type { PageStart, SettingInfos } from '../contracts/plugin';
 import { definePlugin } from './define-plugin';
 
 const manifest = definePlugin({
@@ -17,6 +17,7 @@ const manifest = definePlugin({
     app: [{ accelerator: 'CommandOrControl+Q', command: 'quit' }],
   },
   settings: { delayMs: 400 },
+  settingInfo: { delayMs: { label: 'Delay', description: 'The delay.' } },
   themeTokens: {},
 });
 
@@ -91,6 +92,42 @@ describe('definePlugin', () => {
     expect(() => definePlugin({ ...manifest, id: 'my.plugin' })).toThrow(
       'Plugin id "my.plugin"',
     );
+  });
+
+  it('a settingInfo missing a leaf setting is a type error', () => {
+    const defined = definePlugin({
+      ...manifest,
+      // @ts-expect-error -- `delayMs` has no declaration
+      settingInfo: {},
+    });
+
+    expect(defined.id).toBe('p');
+  });
+
+  it('a settingInfo path naming no leaf setting is a type error', () => {
+    const defined = definePlugin({
+      ...manifest,
+      settingInfo: {
+        delayMs: { label: 'Delay', description: 'The delay.' },
+        // @ts-expect-error -- `delay` is no setting
+        delay: { label: 'Delay', description: 'The delay.' },
+      },
+    });
+
+    expect(defined.id).toBe('p');
+  });
+
+  it('settingInfo takes a nested setting and an array setting by their leaf paths', () => {
+    const info = { label: 'L', description: 'D.' };
+    // Compiles only while the leaf paths are exactly `window.width`,
+    // `fonts.ui` and `list`: a missing path fails, and so does an extra one.
+    const infos: SettingInfos<{
+      window: { width: number };
+      fonts: { ui?: string };
+      list: { x: number }[];
+    }> = { 'window.width': info, 'fonts.ui': info, list: info };
+
+    expect(Object.keys(infos)).toEqual(['window.width', 'fonts.ui', 'list']);
   });
 
   it('a bind naming an undeclared scope is a type error', () => {

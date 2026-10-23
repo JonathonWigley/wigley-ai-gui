@@ -19,6 +19,18 @@ export const keysManifest = definePlugin({
     whichKeyTimeoutMs: null as number | null,
   },
   optionalSettings: { whichKeyTimeoutMs: 'number' },
+  settingInfo: {
+    whichKeyDelayMs: {
+      label: 'Which-key delay',
+      description:
+        'How long a pending key sequence waits before the which-key panel opens, in milliseconds.',
+    },
+    whichKeyTimeoutMs: {
+      label: 'Which-key timeout',
+      description:
+        'How long the which-key panel waits before ending the sequence, in milliseconds; empty waits for a key.',
+    },
+  },
   themeTokens: {
     'which-key-command': { kind: 'color', default: 'var(--wg-fg)' },
     'which-key-prefix': { kind: 'color', default: 'var(--wg-fg-secondary)' },

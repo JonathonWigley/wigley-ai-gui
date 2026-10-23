@@ -91,5 +91,12 @@ export const docsManifest = definePlugin({
     confirm: 'In the Trash confirmation',
   },
   settings: { scriptPath: '' },
+  settingInfo: {
+    scriptPath: {
+      label: 'Docs index script',
+      description:
+        "The path to `docs_index.py`; empty finds the installed wigley plugin's copy. `~` is the home folder.",
+    },
+  },
   themeTokens: {},
 });

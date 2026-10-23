@@ -70,10 +70,35 @@ export interface PluginKeys<
 // is null, or the setting is left unset.
 export type SettingKind = 'string' | 'number' | 'boolean';
 
+// What Settings mode shows on a setting's row: a sentence-case label and a
+// one-line description.
+export interface SettingInfo {
+  label: string;
+  description: string;
+}
+
+// Every leaf of `T` as a dotted path: a member whose value, null and undefined
+// aside, is a plain object recurses as `<key>.<path>`; an array, a scalar or
+// null is a leaf, and so is an optional member.
+export type SettingPath<T> = {
+  [K in keyof T & string]-?: NonNullable<T[K]> extends readonly unknown[]
+    ? K
+    : NonNullable<T[K]> extends object
+      ? `${K}.${SettingPath<NonNullable<T[K]>>}`
+      : K;
+}[keyof T & string];
+
+// A declaration for each leaf of `T`, by its dotted path.
+export type SettingInfos<T> = {
+  readonly [P in SettingPath<T>]: SettingInfo;
+};
+
 // `scopes` holds each scope's title by its short id; `settings` holds the
 // plugin's settings with their defaults; `optionalSettings` holds the kind of
 // each setting whose default is null or unset, by its dotted path inside
-// `settings` (an array element's fields under `<path>[]`); `themeTokens`
+// `settings` (an array element's fields under `<path>[]`); `settingInfo`
+// declares each leaf setting's label and description by its dotted path, as
+// `SettingPath` names the leaves (`definePlugin` checks the paths); `themeTokens`
 // declares the plugin's own theme tokens by their unqualified names
 // (`origin-caused`), each with its kind and default; `dependsOn` names plugins
 // that start before this one.
@@ -91,6 +116,7 @@ export interface PluginManifest<
   keys?: PluginKeys<C, C, S>;
   settings: T;
   optionalSettings?: Readonly<Record<string, SettingKind>>;
+  settingInfo: Readonly<Record<string, SettingInfo>>;
   themeTokens: Readonly<Record<string, TokenDecl>>;
 }
 

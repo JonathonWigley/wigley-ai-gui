@@ -122,5 +122,12 @@ export const chatManifest = definePlugin({
     signIn: 'In the sign-in dialog',
   },
   settings: { profiles: DEFAULT_PROFILES },
+  settingInfo: {
+    profiles: {
+      label: 'Profiles',
+      description:
+        'The Claude profiles a new session can start in: a name and its config folder each.',
+    },
+  },
   themeTokens: {},
 });

@@ -24,6 +24,7 @@ const manifest: PluginManifest = {
   commands: {},
   scopes: { review: 'In review' },
   settings: {},
+  settingInfo: {},
   themeTokens: {},
 };
 

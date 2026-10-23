@@ -26,5 +26,6 @@ export const galleryManifest = definePlugin({
   },
   scopes: { gallery: 'In the gallery' },
   settings: {},
+  settingInfo: {},
   themeTokens: {},
 });

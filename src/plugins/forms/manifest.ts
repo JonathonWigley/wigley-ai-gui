@@ -117,6 +117,18 @@ export const formsManifest = definePlugin({
     idle: 'With no round open',
   },
   settings: { autosaveDelayMs: 400, deadlineSeconds: 240 },
+  settingInfo: {
+    autosaveDelayMs: {
+      label: 'Autosave delay',
+      description:
+        "How long after a change a round's draft is saved, in milliseconds.",
+    },
+    deadlineSeconds: {
+      label: 'Round deadline',
+      description:
+        'How long an agent waits on a round before it gets a draft back, in seconds, when its session names no deadline.',
+    },
+  },
   themeTokens: {
     'origin-caused': { kind: 'color', default: 'var(--wg-status-error)' },
     'origin-pre-existing': { kind: 'color', default: '#eba0ac' },

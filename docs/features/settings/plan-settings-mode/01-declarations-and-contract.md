@@ -1,6 +1,6 @@
 # 01 — Setting declarations and the userConfig contract
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

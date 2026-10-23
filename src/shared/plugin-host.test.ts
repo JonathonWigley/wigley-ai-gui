@@ -19,6 +19,7 @@ function part(
       commands: {},
       scopes: {},
       settings: {},
+      settingInfo: {},
       themeTokens: {},
     },
     exports,

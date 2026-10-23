@@ -2,6 +2,7 @@ import type {
   CommandDecl,
   CommandsDeclaredIn,
   PluginKeys,
+  SettingInfos,
   SettingKind,
 } from '../contracts/plugin';
 import type { TokenDecl } from '../contracts/theme';
@@ -25,9 +26,10 @@ type NullKindsDeclared<T> = [NullDefaultSettings<T>] extends [never]
 // Returns `manifest` unchanged, keeping its literal id, command ids and scopes
 // in its type and its settings as plain types: a key naming an undeclared command
 // or scope, or a command running in the other process, fails to compile, and
-// so does a start function missing a declared command's handler, and a
-// top-level setting defaulting to null whose kind `optionalSettings` leaves
-// out. Throws when the id holds anything but lowercase letters, digits and `-`.
+// so does a start function missing a declared command's handler, a top-level
+// setting defaulting to null whose kind `optionalSettings` leaves out, and a
+// `settingInfo` missing a leaf setting's path or naming a path that is no
+// leaf. Throws when the id holds anything but lowercase letters, digits and `-`.
 export function definePlugin<
   const Id extends string,
   const Cmds extends Record<string, CommandDecl>,
@@ -46,6 +48,7 @@ export function definePlugin<
     >;
     settings: T;
     optionalSettings?: Readonly<Record<string, SettingKind>>;
+    settingInfo: SettingInfos<NoInfer<T>>;
     themeTokens: Readonly<Record<string, TokenDecl>>;
   } & NullKindsDeclared<NoInfer<T>>,
 ): typeof manifest {

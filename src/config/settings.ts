@@ -1,3 +1,4 @@
+import type { SettingInfos } from '../contracts/plugin';
 import type { Settings } from '../contracts/settings';
 
 export const defaultSettings: Settings = {
@@ -23,4 +24,64 @@ export const optionalSettings: Readonly<
 // The only strings a core setting takes, by its dotted path.
 export const settingChoices: Readonly<Record<string, readonly string[]>> = {
   transparency: ['system', 'full', 'reduced'],
+};
+
+// Each core setting's row in Settings mode, by its dotted path.
+export const settingInfo: SettingInfos<Settings> = {
+  'window.width': {
+    label: 'Window width',
+    description:
+      'Width of a new window, in pixels. Applies to the next window.',
+  },
+  'window.height': {
+    label: 'Window height',
+    description:
+      'Height of a new window, in pixels. Applies to the next window.',
+  },
+  'window.minWidth': {
+    label: 'Minimum window width',
+    description:
+      'The narrowest the window can be dragged, in pixels. Applies to the next window.',
+  },
+  'window.minHeight': {
+    label: 'Minimum window height',
+    description:
+      'The shortest the window can be dragged, in pixels. Applies to the next window.',
+  },
+  theme: {
+    label: 'Theme',
+    description: 'A built-in theme or one from the themes folder.',
+  },
+  transparency: {
+    label: 'Transparency',
+    description:
+      'Whether glass shows through: follow the system, always, or never.',
+  },
+  'fonts.ui': {
+    label: 'UI font',
+    description: "A font family for the interface, in place of the theme's.",
+  },
+  'fonts.mono': {
+    label: 'Code font',
+    description:
+      "A font family for code, paths and keys, in place of the theme's.",
+  },
+  'fonts.uiSize': {
+    label: 'UI font size',
+    description: 'The interface text size, in pixels.',
+  },
+  'fonts.monoSize': {
+    label: 'Code font size',
+    description: 'The code text size, in pixels.',
+  },
+  keySequenceTimeoutMs: {
+    label: 'Key sequence timeout',
+    description:
+      'How long a key sequence waits for its next key, in milliseconds.',
+  },
+  'claude.command': {
+    label: 'Claude command',
+    description:
+      'The `claude` program sessions run; `~` is the home folder. Applies to the next session.',
+  },
 };

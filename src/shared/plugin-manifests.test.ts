@@ -8,6 +8,7 @@ import {
   mergeKeymap,
   overrideSettings,
   pluginOptionalSettings,
+  pluginSettingInfo,
   pluginSettings,
   pluginThemeTokens,
   requireListed,
@@ -24,6 +25,7 @@ function manifest(
     commands: {},
     scopes: {},
     settings: {},
+    settingInfo: {},
     themeTokens: {},
     ...overrides,
   };
@@ -566,6 +568,58 @@ describe('pluginOptionalSettings', () => {
     ).toThrow(
       'Plugin "p" setting "timeout" declares a kind in optionalSettings but defaults to a value',
     );
+  });
+});
+
+describe('pluginSettingInfo', () => {
+  const info = { label: 'A', description: 'The a setting.' };
+
+  it('qualifies each declared path with the plugin id', () => {
+    const infos = pluginSettingInfo([
+      manifest('p', { settings: { a: 1 }, settingInfo: { a: info } }),
+    ]);
+
+    expect(infos).toEqual({ 'p.a': info });
+  });
+
+  it('rejects a leaf setting with no declaration, naming the plugin and the path', () => {
+    expect(() =>
+      pluginSettingInfo([manifest('p', { settings: { a: 1 } })]),
+    ).toThrow('Plugin "p" setting "a" has no declaration in settingInfo');
+  });
+
+  it('rejects a declaration naming no leaf setting', () => {
+    expect(() =>
+      pluginSettingInfo([
+        manifest('p', {
+          settings: { a: 1 },
+          settingInfo: { a: info, b: info },
+        }),
+      ]),
+    ).toThrow('"b"');
+  });
+
+  it('takes an array setting as one leaf, with no element paths', () => {
+    const infos = pluginSettingInfo([
+      manifest('p', {
+        settings: { list: [{ x: 1 }] },
+        settingInfo: { list: info },
+      }),
+    ]);
+
+    expect(Object.keys(infos)).toEqual(['p.list']);
+  });
+
+  it('takes nested and optional settings as leaves, not their parent object', () => {
+    const infos = pluginSettingInfo([
+      manifest('p', {
+        settings: { window: { width: 1 }, fonts: {} },
+        optionalSettings: { 'fonts.ui': 'string' },
+        settingInfo: { 'window.width': info, 'fonts.ui': info },
+      }),
+    ]);
+
+    expect(Object.keys(infos).sort()).toEqual(['p.fonts.ui', 'p.window.width']);
   });
 });
 

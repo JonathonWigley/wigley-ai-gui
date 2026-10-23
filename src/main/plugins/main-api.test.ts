@@ -18,6 +18,7 @@ const manifest: PluginManifest = {
   commands: {},
   scopes: {},
   settings: {},
+  settingInfo: {},
   themeTokens: {},
 };
 

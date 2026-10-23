@@ -193,7 +193,7 @@ the settings plugin imports only `src/contracts`, `src/shared`, its own folder a
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is this run's commit list)
 
 ### Groups
 ### Contract changes
