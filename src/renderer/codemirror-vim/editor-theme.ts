@@ -13,10 +13,12 @@ export const editorTheme = EditorView.theme({
   // overlay so the opaque gutter and vim panel cannot cover its edges; an
   // input frame around a document editor hides it and rings it instead. The
   // document editor isolates its stacking, so the ring's z-index orders it
-  // only above the editor's own gutter and panels.
+  // only above the editor's own gutter and panels. The ring follows focus
+  // anywhere inside the editor: vim's `:` line input takes focus from the
+  // content, and CodeMirror drops `.cm-focused` while it holds it.
   '&.cm-focused': { outline: 'none' },
   '&.wg-document-editor': { height: '100%', isolation: 'isolate' },
-  '&.wg-document-editor.cm-focused::after': {
+  '&.wg-document-editor:focus-within::after': {
     content: '""',
     position: 'absolute',
     inset: '0',

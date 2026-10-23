@@ -250,6 +250,38 @@ describe('createModes', () => {
     expect(one.handle.sideBarShown()).toBe(true);
   });
 
+  it("picked on a hidden mode while narrow leaves the shown mode's overlay open", () => {
+    const { modes, logs, calls, add } = setup(true);
+    const one = add('a.one', 'One', true);
+    const two = add('b.two', 'Two', true);
+    one.handle.toggleSideBar();
+    two.handle.toggleSideBar();
+    const logged = logs.length;
+
+    calls.length = 0;
+    two.handle.picked();
+
+    expect(calls).toEqual([]);
+    expect(logs).toHaveLength(logged);
+    expect(modes.shown()).toBe('a.one');
+    expect(one.handle.sideBarShown()).toBe(true);
+  });
+
+  it('picked on a hidden mode while narrow closes its overlay for its next show', () => {
+    const { calls, add } = setup(true);
+    add('a.one', 'One', true);
+    const two = add('b.two', 'Two', true);
+    two.handle.toggleSideBar();
+    two.handle.picked();
+
+    calls.length = 0;
+    two.handle.show();
+
+    expect(calls).toContain('side bar hidden');
+    expect(calls).not.toContain('side bar over');
+    expect(two.handle.sideBarShown()).toBe(false);
+  });
+
   it('picked on a mode with no side bar does nothing', () => {
     const { calls, add } = setup(true);
     const one = add('a.one', 'One');
