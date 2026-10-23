@@ -5,18 +5,19 @@
 - **Intent** — what the feature gives the user.
 - **Vocabulary** — the terms the code and plans use.
 - **Flow** — a session from start to end, with a form swapping in and back.
-- **Agent harness seam** — the contract, the Claude adapter, the fake, chat entries, controls.
+- **Agent harness seam** — the contract, the Claude adapter, the fake, chat entries, controls, images, accounts.
 - **Sessions and tabs** — owned sessions, joining the relay, take over and give back, the attention mark.
-- **Chat plugin** — the Chat tab, the start prompt, permission cards, alerts, keys.
+- **Chat plugin** — the Chat tab, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys.
 - **Layouts** — the shared layout machinery and chat layouts.
-- **Plans** — what plan A and plan B each land.
+- **Plans** — what plans A, B and C each land.
 - **Out of scope** — follow-ups.
 
 ## Intent
 
 The user starts Claude Code sessions from the app, chats with them, and never switches to a terminal: when a
 session's agent sends a forms round, the session's tab swaps to the form in place, and submitting (or cancelling)
-swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this file is the record of it.
+swaps back to the chat. Settled in a four-round interview on 2026-10-19/20 and extended by plan C's two-round
+interview on 2026-10-23; this file is the record of both.
 
 ## Vocabulary
 
@@ -33,12 +34,21 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 - **Owned session** — a session the app started; its row exists from start and ends when its process ends. A
   **connected session** is one a relay connection brought (a terminal session), as today.
 - **Take over** — a session tab selecting itself and later giving the session back to the tab shown before.
+- **App slash command** — a `/name` the app runs itself when typed in the message box, instead of sending it to the
+  agent. Any plugin registers one through chat's page exports. Chat registers `/login`, `/logout` and `/status`, the
+  terminal-only commands print mode refuses (`claude-stream.md` § Terminal-only commands).
+- **Sign-in** — signing a profile in to its harness account, run by the harness adapter (`claude auth login` for
+  Claude) and shown by chat in the sign-in dialog. **Account status** is whether a profile is signed in, and as whom.
+- **Attached image** — an image pasted or dropped into the composer, shown as a thumbnail above the message box and
+  sent with the next message.
 
 ## Flow
 
 ```
- Space k n ─► start prompt (overlay): folder (recent first, or the folder dialog), then profile
-                 │                     (skipped with one profile), then a new session or one of the folder's saved sessions to resume
+ Space k n ─► start prompt (overlay): folder (the app's recent folders and every folder the harness has sessions in,
+                 │                     newest first, or the folder dialog), then profile (skipped with one profile),
+                 │                     then sign-in when that profile is signed out, then a new session or one of the
+                 │                     folder's saved sessions to resume
                  ▼
  chat main ─► sessions.open(info with a fresh host session id, or the saved one's on resume) ─► row + Chat tab, selected
           └─► AgentHarness.start(...) ─► claude -p --input-format stream-json --output-format stream-json
@@ -48,7 +58,11 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
                  ▼
  sessions relay ─► connect(info) finds the owned session by host id ─► joins its row (no second row)
 
- user types ─► message box (vim) ─► Enter (normal) / Cmd+Enter ─► chat main ─► AgentProcess.send(text)
+ user types ─► message box (vim), images pasted or dropped ─► Enter (normal) / Cmd+Enter
+          ├─► `/name` an app slash command registered ─► its handler runs in the page; nothing goes to the agent
+          └─► otherwise ─► chat main ─► AgentProcess.send({ text, images })
+ /login ─► chat main ─► AgentHarness.logIn(profile) ─► claude auth login opens the browser ─► sign-in dialog
+          (link, paste-code box) ─► process ends ─► accountStatus confirms ─► dialog closes + toast
  claude stdout ─► adapter ─► ChatEntry added / updated ─► chat channel ─► Chat tab, drawn by the chat layout
  tool needs approval ─► permission_prompt tool call ─► permission entry ─► y / n ─► tool result to claude
  agent calls ask_round ─► forms ─► Form tab takeOver() ─► user answers ─► submit ─► release() ─► Chat tab
@@ -85,7 +99,20 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   cumulative for the process; a total below the last one gives `null`.
 - **Locality**: listing a folder's past sessions and reading a transcript into chat entries are adapter
   calls, so Claude's undocumented transcript format stays in the adapter. A line it cannot read becomes a raw entry.
-- Slash commands typed in the chat run as in the terminal (`/model`, `/compact`, `/wigley:feature …`).
+- Slash commands typed in the chat run as in the terminal (`/model`, `/compact`, `/wigley:feature …`), except the
+  app slash commands, which the app runs itself (§ Chat plugin).
+- **Messages carry images**: `AgentProcess.send` takes `{ text, images }`, each image `{ mediaType, data }` (base64,
+  no `data:` prefix), and the `user` chat entry carries the same `images`. Claude sends them as `image` content blocks
+  before the text block (`claude-stream.md` § Images); a resumed transcript's image blocks come back as the user
+  entry's `images`, and the CLI's `isMeta` `[Image: source: …]` record shows nothing.
+- **Accounts**: `accountStatus(profileDir)` gives `{ signedIn, account }` (`account` the adapter's one-line label,
+  for Claude the email and the subscription); `logIn(profileDir, events)` starts a sign-in that reports its fallback
+  link and its end, and takes a pasted code and a cancel; `logOut(profileDir)` signs out. Claude runs
+  `claude auth status --json`, `claude auth login` and `claude auth logout` with the session launch's environment
+  (`claude-stream.md` § Auth), and confirms a finished sign-in with the status, since the login's exit code is not
+  measured.
+- **Project folders**: `listProjects(profileDir)` gives every folder the harness has saved sessions in, each with its
+  newest change, so the folder step can offer them; for Claude, one transcript head per project folder names it.
 
 ## Sessions and tabs
 
@@ -120,10 +147,35 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
   each opening a picker of its choices; raw `c` (`<Leader>cc` in the box) lists every control, so a control a new
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
-- **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder — the
-  folders the app started sessions in before, most recent first, plus an entry opening the native folder dialog —
-  then the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at either
-  step starts nothing. Recent folders live in chat's plugin data.
+- **Start prompt**: `Space k n`, in the overlay layer: `j` / `k` and Enter, `/` to filter. It picks the folder, then
+  the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at any step
+  starts nothing. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
+  in chat's plugin data) merged with every folder each profile's harness has saved sessions in (`listProjects`),
+  one line per folder, its newest use and the profile of that use kept; a folder that no longer exists or sits in an
+  OS temp folder (`MainServices.tempFolders`) is left out; `Choose folder…`, the native folder dialog, is last.
+  After the profile, chat reads the profile's account status: a signed-out profile opens the sign-in dialog, and a
+  finished sign-in goes on to the session step. A status that cannot be read is logged and the prompt goes on.
+- **Sign-in dialog**: one at a time, in the overlay layer over the `chat.signIn` scope: "Finish sign-in in your
+  browser", the fallback link with a Copy button, and a vim box for a code the browser page shows, which Cmd+Enter
+  sends. Esc cancels the sign-in. When the sign-in ends the dialog closes; a confirmed sign-in toasts
+  `Signed in to <profile> as <account>`, anything else toasts the error. Asking for a second sign-in while one runs
+  focuses the open dialog.
+- **App slash commands**: chat's page exports `addSlashCommand({ name, description, run })`, returning a
+  `Disposable`. Sending a box whose trimmed text is `/name` or `/name <args>` with `name` registered runs
+  `run({ sessionId, profile, args })` in place of sending, and clears the box; attached images stay. A registered
+  name wins over the agent's command of the same name. The `/` completion offers the registered names first, then
+  the agent's, without repeats. A handler reports through chat's `notice` channel call, which adds a notice entry
+  main keeps. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile
+  out; a notice says so) and `/status` (a notice: `<profile>: signed in as <account>` or `<profile>: not signed in`).
+- **Images**: pasting or dropping an image file on the composer attaches it: PNG, JPEG, GIF and WebP up to 5 MB each
+  (the API's per-image limit); any other file is refused with a toast. Attached images show as a strip of
+  thumbnails above the message box, each with a remove button; `<Leader>cx` removes the last one. Send sends the
+  text with the images, or the images alone. A sent user entry shows its images as thumbnails under its text;
+  clicking one, or Enter on the focused entry, opens the image viewer over the `chat.image` scope: the image fitted
+  to the window, `h` / `l` the entry's previous and next image, Esc closes. The chat layout kit's `images()` part
+  draws the thumbnails, so a user layout gets the viewer too.
+- **Completion popup**: the editor adapter draws CodeMirror's popups on the page body, so the composer's scroll box
+  does not clip the slash completion list.
 - **Permissions**: sessions run in auto mode; anything auto mode would still prompt reaches chat's `permission_prompt`
   MCP tool, contributed to sessions as forms contributes its tools, and shows as a permission entry. `y` allows, `n`
   denies and opens a box for an optional reason Claude reads, each answering the oldest pending permission of the
@@ -161,8 +213,10 @@ swaps back to the chat. Settled in a four-round interview on 2026-10-19/20; this
   permission cards, controls, alerts, and the start prompt with profiles and recent folders.
 - **Plan B — resume and completion** (landed, its plan folder closing): resume with history, archive, slash
   completion.
+- **Plan C — chat usability** (planned 2026-10-23, `plan-chat-usability/`): sign-in from the app, app slash commands,
+  the merged folder list, pasted images with previews, and the completion popup drawn outside the composer.
 
 ## Out of scope
 
-In `docs/features/followups.md`: Codex and wigley-harness adapters, a read-only view of terminal sessions, images
-and files pasted into the chat, "Always allow" on a permission card.
+In `docs/features/followups.md`: Codex and wigley-harness adapters, a read-only view of terminal sessions, files
+other than images pasted into the chat, "Always allow" on a permission card.

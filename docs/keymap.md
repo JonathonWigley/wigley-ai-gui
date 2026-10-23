@@ -62,19 +62,19 @@ hjkl is the direction in every layer; the modifier picks the verb.
 The first key after the leader is the group. The next is the item's first letter, a doubled key
 is the group's main action, `n`/`p` are next and previous, and uppercase is a variant.
 
-| Key                | which-key name                       | Binds today                                                                       |
-| ------------------ | ------------------------------------ | --------------------------------------------------------------------------------- |
-| `<Leader><Leader>` | none: the current context's overview | forms review, on the page and in a box                                            |
-| `?`                | none: help                           | key help                                                                          |
-| `;`                | none: close                          | close session                                                                     |
-| `k`                | windows                              | `ks` Sessions, `kd` Docs, `kn` new session                                        |
-| `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                              |
-| `c`                | chat controls                        | in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control             |
-| `a`                | answer                               | in a box only: `a1`…`a9`, `ac` clear, `af` fix now, `au` follow-up, `as` leave it |
-| `x`                | none: forms not applicable           | in a box only: `x`                                                                |
-| `z`                | debug                                | `zg` gallery, `zs` shell layout                                                   |
-| `zl`               | forms layouts                        | `zln` next, `zlp` previous, `zlc` copy, `zlo` open preview                        |
-| `zc`               | chat layouts                         | `zcn` next, `zcp` previous, `zcc` copy                                            |
+| Key                | which-key name                       | Binds today                                                                                                |
+| ------------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `<Leader><Leader>` | none: the current context's overview | forms review, on the page and in a box                                                                     |
+| `?`                | none: help                           | key help                                                                                                   |
+| `;`                | none: close                          | close session                                                                                              |
+| `k`                | windows                              | `ks` Sessions, `kd` Docs, `kn` new session                                                                 |
+| `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                                                       |
+| `c`                | chat controls                        | in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image |
+| `a`                | answer                               | in a box only: `a1`…`a9`, `ac` clear, `af` fix now, `au` follow-up, `as` leave it                          |
+| `x`                | none: forms not applicable           | in a box only: `x`                                                                                         |
+| `z`                | debug                                | `zg` gallery, `zs` shell layout                                                                            |
+| `zl`               | forms layouts                        | `zln` next, `zlp` previous, `zlc` copy, `zlo` open preview                                                 |
+| `zc`               | chat layouts                         | `zcn` next, `zcp` previous, `zcc` copy                                                                     |
 
 A row named `none` is a prefix without a `groups` entry; which-key labels it from its commands'
 groups, and its description here is only for readers of this table.

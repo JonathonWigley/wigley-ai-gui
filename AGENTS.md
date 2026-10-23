@@ -106,8 +106,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  view hands back its tree and its doc: the tree goes in Docs mode's side bar, and in the start
                  pane of a split in each session's Docs tab)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
-                 permission_prompt MCP tool, recent folders, archived sessions, resume), page/ (the Chat tab,
-                 the start prompt with its folder, profile and session steps), layouts/ (the chat Layout contract
+                 permission_prompt MCP tool, recent folders, archived sessions, resume, sign-in), page/ (the
+                 Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
+                 the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout)
   keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the status bar's key list, and the
                  keys-for-command lookup it exports); no main part

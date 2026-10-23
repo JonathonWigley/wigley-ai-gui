@@ -80,6 +80,16 @@ Both content forms are accepted. Neither needs `session_id` on the stdin line.
   `user` events on stdout are tool results (§ Tool results), interrupt markers (§ Interrupt), and the `set_model`
   replay (§ Model).
 
+### Images
+
+Measured on 2.1.309, 2026-10-23, `--model haiku`, in a scratch project folder.
+
+- Stdin `{"type":"user","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"<base64>"}},{"type":"text","text":"What colour is this image? One word."}]}}`
+  with an 8×8 red PNG → a model turn, `result` text `Red.` The image block goes before the text block.
+- The transcript keeps the image: the user record holds the same `image` block with its base64 `data`, and carries
+  `"imagePasteIds":[1]`. A second user record follows it, `"isMeta":true,"turnCompanion":true`, with one text block
+  `[Image: source: <config>/…/<session-id>/images/1.png]`: the CLI's own copy of the image on disk.
+
 ## Init
 
 **When.** `system/init` arrives only after the first stdin message, never at process start. It then arrives again
@@ -273,6 +283,39 @@ Probe: base plus cheap flags, stdin `U(/wigley:feature x)`. At the first `stream
   text. There was no local error, no synthetic `assistant` event, and no `result` before the model turn.
 - That `ask_round` call waited on the forms app: two `tool_progress` heartbeats, 30 s apart, then
   `"content":"Connection closed","is_error":true` once stdin closed and the process was ended (§ Other events).
+
+## Terminal-only commands
+
+Measured on 2.1.309, 2026-10-23. Stdin `U(/login)`, then `U(/logout)`, `U(/config)`, `U(/mcp)`, `U(/status)` in one
+process.
+
+- `/login`, `/logout` and `/status` each print a synthetic `assistant` event and a `result` with no model turn:
+  `{"type":"result","subtype":"success","is_error":false,"result":"/login isn't available in this environment.","total_cost_usd":0,…}`
+  (the same text with `/logout` and `/status`).
+- `/config` prints its usage (`Usage: /config key=value [key=value ...]` and the keys). `/mcp` prints a summary,
+  ``2 MCP server(s): 2 connected, 0 not connected, 0 disabled. Use `/mcp` in the terminal for details.``, and its
+  `result` carries `"local_command":"mcp"`.
+- None of `login`, `logout` or `status` is in init's `slash_commands`; `config` and `mcp` are. Init's
+  `terminal_slash_commands` (`doctor`, `color`, `focus`, `reload-plugins`) does not list them either, so no event
+  names the commands print mode refuses.
+
+## Auth
+
+Measured on 2.1.309, 2026-10-23. `claude auth` has `login`, `logout` and `status`; each reads `CLAUDE_CONFIG_DIR`.
+
+- **`claude auth status --json`** prints one JSON object and exits 0, signed in or not:
+  signed in → `{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","email":"<email>","orgName":"…","subscriptionType":"max","configDirectory":"<config>",…}`;
+  an empty config folder → `{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty","configDirectory":"<config>",…}`.
+- **`claude auth login`** runs with no terminal (stdin a pipe). It prints `Opening browser to sign in…`, opens the
+  browser through `open` (or `$BROWSER`) on an authorize URL whose `redirect_uri` is `http://localhost:<port>/callback`,
+  then prints `If the browser didn't open, visit: <url>` — the URL wrapped in an OSC 8 terminal hyperlink, so it
+  shows twice on the line (once as the link target, once as its text) between escape sequences; its `redirect_uri` is
+  the hosted `https://platform.claude.com/oauth/code/callback`, which shows the user a code to paste — and
+  `Paste code here if prompted > `. It then waits: on the localhost callback, or on a code written to stdin.
+  Options: `--claudeai` (subscription, the default), `--console` (API billing), `--email <email>`, `--sso`.
+- The probe stopped there (12 s timeout, no sign-in finished): the exit code after a finished sign-in is not
+  measured, so a reader confirms the result with `claude auth status --json` once the process ends.
+- **`claude auth logout`** was not run, so as not to sign a profile out.
 
 ## Interrupt
 
