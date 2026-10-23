@@ -1,6 +1,6 @@
 # 14 — Re-read the docs written ahead and retire the fixed follow-ups
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13
 Plan: [plan.md](plan.md)

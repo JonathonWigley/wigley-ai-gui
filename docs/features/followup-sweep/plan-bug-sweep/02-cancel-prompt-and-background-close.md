@@ -1,6 +1,6 @@
 # 02 — The cancel prompt leaves with its view, and a background round's close says why
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -97,6 +97,8 @@ the script (task 15 runs them).
 Commit:    one commit, "Forms: the cancel prompt pushes its own key scope and leaves with its view; closing a background round's session toasts and selects it"
 
 ## Proof
+
+480f264 · diff read, every Produces present; self-test expect strings match the modes log; typecheck, lint and forms-commands tests pass (worker) · concerns: dismiss-on-base-change relies on Sessions hidden() running before Docs shown(); while a cancel sends, the confirm scope stays pushed until roundClosed (spec allows); two comment lines past the wrap width
 
 ## Live checks for task 15
 

@@ -1,6 +1,6 @@
 # 03 — The review redraws its rows only when they change, and a notice's rail entry jumps to its card
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -96,6 +96,8 @@ Done when: `npm run typecheck` and `npm run lint` pass; the test gate runs the t
 Commit:    one commit, "Forms review: rebuild the rows only when their inputs change; a notice's rail entry jumps to its card"
 
 ## Proof
+
+780b705 · diff read, every Produces present; reviewJumpItem is outside SENDING_ACTIONS so inert while sending; typecheck and the two test files pass (worker) · concerns: is-disabled toggle removed (ui-row drops clicks on is-disabled rows); followups.md:24 entry for task 14
 
 ## Live checks for task 15
 

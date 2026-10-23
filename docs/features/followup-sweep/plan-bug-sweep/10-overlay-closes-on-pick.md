@@ -1,6 +1,6 @@
 # 10 — A pick in the narrow side bar overlay closes it
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 06, 11
 Plan: [plan.md](plan.md)
@@ -132,4 +132,6 @@ reading `.shell-side-bar`'s `data-side-bar` with `query`:
   leaf: the side bar stays `beside` and no `side bar hidden` line is logged.
 
 ## Proof
+
+af1991a · diff read, every Produces present; treeHidden, sideBarHidden and doc.open's boolean confirmed in the tree; modes.test passes (worker) · concerns: sessions, docs and Settings call sites have no unit test — task 15 live checks
 

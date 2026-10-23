@@ -1,6 +1,6 @@
 # 12 — `Space v t` hides and shows the tree of whichever docs view shows
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 10, 11
 Plan: [plan.md](plan.md)
@@ -131,4 +131,6 @@ Drive run with `docs.seed` and `docs.connectSession`:
   the docs tree`.
 
 ## Proof
+
+cebc48a · diff read, every Produces present (manifest command, <Leader>vt bind, view group, toggleTree); typecheck, lint, keymap test pass (worker) · concerns: session <A-h> step expects [docs] tree shown with tree focused logged after it in the same key — self-test confirms
 

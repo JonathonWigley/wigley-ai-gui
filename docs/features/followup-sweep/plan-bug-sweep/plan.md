@@ -191,12 +191,12 @@ that needs a file another task in its wave also lists is moved to a later wave.
 - [x] [Focus ring isolation](13-focus-ring-isolation.md)
 
 ### Wave 2
-- [ ] [Cancel prompt and background close](02-cancel-prompt-and-background-close.md) — after 01
-- [ ] [Review redraw and rail notice](03-review-redraw-and-rail-notice.md) — after 01
-- [ ] [Overlay closes on pick](10-overlay-closes-on-pick.md) — after 06, 11
+- [x] [Cancel prompt and background close](02-cancel-prompt-and-background-close.md) — after 01
+- [x] [Review redraw and rail notice](03-review-redraw-and-rail-notice.md) — after 01
+- [x] [Overlay closes on pick](10-overlay-closes-on-pick.md) — after 06, 11
 
 ### Wave 3
-- [ ] [Docs toggle tree key](12-docs-toggle-tree-key.md) — after 10, 11
+- [x] [Docs toggle tree key](12-docs-toggle-tree-key.md) — after 10, 11
 
 ### Wave 4
 - [ ] [Doc re-read](14-doc-re-read.md) — after every code task
@@ -218,8 +218,13 @@ Review base: 2bd62ed (peer sessions share this tree: the review range is this ru
 - 08 Sessions, config and keymap fixes · 687221f · diff read, addDriveActions signature as planned; each new test failed with its guard removed (worker) · concerns: followups.md still lists the < leader entry — task 14 removes it; a sessions start.ts comment line exceeds the wrap width
 - 13 Focus ring isolation · bf6d8d2 · diff read, isolation: isolate on the rule; ring rule unchanged · concerns: none
 - 01 Round finish waits for main · 44968c9 · diff read, every Produces present as named; typecheck, lint and the forms tests pass (worker) · concerns: roundClosed vs finish-reply order over real IPC untested (page does not depend on it) — task 15 live check
+- 10 Overlay closes on pick · af1991a · diff read, every Produces present; treeHidden, sideBarHidden and doc.open's boolean confirmed in the tree; modes.test passes (worker) · concerns: sessions, docs and Settings call sites have no unit test — task 15 live checks
+- 03 Review redraw and rail notice · 780b705 · diff read, every Produces present; reviewJumpItem is outside SENDING_ACTIONS so inert while sending; typecheck and the two test files pass (worker) · concerns: is-disabled toggle removed (ui-row drops clicks on is-disabled rows); followups.md:24 entry for task 14
+- 02 Cancel prompt and background close · 480f264 · diff read, every Produces present; self-test expect strings match the modes log; typecheck, lint and forms-commands tests pass (worker) · concerns: dismiss-on-base-change relies on Sessions hidden() running before Docs shown(); while a cancel sends, the confirm scope stays pushed until roundClosed (spec allows); two comment lines past the wrap width
+- 12 Docs toggle tree key · cebc48a · diff read, every Produces present (manifest command, <Leader>vt bind, view group, toggleTree); typecheck, lint, keymap test pass (worker) · concerns: session <A-h> step expects [docs] tree shown with tree focused logged after it in the same key — self-test confirms
 ### Contract changes
 - TreeViewDeps: keysFor, kbd → also hasIndex(): boolean, wired as () => document !== null · why: a null document and an empty index both reach setTree as [] · consumers: none (10 and 12 edit docs-view later) · group 11
+- FormsView.isFormShown(): on the interface → a local inside mountFormsView · why: its only outside caller, start.ts' store.subscribe, is deleted · consumers: none · group 02
 ### Rulings
 - Existing pluginEvents tests whose log nothing asserts pass logInto([]) inline — keeps those tests unchanged but for the argument — cost: none beyond style · group 06
 - plan.py is missing from the installed wigley 1.8.0 (no scripts/plan); the Run log, boxes and Status lines are kept through a hand stand-in with the same edits — cost: none if the edits match plan-folder.md · lead
@@ -229,5 +234,8 @@ Review base: 2bd62ed (peer sessions share this tree: the review range is this ru
 - Tree keysChanged recomputes the line and redraws only when the key strings differ — cost: kbd drawing a same string differently would not redraw · group 11
 - readLeader computes page keys once inside the try so the < refusal joins the single refusal if — cost: shape only · group 08
 - Forms apply checks a SENDING_ACTIONS allow-list while the active round sends; sendStarted and sendFailed carry no view check (finishActiveRound checks it) — cost: none today · group 01
+- Extra comments at the sessions activate dep and Settings sectionPicked dep saying a pick closes the overlay and why mode is safe to read — cost: two comment lines · group 10
+- RoundParts.reviewRowAt dropped (only the click handler read it, through a local); reviewJumpItem on the already-focused notice still switches to the forms view — cost: none · group 03
+- docs start: a local toggleSideBar serves showMode and toggleTree; toggleTree finds a session view's state through sessionDocsOf; onActiveView returns early on no active view — cost: none · group 12
 ### Review rounds
 ### Test gate
