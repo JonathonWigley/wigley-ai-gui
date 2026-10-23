@@ -46,12 +46,19 @@ export function createSplit(options: SplitOptions): Split {
   };
   showWidth(width);
 
-  // The pointer whose drag the handle holds, kept until its capture loss
-  // reaches the handle; a handle moved out of the document mid-drag gets no
-  // lostpointercapture, so the drag stays set with its capture gone.
+  // The pointer whose drag the handle holds, until that pointer's pointerup or
+  // pointercancel reaches the window or its capture loss reaches the handle;
+  // the window hears the release even after the handle has left the document.
   let dragPointer: number | null = null;
+  const endDragOnRelease = (event: PointerEvent) => {
+    if (event.pointerId === dragPointer) {
+      endDrag();
+    }
+  };
   const endDrag = () => {
     dragPointer = null;
+    window.removeEventListener('pointerup', endDragOnRelease);
+    window.removeEventListener('pointercancel', endDragOnRelease);
     handle.classList.remove('is-active');
     if (width !== widthAtDragStart) {
       options.uiState.set(options.stateKey, width);
@@ -71,6 +78,8 @@ export function createSplit(options: SplitOptions): Split {
     event.preventDefault();
     handle.setPointerCapture(event.pointerId);
     dragPointer = event.pointerId;
+    window.addEventListener('pointerup', endDragOnRelease);
+    window.addEventListener('pointercancel', endDragOnRelease);
     handle.classList.add('is-active');
     widthAtDragStart = width;
   });

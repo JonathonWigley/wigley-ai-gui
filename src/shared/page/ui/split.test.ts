@@ -81,8 +81,41 @@ function loseCapture(handle: FakeElement, pointerId: number) {
   handle.fire('lostpointercapture', { pointerId });
 }
 
+// The window surface the split uses: listeners by event type, removed by
+// reference.
+interface FakeWindow {
+  listeners: Map<string, Listener[]>;
+  fire(type: string, fields?: Record<string, unknown>): void;
+}
+
+function fakeWindow(): FakeWindow & Record<string, unknown> {
+  const listeners = new Map<string, Listener[]>();
+  return {
+    listeners,
+    addEventListener: (type: string, listener: Listener) => {
+      listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+    },
+    removeEventListener: (type: string, listener: Listener) => {
+      listeners.set(
+        type,
+        (listeners.get(type) ?? []).filter((held) => held !== listener),
+      );
+    },
+    fire(type, fields = {}) {
+      const event = { type, ...fields };
+      for (const listener of listeners.get(type) ?? []) {
+        listener(event as unknown as Event);
+      }
+    },
+  };
+}
+
+let fakeWin: FakeWindow;
+
 beforeEach(() => {
   created = [];
+  fakeWin = fakeWindow();
+  vi.stubGlobal('window', fakeWin);
   vi.stubGlobal('document', {
     createElement: () => {
       const node = fakeElement();
@@ -135,6 +168,46 @@ describe('createSplit drag', () => {
     expect(split.width()).toBe(200);
     expect(saved.get('side')).toBe(200);
     expect(handle.classes.has('is-active')).toBe(false);
+  });
+
+  it('saves the dragged width when the pointer is released off the handle', () => {
+    const saved = new Map<string, unknown>();
+    const { handle } = splitWithHandle(saved);
+    press(handle, 1);
+    move(handle, 1, 300);
+    fakeWin.fire('pointerup', { pointerId: 1 });
+    expect(saved.get('side')).toBe(300);
+    expect(handle.classes.has('is-active')).toBe(false);
+  });
+
+  it('saves the dragged width when the pointer is cancelled', () => {
+    const saved = new Map<string, unknown>();
+    const { handle } = splitWithHandle(saved);
+    press(handle, 1);
+    move(handle, 1, 300);
+    fakeWin.fire('pointercancel', { pointerId: 1 });
+    expect(saved.get('side')).toBe(300);
+  });
+
+  it('keeps the drag when another pointer is released', () => {
+    const saved = new Map<string, unknown>();
+    const { split, handle } = splitWithHandle(saved);
+    press(handle, 1);
+    move(handle, 1, 300);
+    fakeWin.fire('pointerup', { pointerId: 2 });
+    expect(handle.classes.has('is-active')).toBe(true);
+    expect(saved.has('side')).toBe(false);
+    move(handle, 1, 320);
+    expect(split.width()).toBe(320);
+  });
+
+  it('stops listening on the window once the drag ends', () => {
+    const saved = new Map<string, unknown>();
+    const { handle } = splitWithHandle(saved);
+    press(handle, 1);
+    loseCapture(handle, 1);
+    expect(fakeWin.listeners.get('pointerup') ?? []).toEqual([]);
+    expect(fakeWin.listeners.get('pointercancel') ?? []).toEqual([]);
   });
 });
 
