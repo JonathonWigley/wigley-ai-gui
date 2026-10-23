@@ -178,8 +178,9 @@ export interface ImageListenerDeps {
 
 // Attaches the image files pasted into the composer or dropped on the tab.
 // The composer hears paste in the capture phase, ahead of the editor; a paste
-// with no files, or one that also holds text, reaches the editor untouched
-// (Excel, Numbers, Word and Pages put a picture beside copied text). The
+// with no files, or one whose text is more than a file name or a link,
+// reaches the editor untouched (Excel, Numbers, Word and Pages put a picture
+// beside copied text; a Finder copy or Copy Image puts only a name or URL). The
 // whole tab hears drop, so a file dropped just outside the composer attaches
 // instead of the window navigating to it. An ended tab takes no files and logs
 // it.
@@ -215,8 +216,9 @@ export function listenForImages(
   composer.addEventListener(
     'paste',
     (event) => {
-      if (!holdsText(event.clipboardData)) {
-        take(event, filesOf(event.clipboardData), 'pasted');
+      const files = filesOf(event.clipboardData);
+      if (!holdsPastedText(event.clipboardData, files)) {
+        take(event, files, 'pasted');
       }
     },
     { capture: true },
@@ -231,8 +233,21 @@ export function listenForImages(
   );
 }
 
-function holdsText(transfer: DataTransfer | null): boolean {
-  return transfer !== null && transfer.getData('text/plain') !== '';
+function holdsPastedText(
+  transfer: DataTransfer | null,
+  files: File[],
+): boolean {
+  return transfer !== null && isRealText(transfer.getData('text/plain'), files);
+}
+
+// Plain text beside pasted files stands for them, and is no text to paste,
+// when it is blank, the name of one of the files, or a single URL.
+function isRealText(text: string, files: File[]): boolean {
+  const trimmed = text.trim();
+  const isBlank = trimmed === '';
+  const isFileName = files.some((file) => file.name === trimmed);
+  const isSingleUrl = /^(https?:\/\/|file:\/\/|data:)\S*$/.test(trimmed);
+  return !isBlank && !isFileName && !isSingleUrl;
 }
 
 function filesOf(transfer: DataTransfer | null): File[] {

@@ -123,4 +123,39 @@ describe('listenForImages paste', () => {
     expect(prevented).toBe(true);
     expect(toasts).toHaveLength(1);
   });
+
+  it('paste_TextIsFileName_Attached', () => {
+    const { toasts, prevented } = pasteWith(` ${oversizePng.name}\n`);
+
+    expect(prevented).toBe(true);
+    expect(toasts).toHaveLength(1);
+  });
+
+  it('paste_TextIsHttpsUrl_Attached', () => {
+    const { toasts, prevented } = pasteWith('https://example.com/a.png');
+
+    expect(prevented).toBe(true);
+    expect(toasts).toHaveLength(1);
+  });
+
+  it('paste_TextIsWhitespaceOnly_Attached', () => {
+    const { toasts, prevented } = pasteWith('  \n\t ');
+
+    expect(prevented).toBe(true);
+    expect(toasts).toHaveLength(1);
+  });
+
+  it('paste_TextIsFileNameAndMoreWords_LeftToEditor', () => {
+    const { toasts, prevented } = pasteWith(`${oversizePng.name} was here`);
+
+    expect(prevented).toBe(false);
+    expect(toasts).toEqual([]);
+  });
+
+  it('paste_TextIsUrlAndMoreWords_LeftToEditor', () => {
+    const { toasts, prevented } = pasteWith('see https://example.com');
+
+    expect(prevented).toBe(false);
+    expect(toasts).toEqual([]);
+  });
 });
