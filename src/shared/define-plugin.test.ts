@@ -117,6 +117,19 @@ describe('definePlugin', () => {
     expect(defined.id).toBe('p');
   });
 
+  it('a settingInfo key on a plugin with no settings is a type error', () => {
+    const defined = definePlugin({
+      ...manifest,
+      settings: {},
+      settingInfo: {
+        // @ts-expect-error -- the plugin has no settings to declare
+        delayMs: { label: 'Delay', description: 'The delay.' },
+      },
+    });
+
+    expect(defined.id).toBe('p');
+  });
+
   it('settingInfo takes a nested setting and an array setting by their leaf paths', () => {
     const info = { label: 'L', description: 'D.' };
     // Compiles only while the leaf paths are exactly `window.width`,

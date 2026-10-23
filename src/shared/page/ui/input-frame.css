@@ -25,6 +25,11 @@
   outline: none;
 }
 
+/* The frame is the ring of a document editor inside it. */
+.ui-input .cm-editor.wg-document-editor.cm-focused::after {
+  content: none;
+}
+
 .ui-input .cm-placeholder {
   color: var(--wg-input-placeholder);
 }

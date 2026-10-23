@@ -89,10 +89,11 @@ export type SettingPath<T> = {
       : K;
 }[keyof T & string];
 
-// A declaration for each leaf of `T`, by its dotted path.
-export type SettingInfos<T> = {
-  readonly [P in SettingPath<T>]: SettingInfo;
-};
+// A declaration for each leaf of `T`, by its dotted path. A `T` with no leaf
+// takes no declaration at all, so any key in it fails to compile.
+export type SettingInfos<T> = [SettingPath<T>] extends [never]
+  ? Readonly<Record<string, never>>
+  : { readonly [P in SettingPath<T>]: SettingInfo };
 
 // `scopes` holds each scope's title by its short id; `settings` holds the
 // plugin's settings with their defaults; `optionalSettings` holds the kind of
