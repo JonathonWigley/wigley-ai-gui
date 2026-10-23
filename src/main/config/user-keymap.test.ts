@@ -176,6 +176,15 @@ describe('parseUserKeymap', () => {
     );
   });
 
+  it.each(['<', '<lt>'])(
+    'parseUserKeymap_LessThanLeader_Throws (%s)',
+    (written) => {
+      expect(() => parse({ leader: written })).toThrow(
+        '"leader" must be one key, such as "<Space>" or ",".',
+      );
+    },
+  );
+
   it('parseUserKeymap_TwoKeyLeader_Throws', () => {
     expect(() => parse({ leader: 'ab' })).toThrow(
       '"leader" must be one key, such as "<Space>" or ",".',
@@ -197,8 +206,6 @@ describe('parseUserKeymap', () => {
     ['\\', '\\'],
     ['<Bar>', '|'],
     ['|', '|'],
-    ['<lt>', '<'],
-    ['<', '<'],
   ])(
     'parseUserKeymap_LeaderTypingOneCharacter_StoresTheCharacter (%s)',
     (written, stored) => {

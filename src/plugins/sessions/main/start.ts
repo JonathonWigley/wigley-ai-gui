@@ -1,7 +1,12 @@
 import os from 'node:os';
 import path from 'node:path';
 import type { Disposable } from '../../../contracts/disposable';
-import type { DriveHost, MainApi, MainPart } from '../../../contracts/plugin';
+import type {
+  DriveHost,
+  MainApi,
+  MainPart,
+  QualifiedEvents,
+} from '../../../contracts/plugin';
 import {
   argsObject,
   nullableNumberOr,
@@ -34,7 +39,8 @@ import { createSessionList, type SessionList } from './session-list';
 type SessionsApi = MainApi<
   typeof sessionsManifest,
   SessionsChannel,
-  SessionsMainEvents
+  SessionsMainEvents,
+  QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
 function createList(api: SessionsApi): SessionList {
@@ -81,14 +87,23 @@ function openRelay(api: SessionsApi, list: SessionList) {
 
 // Connects a drive run's sessions as a relay would, each with no round, and
 // ends or selects them. A session's id is `drive-session-<n>` unless the
-// caller names one; `rowId` is the app's own id, which `activate` takes.
-// Disposing removes the actions and ends every session still connected.
+// caller names one; `rowId` is the app's own id, which `activate` takes. A
+// session that ends leaves the map, so its id connects again.
+// `onSessionEnded` hears each session that ends, by its row id. Disposing removes the actions and ends every session still connected.
 export function addDriveActions(
   host: DriveHost,
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>,
+  onSessionEnded: (listener: (rowId: string) => void) => void,
 ): Disposable {
   const connected = new Map<string, ConnectedSession>();
   let defaultIds = 0;
+  onSessionEnded((rowId) => {
+    for (const [sessionId, session] of connected) {
+      if (session.session.id === rowId) {
+        connected.delete(sessionId);
+      }
+    }
+  });
   const actions = [
     host.add('connect', {
       description:
@@ -192,7 +207,13 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       addCloseGuard: (mayClose) => list.addCloseGuard(mayClose),
     };
     const driveActions =
-      api.drive !== null ? addDriveActions(api.drive, exports) : null;
+      api.drive !== null
+        ? addDriveActions(api.drive, exports, (listener) =>
+            api.events.on('sessions.ended', ({ sessionId }) =>
+              listener(sessionId),
+            ),
+          )
+        : null;
     return {
       commands: {},
       exports,

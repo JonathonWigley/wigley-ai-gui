@@ -663,6 +663,26 @@ describe('loadConfigStore', () => {
     expect(settingsReads() - readsAtLoad).toBe(2);
   });
 
+  it('a rebuild running at dispose publishes nothing and runs no more', async () => {
+    const memory = createMemoryFiles();
+    const held = heldReads(memory);
+    const store = await load(held.files);
+    const width = store.current().settings.window.width;
+    const settingsReads = () =>
+      held.reads.filter((path) => path.endsWith('/settings.json')).length;
+    const readsAtLoad = settingsReads();
+
+    held.hold();
+    await memory.write(`${FOLDER}/settings.json`, '{"window":{"width":1000}}');
+    await memory.write(`${FOLDER}/settings.json`, '{"window":{"width":1100}}');
+    store.dispose();
+    held.release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(store.current().settings.window.width).toBe(width);
+    expect(settingsReads() - readsAtLoad).toBe(1);
+  });
+
   it('applies a change made during the first read once loaded', async () => {
     const memory = createMemoryFiles();
     await memory.write(`${FOLDER}/settings.json`, '{"window":{"width":1000}}');

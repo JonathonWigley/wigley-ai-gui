@@ -22,11 +22,23 @@ function fakeSessions() {
   };
 }
 
+function fakeEndedEvent() {
+  const listeners: ((rowId: string) => void)[] = [];
+  return {
+    on: (listener: (rowId: string) => void) => listeners.push(listener),
+    emit: (rowId: string) => {
+      for (const listener of listeners) {
+        listener(rowId);
+      }
+    },
+  };
+}
+
 describe('sessions drive actions', () => {
   it('connect fills the fixture defaults for every field left out', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
-    addDriveActions(drive.host, sessions);
+    addDriveActions(drive.host, sessions, fakeEndedEvent().on);
 
     expect(await drive.run('connect')).toEqual({
       sessionId: 'drive-session-1',
@@ -45,7 +57,7 @@ describe('sessions drive actions', () => {
   it('connect keeps an explicit null projectDir', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
-    addDriveActions(drive.host, sessions);
+    addDriveActions(drive.host, sessions, fakeEndedEvent().on);
 
     await drive.run('connect', { projectDir: null });
 
@@ -55,7 +67,7 @@ describe('sessions drive actions', () => {
   it('connect rejects a field of the wrong type and an unknown harness', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
-    addDriveActions(drive.host, sessions);
+    addDriveActions(drive.host, sessions, fakeEndedEvent().on);
 
     await expect(drive.run('connect', { sessionId: 7 })).rejects.toThrow(
       'sessionId must be a string',
@@ -69,7 +81,7 @@ describe('sessions drive actions', () => {
   it('activate and end reject missing args instead of passing undefined on', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
-    addDriveActions(drive.host, sessions);
+    addDriveActions(drive.host, sessions, fakeEndedEvent().on);
 
     await expect(drive.run('activate', {})).rejects.toThrow(
       'rowId must be a string',
@@ -83,7 +95,7 @@ describe('sessions drive actions', () => {
   it('dispose removes the actions and ends each session still connected', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
-    const actions = addDriveActions(drive.host, sessions);
+    const actions = addDriveActions(drive.host, sessions, fakeEndedEvent().on);
     await drive.run('connect', { sessionId: 'a' });
     await drive.run('connect', { sessionId: 'b' });
     await drive.run('end', { sessionId: 'a' });
@@ -92,5 +104,22 @@ describe('sessions drive actions', () => {
 
     expect(sessions.ended).toEqual(['row-a', 'row-b']);
     expect([...drive.actions.keys()]).toEqual([]);
+  });
+
+  it('a session that ends outside end leaves the map, so its id connects again', async () => {
+    const drive = fakeDriveHost();
+    const sessions = fakeSessions();
+    const ended = fakeEndedEvent();
+    const actions = addDriveActions(drive.host, sessions, ended.on);
+    await drive.run('connect', { sessionId: 'a' });
+
+    ended.emit('row-a');
+
+    expect(await drive.run('connect', { sessionId: 'a' })).toEqual({
+      sessionId: 'a',
+      rowId: 'row-a',
+    });
+    actions.dispose();
+    expect(sessions.ended).toEqual(['row-a']);
   });
 });

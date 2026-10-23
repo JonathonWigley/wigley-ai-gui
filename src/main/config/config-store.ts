@@ -28,7 +28,8 @@ import type { UserSettings } from './user-settings';
 // `onChanged` listeners run, in registration order, each time a change to a
 // config file changes the served config, after `current` returns the new one.
 // `dispose` stops watching the folder and drops every listener; `current`
-// keeps returning the last config.
+// keeps returning the last config. A rebuild already running when `dispose`
+// is called publishes nothing and runs no further rebuild.
 export interface ConfigStore extends Disposable {
   current(): AppConfig;
   onChanged(listener: (config: AppConfig) => void): Disposable;
@@ -94,6 +95,7 @@ export async function loadConfigStore(
   let watchProblem: ConfigProblem | null = null;
   let current: AppConfig | null = null;
   const listeners = new Set<(config: AppConfig) => void>();
+  let isDisposed = false;
 
   const settingsSlice = (read: ConfigFileText, problems: ConfigProblem[]) => {
     if ('problem' in read) {
@@ -210,11 +212,14 @@ export async function loadConfigStore(
       do {
         isQueued = false;
         try {
-          publish(await rebuild(false));
+          const config = await rebuild(false);
+          if (!isDisposed) {
+            publish(config);
+          }
         } catch (error) {
           deps.log('config', `config not read: ${errorText(error)}`);
         }
-      } while (isQueued);
+      } while (isQueued && !isDisposed);
       running = null;
     })();
   };
@@ -266,6 +271,7 @@ export async function loadConfigStore(
       return { dispose: () => listeners.delete(registration) };
     },
     dispose() {
+      isDisposed = true;
       watch?.close();
       watch = null;
       listeners.clear();
