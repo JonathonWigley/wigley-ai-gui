@@ -4,6 +4,7 @@ import type { Disposable } from '../../contracts/disposable';
 import { type Files, readIfPresent } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import {
+  optionalBoolean,
   optionalNumber,
   optionalString,
   optionalStringList,
@@ -22,12 +23,14 @@ import {
   click,
   cutOffAtWidth,
   drag,
+  dragAndHold,
   isReadyForKeys,
   linesAfter,
   markLog,
   press,
   readLog,
   readStartFailure,
+  release,
   SCREENSHOT_NAME,
   STEP_TIMEOUT_MS,
   typeText,
@@ -91,6 +94,15 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
   const listening = window.onConsole((message) =>
     consoleMessages.push(message),
   );
+  // The drag `drag --hold` left with its button down, until `release`.
+  let held: { selector: string; at: { x: number; y: number } } | null = null;
+
+  // Rejects while a drag is held, since a new press would land mid-drag.
+  const requireNothingHeld = () => {
+    if (held !== null) {
+      throw new Error(`A drag from ${held.selector} is held; release it first`);
+    }
+  };
 
   // Every page-log line `act` caused, oldest first, once the page has redrawn.
   const linesCausedBy = async (act: () => Promise<void>) => {
@@ -157,8 +169,9 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     click: {
       args: "{ selector: string, button?: 'left' | 'right', count?: number }",
       description:
-        "clicks the centre of the selector's first match; rejects, naming the cover, when another element covers that point",
+        "clicks the centre of the selector's first match; rejects, naming the cover, when another element covers that point, and while a drag is held",
       run: async (args) => {
+        requireNothingHeld();
         const selector = requiredString(args, 'selector');
         const button = mouseButton(args);
         const count = optionalNumber(args, 'count') ?? 1;
@@ -169,16 +182,40 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
       },
     },
     drag: {
-      args: '{ selector: string, dx: number, dy: number }',
+      args: '{ selector: string, dx: number, dy: number, hold?: boolean }',
       description:
-        "drags with the left button from the centre of the selector's first match; rejects, naming the cover, when another element covers that point",
+        "drags with the left button from the centre of the selector's first match, leaving the button down until `release` with `hold`; rejects, naming the cover, when another element covers that point, and while a drag is held",
       run: async (args) => {
+        requireNothingHeld();
         const selector = requiredString(args, 'selector');
         const dx = requiredNumber(args, 'dx');
         const dy = requiredNumber(args, 'dy');
+        const isHeld = optionalBoolean(args, 'hold') ?? false;
         return linesCausedBy(async () => {
           window.focus();
-          await drag(window, selector, dx, dy);
+          if (isHeld) {
+            held = {
+              selector,
+              at: await dragAndHold(window, selector, dx, dy),
+            };
+          } else {
+            await drag(window, selector, dx, dy);
+          }
+        });
+      },
+    },
+    release: {
+      args: '{}',
+      description:
+        'lifts the button a `drag` with `hold` left down, at its end point; rejects when no drag is held',
+      run: async () => {
+        const { at } = held ?? {};
+        if (at === undefined) {
+          throw new Error('No drag is held; drag --hold first');
+        }
+        return linesCausedBy(async () => {
+          release(window, at);
+          held = null;
         });
       },
     },

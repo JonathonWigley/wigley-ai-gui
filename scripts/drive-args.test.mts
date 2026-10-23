@@ -77,6 +77,16 @@ describe('parseDriveArgs', () => {
     });
   });
 
+  it("GIVEN argv ['drag', '.handle', '40', '0', '--hold'] WHEN parsed THEN args is { selector: '.handle', dx: 40, dy: 0, hold: true }", () => {
+    const invocation = parseDriveArgs(['drag', '.handle', '40', '0', '--hold']);
+    expect(invocation).toEqual({
+      run: null,
+      kind: 'send',
+      command: 'drag',
+      args: { selector: '.handle', dx: 40, dy: 0, hold: true },
+    });
+  });
+
   it("GIVEN argv ['start', '--harness', 'real'] WHEN parsed THEN it throws naming fake and claude", () => {
     const parse = () => parseDriveArgs(['start', '--harness', 'real']);
     expect(parse).toThrow(/fake/);

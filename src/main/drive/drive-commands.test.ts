@@ -57,6 +57,12 @@ function setUp(log: () => string[], answers: FakeAnswer[] = []) {
   return { fake, files, commands, changeConfigOnWrite, logged };
 }
 
+// A press target whose centre is at (60, 40), shown and uncovered.
+const TARGET_AT_60X40: FakeAnswer = [
+  'elementFromPoint',
+  () => ({ x: 60, y: 40, isShown: true, isInWindow: true, cover: null }),
+];
+
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -189,6 +195,83 @@ describe('createDriveCommands', () => {
     await expect(
       commands.run('click', { selector: '.missing' }),
     ).rejects.toThrow('No element matches .missing');
+  });
+
+  it('drag with hold ends on a move with the left button held and sends no mouseUp', async () => {
+    const { fake, commands } = setUp(() => [], [TARGET_AT_60X40]);
+
+    await commands.run('drag', {
+      selector: '.handle',
+      dx: 40,
+      dy: 0,
+      hold: true,
+    });
+
+    expect(fake.inputs.at(-1)).toMatchObject({
+      type: 'mouseMove',
+      x: 100,
+      y: 40,
+      modifiers: ['leftbuttondown'],
+    });
+    expect(fake.inputs.some((input) => input.type === 'mouseUp')).toBe(false);
+  });
+
+  it("release after a held drag sends one left mouseUp at the drag's end point and returns the lines it caused", async () => {
+    const { fake, commands } = setUp(
+      () =>
+        fake.inputs.some((input) => input.type === 'mouseUp')
+          ? ['[x] dropped', '[a] before']
+          : ['[a] before'],
+      [TARGET_AT_60X40],
+    );
+    await commands.run('drag', {
+      selector: '.handle',
+      dx: 40,
+      dy: 0,
+      hold: true,
+    });
+    const sentBefore = fake.inputs.length;
+
+    const result = await commands.run('release', {});
+
+    expect(fake.inputs.slice(sentBefore)).toEqual([
+      expect.objectContaining({
+        type: 'mouseUp',
+        button: 'left',
+        x: 100,
+        y: 40,
+        modifiers: [],
+      }),
+    ]);
+    expect(result).toEqual({ lines: ['[x] dropped'] });
+  });
+
+  it('click or another drag while a drag is held rejects naming the held selector and sends nothing', async () => {
+    const { fake, commands } = setUp(() => [], [TARGET_AT_60X40]);
+    await commands.run('drag', {
+      selector: '.handle',
+      dx: 40,
+      dy: 0,
+      hold: true,
+    });
+    const sentBefore = fake.inputs.length;
+
+    await expect(
+      commands.run('click', { selector: '.button' }),
+    ).rejects.toThrow('A drag from .handle is held; release it first');
+    await expect(
+      commands.run('drag', { selector: '.other', dx: 10, dy: 0 }),
+    ).rejects.toThrow('A drag from .handle is held; release it first');
+    expect(fake.inputs).toHaveLength(sentBefore);
+  });
+
+  it('release with no drag held rejects saying to drag with hold first', async () => {
+    const { fake, commands } = setUp(() => []);
+
+    await expect(commands.run('release', {})).rejects.toThrow(
+      'No drag is held; drag --hold first',
+    );
+    expect(fake.inputs).toEqual([]);
   });
 
   it('screenshot_MatchHasNoSize_RejectsSayingItIsNotShown', async () => {

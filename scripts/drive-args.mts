@@ -28,6 +28,7 @@ interface Flags {
   harness: string | null;
   userConfig: boolean;
   plugin: string | null;
+  hold: boolean;
 }
 
 interface PositionalForm {
@@ -48,6 +49,7 @@ const END_OF_FLAGS = '--';
 const COMMAND_FLAGS: Record<string, string[]> = {
   start: ['--packaged', '--harness', '--user-config'],
   setting: ['--plugin'],
+  drag: ['--hold'],
 };
 
 const POSITIONAL_FORMS: Record<string, PositionalForm> = {
@@ -73,14 +75,22 @@ const POSITIONAL_FORMS: Record<string, PositionalForm> = {
     },
   },
   drag: {
-    usage: 'drag <selector> <dx> <dy>',
-    parse: (rest) => {
-      requireCount(rest, 3, 3, 'drag <selector> <dx> <dy>');
-      return {
+    usage: 'drag <selector> <dx> <dy> [--hold]',
+    parse: (rest, flags) => {
+      requireCount(rest, 3, 3, 'drag <selector> <dx> <dy> [--hold]');
+      const args = {
         selector: rest[0],
         dx: numberArg(rest[1], 'dx'),
         dy: numberArg(rest[2], 'dy'),
       };
+      return flags.hold ? { ...args, hold: true } : args;
+    },
+  },
+  release: {
+    usage: 'release',
+    parse: (rest) => {
+      requireCount(rest, 0, 0, 'release');
+      return {};
     },
   },
   resize: {
@@ -243,6 +253,7 @@ function splitFlags(argv: string[]): { flags: Flags; positionals: string[] } {
     harness: null,
     userConfig: false,
     plugin: null,
+    hold: false,
   };
   const positionals: string[] = [];
   for (let index = 0; index < argv.length; index++) {
@@ -268,6 +279,8 @@ function splitFlags(argv: string[]): { flags: Flags; positionals: string[] } {
       flags.packaged = true;
     } else if (argument === '--user-config') {
       flags.userConfig = true;
+    } else if (argument === '--hold') {
+      flags.hold = true;
     } else {
       throw new Error(`Unknown flag ${argument}`);
     }

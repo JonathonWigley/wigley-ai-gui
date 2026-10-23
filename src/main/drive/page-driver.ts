@@ -144,38 +144,58 @@ export async function click(
   window.sendInput({ type: 'mouseUp', ...pointer, modifiers: [] });
 }
 
+// The pointer fields every input of a left-button drag carries.
+const DRAG_POINTER = { button: 'left' as const, clickCount: 1 };
+
 // Presses the left button at the centre of the first element `selector`
-// matches, moves by `(dx, dy)` in ten even steps a key gap apart with the
-// button held, and releases there; throws as `pressPointOf` does before
-// sending anything.
-export async function drag(
+// matches and moves by `(dx, dy)` in ten even steps a key gap apart with the
+// button held, leaving it held; resolves to the end point, where `release`
+// lifts it. Throws as `pressPointOf` does before sending anything.
+export async function dragAndHold(
   window: DrivenWindow,
   selector: string,
   dx: number,
   dy: number,
-): Promise<void> {
+): Promise<{ x: number; y: number }> {
   const start = await pressPointOf(window, selector);
-  const pointer = { button: 'left' as const, clickCount: 1 };
   const held: HeldButton[] = [HELD_BUTTONS.left];
   window.sendInput({
     type: 'mouseDown',
     ...start,
-    ...pointer,
+    ...DRAG_POINTER,
     modifiers: held,
   });
   for (let move = 1; move <= DRAG_MOVES; move++) {
     await wait(KEY_GAP_MS);
     const x = start.x + (dx * move) / DRAG_MOVES;
     const y = start.y + (dy * move) / DRAG_MOVES;
-    window.sendInput({ type: 'mouseMove', x, y, ...pointer, modifiers: held });
+    window.sendInput({
+      type: 'mouseMove',
+      x,
+      y,
+      ...DRAG_POINTER,
+      modifiers: held,
+    });
   }
-  window.sendInput({
-    type: 'mouseUp',
-    x: start.x + dx,
-    y: start.y + dy,
-    ...pointer,
-    modifiers: [],
-  });
+  return { x: start.x + dx, y: start.y + dy };
+}
+
+// Lifts the left button a `dragAndHold` left held, at `at`.
+export function release(
+  window: DrivenWindow,
+  at: { x: number; y: number },
+): void {
+  window.sendInput({ type: 'mouseUp', ...at, ...DRAG_POINTER, modifiers: [] });
+}
+
+// Drags as `dragAndHold` does and releases the button at the end point.
+export async function drag(
+  window: DrivenWindow,
+  selector: string,
+  dx: number,
+  dy: number,
+): Promise<void> {
+  release(window, await dragAndHold(window, selector, dx, dy));
 }
 
 // The bounding box of the first element `selector` matches, or null when
