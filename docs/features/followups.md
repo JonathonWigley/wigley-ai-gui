@@ -19,7 +19,6 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
   `wigley:feature` in that repo.
 - A settings window over the user config files.
 - A setting that turns every key hint on or off (the conflict prompt, the trash y/n, chat's and forms' hints). Hints already come from `keysFor`, so one setting can blank them in one place. Builds on the user config folder.
-- `npm run selftest` on Windows (`tee /dev/stderr` in the script).
 - Editor key replay (a broken key sequence replayed into a box through `EditorHost.typeInto`) has three limits only a custom keymap reaches: focus moving mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on named keys.
 - Rail notice entries are inert in the review: clicking one could jump to the notice's comment box, as question entries jump to their question.
 - A notification click focusing its round is untested live: an unsigned dev build gets no macOS notification (the alerts adapter falls back to Dock bounce and badge), so check it on the first signed build from the packaging follow-up.
@@ -169,22 +168,13 @@ now, any harness later). Each item names its sites.
 
 - A `Platform` record chosen in the composition root (`createMacPlatform` / `createWindowsPlatform`), exposed read-only
   as `services.platform` on both sides: app lifecycle quirks, attention and badge (the alerts adapter splits into mac
-  and Windows variants), default program paths, the relay endpoint, the primary modifier and its label, path rules.
-  Replaces the 12 `process.platform` reads (`main.ts`, `electron-alerts.ts`, `node-files.ts`, sessions' `openRelay`
-  with its direct `os.userInfo`, `process.env`, `execPath`, `cwd`).
-- A portable primary modifier in the chord notation (`<M-w>`: Cmd on macOS, Ctrl elsewhere, like Electron's
-  `CommandOrControl`), resolved in `mergeKeymap`, used for `<D-w>` (sessions close), `<D-Enter>` (chat) and the forms
-  self-test's close steps; the summon accelerator `Control+Alt+Command+W` uses `CommandOrControl`. An optional
-  per-bind `platforms` field covers a truly platform-only key.
+  and Windows variants), default program paths, the relay endpoint. Replaces the other `process.platform` reads
+  (`main.ts`, `electron-alerts.ts`, `node-files.ts`, sessions' `openRelay` with its direct `os.userInfo`,
+  `process.env`, `execPath`, `cwd`); path rules already sit behind `services.paths`.
 - The app menu labels commands by `label`, not id.
 - Chord matching per platform: match the physical `code` only for Option chords on macOS, and `key` otherwise, so
   `<C-q>` lands on the right key on AZERTY and Dvorak; treat Windows AltGr (Ctrl+Alt) as typing, not a chord
   (`page-keys.ts:19-23`); allow non-letter chords (`<C-/>`, `<F5>`).
-- One platform-aware path module in `src/shared/paths.ts` (join, parent, base, isAbsolute, isInside and samePath
-  case-folded on Windows, tilde, display), taking a `PathStyle` main serves to the page. It replaces docs'
-  `doc-paths.ts` (rejects every `C:\` path, so docs can't run on Windows), docs' `expandTilde` and shared
-  `expandHome`, `scoped-files.ts` (`realPath` rejects every Windows path), the `/` joins in `main-api.ts`, chat's
-  `folderName`, and the raw-string `projectDir` comparisons in forms' `isOwnedBy` and chat's recent folders.
 - Program lookup and spawning per platform behind `ProcessRunner`: `.cmd`/`.bat` shims through `cmd.exe` on Windows,
   a `resolveProgram('python')` (`py -3` → `python` → `python3`) for docs' index script, a PATH lookup for the
   `claude` command instead of `~/.local/bin/claude`, and spawn/kill handles so the Claude adapter stops importing

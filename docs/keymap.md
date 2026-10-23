@@ -52,7 +52,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   session, Shift being the bigger scope. **Alt+n / Alt+p** next and previous thing waiting on the
   user (forms' unanswered items).
 - **Cmd** is for OS-convention app actions only: `Cmd+Enter` send or submit, `Cmd+w` close, the
-  summon chord. Nothing else takes Cmd.
+  summon chord. Nothing else takes Cmd. `D-` is the Win key on Windows, so these binds are Win
+  chords there: the user holds the four modifiers the same way on both OSes.
 - **Leader (Space)** changes scope or holds named actions. Inside a text box raw keys belong to
   vim, so every action reachable from a box keeps a leader route there.
 

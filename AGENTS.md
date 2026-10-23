@@ -65,6 +65,7 @@ src/config/      core commands and scopes, default settings, the core token regi
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
                  theme variables, `errorText`, the fake agent harness)
   layouts/       the layout registry plugins' main parts share (forms and chat layouts)
+  paths/         the POSIX and Windows adapters behind `Paths`, picked by each composition root
   page/          page-only DOM builders plugins share, the layout loader among them
                  → imported only by src/renderer and plugins' page/ parts
     ui/          the design primitives `DESIGN.md` lists, each a builder with its CSS beside it; `icon.ts` is the only
@@ -270,6 +271,12 @@ round), since main, not the page, decides.
   names no tool.
 - **An ambient service** — the clock, ids, the home folder, files (with watching), processes, opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake.
+- **A path** is handled through `services.paths` on both sides, the `Paths` contract (`src/contracts/paths.ts`)
+  with a POSIX and a Windows adapter in `src/shared/paths/`, each composition root picking one: main by the OS it
+  runs on, the page by the served `platform`. Code that joins, splits, compares or shows a full path calls it, so no
+  plugin writes `/` into a path or compares paths as strings. Windows paths show with backslashes and the home folder
+  as `~`, accept either separator when typed, and compare case-insensitively. A path relative to a scoped `Files`
+  (plugin data) stays `/`-separated on every OS.
 - **A setting** is a core setting in `src/contracts/settings.ts` and `src/config/settings.ts`, or a plugin's own in
   its manifest's `settings`. The user overrides any of them in `settings.json` (plugin settings under the plugin id).
 - **The user config folder** is `~/.config/wigley-ai-gui/` on both OSes: `settings.json`, `keymap.json` and
