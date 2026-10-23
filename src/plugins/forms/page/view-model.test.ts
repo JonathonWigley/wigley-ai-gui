@@ -635,14 +635,34 @@ describe('sessionTitle', () => {
 });
 
 describe('pickRailItem', () => {
-  function picker() {
+  // Rail position = question position in the three-question round.
+  function picker(state: FormsState = threeQuestionState()) {
+    let current = state;
     const dispatched: FormsAction[] = [];
     const logs: string[] = [];
     const deps = {
-      dispatch: (action: FormsAction) => dispatched.push(action),
+      dispatch(action: FormsAction) {
+        dispatched.push(action);
+        current = apply(current, action);
+      },
+      getState: () => current,
       log: (source: string, line: string) => logs.push(`[${source}] ${line}`),
     };
     return { deps, dispatched, logs };
+  }
+
+  function threeQuestionState(...actions: FormsAction[]): FormsState {
+    return actions.reduce(
+      apply,
+      initialState(
+        [
+          presentedRound('r1', {
+            questions: [question('Alpha'), question('Beta'), question('Gamma')],
+          }),
+        ],
+        'r1-session',
+      ),
+    );
   }
 
   it('focuses the clicked item and logs the jump as a key jump does', () => {
@@ -652,6 +672,30 @@ describe('pickRailItem', () => {
 
     expect(dispatched).toEqual([{ type: 'focusItem', item: 1 }]);
     expect(logs).toEqual(['[forms] jumped to question 2']);
+  });
+
+  it('logs no jump on a click on the item that has focus', () => {
+    const { deps, logs } = picker(
+      threeQuestionState({ type: 'focusItem', item: 1 }),
+    );
+
+    pickRailItem(deps, 'forms', { kind: 'question', index: 2 }, 1, 1);
+
+    expect(logs).toEqual([]);
+  });
+
+  it('logs no jump on a click while the round sends', () => {
+    const { deps, logs } = picker(
+      threeQuestionState({
+        type: 'sendStarted',
+        roundId: 'r1',
+        kind: 'submitted',
+      }),
+    );
+
+    pickRailItem(deps, 'forms', { kind: 'question', index: 2 }, 1, 1);
+
+    expect(logs).toEqual([]);
   });
 
   it('logs nothing and dispatches nothing under the cancel prompt', () => {

@@ -18,6 +18,7 @@ import {
   answerableItems,
   answerStatus,
   type FormsAction,
+  type FormsState,
   type FormsView,
   progress,
   type RailItem,
@@ -45,13 +46,15 @@ import {
   reviewRowsChanged,
 } from './view-model';
 
-// `platform` is the OS key hints are drawn for; `uiState` keeps the rail's
-// dragged width.
+// `getState` reads the forms state, so a rail click logs only a jump that
+// moved. `platform` is the OS key hints are drawn for; `uiState` keeps the
+// rail's dragged width.
 export interface RoundViewDeps {
   markdown: MarkdownRenderer;
   boxes: Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>;
   keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   dispatch(action: FormsAction): void;
+  getState(): FormsState;
   run(command: CommandId): void;
   platform: Platform;
   uiState: UiState;

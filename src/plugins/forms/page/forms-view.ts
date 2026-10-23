@@ -36,7 +36,10 @@ import { roundSaveLabel, roundSaveState, sessionTitle } from './view-model';
 // `pushConfirmScope` lays the cancel prompt's scope over it. `platform` is the
 // OS key hints are drawn for; `uiState` keeps the rail's dragged width, which
 // every round's rail opens at. `onViewChanged` hears each change that can move
-// the visible view off or onto a Form tab: a key scope or mode change.
+// the visible view off or onto a Form tab: a key scope or mode change. The
+// status line shows only over a Form tab, and is rechecked on each store
+// render, box change, scope or mode change, and base change under the
+// cancel prompt.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'statusBar' | 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
@@ -110,6 +113,8 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   const pushConfirmScope = () => {
     const pushed = deps.pushConfirmScope();
     pushed.onBaseChanged(() => {
+      // Under the pushed scope a base change reaches no onViewChanged.
+      updateStatus();
       if (confirmScope !== pushed) {
         return;
       }
@@ -302,6 +307,7 @@ function showRound(
       boxes: deps.boxes,
       keys: deps.keys,
       dispatch,
+      getState: deps.store.get,
       run: deps.run,
       platform: deps.platform,
       uiState: deps.uiState,

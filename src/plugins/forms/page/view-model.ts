@@ -3,12 +3,14 @@ import type { DotStatus } from '../../../shared/page/ui/status-dot';
 import type { AnswerableKind, AnswerStatus, FindingAction } from '../contract';
 import { findingSolution } from '../finding-pick';
 import {
+  activeRound,
   type AnswerableItem,
   answerableItems,
   answerStatus,
   findingActionOf,
   findingActionWord,
   type FormsAction,
+  type FormsState,
   type FormsView,
   itemAnswer,
   pickIsComplete,
@@ -226,10 +228,24 @@ export function jumpedToLine(item: RailItem): string {
   return `jumped to ${itemName(item)}`;
 }
 
+// Whether going from `before` to `after` moved the view or the active round's
+// focused item: a jump that did neither is not logged.
+export function jumpMoved(before: FormsState, after: FormsState): boolean {
+  return (
+    before.view !== after.view ||
+    activeRound(before)?.focus !== activeRound(after)?.focus
+  );
+}
+
 // A click on the rail entry of `item`, at rail position `position`: dispatches
-// its railPickAction and logs the jump, doing nothing when that is null.
+// its railPickAction and logs the jump when it moved the focus or the view,
+// doing nothing when that action is null.
 export function pickRailItem(
-  deps: { dispatch(action: FormsAction): void; log: Log },
+  deps: {
+    dispatch(action: FormsAction): void;
+    getState(): FormsState;
+    log: Log;
+  },
   view: FormsView,
   item: RailItem,
   position: number,
@@ -239,8 +255,11 @@ export function pickRailItem(
   if (action === null) {
     return;
   }
+  const before = deps.getState();
   deps.dispatch(action);
-  deps.log('forms', jumpedToLine(item));
+  if (jumpMoved(before, deps.getState())) {
+    deps.log('forms', jumpedToLine(item));
+  }
 }
 
 // What clicking a rail item does: focus it in the forms view; in the review,

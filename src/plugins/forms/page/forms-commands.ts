@@ -34,7 +34,7 @@ import {
   unansweredItem,
 } from './form-state';
 import type { FormsStore } from './forms-store';
-import { itemName, jumpedToLine } from './view-model';
+import { itemName, jumpedToLine, jumpMoved } from './view-model';
 
 export interface FormsCommandDeps {
   store: FormsStore;
@@ -366,7 +366,9 @@ function jumpToUnanswered(
     type: 'focusItem',
     item: railPosition(round.round, item),
   });
-  deps.log('forms', jumpedToLine(item));
+  if (jumpMoved(state, deps.store.get())) {
+    deps.log('forms', jumpedToLine(item));
+  }
 }
 
 // `showForm` selects the session's Form tab; `activate` selects the session.
