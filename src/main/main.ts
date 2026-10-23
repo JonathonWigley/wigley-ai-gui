@@ -264,11 +264,18 @@ const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 
 // The self-test gives plugins a fresh temp folder as the home folder, and
-// deletes it before it exits.
+// deletes it before it exits. Node retries the removal on `EBUSY`,
+// `ENOTEMPTY` and `EPERM`, which Windows returns while a watcher or the page
+// still holds a file in the home.
 let tempHome: string | null = null;
 const cleanUpSelfTest = () => {
   if (tempHome !== null) {
-    rmSync(tempHome, { recursive: true, force: true });
+    rmSync(tempHome, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 200,
+    });
   }
 };
 

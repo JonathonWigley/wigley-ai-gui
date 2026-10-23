@@ -39,15 +39,21 @@ function report(passed: boolean, what: string) {
 
 let hasExited = false;
 
-// `cleanUp` runs before every exit, since app.exit skips quit handlers. Only
+// `cleanUp` runs before every exit, since app.exit skips quit handlers; a
+// cleanup that throws is reported on stderr and the exit keeps `code`. Only
 // the first exit counts: a run a late page load starts after it stays quiet.
 function exitSelfTest(code: number, cleanUp: () => void) {
   if (hasExited) {
     return;
   }
   hasExited = true;
-  cleanUp();
-  app.exit(code);
+  try {
+    cleanUp();
+  } catch (error) {
+    console.error(`[selftest] cleanup failed: ${errorText(error)}`);
+  } finally {
+    app.exit(code);
+  }
 }
 
 // Reports `what` as failed with `error`'s text, and exits non-zero; after the

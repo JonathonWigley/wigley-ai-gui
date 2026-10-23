@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -16,6 +17,10 @@ import {
 
 const START = '__WIGLEY_LOGIN_PATH_START__';
 const END = '__WIGLEY_LOGIN_PATH_END__';
+
+// The shell stand-ins below are `#!/bin/sh` scripts, which only a machine
+// with that shell can run.
+const hasPosixShell = existsSync('/bin/sh');
 
 describe('pathFromMarkedOutput', () => {
   it('reads the PATH between the markers, ignoring what the profile prints around it', () => {
@@ -99,13 +104,16 @@ describe('readLoginShellPath', () => {
     return shell;
   }
 
-  it('reads the PATH the shell prints between the markers', async () => {
-    const shell = standInShell(`printf '%s' '${START}/a:/b${END}'`);
+  it.skipIf(!hasPosixShell)(
+    'reads the PATH the shell prints between the markers',
+    async () => {
+      const shell = standInShell(`printf '%s' '${START}/a:/b${END}'`);
 
-    expect(await readLoginShellPath(shell, CAP_MS)).toBe('/a:/b');
-  });
+      expect(await readLoginShellPath(shell, CAP_MS)).toBe('/a:/b');
+    },
+  );
 
-  it(
+  it.skipIf(!hasPosixShell)(
     'resolves null within the cap when the shell ignores SIGTERM and never exits',
     async () => {
       const shell = standInShell(
@@ -117,7 +125,7 @@ describe('readLoginShellPath', () => {
     SETTLE_LIMIT_MS,
   );
 
-  it(
+  it.skipIf(!hasPosixShell)(
     'resolves null within the cap and kills the child that holds stdout open',
     async () => {
       const pidFile = path.join(folder, 'child.pid');
@@ -132,7 +140,7 @@ describe('readLoginShellPath', () => {
     SETTLE_LIMIT_MS,
   );
 
-  it(
+  it.skipIf(!hasPosixShell)(
     'resolves null within the cap when killing the group fails with EPERM',
     async () => {
       const pidFile = path.join(folder, 'shell.pid');

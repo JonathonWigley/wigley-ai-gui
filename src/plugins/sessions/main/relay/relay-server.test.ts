@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,6 +16,7 @@ import {
   type ServeSession,
   startRelayServer,
 } from './relay-server';
+import { channelPath } from './endpoint';
 
 const HELLO: RelayHello = {
   protocol: RELAY_PROTOCOL,
@@ -64,6 +65,14 @@ function echoServe() {
   return { serve, closed: () => closed };
 }
 
+// The production channel over a test folder: a named pipe on Windows, a
+// socket file elsewhere.
+function testChannel(dir: string): string {
+  return channelPath(process.platform, dir, 'selftest', dir);
+}
+
+const channelIsPipe = testChannel(tmpdir()).startsWith('\\\\.\\pipe\\');
+
 // macOS caps a socket path near 104 bytes, so the folder name stays short.
 function start(
   serve: ServeSession,
@@ -71,8 +80,9 @@ function start(
   leftover = false,
 ) {
   const dir = mkdtempSync(path.join(tmpdir(), 'wr-'));
-  const channel = path.join(dir, 's.sock');
+  const channel = testChannel(dir);
   if (leftover) {
+    mkdirSync(path.dirname(channel), { recursive: true });
     writeFileSync(channel, '');
   }
   const server = startRelayServer({ channel, connect, serve, log: () => {} });
@@ -313,12 +323,15 @@ describe('startRelayServer', () => {
     expect(echo.closed()).toBe(1);
   });
 
-  it('listens over a socket file a crashed run left behind', async () => {
-    const channel = start(echoServe().serve, fakeSessions().connect, true);
-    const { socket, nextLine } = await open(channel);
+  it.skipIf(channelIsPipe)(
+    'listens over a socket file a crashed run left behind',
+    async () => {
+      const channel = start(echoServe().serve, fakeSessions().connect, true);
+      const { socket, nextLine } = await open(channel);
 
-    socket.write(helloLine(HELLO));
+      socket.write(helloLine(HELLO));
 
-    expect(JSON.parse(await nextLine())).toEqual({ ok: true });
-  });
+      expect(JSON.parse(await nextLine())).toEqual({ ok: true });
+    },
+  );
 });

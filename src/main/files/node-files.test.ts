@@ -81,6 +81,25 @@ function isCaseInsensitive(folder: string): boolean {
   }
 }
 
+// Whether this process may create a symlink: Windows refuses with `EPERM`
+// unless Developer Mode is on or the process is elevated.
+function canCreateSymlink(): boolean {
+  const folder = mkdtempSync(path.join(tmpdir(), 'wigley-symlink-probe-'));
+  try {
+    symlinkSync(path.join(folder, 'target'), path.join(folder, 'link'));
+    return true;
+  } catch (error) {
+    if (errorCode(error) === 'EPERM') {
+      return false;
+    }
+    throw error;
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+}
+
+const canSymlink = canCreateSymlink();
+
 function errorCode(error: unknown): unknown {
   return (error as { code?: unknown }).code;
 }
@@ -261,34 +280,37 @@ describe('createNodeFiles', () => {
     expect(await files.stat(path.join(root, 'a', 'b'))).toBeNull();
   });
 
-  it('stat_FileFolderAndLink_IsFolderAndIsLink', async () => {
-    writeFileSync(path.join(root, 'a.md'), 'text');
-    mkdirSync(path.join(root, 'folder'));
-    writeFileSync(path.join(root, 'folder', 'b.md'), 'text');
-    symlinkSync(path.join(root, 'folder'), path.join(root, 'link'));
+  it.skipIf(!canSymlink)(
+    'stat_FileFolderAndLink_IsFolderAndIsLink',
+    async () => {
+      writeFileSync(path.join(root, 'a.md'), 'text');
+      mkdirSync(path.join(root, 'folder'));
+      writeFileSync(path.join(root, 'folder', 'b.md'), 'text');
+      symlinkSync(path.join(root, 'folder'), path.join(root, 'link'));
 
-    expect(await files.stat(path.join(root, 'a.md'))).toEqual({
-      isFolder: false,
-      isLink: false,
-    });
-    expect(await files.stat(root)).toEqual({ isFolder: true, isLink: false });
-    expect(await files.stat(path.join(root, 'link'))).toEqual({
-      isFolder: true,
-      isLink: true,
-    });
-    expect(await files.stat(path.join(root, 'link', 'b.md'))).toEqual({
-      isFolder: false,
-      isLink: false,
-    });
-  });
+      expect(await files.stat(path.join(root, 'a.md'))).toEqual({
+        isFolder: false,
+        isLink: false,
+      });
+      expect(await files.stat(root)).toEqual({ isFolder: true, isLink: false });
+      expect(await files.stat(path.join(root, 'link'))).toEqual({
+        isFolder: true,
+        isLink: true,
+      });
+      expect(await files.stat(path.join(root, 'link', 'b.md'))).toEqual({
+        isFolder: false,
+        isLink: false,
+      });
+    },
+  );
 
-  it('stat_DanglingLink_Null', async () => {
+  it.skipIf(!canSymlink)('stat_DanglingLink_Null', async () => {
     symlinkSync(path.join(root, 'gone.md'), path.join(root, 'link.md'));
 
     expect(await files.stat(path.join(root, 'link.md'))).toBeNull();
   });
 
-  it('realPath_Symlink_ReturnsTarget', async () => {
+  it.skipIf(!canSymlink)('realPath_Symlink_ReturnsTarget', async () => {
     writeFileSync(path.join(root, 'real.md'), 'text');
     symlinkSync(path.join(root, 'real.md'), path.join(root, 'link.md'));
 
@@ -340,17 +362,20 @@ describe('createNodeFiles', () => {
     expect(readFileSync(path.join(root, 'b.md'), 'utf8')).toBe('two');
   });
 
-  it('rename_DestinationIsBrokenSymlink_RejectsAndKeepsBoth', async () => {
-    writeFileSync(path.join(root, 'a.md'), 'one');
-    symlinkSync(path.join(root, 'gone.md'), path.join(root, 'b.md'));
+  it.skipIf(!canSymlink)(
+    'rename_DestinationIsBrokenSymlink_RejectsAndKeepsBoth',
+    async () => {
+      writeFileSync(path.join(root, 'a.md'), 'one');
+      symlinkSync(path.join(root, 'gone.md'), path.join(root, 'b.md'));
 
-    await expect(
-      files.rename(path.join(root, 'a.md'), path.join(root, 'b.md')),
-    ).rejects.toThrow(`${path.join(root, 'b.md')} already exists`);
+      await expect(
+        files.rename(path.join(root, 'a.md'), path.join(root, 'b.md')),
+      ).rejects.toThrow(`${path.join(root, 'b.md')} already exists`);
 
-    expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
-    expect(lstatSync(path.join(root, 'b.md')).isSymbolicLink()).toBe(true);
-  });
+      expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
+      expect(lstatSync(path.join(root, 'b.md')).isSymbolicLink()).toBe(true);
+    },
+  );
 
   it('rename_CaseOnlyOnCaseInsensitiveVolume_Renames', async ({ skip }) => {
     if (!isCaseInsensitive(root)) {
@@ -400,7 +425,7 @@ describe('createNodeFiles', () => {
     expect(await files.stat(path.join(root, 'a.md'))).toBeNull();
   });
 
-  it('rename_Symlink_MovesTheLinkItself', async () => {
+  it.skipIf(!canSymlink)('rename_Symlink_MovesTheLinkItself', async () => {
     writeFileSync(path.join(root, 'real.md'), 'one');
     symlinkSync(path.join(root, 'real.md'), path.join(root, 'a.md'));
 
@@ -429,16 +454,16 @@ describe('createNodeFiles', () => {
     expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
   });
 
-  it('rename_DestinationParentIsFile_RejectsWithEnotdir', async () => {
+  it('rename_DestinationParentIsFile_RejectsAndKeepsSource', async () => {
     writeFileSync(path.join(root, 'a.md'), 'one');
     writeFileSync(path.join(root, 'f'), 'file');
 
-    const error = await files
-      .rename(path.join(root, 'a.md'), path.join(root, 'f', 'b.md'))
-      .catch((caught: unknown) => caught);
+    await expect(
+      files.rename(path.join(root, 'a.md'), path.join(root, 'f', 'b.md')),
+    ).rejects.toThrow();
 
-    expect(errorCode(error)).toBe('ENOTDIR');
     expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
+    expect(readFileSync(path.join(root, 'f'), 'utf8')).toBe('file');
   });
 
   it('makeFolder_UnderAFile_RejectsWithEnotdir', async () => {
@@ -451,15 +476,17 @@ describe('createNodeFiles', () => {
     expect(errorCode(error)).toBe('ENOTDIR');
   });
 
-  it('write_OntoAFolder_RejectsWithEisdir', async () => {
+  it('write_OntoAFolder_RejectsAndKeepsFolder', async () => {
     mkdirSync(path.join(root, 'folder'));
 
-    const error = await files
-      .write(path.join(root, 'folder'), 'text')
-      .catch((caught: unknown) => caught);
+    await expect(
+      files.write(path.join(root, 'folder'), 'text'),
+    ).rejects.toThrow();
 
-    expect(errorCode(error)).toBe('EISDIR');
     expect(statSync(path.join(root, 'folder')).isDirectory()).toBe(true);
+    expect(await files.list(root)).toEqual([
+      { path: 'folder', kind: 'folder' },
+    ]);
   });
 
   it('write_ParentIsAFile_RejectsWithEexist', async () => {
