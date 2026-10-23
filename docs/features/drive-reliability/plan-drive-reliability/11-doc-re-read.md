@@ -1,6 +1,6 @@
 # 11 — Re-read the docs written ahead against the landed code
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10
 Plan: [plan.md](plan.md)
@@ -31,3 +31,4 @@ Commit:    one commit for the group, when anything changed
 
 ## Proof
 
+Commit a1515bb · proof: every listed line checked; AGENTS.md running/testing and dev quirks, drive SKILL.md navigation, lock, drag rejections and loadStates, DESIGN.md gallery names fixed; wait-log and per-run build entry clean; lint passes · concerns: followups.md restart entry, hidden-tree entry (line ~41) and fixture entry (line ~37) now describe resolved states, left for Close; new doc lines exceed the files' wrap width

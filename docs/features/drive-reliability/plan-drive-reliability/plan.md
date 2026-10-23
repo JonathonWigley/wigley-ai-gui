@@ -204,7 +204,7 @@ Boundary rules: everything stays in this repo; `src/main/drive/` keeps no `elect
 - [x] [Chat and settings scripts in groups](10-chat-settings-groups.md) — after 07
 
 ### Wave 5
-- [ ] [Doc re-read](11-doc-re-read.md) — after every code task
+- [x] [Doc re-read](11-doc-re-read.md) — after every code task
 
 ### Wave 6
 - [ ] [Final verification](12-final-verification.md) — after 11
@@ -224,6 +224,7 @@ Review base: 5b2bc38096dafc34abedca7cf3e261e5117ffdd1
 - 08 · aefdfde · expect sequence identical but the 8 folded gallery steps; 145 → 137 expect lines; 12 groups in the planned order; typecheck and lint pass · concerns: DESIGN.md:316-317 names the old gallery shot names; followups.md:268 and master-plan.md:48 describe the gallery page-count problem this removes; the reduced repeat's last press saves gallery-reduced-5, the end page, duplicating gallery-reduced-end
 - 09 · 37e5dd4 · step sequence identical but the two narrow window steps; 123 → 125 expect lines; 13 groups in the planned order; typecheck and lint pass · concerns: inline step comments inside the group arrays stay (only the narration block was deleted); the narrow step assumes the self-test starts at 680 px or wider, though its expect holds either way
 - 10 · a250702 · expect sequences identical (formatting only); chat 88, settings 28 expect lines; chat 14 groups, settings 6; typecheck and lint pass · concerns: the two sessions why reads the narration as visual mode surviving a blur
+- 11 · a1515bb · every listed line checked; AGENTS.md running/testing and dev quirks, drive SKILL.md navigation, lock, drag rejections and loadStates, DESIGN.md gallery names fixed; wait-log and per-run build entry clean; lint passes · concerns: followups.md restart entry, hidden-tree entry (line ~41) and fixture entry (line ~37) now describe resolved states, left for Close; new doc lines exceed the files' wrap width
 ### Contract changes
 - StartLock.release(): deletes the file → deletes it on the first call only · why: selftest releases at the first [selftest] line and again on close, and a second delete could remove another start's lock · consumers: 04 · group 04
 - takeStartLock timeout message: names .drive/start.lock literally → names the lockFile path passed in (absolute from both CLIs) · why: the path is a parameter · consumers: 04, 11 (docs quoting the message) · group 04
@@ -256,3 +257,4 @@ Review base: 5b2bc38096dafc34abedca7cf3e261e5117ffdd1
 - chat's resume Enter step sits in the archive group with its own why — no group of one step — none · group 10 · group 10
 ### Review rounds
 ### Test gate
+- unit: page-driver, drive-commands, selftest, selftest-steps, selftest-config (runner, waits, marks, drag hold, groups/width/repeat added or edited by 01/02/03/07), fake-agent-harness (05), shared drive-args, docs selftest-fixture and docs start (06), start-lock and scripts drive-args (03/04) · 11 files, 140 passed; npm run selftest (01 startup-reload stand-down, 06 docs fixture unchanged, 07–10 groups) pending: the user's open forms round holds the app (pid 28090)
