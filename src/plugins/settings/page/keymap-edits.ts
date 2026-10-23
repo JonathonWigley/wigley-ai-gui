@@ -1,5 +1,6 @@
 import type { CommandId } from '../../../contracts/commands';
 import type {
+  BindWhere,
   KeyBind,
   KeymapUnbind,
   UserKeymap,
@@ -7,7 +8,12 @@ import type {
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import { errorText } from '../../../shared/error-text';
 import { isJsonObject, type JsonObject } from '../../../shared/json';
-import { sharedHalves } from '../../../shared/plugin-manifests';
+import {
+  defaultBindLines,
+  type DefaultBindLine,
+  expandBind,
+  sharedHalves,
+} from '../../../shared/plugin-manifests';
 import { type BindLine, isExpandable, keymapLeader } from './keymap-rows';
 
 // The sections the advanced box edits, in the order it shows them.
@@ -69,9 +75,24 @@ export function withAddedBind(
   return tidied({ ...layer, binds: [...kept, bind] });
 }
 
+// The `where` of the unbind entry removing default `line`: the bind's own,
+// narrowed to the one half still its own when a later default layer's bind
+// took the other, so the entry leaves that bind alone.
+function unbindWhere(line: BindLine, leader: string): BindWhere | undefined {
+  const halves = expandBind(line.bind, leader);
+  if (halves.page !== null && line.page === null) {
+    return 'box';
+  }
+  if (halves.editor !== null && line.editor === null) {
+    return 'page';
+  }
+  return line.bind.where;
+}
+
 // `layer` without `line`'s bind: a user bind leaves `binds` with every user
 // bind sharing a half with it under the layer's leader, else the schema's
-// default; a default gets a `keys` unbind entry.
+// default; a default gets a `keys` unbind entry for the halves that are its
+// own in the merged default layers.
 export function withRemovedBind(
   layer: UserKeymap | null,
   line: BindLine,
@@ -86,7 +107,8 @@ export function withRemovedBind(
       ),
     });
   }
-  const { keys, scope, where, mode } = line.bind;
+  const { keys, scope, mode } = line.bind;
+  const where = unbindWhere(line, keymapLeader(schema, layer));
   const entry: KeymapUnbind = {
     keys,
     scope,
@@ -96,21 +118,37 @@ export function withRemovedBind(
   return tidied({ ...layer, unbind: [...(layer?.unbind ?? []), entry] });
 }
 
+// Whether the bind or `keys` unbind entry `entry` shares a half of default
+// `line` the merged default layers keep.
+function sharesAKeptHalf(
+  entry: KeyBind | KeymapUnbind,
+  line: DefaultBindLine,
+  leader: string,
+): boolean {
+  const shared = sharedHalves(entry, line.bind, leader);
+  return (
+    (shared.page && line.page !== null) ||
+    (shared.editor && line.editor !== null)
+  );
+}
+
 // `layer` with `command`'s default binds firing again: without each user bind
-// naming `command`, each other command's user bind sharing a half with one of
-// `command`'s default binds, and each `keys` unbind entry removing a half of
-// one.
+// naming `command`, each other command's user bind sharing a half the merged
+// default layers keep of one of `command`'s default binds, and each `keys`
+// unbind entry removing such a half.
 export function withCommandReset(
   layer: UserKeymap | null,
   command: CommandId,
   schema: UserConfigSchema,
 ): UserKeymap {
   const leader = keymapLeader(schema, layer);
-  const defaults = schema.defaultBinds.filter(
-    (bind) => bind.command === command,
-  );
+  const defaults = defaultBindLines(
+    schema.defaultBindLayers,
+    layer ?? {},
+    leader,
+  ).filter((line) => line.bind.command === command);
   const isOnDefault = (entry: KeyBind | KeymapUnbind) =>
-    defaults.some((bind) => sharesAHalf(entry, bind, leader));
+    defaults.some((line) => sharesAKeptHalf(entry, line, leader));
   return tidied({
     ...layer,
     binds: (layer?.binds ?? []).filter(

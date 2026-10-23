@@ -3,6 +3,7 @@ import type { DefaultKeymap, KeyBind } from '../contracts/keymap';
 import type { PluginManifest } from '../contracts/plugin';
 import {
   commandInfos,
+  defaultBindLines,
   defaultBindStanding,
   dependencyOrder,
   expandBind,
@@ -498,6 +499,18 @@ describe('defaultBindStanding', () => {
     ).toEqual({ state: 'removed', by: entry });
   });
 
+  it('defaultBindStanding_NormalModeUnbindOverBoxDefaultWithoutMode_RemovesEditorHalf', () => {
+    const entry = { keys: 'x', scope: 's', mode: 'normal' as const };
+
+    expect(
+      defaultBindStanding(
+        { keys: 'x', scope: 's', command: 'a', where: 'box' },
+        { unbind: [entry] },
+        leader,
+      ),
+    ).toEqual({ page: null, editor: { state: 'removed', by: entry } });
+  });
+
   it('defaultBindStanding_OtherScope_StaysActive', () => {
     expect(
       defaultBindStanding(
@@ -506,6 +519,69 @@ describe('defaultBindStanding', () => {
         leader,
       ).page,
     ).toEqual({ state: 'active' });
+  });
+});
+
+describe('defaultBindLines', () => {
+  const leader = '<Space>';
+
+  it('defaultBindLines_PluginDefaultOnCoreDefaultsKeys_DropsCoreDefault', () => {
+    const core = { keys: 'x', scope: 's', command: 'a' };
+    const plugin = { keys: 'x', scope: 's', command: 'p.b' };
+
+    expect(defaultBindLines([[core], [plugin]], {}, leader)).toEqual([
+      { bind: plugin, page: { state: 'active' }, editor: null },
+    ]);
+  });
+
+  it('defaultBindLines_PluginPageDefaultOverCoreLeaderDefault_KeepsEditorHalf', () => {
+    const core = { keys: '<Leader>x', scope: 's', command: 'a' };
+    const plugin = {
+      keys: '<Leader>x',
+      scope: 's',
+      command: 'p.b',
+      where: 'page' as const,
+    };
+
+    expect(defaultBindLines([[core], [plugin]], {}, leader)).toEqual([
+      { bind: core, page: null, editor: { state: 'active' } },
+      { bind: plugin, page: { state: 'active' }, editor: null },
+    ]);
+  });
+
+  it('defaultBindLines_UserLeaderSpellsCoreKeys_DropsCoreDefault', () => {
+    const core = { keys: ',x', scope: 's', command: 'a' };
+    const plugin = {
+      keys: '<Leader>x',
+      scope: 's',
+      command: 'p.b',
+      where: 'page' as const,
+    };
+
+    expect(defaultBindLines([[core], [plugin]], {}, ',')).toEqual([
+      { bind: plugin, page: { state: 'active' }, editor: null },
+    ]);
+  });
+
+  it('defaultBindLines_SameLayer_KeepsBoth', () => {
+    const first = { keys: 'x', scope: 's', command: 'a' };
+    const second = { keys: 'x', scope: 's', command: 'b' };
+
+    expect(
+      defaultBindLines([[first, second]], {}, leader).map((line) => line.bind),
+    ).toEqual([first, second]);
+  });
+
+  it('defaultBindLines_UserBindOverPluginDefault_ReplacesPluginDefaultOnly', () => {
+    const core = { keys: 'x', scope: 's', command: 'a' };
+    const plugin = { keys: 'x', scope: 's', command: 'p.b' };
+    const user = { keys: 'x', scope: 's', command: 'c' };
+
+    expect(
+      defaultBindLines([[core], [plugin]], { binds: [user] }, leader),
+    ).toEqual([
+      { bind: plugin, page: { state: 'replaced', by: user }, editor: null },
+    ]);
   });
 });
 

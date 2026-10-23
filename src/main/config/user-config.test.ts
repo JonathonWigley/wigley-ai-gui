@@ -596,9 +596,10 @@ describe('createUserConfig', () => {
   it("lists the default keymap's binds then each plugin's, qualified", async () => {
     const schema = (await create(createMemoryFiles())).schema();
 
-    expect(schema.defaultBinds).toEqual([
-      { keys: '<Leader>q', scope: 'any', command: 'app.quit' },
-      { keys: 'j', scope: 'p.list', command: 'p.down' },
+    expect(schema.defaultBindLayers).toEqual([
+      [{ keys: '<Leader>q', scope: 'any', command: 'app.quit' }],
+      [{ keys: 'j', scope: 'p.list', command: 'p.down' }],
+      [],
     ]);
     expect(schema.defaultAccelerators).toEqual({
       app: [{ accelerator: 'CommandOrControl+Q', command: 'app.quit' }],
@@ -606,6 +607,42 @@ describe('createUserConfig', () => {
       intercept: [],
     });
     expect(schema.defaultLeader).toBe('<Space>');
+  });
+
+  it("serves a plugin's accelerator in place of the default on its chord", async () => {
+    const overPlugin = definePlugin({
+      id: 'over',
+      dependsOn: [],
+      commands: { quit: { label: 'Quit', group: 'App', runsIn: 'main' } },
+      scopes: {},
+      keys: { app: [{ accelerator: 'CmdOrCtrl+Q', command: 'quit' }] },
+      settings: {},
+      settingInfo: {},
+      themeTokens: {},
+    });
+    const files = createMemoryFiles();
+    const store = await loadConfigStore({
+      ...CHECK_DEPS,
+      manifests: [overPlugin],
+      files,
+      folder: FOLDER,
+      platform: 'macos',
+      homeDir: HOME,
+      log: () => undefined,
+    });
+
+    const schema = createUserConfig({
+      ...CHECK_DEPS,
+      manifests: [overPlugin],
+      files,
+      folder: FOLDER,
+      store,
+      settingInfo: {},
+    }).schema();
+
+    expect(schema.defaultAccelerators.app).toEqual([
+      { accelerator: 'CmdOrCtrl+Q', command: 'over.quit' },
+    ]);
   });
 
   it('throws on a plugin setting with no declaration', async () => {

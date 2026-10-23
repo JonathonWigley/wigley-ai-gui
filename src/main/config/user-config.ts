@@ -204,11 +204,11 @@ function userConfigSchema(
     sections,
     commands: fixed.commands,
     scopes: fixed.scopes,
-    defaultBinds: layers.flatMap((layer) => layer.binds ?? []),
+    defaultBindLayers: layers.map((layer) => layer.binds ?? []),
     defaultAccelerators: {
-      app: layers.flatMap((layer) => layer.app ?? []),
-      global: layers.flatMap((layer) => layer.global ?? []),
-      intercept: layers.flatMap((layer) => layer.intercept ?? []),
+      app: fixed.defaultKeymap.app,
+      global: fixed.defaultKeymap.global,
+      intercept: fixed.defaultKeymap.intercept,
     },
     defaultLeader: fixed.defaultLeader,
   };

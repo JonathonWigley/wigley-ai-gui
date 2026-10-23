@@ -1,11 +1,11 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { ViewScope } from '../../../contracts/keymap';
+import type { CommandInfo } from '../../../contracts/plugin';
 import { capitalised } from '../../../shared/capitalised';
 import { element } from '../../../shared/page/dom';
 import { kbd } from '../../../shared/page/ui/kbd';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { tag } from '../../../shared/page/ui/tag';
-import type { HalfStanding } from '../../../shared/plugin-manifests';
 import {
   chordName,
   formatAccelerator,
@@ -21,8 +21,10 @@ import {
 } from './keymap-edits';
 import {
   type AcceleratorLine,
+  andList,
   type BindLine,
   type CommandRow,
+  coverTexts,
   firesAnywhere,
   keymapLeader,
   keymapRows,
@@ -77,43 +79,6 @@ function lineElement(
   return node;
 }
 
-const HALF_PLACES = { page: 'on the page', editor: 'in the editor' } as const;
-
-// What covers one half, in lower case; null for a half still firing.
-function coverText(ctx: RowContext, standing: HalfStanding): string | null {
-  if (standing.state === 'removed') {
-    return 'removed';
-  }
-  if (standing.state === 'replaced') {
-    return `replaced by ${commandLabel(ctx, standing.by.command)}`;
-  }
-  return null;
-}
-
-// The tags naming what covers `line`'s halves: with every half covered,
-// Removed and Replaced by its command; with one half still firing, Partly
-// removed or Partly replaced, naming where it still fires.
-function coverTags(ctx: RowContext, line: BindLine): string[] {
-  const halves = (['page', 'editor'] as const).flatMap((half) => {
-    const standing = line[half];
-    return standing === null ? [] : [{ half, standing }];
-  });
-  const firing = halves.find(({ standing }) => standing.state === 'active');
-  const tags: string[] = [];
-  for (const { standing } of halves) {
-    const text = coverText(ctx, standing);
-    if (text === null) {
-      continue;
-    }
-    tags.push(
-      firing === undefined
-        ? capitalised(text)
-        : `Partly ${text} — still fires ${HALF_PLACES[firing.half]}`,
-    );
-  }
-  return [...new Set(tags)];
-}
-
 function bindLineElement(ctx: RowContext, line: BindLine): HTMLElement {
   const { bind } = line;
   const tags = [tag(scopeTitle(ctx, bind.scope))];
@@ -126,7 +91,8 @@ function bindLineElement(ctx: RowContext, line: BindLine): HTMLElement {
   if (line.origin === 'user') {
     tags.push(tag('Set'));
   }
-  tags.push(...coverTags(ctx, line).map((text) => tag(text)));
+  const label = (command: CommandId) => commandLabel(ctx, command);
+  tags.push(...coverTexts(line, label).map((text) => tag(text)));
   return lineElement(keysKbd(ctx, bind.keys), tags, !firesAnywhere(line));
 }
 
@@ -148,7 +114,7 @@ function acceleratorLineElement(
   return lineElement(kbd(text, ctx.platform), tags, line.state !== 'active');
 }
 
-// The typed keys as Kbd, and the command a bind on them in `scope` replaces.
+// The typed keys as Kbd, and the commands a bind on them in `scope` replaces.
 function keysPreview(
   ctx: RowContext,
   text: string,
@@ -161,21 +127,29 @@ function keysPreview(
   const node = element('span', 'settings-bind');
   node.append(keysKbd(ctx, keys));
   const replaced = replacedBy(ctx.schema, ctx.keymapLayer(), keys, scope);
-  if (replaced !== null) {
+  if (replaced.length > 0) {
     node.append(
-      element('span', 'settings-replaces', `Replaces ${replaced.label}`),
+      element(
+        'span',
+        'settings-replaces',
+        `Replaces ${replacedLabels(replaced)}`,
+      ),
     );
   }
   return node;
 }
 
-// Adds a bind: a box takes the keys, then the scope picker; Enter on an empty
-// box closes it.
-function addBind(ctx: RowContext, command: CommandId) {
-  const firstDefault = ctx.schema.defaultBinds.find(
-    (bind) => bind.command === command,
-  );
-  const preselected: ViewScope = firstDefault?.scope ?? 'any';
+function replacedLabels(commands: readonly CommandInfo[]): string {
+  return andList(commands.map((command) => command.label));
+}
+
+// Adds a bind to `row`'s command: a box takes the keys, then the scope
+// picker, preselecting the scope of the row's first default bind; Enter on an
+// empty box closes it.
+function addBind(ctx: RowContext, row: CommandRow) {
+  const command = row.command.id;
+  const firstDefault = row.binds.find((line) => line.origin === 'default');
+  const preselected: ViewScope = firstDefault?.bind.scope ?? 'any';
   ctx.openBox({
     key: command,
     file: 'keymap',
@@ -206,9 +180,9 @@ function addBind(ctx: RowContext, command: CommandId) {
             scope,
           );
           const title = scopeTitle(ctx, scope);
-          return replaced === null
+          return replaced.length === 0
             ? title
-            : `${title} — replaces ${replaced.label}`;
+            : `${title} — replaces ${replacedLabels(replaced)}`;
         },
         selected: scopes.indexOf(preselected),
         chosen: (scope) =>
@@ -268,7 +242,7 @@ function commandActions(ctx: RowContext, row: CommandRow): RowActions {
       reset: tellAdvanced,
     };
   }
-  const add = () => addBind(ctx, command.id);
+  const add = () => addBind(ctx, row);
   return {
     open: add,
     edit: add,

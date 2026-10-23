@@ -10,7 +10,7 @@ import type { UserConfigSchema } from '../../../contracts/user-config';
 import { capitalised } from '../../../shared/capitalised';
 import {
   bindIdentities,
-  defaultBindStanding,
+  defaultBindLines,
   expandBind,
   type HalfStanding,
   isSameAccelerator,
@@ -67,6 +67,58 @@ export function firesAnywhere(line: BindLine): boolean {
   return line.page?.state === 'active' || line.editor?.state === 'active';
 }
 
+const HALF_PLACES = { page: 'on the page', editor: 'in the editor' } as const;
+
+// What covers one half, in lower case; null for a half still firing.
+function coverText(
+  standing: HalfStanding,
+  label: (command: CommandId) => string,
+): string | null {
+  if (standing.state === 'removed') {
+    return 'removed';
+  }
+  if (standing.state === 'replaced') {
+    return `replaced by ${label(standing.by.command)}`;
+  }
+  return null;
+}
+
+// The tag texts naming what covers `line`'s halves, each once, page half
+// first: with no half firing, "Removed" and "Replaced by <label>"; with a half
+// still firing, "Partly removed" or "Partly replaced by <label>", each with
+// where it still fires. `label` names a command.
+export function coverTexts(
+  line: BindLine,
+  label: (command: CommandId) => string,
+): string[] {
+  const halves = (['page', 'editor'] as const).flatMap((half) => {
+    const standing = line[half];
+    return standing === null ? [] : [{ half, standing }];
+  });
+  const firing = halves.find(({ standing }) => standing.state === 'active');
+  const texts: string[] = [];
+  for (const { standing } of halves) {
+    const text = coverText(standing, label);
+    if (text === null) {
+      continue;
+    }
+    texts.push(
+      firing === undefined
+        ? capitalised(text)
+        : `Partly ${text} — still fires ${HALF_PLACES[firing.half]}`,
+    );
+  }
+  return [...new Set(texts)];
+}
+
+// `labels` joined as prose: "A", "A and B", "A, B and C".
+export function andList(labels: readonly string[]): string {
+  if (labels.length < 2) {
+    return labels.join('');
+  }
+  return `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`;
+}
+
 // Whether the merge can expand `bind` under `leader`; keys the user is still
 // typing may not be.
 export function isExpandable(bind: KeyBind, leader: string): boolean {
@@ -76,18 +128,6 @@ export function isExpandable(bind: KeyBind, leader: string): boolean {
   } catch {
     return false;
   }
-}
-
-function defaultLine(
-  bind: KeyBind,
-  layer: UserKeymap | null,
-  leader: string,
-): BindLine {
-  return {
-    bind,
-    origin: 'default',
-    ...defaultBindStanding(bind, layer ?? {}, leader),
-  };
 }
 
 function userLine(bind: KeyBind, leader: string): BindLine {
@@ -191,18 +231,24 @@ function groupTitle(plugin: string): string {
 
 // Every command's row, grouped by plugin: `core` first, then each plugin in
 // the order `schema.commands` first names it, rows in `schema.commands` order.
+// A row's default binds are those the merge of the default layers keeps.
 export function keymapRows(
   schema: UserConfigSchema,
   layer: UserKeymap | null,
 ): CommandGroup[] {
   const leader = keymapLeader(schema, layer);
+  const defaults = defaultBindLines(
+    schema.defaultBindLayers,
+    layer ?? {},
+    leader,
+  );
   const groups = new Map<string, CommandGroup>([
     ['core', { plugin: 'core', title: groupTitle('core'), rows: [] }],
   ]);
   for (const command of Object.values(schema.commands)) {
-    const defaultLines = schema.defaultBinds
-      .filter((bind) => bind.command === command.id)
-      .map((bind) => defaultLine(bind, layer, leader));
+    const defaultLines = defaults
+      .filter((line) => line.bind.command === command.id)
+      .map((line): BindLine => ({ ...line, origin: 'default' }));
     const userLines = (layer?.binds ?? [])
       .filter((bind) => bind.command === command.id)
       .map((bind) => userLine(bind, leader));
@@ -225,32 +271,30 @@ export function keymapRows(
   return [...groups.values()].filter((group) => group.rows.length > 0);
 }
 
-// The command whose firing bind, default or user, a new bind on `keys` in
-// `scope` would take, judged half by half as the merge does; null when none,
-// or when the merge cannot expand those keys.
+// Every command a new bind on `keys` in `scope` would displace, in row
+// order: each whose default bind fires on a half the new bind shares, and each
+// whose user bind `withAddedBind` drops; judged half by half as the merge
+// does. Empty when none, or when the merge cannot expand those keys.
 export function replacedBy(
   schema: UserConfigSchema,
   layer: UserKeymap | null,
   keys: string,
   scope: string,
-): CommandInfo | null {
+): CommandInfo[] {
   const leader = keymapLeader(schema, layer);
   const typed: KeyBind = { keys, scope, command: '' };
   if (!isExpandable(typed, leader)) {
-    return null;
+    return [];
   }
-  for (const group of keymapRows(schema, layer)) {
-    for (const row of group.rows) {
-      const holdsKeys = row.binds.some((line) => {
+  const rows = keymapRows(schema, layer).flatMap((group) => group.rows);
+  return rows
+    .filter((row) =>
+      row.binds.some((line) => {
         const shared = sharedHalves(typed, line.bind, leader);
         const takesPage = shared.page && line.page?.state === 'active';
         const takesEditor = shared.editor && line.editor?.state === 'active';
         return takesPage || takesEditor;
-      });
-      if (holdsKeys) {
-        return row.command;
-      }
-    }
-  }
-  return null;
+      }),
+    )
+    .map((row) => row.command);
 }

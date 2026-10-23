@@ -6,7 +6,14 @@ import type {
 } from '../../../contracts/keymap';
 import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
-import { keymapRows, replacedBy, type CommandRow } from './keymap-rows';
+import {
+  andList,
+  type BindLine,
+  coverTexts,
+  keymapRows,
+  replacedBy,
+  type CommandRow,
+} from './keymap-rows';
 
 function command(id: string, runsIn: 'page' | 'main' = 'page'): CommandInfo {
   const [plugin] = id.split('.');
@@ -23,10 +30,14 @@ function schema(
     sections: [],
     commands: Object.fromEntries(commands.map((info) => [info.id, info])),
     scopes: [],
-    defaultBinds,
+    defaultBindLayers: [defaultBinds],
     defaultAccelerators: { app, global: [], intercept },
     defaultLeader: '<Space>',
   };
+}
+
+function ids(commands: readonly CommandInfo[]): string[] {
+  return commands.map((info) => info.id);
 }
 
 function row(groups: ReturnType<typeof keymapRows>, id: string): CommandRow {
@@ -145,7 +156,7 @@ describe('replacedBy', () => {
       [{ keys: 'g<CR>', scope: 'p.s', command: 'p.a' }],
     );
 
-    expect(replacedBy(given, null, 'g<Enter>', 'p.s')?.id).toBe('p.a');
+    expect(ids(replacedBy(given, null, 'g<Enter>', 'p.s'))).toEqual(['p.a']);
   });
 
   it('replacedBy_RemovedDefault_NamesNone', () => {
@@ -155,7 +166,7 @@ describe('replacedBy', () => {
     );
     const layer = { unbind: [{ keys: 'x', scope: 'p.s' }] };
 
-    expect(replacedBy(given, layer, 'x', 'p.s')).toBeNull();
+    expect(replacedBy(given, layer, 'x', 'p.s')).toEqual([]);
   });
 
   it('replacedBy_KeysThePageCannotBind_NamesNone', () => {
@@ -164,6 +175,113 @@ describe('replacedBy', () => {
       [{ keys: 'x', scope: 'p.s', command: 'p.a' }],
     );
 
-    expect(replacedBy(given, null, '<Nope>', 'p.s')).toBeNull();
+    expect(replacedBy(given, null, '<Nope>', 'p.s')).toEqual([]);
+  });
+
+  it('replacedBy_DefaultHalfAndUserBindOnOtherHalf_NamesBoth', () => {
+    const given = schema(
+      [command('p.a'), command('p.b')],
+      [{ keys: '<Leader>x', scope: 'p.s', command: 'p.a' }],
+    );
+    const layer = {
+      binds: [
+        {
+          keys: '<Leader>x',
+          scope: 'p.s',
+          command: 'p.b',
+          where: 'page' as const,
+        },
+      ],
+    };
+
+    expect(ids(replacedBy(given, layer, '<Leader>x', 'p.s'))).toEqual([
+      'p.a',
+      'p.b',
+    ]);
+  });
+
+  it('replacedBy_PluginDefaultOverCoreDefault_NamesPluginCommand', () => {
+    const given = {
+      ...schema([command('core.a'), command('p.b')], []),
+      defaultBindLayers: [
+        [{ keys: 'x', scope: 'p.s', command: 'core.a' }],
+        [{ keys: 'x', scope: 'p.s', command: 'p.b' }],
+      ],
+    };
+
+    expect(ids(replacedBy(given, null, 'x', 'p.s'))).toEqual(['p.b']);
+  });
+});
+
+describe('keymapRows default layers', () => {
+  it('keymapRows_PluginDefaultOverCoreDefault_DropsCoreLine', () => {
+    const given = {
+      ...schema([command('core.a'), command('p.b')], []),
+      defaultBindLayers: [
+        [{ keys: 'x', scope: 'p.s', command: 'core.a' }],
+        [{ keys: 'x', scope: 'p.s', command: 'p.b' }],
+      ],
+    };
+
+    const groups = keymapRows(given, null);
+
+    expect(row(groups, 'core.a').binds).toEqual([]);
+    expect(row(groups, 'p.b').binds).toHaveLength(1);
+  });
+});
+
+describe('coverTexts', () => {
+  const bind = { keys: '<Leader>x', scope: 's', command: 'a' };
+  const label = (id: string) => `${id} label`;
+  const removed = { state: 'removed', by: { keys: 'x', scope: 's' } } as const;
+  const replaced = {
+    state: 'replaced',
+    by: { keys: 'x', scope: 's', command: 'b' },
+  } as const;
+  const active = { state: 'active' } as const;
+  const line = (
+    page: BindLine['page'],
+    editor: BindLine['editor'],
+  ): BindLine => ({ bind, origin: 'default', page, editor });
+
+  it('coverTexts_EveryHalfActive_IsEmpty', () => {
+    expect(coverTexts(line(active, active), label)).toEqual([]);
+  });
+
+  it('coverTexts_OnlyHalfRemoved_IsRemoved', () => {
+    expect(coverTexts(line(removed, null), label)).toEqual(['Removed']);
+  });
+
+  it('coverTexts_BothHalvesReplacedBySameCommand_NamesItOnce', () => {
+    expect(coverTexts(line(replaced, replaced), label)).toEqual([
+      'Replaced by b label',
+    ]);
+  });
+
+  it('coverTexts_OneHalfRemovedOtherReplaced_NamesBoth', () => {
+    expect(coverTexts(line(removed, replaced), label)).toEqual([
+      'Removed',
+      'Replaced by b label',
+    ]);
+  });
+
+  it('coverTexts_PageRemovedEditorActive_IsPartlyRemoved', () => {
+    expect(coverTexts(line(removed, active), label)).toEqual([
+      'Partly removed — still fires in the editor',
+    ]);
+  });
+
+  it('coverTexts_PageActiveEditorReplaced_IsPartlyReplaced', () => {
+    expect(coverTexts(line(active, replaced), label)).toEqual([
+      'Partly replaced by b label — still fires on the page',
+    ]);
+  });
+});
+
+describe('andList', () => {
+  it('andList_JoinsLabelsAsProse', () => {
+    expect(andList(['A'])).toBe('A');
+    expect(andList(['A', 'B'])).toBe('A and B');
+    expect(andList(['A', 'B', 'C'])).toBe('A, B and C');
   });
 });

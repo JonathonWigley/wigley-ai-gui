@@ -385,6 +385,49 @@ export function defaultBindStanding(
   return { page: standing('page'), editor: standing('editor') };
 }
 
+// A default bind that fires on at least one half once the default layers are
+// merged, each half as `defaultBindStanding` judges it under the user's layer.
+export interface DefaultBindLine {
+  bind: KeyBind;
+  page: HalfStanding | null;
+  editor: HalfStanding | null;
+}
+
+// Every default bind of `layers` (the binds of `defaultKeyLayers`, in its
+// order) that the merge keeps, in layer order: a half a bind of a later
+// default layer shares is null, as the merge replaces it there and it never
+// fires; a bind left with neither half is dropped. The other halves stand as
+// `defaultBindStanding` judges them under `user`. `leader` is the merge's.
+export function defaultBindLines(
+  layers: readonly (readonly KeyBind[])[],
+  user: UserKeymap,
+  leader: string,
+): DefaultBindLine[] {
+  const lines: DefaultBindLine[] = [];
+  layers.forEach((binds, index) => {
+    const later = layers.slice(index + 1).flat();
+    for (const bind of binds) {
+      const replacedHalves = later.map((other) =>
+        sharedHalves(other, bind, leader),
+      );
+      const standing = defaultBindStanding(bind, user, leader);
+      const line = {
+        bind,
+        page: replacedHalves.some((shared) => shared.page)
+          ? null
+          : standing.page,
+        editor: replacedHalves.some((shared) => shared.editor)
+          ? null
+          : standing.editor,
+      };
+      if (line.page !== null || line.editor !== null) {
+        lines.push(line);
+      }
+    }
+  });
+  return lines;
+}
+
 // The served keymap in layers: `defaults`, then each manifest's keys in
 // `dependencyOrder` (commands and scopes qualified as `<pluginId>.<short>`,
 // the `any` scope left unqualified), then the user's. Each layer's binds are

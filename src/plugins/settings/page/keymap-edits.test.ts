@@ -14,7 +14,7 @@ function schema(defaultBinds: KeyBind[] = []): UserConfigSchema {
     sections: [],
     commands: {},
     scopes: [],
-    defaultBinds,
+    defaultBindLayers: [defaultBinds],
     defaultAccelerators: { app: [], global: [], intercept: [] },
     defaultLeader: '<Space>',
   };
@@ -80,6 +80,19 @@ describe('withRemovedBind', () => {
     });
   });
 
+  it('withRemovedBind_DefaultWhosePageHalfALaterDefaultTook_UnbindsTheBoxHalf', () => {
+    const line = {
+      bind: { keys: '<Leader>x', scope: 'p.s', command: 'p.a' },
+      origin: 'default' as const,
+      page: null,
+      editor: { state: 'active' as const },
+    };
+
+    expect(withRemovedBind(null, line, schema())).toEqual({
+      unbind: [{ keys: '<Leader>x', scope: 'p.s', where: 'box' }],
+    });
+  });
+
   it('withRemovedBind_User_LeavesBinds', () => {
     const line = {
       bind,
@@ -131,6 +144,22 @@ describe('withCommandReset', () => {
     expect(withCommandReset(layer, 'p.a', given)).toEqual({
       binds: [elsewhere],
     });
+  });
+
+  it('withCommandReset_CoreDefaultAPluginDefaultTook_KeepsBindsOnItsKeys', () => {
+    const layer: UserKeymap = {
+      binds: [{ keys: 'x', scope: 'p.s', command: 'p.c' }],
+      unbind: [{ keys: 'x', scope: 'p.s' }],
+    };
+    const given = {
+      ...schema(),
+      defaultBindLayers: [
+        [{ keys: 'x', scope: 'p.s', command: 'core.a' }],
+        [{ keys: 'x', scope: 'p.s', command: 'p.b' }],
+      ],
+    };
+
+    expect(withCommandReset(layer, 'core.a', given)).toEqual(layer);
   });
 
   it('withCommandReset_RemovesWiderUnbind', () => {

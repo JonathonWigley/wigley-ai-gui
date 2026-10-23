@@ -36,13 +36,16 @@ export interface SettingSection {
 }
 
 // `sections`: core first, then each plugin with at least one leaf, in manifest order.
-// `defaultBinds`: the default keymap's binds, then each manifest's `keys.binds`, qualified, in layer order.
-// `defaultAccelerators`: the same layers' `app`, `global` and `intercept` binds, which main commands run on.
+// `defaultBindLayers`: the binds of each default layer unmerged, the default keymap's then each manifest's `keys.binds`,
+// qualified, in merge order; a later layer's bind replacing an earlier one depends on the user's leader, so the reader
+// merges them (`defaultBindLines`).
+// `defaultAccelerators`: the same layers' `app`, `global` and `intercept` binds merged, a later layer's replacing an
+// earlier one on the same chord; main commands run on them.
 export interface UserConfigSchema {
   sections: readonly SettingSection[];
   commands: Readonly<Record<CommandId, CommandInfo>>;
   scopes: readonly ScopeInfo[];
-  defaultBinds: readonly KeyBind[];
+  defaultBindLayers: readonly (readonly KeyBind[])[];
   defaultAccelerators: {
     app: readonly AcceleratorBind[];
     global: readonly AcceleratorBind[];

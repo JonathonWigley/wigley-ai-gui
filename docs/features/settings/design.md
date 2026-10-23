@@ -64,15 +64,17 @@ plan is written from them. A decision here stands unless the user changes it.
   or `mode` as a further Tag when set. A bind the user added shows "Set"; a default the user removed shows struck
   through with "Removed", and one a user bind on the same keys displaced shows "Replaced by <label>", each judged per
   half (page and editor) as the merge judges it. A default with one half still firing is not struck and shows "Partly
-  removed — still fires in the editor" or "Partly replaced by <label> — still fires on the page". A command with no
-  keys shows "Not bound".
+  removed — still fires in the editor" or "Partly replaced by <label> — still fires on the page". A default a plugin's
+  default on the same keys replaces, as the merge lays the default layers, never fires: it is not listed, and a half
+  of one so replaced counts as a half it does not have. A command with no keys shows "Not bound".
 - A main command's row (`settings.show`, `window.summon`) lists its app menu, global or intercepted accelerators
   read-only; they are edited in the advanced box. A default accelerator shows "Removed" when unbound and "Replaced by
   <label>" when a user accelerator of the same kind takes its keys.
 - On a command row (Enter or `i` opens the add-bind box, as `a` does; on a main command's row they toast
   "Accelerators are edited in the advanced box", as `a`, `d` and `r` do):
-  - `a` adds a bind: a box takes vim notation and shows a live Kbd preview and, when a bind on the same keys and scope
-    exists, "Replaces <label>". Enter then opens the list picker of scopes (`any` and every scope), preselecting the
+  - `a` adds a bind: a box takes vim notation and shows a live Kbd preview and, when firing binds on the same keys and
+    scope exist, "Replaces <label>" naming every command the add displaces ("Replaces A and B", "Replaces A, B and
+    C"): each whose default still fires on a half the new bind shares, and each whose user bind the add drops. Enter then opens the list picker of scopes (`any` and every scope), preselecting the
     scope of the command's first default bind, else `any`. A bind added here carries no `where` or `mode`.
   - `d` removes a bind (the list picker chooses which when the row has several): a default becomes an `unbind`
     entry, a user bind leaves `binds`.
@@ -91,8 +93,8 @@ plan is written from them. A decision here stands unless the user changes it.
 - It serves:
   - the schema: core and plugin setting defaults, each leaf's declaration (label, description, control, default), the
     plugin sections in order, every command and scope, the default binds as `KeyBind` entries by the layer they come
-    from (defaults, then each manifest's `keys`), the default `app`, `global` and `intercept` accelerators, and the
-    default leader
+    from (defaults, then each manifest's `keys`), unmerged because which one replaces which depends on the user's
+    leader, the default `app`, `global` and `intercept` accelerators merged across those layers, and the default leader
   - a read of both files: each file's user layer (null when the file is missing), its problem, and its text (null when missing), plus
     the theme names
   - a write of each file's whole new user layer against the text it was read at (stale: `changedOnDisk`)
