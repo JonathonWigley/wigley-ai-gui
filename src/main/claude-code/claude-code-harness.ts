@@ -43,8 +43,8 @@ export type ClaudeSpawn = (
 // `permissionTool` the MCP tool Claude asks what auto mode would still prompt;
 // `env` the environment the process inherits; `files` reads saved transcripts,
 // `homeDir` holds the default config folder `.claude`, is what a `~` profile
-// folder resolves against and is where `claude auth` runs, and `paths` joins and compares paths by the rules
-// of the OS `claude` runs on.
+// folder resolves against and is where `claude auth` runs, and `paths` joins
+// and compares paths by the rules of the OS `claude` runs on.
 export interface ClaudeCodeHarnessDeps {
   command(): string;
   permissionTool: string;

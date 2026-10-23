@@ -143,7 +143,7 @@ interview on 2026-10-23; this file is the record of both.
   interrupts. Tool calls show one compact line (tool name and a short input summary) that expands to the full input
   and output. These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows (the start
-  prompt, tied to no session, stays open).
+  prompt and the sign-in dialog, tied to no session, stay open).
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
   each opening a picker of its choices; raw `c` (`<Leader>cc` in the box) lists every control, so a control a new
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
@@ -163,7 +163,7 @@ interview on 2026-10-23; this file is the record of both.
   focuses the open dialog.
 - **App slash commands**: chat's page exports `addSlashCommand({ name, description, run })`, returning a
   `Disposable`. Sending a box whose trimmed text is `/name` or `/name <args>` with `name` registered runs
-  `run({ sessionId, profile, args })` in place of sending, and clears the box; attached images stay. A registered
+  `run({ sessionId, profile, args, ended })` in place of sending, and clears the box; attached images stay. A registered
   name wins over the agent's command of the same name. The `/` completion offers the registered names first, then
   the agent's, without repeats. A handler reports through chat's `notice` channel call, which adds a notice entry
   main keeps, or through a toast in an ended session, which has no entries to show it. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile

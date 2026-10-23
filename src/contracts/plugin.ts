@@ -521,9 +521,9 @@ export interface DriveHost {
 // `openExternal` opens an http or https URL in the user's default app,
 // and rejects with `Refused to open <url>: …` for any other scheme or a URL
 // that does not parse. `tempFolders` are the OS's temporary folders as real
-// paths; a folder inside one is scratch space. `userConfig` reads and writes
-// the user's `settings.json` and `keymap.json` layers through the ConfigStore's
-// checks.
+// paths, none in the self-test; a folder inside one is scratch space.
+// `userConfig` reads and writes the user's `settings.json` and `keymap.json`
+// layers through the ConfigStore's checks.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;

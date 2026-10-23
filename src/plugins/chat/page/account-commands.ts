@@ -16,9 +16,10 @@ export function accountText(account: string | null): string {
   return account ?? 'an unnamed account';
 }
 
-// Registers `/login`, `/logout` and `/status` on the session's profile. Each
-// reports through a notice in the session's chat, or an info toast in an
-// ended session, where main keeps no entries to show a notice in.
+// Registers `/login`, `/logout` and `/status` on the session's profile.
+// `/login` opens the sign-in dialog; `/logout` and `/status` report through a
+// notice in the session's chat, or an info toast in an ended session, where
+// main keeps no entries to show a notice in.
 export function addAccountCommands(deps: AccountCommandDeps): Disposable[] {
   const { commands, channel } = deps;
   const report = (context: SlashCommandContext, text: string) => {

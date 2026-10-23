@@ -280,8 +280,9 @@ Conventions every primitive follows:
   the sheet. Tool calls are collapsible cards: a mono head with the tool and its summary, a status
   dot (running, success, error), built closed; a result changes only the dot. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
-  `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds the box, the
-  session controls as chips, and send.
+  `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds the strip of attached images'
+  thumbnails above the box, the box, the session controls as chips, and send. A user turn shows its sent images as
+  thumbnails under its text.
 - **Docs:** in Docs mode the tree is the side bar; in a session's Docs tab it is the left pane of a
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
   with `radius-md` and no border.
@@ -291,7 +292,7 @@ Conventions every primitive follows:
   its check message under it in `status-error`. A file that fails its check shows an error Card at the section's
   top.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
-  and key hints right-aligned in `fg-tertiary`; dialogs sit over the `scrim`.
+  and key hints right-aligned in `fg-tertiary`; dialogs, and chat's full-size image viewer, sit over the `scrim`.
 - **Empty states:** one line saying what to do, and the key or action that does it. No
   illustrations.
 - **Splits** resize by drag, and the app keeps the widths.

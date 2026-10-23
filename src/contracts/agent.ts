@@ -137,7 +137,8 @@ export interface PastSession {
 }
 
 // A profile's sign-in: `account` is the adapter's one-line label for the
-// signed-in account, null when signed out.
+// signed-in account, null when signed out or when the harness names no
+// account.
 export interface AccountStatus {
   signedIn: boolean;
   account: string | null;
