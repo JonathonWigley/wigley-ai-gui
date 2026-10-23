@@ -21,6 +21,9 @@ export interface UiStateFile {
   // Writes now when anything changed since the last write, cancelling a
   // scheduled one; otherwise resolves at once. Never rejects.
   flush(): Promise<void>;
+  // Flushes, and from then on a set changes nothing and writes nothing, so
+  // the flush is the file's last write. Never rejects.
+  close(): Promise<void>;
 }
 
 // Reads the file at `path` once. A missing file starts empty; a file that is
@@ -37,6 +40,7 @@ export async function loadUiStateFile(deps: {
   let scheduled: ReturnType<typeof setTimeout> | null = null;
   let hasUnwritten = false;
   let lastWrite: Promise<void> = Promise.resolve();
+  let isClosed = false;
 
   const writeLatest = async () => {
     if (!hasUnwritten) {
@@ -57,9 +61,20 @@ export async function loadUiStateFile(deps: {
     return lastWrite;
   };
 
+  const flush = () => {
+    if (scheduled !== null) {
+      clearTimeout(scheduled);
+      scheduled = null;
+    }
+    return queueWrite();
+  };
+
   return {
     snapshot: () => Object.fromEntries(values),
     set(key, value) {
+      if (isClosed) {
+        return;
+      }
       if (value === undefined) {
         values.delete(key);
       } else {
@@ -73,12 +88,10 @@ export async function loadUiStateFile(deps: {
         }, WRITE_DELAY_MS);
       }
     },
-    flush() {
-      if (scheduled !== null) {
-        clearTimeout(scheduled);
-        scheduled = null;
-      }
-      return queueWrite();
+    flush,
+    close() {
+      isClosed = true;
+      return flush();
     },
   };
 }

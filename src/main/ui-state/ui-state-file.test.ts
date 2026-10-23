@@ -105,6 +105,21 @@ describe('loadUiStateFile', () => {
     expect(await saved()).toEqual({ 'forms.rail': 240 });
   });
 
+  it('close writes a pending change and refuses later sets', async () => {
+    const write = vi.spyOn(memory, 'write');
+    const file = await load();
+
+    file.set('forms.rail', 240);
+    await file.close();
+    file.set('chat.rail', 300);
+    await vi.advanceTimersByTimeAsync(500);
+    await file.flush();
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(await saved()).toEqual({ 'forms.rail': 240 });
+    expect(file.snapshot()).toEqual({ 'forms.rail': 240 });
+  });
+
   it('logs a failed write and retries on the next set', async () => {
     let hasFailed = false;
     const failingOnce: Files = {

@@ -475,8 +475,10 @@ function livePage(window: BrowserWindow): WebContents | null {
 // Serves the ui-state file at `filePath` to the page. It loads on the page's
 // first read, when the page already hears the log, and is kept, so a reload
 // reads main's copy, the newest. On quit a pending change is written as a
-// quit task, which a drive run waits for and the user's app does not; the
-// self-test's exit writes it as a teardown before it deletes the temp home.
+// quit task, which a drive run waits for and the user's app does not. The
+// self-test's exit closes the file as a teardown, loading it first if the page
+// never read it: the close writes the pending change, and a page write after
+// it is dropped, so nothing writes into the temp home while it is removed.
 function serveUiState(filePath: string, log: Log) {
   let loading: Promise<UiStateFile> | null = null;
   let loaded: UiStateFile | null = null;
@@ -496,7 +498,7 @@ function serveUiState(filePath: string, log: Log) {
       void load().then((file) => file.set(key, value)),
   );
   onQuit(() => loaded?.flush());
-  onSelfTestExit('the ui-state file', () => loaded?.flush());
+  onSelfTestExit('the ui-state file', async () => (await load()).close());
 }
 
 // Starts every plugin's main part, each with its own API over one plugin

@@ -23,6 +23,7 @@ describe('failSelfTest', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -82,7 +83,6 @@ describe('failSelfTest', () => {
     expect(errors).toEqual([
       '[selftest] teardown of a hung part did not settle within 1000 ms',
     ]);
-    vi.useRealTimers();
   });
 
   it('does nothing on a second exit', async () => {
