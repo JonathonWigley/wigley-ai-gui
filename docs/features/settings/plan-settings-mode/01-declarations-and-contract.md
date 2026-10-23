@@ -17,7 +17,6 @@ Produces:  in `src/contracts/plugin.ts`:
            `export type SettingPath<T>` — every leaf of `T` as a dotted path
            `export type SettingInfos<T> = { readonly [P in SettingPath<T>]: SettingInfo }`
            `PluginManifest.settingInfo: Readonly<Record<string, SettingInfo>>` (required)
-           `MainServices.userConfig: UserConfig`
            in `src/config/settings.ts`: `export const settingInfo: SettingInfos<Settings>`
            in `src/shared/plugin-manifests.ts`:
            `export function pluginSettingInfo(manifests: readonly PluginManifest[]): Record<string, SettingInfo>`
@@ -25,7 +24,7 @@ Produces:  in `src/contracts/plugin.ts`:
 Decisions: label and description per setting, compiler-checked (round 2) · userConfig is a core main service
            (round 2) · stale writes refused by expected text, as docs' `writeDoc` (Decided) · booleans and closed
            choices both pick from a list (Decided)
-Done when: `npm run lint` and `npx tsc --noEmit` pass (the build fails on a missing or misspelled declaration); the
+Done when: `npm run lint` and `npx tsc --noEmit` pass (`MainServices.userConfig` lands in 02, with its filling) (the build fails on a missing or misspelled declaration); the
            tests below pass under the test gate
 Commit:    one commit for the group
 
@@ -41,8 +40,9 @@ or extra path. `PluginManifest` keeps the loose record, for an outside plugin co
 
 `pluginSettingInfo` qualifies each path as `<pluginId>.<path>` and throws, naming the plugin and the path, on a leaf
 of `settings` with no declaration and on a declaration naming no leaf. It finds leaves as `settingDefaults` walks
-them, but treating an array as one leaf (no `[]` element paths) and a member left unset by the defaults as invisible
-(an outside plugin declares an unset member through `optionalSettings`, whose top-level paths count as leaves).
+them, but treating an array as one leaf (no `[]` element paths) and a member left unset by the defaults as invisible.
+Every `optionalSettings` path without `[]` is a leaf too, nested ones included (as `SettingPath` counts optional
+members at any depth); a path holding `[]` never is.
 
 ## The userConfig contract (`src/contracts/user-config.ts`)
 
@@ -76,11 +76,17 @@ export interface SettingSection {
 
 // `sections`: core first, then each plugin with at least one leaf, in manifest order.
 // `defaultBinds`: the default keymap's binds, then each manifest's `keys.binds`, qualified, in layer order.
+// `defaultAccelerators`: the same layers' `app`, `global` and `intercept` binds, which main commands run on.
 export interface UserConfigSchema {
   sections: readonly SettingSection[];
   commands: Readonly<Record<CommandId, CommandInfo>>;
   scopes: readonly ScopeInfo[];
   defaultBinds: readonly KeyBind[];
+  defaultAccelerators: {
+    app: readonly AcceleratorBind[];
+    global: readonly AcceleratorBind[];
+    intercept: readonly InterceptBind[];
+  };
   defaultLeader: string;
 }
 
@@ -142,14 +148,14 @@ Plugins:
 | Path | Label | Description |
 |---|---|---|
 | `chat.profiles` | Profiles | The Claude profiles a new session can start in: a name and its config folder each. |
-| `docs.scriptPath` | Docs index script | The path to `docs_index.py`; empty finds it in the wigley plugin. |
+| `docs.scriptPath` | Docs index script | The path to `docs_index.py`; empty finds the installed wigley plugin's copy. `~` is the home folder. |
 | `forms.autosaveDelayMs` | Autosave delay | How long after a change a round's draft is saved, in milliseconds. |
-| `forms.deadlineSeconds` | Round deadline | How long an agent waits on a round before it gets a draft back, in seconds. |
+| `forms.deadlineSeconds` | Round deadline | How long an agent waits on a round before it gets a draft back, in seconds, when its session names no deadline. |
 | `keys.whichKeyDelayMs` | Which-key delay | How long a pending key sequence waits before the which-key panel opens, in milliseconds. |
 | `keys.whichKeyTimeoutMs` | Which-key timeout | How long the which-key panel waits before ending the sequence, in milliseconds; empty waits for a key. |
 
-Check `docs.scriptPath`'s and `forms.deadlineSeconds`' meanings against their readers (`src/plugins/docs/main/`,
-`src/plugins/forms/main/`) and correct the description if the code says otherwise.
+The two plugin meanings were checked at plan time against `locateScript` (`src/plugins/docs/main/script-locator.ts`)
+and `deadlineSeconds` (`src/plugins/forms/main/forms-service.ts`).
 
 ## Tests
 

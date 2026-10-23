@@ -33,7 +33,7 @@ plan is written from them. A decision here stands unless the user changes it.
   `j`/`k` move the cursor and Enter opens the section in the content sheet. `Alt+l` / `Alt+h` move focus between the
   side bar and the form, as in Docs mode.
 - `/` filters the open section's rows: setting rows by label, dotted path and description, command rows by label,
-  qualified id and keys.
+  qualified id and keys. Esc on the rows clears a kept filter; opening a section clears it too.
 
 ## Setting rows
 
@@ -61,6 +61,8 @@ plan is written from them. A decision here stands unless the user changes it.
   header (core first), each with its label. A row lists each bind in force as Kbd with its scope as a Tag, and `where`
   or `mode` as a further Tag when set. A bind the user added shows "Set"; a default the user removed shows struck
   through with "Removed".
+- A main command's row (`settings.show`, `window.summon`) lists its app menu, global or intercepted accelerators
+  read-only; they are edited in the advanced box.
 - On a command row:
   - `a` adds a bind: a box takes vim notation and shows a live Kbd preview and, when a bind on the same keys and scope
     exists, "Replaces <label>". Enter then opens the list picker of scopes (`any` and every scope), preselecting the
@@ -69,7 +71,7 @@ plan is written from them. A decision here stands unless the user changes it.
     entry, a user bind leaves `binds`.
   - `r` resets the row: every user `binds` entry and `unbind` entry naming that command's binds is removed.
   - Adding a bind that another user bind already holds in that scope replaces that one in the user layer too.
-- An advanced JSON document box at the bottom edits `groups`, `remaps`, `app`, `intercept`, `global` and the
+- An `Advanced` row at the bottom opens a JSON document box that edits `groups`, `remaps`, `app`, `intercept`, `global` and the
   accelerator `unbind` entries (`app`, `global`, `intercept`); the command rows own `binds`, `leader` and the `keys`
   `unbind` entries. `:w` commits.
 
@@ -96,7 +98,9 @@ plan is written from them. A decision here stands unless the user changes it.
 ## Disk changes and broken files
 
 - The page redraws a section on each change signal. An open box keeps the user's text across the redraw.
-- A write whose revision no longer matches the file is refused as stale: the box stays open with the user's text,
-  under the message "<file> changed on disk; the form now shows it", over the redrawn rows.
+- A box keeps the file's text from when it opened. A commit whose text no longer matches the file is refused as
+  stale: the box stays open with the user's text, under the message "<file> changed on disk; the form now shows
+  it", over the redrawn rows, and a second commit writes over the change.
+- An edit or reset that changes nothing writes nothing.
 - A file that fails its check shows its problem in an error card at the top of its section, and the section refuses
   edits until the file is fixed, since a write would throw away the user's text.

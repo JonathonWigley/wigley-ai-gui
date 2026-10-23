@@ -43,8 +43,9 @@ Each was run at plan time; `wigley:make` re-runs them before the first dispatch.
   `keySequenceTimeoutMs`, `claude.command`; plugins 6 — `chat.profiles`, `docs.scriptPath`, `forms.autosaveDelayMs`,
   `forms.deadlineSeconds`, `keys.whichKeyDelayMs`, `keys.whichKeyTimeoutMs`. No boolean setting exists.
 - **Peer plan.** `docs/features/agent-chat/plan-chat-usability/` (chat plan C) is open on the same branch and also
-  edits `src/contracts/plugin.ts` (`MainServices.tempFolders`), `src/main/main.ts`, `src/plugins/chat/manifest.ts`
-  and `src/plugins/keymap.ts`. Run this plan after plan C closes, or expect to merge those four files by hand;
+  edits `src/main/main.ts`, `src/plugins/chat/manifest.ts` and `src/plugins/keymap.ts` (its
+  `MainServices.tempFolders` is already in HEAD). Run this plan after plan C closes, or expect to merge those three
+  files by hand;
   `ls docs/features/agent-chat/` shows whether `plan-chat-usability/` still stands.
 
 ## Docs written ahead
@@ -129,8 +130,8 @@ Architecture:
 
 **Modified**
 
-- `src/contracts/plugin.ts` — `SettingInfo`, `SettingInfos<T>`, `PluginManifest.settingInfo`,
-  `MainServices.userConfig`.
+- `src/contracts/plugin.ts` — `SettingInfo`, `SettingInfos<T>`, `PluginManifest.settingInfo` (01);
+  `MainServices.userConfig` (02, beside its filling in `main.ts`).
 - `src/shared/define-plugin.ts` (+ test) — requires `settingInfo: SettingInfos<T>`.
 - `src/shared/plugin-manifests.ts` (+ test) — `pluginSettingInfo(manifests)`.
 - `src/config/settings.ts` — core `settingInfo`.
@@ -140,21 +141,24 @@ Architecture:
   `src/main/plugins/main-api.test.ts` — `settingInfo: {}`.
 - `src/main/config/config-store.ts` — its file checks move to `config-checks.ts`.
 - `src/main/main.ts` — builds `userConfig` and hands it to the main parts.
-- `src/plugins/keymap.ts`, `src/plugins/manifests.ts`, `src/plugins/main.ts`, `src/plugins/page.ts` — the new plugin.
+- `src/plugins/keymap.ts` (03: the app accelerator; 05: the page keys), `src/plugins/manifests.ts`,
+  `src/plugins/main.ts` (03), `src/plugins/page.ts` (05) — the new plugin.
 - `scripts/check-layers.mts` — `src/plugins/settings*` entries, and the composition roots listing them.
 
 **New**
 
 - `src/contracts/user-config.ts` — the userConfig contract and the records crossing it.
-- `src/main/config/config-checks.ts` (+ test) — one check per file, shared by the ConfigStore and userConfig.
+- `src/main/config/config-checks.ts` — one check per file, shared by the ConfigStore and userConfig (a move; the
+  ConfigStore's tests keep covering it).
 - `src/main/config/user-config.ts` (+ test) — the live userConfig.
 - `src/plugins/settings/manifest.ts`, `contract.ts` — the plugin and its channel.
-- `src/plugins/settings/main/start.ts` (+ test), `main/selftest-script.ts` — the relay, `settings.show`, the
-  self-test.
+- `src/plugins/settings/main/start.ts`, `main/selftest-script.ts` — the relay, `settings.show`, the self-test.
 - `src/plugins/settings/page/setting-rows.ts`, `setting-edits.ts`, `keymap-rows.ts`, `keymap-edits.ts`,
   `row-filter.ts` (+ tests each) — pure row and edit logic.
 - `src/plugins/settings/page/start.ts`, `settings-view.ts`, `sections-view.ts`, `setting-rows-view.ts`,
   `keymap-view.ts`, `row-box.ts`, `settings.css` — the mode and its views.
+- `src/shared/page/text-box.ts` — docs' `textBoxInput` moved here so docs and settings share one small box
+  (`src/plugins/docs/page/text-box.ts` removed; `docs-dialogs.ts` and `tree-view.ts` import the new path).
 
 **Boundary rules**: `src/contracts/` imports nothing; only `src/main/config/` reads or writes the user config files;
 the settings plugin imports only `src/contracts`, `src/shared`, its own folder and `src/plugins/keys/contract.ts`
@@ -170,19 +174,21 @@ the settings plugin imports only `src/contracts`, `src/shared`, its own folder a
 
 ### Wave 2
 - [ ] [userConfig service](02-user-config-service.md) — after 01
-- [ ] [Settings plugin skeleton](03-plugin-skeleton.md) — after 01
 - [ ] [Row and edit logic](04-row-and-edit-logic.md) — after 01
 
 ### Wave 3
-- [ ] [Settings mode views](05-settings-views.md) — after 03, 04
+- [ ] [Settings plugin skeleton](03-plugin-skeleton.md) — after 01, 02
 
 ### Wave 4
-- [ ] [Settings self-test](06-self-test.md) — after 02, 05
+- [ ] [Settings mode views](05-settings-views.md) — after 03, 04
 
 ### Wave 5
-- [ ] [Doc re-read](07-doc-re-read.md) — after 06
+- [ ] [Settings self-test](06-self-test.md) — after 02, 05
 
 ### Wave 6
+- [ ] [Doc re-read](07-doc-re-read.md) — after 06
+
+### Wave 7
 - [ ] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
