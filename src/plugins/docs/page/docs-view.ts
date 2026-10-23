@@ -100,6 +100,9 @@ export interface DocsView {
   // scope they pushed popped, without moving focus: another docs view is
   // about to show, and its pane scope may equal this one's.
   closeOverlays(): void;
+  // Closes the filter box, keeping its filter, its scope popped, without
+  // moving focus; nothing while the box is closed.
+  dismissFilter(): void;
   // The tree's container hid it: the doc pane takes focus and the doc scope.
   treeHidden(): void;
   // The tree's container opened it over the doc: the tree takes focus and
@@ -750,6 +753,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       dialogs.close();
       doc.closeConflict();
     },
+    dismissFilter: () => tree.dismissFilter(),
     treeHidden: focusDoc,
     treeOpenedOver: focusTreePane,
     focusScope: () => focused,

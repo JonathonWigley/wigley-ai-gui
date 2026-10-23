@@ -152,57 +152,91 @@ describe('parentId', () => {
 });
 
 describe('treeRowAction', () => {
-  // Root `a` holding group `b` holding leaf `c`.
-  const groupB = group('b', 'B', [leaf('c', 'C', 'e:c')]);
-  const tree = [group('a', 'A', [groupB])];
-  const rowOf = (node: TreeNode, isExpanded: boolean): TreeRow => ({
-    node,
-    depth: 1,
-    isExpanded,
-  });
-  const actionOf = (row: TreeRow, key: TreeRowKey, filter = '') =>
-    treeRowAction(tree, row, filter, key);
+  // Root `a` holding group `b` holding leaves `c` and `d`; each leaf's path
+  // is its entry id.
+  const tree = [
+    group('a', 'A', [
+      group('b', 'B', [leaf('c', 'C', 'e:c'), leaf('d', 'D', 'e:d')]),
+    ]),
+  ];
+  const rowsFor = (expanded: string[], filter = '') =>
+    visibleRows(tree, state({ expanded: new Set(expanded), filter }), String);
+  const actionOf = (
+    id: string,
+    key: TreeRowKey,
+    rows: readonly TreeRow[],
+    filter = '',
+  ) => {
+    const row = rows.find((each) => each.node.id === id);
+    if (row === undefined) {
+      throw new Error(`No row ${id} shows`);
+    }
+    return treeRowAction(tree, rows, row, filter, key);
+  };
 
   it('treeRowAction_ToggleExpandedGroup_Collapses', () => {
-    expect(actionOf(rowOf(groupB, true), 'toggle')).toEqual({
+    expect(actionOf('b', 'toggle', rowsFor(['a', 'b']))).toEqual({
       type: 'collapse',
     });
   });
 
   it('treeRowAction_ToggleCollapsedGroup_Expands', () => {
-    expect(actionOf(rowOf(groupB, false), 'toggle')).toEqual({
+    expect(actionOf('b', 'toggle', rowsFor(['a']))).toEqual({
       type: 'expand',
     });
   });
 
   it('treeRowAction_ToggleLeaf_OpensIt', () => {
-    expect(actionOf(rowOf(leaf('c', 'C', 'e:c'), false), 'toggle')).toEqual({
+    expect(actionOf('c', 'toggle', rowsFor(['a', 'b']))).toEqual({
       type: 'openLeaf',
     });
   });
 
-  it('treeRowAction_ToggleFilteredGroup_SelectsFirstChild', () => {
-    expect(actionOf(rowOf(groupB, true), 'toggle', 'c')).toEqual({
+  it('treeRowAction_ToggleFilteredGroup_SelectsFirstShownChild', () => {
+    expect(actionOf('b', 'toggle', rowsFor([], 'e:d'), 'e:d')).toEqual({
       type: 'select',
-      id: 'c',
+      id: 'd',
+    });
+  });
+
+  it('treeRowAction_OpenFilteredGroup_SelectsFirstShownChild', () => {
+    expect(actionOf('b', 'open', rowsFor([], 'e:d'), 'e:d')).toEqual({
+      type: 'select',
+      id: 'd',
     });
   });
 
   it('treeRowAction_OpenExpandedGroup_SelectsFirstChild', () => {
-    expect(actionOf(rowOf(groupB, true), 'open')).toEqual({
+    expect(actionOf('b', 'open', rowsFor(['a', 'b']))).toEqual({
       type: 'select',
       id: 'c',
     });
   });
 
+  it('treeRowAction_OpenExpandedEmptyGroup_Nothing', () => {
+    const withEmpty = [
+      group('a', 'A', [group('b', 'B', []), leaf('c', 'C', 'e:c')]),
+    ];
+    const rows = visibleRows(
+      withEmpty,
+      state({ expanded: new Set(['a', 'b']) }),
+      String,
+    );
+    const [, emptyGroup] = rows;
+
+    expect(treeRowAction(withEmpty, rows, emptyGroup, '', 'open')).toEqual({
+      type: 'none',
+    });
+  });
+
   it('treeRowAction_CloseExpandedGroup_Collapses', () => {
-    expect(actionOf(rowOf(groupB, true), 'close')).toEqual({
+    expect(actionOf('b', 'close', rowsFor(['a', 'b']))).toEqual({
       type: 'collapse',
     });
   });
 
   it('treeRowAction_CloseCollapsedGroup_SelectsParent', () => {
-    expect(actionOf(rowOf(groupB, false), 'close')).toEqual({
+    expect(actionOf('b', 'close', rowsFor(['a']))).toEqual({
       type: 'select',
       id: 'a',
     });

@@ -53,32 +53,34 @@ const UNMATCHED_FILTER = 'zqzq'.repeat(10);
 // cancels; A again and fresh.md creates it, :q closes its editor, Option+h to
 // the tree and d asks to move it to the Trash, y does. R rescans: eight entries
 // and neat.md. / filters the tree to neat and Enter keeps the filter, leaving
-// Global, Rules and neat.md; k k j j selects neat.md and d asks to trash it, n
-// keeps it, d again and Esc keeps it; / and Esc clear the filter. / filters to
-// zqzq, which matches nothing, and Enter keeps it; / and Esc clear it. h goes
-// up to Rules and h again collapses it. j l expands Hooks and j l opens the
-// hook's detail view; Option+l, i edits settings.json and :q closes it;
-// Option+h back. j j l expands the plugin, j j l its Plugins group and j l
-// opens the plugin's detail view; Option+l, i edits installed_plugins.json and
-// :q closes it; Option+h back. k k l expands the plugin's Skills and j l opens
-// its cached SKILL.md; Option+l, j and k scroll, Ctrl+j and Ctrl+k scroll half
-// a page, and i refuses to edit it in the plugin cache; Option+h back. a opens
-// the kind picker, j k j l picks rule, and Esc cancels its place picker. c
-// opens the context picker, j Enter picks the repo. Space k d hides the side
-// bar, focusing the doc, and Option+h brings it back; Space k d hides it again
-// and once more shows it; Space v t hides it and shows it again; Option+h
-// focuses the tree. Space k s shows Sessions mode on the docs session's Docs
-// tab (the session tab's screenshot), where R reads its session index, Space v
-// t hides its tree, Option+h shows it, Space v t hides and shows it again, and
-// Option+h focuses the tree. / filters it to a long filter matching nothing and
-// Enter keeps it, / and Esc clear it; / filters it to style and Enter keeps it,
-// and / and Esc clear it. a opens the kind picker. Space k d shows Docs mode,
-// which closes that picker, so j moves Docs mode's tree. / filters it to neat
-// and Enter keeps the filter; j j j j selects neat.md and r opens the path box,
-// where seven Backspaces and kept.md rename it, and the session's view reads
-// its index again; / and Esc clear the filter, so the tree shows its rows.
-// Space z g, t and Space k d show Docs mode under reduced transparency, and
-// Space z g, t and Space k d again under full.
+// Global, Rules and neat.md; gg selects Global, Enter steps into Rules, the
+// first child the filter shows, and Enter again into neat.md; k k j j selects
+// neat.md and d asks to trash it, n keeps it, d again and Esc keeps it; / and
+// Esc clear the filter. / filters to zqzq, which matches nothing, and Enter
+// keeps it; / and Esc clear it. h goes up to Rules and h again collapses it. j
+// l expands Hooks and j l opens the hook's detail view; Option+l, i edits
+// settings.json and :q closes it; Option+h back. j j l expands the plugin, j j
+// l its Plugins group and j l opens the plugin's detail view; Option+l, i edits
+// installed_plugins.json and :q closes it; Option+h back. k k l expands the
+// plugin's Skills and j l opens its cached SKILL.md; Option+l, j and k scroll,
+// Ctrl+j and Ctrl+k scroll half a page, and i refuses to edit it in the plugin
+// cache; Option+h back. a opens the kind picker, j k j l picks rule, and Esc
+// cancels its place picker. c opens the context picker, Space v t hides the
+// side bar under it, j Enter picks the repo, and Space v t shows the side bar
+// again. Space k d hides the side bar, focusing the doc, and Option+h brings it
+// back; Space k d hides it again and once more shows it; Space v t hides it and
+// shows it again; Option+h focuses the tree. Space k s shows Sessions mode on
+// the docs session's Docs tab (the session tab's screenshot), where R reads its
+// session index, Space v t hides its tree, Option+h shows it, Space v t hides
+// and shows it again, and Option+h focuses the tree. / filters it to a long
+// filter matching nothing and Enter keeps it, / and Esc clear it; / filters it
+// to style and Enter keeps it, and / and Esc clear it. a opens the kind picker.
+// Space k d shows Docs mode, which closes that picker, so j moves Docs mode's
+// tree. / filters it to neat and Enter keeps the filter; j j j j selects
+// neat.md and r opens the path box, where seven Backspaces and kept.md rename
+// it, and the session's view reads its index again; / and Esc clear the filter,
+// so the tree shows its rows. Space z g, t and Space k d show Docs mode under
+// reduced transparency, and Space z g, t and Space k d again under full.
 function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
   // A path below the home as the page shows it.
   const shown = (relative: string) =>
@@ -230,6 +232,11 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
       keys: ['/', ...'neat', 'Enter'],
       expect: '[docs] filtered the tree: neat',
     },
+    // Global's first child, Instructions, holds no match, so Enter steps into
+    // Rules, the first child the filter shows.
+    { keys: ['g', 'g'], expect: '[docs] selected Global' },
+    { keys: ['Enter'], expect: '[docs] selected Rules' },
+    { keys: ['Enter'], expect: '[docs] selected neat.md' },
     {
       keys: ['k', 'k', 'j', 'j', 'd'],
       expect: '[docs] asked to move neat.md to the Trash',
@@ -282,10 +289,13 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
     { keys: ['j', 'k', 'j', 'l'], expect: '[docs] create rule: pick a place' },
     { keys: ['Escape'], expect: '[docs] create cancelled' },
     { keys: ['c'], expect: '[page] c ran docs.pickContext', checksFit: true },
+    // The picker keeps its keys through the side bar hiding under it.
+    { keys: [' ', 'v', 't'], expect: '[page] side bar hidden' },
     {
       keys: ['j', 'Enter'],
       expect: `[docs] context ${shown('dev/selftest-repo')}`,
     },
+    { keys: [' ', 'v', 't'], expect: '[page] side bar shown' },
     {
       keys: [' ', 'k', 'd'],
       expect: '[page] side bar hidden',

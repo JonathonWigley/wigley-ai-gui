@@ -141,13 +141,15 @@ export type TreeRowAction =
   | { type: 'select'; id: string }
   | { type: 'none' };
 
-// What `key` does on `row`. A leaf opens on open or toggle. Open expands a
-// collapsed group and steps into an expanded one's first child. Close
-// collapses an expanded group, else selects the row's parent. Toggle expands
-// a collapsed group and collapses an expanded one. A filter shows every group
-// expanded, so it collapses none: there toggle steps in as open does.
+// What `key` does on `row`, one of the visible `rows`. A leaf opens on open
+// or toggle. Open expands a collapsed group and steps into an expanded one's
+// first shown child, the row after it. Close collapses an expanded group,
+// else selects the row's parent. Toggle expands a collapsed group and
+// collapses an expanded one. A filter shows every group expanded, so it
+// collapses none: there toggle steps in as open does.
 export function treeRowAction(
   tree: readonly TreeNode[],
+  rows: readonly TreeRow[],
   row: TreeRow,
   filter: string,
   key: TreeRowKey,
@@ -171,10 +173,9 @@ export function treeRowAction(
   if (key === 'toggle' && isCollapsible) {
     return { type: 'collapse' };
   }
-  const [firstChild] = node.children;
-  return firstChild === undefined
-    ? { type: 'none' }
-    : { type: 'select', id: firstChild.id };
+  const next = rows[rows.findIndex((each) => each.node.id === node.id) + 1];
+  const isShownChild = next !== undefined && next.depth > row.depth;
+  return isShownChild ? { type: 'select', id: next.node.id } : { type: 'none' };
 }
 
 // `state` is what the chip's colour keys on: the load state, `none` for a

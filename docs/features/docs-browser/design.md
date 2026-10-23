@@ -40,6 +40,10 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - While a docs view's tree is hidden, by `Space k d`, `Space v t` or a window too narrow for it, a tree key moves focus to the doc
   and runs what that key runs there by the keymap in force (`j` scrolls the doc); a tree command whose keys run
   different commands there, or none, only moves focus (`src/plugins/docs/page/hidden-tree-keys.ts`).
+- As a docs view's tree hides, its filter box closes first, keeping the filter, since a hidden box must never hold
+  the keys. Every other scope pushed over the docs pane — a docs dialog or picker, the changed-on-disk prompt, help,
+  another plugin's — stays open through the tree hiding or opening over the doc, and focus moves to the doc or the
+  tree only while none is pushed (`src/plugins/docs/page/start.ts`).
 - Every key is a default bind in the default keymap (`src/plugins/keymap.ts`) to a named command, never code
   reacting to a key, so the user's `keymap.json` rebinds any of them.
 - **Sessions sidebar**, left, Claude Code style, replacing the tab strip. It lists every connected session (a relay

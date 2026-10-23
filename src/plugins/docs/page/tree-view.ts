@@ -54,13 +54,15 @@ export interface TreeView {
   ): void;
   down(): void;
   up(): void;
+  // `l`, `h` and Enter act on the selected row as `treeRowAction` says; a
+  // step into a group or up to the parent logs the row it selects.
   // `l`: opens a leaf, expands a collapsed group, steps into an expanded
   // one.
   open(): void;
   // `h`: collapses an expanded group, else selects the parent.
   close(): void;
   // Enter: opens a leaf, expands a collapsed group, collapses an expanded
-  // one.
+  // one; under a filter, steps into it.
   toggle(): void;
   // Selects the first or last visible row, logging its title; nothing on an
   // empty tree.
@@ -236,7 +238,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       return;
     }
     const { node } = row;
-    const action = treeRowAction(tree, row, state.filter, key);
+    const action = treeRowAction(tree, rows, row, state.filter, key);
     if (action.type === 'openLeaf' && node.type === 'entry') {
       draw();
       deps.openLeaf(node);
@@ -249,6 +251,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     } else if (action.type === 'select') {
       state = { ...state, selectedId: action.id };
       draw();
+      deps.log('docs', `selected ${selectedRow()?.node.title}`);
     }
   };
 

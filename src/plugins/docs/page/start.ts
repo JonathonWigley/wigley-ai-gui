@@ -191,16 +191,33 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const docsSheet = sheet();
     docsSheet.classList.add('docs-sheet');
     docsSheet.append(machineView.doc);
-    // A docs dialog, the filter box, the changed-on-disk prompt or help lays
-    // its scope over the view's pane scope, and ends when that scope changes.
+    // Any scope pushed over the view's pane scope counts: a docs dialog or
+    // picker, the filter box, the changed-on-disk prompt, help, or another
+    // plugin's. Each ends when the pane scope changes under it.
     const isScopePushedOver = (view: DocsView): boolean =>
       api.keys.scope() !== qualify(docsManifest.id, view.focusScope());
 
+    // As a view's tree hides, its filter box is dismissed first, since a
+    // hidden box must never hold the keys. Every other pushed scope is kept
+    // through a hide or an open-over, so focus moves only while none is
+    // pushed; a tree key moves it later (`runInDocPane`).
+    const treeHiddenIn = (view: DocsView) => {
+      view.dismissFilter();
+      if (!isScopePushedOver(view)) {
+        view.treeHidden();
+      }
+    };
+
+    const treeOpenedOverIn = (view: DocsView) => {
+      if (!isScopePushedOver(view)) {
+        view.treeOpenedOver();
+      }
+    };
+
     // `add` calls `shown` before it returns only for the first mode added;
     // Sessions mode starts before Docs mode. Focus leaves the tree for the
-    // doc as the side bar hides, unless a pushed scope would end on that
-    // move; a tree key then moves it (`runInDocPane`). Focus moves to the
-    // tree as the side bar opens over the doc.
+    // doc as the side bar hides, and moves to the tree as it opens over the
+    // doc, by `treeHiddenIn` and `treeOpenedOverIn`.
     const mode = api.modes.add({
       id: 'docs',
       title: 'Docs',
@@ -214,12 +231,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         machineView.showFirstTime();
       },
       hidden: () => undefined,
-      sideBarHidden() {
-        if (!isScopePushedOver(machineView)) {
-          machineView.treeHidden();
-        }
-      },
-      sideBarOpenedOver: () => machineView.treeOpenedOver(),
+      sideBarHidden: () => treeHiddenIn(machineView),
+      sideBarOpenedOver: () => treeOpenedOverIn(machineView),
     });
     api.modes.onChanged((modeId) => {
       isDocsModeShown = modeId === 'docs.docs';
@@ -291,14 +304,15 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       held.view.dispose();
     });
 
-    // Showing leaves focus where it is, as Docs mode's side bar showing beside
+    // Hiding moves focus by `treeHiddenIn`, as Docs mode's side bar hiding
+    // does. Showing leaves focus where it is, as the side bar showing beside
     // the doc does.
     const setSessionTreeHidden = (held: SessionDocs, isHidden: boolean) => {
       held.split.setStartHidden(isHidden);
       held.isTreeHidden = isHidden;
       log('docs', isHidden ? 'tree hidden' : 'tree shown');
       if (isHidden) {
-        held.view.treeHidden();
+        treeHiddenIn(held.view);
       }
     };
 
