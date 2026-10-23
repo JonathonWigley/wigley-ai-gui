@@ -128,11 +128,14 @@ export async function startLayoutRegistry(
 
   // Marked from before the write, so a report during it is ignored too; the
   // timer starts once the write settles.
-  const writeOwn = async (relative: string, text: string) => {
+  const writeOwn = async (relative: string, content: string | Uint8Array) => {
     forgetOwnWrite(relative);
     ownWrites.set(relative, undefined);
     try {
-      await data.write(`${LAYOUTS}/${relative}`, text);
+      const file = `${LAYOUTS}/${relative}`;
+      await (typeof content === 'string'
+        ? data.write(file, content)
+        : data.writeBytes(file, content));
     } finally {
       if (ownWrites.has(relative)) {
         ownWrites.set(
@@ -202,8 +205,8 @@ export async function startLayoutRegistry(
           const entries = await data.list(source, { recursive: true });
           for (const entry of entries) {
             if (entry.kind === 'file') {
-              const text = await data.read(`${source}/${entry.path}`);
-              await writeOwn(`${name}/${entry.path}`, text);
+              const bytes = await data.readBytes(`${source}/${entry.path}`);
+              await writeOwn(`${name}/${entry.path}`, bytes);
             }
           }
           hasCss = active.hasCss;

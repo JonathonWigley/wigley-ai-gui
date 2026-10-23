@@ -28,7 +28,15 @@ describe('createMemoryFiles', () => {
   it('writeBytes_BinaryBytes_HoldsTheSameBytes', async () => {
     await files.writeBytes('/h/shot.png', new Uint8Array([0, 255, 137]));
 
-    expect([...files.readBytes('/h/shot.png')]).toEqual([0, 255, 137]);
+    expect([...files.bytesOf('/h/shot.png')]).toEqual([0, 255, 137]);
+  });
+
+  it('readBytes_MissingFile_RejectsAsMissingFile', async () => {
+    const error = await files
+      .readBytes('/h/none.png')
+      .catch((caught: unknown) => caught);
+
+    expect(isMissingFile(error)).toBe(true);
   });
 
   it('modified_NoClock_IsZero', async () => {

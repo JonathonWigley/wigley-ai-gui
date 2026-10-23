@@ -106,6 +106,16 @@ describe('scopedFiles', () => {
     expect(calls).toEqual([]);
   });
 
+  it('readBytes_ParentEscape_RejectsBeforeReading', async () => {
+    const calls: string[] = [];
+    const recorded = recordingCalls(calls);
+
+    await expect(
+      scopedFiles(recorded, ROOT, posixPaths).readBytes('../x.png'),
+    ).rejects.toThrow(`../x.png is outside ${ROOT}`);
+    expect(calls).toEqual([]);
+  });
+
   it('modified_ParentEscape_RejectsBeforeReading', async () => {
     const calls: string[] = [];
     const recorded = recordingCalls(calls);
@@ -213,13 +223,18 @@ function withRealPaths(realPaths: Record<string, string>): MemoryFiles {
   };
 }
 
-// `inner` with `readStart` and `modified` pushing each path asked onto `calls`.
+// `inner` with `readStart`, `readBytes` and `modified` pushing each path asked
+// onto `calls`.
 function recordingCalls(calls: string[]): MemoryFiles {
   return {
     ...inner,
     readStart: async (path, maxBytes) => {
       calls.push(path);
       return inner.readStart(path, maxBytes);
+    },
+    readBytes: async (path) => {
+      calls.push(path);
+      return inner.readBytes(path);
     },
     modified: async (path) => {
       calls.push(path);

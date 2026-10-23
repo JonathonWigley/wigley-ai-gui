@@ -50,6 +50,7 @@ export function createNodeFiles(options: NodeFilesOptions): Files {
     readStart: readFirstBytes,
     write: writeAtomically,
     writeBytes: writeAtomically,
+    readBytes: (file) => readFile(file),
     list: listFolder,
     watch: watchDebounced,
     stat: statPath,

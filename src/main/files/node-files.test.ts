@@ -169,6 +169,21 @@ describe('createNodeFiles', () => {
     expect(isMissingFile(error)).toBe(true);
   });
 
+  it('readBytes_BinaryFile_ReturnsTheSameBytes', async () => {
+    const file = path.join(root, 'shot.png');
+    writeFileSync(file, Buffer.from([0, 255, 137]));
+
+    expect([...(await files.readBytes(file))]).toEqual([0, 255, 137]);
+  });
+
+  it('readBytes_MissingFile_IsMissingFile', async () => {
+    const error = await files
+      .readBytes(path.join(root, 'missing.png'))
+      .catch((caught: unknown) => caught);
+
+    expect(isMissingFile(error)).toBe(true);
+  });
+
   it('readStart_ShorterLimit_ReturnsTheFirstBytes', async () => {
     const file = path.join(root, 'a.txt');
     writeFileSync(file, 'hello');

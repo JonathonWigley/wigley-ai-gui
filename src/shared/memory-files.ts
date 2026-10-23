@@ -15,7 +15,7 @@ export interface MemoryFiles extends Files {
   remove(path: string): void;
   // The file's bytes as `writeBytes` stored them, or its text as UTF-8.
   // Throws, as `isMissingFile` tells, when the file is missing.
-  readBytes(path: string): Uint8Array;
+  bytesOf(path: string): Uint8Array;
 }
 
 interface MemoryWatch {
@@ -111,6 +111,14 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
     return content;
   };
 
+  // A copy, so the caller may change it without changing the stored file.
+  const bytesOf = (path: string): Uint8Array => {
+    const content = contentOf(path);
+    return typeof content === 'string'
+      ? new TextEncoder().encode(content)
+      : content.slice();
+  };
+
   const textOf = (path: string): string => {
     const content = contentOf(path);
     return typeof content === 'string'
@@ -146,6 +154,7 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
     write: async (path, text) => store(path, text),
     // A copy, so the caller may reuse its buffer.
     writeBytes: async (path, bytes) => store(path, bytes.slice()),
+    readBytes: async (path) => bytesOf(path),
     list: async (folder, options) =>
       listUnder(
         contents.keys(),
@@ -217,12 +226,7 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
       removeKey(key);
     },
     remove: (path) => removeKey(keyOf(path)),
-    readBytes: (path) => {
-      const content = contentOf(path);
-      return typeof content === 'string'
-        ? new TextEncoder().encode(content)
-        : content.slice();
-    },
+    bytesOf,
   };
 }
 

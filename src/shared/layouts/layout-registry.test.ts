@@ -292,6 +292,22 @@ describe('copy', () => {
     expect(await files.read('layouts/alpha-2/parts/card.js')).toBe('// card');
   });
 
+  it('copy_UserLayoutWithBinaryFile_CopiesTheSameBytes', async () => {
+    await files.write('layouts/alpha/layout.js', '// js');
+    await files.writeBytes(
+      'layouts/alpha/art.png',
+      new Uint8Array([0x89, 0x50, 0xff, 0xfe, 0x00]),
+    );
+    await files.write('layouts/active', 'alpha');
+    const registry = await start();
+
+    await registry.copy();
+
+    expect([...files.bytesOf('layouts/alpha-2/art.png')]).toEqual([
+      0x89, 0x50, 0xff, 0xfe, 0x00,
+    ]);
+  });
+
   it('copy_LateWatchReportsForCopiedFiles_SendNothing', async () => {
     await files.write('layouts/alpha/layout.js', '// js');
     await files.write('layouts/alpha/layout.css', '/* css */');
