@@ -19,8 +19,8 @@ Decisions: follows the `fake: tool` / `fake: hold` pattern (round 1) · the sess
   then in the same microtask marks the process ended and emits `ended({ code: 0, error: null })`. No reply entry.
 - After it, `send`, `interrupt` and `setControl` throw as on any ended process (`requireRunning`), and `end()`
   resolves at once without a second `ended`: the self-ended process sets the same `endPromise` `end()` returns.
-  If the process has a `kill()` by then (a peer's edit, uncommitted when this plan was refreshed), it already returns
-  early once `endPromise` is set, so a kill after a self-end emits nothing; match its shape.
+  The fake's `kill()` (9d74a98) already returns early once `endPromise` is set, so a kill after a self-end emits
+  nothing; the self-end follows its shape.
 - The constant's comment matches its neighbours' one-line form: "A send of this text ends the process on its own, as
   a CLI that exits."
 - `chat/main/start.ts`: the `chat.start` drive action's description, which lists the fake's messages, adds `"fake:
