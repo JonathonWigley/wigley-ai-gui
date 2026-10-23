@@ -3,7 +3,7 @@
 **Contents**
 
 - **Order** — the dependency tiers at a glance.
-- **Tier 0: fix and stabilise** — bug sweep, drive reliability, the docs index seam.
+- **Tier 0: fix and stabilise** — drive reliability, the docs index seam; step 1, the bug sweep, has landed.
 - **Tier 1: core seams** — disposables, commands and events, keys, shared services, palette.
 - **Tier 2: harness and platform** — harness registry, harness-neutral app, Codex, platform, packaging.
 - **Tier 3: open the plugins** — plugin host, layouts service, forms kinds, sessions, chat and docs hooks.
@@ -19,7 +19,7 @@ after the steps it needs.
 ## Order
 
 ```
- Tier 0  fix and stabilise     1 Bug sweep ── 2 Drive reliability ── 3 Docs index seam (deadline)
+ Tier 0  fix and stabilise     1 Bug sweep (landed) ── 2 Drive reliability ── 3 Docs index seam (deadline)
               │
  Tier 1  core seams            4 Disposables ─┬─ 5 Commands & events ── 8 Palette & finders
               │                               ├─ 6 Keys core
@@ -35,31 +35,10 @@ after the steps it needs.
  Tier 5  cleanup               22 Test cleanup    23 Design skills (other repo)    24 Per-run drive build
 ```
 
-Start with step 1, then step 3, since step 3 must land before docs task 07. Step 2 can run beside them. Step 4 unblocks
+Step 1, the bug sweep, has landed. Start with step 3, since it must land before docs task 07; step 2 can run beside it. Step 4 unblocks
 most of Tiers 1 and 3.
 
 ## Tier 0: fix and stabilise
-
-**1. Correctness bug sweep.** These fixes are small and don't depend on each other; a few of them lose data or leave
-stuck UI.
-- Layout `copy` corrupts binary files (`Files.copy`)
-- Forms submit/cancel has no rollback when `finish` rejects
-- The cancel prompt stays over Docs mode
-- A refused background close only logs
-- The event bus doesn't guard against a throwing listener
-- `chat.askPermission` treats null input as missing
-- Stale sign-in cancel → a dedicated `loaded` message
-- The sessions `connected` map leaks sessions that ended
-- `ConfigStore.dispose` during a rebuild
-- Refuse a `<` leader
-- Split handle removed mid-drag
-- The narrow overlay doesn't close on a row click
-- Focus ring z-index
-- The review list rebuilds on each note keystroke
-- `forms.css` scoping
-- Rail notice entries jump to their comment box
-- Docs: empty-tree state, and a session Docs tab tree with no hide key
-- Raw events: reword `design.md` so the deltas count as covered
 
 **2. Drive reliability and tooling.** Every later step's live checks run through it.
 - Restart sometimes never finishes loading (root-caused; the per-run build is step 24)

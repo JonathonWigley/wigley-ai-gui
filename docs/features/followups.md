@@ -21,18 +21,14 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
   hand-edited today, and the userConfig service writes only `settings.json` and `keymap.json`.
 - A setting that turns every key hint on or off (the conflict prompt, the trash y/n, chat's and forms' hints). Hints already come from `keysFor`, so one setting can blank them in one place. Builds on the user config folder.
 - Editor key replay (a broken key sequence replayed into a box through `EditorHost.typeInto`) has three limits only a custom keymap reaches: focus moving mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on named keys.
-- Rail notice entries are inert in the review: clicking one could jump to the notice's comment box, as question entries jump to their question.
 - A notification click focusing its round is untested live: an unsigned dev build gets no macOS notification (the alerts adapter falls back to Dock bounce and badge), so check it on the first signed build from the packaging follow-up.
 - Fuzzy finders: `Space f f` finds a file, `Space f s` searches text, ranked by the `FuzzyMatcher` page service (the fzf adapter, `src/renderer/fzf/`). Deferred from the docs browser (`docs-browser/design.md`).
 - Keyboard link hints (vimium style) in rendered docs, if Tab between links is not enough.
 - Images in rendered docs: loading local image files into the page needs a safe file protocol of its own; today they show their alt text.
 - Docs delete trashes every link that points at a trashed target. Deleting a synced skill from the tree trashes the repo's folder and leaves `~/.claude/skills/<name>` dangling, because each index entry carries only its real path. The docs index exports the link locations it walked, which `to_json` leaves out today, and `trashTargets` adds them (wigley-ai-marketplace `plugins/wigley/scripts/docs-index` `model.py` `to_json`; `src/plugins/docs/main/doc-files.ts` `trashTargets`).
 - The docs main part watches an open doc's parent folder with the recursive `watch`, so a doc directly in `~/.claude` also sees every transcript write under `~/.claude/projects`. Kept: the watch filters by name on a debounced FSEvents stream. If it costs CPU while sessions stream, add a non-recursive option to `watch` on the Files contract (`src/plugins/docs/main/view-watches.ts`, `src/contracts/files.ts`).
-- A row click in the narrow side bar overlay (below 680 px, opened over the content by `Space k s`) leaves the overlay covering the form the user picked the row to see; close it on the click, as a choice made. Sites: `src/renderer/shell/modes.ts`'s side bar state (`sideBarLayout`, `sideBarAfterResize`) and the sessions row click (`src/plugins/sessions/page/sidebar-view.ts`, `onClick`). Recommended by the agent in ui-design plan C's live check S9; the user can keep today's behaviour by dropping this entry.
-- A docs tree with no rows — a filter matching nothing, or an empty index — draws no empty state, and once Enter closes the filter box nothing shows a filter is on. One line naming the filter and `/` then Esc to clear it (`src/plugins/docs/page/tree-view.ts`).
 - The `on-demand` load-state tag uses the accent tone (`CHIP_TONES`, `src/plugins/docs/page/doc-view.ts`), against DESIGN.md's rule that colour at rest means a status; it was `status-info` before plan C, and `listed` now reads the same as `not-loaded`. Needs an info tone on the Tag primitive (`src/shared/page/ui/`).
 - Docs prints keys as plain text inside three sentences — the conflict prompt (`conflictText`, `src/plugins/docs/page/docs-state.ts`), the trash question and the no-place text (`src/plugins/docs/page/docs-dialogs.ts`) — where AGENTS.md and DESIGN.md say every hint is drawn by Kbd. Draw them through `kbd`, or carve out keys inside a sentence in both docs.
-- A session Docs tab's tree has no key to hide it: the split never hides the tree, and `Space k d` toggles only Docs mode's side bar (`src/plugins/docs/page/start.ts`).
 - One `keyHint` helper in place of four copies of "read `keysFor`, then nothing or a Kbd": chat's `keyHint(keys, platform, command, scope)` (`src/plugins/chat/page/key-hint.ts`), forms' `keyHint` / `appendKeyHint`, which also redraws on keymap change (`src/plugins/forms/page/kinds/card-parts.ts`), sessions' `noSelectionHint` (`src/plugins/sessions/page/start.ts`) and keys' `closeHelpHint` (`src/plugins/keys/page/start.ts`). Chat redraws on each draw and forms on `onChanged`; one helper settles one way.
 - A Codex harness adapter behind `AgentHarness`, declaring Codex's own session controls (`agent-chat/design.md`).
 - A wigley-harness adapter behind `AgentHarness`, so the app drives the C# harness as it drives Claude Code.
@@ -40,12 +36,9 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - Files other than images (PDFs, text files) pasted or dropped into the chat's message box; images land in agent-chat
   plan C.
 - Drive fixtures for two live checks the agent could not reach: docs load states other than `launch` (`on-demand`, `shadowed`, `pending`, `listed`, `not-loaded`, with their reasons) from `docs.seed` or `docs.connectSession` (`src/plugins/docs/main/start.ts`), and a fake-harness message that ends its own session, so the ended composer's disabled chips and send show (`sessionEnded`; the fake harness in chat main). Until then those two halves are settled only in code (`CHIP_TONES`, `src/plugins/docs/page/doc-view.ts`).
-- The doc editor's focus ring (`.wg-document-editor.cm-focused::after`) sits at z-index 300, set in `src/renderer/codemirror-vim/editor-theme.ts`, and can draw over the side bar overlay and help, as the vim panel did before its fix; seen in code, not yet on screen.
 - A dev drive run's page sometimes never finishes loading after `restart`: `ready` rejects with "The page never finished loading within 30 s", after which `quit` exits cleanly (since 9001c51). Measured on 2026-10-23: about 1 in 60 restarts for one run alone, and 8 in 36 for three runs restarting together. Cause: `executeJavaScript` never settles when the page navigates during the call, and `waitFor`'s `holdsBefore` lets that one call hold the whole deadline. Overlapping `electron-forge start`s, which share `.vite/build`, add the navigations (`src/main/electron-driven-window.ts` `run`, `src/main/drive/page-driver.ts` `holdsBefore`, `scripts/drive.mts` `start`).
 - Each dev drive run could build main and preload into its own `.drive/<run>/build` and launch Electron on it directly instead of through `electron-forge start`, so drive runs and the user's `npm start` stop sharing `.vite/build` (forge plugin-vite fixes that folder at `<project>/.vite`). The start lock in `scripts/` covers drive and self-test starts only. Do this if the user's `npm start` keeps getting hit.
 - The docs hidden-tree key routing (tree focused, window too narrow for the tree) has a unit test of its rule and a drive check, but no self-test step: the self-test's fit check restores the width before the next step, so no step can hold a narrow window. A `SelfTestStep` width (`src/contracts/plugin.ts`, `src/main/selftest.ts`) would give it one.
-- `chat.askPermission` with `input: null` asks with the default input, since `args.input ?? DEFAULT_PERMISSION_INPUT` treats null as left out; the drive-args `…Or` readers apply a default only to a left-out field (`src/plugins/chat/main/start.ts`).
-- The sessions plugin's drive `connected` map keeps a session that ended other than through `sessions.end`; forms drops its own on `sessions.ended`, and sessions could do the same (`src/plugins/sessions/main/start.ts`).
 - `wait-log`, and every caller that reads the log length before waiting, misses a page reload that lands between that read and the wait's start; a log mark that carries the navigation count would close it (`markLog`-style change at the `waitForNewLogLine` call sites in `src/main/drive/drive-commands.ts` and `src/main/selftest.ts`).
 - `Split` could subscribe to its ui-state key instead of each owner calling `reloadWidth()` when shown (docs' session tree, forms' rail), so a new split owner cannot forget it (`src/shared/page/ui/split.ts`).
 - A drag style that shows only while the button is held cannot be checked with the drive run's `query`, because `drag` releases before it returns; a `drag --hold` that leaves the button down until a later `release` would make it reachable (`src/main/drive/page-driver.ts`).
@@ -53,9 +46,7 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
   permission-prompt tool path for it is undocumented, so it starts with a spike.
 - When the docs editor lands: an editor key sequence bound only in other scopes is taken from vim in every editor, so a normal-mode Esc in a docs box runs nothing and logs `<Esc> has no bind in docs.…` while forms binds `<Esc>`; a new round selects its session's Form tab, switching away from a Docs tab mid-edit; and a row removed while its round stays open rebuilds that round's Form tab in a hidden body nothing drops after the round closes.
 - A Codex process started from a shell Claude Code spawned inherits `CLAUDECODE=1`, so its row reads `Claude`.
-- Chat raw events drop the streaming deltas (text, thinking and tool input) and `message_start` / `message_delta` / `message_stop`, while `agent-chat/design.md` says every entry carries the events it was built from. Chosen: rule the deltas covered by the start and final assistant events, and say so in design.md.
 - The Claude harness counts one result per sent message (measured on 2.1.304, `agent-chat/claude-stream.md` § Queued messages); a message that gets no result would leave the session `working` and the turn alert unfired. Chosen: probe the cases that might give none (local slash commands, a rejected message) and record them in claude-stream.md before guarding.
-- Chat main cancels a sign-in left running by a reloaded page when the page reads `sessions`, because the page reads it once per load (`src/plugins/chat/main/start.ts`, pinned by `start.test.ts`); a second `sessions` read would cancel a live sign-in. Chosen: a dedicated page `loaded` message that cancels it, apart from the sessions read.
 - Two tabs' take-overs released out of order give the session back to the first taker's tab even though its take-over has ended (pinned by `sessions/page/tabs.test.ts`); only forms takes over today, so it matters once a second plugin does.
 
 ## Extensibility review (2026-10-20)
@@ -90,8 +81,6 @@ now, any harness later). Each item names its sites.
   `page.js`), main `import()`s from disk and the page through `dataUrl`, and a `validateManifest` gives every plugin the
   checks `definePlugin` makes at compile time. `requireListed` and the static lists in `src/plugins/{main,page,manifests}.ts`
   are what block it.
-- The event bus catches a throwing listener, logs it under the listening plugin, and calls the rest
-  (`src/shared/event-bus.ts:23-27`); today one bad listener breaks the publisher.
 - Forms page state survives a page reload: focus, review row and view (review, confirm) go into the draft or a core
   per-plugin page-state slot; pending autosaves flush on `pagehide`; restored rounds don't take over their session again.
 - A layout hot reload keeps the user's place: `round-view.ts` `setLayout` destroys every box, losing focus, cursor, vim
@@ -249,19 +238,9 @@ now, any harness later). Each item names its sites.
 
 ### Bugs and code
 
-- Layout `copy` corrupts images and fonts: `Files` is UTF-8 only (`layout-registry.ts:201-207`). Add `Files.copy` or
-  byte reads, with a test over non-UTF-8 bytes.
-- Forms submit and cancel close the round on the page before main confirms, with no rollback when `finish` rejects
-  (`forms-commands.ts:447-475`): close on main's `roundClosed`, or restore and toast.
-- The cancel prompt can stay over Docs mode where its keys don't act (`forms-view.ts:108`): tie it to the Form tab
-  showing, or push its scope and pop on hide.
-- A Split handle removed from the document mid-drag never saves the dragged width unless it is pressed again, since only its next press or its own `lostpointercapture` ends the drag (`src/shared/page/ui/split.ts`). A teardown that ends the drag when the split leaves the document would save it.
-- A background session's refused close only logs (`forms-commands.ts:422-434`): toast, or select it and confirm.
 - `form-state.ts` (995 lines) splits into session state, answers (dispatching to `PageKind.reduce`), finding rules
   (into `kinds/finding/`), a save tracker and a draft codec.
 - Two types named `FormsView` (`form-state.ts:16`, `forms-view.ts:56`): rename the union, which also names the key scope.
-- `forms.css` scopes its generic classes (`.field`, `.box`, `.choice`, …) under the Form tab.
-- The review list rebuilds every row and its markdown on each keystroke in the round note (`round-view.ts:389-402`).
 - `forms/main/selftest-script.ts`'s 57-line narration becomes a `why` on each `SelfTestStep` and named step groups.
 - Forms' tool routing derives `FORMS_TOOLS` and the dispatch from one list of `{ definition, call }`
   (`tool-session.ts`); `isSavedOutcome` derives from a `SAVED_OUTCOMES` const; `answerResult` and `findingResult`
@@ -285,6 +264,4 @@ now, any harness later). Each item names its sites.
 - Shell layout swap failure paths are untested: `mountShell`'s rollback when a layout throws or misses an area, and the generation-guarded restore after a later `setLayout` (`src/renderer/shell/shell.ts`). Plan B's gallery `Space z s` covers only a good swap and its restore; a throwing test layout and a second swap would cover the rest.
 - `titleBarOverlayProblem` blames the file at the end of a colour alias chain (`src/main/title-bar-overlay.ts`). Colour tokens accept only hex, `transparent` or an alias today, so it is right; if the colour kind widens (`rgb()`, `color-mix()`), a user alias onto a built-in token would be blamed on the built-in theme and fail start.
 - settings.json array elements are checked for the default element's top-level keys only (`checkElements`, `src/main/config/user-settings.ts`); a nested object inside an element would pass with keys missing. No setting has that shape yet.
-- `ConfigStore.dispose` during a running rebuild lets that rebuild still replace `current` once (no listener hears it) (`src/main/config/config-store.ts`).
 - The forms self-test's gallery steps pin the page count: four `<C-j>` steps expect `[gallery] paged down` and the fifth `reached the end` (`src/plugins/forms/main/selftest-script.ts`), so a gallery section that adds a page breaks the run. A step kind that repeats a key until a given line and saves one screenshot per press would remove the count.
-- Refuse `<` as a keymap.json leader, with the existing "must be one key" message (`readLeader`, `src/main/config/user-keymap.ts`). A `<` leader (also stored for `<lt>`) joins any later `>` in a bind into one named key: `<Leader>a>` reads as `<a>`, in the page tokenizer (`vimTokens`, `src/shared/key-hints.ts`) and in vim alike. No default bind has `>` after the leader.
