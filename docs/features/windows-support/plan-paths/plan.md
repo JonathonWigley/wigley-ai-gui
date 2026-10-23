@@ -196,7 +196,7 @@ Shared signatures parts use:
 - [x] [Chat and forms on Paths](05-chat-forms-sessions-paths.md) — after 02
 
 ### Wave 4
-- [ ] [Doc re-read](07-doc-re-read.md) — after 03, 04, 05
+- [x] [Doc re-read](07-doc-re-read.md) — after 03, 04, 05
 - [ ] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
@@ -210,6 +210,7 @@ Review base: 4cadb24
 - 03 · ff56bba · diff read + typecheck (own layers), 8 files 163 pass · concerns: inherited CLAUDE_CONFIG_DIR not normalized
 - 05 · 9c2315f · diff read + typecheck (own plugins), chat+forms 742 pass · concerns: 6 files outside the list took only the new argument
 - 04 · 9b94c49 · diff read + typecheck + lint, docs 243 pass · concerns: realTarget root stop on Windows untested until task 08
+- 07 · 7e32a80 · diff read + lint · concerns: none
 ### Contract changes
 - posixPaths, windowsPaths: two standalone adapter files → two PathSyntax records handed to rootedPaths(syntax): Paths in a new src/shared/paths/rooted-paths.ts · why: the adapters share every rule but root parsing and case folding · consumers: none (02–05 import the constants) · group 01
 - paths in createRoundStore's deps: as planned, plus roundQueries(readAll) → roundQueries(readAll, paths) and createMemoryRoundStore(clock, randomHex) → (clock, randomHex, paths) · why: isOwnedBy runs inside roundQueries, which the disk and preview stores both spread · consumers: forms only · group 05
@@ -232,3 +233,4 @@ Review base: 4cadb24
 - context lookups (each.folder === contextFolder) stay ===: both sides come from one index document, not two spellings · group 04b
 ### Review rounds
 ### Test gate
+- full vitest suite (the range touches shared modules every plugin's tests reach, and task 08 names it; it runs in about a minute, not hours) · 147 files, 2197 passed, 12 skipped (2 already skipped + task 06's 10) · plus typecheck and lint clean · plus npm run selftest outside the Bash sandbox: [selftest] all passed, exit 0 (in the sandbox Electron's mkdir of .selftest/screenshots hit EPERM); cleanup reported EPERM on the temp home and left it behind, the exit code kept

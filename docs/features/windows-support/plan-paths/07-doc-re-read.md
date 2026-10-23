@@ -1,6 +1,6 @@
 # 07 — Doc re-read against the landed code
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03, 04, 05
 Plan: [plan.md](plan.md)
@@ -34,3 +34,4 @@ Commit:    one commit for the group, when there is a fix
 
 ## Proof
 
+Commit 7e32a80. Proof: every checklist line checked against the code; one fix (docs-browser design.md: python3 -X utf8); AGENTS.md, keymap.md and followups.md held as written; lint clean.
