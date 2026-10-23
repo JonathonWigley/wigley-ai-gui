@@ -7,6 +7,7 @@ import type {
 } from '../contracts/agent';
 import {
   createFakeAgentHarness,
+  FAKE_END_TEXT,
   FAKE_HISTORY_IMAGES,
   FAKE_HOLD_TEXT,
   FAKE_PAST_SESSIONS,
@@ -321,6 +322,51 @@ describe('createFakeAgentHarness', () => {
 
     expect(heard).toEqual([['ended', { code: 0, error: null }]]);
     expect(record.ended).toBe(true);
+    expect(() => agent.send({ text: 'x', images: [] })).toThrow(
+      'fake agent process has ended',
+    );
+  });
+
+  it('send_EndText_EmitsUserEntryThenEnded', async () => {
+    const { agent, heard, record } = await startedProcess();
+
+    agent.send({ text: FAKE_END_TEXT, images: [] });
+    await flush();
+
+    expect(heard).toEqual([
+      [
+        'entry',
+        {
+          kind: 'user',
+          id: 'user-1',
+          text: FAKE_END_TEXT,
+          images: [],
+          raw: [{ fake: 'user', text: FAKE_END_TEXT }],
+        },
+      ],
+      ['activity', 'working'],
+      ['ended', { code: 0, error: null }],
+    ]);
+    expect(record.ended).toBe(true);
+  });
+
+  it('end_AfterEndText_ResolvesWithoutSecondEnded', async () => {
+    const { agent, heard } = await startedProcess();
+    agent.send({ text: FAKE_END_TEXT, images: [] });
+    await flush();
+    heard.length = 0;
+
+    await agent.end();
+    await flush();
+
+    expect(heard).toEqual([]);
+  });
+
+  it('send_AfterEndText_Throws', async () => {
+    const { agent } = await startedProcess();
+    agent.send({ text: FAKE_END_TEXT, images: [] });
+    await flush();
+
     expect(() => agent.send({ text: 'x', images: [] })).toThrow(
       'fake agent process has ended',
     );

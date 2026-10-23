@@ -21,6 +21,8 @@ import type {
 export const FAKE_HOLD_TEXT = 'fake: hold';
 // A send of this text runs one tool before the reply.
 export const FAKE_TOOL_TEXT = 'fake: tool';
+// A send of this text ends the process on its own, as a CLI that exits.
+export const FAKE_END_TEXT = 'fake: end';
 // The link every `logIn` reports, and the one code that finishes it.
 export const FAKE_SIGN_IN_URL = 'https://example.invalid/fake-sign-in';
 export const FAKE_SIGN_IN_CODE = 'fake-code';
@@ -71,10 +73,11 @@ export interface FakePastSessionCall {
 // `processes` holds one record per `start` that did not throw, in start order:
 // the same array for the harness's life, each record changing in place.
 // `failNextStart` makes the next `start` throw `message`. Every `end` on a
-// process returns the promise its first `end` returned. Between `holdEnd` and
-// `releaseEnd`, a first `end` marks its process ended and leaves that promise
-// pending; `releaseEnd` emits `ended` for each held process in call order and
-// resolves them. `pastSessionCalls` lists every `listSessions` and `history`
+// process returns the promise its first `end` returned, or, once a
+// `FAKE_END_TEXT` send ended it, the promise of that exit. Between `holdEnd`
+// and `releaseEnd`, a first `end` marks its process ended and leaves that
+// promise pending; `releaseEnd` emits `ended` for each held process in call
+// order and resolves them. A `FAKE_END_TEXT` exit is never held. `pastSessionCalls` lists every `listSessions` and `history`
 // call in call order, failed ones included; `failNextHistory` makes the next
 // `history` reject `message`. Every profile starts signed in as
 // `fake@example.invalid`; `logOut` signs it out and a `logIn` given
@@ -297,9 +300,7 @@ export function createFakeAgentHarness(): FakeAgentHarness {
         requireRunning();
         turn += 1;
         const sentTurn = turn;
-        const isHold = text === FAKE_HOLD_TEXT;
-        isTurnOpen = isHold;
-        queueMicrotask(() => {
+        const emitUserEntry = () => {
           events.entry({
             kind: 'user',
             id: `user-${sentTurn}`,
@@ -308,6 +309,23 @@ export function createFakeAgentHarness(): FakeAgentHarness {
             raw: [{ fake: 'user', text }],
           });
           events.activity('working');
+        };
+        if (text === FAKE_END_TEXT) {
+          record.ended = true;
+          isTurnOpen = false;
+          endPromise = new Promise<void>((resolve) => {
+            queueMicrotask(() => {
+              emitUserEntry();
+              events.ended({ code: 0, error: null });
+              resolve();
+            });
+          });
+          return;
+        }
+        const isHold = text === FAKE_HOLD_TEXT;
+        isTurnOpen = isHold;
+        queueMicrotask(() => {
+          emitUserEntry();
           if (isHold) {
             return;
           }
