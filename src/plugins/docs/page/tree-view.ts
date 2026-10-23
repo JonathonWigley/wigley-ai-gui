@@ -30,9 +30,6 @@ export interface TreeViewDeps {
   // Runs once an accepted or cancelled filter box has closed and focus is
   // back on the tree.
   filterClosed(): void;
-  // Whether the index read last returned a document; false before the first
-  // read lands and while the last read shown returned no document.
-  hasIndex(): boolean;
   keysFor: DocsKeysFor;
   // Draws keys `keysFor` read as a key hint.
   kbd(keys: string): HTMLElement;
@@ -46,7 +43,13 @@ export interface TreeViewDeps {
 export interface TreeView {
   element: HTMLElement;
   setStatus(text: string | null): void;
-  setTree(tree: TreeNode[], pathOf: (entryId: string) => string): void;
+  // `hasIndex`: whether the index read last returned a document; false before
+  // the first read lands and while the last read shown returned no document.
+  setTree(
+    tree: TreeNode[],
+    pathOf: (entryId: string) => string,
+    hasIndex: boolean,
+  ): void;
   down(): void;
   up(): void;
   open(): void;
@@ -253,10 +256,10 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       status.textContent = text ?? '';
       status.title = text ?? '';
     },
-    setTree(next, nextPathOf) {
+    setTree(next, nextPathOf, hasIndex) {
       tree = next;
       pathOf = nextPathOf;
-      hasTree = deps.hasIndex();
+      hasTree = hasIndex;
       const isFirstTree = !hasRows && next.length > 0;
       if (isFirstTree) {
         hasRows = true;

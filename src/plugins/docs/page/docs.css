@@ -38,12 +38,25 @@
   text-overflow: ellipsis;
 }
 
-/* A tree line's keys and words, kept whole. */
+/* A tree line's keys and words, kept whole above the rows. */
 .docs-hint {
   align-items: baseline;
   display: inline-flex;
   flex: none;
   gap: var(--wg-space-1);
+}
+
+/* The empty index and no-match lines wrap inside a narrow pane, a long
+   filter breaking anywhere and the hint between its parts. */
+.docs-tree > .ui-empty {
+  overflow-wrap: anywhere;
+}
+
+.docs-tree > .ui-empty .docs-hint {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: center;
+  min-width: 0;
 }
 
 .docs-filter {

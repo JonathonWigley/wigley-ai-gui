@@ -320,7 +320,6 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       focused = 'tree';
       applyScope();
     },
-    hasIndex: () => document !== null,
     keysFor: deps.keysFor,
     kbd: deps.kbd,
   });
@@ -438,6 +437,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       (entryId) => {
         return entriesById.get(entryId)?.path ?? '';
       },
+      next !== null,
     );
     doc.refreshChips();
   };

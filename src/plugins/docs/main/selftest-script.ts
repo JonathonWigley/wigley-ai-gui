@@ -23,24 +23,28 @@ const STYLE_RELOADED = '# Style\n\nWrite short lines.\nChanged on disk.\n';
 const STYLE_CHANGED_WHILE_EDITING =
   '# Style\n\nWrite short lines.\nChanged while editing.\n';
 
+// A filter matching nothing, with no break in it, wider than the session
+// split's narrowest tree pane.
+const UNMATCHED_FILTER = 'zqzq'.repeat(10);
+
 // Space k d shows Docs mode. Its first show built the index during an earlier
 // plugin's steps, before this script rewrote the fixture, so R rescans: the
-// fixture's eight entries. G selects the last row and gg the first, Global. j to Global's
-// Instructions and l expands it; j to the self-test instructions and l opens
-// CLAUDE.md. Option+l focuses the doc; Ctrl+j scrolls it half a page and Ctrl+k
-// back to the top. i edits it at the top: Ctrl+j scrolls the editor half a
-// page, moving the cursor, and Ctrl+k back to the top, where the cursor is in
-// sight; G and Ctrl+k scroll up from the bottom, moving the cursor into sight.
-// gg, V and Ctrl+j grow the selection with the scroll, and Ctrl+k shrinks it
-// back to the top. Esc, and :q closes the editor. Tab reaches the doc's first
-// link, the style rule, and Enter follows it. A change on disk reloads
-// style.md. i edits it, and a second change on disk shows the changed-on-disk
-// banner. o types a new line below, Esc to normal mode and :w meets the
-// changed-on-disk prompt, where r reloads the disk's text. Another change on
-// disk, a new line and :w again, and o overwrites the disk. A third, and Esc
-// keeps editing; :w shows the prompt again and o overwrites. :q closes the
-// editor. i again, x deletes a character, so :q is refused and :q! drops the
-// edit. Option+h back to the tree; a asks for a kind (the kind picker's
+// fixture's eight entries. G selects the last row and gg the first, Global. j
+// to Global's Instructions and l expands it; j to the self-test instructions
+// and l opens CLAUDE.md. Option+l focuses the doc; Ctrl+j scrolls it half a
+// page and Ctrl+k back to the top. i edits it at the top: Ctrl+j scrolls the
+// editor half a page, moving the cursor, and Ctrl+k back to the top, where the
+// cursor is in sight; G and Ctrl+k scroll up from the bottom, moving the cursor
+// into sight. gg, V and Ctrl+j grow the selection with the scroll, and Ctrl+k
+// shrinks it back to the top. Esc, and :q closes the editor. Tab reaches the
+// doc's first link, the style rule, and Enter follows it. A change on disk
+// reloads style.md. i edits it, and a second change on disk shows the
+// changed-on-disk banner. o types a new line below, Esc to normal mode and :w
+// meets the changed-on-disk prompt, where r reloads the disk's text. Another
+// change on disk, a new line and :w again, and o overwrites the disk. A third,
+// and Esc keeps editing; :w shows the prompt again and o overwrites. :q closes
+// the editor. i again, x deletes a character, so :q is refused and :q! drops
+// the edit. Option+h back to the tree; a asks for a kind (the kind picker's
 // screenshot), j Enter picks rule, Enter its one place, and tidy names it,
 // which creates tidy.md and opens it in the editor; :q closes it. Option+h to
 // the tree, where r opens the path box on tidy.md: seven Backspaces leave the
@@ -50,24 +54,25 @@ const STYLE_CHANGED_WHILE_EDITING =
 // the tree and d asks to move it to the Trash, y does. R rescans: eight entries
 // and neat.md. / filters the tree to neat and Enter keeps the filter, leaving
 // Global, Rules and neat.md; k k j j selects neat.md and d asks to trash it, n
-// keeps it, d again and Esc keeps it; / and Esc clear the filter. / filters
-// to zqzq, which matches nothing, and Enter keeps it; / and Esc clear it. h
-// goes up to Rules and h again collapses it. j l expands Hooks and j l opens
-// the hook's detail view; Option+l, i edits settings.json and :q closes it;
-// Option+h back.
-// j j l expands the plugin, j j l its Plugins group and j l opens the plugin's
-// detail view; Option+l, i edits installed_plugins.json and :q closes it;
-// Option+h back. k k l expands the plugin's Skills and j l opens its cached
-// SKILL.md; Option+l, j and k scroll, Ctrl+j and Ctrl+k scroll half a page, and
-// i refuses to edit it in the plugin cache; Option+h back. a opens the kind
-// picker, j k j l picks rule, and Esc cancels its place picker. c opens the
-// context picker, j Enter picks the repo. Space k d hides the side bar,
-// focusing the doc, and Option+h brings it back; Space k d hides it again and
-// once more shows it; Space v t hides it and shows it again; Option+h focuses
-// the tree. Space k s shows Sessions mode on the docs session's Docs tab (the
-// session tab's screenshot), where R reads its session index, Space v t hides
-// its tree, Option+h shows it, Space v t hides and shows it again, and
-// Option+h focuses the tree; a opens the kind picker. Space k d shows Docs mode,
+// keeps it, d again and Esc keeps it; / and Esc clear the filter. / filters to
+// zqzq, which matches nothing, and Enter keeps it; / and Esc clear it. h goes
+// up to Rules and h again collapses it. j l expands Hooks and j l opens the
+// hook's detail view; Option+l, i edits settings.json and :q closes it;
+// Option+h back. j j l expands the plugin, j j l its Plugins group and j l
+// opens the plugin's detail view; Option+l, i edits installed_plugins.json and
+// :q closes it; Option+h back. k k l expands the plugin's Skills and j l opens
+// its cached SKILL.md; Option+l, j and k scroll, Ctrl+j and Ctrl+k scroll half
+// a page, and i refuses to edit it in the plugin cache; Option+h back. a opens
+// the kind picker, j k j l picks rule, and Esc cancels its place picker. c
+// opens the context picker, j Enter picks the repo. Space k d hides the side
+// bar, focusing the doc, and Option+h brings it back; Space k d hides it again
+// and once more shows it; Space v t hides it and shows it again; Option+h
+// focuses the tree. Space k s shows Sessions mode on the docs session's Docs
+// tab (the session tab's screenshot), where R reads its session index,
+// Space v t hides its tree, Option+h shows it, Space v t hides and shows it
+// again, and Option+h focuses the tree. / filters it to a long filter matching
+// nothing and Enter keeps it, / and Esc clear it; / filters it to style and
+// Enter keeps it, and / and Esc clear it. a opens the kind picker. Space k d shows Docs mode,
 // which closes that picker, so j moves Docs mode's tree. / filters it to neat
 // and Enter keeps the filter; j j j j selects neat.md and r opens the path box,
 // where seven Backspaces and kept.md rename it, and the session's view reads
@@ -236,7 +241,6 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
     {
       keys: ['/', ...'zqzq', 'Enter'],
       expect: '[docs] no docs match "zqzq"',
-      checksFit: true,
     },
     { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
     { keys: ['h', 'h'], expect: '[docs] collapsed Rules' },
@@ -308,8 +312,22 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
     { keys: ['<A-h>'], expect: '[docs] tree shown' },
     { keys: [' ', 'v', 't'], expect: '[docs] tree hidden' },
     { keys: [' ', 'v', 't'], expect: '[docs] tree shown' },
-    // The tree scope back for the kind picker.
+    // The tree scope back for the filter and the kind picker.
     { keys: ['<A-h>'], expect: '[docs] tree focused' },
+    // The session split keeps its tree at the fit check's width, where Docs
+    // mode hides its side bar, so the tree's lines are checked here.
+    {
+      keys: ['/', ...UNMATCHED_FILTER, 'Enter'],
+      expect: `[docs] no docs match "${UNMATCHED_FILTER}"`,
+      checksFit: true,
+    },
+    { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
+    {
+      keys: ['/', ...'style', 'Enter'],
+      expect: '[docs] filtered the tree: style',
+      checksFit: true,
+    },
+    { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
     { keys: ['a'], expect: '[docs] create: pick a kind' },
     { keys: [' ', 'k', 'd'], expect: '[page] marked Docs in the activity bar' },
     { keys: ['j'], expect: '[page] j ran docs.treeDown' },
