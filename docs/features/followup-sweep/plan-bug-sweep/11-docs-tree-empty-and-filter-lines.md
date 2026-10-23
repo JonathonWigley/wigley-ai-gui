@@ -1,6 +1,6 @@
 # 11 — The docs tree says when nothing matches, when the index is empty, and when a filter is on
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -177,4 +177,6 @@ The empty-index line has no drive check: no drive action seeds an index with no 
 `treeLine_EmptyIndex_RescanHint` pins its text; the line shares its DOM path with the no-match line.
 
 ## Proof
+
+d652347 · diff read, every Produces present plus hasIndex; document set before setTree in docs-view; checksFit is a SelfTestStep field · concerns: no-match line sits near the pane top, not vertically centred (.ui-empty centres horizontally only) — task 15 screenshot; hidden slots drop out of grid placement, rows scroll left to task 15's G check
 

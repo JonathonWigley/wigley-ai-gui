@@ -1,6 +1,6 @@
 # 03 — The review redraws its rows only when they change, and a notice's rail entry jumps to its card
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)

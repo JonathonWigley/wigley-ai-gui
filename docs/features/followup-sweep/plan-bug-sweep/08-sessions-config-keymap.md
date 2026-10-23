@@ -1,6 +1,6 @@
 # 08 — Sessions' drive map drops ended sessions, ConfigStore stops on dispose, `<` refused as leader
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -94,6 +94,8 @@ Done when: `npm run typecheck` and `npm run lint` pass; the test gate runs the t
 Commit:    one commit for the group
 
 ## Proof
+
+687221f · diff read, addDriveActions signature as planned; each new test failed with its guard removed (worker) · concerns: followups.md still lists the < leader entry — task 14 removes it; a sessions start.ts comment line exceeds the wrap width
 
 ## Live checks for task 15
 

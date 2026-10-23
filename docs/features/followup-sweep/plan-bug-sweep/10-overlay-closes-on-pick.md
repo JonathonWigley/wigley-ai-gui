@@ -1,6 +1,6 @@
 # 10 — A pick in the narrow side bar overlay closes it
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 06, 11
 Plan: [plan.md](plan.md)

@@ -180,15 +180,15 @@ that needs a file another task in its wave also lists is moved to a later wave.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Round finish waits for main](01-round-finish-waits-for-main.md)
-- [ ] [Forms CSS scoping](04-forms-css-scoping.md)
-- [ ] [Files read bytes](05-files-read-bytes.md)
-- [ ] [Event bus catches listeners](06-event-bus-catches-listeners.md)
-- [ ] [Chat askPermission and loaded](07-chat-ask-permission-and-loaded.md)
-- [ ] [Sessions, config and keymap fixes](08-sessions-config-keymap.md)
-- [ ] [Split ends drag on pointer up](09-split-ends-drag-on-pointer-up.md)
-- [ ] [Docs tree empty and filter lines](11-docs-tree-empty-and-filter-lines.md)
-- [ ] [Focus ring isolation](13-focus-ring-isolation.md)
+- [x] [Round finish waits for main](01-round-finish-waits-for-main.md)
+- [x] [Forms CSS scoping](04-forms-css-scoping.md)
+- [x] [Files read bytes](05-files-read-bytes.md)
+- [x] [Event bus catches listeners](06-event-bus-catches-listeners.md)
+- [x] [Chat askPermission and loaded](07-chat-ask-permission-and-loaded.md)
+- [x] [Sessions, config and keymap fixes](08-sessions-config-keymap.md)
+- [x] [Split ends drag on pointer up](09-split-ends-drag-on-pointer-up.md)
+- [x] [Docs tree empty and filter lines](11-docs-tree-empty-and-filter-lines.md)
+- [x] [Focus ring isolation](13-focus-ring-isolation.md)
 
 ### Wave 2
 - [ ] [Cancel prompt and background close](02-cancel-prompt-and-background-close.md) — after 01
@@ -206,10 +206,28 @@ that needs a file another task in its wave also lists is moved to a later wave.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 2bd62ed (peer sessions share this tree: the review range is this run's commit list)
 
 ### Groups
+- 05 Files read bytes · 24fe14f · diff read, Produces all present; typecheck clean in its files (errors only in running groups 01 and 11) · concerns: none
+- 07 Chat askPermission and loaded · 80c86cd · diff read, Produces present (loaded invoke and handler); typecheck clean in its files · concerns: chatMainPart header comment left as is, still true
+- 06 Event bus catches listeners · e223013 · diff read, pluginEvents signature as planned; typecheck clean in its files · concerns: worker ran npx prettier (cached, not a dependency) on its five files and restored them with oxfmt — hard-gate breach reported to the user
+- 04 Forms CSS scoping · e5cdd22 · diff read: stripping the :where(.form-tab) prefix and the new comment gives the old file byte for byte; only .form-tab and .status- rules start a line · concerns: none
+- 09 Split ends drag on pointer up · 0d2ae5d · diff read, createSplit and Split unchanged; window listeners added at pointerdown and removed in endDrag; lostpointercapture guard keeps a single save · concerns: endDragOnRelease and endDrag refer to each other (safe: neither runs before both exist)
+- 11 Docs tree empty and filter lines · d652347 · diff read, every Produces present plus hasIndex; document set before setTree in docs-view; checksFit is a SelfTestStep field · concerns: no-match line sits near the pane top, not vertically centred (.ui-empty centres horizontally only) — task 15 screenshot; hidden slots drop out of grid placement, rows scroll left to task 15's G check
+- 08 Sessions, config and keymap fixes · 687221f · diff read, addDriveActions signature as planned; each new test failed with its guard removed (worker) · concerns: followups.md still lists the < leader entry — task 14 removes it; a sessions start.ts comment line exceeds the wrap width
+- 13 Focus ring isolation · bf6d8d2 · diff read, isolation: isolate on the rule; ring rule unchanged · concerns: none
+- 01 Round finish waits for main · 44968c9 · diff read, every Produces present as named; typecheck, lint and the forms tests pass (worker) · concerns: roundClosed vs finish-reply order over real IPC untested (page does not depend on it) — task 15 live check
 ### Contract changes
+- TreeViewDeps: keysFor, kbd → also hasIndex(): boolean, wired as () => document !== null · why: a null document and an empty index both reach setTree as [] · consumers: none (10 and 12 edit docs-view later) · group 11
 ### Rulings
+- Existing pluginEvents tests whose log nothing asserts pass logInto([]) inline — keeps those tests unchanged but for the argument — cost: none beyond style · group 06
+- plan.py is missing from the installed wigley 1.8.0 (no scripts/plan); the Run log, boxes and Status lines are kept through a hand stand-in with the same edits — cost: none if the edits match plan-folder.md · lead
+- forms.css: the :where() comment sits in its own block above the round rules, leaving the existing comment's wording — cost: a one-line move · group 04
+- Split: one endDragOnRelease closure serves both pointerup and pointercancel — same behaviour as two — cost: none · group 09
+- Tree line hasTree follows the latest setTree, not a sticky flag — no empty-index line shows under a failed read after a good one — cost: a failed read hides the line · group 11
+- Tree keysChanged recomputes the line and redraws only when the key strings differ — cost: kbd drawing a same string differently would not redraw · group 11
+- readLeader computes page keys once inside the try so the < refusal joins the single refusal if — cost: shape only · group 08
+- Forms apply checks a SENDING_ACTIONS allow-list while the active round sends; sendStarted and sendFailed carry no view check (finishActiveRound checks it) — cost: none today · group 01
 ### Review rounds
 ### Test gate

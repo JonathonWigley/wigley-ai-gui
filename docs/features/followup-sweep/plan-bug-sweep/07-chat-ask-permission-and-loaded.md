@@ -1,6 +1,6 @@
 # 07 — Chat: askPermission keeps an explicit null input, `loaded` cancels a stale sign-in, raw comments
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -81,6 +81,8 @@ Done when: `npm run typecheck` and `npm run lint` pass; the test gate runs the t
 Commit:    one commit for the group
 
 ## Proof
+
+80c86cd · diff read, Produces present (loaded invoke and handler); typecheck clean in its files · concerns: chatMainPart header comment left as is, still true
 
 ## Live checks for task 15
 

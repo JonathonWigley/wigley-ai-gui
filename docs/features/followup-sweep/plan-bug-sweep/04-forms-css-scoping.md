@@ -1,6 +1,6 @@
 # 04 — Scope the Form tab's generic classes in `forms.css`
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -53,6 +53,8 @@ Done when: `npm run lint` passes (`check-styles.mts` reports the files clean); t
 Commit:    one commit, "forms.css: scope the Form tab's generic classes with :where(.form-tab), leaving the status line unscoped"
 
 ## Proof
+
+e5cdd22 · diff read: stripping the :where(.form-tab) prefix and the new comment gives the old file byte for byte; only .form-tab and .status- rules start a line · concerns: none
 
 ## Live checks for task 15
 

@@ -1,6 +1,6 @@
 # 05 — Files reads bytes; layout copy copies every file through bytes
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -83,4 +83,6 @@ Done when: `npm run typecheck` and `npm run lint` pass; the test gate runs the t
 Commit:    one commit for the group
 
 ## Proof
+
+24fe14f · diff read, Produces all present; typecheck clean in its files (errors only in running groups 01 and 11) · concerns: none
 

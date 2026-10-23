@@ -1,6 +1,6 @@
 # 01 — Submit and cancel close the round only when main says it closed
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -169,6 +169,8 @@ Done when: `npm run typecheck` and `npm run lint` pass; the test gate runs the t
 Commit:    one commit, "Forms: submit and cancel close the round only on main's roundClosed; a failed finish keeps the round with an error toast"
 
 ## Proof
+
+44968c9 · diff read, every Produces present as named; typecheck, lint and the forms tests pass (worker) · concerns: roundClosed vs finish-reply order over real IPC untested (page does not depend on it) — task 15 live check
 
 ## Live checks for task 15
 

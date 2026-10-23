@@ -1,6 +1,6 @@
 # 13 — The doc editor's focus ring stays inside the editor's stacking
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -62,4 +62,6 @@ state rather than reproduce the old one.
   edges stay visible over the gutter and over the vim panel's top border, at `screenshot` zoom.
 
 ## Proof
+
+bf6d8d2 · diff read, isolation: isolate on the rule; ring rule unchanged · concerns: none
 

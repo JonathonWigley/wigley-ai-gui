@@ -1,6 +1,6 @@
 # 02 — The cancel prompt leaves with its view, and a background round's close says why
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)

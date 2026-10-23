@@ -1,6 +1,6 @@
 # 06 — A plugin's throwing event listener is logged, and the rest still run
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -59,4 +59,6 @@ Done when: `npm run typecheck` (the file's `@ts-expect-error` lines included) an
 Commit:    one commit for the group
 
 ## Proof
+
+e223013 · diff read, pluginEvents signature as planned; typecheck clean in its files · concerns: worker ran npx prettier (cached, not a dependency) on its five files and restored them with oxfmt — hard-gate breach reported to the user
 

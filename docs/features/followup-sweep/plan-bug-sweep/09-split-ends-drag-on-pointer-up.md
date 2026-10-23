@@ -1,6 +1,6 @@
 # 09 — A Split drag ends on the window's pointer up, so a handle removed mid-drag still saves
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -82,4 +82,6 @@ Commit:    one commit for the group
   between press and release); the unit tests carry it.
 
 ## Proof
+
+0d2ae5d · diff read, createSplit and Split unchanged; window listeners added at pointerdown and removed in endDrag; lostpointercapture guard keeps a single save · concerns: endDragOnRelease and endDrag refer to each other (safe: neither runs before both exist)
 
