@@ -247,6 +247,7 @@ export function chatCommandHandlers(
     closeImage: () => deps.viewer.close(),
     submitCode: () => deps.signIn.submitCode(),
     cancelSignIn: () => deps.signIn.cancel(),
+    copySignInLink: () => deps.signIn.copyLink(),
     endSession: () => deps.confirm.end(),
     keepSession: () => deps.confirm.keep(),
     pickerDown: () => picker.down(),

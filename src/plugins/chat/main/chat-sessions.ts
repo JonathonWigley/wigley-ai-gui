@@ -29,6 +29,7 @@ import type {
   StartRequest,
 } from '../contract';
 import type { ArchivedSessions } from './archived-sessions';
+import { CHAT_HARNESS_ID, requireChatHarness, requireProfile } from './lookups';
 import {
   CANCELLED_REASON,
   NOT_OWNED_TEXT,
@@ -39,7 +40,6 @@ import {
 } from './permission-tool';
 import type { RecentFolders } from './recent-folders';
 
-export const CHAT_HARNESS_ID = 'claude';
 export const TURN_FINISHED_TITLE = 'Turn finished';
 
 export interface ChatSessionsDeps {
@@ -152,30 +152,6 @@ function sameNames(held: readonly string[], names: readonly string[]): boolean {
     held.length === names.length &&
     held.every((name, index) => name === names[index])
   );
-}
-
-export function requireProfile(
-  profiles: readonly ChatProfile[],
-  name: string,
-): ChatProfile {
-  const profile = profiles.find((held) => held.name === name);
-  if (!profile) {
-    throw new Error(`chat has no profile "${name}"`);
-  }
-  return profile;
-}
-
-// The harness chat runs its sessions on.
-export function requireChatHarness(
-  harnesses: readonly AgentHarness[],
-): AgentHarness {
-  const harness = harnesses.find(
-    (candidate) => candidate.id === CHAT_HARNESS_ID,
-  );
-  if (!harness) {
-    throw new Error(`no agent harness "${CHAT_HARNESS_ID}"`);
-  }
-  return harness;
 }
 
 function shownActivity(held: HeldSession): ProcessActivity {

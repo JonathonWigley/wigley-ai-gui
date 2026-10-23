@@ -198,6 +198,7 @@ export const defaultKeymap = {
     { keys: '<Esc>', scope: 'chat.reason', command: 'chat.cancelReason' },
     { keys: '<D-Enter>', scope: 'chat.signIn', command: 'chat.submitCode' },
     { keys: '<Esc>', scope: 'chat.signIn', command: 'chat.cancelSignIn' },
+    { keys: 'y', scope: 'chat.signIn', command: 'chat.copySignInLink' },
     { keys: 'y', scope: 'chat.confirm', command: 'chat.endSession' },
     { keys: 'n', scope: 'chat.confirm', command: 'chat.keepSession' },
     { keys: '<Esc>', scope: 'chat.confirm', command: 'chat.keepSession' },
@@ -257,6 +258,7 @@ export const defaultKeymap = {
       command: 'chat.cancelReason',
       where: 'box',
     },
+    // A code is one line, so Enter sends it in insert mode too.
     {
       keys: '<CR>',
       scope: 'chat.signIn',
@@ -264,9 +266,21 @@ export const defaultKeymap = {
       where: 'box',
     },
     {
+      keys: '<CR>',
+      scope: 'chat.signIn',
+      command: 'chat.submitCode',
+      mode: 'insert',
+    },
+    {
       keys: '<Esc>',
       scope: 'chat.signIn',
       command: 'chat.cancelSignIn',
+      where: 'box',
+    },
+    {
+      keys: '<Leader>cy',
+      scope: 'chat.signIn',
+      command: 'chat.copySignInLink',
       where: 'box',
     },
 

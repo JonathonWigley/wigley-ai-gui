@@ -79,6 +79,11 @@ export const chatManifest = definePlugin({
       group: 'signIn',
       runsIn: 'page',
     },
+    copySignInLink: {
+      label: 'copy the sign-in link',
+      group: 'signIn',
+      runsIn: 'page',
+    },
     pickMode: { label: 'permission mode', group: 'controls', runsIn: 'page' },
     pickEffort: { label: 'effort', group: 'controls', runsIn: 'page' },
     pickModel: { label: 'model', group: 'controls', runsIn: 'page' },

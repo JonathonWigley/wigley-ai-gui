@@ -29,13 +29,10 @@ import layoutTypes from '../layouts/layout.d.ts?raw';
 import { chatManifest } from '../manifest';
 import { createAccounts } from './accounts';
 import { createArchivedSessions } from './archived-sessions';
-import {
-  type ChatSessions,
-  createChatSessions,
-  requireChatHarness,
-} from './chat-sessions';
+import { type ChatSessions, createChatSessions } from './chat-sessions';
 import { askFixturePermission } from './fixtures';
 import { createFolderChoices } from './folder-choices';
+import { requireChatHarness } from './lookups';
 import { PERMISSION_TOOLS } from './permission-tool';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript } from './selftest-script';
@@ -191,8 +188,9 @@ export function addDriveActions(
 // Starts, resumes and runs the Claude Code sessions the page asks for, lists
 // and archives the saved ones, answers their permission prompts through the
 // `permission_prompt` tool, keeps the recent project folders and serves them
-// merged with the harness's, signs profiles in and out, serves the page its
-// chat layouts, and offers a drive run its fixtures.
+// merged with the harness's, signs profiles in and out (cancelling a running
+// sign-in when the page loads again or the part is disposed), serves the page
+// its chat layouts, and offers a drive run its fixtures.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -233,7 +231,12 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       window: services.window,
       log: services.log,
     });
-    api.channel.handle('sessions', () => chat.sessions());
+    // The page reads its sessions once on each load: a sign-in running then
+    // was started by a page that is gone, and would refuse every later one.
+    api.channel.handle('sessions', () => {
+      accounts.cancelRunning();
+      return chat.sessions();
+    });
     api.channel.handle('start', (request) => chat.start(request));
     api.channel.handle('pastSessions', (projectDir, profile) =>
       chat.pastSessions(projectDir, profile),
@@ -249,9 +252,9 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       chat.notice(sessionId, text, tone),
     );
     api.channel.handle('accountStatus', (profile) => accounts.status(profile));
-    api.channel.handle('logIn', (profile) => accounts.logIn(profile));
-    api.channel.handle('logInCode', (code) => accounts.sendCode(code));
-    api.channel.handle('cancelLogIn', () => accounts.cancel());
+    api.channel.handle('logIn', (id, profile) => accounts.logIn(id, profile));
+    api.channel.handle('logInCode', (id, code) => accounts.sendCode(id, code));
+    api.channel.handle('cancelLogIn', (id) => accounts.cancel(id));
     api.channel.handle('logOut', (profile) => accounts.logOut(profile));
     api.channel.handle('interrupt', (sessionId) => chat.interrupt(sessionId));
     api.channel.handle('setControl', (sessionId, controlId, value) =>
@@ -297,6 +300,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     return {
       commands: {},
       dispose: () => {
+        accounts.cancelRunning();
         for (const action of driveActions) {
           action.dispose();
         }

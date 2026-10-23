@@ -84,8 +84,8 @@ const LONG_KEYS = [
 // The line an account command's notice adds; the notice's text is not logged.
 const NOTICE_LINE = '[chat] notice entry added in chat-selftest';
 const SIGN_IN_LINK_LINE = '[chat] sign-in link shown for work';
-// Main's line for a sign-in that ended with no error, so signed in.
-const SIGNED_IN_LINE = '[chat] sign-in for work ended';
+// The dialog's line for a sign-in that ended with no error, signed in.
+const SIGNED_IN_LINE = '[chat] signed in to work';
 
 // Each step expects the last line its keys cause: the fake emits in microtasks,
 // so an earlier line can land before the step's wait begins. Each session opens
@@ -121,11 +121,14 @@ const SIGNED_IN_LINE = '[chat] sign-in for work ended';
 // the fake's command, Tab accepts it and Esc Enter sends it. The fake starts
 // every profile signed in: /status reports it in a notice, /logout signs the
 // work profile out and /status reports that. /login opens the sign-in dialog
-// on the fake's link, its box in insert mode: Esc leaves insert mode and Esc
-// again cancels, the fake's end reaching a closed dialog. /login again, the
-// fake's code and Cmd+Enter sign in; /logout, /login, the code and Esc Enter,
-// Enter sending from the box's normal mode, sign in again, so the profile ends
-// signed in, as /status then reports. Space c x finds no attached image and Esc
+// on the fake's link, its box in insert mode: Esc leaves insert mode, Space c y
+// copies the link, and Esc again cancels, main logging the cancelled end it
+// sends no page. /login again, the fake's code and Cmd+Enter sign in;
+// /logout, /login, the code and Esc Enter, Enter sending from the box's normal
+// mode, sign in again; /logout, /login, the code and Enter, Enter sending from
+// insert mode, sign in again. /login on the signed-in profile and a wrong code
+// fail with the fake's Wrong code though the profile still reads signed in,
+// as /status then reports. Space c x finds no attached image and Esc
 // leaves the box. gg focuses the first entry, the resumed history's message
 // with the fake's two images: Enter opens the viewer on the first, l steps to
 // the second and stops there, h steps back and stops at the first, and Esc
@@ -269,9 +272,10 @@ const STEPS: SelfTestStep[] = [
   { keys: sendKeys('/logout'), expect: NOTICE_LINE },
   { keys: sendKeys('/status'), expect: NOTICE_LINE },
   { keys: sendKeys('/login'), expect: SIGN_IN_LINK_LINE, checksFit: true },
+  { keys: ['Escape', ' ', 'c', 'y'], expect: '[chat] sign-in link copied' },
   {
-    keys: ['Escape', 'Escape'],
-    expect: '[chat] sign-in for work ended with its dialog closed',
+    keys: ['Escape'],
+    expect: '[chat] sign-in for work ended: Sign-in cancelled',
   },
   { keys: sendKeys('/login'), expect: SIGN_IN_LINK_LINE },
   {
@@ -283,6 +287,14 @@ const STEPS: SelfTestStep[] = [
   {
     keys: [...FAKE_SIGN_IN_CODE, 'Escape', 'Enter'],
     expect: SIGNED_IN_LINE,
+  },
+  { keys: sendKeys('/logout'), expect: NOTICE_LINE },
+  { keys: sendKeys('/login'), expect: SIGN_IN_LINK_LINE },
+  { keys: [...FAKE_SIGN_IN_CODE, 'Enter'], expect: SIGNED_IN_LINE },
+  { keys: sendKeys('/login'), expect: SIGN_IN_LINK_LINE },
+  {
+    keys: ['x', 'Enter'],
+    expect: '[chat] sign-in failed for work: Wrong code',
   },
   { keys: sendKeys('/status'), expect: NOTICE_LINE },
   { keys: [' ', 'c', 'x'], expect: '[chat] no attached image' },

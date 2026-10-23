@@ -41,8 +41,10 @@ export interface StartPromptDeps {
 // signs a signed-out profile in through the sign-in dialog, then asks for a
 // new or saved session when the folder has saved ones, and starts or
 // resumes a chat session there, revealing its Chat tab. Esc at any step
-// starts nothing. `toggleArchive` and `showArchived` act on the session step
-// while it is open.
+// starts nothing. Opening the prompt again drops the earlier one: an answer
+// or a sign-in that arrives for it is logged and goes no further.
+// `toggleArchive` and `showArchived` act on the session step while it is
+// open.
 export interface StartPrompt {
   open(): void;
   toggleArchive(): void;
@@ -63,9 +65,11 @@ interface SessionStep {
   isWriting: boolean;
 }
 
-// What the prompt has gathered once its first answer arrives.
+// What the prompt has gathered once its first answer arrives. `isCurrent`
+// is false once the prompt has opened again.
 interface PromptContext {
   deps: StartPromptDeps;
+  isCurrent(): boolean;
   recent: readonly RecentFolder[];
   profiles: readonly ChatProfile[];
 }
@@ -81,17 +85,36 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const shownStep = (): SessionStep | null =>
     step?.shown?.isOpen() === true ? step : null;
 
+  // Counts the prompt's opens, so an answer can tell its own open is gone.
+  let opens = 0;
+
+  // True, logging `what` as dropped, once the prompt has opened again since
+  // the open `isCurrent` belongs to.
+  const isStale = (isCurrent: () => boolean, what: string) => {
+    if (isCurrent()) {
+      return false;
+    }
+    log('chat', `${what} dropped: the start prompt opened again`);
+    return true;
+  };
+
   const openPrompt = () => {
     step = null;
+    opens += 1;
+    const opened = opens;
+    const isCurrent = () => opens === opened;
     void channel.invoke('recentFolders').then(
       (recent) => {
+        if (isStale(isCurrent, 'recent folders')) {
+          return;
+        }
         const profiles = deps.profiles();
         if (profiles.length === 0) {
           log('chat', 'no profiles in the chat settings');
           deps.toast("Add a profile to chat's profiles setting first", 'error');
           return;
         }
-        openFolderStep({ deps, recent, profiles });
+        openFolderStep({ deps, isCurrent, recent, profiles });
       },
       (error: unknown) => {
         log('chat', `start prompt not opened: ${errorText(error)}`);
@@ -117,6 +140,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const chooseFolder = (context: PromptContext) => {
     void channel.invoke('chooseFolder').then(
       (projectDir) => {
+        if (isStale(context.isCurrent, 'chosen folder')) {
+          return;
+        }
         if (projectDir === null) {
           log('chat', 'no folder chosen');
           openFolderStep(context);
@@ -153,7 +179,8 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
 
   // Goes on to the session step when the profile is signed in; a signed-out
   // profile opens the sign-in dialog first, going on only once it finishes
-  // signed in. A status that cannot be read goes on.
+  // signed in. A status that cannot be read goes on. Nothing goes on once the
+  // prompt has opened again.
   const checkAccount = (
     context: PromptContext,
     projectDir: string,
@@ -161,12 +188,18 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   ) => {
     void channel.invoke('accountStatus', profile.name).then(
       (status) => {
+        if (isStale(context.isCurrent, `${profile.name}'s status`)) {
+          return;
+        }
         if (status.signedIn) {
           listSessions(context, projectDir, profile);
           return;
         }
         log('chat', `${profile.name} is signed out`);
         deps.signIn.open(profile.name, (signedIn) => {
+          if (isStale(context.isCurrent, `${profile.name}'s sign-in`)) {
+            return;
+          }
           if (signedIn) {
             listSessions(context, projectDir, profile);
             return;
@@ -176,6 +209,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       },
       (error: unknown) => {
         log('chat', `account status not read: ${errorText(error)}`);
+        if (isStale(context.isCurrent, `${profile.name}'s status`)) {
+          return;
+        }
         listSessions(context, projectDir, profile);
       },
     );
@@ -205,6 +241,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     };
     void channel.invoke('pastSessions', projectDir, profile.name).then(
       (rows) => {
+        if (isStale(context.isCurrent, 'saved sessions')) {
+          return;
+        }
         if (rows.length === 0) {
           startSession(context, projectDir, profile);
           return;
@@ -213,6 +252,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       },
       (error: unknown) => {
         log('chat', `saved sessions not listed: ${errorText(error)}`);
+        if (isStale(context.isCurrent, 'saved sessions')) {
+          return;
+        }
         deps.toast(`Saved sessions not listed: ${errorText(error)}`, 'error');
         openWith([]);
       },

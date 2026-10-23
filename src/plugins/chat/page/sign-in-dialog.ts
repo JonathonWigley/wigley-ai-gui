@@ -1,21 +1,18 @@
 import type { EditorHost } from '../../../contracts/editor';
-import type {
-  PageChannel,
-  PushedScope,
-  ToastTone,
-} from '../../../contracts/plugin';
-import { errorText } from '../../../shared/error-text';
+import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
 import { textButton } from '../../../shared/page/ui/button';
 import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type { ChatChannel } from '../contract';
-import { accountText } from './account-commands';
+import { chatCommand } from '../ids';
 import {
   type DialogAction,
   type DialogDeps,
   followKeymap,
 } from './chat-dialogs';
+import { keyHint } from './key-hint';
+import { createSignInFlow } from './sign-in-flow';
 
 export interface SignInDialogDeps extends DialogDeps {
   editor: EditorHost;
@@ -24,17 +21,21 @@ export interface SignInDialogDeps extends DialogDeps {
 }
 
 // The sign-in dialog, one at a time, belonging to a profile rather than a
-// session. `open` starts the profile's sign-in and shows the dialog: the link
-// main reports with a Copy button, and a box for a code the sign-in page
-// shows; while the dialog is open, `open` focuses its box and starts nothing.
-// `submitCode` sends the box's trimmed text when not empty. `cancel` cancels
-// the sign-in, closes the dialog and calls `finished(false)`. The sign-in's
-// end closes the dialog, calls `finished` with whether the profile is now
-// signed in, and toasts the outcome; a `logIn` that rejects closes it too,
-// calling `finished(false)`. Each does nothing while the dialog is closed.
+// session. `open` starts a sign-in of the profile and shows the dialog: the
+// link main reports with a Copy button, and a box for a code the sign-in page
+// shows; while the dialog is open, `open` cancels its sign-in first.
+// `submitCode` sends the box's trimmed text when not empty. `copyLink` copies
+// the link once main reported one. `cancel` cancels the sign-in and closes the
+// dialog. The sign-in's end closes the dialog and toasts the outcome: signed in
+// only when it finished with no error and the profile reads signed in. A
+// `logIn` that rejects closes it too. Each does nothing while the dialog is
+// closed. `finished` is called exactly once per open: with whether the profile
+// is now signed in at the sign-in's end, and false on a cancel, a replacing
+// `open` or a rejected `logIn`.
 export interface SignInDialog {
   open(profile: string, finished?: (signedIn: boolean) => void): void;
   submitCode(): void;
+  copyLink(): void;
   cancel(): void;
 }
 
@@ -55,20 +56,10 @@ const SIGN_IN_ACTIONS: readonly DialogAction[] = [
 
 const WAITING_TEXT = 'Waiting for the sign-in link…';
 
-interface OpenSignIn {
-  profile: string;
-  finished(signedIn: boolean): void;
-  scope: PushedScope;
-  url: string | null;
-}
-
 export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
-  const { channel, log } = deps;
   const dialog = createDialog('Sign in');
   const link = element('span', 'chat-sign-in-link', WAITING_TEXT);
-  const copy = textButton('Copy', () => copyLink(), { variant: 'ghost' });
   const linkRow = element('div', 'chat-sign-in-link-row');
-  linkRow.append(link, copy);
   const box = inputFrame();
   box.classList.add('chat-sign-in-box');
   dialog.body.append(
@@ -90,123 +81,52 @@ export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
     modeChanged: () => undefined,
   });
 
-  let open: OpenSignIn | null = null;
+  let hasLink = false;
+  // The Copy button runs the copy command and shows its keys, drawn again on
+  // each keymap change.
+  const drawCopy = () => {
+    const drawn = textButton(
+      'Copy',
+      () => deps.run(chatCommand('copySignInLink')),
+      {
+        variant: 'ghost',
+        hint: keyHint(deps.keys, deps.platform, 'copySignInLink', 'signIn'),
+      },
+    );
+    drawn.disabled = !hasLink;
+    linkRow.replaceChildren(link, drawn);
+    return drawn;
+  };
+  let copy = drawCopy();
+  deps.keys.onChanged(() => {
+    copy = drawCopy();
+  });
   const showLink = (url: string | null) => {
     link.textContent = url ?? WAITING_TEXT;
-    copy.disabled = url === null;
-  };
-  const close = () => {
-    const held = open;
-    if (held === null) {
-      return null;
-    }
-    open = null;
-    editor.blur();
-    held.scope.pop();
-    editor.setText('');
-    showLink(null);
-    dialog.hide();
-    return held;
-  };
-  const copyLink = () => {
-    const url = open?.url ?? null;
-    if (url === null) {
-      log('chat', 'no sign-in link yet');
-      return;
-    }
-    void navigator.clipboard.writeText(url).then(
-      () => log('chat', 'sign-in link copied'),
-      (error: unknown) =>
-        log('chat', `sign-in link not copied: ${errorText(error)}`),
-    );
+    hasLink = url !== null;
+    copy.disabled = !hasLink;
   };
 
-  channel.on('logInLink', ({ profile, url }) => {
-    if (open?.profile !== profile) {
-      log('chat', `sign-in link for ${profile} with no dialog open for it`);
-      return;
-    }
-    open.url = url;
-    showLink(url);
-    log('chat', `sign-in link shown for ${profile}`);
-  });
-  channel.on('logInEnded', ({ profile, status, error }) => {
-    if (open?.profile !== profile) {
-      log('chat', `sign-in for ${profile} ended with its dialog closed`);
-      return;
-    }
-    const ended = close();
-    const signedIn = status?.signedIn === true;
-    ended?.finished(signedIn);
-    if (signedIn) {
-      deps.toast(
-        `Signed in to ${profile} as ${accountText(status.account)}`,
-        'success',
-      );
-      return;
-    }
-    deps.toast(
-      `Sign-in failed: ${error ?? `${profile} is still signed out`}`,
-      'error',
-    );
-  });
-
-  showLink(null);
-  return {
-    open(profile, finished = () => undefined) {
-      if (open !== null) {
+  return createSignInFlow({
+    view: {
+      show(profile) {
+        dialog.setTitle(`Sign in to ${profile}`);
+        dialog.show();
         editor.focus({ insert: true });
-        log('chat', `sign-in dialog already open for ${open.profile}`);
-        return;
-      }
-      const opened: OpenSignIn = {
-        profile,
-        finished,
-        scope: deps.pushScope(),
-        url: null,
-      };
-      open = opened;
-      dialog.setTitle(`Sign in to ${profile}`);
-      dialog.show();
-      editor.focus({ insert: true });
-      log('chat', `sign-in dialog shown for ${profile}`);
-      void channel.invoke('logIn', profile).catch((error: unknown) => {
-        if (open === opened) {
-          close();
-          finished(false);
-        }
-        log('chat', `sign-in not started: ${errorText(error)}`);
-        deps.toast(`Sign-in not started: ${errorText(error)}`, 'error');
-      });
+      },
+      showLink,
+      code: () => editor.text(),
+      hide() {
+        editor.blur();
+        editor.setText('');
+        showLink(null);
+        dialog.hide();
+      },
     },
-    submitCode() {
-      if (open === null) {
-        return;
-      }
-      const code = editor.text().trim();
-      if (code === '') {
-        log('chat', 'no sign-in code to send');
-        return;
-      }
-      void channel
-        .invoke('logInCode', code)
-        .catch((error: unknown) =>
-          log('chat', `logInCode failed: ${errorText(error)}`),
-        );
-      log('chat', `sign-in code sent for ${open.profile}`);
-    },
-    cancel() {
-      const cancelled = close();
-      if (cancelled === null) {
-        return;
-      }
-      void channel
-        .invoke('cancelLogIn')
-        .catch((error: unknown) =>
-          log('chat', `cancelLogIn failed: ${errorText(error)}`),
-        );
-      cancelled.finished(false);
-      log('chat', `sign-in cancelled for ${cancelled.profile}`);
-    },
-  };
+    channel: deps.channel,
+    pushScope: deps.pushScope,
+    writeClipboard: (text) => navigator.clipboard.writeText(text),
+    toast: deps.toast,
+    log: deps.log,
+  });
 }

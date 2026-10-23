@@ -678,4 +678,48 @@ describe('start prompt', () => {
       { projectDir: '/Users/u/dev/app', profile: 'work' },
     ]);
   });
+
+  it('startPrompt_ReopenedThenSignInFinished_GoesNoFurther', async () => {
+    const run = setUp({
+      profiles: [work],
+      answers: {
+        accountStatus: () =>
+          Promise.resolve({ signedIn: false, account: null }),
+        pastSessions: () => Promise.resolve([alpha]),
+      },
+    });
+    await flush();
+    pickFolder(run.opened[0], '~/dev/app');
+    await flush();
+    run.prompt.open();
+    await flush();
+
+    run.signIns[0].finished?.(true);
+    await flush();
+
+    expect(run.invoked).not.toContain('pastSessions');
+    expect(run.last().title).toBe('Folder');
+    expect(run.logs).toContain(
+      "[chat] work's sign-in dropped: the start prompt opened again",
+    );
+  });
+
+  it('startPrompt_ReopenedWhileStatusReads_OpensNoSignIn', async () => {
+    const status = deferred<AccountStatus>();
+    const run = setUp({
+      profiles: [work],
+      answers: { accountStatus: () => status.promise },
+    });
+    await flush();
+    pickFolder(run.opened[0], '~/dev/app');
+    await flush();
+    run.prompt.open();
+    await flush();
+
+    status.resolve({ signedIn: false, account: null });
+    await flush();
+
+    expect(run.signIns).toEqual([]);
+    expect(run.last().title).toBe('Folder');
+  });
 });

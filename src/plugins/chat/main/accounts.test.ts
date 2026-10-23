@@ -48,25 +48,25 @@ function setUp() {
 }
 
 describe('createAccounts', () => {
-  it('logIn_Link_SendsLogInLink', async () => {
+  it('logIn_Link_SendsLogInLinkWithItsId', async () => {
     const test = setUp();
 
-    test.accounts.logIn('work');
+    test.accounts.logIn(7, 'work');
     await flush();
 
     expect(test.messages).toEqual([
       {
         message: 'logInLink',
-        data: { profile: 'work', url: FAKE_SIGN_IN_URL },
+        data: { id: 7, profile: 'work', url: FAKE_SIGN_IN_URL },
       },
     ]);
   });
 
   it('logIn_WhileRunning_Throws', async () => {
     const test = setUp();
-    test.accounts.logIn('work');
+    test.accounts.logIn(1, 'work');
 
-    expect(() => test.accounts.logIn('personal')).toThrow(
+    expect(() => test.accounts.logIn(2, 'personal')).toThrow(
       'A sign-in is already running for work',
     );
     expect(test.logIns()).toBe(1);
@@ -75,10 +75,10 @@ describe('createAccounts', () => {
   it('logIn_Ended_SendsLogInEndedAndAllowsAnother', async () => {
     const test = setUp();
     await test.harness.logOut('~/.claude');
-    test.accounts.logIn('work');
+    test.accounts.logIn(1, 'work');
     await flush();
 
-    test.accounts.sendCode(FAKE_SIGN_IN_CODE);
+    test.accounts.sendCode(1, FAKE_SIGN_IN_CODE);
     await flush();
 
     expect(
@@ -87,40 +87,85 @@ describe('createAccounts', () => {
       {
         message: 'logInEnded',
         data: {
+          id: 1,
           profile: 'work',
           status: { signedIn: true, account: 'fake@example.invalid' },
           error: null,
         },
       },
     ]);
-    test.accounts.logIn('personal');
+    test.accounts.logIn(2, 'personal');
     expect(test.logIns()).toBe(2);
   });
 
-  it('cancel_WhileRunning_EndsWithNoStatusAndAllowsAnother', async () => {
+  it('cancel_WhileRunning_AllowsAnotherAtOnceAndSendsNoEnd', async () => {
     const test = setUp();
-    test.accounts.logIn('work');
+    test.accounts.logIn(1, 'work');
     await flush();
 
-    test.accounts.cancel();
+    test.accounts.cancel(1);
+    test.accounts.logIn(2, 'personal');
     await flush();
 
+    expect(test.logIns()).toBe(2);
     expect(
       test.messages.filter((sent) => sent.message === 'logInEnded'),
-    ).toEqual([
+    ).toEqual([]);
+    expect(test.logged).toContain(
+      '[chat] sign-in for work ended: Sign-in cancelled',
+    );
+  });
+
+  it('cancelAndSendCode_OtherId_LoggedAndIgnored', async () => {
+    const test = setUp();
+    await test.harness.logOut('~/.claude');
+    test.accounts.logIn(2, 'work');
+    await flush();
+
+    test.accounts.cancel(1);
+    test.accounts.sendCode(1, FAKE_SIGN_IN_CODE);
+    await flush();
+
+    expect(() => test.accounts.logIn(3, 'personal')).toThrow(
+      'A sign-in is already running for work',
+    );
+    expect(test.messages.map((sent) => sent.message)).toEqual(['logInLink']);
+  });
+
+  it('cancelRunning_ReusedIdAfterward_OldEndReachesNoPage', async () => {
+    const test = setUp();
+    await test.harness.logOut('~/.claude');
+    test.accounts.logIn(1, 'work');
+    await flush();
+
+    test.accounts.cancelRunning();
+    test.accounts.logIn(1, 'personal');
+    await flush();
+
+    expect(test.messages).toEqual([
       {
-        message: 'logInEnded',
-        data: { profile: 'work', status: null, error: 'Sign-in cancelled' },
+        message: 'logInLink',
+        data: { id: 1, profile: 'work', url: FAKE_SIGN_IN_URL },
+      },
+      {
+        message: 'logInLink',
+        data: { id: 1, profile: 'personal', url: FAKE_SIGN_IN_URL },
       },
     ]);
-    test.accounts.logIn('personal');
-    expect(test.logIns()).toBe(2);
+  });
+
+  it('cancelRunning_NoneRunning_DoesNothing', () => {
+    const test = setUp();
+
+    test.accounts.cancelRunning();
+
+    expect(test.logged).toEqual([]);
   });
 
   it('logIn_UnknownProfile_ThrowsNamingIt', () => {
     const test = setUp();
 
-    expect(() => test.accounts.logIn('nobody')).toThrow(
+    expect(() => test.accounts.logIn(1, 'nobody')).toThrow(
       'chat has no profile "nobody"',
     );
     expect(test.logIns()).toBe(0);
@@ -129,12 +174,12 @@ describe('createAccounts', () => {
   it('sendCodeAndCancel_NoneRunning_LoggedAndIgnored', () => {
     const test = setUp();
 
-    test.accounts.sendCode(FAKE_SIGN_IN_CODE);
-    test.accounts.cancel();
+    test.accounts.sendCode(1, FAKE_SIGN_IN_CODE);
+    test.accounts.cancel(1);
 
     expect(test.logged).toEqual([
-      '[chat] sign-in code with no sign-in running ignored',
-      '[chat] sign-in cancel with no sign-in running ignored',
+      '[chat] sign-in code for sign-in 1, which is not running, ignored',
+      '[chat] sign-in cancel for sign-in 1, which is not running, ignored',
     ]);
   });
 

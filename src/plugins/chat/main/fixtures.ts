@@ -1,5 +1,6 @@
 import type { ToolResult } from '../../sessions/contract';
-import { CHAT_HARNESS_ID, type ChatSessions } from './chat-sessions';
+import type { ChatSessions } from './chat-sessions';
+import { CHAT_HARNESS_ID } from './lookups';
 import { PERMISSION_TOOL_NAME } from './permission-tool';
 
 // Fixtures the self-test script and the drive actions share.

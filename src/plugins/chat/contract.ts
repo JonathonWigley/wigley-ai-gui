@@ -60,6 +60,8 @@ export interface PermissionAnswer {
 
 export interface ChatChannel extends ChannelShape {
   invoke: {
+    // Read once on each page load, which also cancels any running sign-in:
+    // the page that started it is gone.
     sessions(): ChatSessionState[];
     // Newest first: the folders chat started sessions in merged with every
     // folder each profile's harness saved sessions in, one per folder, missing
@@ -80,12 +82,18 @@ export interface ChatChannel extends ChannelShape {
     // Adds a notice entry to the session's chat, kept across a page reload.
     notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
     accountStatus(profile: string): Promise<AccountStatus>;
-    // Starts the profile's sign-in; throws while any sign-in runs. Its link
-    // arrives as `logInLink` and its end as `logInEnded`.
-    logIn(profile: string): void;
-    // The code the sign-in page showed, for the running sign-in.
-    logInCode(code: string): void;
-    cancelLogIn(): void;
+    // Starts sign-in `id` to the profile; throws while any sign-in runs. The
+    // page picks `id`, unique within its load, since the sign-in's messages
+    // can arrive before this call answers. Its link arrives as `logInLink`
+    // and its end as `logInEnded`, each carrying `id`; a cancelled sign-in
+    // sends neither.
+    logIn(id: number, profile: string): void;
+    // The code the sign-in page showed, for sign-in `id`; ignored when `id`
+    // is not the running sign-in.
+    logInCode(id: number, code: string): void;
+    // Cancels sign-in `id`, so another may start at once; ignored when `id`
+    // is not the running sign-in.
+    cancelLogIn(id: number): void;
     logOut(profile: string): Promise<void>;
     interrupt(sessionId: string): void;
     setControl(sessionId: string, controlId: string, value: string): void;
@@ -106,11 +114,13 @@ export interface ChatChannel extends ChannelShape {
     commands: { sessionId: string; names: string[] };
     sessionEnded: { sessionId: string; error: string | null };
     layoutChanged: LayoutChoice;
-    // The page the user opens to finish the running sign-in.
-    logInLink: { profile: string; url: string };
-    // `status` is null when the sign-in was cancelled or its status could not
-    // be read; `error` is null only for a finished sign-in.
+    // The page the user opens to finish sign-in `id`.
+    logInLink: { id: number; profile: string; url: string };
+    // `status` is null when the status could not be read; `error` is null
+    // only for a finished sign-in, and a failed one may still read signed in
+    // (a wrong code on a signed-in profile).
     logInEnded: {
+      id: number;
       profile: string;
       status: AccountStatus | null;
       error: string | null;

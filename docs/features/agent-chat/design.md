@@ -158,12 +158,24 @@ interview on 2026-10-23; this file is the record of both.
   holds the newest 40 of the rest; `Choose folder…`, the native folder dialog, is last.
   After the profile, chat reads the profile's account status: a signed-out profile opens the sign-in dialog, and a
   finished sign-in goes on to the session step. A status that cannot be read is logged and the prompt goes on.
+  Opening the prompt again drops the earlier one: its answers and sign-in still to arrive are logged and go no
+  further.
 - **Sign-in dialog**: one at a time, in the overlay layer over the `chat.signIn` scope: "Finish sign-in in your
-  browser", the fallback link with a Copy button, and a vim box for a code the browser page shows, which Cmd+Enter
-  (or Enter in the box's normal mode) sends. Esc cancels the sign-in. When the sign-in ends the dialog closes; a
-  confirmed sign-in toasts `Signed in to <profile> as <account>`, any other end toasts `Sign-in failed: <reason>`, and
-  a sign-in that cannot start toasts `Sign-in not started: <reason>`. Asking for a second sign-in while one runs
-  focuses the open dialog.
+  browser", the fallback link with a Copy button, and a vim box for a code the browser page shows, which Enter (in
+  either vim mode, since a code is one line) or Cmd+Enter sends. `y` on the dialog, `Space c y` in the box's normal
+  mode and the Copy button copy the link. The box opens in insert mode, so Esc first leaves insert mode and Esc
+  again cancels the sign-in. When the sign-in ends the dialog closes; a sign-in that finished with no error and
+  reads signed in toasts `Signed in to <profile> as <account>`, any other end toasts `Sign-in failed: <reason>` (a
+  wrong code on a profile already signed in fails, though the profile still reads signed in), and a sign-in that
+  cannot start toasts `Sign-in not started: <reason>`. Opening the dialog while it is open cancels its sign-in and
+  starts the new one. Each open calls its caller back exactly once, so a start prompt opened again since never runs
+  the old prompt's next step.
+- **Sign-in identity**: main runs one sign-in at a time. The page names each sign-in by an id it picks, since the
+  sign-in's link can reach the page before `logIn` answers; the link, the end, the code and the cancel all carry it,
+  and the dialog ignores a message for any other id. A cancel stops the sign-in at once, so another may start, and
+  the cancelled one's later link and end reach no page. Main cancels the running sign-in when the page loads again
+  (its first `sessions` read) and when chat's main part is disposed, so a reload never leaves one running that
+  refuses every later `/login`.
 - **App slash commands**: chat's page exports `addSlashCommand({ name, description, run })`, returning a
   `Disposable`. Sending a box whose trimmed text is `/name` or `/name <args>` with `name` registered runs
   `run({ sessionId, profile, args, ended })` in place of sending, and clears the box; attached images stay. A registered
