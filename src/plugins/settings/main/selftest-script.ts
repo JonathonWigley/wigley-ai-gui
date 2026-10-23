@@ -20,6 +20,10 @@ const SETTINGS_FILE = '.config/wigley-ai-gui/settings.json';
 // A key no default binds, added to the help command and removed again.
 const ADDED_KEYS = '<Leader>zh';
 
+// The key sequence timeout written on disk under the open box; it stays in
+// settings.json until the last step resets it.
+const STALE_TIMEOUT_MS = 900;
+
 // Open empties both user files, then settings mode shows on the first
 // section, Core, with focus on the side bar. Space k , hides the side bar,
 // focusing the rows, and again shows it. / and sequence filter Core to the key
@@ -73,7 +77,10 @@ const STEPS: SelfTestStep[] = [
   },
   { keys: ['Enter'], expect: '[settings] box open keySequenceTimeoutMs' },
   {
-    writeFile: { path: SETTINGS_FILE, text: '{"keySequenceTimeoutMs": 900}' },
+    writeFile: {
+      path: SETTINGS_FILE,
+      text: JSON.stringify({ keySequenceTimeoutMs: STALE_TIMEOUT_MS }),
+    },
     keys: [...'600', 'Enter'],
     expect: '[settings] changed on disk settings.json',
   },
@@ -113,22 +120,11 @@ function isEmptyLayer(layer: unknown): boolean {
   return JSON.stringify(layer) === '{}';
 }
 
-// Whether both files hold an empty user layer: the state the steps start
-// from and end in.
-function isEmptyConfig(read: UserConfigRead): boolean {
+// Whether settings.json holds the timeout written on disk under the box.
+function holdsStaleTimeout(read: UserConfigRead): boolean {
   return (
     read.settings.state === 'ok' &&
-    isEmptyLayer(read.settings.layer) &&
-    read.keymap.state === 'ok' &&
-    isEmptyLayer(read.keymap.layer)
-  );
-}
-
-// Whether keymap.json holds the bind the keymap steps add.
-function holdsAddedBind(read: UserConfigRead): boolean {
-  return (
-    read.keymap.state === 'ok' &&
-    (read.keymap.layer?.binds ?? []).some((bind) => bind.keys === ADDED_KEYS)
+    read.settings.layer?.keySequenceTimeoutMs === STALE_TIMEOUT_MS
   );
 }
 
@@ -160,22 +156,19 @@ function resultProblems(read: UserConfigRead): string[] {
   }
   if (keymap.state === 'broken') {
     problems.push(`keymap.json broken: ${keymap.problem}`);
-  } else {
-    const added = (keymap.layer?.binds ?? []).filter(
-      (bind) => bind.keys === ADDED_KEYS,
-    );
-    if (added.length > 0) {
-      problems.push(`keymap.json held ${JSON.stringify(added)}`);
-    }
+  } else if (!isEmptyLayer(keymap.layer)) {
+    problems.push(`keymap.json held ${JSON.stringify(keymap.layer)}`);
   }
   return problems;
 }
 
 // `open` empties both user files, then shows Settings mode as
 // `settings.show` does. The result is the user config read on the first
-// change after which both layers are empty that follows one where keymap.json
-// held the added bind: the steps reach that state only at the last step,
-// whatever the files held before. It rejects when emptying the files fails.
+// change after which settings.json no longer holds the stale timeout that
+// follows one where it did: only the last step changes it, and `problems`
+// expects both layers empty then. The keymap steps' add and remove land too
+// close together for the config store to publish the state between them, so
+// the result cannot wait on that. It rejects when emptying the files fails.
 export function settingsSelfTestScript(
   deps: SettingsSelfTestDeps,
 ): SelfTestScript {
@@ -187,15 +180,16 @@ export function settingsSelfTestScript(
     scrollsItself: ['.settings-sheet'],
     open() {
       watching?.dispose();
-      let hasSeenAddedBind = false;
+      let hasSeenStaleTimeout = false;
       const result = new Promise<UserConfigRead>((resolve, reject) => {
         const watch = userConfig.onChanged(() => {
           userConfig.read().then((read) => {
             if (watching !== watch) {
               return;
             }
-            hasSeenAddedBind ||= holdsAddedBind(read);
-            if (hasSeenAddedBind && isEmptyConfig(read)) {
+            const holdsStale = holdsStaleTimeout(read);
+            hasSeenStaleTimeout ||= holdsStale;
+            if (hasSeenStaleTimeout && !holdsStale) {
               watch.dispose();
               watching = null;
               resolve(read);

@@ -93,26 +93,43 @@ describe('settingsSelfTestScript', () => {
     });
   });
 
-  it('resolves on the first empty config after the added bind, not before', async () => {
+  it('resolves on the first change after the stale timeout, not before', async () => {
     const fake = fakeUserConfig({}, {});
     const show = vi.fn();
-    const { result } = settingsSelfTestScript({
+    const script = settingsSelfTestScript({
       userConfig: fake.userConfig,
       show,
-    }).open(1);
+    });
+    const { result } = script.open(1);
     await vi.waitFor(() => expect(show).toHaveBeenCalled());
 
     await fake.change({ settings: {} });
     expect(await isSettled(result)).toBe(false);
-    await fake.change({ keymap: { binds: [ADDED_BIND] } });
-    await fake.change({ keymap: {}, settings: { keySequenceTimeoutMs: 900 } });
+    await fake.change({ settings: { keySequenceTimeoutMs: 900 } });
+    // The keymap add and remove land too close together to be published.
+    await fake.change({ keymap: {} });
     expect(await isSettled(result)).toBe(false);
     await fake.change({ settings: {} });
 
-    expect(await result).toMatchObject({
-      settings: { layer: {} },
-      keymap: { layer: {} },
+    expect(script.problems(await result)).toEqual([]);
+  });
+
+  it('reports a keymap layer the steps left behind', async () => {
+    const fake = fakeUserConfig({}, {});
+    const show = vi.fn();
+    const script = settingsSelfTestScript({
+      userConfig: fake.userConfig,
+      show,
     });
+    const { result } = script.open(1);
+    await vi.waitFor(() => expect(show).toHaveBeenCalled());
+
+    await fake.change({ settings: { keySequenceTimeoutMs: 900 } });
+    await fake.change({ settings: {}, keymap: { binds: [ADDED_BIND] } });
+
+    expect(script.problems(await result)).toEqual([
+      `keymap.json held ${JSON.stringify({ binds: [ADDED_BIND] })}`,
+    ]);
   });
 
   it('rejects when emptying the files is refused', async () => {
