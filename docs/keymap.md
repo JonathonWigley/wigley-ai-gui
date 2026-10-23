@@ -52,7 +52,9 @@ hjkl is the direction in every layer; the modifier picks the verb.
   session, Shift being the bigger scope. **Alt+n / Alt+p** next and previous thing waiting on the
   user (forms' unanswered items).
 - **Cmd** is for OS-convention app actions only: `Cmd+Enter` send or submit, `Cmd+w` close, the
-  summon chord. Nothing else takes Cmd. `D-` is the Win key on Windows, so these binds are Win
+  summon chord, `Cmd+,` Settings. Nothing else takes Cmd. `Cmd+,` is an app menu accelerator
+  (`CommandOrControl+,`), since a page chord cannot hold `,`, so on Windows it is `Ctrl+,`, where
+  `Win+,` belongs to the OS. `D-` is the Win key on Windows, so these binds are Win
   chords there: the user holds the four modifiers the same way on both OSes.
 - **Leader (Space)** changes scope or holds named actions. Inside a text box raw keys belong to
   vim, so every action reachable from a box keeps a leader route there.
@@ -67,7 +69,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `<Leader><Leader>` | none: the current context's overview | forms review, on the page and in a box                                                                     |
 | `?`                | none: help                           | key help                                                                                                   |
 | `;`                | none: close                          | close session                                                                                              |
-| `k`                | windows                              | `ks` Sessions, `kd` Docs, `kn` new session                                                                 |
+| `k`                | windows                              | `ks` Sessions, `kd` Docs, `kn` new session, `k,` Settings                                                  |
 | `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                                                       |
 | `c`                | chat controls                        | in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image |
 | `a`                | answer                               | in a box only: `a1`…`a9`, `ac` clear, `af` fix now, `au` follow-up, `as` leave it                          |

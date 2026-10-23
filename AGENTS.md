@@ -73,7 +73,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
 src/main/        core main process; main.ts is its composition root
   plugins/       the main-side plugin API: per-plugin channel routing and services
   config/        the ConfigStore: watches the user config folder, layers settings, keymap and themes over the
-                 defaults, and tells its listeners each new config, which main.ts pushes to the page
+                 defaults, and tells its listeners each new config, which main.ts pushes to the page; and the
+                 userConfig service, which reads and writes the user's `settings.json` and `keymap.json` layers
+                 through the ConfigStore's own checks
   themes/        theme loader: parses a theme by the token registry and resolves `extends`
   ui-state/      the uiState file: app-written view state (`ui-state.json`) in Electron's user data folder
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts
@@ -114,6 +116,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  keys-for-command lookup it exports); no main part
   gallery/       manifest.ts, page/ (Gallery mode: every primitive in every state, a transparency switch, and a
                  swap of the shell to a test layout); no main part
+  settings/      manifest.ts, contract.ts, main/ (the userConfig reads and writes, `Cmd+,`), page/ (Settings mode:
+                 a form over every setting and every command's binds, `docs/features/settings/design.md`)
 ```
 
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
@@ -283,13 +287,18 @@ round), since main, not the page, decides.
   as `~`, accept either separator when typed, and compare case-insensitively. A path relative to a scoped `Files`
   (plugin data) stays `/`-separated on every OS.
 - **A setting** is a core setting in `src/contracts/settings.ts` and `src/config/settings.ts`, or a plugin's own in
-  its manifest's `settings`. The user overrides any of them in `settings.json` (plugin settings under the plugin id).
+  its manifest's `settings`. Each one declares a label and a one-line description by its dotted path, in
+  `settingInfo` beside its default (`src/config/settings.ts` or the manifest), which Settings mode draws as its row;
+  the compiler fails on a setting with no declaration. The user overrides any of them in `settings.json` (plugin
+  settings under the plugin id), by hand or from Settings mode.
 - **The user config folder** is `~/.config/wigley-ai-gui/` on both OSes: `settings.json`, `keymap.json` and
   `themes/`, each holding only what the user changes. Main's ConfigStore watches it and serves every new config to
   the page over the Bridge, so everything hot reloads: plugins read `settings()` and `keys.keymap()` with
   `onChanged` rather than keeping a copy, and a setting read only when something is created (window size, the claude
   command) applies to the next one. A broken file keeps the last good config and shows the problem in the status
-  bar. App-written state, such as split widths, goes to the `uiState` service, never to the user's config.
+  bar. Code that writes `settings.json` or `keymap.json` goes through the `userConfig` main service, which runs the
+  ConfigStore's check on the new layer and refuses one that fails, so a write never leaves a broken file; themes
+  are written by hand. App-written state, such as split widths, goes to the `uiState` service, never to the user's config.
 - **A third-party tool** gets a contract in `src/contracts/` and an adapter folder of its own; the core hands
   plugins the shared ones (editor, markdown) as services. Swapping it is a new adapter folder against the same
   contract, and one changed line in the composition root.

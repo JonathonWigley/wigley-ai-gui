@@ -17,7 +17,8 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
   fixing-motion-performance (MIT) and Impeccable's critique, audit, polish and quieter guidance (Apache-2.0; keep
   notices) into wigley skills that read a project's `DESIGN.md`, dropping the detector CLI. Plan it with
   `wigley:feature` in that repo.
-- A settings window over the user config files.
+- A theme editor in Settings mode (`docs/features/settings/design.md`): the user's `themes/*.json` token sheets are
+  hand-edited today, and the userConfig service writes only `settings.json` and `keymap.json`.
 - A setting that turns every key hint on or off (the conflict prompt, the trash y/n, chat's and forms' hints). Hints already come from `keysFor`, so one setting can blank them in one place. Builds on the user config folder.
 - Editor key replay (a broken key sequence replayed into a box through `EditorHost.typeInto`) has three limits only a custom keymap reaches: focus moving mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on named keys.
 - Rail notice entries are inert in the review: clicking one could jump to the notice's comment box, as question entries jump to their question.

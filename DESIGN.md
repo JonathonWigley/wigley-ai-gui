@@ -285,6 +285,11 @@ Conventions every primitive follows:
 - **Docs:** in Docs mode the tree is the side bar; in a session's Docs tab it is the left pane of a
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
   with `radius-md` and no border.
+- **Settings:** in Settings mode the sections are the side bar; the open section is one sheet of `row-list` rows,
+  each a label in `fg`, its description in `fg-secondary`, and its value or binds at the end, Kbd for keys. A row the
+  user set carries a neutral "Set" Tag and the default in `fg-tertiary`; a box opens in place inside an InputFrame,
+  its check message under it in `status-error`. A file that fails its check shows an error Card at the section's
+  top.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
   and key hints right-aligned in `fg-tertiary`; dialogs sit over the `scrim`.
 - **Empty states:** one line saying what to do, and the key or action that does it. No
