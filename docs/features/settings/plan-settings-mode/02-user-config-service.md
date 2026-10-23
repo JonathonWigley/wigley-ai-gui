@@ -1,6 +1,6 @@
 # 02 — userConfig service
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -102,3 +102,5 @@ set built in the test, as `config-store.test.ts` builds its own:
   store's watch as `config-store.test.ts` does).
 
 ## Proof
+
+890695e · typecheck and lint pass; worker ran the four src/main/config test files (91 tests) green, config-store.test.ts unchanged · concerns: createUserConfig builds configSchema a second time; pluginSettingInfo checked once over the built-ins in a throwaway test (no throw).

@@ -173,7 +173,7 @@ the settings plugin imports only `src/contracts`, `src/shared`, its own folder a
 - [x] [Setting declarations and the userConfig contract](01-declarations-and-contract.md)
 
 ### Wave 2
-- [ ] [userConfig service](02-user-config-service.md) — after 01
+- [x] [userConfig service](02-user-config-service.md) — after 01
 - [x] [Row and edit logic](04-row-and-edit-logic.md) — after 01
 
 ### Wave 3
@@ -198,10 +198,13 @@ Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is thi
 ### Groups
 - 01 · efd5ab5 · proved (diff read, typecheck, lint) · concerns: pluginSettingInfo never run over the built-in manifests; SettingPath does not distribute over object|scalar unions
 - 04 · 19ca2d7 · proved (diff read, typecheck) · concerns: isSameJson copied from renderer/config-push.ts; fallback compare key-order sensitive; oxfmt needed two writes on keymap-rows.ts
+- 02 · 890695e · proved (diff read, typecheck, lint) · concerns: configSchema built twice (store and userConfig); pluginSettingInfo over the built-ins verified only in a deleted throwaway test
 ### Contract changes
 - keymap-rows.ts: as planned → adds `keymapLeader(schema, layer)` and `isSameKeys(a, b, leader)` · why: keymap-edits shares the leader rule and key compare · consumers: 05 · group 04
 - withAdvanced: as planned → also `"unbind" must be a list` · why: keys unbinds merge into it · consumers: 05 · group 04
 - plugin-manifests.ts: exports `BindIdentities`, `bindIdentities`, `isSameAccelerator` (bodies unchanged) · why: rows reuse the merge compare · consumers: none · group 04
+- config-checks.ts: as planned → adds `readConfigFile`, `ConfigFileText`, `SETTINGS_FILE`, `KEYMAP_FILE`, `THEMES_FOLDER`; ConfigCheckDeps carries the theme members · why: userConfig shares the store's file read and theme resolve · consumers: 02 · group 02
+- plugin-manifests.ts `pluginKeys` and theme-loader.ts `readableName` exported (bodies unchanged) · why: schema default binds and theme names · consumers: 02 · group 02
 ### Rulings
 - Peer chat plan C shares chat/manifest.ts and keymap.ts: agreed order C-05 → settings 01 → C-06; keymap.ts edits announced before dispatch and after commit — avoids two workers in one file — a missed message means a hand merge · lead
 - pluginSettingInfo returns declarations in settingInfo order, manifests in list order — settingDefaults walks a stack (reversed) — task 02 sorts if it wants defaults order · group 01
@@ -212,5 +215,10 @@ Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is thi
 - Default line: `unbound` beats `replaced`; a same-command user bind on the same keys marks the default replaced — the plan named no tie order — cosmetic · group 04
 - withSetting compares to the fallback by JSON.stringify (key order matters) — simple — an equal-but-reordered object is written · group 04
 - parseBoxText throws for choice, boolean and theme — those rows open no box — a caller passing them crashes · group 04
+- defaultBinds/defaultAccelerators list manifests in dependencyOrder (mergeKeymap's layer order); sections keep deps.manifests order — matches the merge — keymap rows order differs if the two orders ever diverge · group 02
+- A write to an existing but unreadable file returns refused `Could not read the file: …` — the contract has no error variant — the page shows a refusal, not a rejection · group 02
+- Only a ThemeError naming settings.json refuses a write; a broken unrelated user theme lets it through — matches the ConfigStore — none · group 02
+- themes: built-ins in list order then user names sorted, first kept on duplicates — a user theme overriding a built-in shows once — none · group 02
+- requireNoCoreSettingIds moved into configSchema; requireUnambiguousKeymap(defaultKeymap) stays a store start check — userConfig fails as the store does — none · group 02
 ### Review rounds
 ### Test gate

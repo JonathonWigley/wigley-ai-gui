@@ -374,7 +374,7 @@ export const defaultKeymap = {
     },
   ],
   remaps: [],
-  app: [],
+  app: [{ accelerator: 'CommandOrControl+,', command: 'settings.show' }],
   intercept: [],
 
   // ── App chords ───────────────────────────────────────────────────────────

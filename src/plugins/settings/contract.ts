@@ -1,0 +1,32 @@
+// The settings plugin's channel between its main and page parts: the user
+// config's schema, reads and guarded layer writes, served from main.
+
+import type { UserKeymap } from '../../contracts/keymap';
+import type { ChannelShape } from '../../contracts/plugin';
+import type {
+  ConfigWriteResult,
+  UserConfigRead,
+  UserConfigSchema,
+} from '../../contracts/user-config';
+
+// Every method rejects with main's own error text when its handler throws.
+export interface SettingsChannel extends ChannelShape {
+  invoke: {
+    schema(): UserConfigSchema;
+    read(): Promise<UserConfigRead>;
+    writeSettings(
+      layer: Record<string, unknown>,
+      expectedText: string | null,
+    ): Promise<ConfigWriteResult>;
+    writeKeymap(
+      layer: UserKeymap,
+      expectedText: string | null,
+    ): Promise<ConfigWriteResult>;
+  };
+  messages: {
+    // The ConfigStore served a new config: read again.
+    changed: null;
+    // Show Settings mode (`Cmd+,`).
+    show: null;
+  };
+}

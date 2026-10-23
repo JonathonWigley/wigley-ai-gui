@@ -5,6 +5,7 @@ import { formsManifest } from './forms/manifest';
 import { galleryManifest } from './gallery/manifest';
 import { keysManifest } from './keys/manifest';
 import { sessionsManifest } from './sessions/manifest';
+import { settingsManifest } from './settings/manifest';
 
 // Every built-in plugin's manifest, each keeping its literal id, command ids
 // and scopes in its type, which the default keymap is checked against.
@@ -15,6 +16,7 @@ export const builtInManifests = [
   keysManifest,
   docsManifest,
   galleryManifest,
+  settingsManifest,
 ] as const;
 
 // Every built-in plugin's manifest: main builds the served keymap, command
