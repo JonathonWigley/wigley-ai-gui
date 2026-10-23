@@ -198,10 +198,10 @@ Boundary rules: everything stays in this repo; `src/main/drive/` keeps no `elect
 - [x] [Self-test groups, why, width, repeat](07-selftest-steps.md) — after 02
 
 ### Wave 4
-- [ ] [Drag hold and release](03-drag-hold.md) — after 02, 07 (shares `page-driver.ts`)
-- [ ] [Forms script in groups; gallery repeat](08-forms-groups.md) — after 07
-- [ ] [Docs script in groups; hidden-tree step](09-docs-groups.md) — after 07
-- [ ] [Chat and settings scripts in groups](10-chat-settings-groups.md) — after 07
+- [x] [Drag hold and release](03-drag-hold.md) — after 02, 07 (shares `page-driver.ts`)
+- [x] [Forms script in groups; gallery repeat](08-forms-groups.md) — after 07
+- [x] [Docs script in groups; hidden-tree step](09-docs-groups.md) — after 07
+- [x] [Chat and settings scripts in groups](10-chat-settings-groups.md) — after 07
 
 ### Wave 5
 - [ ] [Doc re-read](11-doc-re-read.md) — after every code task
@@ -220,6 +220,10 @@ Review base: 5b2bc38096dafc34abedca7cf3e261e5117ffdd1
 - 06 · 88bb0f5 · diff read matches spec; DocsFixtureOptions, writeDocsFixture options, connectDocsFixtureSession options, optionalBoolean, both action args present; typecheck passes · concerns: .agents/skills/drive/SKILL.md line 53 names docs.seed and docs.connectSession without args, so loadStates is undocumented (task 11)
 - 02 · 9f238ce · diff read matches spec; LogMark, markLog, waitForNewLogLine(mark), linesAfter present; typecheck passes · concerns: markLog still rejects on a reload mid-read and callers do not retry (unchanged behaviour); the mark-to-wait race is covered at waitForNewLogLine level only, not through the commands
 - 07 · b8710cf · diff read matches spec; SelfTestGroup, step why/width/repeat, groups, resizeContentWidth, waitForAnyNewLogLine, screenshotFiles string[], checkGroups present; typecheck passes · concerns: no runner test waits out a 5 s timeout (width never landing, a press logging neither); elementFromPoint answer unused; fake-driven-window comment rewrapped raggedly
+- 03 · d57e4fe · diff read matches spec; dragAndHold, release, drag hold arg, release command, CLI forms present; typecheck and lint pass · concerns: a held drag is not released when the run disposes or quits
+- 08 · aefdfde · expect sequence identical but the 8 folded gallery steps; 145 → 137 expect lines; 12 groups in the planned order; typecheck and lint pass · concerns: DESIGN.md:316-317 names the old gallery shot names; followups.md:268 and master-plan.md:48 describe the gallery page-count problem this removes; the reduced repeat's last press saves gallery-reduced-5, the end page, duplicating gallery-reduced-end
+- 09 · 37e5dd4 · step sequence identical but the two narrow window steps; 123 → 125 expect lines; 13 groups in the planned order; typecheck and lint pass · concerns: inline step comments inside the group arrays stay (only the narration block was deleted); the narrow step assumes the self-test starts at 680 px or wider, though its expect holds either way
+- 10 · a250702 · expect sequences identical (formatting only); chat 88, settings 28 expect lines; chat 14 groups, settings 6; typecheck and lint pass · concerns: the two sessions why reads the narration as visual mode surviving a blur
 ### Contract changes
 - StartLock.release(): deletes the file → deletes it on the first call only · why: selftest releases at the first [selftest] line and again on close, and a second delete could remove another start's lock · consumers: 04 · group 04
 - takeStartLock timeout message: names .drive/start.lock literally → names the lockFile path passed in (absolute from both CLIs) · why: the path is a parameter · consumers: 04, 11 (docs quoting the message) · group 04
@@ -242,5 +246,13 @@ Review base: 5b2bc38096dafc34abedca7cf3e261e5117ffdd1
 - the log is marked before the width resize, so a line the resize alone causes counts — as writeFile does — a stale resize line could satisfy expect · group 07 · group 07
 - resizeContentWidth waits for the asked width, not the one the window took — a clamped width fails the step as never landed — a width below the minimum fails rather than clamps · group 07 · group 07
 - unnamed report texts: width never landed as <label> -> <expect>: width <n> never landed; failed restore as <pluginId> start width <n> never landed; checkGroups throw as the self-test groups check — none · group 07 · group 07
+- release is a positional CLI form taking zero positionals, not the json fallback — the brief lists a release usage line — the CLI refuses release {} · group 03 · group 03
+- release clears held inside the act right after the mouseUp; a failure before the send keeps the drag held — no stale held drag after a later redraw failure — only post-error state differs · group 03 · group 03
+- click and drag check held before validating their args — the held drag is named even with bad args — none · group 03 · group 03
+- the Option+Shift+o step back to the selftest session closes the gallery group; each later group starts on the move to its item — boundaries only — a group's why covers one step more or less · group 08 · group 08
+- the two inline keymap comments became the user keymap group why and step whys — they read as narration — none · group 08 · group 08
+- pickers group holds the a/Esc place picker and the context picker sequence through Space v t show; side bar starts at Space k d — the narration treats each as one sequence — a why covers one step more or less · group 09 · group 09
+- group arrays and their whys sit in a top-level GROUPS const handed as groups: GROUPS — keeps step arrays unindented and open() short — moving one literal · group 10 · group 10
+- chat's resume Enter step sits in the archive group with its own why — no group of one step — none · group 10 · group 10
 ### Review rounds
 ### Test gate

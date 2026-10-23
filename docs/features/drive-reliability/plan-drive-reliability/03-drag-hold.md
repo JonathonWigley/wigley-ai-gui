@@ -1,6 +1,6 @@
 # 03 — `drag --hold` leaves the button down until `release`
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 07
 Plan: [plan.md](plan.md)
@@ -54,3 +54,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit d57e4fe · proof: diff read matches spec; dragAndHold, release, drag hold arg, release command, CLI forms present; typecheck and lint pass · concerns: a held drag is not released when the run disposes or quits

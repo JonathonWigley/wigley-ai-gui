@@ -1,6 +1,6 @@
 # 09 — Docs' self-test in named groups, and the hidden-tree step in a narrow window
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -49,3 +49,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 37e5dd4 · proof: step sequence identical but the two narrow window steps; 123 → 125 expect lines; 13 groups in the planned order; typecheck and lint pass · concerns: inline step comments inside the group arrays stay (only the narration block was deleted); the narrow step assumes the self-test starts at 680 px or wider, though its expect holds either way

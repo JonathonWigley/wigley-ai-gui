@@ -1,6 +1,6 @@
 # 08 — Forms' self-test in named groups; the gallery pages with `repeat`
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -64,3 +64,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit aefdfde · proof: expect sequence identical but the 8 folded gallery steps; 145 → 137 expect lines; 12 groups in the planned order; typecheck and lint pass · concerns: DESIGN.md:316-317 names the old gallery shot names; followups.md:268 and master-plan.md:48 describe the gallery page-count problem this removes; the reduced repeat's last press saves gallery-reduced-5, the end page, duplicating gallery-reduced-end

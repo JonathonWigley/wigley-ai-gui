@@ -1,6 +1,6 @@
 # 10 — Chat's and settings' self-tests in named groups
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 4 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -29,3 +29,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit a250702 · proof: expect sequences identical (formatting only); chat 88, settings 28 expect lines; chat 14 groups, settings 6; typecheck and lint pass · concerns: the two sessions why reads the narration as visual mode surviving a blur
