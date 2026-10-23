@@ -270,7 +270,9 @@ Conventions every primitive follows:
 - **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
 - **Side bar:** L1 dense glass. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
-  cursor adds the focus ring.
+  cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
+  tree), the pane without focus marks itself `is-pane-inactive` and its selected row takes
+  `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
 - **Tabs:** sit on the top edge of their sheet. The active tab is solid sheet colour with a 2px
   accent top mark; others are transparent in `fg-secondary`.
 - **Status bar:** L1, `statusbar-height`, `text-12`. Status colours only on status items.
