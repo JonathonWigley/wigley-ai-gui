@@ -1,6 +1,6 @@
 # 08 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 7 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -44,3 +44,5 @@ Synthetic keys never reach the app menu, so `Cmd+,` itself is the user's check i
 `Cmd+,` from another mode and Settings shows; on Windows, `Ctrl+,`.
 
 ## Proof
+
+Drive run `settings-verify` (screenshots under `.drive/settings-verify/screenshots/`): 1 surfaces PASS, 2 hot reload PASS (second theme seeded as a user theme in the temp home; one built-in exists), 3 JSON row PASS, 4 narrow window PASS, 5 leader change PASS · defects for the review: the side bar's open section keeps an accent ring while focus is in the rows; an open JSON box draws three nested accent rings; command labels are lower case (the app-wide command label convention) · note: two Forms commands share a label.

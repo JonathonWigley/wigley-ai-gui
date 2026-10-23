@@ -189,7 +189,7 @@ the settings plugin imports only `src/contracts`, `src/shared`, its own folder a
 - [x] [Doc re-read](07-doc-re-read.md) — after 06
 
 ### Wave 7
-- [ ] [Final verification](08-final-verification.md) — after 07
+- [x] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
 
@@ -202,7 +202,8 @@ Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is thi
 - 03 · 62370c9 · proved (diff read, typecheck, lint) · concerns: first app accelerator → plugin main command path, unexercised at runtime until 06
 - 05 · b7e76f9 · proved (diff read, typecheck, lint) · concerns: third isSameJson copy; box re-parented across redraws; read-race ordering; AGENTS.md text-box wording stale
 - 06 · b5bff28 · proved (diff read, typecheck, selftest by worker) · concerns: core config-problem toast lingers after the fix; selftest hangs if a step fails before 14; duplicate Forms command label
-- 07 · see commit "Settings docs true to the landed code" · proved (diff read, lint) · concerns: none
+- 07 · 10e9bc4 · proved (diff read, lint) · concerns: none
+- 08 · no commit (drive run) · 5/5 checks pass · concerns: second accent ring on the side bar's open section while rows hold focus; three nested accent rings on an open JSON box; lower-case command labels
 ### Contract changes
 - keymap-rows.ts: as planned → adds `keymapLeader(schema, layer)` and `isSameKeys(a, b, leader)` · why: keymap-edits shares the leader rule and key compare · consumers: 05 · group 04
 - withAdvanced: as planned → also `"unbind" must be a list` · why: keys unbinds merge into it · consumers: 05 · group 04
@@ -235,3 +236,4 @@ Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is thi
 - Row counts asserted exactly: `filter "theme": 3 rows`, `filter "help": 2 rows` — the spec left them open — break if a label or description gains those words · group 06
 ### Review rounds
 ### Test gate
+- define-plugin, plugin-manifests (01 SettingPath/pluginSettingInfo, 04/02 exports); user-config, config-store (02 service and the check move); settings/page/* five suites (04 logic); page-api, plugin-host, main-api (manifest literals); keymap.test (new binds and the Cmd+, accelerator); self-test settings steps ran in 06 · 13 files, 166 tests passed
