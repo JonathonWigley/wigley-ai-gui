@@ -787,9 +787,18 @@ describe('watch', () => {
 describe('on Windows', () => {
   const WINDOWS_HOME = 'C:\\Users\\u';
 
+  const WINDOWS_ROOT = 'C:\\Users\\u\\dev\\r';
+  const WINDOWS_ENTRIES = [
+    entry({ path: `${WINDOWS_ROOT}\\AGENTS.md`, root: WINDOWS_ROOT }),
+  ];
+
   // The memory files refuse Windows paths, so `read` records each path asked
-  // and serves 'x'.
-  function setUpWindows() {
+  // and serves 'x', and `stubs` stand in for every other member a case
+  // reaches.
+  function setUpWindows(
+    stubs: Partial<Files> = {},
+    entries: readonly IndexEntry[] = ENTRIES,
+  ) {
     const reads: string[] = [];
     const files: Files = {
       ...createMemoryFiles(),
@@ -797,9 +806,11 @@ describe('on Windows', () => {
         reads.push(path);
         return 'x';
       },
+      ...stubs,
     };
     const { docFiles } = setUp({
       files,
+      entries,
       homeDir: WINDOWS_HOME,
       paths: windowsPaths,
     });
@@ -840,5 +851,93 @@ describe('on Windows', () => {
         path: 'C:\\Users\\u\\dev\\r\\new\\',
       }),
     ).rejects.toThrow('A path names a file, not a folder');
+  });
+
+  it('create_WindowsNoExistingAncestor_StopsAtDriveRoot', async () => {
+    const realPaths: string[] = [];
+    const test = setUpWindows({
+      stat: async () => null,
+      list: async () => [],
+      realPath: async (path) => {
+        realPaths.push(path);
+        return path;
+      },
+    });
+
+    await expect(
+      test.docFiles.create({ type: 'path', path: 'D:\\x\\y.md' }),
+    ).rejects.toThrow('Refused: D:\\x\\y.md is outside the indexed folders');
+    expect(realPaths).toContain('D:\\');
+  });
+
+  it('trash_WindowsDriveCaseDiffersFromRealPath_ReturnsOneTrashedPath', async () => {
+    const asked = `c:\\Users\\u\\dev\\r\\a.md`;
+    const real = `${WINDOWS_ROOT}\\a.md`;
+    const trashedOnDisk: string[] = [];
+    const test = setUpWindows(
+      {
+        stat: async (path) =>
+          windowsPaths.isInside(path, WINDOWS_ROOT)
+            ? {
+                isFolder: windowsPaths.samePath(path, WINDOWS_ROOT),
+                isLink: false,
+              }
+            : null,
+        realPath: async (path) =>
+          windowsPaths.samePath(path, WINDOWS_ROOT) ? WINDOWS_ROOT : path,
+        trash: async (path) => {
+          trashedOnDisk.push(path);
+        },
+      },
+      WINDOWS_ENTRIES,
+    );
+
+    const trashed = await test.docFiles.trash(asked);
+
+    expect(trashed).toEqual({ trashed: [real], error: null });
+    expect(trashedOnDisk).toEqual([real]);
+  });
+
+  it('write_WindowsCaseDiffersFromDanglingLink_Refuses', async () => {
+    const path = `${WINDOWS_ROOT}\\A.md`;
+    const test = setUpWindows(
+      {
+        stat: async () => null,
+        list: async (folder) =>
+          windowsPaths.samePath(folder, WINDOWS_ROOT)
+            ? [{ path: 'a.md', kind: 'file' }]
+            : [],
+        realPath: async (target) => target,
+      },
+      WINDOWS_ENTRIES,
+    );
+
+    await expect(test.docFiles.write(path, 'new', null)).rejects.toThrow(
+      `Refused: ${path} is a link to a missing file`,
+    );
+  });
+
+  it('watch_WindowsMissingFileCreatedInOtherCase_CallsChanged', async () => {
+    let report: ((changedPath: string) => void) | undefined;
+    const watched: string[] = [];
+    const test = setUpWindows({
+      realPath: async (path) => {
+        throw Object.assign(new Error(`${path} is missing`), {
+          code: 'ENOENT',
+        });
+      },
+      watch: (folder, onChange) => {
+        watched.push(folder);
+        report = onChange;
+        return { close: () => {} };
+      },
+    });
+    let changes = 0;
+
+    await test.docFiles.watch(`${WINDOWS_ROOT}\\A.md`, () => changes++);
+    report?.('a.md');
+
+    expect(watched).toEqual([WINDOWS_ROOT]);
+    expect(changes).toBe(1);
   });
 });

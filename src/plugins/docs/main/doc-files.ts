@@ -253,7 +253,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     return files.watch(
       paths.parent(real),
       (changedPath) => {
-        if (changedPath === name) {
+        if (paths.samePath(changedPath, name)) {
           changed();
         }
       },
@@ -352,8 +352,8 @@ async function folderRealTarget(
   );
 }
 
-// Whether `path` is a link that leads nowhere: its folder lists it, but
-// nothing is there once links are followed.
+// Whether `path` is a link that leads nowhere: its folder lists its name,
+// compared as samePath does, but nothing is there once links are followed.
 async function isDanglingLink(
   files: Files,
   path: string,
@@ -364,7 +364,7 @@ async function isDanglingLink(
   }
   const name = paths.base(path);
   const siblings = await files.list(paths.parent(path));
-  return siblings.some((sibling) => sibling.path === name);
+  return siblings.some((sibling) => paths.samePath(sibling.path, name));
 }
 
 async function realPathOrSelf(files: Files, path: string): Promise<string> {
