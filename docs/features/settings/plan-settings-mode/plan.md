@@ -235,5 +235,9 @@ Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is thi
 - Spec steps waiting on two lines split into one step per line — row actions pre-read before a box opens, so batched keys could race it — extra steps only · group 06
 - Row counts asserted exactly: `filter "theme": 3 rows`, `filter "help": 2 rows` — the spec left them open — break if a label or description gains those words · group 06
 ### Review rounds
+- 1 · 57fdf6a · NEEDS FIXES (23 findings; 3 lead-applied in eb64d28; report scratchpad review-57fdf6a.md)
+- 2 · ef35e0f · NEEDS FIXES (re-review of 11 fix commits; 6 findings + 1 follow-up, one a repeat on the theme-name rule stepped back in 6db0d43; report scratchpad review-ef35e0f.md)
+- 3 · 1d4e759 · NEEDS FIXES (cycle 2 of 2: 2 minor + 1 follow-up, no repeats; fixed under the user's go-with-recommendations note, unreviewed past the cycle cap)
 ### Test gate
 - define-plugin, plugin-manifests (01 SettingPath/pluginSettingInfo, 04/02 exports); user-config, config-store (02 service and the check move); settings/page/* five suites (04 logic); page-api, plugin-host, main-api (manifest literals); keymap.test (new binds and the Cmd+, accelerator); self-test settings steps ran in 06 · 13 files, 166 tests passed
+- After review fixes (head 616ffad): full vitest 165 files, 2487 tests passed; typecheck and lint clean; npm run selftest all passed (settings, chat, forms, docs)
