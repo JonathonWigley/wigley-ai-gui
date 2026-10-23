@@ -227,6 +227,8 @@ export interface RoundListener {
   // Throws an Error with the reason when the draft could not be saved; a round
   // no longer open ignores the draft.
   draft(body: FormBody): void;
+  // Throws an Error with the reason when the answers cannot be read; the round
+  // then stays open.
   finish(end: RoundEnd): void;
 }
 
@@ -242,10 +244,11 @@ export type { LayoutChoice } from '../../contracts/layouts';
 // The forms page part invokes `openRounds` and `layout` on load, `draft` as
 // the user types, `finish` on submit or cancel, and `cycleLayout`,
 // `copyLayout` and `openPreview` from the layout keys; main sends each round
-// as it opens, the id of a round that closed without the page, and each layout
-// change, the page's own cycles and copies included. A `draft` whose save
-// failed rejects with the reason; `layout` rejects when the layouts failed to
-// start.
+// as it opens, the id of each round that closes, a round the page finished
+// included, and each layout change, the page's own cycles and copies
+// included. A `draft` whose save failed rejects with the reason; a `finish`
+// whose answers main could not take rejects with the reason and leaves the
+// round open; `layout` rejects when the layouts failed to start.
 export interface FormsChannel extends ChannelShape {
   invoke: {
     openRounds(): PresentedRound[];

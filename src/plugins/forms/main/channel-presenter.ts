@@ -54,16 +54,14 @@ export function createChannelPresenter(
     entry.round = { ...entry.round, draft: body };
     entry.listener.draft(body);
   });
+  // A listener that throws leaves the round open and rejects the page's invoke.
   channel.handle('finish', (roundId, end) => {
     const entry = open.get(roundId);
     if (!entry) {
       return;
     }
-    open.delete(roundId);
-    if (!entry.quiet) {
-      updateOpenCount();
-    }
     entry.listener.finish(end);
+    close(roundId);
   });
 
   const show = (

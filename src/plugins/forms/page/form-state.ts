@@ -9,6 +9,7 @@ import type {
   ItemKind,
   PresentedRound,
   Round,
+  RoundEnd,
 } from '../contract';
 import { actionLabel } from '../finding-origins';
 import { findingPickIsComplete, isFindingAction } from '../finding-pick';
@@ -21,6 +22,14 @@ export type SaveState = 'saved' | 'saving' | 'unsaved';
 export type RailItem = { kind: ItemKind; index: number };
 
 export type AnswerableItem = { kind: AnswerableKind; index: number };
+
+// A finish handed to main and not yet answered by it. `closesSession` marks a
+// cancel the close prompt asked, which closes the session once the round
+// closes.
+export interface RoundSend {
+  kind: RoundEnd['kind'];
+  closesSession: boolean;
+}
 
 // A question's or a finding's answer.
 export interface ItemAnswer {
@@ -61,6 +70,8 @@ export interface RoundState {
   savedRevision: number;
   // The last failed save's message; cleared when a save starts or succeeds.
   saveError: string | null;
+  // Set from the send until main closes the round or the send fails.
+  sending: RoundSend | null;
 }
 
 // The active round is the round of the session the sessions plugin shows,
@@ -125,8 +136,10 @@ export type FormsAction =
   // Without `row`, jumps to the review cursor's row.
   | { type: 'reviewJump'; row?: number }
   | { type: 'askCancel' }
-  | { type: 'confirmCancel' }
   | { type: 'dismissConfirm' }
+  // The round's finish went to main; it closes on main's roundClosed.
+  | { type: 'sendStarted'; roundId: string; kind: RoundEnd['kind'] }
+  | { type: 'sendFailed'; roundId: string }
   | { type: 'setText'; roundId: string; target: TextTarget; value: string }
   | { type: 'saveStarted'; roundId: string; revision: number }
   | { type: 'saveFinished'; roundId: string; revision: number; ok: true }
@@ -209,9 +222,27 @@ export function initialState(
   );
 }
 
+// The actions that still apply while the active round is sending: rounds
+// opening and closing, the shown session, the editors' text and saves, and
+// the send's own failure.
+const SENDING_ACTIONS: ReadonlySet<FormsAction['type']> = new Set([
+  'roundShown',
+  'roundClosed',
+  'sessionActivated',
+  'setText',
+  'saveStarted',
+  'saveFinished',
+  'sendFailed',
+]);
+
 // Returns `state` itself when the action changes nothing. Item actions apply
-// only in the forms view.
+// only in the forms view. While the active round is sending, only the
+// actions in SENDING_ACTIONS apply.
 export function apply(state: FormsState, action: FormsAction): FormsState {
+  const isActiveSending = (activeRound(state)?.sending ?? null) !== null;
+  if (isActiveSending && !SENDING_ACTIONS.has(action.type)) {
+    return state;
+  }
   switch (action.type) {
     case 'roundShown':
       return showRound(state, action.round);
@@ -240,10 +271,6 @@ export function apply(state: FormsState, action: FormsAction): FormsState {
             confirmClosesSession: false,
           }
         : state;
-    case 'confirmCancel':
-      return state.view === 'confirm'
-        ? closeRound(state, state.activeRoundId)
-        : state;
     case 'dismissConfirm':
       return state.view === 'confirm'
         ? {
@@ -255,6 +282,23 @@ export function apply(state: FormsState, action: FormsAction): FormsState {
     case 'setText':
       return updateRound(state, action.roundId, (round) =>
         setText(round, action.target, action.value),
+      );
+    case 'sendStarted':
+      return updateRound(state, action.roundId, (round) =>
+        round.sending === null
+          ? {
+              ...round,
+              sending: {
+                kind: action.kind,
+                closesSession:
+                  action.kind === 'cancelled' && state.confirmClosesSession,
+              },
+            }
+          : round,
+      );
+    case 'sendFailed':
+      return updateRound(state, action.roundId, (round) =>
+        round.sending === null ? round : { ...round, sending: null },
       );
     case 'saveStarted':
       return updateRound(state, action.roundId, (round) =>
@@ -506,6 +550,7 @@ function restoreRound(presented: PresentedRound): RoundState {
     savingRevision: null,
     savedRevision: 0,
     saveError: null,
+    sending: null,
   };
 }
 

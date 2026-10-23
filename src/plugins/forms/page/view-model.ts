@@ -13,6 +13,7 @@ import {
   progress,
   type RoundState,
   type SaveState,
+  saveState,
 } from './form-state';
 import { FORMATS, itemLabel } from './kinds/formats';
 
@@ -177,4 +178,12 @@ export function progressText(progress: Progress): string {
 export function saveLabel(state: SaveState, error: string | null): string {
   const hasError = state === 'unsaved' && error !== null;
   return hasError ? `${SAVE_LABELS[state]} — ${error}` : SAVE_LABELS[state];
+}
+
+// The status line's save text: `Sending…` while the round's finish is with
+// main, else its save state.
+export function roundSaveLabel(round: RoundState): string {
+  return round.sending === null
+    ? saveLabel(saveState(round), round.saveError)
+    : 'Sending…';
 }

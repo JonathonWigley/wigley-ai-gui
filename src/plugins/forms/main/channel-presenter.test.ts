@@ -257,7 +257,8 @@ describe('createChannelPresenter', () => {
   });
 
   it('ends a round the page finishes and drops what arrives after', () => {
-    const { attention, presenter, openRounds, finish, saveDraft } = setUp();
+    const { page, attention, presenter, openRounds, finish, saveDraft } =
+      setUp();
     const { listener, drafts, finishes } = fakeListener();
     presenter.show(ROUND, listener);
     const end: RoundEnd = { kind: 'submitted', body: BODY };
@@ -270,9 +271,29 @@ describe('createChannelPresenter', () => {
     expect(drafts).toEqual([]);
     expect(openRounds()).toEqual([]);
     expect(attention.counts).toEqual([1, 0]);
+    expect(page.sent.at(-1)).toEqual(['roundClosed', 'round-1']);
   });
 
-  it('sends no close to the page for a round its own finish closes', () => {
+  it("keeps a round open and rejects the page's finish when its listener throws", () => {
+    const { page, attention, mayClose, presenter, openRounds, finish } =
+      setUp();
+    presenter.show(ROUND, {
+      draft: () => {},
+      finish: () => {
+        throw new Error('round round-1 has no question 3');
+      },
+    });
+
+    expect(() => finish('round-1', { kind: 'submitted', body: BODY })).toThrow(
+      'round round-1 has no question 3',
+    );
+    expect(openRounds()).toEqual([ROUND]);
+    expect(page.sent).toEqual([['roundShown', ROUND]]);
+    expect(attention.counts).toEqual([1]);
+    expect(mayClose('app-1')).toBe(false);
+  });
+
+  it('sends the page one close for a round its own finish closes', () => {
     const { page, presenter, finish } = setUp();
     const end: RoundEnd = { kind: 'cancelled', body: BODY };
     presenter.show(ROUND, {
@@ -282,7 +303,10 @@ describe('createChannelPresenter', () => {
 
     finish('round-1', end);
 
-    expect(page.sent).toEqual([['roundShown', ROUND]]);
+    expect(page.sent).toEqual([
+      ['roundShown', ROUND],
+      ['roundClosed', 'round-1'],
+    ]);
   });
 
   it('closes an open round on the page, and ignores a round already gone', () => {

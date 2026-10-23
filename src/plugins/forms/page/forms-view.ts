@@ -30,7 +30,7 @@ import {
 } from './form-state';
 import type { FormsStore } from './forms-store';
 import { createRoundView, type RoundView } from './round-view';
-import { saveLabel, sessionTitle } from './view-model';
+import { roundSaveLabel, sessionTitle } from './view-model';
 
 // `beforeClose` answers whether a session may close now; `formShown` runs
 // each time a session's Form tab becomes the visible tab. `platform` is the OS
@@ -293,8 +293,7 @@ function buildStatusLine(deps: FormsViewDeps): {
       mode.textContent = modeLabel(deps.boxes.activeMode());
       const round = activeRound(state);
       const roundSave = round === null ? null : saveState(round);
-      save.textContent =
-        round === null ? '' : saveLabel(saveState(round), round.saveError);
+      save.textContent = round === null ? '' : roundSaveLabel(round);
       save.dataset.state = roundSave ?? '';
     },
   };

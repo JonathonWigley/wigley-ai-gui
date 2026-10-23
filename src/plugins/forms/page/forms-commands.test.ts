@@ -9,7 +9,11 @@ import {
   focusedItem,
   initialState,
 } from './form-state';
-import { formsCommandHandlers, guardClose } from './forms-commands';
+import {
+  closeRoundFromMain,
+  formsCommandHandlers,
+  guardClose,
+} from './forms-commands';
 import { createFormsStore } from './forms-store';
 import {
   decision,
@@ -66,6 +70,7 @@ function setup(
   // Each layout method invoked, with its arguments.
   const layoutCalls: unknown[][] = [];
   let layoutFailure: Error | null = null;
+  let finishFailure: Error | null = null;
   const invokeLayout = (...call: unknown[]) => {
     layoutCalls.push(call);
     return layoutFailure === null
@@ -75,6 +80,12 @@ function setup(
   // Each closed session, with the rounds the store held at the call.
   const closedSessions: { sessionId: string; roundCount: number }[] = [];
   const log = (_source: string, message: string) => logs.push(message);
+  const closeSession = (sessionId: string) =>
+    closedSessions.push({ sessionId, roundCount: store.get().rounds.length });
+  const toast = (text: string, tone: ToastTone) => {
+    toasts.push(text);
+    toastTones.push(tone);
+  };
   const handlers = formsCommandHandlers({
     store,
     boxes: {
@@ -90,18 +101,19 @@ function setup(
       active: () => active,
       boxOf: (editor) => boxEditors.get(editor),
     },
-    finish: (roundId, end) => finished.push({ roundId, end }),
-    closeSession: (sessionId) =>
-      closedSessions.push({ sessionId, roundCount: store.get().rounds.length }),
+    finish: (roundId, end) => {
+      finished.push({ roundId, end });
+      return finishFailure === null
+        ? Promise.resolve()
+        : Promise.reject(finishFailure);
+    },
+    closeSession,
     layouts: {
       cycleLayout: (step) => invokeLayout('cycleLayout', step),
       copyLayout: () => invokeLayout('copyLayout'),
       openPreview: () => invokeLayout('openPreview'),
     },
-    toast: (text, tone) => {
-      toasts.push(text);
-      toastTones.push(tone);
-    },
+    toast,
     log,
   });
   // Each Form tab the guard selected, with the store's view at that moment.
@@ -133,6 +145,13 @@ function setup(
     failLayouts: (error: Error) => {
       layoutFailure = error;
     },
+    // Makes every later finish reject with `error`.
+    failFinish: (error: Error) => {
+      finishFailure = error;
+    },
+    // Main's roundClosed for `roundId` reaching the page.
+    closeFromMain: (roundId: string) =>
+      closeRoundFromMain({ store, closeSession, toast, log }, roundId),
     closedSessions,
     shownForms,
     guardClose: (sessionId: string) =>
@@ -467,7 +486,7 @@ describe('formsCommandHandlers', () => {
     expect(finished).toEqual([]);
   });
 
-  it('hands main the body on submit, then closes the round', () => {
+  it('hands main the body on submit and keeps the round until main closes it', () => {
     const { run, round, store, finished, toasts, logs } = setup();
     run('choose3');
     run('openReview');
@@ -478,14 +497,73 @@ describe('formsCommandHandlers', () => {
     expect(finished).toEqual([
       { roundId: 'r1', end: { kind: 'submitted', body } },
     ]);
+    expect(round().sending).toEqual({
+      kind: 'submitted',
+      closesSession: false,
+    });
+    expect(store.get().view).toBe('review');
+    expect(toasts).toEqual([]);
+    expect(logs.at(-1)).toBe('review opened');
+  });
+
+  it('closes a submitted round when main closes it, then logs and toasts the send', () => {
+    const { run, store, toasts, toastTones, logs, closeFromMain } = setup();
+    run('openReview');
+    run('submit');
+
+    closeFromMain('r1');
+
     expect(store.get().rounds).toEqual([]);
     expect(store.get().view).toBe('idle');
     expect(logs.at(-1)).toBe('submitted');
-    expect(toasts).toHaveLength(1);
+    expect(toasts).toEqual(['Answers sent: project · r1']);
+    expect(toastTones).toEqual(['success']);
+  });
+
+  it('keeps a round whose finish rejects, with its answers, and toasts the error', async () => {
+    const {
+      run,
+      round,
+      store,
+      finished,
+      toasts,
+      toastTones,
+      logs,
+      failFinish,
+    } = setup();
+    run('choose3');
+    run('openReview');
+    failFinish(new Error('round r1 has no question 3'));
+
+    run('submit');
+
+    await vi.waitFor(() =>
+      expect(toasts).toEqual(['Round not sent: round r1 has no question 3']),
+    );
+    expect(toastTones).toEqual(['error']);
+    expect(logs).toContain('round r1 not finished: round r1 has no question 3');
+    expect(round().sending).toBeNull();
+    expect(round().answers[0].choice).toBe(3);
+    expect(store.get().view).toBe('review');
+    run('submit');
+    expect(finished).toHaveLength(2);
+  });
+
+  it('sends nothing more while a round is sending', () => {
+    const { run, store, finished } = setup();
+    run('openReview');
+
+    run('submit');
+    run('submit');
+    run('closeReview');
+
+    expect(finished).toHaveLength(1);
+    expect(store.get().view).toBe('review');
   });
 
   it('asks before cancelling, then hands main a cancelled round', () => {
-    const { run, store, finished, logs } = setup();
+    const { run, store, finished, toasts, toastTones, logs, closeFromMain } =
+      setup();
     run('openReview');
 
     run('askCancel');
@@ -494,12 +572,16 @@ describe('formsCommandHandlers', () => {
     run('confirmCancel');
 
     expect(finished.map((entry) => entry.end.kind)).toEqual(['cancelled']);
+    expect(store.get().view).toBe('confirm');
+    closeFromMain('r1');
     expect(store.get().rounds).toEqual([]);
     expect(logs.at(-1)).toBe('cancelled');
+    expect(toasts).toEqual(['Round cancelled: project · r1']);
+    expect(toastTones).toEqual(['info']);
   });
 
   it('keeps the round when the confirmation is dismissed', () => {
-    const { run, store, finished, closedSessions } = setup();
+    const { run, store, finished, closedSessions, closeFromMain } = setup();
     run('openReview');
     run('askCancel');
 
@@ -510,6 +592,7 @@ describe('formsCommandHandlers', () => {
     expect(closedSessions).toEqual([]);
     run('askCancel');
     run('confirmCancel');
+    closeFromMain('r1');
     expect(closedSessions).toEqual([]);
   });
 
@@ -559,7 +642,8 @@ describe('formsCommandHandlers', () => {
   });
 
   it('confirming a close prompt cancels the round, then closes its session', () => {
-    const { run, finished, closedSessions, guardClose } = setup();
+    const { run, finished, closedSessions, guardClose, closeFromMain } =
+      setup();
     guardClose('r1-session');
 
     run('confirmCancel');
@@ -567,9 +651,45 @@ describe('formsCommandHandlers', () => {
     expect(finished.map((entry) => [entry.roundId, entry.end.kind])).toEqual([
       ['r1', 'cancelled'],
     ]);
+    expect(closedSessions).toEqual([]);
+    closeFromMain('r1');
     expect(closedSessions).toEqual([
       { sessionId: 'r1-session', roundCount: 0 },
     ]);
+  });
+
+  it('a close prompt whose cancel fails keeps the session and the prompt', async () => {
+    const {
+      run,
+      round,
+      store,
+      toasts,
+      closedSessions,
+      guardClose,
+      failFinish,
+    } = setup();
+    guardClose('r1-session');
+    failFinish(new Error('disk full'));
+
+    run('confirmCancel');
+
+    await vi.waitFor(() =>
+      expect(toasts).toEqual(['Round not sent: disk full']),
+    );
+    expect(closedSessions).toEqual([]);
+    expect(store.get().view).toBe('confirm');
+    expect(round().sending).toBeNull();
+  });
+
+  it('closing a round main closed on its own shows no toast and closes no session', () => {
+    const { store, toasts, logs, closedSessions, closeFromMain } = setup();
+
+    closeFromMain('r1');
+
+    expect(store.get().rounds).toEqual([]);
+    expect(toasts).toEqual([]);
+    expect(logs).toEqual([]);
+    expect(closedSessions).toEqual([]);
   });
 
   it('nextLayout_InvokesCycleLayoutForward', () => {

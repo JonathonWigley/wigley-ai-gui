@@ -39,8 +39,9 @@ import type { FormsStore } from './forms-store';
 export interface FormsCommandDeps {
   store: FormsStore;
   boxes: Pick<EditorBoxes, 'focus' | 'leave' | 'active' | 'boxOf'>;
-  // Hands the finished round to main.
-  finish(roundId: string, end: RoundEnd): void;
+  // Hands the finished round to main; rejects with the reason when main keeps
+  // the round open.
+  finish(roundId: string, end: RoundEnd): Promise<void>;
   closeSession(sessionId: string): void;
   layouts: LayoutCommandChannel;
   toast(text: string, tone: ToastTone): void;
@@ -407,9 +408,9 @@ export function guardClose(deps: GuardCloseDeps, sessionId: string): boolean {
   return false;
 }
 
-// Reads the body before the round leaves the state, hands it to main, then
-// closes the round, and its session when the cancel prompt was asked by
-// closing it.
+// Marks the round sending and hands main its body; main's `roundClosed` then
+// closes it through closeRoundFromMain. A rejected finish clears the mark,
+// keeping the round as it was, and toasts the reason.
 function finishActiveRound(
   deps: FormsCommandDeps,
   from: FormsView,
@@ -417,25 +418,48 @@ function finishActiveRound(
 ) {
   const state = deps.store.get();
   const round = activeRound(state);
-  if (state.view !== from || round === null) {
+  if (state.view !== from || round === null || round.sending !== null) {
     return;
   }
-  const closesSession = kind === 'cancelled' && state.confirmClosesSession;
-  deps.finish(round.roundId, { kind, body: buildBody(round) });
-  const isSubmit = kind === 'submitted';
-  deps.store.dispatch(
-    isSubmit
-      ? { type: 'roundClosed', roundId: round.roundId }
-      : { type: 'confirmCancel' },
-  );
-  deps.log('forms', kind);
+  const { roundId } = round;
+  const body = buildBody(round);
+  deps.store.dispatch({ type: 'sendStarted', roundId, kind });
+  void deps.finish(roundId, { kind, body }).catch((error) => {
+    deps.store.dispatch({ type: 'sendFailed', roundId });
+    deps.log('forms', `round ${roundId} not finished: ${errorText(error)}`);
+    deps.toast(`Round not sent: ${errorText(error)}`, 'error');
+  });
+}
+
+export type CloseRoundFromMainDeps = Pick<
+  FormsCommandDeps,
+  'store' | 'closeSession' | 'toast' | 'log'
+>;
+
+// Closes a round main closed. A round the page was sending logs and toasts
+// its send, and closes its session when the close prompt asked the cancel; a
+// round main closed on its own closes quietly.
+export function closeRoundFromMain(
+  deps: CloseRoundFromMainDeps,
+  roundId: string,
+): void {
+  const round = deps.store
+    .get()
+    .rounds.find((candidate) => candidate.roundId === roundId);
+  deps.store.dispatch({ type: 'roundClosed', roundId });
+  const sending = round?.sending ?? null;
+  if (round === undefined || sending === null) {
+    return;
+  }
+  const isSubmit = sending.kind === 'submitted';
+  deps.log('forms', sending.kind);
   deps.toast(
     isSubmit
       ? `Answers sent: ${round.label}`
       : `Round cancelled: ${round.label}`,
     isSubmit ? 'success' : 'info',
   );
-  if (closesSession) {
+  if (sending.closesSession) {
     deps.closeSession(round.sessionId);
   }
 }

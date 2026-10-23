@@ -13,6 +13,7 @@ import {
   progressText,
   railDotStatus,
   reviewRows,
+  roundSaveLabel,
   saveLabel,
   sessionTitle,
 } from './view-model';
@@ -467,6 +468,20 @@ describe('saveLabel', () => {
     expect(saveLabel('unsaved', null)).toBe('Unsaved');
     expect(saveLabel('saving', null)).toBe('Saving…');
     expect(saveLabel('saved', null)).toBe('Saved');
+  });
+});
+
+describe('roundSaveLabel', () => {
+  it('reads Sending… while the round is sending', () => {
+    const round = roundAfter(
+      { type: 'openReview' },
+      { type: 'sendStarted', roundId: 'r1', kind: 'submitted' },
+    );
+    expect(roundSaveLabel(round)).toBe('Sending…');
+  });
+
+  it('reads the save state while the round is not sending', () => {
+    expect(roundSaveLabel(roundAfter())).toBe('Saved');
   });
 });
 

@@ -15,7 +15,7 @@ import type {
   SessionsPageExports,
 } from '../../sessions/contract';
 import type { KeysPageExports } from '../../keys/contract';
-import type { FormsChannel, RoundEnd } from '../contract';
+import type { FormsChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { formsManifest } from '../manifest';
@@ -23,7 +23,11 @@ import { startAutosave } from './autosave';
 import { focusActionFor } from './boxes';
 import { createEditorBoxes, type EditorBoxes } from './editor-boxes';
 import { initialState } from './form-state';
-import { formsCommandHandlers, guardClose } from './forms-commands';
+import {
+  closeRoundFromMain,
+  formsCommandHandlers,
+  guardClose,
+} from './forms-commands';
 import { createFormsStore, type FormsStore } from './forms-store';
 import { mountFormsView } from './forms-view';
 import { readLayout } from './layout/read-layout';
@@ -60,14 +64,27 @@ function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes {
 
 // Listeners first: a round shown while openRounds is in flight arrives in
 // both, and showing an open round again changes nothing. The active round
-// follows the session the sessions plugin shows.
-function listenForRounds(api: FormsApi, store: FormsStore) {
-  const { log } = api.services;
+// follows the session the sessions plugin shows, and a round leaves only when
+// main closes it.
+function listenForRounds(
+  api: FormsApi,
+  store: FormsStore,
+  sessions: SessionsPageExports,
+) {
+  const { log, toast } = api.services;
   api.channel.on('roundShown', (round) =>
     store.dispatch({ type: 'roundShown', round }),
   );
   api.channel.on('roundClosed', (roundId) =>
-    store.dispatch({ type: 'roundClosed', roundId }),
+    closeRoundFromMain(
+      {
+        store,
+        closeSession: (sessionId) => sessions.closeSession(sessionId),
+        toast,
+        log,
+      },
+      roundId,
+    ),
   );
   api.events.on('sessions.activeChanged', ({ sessionId }) =>
     store.dispatch({ type: 'sessionActivated', sessionId }),
@@ -81,17 +98,6 @@ function listenForRounds(api: FormsApi, store: FormsStore) {
     })
     .catch((error) =>
       log('forms', `open rounds not read: ${errorText(error)}`),
-    );
-}
-
-function finishRound(api: FormsApi, roundId: string, end: RoundEnd) {
-  void api.channel
-    .invoke('finish', roundId, end)
-    .catch((error) =>
-      api.services.log(
-        'forms',
-        `round ${roundId} not finished: ${errorText(error)}`,
-      ),
     );
 }
 
@@ -145,7 +151,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       timers: services.timers,
       log: services.log,
     });
-    listenForRounds(api, store);
+    listenForRounds(api, store, sessions);
     showLayouts({
       channel: {
         onLayoutChanged: (listener) =>
@@ -169,7 +175,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       commands: formsCommandHandlers({
         store,
         boxes,
-        finish: (roundId, end) => finishRound(api, roundId, end),
+        finish: (roundId, end) => api.channel.invoke('finish', roundId, end),
         closeSession: (sessionId) => sessions.closeSession(sessionId),
         layouts: {
           cycleLayout: (step) => api.channel.invoke('cycleLayout', step),

@@ -1041,22 +1041,87 @@ describe('cancel', () => {
   it('is not asked outside the review', () => {
     expect(apply(two, { type: 'askCancel' })).toBe(two);
   });
+});
 
-  it('confirming closes the active round and shows the idle view', () => {
+describe('sending', () => {
+  const two = initialState([presented('r1'), presented('r2')], 'r1-session');
+  const submitting: FormsAction = {
+    type: 'sendStarted',
+    roundId: 'r1',
+    kind: 'submitted',
+  };
+  const cancelling: FormsAction = {
+    type: 'sendStarted',
+    roundId: 'r1',
+    kind: 'cancelled',
+  };
+  const sendingReview = run(two, { type: 'openReview' }, submitting);
+
+  it('marks the active round sending with its kind', () => {
+    expect(active(sendingReview).sending).toEqual({
+      kind: 'submitted',
+      closesSession: false,
+    });
+  });
+
+  it('marks a cancel the close prompt asked as closing its session', () => {
     const state = run(
+      two,
+      { type: 'askClose', sessionId: 'r1-session' },
+      cancelling,
+    );
+    expect(active(state).sending?.closesSession).toBe(true);
+  });
+
+  it("ignores the round's keys while it is sending", () => {
+    const keys: FormsAction[] = [
+      { type: 'reviewNext' },
+      { type: 'closeReview' },
+      { type: 'askCancel' },
+      { type: 'reviewJump' },
+      { type: 'askClose', sessionId: 'r1-session' },
+    ];
+    for (const key of keys) {
+      expect(apply(sendingReview, key)).toBe(sendingReview);
+    }
+    const sendingCancel = run(
       two,
       { type: 'openReview' },
       { type: 'askCancel' },
-      { type: 'confirmCancel' },
+      cancelling,
     );
-    expect(state.rounds.map((round) => round.roundId)).toEqual(['r2']);
-    expect(state.activeRoundId).toBeNull();
-    expect(state.view).toBe('idle');
+    expect(apply(sendingCancel, { type: 'dismissConfirm' })).toBe(
+      sendingCancel,
+    );
   });
 
-  it('confirming outside the confirmation does nothing', () => {
-    const state = apply(two, { type: 'openReview' });
-    expect(apply(state, { type: 'confirmCancel' })).toBe(state);
+  it('still takes text edits while sending', () => {
+    const state = apply(sendingReview, {
+      type: 'setText',
+      roundId: 'r1',
+      target: { field: 'note' },
+      value: 'typed',
+    });
+    expect(active(state).note).toBe('typed');
+  });
+
+  it('a failed send clears the mark and keeps the view and answers', () => {
+    const state = run(
+      two,
+      { type: 'choose', choice: 2 },
+      { type: 'openReview' },
+      submitting,
+      { type: 'sendFailed', roundId: 'r1' },
+    );
+    expect(active(state).sending).toBeNull();
+    expect(state.view).toBe('review');
+    expect(active(state).answers[0].choice).toBe(2);
+  });
+
+  it('a sending round closes on roundClosed', () => {
+    const state = apply(sendingReview, { type: 'roundClosed', roundId: 'r1' });
+    expect(state.rounds.map((round) => round.roundId)).toEqual(['r2']);
+    expect(state.view).toBe('idle');
   });
 });
 
