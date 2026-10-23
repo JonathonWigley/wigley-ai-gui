@@ -83,6 +83,7 @@ import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
 import { applySelfTestConfig } from './selftest-config';
+import { tempFolders } from './temp-folders';
 import {
   type DriveHarnessName,
   type RunEnvironment,
@@ -348,6 +349,7 @@ interface StartInputs {
   homeDir: string;
   dataRoot: string;
   uiStatePath: string;
+  tempFolders: readonly string[];
   // The drive run's folder; null outside a drive run.
   driveRunDir: string | null;
 }
@@ -427,13 +429,23 @@ function uiStateFilePath(homeDir: string): string {
     : path.join(homeDir, 'ui-state.json');
 }
 
-function readStartInputs(): StartInputs {
+// The OS's temp folders as real paths; none in the self-test, whose home is
+// itself a temp folder its chat steps open folders in.
+async function runTempFolders(): Promise<string[]> {
+  if (runMode === 'selfTest') {
+    return [];
+  }
+  return tempFolders(await files.realPath(os.tmpdir()), platform);
+}
+
+async function readStartInputs(): Promise<StartInputs> {
   requireListed(mainParts, manifests);
   const homeDir = homeFolder();
   return {
     homeDir,
     dataRoot: dataFolder(homeDir),
     uiStatePath: uiStateFilePath(homeDir),
+    tempFolders: await runTempFolders(),
     driveRunDir,
   };
 }
@@ -644,6 +656,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
       randomHex,
       randomUuid,
       homeDir: inputs.homeDir,
+      tempFolders: inputs.tempFolders,
       paths,
       runMode,
       ...modeServices.forWindow({
@@ -773,7 +786,7 @@ function startApp() {
       if (shellPath !== null) {
         process.env.PATH = shellPath;
       }
-      const inputs = readStartInputs();
+      const inputs = await readStartInputs();
       const store = await loadConfig(inputs.homeDir);
       onSelfTestExit('the config store', () => store.dispose());
       serveDataScheme(inputs.dataRoot, paths);

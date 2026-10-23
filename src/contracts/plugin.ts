@@ -493,7 +493,8 @@ export interface DriveHost {
 // cancels; `window.isFocused` is true while the app's window has focus.
 // `openExternal` opens an http or https URL in the user's default app,
 // and rejects with `Refused to open <url>: …` for any other scheme or a URL
-// that does not parse.
+// that does not parse. `tempFolders` are the OS's temporary folders as real
+// paths; a folder inside one is scratch space.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -502,6 +503,7 @@ export interface MainServices {
   randomHex: RandomHex;
   randomUuid: RandomUuid;
   homeDir: string;
+  tempFolders: readonly string[];
   paths: Paths;
   alerts: Alerts;
   agentHarnesses: readonly AgentHarness[];
