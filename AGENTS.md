@@ -273,8 +273,9 @@ round), since main, not the page, decides.
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake.
 - **A path** is handled through `services.paths` on both sides, the `Paths` contract (`src/contracts/paths.ts`)
   with a POSIX and a Windows adapter in `src/shared/paths/`, each composition root picking one: main by the OS it
-  runs on, the page by the served `platform`. Code that joins, splits, compares or shows a full path calls it, so no
-  plugin writes `/` into a path or compares paths as strings. Windows paths show with backslashes and the home folder
+  runs on, the page by the served `platform`. Page and shared code that joins, splits or shows a full path calls it,
+  and so does every path compare in either process, so no plugin writes `/` into a full path or compares paths as
+  strings; main-side code may join and split with `node:path`, which follows the OS main runs on. Windows paths show with backslashes and the home folder
   as `~`, accept either separator when typed, and compare case-insensitively. A path relative to a scoped `Files`
   (plugin data) stays `/`-separated on every OS.
 - **A setting** is a core setting in `src/contracts/settings.ts` and `src/config/settings.ts`, or a plugin's own in
