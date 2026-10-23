@@ -16,8 +16,8 @@ export interface ListedProject {
 
 // One entry per folder (`paths.samePath`), the one with the greatest
 // `lastUsed` kept with its spelling and profile; a project's `modified` is its
-// `lastUsed`. Newest first, every folder kept: the start prompt caps its list
-// at MAX_FOLDER_CHOICES after leaving folders out.
+// `lastUsed`. Newest first, every folder kept: `list` caps its folders at
+// MAX_FOLDER_CHOICES after leaving folders out.
 export function mergeFolderChoices(
   recent: readonly RecentFolder[],
   projects: readonly ListedProject[],

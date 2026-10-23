@@ -109,8 +109,9 @@ interview on 2026-10-23; this file is the record of both.
   for Claude the email and the subscription); `logIn(profileDir, events)` starts a sign-in that reports its fallback
   link and its end, and takes a pasted code and a cancel; `logOut(profileDir)` signs out. Claude runs
   `claude auth status --json`, `claude auth login` and `claude auth logout` with the session launch's environment
-  (`claude-stream.md` § Auth), and confirms a finished sign-in with the status, since the login's exit code is not
-  measured.
+  (`claude-stream.md` § Auth). The login's exit code is not measured, so Claude reads the status as the login starts
+  and again when it exits: the sign-in finished only when the profile then reads signed in and the login exited 0,
+  the profile was signed out before, or the account changed.
 - **Project folders**: `listProjects(profileDir)` gives every folder the harness has saved sessions in, each with its
   newest change, so the folder step can offer them; for Claude, one transcript head per project folder names it.
 
