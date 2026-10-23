@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Files } from '../../contracts/files';
 import { createMemoryFiles } from '../../shared/memory-files';
+import { posixPaths } from '../../shared/paths/posix-paths';
+import { windowsPaths } from '../../shared/paths/windows-paths';
 import {
   listPastSessions,
   readHistory,
@@ -61,7 +63,11 @@ describe('listPastSessions', () => {
     const files = await savedSessions();
     const { log } = recordingLog();
 
-    const sessions = await listPastSessions({ files, log }, FOLDER, '/w/app');
+    const sessions = await listPastSessions(
+      { files, paths: posixPaths, log },
+      FOLDER,
+      '/w/app',
+    );
 
     expect(sessions).toEqual([
       { sessionId: NEW_ID, title: 'new', modified: 2000 },
@@ -73,7 +79,7 @@ describe('listPastSessions', () => {
     const { log } = recordingLog();
 
     const sessions = await listPastSessions(
-      { files: createMemoryFiles(), log },
+      { files: createMemoryFiles(), paths: posixPaths, log },
       FOLDER,
       '/w/app',
     );
@@ -93,7 +99,11 @@ describe('listPastSessions', () => {
     };
     const { log, logged } = recordingLog();
 
-    const sessions = await listPastSessions({ files, log }, FOLDER, '/w/app');
+    const sessions = await listPastSessions(
+      { files, paths: posixPaths, log },
+      FOLDER,
+      '/w/app',
+    );
 
     expect(sessions).toEqual([
       { sessionId: NEW_ID, title: 'new', modified: 2000 },
@@ -130,10 +140,48 @@ describe('listPastSessions', () => {
     };
     const { log } = recordingLog();
 
-    const sessions = await listPastSessions({ files, log }, FOLDER, '/w/app');
+    const sessions = await listPastSessions(
+      { files, paths: posixPaths, log },
+      FOLDER,
+      '/w/app',
+    );
 
     expect(mostOpen).toBe(TRANSCRIPT_READ_BATCH);
     expect(sessions.map((session) => session.sessionId)).toEqual(ids);
+  });
+
+  it('listPastSessions_WindowsCwdCaseDiffers_Listed', async () => {
+    const folder = 'C:\\Users\\jo\\.claude\\projects\\C---dev-app';
+    const transcriptPath = `${folder}\\${OLD_ID}.jsonl`;
+    const stored = createMemoryFiles();
+    // The in-memory files refuse Windows paths, so this stub answers only the
+    // exact paths the listing joins.
+    const files: Files = {
+      ...stored,
+      list: (path) =>
+        Promise.resolve(
+          path === folder ? [{ path: `${OLD_ID}.jsonl`, kind: 'file' }] : [],
+        ),
+      readStart: (path) =>
+        path === transcriptPath
+          ? Promise.resolve(transcript('c:\\_root\\dev\\app', 'hello'))
+          : Promise.reject(new Error(`missing ${path}`)),
+      modified: (path) =>
+        path === transcriptPath
+          ? Promise.resolve(1000)
+          : Promise.reject(new Error(`missing ${path}`)),
+    };
+    const { log } = recordingLog();
+
+    const sessions = await listPastSessions(
+      { files, paths: windowsPaths, log },
+      folder,
+      'C:\\_root\\dev\\app',
+    );
+
+    expect(sessions).toEqual([
+      { sessionId: OLD_ID, title: 'hello', modified: 1000 },
+    ]);
   });
 });
 
@@ -149,15 +197,15 @@ describe('readHistory', () => {
       },
     };
 
-    await expect(readHistory(files, FOLDER, '../x')).rejects.toThrow(
-      'not a Claude session id: ../x',
-    );
+    await expect(
+      readHistory(files, posixPaths, FOLDER, '../x'),
+    ).rejects.toThrow('not a Claude session id: ../x');
     expect(readPaths).toEqual([]);
   });
 
   it('readHistory_Missing_RejectsNamingThePath', async () => {
     await expect(
-      readHistory(createMemoryFiles(), FOLDER, OLD_ID),
+      readHistory(createMemoryFiles(), posixPaths, FOLDER, OLD_ID),
     ).rejects.toThrow(`${FOLDER}/${OLD_ID}.jsonl`);
   });
 });

@@ -1,5 +1,4 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import path from 'node:path';
 import { createInterface } from 'node:readline';
 import type {
   AgentHarness,
@@ -12,6 +11,7 @@ import type {
 } from '../../contracts/agent';
 import type { Files } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
+import type { Paths } from '../../contracts/paths';
 import { errorText } from '../../shared/error-text';
 import { claudeConfigFolder, claudeLaunch } from './claude-launch';
 import {
@@ -34,8 +34,9 @@ export type ClaudeSpawn = (
 // `command` reads the `claude` binary's path, once per spawned session;
 // `permissionTool` the MCP tool Claude asks what auto mode would still prompt;
 // `env` the environment the process inherits; `files` reads saved transcripts,
-// and `homeDir` holds the default config folder `.claude` and is what a `~/`
-// profile folder resolves against.
+// `homeDir` holds the default config folder `.claude` and is what a `~` profile
+// folder resolves against, and `paths` joins and compares paths by the rules
+// of the OS `claude` runs on.
 export interface ClaudeCodeHarnessDeps {
   command(): string;
   permissionTool: string;
@@ -44,6 +45,7 @@ export interface ClaudeCodeHarnessDeps {
   spawn: ClaudeSpawn;
   files: Files;
   homeDir: string;
+  paths: Paths;
 }
 
 // How long `end` waits after closing stdin before SIGTERM, and again before
@@ -98,6 +100,7 @@ function startClaudeProcess(
     deps.permissionTool,
     deps.env,
     deps.homeDir,
+    deps.paths,
   );
   const command = deps.command();
   const child = deps.spawn(command, launch.args, {
@@ -415,8 +418,8 @@ function projectsFolder(
   projectDir: string,
   profileDir: string | null,
 ): string {
-  return path.join(
-    claudeConfigFolder(profileDir, deps.env, deps.homeDir),
+  return deps.paths.join(
+    claudeConfigFolder(profileDir, deps.env, deps.homeDir, deps.paths),
     'projects',
     projectFolderName(projectDir),
   );
@@ -432,13 +435,14 @@ export function createClaudeCodeHarness(
     start: (request, events) => startClaudeProcess(deps, request, events),
     listSessions: (projectDir, profileDir) =>
       listPastSessions(
-        { files: deps.files, log: deps.log },
+        { files: deps.files, paths: deps.paths, log: deps.log },
         projectsFolder(deps, projectDir, profileDir),
         projectDir,
       ),
     history: (sessionId, projectDir, profileDir) =>
       readHistory(
         deps.files,
+        deps.paths,
         projectsFolder(deps, projectDir, profileDir),
         sessionId,
       ),

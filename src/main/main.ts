@@ -177,6 +177,7 @@ function claudeHarness(
     spawn,
     files,
     homeDir,
+    paths,
   });
 }
 

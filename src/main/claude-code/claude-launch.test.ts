@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { posixPaths } from '../../shared/paths/posix-paths';
+import { windowsPaths } from '../../shared/paths/windows-paths';
 import { claudeConfigFolder, claudeLaunch } from './claude-launch';
 
 const TOOL = 'mcp__plugin_wigley_wigley-forms__permission_prompt';
@@ -15,6 +17,7 @@ describe('claudeLaunch', () => {
       TOOL,
       { HOME: '/h', CLAUDE_CONFIG_DIR: '/x' },
       '/h',
+      posixPaths,
     );
 
     expect(launch.args).toEqual([
@@ -44,6 +47,7 @@ describe('claudeLaunch', () => {
       TOOL,
       env,
       '/h',
+      posixPaths,
     );
 
     expect(launch.args.slice(7, 9)).toEqual(['--resume', 's-1']);
@@ -80,6 +84,7 @@ describe('claudeLaunch', () => {
         CLAUDE_CODE_USE_BEDROCK: '1',
       },
       '/h',
+      posixPaths,
     );
 
     expect(launch.env).toEqual({
@@ -100,9 +105,27 @@ describe('claudeLaunch', () => {
       TOOL,
       { HOME: '/elsewhere' },
       '/Users/u',
+      posixPaths,
     );
 
     expect(launch.env.CLAUDE_CONFIG_DIR).toBe('/Users/u/.claude-personal');
+  });
+
+  it('claudeLaunch_WindowsProfile_ExpandsUnderHome', () => {
+    const launch = claudeLaunch(
+      {
+        sessionId: 's-1',
+        resume: false,
+        projectDir: 'C:\\proj',
+        profileDir: '~/.claude-work',
+      },
+      TOOL,
+      {},
+      'C:\\Users\\jo',
+      windowsPaths,
+    );
+
+    expect(launch.env.CLAUDE_CONFIG_DIR).toBe('C:\\Users\\jo\\.claude-work');
   });
 });
 
@@ -113,7 +136,14 @@ describe('claudeConfigFolder', () => {
         '~/.claude-personal',
         { CLAUDE_CONFIG_DIR: '/c' },
         '/Users/u',
+        posixPaths,
       ),
     ).toBe('/Users/u/.claude-personal');
+  });
+
+  it('claudeConfigFolder_WindowsDefault_IsHomeClaude', () => {
+    expect(claudeConfigFolder(null, {}, 'C:\\Users\\jo', windowsPaths)).toBe(
+      'C:\\Users\\jo\\.claude',
+    );
   });
 });

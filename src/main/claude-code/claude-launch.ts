@@ -1,6 +1,5 @@
-import path from 'node:path';
 import type { AgentStart } from '../../contracts/agent';
-import { expandHome } from '../../shared/expand-home';
+import type { Paths } from '../../contracts/paths';
 
 export interface ClaudeLaunch {
   args: string[];
@@ -31,12 +30,13 @@ const NESTED_SESSION_ENV: readonly string[] = [
 // The arguments, folder and environment `claude` runs one session with:
 // stream-json both ways, partial messages streamed, auto permission mode with
 // what it would still prompt sent to `permissionTool`, and `env` without the
-// nested-session variables. A `~/` profile folder resolves against `homeDir`.
+// nested-session variables. A `~` profile folder resolves against `homeDir`.
 export function claudeLaunch(
   request: AgentStart,
   permissionTool: string,
   env: NodeJS.ProcessEnv,
   homeDir: string,
+  paths: Paths,
 ): ClaudeLaunch {
   const sessionFlag = request.resume ? '--resume' : '--session-id';
   const launchEnv = { ...env };
@@ -44,7 +44,10 @@ export function claudeLaunch(
     delete launchEnv[name];
   }
   if (request.profileDir !== null) {
-    launchEnv.CLAUDE_CONFIG_DIR = expandHome(request.profileDir, homeDir);
+    launchEnv.CLAUDE_CONFIG_DIR = paths.expandTilde(
+      request.profileDir,
+      homeDir,
+    );
   }
   return {
     args: [
@@ -76,11 +79,12 @@ export function claudeConfigFolder(
   profileDir: string | null,
   env: NodeJS.ProcessEnv,
   homeDir: string,
+  paths: Paths,
 ): string {
   if (profileDir !== null) {
-    return expandHome(profileDir, homeDir);
+    return paths.expandTilde(profileDir, homeDir);
   }
   const inherited = env.CLAUDE_CONFIG_DIR;
   const isInherited = inherited !== undefined && inherited !== '';
-  return isInherited ? inherited : path.join(homeDir, '.claude');
+  return isInherited ? inherited : paths.join(homeDir, '.claude');
 }

@@ -4,6 +4,7 @@ import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentProcessEvents, AgentStart } from '../../contracts/agent';
 import { createMemoryFiles } from '../../shared/memory-files';
+import { posixPaths } from '../../shared/paths/posix-paths';
 import {
   createClaudeCodeHarness,
   type ClaudeSpawn,
@@ -81,6 +82,7 @@ function started(fake = fakeChild()) {
     spawn,
     files: createMemoryFiles(),
     homeDir: '/Users/u',
+    paths: posixPaths,
   });
   const { heard, events } = recordingEvents();
   const agent = harness.start(request, events);
@@ -413,6 +415,7 @@ describe('createClaudeCodeHarness past sessions', () => {
       spawn: () => fakeChild().child,
       files,
       homeDir: '/Users/u',
+      paths: posixPaths,
     });
     const sessions = await harness.listSessions('/w/app', profileDir);
     return sessions.map((session) => session.sessionId);

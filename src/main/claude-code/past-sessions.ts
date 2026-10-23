@@ -1,7 +1,7 @@
-import path from 'node:path';
 import type { ChatEntry, PastSession } from '../../contracts/agent';
 import type { Files } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
+import type { Paths } from '../../contracts/paths';
 import { errorText } from '../../shared/error-text';
 import {
   readTranscriptHead,
@@ -13,6 +13,7 @@ import {
 
 export interface PastSessionsDeps {
   files: Files;
+  paths: Paths;
   log: Log;
 }
 
@@ -21,10 +22,10 @@ const TRANSCRIPT_EXTENSION = '.jsonl';
 // cannot exhaust the process's file handles.
 export const TRANSCRIPT_READ_BATCH = 16;
 
-// The sessions in `projectsFolder` whose transcript opens in `projectDir`,
-// newest first, then by session id, read `TRANSCRIPT_READ_BATCH` at a time. A
-// transcript that cannot be read is left out and logged; a missing folder
-// lists none.
+// The sessions in `projectsFolder` whose transcript opens in `projectDir`, as
+// `paths.samePath` compares them, newest first, then by session id, read
+// `TRANSCRIPT_READ_BATCH` at a time. A transcript that cannot be read is left
+// out and logged; a missing folder lists none.
 export async function listPastSessions(
   deps: PastSessionsDeps,
   projectsFolder: string,
@@ -60,6 +61,7 @@ export async function listPastSessions(
 // not a session id, since the id becomes part of a path.
 export async function readHistory(
   files: Files,
+  paths: Paths,
   projectsFolder: string,
   sessionId: string,
 ): Promise<ChatEntry[]> {
@@ -67,7 +69,7 @@ export async function readHistory(
     throw new Error(`not a Claude session id: ${sessionId}`);
   }
   return transcriptEntries(
-    await files.read(transcriptPath(projectsFolder, sessionId)),
+    await files.read(transcriptPath(paths, projectsFolder, sessionId)),
   );
 }
 
@@ -80,8 +82,12 @@ function transcriptSessionId(fileName: string): string | null {
   return SESSION_ID.test(id) ? id : null;
 }
 
-function transcriptPath(projectsFolder: string, sessionId: string): string {
-  return path.join(projectsFolder, `${sessionId}${TRANSCRIPT_EXTENSION}`);
+function transcriptPath(
+  paths: Paths,
+  projectsFolder: string,
+  sessionId: string,
+): string {
+  return paths.join(projectsFolder, `${sessionId}${TRANSCRIPT_EXTENSION}`);
 }
 
 // Null for a transcript that cannot be read or opens in another folder.
@@ -91,7 +97,7 @@ async function pastSession(
   projectDir: string,
   sessionId: string,
 ): Promise<PastSession | null> {
-  const transcript = transcriptPath(projectsFolder, sessionId);
+  const transcript = transcriptPath(deps.paths, projectsFolder, sessionId);
   let head: string;
   let modified: number;
   try {
@@ -107,7 +113,7 @@ async function pastSession(
     return null;
   }
   const { cwd, firstMessage } = readTranscriptHead(head);
-  if (cwd !== projectDir) {
+  if (cwd === null || !deps.paths.samePath(cwd, projectDir)) {
     return null;
   }
   return { sessionId, title: sessionTitle(firstMessage), modified };
