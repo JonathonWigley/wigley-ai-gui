@@ -266,6 +266,14 @@ export interface ModeContext {
 // its base key scope there, so a hidden view never keeps the scope. `hidden`
 // runs each time another mode's `show` hides this one, after its element and
 // side bar are hidden and before the other mode's `shown`.
+// `sideBarHidden` runs each time this mode's side bar hides while the mode
+// shows: by `toggleSideBar`, `picked` or the window narrowing, and after
+// `shown` when the mode shows with its side bar hidden; the plugin moves
+// focus out of the side bar there. `sideBarOpenedOver` runs each time the
+// side bar opens over the content while the mode shows, by `toggleSideBar`
+// or after `shown`; the plugin moves focus into the side bar there. Neither
+// runs for a hidden mode, a mode without a side bar, or a side bar already
+// in that state.
 export interface Mode {
   id: string;
   title: string;
@@ -274,6 +282,8 @@ export interface Mode {
   sideBar?: HTMLElement;
   shown(): void;
   hidden(): void;
+  sideBarHidden?(): void;
+  sideBarOpenedOver?(): void;
 }
 
 // `show` hides the shown mode and shows this one; on the shown mode it does
@@ -305,7 +315,8 @@ export interface ModeHandle {
 // that changes the shown mode hides the old mode's element and side bar, calls
 // the old mode's `hidden`, unhides the new mode's element and side bar, marks
 // it in the activity bar, lays out its side bar, shows its context, calls its
-// `shown`, then `onChanged` listeners hear the new id.
+// `shown` and then `sideBarHidden` or `sideBarOpenedOver` by its side bar's
+// layout, then `onChanged` listeners hear the new id.
 export interface Modes {
   add(mode: Mode): ModeHandle;
   shown(): string;

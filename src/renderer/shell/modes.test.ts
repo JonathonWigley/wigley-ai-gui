@@ -10,10 +10,12 @@ import {
 
 // The test environment has no DOM, so each mode's element and side bar are
 // plain objects holding `hidden`; `calls` records the deps the registry drives,
-// each mode's `shown` and `hidden`, and each change heard.
+// each mode's `shown` and `hidden`, and each change heard; `told` records each
+// mode's `sideBarHidden` and `sideBarOpenedOver`.
 function setup(isNarrow = false) {
   const logs: string[] = [];
   const calls: string[] = [];
+  const told: string[] = [];
   const modes = createModes({
     place: (mode) => calls.push(`place ${mode.id}`),
     marked: (modeId) => calls.push(`marked ${modeId}`),
@@ -34,10 +36,12 @@ function setup(isNarrow = false) {
       sideBar,
       shown: () => calls.push(`shown ${id}`),
       hidden: () => calls.push(`hidden ${id}`),
+      sideBarHidden: () => told.push(`side bar hidden ${id}`),
+      sideBarOpenedOver: () => told.push(`opened over ${id}`),
     });
     return { element, sideBar, handle };
   };
-  return { modes, logs, calls, add };
+  return { modes, logs, calls, told, add };
 }
 
 describe('createModes', () => {
@@ -314,6 +318,129 @@ describe('createModes', () => {
     calls.length = 0;
     one.handle.setContext(null);
     expect(calls).toEqual(['context null']);
+  });
+});
+
+describe('side bar callbacks', () => {
+  it('toggleSideBar tells the shown mode its side bar hid while wide', () => {
+    const { told, add } = setup();
+    const one = add('a.one', 'One', true);
+
+    one.handle.toggleSideBar();
+    expect(told).toEqual(['side bar hidden a.one']);
+
+    one.handle.toggleSideBar();
+    expect(told).toEqual(['side bar hidden a.one']);
+  });
+
+  it('toggleSideBar tells the shown mode its overlay opened and closed while narrow', () => {
+    const { told, add } = setup(true);
+    const one = add('a.one', 'One', true);
+    told.length = 0;
+
+    one.handle.toggleSideBar();
+    one.handle.toggleSideBar();
+
+    expect(told).toEqual(['opened over a.one', 'side bar hidden a.one']);
+  });
+
+  it('picked tells the shown mode its overlay closed, and nothing once closed', () => {
+    const { told, add } = setup(true);
+    const one = add('a.one', 'One', true);
+    one.handle.toggleSideBar();
+    told.length = 0;
+
+    one.handle.picked();
+    one.handle.picked();
+
+    expect(told).toEqual(['side bar hidden a.one']);
+  });
+
+  it('narrowChanged tells the shown mode its side bar hid as the window narrows', () => {
+    const { modes, told, add } = setup();
+    add('a.one', 'One', true);
+    add('b.two', 'Two', true);
+
+    modes.narrowChanged(true);
+    modes.narrowChanged(false);
+
+    expect(told).toEqual(['side bar hidden a.one']);
+  });
+
+  it('narrowChanged tells nothing of a side bar the user already hid', () => {
+    const { modes, told, add } = setup();
+    const one = add('a.one', 'One', true);
+    one.handle.toggleSideBar();
+    told.length = 0;
+
+    modes.narrowChanged(true);
+    modes.narrowChanged(false);
+    one.handle.picked();
+
+    expect(told).toEqual([]);
+  });
+
+  it('tells a hidden mode nothing', () => {
+    const { modes, told, add } = setup(true);
+    add('a.one', 'One', true);
+    const two = add('b.two', 'Two', true);
+    told.length = 0;
+
+    two.handle.toggleSideBar();
+    two.handle.picked();
+    modes.narrowChanged(false);
+    modes.narrowChanged(true);
+
+    expect(told).toEqual(['side bar hidden a.one']);
+  });
+
+  it('tells each mode as it shows whether its side bar starts hidden or over', () => {
+    const { told, add } = setup(true);
+    const one = add('a.one', 'One', true);
+    const two = add('b.two', 'Two', true);
+    two.handle.toggleSideBar();
+
+    two.handle.show();
+    one.handle.show();
+
+    expect(told).toEqual([
+      'side bar hidden a.one',
+      'opened over b.two',
+      'side bar hidden a.one',
+    ]);
+  });
+
+  it('calls sideBarHidden after shown, and tells a mode with no side bar nothing', () => {
+    const events: string[] = [];
+    const modes = createModes({
+      place: () => undefined,
+      marked: () => undefined,
+      layOutSideBar: () => undefined,
+      showContext: () => undefined,
+      isNarrow: true,
+      log: () => undefined,
+    });
+    const addMode = (id: string, sideBar?: HTMLElement) =>
+      modes.add({
+        id,
+        title: id,
+        icon: 'x',
+        element: { hidden: false } as HTMLElement,
+        sideBar,
+        shown: () => events.push(`shown ${id}`),
+        hidden: () => undefined,
+        sideBarHidden: () => events.push(`side bar hidden ${id}`),
+      });
+    addMode('a.one', { hidden: false } as HTMLElement);
+    const two = addMode('b.two');
+
+    two.show();
+
+    expect(events).toEqual([
+      'shown a.one',
+      'side bar hidden a.one',
+      'shown b.two',
+    ]);
   });
 });
 

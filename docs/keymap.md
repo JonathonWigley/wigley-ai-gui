@@ -23,10 +23,11 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
   defaults and any plugin's keys, so a line copies across unchanged. A user bind replaces a bind on
   the same keys in the same scope; `unbind` entries remove a default.
 - A bind is one entry in vim notation (`<Leader>ks`, `gg`, `<A-o>`, `<Esc>`), written once. A
-  leader bind fires on the page and in a text box; any other bind fires on the page, and a chord
-  on the page fires inside a box too. `where` (`page`, `box` or `both`) sets where a bind fires in
-  place of that default, and a chord takes only `page`. A bind with `mode` fires in a box, in that
-  vim mode.
+  leader bind fires on the page and, as a vim normal-mode map, in a text box in normal mode; in
+  insert mode the leader key types itself (Space types a space). Any other bind fires on the page,
+  and a chord on the page fires inside a box too. `where` (`page`, `box` or `both`) sets where a
+  bind fires in place of that default, and a chord takes only `page`. A bind with `mode` fires in
+  a box, in that vim mode.
 - `groups` names each leader prefix for which-key (`<Leader>k` windows); a later layer's name for
   a prefix replaces an earlier one's.
 
@@ -57,7 +58,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   `Win+,` belongs to the OS. `D-` is the Win key on Windows, so these binds are Win
   chords there: the user holds the four modifiers the same way on both OSes.
 - **Leader (Space)** changes scope or holds named actions. Inside a text box raw keys belong to
-  vim, so every action reachable from a box keeps a leader route there.
+  vim, so every action reachable from a box keeps a leader route there, taken in vim normal mode:
+  in insert mode Space types a space, so the route starts with Esc there.
 
 ## Leader groups
 

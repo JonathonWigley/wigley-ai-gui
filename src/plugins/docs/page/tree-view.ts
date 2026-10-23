@@ -16,6 +16,8 @@ import {
   type TreeLineHintPart,
   treeLine,
   type TreeRow,
+  type TreeRowKey,
+  treeRowAction,
   type TreeState,
   visibleRows,
 } from './docs-state';
@@ -23,7 +25,7 @@ import { textBoxInput } from '../../../shared/page/text-box';
 
 export interface TreeViewDeps {
   log: Log;
-  // What `l` does on a leaf: open its doc.
+  // What `l` or Enter does on a leaf: open its doc.
   openLeaf(leaf: TreeLeaf): void;
   // Pushes `docs.box` while the filter box is open.
   pushBoxScope(): PushedScope;
@@ -52,8 +54,14 @@ export interface TreeView {
   ): void;
   down(): void;
   up(): void;
+  // `l`: opens a leaf, expands a collapsed group, steps into an expanded
+  // one.
   open(): void;
+  // `h`: collapses an expanded group, else selects the parent.
   close(): void;
+  // Enter: opens a leaf, expands a collapsed group, collapses an expanded
+  // one.
+  toggle(): void;
   // Selects the first or last visible row, logging its title; nothing on an
   // empty tree.
   top(): void;
@@ -222,6 +230,28 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   const selectedRow = () =>
     rows.find((row) => row.node.id === state.selectedId);
 
+  const actOnSelected = (key: TreeRowKey) => {
+    const row = selectedRow();
+    if (row === undefined) {
+      return;
+    }
+    const { node } = row;
+    const action = treeRowAction(tree, row, state.filter, key);
+    if (action.type === 'openLeaf' && node.type === 'entry') {
+      draw();
+      deps.openLeaf(node);
+    } else if (action.type === 'expand' || action.type === 'collapse') {
+      const isExpanding = action.type === 'expand';
+      setExpanded(node.id, isExpanding);
+      const verb = isExpanding ? 'expanded' : 'collapsed';
+      deps.log('docs', `${verb} ${node.title}`);
+      draw();
+    } else if (action.type === 'select') {
+      state = { ...state, selectedId: action.id };
+      draw();
+    }
+  };
+
   const step = (by: 1 | -1) => {
     state = { ...state, selectedId: stepSelection(rows, state.selectedId, by) };
     draw();
@@ -273,43 +303,9 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     up: () => step(-1),
     top: () => selectEdge('first'),
     bottom: () => selectEdge('last'),
-    open() {
-      const row = selectedRow();
-      if (row === undefined) {
-        return;
-      }
-      const { node } = row;
-      if (node.type === 'entry') {
-        draw();
-        deps.openLeaf(node);
-      } else if (!row.isExpanded) {
-        setExpanded(node.id, true);
-        deps.log('docs', `expanded ${node.title}`);
-        draw();
-      } else if (node.children.length > 0) {
-        state = { ...state, selectedId: node.children[0].id };
-        draw();
-      }
-    },
-    close() {
-      const row = selectedRow();
-      if (row === undefined) {
-        return;
-      }
-      const isCollapsible =
-        row.node.type === 'group' && row.isExpanded && state.filter === '';
-      if (isCollapsible) {
-        setExpanded(row.node.id, false);
-        deps.log('docs', `collapsed ${row.node.title}`);
-        draw();
-        return;
-      }
-      const parent = parentId(tree, row.node.id);
-      if (parent !== null) {
-        state = { ...state, selectedId: parent };
-        draw();
-      }
-    },
+    open: () => actOnSelected('open'),
+    close: () => actOnSelected('close'),
+    toggle: () => actOnSelected('toggle'),
     selected: () => selectedRow()?.node ?? null,
     selectEntry(entryId) {
       const leafId = `entry:${entryId}`;

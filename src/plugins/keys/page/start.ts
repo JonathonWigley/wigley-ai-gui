@@ -70,10 +70,20 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
     );
     // The pushed `help` scope while help is open, `null` while it is closed.
     let helpScope: PushedScope | null = null;
-    const closeHelp = () => {
+    // What held focus as help opened, given it back as the user closes help.
+    let focusedBeforeHelp: Element | null = null;
+    const hideHelp = () => {
       helpScope?.pop();
       helpScope = null;
       help.hide();
+    };
+    const closeHelp = () => {
+      hideHelp();
+      const focused = focusedBeforeHelp;
+      focusedBeforeHelp = null;
+      if (focused instanceof HTMLElement && focused.isConnected) {
+        focused.focus();
+      }
     };
 
     const keyBar = mountKeyBarView(api.areas.statusBar, {
@@ -102,10 +112,14 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
             closeHelp();
             return;
           }
+          focusedBeforeHelp = document.activeElement;
           helpScope = keys.pushScope('help');
           // A view that changes under help, such as a prompt opening, shows at
-          // once rather than behind help's scrim.
-          helpScope.onBaseChanged(closeHelp);
+          // once rather than behind help's scrim, and keeps the focus it took.
+          helpScope.onBaseChanged(() => {
+            focusedBeforeHelp = null;
+            hideHelp();
+          });
           context.editor?.blur();
           help.show();
         },

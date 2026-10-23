@@ -52,6 +52,7 @@ export interface DocsViewCommands {
   treeTop(): void;
   treeBottom(): void;
   treeOpen(): void;
+  treeToggle(): void;
   treeClose(): void;
   filter(): void;
   rescan(): void;
@@ -101,6 +102,9 @@ export interface DocsView {
   closeOverlays(): void;
   // The tree's container hid it: the doc pane takes focus and the doc scope.
   treeHidden(): void;
+  // The tree's container opened it over the doc: the tree takes focus and
+  // the tree scope.
+  treeOpenedOver(): void;
   // The scope this view's keys use now.
   focusScope(): DocsPaneScope;
   hasUnsavedEdits(): boolean;
@@ -383,6 +387,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     applyScope();
   };
 
+  const focusTreePane = () => {
+    focused = 'tree';
+    tree.focus();
+    applyScope();
+  };
+
   const openInEditor = async (entry: IndexEntry, line: number) => {
     if (await doc.open(targetFor(entry.path, entry, line, null))) {
       doc.edit(line);
@@ -648,6 +658,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     treeTop: () => tree.top(),
     treeBottom: () => tree.bottom(),
     treeOpen: () => tree.open(),
+    treeToggle: () => tree.toggle(),
     treeClose: () => tree.close(),
     filter: () => tree.openFilter(),
     rescan: () => view.rescan(),
@@ -658,9 +669,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     focusTree: () => {
       deps.revealTree();
-      focused = 'tree';
-      tree.focus();
-      applyScope();
+      focusTreePane();
       log('docs', 'tree focused');
     },
     scrollDown: () => doc.scroll(1),
@@ -742,6 +751,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       doc.closeConflict();
     },
     treeHidden: focusDoc,
+    treeOpenedOver: focusTreePane,
     focusScope: () => focused,
     hasUnsavedEdits: () => doc.hasUnsavedEdits(),
     unsavedPath: () => (doc.hasUnsavedEdits() ? doc.openPath() : null),

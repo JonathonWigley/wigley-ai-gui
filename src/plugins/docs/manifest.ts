@@ -22,7 +22,16 @@ export const docsManifest = definePlugin({
     treeUp: { label: 'previous row', group: 'tree', runsIn: 'page' },
     treeTop: { label: 'first row', group: 'tree', runsIn: 'page' },
     treeBottom: { label: 'last row', group: 'tree', runsIn: 'page' },
-    treeOpen: { label: 'open or expand', group: 'tree', runsIn: 'page' },
+    treeOpen: {
+      label: 'open, expand or step in',
+      group: 'tree',
+      runsIn: 'page',
+    },
+    treeToggle: {
+      label: 'open, expand or collapse',
+      group: 'tree',
+      runsIn: 'page',
+    },
     treeClose: {
       label: 'collapse or go to the parent',
       group: 'tree',

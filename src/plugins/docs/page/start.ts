@@ -53,6 +53,7 @@ const TREE_COMMANDS_IN_SIGHT: ReadonlySet<keyof DocsViewCommands> = new Set<
   'treeDown',
   'treeUp',
   'treeOpen',
+  'treeToggle',
   'treeClose',
   'treeTop',
   'treeBottom',
@@ -165,8 +166,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // The title bar shows the machine view's open doc while Docs mode shows.
     // `openChanged`, `revealTree` and `leafOpened` read `mode` once a doc
     // opens or a key runs, after `add`. A doc opened from the tree closes the
-    // side bar's overlay, and focus leaves the hidden tree for the doc while
-    // Docs mode still shows once the doc opens.
+    // side bar's overlay.
     const machineView = createView(
       'machine',
       { type: 'machine' },
@@ -185,21 +185,16 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           mode.toggleSideBar();
         }
       },
-      () => {
-        mode.picked();
-        const isTreeOutOfSight = mode.isShown() && !mode.sideBarShown();
-        if (isTreeOutOfSight) {
-          machineView.treeHidden();
-        }
-      },
+      () => mode.picked(),
     );
 
     const docsSheet = sheet();
     docsSheet.classList.add('docs-sheet');
     docsSheet.append(machineView.doc);
     // `add` calls `shown` before it returns only for the first mode added;
-    // Sessions mode starts before Docs mode, so `shown` may read `mode`. A
-    // mode shown in a narrow window reveals with its side bar hidden.
+    // Sessions mode starts before Docs mode. Focus leaves the tree for the
+    // doc as the side bar hides, and moves to the tree as it opens over the
+    // doc.
     const mode = api.modes.add({
       id: 'docs',
       title: 'Docs',
@@ -210,12 +205,11 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         isDocsModeShown = true;
         closeOverlaysBesides(machineView);
         api.keys.setScope(machineView.focusScope());
-        if (!mode.sideBarShown()) {
-          machineView.treeHidden();
-        }
         machineView.showFirstTime();
       },
       hidden: () => undefined,
+      sideBarHidden: () => machineView.treeHidden(),
+      sideBarOpenedOver: () => machineView.treeOpenedOver(),
     });
     api.modes.onChanged((modeId) => {
       isDocsModeShown = modeId === 'docs.docs';
@@ -287,7 +281,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       held.view.dispose();
     });
 
-    // Showing leaves focus where it is, as Docs mode's side bar showing does.
+    // Showing leaves focus where it is, as Docs mode's side bar showing beside
+    // the doc does.
     const setSessionTreeHidden = (held: SessionDocs, isHidden: boolean) => {
       held.split.setStartHidden(isHidden);
       held.isTreeHidden = isHidden;
@@ -324,8 +319,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // scrolls the doc on its first press. The handler is not told which key
     // fired, so it runs one only when every key of the tree command runs the
     // same command in the doc pane, and never a tree command, which would
-    // land here again. The narrowing itself gives the mode no callback, so
-    // the check runs on each key.
+    // land here again.
     const runInDocPane = (view: DocsView, command: keyof DocsViewCommands) => {
       const treeScope = api.keys.scope();
       view.treeHidden();
@@ -361,19 +355,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     };
 
     // The core logs the side bar's hiding and showing.
-    const toggleSideBar = () => {
-      mode.toggleSideBar();
-      if (!mode.sideBarShown()) {
-        machineView.treeHidden();
-      }
-    };
-
     const showMode = () => {
       if (!mode.isShown()) {
         mode.show();
         return;
       }
-      toggleSideBar();
+      mode.toggleSideBar();
     };
 
     const toggleTree = () => {
@@ -382,7 +369,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         return;
       }
       if (view === machineView) {
-        toggleSideBar();
+        mode.toggleSideBar();
         return;
       }
       const held = sessionDocsOf(view);
@@ -400,6 +387,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         treeTop: onActiveView('treeTop'),
         treeBottom: onActiveView('treeBottom'),
         treeOpen: onActiveView('treeOpen'),
+        treeToggle: onActiveView('treeToggle'),
         treeClose: onActiveView('treeClose'),
         filter: onActiveView('filter'),
         rescan: onActiveView('rescan'),

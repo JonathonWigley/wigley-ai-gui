@@ -291,7 +291,7 @@ export const defaultKeymap = {
     { keys: 'gg', scope: 'docs.tree', command: 'docs.treeTop' },
     { keys: 'G', scope: 'docs.tree', command: 'docs.treeBottom' },
     { keys: 'l', scope: 'docs.tree', command: 'docs.treeOpen' },
-    { keys: '<CR>', scope: 'docs.tree', command: 'docs.treeOpen' },
+    { keys: '<CR>', scope: 'docs.tree', command: 'docs.treeToggle' },
     { keys: 'h', scope: 'docs.tree', command: 'docs.treeClose' },
     { keys: '/', scope: 'docs.tree', command: 'docs.filter' },
     { keys: 'R', scope: 'docs.tree', command: 'docs.rescan' },

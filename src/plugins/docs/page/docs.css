@@ -115,6 +115,18 @@
   height: 100%;
 }
 
+/* Stacked, a session Docs tab's tree takes a fixed 40% of the height and the
+   doc the rest: a content-sized row would shrink the tree to its top lines. */
+@media (max-width: 640px) {
+  .docs-split:not(.is-start-hidden) {
+    grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+  }
+
+  .docs-split > .ui-split-start {
+    max-height: none;
+  }
+}
+
 /* The doc pane scrolls; it is the blocks' offset parent, so a block's
    `offsetTop` compares with its `scrollTop`. */
 .docs-doc {

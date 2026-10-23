@@ -27,6 +27,8 @@ import {
   trashQuestion,
   treeLine,
   type TreeLineState,
+  type TreeRowKey,
+  treeRowAction,
   UNSAVED_TEXT,
   visibleRows,
 } from './docs-state';
@@ -146,6 +148,63 @@ describe('parentId', () => {
   it('parentId_LeafInGroup_GroupId', () => {
     expect(parentId(NESTED, 'c')).toBe('b');
     expect(parentId(NESTED, 'a')).toBeNull();
+  });
+});
+
+describe('treeRowAction', () => {
+  // Root `a` holding group `b` holding leaf `c`.
+  const groupB = group('b', 'B', [leaf('c', 'C', 'e:c')]);
+  const tree = [group('a', 'A', [groupB])];
+  const rowOf = (node: TreeNode, isExpanded: boolean): TreeRow => ({
+    node,
+    depth: 1,
+    isExpanded,
+  });
+  const actionOf = (row: TreeRow, key: TreeRowKey, filter = '') =>
+    treeRowAction(tree, row, filter, key);
+
+  it('treeRowAction_ToggleExpandedGroup_Collapses', () => {
+    expect(actionOf(rowOf(groupB, true), 'toggle')).toEqual({
+      type: 'collapse',
+    });
+  });
+
+  it('treeRowAction_ToggleCollapsedGroup_Expands', () => {
+    expect(actionOf(rowOf(groupB, false), 'toggle')).toEqual({
+      type: 'expand',
+    });
+  });
+
+  it('treeRowAction_ToggleLeaf_OpensIt', () => {
+    expect(actionOf(rowOf(leaf('c', 'C', 'e:c'), false), 'toggle')).toEqual({
+      type: 'openLeaf',
+    });
+  });
+
+  it('treeRowAction_ToggleFilteredGroup_Nothing', () => {
+    expect(actionOf(rowOf(groupB, true), 'toggle', 'c')).toEqual({
+      type: 'none',
+    });
+  });
+
+  it('treeRowAction_OpenExpandedGroup_SelectsFirstChild', () => {
+    expect(actionOf(rowOf(groupB, true), 'open')).toEqual({
+      type: 'select',
+      id: 'c',
+    });
+  });
+
+  it('treeRowAction_CloseExpandedGroup_Collapses', () => {
+    expect(actionOf(rowOf(groupB, true), 'close')).toEqual({
+      type: 'collapse',
+    });
+  });
+
+  it('treeRowAction_CloseCollapsedGroup_SelectsParent', () => {
+    expect(actionOf(rowOf(groupB, false), 'close')).toEqual({
+      type: 'select',
+      id: 'a',
+    });
   });
 });
 

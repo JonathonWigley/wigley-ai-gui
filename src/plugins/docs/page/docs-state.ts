@@ -1,9 +1,9 @@
 // The docs view's pure state rules: the tree's visible rows and selection,
-// the load-state chips and context choices, the editor's opening line, the
-// fence a non-markdown file renders in, the changes the view applies before a
-// build lists them, which docs may be renamed or trashed, the texts the view
-// shows with their keys (the tree's line among them), and a hook's or
-// plugin's detail fields.
+// what each tree key does on a row, the load-state chips and context
+// choices, the editor's opening line, the fence a non-markdown file renders
+// in, the changes the view applies before a build lists them, which docs may
+// be renamed or trashed, the texts the view shows with their keys (the tree's
+// line among them), and a hook's or plugin's detail fields.
 
 import type { Paths } from '../../../contracts/paths';
 import type {
@@ -129,6 +129,52 @@ export function parentId(
     item = pending.pop();
   }
   return null;
+}
+
+// The tree keys that act on the selected row: `l`, `h` and Enter.
+export type TreeRowKey = 'open' | 'close' | 'toggle';
+
+export type TreeRowAction =
+  | { type: 'openLeaf' }
+  | { type: 'expand' }
+  | { type: 'collapse' }
+  | { type: 'select'; id: string }
+  | { type: 'none' };
+
+// What `key` does on `row`. A leaf opens on open or toggle. Open expands a
+// collapsed group and steps into an expanded one's first child. Close
+// collapses an expanded group, else selects the row's parent. Toggle expands
+// a collapsed group and collapses an expanded one. A filter shows every group
+// expanded, so it collapses none.
+export function treeRowAction(
+  tree: readonly TreeNode[],
+  row: TreeRow,
+  filter: string,
+  key: TreeRowKey,
+): TreeRowAction {
+  const { node } = row;
+  const isCollapsible =
+    node.type === 'group' && row.isExpanded && filter === '';
+  if (key === 'close') {
+    if (isCollapsible) {
+      return { type: 'collapse' };
+    }
+    const parent = parentId(tree, node.id);
+    return parent === null ? { type: 'none' } : { type: 'select', id: parent };
+  }
+  if (node.type === 'entry') {
+    return { type: 'openLeaf' };
+  }
+  if (!row.isExpanded) {
+    return { type: 'expand' };
+  }
+  if (key === 'toggle') {
+    return isCollapsible ? { type: 'collapse' } : { type: 'none' };
+  }
+  const [firstChild] = node.children;
+  return firstChild === undefined
+    ? { type: 'none' }
+    : { type: 'select', id: firstChild.id };
 }
 
 // `state` is what the chip's colour keys on: the load state, `none` for a

@@ -84,7 +84,8 @@ export interface ModesDeps {
 
 // The core's own view of the registry: `narrowChanged` hears the window cross
 // the 680 px breakpoint, closing every mode's overlay on widening and laying
-// out the shown mode's side bar again.
+// out the shown mode's side bar again, telling the mode as `toggleSideBar`
+// does.
 export interface CoreModes extends Modes {
   narrowChanged(isNarrow: boolean): void;
 }
@@ -117,6 +118,24 @@ export function createModes(deps: ModesDeps): CoreModes {
     }
   };
 
+  // Tells the shown mode its side bar hid or opened over the content, when
+  // its layout differs from `before`: null when the mode was not shown.
+  const tellSideBarChanged = (
+    entry: AddedMode,
+    before: SideBarLayout | null,
+  ) => {
+    const { mode } = entry;
+    const layout = layoutOf(entry);
+    if (mode.sideBar === undefined || layout === before) {
+      return;
+    }
+    if (layout === 'hidden') {
+      mode.sideBarHidden?.();
+    } else if (layout === 'over') {
+      mode.sideBarOpenedOver?.();
+    }
+  };
+
   const reveal = (entry: AddedMode) => {
     const { mode } = entry;
     setHidden(mode, false);
@@ -126,6 +145,7 @@ export function createModes(deps: ModesDeps): CoreModes {
     deps.showContext(entry.context);
     log('page', `showed ${mode.title} mode`);
     mode.shown();
+    tellSideBarChanged(entry, null);
   };
 
   return {
@@ -160,11 +180,13 @@ export function createModes(deps: ModesDeps): CoreModes {
           if (mode.sideBar === undefined) {
             throw new Error(`Mode "${mode.id}" has no side bar`);
           }
+          const before = layoutOf(entry);
           entry.sideBar = toggledSideBar(entry.sideBar, isNarrow);
           if (shownMode === entry) {
             const layout = layoutOf(entry);
             deps.layOutSideBar(layout);
             log('page', SIDE_BAR_LOGS[layout]);
+            tellSideBarChanged(entry, before);
           }
         },
         picked() {
@@ -174,6 +196,7 @@ export function createModes(deps: ModesDeps): CoreModes {
           if (shownMode === entry && layout !== before) {
             deps.layOutSideBar(layout);
             log('page', SIDE_BAR_LOGS[layout]);
+            tellSideBarChanged(entry, before);
           }
         },
         sideBarShown: () => shownMode === entry && layoutOf(entry) !== 'hidden',
@@ -196,12 +219,14 @@ export function createModes(deps: ModesDeps): CoreModes {
       listeners.push(listener);
     },
     narrowChanged(next) {
+      const before = shownMode === null ? null : layoutOf(shownMode);
       isNarrow = next;
       for (const entry of added.values()) {
         entry.sideBar = sideBarAfterResize(entry.sideBar, isNarrow);
       }
       if (shownMode !== null) {
         deps.layOutSideBar(layoutOf(shownMode));
+        tellSideBarChanged(shownMode, before);
       }
     },
   };
