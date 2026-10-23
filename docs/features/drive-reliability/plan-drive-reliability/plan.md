@@ -207,7 +207,7 @@ Boundary rules: everything stays in this repo; `src/main/drive/` keeps no `elect
 - [x] [Doc re-read](11-doc-re-read.md) — after every code task
 
 ### Wave 6
-- [ ] [Final verification](12-final-verification.md) — after 11
+- [x] [Final verification](12-final-verification.md) — after 11
 
 ## Run log
 
@@ -225,6 +225,7 @@ Review base: 5b2bc38096dafc34abedca7cf3e261e5117ffdd1
 - 09 · 37e5dd4 · step sequence identical but the two narrow window steps; 123 → 125 expect lines; 13 groups in the planned order; typecheck and lint pass · concerns: inline step comments inside the group arrays stay (only the narration block was deleted); the narrow step assumes the self-test starts at 680 px or wider, though its expect holds either way
 - 10 · a250702 · expect sequences identical (formatting only); chat 88, settings 28 expect lines; chat 14 groups, settings 6; typecheck and lint pass · concerns: the two sessions why reads the narration as visual mode surviving a blur
 - 11 · a1515bb · every listed line checked; AGENTS.md running/testing and dev quirks, drive SKILL.md navigation, lock, drag rejections and loadStates, DESIGN.md gallery names fixed; wait-log and per-run build entry clean; lint passes · concerns: followups.md restart entry, hidden-tree entry (line ~41) and fixture entry (line ~37) now describe resolved states, left for Close; new doc lines exceed the files' wrap width
+- 12 · none · 1 restart loop PASS (20 restarts, 1.78–2.90 s, all complete); 2 two dev starts PASS (one waited on the lock, ports 5173/5174); 3 held drag PASS (is-active while held, start pane 288→330 px, click rejected naming the drag); 4 ended composer FAIL: fake: end ends the session, but chat-sessions.ts:312 session.owned.end() closes the row at once, so the disabled composer never shows; 5 load-state tags PARTIAL: four tones match CHIP_TONES, but an on-disk edit of an open doc never shows Claude pending; 6 self-test run at the gate; 7 gallery screenshots PASS against DESIGN.md · report /private/tmp/claude-502/-Users-jonathonwigley-Documents-dev-wigley-ai-gui/b18036e1-0824-436b-9728-681d086584bd/scratchpad/reports/12-1.md · concerns: checks 4 and 5 fail on app behaviour this plan did not change (a CLI that exits closes its session row; the open-doc reload does not mark pending); full vs reduced gallery shots near-identical offscreen; gallery-full-0 has no scrollbar
 ### Contract changes
 - StartLock.release(): deletes the file → deletes it on the first call only · why: selftest releases at the first [selftest] line and again on close, and a second delete could remove another start's lock · consumers: 04 · group 04
 - takeStartLock timeout message: names .drive/start.lock literally → names the lockFile path passed in (absolute from both CLIs) · why: the path is a parameter · consumers: 04, 11 (docs quoting the message) · group 04
@@ -255,6 +256,7 @@ Review base: 5b2bc38096dafc34abedca7cf3e261e5117ffdd1
 - pickers group holds the a/Esc place picker and the context picker sequence through Space v t show; side bar starts at Space k d — the narration treats each as one sequence — a why covers one step more or less · group 09 · group 09
 - group arrays and their whys sit in a top-level GROUPS const handed as groups: GROUPS — keeps step arrays unindented and open() short — moving one literal · group 10 · group 10
 - chat's resume Enter step sits in the archive group with its own why — no group of one step — none · group 10 · group 10
+- checks 4 and 5 are not fixed in this run: the fixtures work, and the failing behaviour (a self-ended session closes its row; an open doc's on-disk edit never shows pending) is pre-existing and outside the plan's scope — both go to triage as pre-existing findings — a user who wanted them fixed in this run gets them in a follow-up instead · lead · group 12
 ### Review rounds
 ### Test gate
 - unit: page-driver, drive-commands, selftest, selftest-steps, selftest-config (runner, waits, marks, drag hold, groups/width/repeat added or edited by 01/02/03/07), fake-agent-harness (05), shared drive-args, docs selftest-fixture and docs start (06), start-lock and scripts drive-args (03/04) · 11 files, 140 passed; npm run selftest (01 startup-reload stand-down, 06 docs fixture unchanged, 07–10 groups) pending: the user's open forms round holds the app (pid 28090)
