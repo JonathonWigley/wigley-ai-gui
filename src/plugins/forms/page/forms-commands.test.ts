@@ -715,7 +715,7 @@ describe('formsCommandHandlers', () => {
     expect(closedSessions).toEqual([]);
   });
 
-  it('main closing a round on its own while its cancel sends shows no toast and closes no session', () => {
+  it('main closing a round on its own while its close-prompt cancel sends shows no toast but closes the session', () => {
     const {
       run,
       store,
@@ -734,7 +734,9 @@ describe('formsCommandHandlers', () => {
     expect(store.get().rounds).toEqual([]);
     expect(toasts).toEqual([]);
     expect(logs).toEqual([]);
-    expect(closedSessions).toEqual([]);
+    expect(closedSessions).toEqual([
+      { sessionId: 'r1-session', roundCount: 0 },
+    ]);
   });
 
   it('the close guard keeps the session of the active round while it sends, and says so', () => {

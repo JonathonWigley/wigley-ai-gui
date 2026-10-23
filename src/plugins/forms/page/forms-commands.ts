@@ -29,12 +29,12 @@ import {
   findingActionWord,
   type ItemAnswer,
   itemAnswer,
-  type RailItem,
   railPosition,
   roundOfSession,
   unansweredItem,
 } from './form-state';
 import type { FormsStore } from './forms-store';
+import { itemName, jumpedToLine } from './view-model';
 
 export interface FormsCommandDeps {
   store: FormsStore;
@@ -231,11 +231,6 @@ function focusBoxItem(store: FormsStore, box: BoxRef | undefined) {
   }
 }
 
-// How a log line names an item, e.g. `finding 2`.
-function itemName(item: RailItem): string {
-  return `${item.kind} ${item.index}`;
-}
-
 // The active round's action on `item`; '' on a question.
 function findingAction(
   state: FormsState,
@@ -371,7 +366,7 @@ function jumpToUnanswered(
     type: 'focusItem',
     item: railPosition(round.round, item),
   });
-  deps.log('forms', `jumped to ${itemName(item)}`);
+  deps.log('forms', jumpedToLine(item));
 }
 
 // `showForm` selects the session's Form tab; `activate` selects the session.
@@ -446,10 +441,10 @@ export type CloseRoundFromMainDeps = Pick<
   'store' | 'closeSession' | 'toast' | 'log'
 >;
 
-// Closes a round main closed. A round the page's finish closed logs and toasts
-// its send, and closes its session when the close prompt asked the cancel; a
-// round main closed on its own closes quietly, even while the page's finish
-// for it is in flight, since main dropped those answers.
+// Closes a round main closed. A round the page was sending closes its session
+// when the close prompt asked the cancel, whoever closed the round. Only a
+// round the page's finish closed logs and toasts its send; one main closed on
+// its own stays quiet, since main dropped those answers.
 export function closeRoundFromMain(
   deps: CloseRoundFromMainDeps,
   closed: RoundClosed,
@@ -460,17 +455,19 @@ export function closeRoundFromMain(
     .rounds.find((candidate) => candidate.roundId === roundId);
   deps.store.dispatch({ type: 'roundClosed', roundId });
   const sending = round?.sending ?? null;
-  if (!closed.byFinish || round === undefined || sending === null) {
+  if (round === undefined || sending === null) {
     return;
   }
-  const isSubmit = sending.kind === 'submitted';
-  deps.log('forms', sending.kind);
-  deps.toast(
-    isSubmit
-      ? `Answers sent: ${round.label}`
-      : `Round cancelled: ${round.label}`,
-    isSubmit ? 'success' : 'info',
-  );
+  if (closed.byFinish) {
+    const isSubmit = sending.kind === 'submitted';
+    deps.log('forms', sending.kind);
+    deps.toast(
+      isSubmit
+        ? `Answers sent: ${round.label}`
+        : `Round cancelled: ${round.label}`,
+      isSubmit ? 'success' : 'info',
+    );
+  }
   if (sending.closesSession) {
     deps.closeSession(round.sessionId);
   }

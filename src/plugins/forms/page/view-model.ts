@@ -1,3 +1,4 @@
+import type { Log } from '../../../contracts/log';
 import type { DotStatus } from '../../../shared/page/ui/status-dot';
 import type { AnswerableKind, AnswerStatus, FindingAction } from '../contract';
 import { findingSolution } from '../finding-pick';
@@ -13,6 +14,7 @@ import {
   pickIsComplete,
   type Progress,
   progress,
+  type RailItem,
   type RoundState,
   type SaveState,
   saveState,
@@ -212,6 +214,33 @@ export function reviewRowsChanged(
     drawn.findingAnswers !== current.findingAnswers ||
     drawn.reviewRow !== current.reviewRow
   );
+}
+
+// How a log line names an item, e.g. `finding 2`.
+export function itemName(item: RailItem): string {
+  return `${item.kind} ${item.index}`;
+}
+
+// The log line a jump to `item` writes, by key or by rail click.
+export function jumpedToLine(item: RailItem): string {
+  return `jumped to ${itemName(item)}`;
+}
+
+// A click on the rail entry of `item`, at rail position `position`: dispatches
+// its railPickAction and logs the jump, doing nothing when that is null.
+export function pickRailItem(
+  deps: { dispatch(action: FormsAction): void; log: Log },
+  view: FormsView,
+  item: RailItem,
+  position: number,
+  reviewRow: number | undefined,
+): void {
+  const action = railPickAction(view, position, reviewRow);
+  if (action === null) {
+    return;
+  }
+  deps.dispatch(action);
+  deps.log('forms', jumpedToLine(item));
 }
 
 // What clicking a rail item does: focus it in the forms view; in the review,

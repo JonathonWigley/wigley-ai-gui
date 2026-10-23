@@ -11,6 +11,7 @@ import {
 } from './form-state';
 import { decision, finding, presentedRound, question } from './test-rounds';
 import {
+  pickRailItem,
   progressText,
   railDotStatus,
   railPickAction,
@@ -630,5 +631,35 @@ describe('sessionTitle', () => {
       throw new Error('The test round is not active');
     }
     expect(sessionTitle(round)).toBe('r1 heading 1/3');
+  });
+});
+
+describe('pickRailItem', () => {
+  function picker() {
+    const dispatched: FormsAction[] = [];
+    const logs: string[] = [];
+    const deps = {
+      dispatch: (action: FormsAction) => dispatched.push(action),
+      log: (source: string, line: string) => logs.push(`[${source}] ${line}`),
+    };
+    return { deps, dispatched, logs };
+  }
+
+  it('focuses the clicked item and logs the jump as a key jump does', () => {
+    const { deps, dispatched, logs } = picker();
+
+    pickRailItem(deps, 'forms', { kind: 'question', index: 2 }, 1, 1);
+
+    expect(dispatched).toEqual([{ type: 'focusItem', item: 1 }]);
+    expect(logs).toEqual(['[forms] jumped to question 2']);
+  });
+
+  it('logs nothing and dispatches nothing under the cancel prompt', () => {
+    const { deps, dispatched, logs } = picker();
+
+    pickRailItem(deps, 'confirm', { kind: 'finding', index: 1 }, 0, 0);
+
+    expect(dispatched).toEqual([]);
+    expect(logs).toEqual([]);
   });
 });

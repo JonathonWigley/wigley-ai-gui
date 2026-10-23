@@ -37,9 +37,9 @@ import type { CardDeps, ItemCard } from './kinds/item-format';
 import { createHeadKit } from './layout/card-kit';
 import { buildLayoutCard } from './layout/layout-cards';
 import {
+  pickRailItem,
   progressText,
   railDotStatus,
-  railPickAction,
   type ReviewRow,
   reviewRows,
   reviewRowsChanged,
@@ -224,16 +224,9 @@ function buildRoundParts(
   main.append(itemsPane);
   const reviewRowAt = reviewRowsByRailPosition(round);
   const railEntries = items.map((item, position) =>
-    buildRailEntry(railList, round, item, () => {
-      const action = railPickAction(
-        shownView(),
-        position,
-        reviewRowAt[position],
-      );
-      if (action !== null) {
-        deps.dispatch(action);
-      }
-    }),
+    buildRailEntry(railList, round, item, () =>
+      pickRailItem(deps, shownView(), item, position, reviewRowAt[position]),
+    ),
   );
   const cardDeps: CardDeps = {
     markdown: deps.markdown,

@@ -35,12 +35,14 @@ import { roundSaveLabel, roundSaveState, sessionTitle } from './view-model';
 // key scope to the forms view while a Form tab is the visible tab;
 // `pushConfirmScope` lays the cancel prompt's scope over it. `platform` is the
 // OS key hints are drawn for; `uiState` keeps the rail's dragged width, which
-// every round's rail opens at.
+// every round's rail opens at. `onViewChanged` hears each change that can move
+// the visible view off or onto a Form tab: a key scope or mode change.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'statusBar' | 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
   beforeClose(sessionId: string): boolean;
   setScope(view: FormsState['view']): void;
+  onViewChanged(listener: () => void): void;
   pushConfirmScope(): PushedScope;
   store: FormsStore;
   boxes: EditorBoxes;
@@ -81,11 +83,12 @@ interface FormTab {
 // The whole forms UI: each round in its session's Form tab, the status line in
 // the status bar, the cancel prompt in the overlay layer, all serving the
 // active round. Every store change re-renders it; editors live in the round
-// views and survive every render. While a Form tab is the visible tab the key
-// scope follows the view; the cancel prompt pushes its own scope over it and
-// is dismissed when another view sets the scope. While the round sends, that
-// dismiss waits: a failed send dismisses the prompt, and a sent round closes
-// it with the round. Round views start on the default layout.
+// views and survive every render. While a Form tab is the visible tab the
+// status line shows and the key scope follows the view; the cancel prompt
+// pushes its own scope over it and is dismissed when another view sets the
+// scope. While the round sends, that dismiss waits: a failed send dismisses
+// the prompt, and a sent round closes it with the round. Round views start on
+// the default layout.
 export function mountFormsView(deps: FormsViewDeps): FormsView {
   const { areas, store, boxes } = deps;
   const status = buildStatusLine(deps);
@@ -162,14 +165,16 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       confirm.show();
       pushConfirmScope();
     }
-    status.update(state);
+    status.update(state, isFormShown());
     const box = boxes.active();
     if (box !== null && !isBoxShown(state, box)) {
       boxes.leave();
     }
   };
+  const updateStatus = () => status.update(store.get(), isFormShown());
   store.subscribe(render);
-  boxes.onChange(() => status.update(store.get()));
+  boxes.onChange(updateStatus);
+  deps.onViewChanged(updateStatus);
   render();
   return {
     forgetSession(sessionId) {
@@ -319,9 +324,10 @@ function syncFormTabs(state: FormsState, formTabs: Map<string, FormTab>) {
   }
 }
 
+// The status line, hidden while no Form tab is the visible tab.
 function buildStatusLine(deps: FormsViewDeps): {
   element: HTMLElement;
-  update(state: FormsState): void;
+  update(state: FormsState, isShown: boolean): void;
 } {
   const bar = element('footer', 'status-line');
   const mode = element('span', 'status-mode');
@@ -329,7 +335,8 @@ function buildStatusLine(deps: FormsViewDeps): {
   bar.append(mode, save);
   return {
     element: bar,
-    update(state) {
+    update(state, isShown) {
+      bar.hidden = !isShown;
       mode.textContent = modeLabel(deps.boxes.activeMode());
       const round = activeRound(state);
       const roundSave = round === null ? null : roundSaveState(round);
