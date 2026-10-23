@@ -199,7 +199,7 @@ that needs a file another task in its wave also lists is moved to a later wave.
 - [x] [Docs toggle tree key](12-docs-toggle-tree-key.md) — after 10, 11
 
 ### Wave 4
-- [ ] [Doc re-read](14-doc-re-read.md) — after every code task
+- [x] [Doc re-read](14-doc-re-read.md) — after every code task
 
 ### Wave 5
 - [ ] [Final verification](15-final-verification.md) — after 14
@@ -222,6 +222,7 @@ Review base: 2bd62ed (peer sessions share this tree: the review range is this ru
 - 03 Review redraw and rail notice · 780b705 · diff read, every Produces present; reviewJumpItem is outside SENDING_ACTIONS so inert while sending; typecheck and the two test files pass (worker) · concerns: is-disabled toggle removed (ui-row drops clicks on is-disabled rows); followups.md:24 entry for task 14
 - 02 Cancel prompt and background close · 480f264 · diff read, every Produces present; self-test expect strings match the modes log; typecheck, lint and forms-commands tests pass (worker) · concerns: dismiss-on-base-change relies on Sessions hidden() running before Docs shown(); while a cancel sends, the confirm scope stays pushed until roundClosed (spec allows); two comment lines past the wrap width
 - 12 Docs toggle tree key · cebc48a · diff read, every Produces present (manifest command, <Leader>vt bind, view group, toggleTree); typecheck, lint, keymap test pass (worker) · concerns: session <A-h> step expects [docs] tree shown with tree focused logged after it in the same key — self-test confirms
+- 14 Doc re-read · 5fe1577 · diff read: 19 entries removed, each re-verified; step 1 removed, peer lines kept; written-ahead lines checked against the code · concerns: two rewrapped lines exceed the 120-column wrap (agent-chat/design.md, master-plan.md) — for the review
 ### Contract changes
 - TreeViewDeps: keysFor, kbd → also hasIndex(): boolean, wired as () => document !== null · why: a null document and an empty index both reach setTree as [] · consumers: none (10 and 12 edit docs-view later) · group 11
 - FormsView.isFormShown(): on the interface → a local inside mountFormsView · why: its only outside caller, start.ts' store.subscribe, is deleted · consumers: none · group 02
@@ -239,3 +240,4 @@ Review base: 2bd62ed (peer sessions share this tree: the review range is this ru
 - docs start: a local toggleSideBar serves showMode and toggleTree; toggleTree finds a session view's state through sessionDocsOf; onActiveView returns early on no active view — cost: none · group 12
 ### Review rounds
 ### Test gate
+- picked: the 17 test files the range added or edited (each task's named tests); main-api and page-api tests (pluginEvents callers, 06); keymap, keymap-checks, plugin-manifests, hidden-tree-keys, help-sections, which-key, keymap-rows and user-config tests (they read the default keymap or manifests that 12 changed: new view group and docs.toggleTree) · typecheck clean · 27 files, 735 tests passed

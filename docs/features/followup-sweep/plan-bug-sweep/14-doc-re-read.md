@@ -1,6 +1,6 @@
 # 14 — Re-read the docs written ahead and retire the fixed follow-ups
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13
 Plan: [plan.md](plan.md)
@@ -34,3 +34,5 @@ Done when: every line from step 1 matches the code; `grep -n` for each removed f
 Commit:    one commit, "Step-1 bug sweep: docs re-read against the landed code; fixed follow-ups retired"
 
 ## Proof
+
+5fe1577 · diff read: 19 entries removed, each re-verified; step 1 removed, peer lines kept; written-ahead lines checked against the code · concerns: two rewrapped lines exceed the 120-column wrap (agent-chat/design.md, master-plan.md) — for the review
