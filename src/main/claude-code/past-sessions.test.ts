@@ -88,6 +88,19 @@ function endlessLineFiles(path: string) {
   return { files, asked };
 }
 
+// `stored` with every `readStart` recording the `maxBytes` it asked for.
+function recordingReads(stored: Files) {
+  const asked: number[] = [];
+  const files: Files = {
+    ...stored,
+    readStart: (path, maxBytes) => {
+      asked.push(maxBytes);
+      return stored.readStart(path, maxBytes);
+    },
+  };
+  return { files, asked };
+}
+
 // Memory files holding three transcripts (two in `/w/app`, one in
 // `/w/other`), a text file and a subagent transcript, written at times the
 // test sets.
@@ -279,6 +292,72 @@ describe('listPastSessions', () => {
     expect(logged).toContainEqual([
       'claude',
       `transcript ${path} cut at ${TRANSCRIPT_HEAD_MAX_BYTES} bytes`,
+    ]);
+  });
+
+  it('listPastSessions_ShortFileEndsInsideLine_StopsAtTheSecondRead', async () => {
+    const stored = createMemoryFiles();
+    await stored.write(
+      `${FOLDER}/${OLD_ID}.jsonl`,
+      [
+        JSON.stringify({ type: 'system', cwd: '/w/app' }),
+        '{"type":"user","cwd":"/w/app","message":{"content":"never ends',
+      ].join('\n'),
+    );
+    const { files, asked } = recordingReads(stored);
+    const { log, logged } = recordingLog();
+
+    const sessions = await listPastSessions(
+      { files, paths: posixPaths, log },
+      FOLDER,
+      '/w/app',
+    );
+
+    expect(asked).toEqual([TRANSCRIPT_HEAD_BYTES, TRANSCRIPT_HEAD_BYTES * 2]);
+    expect(logged).toEqual([]);
+    expect(sessions).toEqual([
+      { sessionId: OLD_ID, title: 'Untitled session', modified: 0 },
+    ]);
+  });
+
+  it('listPastSessions_UntypedUserLineThenCutLine_StopsAtTheFirstRead', async () => {
+    const stored = createMemoryFiles();
+    await stored.write(
+      `${FOLDER}/${OLD_ID}.jsonl`,
+      [
+        {
+          type: 'user',
+          uuid: 'u1',
+          cwd: '/w/app',
+          message: {
+            role: 'user',
+            content: [
+              { type: 'tool_result', tool_use_id: 't1', content: 'ok' },
+            ],
+          },
+        },
+        {
+          type: 'assistant',
+          uuid: 'a1',
+          message: { content: 'x'.repeat(TRANSCRIPT_HEAD_BYTES * 3) },
+        },
+      ]
+        .map((line) => JSON.stringify(line))
+        .join('\n'),
+    );
+    const { files, asked } = recordingReads(stored);
+    const { log, logged } = recordingLog();
+
+    const sessions = await listPastSessions(
+      { files, paths: posixPaths, log },
+      FOLDER,
+      '/w/app',
+    );
+
+    expect(asked).toEqual([TRANSCRIPT_HEAD_BYTES]);
+    expect(logged).toEqual([]);
+    expect(sessions).toEqual([
+      { sessionId: OLD_ID, title: 'Untitled session', modified: 0 },
     ]);
   });
 });

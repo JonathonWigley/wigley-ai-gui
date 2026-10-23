@@ -123,11 +123,7 @@ async function pastSession(
   let modified: number;
   try {
     [head, modified] = await Promise.all([
-      readHead(
-        deps,
-        transcript,
-        (read) => read.cwd !== null && read.firstMessage !== null,
-      ),
+      readHead(deps, transcript, hasFolderAndUserLine),
       deps.files.modified(transcript),
     ]);
   } catch (error) {
@@ -142,6 +138,13 @@ async function pastSession(
     return null;
   }
   return { sessionId, title: sessionTitle(firstMessage), modified };
+}
+
+// Whether `head` holds the folder and a whole `user` line. A typed first
+// message implies one; a transcript whose user lines are all tool results or
+// commands stops here too, with no title.
+function hasFolderAndUserLine(head: TranscriptHead): boolean {
+  return head.cwd !== null && head.sawUserLine;
 }
 
 // Null, logged, for a folder that cannot be listed, or whose newest
@@ -182,10 +185,11 @@ async function projectFolder(
   return { projectDir: cwd, modified: newest.modified };
 }
 
-// The folder and first user message at the start of the transcript at
-// `path`: its first `TRANSCRIPT_HEAD_BYTES`, read again at twice the length
-// while the read ends inside a line and lacks what `hasEnough` asks for, up to
-// `TRANSCRIPT_HEAD_MAX_BYTES`. A head that cap still cuts short is logged.
+// The head of the transcript at `path`: its first `TRANSCRIPT_HEAD_BYTES`,
+// read again at twice the length while the read ends inside a line and lacks
+// what `hasEnough` asks for, up to `TRANSCRIPT_HEAD_MAX_BYTES`, or until a
+// longer read returns no more (the whole file). A head that cap still cuts
+// short is logged.
 async function readHead(
   deps: PastSessionsDeps,
   path: string,

@@ -50,9 +50,12 @@ const COMMAND_NAME = /<command-name>([\s\S]*?)<\/command-name>/;
 const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/;
 const ID_PREFIX = 'history:';
 
+// What a transcript's opening bytes hold: its folder, its first typed user
+// message, and whether any `user` line in them parsed whole.
 export interface TranscriptHead {
   cwd: string | null;
   firstMessage: string | null;
+  sawUserLine: boolean;
 }
 
 // The folder Claude keeps a project's transcripts in: the project path with
@@ -61,11 +64,13 @@ export function projectFolderName(projectDir: string): string {
   return projectDir.replace(/[^A-Za-z0-9]/g, '-');
 }
 
-// The folder and first user message a transcript's opening bytes hold. A line
-// that does not parse, such as the one the cut ends inside, is skipped.
+// The folder, first typed user message, and whether a `user` line parsed, in
+// a transcript's opening bytes. A line that does not parse, such as the one
+// the cut ends inside, is skipped.
 export function readTranscriptHead(head: string): TranscriptHead {
   let cwd: string | null = null;
   let firstMessage: string | null = null;
+  let sawUserLine = false;
   for (const piece of head.split('\n')) {
     const json = parsed(piece);
     if (!json.ok) {
@@ -75,11 +80,12 @@ export function readTranscriptHead(head: string): TranscriptHead {
     if (cwd === null && typeof line.cwd === 'string') {
       cwd = line.cwd;
     }
-    if (firstMessage === null && line.type === 'user') {
-      firstMessage = userText(line);
+    if (line.type === 'user') {
+      sawUserLine = true;
+      firstMessage ??= userText(line);
     }
   }
-  return { cwd, firstMessage };
+  return { cwd, firstMessage, sawUserLine };
 }
 
 // Whether `head` ends inside a line: its text after the last newline is not a

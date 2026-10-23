@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  endsInsideLine,
   projectFolderName,
   readTranscriptHead,
   sessionTitle,
@@ -59,6 +60,7 @@ describe('readTranscriptHead', () => {
     expect(readTranscriptHead(head)).toEqual({
       cwd: '/w/app',
       firstMessage: '/wigley:feature add a hello command',
+      sawUserLine: true,
     });
   });
 
@@ -125,7 +127,42 @@ describe('readTranscriptHead', () => {
     expect(readTranscriptHead(head)).toEqual({
       cwd: '/w/app',
       firstMessage: null,
+      sawUserLine: false,
     });
+  });
+
+  it('readTranscriptHead_UntypedUserLinesOnly_SawUserLineWithNullMessage', () => {
+    const head = jsonl([
+      userLine('u1', [
+        { type: 'tool_result', tool_use_id: 't1', content: 'ok' },
+      ]),
+      userLine('u2', '<task-notification>\n<task-id>t1</task-id>'),
+      '{"type":"user","mess',
+    ]);
+
+    expect(readTranscriptHead(head)).toEqual({
+      cwd: '/w/app',
+      firstMessage: null,
+      sawUserLine: true,
+    });
+  });
+});
+
+describe('endsInsideLine', () => {
+  it('endsInsideLine_CutFinalLine_True', () => {
+    expect(
+      endsInsideLine(jsonl([{ type: 'mode' }, '{"type":"user","mess'])),
+    ).toBe(true);
+  });
+
+  it('endsInsideLine_EndsInNewline_False', () => {
+    expect(endsInsideLine(`${jsonl([{ type: 'mode' }])}\n`)).toBe(false);
+  });
+
+  it('endsInsideLine_FinalLineParses_False', () => {
+    expect(endsInsideLine(jsonl([{ type: 'mode' }, { type: 'system' }]))).toBe(
+      false,
+    );
   });
 });
 

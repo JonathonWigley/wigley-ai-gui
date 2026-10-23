@@ -817,6 +817,26 @@ describe('createClaudeCodeHarness accounts', () => {
     ]);
   });
 
+  it('logIn_SignedOutProfileFailsSignedInNoAccount_EndsSignedIn', async () => {
+    const before = authChild();
+    const login = authChild();
+    const status = authChild();
+    const { harness } = authHarness([before, login, status]);
+    const { heard, events } = recordingLogIn();
+    // No email reads as `account: null`, the same account a signed-out
+    // status carries.
+    const signedInNoAccount = JSON.stringify({ loggedIn: true });
+
+    harness.logIn(null, events);
+    await exitWith(before, signedOutStatus, 0);
+    login.emitter.emit('close', 1, null);
+    await exitWith(status, signedInNoAccount, 0);
+
+    expect(heard).toEqual([
+      ['ended', { status: { signedIn: true, account: null }, error: null }],
+    ]);
+  });
+
   it('logOut_NonZeroExit_RejectsWithStderr', async () => {
     const child = authChild();
     const { harness } = authHarness([child]);
