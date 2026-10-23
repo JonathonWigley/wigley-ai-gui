@@ -180,7 +180,7 @@ the settings plugin imports only `src/contracts`, `src/shared`, its own folder a
 - [x] [Settings plugin skeleton](03-plugin-skeleton.md) — after 01, 02
 
 ### Wave 4
-- [ ] [Settings mode views](05-settings-views.md) — after 03, 04
+- [x] [Settings mode views](05-settings-views.md) — after 03, 04
 
 ### Wave 5
 - [ ] [Settings self-test](06-self-test.md) — after 02, 05
@@ -200,6 +200,7 @@ Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is thi
 - 04 · 19ca2d7 · proved (diff read, typecheck) · concerns: isSameJson copied from renderer/config-push.ts; fallback compare key-order sensitive; oxfmt needed two writes on keymap-rows.ts
 - 02 · 890695e · proved (diff read, typecheck, lint) · concerns: configSchema built twice (store and userConfig); pluginSettingInfo over the built-ins verified only in a deleted throwaway test
 - 03 · 62370c9 · proved (diff read, typecheck, lint) · concerns: first app accelerator → plugin main command path, unexercised at runtime until 06
+- 05 · b7e76f9 · proved (diff read, typecheck, lint) · concerns: third isSameJson copy; box re-parented across redraws; read-race ordering; AGENTS.md text-box wording stale
 ### Contract changes
 - keymap-rows.ts: as planned → adds `keymapLeader(schema, layer)` and `isSameKeys(a, b, leader)` · why: keymap-edits shares the leader rule and key compare · consumers: 05 · group 04
 - withAdvanced: as planned → also `"unbind" must be a list` · why: keys unbinds merge into it · consumers: 05 · group 04
@@ -222,5 +223,11 @@ Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is thi
 - themes: built-ins in list order then user names sorted, first kept on duplicates — a user theme overriding a built-in shows once — none · group 02
 - requireNoCoreSettingIds moved into configSchema; requireUnambiguousKeymap(defaultKeymap) stays a store start check — userConfig fails as the store does — none · group 02
 - check-layers settings root allows contracts, shared, shared/paths and its contract (docs' shape minus sessions); main keeps docs' `node:` allowance; page.ts's layer entry lists settings ahead of task 05 — mirrors docs — a looser allow-list · group 03
+- The Leader row filters like other rows (matches `leader` or its keys) — otherwise the Keymap empty state never shows — task 06 may need a `j` after a filter · group 05
+- Enter / `i` on a page command row opens the add-bind box; on a main command row the advanced-box toast — the plan gave command rows no open/edit — a different intended action · group 05
+- `filter "<q>": <n> rows` logs on accept, on boxCancel's clear and on clearFilter, not per keystroke; `cursor` logs on every cursor-key change; `broken` only on a new or changed problem; `redrawn` after each redrawing read — log timing the plan left open — task 06's waits key on these · group 05
+- open/edit/addBind/removeBind pre-read; reset does not — the plan's "a row action with no box sends the latest read's text" — a reset over a stale read is refused changedOnDisk · group 05
+- The add-bind box stays open under the scope picker; Esc in the picker returns to the box; picker titles `Scope` and `Key to remove` — keeps typed keys on a refusal — none · group 05
+- Document box: Enter focuses the editor, Esc closes; `:w`, `:wq`, `:x` commit, `:q`, `:q!` close; a box closes when another mode shows — docs' filter pattern — box text lost on a mode switch · group 05
 ### Review rounds
 ### Test gate

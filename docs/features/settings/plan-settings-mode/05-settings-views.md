@@ -1,6 +1,6 @@
 # 05 — Settings mode views
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03, 04
 Plan: [plan.md](plan.md)
@@ -154,3 +154,5 @@ Through the page log, source `settings`, these exact texts:
 - `redrawn`
 
 ## Proof
+
+b7e76f9 · lint passes; typecheck clean apart from the peer session's uncommitted main.ts edit; worker ran the full suite (2384 tests) green · concerns: third private `isSameJson` copy; an open box is re-parented across redraws (check live); a read overtaken by a newer one is dropped while a waiting action runs on its own read; AGENTS.md still names "docs' `textBoxInput`".

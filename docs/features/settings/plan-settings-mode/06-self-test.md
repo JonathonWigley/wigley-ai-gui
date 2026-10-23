@@ -1,6 +1,6 @@
 # 06 — Settings self-test
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 02, 05
 Plan: [plan.md](plan.md)

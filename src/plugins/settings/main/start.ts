@@ -1,12 +1,14 @@
 import type { MainApi, MainPart } from '../../../contracts/plugin';
 import type { SettingsChannel } from '../contract';
 import { settingsManifest } from '../manifest';
+import { settingsSelfTestScript } from './selftest-script';
 
 type SettingsApi = MainApi<typeof settingsManifest, SettingsChannel>;
 
 // Serves the page the user config through `services.userConfig`, tells it
 // each time the config changes, and on `settings.show` brings the window
-// forward and tells the page to show Settings mode.
+// forward and tells the page to show Settings mode. Hands the self-test its
+// script, which shows the mode the same way.
 export const settingsMainPart: MainPart<typeof settingsManifest> = {
   manifest: settingsManifest,
   start(api: SettingsApi) {
@@ -21,13 +23,13 @@ export const settingsMainPart: MainPart<typeof settingsManifest> = {
       userConfig.writeKeymap(layer, expectedText),
     );
     const changed = userConfig.onChanged(() => channel.send('changed', null));
+    const show = () => {
+      services.window.show();
+      channel.send('show', null);
+    };
+    services.selfTest?.run(settingsSelfTestScript({ userConfig, show }));
     return {
-      commands: {
-        show: () => {
-          services.window.show();
-          channel.send('show', null);
-        },
-      },
+      commands: { show },
       dispose: () => changed.dispose(),
     };
   },
