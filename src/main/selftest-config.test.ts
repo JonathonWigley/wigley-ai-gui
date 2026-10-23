@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { PageBind } from '../contracts/keymap';
-import type { SelfTestScript, SelfTestStep } from '../contracts/plugin';
+import type {
+  SelfTestGroup,
+  SelfTestScript,
+  SelfTestStep,
+} from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import {
   applySelfTestConfig,
+  checkGroups,
   type HandedScript,
   mergeSelfTestConfigs,
   screenshotFiles,
@@ -15,11 +20,24 @@ function handed(
   settings: Record<string, object>,
   steps: SelfTestStep[] = [],
 ): HandedScript {
-  const script: SelfTestScript = {
+  return withGroups(pluginId, [{ name: 'all', why: 'every step', steps }], {
     pageBinds,
     settings,
+  });
+}
+
+function withGroups(
+  pluginId: string,
+  groups: SelfTestGroup[],
+  config: Pick<SelfTestScript, 'pageBinds' | 'settings'> = {
+    pageBinds: [],
+    settings: {},
+  },
+): HandedScript {
+  const script: SelfTestScript = {
+    ...config,
     open: () => ({ shownLine: 'shown', result: Promise.resolve(null) }),
-    steps,
+    groups,
     scrollsItself: [],
     problems: () => [],
   };
@@ -130,7 +148,7 @@ describe('screenshotFiles', () => {
 
     const files = screenshotFiles([handed('forms', [], {}, [step])]);
 
-    expect(files.get(step)).toBe('forms-gallery-full.png');
+    expect(files.get(step)).toEqual(['forms-gallery-full.png']);
   });
 
   it('screenshotFiles_StepWithoutScreenshot_IsAbsent', () => {
@@ -187,5 +205,148 @@ describe('screenshotFiles', () => {
       ]);
 
     expect(name).toThrow('Two self-test steps save a-b-c.png');
+  });
+
+  it('names a repeating step one file per press, each checked against the others', () => {
+    const pages: SelfTestStep = {
+      keys: ['n'],
+      expect: 'next page',
+      repeat: { until: 'last page', max: 3 },
+      screenshot: 'pages',
+    };
+
+    const files = screenshotFiles([handed('forms', [], {}, [pages])]);
+    const clash = () =>
+      screenshotFiles([
+        handed('forms', [], {}, [
+          pages,
+          { keys: ['j'], expect: 'x', screenshot: 'pages-2' },
+        ]),
+      ]);
+
+    expect(files.get(pages)).toEqual([
+      'forms-pages-1.png',
+      'forms-pages-2.png',
+      'forms-pages-3.png',
+    ]);
+    expect(clash).toThrow('Two self-test steps save forms-pages-2.png');
+  });
+
+  it('walks every group of a script', () => {
+    const first: SelfTestStep = { keys: ['j'], expect: 'x', screenshot: 'a' };
+    const second: SelfTestStep = { keys: ['k'], expect: 'y', screenshot: 'b' };
+
+    const files = screenshotFiles([
+      withGroups('forms', [
+        { name: 'one', why: 'first', steps: [first] },
+        { name: 'two', why: 'second', steps: [second] },
+      ]),
+    ]);
+
+    expect(files.get(first)).toEqual(['forms-a.png']);
+    expect(files.get(second)).toEqual(['forms-b.png']);
+  });
+});
+
+describe('checkGroups', () => {
+  const step: SelfTestStep = { keys: ['j'], expect: 'x' };
+
+  it('passes groups with names, whys and valid steps', () => {
+    const check = () =>
+      checkGroups([
+        withGroups('forms', [
+          {
+            name: 'rounds',
+            why: 'rounds open',
+            steps: [
+              { ...step, width: 600 },
+              { ...step, width: 'start' },
+              { ...step, repeat: { until: 'end', max: 2 } },
+            ],
+          },
+          { name: 'gallery', why: 'gallery shows', steps: [step] },
+        ]),
+      ]);
+
+    expect(check).not.toThrow();
+  });
+
+  it('throws on two groups of one script named alike, naming the plugin and the group', () => {
+    const check = () =>
+      checkGroups([
+        withGroups('forms', [
+          { name: 'rounds', why: 'first', steps: [step] },
+          { name: 'rounds', why: 'second', steps: [step] },
+        ]),
+      ]);
+
+    expect(check).toThrow(
+      'Self-test group forms: rounds is named twice in its script',
+    );
+  });
+
+  it('lets two scripts each have a group of one name', () => {
+    const check = () =>
+      checkGroups([
+        withGroups('forms', [{ name: 'keys', why: 'forms keys', steps: [] }]),
+        withGroups('chat', [{ name: 'keys', why: 'chat keys', steps: [] }]),
+      ]);
+
+    expect(check).not.toThrow();
+  });
+
+  it('throws on a group with no name or no why', () => {
+    const noName = () =>
+      checkGroups([withGroups('forms', [{ name: '', why: 'w', steps: [] }])]);
+    const noWhy = () =>
+      checkGroups([
+        withGroups('forms', [{ name: 'rounds', why: ' ', steps: [] }]),
+      ]);
+
+    expect(noName).toThrow('A self-test group of forms has no name');
+    expect(noWhy).toThrow('Self-test group forms: rounds has no why');
+  });
+
+  it('throws on a repeat with max below 2 or no until line', () => {
+    const once = () =>
+      checkGroups([
+        withGroups('forms', [
+          {
+            name: 'pages',
+            why: 'w',
+            steps: [{ ...step, repeat: { until: 'end', max: 1 } }],
+          },
+        ]),
+      ]);
+    const noUntil = () =>
+      checkGroups([
+        withGroups('forms', [
+          {
+            name: 'pages',
+            why: 'w',
+            steps: [{ ...step, repeat: { until: '', max: 3 } }],
+          },
+        ]),
+      ]);
+
+    expect(once).toThrow(
+      "Self-test group forms: pages has a step (x) repeating with max 1: a repeat's max is a whole number of at least 2",
+    );
+    expect(noUntil).toThrow(
+      'Self-test group forms: pages has a step (x) repeating with no until line',
+    );
+  });
+
+  it.each([0, -600, 600.5])('throws on a width of %s', (width) => {
+    const check = () =>
+      checkGroups([
+        withGroups('forms', [
+          { name: 'narrow', why: 'w', steps: [{ ...step, width }] },
+        ]),
+      ]);
+
+    expect(check).toThrow(
+      `Self-test group forms: narrow has a step (x) with width ${width}: a width is 'start' or a positive whole number`,
+    );
   });
 });

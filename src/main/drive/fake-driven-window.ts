@@ -12,7 +12,9 @@ export type FakeAnswer = [fragment: string, answer: () => unknown];
 // how often it was focused and had focus emulated, rejects `emulateFocus`
 // with `focused.failure` while a test sets one, answers each script `run`
 // gets from the first table entry whose fragment the script holds (throwing
-// when none does), resolves `capture` to `screen.captured`, counts the
+// when none does), keeps the content size `setContentWidth` and `setSize` set
+// (800 x 600 at start) for `contentSize` to return, resolves `capture` to
+// `screen.captured`, counts the
 // navigations a test makes with `navigate`, and lets a test paint frames and
 // write console messages to its listeners. As the Electron adapter does,
 // `navigate` rejects every `run` still pending with `PageNavigatedError`; an
@@ -27,6 +29,7 @@ export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
     failure: null,
   };
   const screen: { captured: Uint8Array | null } = { captured: null };
+  const size = { width: 800, height: 600 };
   let navigations = 0;
   // The reject of every `run` call not yet settled.
   const pendingRuns = new Set<(error: Error) => void>();
@@ -49,10 +52,15 @@ export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
           .finally(() => pendingRuns.delete(reject));
       }),
     capture: async () => screen.captured,
-    contentSize: () => ({ width: 800, height: 600 }),
+    contentSize: () => ({ ...size }),
     minimumWidth: () => 400,
-    setContentWidth: () => {},
-    setSize: () => {},
+    setContentWidth: (width) => {
+      size.width = width;
+    },
+    setSize: (width, height) => {
+      size.width = width;
+      size.height = height;
+    },
     focus: () => {
       focused.count += 1;
     },

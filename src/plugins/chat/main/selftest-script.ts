@@ -604,7 +604,13 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
         result,
       };
     },
-    steps: STEPS,
+    groups: [
+      {
+        name: 'chat',
+        why: 'Every chat key path over the fake agent harness',
+        steps: STEPS,
+      },
+    ],
     problems: (result) => [
       ...archiveResetFailures,
       ...runProblems(result as ChatSelfTestResult),

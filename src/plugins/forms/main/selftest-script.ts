@@ -763,7 +763,13 @@ export function formsSelfTestScript(
         result,
       };
     },
-    steps: STEPS,
+    groups: [
+      {
+        name: 'forms',
+        why: 'Every forms key path over the fixture rounds, the keys and gallery steps included',
+        steps: STEPS,
+      },
+    ],
     problems: (result) => toolResultProblems(result as ToolResult),
   };
 }

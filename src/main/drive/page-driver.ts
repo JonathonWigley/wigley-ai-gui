@@ -16,8 +16,8 @@ import {
 
 // Drives the page through a `DrivenWindow`, as the self-test and a drive run
 // both do: presses keys and types text, clicks and drags, reads the page's
-// log, waits for its lines and frames, captures it, and lists what it cuts off
-// at a given width.
+// log, waits for its lines and frames, resizes and captures it, and lists what
+// it cuts off at a given width.
 
 const KEY_CODES: Record<string, string> = { ' ': 'Space' };
 export const STEP_TIMEOUT_MS = 5000;
@@ -350,21 +350,41 @@ function linesSince(
   return isReloaded ? lines : lines.slice(0, lines.length - mark.length);
 }
 
-// Waits for the line among those logged after `mark`, or among all of them
-// once the page has navigated since the mark or its log holds fewer lines
-// than the mark's.
-export function waitForNewLogLine(
+// Waits for any of `lines` among those logged after `mark`, or among all of
+// them once the page has navigated since the mark or its log holds fewer
+// lines than the mark's. Resolves to the first of `lines`, in the order given,
+// that one read found logged, or to null when none was within `timeoutMs`.
+export async function waitForAnyNewLogLine(
+  window: DrivenWindow,
+  lines: readonly string[],
+  mark: LogMark,
+  timeoutMs = STEP_TIMEOUT_MS,
+): Promise<string | null> {
+  // Set only to a line found logged, so a check left running past its cap
+  // never clears what a later check found.
+  let found: string | null = null;
+  const isLogged = await waitFor(async () => {
+    // Counted before the read, so an old log is never taken as all new.
+    const navigation = window.navigationCount();
+    const logged = linesSince(await readLog(window), mark, navigation);
+    const line = lines.find((candidate) => logged.includes(candidate));
+    if (line !== undefined) {
+      found = line;
+    }
+    return line !== undefined;
+  }, timeoutMs);
+  return isLogged ? found : null;
+}
+
+// Waits for the line among those logged after `mark`, as
+// `waitForAnyNewLogLine` does; true once it is logged.
+export async function waitForNewLogLine(
   window: DrivenWindow,
   line: string,
   mark: LogMark,
   timeoutMs = STEP_TIMEOUT_MS,
 ): Promise<boolean> {
-  return waitFor(async () => {
-    // Counted before the read, so an old log is never taken as all new.
-    const navigation = window.navigationCount();
-    const lines = await readLog(window);
-    return linesSince(lines, mark, navigation).includes(line);
-  }, timeoutMs);
+  return (await waitForAnyNewLogLine(window, [line], mark, timeoutMs)) !== null;
 }
 
 // The page-log lines logged after `mark`, oldest first: every line once the
@@ -402,6 +422,20 @@ export async function waitForRedraw(window: DrivenWindow): Promise<boolean> {
 }`);
   return waitFor(
     async () => (await window.run<number>('window.redrawFrames')) >= 3,
+  );
+}
+
+// Sets the window's content width to `width` and waits for the page to report
+// that width and then redraw at it, so the next keys reach a page laid out at
+// it. False when the page never reports `width`, the window having taken
+// another, or produces no frames after it.
+export async function resizeContentWidth(
+  window: DrivenWindow,
+  width: number,
+): Promise<boolean> {
+  window.setContentWidth(width);
+  return (
+    (await waitForPageWidth(window, width)) && (await waitForRedraw(window))
   );
 }
 

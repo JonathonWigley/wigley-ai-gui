@@ -442,7 +442,13 @@ export function docsSelfTestScript(deps: DocsSelfTestDeps): SelfTestScript {
       })();
       return { shownLine: '[sessions] activated selftest-repo', result };
     },
-    steps: docsSteps(paths, homeDir),
+    groups: [
+      {
+        name: 'docs',
+        why: 'Every docs key path over the docs fixture, in Docs mode and a session Docs tab',
+        steps: docsSteps(paths, homeDir),
+      },
+    ],
     problems: (result) =>
       result === null ? [] : [`fixture not ready: ${String(result)}`],
   };

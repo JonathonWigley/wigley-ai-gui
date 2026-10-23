@@ -473,13 +473,35 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // fits the window's minimum width. `screenshot`, when set, saves a PNG of the
 // window once the step's line has been waited for, as
 // `<pluginId>-<screenshot>.png` in the run's screenshot folder; the name is
-// lowercase letters and digits in words joined by `-`.
+// lowercase letters and digits in words joined by `-`. `why`, when set, says
+// what the step proves, and a failed step prints it after its group's.
+// `width`, when set, sets the window's content width before the write and the
+// keys, `'start'` meaning the width the self-test started on, and holds it,
+// the fit check returning to it, until a later step sets another or the script
+// ends, which restores the start width; a number is a positive integer.
+// `repeat`, when set, presses the keys again after each `expect` line until
+// the `until` line is logged, failing when `max` presses (the first included,
+// at least 2) have not reached it; its `screenshot` saves one PNG per press,
+// as `<pluginId>-<screenshot>-<n>.png`.
 export interface SelfTestStep {
   writeFile?: { path: string; text: string };
   keys: string[];
   expect: string;
   checksFit?: true;
   screenshot?: string;
+  why?: string;
+  width?: number | 'start';
+  repeat?: { until: string; max: number };
+}
+
+// A script's steps under one name. `name` is short words naming what the group
+// covers, unique within its script, and the report prints it before the
+// group's steps; `why` says what the group proves, printed under each of its
+// failed steps.
+export interface SelfTestGroup {
+  name: string;
+  why: string;
+  steps: SelfTestStep[];
 }
 
 // `open` starts the fixture for run `run`, returning the line the page logs
@@ -494,7 +516,7 @@ export interface SelfTestScript {
   pageBinds: PageBind[];
   settings: Record<string, object>;
   open(run: number): { shownLine: string; result: Promise<unknown> };
-  steps: SelfTestStep[];
+  groups: SelfTestGroup[];
   scrollsItself: string[];
   problems(result: unknown): string[];
 }

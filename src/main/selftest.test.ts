@@ -28,6 +28,7 @@ vi.mock('./electron-driven-window', () => ({
   electronDrivenWindow: () => ({
     focus: () => {},
     emulateFocus: async () => {},
+    contentSize: () => ({ width: 800, height: 600 }),
   }),
 }));
 
@@ -176,17 +177,26 @@ describe('runScript', () => {
         shownLine: '[plugin] shown',
         result: Promise.reject(new Error('fixture failed')),
       }),
-      steps: [{ keys: ['a'], expect: '[plugin] a' }],
+      groups: [
+        {
+          name: 'keys',
+          why: 'a proves the keys',
+          steps: [{ keys: ['a'], expect: '[plugin] a' }],
+        },
+      ],
       scrollsItself: [],
       problems: () => [],
     };
 
     await expect(
       runScript(
-        {} as DrivenWindow,
+        {
+          contentSize: () => ({ width: 800, height: 600 }),
+        } as unknown as DrivenWindow,
         {} as Files,
         { pluginId: 'plugin', script },
         new Map(),
+        800,
         1,
         () => true,
       ),
@@ -239,7 +249,13 @@ describe('startSelfTest', () => {
       pageBinds: [],
       settings: {},
       open: () => ({ shownLine: '[plugin] shown', result }),
-      steps: [{ keys: ['a', 'b'], expect: '[plugin] ab' }],
+      groups: [
+        {
+          name: 'keys',
+          why: 'ab proves the keys',
+          steps: [{ keys: ['a', 'b'], expect: '[plugin] ab' }],
+        },
+      ],
       scrollsItself: [],
       problems: () => [],
     };
@@ -259,6 +275,7 @@ describe('startSelfTest', () => {
     expect(press).toHaveBeenCalledTimes(1);
     expect(lines).toEqual([
       '[selftest] PASS [plugin] shown',
+      '[selftest] group plugin: keys',
       '[selftest] FAIL the steps run: fixture failed',
     ]);
   });

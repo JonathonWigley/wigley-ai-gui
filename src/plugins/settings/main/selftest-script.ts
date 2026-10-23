@@ -201,7 +201,13 @@ export function settingsSelfTestScript(
       });
       return { shownLine: '[settings] shown', result };
     },
-    steps: STEPS,
+    groups: [
+      {
+        name: 'settings',
+        why: 'The settings form editing settings.json and keymap.json, and outside edits to both',
+        steps: STEPS,
+      },
+    ],
     problems: (result) => resultProblems(result as UserConfigRead),
   };
 }
