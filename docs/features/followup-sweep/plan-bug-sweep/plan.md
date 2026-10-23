@@ -202,7 +202,7 @@ that needs a file another task in its wave also lists is moved to a later wave.
 - [x] [Doc re-read](14-doc-re-read.md) — after every code task
 
 ### Wave 5
-- [ ] [Final verification](15-final-verification.md) — after 14
+- [x] [Final verification](15-final-verification.md) — after 14
 
 ## Run log
 
@@ -223,6 +223,7 @@ Review base: 2bd62ed (peer sessions share this tree: the review range is this ru
 - 02 Cancel prompt and background close · 480f264 · diff read, every Produces present; self-test expect strings match the modes log; typecheck, lint and forms-commands tests pass (worker) · concerns: dismiss-on-base-change relies on Sessions hidden() running before Docs shown(); while a cancel sends, the confirm scope stays pushed until roundClosed (spec allows); two comment lines past the wrap width
 - 12 Docs toggle tree key · cebc48a · diff read, every Produces present (manifest command, <Leader>vt bind, view group, toggleTree); typecheck, lint, keymap test pass (worker) · concerns: session <A-h> step expects [docs] tree shown with tree focused logged after it in the same key — self-test confirms
 - 14 Doc re-read · 5fe1577 · diff read: 19 entries removed, each re-verified; step 1 removed, peer lines kept; written-ahead lines checked against the code · concerns: two rewrapped lines exceed the 120-column wrap (agent-chat/design.md, master-plan.md) — for the review
+- 15 Final verification · 573aebc · run 1 (reports/15-1.md): self-test failed on the docs first step (02's forms Space k d now builds the index first), / drawn as the or-separator (11), editor ring gone with vim's : line open (13); leader not routed in the docs filter box (12) predates the run; 02 background-close click and 08 ended unreachable. Fixed in 64e81dd, 4c74094, 5c7af88. Run 2 (reports/15-2.md) at 573aebc: typecheck, lint, 165 files / 2568 tests, self-test all passed; / is a key, no-match line wraps at the 160px tree, ring stays with : open, review cursor row in view on reopen; sending-close toast and failed-send dismiss unreachable (no drive action holds or rejects a finish) · concerns: leader in the docs filter box and vim insert mode goes to step 8
 ### Contract changes
 - TreeViewDeps: keysFor, kbd → also hasIndex(): boolean, wired as () => document !== null · why: a null document and an empty index both reach setTree as [] · consumers: none (10 and 12 edit docs-view later) · group 11
 - FormsView.isFormShown(): on the interface → a local inside mountFormsView · why: its only outside caller, start.ts' store.subscribe, is deleted · consumers: none · group 02
@@ -238,6 +239,11 @@ Review base: 2bd62ed (peer sessions share this tree: the review range is this ru
 - Extra comments at the sessions activate dep and Settings sectionPicked dep saying a pick closes the overlay and why mode is safe to read — cost: two comment lines · group 10
 - RoundParts.reviewRowAt dropped (only the click handler read it, through a local); reviewJumpItem on the already-focused notice still switches to the forms view — cost: none · group 03
 - docs start: a local toggleSideBar serves showMode and toggleTree; toggleTree finds a session view's state through sessionDocsOf; onActiveView returns early on no active view — cost: none · group 12
+- task 15 live-check failures: docs selftest first step (caused by 02's Space k d step) and the lone `/` hint drawn as the or-separator (11) go back as fixes; leader not routed in the docs filter box / vim insert, and the editor ring gone while vim's `:` line holds focus, predate this run (12 and 13 did not touch those paths) and go to step 8
 ### Review rounds
+- round 1 · 2bd62ed..dc9bdae (head dc9bdae; peer 9028e66 after the pin, outside) · 6 correctness + 4 plan-and-design lanes · NEEDS FIXES · 17 findings (3 important) · 3-8 lead-applied in 1b5feea (prose-only) · 9, 10 dispatched with the task 15 live-check fixes (docs selftest first step, lone `/` Kbd) · 1, 2, 11-17 to triage
+- round 2 (re-review) · 1b5feea..573aebc · 2 correctness lanes · R1 findings 1, 2, 7, 9-17 and optional F1 closed · 2 rewraps lead-applied in dc6720b · 1 open repeat (a main-side close during a closing cancel leaves the session open) to step 8
+- round 3 (re-review of step-8 fixes) · dc6720b..85555f7 · 2 correctness lanes · step-8 items 1-8 closed · 2 comment fixes lead-applied in 683a2df · open: self-test regression from 85555f7 (62 failed after docs Space k d; first mode switch while narrow does not open the overlay), narrowing cancels an open docs dialog, forms status lingers during a cancel send, jump logs on a no-op, Enter on a filtered group · fix cycles exhausted (2), sent to the user
+round 4 (user's round-4 answers, then re-review) · 683a2df..8b399a5 · 1 correctness lane · round-3 open items fixed in 4588faf, 8b399a5 · NEEDS FIXES: filter box kept in a hidden side bar, session Space v t cancelling a pushed scope, open-over ending a pushed scope, filtered step-in onto a hidden child, missing self-test steps · all fixed as Decided (user's standing rec) in af08f01 · self-test all passed, full suite 165 files / 2594 tests · narrowing-hides-filter gap carried to followups.md
 ### Test gate
 - picked: the 17 test files the range added or edited (each task's named tests); main-api and page-api tests (pluginEvents callers, 06); keymap, keymap-checks, plugin-manifests, hidden-tree-keys, help-sections, which-key, keymap-rows and user-config tests (they read the default keymap or manifests that 12 changed: new view group and docs.toggleTree) · typecheck clean · 27 files, 735 tests passed
