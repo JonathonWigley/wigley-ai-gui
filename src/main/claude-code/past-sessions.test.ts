@@ -151,7 +151,7 @@ describe('listPastSessions', () => {
   });
 
   it('listPastSessions_WindowsCwdCaseDiffers_Listed', async () => {
-    const folder = 'C:\\Users\\jo\\.claude\\projects\\C---dev-app';
+    const folder = 'C:\\Users\\jo\\.claude\\projects\\C---root-dev-app';
     const transcriptPath = `${folder}\\${OLD_ID}.jsonl`;
     const stored = createMemoryFiles();
     // The in-memory files refuse Windows paths, so this stub answers only the

@@ -76,6 +76,7 @@ const ROWS: Row[] = [
     ],
     [
       [['C:\\a\\b\\c.md'], 'c.md'],
+      [['C:\\a\\b\\'], 'b'],
       [['C:\\'], ''],
       [['/selftest/chat-selftest'], 'chat-selftest'],
     ],
@@ -86,7 +87,10 @@ const ROWS: Row[] = [
       [['/a/b', '/a/b/'], true],
       [['/A', '/a'], false],
     ],
-    [[['C:\\Users\\Jo', 'c:/users/jo/'], true]],
+    [
+      [['C:\\Users\\Jo', 'c:/users/jo/'], true],
+      [['C:\\a', 'C:\\b'], false],
+    ],
   ],
   [
     'isInside',
@@ -116,6 +120,8 @@ const ROWS: Row[] = [
         ['C:\\a\\B\\c', 'c:\\a'],
         ['B', 'c'],
       ],
+      [['C:\\A', 'c:\\a\\'], []],
+      [['C:\\b', 'C:\\a'], null],
     ],
   ],
   [
@@ -155,6 +161,9 @@ const ROWS: Row[] = [
     [
       [['~/x', 'C:\\Users\\jo'], 'C:\\Users\\jo\\x'],
       [['~\\x', 'C:\\Users\\jo'], 'C:\\Users\\jo\\x'],
+      [['~', 'C:\\Users\\jo'], 'C:\\Users\\jo'],
+      [['~jo\\x', 'C:\\Users\\jo'], '~jo\\x'],
+      [['x', 'C:\\Users\\jo'], 'x'],
     ],
   ],
 ];

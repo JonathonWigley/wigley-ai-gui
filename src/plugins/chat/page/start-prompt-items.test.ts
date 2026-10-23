@@ -86,6 +86,23 @@ describe('start prompt items', () => {
     );
   });
 
+  it('preselectedProfile_WindowsCaseDiffers_LastUsed', () => {
+    const windowsApp: RecentFolder = {
+      projectDir: 'C:\\Dev\\App',
+      profile: 'personal',
+      lastUsed: 2,
+    };
+
+    expect(
+      preselectedProfile(
+        profiles,
+        [windowsApp],
+        'c:\\dev\\app\\',
+        windowsPaths,
+      ),
+    ).toBe(1);
+  });
+
   it('preselectedProfile_UnknownFolder_First', () => {
     expect(preselectedProfile(profiles, recent, '/elsewhere', posixPaths)).toBe(
       0,
