@@ -97,6 +97,26 @@ describe('createAccounts', () => {
     expect(test.logIns()).toBe(2);
   });
 
+  it('cancel_WhileRunning_EndsWithNoStatusAndAllowsAnother', async () => {
+    const test = setUp();
+    test.accounts.logIn('work');
+    await flush();
+
+    test.accounts.cancel();
+    await flush();
+
+    expect(
+      test.messages.filter((sent) => sent.message === 'logInEnded'),
+    ).toEqual([
+      {
+        message: 'logInEnded',
+        data: { profile: 'work', status: null, error: 'Sign-in cancelled' },
+      },
+    ]);
+    test.accounts.logIn('personal');
+    expect(test.logIns()).toBe(2);
+  });
+
   it('logIn_UnknownProfile_ThrowsNamingIt', () => {
     const test = setUp();
 

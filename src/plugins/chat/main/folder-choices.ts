@@ -1,5 +1,5 @@
 import type { AgentHarness, ProjectFolder } from '../../../contracts/agent';
-import type { Files } from '../../../contracts/files';
+import type { Files, FileStat } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
@@ -16,7 +16,8 @@ export interface ListedProject {
 
 // One entry per folder (`paths.samePath`), the one with the greatest
 // `lastUsed` kept with its spelling and profile; a project's `modified` is its
-// `lastUsed`. Newest first, at most MAX_FOLDER_CHOICES.
+// `lastUsed`. Newest first, every folder kept: the start prompt caps its list
+// at MAX_FOLDER_CHOICES after leaving folders out.
 export function mergeFolderChoices(
   recent: readonly RecentFolder[],
   projects: readonly ListedProject[],
@@ -33,9 +34,6 @@ export function mergeFolderChoices(
   uses.sort((a, b) => b.lastUsed - a.lastUsed);
   const kept: RecentFolder[] = [];
   for (const use of uses) {
-    if (kept.length === MAX_FOLDER_CHOICES) {
-      break;
-    }
     const isNewFolder = !kept.some((earlier) =>
       paths.samePath(earlier.projectDir, use.projectDir),
     );
@@ -49,7 +47,8 @@ export function mergeFolderChoices(
 export interface FolderChoices {
   // The start prompt's folders: chat's recent folders merged with every
   // profile's harness project folders, leaving out each folder inside one of
-  // the OS's temp folders and each that no longer exists. A profile whose
+  // the OS's temp folders, each that is no longer a folder, and each it cannot
+  // check (logged); the newest MAX_FOLDER_CHOICES of the rest. A profile whose
   // listing rejects is logged and lists none; rejects when chat's harness is
   // missing.
   list(): Promise<RecentFolder[]>;
@@ -92,6 +91,18 @@ export function createFolderChoices(deps: {
     return listings.flat();
   }
 
+  async function statFolder(folder: RecentFolder): Promise<FileStat | null> {
+    try {
+      return await files.stat(folder.projectDir);
+    } catch (error) {
+      log(
+        'chat',
+        `folder ${folder.projectDir} not checked: ${errorText(error)}`,
+      );
+      return null;
+    }
+  }
+
   const isInTempFolder = (folder: RecentFolder) =>
     tempFolders.some((temp) => paths.isInside(folder.projectDir, temp));
 
@@ -104,10 +115,10 @@ export function createFolderChoices(deps: {
       const merged = mergeFolderChoices(recent, projects, paths).filter(
         (folder) => !isInTempFolder(folder),
       );
-      const stats = await Promise.all(
-        merged.map((folder) => files.stat(folder.projectDir)),
-      );
-      return merged.filter((_, index) => stats[index] !== null);
+      const stats = await Promise.all(merged.map(statFolder));
+      return merged
+        .filter((_, index) => stats[index]?.isFolder === true)
+        .slice(0, MAX_FOLDER_CHOICES);
     },
   };
 }

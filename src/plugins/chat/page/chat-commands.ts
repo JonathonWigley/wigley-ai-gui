@@ -179,19 +179,20 @@ export function chatCommandHandlers(
     }),
     halfPageDown: inSession((session) => scrollTranscript(session, 1, log)),
     halfPageUp: inSession((session) => scrollTranscript(session, -1, log)),
-    // A focused user entry with images opens the viewer on its first image.
+    // A focused user entry with images opens the viewer on its first image and
+    // toggles nothing; any other focused entry toggles its expanders.
     toggleEntry: inSession((session) => {
+      const focused = session.entries.focused();
+      if (focused?.kind === 'user' && focused.images.length > 0) {
+        deps.viewer.open(focused.images, 0);
+        return;
+      }
       const toggled = session.entries.toggleFocused();
       if (toggled === null) {
         log('chat', `no entries in ${session.name}`);
         return;
       }
-      const { entry } = toggled;
-      if (entry.kind === 'user' && entry.images.length > 0) {
-        deps.viewer.open(entry.images, 0);
-        return;
-      }
-      const { kind } = entry;
+      const { kind } = toggled.entry;
       log(
         'chat',
         toggled.result === 'nothing'

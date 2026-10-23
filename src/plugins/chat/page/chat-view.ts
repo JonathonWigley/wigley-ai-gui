@@ -16,7 +16,6 @@ import { element } from '../../../shared/page/dom';
 import { textButton } from '../../../shared/page/ui/button';
 import { chip } from '../../../shared/page/ui/chip';
 import { floatingPanel } from '../../../shared/page/ui/floating-panel';
-import { iconButton } from '../../../shared/page/ui/icon-button';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
@@ -30,9 +29,9 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
 import {
   type Attachments,
-  attachFiles,
+  buildAttachmentStrip,
   createAttachments,
-  imageUrl,
+  listenForImages,
 } from './attachments';
 import { blurFocusedElement, type CloseConfirm } from './chat-dialogs';
 import {
@@ -80,7 +79,7 @@ export interface ChatSession extends SessionRef {
   attachments: Attachments;
   entries: Pick<
     EntryList,
-    'move' | 'latest' | 'first' | 'toggleFocused' | 'scrollHalfPage'
+    'move' | 'latest' | 'first' | 'focused' | 'toggleFocused' | 'scrollHalfPage'
   >;
 }
 
@@ -482,87 +481,6 @@ function mayClose(tab: HeldTab, deps: ChatViewDeps): boolean {
   });
   deps.log('chat', `closing the session asks to end ${tab.name}`);
   return false;
-}
-
-// A thumbnail per attached image, each with its remove button, redrawn on
-// each change and hidden while nothing is attached.
-function buildAttachmentStrip(attachments: Attachments): HTMLElement {
-  const strip = element('div', 'chat-attachments');
-  strip.hidden = true;
-  attachments.onChange((images) => {
-    strip.hidden = images.length === 0;
-    strip.replaceChildren(
-      ...images.map((image, index) => {
-        const held = element('div', 'chat-attachment');
-        const thumbnail = element('img', 'chat-attachment-image');
-        thumbnail.src = imageUrl(image);
-        thumbnail.alt = `Attached image ${index + 1}`;
-        const remove = iconButton(
-          'close',
-          'Remove the image',
-          () => attachments.removeAt(index),
-          'sm',
-        );
-        remove.classList.add('chat-attachment-remove');
-        held.append(thumbnail, remove);
-        return held;
-      }),
-    );
-  });
-  return strip;
-}
-
-// Attaches the image files pasted into the composer or dropped on the tab.
-// The composer hears paste in the capture phase, ahead of the editor; a paste
-// with no files reaches the editor untouched. The whole tab hears drop, so a
-// file dropped just outside the composer attaches instead of the window
-// navigating to it. An ended tab takes no files and logs it.
-function listenForImages(
-  tab: HeldTab,
-  composer: HTMLElement,
-  root: HTMLElement,
-  deps: Pick<ChatViewDeps, 'log' | 'toast'>,
-) {
-  const { log } = deps;
-  const take = (event: Event, files: File[], how: string) => {
-    if (files.length === 0) {
-      return;
-    }
-    event.preventDefault();
-    if (tab.ended) {
-      log('chat', `${how} files ignored: ${tab.name} has ended`);
-      return;
-    }
-    attachFiles(files, tab.attachments, {
-      attached: (image) =>
-        log('chat', `attached a ${image.mediaType} image in ${tab.name}`),
-      refused: (reason) => {
-        log('chat', `image refused: ${reason}`);
-        deps.toast(reason, 'error');
-      },
-      failed: (name, error) => {
-        log('chat', `${name} not read: ${error}`);
-        deps.toast(`${name} not read: ${error}`, 'error');
-      },
-    });
-  };
-  composer.addEventListener(
-    'paste',
-    (event) => take(event, filesOf(event.clipboardData), 'pasted'),
-    { capture: true },
-  );
-  root.addEventListener('dragover', (event) => {
-    if (event.dataTransfer?.types.includes('Files') === true) {
-      event.preventDefault();
-    }
-  });
-  root.addEventListener('drop', (event) =>
-    take(event, filesOf(event.dataTransfer), 'dropped'),
-  );
-}
-
-function filesOf(transfer: DataTransfer | null): File[] {
-  return transfer === null ? [] : [...transfer.files];
 }
 
 // Writes the composer's border-box height, rounded, as the unitless

@@ -4,7 +4,11 @@ import { createFakeAgentHarness } from '../../../shared/fake-agent-harness';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { ChatProfile, RecentFolder } from '../contract';
-import { createFolderChoices, mergeFolderChoices } from './folder-choices';
+import {
+  createFolderChoices,
+  MAX_FOLDER_CHOICES,
+  mergeFolderChoices,
+} from './folder-choices';
 
 const PROFILES: ChatProfile[] = [
   { name: 'work', configDir: '~/.claude' },
@@ -32,9 +36,21 @@ function setUp(options: {
   recent: RecentFolder[];
   listed: Record<string, ProjectFolder[] | Error>;
   folders: string[];
+  fileAt?: string[];
   tempFolders?: string[];
+  // Paths whose `stat` rejects, as for a folder the app may not read.
+  statRejects?: string[];
 }) {
-  const files = createMemoryFiles();
+  const memory = createMemoryFiles();
+  const files = {
+    ...memory,
+    async stat(path: string) {
+      if (options.statRejects?.includes(path)) {
+        throw new Error(`EACCES: permission denied, stat '${path}'`);
+      }
+      return memory.stat(path);
+    },
+  };
   const logged: string[] = [];
   const harness = harnessListing(options.listed);
   const choices = createFolderChoices({
@@ -52,9 +68,10 @@ function setUp(options: {
   return {
     choices,
     logged,
-    madeFolders: Promise.all(
-      options.folders.map((folder) => files.makeFolder(folder)),
-    ),
+    madeFolders: Promise.all([
+      ...options.folders.map((folder) => memory.makeFolder(folder)),
+      ...(options.fileAt ?? []).map((path) => memory.write(path, 'text')),
+    ]),
   };
 }
 
@@ -108,6 +125,90 @@ describe('createFolderChoices', () => {
     expect(await test.choices.list()).toEqual([
       { projectDir: '/p', profile: 'work', lastUsed: 3 },
     ]);
+  });
+
+  it('list_PathHoldsAFile_LeftOut', async () => {
+    const test = setUp({
+      recent: [
+        { projectDir: '/p', profile: 'work', lastUsed: 1 },
+        { projectDir: '/now-a-file', profile: 'work', lastUsed: 2 },
+      ],
+      listed: {},
+      folders: ['/p'],
+      fileAt: ['/now-a-file'],
+    });
+    await test.madeFolders;
+
+    expect(await test.choices.list()).toEqual([
+      { projectDir: '/p', profile: 'work', lastUsed: 1 },
+    ]);
+  });
+
+  it('list_StatRejects_LeftOutAndLogged', async () => {
+    const test = setUp({
+      recent: [
+        { projectDir: '/p', profile: 'work', lastUsed: 1 },
+        { projectDir: '/locked', profile: 'work', lastUsed: 2 },
+      ],
+      listed: {},
+      folders: ['/p', '/locked'],
+      statRejects: ['/locked'],
+    });
+    await test.madeFolders;
+
+    expect(await test.choices.list()).toEqual([
+      { projectDir: '/p', profile: 'work', lastUsed: 1 },
+    ]);
+    expect(test.logged).toEqual([
+      "[chat] folder /locked not checked: EACCES: permission denied, stat '/locked'",
+    ]);
+  });
+
+  it('list_NewerFoldersLeftOut_OlderFoldersFillTheList', async () => {
+    const newerLeftOut: RecentFolder[] = Array.from(
+      { length: MAX_FOLDER_CHOICES },
+      (_, index) => ({
+        projectDir: index % 2 === 0 ? `/tmp/t${index}` : `/gone${index}`,
+        profile: 'work',
+        lastUsed: 1000 + index,
+      }),
+    );
+    const olderKept: RecentFolder[] = [
+      { projectDir: '/kept-a', profile: 'work', lastUsed: 2 },
+      { projectDir: '/kept-b', profile: 'work', lastUsed: 1 },
+    ];
+    const test = setUp({
+      recent: [...newerLeftOut, ...olderKept],
+      listed: {},
+      folders: ['/kept-a', '/kept-b'],
+      tempFolders: ['/tmp'],
+    });
+    await test.madeFolders;
+
+    expect(await test.choices.list()).toEqual(olderKept);
+  });
+
+  it('list_MoreFoldersThanTheCap_KeepsTheNewest', async () => {
+    const recent: RecentFolder[] = Array.from(
+      { length: MAX_FOLDER_CHOICES + 5 },
+      (_, index) => ({
+        projectDir: `/f${index}`,
+        profile: 'work',
+        lastUsed: index,
+      }),
+    );
+    const test = setUp({
+      recent,
+      listed: {},
+      folders: recent.map((folder) => folder.projectDir),
+    });
+    await test.madeFolders;
+
+    const listed = await test.choices.list();
+
+    expect(listed).toHaveLength(MAX_FOLDER_CHOICES);
+    expect(listed[0]?.projectDir).toBe(`/f${MAX_FOLDER_CHOICES + 4}`);
+    expect(listed.at(-1)?.projectDir).toBe('/f5');
   });
 
   it('list_ProfileListingRejects_OthersStillListed', async () => {

@@ -76,6 +76,20 @@ function session(
   return Object.assign(shown, { counts });
 }
 
+// Entries focused on `entry`: `focused` answers with it, and `toggleFocused`
+// counts each call in `toggles` and answers that it expanded `entry`.
+function focusedOn(entry: ChatEntry) {
+  const counts = { toggles: 0 };
+  const entries = {
+    focused: () => entry,
+    toggleFocused() {
+      counts.toggles++;
+      return { entry, result: 'expanded' as const };
+    },
+  } as ChatSession['entries'];
+  return Object.assign(entries, { counts });
+}
+
 // Lets a settled invoke's handlers run.
 async function flush() {
   for (let turn = 0; turn < 5; turn++) {
@@ -96,7 +110,8 @@ function box(text: string) {
 }
 
 // The handlers over one shown session; `invoked` records each call to chat
-// main, `opened` each picker request and `toasts` each toast. Every invoke
+// main, `opened` each picker request, `viewed` each image viewer opening and
+// `toasts` each toast. Every invoke
 // resolves, or rejects with `refusal` when one is given. With `visible`
 // false no Chat tab is the visible tab. `slashCommands` holds the app slash
 // commands send matches.
@@ -110,6 +125,7 @@ function setUp(
   const opened: PickerRequest<unknown>[] = [];
   const logs: string[] = [];
   const toasts: string[] = [];
+  const viewed: { images: readonly ChatImage[]; index: number }[] = [];
   const tabs = {
     visibleSessionId: () => (visible ? shown.sessionId : null),
     session: (sessionId: string) =>
@@ -137,7 +153,11 @@ function setUp(
     picker,
     signIn: {} as SignInDialog,
     slashCommands,
-    viewer: {} as ImageViewer,
+    viewer: {
+      open(images: readonly ChatImage[], index: number) {
+        viewed.push({ images, index });
+      },
+    } as ImageViewer,
     toast: (text) => toasts.push(text),
     log: (source, message) => logs.push(`[${source}] ${message}`),
   };
@@ -147,6 +167,7 @@ function setUp(
     opened,
     logs,
     toasts,
+    viewed,
   };
 }
 
@@ -250,6 +271,29 @@ describe('chat commands', () => {
     run.handlers.firstEntry({});
 
     expect(run.logs).toEqual(['[chat] no entries in app']);
+  });
+
+  it('toggleEntry_userEntryWithImages_opensViewerAtFirstAndTogglesNothing', () => {
+    const entries = focusedOn({ ...userEntry, images: [png, jpeg] });
+    const shown = Object.assign(session(false), { entries });
+    const run = setUp(shown);
+
+    run.handlers.toggleEntry({});
+
+    expect(run.viewed).toEqual([{ images: [png, jpeg], index: 0 }]);
+    expect(entries.counts.toggles).toBe(0);
+  });
+
+  it('toggleEntry_userEntryWithoutImages_togglesAndOpensNoViewer', () => {
+    const entries = focusedOn(userEntry);
+    const shown = Object.assign(session(false), { entries });
+    const run = setUp(shown);
+
+    run.handlers.toggleEntry({});
+
+    expect(entries.counts.toggles).toBe(1);
+    expect(run.viewed).toEqual([]);
+    expect(run.logs).toEqual(['[chat] expanded user entry']);
   });
 
   it('halfPageDown_scrollsOntoTheBottom_logsItFollows', () => {

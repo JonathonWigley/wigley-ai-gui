@@ -70,32 +70,88 @@ describe('slash commands', () => {
   });
 });
 
-describe('account commands', () => {
-  it('status_EndedSession_Toasts', async () => {
-    const commands = createSlashCommands();
-    const invoked: unknown[][] = [];
-    const toasts: string[] = [];
-    addAccountCommands({
-      commands,
-      signIn: { open: () => undefined },
-      channel: {
-        invoke: (...args: unknown[]) => {
-          invoked.push(args);
-          return Promise.resolve({ signedIn: false, account: null });
-        },
-      } as unknown as Parameters<typeof addAccountCommands>[0]['channel'],
-      toast: (text) => toasts.push(text),
-    });
-    const status = commands.match('/status');
-
-    await status?.command.run({
+// The account commands over a channel whose every invoke resolves with
+// `answer`; `invoked` records each call to chat main, `signIns` each profile
+// the sign-in dialog opened for and `toasts` each toast. `run` runs the typed
+// command in session row-1 on profile work.
+function accountCommands(answer: unknown = undefined) {
+  const commands = createSlashCommands();
+  const invoked: unknown[][] = [];
+  const signIns: string[] = [];
+  const toasts: string[] = [];
+  addAccountCommands({
+    commands,
+    signIn: { open: (profile) => signIns.push(profile) },
+    channel: {
+      invoke: (...args: unknown[]) => {
+        invoked.push(args);
+        return Promise.resolve(answer);
+      },
+    } as unknown as Parameters<typeof addAccountCommands>[0]['channel'],
+    toast: (text) => toasts.push(text),
+  });
+  const run = async (typed: string, ended: boolean) => {
+    const matched = commands.match(typed);
+    await matched?.command.run({
       sessionId: 'row-1',
       profile: 'work',
-      args: status.args,
-      ended: true,
+      args: matched.args,
+      ended,
     });
+  };
+  return { run, invoked, signIns, toasts };
+}
 
-    expect(toasts).toEqual(['work: not signed in']);
-    expect(invoked).toEqual([['accountStatus', 'work']]);
+describe('account commands', () => {
+  it('status_EndedSession_Toasts', async () => {
+    const account = accountCommands({ signedIn: false, account: null });
+
+    await account.run('/status', true);
+
+    expect(account.toasts).toEqual(['work: not signed in']);
+    expect(account.invoked).toEqual([['accountStatus', 'work']]);
+  });
+
+  it('status_LiveSignedIn_NoticesTheAccount', async () => {
+    const account = accountCommands({ signedIn: true, account: 'me@x.dev' });
+
+    await account.run('/status', false);
+
+    expect(account.invoked).toEqual([
+      ['accountStatus', 'work'],
+      ['notice', 'row-1', 'work: signed in as me@x.dev', 'info'],
+    ]);
+    expect(account.toasts).toEqual([]);
+  });
+
+  it('status_LiveSignedInNoAccountName_NoticesAnUnnamedAccount', async () => {
+    const account = accountCommands({ signedIn: true, account: null });
+
+    await account.run('/status', false);
+
+    expect(account.invoked).toEqual([
+      ['accountStatus', 'work'],
+      ['notice', 'row-1', 'work: signed in as an unnamed account', 'info'],
+    ]);
+  });
+
+  it('logout_LiveSession_LogsOutThenNotices', async () => {
+    const account = accountCommands();
+
+    await account.run('/logout', false);
+
+    expect(account.invoked).toEqual([
+      ['logOut', 'work'],
+      ['notice', 'row-1', 'Signed out of work', 'info'],
+    ]);
+  });
+
+  it('login_OpensSignInForTheSessionProfile', async () => {
+    const account = accountCommands();
+
+    await account.run('/login', false);
+
+    expect(account.signIns).toEqual(['work']);
+    expect(account.invoked).toEqual([]);
   });
 });

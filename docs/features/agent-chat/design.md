@@ -151,8 +151,9 @@ interview on 2026-10-23; this file is the record of both.
   the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at any step
   starts nothing. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
   in chat's plugin data) merged with every folder each profile's harness has saved sessions in (`listProjects`),
-  one line per folder, its newest use and the profile of that use kept, at most 40 before the filters below; a folder
-  that no longer exists or sits in an OS temp folder (`MainServices.tempFolders`) is left out; `Choose folder…`, the native folder dialog, is last.
+  one line per folder, its newest use and the profile of that use kept. A path that is no longer a folder, one that
+  sits in an OS temp folder (`MainServices.tempFolders`), and one whose check fails (logged) are left out, and the list
+  holds the newest 40 of the rest; `Choose folder…`, the native folder dialog, is last.
   After the profile, chat reads the profile's account status: a signed-out profile opens the sign-in dialog, and a
   finished sign-in goes on to the session step. A status that cannot be read is logged and the prompt goes on.
 - **Sign-in dialog**: one at a time, in the overlay layer over the `chat.signIn` scope: "Finish sign-in in your

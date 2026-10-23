@@ -133,6 +133,7 @@ export interface ChatKit {
   // answer instead once the entry carries one; the part keeps itself up to date as the entry's answer arrives.
   permissionActions(): HTMLElement;
   // A user entry's images as thumbnails; clicking one opens the image viewer at it. Throws for any other entry kind.
+  // Enter on a focused user entry with images opens the viewer at its first image, in place of toggling its expanders.
   // Call it again in `update` for the entry's later images.
   images(): HTMLElement;
 }

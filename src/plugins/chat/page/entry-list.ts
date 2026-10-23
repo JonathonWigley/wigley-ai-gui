@@ -77,6 +77,8 @@ export interface EntryList {
   // down onto the bottom (within 1px) follows the latest entry again. The
   // focused entry stays either way.
   scrollHalfPage(direction: 1 | -1): TranscriptScroll;
+  // The focused entry; null with no focused entry.
+  focused(): ChatEntry | null;
   // Opens every expander of the focused entry when any is closed, else
   // closes them all; null with no focused entry.
   toggleFocused(): { entry: ChatEntry; result: ToggleResult } | null;
@@ -192,6 +194,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       drawFocus('follow');
       return { ...scroll, following: focus.following };
     },
+    focused: () => focusedEntry(focus, slots),
     toggleFocused() {
       const slot =
         focus.entryId === null ? undefined : slots.get(focus.entryId);

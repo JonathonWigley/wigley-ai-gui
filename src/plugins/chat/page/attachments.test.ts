@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatImage } from '../../../contracts/agent';
-import { createAttachments, refusalOf } from './attachments';
+import { createAttachments, refusalOf, refusalOfFile } from './attachments';
 
 const FIVE_MB = 5 * 1024 * 1024;
 
@@ -22,6 +22,29 @@ describe('refusalOf', () => {
 
   it('refusalOf_PngAtLimit_Accepts', () => {
     expect(refusalOf('image/png', FIVE_MB)).toBeNull();
+  });
+});
+
+// The largest byte count whose base64 text is at most 5 MB.
+const LARGEST_ACCEPTED_BYTES = (FIVE_MB / 4) * 3;
+
+describe('refusalOfFile', () => {
+  it('refusalOfFile_LargestAcceptedSize_Accepts', () => {
+    expect(
+      refusalOfFile({ type: 'image/png', size: LARGEST_ACCEPTED_BYTES }),
+    ).toBeNull();
+  });
+
+  it('refusalOfFile_OneByteOver_RefusesSize', () => {
+    expect(
+      refusalOfFile({ type: 'image/png', size: LARGEST_ACCEPTED_BYTES + 1 }),
+    ).toBe('Images over 5 MB cannot be attached');
+  });
+
+  it('refusalOfFile_LargeVideo_RefusesType', () => {
+    expect(refusalOfFile({ type: 'video/mp4', size: 500 * 1024 * 1024 })).toBe(
+      'Only PNG, JPEG, GIF and WebP images can be attached',
+    );
   });
 });
 
