@@ -275,7 +275,8 @@ round), since main, not the page, decides.
   with a POSIX and a Windows adapter in `src/shared/paths/`, each composition root picking one: main by the OS it
   runs on, the page by the served `platform`. Page and shared code that joins, splits or shows a full path calls it,
   and so does every path compare in either process, so no plugin writes `/` into a full path or compares paths as
-  strings; main-side code may join and split with `node:path`, which follows the OS main runs on. Windows paths show with backslashes and the home folder
+  strings; main-side code may join and split with `node:path`, which follows the OS main runs on, and a Unix socket
+  path, which exists only on POSIX, is written with `/` and `path.posix`. Windows paths show with backslashes and the home folder
   as `~`, accept either separator when typed, and compare case-insensitively. A path relative to a scoped `Files`
   (plugin data) stays `/`-separated on every OS.
 - **A setting** is a core setting in `src/contracts/settings.ts` and `src/config/settings.ts`, or a plugin's own in

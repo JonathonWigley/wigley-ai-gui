@@ -20,17 +20,20 @@ export interface PathSyntax {
 
 interface ParsedPath {
   root: string;
+  absolute: boolean;
   segments: string[];
 }
 
 // A `Paths` over `syntax`: a path is a root and its segments, '..' climbing a
-// kept segment, kept at the front of an unrooted path and dropped at a root.
+// kept segment, dropped at the front of an absolute path and kept at the front
+// of any other.
 export function rootedPaths(syntax: PathSyntax): Paths {
   const parse = (path: string): ParsedPath => {
-    const { root, rest } = syntax.splitRoot(path);
+    const { root, absolute, rest } = syntax.splitRoot(path);
     return {
       root,
-      segments: foldSegments(rest.split(syntax.separators), root),
+      absolute,
+      segments: foldSegments(rest.split(syntax.separators), absolute),
     };
   };
   const write = (root: string, segments: readonly string[]): string =>
@@ -47,7 +50,7 @@ export function rootedPaths(syntax: PathSyntax): Paths {
     );
     return write(
       parsed.root,
-      foldSegments([...parsed.segments, ...appended], parsed.root),
+      foldSegments([...parsed.segments, ...appended], parsed.absolute),
     );
   };
   const segmentsBelow = (path: string, folder: string): string[] | null => {
@@ -117,8 +120,12 @@ export function rootedPaths(syntax: PathSyntax): Paths {
 }
 
 // Drops '' and '.', and folds '..' into the segment before it; a '..' with
-// none before it stays when `root` is '' and is dropped at a root.
-function foldSegments(segments: readonly string[], root: string): string[] {
+// none before it is dropped at an absolute root and kept at any other ('',
+// Windows' '\' and 'C:'), which has no fixed top.
+function foldSegments(
+  segments: readonly string[],
+  absolute: boolean,
+): string[] {
   const kept: string[] = [];
   for (const segment of segments) {
     if (segment === '' || segment === '.') {
@@ -128,7 +135,7 @@ function foldSegments(segments: readonly string[], root: string): string[] {
       segment === '..' && kept.length > 0 && kept[kept.length - 1] !== '..';
     if (climbsKeptSegment) {
       kept.pop();
-    } else if (segment !== '..' || root === '') {
+    } else if (segment !== '..' || !absolute) {
       kept.push(segment);
     }
   }

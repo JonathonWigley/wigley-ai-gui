@@ -1,7 +1,8 @@
 // Full paths by the rules of one OS. A path the caller passes may use either
 // separator on Windows; every path returned is normalized: '.' and repeated
-// or trailing separators folded, '..' folded and never climbing above the
-// root, the OS's separator written.
+// or trailing separators folded, '..' folded and never climbing above an
+// absolute root (kept at the front of any other path), the OS's separator
+// written.
 export interface Paths {
   // '/' or '\'.
   readonly separator: string;
