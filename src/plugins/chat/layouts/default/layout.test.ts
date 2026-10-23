@@ -71,6 +71,7 @@ function fakeKit() {
     setOpen: [] as boolean[],
     setDotStatus: [] as [string | null, string][],
     permissionActions: 0,
+    images: 0,
   };
   const kit: ChatKit = {
     markdown(text) {
@@ -106,6 +107,10 @@ function fakeKit() {
     permissionActions() {
       calls.permissionActions += 1;
       return asHtml(fakeElement('div', 'permissionActions'));
+    },
+    images() {
+      calls.images += 1;
+      return asHtml(fakeElement('div', 'images'));
     },
   };
   return { kit, calls };
@@ -145,6 +150,7 @@ describe('default chat layout', () => {
       kind: 'user' as const,
       id: 'u1',
       text: 'hello',
+      images: [] as { mediaType: string; data: string }[],
       raw: [] as unknown[],
     };
 
@@ -159,6 +165,34 @@ describe('default chat layout', () => {
     expect(asFake(view.element)).toBe(root);
     expect(root.children).toEqual([turn]);
     expect(describeChildren(turn)).toEqual(['markdown:hello there']);
+  });
+
+  const userWithImage = {
+    kind: 'user' as const,
+    id: 'u2',
+    text: 'look',
+    images: [{ mediaType: 'image/png', data: 'cG5n' }],
+    raw: [] as unknown[],
+  };
+
+  it('userEntry_WithImages_DrawsThumbnails', () => {
+    const { kit, calls } = fakeKit();
+
+    const view = layout.entries.user(userWithImage, kit);
+    const turn = asFake(view.element).children[0];
+
+    expect(calls.images).toBe(1);
+    expect(describeChildren(turn)).toEqual(['markdown:look', 'images']);
+  });
+
+  it('userEntry_NoImages_NoThumbnails', () => {
+    const { kit, calls } = fakeKit();
+
+    const view = layout.entries.user({ ...userWithImage, images: [] }, kit);
+    const turn = asFake(view.element).children[0];
+
+    expect(calls.images).toBe(0);
+    expect(describeChildren(turn)).toEqual(['markdown:look']);
   });
 
   it('assistant_streamingClass_updateInPlace', () => {

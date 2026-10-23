@@ -21,6 +21,14 @@ export const chatManifest = definePlugin({
     },
     leaveBox: { label: 'leave the box', group: 'box', runsIn: 'page' },
     send: { label: 'send the message', group: 'box', runsIn: 'page' },
+    removeImage: {
+      label: 'remove the last attached image',
+      group: 'box',
+      runsIn: 'page',
+    },
+    nextImage: { label: 'next image', group: 'image', runsIn: 'page' },
+    prevImage: { label: 'previous image', group: 'image', runsIn: 'page' },
+    closeImage: { label: 'close the image', group: 'image', runsIn: 'page' },
     interrupt: { label: 'interrupt the turn', group: 'chat', runsIn: 'page' },
     nextEntry: { label: 'next entry', group: 'entries', runsIn: 'page' },
     prevEntry: { label: 'previous entry', group: 'entries', runsIn: 'page' },
@@ -120,6 +128,7 @@ export const chatManifest = definePlugin({
     reason: 'In the deny reason box',
     confirm: 'In the end-session confirmation',
     signIn: 'In the sign-in dialog',
+    image: 'In the image viewer',
   },
   settings: { profiles: DEFAULT_PROFILES },
   settingInfo: {

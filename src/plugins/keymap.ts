@@ -200,6 +200,9 @@ export const defaultKeymap = {
     { keys: 'y', scope: 'chat.confirm', command: 'chat.endSession' },
     { keys: 'n', scope: 'chat.confirm', command: 'chat.keepSession' },
     { keys: '<Esc>', scope: 'chat.confirm', command: 'chat.keepSession' },
+    { keys: 'h', scope: 'chat.image', command: 'chat.prevImage' },
+    { keys: 'l', scope: 'chat.image', command: 'chat.nextImage' },
+    { keys: '<Esc>', scope: 'chat.image', command: 'chat.closeImage' },
     // A box's binds are normal-mode maps: `<CR>` sends only in normal mode, so
     // Enter in insert mode adds a line.
     { keys: '<CR>', scope: 'chat.chat', command: 'chat.send', where: 'box' },
@@ -231,6 +234,12 @@ export const defaultKeymap = {
       keys: '<Leader>cc',
       scope: 'chat.chat',
       command: 'chat.pickControl',
+      where: 'box',
+    },
+    {
+      keys: '<Leader>cx',
+      scope: 'chat.chat',
+      command: 'chat.removeImage',
       where: 'box',
     },
     ...chatListBoxBinds('chat.picker'),

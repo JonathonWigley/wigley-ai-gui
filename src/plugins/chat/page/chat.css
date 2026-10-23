@@ -111,7 +111,24 @@
   font-weight: var(--wg-weight-semibold);
 }
 
-/* The composer: the message box over its bar (mode, control chips, send). */
+/* A sent user turn's images, under its text. */
+.chat-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+  margin-top: var(--wg-space-2);
+}
+
+.chat-image-thumbnail {
+  border-radius: var(--wg-radius-sm);
+  cursor: pointer;
+  height: calc(var(--wg-space-8) * 3);
+  object-fit: cover;
+  width: calc(var(--wg-space-8) * 3);
+}
+
+/* The composer: the attached images' strip, then the message box over its
+   bar (mode, control chips, send). */
 .ui-floating.chat-composer {
   border-radius: var(--wg-radius-xl);
   bottom: var(--wg-space-3);
@@ -123,6 +140,36 @@
   padding: var(--wg-space-2);
   position: absolute;
   right: var(--wg-space-3);
+}
+
+/* `display` would override `hidden`, so the empty strip is hidden here. */
+.chat-attachments {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+.chat-attachments[hidden] {
+  display: none;
+}
+
+.chat-attachment {
+  position: relative;
+}
+
+.chat-attachment-image {
+  border-radius: var(--wg-radius-sm);
+  display: block;
+  height: calc(var(--wg-space-8) * 2);
+  object-fit: cover;
+  width: calc(var(--wg-space-8) * 2);
+}
+
+.chat-attachment-remove {
+  position: absolute;
+  right: var(--wg-space-0_5);
+  top: var(--wg-space-0_5);
 }
 
 .chat-box {
@@ -178,4 +225,42 @@
   min-width: 0;
   overflow-wrap: anywhere;
   user-select: text;
+}
+
+/* The image viewer: a dialog-layer surface over the scrim, the image fitted
+   inside the window with its aspect kept, and its place under it. */
+.chat-image-viewer {
+  align-items: center;
+  background: var(--wg-scrim);
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+  inset: 0;
+  justify-content: center;
+  padding: var(--wg-space-6);
+  position: fixed;
+  z-index: var(--wg-z-dialog);
+}
+
+.chat-image-viewer[hidden] {
+  display: none;
+}
+
+.chat-image-viewer-image {
+  border-radius: var(--wg-radius-md);
+  max-height: 100%;
+  max-width: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+
+.chat-image-viewer-count {
+  color: var(--wg-fg);
+  flex-shrink: 0;
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-image-viewer-count[hidden] {
+  display: none;
 }

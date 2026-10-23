@@ -159,7 +159,7 @@ nothing; chat's page imports only `src/contracts`, `src/shared`, its own folder 
 - [x] [Chat main: image messages, notices, sign-in, merged folders](04-chat-main.md) — after 01, 03
 
 ### Wave 3
-- [ ] [App slash commands and sign-in in the page](05-slash-commands-sign-in.md) — after 04
+- [x] [App slash commands and sign-in in the page](05-slash-commands-sign-in.md) — after 04
 
 ### Wave 4
 - [ ] [Attached images and the image viewer](06-images.md) — after 05
@@ -179,9 +179,14 @@ Review base: a0e7aebc036aed1714fb1422459501b1d4d7319d
 - 02 completion popup · 63e9972 · proved (diff read, typecheck, lint) · concerns: popup DOM sits outside EditorHost.contains — check clicks on rows in 08
 - 01 harness seam · c37acaa · proved (diff read, typecheck, lint) · concerns: layout.d.ts UserInput lacks images (06); AGENTS.md claude-code line stale (07); link-on-stderr untested
 - 04 chat main · bb7ccc2 · proved (diff read, typecheck, lint) · concerns: filters after the 40 cap can shorten the list; a rejecting stat rejects recentFolders
+- 05 slash commands and sign-in · 89f54d0 · proved (diff read, typecheck, lint) · concerns: second open drops its finished; no sign-in id for stale logInEnded; no self-test step for /status or the dialog
 ### Contract changes
 - createFolderChoices returns a named `FolderChoices` of the planned shape; mergeFolderChoices takes `ListedProject[]` (= `{ profile; folder: ProjectFolder }`) · why: naming only · consumers: none · group 04
 - chat-sessions.ts exports `requireProfile(profiles, name)` and `requireChatHarness(harnesses)` (private lookups widened); `SELFTEST_PROJECT_DIR` export removed; `ChatSelfTestDeps` gains `homeDir` and `files` · why: shared by accounts, folder-choices and start · consumers: none outside 04 · group 04
+- addAccountCommands deps: `signIn: SignInDialog` → `signIn: Pick<SignInDialog, 'open'>` plus `toast` · why: ended-session toasts · consumers: none · group 05
+- createSignInDialog deps: `SignInDialogDeps extends DialogDeps { editor; channel: Pick<PageChannel<ChatChannel>, 'invoke' | 'on'>; toast }` · why: the dialog hears logInLink/logInEnded · consumers: none · group 05
+- ChatCommandDeps gains `signIn: SignInDialog` and `slashCommands: Pick<SlashCommands, 'match'>`; ChatViewDeps gains `slashCommandNames(): string[]`; account-commands.ts exports `accountText(account)` · why: the plan left the shape open · consumers: 06 · group 05
+- chat-dialogs.ts (outside Files) exports `followKeymap` and `DialogAction` · why: widen, never copy · consumers: none · group 05
 ### Rulings
 - plan.py is absent from wigley 1.8.0; the Run log, boxes and Status lines are edited by hand — no tooling to lean on — a malformed entry, caught at Close · lead
 - A peer session shares the working tree; every commit is pathspec-scoped and the review range is this run's commit list — a swept peer edit — lead
@@ -194,5 +199,7 @@ Review base: a0e7aebc036aed1714fb1422459501b1d4d7319d
 - Self-test project folders are made under the real path of the self-test home, not services.homeDir, and sessions start once they exist — the mkdtemp spelling did not tilde in the picker and broke the min-width step — none seen, self-test passes · group 04
 - `A sign-in is already running for <profile>` names the running sign-in's profile — matches the page focusing the open dialog — one string · group 04
 - File order agreed with peer wigley-ai-gui-b5 (settings-mode plan): plan C 05 holds chat/manifest.ts and keymap.ts; the peer's 01 runs after 05 commits; plan C 06 dispatches only after the peer reports its 01 committed; keymap.ts one worker at a time, announced before and after — both plans edit those files — a wait on 06 · lead
+- A finished sign-in still signed out with error null toasts `Sign-in failed: <profile> is still signed out`; a rejected logIn closes, toasts `Sign-in not started: <error>` and calls finished(false) — spec silent — copy only · group 05
+- submitCode keeps the code in the box and the dialog open until logInEnded; Copy is a ghost button disabled until the link arrives — spec silent — a resend shows the old text · group 05
 ### Review rounds
 ### Test gate

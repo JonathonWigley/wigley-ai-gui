@@ -63,6 +63,19 @@ function resultLine(input) {
   return parts.join(' · ');
 }
 
+// The text, then the thumbnails of any images under it.
+/**
+ * @param {import('../layout').UserInput} input
+ * @param {import('../layout').ChatKit} kit
+ */
+function userTurnParts(input, kit) {
+  const parts = [kit.markdown(input.text)];
+  if (input.images.length > 0) {
+    parts.push(kit.images());
+  }
+  return parts;
+}
+
 /** @param {'info' | 'error'} tone */
 function noticeClass(tone) {
   return `chat-entry chat-notice chat-notice-${tone}`;
@@ -74,12 +87,12 @@ const layout = {
     user(input, kit) {
       const root = el('div', 'chat-entry chat-user');
       const turn = kit.card();
-      turn.append(kit.markdown(input.text));
+      turn.append(...userTurnParts(input, kit));
       root.append(turn);
       return {
         element: root,
         update(next) {
-          turn.replaceChildren(kit.markdown(next.text));
+          turn.replaceChildren(...userTurnParts(next, kit));
         },
       };
     },

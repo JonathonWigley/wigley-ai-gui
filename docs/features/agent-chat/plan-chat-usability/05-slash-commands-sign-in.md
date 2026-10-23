@@ -1,6 +1,6 @@
 # 05 — App slash commands and sign-in in the page
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -106,3 +106,5 @@ GIVEN a signed-out profile WHEN the start prompt's profile is picked THEN the si
   `startPrompt_StatusReadFails_GoesOn` in `start-prompt.test.ts`, with a recording sign-in fake
 
 ## Proof
+
+Commit 89f54d0 · diff read, every Produces present · typecheck and lint pass · worker ran its 3 test files (55 passed) and the self-test (passed) · concerns: a second open for another profile never calls its finished; a stale logInEnded cannot be told from a new one (no sign-in id); code box one-line by CSS only; no self-test step for /status or the dialog; dialog not yet seen live (08)

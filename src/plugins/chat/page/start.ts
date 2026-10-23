@@ -22,6 +22,7 @@ import { addAccountCommands } from './account-commands';
 import { chatCommandHandlers, createPermissionActions } from './chat-commands';
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
 import { mountChatView } from './chat-view';
+import { createImageViewer } from './image-viewer';
 import { createPicker } from './picker';
 import { readChatLayout } from './read-chat-layout';
 import { createSignInDialog } from './sign-in-dialog';
@@ -41,11 +42,14 @@ type ChatApi = PageApi<
 // asks for a folder, a profile and a new or saved session in the picker and
 // starts or resumes a session there, signing a signed-out profile in first.
 // Sending `/login`, `/logout`, `/status` or another app slash command runs it
-// in the page in place of sending it; the exports register more. The
-// picker, the deny reason box, the end-session confirmation and the sign-in
-// dialog sit in the overlay layer, each over a scope of its own; another
-// session's Chat tab showing closes the reason box, the confirmation and a
-// control picker, and leaves the start prompt and the sign-in dialog open.
+// in the page in place of sending it; the exports register more. Images
+// pasted or dropped into a Chat tab attach to its next message, and a sent
+// message's images open full size in the image viewer. The picker, the deny
+// reason box, the end-session confirmation, the sign-in dialog and the image
+// viewer sit in the overlay layer, each over a scope of its own; another
+// session's Chat tab showing closes the reason box, the confirmation, a
+// control picker and the image viewer, and leaves the start prompt and the
+// sign-in dialog open.
 export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -94,6 +98,11 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       pushScope: (scope) => api.keys.pushScope(scope),
       log: services.log,
     });
+    const viewer = createImageViewer({
+      overlay: api.areas.overlay,
+      pushScope: () => api.keys.pushScope('image'),
+      log: services.log,
+    });
     const permissions = createPermissionActions({
       channel: api.channel,
       reasonBox,
@@ -114,12 +123,14 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       run,
       permissions,
       confirm,
+      viewer,
       slashCommandNames: () => slashCommands.names(),
       setScope: () => api.keys.setScope('chat'),
       otherSessionShown: () => {
         picker.closeSessionBound();
         reasonBox.cancel();
         confirm.keep();
+        viewer.close();
       },
       log: services.log,
       toast: services.toast,
@@ -168,6 +179,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           picker,
           signIn,
           slashCommands,
+          viewer,
           toast: services.toast,
           log: services.log,
         }),

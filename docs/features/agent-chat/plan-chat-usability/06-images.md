@@ -1,6 +1,6 @@
 # 06 — Attached images and the image viewer
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)

@@ -8,10 +8,12 @@ export type EntryKind =
   | 'notice'
   | 'raw';
 
+// `images` are the message's attached images, base64 with no `data:` prefix.
 export interface UserInput {
   kind: 'user';
   id: string;
   text: string;
+  images: { mediaType: string; data: string }[];
   raw: unknown[];
 }
 export interface AssistantInput {
@@ -130,6 +132,9 @@ export interface ChatKit {
   // Allow once / Deny with their keys beside them (from keys' `keysFor`); Deny opens the reason box. Draws the
   // answer instead once the entry carries one; the part keeps itself up to date as the entry's answer arrives.
   permissionActions(): HTMLElement;
+  // A user entry's images as thumbnails; clicking one opens the image viewer at it. Throws for any other entry kind.
+  // Call it again in `update` for the entry's later images.
+  images(): HTMLElement;
 }
 
 export interface ChatLayout {

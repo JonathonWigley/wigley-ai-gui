@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { ChatEntry, SessionControl } from '../../../contracts/agent';
+import type {
+  ChatEntry,
+  ChatImage,
+  SessionControl,
+} from '../../../contracts/agent';
 import type { TextEditor } from '../../../contracts/editor';
 import type { ChatSessionState, SlashCommandContext } from '../contract';
+import { createAttachments } from './attachments';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
 import { type ChatCommandDeps, chatCommandHandlers } from './chat-commands';
 import type { ChatSession, ChatTabs, PermissionActions } from './chat-view';
 import type { TranscriptScroll } from './entry-list';
+import type { ImageViewer } from './image-viewer';
 import type { Picker, PickerRequest } from './picker';
 import type { SignInDialog } from './sign-in-dialog';
 import { createSlashCommands, type SlashCommands } from './slash-commands';
@@ -27,6 +33,9 @@ const userEntry: ChatEntry = {
   images: [],
   raw: [],
 };
+
+const png: ChatImage = { mediaType: 'image/png', data: 'cG5n' };
+const jpeg: ChatImage = { mediaType: 'image/jpeg', data: 'anBn' };
 
 // `first` answers each call with `firstEntry` and counts it in `firstCalls`;
 // `scrollHalfPage` records each step in `scrolls` and answers with `scroll`.
@@ -61,6 +70,7 @@ function session(
     state,
     ended,
     box: {} as TextEditor,
+    attachments: createAttachments(),
     entries,
   };
   return Object.assign(shown, { counts });
@@ -127,6 +137,7 @@ function setUp(
     picker,
     signIn: {} as SignInDialog,
     slashCommands,
+    viewer: {} as ImageViewer,
     toast: (text) => toasts.push(text),
     log: (source, message) => logs.push(`[${source}] ${message}`),
   };
@@ -369,5 +380,44 @@ describe('chat commands', () => {
     expect(run.invoked).toEqual([
       ['send', 'row-1', { text: '/model opus', images: [] }],
     ]);
+  });
+
+  it('send_ImagesOnly_Sends', () => {
+    const shown = Object.assign(session(false), { box: box('') });
+    shown.attachments.add(png);
+    const run = setUp(shown);
+
+    run.handlers.send({});
+
+    expect(run.invoked).toEqual([
+      ['send', 'row-1', { text: '', images: [png] }],
+    ]);
+  });
+
+  it('send_WithImages_ClearsAttachments', () => {
+    const shown = Object.assign(session(false), { box: box('hi') });
+    shown.attachments.add(png);
+    shown.attachments.add(jpeg);
+    const run = setUp(shown);
+
+    run.handlers.send({});
+
+    expect(run.invoked).toEqual([
+      ['send', 'row-1', { text: 'hi', images: [png, jpeg] }],
+    ]);
+    expect(shown.attachments.images()).toEqual([]);
+  });
+
+  it('send_AppCommand_KeepsAttachments', () => {
+    const commands = createSlashCommands();
+    commands.add({ name: 'status', description: 'Show', run: () => undefined });
+    const shown = Object.assign(session(false), { box: box('/status') });
+    shown.attachments.add(png);
+    const run = setUp(shown, undefined, true, commands);
+
+    run.handlers.send({});
+
+    expect(run.invoked).toEqual([]);
+    expect(shown.attachments.images()).toEqual([png]);
   });
 });

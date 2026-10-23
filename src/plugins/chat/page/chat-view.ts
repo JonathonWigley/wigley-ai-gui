@@ -16,6 +16,7 @@ import { element } from '../../../shared/page/dom';
 import { textButton } from '../../../shared/page/ui/button';
 import { chip } from '../../../shared/page/ui/chip';
 import { floatingPanel } from '../../../shared/page/ui/floating-panel';
+import { iconButton } from '../../../shared/page/ui/icon-button';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
@@ -27,6 +28,12 @@ import type { ChatChannel, ChatSessionState } from '../contract';
 import { chatCommand } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
+import {
+  type Attachments,
+  attachFiles,
+  createAttachments,
+  imageUrl,
+} from './attachments';
 import { blurFocusedElement, type CloseConfirm } from './chat-dialogs';
 import {
   applyEntry,
@@ -42,6 +49,7 @@ import {
   type EntryList,
   type ShownLayout,
 } from './entry-list';
+import type { ImageViewer } from './image-viewer';
 import { keyHint } from './key-hint';
 import { completionWords } from './slash-commands';
 
@@ -63,11 +71,13 @@ export interface SessionRef {
 }
 
 // One held chat session as the commands act on it: its state as chat main
-// last sent it, whether it ended, its message box and its entries.
+// last sent it, whether it ended, its message box, the images attached to
+// its next message and its entries.
 export interface ChatSession extends SessionRef {
   readonly state: ChatSessionState;
   readonly ended: boolean;
   box: TextEditor;
+  attachments: Attachments;
   entries: Pick<
     EntryList,
     'move' | 'latest' | 'first' | 'toggleFocused' | 'scrollHalfPage'
@@ -94,7 +104,8 @@ export interface PermissionActions {
 // a command, as the composer's chips and send button do; `platform` prints
 // the key hints; `paths` names each tab by its project folder.
 // `slashCommandNames` reads the app slash commands registered now, which the
-// `/` completion offers ahead of the agent's.
+// `/` completion offers ahead of the agent's. `viewer` opens a sent message's
+// images full size.
 export interface ChatViewDeps {
   channel: PageChannel<ChatChannel>;
   paths: Paths;
@@ -107,6 +118,7 @@ export interface ChatViewDeps {
   run(command: CommandId): void;
   permissions: PermissionActions;
   confirm: CloseConfirm;
+  viewer: Pick<ImageViewer, 'open'>;
   slashCommandNames(): string[];
   setScope(): void;
   otherSessionShown(): void;
@@ -130,6 +142,7 @@ interface HeldTab {
   boxMode: VimMode;
   isBoxFocused: boolean;
   entries: EntryList;
+  attachments: Attachments;
   bar: ComposerBar;
   composerSize: ResizeObserver;
   keysChange: Disposable;
@@ -143,8 +156,9 @@ interface ComposerBar {
 const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 
 // One Chat tab per chat session main holds, each with its entries and its
-// composer (message box, mode, control chips, send), kept up to date from
-// chat main's messages. Each tab is selected in its session when added.
+// composer (attached images, message box, mode, control chips, send), kept up
+// to date from chat main's messages. Each tab is selected in its session when
+// added.
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
@@ -318,16 +332,17 @@ function sessionOf(tab: HeldTab, box: TextEditor): ChatSession {
       return tab.ended;
     },
     box,
+    attachments: tab.attachments,
     entries: tab.entries,
   };
 }
 
 // The tab element (`div.chat-tab`: entries, then the floating composer
-// holding the box and its bar) added to its session, with the box's editor
-// mounted once the element is attached. The tab then selects itself, so a
-// chat session opens on its Chat tab whichever plugin's tab the session got
-// first. `view.shown` may run inside `addTab`, before the handle and box are
-// set.
+// holding the attached images' strip, the box and its bar) added to its
+// session, with the box's editor mounted once the element is attached. The
+// tab then selects itself, so a chat session opens on its Chat tab whichever
+// plugin's tab the session got first. `view.shown` may run inside `addTab`,
+// before the handle and box are set.
 function createTab(
   state: ChatSessionState,
   shown: ShownLayout,
@@ -344,6 +359,7 @@ function createTab(
       platform: deps.platform,
       allow: (entry) => deps.permissions.allow(ref, entry),
       deny: (entry) => deps.permissions.deny(ref, entry),
+      openImages: (images, index) => deps.viewer.open(images, index),
     },
     log: deps.log,
     toast: deps.toast,
@@ -351,9 +367,11 @@ function createTab(
   const boxElement = inputFrame();
   boxElement.classList.add('chat-box');
   const bar = buildComposerBar(deps);
+  const attachments = createAttachments();
+  const strip = buildAttachmentStrip(attachments);
   const composer = floatingPanel();
   composer.classList.add('chat-composer');
-  composer.append(boxElement, bar.element);
+  composer.append(strip, boxElement, bar.element);
   const root = element('div', 'chat-tab');
   root.append(entries.element, composer);
   const tab: HeldTab = {
@@ -368,12 +386,14 @@ function createTab(
     boxMode: STARTING_MODE,
     isBoxFocused: false,
     entries,
+    attachments,
     bar,
     composerSize: followComposerHeight(composer, root, entries),
     keysChange: deps.keys.onChanged(() => bar.draw(tab)),
   };
   entries.rebuild(state.entries);
   bar.draw(tab);
+  listenForImages(tab, composer, root, deps);
   tab.handle = deps.sessions.addTab(state.sessionId, {
     id: 'chat',
     title: 'Chat',
@@ -462,6 +482,87 @@ function mayClose(tab: HeldTab, deps: ChatViewDeps): boolean {
   });
   deps.log('chat', `closing the session asks to end ${tab.name}`);
   return false;
+}
+
+// A thumbnail per attached image, each with its remove button, redrawn on
+// each change and hidden while nothing is attached.
+function buildAttachmentStrip(attachments: Attachments): HTMLElement {
+  const strip = element('div', 'chat-attachments');
+  strip.hidden = true;
+  attachments.onChange((images) => {
+    strip.hidden = images.length === 0;
+    strip.replaceChildren(
+      ...images.map((image, index) => {
+        const held = element('div', 'chat-attachment');
+        const thumbnail = element('img', 'chat-attachment-image');
+        thumbnail.src = imageUrl(image);
+        thumbnail.alt = `Attached image ${index + 1}`;
+        const remove = iconButton(
+          'close',
+          'Remove the image',
+          () => attachments.removeAt(index),
+          'sm',
+        );
+        remove.classList.add('chat-attachment-remove');
+        held.append(thumbnail, remove);
+        return held;
+      }),
+    );
+  });
+  return strip;
+}
+
+// Attaches the image files pasted into the composer or dropped on the tab.
+// The composer hears paste in the capture phase, ahead of the editor; a paste
+// with no files reaches the editor untouched. The whole tab hears drop, so a
+// file dropped just outside the composer attaches instead of the window
+// navigating to it. An ended tab takes no files and logs it.
+function listenForImages(
+  tab: HeldTab,
+  composer: HTMLElement,
+  root: HTMLElement,
+  deps: Pick<ChatViewDeps, 'log' | 'toast'>,
+) {
+  const { log } = deps;
+  const take = (event: Event, files: File[], how: string) => {
+    if (files.length === 0) {
+      return;
+    }
+    event.preventDefault();
+    if (tab.ended) {
+      log('chat', `${how} files ignored: ${tab.name} has ended`);
+      return;
+    }
+    attachFiles(files, tab.attachments, {
+      attached: (image) =>
+        log('chat', `attached a ${image.mediaType} image in ${tab.name}`),
+      refused: (reason) => {
+        log('chat', `image refused: ${reason}`);
+        deps.toast(reason, 'error');
+      },
+      failed: (name, error) => {
+        log('chat', `${name} not read: ${error}`);
+        deps.toast(`${name} not read: ${error}`, 'error');
+      },
+    });
+  };
+  composer.addEventListener(
+    'paste',
+    (event) => take(event, filesOf(event.clipboardData), 'pasted'),
+    { capture: true },
+  );
+  root.addEventListener('dragover', (event) => {
+    if (event.dataTransfer?.types.includes('Files') === true) {
+      event.preventDefault();
+    }
+  });
+  root.addEventListener('drop', (event) =>
+    take(event, filesOf(event.dataTransfer), 'dropped'),
+  );
+}
+
+function filesOf(transfer: DataTransfer | null): File[] {
+  return transfer === null ? [] : [...transfer.files];
 }
 
 // Writes the composer's border-box height, rounded, as the unitless

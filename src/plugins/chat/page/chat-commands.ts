@@ -23,6 +23,7 @@ import type {
   SessionRef,
 } from './chat-view';
 import { CONTROL_IDS } from './control-commands';
+import type { ImageViewer } from './image-viewer';
 import type { Picker } from './picker';
 import type { SignInDialog } from './sign-in-dialog';
 import type { SlashCommands } from './slash-commands';
@@ -79,6 +80,7 @@ export interface ChatCommandDeps {
   picker: Picker;
   signIn: SignInDialog;
   slashCommands: Pick<SlashCommands, 'match'>;
+  viewer: ImageViewer;
   toast(text: string, tone: ToastTone): void;
   log: Log;
 }
@@ -177,13 +179,19 @@ export function chatCommandHandlers(
     }),
     halfPageDown: inSession((session) => scrollTranscript(session, 1, log)),
     halfPageUp: inSession((session) => scrollTranscript(session, -1, log)),
+    // A focused user entry with images opens the viewer on its first image.
     toggleEntry: inSession((session) => {
       const toggled = session.entries.toggleFocused();
       if (toggled === null) {
         log('chat', `no entries in ${session.name}`);
         return;
       }
-      const { kind } = toggled.entry;
+      const { entry } = toggled;
+      if (entry.kind === 'user' && entry.images.length > 0) {
+        deps.viewer.open(entry.images, 0);
+        return;
+      }
+      const { kind } = entry;
       log(
         'chat',
         toggled.result === 'nothing'
@@ -226,6 +234,16 @@ export function chatCommandHandlers(
         picked: (control) => openChoices(deps, session, control),
       });
     }),
+    removeImage: inSession((session) => {
+      if (session.attachments.removeLast()) {
+        log('chat', `removed the last attached image in ${session.name}`);
+      } else {
+        log('chat', 'no attached image');
+      }
+    }),
+    nextImage: () => deps.viewer.next(),
+    prevImage: () => deps.viewer.previous(),
+    closeImage: () => deps.viewer.close(),
     submitCode: () => deps.signIn.submitCode(),
     cancelSignIn: () => deps.signIn.cancel(),
     endSession: () => deps.confirm.end(),
@@ -257,13 +275,16 @@ function sessionFor(
   return firedInOtherBox ? undefined : session;
 }
 
-// Sends the box's text as typed and clears the box; an empty box or an ended
-// session sends nothing and keeps the text. A registered app slash command
-// runs in place of sending, an ended session's included, and clears the box.
+// Sends the box's text as typed with the attached images, then clears the box
+// and the attachments; images send with an empty box too. A box and
+// attachments both empty, or an ended session, send nothing and keep what is
+// there. A registered app slash command runs in place of sending, an ended
+// session's included, and clears the box, leaving the images attached.
 function send(deps: ChatCommandDeps, session: ChatSession) {
   const { log } = deps;
   const text = session.box.text();
-  if (text.trim() === '') {
+  const images = session.attachments.images();
+  if (text.trim() === '' && images.length === 0) {
     log('chat', 'nothing to send');
     return;
   }
@@ -277,13 +298,16 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
     return;
   }
   void deps.channel
-    .invoke('send', session.sessionId, { text, images: [] })
+    .invoke('send', session.sessionId, { text, images })
     .catch((error: unknown) => {
       log('chat', `send failed: ${errorText(error)}`);
       deps.toast(`Message not sent: ${errorText(error)}`, 'error');
     });
   session.box.setText('');
-  log('chat', `sent a message in ${session.name}`);
+  session.attachments.clear();
+  const withImages =
+    images.length === 0 ? '' : ` with ${images.length} image(s)`;
+  log('chat', `sent a message${withImages} in ${session.name}`);
 }
 
 // Runs the command for the session and clears the box; a run that throws or

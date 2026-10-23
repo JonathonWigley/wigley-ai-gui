@@ -1,4 +1,4 @@
-import type { ChatEntry } from '../../../contracts/agent';
+import type { ChatEntry, ChatImage } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Platform } from '../../../contracts/platform';
@@ -13,17 +13,20 @@ import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { setDotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import type { KeysPageExports } from '../../keys/contract';
 import type { ChatKit } from '../layouts/layout';
+import { imageUrl } from './attachments';
 import type { PermissionEntry } from './chat-state';
 import { keyHint } from './key-hint';
 
 // `allow` answers the permission entry allowed; `deny` opens the reason box
-// for it. `platform` prints the key hints.
+// for it. `platform` prints the key hints. `openImages` opens the image
+// viewer on a user entry's images at `index`.
 export interface KitDeps {
   markdown: MarkdownRenderer;
   keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   platform: Platform;
   allow(entry: PermissionEntry): void;
   deny(entry: PermissionEntry): void;
+  openImages(images: readonly ChatImage[], index: number): void;
 }
 
 // The expanders one kit made (its expanders and collapsible cards), in
@@ -96,6 +99,12 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
       drawPermissionParts();
       return part;
     },
+    images() {
+      if (current.kind !== 'user') {
+        throw new Error('images is only for a user entry');
+      }
+      return imageThumbnails(current.images, deps);
+    },
   };
   return {
     kit,
@@ -149,6 +158,24 @@ function drawPermissionActions(
     hint: keyHint(deps.keys, deps.platform, 'denyPermission', 'chat'),
   });
   part.replaceChildren(allow, deny);
+}
+
+// One thumbnail per image, each opening the viewer at its own index.
+function imageThumbnails(
+  images: readonly ChatImage[],
+  deps: Pick<KitDeps, 'openImages'>,
+): HTMLElement {
+  const strip = element('div', 'chat-images');
+  strip.append(
+    ...images.map((image, index) => {
+      const thumbnail = element('img', 'chat-image-thumbnail');
+      thumbnail.src = imageUrl(image);
+      thumbnail.alt = `Image ${index + 1} of ${images.length}`;
+      thumbnail.addEventListener('click', () => deps.openImages(images, index));
+      return thumbnail;
+    }),
+  );
+  return strip;
 }
 
 function answerText(answer: NonNullable<PermissionEntry['answer']>): string {
