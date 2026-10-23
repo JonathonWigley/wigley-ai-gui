@@ -84,7 +84,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   doc's title and path through the `FuzzyMatcher` page service and keeps the tree's order. A filter that matches nothing
   shows `No docs match "<filter>"` with `/` then `Esc` to clear it; an empty index shows `No docs in this index` with
   `R` to rescan; while a filter is on and rows show, one muted line above them reads `Filtered: <filter>` with `/` to
-  change it. Each key shows as a Kbd and follows a rebind.
+  change it. Each key shows as a Kbd and follows a rebind. No line shows until a read returns an index, or after one
+  that returns none; the read's message shows instead.
 - **Viewing and editing**: a doc opens rendered; `i` swaps the pane to the vim document editor at the line shown;
   `:w` saves, `:q` returns to the rendered view (refused with unsaved edits; `:q!` drops them), `:wq` both. YAML
   frontmatter shows as a field table above the rendered body. The editor highlights markdown, JSON, TOML and YAML by

@@ -26,9 +26,9 @@ interview on 2026-10-23; this file is the record of both.
 - **Agent process** — one running session of a harness, started by the app: one `claude` child process.
 - **Chat entry** — one item in a session's chat, in the app's own shape: a user message, an assistant message,
   thinking, a tool call (with its result), a permission request, a turn result, a notice, or a raw entry. Every entry
-  carries the raw harness events it was built from. Claude's `content_block_delta`,
-  `content_block_stop`, `message_start`, `message_delta` and `message_stop` stream events are left out: the entry's start event and its final assistant event already hold
-  what they carry.
+  carries the raw harness events it was built from. Of Claude's stream events it keeps only a text or thinking block's
+  `content_block_start`; every other stream event is left out, since the entry's start event or the final `assistant`
+  event already holds what it carries.
 - **Session control** — a setting of a running session the harness adapter declares (id, label, choices, current
   value): Claude declares `mode` (permission mode), `effort` and `model`.
 - **Profile** — a named Claude config folder (`work` → `~/.claude`, `personal` → `~/.claude-personal`); it sets the
@@ -183,8 +183,8 @@ interview on 2026-10-23; this file is the record of both.
   sign-in's link can reach the page before `logIn` answers; the link, the end, the code and the cancel all carry it,
   and the dialog ignores a message for any other id. A cancel stops the sign-in at once, so another may start, and
   the cancelled one's later link and end reach no page. Main cancels the running sign-in when the page loads again
-  (its first `sessions` read) and when chat's main part is disposed, so a reload never leaves one running that
-  refuses every later `/login`.
+  (the page's `loaded` message, sent once on each load) and when chat's main part is disposed, so a reload never
+  leaves one running that refuses every later `/login`.
 - **App slash commands**: chat's page exports `addSlashCommand({ name, description, run })`, returning a
   `Disposable`. Sending a box whose trimmed text is `/name` or `/name <args>` with `name` registered runs
   `run({ sessionId, profile, args, ended })` in place of sending, and clears the box; attached images stay. A registered

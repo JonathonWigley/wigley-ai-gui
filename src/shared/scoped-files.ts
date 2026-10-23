@@ -31,8 +31,8 @@ export function relativeSegments(path: string): string[] | null {
 // `relativeSegments` refuses fails with `<path> is outside <root>` before any
 // I/O: `read`, `modified`, `readStart`, `readBytes`, `write`, `writeBytes`,
 // `list`, `stat`, `realPath`, `makeFolder`, `rename` (either path) and `trash`
-// reject, and `watch` throws. `realPath` returns the resolved path relative to `root`'s
-// own real path (`` for `root` itself), as `paths` compares them, its
+// reject, and `watch` throws. `realPath` returns the resolved path relative to
+// `root`'s own real path (`` for `root` itself), as `paths` compares them, its
 // segments joined with `/`, and rejects `<path> is outside <root>` when a link
 // leads out of `root`.
 export function scopedFiles(files: Files, root: string, paths: Paths): Files {

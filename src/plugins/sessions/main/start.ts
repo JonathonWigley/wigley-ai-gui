@@ -89,7 +89,8 @@ function openRelay(api: SessionsApi, list: SessionList) {
 // ends or selects them. A session's id is `drive-session-<n>` unless the
 // caller names one; `rowId` is the app's own id, which `activate` takes. A
 // session that ends leaves the map, so its id connects again.
-// `onSessionEnded` hears each session that ends, by its row id. Disposing removes the actions and ends every session still connected.
+// `onSessionEnded` hears each session that ends, by its row id. Disposing
+// removes the actions and ends every session still connected.
 export function addDriveActions(
   host: DriveHost,
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>,

@@ -160,8 +160,9 @@ export const SELFTEST_LAYOUT = {
 // Space k d shows Docs mode, which dismisses it, and Space k s shows Sessions
 // mode, back in the review's scope, where C opens it and n dismisses it;
 // Space ? opens help again, Cmd+W opens the cancel prompt, which closes help,
-// so n dismisses the prompt. o types "note" into the Round note at once (INSERT), Esc Esc out
-// (forms' editor bind in the review's scope), Enter jumps back to finding 1,
+// so n dismisses the prompt. o types "note" into the Round note at once
+// (INSERT), Esc Esc out (forms' editor bind in the review's scope), Enter jumps
+// back to finding 1,
 // review again, and o then Cmd+Enter sends from the Round note box. Space z l o
 // opens the sample round again, in a new preview session, and selects its row,
 // which the sessions page logs; Cmd+W there asks to cancel the sample round, so

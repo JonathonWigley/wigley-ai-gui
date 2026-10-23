@@ -285,7 +285,8 @@ export interface Mode {
 // It throws `Mode "<id>" has no side bar` on a mode without one.
 // `picked` tells the core the user picked something in the mode's side bar:
 // in a narrow window it closes the side bar's overlay, logging
-// `side bar hidden`; otherwise it does nothing.
+// `side bar hidden`, only when the shown mode's overlay was open; a hidden
+// mode's overlay closes for its next show. Otherwise it does nothing.
 // `sideBarShown` is true while the mode shows and its side bar lies beside or
 // over the content.
 export interface ModeHandle {

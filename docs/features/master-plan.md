@@ -35,8 +35,8 @@ after the steps it needs.
  Tier 5  cleanup               22 Test cleanup    23 Design skills (other repo)    24 Per-run drive build
 ```
 
-Step 1, the bug sweep, has landed. Start with step 3, since it must land before docs task 07; step 2 can run beside it. Step 4 unblocks
-most of Tiers 1 and 3.
+Step 1, the bug sweep, has landed. Start with step 3, since it must land before docs task 07; step 2 can run beside
+it. Step 4 unblocks most of Tiers 1 and 3.
 
 ## Tier 0: fix and stabilise
 

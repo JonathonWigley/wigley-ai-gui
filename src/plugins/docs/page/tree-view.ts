@@ -31,7 +31,7 @@ export interface TreeViewDeps {
   // back on the tree.
   filterClosed(): void;
   // Whether the index read last returned a document; false before the first
-  // read and after a failed one.
+  // read lands and while the last read shown returned no document.
   hasIndex(): boolean;
   keysFor: DocsKeysFor;
   // Draws keys `keysFor` read as a key hint.

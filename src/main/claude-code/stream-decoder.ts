@@ -89,14 +89,14 @@ function messageText(content: unknown): string {
 // later line updates them. An event joins the entry it belongs to; a known
 // event that belongs to none joins the turn's events entry, one raw entry per
 // turn re-sent as it grows, which an event between turns joins too; an event
-// of a type the decoder does not know gets a raw entry of its own. An entry is re-sent whenever it changes, its `raw`
-// included, except a thinking entry's `system/thinking_tokens`: those arrive
-// once per delta, so they ride with the entry's next send, which the block's
-// `content_block_stop` brings, or the turn's result when an interrupt ends the
-// block with no stop. An entry's `raw` leaves out `content_block_delta`,
-// `content_block_stop`, `message_start`, `message_delta` and `message_stop`
-// stream events, whose content the block's `content_block_start` and the final
-// `assistant` event hold.
+// of a type the decoder does not know gets a raw entry of its own. An entry is
+// re-sent whenever it changes, its `raw` included, except a thinking entry's
+// `system/thinking_tokens`: those arrive once per delta, so they ride with the
+// entry's next send, which the block's `content_block_stop` brings, or the
+// turn's result when an interrupt ends the block with no stop. Of the stream
+// events, an entry's `raw` keeps only a text or thinking block's
+// `content_block_start`; every other stream event is left out, since the
+// entry's start event or the final `assistant` event holds its content.
 export function createStreamDecoder(): StreamDecoder {
   const textEntries = new Map<string, TextEntry>();
   const toolEntries = new Map<string, ToolEntry>();
