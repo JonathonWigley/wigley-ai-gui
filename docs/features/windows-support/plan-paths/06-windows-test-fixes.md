@@ -1,6 +1,6 @@
 # 06 — Windows-only test and self-test fixes
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -49,3 +49,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 3ea3e97. Proof: diff read against the four items (relay channel from channelPath with the leftover case skipped for a pipe; symlink probe and five skips; two renamed tests asserting rejection and unchanged files; /bin/sh skips; exitSelfTest try/catch/finally and rmSync retries); worker's typecheck, lint and the three files (61 passed, 10 skipped) green. Concerns: the self-test exit path has no unit test, task 08 proves it live.

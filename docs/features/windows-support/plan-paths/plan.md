@@ -185,7 +185,7 @@ Shared signatures parts use:
 
 ### Wave 1
 - [ ] [Paths contract and adapters](01-paths-contract.md)
-- [ ] [Windows-only test and self-test fixes](06-windows-test-fixes.md)
+- [x] [Windows-only test and self-test fixes](06-windows-test-fixes.md)
 
 ### Wave 2
 - [ ] [Paths as a service in both processes](02-paths-service.md) — after 01, 06
@@ -201,10 +201,13 @@ Shared signatures parts use:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 4cadb24
 
 ### Groups
+- 06 · 3ea3e97 · diff read + worker compile/lint, 3 files 61 pass 10 skip · concerns: self-test exit unproved until task 08
 ### Contract changes
 ### Rulings
+- login-shell-path: a 4th /bin/sh test (ignores SIGTERM) also skipped where there is no /bin/sh — it spawns the same stand-in and proved nothing on Windows — Windows loses one empty pass · group 06
+- relay test duplicates the \.\pipe\ prefix literal, since PIPE_PREFIX in relay-server.ts is not exported and was out of scope — a changed prefix would mis-skip one test · group 06
 ### Review rounds
 ### Test gate

@@ -17,7 +17,8 @@ interface LayerRule {
 const LAYERS: Record<string, LayerRule> = {
   'src/contracts': { layers: [], packages: [] },
   'src/config': { layers: ['src/contracts'], packages: [] },
-  'src/shared': { layers: ['src/contracts'], packages: [] },
+  'src/shared': { layers: ['src/contracts', 'src/shared/paths'], packages: [] },
+  'src/shared/paths': { layers: ['src/contracts'], packages: [] },
   'src/shared/page': {
     layers: ['src/contracts', 'src/shared', 'src/shared/page/ui'],
     packages: [],
@@ -36,7 +37,7 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['electron', 'node:'],
   },
   'src/main/claude-code': {
-    layers: ['src/contracts', 'src/shared'],
+    layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
     packages: ['node:'],
   },
   'src/main/themes': { layers: ['src/contracts', 'src/shared'], packages: [] },
@@ -55,15 +56,19 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared'],
     packages: ['electron', 'node:'],
   },
-  'src/main/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
+  'src/main/plugins': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
+    packages: [],
+  },
   'src/main/drive': {
-    layers: ['src/contracts', 'src/shared'],
+    layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
     packages: ['node:'],
   },
   'src/main/main.ts': {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/paths',
       'src/config',
       'src/main',
       'src/main/claude-code',
@@ -123,6 +128,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/paths',
       'src/plugins/chat',
       'src/plugins/chat/layouts',
       'src/plugins/sessions/contract.ts',
@@ -134,6 +140,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/paths',
       'src/shared/page',
       'src/shared/page/ui',
       'src/plugins/chat',
@@ -147,6 +154,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/paths',
       'src/plugins/docs/contract.ts',
       'src/plugins/sessions/contract.ts',
     ],
@@ -160,6 +168,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/paths',
       'src/plugins/docs',
       'src/plugins/docs/contract.ts',
       'src/plugins/sessions/contract.ts',
@@ -170,6 +179,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/paths',
       'src/shared/page',
       'src/shared/page/ui',
       'src/plugins/docs',
@@ -187,6 +197,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/paths',
       'src/plugins/forms',
       'src/plugins/forms/layouts',
       'src/plugins/sessions/contract.ts',
@@ -249,6 +260,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/paths',
       'src/plugins/sessions',
       'src/plugins/sessions/contract.ts',
       'src/plugins/sessions/main/relay',
@@ -355,6 +367,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/paths',
       'src/renderer',
       'src/renderer/codemirror-vim',
       'src/renderer/markdown-it',
