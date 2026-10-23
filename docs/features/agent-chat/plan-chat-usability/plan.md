@@ -210,5 +210,8 @@ Review base: a0e7aebc036aed1714fb1422459501b1d4d7319d
 ### Review rounds
 - round 1 · 238f123 · NEEDS FIXES · 24 findings + F1; lead-applied a7703a6; fixes 092d1cf e5020f2 8a96035 48646e8; full tests 2393 pass, self-test passes; open: #1 #3 #8 #20 #21 to the user
 - round 2 (re-review, correctness) · 9bdb5e6 · NEEDS FIXES · 1 important repeat of #18 (dialog ignores error) to the user; minor: 2 untested #18 branches dispatched; cap comment + design.md Accounts bullet lead-applied
+- round 3 (re-review 2, correctness ×2) · d429a99 · NEEDS FIXES · fix cycle cap reached; 7 findings (2 repeats) to the user
+- user-approved fixes after the cap: efd2060 (transcript head stops at the first whole user line; head and harness tests), 5fdf52c (sign-in Copy shows box keys; paste stub, sign-in cancel tests); finding 1 (Finder paste) returned as a question, carried to step 8
 ### Test gate
 - Picked every test file the range added or edited (17: claude-auth, claude-code-harness, claude-controls, claude-launch, past-sessions, transcripts, temp-folders, default layout, accounts, chat-sessions, folder-choices, attachments, chat-commands, chat-state, slash-commands, start-prompt, fake-agent-harness — they cover all changed logic); `npm run selftest` because selftest-script.ts and the chat start path changed; the codemirror host change (02) has no test and goes to the live check in 08 · 17 files / 233 tests passed; self-test all passed (tree held the peer session's uncommitted settings work)
+- after 5fdf52c: typecheck clean, lint clean, npm test 165 files / 2498 tests pass, npm run selftest exit 0 (chat, forms, docs, settings results as expected)
