@@ -94,145 +94,42 @@ export const SELFTEST_LAYOUT = {
 };
 
 // The gallery steps run first, before any step raises a toast, so no toast
-// covers their screenshots. Space z l o opens the layout preview's sample
-// round, every card kind, in a session of its own after the other three, and
-// selects its row. Space z g shows Gallery mode and Ctrl+j pages its sheet down
-// to the end, saving each page; G, then t switches to reduced transparency, g g
-// goes back to the top and Ctrl+j pages down again, saving each page reduced.
-// Ctrl+k pages up from the end, g g goes back to the top and Ctrl+k there
-// reaches the top. Space k s shows Sessions mode, on the sample round,
-// reduced; Space z g, t back to full and Space k s show it full. Space z s
-// swaps the shell to the gallery's test layout over Sessions mode, and Space z
-// s again restores the default.
-// Option+Shift+o wraps back to the first session.
-// Then, opening on finding 1: Space k then k breaks Space k s, so the first k
-// replays to the notice and the second finds no item before it; j back to the
-// finding, which opens on Fix now, saving the round's screenshot; 2 picks
-// solution 2, f clears the action and s sets Leave it. a types "agreed" at once
-// (INSERT), Esc to NORMAL, where Space a u (the editor bind) sets Follow-up;
-// Esc out, as every Esc out of a box in NORMAL runs forms' editor bind there. j
-// to finding 2, a Nit: u is refused, since a Nit offers no follow-up, and it
-// opens on Fix anyway with its one solution, so s sets Leave it and f sets Fix
-// anyway again. j to finding 3, a Decision: u sets Plan it, and Enter accepts
-// its recommendation. j to question 1, where 2 picks 2; a types "ab" at once,
-// Esc Esc out (the first Esc to NORMAL); d focuses its reason box, A appends a
-// long word and Ctrl+k still in INSERT moves back to its notes box, Esc out; a
-// again types "c" after "ab", Esc Esc out. a once more, Esc to NORMAL, where
-// Space opens which-key and Esc closes it without leaving the box (vim drops
-// its pending input); Space opens it again and, with no key pressed, the
-// which-key timeout closes it, and Esc then leaves the box, so the box kept
-// focus and its pending Space was dropped. a back in, Esc, Space opens
-// which-key, and Ctrl+j moving to the reason box, which it focuses in INSERT,
-// closes it; Esc Esc out. a, Esc and d, then Ctrl+j to the reason box and
-// Ctrl+k back; w and Esc leave the box, and w deleted nothing, since leaving
-// dropped the pending d. j to question 2, where q a x then b breaks the
-// self-test bind, so a opens the notes box and "xb" is typed into it; Esc Esc
-// out and x marks question 2 not applicable. Ctrl+h goes back to question 1,
-// where Space opens which-key and the timeout closes it, so 2 starts a fresh
-// sequence and clears the choice, 2 picks it again; c clears it and 2 picks it
-// again, Enter replaces that pick with its recommendation, j moves to question
-// 2, and Option+n finds no unanswered item. Space opens which-key, z moves it
-// into the Space z group, and Esc cancels the sequence and closes it.
-// Option+Shift+o moves to the second session, where Option+o wraps from its
-// Form tab to its Docs tab and Option+o again back to the Form tab; Cmd+W there
-// asks to cancel its round, Esc keeps it and returns to its form, where j moves
-// to its question 2 and Option+p finds its untouched question 1; Option+Shift+i
-// moves back to the first session, on question 2. Space k s hides the side bar
-// and shows it again; a enters question 2's notes box, where Option+n in INSERT
-// finds no unanswered item, and Esc and Space k s (the editor
-// bind) hide it and Space k s in NORMAL shows it; Esc (forms' editor bind)
-// leaves the box. Option+Shift+i wraps to the last session, the layout
-// preview's; Cmd+W there asks to cancel its sample round and y cancels it,
-// which closes the session and selects its left neighbour, a Codex session with
-// no folder, whose only tab is its Docs tab: its first show runs the session
-// source, which knows no folder, and no form keeps its scope; Option+o finds no
-// other tab there; Option+Shift+o wraps back to the first, whose form takes its
-// scope again. Space z l n cycles to the selftest layout and Space z l p back
-// to default; each load logs every line its cards log at once, so each step
-// checks one of them: the finding card's failure, then, cycling backwards onto
-// selftest, the notice card's, then, forwards to default and backwards onto
-// selftest, its shown line. The shown question 2 card's update threw on that
-// load; k shows question 1's card, whose first update throws, and 2 picks 2;
-// Enter restores the recommendation and j returns to question 2. Space z l n
-// leaves default shown for the steps after. Then review, which only that scope
-// opens, proves it; Space ? opens help and Esc closes it, back in the review's
-// scope, where C opens and n dismisses the cancel prompt; C opens it again and
-// Space k d shows Docs mode, which dismisses it, and Space k s shows Sessions
-// mode, back in the review's scope, where C opens it and n dismisses it;
-// Space ? opens help again, Cmd+W opens the cancel prompt, which closes help,
-// so n dismisses the prompt. o types "note" into the Round note at once
-// (INSERT), Esc Esc out (forms' editor bind in the review's scope), Enter jumps
-// back to finding 1,
-// review again, and o then Cmd+Enter sends from the Round note box. Space z l o
-// opens the sample round again, in a new preview session, and selects its row,
-// which the sessions page logs; Cmd+W there asks to cancel the sample round, so
-// the selected session shows it, and n dismisses the prompt.
-const STEPS: SelfTestStep[] = [
-  { keys: [' ', 'z', 'l', 'o'], expect: '[sessions] activated Layout preview' },
+// covers their screenshots.
+const GALLERY_STEPS: SelfTestStep[] = [
+  {
+    keys: [' ', 'z', 'l', 'o'],
+    expect: '[sessions] activated Layout preview',
+    why: "Opens the layout preview's sample round, every card kind, in a session of its own after the other three, and selects its row.",
+  },
   {
     keys: [' ', 'z', 'g'],
     expect: '[page] showed Gallery mode',
     checksFit: true,
-    screenshot: 'gallery-1-full',
+    screenshot: 'gallery-full-0',
   },
   {
     keys: ['<C-j>'],
     expect: '[gallery] paged down',
-    screenshot: 'gallery-2-full',
-  },
-  {
-    keys: ['<C-j>'],
-    expect: '[gallery] paged down',
-    screenshot: 'gallery-3-full',
-  },
-  {
-    keys: ['<C-j>'],
-    expect: '[gallery] paged down',
-    screenshot: 'gallery-4-full',
-  },
-  {
-    keys: ['<C-j>'],
-    expect: '[gallery] paged down',
-    screenshot: 'gallery-5-full',
-  },
-  {
-    keys: ['<C-j>'],
-    expect: '[gallery] reached the end',
-    screenshot: 'gallery-6-full',
+    repeat: { until: '[gallery] reached the end', max: 12 },
+    screenshot: 'gallery-full',
   },
   { keys: ['G'], expect: '[gallery] scrolled to the end' },
   {
     keys: ['t'],
     expect: '[gallery] transparency reduced',
-    screenshot: 'gallery-6-reduced',
+    screenshot: 'gallery-reduced-end',
   },
   {
     keys: ['g', 'g'],
     expect: '[gallery] scrolled to the top',
-    screenshot: 'gallery-1-reduced',
+    screenshot: 'gallery-reduced-0',
   },
   {
     keys: ['<C-j>'],
     expect: '[gallery] paged down',
-    screenshot: 'gallery-2-reduced',
+    repeat: { until: '[gallery] reached the end', max: 12 },
+    screenshot: 'gallery-reduced',
   },
-  {
-    keys: ['<C-j>'],
-    expect: '[gallery] paged down',
-    screenshot: 'gallery-3-reduced',
-  },
-  {
-    keys: ['<C-j>'],
-    expect: '[gallery] paged down',
-    screenshot: 'gallery-4-reduced',
-  },
-  {
-    keys: ['<C-j>'],
-    expect: '[gallery] paged down',
-    screenshot: 'gallery-5-reduced',
-  },
-  // Page 6 reduced is the view `t` saved, the sheet already at its end.
-  { keys: ['<C-j>'], expect: '[gallery] reached the end' },
   { keys: ['<C-k>'], expect: '[gallery] paged up' },
   { keys: ['g', 'g'], expect: '[gallery] scrolled to the top' },
   { keys: ['<C-k>'], expect: '[gallery] reached the top' },
@@ -259,10 +156,14 @@ const STEPS: SelfTestStep[] = [
     screenshot: 'shell-layout-restored',
   },
   { keys: ['<A-S-o>'], expect: '[sessions] activated selftest' },
+];
+
+const FINDING_ACTIONS_STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'k', 'k'],
     expect: '[page] k ran forms.prevItem',
     checksFit: true,
+    why: 'Space k then k breaks Space k s, so the first k replays to the notice and the second finds no item before it.',
   },
   {
     keys: ['j'],
@@ -273,15 +174,28 @@ const STEPS: SelfTestStep[] = [
   { keys: ['2'], expect: '[forms] chose 2 on finding 1' },
   { keys: ['f'], expect: '[forms] cleared the action on finding 1' },
   { keys: ['s'], expect: '[forms] chose Leave it on finding 1' },
-  { keys: ['a'], expect: '[forms] focused notes on finding 1' },
+  {
+    keys: ['a'],
+    expect: '[forms] focused notes on finding 1',
+    why: 'a enters the notes box in INSERT, so the next step types at once.',
+  },
   {
     keys: [...'agreed', 'Escape', ' ', 'a', 'u'],
     expect: '[forms] chose Follow-up on finding 1',
+    why: 'Space a u in NORMAL inside the box is the editor bind.',
   },
-  { keys: ['Escape'], expect: '[forms] left the box' },
+  {
+    keys: ['Escape'],
+    expect: '[forms] left the box',
+    why: "Every Esc out of a box in NORMAL runs forms' editor bind there.",
+  },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: ['u'], expect: '[forms] finding 2 offers no follow-up' },
-  { keys: ['s'], expect: '[forms] chose Leave it on finding 2' },
+  {
+    keys: ['s'],
+    expect: '[forms] chose Leave it on finding 2',
+    why: 'A Nit opens on Fix anyway with its one solution.',
+  },
   { keys: ['f'], expect: '[forms] chose Fix anyway on finding 2' },
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: ['u'], expect: '[forms] chose Plan it on finding 3' },
@@ -289,28 +203,56 @@ const STEPS: SelfTestStep[] = [
     keys: ['Enter'],
     expect: '[forms] accepted the recommendation on finding 3',
   },
+];
+
+const QUESTION_BOXES_STEPS: SelfTestStep[] = [
   { keys: ['j'], expect: '[page] j ran forms.nextItem', checksFit: true },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
-  { keys: ['a', 'b', 'Escape', 'Escape'], expect: '[forms] left the box' },
+  {
+    keys: ['a', 'b', 'Escape', 'Escape'],
+    expect: '[forms] left the box',
+    why: 'The first Esc goes to NORMAL, the second leaves the box.',
+  },
   { keys: ['d'], expect: '[forms] focused dontAskReason on question 1' },
   {
     keys: ['A', ...LONG_WORD, '<C-k>'],
     expect: '[forms] focused notes on question 1',
     checksFit: true,
+    why: 'Ctrl+k, still in INSERT, moves back from the reason box to the notes box.',
   },
   { keys: ['Escape'], expect: '[forms] left the box' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
-  { keys: ['c', 'Escape', 'Escape'], expect: '[forms] left the box' },
+  {
+    keys: ['c', 'Escape', 'Escape'],
+    expect: '[forms] left the box',
+    why: 'a enters INSERT with the cursor at the end, so c follows ab.',
+  },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   { keys: ['Escape', ' '], expect: '[keys] which-key shows Space' },
-  { keys: ['Escape'], expect: '[keys] which-key closed' },
+  {
+    keys: ['Escape'],
+    expect: '[keys] which-key closed',
+    why: 'Esc closes which-key without leaving the box, vim dropping its pending input.',
+  },
   { keys: [' '], expect: '[keys] which-key shows Space' },
-  { keys: [], expect: '[keys] which-key closed' },
-  { keys: ['Escape'], expect: '[forms] left the box' },
+  {
+    keys: [],
+    expect: '[keys] which-key closed',
+    why: 'With no key pressed, the which-key timeout closes it.',
+  },
+  {
+    keys: ['Escape'],
+    expect: '[forms] left the box',
+    why: 'Esc leaving the box shows the box kept focus and its pending Space was dropped.',
+  },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   { keys: ['Escape', ' '], expect: '[keys] which-key shows Space' },
-  { keys: ['<C-j>'], expect: '[keys] which-key closed' },
+  {
+    keys: ['<C-j>'],
+    expect: '[keys] which-key closed',
+    why: 'Ctrl+j moves to the reason box, which it focuses in INSERT, and that closes which-key.',
+  },
   { keys: ['Escape', 'Escape'], expect: '[forms] left the box' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   {
@@ -318,14 +260,24 @@ const STEPS: SelfTestStep[] = [
     expect: '[forms] focused dontAskReason on question 1',
   },
   { keys: ['<C-k>'], expect: '[forms] focused notes on question 1' },
-  { keys: ['w', 'Escape'], expect: '[forms] left the box' },
+  {
+    keys: ['w', 'Escape'],
+    expect: '[forms] left the box',
+    why: 'w deletes nothing, since leaving the box dropped the pending d.',
+  },
+];
+
+const BROKEN_BIND_STEPS: SelfTestStep[] = [
   {
     keys: ['j', 'q', 'a', 'x', 'b'],
     expect: '[page] typed xb into the editor',
+    why: 'b breaks the self-test bind q a x y, so a opens the notes box and x b are typed into it.',
   },
   { keys: ['Escape', 'Escape'], expect: '[forms] left the box' },
   { keys: ['x'], expect: '[forms] not applicable on question 2' },
-  // The user's keymap.json applies live; a broken one keeps the last good keys.
+];
+
+const USER_KEYMAP_STEPS: SelfTestStep[] = [
   {
     writeFile: { path: USER_KEYMAP_FILE, text: userKeymap('keys.toggleHelp') },
     keys: [],
@@ -342,19 +294,17 @@ const STEPS: SelfTestStep[] = [
     expect:
       '[config] keymap.json: "binds[0].command" names no command "keys.noSuchCommand".',
   },
-  { keys: ['Q'], expect: '[page] Q ran keys.toggleHelp' },
+  {
+    keys: ['Q'],
+    expect: '[page] Q ran keys.toggleHelp',
+    why: 'The broken keymap.json kept the last good keys.',
+  },
   { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
   {
     writeFile: { path: USER_KEYMAP_FILE, text: '{}' },
     keys: [],
     expect: '[config] applied a new config',
   },
-  // keymap.json moves the box's not-applicable toggle from <Leader>x to
-  // <Leader>q in the form, so <Leader>x now runs nothing there and <Leader>q
-  // marks question 2 (the item shown) applicable; then a `,` leader runs the
-  // toggle as `,x`, and `{}` restores Space x, the leader Space having been
-  // unmapped once already, which toggles it twice, leaving question 2 not
-  // applicable.
   {
     writeFile: { path: USER_KEYMAP_FILE, text: MOVED_NOT_APPLICABLE_KEYMAP },
     keys: [],
@@ -377,13 +327,24 @@ const STEPS: SelfTestStep[] = [
     keys: [],
     expect: '[config] applied a new config',
   },
-  { keys: [' ', 'x'], expect: '[forms] applicable again on question 2' },
+  {
+    keys: [' ', 'x'],
+    expect: '[forms] applicable again on question 2',
+    why: '{} restores the Space leader and <Leader>x, though Space was unmapped as the leader once already.',
+  },
   { keys: [' ', 'x'], expect: '[forms] not applicable on question 2' },
   { keys: ['Escape'], expect: '[forms] left the box' },
+];
+
+const CHOICES_STEPS: SelfTestStep[] = [
   { keys: ['<C-h>'], expect: '[page] <C-h> ran forms.prevItem' },
   { keys: [' '], expect: '[keys] which-key shows Space' },
   { keys: [], expect: '[keys] which-key closed' },
-  { keys: ['2'], expect: '[forms] cleared the choice on question 1' },
+  {
+    keys: ['2'],
+    expect: '[forms] cleared the choice on question 1',
+    why: 'The which-key timeout ended the Space sequence, so 2 starts a fresh one.',
+  },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
   { keys: ['c'], expect: '[forms] cleared the choice on question 1' },
   { keys: ['2'], expect: '[forms] chose 2 on question 1' },
@@ -396,6 +357,9 @@ const STEPS: SelfTestStep[] = [
   { keys: [' '], expect: '[keys] which-key shows Space', checksFit: true },
   { keys: ['z'], expect: '[keys] which-key shows Space z' },
   { keys: ['Escape'], expect: '[keys] which-key closed' },
+];
+
+const SECOND_SESSION_STEPS: SelfTestStep[] = [
   {
     keys: ['<A-S-o>'],
     expect: '[sessions] activated selftest 2',
@@ -416,6 +380,9 @@ const STEPS: SelfTestStep[] = [
   { keys: ['j'], expect: '[page] j ran forms.nextItem' },
   { keys: ['<A-p>'], expect: '[forms] jumped to question 1' },
   { keys: ['<A-S-i>'], expect: '[sessions] activated selftest' },
+];
+
+const SIDE_BAR_FROM_A_BOX_STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'k', 's'],
     expect: '[page] side bar hidden',
@@ -427,9 +394,17 @@ const STEPS: SelfTestStep[] = [
   {
     keys: ['Escape', ' ', 'k', 's'],
     expect: '[page] side bar hidden',
+    why: 'Space k s in NORMAL inside the box is the editor bind.',
   },
   { keys: [' ', 'k', 's'], expect: '[page] side bar shown' },
-  { keys: ['Escape'], expect: '[forms] left the box' },
+  {
+    keys: ['Escape'],
+    expect: '[forms] left the box',
+    why: "Esc in NORMAL runs forms' editor bind.",
+  },
+];
+
+const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[sessions] activated Layout preview' },
   {
     keys: ['<D-w>'],
@@ -440,9 +415,13 @@ const STEPS: SelfTestStep[] = [
     keys: ['y'],
     expect: '[docs] session index: No project folder is known for this session',
     checksFit: true,
+    why: "Cancelling closes the session and selects its left neighbour, a Codex session with no folder, whose only tab is its Docs tab; that tab's first show runs the session source, which knows no folder.",
   },
   { keys: ['<A-o>'], expect: '[sessions] no other tab in Codex session' },
   { keys: ['<A-S-o>'], expect: '[sessions] activated selftest' },
+];
+
+const LAYOUT_CYCLE_STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'z', 'l', 'n'],
     expect: '[forms] layout selftest finding card failed: selftest throw',
@@ -468,6 +447,7 @@ const STEPS: SelfTestStep[] = [
     keys: ['k', '2'],
     expect:
       '[forms] layout selftest question card update failed: selftest update throw',
+    why: "The shown question 2 card's update threw on load; k shows question 1's card, whose first update throws on the pick.",
   },
   {
     keys: ['Enter'],
@@ -478,7 +458,15 @@ const STEPS: SelfTestStep[] = [
     keys: [' ', 'z', 'l', 'n'],
     expect: '[forms] layout default shown (cycled, revision 7)',
   },
-  { keys: [' ', ' '], expect: '[forms] review opened', checksFit: true },
+];
+
+const REVIEW_STEPS: SelfTestStep[] = [
+  {
+    keys: [' ', ' '],
+    expect: '[forms] review opened',
+    checksFit: true,
+    why: "Review opens only in forms' scope, so it proves the form took its scope back.",
+  },
   {
     keys: [' ', '?'],
     expect: '[page]  ? ran keys.toggleHelp',
@@ -500,16 +488,21 @@ const STEPS: SelfTestStep[] = [
     keys: ['<D-w>'],
     expect:
       '[forms] closing the session asks to cancel selftest · Self-test round',
+    why: 'The cancel prompt closes help.',
   },
   { keys: ['n'], expect: '[page] n ran forms.dismissConfirm' },
   {
     keys: ['o', 'n', 'o', 't', 'e', 'Escape', 'Escape'],
     expect: '[forms] left the box',
     checksFit: true,
+    why: "o enters the Round note in INSERT at once; the second Esc runs forms' editor bind in the review's scope.",
   },
   { keys: ['Enter'], expect: '[page] Enter ran forms.reviewJump' },
   { keys: [' ', ' '], expect: '[forms] review opened' },
   { keys: ['o', '<D-Enter>'], expect: '[forms] submitted' },
+];
+
+const SAMPLE_ROUND_AGAIN_STEPS: SelfTestStep[] = [
   { keys: [' ', 'z', 'l', 'o'], expect: '[sessions] activated Layout preview' },
   {
     keys: ['<D-w>'],
@@ -643,7 +636,7 @@ function toolResultProblems(result: ToolResult): string[] {
   return payloadProblems(result.structuredContent as unknown as AnswersPayload);
 }
 
-// What the fixture's answers must come back as after STEPS.
+// What the fixture's answers must come back as after the steps.
 function payloadProblems(payload: AnswersPayload): string[] {
   const [finding, nit, design] = payload.findings;
   const [first, second] = payload.answers;
@@ -765,9 +758,64 @@ export function formsSelfTestScript(
     },
     groups: [
       {
-        name: 'forms',
-        why: 'Every forms key path over the fixture rounds, the keys and gallery steps included',
-        steps: STEPS,
+        name: 'gallery',
+        why: "The layout preview's sample round shows every card kind in Gallery mode, paged to the end and back under full and reduced transparency, and in Sessions mode under both; the shell swaps to the gallery's test layout and back.",
+        steps: GALLERY_STEPS,
+      },
+      {
+        name: 'finding actions',
+        why: "Findings 1 to 3 take solution picks and actions by key, refusing an action a finding does not offer, and finding 1's notes box sets an action through its editor bind.",
+        steps: FINDING_ACTIONS_STEPS,
+      },
+      {
+        name: 'question boxes',
+        why: "Question 1's notes and reason boxes enter INSERT at the end and hand focus between them, and which-key inside a box closes without leaving it; pending keys are dropped when the box is left.",
+        steps: QUESTION_BOXES_STEPS,
+      },
+      {
+        name: 'broken bind',
+        why: 'The keys a broken page bind leaves over are typed into the box its command focused, and x marks question 2 not applicable.',
+        steps: BROKEN_BIND_STEPS,
+      },
+      {
+        name: 'user keymap',
+        why: "The user's keymap.json applies live and a broken one keeps the last good keys; it can move a box bind and change the leader, and {} restores both.",
+        steps: USER_KEYMAP_STEPS,
+      },
+      {
+        name: 'choices',
+        why: "Question 1's choice clears and re-picks by key and Enter replaces the pick with the recommendation; Option+n finds no unanswered item, and which-key enters and cancels the Space z group.",
+        steps: CHOICES_STEPS,
+      },
+      {
+        name: 'second session',
+        why: 'The second session cycles its Form and Docs tabs, keeps its round when its cancel prompt is dismissed, and Option+p finds its untouched question.',
+        steps: SECOND_SESSION_STEPS,
+      },
+      {
+        name: 'side bar from a box',
+        why: 'Space k s hides and shows the side bar from the page and from inside a notes box in NORMAL, and Option+n works in INSERT.',
+        steps: SIDE_BAR_FROM_A_BOX_STEPS,
+      },
+      {
+        name: 'cancelled preview',
+        why: "Cancelling the preview round closes its session and selects a Codex session with no folder, where no form keeps its scope; wrapping back gives the first session's form its scope again.",
+        steps: CANCELLED_PREVIEW_STEPS,
+      },
+      {
+        name: 'layout cycle',
+        why: "Cycling layouts logs each selftest card's failure, a throwing build, a missing notes box and a throwing update, without breaking the form, and the cycle returns to default for the steps after. Each load logs every line its cards log at once, so each step checks one of them.",
+        steps: LAYOUT_CYCLE_STEPS,
+      },
+      {
+        name: 'review',
+        why: "The review opens in forms' scope, where help and the cancel prompt open and close without leaving it, the Round note takes text, Enter jumps back to an item, and Cmd+Enter sends the round.",
+        steps: REVIEW_STEPS,
+      },
+      {
+        name: 'sample round again',
+        why: 'Reopening the sample round selects its new preview session, which then shows the cancel prompt that n dismisses.',
+        steps: SAMPLE_ROUND_AGAIN_STEPS,
       },
     ],
     problems: (result) => toolResultProblems(result as ToolResult),
