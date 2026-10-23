@@ -24,10 +24,12 @@ import {
   type DriveInvocation,
   parseDriveArgs,
 } from './drive-args.mts';
+import { isAlive, takeStartLock } from './start-lock.mts';
 
 const REPO_DIR = path.resolve(import.meta.dirname, '..');
 const DRIVE_DIR = path.join(REPO_DIR, '.drive');
 const CURRENT_FILE = path.join(DRIVE_DIR, 'current');
+const START_LOCK_FILE = path.join(DRIVE_DIR, 'start.lock');
 const START_TIMEOUT_MS = 120_000;
 // How long a quit may take before the run is terminated: long enough for a
 // recording's encode to finish.
@@ -81,7 +83,9 @@ async function main(invocation: DriveInvocation): Promise<void> {
 
 // Starts the app into `.drive/<runId>/`, reusing its home when the folder
 // exists, and returns once the page is ready for keys. `copyUserConfig` false
-// keeps the home's config as the run left it, on a restart.
+// keeps the home's config as the run left it, on a restart. A dev start holds
+// `.drive/start.lock` from spawn until the app writes `drive.json`, since
+// every `electron-forge start` rewrites the shared `.vite/build`.
 async function start(
   runId: string,
   options: StartOptions,
@@ -109,13 +113,28 @@ async function start(
     });
   }
   writeFileSync(CURRENT_FILE, runId);
-  const pid = spawnApp(runDir, options);
-  const startFile: StartFile = { ...options, pid };
-  writeFileSync(
-    path.join(runDir, 'start.json'),
-    JSON.stringify(startFile, null, 2),
-  );
-  await waitForDriveFile(runDir, pid);
+  const startLock = options.packaged
+    ? null
+    : await takeStartLock(START_LOCK_FILE, {
+        timeoutMs: START_TIMEOUT_MS,
+        pollMs: POLL_MS,
+        isAlive,
+        onWait: (holder) =>
+          console.log(
+            `Waiting for another dev start (pid ${holder}) to finish`,
+          ),
+      });
+  try {
+    const pid = spawnApp(runDir, options);
+    const startFile: StartFile = { ...options, pid };
+    writeFileSync(
+      path.join(runDir, 'start.json'),
+      JSON.stringify(startFile, null, 2),
+    );
+    await waitForDriveFile(runDir, pid);
+  } finally {
+    startLock?.release();
+  }
   const ready = await send(runId, 'ready', {}, START_TIMEOUT_MS);
   if (typeof ready === 'string' || !ready.ok) {
     const why = typeof ready === 'string' ? ready : ready.error;
@@ -413,16 +432,6 @@ function isRunProcess(pid: number, runDir: string): boolean {
   return ` ${commandLine.trim()} `.includes(
     ` WIGLEY_DRIVE_DIR=${path.resolve(runDir)} `,
   );
-}
-
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    // EPERM: the process exists but belongs to another user.
-    return (error as NodeJS.ErrnoException).code === 'EPERM';
-  }
 }
 
 // Prints the CLI's forms, then the live run's commands when one answers.
