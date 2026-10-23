@@ -35,11 +35,22 @@ export interface ConsoleMessage {
   source: string;
 }
 
+// The page a script ran in is gone: its main frame committed a navigation, or
+// its renderer went away, before the script answered.
+export class PageNavigatedError extends Error {
+  constructor() {
+    super('The page navigated while the script ran');
+    this.name = 'PageNavigatedError';
+  }
+}
+
 // The app window as the page driver drives it. Every size is the content
 // size, the page's own area without the window frame.
 export interface DrivenWindow {
   sendInput(input: DrivenInput): void;
-  // Runs `script` in the page and resolves to its result.
+  // Runs `script` in the page and resolves to its result. Rejects with
+  // `PageNavigatedError` when the page's main frame commits a navigation, or
+  // its renderer goes away, while the script runs.
   run<T>(script: string): Promise<T>;
   // PNG bytes of the window, or of `box` in it; null when the capture is empty.
   capture(box?: Box): Promise<Uint8Array | null>;

@@ -1,6 +1,6 @@
 # 01 — A script call rejects when the page navigates under it; each wait check is capped
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 06 — `docs.seed` and `docs.connectSession` can seed a doc in every index load state
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

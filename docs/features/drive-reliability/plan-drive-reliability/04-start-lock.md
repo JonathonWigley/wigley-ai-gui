@@ -1,6 +1,6 @@
 # 04 — Dev drive and self-test starts take one lock
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

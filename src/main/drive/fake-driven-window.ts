@@ -1,7 +1,8 @@
-import type {
-  ConsoleMessage,
-  DrivenInput,
-  DrivenWindow,
+import {
+  type ConsoleMessage,
+  type DrivenInput,
+  type DrivenWindow,
+  PageNavigatedError,
 } from './driven-window';
 
 // A script fragment and the answer the fake gives a script holding it.
@@ -13,7 +14,9 @@ export type FakeAnswer = [fragment: string, answer: () => unknown];
 // gets from the first table entry whose fragment the script holds (throwing
 // when none does), resolves `capture` to `screen.captured`, counts the
 // navigations a test makes with `navigate`, and lets a test paint frames and
-// write console messages to its listeners.
+// write console messages to its listeners. As the Electron adapter does,
+// `navigate` rejects every `run` still pending with `PageNavigatedError`; an
+// answer that returns a promise which never settles models a lost call.
 export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
   const inputs: DrivenInput[] = [];
   const frameListeners = new Set<(png: () => Uint8Array, at: number) => void>();
@@ -25,15 +28,26 @@ export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
   };
   const screen: { captured: Uint8Array | null } = { captured: null };
   let navigations = 0;
+  // The reject of every `run` call not yet settled.
+  const pendingRuns = new Set<(error: Error) => void>();
+  const answer = async <T>(script: string) => {
+    const entry = answers.find(([fragment]) => script.includes(fragment));
+    if (entry === undefined) {
+      throw new Error(`The fake window has no answer for ${script}`);
+    }
+    return entry[1]() as T;
+  };
   const window: DrivenWindow = {
     sendInput: (input) => inputs.push(input),
-    async run<T>(script: string) {
-      const entry = answers.find(([fragment]) => script.includes(fragment));
-      if (entry === undefined) {
-        throw new Error(`The fake window has no answer for ${script}`);
-      }
-      return entry[1]() as T;
-    },
+    // Pending before the answer is asked for, so an answer that navigates
+    // rejects its own call.
+    run: <T>(script: string) =>
+      new Promise<T>((resolve, reject) => {
+        pendingRuns.add(reject);
+        answer<T>(script)
+          .then(resolve, reject)
+          .finally(() => pendingRuns.delete(reject));
+      }),
     capture: async () => screen.captured,
     contentSize: () => ({ width: 800, height: 600 }),
     minimumWidth: () => 400,
@@ -71,6 +85,10 @@ export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
   };
   const navigate = () => {
     navigations += 1;
+    for (const reject of pendingRuns) {
+      reject(new PageNavigatedError());
+    }
+    pendingRuns.clear();
   };
   return { window, inputs, focused, screen, navigate, paint, writeConsole };
 }

@@ -1,6 +1,6 @@
 # 05 — A `fake: end` message ends its own fake session
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -38,3 +38,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 0558ba9 · proof: diff read matches spec; FAKE_END_TEXT present; typecheck passes · concerns: user-entry emit moved to a local closure shared by both branches; one interface-comment line left unwrapped

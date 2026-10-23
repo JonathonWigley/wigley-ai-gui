@@ -75,6 +75,43 @@ describe('waitFor', () => {
 
     expect(holds).toBe(false);
   });
+
+  it('polls again once a check has gone unanswered for its cap, well inside the wait', async () => {
+    let checks = 0;
+    const started = Date.now();
+
+    const holds = await waitFor(
+      () =>
+        ++checks === 1 ? new Promise<boolean>(() => {}) : Promise.resolve(true),
+      10_000,
+    );
+
+    expect(holds).toBe(true);
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+
+  it('retries a check whose run the page navigated under', async () => {
+    let runs = 0;
+    const { window, navigate } = fakeDrivenWindow([
+      ['ready', () => (++runs === 1 ? new Promise(() => {}) : true)],
+    ]);
+    const started = Date.now();
+
+    const waiting = waitFor(() => window.run<boolean>('ready'), 10_000);
+    navigate();
+
+    expect(await waiting).toBe(true);
+    expect(runs).toBe(2);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it('rejects with the error of a check that fails for another reason', async () => {
+    const failure = new Error('the script threw');
+
+    const waiting = waitFor(() => Promise.reject(failure), 10_000);
+
+    await expect(waiting).rejects.toBe(failure);
+  });
 });
 
 describe('press', () => {

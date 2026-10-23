@@ -188,7 +188,7 @@ Boundary rules: everything stays in this repo; `src/main/drive/` keeps no `elect
 ### Wave 1
 - [ ] [Script calls reject on navigation; capped checks](01-navigation-rejects-runs.md)
 - [ ] [Start lock for dev starts](04-start-lock.md)
-- [ ] [Fake session that ends itself](05-fake-end.md)
+- [x] [Fake session that ends itself](05-fake-end.md)
 - [ ] [Docs fixture with every load state](06-docs-load-states.md)
 
 ### Wave 2
@@ -211,10 +211,13 @@ Boundary rules: everything stays in this repo; `src/main/drive/` keeps no `elect
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 5b2bc38096dafc34abedca7cf3e261e5117ffdd1
 
 ### Groups
+- 05 · 0558ba9 · diff read matches spec; FAKE_END_TEXT present; typecheck passes · concerns: user-entry emit moved to a local closure shared by both branches; one interface-comment line left unwrapped
 ### Contract changes
 ### Rulings
+- a self-end marks the process ended synchronously in send, emitting entry and ended in the microtask — a call between send and the microtask must see an ended process — a caller reading record.ended right after send sees true · group 05 · group 05
+- a FAKE_END_TEXT exit ignores holdEnd — a CLI exiting on its own is not held by the test's end gate — a test holding ends sees a self-end early · group 05 · group 05
 ### Review rounds
 ### Test gate

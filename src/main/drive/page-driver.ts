@@ -6,7 +6,13 @@ import {
   parseChord,
 } from '../../shared/chord-notation';
 import { errorText } from '../../shared/error-text';
-import type { Box, DrivenWindow, HeldButton, Modifier } from './driven-window';
+import {
+  type Box,
+  type DrivenWindow,
+  type HeldButton,
+  type Modifier,
+  PageNavigatedError,
+} from './driven-window';
 
 // Drives the page through a `DrivenWindow`, as the self-test and a drive run
 // both do: presses keys and types text, clicks and drags, reads the page's
@@ -15,6 +21,8 @@ import type { Box, DrivenWindow, HeldButton, Modifier } from './driven-window';
 
 const KEY_CODES: Record<string, string> = { ' ': 'Space' };
 export const STEP_TIMEOUT_MS = 5000;
+// The longest `waitFor` waits on one check before polling again.
+const CHECK_TIMEOUT_MS = 2000;
 // The gap between typed keys, and between a drag's moves.
 const KEY_GAP_MS = 30;
 const DRAG_MOVES = 10;
@@ -269,14 +277,18 @@ function cutOffScript(scrollsItself: string[]): string {
 }
 
 // Polls `check` every 50 ms; true once it holds, false when it has not within
-// `timeoutMs`, a check still unanswered at that point included.
+// `timeoutMs`, a check still unanswered at that point included. A check
+// unanswered after `CHECK_TIMEOUT_MS`, or rejected with `PageNavigatedError`,
+// counts as not holding and the next poll runs; any other rejection rejects
+// the wait.
 export async function waitFor(
   check: () => Promise<boolean>,
   timeoutMs = STEP_TIMEOUT_MS,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await holdsBefore(check(), deadline)) {
+    const checkDeadline = Math.min(deadline, Date.now() + CHECK_TIMEOUT_MS);
+    if (await holdsBefore(check(), checkDeadline)) {
       return true;
     }
     await wait(50);
@@ -284,7 +296,8 @@ export async function waitFor(
   return false;
 }
 
-// What `check` answers, or false when `deadline` passes first; the check is
+// What `check` answers, or false when `deadline` passes first or the check
+// rejects with `PageNavigatedError`; a check still running at `deadline` is
 // left running.
 async function holdsBefore(
   check: Promise<boolean>,
@@ -296,6 +309,11 @@ async function holdsBefore(
   });
   try {
     return await Promise.race([check, timedOut]);
+  } catch (error) {
+    if (error instanceof PageNavigatedError) {
+      return false;
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }
