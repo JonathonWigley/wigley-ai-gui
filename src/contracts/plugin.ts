@@ -80,7 +80,7 @@ export interface SettingInfo {
 
 // Every leaf of `T` as a dotted path: a member whose value, null and undefined
 // aside, is a plain object recurses as `<key>.<path>`; an array, a scalar or
-// null is a leaf, and so is an optional member.
+// null is a leaf, and so is an optional member whose value is no object.
 export type SettingPath<T> = {
   [K in keyof T & string]-?: NonNullable<T[K]> extends readonly unknown[]
     ? K

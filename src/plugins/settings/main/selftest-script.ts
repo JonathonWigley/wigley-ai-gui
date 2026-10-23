@@ -24,9 +24,10 @@ const ADDED_KEYS = '<Leader>zh';
 // it. 800 written on disk redraws the rows, and r resets the row. A key the
 // settings do not declare breaks settings.json, and {} mends it. Enter opens
 // the box, 900 written on disk makes the box's 600 stale, and Esc closes it.
-// / and theme filter to the theme row, whose Enter shows the theme picker.
-// Esc, Option+h, G and Enter open Keymap; / and help filter it to the help
-// command, where a and <Leader>zh open the scope picker, and Enter picks the
+// / and theme filter Core to the three rows naming the theme, the Theme row
+// first, whose Enter shows the theme picker. Esc, Option+h, G and Enter open
+// Keymap; / and help filter it to the two help rows, the help command first,
+// where a and <Leader>zh open the scope picker, and Enter picks the
 // preselected scope. d picks the user bind, listed last, to remove; r then
 // finds nothing to reset. Option+h, gg and Enter open Core, where / and
 // sequence filter to the timeout again and r clears the 900.

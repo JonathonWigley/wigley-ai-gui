@@ -66,7 +66,7 @@ type SameBind<B> = (a: B, b: B) => boolean;
 
 // How the merge tells that a later layer's bind replaces an earlier one, for
 // each list of the keymap; the editor's compare keys with `leader` spelled.
-export interface BindIdentities {
+interface BindIdentities {
   page: SameBind<PageBind>;
   editorBinds: SameBind<EditorBind>;
   remaps: SameBind<EditorRemap>;
