@@ -48,10 +48,11 @@ export function mergeSelfTestConfigs(
 }
 
 // The PNG files each step with a `screenshot` saves, walking the scripts in
-// hand-over order and each script's groups in order: `<pluginId>-<screenshot>.png`,
-// or for a repeating step one per press, `<pluginId>-<screenshot>-<n>.png` for
-// `n` from 1 to its `max`. Throws on a name that is not lowercase words joined
-// by `-`, and on two steps that save one file.
+// hand-over order and each script's groups in order:
+// `<pluginId>-<screenshot>.png`, or for a repeating step one per press,
+// `<pluginId>-<screenshot>-<n>.png` for `n` from 1 to its `max`. Throws on a
+// name that is not lowercase words joined by `-`, and on two steps that save
+// one file.
 export function screenshotFiles(
   handed: readonly HandedScript[],
 ): Map<SelfTestStep, string[]> {

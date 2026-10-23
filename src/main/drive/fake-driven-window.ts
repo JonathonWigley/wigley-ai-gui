@@ -14,11 +14,11 @@ export type FakeAnswer = [fragment: string, answer: () => unknown];
 // gets from the first table entry whose fragment the script holds (throwing
 // when none does), keeps the content size `setContentWidth` and `setSize` set
 // (800 x 600 at start) for `contentSize` to return, resolves `capture` to
-// `screen.captured`, counts the
-// navigations a test makes with `navigate`, and lets a test paint frames and
-// write console messages to its listeners. As the Electron adapter does,
-// `navigate` rejects every `run` still pending with `PageNavigatedError`; an
-// answer that returns a promise which never settles models a lost call.
+// `screen.captured`, counts the navigations a test makes with `navigate`, and
+// lets a test paint frames and write console messages to its listeners. As the
+// Electron adapter does, `navigate` rejects every `run` still pending with
+// `PageNavigatedError`; an answer that returns a promise which never settles
+// models a lost call.
 export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
   const inputs: DrivenInput[] = [];
   const frameListeners = new Set<(png: () => Uint8Array, at: number) => void>();

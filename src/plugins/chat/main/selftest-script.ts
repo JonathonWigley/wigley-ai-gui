@@ -347,7 +347,7 @@ const IDLE_CLOSE_STEPS: SelfTestStep[] = [
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'two sessions',
-    why: "Each session keeps its own state across switching Chat tabs: y in the second leaves the first's permission alone, a picker closes, the start prompt stays open, and the box's visual mode survives a blur.",
+    why: "Each session keeps its own state across switching Chat tabs: y in the second leaves the first's permission alone, a picker closes, the start prompt stays open, and a box left in visual mode keeps its text and cursor across a blur.",
     steps: TWO_SESSIONS_STEPS,
   },
   {

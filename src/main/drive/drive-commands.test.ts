@@ -197,7 +197,7 @@ describe('createDriveCommands', () => {
     ).rejects.toThrow('No element matches .missing');
   });
 
-  it('drag with hold ends on a move with the left button held and sends no mouseUp', async () => {
+  it('drag_WithHold_EndsOnAHeldMoveAndSendsNoMouseUp', async () => {
     const { fake, commands } = setUp(() => [], [TARGET_AT_60X40]);
 
     await commands.run('drag', {
@@ -216,7 +216,7 @@ describe('createDriveCommands', () => {
     expect(fake.inputs.some((input) => input.type === 'mouseUp')).toBe(false);
   });
 
-  it("release after a held drag sends one left mouseUp at the drag's end point and returns the lines it caused", async () => {
+  it('release_AfterAHeldDrag_SendsOneMouseUpAtTheEndPointAndReturnsItsLines', async () => {
     const { fake, commands } = setUp(
       () =>
         fake.inputs.some((input) => input.type === 'mouseUp')
@@ -246,7 +246,7 @@ describe('createDriveCommands', () => {
     expect(result).toEqual({ lines: ['[x] dropped'] });
   });
 
-  it('click or another drag while a drag is held rejects naming the held selector and sends nothing', async () => {
+  it('clickOrDrag_WhileADragIsHeld_RejectsNamingTheHeldSelectorAndSendsNothing', async () => {
     const { fake, commands } = setUp(() => [], [TARGET_AT_60X40]);
     await commands.run('drag', {
       selector: '.handle',
@@ -265,7 +265,7 @@ describe('createDriveCommands', () => {
     expect(fake.inputs).toHaveLength(sentBefore);
   });
 
-  it('release with no drag held rejects saying to drag with hold first', async () => {
+  it('release_NoDragHeld_RejectsSayingToDragWithHoldFirst', async () => {
     const { fake, commands } = setUp(() => []);
 
     await expect(commands.run('release', {})).rejects.toThrow(

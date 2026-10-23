@@ -369,20 +369,20 @@ round), since main, not the page, decides.
   been waited for, to `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)
   for the agent to check against `DESIGN.md`. A script's steps sit in named groups, each with a `why` saying what
   the group proves, and a step may add its own `why`; the report prints `group <plugin>: <name>` before the group's
-  steps, and a failed step prints the group's why and the step's own. The groups are checked when the script is
-  handed over: a blank or repeated group name, a blank `why`, a bad `width` or a bad `repeat` fails the self-test
-  before any step runs. A step's `width` (a positive whole number, or `'start'`, the width the self-test began on) sets the
-  window's content width before the step's write and keys and holds it, the fit check returning to it, until a later
-  step sets another or the script ends; every script starts and ends on the start width. A run a reload interrupted
-  does not restore the width itself: the next run resizes back on opening. A step's `repeat: { until, max }` presses its
-  keys again after each `expect` line until the `until` line is logged; the first press counts toward `max` (a whole
-  number of at least 2), and passing the cap without `until` fails. It reports one line, `<keys> ×<presses> ->
-  <until>`, and its `screenshot` saves one PNG per press, `<plugin>-<name>-<n>.png`, file n after press n. The
-  self-test's user
-  config folder sits in its temp home. The script's
-  `settings` override plugin settings in the config main serves the page (forms' sets a short
-  `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the ConfigStore's config, which under the self-test is the empty config folder in its temp
-  home, so the defaults, with no script `settings` over them. Each plugin hands
+  steps, and a failed step prints the group's why and the step's own. The groups are checked when the handover
+  closes, once every part has started: a blank or repeated group name, a blank `why`, a bad `width` or a bad
+  `repeat` fails the self-test before any step runs. A step's `width` (a positive whole number, or `'start'`, the
+  width the self-test began on) sets the window's content width before the step's write and keys and holds it, the
+  fit check returning to it, until a later step sets another or the script ends; every script starts and ends on the
+  start width. A run a reload interrupted does not restore the width itself: the next run resizes back on opening. A
+  step's `repeat: { until, max }` presses its keys again after each `expect` line until the `until` line is logged;
+  the first press counts toward `max` (a whole number of at least 2), and passing the cap without `until` fails. It
+  reports one line, `<keys> ×<presses> -> <until>`, and its `screenshot` saves one PNG per press,
+  `<plugin>-<name>-<n>.png`, file n after press n. The self-test's user config folder sits in its temp home. The
+  script's `settings` override plugin settings in the config main serves the page (forms' sets a short
+  `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the ConfigStore's config, which
+  under the self-test is the empty config folder in its temp home, so the defaults, with no script `settings` over
+  them. Each plugin hands
   at most one script, and the scripts run in plugin start order; the keys plugin has no main part, so its steps live
   in forms' script, whose fixture gives them scopes full of binds and a box to type in. The gallery has no main part
   either, so its steps live in forms' and docs' scripts. Chat's script runs its
@@ -416,11 +416,11 @@ round), since main, not the page, decides.
 - Every `electron-forge start` (a dev drive run, the self-test, the user's `npm start`) empties and rewrites the one
   `.vite/build` and bakes its own dev-server URL into `main.cjs`. Two starts that overlap launch Electron on a
   missing `main.cjs` (Electron's "Error launching app" dialog, on the user's screen) or point one app's page at the
-  other's dev server. Dev drive starts (`start`, `restart`) and `npm run selftest` take `.drive/start.lock`, which holds the taker's
-  pid: a drive start from just before the spawn until `drive.json` appears, the self-test until its first
-  `[selftest]` line or its child closing (a packaged drive start skips it). A start that finds a live holder prints
-  `Waiting for another dev start (pid <pid>) to finish`; a dead holder's lock is cleared; after 120 s the start fails
-  naming the lock's absolute path to delete when no start is running. The user's `npm start` is
+  other's dev server. Dev drive starts (`start`, `restart`) and `npm run selftest` take `.drive/start.lock`, which
+  holds the taker's pid: a drive start from just before the spawn until `drive.json` appears, the self-test until
+  its first `[selftest]` line or its child closing (a packaged drive start skips it). A start that finds a live
+  holder prints `Waiting for another dev start (pid <pid>) to finish`; a dead holder's lock is cleared; after 120 s
+  the start fails naming the lock's absolute path to delete when no start is running. The user's `npm start` is
   outside it, so work that runs drive checks beside a peer's runs in a worktree, which has its own `.vite`.
 - A session's `ask_round` schema is fixed when the session starts, so after a change to the forms tool contract the
   running session still offers the old shape. Take the fields the server now requires from its error, and send a

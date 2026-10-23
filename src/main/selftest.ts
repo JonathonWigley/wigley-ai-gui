@@ -39,10 +39,10 @@ import {
 // opens each script's fixture, walks its groups of steps, sets and holds the
 // widths steps set, writes the files a step writes, drives its keys (again and
 // again for a repeating step) into the page through Electron's input
-// pipeline, and checks the lines the
-// page logs, that the page fits the window's minimum width, and the result the
-// script checks, saving the screenshots steps ask for. Run with
-// `npm run selftest`; exits non-zero on failure.
+// pipeline, and checks the lines the page logs, that the page fits the
+// window's minimum width, and the result the script checks, saving the
+// screenshots steps ask for. Run with `npm run selftest`; exits non-zero on
+// failure.
 
 function report(passed: boolean, what: string) {
   console.log(`[selftest] ${passed ? 'PASS' : 'FAIL'} ${what}`);

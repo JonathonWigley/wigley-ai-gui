@@ -50,24 +50,29 @@ or touches their data, so start one whenever a check needs it.
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something
 survives a restart runs the same way. The docs fixture survives a `restart` as the agent left it;
-`docs.seed` and `docs.connectSession` rewrite it (`loadStates: true` on either adds one doc per index load state other than `launch`, under `.claude/load-states/`). `docs.openDoc` (`{ path, line? }`) calls the docs page export `openDoc`: Docs mode shows and opens the doc at that line, or toasts that the machine index does not list it. A start with an unusable environment (a relative `WIGLEY_DRIVE_DIR`, a
-`WIGLEY_DRIVE_HARNESS` other than `fake` or `claude`) exits 1 with the reason on stderr before any
-window opens.
+`docs.seed` and `docs.connectSession` rewrite it (`loadStates: true` on either adds one doc per
+index load state other than `launch`, under `.claude/load-states/`). `docs.openDoc` (`{ path,
+line? }`) calls the docs page export `openDoc`: Docs mode shows and opens the doc at that line, or
+toasts that the machine index does not list it. A start with an unusable environment (a relative
+`WIGLEY_DRIVE_DIR`, a `WIGLEY_DRIVE_HARNESS` other than `fake` or `claude`) exits 1 with the
+reason on stderr before any window opens.
 
 The app runs commands one at a time, so a command that never returns blocks every later one, and
-the CLI then says the run did not answer. A script the drive runs in the page rejects (`PageNavigatedError`)
-when the page navigates under it or its renderer exits, and each wait caps a check at 2 s and
-re-polls on that rejection, so a reload during a command costs one poll rather than the whole 30 s
-wait. Dev starts (`start`, `restart`, `npm run selftest`) take `.drive/start.lock`, holding the
-taker's pid, because each `electron-forge start` empties and rewrites the shared `.vite/build`: a
-drive start holds it from just before the spawn until `drive.json` appears, the self-test until its
-first `[selftest]` line (a packaged start skips it). A start waits while a live pid holds it,
-printing `Waiting for another dev start (pid <pid>) to finish`, clears a dead holder's lock, and
-after 120 s fails naming the lock's absolute path to delete when no start is running. `restart` and `quit` end a stuck run: `quit` runs beside the stuck command,
-and the CLI waits up to 60 s for the app to exit (time for a recording's encode), then terminates
-it; the app takes that SIGTERM as a second quit and exits without waiting further. Terminating
-skips any recorded pid whose process no longer carries the run's `WIGLEY_DRIVE_DIR` (a pid reused
-after a crash); on Windows it cannot check and terminates every live recorded pid.
+the CLI then says the run did not answer. A script the drive runs in the page rejects
+(`PageNavigatedError`) when the page navigates under it or its renderer exits, and each wait caps
+a check at 2 s and re-polls on that rejection, so a reload during a command costs one poll rather
+than the whole 30 s wait. Dev starts (`start`, `restart`, `npm run selftest`) take
+`.drive/start.lock`, holding the taker's pid, because each `electron-forge start` empties and
+rewrites the shared `.vite/build`: a drive start holds it from just before the spawn until
+`drive.json` appears, the self-test until its first `[selftest]` line or its child closing (a
+packaged drive start skips the lock). A start waits while a live pid holds it, printing `Waiting
+for another dev start (pid <pid>) to finish`, clears a dead holder's lock, and after 120 s fails
+naming the lock's absolute path to delete when no start is running. `restart` and `quit` end a
+stuck run: `quit` runs beside the stuck command, and the CLI waits up to 60 s for the app to exit
+(time for a recording's encode), then terminates it; the app takes that SIGTERM as a second quit
+and exits without waiting further. Terminating skips any recorded pid whose process no longer
+carries the run's `WIGLEY_DRIVE_DIR` (a pid reused after a crash); on Windows it cannot check and
+terminates every live recorded pid.
 
 A run folder holds `home/` (the app's home: config, plugin data, ui-state), `user-data/`
 (Chromium's profile), `screenshots/`, `videos/`, `app.log`, and `start.json` and `drive.json`
@@ -88,8 +93,9 @@ Conventions:
   cover: that is a finding, not a flake.
 - `drag --hold` leaves the left button down at the drag's end point, so `query` and `screenshot`
   can read a style that shows only while the button is held; `release` lifts it there and returns
-  the lines it caused. Until `release`, another `drag` or a `click` rejects with `A drag from <selector> is held;
-  release it first`; `release` with nothing held rejects with `No drag is held; drag --hold first`.
+  the lines it caused. Until `release`, another `drag` or a `click` rejects with `A drag from
+  <selector> is held; release it first`; `release` with nothing held rejects with `No drag is
+  held; drag --hold first`.
 - `wait-log` matches a whole page log line, its source prefix included (`[page] …`), logged after the call starts; a line already in the log does not count.
 - `chat.askPermission` returns a `toolUseId` at once; `chat.permissionAnswer` with that id answers
   `{ pending: true }` until the card is answered, then the reply, as `forms.answers` does for a

@@ -314,11 +314,13 @@ Conventions every primitive follows:
   argument.
 - A self-test step's `screenshot` field saves a PNG of the window to
   `.selftest/screenshots/<plugin>-<name>.png`. The self-test saves the gallery's pages
-  (`forms-gallery-full-0` for the opening page, `forms-gallery-full-1` onward for each page press, `forms-gallery-reduced-end`, `forms-gallery-reduced-0`, `forms-gallery-reduced-1` onward), Sessions (`forms-sessions-*`) and Docs
-  (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and session
-  Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), and the shell layout swap; the agent checks
-  them against this file — density, the one accent, each surface on its layer and material, sentence
-  case — before handing a UI change to the user.
+  (`forms-gallery-full-0` for the opening page, `forms-gallery-full-1` onward for each page press,
+  `forms-gallery-reduced-end`, `forms-gallery-reduced-0`, `forms-gallery-reduced-1` onward),
+  Sessions (`forms-sessions-*`) and Docs (`docs-docs-*`) in both transparency settings, the docs
+  kind picker, completion list and session Docs tab (`docs-kind-picker`, `docs-completion`,
+  `docs-session-tab`), and the shell layout swap; the agent checks them against this file — density,
+  the one accent, each surface on its layer and material, sentence case — before handing a UI change
+  to the user.
 - Text meets WCAG AA contrast against its opaque fallback background, in both transparency
   settings.
 - Scrolling the transcript beneath the composer stays smooth; when blur is expensive, lower the

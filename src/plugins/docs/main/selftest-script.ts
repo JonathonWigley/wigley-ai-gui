@@ -44,7 +44,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['R'],
       expect: '[docs] index rebuilt: 8 entries',
-      why: "Docs mode's first show built the index during an earlier plugin's steps, before this script rewrote the fixture",
+      why: "Docs mode's first show built the index during an earlier plugin's steps, before this script rewrote the fixture.",
     },
     { keys: ['G'], expect: '[docs] selected Features' },
     { keys: ['g', 'g'], expect: '[docs] selected Global' },
@@ -287,7 +287,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       keys: ['j'],
       expect:
         '[docs] tree out of sight: treeDown ran docs.scrollDown in the doc',
-      why: 'Below 680 px the side bar hides, so a tree key runs in the doc pane by the keymap',
+      why: 'Below 680 px the side bar hides, so a tree key runs in the doc pane by the keymap.',
     },
     { width: 'start', keys: ['<A-h>'], expect: '[docs] tree focused' },
   ];
@@ -327,7 +327,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['j'],
       expect: '[page] j ran docs.treeDown',
-      why: "Showing Docs mode closed the session view's kind picker, which frees j for Docs mode's tree",
+      why: "Showing Docs mode closed the session view's kind picker, which frees j for Docs mode's tree.",
     },
     {
       keys: ['/', ...'neat', 'Enter'],
@@ -373,7 +373,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       name: 'create and rename',
-      why: 'a creates a doc by kind and place and opens it in the editor, r renames it through the path box, and A creates one by path, Tab completing it.',
+      why: 'a creates a doc by kind and place and opens it in the editor, r renames it through the path box, and A completes a path with Tab and creates one by path.',
       steps: createAndRename,
     },
     {

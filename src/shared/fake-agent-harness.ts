@@ -77,12 +77,13 @@ export interface FakePastSessionCall {
 // `FAKE_END_TEXT` send ended it, the promise of that exit. Between `holdEnd`
 // and `releaseEnd`, a first `end` marks its process ended and leaves that
 // promise pending; `releaseEnd` emits `ended` for each held process in call
-// order and resolves them. A `FAKE_END_TEXT` exit is never held. `pastSessionCalls` lists every `listSessions` and `history`
-// call in call order, failed ones included; `failNextHistory` makes the next
-// `history` reject `message`. Every profile starts signed in as
-// `fake@example.invalid`; `logOut` signs it out and a `logIn` given
-// `FAKE_SIGN_IN_CODE` signs it back in. `listProjects` lists the folders
-// `start` ran under the profile, the last started first.
+// order and resolves them. A `FAKE_END_TEXT` exit is never held.
+// `pastSessionCalls` lists every `listSessions` and `history` call in call
+// order, failed ones included; `failNextHistory` makes the next `history`
+// reject `message`. Every profile starts signed in as `fake@example.invalid`;
+// `logOut` signs it out and a `logIn` given `FAKE_SIGN_IN_CODE` signs it back
+// in. `listProjects` lists the folders `start` ran under the profile, the last
+// started first.
 export interface FakeAgentHarness extends AgentHarness {
   readonly processes: readonly FakeAgentProcessRecord[];
   readonly pastSessionCalls: readonly FakePastSessionCall[];

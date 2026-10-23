@@ -82,7 +82,7 @@ describe('waitForNewLogLine', () => {
     expect(isLogged).toBe(false);
   });
 
-  it("finds a line among the oldest of the mark's length once the page has navigated since the mark", async () => {
+  it('waitForNewLogLine_PageNavigatedSinceTheMark_FindsALineAmongTheOldest', async () => {
     let log = ['[x] 5', '[x] 4', '[x] 3', '[x] 2', '[x] 1'];
     const { window, navigate } = fakeDrivenWindow([['#log li', () => log]]);
     const mark = await markLog(window);
@@ -94,7 +94,7 @@ describe('waitForNewLogLine', () => {
     expect(isLogged).toBe(true);
   });
 
-  it('does not find a line logged before the mark when the page has not navigated', async () => {
+  it('waitForNewLogLine_LineLoggedBeforeTheMarkAndNoNavigation_ResolvesFalse', async () => {
     const log = ['[x] 5', '[x] 4', '[x] done', '[x] 2', '[x] 1'];
     const { window } = fakeDrivenWindow([['#log li', () => log]]);
     const mark = await markLog(window);
@@ -106,7 +106,7 @@ describe('waitForNewLogLine', () => {
 });
 
 describe('linesAfter', () => {
-  it('returns every line of the new log, oldest first, once the page has navigated since the mark', async () => {
+  it('linesAfter_PageNavigatedSinceTheMark_ReturnsTheWholeNewLogOldestFirst', async () => {
     let log = ['[x] 5', '[x] 4', '[x] 3', '[x] 2', '[x] 1'];
     const { window, navigate } = fakeDrivenWindow([['#log li', () => log]]);
     const mark = await markLog(window);
@@ -140,7 +140,7 @@ describe('waitFor', () => {
     expect(holds).toBe(false);
   });
 
-  it('polls again once a check has gone unanswered for its cap, well inside the wait', async () => {
+  it('waitFor_CheckUnansweredForItsCap_PollsAgainInsideTheWait', async () => {
     let checks = 0;
     const started = Date.now();
 
@@ -154,7 +154,7 @@ describe('waitFor', () => {
     expect(Date.now() - started).toBeLessThan(3000);
   });
 
-  it('retries a check whose run the page navigated under', async () => {
+  it('waitFor_PageNavigatesUnderTheCheck_RetriesIt', async () => {
     let runs = 0;
     const { window, navigate } = fakeDrivenWindow([
       ['ready', () => (++runs === 1 ? new Promise(() => {}) : true)],
@@ -169,7 +169,7 @@ describe('waitFor', () => {
     expect(Date.now() - started).toBeLessThan(1000);
   });
 
-  it('rejects with the error of a check that fails for another reason', async () => {
+  it('waitFor_CheckFailsForAnotherReason_RejectsWithItsError', async () => {
     const failure = new Error('the script threw');
 
     const waiting = waitFor(() => Promise.reject(failure), 10_000);
