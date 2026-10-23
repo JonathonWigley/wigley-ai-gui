@@ -14,7 +14,7 @@ import {
 } from 'electron';
 import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -268,22 +268,6 @@ const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 const paths: Paths = process.platform === 'win32' ? windowsPaths : posixPaths;
 
-// The self-test gives plugins a fresh temp folder as the home folder, and
-// deletes it before it exits. Node retries the removal on `EBUSY`,
-// `ENOTEMPTY` and `EPERM`, which Windows returns while a watcher or the page
-// still holds a file in the home.
-let tempHome: string | null = null;
-const cleanUpSelfTest = () => {
-  if (tempHome !== null) {
-    rmSync(tempHome, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 200,
-    });
-  }
-};
-
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
@@ -295,9 +279,16 @@ function onQuit(task: () => unknown) {
   quitTasks.push(task);
 }
 
-// Starts every quit task once, on the first will-quit. A drive run holds the
-// quit until every task settles, so a drive `restart` finds the ui-state it
-// left and a recording finishes encoding; a second will-quit during the hold
+// Starts every quit task, on the first call only, and settles once every task
+// has.
+function startQuitWork() {
+  quitWork ??= Promise.allSettled(quitTasks.map(async (task) => task()));
+  return quitWork;
+}
+
+// Starts the quit work on the first will-quit. A drive run holds the quit
+// until every task settles, so a drive `restart` finds the ui-state it left
+// and a recording finishes encoding; a second will-quit during the hold
 // (another quit, or the SIGTERM Electron turns into a quit) exits at once.
 // The user's app quits without waiting, so a task still running when it exits
 // is cut short.
@@ -306,15 +297,29 @@ function runQuitTasks(event: Event) {
     app.exit(0);
     return;
   }
-  quitWork ??= Promise.allSettled(quitTasks.map(async (task) => task())).then(
-    () => {
-      if (runMode === 'drive') {
-        app.exit(0);
-      }
-    },
-  );
+  const work = startQuitWork();
   if (runMode === 'drive') {
+    void work.then(() => app.exit(0));
     event.preventDefault();
+  }
+}
+
+// The self-test gives plugins a fresh temp folder as the home folder. Its
+// exit skips will-quit, so the cleanup runs the quit work itself, closing the
+// watchers and files the parts and the config store hold in the home, then
+// deletes the home. Node retries the removal on `EBUSY`, `ENOTEMPTY` and
+// `EPERM`, which Windows returns for a handle it releases a moment after it
+// closes.
+let tempHome: string | null = null;
+async function cleanUpSelfTest() {
+  await startQuitWork();
+  if (tempHome !== null) {
+    await rm(tempHome, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 200,
+    });
   }
 }
 
@@ -586,8 +591,9 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
           path.join(app.getAppPath(), '.selftest', 'screenshots'),
         )
       : null;
-  // On a normal quit, a quit task disposes the parts that started; a failed
-  // start exits through failStart, which skips the quit tasks.
+  // On a normal quit, and before the self-test removes its temp home, a quit
+  // task disposes the parts that started; a failed start outside the
+  // self-test exits through failStart, which skips the quit tasks.
   const startedParts: MainStart<PluginManifest>[] = [];
   onQuit(() => disposeParts(startedParts));
   const driveRun =

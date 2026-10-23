@@ -39,16 +39,17 @@ function report(passed: boolean, what: string) {
 
 let hasExited = false;
 
-// `cleanUp` runs before every exit, since app.exit skips quit handlers; a
-// cleanup that throws is reported on stderr and the exit keeps `code`. Only
-// the first exit counts: a run a late page load starts after it stays quiet.
-function exitSelfTest(code: number, cleanUp: () => void) {
+// Exits with `code` once `cleanUp` settles, since app.exit skips quit
+// handlers; a cleanup that throws or rejects is reported on stderr and the
+// exit keeps `code`. Only the first exit counts: a run a late page load starts
+// during the cleanup or after it stays quiet.
+async function exitSelfTest(code: number, cleanUp: () => Promise<void>) {
   if (hasExited) {
     return;
   }
   hasExited = true;
   try {
-    cleanUp();
+    await cleanUp();
   } catch (error) {
     console.error(`[selftest] cleanup failed: ${errorText(error)}`);
   } finally {
@@ -56,18 +57,18 @@ function exitSelfTest(code: number, cleanUp: () => void) {
   }
 }
 
-// Reports `what` as failed with `error`'s text, and exits non-zero; after the
-// self-test has exited, does nothing.
+// Reports `what` as failed with `error`'s text, and exits non-zero once
+// `cleanUp` settles; after the self-test has begun to exit, does nothing.
 export function failSelfTest(
   what: string,
   error: unknown,
-  cleanUp: () => void,
+  cleanUp: () => Promise<void>,
 ) {
   if (hasExited) {
     return;
   }
   report(false, `${what}: ${errorText(error)}`);
-  exitSelfTest(1, cleanUp);
+  void exitSelfTest(1, cleanUp);
 }
 
 // Saves a PNG of the window to `png` once the page has redrawn; returns why it
@@ -218,9 +219,9 @@ async function runAllScripts(
   screenshots: ReadonlyMap<SelfTestStep, string>,
   run: number,
   isCurrent: () => boolean,
-  cleanUp: () => void,
+  cleanUp: () => Promise<void>,
 ) {
-  const exit = (code: number) => exitSelfTest(code, cleanUp);
+  const exit = (code: number) => void exitSelfTest(code, cleanUp);
   // Chromium drops input that reaches a page before the page's first frame,
   // and only an offscreen window reports its frames, so a visible-window
   // self-test would time out here.
@@ -275,7 +276,7 @@ function startRun(
   homeFiles: Files,
   handed: readonly HandedScript[],
   screenshots: ReadonlyMap<SelfTestStep, string>,
-  cleanUp: () => void,
+  cleanUp: () => Promise<void>,
 ) {
   if (hasExited) {
     return;
@@ -309,8 +310,9 @@ export interface SelfTestDriver {
 }
 
 // `homeFiles` is the files service rooted at the self-test's temp home, which
-// steps' `writeFile` writes through. `cleanUp` deletes what the self-test made
-// outside the repo; it runs before the self-test exits. `screenshotFolder` is
+// steps' `writeFile` writes through. `cleanUp` closes what holds files there
+// and deletes what the self-test made outside the repo; the self-test awaits
+// it before it exits. `screenshotFolder` is
 // emptied here, so it ends the run holding only that run's PNGs. Each plugin
 // hands at most one script while the parts start; a host throws on its
 // plugin's second script or one handed over late. Every page load runs the
@@ -318,7 +320,7 @@ export interface SelfTestDriver {
 export function startSelfTest(
   window: BrowserWindow,
   homeFiles: Files,
-  cleanUp: () => void,
+  cleanUp: () => Promise<void>,
   screenshotFolder: string,
 ): SelfTestDriver {
   rmSync(screenshotFolder, { recursive: true, force: true });
@@ -350,7 +352,7 @@ export function startSelfTest(
       isHandoverClosed = true;
       if (handed.length === 0) {
         report(false, 'a plugin handed over a self-test script during start');
-        exitSelfTest(1, cleanUp);
+        void exitSelfTest(1, cleanUp);
         return { pageBinds: [], settings: {} };
       }
       let config: SelfTestConfig;
