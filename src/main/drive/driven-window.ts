@@ -44,6 +44,37 @@ export class PageNavigatedError extends Error {
   }
 }
 
+// The `run` calls of one page not yet settled, for a `DrivenWindow` to reject
+// when its page goes away.
+export interface PendingRuns {
+  // Resolves or rejects as `start()` does, unless `rejectAll` rejects it
+  // first. The call is pending before `start` is called, so a `start` that
+  // leads to `rejectAll` rejects its own call.
+  track<T>(start: () => Promise<T>): Promise<T>;
+  // Rejects every pending call with `PageNavigatedError`.
+  rejectAll(): void;
+}
+
+export function createPendingRuns(): PendingRuns {
+  // The reject of every call not yet settled.
+  const rejects = new Set<(error: Error) => void>();
+  return {
+    track: <T>(start: () => Promise<T>) =>
+      new Promise<T>((resolve, reject) => {
+        rejects.add(reject);
+        start()
+          .then(resolve, reject)
+          .finally(() => rejects.delete(reject));
+      }),
+    rejectAll() {
+      for (const reject of rejects) {
+        reject(new PageNavigatedError());
+      }
+      rejects.clear();
+    },
+  };
+}
+
 // The app window as the page driver drives it. Every size is the content
 // size, the page's own area without the window frame.
 export interface DrivenWindow {

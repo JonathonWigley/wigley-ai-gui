@@ -7,8 +7,8 @@ import type {
 } from 'electron';
 import {
   type ConsoleMessage,
+  createPendingRuns,
   type DrivenWindow,
-  PageNavigatedError,
 } from './drive/driven-window';
 
 // The Electron adapter of `DrivenWindow`. `paint` fires only for an offscreen
@@ -19,35 +19,22 @@ export function electronDrivenWindow(window: BrowserWindow): DrivenWindow {
   const { webContents } = window;
   let hasPainted = false;
   let navigations = 0;
-  // The reject of every `run` call not yet settled.
-  const pendingRuns = new Set<(error: Error) => void>();
-  const rejectPendingRuns = () => {
-    for (const reject of pendingRuns) {
-      reject(new PageNavigatedError());
-    }
-    pendingRuns.clear();
-  };
+  const pendingRuns = createPendingRuns();
   // Fires on a main-frame commit only: a navigation `window.ts` refuses in
   // `will-navigate` never gets here, and its page's calls run on.
   webContents.on('did-navigate', () => {
     hasPainted = false;
     navigations += 1;
-    rejectPendingRuns();
+    pendingRuns.rejectAll();
   });
-  webContents.on('render-process-gone', rejectPendingRuns);
+  webContents.on('render-process-gone', () => pendingRuns.rejectAll());
   webContents.on('paint', () => {
     hasPainted = true;
   });
   return {
     sendInput: (input) => webContents.sendInputEvent(input),
     run: <T>(script: string) =>
-      new Promise<T>((resolve, reject) => {
-        pendingRuns.add(reject);
-        webContents
-          .executeJavaScript(script)
-          .then(resolve, reject)
-          .finally(() => pendingRuns.delete(reject));
-      }),
+      pendingRuns.track<T>(() => webContents.executeJavaScript(script)),
     async capture(box) {
       const image = await webContents.capturePage(box, { stayHidden: true });
       return image.isEmpty() ? null : image.toPNG();

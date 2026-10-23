@@ -1,8 +1,8 @@
 import {
   type ConsoleMessage,
   type DrivenInput,
+  createPendingRuns,
   type DrivenWindow,
-  PageNavigatedError,
 } from './driven-window';
 
 // A script fragment and the answer the fake gives a script holding it.
@@ -31,8 +31,7 @@ export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
   const screen: { captured: Uint8Array | null } = { captured: null };
   const size = { width: 800, height: 600 };
   let navigations = 0;
-  // The reject of every `run` call not yet settled.
-  const pendingRuns = new Set<(error: Error) => void>();
+  const pendingRuns = createPendingRuns();
   const answer = async <T>(script: string) => {
     const entry = answers.find(([fragment]) => script.includes(fragment));
     if (entry === undefined) {
@@ -44,13 +43,7 @@ export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
     sendInput: (input) => inputs.push(input),
     // Pending before the answer is asked for, so an answer that navigates
     // rejects its own call.
-    run: <T>(script: string) =>
-      new Promise<T>((resolve, reject) => {
-        pendingRuns.add(reject);
-        answer<T>(script)
-          .then(resolve, reject)
-          .finally(() => pendingRuns.delete(reject));
-      }),
+    run: <T>(script: string) => pendingRuns.track(() => answer<T>(script)),
     capture: async () => screen.captured,
     contentSize: () => ({ ...size }),
     minimumWidth: () => 400,
@@ -93,10 +86,7 @@ export function fakeDrivenWindow(answers: FakeAnswer[] = []) {
   };
   const navigate = () => {
     navigations += 1;
-    for (const reject of pendingRuns) {
-      reject(new PageNavigatedError());
-    }
-    pendingRuns.clear();
+    pendingRuns.rejectAll();
   };
   return { window, inputs, focused, screen, navigate, paint, writeConsole };
 }
