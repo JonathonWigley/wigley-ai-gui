@@ -23,8 +23,9 @@ const STYLE_RELOADED = '# Style\n\nWrite short lines.\nChanged on disk.\n';
 const STYLE_CHANGED_WHILE_EDITING =
   '# Style\n\nWrite short lines.\nChanged while editing.\n';
 
-// Space k d shows Docs mode, whose first show builds the index: the fixture's
-// eight entries. G selects the last row and gg the first, Global. j to Global's
+// Space k d shows Docs mode. Its first show built the index during an earlier
+// plugin's steps, before this script rewrote the fixture, so R rescans: the
+// fixture's eight entries. G selects the last row and gg the first, Global. j to Global's
 // Instructions and l expands it; j to the self-test instructions and l opens
 // CLAUDE.md. Option+l focuses the doc; Ctrl+j scrolls it half a page and Ctrl+k
 // back to the top. i edits it at the top: Ctrl+j scrolls the editor half a
@@ -80,9 +81,10 @@ function docsSteps(paths: Paths, homeDir: string): SelfTestStep[] {
   return [
     {
       keys: [' ', 'k', 'd'],
-      expect: '[docs] index rebuilt: 8 entries',
+      expect: '[page] showed Docs mode',
       checksFit: true,
     },
+    { keys: ['R'], expect: '[docs] index rebuilt: 8 entries' },
     { keys: ['G'], expect: '[docs] selected Features' },
     { keys: ['g', 'g'], expect: '[docs] selected Global' },
     { keys: ['j', 'l'], expect: '[docs] expanded Instructions' },

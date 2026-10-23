@@ -14,11 +14,26 @@ describe('kbdParts', () => {
     expect(kbdParts('<A-o>')).toEqual([{ kind: 'chord', text: '<A-o>' }]);
   });
 
-  it('reads a lone slash as an alternative', () => {
+  it('reads a lone slash between two keys as an alternative', () => {
     expect(kbdParts('j / k')).toEqual([
       { kind: 'key', text: 'j' },
       { kind: 'or', text: '/' },
       { kind: 'key', text: 'k' },
+    ]);
+  });
+
+  it('reads a slash alone as the slash key', () => {
+    expect(kbdParts('/')).toEqual([{ kind: 'key', text: '/' }]);
+  });
+
+  it('reads a slash at either end as the slash key', () => {
+    expect(kbdParts('/ n')).toEqual([
+      { kind: 'key', text: '/' },
+      { kind: 'key', text: 'n' },
+    ]);
+    expect(kbdParts('n /')).toEqual([
+      { kind: 'key', text: 'n' },
+      { kind: 'key', text: '/' },
     ]);
   });
 

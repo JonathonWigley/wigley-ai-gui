@@ -165,7 +165,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // The title bar shows the machine view's open doc while Docs mode shows.
     // `openChanged`, `revealTree` and `leafOpened` read `mode` once a doc
     // opens or a key runs, after `add`. A doc opened from the tree closes the
-    // side bar's overlay, and focus leaves the hidden tree for the doc.
+    // side bar's overlay, and focus leaves the hidden tree for the doc while
+    // Docs mode still shows once the doc opens.
     const machineView = createView(
       'machine',
       { type: 'machine' },
@@ -186,7 +187,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       },
       () => {
         mode.picked();
-        if (!mode.sideBarShown()) {
+        const isTreeOutOfSight = mode.isShown() && !mode.sideBarShown();
+        if (isTreeOutOfSight) {
           machineView.treeHidden();
         }
       },

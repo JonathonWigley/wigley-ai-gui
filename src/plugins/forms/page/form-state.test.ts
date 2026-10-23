@@ -1130,6 +1130,68 @@ describe('sending', () => {
     expect(active(state).note).toBe('typed');
   });
 
+  it('still takes saves while sending', () => {
+    const edited = apply(sendingReview, {
+      type: 'setText',
+      roundId: 'r1',
+      target: { field: 'note' },
+      value: 'typed',
+    });
+    const revision = active(edited).revision;
+    const state = run(
+      edited,
+      { type: 'saveStarted', roundId: 'r1', revision },
+      { type: 'saveFinished', roundId: 'r1', revision, ok: true },
+    );
+    expect(saveState(active(state))).toBe('saved');
+  });
+
+  it("takes another session's keys while a round in the background sends", () => {
+    const state = run(
+      sendingReview,
+      { type: 'sessionActivated', sessionId: 'r2-session' },
+      { type: 'focusItem', item: 0 },
+      { type: 'choose', choice: 2 },
+      { type: 'openReview' },
+    );
+    expect(state.activeRoundId).toBe('r2');
+    expect(state.view).toBe('review');
+    expect(active(state).answers[0].choice).toBe(2);
+  });
+
+  it('ignores the keys again once the sending round is shown again', () => {
+    const back = run(
+      sendingReview,
+      { type: 'sessionActivated', sessionId: 'r2-session' },
+      { type: 'sessionActivated', sessionId: 'r1-session' },
+    );
+    const keys: FormsAction[] = [
+      { type: 'focusItem', item: 0 },
+      { type: 'choose', choice: 2 },
+      { type: 'openReview' },
+    ];
+    for (const key of keys) {
+      expect(apply(back, key)).toBe(back);
+    }
+  });
+
+  it('takes text edits and a failed send for a round in the background', () => {
+    const state = run(
+      sendingReview,
+      { type: 'sessionActivated', sessionId: 'r2-session' },
+      {
+        type: 'setText',
+        roundId: 'r1',
+        target: { field: 'note' },
+        value: 'typed',
+      },
+      { type: 'sendFailed', roundId: 'r1' },
+    );
+    const background = state.rounds.find((round) => round.roundId === 'r1');
+    expect(background?.note).toBe('typed');
+    expect(background?.sending).toBeNull();
+  });
+
   it('a failed send clears the mark and keeps the view and answers', () => {
     const state = run(
       two,

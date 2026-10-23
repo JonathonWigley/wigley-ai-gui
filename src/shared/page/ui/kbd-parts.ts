@@ -8,16 +8,16 @@ export interface KbdPart {
 const WHOLE_CHORD = /^<[^<>]+>$/;
 
 // The parts of a hint string as the keymap prints it, e.g. `j / k` or
-// `Space k s`: tokens split on whitespace, a lone `/` the alternative, a token
-// that is wholly one `<…>` group a chord.
+// `Space k s`: tokens split on whitespace, a lone `/` between two other tokens
+// the alternative, a token that is wholly one `<…>` group a chord. A `/` that
+// starts or ends the hint is the slash key.
 export function kbdParts(keys: string): KbdPart[] {
-  return keys
-    .split(/\s+/)
-    .filter((token) => token !== '')
-    .map((token): KbdPart => {
-      if (token === '/') {
-        return { kind: 'or', text: token };
-      }
-      return { kind: WHOLE_CHORD.test(token) ? 'chord' : 'key', text: token };
-    });
+  const tokens = keys.split(/\s+/).filter((token) => token !== '');
+  return tokens.map((token, index): KbdPart => {
+    const isBetweenKeys = index > 0 && index < tokens.length - 1;
+    if (token === '/' && isBetweenKeys) {
+      return { kind: 'or', text: token };
+    }
+    return { kind: WHOLE_CHORD.test(token) ? 'chord' : 'key', text: token };
+  });
 }
