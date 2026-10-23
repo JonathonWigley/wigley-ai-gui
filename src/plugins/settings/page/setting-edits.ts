@@ -1,9 +1,9 @@
 import type { SettingLeaf } from '../../../contracts/user-config';
-import { isJsonObject, type JsonObject } from '../../../shared/json';
-
-function isSameJson(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
+import {
+  isJsonObject,
+  isSameJson,
+  type JsonObject,
+} from '../../../shared/json';
 
 // `layer` with `value` at `leaf.path`, each missing object on the path
 // created; a value equal to the leaf's fallback removes the key instead, so

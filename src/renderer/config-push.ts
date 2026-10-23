@@ -5,6 +5,7 @@ import type { Log } from '../contracts/log';
 import type { Area } from '../contracts/plugin';
 import type { AppConfig, ConfigProblem } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
+import { isSameJson } from '../shared/json';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
 import { type AppliedKeys, installedConfig } from './installed-config';
 import type { ThemeApplier } from './theme';
@@ -23,10 +24,6 @@ export interface PushTargets {
 
 function problemText(problem: ConfigProblem): string {
   return `${problem.file}: ${problem.message}`;
-}
-
-function isSameJson(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 // A status-bar item over the config problems, hidden while there is none: one

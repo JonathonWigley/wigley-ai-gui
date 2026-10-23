@@ -14,6 +14,7 @@ import type {
   UserConfigSchema,
 } from '../../../contracts/user-config';
 import { errorText } from '../../../shared/error-text';
+import { isSameJson } from '../../../shared/json';
 import { element } from '../../../shared/page/dom';
 import {
   createListPicker,
@@ -161,11 +162,6 @@ export interface SettingsView {
   commands: Record<SettingsCommand, () => void>;
 }
 
-// Whether two JSON values serialise alike.
-function isSameJson(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
 interface OpenBox {
   box: RowBox;
   file: ConfigFile;
@@ -241,11 +237,15 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
   };
 
+  // Marks the cursor row selected, and draws its focus ring while the keys
+  // act on the rows: an open box or filter draws its own ring instead.
   const markCursor = () => {
+    const isRowsFocused =
+      focus === 'rows' && openBox === null && filterScope === null;
     for (const row of rows) {
       const isCursor = row.key === cursorKey;
       row.element.classList.toggle('is-selected', isCursor);
-      row.element.classList.toggle('is-cursor', isCursor && focus === 'rows');
+      row.element.classList.toggle('is-cursor', isCursor && isRowsFocused);
     }
     sections.draw(
       sectionList(),
@@ -341,13 +341,14 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     brokenProblems = next;
   };
 
-  // Reads both files; redraws when `always`, else only when the read differs
-  // from the last. A read overtaken by a later one is dropped.
-  const refresh = async (always: boolean) => {
+  // Reads both files and returns the read; redraws when `always`, else only
+  // when the read differs from the last. A read overtaken by a later one is
+  // returned without being held or drawn.
+  const refresh = async (always: boolean): Promise<UserConfigRead> => {
     const count = ++readCount;
     const read = await channel.invoke('read');
     if (count !== readCount) {
-      return;
+      return read;
     }
     const isChanged = !isSameJson(read, latest);
     latest = read;
@@ -362,6 +363,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       draw();
       log('redrawn');
     }
+    return read;
   };
 
   const refreshQuietly = (always: boolean) =>
@@ -370,7 +372,13 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       deps.toast(errorText(error), 'error');
     });
 
+  // Each focus change closes an open filter first: `setScope` leaves the
+  // filter's pushed scope in force.
   const focusRows = () => {
+    if (filterScope !== null) {
+      logFilter();
+      closeFilter();
+    }
     focus = 'rows';
     deps.setScope('rows');
     rowsSheet.focus();
@@ -378,21 +386,30 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   };
 
   const focusSections = () => {
+    if (filterScope !== null) {
+      logFilter();
+      closeFilter();
+    }
     focus = 'sections';
     deps.setScope('sections');
     sections.element.focus();
     markCursor();
   };
 
-  // Gives focus back to the pane keys act on when a closed box or picker
-  // left it nowhere.
+  // Gives focus back to where the keys act when a closed box or picker left
+  // it nowhere: the box still open, else the focused pane.
   const restoreFocus = () => {
     const isFocusLost =
       document.activeElement === null ||
       document.activeElement === document.body;
-    if (isFocusLost) {
-      (focus === 'rows' ? rowsSheet : sections.element).focus();
+    if (!isFocusLost) {
+      return;
     }
+    if (openBox !== null) {
+      openBox.box.focus();
+      return;
+    }
+    (focus === 'rows' ? rowsSheet : sections.element).focus();
   };
 
   const closeBox = (box: RowBox) => {
@@ -404,6 +421,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     held.scope.pop();
     box.destroy();
     log(`box closed ${box.key}`);
+    markCursor();
     restoreFocus();
   };
 
@@ -431,6 +449,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     const scope = deps.pushScope('box');
     scope.onBaseChanged(() => closeBox(box));
     openBox = { box, file: request.file, scope };
+    markCursor();
     row.element.append(box.element);
     box.focus();
     log(`box open ${request.key}`);
@@ -477,10 +496,10 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         return;
       case 'changedOnDisk': {
         log(`changed on disk ${name}`);
-        await refresh(true);
+        const reread = await refresh(true);
         const text = `${name} changed on disk; the form now shows it`;
         if (box !== null && isBoxOpen()) {
-          box.expectedText = latest?.[file].text ?? null;
+          box.expectedText = reread[file].text;
           showUnderBox(box, text);
         } else {
           deps.toast(text, 'info');
@@ -646,6 +665,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     filterScope?.pop();
     filterScope = null;
     filterFrame.hidden = query === '';
+    markCursor();
   };
 
   const openFilter = () => {
@@ -661,6 +681,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     filterScope = scope;
     filterBox.value = query;
     filterFrame.hidden = false;
+    markCursor();
     filterBox.focus();
     filterBox.select();
   };
