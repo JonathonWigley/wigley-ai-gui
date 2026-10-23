@@ -191,10 +191,16 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const docsSheet = sheet();
     docsSheet.classList.add('docs-sheet');
     docsSheet.append(machineView.doc);
+    // A docs dialog, the filter box, the changed-on-disk prompt or help lays
+    // its scope over the view's pane scope, and ends when that scope changes.
+    const isScopePushedOver = (view: DocsView): boolean =>
+      api.keys.scope() !== qualify(docsManifest.id, view.focusScope());
+
     // `add` calls `shown` before it returns only for the first mode added;
     // Sessions mode starts before Docs mode. Focus leaves the tree for the
-    // doc as the side bar hides, and moves to the tree as it opens over the
-    // doc.
+    // doc as the side bar hides, unless a pushed scope would end on that
+    // move; a tree key then moves it (`runInDocPane`). Focus moves to the
+    // tree as the side bar opens over the doc.
     const mode = api.modes.add({
       id: 'docs',
       title: 'Docs',
@@ -208,7 +214,11 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         machineView.showFirstTime();
       },
       hidden: () => undefined,
-      sideBarHidden: () => machineView.treeHidden(),
+      sideBarHidden() {
+        if (!isScopePushedOver(machineView)) {
+          machineView.treeHidden();
+        }
+      },
       sideBarOpenedOver: () => machineView.treeOpenedOver(),
     });
     api.modes.onChanged((modeId) => {

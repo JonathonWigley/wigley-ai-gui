@@ -267,9 +267,10 @@ export interface ModeContext {
 // runs each time another mode's `show` hides this one, after its element and
 // side bar are hidden and before the other mode's `shown`.
 // `sideBarHidden` runs each time this mode's side bar hides while the mode
-// shows: by `toggleSideBar`, `picked` or the window narrowing or widening,
-// and after `shown` when the mode shows with its side bar hidden; the plugin
-// moves focus out of the side bar there. `sideBarOpenedOver` runs each time
+// shows: by `toggleSideBar`, `picked`, or the window widening with its
+// overlay open, and after `shown` when the mode shows with its side bar
+// hidden; the plugin moves focus out of the side bar there. A window
+// narrowing hides the side bar without it. `sideBarOpenedOver` runs each time
 // the side bar opens over the content while the mode shows, by
 // `toggleSideBar` or after `shown`; the plugin moves focus into the side bar
 // there. Neither

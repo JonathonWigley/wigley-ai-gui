@@ -165,7 +165,8 @@ round), since main, not the page, decides.
   handle sets the title bar's context. In a window too narrow for it the side bar opens over the content, and a plugin
   calls its handle's `picked()` when the user picks something in its side bar, which closes that overlay. The core tells the
   shown mode when its side bar hides (`sideBarHidden`) or opens over the content (`sideBarOpenedOver`), and its plugin
-  moves focus out of or into the side bar there. A hidden mode keeps its state,
+  moves focus out of or into the side bar there; a window narrowing hides it without telling, so focus survives a
+  narrow-and-widen round trip. A hidden mode keeps its state,
   so leaving one never loses work in it, but it keeps no keys: each mode and each session tab is told when it becomes
   the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
   core edit.

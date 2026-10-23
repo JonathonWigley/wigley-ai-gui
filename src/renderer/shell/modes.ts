@@ -84,8 +84,9 @@ export interface ModesDeps {
 
 // The core's own view of the registry: `narrowChanged` hears the window cross
 // the 680 px breakpoint, closing every mode's overlay on widening and laying
-// out the shown mode's side bar again, telling the mode as `toggleSideBar`
-// does.
+// out the shown mode's side bar again. It tells the mode only when widening
+// closes its open overlay onto a side bar the user hid; a narrowing tells
+// nothing.
 export interface CoreModes extends Modes {
   narrowChanged(isNarrow: boolean): void;
 }
@@ -226,7 +227,11 @@ export function createModes(deps: ModesDeps): CoreModes {
       }
       if (shownMode !== null) {
         deps.layOutSideBar(layoutOf(shownMode));
-        tellSideBarChanged(shownMode, before);
+        // A narrowing hides the side bar without telling the mode, so focus
+        // stays across a narrow-and-widen round trip.
+        if (before === 'over') {
+          tellSideBarChanged(shownMode, before);
+        }
       }
     },
   };

@@ -181,9 +181,10 @@ describe('treeRowAction', () => {
     });
   });
 
-  it('treeRowAction_ToggleFilteredGroup_Nothing', () => {
+  it('treeRowAction_ToggleFilteredGroup_SelectsFirstChild', () => {
     expect(actionOf(rowOf(groupB, true), 'toggle', 'c')).toEqual({
-      type: 'none',
+      type: 'select',
+      id: 'c',
     });
   });
 

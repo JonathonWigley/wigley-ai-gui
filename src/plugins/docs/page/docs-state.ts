@@ -145,7 +145,7 @@ export type TreeRowAction =
 // collapsed group and steps into an expanded one's first child. Close
 // collapses an expanded group, else selects the row's parent. Toggle expands
 // a collapsed group and collapses an expanded one. A filter shows every group
-// expanded, so it collapses none.
+// expanded, so it collapses none: there toggle steps in as open does.
 export function treeRowAction(
   tree: readonly TreeNode[],
   row: TreeRow,
@@ -168,8 +168,8 @@ export function treeRowAction(
   if (!row.isExpanded) {
     return { type: 'expand' };
   }
-  if (key === 'toggle') {
-    return isCollapsible ? { type: 'collapse' } : { type: 'none' };
+  if (key === 'toggle' && isCollapsible) {
+    return { type: 'collapse' };
   }
   const [firstChild] = node.children;
   return firstChild === undefined

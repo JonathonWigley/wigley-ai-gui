@@ -115,8 +115,9 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   Images show their alt text.
 - **Keys** (scopes `docs.tree`, `docs.doc`, `docs.conflict`, `docs.picker`, `docs.box`, `docs.confirm`): tree `j`/`k`
   move; `l` opens a doc, expands a collapsed group or steps into an expanded one; Enter opens a doc or toggles a
-  group, expanding or collapsing it as `l` and `h` do; `h` collapses a group or goes to the parent; `/` filter, `a`,
-  `A`, `r`, `d`, `R` rescan, `c` pick the load-state folder; `Alt+l` / `Alt+h` move focus between tree and doc.
+  group, expanding or collapsing it as `l` and `h` do, and under a filter, which shows every group expanded, steps
+  into a group as `l` does; `h` collapses a group or goes to the parent; `/` filter, `a`, `A`, `r`, `d`, `R` rescan,
+  `c` pick the load-state folder; `Alt+l` / `Alt+h` move focus between tree and doc.
   Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll the doc half a page, the editor too while editing, `i` edit.
   Conflict prompt `r` reload, `o` overwrite, Esc keep editing. Picker `j`/`k` move, Enter or `l` choose, Esc cancel. Text box Tab
   completes the path, Enter accepts, Esc cancels. Trash confirm `y` yes, `n` or Esc keep.

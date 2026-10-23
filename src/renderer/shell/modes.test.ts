@@ -356,12 +356,25 @@ describe('side bar callbacks', () => {
     expect(told).toEqual(['side bar hidden a.one']);
   });
 
-  it('narrowChanged tells the shown mode its side bar hid as the window narrows', () => {
+  it('narrowChanged tells nothing across a narrow-and-widen round trip', () => {
     const { modes, told, add } = setup();
     add('a.one', 'One', true);
     add('b.two', 'Two', true);
 
     modes.narrowChanged(true);
+    modes.narrowChanged(false);
+
+    expect(told).toEqual([]);
+  });
+
+  it('narrowChanged tells the shown mode its overlay closed as widening hides its side bar', () => {
+    const { modes, told, add } = setup();
+    const one = add('a.one', 'One', true);
+    one.handle.toggleSideBar();
+    modes.narrowChanged(true);
+    one.handle.toggleSideBar();
+    told.length = 0;
+
     modes.narrowChanged(false);
 
     expect(told).toEqual(['side bar hidden a.one']);
@@ -391,7 +404,7 @@ describe('side bar callbacks', () => {
     modes.narrowChanged(false);
     modes.narrowChanged(true);
 
-    expect(told).toEqual(['side bar hidden a.one']);
+    expect(told).toEqual([]);
   });
 
   it('tells each mode as it shows whether its side bar starts hidden or over', () => {
