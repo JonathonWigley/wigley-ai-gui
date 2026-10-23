@@ -179,11 +179,12 @@ async function runStep(
 
 // Opens the script's fixture, runs its steps and checks its result, reporting
 // each under `pluginId`; a result that has not settled within the step
-// timeout once the steps end fails as timed out. `screenshots` maps each step
-// that saves a PNG to its path, and the fit check lets the script's
-// `scrollsItself` and the primitives' ellipsis parts clip. Returns how many checks failed, or null
-// when a reload interrupted the run.
-async function runScript(
+// timeout once the steps end fails as timed out, and a result that rejects,
+// even before the steps end, stops the run and rejects with its error.
+// `screenshots` maps each step that saves a PNG to its path, and the fit check
+// lets the script's `scrollsItself` and the primitives' ellipsis parts clip.
+// Returns how many checks failed, or null when a reload interrupted the run.
+export async function runScript(
   window: DrivenWindow,
   homeFiles: Files,
   { pluginId, script }: HandedScript,
@@ -197,7 +198,15 @@ async function runScript(
     return null;
   }
   const { shownLine, result } = script.open(run);
-  let failures = (await waitForNewLogLine(window, shownLine, seen)) ? 0 : 1;
+  // Rejects with the result's error and otherwise never settles, so a wait
+  // raced against it ends as soon as the result rejects.
+  const rejection = result.then(() => new Promise<never>(() => {}));
+  let failures = (await Promise.race([
+    waitForNewLogLine(window, shownLine, seen),
+    rejection,
+  ]))
+    ? 0
+    : 1;
   if (isCurrent()) {
     report(failures === 0, shownLine);
   }
@@ -207,14 +216,17 @@ async function runScript(
     if (!isCurrent()) {
       return null;
     }
-    const passed = await runStep(
-      window,
-      homeFiles,
-      step,
-      screenshots.get(step) ?? null,
-      scrollsItself,
-      isCurrent,
-    );
+    const passed = await Promise.race([
+      runStep(
+        window,
+        homeFiles,
+        step,
+        screenshots.get(step) ?? null,
+        scrollsItself,
+        isCurrent,
+      ),
+      rejection,
+    ]);
     if (!passed) {
       failures++;
     }
@@ -298,8 +310,9 @@ async function runAllScripts(
   exit(failures === 0 ? 0 : 1);
 }
 
-// Starts a fresh run of every handed script; a step that throws fails the
-// self-test, unless a reload already interrupted the run.
+// Starts a fresh run of every handed script; a step that throws or a script
+// result that rejects fails the self-test, unless a reload already interrupted
+// the run.
 function startRun(
   window: DrivenWindow,
   homeFiles: Files,

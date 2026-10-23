@@ -1,7 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Files } from '../contracts/files';
+import type { SelfTestScript } from '../contracts/plugin';
+import type { DrivenWindow } from './drive/driven-window';
 
 const exit = vi.hoisted(() => vi.fn());
 vi.mock('electron', () => ({ app: { exit } }));
+
+// A page that logs nothing, so every wait for a log line stays pending.
+const press = vi.hoisted(() => vi.fn());
+vi.mock('./drive/page-driver', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./drive/page-driver')>()),
+  press,
+  readLog: async () => [],
+  waitForNewLogLine: () => new Promise<boolean>(() => {}),
+}));
 
 // `failSelfTest` keeps whether the self-test has exited in module state, so
 // each test loads a fresh copy.
@@ -135,5 +147,34 @@ describe('settleWithin', () => {
     await expect(
       settleWithin(Promise.reject(new Error('boom')), 1000),
     ).rejects.toThrow('boom');
+  });
+});
+
+describe('runScript', () => {
+  it('stops the steps and rejects once the result rejects early', async () => {
+    const { runScript } = await import('./selftest');
+    const script: SelfTestScript = {
+      pageBinds: [],
+      settings: {},
+      open: () => ({
+        shownLine: '[plugin] shown',
+        result: Promise.reject(new Error('fixture failed')),
+      }),
+      steps: [{ keys: ['a'], expect: '[plugin] a' }],
+      scrollsItself: [],
+      problems: () => [],
+    };
+
+    await expect(
+      runScript(
+        {} as DrivenWindow,
+        {} as Files,
+        { pluginId: 'plugin', script },
+        new Map(),
+        1,
+        () => true,
+      ),
+    ).rejects.toThrow('fixture failed');
+    expect(press).not.toHaveBeenCalled();
   });
 });
