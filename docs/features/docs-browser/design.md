@@ -73,10 +73,19 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 ## Docs browser (plan B)
 
 - A `docs` plugin with a main part (index runs, file reads and writes, watching) and a page part (tree, viewer,
-  editor). One Docs view, fed by an **index source** with two adapters: the machine source (`index.json`, plus
-  `docs_index.py build`) for Docs mode, and the session source (`docs_index.py session <id>`, about 0.3 s measured;
-  `context <project folder>` for a Codex session, and a 'no folder known' message when the folder is unknown) for a
-  session's Docs tab.
+  editor). One Docs view per **index source**, `IndexSource { id, title, load(), rebuild?() }`, registered by id in
+  main through the `addSource` export (a Disposable; a taken id throws). Docs registers two kinds: the `machine`
+  source (`index.json`, its rebuild `docs_index.py build`) for Docs mode, and a `session:<id>` source for each live
+  session, added on `sessions.connected` and disposed on `sessions.ended` (`docs_index.py session <id>`, about 0.3 s
+  measured; `context <project folder>` for a Codex session, and a 'no folder known' message when the folder is
+  unknown) for its Docs tab. The page reaches a source through `loadIndex(sourceId)` and `rebuildIndex(sourceId)`; an
+  unknown id rejects naming it. A view runs `load` on its first show, then `rebuild` when the source has one; Rescan
+  runs `rebuild`, or `load` for a source with none. The write guard below reads the entries each registered source
+  last loaded, so a source's entries stop allowing changes once it is disposed.
+- **Page exports**: `addView(sourceId, { isVisible })` returns `{ element, shown(), dispose() }`: one element holding
+  the view's tree and doc in a split, its keys, `Space v t` and its changes reaching the other views as a session
+  tab's do (each session's Docs tab is built through it). `openDoc(path, line?)` shows Docs mode and opens the doc
+  there at that 1-based line; a path the machine index does not list is refused with a toast.
 - The script is found through `installPath` in each configured Claude config folder's
   `plugins/installed_plugins.json`; a `docs.scriptPath` setting, empty by default, overrides it. `python3 -X utf8`
   runs it: UTF-8 mode lets it print the index's `→` to a Windows console's cp1252 pipe.
@@ -84,7 +93,10 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   in the background on launch and on Rescan. After create, rename or delete the tree updates at once and a background
   build fills in load states; until then the changed entry's chips read `pending`.
 - **Tree**: Global, then Plugins, then one node per repo; a repo holds its docs by kind and its feature home, and
-  splits by clone only when it has more than one. Follow-up items open at their `line`. The filter fuzzy-matches each
+  splits by clone only when it has more than one. A kind or source the app does not know still loads: an unknown
+  kind is a group after the known kinds, an unknown source a root node after the repos holding kind groups, each
+  titled from its id (`my-kind` → `My kind`). An unknown source offers no create place, and only its entries' own
+  files are changeable, never the rest of its root. Follow-up items open at their `line`. The filter fuzzy-matches each
   doc's title and path through the `FuzzyMatcher` page service and keeps the tree's order. A filter that matches nothing
   shows `No docs match "<filter>"` with `/` then `Esc` to clear it; an empty index shows `No docs in this index` with
   `R` to rescan; while a filter is on and rows show, one muted line above them reads `Filtered: <filter>` with `/` to
@@ -102,7 +114,11 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   appended as a `- **title** — …` item to the home's `followups.md`. The path box lists matching folders and files
   under the chosen place as the user types, and Tab completes the shared part, as a shell does.
 - **Rename** (`r`) uses the same path box, so it also moves a file. **Delete** (`d`) moves the file to the Trash after
-  a confirm prompt; a skill's whole folder goes with its SKILL.md. Deleting a symlink sends the file or folder it
+  a confirm prompt; a skill's whole folder goes with its SKILL.md. Every link the index walked to the file or
+  folder going goes with it — each entry's `walked` paths (schema 2) name where a walk reached it through a link,
+  and the link trashed is the nearest one at or above that path resolving into what goes — so deleting a synced
+  skill also removes `~/.claude/skills/<name>`. The prompt names every path, and the guard must allow every one or
+  none goes. Deleting a symlink sends the file or folder it
   finally points to to the Trash and then the link, the prompt naming both; the guard below must allow both, or neither
   goes. In a chain of links only the first link and the final target go; a link in between stays, dangling. When the
   link's trash fails after its target went, the target's removal still shows and the failure is toasted.
@@ -112,7 +128,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - **Plugin cache files** open read-only with a line naming the plugin; the source repo's copy is the one to edit.
 - **Hook and plugin entries** show a detail view (event, matcher, command / version, enabled) whose edit key opens
   the settings or config file holding it in the same editor.
-- **Disk changes**: the open file is watched. The rendered view reloads by itself; while editing, a banner says the
+- **Disk changes**: the open file is watched, through a one-level watch (`recursive: false`) on its folder, so a doc
+  directly in `~/.claude` hears no transcript write under `~/.claude/projects`. The rendered view reloads by itself; while editing, a banner says the
   file changed, and `:w` asks reload-or-overwrite.
 - **Links**: a relative link to a file opens it in the browser, an http or https link opens in the default browser (any other scheme is refused), a
   `#heading` link scrolls. Links are real anchors: Tab moves between them, Enter follows. Forms keep literal links.

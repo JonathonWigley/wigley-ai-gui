@@ -3,7 +3,7 @@
 **Contents**
 
 - **Intent** — what every change is judged by: everything a plugin, everything hot reloads, macOS and Windows now,
-  any agent harness or model later.
+  any agent harness or model later, one user and no backwards compatibility.
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the core and its plugins, the
   layers, the relay and agent sessions, and where a new plugin, shell area, mode, session tab, key, event, setting,
   user config file, theme, plugin data, layout, agent harness, session control, round source, MCP tool or
@@ -47,6 +47,10 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
   wigley-harness and other models follow. Only the seams are built now, and no knowledge of one harness — its CLI,
   events, session controls, environment variables, model names — lives outside its adapter, so a new harness or
   model is a new adapter folder.
+- **One user, no backwards compatibility.** The user is the app's only user and updates the app and
+  wigley-ai-marketplace together. A change replaces a shape in place, with no migration, fallback or version
+  shim: a contract, a config or data file the app writes, the docs index schema. A shape both repos read changes in
+  both in the same piece of work.
 
 ## Architecture
 
@@ -104,11 +108,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  sidebar and each session's tabs)
   forms/         manifest.ts, contract.ts, main/ (round logic, saved rounds, its MCP tools, layouts, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
-  docs/          manifest.ts, contract.ts, main/ (docs index runs, file changes inside the indexed folders only,
-                 watching the open file), page/ (one docs view — tree, rendered doc, document editor — shown as
-                 Docs mode over the machine's index and as each session's Docs tab over that session's; the
-                 view hands back its tree and its doc: the tree goes in Docs mode's side bar, and in the start
-                 pane of a split in each session's Docs tab)
+  docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
+                 the indexed folders only, watching the open file), page/ (one docs view per source — tree,
+                 rendered doc, document editor — shown as Docs mode over the machine's index, its tree in the side
+                 bar, and as a split of tree and doc in each view `addView` hands out, each session's Docs tab
+                 among them)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
                  permission_prompt MCP tool, recent folders, archived sessions, resume, sign-in), page/ (the
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
@@ -277,6 +281,10 @@ round), since main, not the page, decides.
 - **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
   reaches the round store, the deadline or the window directly. It reads saved rounds only through a
   function the composition root injects, as the layout preview reads saved round args through `savedArgs`.
+- **A docs index source** — the machine index, one per live session today — is an `IndexSource` registered through
+  the `docs` main export `addSource`, which returns a Disposable; the source's entries feed the docs write guard while
+  it is registered. A plugin shows a docs view over a source through the `docs` page export `addView`, and opens a
+  doc in Docs mode with `openDoc`.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool.

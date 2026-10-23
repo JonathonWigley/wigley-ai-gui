@@ -19,7 +19,7 @@ after the steps it needs.
 ## Order
 
 ```
- Tier 0  fix and stabilise     1 Bug sweep (landed) ── 2 Drive reliability ── 3 Docs index seam (deadline)
+ Tier 0  fix and stabilise     1 Bug sweep (landed) ── 2 Drive reliability ── 3 Docs index seam
               │
  Tier 1  core seams            4 Disposables ─┬─ 5 Commands & events ── 8 Palette & finders
               │                               ├─ 6 Keys core
@@ -35,8 +35,7 @@ after the steps it needs.
  Tier 5  cleanup               22 Test cleanup    23 Design skills (other repo)    24 Per-run drive build
 ```
 
-Step 1, the bug sweep, has landed. Start with step 3, since it must land before docs task 07; step 2 can run beside
-it. Step 4 unblocks most of Tiers 1 and 3.
+Step 1, the bug sweep, has landed. Steps 2 and 3 can run side by side. Step 4 unblocks most of Tiers 1 and 3.
 
 ## Tier 0: fix and stabilise
 
@@ -49,11 +48,11 @@ it. Step 4 unblocks most of Tiers 1 and 3.
 - Drive fixtures for the docs load states and for a fake session that ends itself
 - Narration in `selftest-script.ts` becomes per-step `why` and step groups
 
-**3. Docs index seam.** Deadline: settle this before docs task 07 builds on the fixed channel methods.
+**3. Docs index seam.**
 - `IndexSource` registry with `addSource`; `openDoc(path, line?)`; `DocsView(source)`
 - Docs accepts unknown `kind` and `source` values
 - Docs delete trashes link locations (`to_json` exports them; includes a wigley-ai-marketplace change)
-- Non-recursive `watch` option, only if the `~/.claude` watch costs CPU
+- Non-recursive `watch` option
 
 ## Tier 1: core seams
 

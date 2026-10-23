@@ -131,8 +131,8 @@ now, any harness later). Each item names its sites.
   unformatted hints (page and editor) with a keymap-changed subscription so drawn buttons follow a rebind. Box focus
   (`page` or `editor`) becomes a core `keys.onWhereChanged`, replacing keys' own `document.activeElement` reading.
 - Docs: an `IndexSource { id, load, rebuild? }` registry in main, addressed by source id, with `addSource` exported;
-  the page exports `openDoc(path, line?)` and the `DocsView(source)` factory. Settle before docs task 07 builds the
-  view on the fixed `machineIndex` / `rebuild` / `sessionIndex` channel methods.
+  the page exports `openDoc(path, line?)` and the `DocsView(source)` factory, in place of the fixed `machineIndex` /
+  `rebuild` / `sessionIndex` channel methods.
 
 ### Closed lists that become registrations
 
