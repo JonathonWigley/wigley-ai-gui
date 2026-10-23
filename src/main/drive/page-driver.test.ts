@@ -9,6 +9,7 @@ import {
   press,
   waitFor,
   waitForNewLogLine,
+  waitForRedraw,
   withPrimitiveEllipsis,
 } from './page-driver';
 
@@ -175,6 +176,16 @@ describe('waitFor', () => {
     const waiting = waitFor(() => Promise.reject(failure), 10_000);
 
     await expect(waiting).rejects.toBe(failure);
+  });
+});
+
+describe('waitForRedraw', () => {
+  it('waitForRedraw_PageNavigatesDuringSetup_ResolvesFalse', async () => {
+    const { window, navigate } = fakeDrivenWindow([
+      ['window.redrawFrames = 0', () => navigate()],
+    ]);
+
+    expect(await waitForRedraw(window)).toBe(false);
   });
 });
 

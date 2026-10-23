@@ -15,8 +15,9 @@ const LOCK_POLL_MS = 250;
 const SELFTEST_PREFIX = '[selftest]';
 const PASSED_LINE = '[selftest] all passed';
 
+let startLock: StartLock | undefined;
 try {
-  const startLock = await takeStartLock(START_LOCK_FILE, {
+  startLock = await takeStartLock(START_LOCK_FILE, {
     timeoutMs: LOCK_TIMEOUT_MS,
     pollMs: LOCK_POLL_MS,
     isAlive,
@@ -25,6 +26,7 @@ try {
   });
   runSelfTest(startLock);
 } catch (error) {
+  startLock?.release();
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 }

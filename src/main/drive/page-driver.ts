@@ -432,7 +432,8 @@ function waitForPageWidth(window: DrivenWindow, width: number) {
 // first frame, which asks vim to redraw its cursor in the next, and the third
 // starts after that redraw.
 export async function waitForRedraw(window: DrivenWindow): Promise<boolean> {
-  await window.run(`{
+  try {
+    await window.run(`{
   window.redrawFrames = 0;
   const frame = () => {
     window.redrawFrames += 1;
@@ -440,6 +441,12 @@ export async function waitForRedraw(window: DrivenWindow): Promise<boolean> {
   };
   requestAnimationFrame(frame);
 }`);
+  } catch (error) {
+    if (error instanceof PageNavigatedError) {
+      return false;
+    }
+    throw error;
+  }
   return waitFor(
     async () => (await window.run<number>('window.redrawFrames')) >= 3,
   );

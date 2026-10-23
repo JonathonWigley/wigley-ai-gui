@@ -82,6 +82,30 @@ describe('takeStartLock', () => {
     expect(readFileSync(lockFile, 'utf8')).toBe(String(process.pid));
   });
 
+  it('GIVEN a released lock another taker has since taken WHEN the first lock is released again THEN the file still holds the second taker', async () => {
+    const lock = await takeStartLock(lockFile, options({}));
+    lock.release();
+    writeHolder(lockFile, HOLDER_PID);
+
+    lock.release();
+
+    expect(readFileSync(lockFile, 'utf8')).toBe(String(HOLDER_PID));
+  });
+
+  it.each(['', 'x'])(
+    'GIVEN a lock file holding %j WHEN takeStartLock runs THEN it clears the file and takes the lock without waiting',
+    async (text) => {
+      mkdirSync(path.dirname(lockFile), { recursive: true });
+      writeFileSync(lockFile, text);
+      const onWait = vi.fn();
+
+      await takeStartLock(lockFile, options({ onWait }));
+
+      expect(onWait).not.toHaveBeenCalled();
+      expect(readFileSync(lockFile, 'utf8')).toBe(String(process.pid));
+    },
+  );
+
   it('GIVEN a lock held past timeoutMs WHEN takeStartLock runs THEN it rejects naming the holder pid', async () => {
     writeHolder(lockFile, HOLDER_PID);
 

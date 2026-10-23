@@ -307,17 +307,24 @@ describe('checkGroups', () => {
     expect(noWhy).toThrow('Self-test group forms: rounds has no why');
   });
 
-  it('throws on a repeat with max below 2 or no until line', () => {
-    const once = () =>
+  it.each([1, 2.5])('throws on a repeat with max %s', (max) => {
+    const check = () =>
       checkGroups([
         withGroups('forms', [
           {
             name: 'pages',
             why: 'w',
-            steps: [{ ...step, repeat: { until: 'end', max: 1 } }],
+            steps: [{ ...step, repeat: { until: 'end', max } }],
           },
         ]),
       ]);
+
+    expect(check).toThrow(
+      `Self-test group forms: pages has a step (x) repeating with max ${max}: a repeat's max is a whole number of at least 2`,
+    );
+  });
+
+  it('throws on a repeat with no until line', () => {
     const noUntil = () =>
       checkGroups([
         withGroups('forms', [
@@ -329,9 +336,6 @@ describe('checkGroups', () => {
         ]),
       ]);
 
-    expect(once).toThrow(
-      "Self-test group forms: pages has a step (x) repeating with max 1: a repeat's max is a whole number of at least 2",
-    );
     expect(noUntil).toThrow(
       'Self-test group forms: pages has a step (x) repeating with no until line',
     );

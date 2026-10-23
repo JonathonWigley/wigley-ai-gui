@@ -385,10 +385,6 @@ export async function runScript(
   isCurrent: () => boolean,
 ): Promise<number | null> {
   const mark = await markLog(window);
-  // A later run may have begun while the log was read.
-  if (!isCurrent()) {
-    return null;
-  }
   let failures = (await restoreStartWidth(
     window,
     pluginId,
@@ -397,6 +393,10 @@ export async function runScript(
   ))
     ? 0
     : 1;
+  // A later run may have begun while the log was read or the width restored.
+  if (!isCurrent()) {
+    return null;
+  }
   const { shownLine, result } = script.open(run);
   // Rejects with the result's error and otherwise never settles, so a wait
   // raced against it ends as soon as the result rejects.

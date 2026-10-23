@@ -39,12 +39,13 @@ function page(onKey: (key: string, log: string[]) => void) {
 }
 
 // Runs one script of `groups` for plugin `t` over `window`, its fixture
-// logging `[t] shown` as it opens.
+// logging `[t] shown` as it opens, as the run `isCurrent` says is current.
 function runGroups(
   window: DrivenWindow,
   log: string[],
   groups: SelfTestGroup[],
   screenshots: ReadonlyMap<SelfTestStep, readonly string[]> = new Map(),
+  isCurrent: () => boolean = () => true,
 ) {
   return runScript(
     window,
@@ -66,7 +67,7 @@ function runGroups(
     screenshots,
     START_WIDTH,
     1,
-    () => true,
+    isCurrent,
   );
 }
 
@@ -157,6 +158,36 @@ describe('runScript', () => {
     expect(widthsAtKeys).toEqual([START_WIDTH]);
   });
 
+  it('opens nothing when a reload lands while it resizes back to the start width', async () => {
+    const { window, log } = page(echo);
+    window.setContentWidth(500);
+    let isCurrent = true;
+    const reloadingWindow: DrivenWindow = {
+      ...window,
+      setContentWidth: (width) => {
+        window.setContentWidth(width);
+        isCurrent = false;
+      },
+    };
+
+    const failures = await runGroups(
+      reloadingWindow,
+      log,
+      [
+        {
+          name: 'keys',
+          why: 'keys log',
+          steps: [{ keys: ['a'], expect: '[t] a' }],
+        },
+      ],
+      new Map(),
+      () => isCurrent,
+    );
+
+    expect(failures).toBeNull();
+    expect(log).not.toContain('[t] shown');
+  });
+
   it('presses a repeating step until its until line and saves one file per press', async () => {
     const { window, log } = page(pager(3));
     const pngs = [1, 2, 3, 4, 5].map((n) =>
@@ -179,6 +210,34 @@ describe('runScript', () => {
       false,
       false,
     ]);
+  });
+
+  it('passes a repeating step whose first press logs its until line', async () => {
+    const { window, log } = page(pager(1));
+
+    const failures = await runGroups(window, log, [
+      { name: 'pages', why: 'every page shows', steps: [PAGES_STEP] },
+    ]);
+
+    expect(failures).toBe(0);
+    expect(lines).toContain('[selftest] PASS n ×1 -> last page');
+  });
+
+  it('stops a repeating step at a press that logs both its expect and until lines', async () => {
+    let presses = 0;
+    const { window, log } = page((_key, pageLog) => {
+      presses++;
+      pageLog.unshift('next page');
+      pageLog.unshift('last page');
+    });
+
+    const failures = await runGroups(window, log, [
+      { name: 'pages', why: 'every page shows', steps: [PAGES_STEP] },
+    ]);
+
+    expect(failures).toBe(0);
+    expect(presses).toBe(1);
+    expect(lines).toContain('[selftest] PASS n ×1 -> last page');
   });
 
   it('fails a repeating step whose until line never comes in max presses', async () => {
