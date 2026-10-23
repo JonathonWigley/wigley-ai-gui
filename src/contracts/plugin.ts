@@ -517,10 +517,10 @@ export interface MainServices {
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` and
 // `Heard` are as on `PageApi`. `data` is the files service scoped to the
 // plugin's data folder: its paths are `/`-separated and relative to that
-// folder on every OS, and one that resolves outside it fails. `settings` reads the plugin's settings as the
-// user config now sets them; `onSettingsChanged` hears them each time they
-// change, until its `dispose`. `drive` is the plugin's own drive host, null
-// outside a drive run.
+// folder on every OS, and one that resolves outside it fails. `settings`
+// reads the plugin's settings as the user config now sets them;
+// `onSettingsChanged` hears them each time they change, until its `dispose`.
+// `drive` is the plugin's own drive host, null outside a drive run.
 export interface MainApi<
   M extends PluginManifest,
   Ch extends ChannelShape,

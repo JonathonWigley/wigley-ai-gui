@@ -40,8 +40,8 @@ export function registerDataScheme(): void {
 
 // Serves each plugin's data folder under `dataRoot`, joined by `paths`, on
 // the default session, open to any origin, so the page imports modules from it
-// in dev and packaged alike. A URL outside a plugin's folder, or naming anything but a file,
-// answers 404.
+// in dev and packaged alike. A URL outside a plugin's folder, or naming
+// anything but a file, answers 404.
 export function serveDataScheme(dataRoot: string, paths: Paths): void {
   protocol.handle(DATA_SCHEME, async (request) => {
     const file = dataFilePath(request.url, dataRoot, paths);

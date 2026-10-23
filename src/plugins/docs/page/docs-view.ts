@@ -2,6 +2,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { Paths } from '../../../contracts/paths';
 import type {
   PageChannel,
   PushedScope,
@@ -16,7 +17,6 @@ import type {
   IndexLoad,
   SessionSourceSpec,
 } from '../contract';
-import type { Paths } from '../../../contracts/paths';
 import { metaString } from '../index-document';
 import { isIndexedPath } from '../path-guard';
 import { buildTree, type TreeLeaf } from '../tree';
