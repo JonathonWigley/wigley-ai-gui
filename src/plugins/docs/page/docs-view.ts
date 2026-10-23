@@ -719,7 +719,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         return;
       }
       if (change.type !== 'created') {
-        void showChange(change);
+        showChange(change);
       }
       hasRun = true;
       runSource();
