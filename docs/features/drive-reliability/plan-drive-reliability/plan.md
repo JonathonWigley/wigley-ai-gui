@@ -1,7 +1,7 @@
 # Drive reliability and tooling — plan
 
 Feature: drive reliability (master-plan step 2) · Implements: none · Ticket: none
-Target: branch `drive-reliability`, run in a git worktree beside step 1 · Written: 2026-10-23
+Target: `main`, in the main tree, after step 1 · Written: 2026-10-23
 
 REQUIRED SUB-SKILL: Use wigley:make to implement this plan
 
@@ -41,14 +41,11 @@ dialog. Measured: about 1 in 60 restarts for one run alone; 8 in 36 for three ru
 
 ## Preconditions
 
-`wigley:make` re-runs each before the first dispatch, from the worktree.
+`wigley:make` re-runs each before the first dispatch.
 
-- The worktree: `git worktree add ../wigley-ai-gui-drive-reliability -b drive-reliability main` from the main tree,
-  after this plan folder is committed on `main`; then `ln -s
-  /Users/jonathonwigley/Documents/dev/wigley-ai-gui/node_modules
-  /Users/jonathonwigley/Documents/dev/wigley-ai-gui-drive-reliability/node_modules` (round 2: link, never install).
-  The worktree has its own `.vite/`, `.drive/` and `.selftest/`, all git-ignored (`grep -n '^\.vite/\|^\.drive/\|^\.selftest/' .gitignore`
-  prints three lines).
+- Step 1 is finished: its session has said so, and `git status --short -- src` prints nothing, so no peer's
+  uncommitted edit sits in a file this plan changes. Until both hold, the run waits: a peer's dev start shares this
+  tree's `.vite/build` (AGENTS.md § Dev quirks), and its edits would be swept into this run's commits.
 - The docs written ahead are in the tree: `git merge-base --is-ancestor 6e65c67 HEAD` exits 0.
 - Electron is 44.9.1: `grep '"electron"' package.json`. Task 01 checks its `render-process-gone` event
   shape in Electron 44's docs.
@@ -58,8 +55,6 @@ dialog. Measured: about 1 in 60 restarts for one run alone; 8 in 36 for three ru
   `STEPS`, docs `docsSteps(paths, homeDir)`, chat `STEPS`, settings `STEPS` (measured at plan time, re-verify).
 - Step counts per script, re-measured at preflight with `grep -c 'expect:'`, since step 1 landed steps while this
   plan was written: forms 145, docs 113, chat 88, settings 28 (measured at plan time on `dc9bdae`).
-- Step 1's code is on `main` (`git log --oneline -- src | head` shows its commits through `cebc48a`); cut the
-  worktree after step 1's final verification commits, so no step-1 fix lands under this run.
 
 ## Docs written ahead
 
@@ -131,12 +126,11 @@ Commit `6e65c67`:
 
 ### Landing
 
-The run works in the worktree on `drive-reliability`, so its forge starts never meet a peer's or the user's
-`npm start`. Step 1's code is already on `main`, so the worktree starts on top of it. Landing the branch on `main` is
-the user's call after the run. Merge conflicts are expected only with work that lands on `main` meanwhile: the
-slash-completion plan (`docs/features/agent-chat/plan-slash-completion/`) edits `src/contracts/plugin.ts` (another
-interface), `src/shared/fake-agent-harness.ts`, `src/plugins/chat/main/start.ts` and chat's self-test script. After
-the merge, `npm run selftest` passes before the merge commit lands.
+The run commits on `main` in the main tree, once step 1 is finished, so there is no branch to merge. The user's own
+`npm start` shares `.vite/build` with the run's dev starts and is outside the start lock, so the run's drive and
+self-test starts wait while it is open. The slash-completion plan (`docs/features/agent-chat/plan-slash-completion/`)
+edits `src/contracts/plugin.ts`, `src/shared/fake-agent-harness.ts`, `src/plugins/chat/main/start.ts` and chat's
+self-test script; it runs before or after this plan, not beside it.
 
 ## File Structure
 

@@ -5,15 +5,15 @@ Type: Task
 Wave: 6 · Depends on: 11
 Plan: [plan.md](plan.md)
 
-Files:     none (drive runs and the self-test, in the worktree)
+Files:     none (drive runs and the self-test)
 Consumes:  every task
 Produces:  a live-check record in the Proof section
-Decisions: only checks no test pins (`wigley:writing-tests` § What earns a live run instead); every run happens in
-           the worktree, whose `.vite/` is its own, so no check touches the user's `npm start`
+Decisions: only checks no test pins (`wigley:writing-tests` § What earns a live run instead); every run happens with
+           no `npm start` of the user's open, since it shares `.vite/build` and is outside the start lock
 
 ## Checks
 
-Run each in the worktree, reading every capture. Each is tagged expected (the change doing its job) or
+Run each, reading every capture. Each is tagged expected (the change doing its job) or
 low-confidence (where a bug is likely), with its reason.
 
 1. **Restart loop** — expected; the root-cause fix has no live proof yet. One dev run: `restart` it 20 times, each
