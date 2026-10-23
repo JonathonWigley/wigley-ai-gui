@@ -886,6 +886,32 @@ describe('provisionalEntry', () => {
 
     expect(made).toMatchObject({ kind: 'rule', title: 'x.md' });
   });
+
+  it('provisionalEntry_WindowsFolderOtherCase_KindGuessed', () => {
+    const guessed = (path: string) =>
+      provisionalEntry(path, null, [], windowsPaths).kind;
+
+    expect(guessed('C:\\Users\\u\\.claude\\Rules\\x.md')).toBe('rule');
+    expect(guessed('C:/Users/u/.claude/AGENTS/x.md')).toBe('subagent');
+    expect(guessed('C:\\Users\\u\\.claude\\Commands\\x.md')).toBe('command');
+  });
+
+  it('provisionalEntry_PosixFolderOtherCase_Reference', () => {
+    const made = provisionalEntry(
+      '/Users/u/.claude/Rules/x.md',
+      null,
+      [],
+      posixPaths,
+    );
+
+    expect(made.kind).toBe('reference');
+  });
+
+  it('provisionalEntry_FileNamedLikeFolder_NotGuessedFromIt', () => {
+    const made = provisionalEntry('/Users/u/notes/rules', null, [], posixPaths);
+
+    expect(made.kind).toBe('reference');
+  });
 });
 
 describe('settlePending', () => {

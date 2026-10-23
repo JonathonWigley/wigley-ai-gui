@@ -181,6 +181,35 @@ describe('resolveLink on Windows', () => {
     });
   });
 
+  it('resolve_WindowsRootRelative_LinkingDocsDrive', () => {
+    for (const href of ['/x.md', '\\x.md', '/sub/../x.md#L3']) {
+      expect(resolveOnWindows(href)).toMatchObject({
+        type: 'file',
+        path: 'C:\\x.md',
+      });
+    }
+    expect(
+      resolveLink('\\x.md', 'D:\\r\\a.md', WINDOWS_HOME, windowsPaths),
+    ).toMatchObject({ type: 'file', path: 'D:\\x.md' });
+    expect(
+      resolveLink(
+        '/x.md',
+        '\\\\srv\\share\\r\\a.md',
+        WINDOWS_HOME,
+        windowsPaths,
+      ),
+    ).toMatchObject({ type: 'file', path: '\\\\srv\\share\\x.md' });
+  });
+
+  it('resolve_PosixRootPath_Absolute', () => {
+    expect(resolve('/x.md')).toEqual({
+      type: 'file',
+      path: '/x.md',
+      line: null,
+      fragment: null,
+    });
+  });
+
   it('resolve_WindowsTildeWithLine_Expanded', () => {
     expect(resolveOnWindows('~/notes/b.md:4')).toEqual({
       type: 'file',

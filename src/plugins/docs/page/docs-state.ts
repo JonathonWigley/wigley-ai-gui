@@ -498,23 +498,36 @@ function guessedKind(
   owner: IndexEntry | null,
   paths: Paths,
 ): DocKind {
-  const separator = paths.separator;
   if (skill !== null) {
     return 'skill';
   }
-  if (path.includes(`${separator}rules${separator}`)) {
+  const folders = folderNames(path, paths);
+  const inFolder = (name: string): boolean =>
+    folders.some((folder) => paths.samePath(folder, name));
+  if (inFolder('rules')) {
     return 'rule';
   }
-  if (path.includes(`${separator}agents${separator}`)) {
+  if (inFolder('agents')) {
     return 'subagent';
   }
-  if (path.includes(`${separator}commands${separator}`)) {
+  if (inFolder('commands')) {
     return 'command';
   }
   if (INSTRUCTION_NAMES.has(paths.base(path))) {
     return 'instructions';
   }
   return owner?.source === 'features' ? 'feature-doc' : 'reference';
+}
+
+// The name of each folder holding `path`, nearest first.
+function folderNames(path: string, paths: Paths): string[] {
+  const names: string[] = [];
+  let folder = paths.parent(path);
+  while (paths.base(folder) !== '') {
+    names.push(paths.base(folder));
+    folder = paths.parent(folder);
+  }
+  return names;
 }
 
 // The pending paths still waiting once a source run that started at change

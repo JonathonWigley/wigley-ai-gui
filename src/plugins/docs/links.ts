@@ -93,7 +93,8 @@ function fileUrlPath(href: string, paths: Paths): string | null {
 
 // A path link: `#L<n>` or a trailing `:<n>` gives the line, any other `#…`
 // the fragment; a `?query` is dropped, and a link that is only a `?query`
-// leads to `fromFile` itself.
+// leads to `fromFile` itself. A path that starts with a separator yet is not
+// absolute (Windows' `\x`) starts at the root of `fromFile`.
 function fileTarget(
   href: string,
   fromFile: string,
@@ -118,10 +119,25 @@ function fileTarget(
     return { type: 'file', path: fromFile, line, fragment };
   }
   const expanded = paths.expandTilde(decoded(pathText), homeDir);
-  const path = paths.isAbsolute(expanded)
-    ? paths.normalize(expanded)
-    : paths.join(paths.parent(fromFile), expanded);
+  const startsAtRoot = paths.normalize(expanded).startsWith(paths.separator);
+  let path: string;
+  if (paths.isAbsolute(expanded)) {
+    path = paths.normalize(expanded);
+  } else if (startsAtRoot) {
+    path = paths.join(rootOf(fromFile, paths), expanded);
+  } else {
+    path = paths.join(paths.parent(fromFile), expanded);
+  }
   return { type: 'file', path, line, fragment };
+}
+
+// The root `path` starts at: its farthest parent.
+function rootOf(path: string, paths: Paths): string {
+  let folder = path;
+  while (paths.parent(folder) !== folder) {
+    folder = paths.parent(folder);
+  }
+  return folder;
 }
 
 // `text` URI-decoded; a malformed escape keeps the raw text.
