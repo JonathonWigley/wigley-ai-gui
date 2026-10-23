@@ -117,7 +117,6 @@ const GALLERY_STEPS: SelfTestStep[] = [
   {
     keys: ['t'],
     expect: '[gallery] transparency reduced',
-    screenshot: 'gallery-reduced-end',
   },
   {
     keys: ['g', 'g'],

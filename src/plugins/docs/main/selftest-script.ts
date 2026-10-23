@@ -194,10 +194,12 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       keys: ['/', ...'neat', 'Enter'],
       expect: '[docs] filtered the tree: neat',
     },
-    // Global's first child, Instructions, holds no match, so Enter steps into
-    // Rules, the first child the filter shows.
     { keys: ['g', 'g'], expect: '[docs] selected Global' },
-    { keys: ['Enter'], expect: '[docs] selected Rules' },
+    {
+      keys: ['Enter'],
+      expect: '[docs] selected Rules',
+      why: "Global's first child, Instructions, holds no match, so Enter steps into Rules, the first child the filter shows.",
+    },
     { keys: ['Enter'], expect: '[docs] selected neat.md' },
     {
       keys: ['k', 'k', 'j', 'j', 'd'],
@@ -257,8 +259,11 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     { keys: ['j', 'k', 'j', 'l'], expect: '[docs] create rule: pick a place' },
     { keys: ['Escape'], expect: '[docs] create cancelled' },
     { keys: ['c'], expect: '[page] c ran docs.pickContext', checksFit: true },
-    // The picker keeps its keys through the side bar hiding under it.
-    { keys: [' ', 'v', 't'], expect: '[page] side bar hidden' },
+    {
+      keys: [' ', 'v', 't'],
+      expect: '[page] side bar hidden',
+      why: 'The picker keeps its keys through the side bar hiding under it.',
+    },
     {
       keys: ['j', 'Enter'],
       expect: `[docs] context ${shown('dev/selftest-repo')}`,
@@ -276,9 +281,6 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     { keys: [' ', 'k', 'd'], expect: '[page] side bar shown' },
     { keys: [' ', 'v', 't'], expect: '[page] side bar hidden' },
     { keys: [' ', 'v', 't'], expect: '[page] side bar shown' },
-    // Both views' pane scope is now tree, so only closing the session view's
-    // kind picker on Docs mode's show frees `j` there. The picker holds no
-    // text box, so Space reaches the leader.
     { keys: ['<A-h>'], expect: '[docs] tree focused' },
   ];
   const narrowWindow: SelfTestStep[] = [
@@ -300,18 +302,23 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     { keys: ['R'], expect: '[docs] session index read: 4 entries' },
     { keys: [' ', 'v', 't'], expect: '[docs] tree hidden', checksFit: true },
-    // Option+h reveals the hidden tree.
-    { keys: ['<A-h>'], expect: '[docs] tree shown' },
+    {
+      keys: ['<A-h>'],
+      expect: '[docs] tree shown',
+      why: 'Option+h reveals the hidden tree.',
+    },
     { keys: [' ', 'v', 't'], expect: '[docs] tree hidden' },
     { keys: [' ', 'v', 't'], expect: '[docs] tree shown' },
-    // The tree scope back for the filter and the kind picker.
-    { keys: ['<A-h>'], expect: '[docs] tree focused' },
-    // The session split keeps its tree at the fit check's width, where Docs
-    // mode hides its side bar, so the tree's lines are checked here.
+    {
+      keys: ['<A-h>'],
+      expect: '[docs] tree focused',
+      why: 'The tree scope comes back for the filter and the kind picker.',
+    },
     {
       keys: ['/', ...UNMATCHED_FILTER, 'Enter'],
       expect: `[docs] no docs match "${UNMATCHED_FILTER}"`,
       checksFit: true,
+      why: "The session split keeps its tree at the fit check's width, where Docs mode hides its side bar, so the tree's lines are checked here.",
     },
     { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
     {
@@ -323,11 +330,15 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   ];
   const docsModeFromSession: SelfTestStep[] = [
     { keys: ['a'], expect: '[docs] create: pick a kind' },
-    { keys: [' ', 'k', 'd'], expect: '[page] marked Docs in the activity bar' },
+    {
+      keys: [' ', 'k', 'd'],
+      expect: '[page] marked Docs in the activity bar',
+      why: 'The picker holds no text box, so Space reaches the leader.',
+    },
     {
       keys: ['j'],
       expect: '[page] j ran docs.treeDown',
-      why: "Showing Docs mode closed the session view's kind picker, which frees j for Docs mode's tree.",
+      why: "Both views' pane scope is tree, so only closing the session view's kind picker on Docs mode's show frees j for Docs mode's tree.",
     },
     {
       keys: ['/', ...'neat', 'Enter'],
@@ -337,10 +348,10 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       keys: ['j', 'j', 'j', 'j', 'r'],
       expect: '[docs] rename: type the new path',
     },
-    // The session view has read its index, so the rename runs it again.
     {
       keys: [...Array<string>(7).fill('Backspace'), ...'kept.md', 'Enter'],
       expect: '[docs] session index read: 4 entries',
+      why: 'The session view has read its index, so the rename runs it again.',
     },
     { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
   ];
