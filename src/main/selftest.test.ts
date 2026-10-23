@@ -19,7 +19,7 @@ const waitForNewLogLine = vi.hoisted(() =>
 vi.mock('./drive/page-driver', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./drive/page-driver')>()),
   press,
-  readLog: async () => [],
+  markLog: async () => ({ navigation: 0, length: 0 }),
   isReadyForKeys: async () => true,
   readStartFailure: async () => null,
   waitForNewLogLine,

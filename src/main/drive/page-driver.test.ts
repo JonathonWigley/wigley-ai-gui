@@ -4,6 +4,8 @@ import { fakeDrivenWindow } from './fake-driven-window';
 import {
   click,
   drag,
+  linesAfter,
+  markLog,
   press,
   waitFor,
   waitForNewLogLine,
@@ -17,7 +19,10 @@ describe('waitForNewLogLine', () => {
       ['#log li', () => (++reads >= 3 ? ['[x] done'] : [])],
     ]);
 
-    const isLogged = await waitForNewLogLine(window, '[x] done', 0);
+    const isLogged = await waitForNewLogLine(window, '[x] done', {
+      navigation: 0,
+      length: 0,
+    });
 
     expect(isLogged).toBe(true);
   });
@@ -25,7 +30,12 @@ describe('waitForNewLogLine', () => {
   it('waitForNewLogLine_PageReloadedToFewerLinesThanSeen_FindsTheLineAmongThemAll', async () => {
     const { window } = fakeDrivenWindow([['#log li', () => ['[x] done']]]);
 
-    const isLogged = await waitForNewLogLine(window, '[x] done', 5, 100);
+    const isLogged = await waitForNewLogLine(
+      window,
+      '[x] done',
+      { navigation: 0, length: 5 },
+      100,
+    );
 
     expect(isLogged).toBe(true);
   });
@@ -47,7 +57,12 @@ describe('waitForNewLogLine', () => {
       ],
     ]);
 
-    const isLogged = await waitForNewLogLine(window, '[x] done', 2, 500);
+    const isLogged = await waitForNewLogLine(
+      window,
+      '[x] done',
+      { navigation: 0, length: 2 },
+      500,
+    );
 
     expect(isLogged).toBe(true);
   });
@@ -57,9 +72,58 @@ describe('waitForNewLogLine', () => {
       ['#log li', () => ['[x] later', '[x] done']],
     ]);
 
-    const isLogged = await waitForNewLogLine(window, '[x] done', 2, 100);
+    const isLogged = await waitForNewLogLine(
+      window,
+      '[x] done',
+      { navigation: 0, length: 2 },
+      100,
+    );
 
     expect(isLogged).toBe(false);
+  });
+
+  it("finds a line among the oldest of the mark's length once the page has navigated since the mark", async () => {
+    let log = ['[x] 5', '[x] 4', '[x] 3', '[x] 2', '[x] 1'];
+    const { window, navigate } = fakeDrivenWindow([['#log li', () => log]]);
+    const mark = await markLog(window);
+    navigate();
+    log = ['[x] g', '[x] f', '[x] e', '[x] d', '[x] c', '[x] b', '[x] done'];
+
+    const isLogged = await waitForNewLogLine(window, '[x] done', mark, 100);
+
+    expect(isLogged).toBe(true);
+  });
+
+  it('does not find a line logged before the mark when the page has not navigated', async () => {
+    const log = ['[x] 5', '[x] 4', '[x] done', '[x] 2', '[x] 1'];
+    const { window } = fakeDrivenWindow([['#log li', () => log]]);
+    const mark = await markLog(window);
+
+    const isLogged = await waitForNewLogLine(window, '[x] done', mark, 100);
+
+    expect(isLogged).toBe(false);
+  });
+});
+
+describe('linesAfter', () => {
+  it('returns every line of the new log, oldest first, once the page has navigated since the mark', async () => {
+    let log = ['[x] 5', '[x] 4', '[x] 3', '[x] 2', '[x] 1'];
+    const { window, navigate } = fakeDrivenWindow([['#log li', () => log]]);
+    const mark = await markLog(window);
+    navigate();
+    log = ['[x] g', '[x] f', '[x] e', '[x] d', '[x] c', '[x] b', '[x] a'];
+
+    const lines = await linesAfter(window, mark);
+
+    expect(lines).toEqual([
+      '[x] a',
+      '[x] b',
+      '[x] c',
+      '[x] d',
+      '[x] e',
+      '[x] f',
+      '[x] g',
+    ]);
   });
 });
 

@@ -23,6 +23,8 @@ import {
   cutOffAtWidth,
   drag,
   isReadyForKeys,
+  linesAfter,
+  markLog,
   press,
   readLog,
   readStartFailure,
@@ -92,10 +94,10 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
 
   // Every page-log line `act` caused, oldest first, once the page has redrawn.
   const linesCausedBy = async (act: () => Promise<void>) => {
-    const seen = (await readLog(window)).length;
+    const mark = await markLog(window);
     await act();
     await waitForRedraw(window);
-    return { lines: await linesAfter(window, seen) };
+    return { lines: await linesAfter(window, mark) };
   };
 
   // A capture rectangle with no width or height captures the whole window.
@@ -199,12 +201,12 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
       run: async (args) => {
         const name = requiredString(args, 'name');
         const plugin = optionalString(args, 'plugin');
-        const seen = (await readLog(window)).length;
+        const mark = await markLog(window);
         const applied = await whenConfigChanges(deps.configChanged, () =>
           writeSetting(deps.homeFiles, plugin, name, args.value),
         );
         await waitForRedraw(window);
-        return { lines: await linesAfter(window, seen), applied };
+        return { lines: await linesAfter(window, mark), applied };
       },
     },
     'wait-log': {
@@ -214,9 +216,9 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
       run: async (args) => {
         const line = requiredString(args, 'line');
         const timeoutMs = optionalNumber(args, 'timeoutMs') ?? STEP_TIMEOUT_MS;
-        const seen = (await readLog(window)).length;
+        const mark = await markLog(window);
         return {
-          found: await waitForNewLogLine(window, line, seen, timeoutMs),
+          found: await waitForNewLogLine(window, line, mark, timeoutMs),
         };
       },
     },
@@ -409,16 +411,6 @@ async function emulateFocusOrLog(
       `drive: focus could not be emulated, so the page runs unfocused: ${errorText(error)}`,
     );
   }
-}
-
-// The page-log lines logged after the first `seen`, oldest first; the log is
-// newest first.
-async function linesAfter(
-  window: DrivenWindow,
-  seen: number,
-): Promise<string[]> {
-  const lines = await readLog(window);
-  return lines.slice(0, Math.max(0, lines.length - seen)).reverse();
 }
 
 // Runs `write`, then waits up to the step timeout for the next config change;

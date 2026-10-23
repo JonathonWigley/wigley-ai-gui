@@ -319,24 +319,64 @@ async function holdsBefore(
   }
 }
 
-// Waits for the line among those logged after `seen` lines, or among all of
-// them once the page has reloaded: it navigated after the wait began, or its
-// log holds fewer than `seen` lines. The log is newest first.
+// The page's log as it stood at one navigation: that navigation's count and
+// how many lines the log held.
+export interface LogMark {
+  readonly navigation: number;
+  readonly length: number;
+}
+
+// Marks where the page's log stands now, so a later read can tell which lines
+// came after.
+export async function markLog(window: DrivenWindow): Promise<LogMark> {
+  // Counted before the read, so a reload during the read leaves a mark whose
+  // navigation is already stale, and every later line counts as new.
+  const navigation = window.navigationCount();
+  const { length } = await readLog(window);
+  return { navigation, length };
+}
+
+// The lines of `lines` (the log as read, newest first) logged after `mark`,
+// newest first: all of them when the page has navigated since the mark, which
+// `navigation` (counted before the read) says, or when the log holds fewer
+// lines than the mark did.
+function linesSince(
+  lines: string[],
+  mark: LogMark,
+  navigation: number,
+): string[] {
+  const isReloaded =
+    navigation !== mark.navigation || lines.length < mark.length;
+  return isReloaded ? lines : lines.slice(0, lines.length - mark.length);
+}
+
+// Waits for the line among those logged after `mark`, or among all of them
+// once the page has navigated since the mark or its log holds fewer lines
+// than the mark's.
 export function waitForNewLogLine(
   window: DrivenWindow,
   line: string,
-  seen: number,
+  mark: LogMark,
   timeoutMs = STEP_TIMEOUT_MS,
 ): Promise<boolean> {
-  const navigation = window.navigationCount();
   return waitFor(async () => {
-    // Checked before the read, so an old log is never taken as all new.
-    const hasNavigated = window.navigationCount() !== navigation;
+    // Counted before the read, so an old log is never taken as all new.
+    const navigation = window.navigationCount();
     const lines = await readLog(window);
-    const isReloaded = hasNavigated || lines.length < seen;
-    const newLines = isReloaded ? lines : lines.slice(0, lines.length - seen);
-    return newLines.includes(line);
+    return linesSince(lines, mark, navigation).includes(line);
   }, timeoutMs);
+}
+
+// The page-log lines logged after `mark`, oldest first: every line once the
+// page has navigated since the mark or its log holds fewer lines than the
+// mark's.
+export async function linesAfter(
+  window: DrivenWindow,
+  mark: LogMark,
+): Promise<string[]> {
+  const navigation = window.navigationCount();
+  const lines = await readLog(window);
+  return linesSince(lines, mark, navigation).reverse();
 }
 
 function waitForPageWidth(window: DrivenWindow, width: number) {

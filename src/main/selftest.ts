@@ -11,8 +11,8 @@ import {
   capturePng,
   cutOffAtWidth,
   isReadyForKeys,
+  markLog,
   press,
-  readLog,
   readStartFailure,
   STEP_TIMEOUT_MS,
   waitFor,
@@ -116,7 +116,7 @@ let latestRun = 0;
 
 // Writes the step's file through `homeFiles` (rooted at the self-test's temp
 // home, so a path outside it rejects), presses its keys, and waits for its
-// line; the log is counted before the write, so a line the write alone
+// line; the log is marked before the write, so a line the write alone
 // causes counts. Then, whether the line came or not, saves the window to
 // `png` when the step has one, and, when the line came, runs the step's fit
 // check, which resizes the window and so comes after the screenshot.
@@ -128,7 +128,7 @@ async function runStep(
   scrollsItself: string[],
   isCurrent: () => boolean,
 ): Promise<boolean> {
-  const seen = (await readLog(window)).length;
+  const mark = await markLog(window);
   if (step.writeFile) {
     if (!isCurrent()) {
       return false;
@@ -142,7 +142,7 @@ async function runStep(
     press(window, key);
     await wait(30);
   }
-  const passed = await waitForNewLogLine(window, step.expect, seen);
+  const passed = await waitForNewLogLine(window, step.expect, mark);
   const keys = [
     ...(step.writeFile ? [`write ${step.writeFile.path}`] : []),
     step.keys.join('').replaceAll(' ', '␣'),
@@ -192,7 +192,7 @@ export async function runScript(
   run: number,
   isCurrent: () => boolean,
 ): Promise<number | null> {
-  const seen = (await readLog(window)).length;
+  const mark = await markLog(window);
   // A later run may have begun while the log was read.
   if (!isCurrent()) {
     return null;
@@ -202,7 +202,7 @@ export async function runScript(
   // raced against it ends as soon as the result rejects.
   const rejection = result.then(() => new Promise<never>(() => {}));
   let failures = (await Promise.race([
-    waitForNewLogLine(window, shownLine, seen),
+    waitForNewLogLine(window, shownLine, mark),
     rejection,
   ]))
     ? 0
