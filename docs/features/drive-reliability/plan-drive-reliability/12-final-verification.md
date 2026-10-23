@@ -1,6 +1,6 @@
 # 12 — Final verification in drive runs
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 11
 Plan: [plan.md](plan.md)
