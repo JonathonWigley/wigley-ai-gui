@@ -254,8 +254,7 @@ now, any harness later). Each item names its sites.
 - `form-state.ts` (995 lines) splits into session state, answers (dispatching to `PageKind.reduce`), finding rules
   (into `kinds/finding/`), a save tracker and a draft codec.
 - Two types named `FormsView` (`form-state.ts:16`, `forms-view.ts:56`): rename the union, which also names the key scope.
-- `forms.css` scopes its generic classes (`.field`, `.label`, `.box`, `.choice`, …) under the Form tab and merges the
-  two `.answer-label` rules.
+- `forms.css` scopes its generic classes (`.field`, `.box`, `.choice`, …) under the Form tab.
 - The review list rebuilds every row and its markdown on each keystroke in the round note (`round-view.ts:389-402`).
 - `forms/main/selftest-script.ts`'s 57-line narration becomes a `why` on each `SelfTestStep` and named step groups.
 - Forms' tool routing derives `FORMS_TOOLS` and the dispatch from one list of `{ definition, call }`

@@ -71,6 +71,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `;`                | none: close                          | close session                                                                                                                                           |
 | `k`                | windows                              | `ks` Sessions, `kd` Docs, `kn` new session, `k,` Settings                                                                                               |
 | `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                                                                                                    |
+| `v`                | view                                 | `vt` hide or show the docs tree                                                                                                                         |
 | `c`                | chat controls                        | in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cy` copy the sign-in link (sign-in dialog) |
 | `a`                | answer                               | in a box only: `a1`…`a9`, `ac` clear, `af` fix now, `au` follow-up, `as` leave it                                                                       |
 | `x`                | none: forms not applicable           | in a box only: `x`                                                                                                                                      |
@@ -83,7 +84,7 @@ groups, and its description here is only for readers of this table.
 
 Reserved to match Rider and Neovim, for when the app has the action: `.` context actions, `i`
 info, `e` errors and attention (`en`/`ep`), `j` jump to session N, `s` search, `o` open (config
-files), `r` rename, `v` view.
+files), `r` rename.
 
 ## Adding a bind
 

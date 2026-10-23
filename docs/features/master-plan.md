@@ -56,7 +56,7 @@ stuck UI.
 - The narrow overlay doesn't close on a row click
 - Focus ring z-index
 - The review list rebuilds on each note keystroke
-- `forms.css` scoping and the duplicate `.answer-label`
+- `forms.css` scoping
 - Rail notice entries jump to their comment box
 - Docs: empty-tree state, and a session Docs tab tree with no hide key
 - Raw events: reword `design.md` so the deltas count as covered

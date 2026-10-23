@@ -81,7 +81,7 @@ src/main/        core main process; main.ts is its composition root
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
                  project folders and runs `claude auth` sign-in, sign-out and status → the only place the app spawns `claude`
-  files/         file reads (whole or the first bytes), modified times, atomic writes, rename, trash, folder lists
+  files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, rename, trash, folder lists
                  and watching, behind Files
   processes/     runs a program and returns its exit code and output, behind ProcessRunner
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page
@@ -160,7 +160,8 @@ round), since main, not the page, decides.
   title and an optional side bar element, through the page plugin API, and binds the command that shows it
   (Sessions on `Space k s`, Docs on `Space k d`; pressed while its mode already shows, the same command toggles the
   side bar). The activity bar lists every mode, the side bar slot shows the shown mode's side bar, and the mode's
-  handle sets the title bar's context. A hidden mode keeps its state,
+  handle sets the title bar's context. In a window too narrow for it the side bar opens over the content, and a plugin
+  calls its handle's `picked()` when the user picks something in its side bar, which closes that overlay. A hidden mode keeps its state,
   so leaving one never loses work in it, but it keeps no keys: each mode and each session tab is told when it becomes
   the visible one (`shown`), and its plugin sets its key scope there. A new full-window feature is a new mode, with no
   core edit.

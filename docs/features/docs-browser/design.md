@@ -33,7 +33,11 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - `Space k s` shows Sessions mode; pressed while Sessions already shows, it toggles the sessions sidebar. `Space k d`
   does the same for Docs mode and its docs tree. `<Leader>ks` / `<Leader>kd` do the same inside a box. No existing bind
   starts with `Space k`.
-- While Docs mode's tree is hidden, by `Space k d` or a window too narrow for it, a tree key moves focus to the doc
+- `Space v t` hides and shows the tree of whichever docs view shows: Docs mode's side bar, or a session Docs tab's
+  tree pane. `Alt+h` from the doc shows a hidden tree again.
+- In a window too narrow for the side bar, the side bar opens over the content, and a pick closes it: selecting a
+  session row, or opening a doc by click, `l` or Enter. Expanding or collapsing a tree group keeps it open.
+- While a docs view's tree is hidden, by `Space k d`, `Space v t` or a window too narrow for it, a tree key moves focus to the doc
   and runs what that key runs there by the keymap in force (`j` scrolls the doc); a tree command whose keys run
   different commands there, or none, only moves focus (`src/plugins/docs/page/hidden-tree-keys.ts`).
 - Every key is a default bind in the default keymap (`src/plugins/keymap.ts`) to a named command, never code
@@ -76,7 +80,10 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   in the background on launch and on Rescan. After create, rename or delete the tree updates at once and a background
   build fills in load states; until then the changed entry's chips read `pending`.
 - **Tree**: Global, then Plugins, then one node per repo; a repo holds its docs by kind and its feature home, and
-  splits by clone only when it has more than one. Follow-up items open at their `line`.
+  splits by clone only when it has more than one. Follow-up items open at their `line`. A filter that matches nothing
+  shows `No docs match "<filter>"` with `/` then `Esc` to clear it; an empty index shows `No docs in this index` with
+  `R` to rescan; while a filter is on and rows show, one muted line above them reads `Filtered: <filter>` with `/` to
+  change it. Each key shows as a Kbd and follows a rebind.
 - **Viewing and editing**: a doc opens rendered; `i` swaps the pane to the vim document editor at the line shown;
   `:w` saves, `:q` returns to the rendered view (refused with unsaved edits; `:q!` drops them), `:wq` both. YAML
   frontmatter shows as a field table above the rendered body. The editor highlights markdown, JSON, TOML and YAML by
