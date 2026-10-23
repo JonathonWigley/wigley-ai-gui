@@ -60,8 +60,6 @@ export interface ChatChannel extends ChannelShape {
     sessions(): ChatSessionState[];
     recentFolders(): Promise<RecentFolder[]>;
     chooseFolder(): Promise<string | null>;
-    // The home folder, which the start prompt shows as `~`.
-    homeDir(): string;
     // The new row's sessionId.
     start(request: StartRequest): string;
     // Newest first; a session open in the app is left out.

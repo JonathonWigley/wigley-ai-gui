@@ -91,10 +91,6 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       .catch((error) =>
         log('docs', `watches not cleared: ${errorText(error)}`),
       );
-    const homeDir = api.channel.invoke('homeDir');
-    homeDir.catch((error) =>
-      log('docs', `home folder not read: ${errorText(error)}`),
-    );
 
     let isDocsModeShown = false;
     const sessionDocs = new Map<string, SessionDocs>();
@@ -132,7 +128,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         viewId,
         source,
         channel: api.channel,
-        homeDir,
+        homeDir: services.homeDir,
         editor: services.editor,
         markdown: services.markdown,
         paths: services.paths,
@@ -161,22 +157,21 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     };
 
     // The title bar shows the machine view's open doc while Docs mode shows.
-    // Every context waits on the one home folder promise, so contexts apply in
-    // the order the doc changed. `revealTree` reads `mode` once a key runs,
-    // after `add`.
+    // `openChanged` and `revealTree` read `mode` once a doc opens or a key
+    // runs, after `add`.
     const machineView = createView(
       'machine',
       { type: 'machine' },
       () => isDocsModeShown,
-      (path) => {
-        void homeDir.then((home) =>
-          mode.setContext(
-            path === null
-              ? null
-              : { title: services.paths.tilde(path, home), detail: null },
-          ),
-        );
-      },
+      (path) =>
+        mode.setContext(
+          path === null
+            ? null
+            : {
+                title: services.paths.tilde(path, services.homeDir),
+                detail: null,
+              },
+        ),
       () => {
         if (!mode.sideBarShown()) {
           mode.toggleSideBar();

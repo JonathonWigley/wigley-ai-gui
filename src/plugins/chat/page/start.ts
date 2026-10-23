@@ -125,6 +125,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       profiles: () => api.settings().profiles,
       reveal: (sessionId) => view.reveal(sessionId),
       paths: services.paths,
+      homeDir: services.homeDir,
       log: services.log,
       toast: services.toast,
     });

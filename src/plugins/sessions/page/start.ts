@@ -154,7 +154,16 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       mode.setContext(
         selected === undefined
           ? null
-          : { title: selected.label, detail: selected.projectDir },
+          : {
+              title: selected.label,
+              detail:
+                selected.projectDir === null
+                  ? null
+                  : api.services.paths.tilde(
+                      selected.projectDir,
+                      api.services.homeDir,
+                    ),
+            },
       );
       const changes = rowChanges(before.rows, next.rows);
       for (const sessionId of changes.removed) {

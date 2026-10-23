@@ -141,7 +141,6 @@ export interface DocChange {
 // Every method rejects with main's own error text when its handler throws.
 export interface DocsChannel extends ChannelShape {
   invoke: {
-    homeDir(): Promise<string>;
     machineIndex(): Promise<IndexLoad>;
     rebuild(): Promise<IndexLoad>;
     sessionIndex(spec: SessionSourceSpec): Promise<IndexLoad>;

@@ -119,7 +119,7 @@ export interface DocsViewDeps {
   viewId: string;
   source: DocsSource;
   channel: PageChannel<DocsChannel>;
-  homeDir: Promise<string>;
+  homeDir: string;
   editor: EditorHost;
   markdown: MarkdownRenderer;
   paths: Paths;
@@ -214,8 +214,6 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   const run = sourceRun(deps);
   let document: IndexDocument | null = null;
   let entriesById = new Map<string, IndexEntry>();
-  // Set from the first document shown, before any entry can be opened.
-  let homeDirNow = '';
   let changeSeq = 0;
   // Path → the change that made or moved it.
   let pending = new Map<string, number>();
@@ -271,11 +269,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   const detailOf = (entry: IndexEntry | null): DocDetail | null => {
     if (entry?.kind === 'hook') {
-      const fields = detailFields(entry, homeDirNow, deps.paths);
+      const fields = detailFields(entry, deps.homeDir, deps.paths);
       return { fields, editFile: () => hookFile(entry) };
     }
     if (entry?.kind === 'plugin') {
-      const fields = detailFields(entry, homeDirNow, deps.paths);
+      const fields = detailFields(entry, deps.homeDir, deps.paths);
       return { fields, editFile: () => pluginFile(entry) };
     }
     return null;
@@ -414,23 +412,17 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     });
   }
 
-  // The document and its entries take effect at once; the tree and chips
-  // redraw once the home folder is known, unless a newer document came.
-  const showDocument = async (next: IndexDocument | null) => {
+  // Shows the document and its entries, redrawing the tree and chips.
+  const showDocument = (next: IndexDocument | null) => {
     document = next;
     entriesById = new Map(next?.entries.map((entry) => [entry.id, entry]));
-    const homeDir = await deps.homeDir;
-    if (document !== next) {
-      return;
-    }
-    homeDirNow = homeDir;
     if (next !== null && deps.source.type === 'machine') {
-      const choices = contextChoices(next, homeDir, deps.paths);
+      const choices = contextChoices(next, deps.homeDir, deps.paths);
       const kept = choices.some((choice) => choice.folder === contextFolder);
       contextFolder = kept ? contextFolder : (choices[0]?.folder ?? null);
     }
     tree.setTree(
-      buildTree(next?.entries ?? [], homeDir, deps.paths),
+      buildTree(next?.entries ?? [], deps.homeDir, deps.paths),
       (entryId) => {
         return entriesById.get(entryId)?.path ?? '';
       },
@@ -451,7 +443,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     const number = ++startedLoads;
     tree.setStatus(busyText);
     read()
-      .then(async (result) => {
+      .then((result) => {
         if (number < shownLoad) {
           return;
         }
@@ -459,7 +451,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         pending = settlePending(pending, settledSeq);
         unsettled = unsettled.filter((change) => change.seq > settledSeq);
         const built = result.document;
-        await showDocument(
+        showDocument(
           built === null
             ? null
             : unsettled.reduce(
@@ -542,39 +534,37 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   // Applies the change to the shown document, its paths pending until a run
-  // asked after it lands, and moves the doc pane with it; resolves once the
-  // tree shows it, null when no document shows yet.
-  const showChange = (record: DocChangeRecord): Promise<void> | null => {
+  // asked after it lands, and moves the doc pane with it; false when no
+  // document shows yet.
+  const showChange = (record: DocChangeRecord): boolean => {
     const seq = ++changeSeq;
     unsettled.push({ seq, record });
     if (document === null) {
-      return null;
+      return false;
     }
     const next = applyChange(document, record, deps.paths);
     for (const path of changedPaths(record, next)) {
       pending.set(path, seq);
     }
-    const shown = showDocument(next);
+    showDocument(next);
     followChange(record);
-    return shown;
+    return true;
   };
 
   const applyDocChange = (
     record: DocChangeRecord,
     selectPath: string | null,
   ) => {
-    const shown = showChange(record);
+    const isShown = showChange(record);
     const selectId =
       record.type === 'created'
         ? record.entry.id
         : selectPath === null
           ? null
           : entryAt(selectPath)?.id;
-    void shown?.then(() => {
-      if (selectId != null) {
-        tree.selectEntry(selectId);
-      }
-    });
+    if (isShown && selectId != null) {
+      tree.selectEntry(selectId);
+    }
     runSource();
     deps.changed(record);
   };
@@ -622,24 +612,21 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (shown === null) {
       return;
     }
-    void deps.homeDir.then((homeDir) => {
-      const choices = contextChoices(shown, homeDir, deps.paths);
-      if (choices.length === 0) {
-        return;
-      }
-      picker.open({
-        title: 'Load states for',
-        items: choices,
-        label: (choice) => deps.paths.tilde(choice.folder, homeDir),
-        selected: choices.findIndex(
-          (choice) => choice.folder === contextFolder,
-        ),
-        chosen: (choice) => {
-          contextFolder = choice.folder;
-          doc.refreshChips();
-          log('docs', `context ${deps.paths.tilde(choice.folder, homeDir)}`);
-        },
-      });
+    const { homeDir } = deps;
+    const choices = contextChoices(shown, homeDir, deps.paths);
+    if (choices.length === 0) {
+      return;
+    }
+    picker.open({
+      title: 'Load states for',
+      items: choices,
+      label: (choice) => deps.paths.tilde(choice.folder, homeDir),
+      selected: choices.findIndex((choice) => choice.folder === contextFolder),
+      chosen: (choice) => {
+        contextFolder = choice.folder;
+        doc.refreshChips();
+        log('docs', `context ${deps.paths.tilde(choice.folder, homeDir)}`);
+      },
     });
   };
 

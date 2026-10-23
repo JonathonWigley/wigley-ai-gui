@@ -228,7 +228,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     );
     api.channel.handle('recentFolders', () => recent.list());
     api.channel.handle('chooseFolder', () => services.window.chooseFolder());
-    api.channel.handle('homeDir', () => services.homeDir);
     api.events.on('sessions.closed', ({ sessionId }) => chat.closed(sessionId));
     api.events.on('sessions.connected', (session) =>
       chat.sessionConnected(session),

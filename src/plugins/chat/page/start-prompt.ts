@@ -30,6 +30,7 @@ export interface StartPromptDeps {
   profiles(): readonly ChatProfile[];
   reveal(sessionId: string): void;
   paths: Paths;
+  homeDir: string;
   log: Log;
   toast(text: string, tone: ToastTone): void;
 }
@@ -59,11 +60,10 @@ interface SessionStep {
   isWriting: boolean;
 }
 
-// What the prompt has gathered once its first answers arrive.
+// What the prompt has gathered once its first answer arrives.
 interface PromptContext {
   deps: StartPromptDeps;
   recent: readonly RecentFolder[];
-  homeDir: string;
   profiles: readonly ChatProfile[];
 }
 
@@ -80,18 +80,15 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
 
   const openPrompt = () => {
     step = null;
-    void Promise.all([
-      channel.invoke('recentFolders'),
-      channel.invoke('homeDir'),
-    ]).then(
-      ([recent, homeDir]) => {
+    void channel.invoke('recentFolders').then(
+      (recent) => {
         const profiles = deps.profiles();
         if (profiles.length === 0) {
           log('chat', 'no profiles in the chat settings');
           deps.toast("Add a profile to chat's profiles setting first", 'error');
           return;
         }
-        openFolderStep({ deps, recent, homeDir, profiles });
+        openFolderStep({ deps, recent, profiles });
       },
       (error: unknown) => {
         log('chat', `start prompt not opened: ${errorText(error)}`);
@@ -103,7 +100,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const openFolderStep = (context: PromptContext) => {
     deps.picker.open<FolderItem>({
       title: 'Folder',
-      items: folderItems(context.recent, context.homeDir, deps.paths),
+      items: folderItems(context.recent, deps.homeDir, deps.paths),
       label: (item) => item.label,
       selected: 0,
       picked: (item) =>
@@ -283,11 +280,11 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
 }
 
 function resumeSession(step: SessionStep, row: PastSessionRow) {
-  const { deps, homeDir } = step.context;
+  const { deps } = step.context;
   const { projectDir, profile } = step;
   deps.log(
     'chat',
-    `resuming ${row.title} in ${displayPath(projectDir, homeDir, deps.paths)} with ${profile.name}`,
+    `resuming ${row.title} in ${displayPath(projectDir, deps.homeDir, deps.paths)} with ${profile.name}`,
   );
   void deps.channel
     .invoke('resume', {
@@ -312,7 +309,7 @@ function startSession(
   const { deps } = context;
   deps.log(
     'chat',
-    `starting a session in ${displayPath(projectDir, context.homeDir, deps.paths)} with ${profile.name}`,
+    `starting a session in ${displayPath(projectDir, deps.homeDir, deps.paths)} with ${profile.name}`,
   );
   void deps.channel.invoke('start', { projectDir, profile: profile.name }).then(
     (sessionId) => deps.reveal(sessionId),

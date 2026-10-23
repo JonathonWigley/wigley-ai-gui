@@ -50,6 +50,9 @@ export interface AppConfig {
   pluginSettings: Record<string, object>;
   theme: Theme;
   platform: Platform;
+  // The real path of the home folder main's plugins run in: the user's in a
+  // live run, the temp home under the self-test and a drive run.
+  homeDir: string;
   // Every config file that could not be applied; empty when none.
   problems: ConfigProblem[];
 }

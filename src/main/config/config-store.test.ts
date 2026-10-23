@@ -17,7 +17,8 @@ import {
   loadConfigStore,
 } from './config-store';
 
-const FOLDER = '/home/.config/wigley-ai-gui';
+const HOME = '/home';
+const FOLDER = `${HOME}/.config/wigley-ai-gui`;
 
 const DEFAULTS: Settings = {
   window: { width: 900, height: 700, minWidth: 420, minHeight: 360 },
@@ -133,6 +134,7 @@ function load(
     resolveTheme,
     checkTokens: () => null,
     platform: 'windows',
+    homeDir: HOME,
     log: () => undefined,
     ...overrides,
   });
@@ -220,6 +222,7 @@ describe('loadConfigStore', () => {
     expect(config.theme.name).toBe('mocha');
     expect(config.problems).toEqual([]);
     expect(config.platform).toBe('windows');
+    expect(config.homeDir).toBe(HOME);
   });
 
   it('deep-merges settings.json over the defaults', async () => {

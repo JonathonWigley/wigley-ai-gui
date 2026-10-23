@@ -42,7 +42,6 @@ type DocsApi = MainApi<
 // the self-test or a drive run, the fixture written into a home that had
 // none.
 interface DocsMain {
-  homeDir: string;
   sources: IndexSources;
   docFiles: DocFiles;
 }
@@ -90,7 +89,7 @@ export async function startDocs(
     paths,
     entries: () => sources.loadedEntries(),
   });
-  return { homeDir, sources, docFiles };
+  return { sources, docFiles };
 }
 
 interface DocsDriveDeps {
@@ -189,7 +188,6 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       async (path, changed) => (await docs).docFiles.watch(path, changed),
       (change) => channel.send('docChanged', change),
     );
-    channel.handle('homeDir', async () => (await docs).homeDir);
     channel.handle('machineIndex', async () =>
       (await docs).sources.machineIndex(),
     );

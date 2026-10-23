@@ -158,6 +158,7 @@ async function start() {
     log,
     timers,
     paths: config.platform === 'windows' ? windowsPaths : posixPaths,
+    homeDir: config.homeDir,
   };
   // Filled once the page keys are installed; no key reaches the engine before.
   let pageKeys: ReturnType<typeof installPageKeys> | null = null;

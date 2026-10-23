@@ -69,6 +69,7 @@ export interface ConfigStoreDeps {
   resolveTheme: (...args: Required<Parameters<typeof resolveTheme>>) => Theme;
   checkTokens: TokenCheck;
   platform: Platform;
+  homeDir: string;
   log: Log;
 }
 
@@ -314,6 +315,7 @@ export async function loadConfigStore(
       pluginSettings: settings.pluginSettings,
       theme,
       platform: deps.platform,
+      homeDir: deps.homeDir,
       problems: [
         ...(watchProblem === null ? [] : [watchProblem]),
         ...inServedOrder(problems),

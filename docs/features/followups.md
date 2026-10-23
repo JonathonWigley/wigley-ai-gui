@@ -226,8 +226,8 @@ now, any harness later). Each item names its sites.
   `SessionInfo.deadlineSeconds` moves to an opaque host record forms reads. The layout preview passes a `label` instead
   of `projectDir: 'Layout preview'`.
 - Core page services for what plugins duplicate: `services.picker` (chat-private today, docs needs it) and
-  `services.confirm` (built twice, chat and forms); `homeDir`, `chooseFolder()` and `openExternal(url)` on
-  `PageServices` with the scheme check inside, deleting the per-plugin channel pass-throughs in chat and docs.
+  `services.confirm` (built twice, chat and forms); `chooseFolder()` and `openExternal(url)` on `PageServices` with
+  the scheme check inside, deleting the per-plugin channel pass-throughs in chat and docs.
 - Shared helpers in place of copies: `readIfPresent` (docs `script-locator.ts`, chat `recent-folders.ts`, theme
   loader), `upsertById` (chat main and page), one `orList` and `capitalised` (`round.ts`, `finding-text.ts`).
 - One status item for the focused editor's vim mode, fed by `EditorHost`; forms contributes only its save state while

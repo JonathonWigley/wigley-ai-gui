@@ -106,6 +106,7 @@ describe('applySelfTestConfig', () => {
       pluginSettings: { p: { size: 1, speed: 2 } },
       theme: { name: 't', colorScheme: 'dark', tokens: {}, reduced: {} },
       platform: 'macos',
+      homeDir: '/Users/u',
       problems: [],
     };
 

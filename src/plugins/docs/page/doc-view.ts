@@ -64,7 +64,7 @@ export interface DocTarget {
 export interface DocViewDeps {
   viewId: string;
   channel: PageChannel<DocsChannel>;
-  homeDir: Promise<string>;
+  homeDir: string;
   editor: EditorHost;
   markdown: MarkdownRenderer;
   paths: Paths;
@@ -263,10 +263,10 @@ export function createDocView(deps: DocViewDeps): DocView {
     body = nextBody;
   };
 
-  const drawHeader = (target: DocTarget, homeDir: string) => {
+  const drawHeader = (target: DocTarget) => {
     header.hidden = false;
     title.textContent = target.title;
-    path.textContent = deps.paths.tilde(target.path, homeDir);
+    path.textContent = deps.paths.tilde(target.path, deps.homeDir);
     path.title = target.path;
     readOnlyLine.hidden = target.cachePlugin === null;
     readOnlyLine.textContent =
@@ -311,28 +311,26 @@ export function createDocView(deps: DocViewDeps): DocView {
     event.preventDefault();
     const href = anchor.dataset.href ?? '';
     const fromFile = shown.target.path;
-    void deps.homeDir.then((homeDir) => {
-      const target = resolveLink(href, fromFile, homeDir, deps.paths);
-      switch (target.type) {
-        case 'external':
-          deps.channel
-            .invoke('openExternal', target.url)
-            .then(() => deps.log('docs', `opened link ${target.url}`))
-            .catch((error) => deps.toast(errorText(error), 'error'));
-          break;
-        case 'heading':
-          if (!scrollToHeading(target.fragment)) {
-            toastMissingHeading(target.fragment);
-          }
-          break;
-        case 'file':
-          deps.followFile(target.path, target.line, target.fragment);
-          break;
-        case 'unsupported':
-          deps.toast(`This link does not open here: ${target.href}`, 'info');
-          break;
-      }
-    });
+    const target = resolveLink(href, fromFile, deps.homeDir, deps.paths);
+    switch (target.type) {
+      case 'external':
+        deps.channel
+          .invoke('openExternal', target.url)
+          .then(() => deps.log('docs', `opened link ${target.url}`))
+          .catch((error) => deps.toast(errorText(error), 'error'));
+        break;
+      case 'heading':
+        if (!scrollToHeading(target.fragment)) {
+          toastMissingHeading(target.fragment);
+        }
+        break;
+      case 'file':
+        deps.followFile(target.path, target.line, target.fragment);
+        break;
+      case 'unsupported':
+        deps.toast(`This link does not open here: ${target.href}`, 'info');
+        break;
+    }
   }
 
   const endConflict = (refocus: boolean) => {
@@ -537,7 +535,6 @@ export function createDocView(deps: DocViewDeps): DocView {
       const count = ++openCount;
       let text = '';
       let rendered: Rendered = { fields: [], html: '', bodyStartLine: 1 };
-      const homeDir = await deps.homeDir;
       try {
         if (target.detail === null) {
           text = await deps.channel.invoke('readDoc', target.path);
@@ -551,7 +548,7 @@ export function createDocView(deps: DocViewDeps): DocView {
           rendered = detailRendered(target.detail);
         }
       } catch (error) {
-        const failure = `Could not open ${deps.paths.tilde(target.path, homeDir)}: ${errorText(error)}`;
+        const failure = `Could not open ${deps.paths.tilde(target.path, deps.homeDir)}: ${errorText(error)}`;
         deps.toast(failure, 'error');
         deps.log('docs', failure);
         return false;
@@ -572,7 +569,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       };
       deps.openChanged(target.path);
       empty.hidden = true;
-      drawHeader(target, homeDir);
+      drawHeader(target);
       drawChips();
       drawBody(rendered);
       pane.scrollTop = 0;
@@ -600,11 +597,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         watchFile(target.path, doc.name);
       }
       drawChips();
-      void deps.homeDir.then((homeDir) => {
-        if (shown === doc) {
-          drawHeader(target, homeDir);
-        }
-      });
+      drawHeader(target);
     },
     clear() {
       if (shown === null) {

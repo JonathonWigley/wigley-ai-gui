@@ -312,6 +312,8 @@ export interface PageServices {
   timers: Timers;
   // Full paths by the rules of the OS the served config names.
   paths: Paths;
+  // The home folder the served config names, which `paths.tilde` shows as `~`.
+  homeDir: string;
   // This plugin's own ui state, its keys kept apart from every other plugin's.
   uiState: UiState;
 }

@@ -270,7 +270,9 @@ round), since main, not the page, decides.
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool.
 - **An ambient service** — the clock, ids, the home folder, files (with watching), processes, opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
-  through `api.services`, filled in by the composition root, so a test hands the plugin a fake.
+  through `api.services`, filled in by the composition root, so a test hands the plugin a fake. The page's home folder
+  is the real path of main's, served in the config, so every view shows a folder under it as `~` through
+  `services.homeDir`.
 - **A path** is handled through `services.paths` on both sides, the `Paths` contract (`src/contracts/paths.ts`)
   with a POSIX and a Windows adapter in `src/shared/paths/`, each composition root picking one: main by the OS it
   runs on, the page by the served `platform`. Page and shared code that joins, splits or shows a full path calls it,

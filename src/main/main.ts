@@ -430,8 +430,9 @@ function readStartInputs(): StartInputs {
 }
 
 // The ConfigStore over the user config folder in `homeDir`, logging to the
-// page.
-function loadConfig(homeDir: string): Promise<ConfigStore> {
+// page and serving the real path of `homeDir`, since index entries and
+// session folders are real paths.
+async function loadConfig(homeDir: string): Promise<ConfigStore> {
   return loadConfigStore({
     files,
     folder: path.join(homeDir, '.config', 'wigley-ai-gui'),
@@ -450,6 +451,7 @@ function loadConfig(homeDir: string): Promise<ConfigStore> {
     resolveTheme,
     checkTokens: titleBarOverlayProblem,
     platform,
+    homeDir: await files.realPath(homeDir),
     log: pageLog.log,
   });
 }

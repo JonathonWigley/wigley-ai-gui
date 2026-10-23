@@ -31,7 +31,6 @@ const app: RecentFolder = {
 // reject or answer differently each time.
 interface Answers {
   recentFolders: () => Promise<RecentFolder[]>;
-  homeDir: () => Promise<string>;
   chooseFolder: () => Promise<string | null>;
   pastSessions: () => Promise<PastSessionRow[]>;
   start: (request: StartRequest) => Promise<string>;
@@ -72,7 +71,6 @@ function setUp(
   const toasts: { text: string; tone: ToastTone }[] = [];
   const answers: Answers = {
     recentFolders: () => Promise.resolve(recent),
-    homeDir: () => Promise.resolve(HOME),
     chooseFolder: () => Promise.resolve('/Users/u/dev/new'),
     pastSessions: () => Promise.resolve([]),
     start: () => Promise.resolve('row-1'),
@@ -133,6 +131,7 @@ function setUp(
     profiles: () => profiles,
     reveal: (sessionId) => revealed.push(sessionId),
     paths: posixPaths,
+    homeDir: HOME,
     log: (source, message) => logs.push(`[${source}] ${message}`),
     toast: (text, tone) => toasts.push({ text, tone }),
   });
@@ -356,17 +355,6 @@ describe('start prompt', () => {
     expect(run.logs).toEqual(['[chat] start prompt not opened: bad file']);
     expect(run.toasts).toEqual([
       { text: 'Start prompt not opened: bad file', tone: 'error' },
-    ]);
-  });
-
-  it('homeDirRejects_toastsAndOpensNothing', async () => {
-    const run = setUp({
-      answers: { homeDir: () => Promise.reject(new Error('no home')) },
-    });
-    await flush();
-    expect(run.opened).toEqual([]);
-    expect(run.toasts).toEqual([
-      { text: 'Start prompt not opened: no home', tone: 'error' },
     ]);
   });
 

@@ -66,7 +66,7 @@ interface TextBox {
 
 interface TextBoxDeps {
   channel: PageChannel<DocsChannel>;
-  homeDir: Promise<string>;
+  homeDir: string;
   paths: Paths;
   log: Log;
   pushScope(): PushedScope;
@@ -105,7 +105,7 @@ function createTextBox(deps: TextBoxDeps): TextBox {
 
   // The matches for `typed`, once its folder is listed.
   const matchesFor = async (typed: string) => {
-    const query = completionQuery(typed, await deps.homeDir, deps.paths);
+    const query = completionQuery(typed, deps.homeDir, deps.paths);
     return completions(await listing(query.folder), query.prefix, deps.paths);
   };
 
@@ -308,7 +308,7 @@ const CREATE_KIND_TITLES: Record<CreateKind, string> = {
 
 export interface DocsDialogsDeps {
   channel: PageChannel<DocsChannel>;
-  homeDir: Promise<string>;
+  homeDir: string;
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: Log;
@@ -375,9 +375,9 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
   // Whether a delete is waiting on main to name what it moves.
   let isTrashAsking = false;
 
-  const pickPlace = async (kind: CreateKind) => {
+  const pickPlace = (kind: CreateKind) => {
     const kindTitle = CREATE_KIND_TITLES[kind];
-    const places = placesFor(kind, deps.entries(), await deps.homeDir, paths);
+    const places = placesFor(kind, deps.entries(), deps.homeDir, paths);
     if (places.length === 0) {
       toast(
         noPlaceText(kindTitle, deps.keysFor('createByPath', 'tree')),
@@ -458,7 +458,11 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
         label: (kind) => CREATE_KIND_TITLES[kind],
         selected: 0,
         chosen: (kind) => {
-          pickPlace(kind).catch(failed);
+          try {
+            pickPlace(kind);
+          } catch (error) {
+            failed(error);
+          }
         },
         cancelled: () => {
           createCancelled();
@@ -468,64 +472,61 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       log('docs', 'create: pick a kind');
     },
     createByPath(folder) {
-      void deps.homeDir.then((homeDir) => {
-        box.open({
-          label: 'New file',
-          text: `${paths.tilde(folder ?? homeDir, homeDir)}${paths.separator}`,
-          completes: true,
-          accept: async (path) => {
-            try {
-              const created = await channel.invoke('createDoc', {
-                type: 'path',
-                path,
-              });
-              box.close();
-              const entry = provisionalEntry(
-                created.path,
-                null,
-                deps.entries(),
-                paths,
-              );
-              deps.changed({ type: 'created', entry }, null);
-              await deps.openInEditor(entry, created.line);
-              log('docs', `created ${paths.base(created.path)}`);
-            } catch (error) {
-              failed(error);
-            }
-          },
-          cancelled: createCancelled,
-        });
-        log('docs', 'create by path: type the path');
+      const { homeDir } = deps;
+      box.open({
+        label: 'New file',
+        text: `${paths.tilde(folder ?? homeDir, homeDir)}${paths.separator}`,
+        completes: true,
+        accept: async (path) => {
+          try {
+            const created = await channel.invoke('createDoc', {
+              type: 'path',
+              path,
+            });
+            box.close();
+            const entry = provisionalEntry(
+              created.path,
+              null,
+              deps.entries(),
+              paths,
+            );
+            deps.changed({ type: 'created', entry }, null);
+            await deps.openInEditor(entry, created.line);
+            log('docs', `created ${paths.base(created.path)}`);
+          } catch (error) {
+            failed(error);
+          }
+        },
+        cancelled: createCancelled,
       });
+      log('docs', 'create by path: type the path');
     },
     rename(entry) {
-      void deps.homeDir.then((homeDir) => {
-        box.open({
-          label: 'Rename to',
-          text: paths.tilde(entry.path, homeDir),
-          completes: true,
-          accept: async (typed) => {
-            try {
-              const renamed = await channel.invoke(
-                'renameDoc',
-                entry.path,
-                typed,
-              );
-              box.close();
-              const record = renameRecord(entry.path, renamed, paths);
-              deps.changed(record, renamed);
-              log(
-                'docs',
-                `renamed ${paths.base(record.from)} to ${paths.base(record.to)}`,
-              );
-            } catch (error) {
-              failed(error);
-            }
-          },
-          cancelled: () => log('docs', 'rename cancelled'),
-        });
-        log('docs', 'rename: type the new path');
+      box.open({
+        label: 'Rename to',
+        text: paths.tilde(entry.path, deps.homeDir),
+        completes: true,
+        accept: async (typed) => {
+          try {
+            const renamed = await channel.invoke(
+              'renameDoc',
+              entry.path,
+              typed,
+            );
+            box.close();
+            const record = renameRecord(entry.path, renamed, paths);
+            deps.changed(record, renamed);
+            log(
+              'docs',
+              `renamed ${paths.base(record.from)} to ${paths.base(record.to)}`,
+            );
+          } catch (error) {
+            failed(error);
+          }
+        },
+        cancelled: () => log('docs', 'rename cancelled'),
       });
+      log('docs', 'rename: type the new path');
     },
     // Main names what goes before the question, so a link's target is named
     // beside the link; a delete while that is asked is ignored. A trash that
@@ -536,17 +537,18 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
         return;
       }
       isTrashAsking = true;
-      Promise.all([channel.invoke('trashTargets', entry.path), deps.homeDir])
+      channel
+        .invoke('trashTargets', entry.path)
         .finally(() => {
           isTrashAsking = false;
         })
-        .then(([targets, homeDir]) => {
+        .then((targets) => {
           const name = paths.base(targets[targets.length - 1]);
           confirm.open(
             () =>
               trashQuestion(
                 targets,
-                homeDir,
+                deps.homeDir,
                 {
                   yes: deps.keysFor('confirmYes', 'confirm'),
                   no: deps.keysFor('confirmNo', 'confirm'),
