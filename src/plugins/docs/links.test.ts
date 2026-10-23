@@ -218,6 +218,19 @@ describe('resolveLink on Windows', () => {
     });
   });
 
+  it('resolve_FileUrlDriveAsHost_DrivePath', () => {
+    expect(resolveOnWindows('file://C:/r/y.md')).toEqual({
+      type: 'file',
+      path: 'C:\\r\\y.md',
+      line: null,
+      fragment: null,
+    });
+    expect(resolve('file://C:/r/y.md')).toEqual({
+      type: 'unsupported',
+      href: 'file://C:/r/y.md',
+    });
+  });
+
   it('resolve_WindowsFileUrlWithHost_UncPath', () => {
     expect(resolveOnWindows('file://server/share/x.md#L2')).toEqual({
       type: 'file',

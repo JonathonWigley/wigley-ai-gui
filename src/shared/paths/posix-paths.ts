@@ -8,8 +8,8 @@ export const posixPaths: Paths = rootedPaths({
   separators: /\//,
   splitRoot(path) {
     return path.startsWith('/')
-      ? { root: '/', absolute: true, rest: path.slice(1) }
-      : { root: '', absolute: false, rest: path };
+      ? { root: '/', absolute: true, fixedTop: true, rest: path.slice(1) }
+      : { root: '', absolute: false, fixedTop: false, rest: path };
   },
   compareKey: (text) => text,
 });

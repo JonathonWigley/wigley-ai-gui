@@ -9,6 +9,8 @@ export type LinkTarget =
 // The links the app opens outside itself, in the OS default handler.
 export const EXTERNAL_SCHEME = /^https?:/i;
 const FILE_URL = /^file:\/\//i;
+// A `file:` URL's host that is a drive letter and colon, never a UNC server.
+const DRIVE_HOST = /^[A-Za-z]:$/;
 const ANY_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 // `b.md:12` reads as a scheme to ANY_SCHEME; a name holding a `.` or `/`
 // with a colon followed only by digits is a file and line (not
@@ -68,16 +70,24 @@ export function resolveLink(
 // holding any `#…` or `?…`; null when it names none. `file://host/share/x`
 // is the UNC path `\\host\share\x`, which only a Windows `paths` accepts;
 // `localhost` reads as no host. With no host, `file:///C:/x` is `C:/x` and
-// `file:///x` is `/x`, which names no file on Windows.
+// `file:///x` is `/x`, which names no file on Windows. A drive letter in the
+// host's place, as in `file://C:/x`, is the start of the path `C:/x`, which
+// names no file on POSIX.
 function fileUrlPath(href: string, paths: Paths): string | null {
   const rest = href.replace(FILE_URL, '');
   const slash = rest.indexOf('/');
   const host = slash === -1 ? rest : rest.slice(0, slash);
   const urlPath = slash === -1 ? '' : rest.slice(slash);
-  const candidates =
-    host === '' || host.toLowerCase() === 'localhost'
-      ? [urlPath.slice(1), urlPath]
-      : [`\\\\${host}${urlPath}`];
+  const hostIsDrive = DRIVE_HOST.test(host);
+  const hasNoHost = host === '' || host.toLowerCase() === 'localhost';
+  let candidates: string[];
+  if (hostIsDrive) {
+    candidates = [host + urlPath];
+  } else if (hasNoHost) {
+    candidates = [urlPath.slice(1), urlPath];
+  } else {
+    candidates = [`\\\\${host}${urlPath}`];
+  }
   return candidates.find((path) => paths.isAbsolute(path)) ?? null;
 }
 

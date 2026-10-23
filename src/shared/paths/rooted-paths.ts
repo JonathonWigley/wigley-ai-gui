@@ -5,6 +5,8 @@ export interface SplitRoot {
   // As `normalize` writes it: '' for none, '/', 'C:\', '\\server\share\'.
   root: string;
   absolute: boolean;
+  // A '..' stops at the root: '/', 'C:\', a UNC share and Windows' '\'.
+  fixedTop: boolean;
   rest: string;
 }
 
@@ -20,20 +22,20 @@ export interface PathSyntax {
 
 interface ParsedPath {
   root: string;
-  absolute: boolean;
+  fixedTop: boolean;
   segments: string[];
 }
 
 // A `Paths` over `syntax`: a path is a root and its segments, '..' climbing a
-// kept segment, dropped at the front of an absolute path and kept at the front
-// of any other.
+// kept segment, dropped at the front of a path whose root has a fixed top and
+// kept at the front of any other.
 export function rootedPaths(syntax: PathSyntax): Paths {
   const parse = (path: string): ParsedPath => {
-    const { root, absolute, rest } = syntax.splitRoot(path);
+    const { root, fixedTop, rest } = syntax.splitRoot(path);
     return {
       root,
-      absolute,
-      segments: foldSegments(rest.split(syntax.separators), absolute),
+      fixedTop,
+      segments: foldSegments(rest.split(syntax.separators), fixedTop),
     };
   };
   const write = (root: string, segments: readonly string[]): string =>
@@ -50,7 +52,7 @@ export function rootedPaths(syntax: PathSyntax): Paths {
     );
     return write(
       parsed.root,
-      foldSegments([...parsed.segments, ...appended], parsed.absolute),
+      foldSegments([...parsed.segments, ...appended], parsed.fixedTop),
     );
   };
   const segmentsBelow = (path: string, folder: string): string[] | null => {
@@ -120,11 +122,11 @@ export function rootedPaths(syntax: PathSyntax): Paths {
 }
 
 // Drops '' and '.', and folds '..' into the segment before it; a '..' with
-// none before it is dropped at an absolute root and kept at any other ('',
-// Windows' '\' and 'C:'), which has no fixed top.
+// none before it is dropped when the root has a fixed top and kept at a root
+// with none ('' and Windows' 'C:').
 function foldSegments(
   segments: readonly string[],
-  absolute: boolean,
+  fixedTop: boolean,
 ): string[] {
   const kept: string[] = [];
   for (const segment of segments) {
@@ -135,7 +137,7 @@ function foldSegments(
       segment === '..' && kept.length > 0 && kept[kept.length - 1] !== '..';
     if (climbsKeptSegment) {
       kept.pop();
-    } else if (segment !== '..' || !absolute) {
+    } else if (segment !== '..' || !fixedTop) {
       kept.push(segment);
     }
   }

@@ -22,6 +22,7 @@ function splitRoot(path: string): SplitRoot {
     return {
       root: `\\\\${unc[1]}\\${unc[2]}\\`,
       absolute: true,
+      fixedTop: true,
       rest: path.slice(unc[0].length),
     };
   }
@@ -30,14 +31,21 @@ function splitRoot(path: string): SplitRoot {
     return {
       root: `${drive[1]}\\`,
       absolute: true,
+      fixedTop: true,
       rest: path.slice(drive[0].length),
     };
   }
   if (DRIVE_RELATIVE.test(path)) {
-    return { root: path.slice(0, 2), absolute: false, rest: path.slice(2) };
+    return {
+      root: path.slice(0, 2),
+      absolute: false,
+      fixedTop: false,
+      rest: path.slice(2),
+    };
   }
+  // '\foo': relative to the current drive's root.
   if (path.startsWith('\\') || path.startsWith('/')) {
-    return { root: '\\', absolute: false, rest: path.slice(1) };
+    return { root: '\\', absolute: false, fixedTop: true, rest: path.slice(1) };
   }
-  return { root: '', absolute: false, rest: path };
+  return { root: '', absolute: false, fixedTop: false, rest: path };
 }
