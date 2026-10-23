@@ -68,11 +68,11 @@ const UNMATCHED_FILTER = 'zqzq'.repeat(10);
 // bar, focusing the doc, and Option+h brings it back; Space k d hides it again
 // and once more shows it; Space v t hides it and shows it again; Option+h
 // focuses the tree. Space k s shows Sessions mode on the docs session's Docs
-// tab (the session tab's screenshot), where R reads its session index,
-// Space v t hides its tree, Option+h shows it, Space v t hides and shows it
-// again, and Option+h focuses the tree. / filters it to a long filter matching
-// nothing and Enter keeps it, / and Esc clear it; / filters it to style and
-// Enter keeps it, and / and Esc clear it. a opens the kind picker. Space k d shows Docs mode,
+// tab (the session tab's screenshot), where R reads its session index, Space v
+// t hides its tree, Option+h shows it, Space v t hides and shows it again, and
+// Option+h focuses the tree. / filters it to a long filter matching nothing and
+// Enter keeps it, / and Esc clear it; / filters it to style and Enter keeps it,
+// and / and Esc clear it. a opens the kind picker. Space k d shows Docs mode,
 // which closes that picker, so j moves Docs mode's tree. / filters it to neat
 // and Enter keeps the filter; j j j j selects neat.md and r opens the path box,
 // where seven Backspaces and kept.md rename it, and the session's view reads
