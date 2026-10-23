@@ -1,5 +1,5 @@
 import { app, type BrowserWindow } from 'electron';
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { setTimeout as wait } from 'node:timers/promises';
 import path from 'node:path';
@@ -298,6 +298,16 @@ function startRun(
   });
 }
 
+// Removes the folder's entries and keeps the folder, creating it when missing:
+// on Windows a removed folder stays delete-pending for a moment, and creating
+// it again in that moment fails with EPERM.
+function emptyFolder(folder: string): void {
+  mkdirSync(folder, { recursive: true });
+  for (const entry of readdirSync(folder)) {
+    rmSync(path.join(folder, entry), { recursive: true, force: true });
+  }
+}
+
 // What the composition root holds: `hostFor` gives each plugin the host its
 // part hands its script to, and `closeHandover`, called once every part has
 // started, returns the merged page binds and settings of every handed script.
@@ -323,8 +333,7 @@ export function startSelfTest(
   cleanUp: () => Promise<void>,
   screenshotFolder: string,
 ): SelfTestDriver {
-  rmSync(screenshotFolder, { recursive: true, force: true });
-  mkdirSync(screenshotFolder, { recursive: true });
+  emptyFolder(screenshotFolder);
   const drivenWindow = electronDrivenWindow(window);
   window.webContents.on('did-navigate', () => {
     // A run begun on the previous page stands down before its load finishes.
