@@ -81,6 +81,7 @@ import { createPageLog } from './page-log';
 import { createPluginChannels } from './plugins/plugin-channel';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
+import { createSelfTestTeardown } from './selftest-teardown';
 import { applySelfTestConfig } from './selftest-config';
 import {
   type DriveHarnessName,
@@ -305,14 +306,13 @@ function runQuitTasks(event: Event) {
 }
 
 // The self-test gives plugins a fresh temp folder as the home folder. Its
-// exit skips will-quit, so the cleanup runs the quit work itself, closing the
-// watchers and files the parts and the config store hold in the home, then
-// deletes the home. Node retries the removal on `EBUSY`, `ENOTEMPTY` and
-// `EPERM`, which Windows returns for a handle it releases a moment after it
-// closes.
+// exit skips will-quit and the quit tasks: it runs its own teardown, which
+// closes whatever registered through onSelfTestExit, waiting at most a capped
+// time, then deletes the home. Node retries the removal on `EBUSY`,
+// `ENOTEMPTY` and `EPERM`, which Windows returns for a handle it releases a
+// moment after it closes.
 let tempHome: string | null = null;
-async function cleanUpSelfTest() {
-  await startQuitWork();
+const selfTestTeardown = createSelfTestTeardown(async () => {
   if (tempHome !== null) {
     await rm(tempHome, {
       recursive: true,
@@ -320,6 +320,15 @@ async function cleanUpSelfTest() {
       maxRetries: 5,
       retryDelay: 200,
     });
+  }
+});
+const cleanUpSelfTest = () => selfTestTeardown.run();
+
+// In the self-test, adds `teardown` to what its exit closes before it deletes
+// the temp home; `name` names it in the line a teardown that hangs reports.
+function onSelfTestExit(name: string, teardown: () => unknown) {
+  if (runMode === 'selfTest') {
+    selfTestTeardown.add(name, teardown);
   }
 }
 
@@ -466,7 +475,8 @@ function livePage(window: BrowserWindow): WebContents | null {
 // Serves the ui-state file at `filePath` to the page. It loads on the page's
 // first read, when the page already hears the log, and is kept, so a reload
 // reads main's copy, the newest. On quit a pending change is written as a
-// quit task, which a drive run waits for and the user's app does not.
+// quit task, which a drive run waits for and the user's app does not; the
+// self-test's exit writes it as a teardown before it deletes the temp home.
 function serveUiState(filePath: string, log: Log) {
   let loading: Promise<UiStateFile> | null = null;
   let loaded: UiStateFile | null = null;
@@ -486,6 +496,7 @@ function serveUiState(filePath: string, log: Log) {
       void load().then((file) => file.set(key, value)),
   );
   onQuit(() => loaded?.flush());
+  onSelfTestExit('the ui-state file', () => loaded?.flush());
 }
 
 // Starts every plugin's main part, each with its own API over one plugin
@@ -493,7 +504,8 @@ function serveUiState(filePath: string, log: Log) {
 // self-test layer, one event bus, the shared `services`, its own host from
 // `selfTest` (null outside the self-test), its own host from `driveRun` (null
 // outside a drive run), and its data folder under `dataRoot`. `onStarted` sees
-// each part as it starts, so a part is known even when a later start throws.
+// each part, with its plugin id, as it starts, so a part is known even when a
+// later start throws.
 function startMainParts(
   window: BrowserWindow,
   store: ConfigStore,
@@ -501,7 +513,7 @@ function startMainParts(
   services: Omit<MainServices, 'selfTest'>,
   selfTest: SelfTestDriver | null,
   driveRun: DriveRun | null,
-  onStarted: (part: MainStart<PluginManifest>) => void,
+  onStarted: (pluginId: string, part: MainStart<PluginManifest>) => void,
 ) {
   const channels = createPluginChannels(ipcMain, () => livePage(window));
   const bus = createEventBus();
@@ -522,7 +534,7 @@ function startMainParts(
           dataRoot,
         }),
       );
-      onStarted(started);
+      onStarted(part.manifest.id, started);
       return started;
     },
     manifests,
@@ -593,9 +605,10 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
           path.join(app.getAppPath(), '.selftest', 'screenshots'),
         )
       : null;
-  // On a normal quit, and before the self-test removes its temp home, a quit
-  // task disposes the parts that started; a failed start outside the
-  // self-test exits through failStart, which skips the quit tasks.
+  // On a normal quit a quit task disposes the parts that started; a failed
+  // start outside the self-test exits through failStart, which skips the quit
+  // tasks. In the self-test each part's dispose joins the teardown as the part
+  // starts, so an exit at any point disposes the parts started by then.
   const startedParts: MainStart<PluginManifest>[] = [];
   onQuit(() => disposeParts(startedParts));
   const driveRun =
@@ -640,7 +653,10 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
     },
     selfTest,
     driveRun,
-    (part) => startedParts.push(part),
+    (pluginId, part) => {
+      startedParts.push(part);
+      onSelfTestExit(`plugin ${pluginId}`, () => part.dispose?.());
+    },
   );
   // The config needs the page binds and settings of the scripts the plugins
   // handed the self-test.
@@ -757,6 +773,7 @@ function startApp() {
       }
       const inputs = readStartInputs();
       const store = await loadConfig(inputs.homeDir);
+      onSelfTestExit('the config store', () => store.dispose());
       serveDataScheme(inputs.dataRoot, paths);
       createWindow(inputs, store);
       // After createWindow's quit tasks, so the parts dispose before it.

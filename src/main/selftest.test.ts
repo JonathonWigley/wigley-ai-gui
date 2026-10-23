@@ -64,6 +64,27 @@ describe('failSelfTest', () => {
     expect(errors).toEqual(['[selftest] cleanup failed: home still held']);
   });
 
+  it('exits with its code once the teardown cap cuts off a hung teardown', async () => {
+    vi.useFakeTimers();
+    const failSelfTest = await loadFailSelfTest();
+    const { createSelfTestTeardown } = await import('./selftest-teardown');
+    const removeHome = vi.fn(async () => {});
+    const teardown = createSelfTestTeardown(removeHome, 1000);
+    teardown.add('a hung part', () => new Promise<void>(() => {}));
+
+    failSelfTest('a step', new Error('boom'), () => teardown.run());
+    await vi.advanceTimersByTimeAsync(999);
+    expect(exit).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(removeHome).toHaveBeenCalledTimes(1);
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(errors).toEqual([
+      '[selftest] teardown of a hung part did not settle within 1000 ms',
+    ]);
+    vi.useRealTimers();
+  });
+
   it('does nothing on a second exit', async () => {
     const failSelfTest = await loadFailSelfTest();
     const firstCleanUp = vi.fn(async () => {});
