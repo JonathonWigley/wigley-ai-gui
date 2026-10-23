@@ -1,6 +1,6 @@
 # 06 — Attached images and the image viewer
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -90,3 +90,5 @@ GIVEN two attached images and the text `hi` WHEN send runs THEN the channel's `s
   records one `images()` call and the card holds its element under the markdown; `userEntry_NoImages_NoThumbnails`
 
 ## Proof
+
+Commit 2b7fef7 · diff read, every Produces present · typecheck and lint pass · worker ran its 3 test files (41 passed) and the self-test (passed) · concerns: AGENTS.md kit part list lacks images (07); paste/drop/strip/viewer only provable live (08); a drop outside the Chat tab still navigates; backdrop click does not close the viewer

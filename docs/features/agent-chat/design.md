@@ -151,24 +151,25 @@ interview on 2026-10-23; this file is the record of both.
   the profile (a single profile is not asked; the last profile used in a folder is pre-selected). Esc at any step
   starts nothing. The folder step lists, newest first, the folders the app started sessions in (`recent-folders.json`
   in chat's plugin data) merged with every folder each profile's harness has saved sessions in (`listProjects`),
-  one line per folder, its newest use and the profile of that use kept; a folder that no longer exists or sits in an
-  OS temp folder (`MainServices.tempFolders`) is left out; `Choose folder…`, the native folder dialog, is last.
+  one line per folder, its newest use and the profile of that use kept, at most 40 before the filters below; a folder
+  that no longer exists or sits in an OS temp folder (`MainServices.tempFolders`) is left out; `Choose folder…`, the native folder dialog, is last.
   After the profile, chat reads the profile's account status: a signed-out profile opens the sign-in dialog, and a
   finished sign-in goes on to the session step. A status that cannot be read is logged and the prompt goes on.
 - **Sign-in dialog**: one at a time, in the overlay layer over the `chat.signIn` scope: "Finish sign-in in your
   browser", the fallback link with a Copy button, and a vim box for a code the browser page shows, which Cmd+Enter
-  sends. Esc cancels the sign-in. When the sign-in ends the dialog closes; a confirmed sign-in toasts
-  `Signed in to <profile> as <account>`, anything else toasts the error. Asking for a second sign-in while one runs
+  (or Enter in the box's normal mode) sends. Esc cancels the sign-in. When the sign-in ends the dialog closes; a
+  confirmed sign-in toasts `Signed in to <profile> as <account>`, any other end toasts `Sign-in failed: <reason>`, and
+  a sign-in that cannot start toasts `Sign-in not started: <reason>`. Asking for a second sign-in while one runs
   focuses the open dialog.
 - **App slash commands**: chat's page exports `addSlashCommand({ name, description, run })`, returning a
   `Disposable`. Sending a box whose trimmed text is `/name` or `/name <args>` with `name` registered runs
   `run({ sessionId, profile, args })` in place of sending, and clears the box; attached images stay. A registered
   name wins over the agent's command of the same name. The `/` completion offers the registered names first, then
   the agent's, without repeats. A handler reports through chat's `notice` channel call, which adds a notice entry
-  main keeps. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile
+  main keeps, or through a toast in an ended session, which has no entries to show it. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile
   out; a notice says so) and `/status` (a notice: `<profile>: signed in as <account>` or `<profile>: not signed in`).
-- **Images**: pasting an image file into the composer, or dropping one anywhere on the Chat tab, attaches it: PNG, JPEG, GIF and WebP up to 5 MB each
-  (the API's per-image limit); any other file is refused with a toast. Attached images show as a strip of
+- **Images**: pasting an image file into the composer, or dropping one anywhere on the Chat tab, attaches it: PNG, JPEG, GIF and WebP whose base64 text is at most
+  5 MB (the API's per-image limit, which counts that text); any other file is refused with a toast. Attached images show as a strip of
   thumbnails above the message box, each with a remove button; `<Leader>cx` removes the last one. Send sends the
   text with the images, or the images alone. A sent user entry shows its images as thumbnails under its text;
   clicking one, or Enter on the focused entry, opens the image viewer over the `chat.image` scope: the image fitted

@@ -79,8 +79,8 @@ src/main/        core main process; main.ts is its composition root
   themes/        theme loader: parses a theme by the token registry and resolves `extends`
   ui-state/      the uiState file: app-written view state (`ui-state.json`) in Electron's user data folder
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts
-  claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions
-                 → the only place the app spawns `claude`
+  claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
+                 project folders and runs `claude auth` sign-in, sign-out and status → the only place the app spawns `claude`
   files/         file reads (whole or the first bytes), modified times, atomic writes, rename, trash, folder lists
                  and watching, behind Files
   processes/     runs a program and returns its exit code and output, behind ProcessRunner
@@ -315,7 +315,7 @@ round), since main, not the page, decides.
 - **A chat layout** builds each entry kind's element from the entry and a `ChatKit`
   (`src/plugins/chat/layouts/layout.d.ts`): `markdown`, `json`, `expander` (a collapsible card), `collapsibleCard`,
   `card`, `statusDot` with `setDotStatus`, `sectionHeader`, and `permissionActions` (Allow once / Deny with their
-  keys).
+  keys), and `images` (a user entry's thumbnails, which open the image viewer).
 - **A forms layout** builds each item's cards, and may add a head above them. Its contract is
   `src/plugins/forms/layouts/layout.d.ts`: the card input for each kind, and the kit of ready-made parts (sections,
   choice list, answer controls, verdict, action row, and the plain parts `card`, `tag`, `kbd`, `button` — variant

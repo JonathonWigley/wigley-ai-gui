@@ -1,6 +1,6 @@
 # 07 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 02, 06
 Plan: [plan.md](plan.md)
@@ -24,3 +24,5 @@ companion line's handling, and the folder step's order and filters. Fix the doc,
 contradicts a decision in `plan.md` — that goes in the report instead. Run `wigley:writing-for-agents` on each fix.
 
 ## Proof
+
+Committed with its Proof (see git log) · diff read · lint passes · fixed AGENTS.md claude-code line and kit list; design.md folder cap, sign-in keys and copy, ended-session toasts, 5 MB base64 wording · keymap.md, claude-stream.md, followups.md true as written · concerns: none new

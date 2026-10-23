@@ -162,10 +162,10 @@ nothing; chat's page imports only `src/contracts`, `src/shared`, its own folder 
 - [x] [App slash commands and sign-in in the page](05-slash-commands-sign-in.md) — after 04
 
 ### Wave 4
-- [ ] [Attached images and the image viewer](06-images.md) — after 05
+- [x] [Attached images and the image viewer](06-images.md) — after 05
 
 ### Wave 5
-- [ ] [Doc re-read](07-doc-re-read.md) — after 02, 06
+- [x] [Doc re-read](07-doc-re-read.md) — after 02, 06
 
 ### Wave 6
 - [ ] [Final verification](08-final-verification.md) — after 07
@@ -180,6 +180,8 @@ Review base: a0e7aebc036aed1714fb1422459501b1d4d7319d
 - 01 harness seam · c37acaa · proved (diff read, typecheck, lint) · concerns: layout.d.ts UserInput lacks images (06); AGENTS.md claude-code line stale (07); link-on-stderr untested
 - 04 chat main · bb7ccc2 · proved (diff read, typecheck, lint) · concerns: filters after the 40 cap can shorten the list; a rejecting stat rejects recentFolders
 - 05 slash commands and sign-in · 89f54d0 · proved (diff read, typecheck, lint) · concerns: second open drops its finished; no sign-in id for stale logInEnded; no self-test step for /status or the dialog
+- 06 images and viewer · 2b7fef7 · proved (diff read, typecheck, lint) · concerns: AGENTS.md kit list lacks images; paste/drop/viewer live only; backdrop click does not close
+- 07 doc re-read · committed with this Groups line · proved (diff read, lint) · concerns: none new
 ### Contract changes
 - createFolderChoices returns a named `FolderChoices` of the planned shape; mergeFolderChoices takes `ListedProject[]` (= `{ profile; folder: ProjectFolder }`) · why: naming only · consumers: none · group 04
 - chat-sessions.ts exports `requireProfile(profiles, name)` and `requireChatHarness(harnesses)` (private lookups widened); `SELFTEST_PROJECT_DIR` export removed; `ChatSelfTestDeps` gains `homeDir` and `files` · why: shared by accounts, folder-choices and start · consumers: none outside 04 · group 04
@@ -187,6 +189,7 @@ Review base: a0e7aebc036aed1714fb1422459501b1d4d7319d
 - createSignInDialog deps: `SignInDialogDeps extends DialogDeps { editor; channel: Pick<PageChannel<ChatChannel>, 'invoke' | 'on'>; toast }` · why: the dialog hears logInLink/logInEnded · consumers: none · group 05
 - ChatCommandDeps gains `signIn: SignInDialog` and `slashCommands: Pick<SlashCommands, 'match'>`; ChatViewDeps gains `slashCommandNames(): string[]`; account-commands.ts exports `accountText(account)` · why: the plan left the shape open · consumers: 06 · group 05
 - chat-dialogs.ts (outside Files) exports `followKeymap` and `DialogAction` · why: widen, never copy · consumers: none · group 05
+- ChatViewDeps gains `viewer: Pick<ImageViewer, 'open'>`, ChatCommandDeps `viewer: ImageViewer`, ChatSession `attachments: Attachments`, KitDeps `openImages(images, index)`; attachments.ts also exports `attachFiles(files, attachments, report)` and `imageUrl(image)` · why: internal deps the plan left open · consumers: none outside chat page · group 06
 ### Rulings
 - plan.py is absent from wigley 1.8.0; the Run log, boxes and Status lines are edited by hand — no tooling to lean on — a malformed entry, caught at Close · lead
 - A peer session shares the working tree; every commit is pathspec-scoped and the review range is this run's commit list — a swept peer edit — lead
@@ -201,5 +204,8 @@ Review base: a0e7aebc036aed1714fb1422459501b1d4d7319d
 - File order agreed with peer wigley-ai-gui-b5 (settings-mode plan): plan C 05 holds chat/manifest.ts and keymap.ts; the peer's 01 runs after 05 commits; plan C 06 dispatches only after the peer reports its 01 committed; keymap.ts one worker at a time, announced before and after — both plans edit those files — a wait on 06 · lead
 - A finished sign-in still signed out with error null toasts `Sign-in failed: <profile> is still signed out`; a rejected logIn closes, toasts `Sign-in not started: <error>` and calls finished(false) — spec silent — copy only · group 05
 - submitCode keeps the code in the box and the dialog open until logInEnded; Copy is a ghost button disabled until the link arrives — spec silent — a resend shows the old text · group 05
+- Enter on a user entry with images toggles the entry first, then opens the viewer at 0 — EntryList has no read-only focused() and entry-list.ts was outside Files — a layout with expanders in a user turn would toggle and open both · group 06
+- An ended tab still preventDefaults a paste/drop holding files and logs it; files are read before refusalOf runs; the viewer closes on scope base change and otherSessionShown, not on backdrop click — spec order kept — a large non-image file is read before refusal · group 06
 ### Review rounds
 ### Test gate
+- Picked every test file the range added or edited (17: claude-auth, claude-code-harness, claude-controls, claude-launch, past-sessions, transcripts, temp-folders, default layout, accounts, chat-sessions, folder-choices, attachments, chat-commands, chat-state, slash-commands, start-prompt, fake-agent-harness — they cover all changed logic); `npm run selftest` because selftest-script.ts and the chat start path changed; the codemirror host change (02) has no test and goes to the live check in 08 · 17 files / 233 tests passed; self-test all passed (tree held the peer session's uncommitted settings work)
