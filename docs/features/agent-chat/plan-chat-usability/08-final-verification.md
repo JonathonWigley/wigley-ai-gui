@@ -1,6 +1,6 @@
 # 08 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 6 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -48,3 +48,13 @@ touches the user's own app, config or Claude profiles: the drive run has its own
 Report each check's result and screenshot path. A failed check is reported with what showed, not fixed in this task.
 
 ## Proof
+
+Drive run chk081 (fake harness), report /private/tmp/claude-502/-Users-jonathonwigley-Documents-dev-wigley-ai-gui/19451c96-28e0-469f-b152-0c5a1c764c3b/scratchpad/reports/08-1.md, screenshots under /screenshots/. All seven checks passed:
+1. popup unclipped, mounted on body, themed (c1-popup.png); it draws below the cursor over the composer, fully visible.
+2. folder step lists `~/dev/drive-project` from listProjects, `Choose folder…` last (c2-folders.png); low confidence, an in-memory recent list not ruled out.
+3. /logout notice, sign-in dialog, wrong code toast, fake-code signs in and opens the session step; Esc closes on the second press (first leaves vim insert) (c3-*.png).
+4. `/st` offers `/status`; its notice survives a reload (c4-*.png).
+5. paste and drop thumbnails draw (CSP allows data:), remove, text/plain refusal toast, send shows text and one thumbnail (c5-*.png). Anomaly: one first send lost the text `hi` around a hot reload from the peer's edits; not reproduced.
+6. viewer fits the image, Esc closes, Enter on the user entry reopens it (c6-*.png).
+7. last entry stays above the composer with three images (c7-*.png).
+Debug state deleted: /home/plugin-data/chat/recent-folders.json.

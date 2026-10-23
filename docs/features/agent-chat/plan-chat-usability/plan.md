@@ -168,7 +168,7 @@ nothing; chat's page imports only `src/contracts`, `src/shared`, its own folder 
 - [x] [Doc re-read](07-doc-re-read.md) — after 02, 06
 
 ### Wave 6
-- [ ] [Final verification](08-final-verification.md) — after 07
+- [x] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
 
@@ -182,6 +182,7 @@ Review base: a0e7aebc036aed1714fb1422459501b1d4d7319d
 - 05 slash commands and sign-in · 89f54d0 · proved (diff read, typecheck, lint) · concerns: second open drops its finished; no sign-in id for stale logInEnded; no self-test step for /status or the dialog
 - 06 images and viewer · 2b7fef7 · proved (diff read, typecheck, lint) · concerns: AGENTS.md kit list lacks images; paste/drop/viewer live only; backdrop click does not close
 - 07 doc re-read · committed with this Groups line · proved (diff read, lint) · concerns: none new
+- 08 · drive verification (opus-low) · no commit · concerns: one lost-text send near a peer hot reload, not reproduced; sign-in Esc needs two presses from insert mode (finding 20 family)
 ### Contract changes
 - createFolderChoices returns a named `FolderChoices` of the planned shape; mergeFolderChoices takes `ListedProject[]` (= `{ profile; folder: ProjectFolder }`) · why: naming only · consumers: none · group 04
 - chat-sessions.ts exports `requireProfile(profiles, name)` and `requireChatHarness(harnesses)` (private lookups widened); `SELFTEST_PROJECT_DIR` export removed; `ChatSelfTestDeps` gains `homeDir` and `files` · why: shared by accounts, folder-choices and start · consumers: none outside 04 · group 04
