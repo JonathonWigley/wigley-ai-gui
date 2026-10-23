@@ -203,12 +203,12 @@ function keymapLayer(
   };
 }
 
+// One layer of keys under the user's: the default keymap's, or one plugin's.
+export type DefaultKeyLayer = Omit<UserKeymap, 'leader' | 'unbind'>;
+
 // One plugin's default keys, their commands and scopes qualified as
-// `<pluginId>.<short>`, as `mergeKeymap` lays them; the `any` scope stays
-// unqualified.
-export function pluginKeys(
-  manifest: PluginManifest,
-): Omit<UserKeymap, 'leader' | 'unbind'> {
+// `<pluginId>.<short>`; the `any` scope stays unqualified.
+function pluginKeys(manifest: PluginManifest): DefaultKeyLayer {
   const keys = manifest.keys ?? {};
   const qualifyCommand = <Bind extends { command: string }>(bind: Bind) => ({
     ...bind,
@@ -337,8 +337,8 @@ export function mergeKeymap(
 ): Keymap {
   const leader = user.leader ?? defaults.leader;
   const same = bindIdentities(leader);
-  const ordered = dependencyOrder(manifests).map(pluginKeys);
-  const empty: Keymap = {
+  const layers = defaultKeyLayers(defaults, manifests);
+  let merged: Keymap = {
     editor: { leader, remaps: [], binds: [] },
     page: [],
     app: [],
@@ -346,8 +346,7 @@ export function mergeKeymap(
     global: [],
     groups: {},
   };
-  let merged = keymapLayerOver(empty, keymapLayer(defaults, leader), same);
-  for (const keys of ordered) {
+  for (const keys of layers) {
     merged = keymapLayerOver(merged, keymapLayer(keys, leader), same);
   }
   merged = withoutUnbound(merged, user.unbind ?? [], leader, same);
@@ -355,14 +354,20 @@ export function mergeKeymap(
   return {
     ...merged,
     groups: mergeGroups(
-      [
-        defaults.groups,
-        ...ordered.map((keys) => keys.groups ?? {}),
-        user.groups ?? {},
-      ],
+      [...layers.map((keys) => keys.groups ?? {}), user.groups ?? {}],
       leader,
     ),
   };
+}
+
+// The layers `mergeKeymap` lays under the user's, in its order: `defaults`,
+// then each manifest's keys in `dependencyOrder`, commands and scopes
+// qualified as `<pluginId>.<short>` (the `any` scope left unqualified).
+export function defaultKeyLayers(
+  defaults: DefaultKeymap,
+  manifests: readonly PluginManifest[],
+): DefaultKeyLayer[] {
+  return [defaults, ...dependencyOrder(manifests).map(pluginKeys)];
 }
 
 // Every command by id: the core's under their own ids with plugin `core`,

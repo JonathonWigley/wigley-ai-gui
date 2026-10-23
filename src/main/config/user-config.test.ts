@@ -231,6 +231,74 @@ describe('createUserConfig', () => {
     expect(await files.read(`${FOLDER}/settings.json`)).toContain('"dusk"');
   });
 
+  it('refuses a theme name no theme has while a user theme file is broken', async () => {
+    const { files, userConfig } = await createWithFile(
+      'themes/bad.json',
+      '{ not json',
+    );
+
+    const result = await userConfig.writeSettings({ theme: 'nope' }, null);
+
+    expect(result).toEqual({
+      type: 'refused',
+      problem: '"theme" names "nope", which no theme has',
+    });
+    expect(await files.stat(`${FOLDER}/settings.json`)).toBeNull();
+  });
+
+  it('writes the name of a user theme whose file parses but is broken', async () => {
+    const { files, userConfig } = await createWithFile(
+      'themes/half.json',
+      JSON.stringify({ name: 'half', extends: 'mocha', tokens: 'oops' }),
+    );
+
+    const result = await userConfig.writeSettings({ theme: 'half' }, null);
+
+    expect(result).toEqual({ type: 'written' });
+    expect(await files.read(`${FOLDER}/settings.json`)).toContain('"half"');
+  });
+
+  it('finds the file changed on disk for an overlapping write expecting the same text', async () => {
+    const { files, userConfig } = await createWithFile('settings.json', '{}');
+
+    const [first, second] = await Promise.all([
+      userConfig.writeSettings({ keySequenceTimeoutMs: 500 }, '{}'),
+      userConfig.writeSettings({ keySequenceTimeoutMs: 700 }, '{}'),
+    ]);
+
+    expect(first).toEqual({ type: 'written' });
+    expect(second).toEqual({ type: 'changedOnDisk' });
+    expect(await files.read(`${FOLDER}/settings.json`)).toContain('500');
+  });
+
+  it('runs the next write after one that fails', async () => {
+    const memory = createMemoryFiles();
+    let writes = 0;
+    const files: MemoryFiles = {
+      ...memory,
+      write: async (path, text) => {
+        writes += 1;
+        if (writes === 1) {
+          throw new Error('disk full');
+        }
+        return memory.write(path, text);
+      },
+    };
+    const userConfig = await create(files);
+
+    const [first, second] = await Promise.allSettled([
+      userConfig.writeSettings({ keySequenceTimeoutMs: 500 }, null),
+      userConfig.writeSettings({ keySequenceTimeoutMs: 700 }, null),
+    ]);
+
+    expect(first).toMatchObject({ status: 'rejected' });
+    expect(second).toEqual({
+      status: 'fulfilled',
+      value: { type: 'written' },
+    });
+    expect(await memory.read(`${FOLDER}/settings.json`)).toContain('700');
+  });
+
   it('refuses as changed on disk when the file no longer holds the expected text', async () => {
     const { files, userConfig } = await createWithFile('settings.json', '{}');
 

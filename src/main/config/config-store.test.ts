@@ -553,6 +553,22 @@ describe('loadConfigStore', () => {
     ]);
   });
 
+  it('reports a theme name that names no theme while a user theme file does not parse', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${FOLDER}/settings.json`, '{"theme":"nope"}');
+    await files.write(`${FOLDER}/themes/bad.json`, '{ not json');
+
+    const store = await load(files);
+
+    expect(store.current().theme.name).toBe('mocha');
+    expect(store.current().problems).toEqual([
+      {
+        file: 'settings.json',
+        message: '"theme" names "nope", which no theme has',
+      },
+    ]);
+  });
+
   it('ignores changes to other files', async () => {
     const files = createMemoryFiles();
     const store = await load(files);

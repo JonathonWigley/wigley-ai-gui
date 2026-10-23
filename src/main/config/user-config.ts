@@ -1,6 +1,6 @@
 import type { Files } from '../../contracts/files';
 import type { UserKeymap } from '../../contracts/keymap';
-import type { PluginManifest, SettingInfo } from '../../contracts/plugin';
+import type { SettingInfo } from '../../contracts/plugin';
 import type {
   ConfigFileRead,
   ConfigWriteResult,
@@ -10,18 +10,14 @@ import type {
   UserConfig,
   UserConfigSchema,
 } from '../../contracts/user-config';
+import { capitalised } from '../../shared/capitalised';
 import { errorText } from '../../shared/error-text';
 import { isJsonObject } from '../../shared/json';
 import {
-  dependencyOrder,
-  pluginKeys,
+  defaultKeyLayers,
   pluginSettingInfo,
 } from '../../shared/plugin-manifests';
-import {
-  readableName,
-  ThemeError,
-  type ThemeFileText,
-} from '../themes/theme-loader';
+import type { ThemeFileText } from '../themes/theme-loader';
 import {
   checkKeymapText,
   checkSettingsText,
@@ -31,7 +27,10 @@ import {
   KEYMAP_FILE,
   readConfigFile,
   readUserThemes,
+  resolveConfigTheme,
   SETTINGS_FILE,
+  themeNames,
+  usersThemeProblem,
 } from './config-checks';
 import type { ConfigStore } from './config-store';
 
@@ -91,13 +90,15 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
   };
 
   // Writes `layer` as `file` when the file still holds `expectedText` and the
-  // new text passes `check`.
+  // new text passes `check`. The themes are read first, so nothing is awaited
+  // between comparing the file's text and starting the write.
   const writeLayer = async (
     file: string,
     layer: object,
     expectedText: string | null,
     check: TextCheck,
   ): Promise<ConfigWriteResult> => {
+    const userThemes = (await readUserThemes(deps.files, deps.folder)).texts;
     const read = await readConfigFile(deps.files, deps.folder, file);
     if ('problem' in read) {
       return { type: 'refused', problem: read.problem.message };
@@ -106,13 +107,23 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
       return { type: 'changedOnDisk' };
     }
     const text = `${JSON.stringify(layer, null, 2)}\n`;
-    const userThemes = (await readUserThemes(deps.files, deps.folder)).texts;
     const problem = check(text, userThemes);
     if (problem !== null) {
       return { type: 'refused', problem };
     }
     await deps.files.write(filePath(file), text);
     return { type: 'written' };
+  };
+
+  // Each write starts once the one before it settles, failed or not, so a
+  // second write expecting the text the first replaced finds it changed.
+  let lastWrite: Promise<unknown> = Promise.resolve();
+  const afterLastWrite = (
+    write: () => Promise<ConfigWriteResult>,
+  ): Promise<ConfigWriteResult> => {
+    const result = lastWrite.then(write);
+    lastWrite = result.catch(() => undefined);
+    return result;
   };
 
   return {
@@ -134,17 +145,21 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
       };
     },
     writeSettings: (layer, expectedText) =>
-      writeLayer(SETTINGS_FILE, layer, expectedText, checkSettings),
+      afterLastWrite(() =>
+        writeLayer(SETTINGS_FILE, layer, expectedText, checkSettings),
+      ),
     writeKeymap: (layer, expectedText) =>
-      writeLayer(KEYMAP_FILE, layer, expectedText, checkKeymap),
+      afterLastWrite(() =>
+        writeLayer(KEYMAP_FILE, layer, expectedText, checkKeymap),
+      ),
     onChanged: (listener) => deps.store.onChanged(() => listener()),
   };
 }
 
 // The problem the ConfigStore would show on `settings.json` holding `text`:
-// the merge's, or the theme's when it names `settings.json` (a name no theme
-// has). A theme error on any other file is that file's, which the ConfigStore
-// reports there while keeping the last good theme.
+// the merge's, or the theme's when it is on `settings.json`. A theme error on
+// any other file is that file's, which the ConfigStore reports there while
+// keeping the last good theme.
 function settingsProblem(
   text: string,
   userThemes: readonly ThemeFileText[],
@@ -158,44 +173,14 @@ function settingsProblem(
     return errorText(error);
   }
   try {
-    deps.resolveTheme(
-      themeName,
-      deps.builtInThemes,
-      userThemes,
-      deps.themeTokens,
-      deps.checkTokens,
-    );
+    resolveConfigTheme(themeName, userThemes, deps);
   } catch (error) {
-    if (error instanceof ThemeError && error.file === SETTINGS_FILE) {
-      return error.problem;
+    const usersProblem = usersThemeProblem(error, userThemes);
+    if (usersProblem?.file === SETTINGS_FILE) {
+      return usersProblem.message;
     }
   }
   return null;
-}
-
-// Each built-in theme's name, then each user theme file's that parses to
-// one, sorted, every name once.
-function themeNames(
-  builtInThemes: readonly unknown[],
-  userThemes: readonly ThemeFileText[],
-): string[] {
-  const builtIn = builtInThemes.map(readableName);
-  const user = userThemes.map((theme) =>
-    readableName(parsedOrNull(theme.text)),
-  );
-  const names = [
-    ...builtIn,
-    ...user.filter((name) => name !== null).sort(),
-  ].filter((name) => name !== null);
-  return [...new Set(names)];
-}
-
-function parsedOrNull(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
 }
 
 function userConfigSchema(
@@ -216,7 +201,7 @@ function userConfigSchema(
     if (infos.length > 0) {
       sections.push({
         id: manifest.id,
-        title: manifest.id.charAt(0).toUpperCase() + manifest.id.slice(1),
+        title: capitalised(manifest.id),
         leaves: infos.map(([path, info]) =>
           settingLeaf(path, info, deps, fixed),
         ),
@@ -236,15 +221,6 @@ function userConfigSchema(
     },
     defaultLeader: fixed.defaultLeader,
   };
-}
-
-// The default keymap's keys, then each manifest's in the order `mergeKeymap`
-// lays them, commands and scopes qualified.
-function defaultKeyLayers(
-  defaultKeymap: ConfigCheckDeps['defaultKeymap'],
-  manifests: readonly PluginManifest[],
-): Pick<UserKeymap, 'binds' | 'app' | 'global' | 'intercept'>[] {
-  return [defaultKeymap, ...dependencyOrder(manifests).map(pluginKeys)];
 }
 
 // `path` is the setting's full dotted path, a plugin's under its id.

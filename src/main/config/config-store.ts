@@ -17,8 +17,10 @@ import {
   KEYMAP_FILE,
   readConfigFile,
   readUserThemes,
+  resolveConfigTheme,
   SETTINGS_FILE,
   THEMES_FOLDER,
+  usersThemeProblem,
 } from './config-checks';
 import type { UserSettings } from './user-settings';
 
@@ -125,9 +127,9 @@ export async function loadConfigStore(
     }
   };
 
-  // A theme error naming `settings.json` or a user file is the user's to fix;
-  // any other is the app's, which fails the first read and after it only
-  // reports, since a running app never stops on a config edit.
+  // A theme error in the user's files is theirs to fix; any other is the
+  // app's, which fails the first read and after it only reports, since a
+  // running app never stops on a config edit.
   const themeSlice = (
     name: string,
     userTexts: readonly ThemeFileText[],
@@ -135,25 +137,17 @@ export async function loadConfigStore(
     problems: ConfigProblem[],
   ) => {
     try {
-      return deps.resolveTheme(
-        name,
-        deps.builtInThemes,
-        userTexts,
-        deps.themeTokens,
-        deps.checkTokens,
-      );
+      return resolveConfigTheme(name, userTexts, deps);
     } catch (error) {
-      const isUsersFile =
-        error instanceof ThemeError &&
-        (error.file === SETTINGS_FILE ||
-          userTexts.some((text) => text.file === error.file));
-      if (isFirstRead && !isUsersFile) {
+      const usersProblem = usersThemeProblem(error, userTexts);
+      if (isFirstRead && usersProblem === null) {
         throw error;
       }
       problems.push(
-        error instanceof ThemeError
-          ? { file: error.file, message: error.problem }
-          : { file: THEMES_FOLDER, message: errorText(error) },
+        usersProblem ??
+          (error instanceof ThemeError
+            ? { file: error.file, message: error.problem }
+            : { file: THEMES_FOLDER, message: errorText(error) }),
       );
       return slices.theme;
     }

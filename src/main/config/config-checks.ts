@@ -26,11 +26,13 @@ import {
   pluginSettings,
   scopeInfos,
 } from '../../shared/plugin-manifests';
-import type {
-  resolveTheme,
-  ThemeFileText,
-  ThemeTokenRegistry,
-  TokenCheck,
+import {
+  readableName,
+  type resolveTheme,
+  ThemeError,
+  type ThemeFileText,
+  type ThemeTokenRegistry,
+  type TokenCheck,
 } from '../themes/theme-loader';
 import { parseUserKeymap } from './user-keymap';
 import { mergeUserSettings, type UserSettings } from './user-settings';
@@ -196,4 +198,69 @@ export async function readUserThemes(
     }
   }
   return { texts, problems };
+}
+
+// Each built-in theme's name, then each user theme file's that parses to
+// one, sorted, every name once. A user file whose other parts are broken
+// still gives its name.
+export function themeNames(
+  builtInThemes: readonly unknown[],
+  userThemes: readonly ThemeFileText[],
+): string[] {
+  const builtIn = builtInThemes.map(readableName);
+  const user = userThemes.map((theme) =>
+    readableName(parsedOrNull(theme.text)),
+  );
+  const names = [
+    ...builtIn,
+    ...user.filter((name) => name !== null).sort(),
+  ].filter((name) => name !== null);
+  return [...new Set(names)];
+}
+
+function parsedOrNull(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+// The theme `settings.json` selects as `name`, resolved over the built-in
+// themes and `userThemes`. Throws a ThemeError on `settings.json` when no
+// name in `themeNames` is `name`, so a theme named while its file is broken
+// elsewhere still passes and one no file names fails at once; otherwise
+// throws the loader's error, naming the file that set the bad value.
+export function resolveConfigTheme(
+  name: string,
+  userThemes: readonly ThemeFileText[],
+  deps: ConfigCheckDeps,
+): Theme {
+  if (!themeNames(deps.builtInThemes, userThemes).includes(name)) {
+    throw new ThemeError(
+      SETTINGS_FILE,
+      `"theme" names "${name}", which no theme has`,
+    );
+  }
+  return deps.resolveTheme(
+    name,
+    deps.builtInThemes,
+    userThemes,
+    deps.themeTokens,
+    deps.checkTokens,
+  );
+}
+
+// The problem a `resolveConfigTheme` error is in the user's own files: on
+// `settings.json` or on one of `userThemes`. Null when the error is the
+// app's.
+export function usersThemeProblem(
+  error: unknown,
+  userThemes: readonly ThemeFileText[],
+): ConfigProblem | null {
+  const isUsersFile =
+    error instanceof ThemeError &&
+    (error.file === SETTINGS_FILE ||
+      userThemes.some((text) => text.file === error.file));
+  return isUsersFile ? { file: error.file, message: error.problem } : null;
 }
