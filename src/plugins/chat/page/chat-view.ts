@@ -43,6 +43,7 @@ import {
   type ShownLayout,
 } from './entry-list';
 import { keyHint } from './key-hint';
+import { completionWords } from './slash-commands';
 
 export interface ChatView {
   // Shows the session's Chat tab: activates the session (Sessions mode shows),
@@ -92,6 +93,8 @@ export interface PermissionActions {
 // `onSessionRemoved` hears the sessions plugin drop a row's tabs. `run` runs
 // a command, as the composer's chips and send button do; `platform` prints
 // the key hints; `paths` names each tab by its project folder.
+// `slashCommandNames` reads the app slash commands registered now, which the
+// `/` completion offers ahead of the agent's.
 export interface ChatViewDeps {
   channel: PageChannel<ChatChannel>;
   paths: Paths;
@@ -104,6 +107,7 @@ export interface ChatViewDeps {
   run(command: CommandId): void;
   permissions: PermissionActions;
   confirm: CloseConfirm;
+  slashCommandNames(): string[];
   setScope(): void;
   otherSessionShown(): void;
   log: Log;
@@ -398,8 +402,10 @@ function createTab(
     {
       completions: {
         prefix: '/',
-        // Read each call: commands can arrive after the box exists.
-        words: () => tab.state.commands,
+        // Read each call: commands can arrive or register after the box
+        // exists.
+        words: () =>
+          completionWords(deps.slashCommandNames(), tab.state.commands),
         offered: (words) =>
           deps.log(
             'chat',

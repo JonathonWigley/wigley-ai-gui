@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatEntry, SessionControl } from '../../../contracts/agent';
 import type { TextEditor } from '../../../contracts/editor';
-import type { ChatSessionState } from '../contract';
+import type { ChatSessionState, SlashCommandContext } from '../contract';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
 import { type ChatCommandDeps, chatCommandHandlers } from './chat-commands';
 import type { ChatSession, ChatTabs, PermissionActions } from './chat-view';
 import type { TranscriptScroll } from './entry-list';
 import type { Picker, PickerRequest } from './picker';
+import type { SignInDialog } from './sign-in-dialog';
+import { createSlashCommands, type SlashCommands } from './slash-commands';
 
 const mode: SessionControl = {
   id: 'mode',
@@ -71,11 +73,29 @@ async function flush() {
   }
 }
 
+// A message box holding `text`, which `setText` replaces.
+function box(text: string) {
+  const held = { text };
+  const editor = {
+    text: () => held.text,
+    setText: (next: string) => {
+      held.text = next;
+    },
+  } as unknown as TextEditor;
+  return Object.assign(editor, { held });
+}
+
 // The handlers over one shown session; `invoked` records each call to chat
 // main, `opened` each picker request and `toasts` each toast. Every invoke
 // resolves, or rejects with `refusal` when one is given. With `visible`
-// false no Chat tab is the visible tab.
-function setUp(shown: ChatSession, refusal?: Error, visible = true) {
+// false no Chat tab is the visible tab. `slashCommands` holds the app slash
+// commands send matches.
+function setUp(
+  shown: ChatSession,
+  refusal?: Error,
+  visible = true,
+  slashCommands: SlashCommands = createSlashCommands(),
+) {
   const invoked: unknown[][] = [];
   const opened: PickerRequest<unknown>[] = [];
   const logs: string[] = [];
@@ -105,6 +125,8 @@ function setUp(shown: ChatSession, refusal?: Error, visible = true) {
     reasonBox: {} as ReasonBox,
     confirm: {} as CloseConfirm,
     picker,
+    signIn: {} as SignInDialog,
+    slashCommands,
     toast: (text) => toasts.push(text),
     log: (source, message) => logs.push(`[${source}] ${message}`),
   };
@@ -277,6 +299,75 @@ describe('chat commands', () => {
     expect(run.logs).toEqual([
       '[chat] no Chat tab shown',
       '[chat] no Chat tab shown',
+    ]);
+  });
+
+  it('send_AppCommand_RunsAndClearsBox', () => {
+    const ran: SlashCommandContext[] = [];
+    const commands = createSlashCommands();
+    commands.add({
+      name: 'login',
+      description: 'Sign in',
+      run: (context) => {
+        ran.push(context);
+      },
+    });
+    const message = box('  /login  ');
+    const shown = Object.assign(session(false), { box: message });
+    const run = setUp(shown, undefined, true, commands);
+
+    run.handlers.send({});
+
+    expect(ran).toEqual([
+      { sessionId: 'row-1', profile: 'work', args: '', ended: false },
+    ]);
+    expect(run.invoked).toEqual([]);
+    expect(message.held.text).toBe('');
+  });
+
+  it('send_AppCommandEndedSession_RunsWithEnded', () => {
+    const ran: SlashCommandContext[] = [];
+    const commands = createSlashCommands();
+    commands.add({
+      name: 'status',
+      description: 'Show the account',
+      run: (context) => {
+        ran.push(context);
+      },
+    });
+    const shown = Object.assign(session(true), { box: box('/status') });
+    const run = setUp(shown, undefined, true, commands);
+
+    run.handlers.send({});
+
+    expect(ran.map((context) => context.ended)).toEqual([true]);
+  });
+
+  it('send_AppCommandRejects_Toasts', async () => {
+    const commands = createSlashCommands();
+    commands.add({
+      name: 'logout',
+      description: 'Sign out',
+      run: () => Promise.reject(new Error('no network')),
+    });
+    const shown = Object.assign(session(false), { box: box('/logout') });
+    const run = setUp(shown, undefined, true, commands);
+
+    run.handlers.send({});
+    await flush();
+
+    expect(run.toasts).toEqual(['/logout failed: no network']);
+    expect(run.invoked).toEqual([]);
+  });
+
+  it('send_UnregisteredSlash_SendsToTheAgent', () => {
+    const shown = Object.assign(session(false), { box: box('/model opus') });
+    const run = setUp(shown);
+
+    run.handlers.send({});
+
+    expect(run.invoked).toEqual([
+      ['send', 'row-1', { text: '/model opus', images: [] }],
     ]);
   });
 });

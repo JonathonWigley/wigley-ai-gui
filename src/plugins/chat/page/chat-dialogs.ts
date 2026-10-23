@@ -33,7 +33,7 @@ export interface DialogDeps {
 
 // One action button of a dialog: its label, look, and the command it runs,
 // whose keys in `scope` it shows.
-interface DialogAction {
+export interface DialogAction {
   label: string;
   variant: ButtonVariant;
   command: ChatCommandName;
@@ -206,7 +206,7 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
 
 // Draws the dialog's actions, and draws them again on each keymap change for
 // as long as the page lives, so a rebind reaches a dialog open or shut.
-function followKeymap(
+export function followKeymap(
   dialog: Dialog,
   actions: readonly DialogAction[],
   deps: Pick<DialogDeps, 'keys' | 'platform' | 'run'>,

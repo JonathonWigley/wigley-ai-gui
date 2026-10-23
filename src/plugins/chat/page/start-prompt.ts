@@ -16,6 +16,7 @@ import {
   sessionItems,
   withArchived,
 } from './resume-items';
+import type { SignInDialog } from './sign-in-dialog';
 import {
   displayPath,
   type FolderItem,
@@ -26,6 +27,7 @@ import {
 
 export interface StartPromptDeps {
   picker: Picker;
+  signIn: Pick<SignInDialog, 'open'>;
   channel: Pick<PageChannel<ChatChannel>, 'invoke'>;
   profiles(): readonly ChatProfile[];
   reveal(sessionId: string): void;
@@ -36,7 +38,8 @@ export interface StartPromptDeps {
 }
 
 // `open` asks for a folder, then a profile when there is more than one, then
-// a new or saved session when the folder has saved ones, and starts or
+// signs a signed-out profile in through the sign-in dialog, then asks for a
+// new or saved session when the folder has saved ones, and starts or
 // resumes a chat session there, revealing its Chat tab. Esc at any step
 // starts nothing. `toggleArchive` and `showArchived` act on the session step
 // while it is open.
@@ -131,7 +134,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const openProfileStep = (context: PromptContext, projectDir: string) => {
     const { profiles } = context;
     if (profiles.length === 1) {
-      listSessions(context, projectDir, profiles[0]);
+      checkAccount(context, projectDir, profiles[0]);
       return;
     }
     deps.picker.open<ChatProfile>({
@@ -144,8 +147,38 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         projectDir,
         deps.paths,
       ),
-      picked: (profile) => listSessions(context, projectDir, profile),
+      picked: (profile) => checkAccount(context, projectDir, profile),
     });
+  };
+
+  // Goes on to the session step when the profile is signed in; a signed-out
+  // profile opens the sign-in dialog first, going on only once it finishes
+  // signed in. A status that cannot be read goes on.
+  const checkAccount = (
+    context: PromptContext,
+    projectDir: string,
+    profile: ChatProfile,
+  ) => {
+    void channel.invoke('accountStatus', profile.name).then(
+      (status) => {
+        if (status.signedIn) {
+          listSessions(context, projectDir, profile);
+          return;
+        }
+        log('chat', `${profile.name} is signed out`);
+        deps.signIn.open(profile.name, (signedIn) => {
+          if (signedIn) {
+            listSessions(context, projectDir, profile);
+            return;
+          }
+          log('chat', `no session started: ${profile.name} is signed out`);
+        });
+      },
+      (error: unknown) => {
+        log('chat', `account status not read: ${errorText(error)}`);
+        listSessions(context, projectDir, profile);
+      },
+    );
   };
 
   // Opens the session step on the folder's saved sessions; with none, starts

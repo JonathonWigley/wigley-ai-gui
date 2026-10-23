@@ -1,6 +1,6 @@
 # 04 — Chat main: image messages, notices, sign-in, merged folders
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01, 03
 Plan: [plan.md](plan.md)
@@ -93,3 +93,5 @@ GIVEN a sign-in running WHEN `logIn` runs again THEN it throws and the harness s
 - `send_PassesImagesToProcess` — the fake's `calls` hold `imageCount: 1`
 
 ## Proof
+
+Commit bb7ccc2 · diff read, every Produces present · typecheck and lint pass · worker ran chat tests (174 passed) and the self-test (passed) · concerns: temp/stat filters run after the 40 cap, so the list can come up short; a rejecting stat rejects the whole recentFolders call

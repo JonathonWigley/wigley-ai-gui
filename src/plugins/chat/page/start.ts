@@ -14,15 +14,18 @@ import type {
   SessionsPageEvents,
   SessionsPageExports,
 } from '../../sessions/contract';
-import type { ChatChannel } from '../contract';
+import type { ChatChannel, ChatPageExports } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
 import { chatManifest } from '../manifest';
+import { addAccountCommands } from './account-commands';
 import { chatCommandHandlers, createPermissionActions } from './chat-commands';
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
 import { mountChatView } from './chat-view';
 import { createPicker } from './picker';
 import { readChatLayout } from './read-chat-layout';
+import { createSignInDialog } from './sign-in-dialog';
+import { createSlashCommands } from './slash-commands';
 import { createStartPrompt } from './start-prompt';
 
 type ChatApi = PageApi<
@@ -36,11 +39,13 @@ type ChatApi = PageApi<
 // drawn by the chat layout main chooses, under a floating composer holding
 // the message box, the controls as chips and send. The new-session prompt
 // asks for a folder, a profile and a new or saved session in the picker and
-// starts or resumes a session there. The
-// picker, the deny reason box and the end-session confirmation sit in the
-// overlay layer, each over a scope of its own; another session's Chat tab
-// showing closes the dialogs and a control picker, and leaves the start prompt
-// open.
+// starts or resumes a session there, signing a signed-out profile in first.
+// Sending `/login`, `/logout`, `/status` or another app slash command runs it
+// in the page in place of sending it; the exports register more. The
+// picker, the deny reason box, the end-session confirmation and the sign-in
+// dialog sit in the overlay layer, each over a scope of its own; another
+// session's Chat tab showing closes the reason box, the confirmation and a
+// control picker, and leaves the start prompt and the sign-in dialog open.
 export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -64,6 +69,24 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       run,
       pushScope: () => api.keys.pushScope('confirm'),
       log: services.log,
+    });
+    const signIn = createSignInDialog({
+      overlay: api.areas.overlay,
+      editor: services.editor,
+      keys,
+      platform: api.platform,
+      run,
+      pushScope: () => api.keys.pushScope('signIn'),
+      log: services.log,
+      channel: api.channel,
+      toast: services.toast,
+    });
+    const slashCommands = createSlashCommands();
+    addAccountCommands({
+      commands: slashCommands,
+      signIn,
+      channel: api.channel,
+      toast: services.toast,
     });
     const picker = createPicker({
       overlay: api.areas.overlay,
@@ -91,6 +114,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       run,
       permissions,
       confirm,
+      slashCommandNames: () => slashCommands.names(),
       setScope: () => api.keys.setScope('chat'),
       otherSessionShown: () => {
         picker.closeSessionBound();
@@ -121,6 +145,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     });
     const startPrompt = createStartPrompt({
       picker,
+      signIn,
       channel: api.channel,
       profiles: () => api.settings().profiles,
       reveal: (sessionId) => view.reveal(sessionId),
@@ -129,6 +154,9 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       log: services.log,
       toast: services.toast,
     });
+    const exports: ChatPageExports = {
+      addSlashCommand: (command) => slashCommands.add(command),
+    };
     return {
       commands: {
         ...chatCommandHandlers({
@@ -138,6 +166,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           reasonBox,
           confirm,
           picker,
+          signIn,
+          slashCommands,
           toast: services.toast,
           log: services.log,
         }),
@@ -145,6 +175,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         toggleArchive: () => startPrompt.toggleArchive(),
         showArchived: () => startPrompt.showArchived(),
       },
+      exports,
     };
   },
 };

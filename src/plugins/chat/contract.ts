@@ -5,6 +5,7 @@ import type {
   SessionControl,
   UserMessage,
 } from '../../contracts/agent';
+import type { Disposable } from '../../contracts/disposable';
 import type { LayoutChoice } from '../../contracts/layouts';
 import type { ChannelShape } from '../../contracts/plugin';
 
@@ -115,4 +116,29 @@ export interface ChatChannel extends ChannelShape {
       error: string | null;
     };
   };
+}
+
+// The session an app slash command was sent in: `args` is the trimmed text
+// after the name, '' when none; `ended` is true when the session's agent
+// process has ended, where main keeps no entries and a notice shows nowhere.
+export interface SlashCommandContext {
+  sessionId: string;
+  profile: string;
+  args: string;
+  ended: boolean;
+}
+
+// A `/name` the app runs itself in place of sending it to the agent. `name`
+// has no leading `/` and no whitespace; a registered name wins over the
+// agent's command of the same name.
+export interface AppSlashCommand {
+  name: string;
+  description: string;
+  run(context: SlashCommandContext): Promise<void> | void;
+}
+
+// The page part's exports. `addSlashCommand` registers an app slash command
+// until its `dispose`, and throws when the name is already registered.
+export interface ChatPageExports {
+  addSlashCommand(command: AppSlashCommand): Disposable;
 }

@@ -160,3 +160,22 @@
 .chat-reason-box .cm-scroller {
   overflow: auto;
 }
+
+/* The sign-in dialog: the link, selectable, beside Copy, then the code
+   box. */
+.chat-sign-in-link-row {
+  align-items: center;
+  display: flex;
+  gap: var(--wg-space-2);
+  margin: 0 0 var(--wg-space-3);
+}
+
+.chat-sign-in-link {
+  color: var(--wg-fg);
+  flex: 1;
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-12);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+}

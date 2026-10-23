@@ -8,7 +8,11 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { halfPageText } from '../../../shared/half-page';
-import type { ChatChannel } from '../contract';
+import type {
+  AppSlashCommand,
+  ChatChannel,
+  SlashCommandContext,
+} from '../contract';
 import type { chatManifest } from '../manifest';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
 import { controlText, oldestPendingPermission } from './chat-state';
@@ -20,6 +24,8 @@ import type {
 } from './chat-view';
 import { CONTROL_IDS } from './control-commands';
 import type { Picker } from './picker';
+import type { SignInDialog } from './sign-in-dialog';
+import type { SlashCommands } from './slash-commands';
 
 type ChatInvoke = Pick<PageChannel<ChatChannel>, 'invoke'>;
 
@@ -71,6 +77,8 @@ export interface ChatCommandDeps {
   reasonBox: ReasonBox;
   confirm: CloseConfirm;
   picker: Picker;
+  signIn: SignInDialog;
+  slashCommands: Pick<SlashCommands, 'match'>;
   toast(text: string, tone: ToastTone): void;
   log: Log;
 }
@@ -218,6 +226,8 @@ export function chatCommandHandlers(
         picked: (control) => openChoices(deps, session, control),
       });
     }),
+    submitCode: () => deps.signIn.submitCode(),
+    cancelSignIn: () => deps.signIn.cancel(),
     endSession: () => deps.confirm.end(),
     keepSession: () => deps.confirm.keep(),
     pickerDown: () => picker.down(),
@@ -248,12 +258,18 @@ function sessionFor(
 }
 
 // Sends the box's text as typed and clears the box; an empty box or an ended
-// session sends nothing and keeps the text.
+// session sends nothing and keeps the text. A registered app slash command
+// runs in place of sending, an ended session's included, and clears the box.
 function send(deps: ChatCommandDeps, session: ChatSession) {
   const { log } = deps;
   const text = session.box.text();
   if (text.trim() === '') {
     log('chat', 'nothing to send');
+    return;
+  }
+  const matched = deps.slashCommands.match(text);
+  if (matched !== null) {
+    runSlashCommand(deps, session, matched.command, matched.args);
     return;
   }
   if (session.ended) {
@@ -268,6 +284,29 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
     });
   session.box.setText('');
   log('chat', `sent a message in ${session.name}`);
+}
+
+// Runs the command for the session and clears the box; a run that throws or
+// rejects logs and toasts the failure.
+function runSlashCommand(
+  deps: ChatCommandDeps,
+  session: ChatSession,
+  command: AppSlashCommand,
+  args: string,
+) {
+  const { log } = deps;
+  const context: SlashCommandContext = {
+    sessionId: session.sessionId,
+    profile: session.state.profile,
+    args,
+    ended: session.ended,
+  };
+  session.box.setText('');
+  log('chat', `ran /${command.name} in ${session.name}`);
+  void (async () => command.run(context))().catch((error: unknown) => {
+    log('chat', `/${command.name} failed: ${errorText(error)}`);
+    deps.toast(`/${command.name} failed: ${errorText(error)}`, 'error');
+  });
 }
 
 function moveEntry(session: ChatSession, step: 1 | -1, log: Log) {

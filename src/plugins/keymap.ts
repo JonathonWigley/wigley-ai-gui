@@ -195,6 +195,8 @@ export const defaultKeymap = {
     { keys: '.', scope: 'chat.resume', command: 'chat.showArchived' },
     { keys: '<D-Enter>', scope: 'chat.reason', command: 'chat.submitReason' },
     { keys: '<Esc>', scope: 'chat.reason', command: 'chat.cancelReason' },
+    { keys: '<D-Enter>', scope: 'chat.signIn', command: 'chat.submitCode' },
+    { keys: '<Esc>', scope: 'chat.signIn', command: 'chat.cancelSignIn' },
     { keys: 'y', scope: 'chat.confirm', command: 'chat.endSession' },
     { keys: 'n', scope: 'chat.confirm', command: 'chat.keepSession' },
     { keys: '<Esc>', scope: 'chat.confirm', command: 'chat.keepSession' },
@@ -243,6 +245,18 @@ export const defaultKeymap = {
       keys: '<Esc>',
       scope: 'chat.reason',
       command: 'chat.cancelReason',
+      where: 'box',
+    },
+    {
+      keys: '<CR>',
+      scope: 'chat.signIn',
+      command: 'chat.submitCode',
+      where: 'box',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'chat.signIn',
+      command: 'chat.cancelSignIn',
       where: 'box',
     },
 

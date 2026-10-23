@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { AccountStatus } from '../../../contracts/agent';
 import type { ToastTone } from '../../../contracts/plugin';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
@@ -9,7 +10,11 @@ import type {
   StartRequest,
 } from '../contract';
 import type { Picker, PickerRequest } from './picker';
-import { NEW_SESSION_LABEL, sessionTime } from './resume-items';
+import {
+  NEW_SESSION_LABEL,
+  SESSION_STEP_TITLE,
+  sessionTime,
+} from './resume-items';
 import { createStartPrompt } from './start-prompt';
 import { CHOOSE_FOLDER_LABEL, type FolderItem } from './start-prompt-items';
 
@@ -31,6 +36,7 @@ const app: RecentFolder = {
 // reject or answer differently each time.
 interface Answers {
   recentFolders: () => Promise<RecentFolder[]>;
+  accountStatus: () => Promise<AccountStatus>;
   chooseFolder: () => Promise<string | null>;
   pastSessions: () => Promise<PastSessionRow[]>;
   start: (request: StartRequest) => Promise<string>;
@@ -69,8 +75,15 @@ function setUp(
   const revealed: string[] = [];
   const logs: string[] = [];
   const toasts: { text: string; tone: ToastTone }[] = [];
+  // Each sign-in the prompt opens, with the callback that finishes it.
+  const signIns: {
+    profile: string;
+    finished: ((signedIn: boolean) => void) | undefined;
+  }[] = [];
   const answers: Answers = {
     recentFolders: () => Promise.resolve(recent),
+    accountStatus: () =>
+      Promise.resolve({ signedIn: true, account: 'me@example.invalid' }),
     chooseFolder: () => Promise.resolve('/Users/u/dev/new'),
     pastSessions: () => Promise.resolve([]),
     start: () => Promise.resolve('row-1'),
@@ -127,6 +140,9 @@ function setUp(
   };
   const prompt = createStartPrompt({
     picker: picker as Picker,
+    signIn: {
+      open: (profile, finished) => signIns.push({ profile, finished }),
+    },
     channel: { invoke } as Parameters<typeof createStartPrompt>[0]['channel'],
     profiles: () => profiles,
     reveal: (sessionId) => revealed.push(sessionId),
@@ -146,6 +162,7 @@ function setUp(
     revealed,
     logs,
     toasts,
+    signIns,
     last: () => opened[opened.length - 1],
     moveCursor: (index: number) => {
       cursor = index;
@@ -586,6 +603,79 @@ describe('start prompt', () => {
     expect(run.logs).toEqual([
       '[chat] archive ignored: an archive write is in flight',
       '[chat] archived Alpha',
+    ]);
+  });
+
+  it('startPrompt_SignedOut_OpensSignIn', async () => {
+    const run = setUp({
+      profiles: [work],
+      answers: {
+        accountStatus: () =>
+          Promise.resolve({ signedIn: false, account: null }),
+      },
+    });
+    await flush();
+    pickFolder(run.opened[0], '~/dev/app');
+    await flush();
+
+    expect(run.signIns.map(({ profile }) => profile)).toEqual(['work']);
+    expect(run.invoked).not.toContain('pastSessions');
+    expect(run.started).toEqual([]);
+  });
+
+  it('startPrompt_SignInFinished_OpensSessionStep', async () => {
+    const run = setUp({
+      answers: {
+        accountStatus: () =>
+          Promise.resolve({ signedIn: false, account: null }),
+        pastSessions: () => Promise.resolve([alpha]),
+      },
+    });
+    await flush();
+    pickFolder(run.opened[0], '~/dev/app');
+    pickItem(run.opened[1], 'personal · ~/.claude-personal');
+    await flush();
+    run.signIns[0].finished?.(true);
+    await flush();
+
+    expect(run.last().title).toBe(SESSION_STEP_TITLE);
+  });
+
+  it('startPrompt_SignInCancelled_StartsNothing', async () => {
+    const run = setUp({
+      profiles: [work],
+      answers: {
+        accountStatus: () =>
+          Promise.resolve({ signedIn: false, account: null }),
+      },
+    });
+    await flush();
+    pickFolder(run.opened[0], '~/dev/app');
+    await flush();
+    run.signIns[0].finished?.(false);
+    await flush();
+
+    expect(run.invoked).not.toContain('pastSessions');
+    expect(run.started).toEqual([]);
+  });
+
+  it('startPrompt_StatusReadFails_GoesOn', async () => {
+    const run = setUp({
+      profiles: [work],
+      answers: {
+        accountStatus: () => Promise.reject(new Error('claude not found')),
+      },
+    });
+    await flush();
+    pickFolder(run.opened[0], '~/dev/app');
+    await flush();
+
+    expect(run.signIns).toEqual([]);
+    expect(run.logs).toContain(
+      '[chat] account status not read: claude not found',
+    );
+    expect(run.started).toEqual([
+      { projectDir: '/Users/u/dev/app', profile: 'work' },
     ]);
   });
 });

@@ -1,6 +1,6 @@
 # 05 — App slash commands and sign-in in the page
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 3 · Depends on: 04
 Plan: [plan.md](plan.md)

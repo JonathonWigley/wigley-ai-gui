@@ -156,7 +156,7 @@ nothing; chat's page imports only `src/contracts`, `src/shared`, its own folder 
 - [x] [Temp folders as a main service](03-temp-folders.md)
 
 ### Wave 2
-- [ ] [Chat main: image messages, notices, sign-in, merged folders](04-chat-main.md) — after 01, 03
+- [x] [Chat main: image messages, notices, sign-in, merged folders](04-chat-main.md) — after 01, 03
 
 ### Wave 3
 - [ ] [App slash commands and sign-in in the page](05-slash-commands-sign-in.md) — after 04
@@ -178,7 +178,10 @@ Review base: a0e7aebc036aed1714fb1422459501b1d4d7319d
 - 03 temp folders · 7c28b58 · proved (diff read, typecheck, lint) · concerns: test names use the task-doc style, not the repo prose style
 - 02 completion popup · 63e9972 · proved (diff read, typecheck, lint) · concerns: popup DOM sits outside EditorHost.contains — check clicks on rows in 08
 - 01 harness seam · c37acaa · proved (diff read, typecheck, lint) · concerns: layout.d.ts UserInput lacks images (06); AGENTS.md claude-code line stale (07); link-on-stderr untested
+- 04 chat main · bb7ccc2 · proved (diff read, typecheck, lint) · concerns: filters after the 40 cap can shorten the list; a rejecting stat rejects recentFolders
 ### Contract changes
+- createFolderChoices returns a named `FolderChoices` of the planned shape; mergeFolderChoices takes `ListedProject[]` (= `{ profile; folder: ProjectFolder }`) · why: naming only · consumers: none · group 04
+- chat-sessions.ts exports `requireProfile(profiles, name)` and `requireChatHarness(harnesses)` (private lookups widened); `SELFTEST_PROJECT_DIR` export removed; `ChatSelfTestDeps` gains `homeDir` and `files` · why: shared by accounts, folder-choices and start · consumers: none outside 04 · group 04
 ### Rulings
 - plan.py is absent from wigley 1.8.0; the Run log, boxes and Status lines are edited by hand — no tooling to lean on — a malformed entry, caught at Close · lead
 - A peer session shares the working tree; every commit is pathspec-scoped and the review range is this run's commit list — a swept peer edit — lead
@@ -188,5 +191,8 @@ Review base: a0e7aebc036aed1714fb1422459501b1d4d7319d
 - claude-auth.ts carries the repo's first `oxlint-disable-next-line no-control-regex`, for the OSC 8 regex — the control characters are the point — a lint precedent · group 01
 - The tooltip z-index sits on the autocomplete rule only — the only tooltip the app styles — a later tooltip type may sit under a dialog · group 02
 - readStartInputs became async to await the real path of os.tmpdir(); the self-test gets [] — realPath is async — a failed realPath now fails start through failStart · group 03
+- Self-test project folders are made under the real path of the self-test home, not services.homeDir, and sessions start once they exist — the mkdtemp spelling did not tilde in the picker and broke the min-width step — none seen, self-test passes · group 04
+- `A sign-in is already running for <profile>` names the running sign-in's profile — matches the page focusing the open dialog — one string · group 04
+- File order agreed with peer wigley-ai-gui-b5 (settings-mode plan): plan C 05 holds chat/manifest.ts and keymap.ts; the peer's 01 runs after 05 commits; plan C 06 dispatches only after the peer reports its 01 committed; keymap.ts one worker at a time, announced before and after — both plans edit those files — a wait on 06 · lead
 ### Review rounds
 ### Test gate
