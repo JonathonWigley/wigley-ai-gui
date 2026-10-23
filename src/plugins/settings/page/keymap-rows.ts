@@ -271,23 +271,27 @@ export function keymapRows(
   return [...groups.values()].filter((group) => group.rows.length > 0);
 }
 
-// Every command a new bind on `keys` in `scope` would displace, in row
-// order: each whose default bind fires on a half the new bind shares, and each
-// whose user bind `withAddedBind` drops; judged half by half as the merge
-// does. Empty when none, or when the merge cannot expand those keys.
+// Every other command a new bind of `command` on `keys` in `scope` would
+// displace, in row order: each whose default bind fires on a half the new bind
+// shares, and each whose user bind `withAddedBind` drops; judged half by half
+// as the merge does. `command` itself is left out, since a bind on keys it
+// already holds displaces nothing. Empty when none, or when the merge cannot
+// expand those keys.
 export function replacedBy(
   schema: UserConfigSchema,
   layer: UserKeymap | null,
   keys: string,
   scope: string,
+  command: CommandId,
 ): CommandInfo[] {
   const leader = keymapLeader(schema, layer);
-  const typed: KeyBind = { keys, scope, command: '' };
+  const typed: KeyBind = { keys, scope, command };
   if (!isExpandable(typed, leader)) {
     return [];
   }
   const rows = keymapRows(schema, layer).flatMap((group) => group.rows);
   return rows
+    .filter((row) => row.command.id !== command)
     .filter((row) =>
       row.binds.some((line) => {
         const shared = sharedHalves(typed, line.bind, leader);

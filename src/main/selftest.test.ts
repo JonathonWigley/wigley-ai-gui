@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import type { BrowserWindow } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Files } from '../contracts/files';
 import type { SelfTestScript } from '../contracts/plugin';
@@ -6,13 +10,25 @@ import type { DrivenWindow } from './drive/driven-window';
 const exit = vi.hoisted(() => vi.fn());
 vi.mock('electron', () => ({ app: { exit } }));
 
-// A page that logs nothing, so every wait for a log line stays pending.
+// A page that is ready for keys at once and logs nothing, so every wait for a
+// log line stays pending unless a test makes it resolve.
 const press = vi.hoisted(() => vi.fn());
+const waitForNewLogLine = vi.hoisted(() =>
+  vi.fn((..._args: unknown[]) => new Promise<boolean>(() => {})),
+);
 vi.mock('./drive/page-driver', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./drive/page-driver')>()),
   press,
   readLog: async () => [],
-  waitForNewLogLine: () => new Promise<boolean>(() => {}),
+  isReadyForKeys: async () => true,
+  readStartFailure: async () => null,
+  waitForNewLogLine,
+}));
+vi.mock('./electron-driven-window', () => ({
+  electronDrivenWindow: () => ({
+    focus: () => {},
+    emulateFocus: async () => {},
+  }),
 }));
 
 // `failSelfTest` keeps whether the self-test has exited in module state, so
@@ -176,5 +192,74 @@ describe('runScript', () => {
       ),
     ).rejects.toThrow('fixture failed');
     expect(press).not.toHaveBeenCalled();
+  });
+});
+
+describe('startSelfTest', () => {
+  let screenshotFolder: string;
+  let lines: string[];
+
+  beforeEach(() => {
+    exit.mockClear();
+    press.mockClear();
+    screenshotFolder = mkdtempSync(path.join(tmpdir(), 'selftest-test-'));
+    lines = [];
+    vi.spyOn(console, 'log').mockImplementation((line: string) => {
+      lines.push(line);
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    rmSync(screenshotFolder, { recursive: true, force: true });
+  });
+
+  it('stops a step left running once its result rejects mid-step', async () => {
+    vi.resetModules();
+    const { startSelfTest } = await import('./selftest');
+    let rejectResult = (_error: Error) => {};
+    const result = new Promise<never>((_resolve, reject) => {
+      rejectResult = reject;
+    });
+    press.mockImplementationOnce(() =>
+      rejectResult(new Error('fixture failed')),
+    );
+    waitForNewLogLine.mockResolvedValueOnce(true);
+    const loaded: (() => void)[] = [];
+    const window = {
+      webContents: {
+        on: (event: string, listener: () => void) => {
+          if (event === 'did-finish-load') {
+            loaded.push(listener);
+          }
+        },
+      },
+    } as unknown as BrowserWindow;
+    const script: SelfTestScript = {
+      pageBinds: [],
+      settings: {},
+      open: () => ({ shownLine: '[plugin] shown', result }),
+      steps: [{ keys: ['a', 'b'], expect: '[plugin] ab' }],
+      scrollsItself: [],
+      problems: () => [],
+    };
+    const driver = startSelfTest(
+      window,
+      {} as Files,
+      async () => {},
+      screenshotFolder,
+    );
+    driver.hostFor('plugin').run(script);
+    driver.closeHandover();
+
+    loaded[0]();
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(press).toHaveBeenCalledTimes(1);
+    expect(lines).toEqual([
+      '[selftest] PASS [plugin] shown',
+      '[selftest] FAIL the steps run: fixture failed',
+    ]);
   });
 });

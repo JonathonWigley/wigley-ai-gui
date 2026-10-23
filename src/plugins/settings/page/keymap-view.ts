@@ -114,11 +114,13 @@ function acceleratorLineElement(
   return lineElement(kbd(text, ctx.platform), tags, line.state !== 'active');
 }
 
-// The typed keys as Kbd, and the commands a bind on them in `scope` replaces.
+// The typed keys as Kbd, and the other commands a bind of `command` on them in
+// `scope` replaces.
 function keysPreview(
   ctx: RowContext,
   text: string,
   scope: ViewScope,
+  command: CommandId,
 ): HTMLElement | null {
   const keys = text.trim();
   if (keys === '') {
@@ -126,7 +128,13 @@ function keysPreview(
   }
   const node = element('span', 'settings-bind');
   node.append(keysKbd(ctx, keys));
-  const replaced = replacedBy(ctx.schema, ctx.keymapLayer(), keys, scope);
+  const replaced = replacedBy(
+    ctx.schema,
+    ctx.keymapLayer(),
+    keys,
+    scope,
+    command,
+  );
   if (replaced.length > 0) {
     node.append(
       element(
@@ -156,7 +164,7 @@ function addBind(ctx: RowContext, row: CommandRow) {
     text: '',
     editor: {
       type: 'line',
-      preview: (text) => keysPreview(ctx, text, preselected),
+      preview: (text) => keysPreview(ctx, text, preselected, command),
     },
     accept(box) {
       const keys = box.text().trim();
@@ -178,6 +186,7 @@ function addBind(ctx: RowContext, row: CommandRow) {
             ctx.keymapLayer(),
             keys,
             scope,
+            command,
           );
           const title = scopeTitle(ctx, scope);
           return replaced.length === 0

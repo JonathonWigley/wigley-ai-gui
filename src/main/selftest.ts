@@ -312,7 +312,9 @@ async function runAllScripts(
 
 // Starts a fresh run of every handed script; a step that throws or a script
 // result that rejects fails the self-test, unless a reload already interrupted
-// the run.
+// the run. The run stands down once the self-test begins to exit, so a step
+// still running when its script's result rejected presses, saves and reports
+// nothing more.
 function startRun(
   window: DrivenWindow,
   homeFiles: Files,
@@ -324,7 +326,7 @@ function startRun(
     return;
   }
   const run = ++latestRun;
-  const isCurrent = () => run === latestRun;
+  const isCurrent = () => run === latestRun && !hasExited;
   runAllScripts(
     window,
     homeFiles,

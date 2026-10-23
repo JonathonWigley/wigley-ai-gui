@@ -74,8 +74,9 @@ plan is written from them. A decision here stands unless the user changes it.
   "Accelerators are edited in the advanced box", as `a`, `d` and `r` do):
   - `a` adds a bind: a box takes vim notation and shows a live Kbd preview and, when firing binds on the same keys and
     scope exist, "Replaces <label>" naming every command the add displaces ("Replaces A and B", "Replaces A, B and
-    C"): each whose default still fires on a half the new bind shares, and each whose user bind the add drops. Enter then opens the list picker of scopes (`any` and every scope), preselecting the
-    scope of the command's first default bind, else `any`. A bind added here carries no `where` or `mode`.
+    C"): each whose default still fires on a half the new bind shares, and each whose user bind the add drops. Enter
+    then opens the list picker of scopes (`any` and every scope), preselecting the scope of the command's first
+    default bind, else `any`. A bind added here carries no `where` or `mode`.
   - `d` removes a bind (the list picker chooses which when the row has several): a default becomes an `unbind`
     entry, a user bind leaves `binds`.
   - `r` resets the row: every user `binds` entry naming that command, every other command's user bind sharing a half

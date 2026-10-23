@@ -156,7 +156,9 @@ describe('replacedBy', () => {
       [{ keys: 'g<CR>', scope: 'p.s', command: 'p.a' }],
     );
 
-    expect(ids(replacedBy(given, null, 'g<Enter>', 'p.s'))).toEqual(['p.a']);
+    expect(ids(replacedBy(given, null, 'g<Enter>', 'p.s', 'p.z'))).toEqual([
+      'p.a',
+    ]);
   });
 
   it('replacedBy_RemovedDefault_NamesNone', () => {
@@ -166,7 +168,7 @@ describe('replacedBy', () => {
     );
     const layer = { unbind: [{ keys: 'x', scope: 'p.s' }] };
 
-    expect(replacedBy(given, layer, 'x', 'p.s')).toEqual([]);
+    expect(replacedBy(given, layer, 'x', 'p.s', 'p.z')).toEqual([]);
   });
 
   it('replacedBy_KeysThePageCannotBind_NamesNone', () => {
@@ -175,7 +177,7 @@ describe('replacedBy', () => {
       [{ keys: 'x', scope: 'p.s', command: 'p.a' }],
     );
 
-    expect(replacedBy(given, null, '<Nope>', 'p.s')).toEqual([]);
+    expect(replacedBy(given, null, '<Nope>', 'p.s', 'p.z')).toEqual([]);
   });
 
   it('replacedBy_DefaultHalfAndUserBindOnOtherHalf_NamesBoth', () => {
@@ -194,8 +196,29 @@ describe('replacedBy', () => {
       ],
     };
 
-    expect(ids(replacedBy(given, layer, '<Leader>x', 'p.s'))).toEqual([
+    expect(ids(replacedBy(given, layer, '<Leader>x', 'p.s', 'p.z'))).toEqual([
       'p.a',
+      'p.b',
+    ]);
+  });
+
+  it('replacedBy_KeysTheCommandsOwnDefaultHolds_LeavesTheCommandOut', () => {
+    const given = schema(
+      [command('p.a'), command('p.b')],
+      [{ keys: '<Leader>x', scope: 'p.s', command: 'p.a' }],
+    );
+    const layer = {
+      binds: [
+        {
+          keys: '<Leader>x',
+          scope: 'p.s',
+          command: 'p.b',
+          where: 'page' as const,
+        },
+      ],
+    };
+
+    expect(ids(replacedBy(given, layer, '<Leader>x', 'p.s', 'p.a'))).toEqual([
       'p.b',
     ]);
   });
@@ -209,7 +232,7 @@ describe('replacedBy', () => {
       ],
     };
 
-    expect(ids(replacedBy(given, null, 'x', 'p.s'))).toEqual(['p.b']);
+    expect(ids(replacedBy(given, null, 'x', 'p.s', 'p.z'))).toEqual(['p.b']);
   });
 });
 
