@@ -10,6 +10,7 @@ import {
   type FakeAgentHarness,
 } from '../../../shared/fake-agent-harness';
 import { createMemoryFiles } from '../../../shared/memory-files';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   AgentSession,
   SessionInfo,
@@ -105,6 +106,7 @@ function setUp(
     recent: createRecentFolders({
       data,
       clock: { now: () => options.clockNow ?? 1000 },
+      paths: posixPaths,
       log,
     }),
     archived,

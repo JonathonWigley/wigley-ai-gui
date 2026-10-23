@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ToastTone } from '../../../contracts/plugin';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   ChatProfile,
   PastSessionRow,
@@ -131,6 +132,7 @@ function setUp(
     channel: { invoke } as Parameters<typeof createStartPrompt>[0]['channel'],
     profiles: () => profiles,
     reveal: (sessionId) => revealed.push(sessionId),
+    paths: posixPaths,
     log: (source, message) => logs.push(`[${source}] ${message}`),
     toast: (text, tone) => toasts.push({ text, tone }),
   });

@@ -1,3 +1,4 @@
+import type { Paths } from '../../../contracts/paths';
 import type { ChatProfile, RecentFolder } from '../contract';
 
 export type FolderItem =
@@ -6,17 +7,13 @@ export type FolderItem =
 
 export const CHOOSE_FOLDER_LABEL = 'Choose folder…';
 
-// `projectDir` with the home folder shown as `~`; a folder outside home is
-// unchanged.
-export function displayPath(projectDir: string, homeDir: string): string {
-  const home = homeDir.endsWith('/') ? homeDir.slice(0, -1) : homeDir;
-  if (projectDir === home) {
-    return '~';
-  }
-  if (projectDir.startsWith(`${home}/`)) {
-    return `~${projectDir.slice(home.length)}`;
-  }
-  return projectDir;
+// `projectDir` in the OS's own spelling with the home folder shown as `~`.
+export function displayPath(
+  projectDir: string,
+  homeDir: string,
+  paths: Paths,
+): string {
+  return paths.tilde(projectDir, homeDir);
 }
 
 // The folder step's lines: the recent folders in the order given, then the
@@ -24,23 +21,27 @@ export function displayPath(projectDir: string, homeDir: string): string {
 export function folderItems(
   recent: readonly RecentFolder[],
   homeDir: string,
+  paths: Paths,
 ): FolderItem[] {
   const recentItems: FolderItem[] = recent.map((folder) => ({
     kind: 'recent',
     folder,
-    label: displayPath(folder.projectDir, homeDir),
+    label: displayPath(folder.projectDir, homeDir, paths),
   }));
   return [...recentItems, { kind: 'choose', label: CHOOSE_FOLDER_LABEL }];
 }
 
 // The index in `profiles` to pre-select for `projectDir`; 0 when no recent
-// folder names a profile in `profiles`.
+// folder that is the same path names a profile in `profiles`.
 export function preselectedProfile(
   profiles: readonly ChatProfile[],
   recent: readonly RecentFolder[],
   projectDir: string,
+  paths: Paths,
 ): number {
-  const used = recent.find((folder) => folder.projectDir === projectDir);
+  const used = recent.find((folder) =>
+    paths.samePath(folder.projectDir, projectDir),
+  );
   if (used === undefined) {
     return 0;
   }

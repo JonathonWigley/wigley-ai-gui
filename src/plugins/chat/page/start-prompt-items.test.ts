@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { posixPaths } from '../../../shared/paths/posix-paths';
+import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type { ChatProfile, RecentFolder } from '../contract';
 import {
   displayPath,
@@ -28,27 +30,41 @@ const profiles: ChatProfile[] = [
 
 describe('start prompt items', () => {
   it('displayPath_HomeItself_Tilde', () => {
-    expect(displayPath('/Users/u', home)).toBe('~');
+    expect(displayPath('/Users/u', home, posixPaths)).toBe('~');
   });
 
   it('displayPath_InsideHome_TildePrefix', () => {
-    expect(displayPath('/Users/u/dev/app', home)).toBe('~/dev/app');
+    expect(displayPath('/Users/u/dev/app', home, posixPaths)).toBe('~/dev/app');
   });
 
   it('displayPath_SiblingPrefix_Unchanged', () => {
-    expect(displayPath('/Users/uz/app', home)).toBe('/Users/uz/app');
+    expect(displayPath('/Users/uz/app', home, posixPaths)).toBe(
+      '/Users/uz/app',
+    );
   });
 
   it('displayPath_OutsideHome_Unchanged', () => {
-    expect(displayPath('/opt/app', home)).toBe('/opt/app');
+    expect(displayPath('/opt/app', home, posixPaths)).toBe('/opt/app');
   });
 
   it('displayPath_HomeWithTrailingSlash', () => {
-    expect(displayPath('/Users/u/dev', '/Users/u/')).toBe('~/dev');
+    expect(displayPath('/Users/u/dev', '/Users/u/', posixPaths)).toBe('~/dev');
+  });
+
+  it('displayPath_WindowsBelowHome_Tilde', () => {
+    expect(
+      displayPath('C:\\Users\\jo\\dev\\app', 'C:\\Users\\jo', windowsPaths),
+    ).toBe('~\\dev\\app');
+  });
+
+  it('displayPath_WindowsOutsideHome_Native', () => {
+    expect(displayPath('C:\\_root\\dev', 'C:\\Users\\jo', windowsPaths)).toBe(
+      'C:\\_root\\dev',
+    );
   });
 
   it('folderItems_RecentThenChoose', () => {
-    expect(folderItems(recent, home)).toEqual([
+    expect(folderItems(recent, home, posixPaths)).toEqual([
       { kind: 'recent', folder: app, label: '~/dev/app' },
       { kind: 'recent', folder: tool, label: '/opt/tool' },
       { kind: 'choose', label: 'Choose folder…' },
@@ -56,18 +72,24 @@ describe('start prompt items', () => {
   });
 
   it('folderItems_NoRecent_ChooseOnly', () => {
-    expect(folderItems([], home)).toEqual([
+    expect(folderItems([], home, posixPaths)).toEqual([
       { kind: 'choose', label: 'Choose folder…' },
     ]);
   });
 
   it('preselectedProfile_LastUsedInFolder', () => {
-    expect(preselectedProfile(profiles, recent, '/Users/u/dev/app')).toBe(1);
-    expect(preselectedProfile(profiles, recent, '/opt/tool')).toBe(0);
+    expect(
+      preselectedProfile(profiles, recent, '/Users/u/dev/app', posixPaths),
+    ).toBe(1);
+    expect(preselectedProfile(profiles, recent, '/opt/tool', posixPaths)).toBe(
+      0,
+    );
   });
 
   it('preselectedProfile_UnknownFolder_First', () => {
-    expect(preselectedProfile(profiles, recent, '/elsewhere')).toBe(0);
+    expect(preselectedProfile(profiles, recent, '/elsewhere', posixPaths)).toBe(
+      0,
+    );
   });
 
   it('preselectedProfile_RemovedProfile_First', () => {
@@ -77,7 +99,7 @@ describe('start prompt items', () => {
       lastUsed: 3,
     };
 
-    expect(preselectedProfile(profiles, [old], '/srv/old')).toBe(0);
+    expect(preselectedProfile(profiles, [old], '/srv/old', posixPaths)).toBe(0);
   });
 
   it('profileLabel_NameAndFolder', () => {

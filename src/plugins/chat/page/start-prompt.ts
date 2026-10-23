@@ -1,4 +1,5 @@
 import type { Log } from '../../../contracts/log';
+import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type {
@@ -28,6 +29,7 @@ export interface StartPromptDeps {
   channel: Pick<PageChannel<ChatChannel>, 'invoke'>;
   profiles(): readonly ChatProfile[];
   reveal(sessionId: string): void;
+  paths: Paths;
   log: Log;
   toast(text: string, tone: ToastTone): void;
 }
@@ -101,7 +103,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const openFolderStep = (context: PromptContext) => {
     deps.picker.open<FolderItem>({
       title: 'Folder',
-      items: folderItems(context.recent, context.homeDir),
+      items: folderItems(context.recent, context.homeDir, deps.paths),
       label: (item) => item.label,
       selected: 0,
       picked: (item) =>
@@ -139,7 +141,12 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       title: 'Profile',
       items: profiles,
       label: profileLabel,
-      selected: preselectedProfile(profiles, context.recent, projectDir),
+      selected: preselectedProfile(
+        profiles,
+        context.recent,
+        projectDir,
+        deps.paths,
+      ),
       picked: (profile) => listSessions(context, projectDir, profile),
     });
   };
@@ -280,7 +287,7 @@ function resumeSession(step: SessionStep, row: PastSessionRow) {
   const { projectDir, profile } = step;
   deps.log(
     'chat',
-    `resuming ${row.title} in ${displayPath(projectDir, homeDir)} with ${profile.name}`,
+    `resuming ${row.title} in ${displayPath(projectDir, homeDir, deps.paths)} with ${profile.name}`,
   );
   void deps.channel
     .invoke('resume', {
@@ -305,7 +312,7 @@ function startSession(
   const { deps } = context;
   deps.log(
     'chat',
-    `starting a session in ${displayPath(projectDir, context.homeDir)} with ${profile.name}`,
+    `starting a session in ${displayPath(projectDir, context.homeDir, deps.paths)} with ${profile.name}`,
   );
   void deps.channel.invoke('start', { projectDir, profile: profile.name }).then(
     (sessionId) => deps.reveal(sessionId),

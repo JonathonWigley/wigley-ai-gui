@@ -3,6 +3,7 @@ import type {
   ProcessActivity,
   SessionControl,
 } from '../../../contracts/agent';
+import type { Paths } from '../../../contracts/paths';
 
 export type PermissionEntry = Extract<ChatEntry, { kind: 'permission' }>;
 
@@ -72,8 +73,9 @@ export function changedControls(
   });
 }
 
-// The folder's last path segment, a trailing slash ignored.
-export function folderName(projectDir: string): string {
-  const segments = projectDir.split('/').filter((segment) => segment !== '');
-  return segments.at(-1) ?? projectDir;
+// The folder's last path segment, a trailing separator ignored; a root is
+// named as it is written.
+export function folderName(projectDir: string, paths: Paths): string {
+  const base = paths.base(projectDir);
+  return base === '' ? projectDir : base;
 }

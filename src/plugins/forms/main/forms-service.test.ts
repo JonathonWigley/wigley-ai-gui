@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { SessionInfo } from '../../sessions/contract';
 import type {
   AnswerEntry,
@@ -187,6 +188,7 @@ beforeEach(() => {
     roundsDir,
     clock: { now: () => nowMs },
     randomHex: () => (++hexCount).toString(16).padStart(8, '0'),
+    paths: posixPaths,
     log: () => {},
   });
 });

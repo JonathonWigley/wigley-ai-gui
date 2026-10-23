@@ -194,6 +194,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     const recent = createRecentFolders({
       data: api.data,
       clock: services.clock,
+      paths: services.paths,
       log: services.log,
     });
     const chat = createChatSessions({

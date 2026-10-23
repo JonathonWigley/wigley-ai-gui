@@ -1,6 +1,7 @@
 import type { Clock } from '../../../contracts/ambient';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
+import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import type { RecentFolder } from '../contract';
 
@@ -17,14 +18,15 @@ export interface RecentFolders {
   record(projectDir: string, profile: string): Promise<void>;
 }
 
-// `folder` first, any earlier entry for its projectDir dropped, at most
-// MAX_RECENT_FOLDERS kept.
+// `folder` first, any earlier entry for the same path as its projectDir
+// dropped (the new spelling kept), at most MAX_RECENT_FOLDERS kept.
 export function addRecentFolder(
   folders: readonly RecentFolder[],
   folder: RecentFolder,
+  paths: Paths,
 ): RecentFolder[] {
   const others = folders.filter(
-    (earlier) => earlier.projectDir !== folder.projectDir,
+    (earlier) => !paths.samePath(earlier.projectDir, folder.projectDir),
   );
   return [folder, ...others].slice(0, MAX_RECENT_FOLDERS);
 }
@@ -41,9 +43,10 @@ function parseRecentFolders(text: string): RecentFolder[] {
 export function createRecentFolders(deps: {
   data: Files;
   clock: Clock;
+  paths: Paths;
   log: Log;
 }): RecentFolders {
-  const { data, clock, log } = deps;
+  const { data, clock, paths, log } = deps;
   let lastWrite: Promise<void> = Promise.resolve();
 
   // [] when the file is missing; throws when it cannot be read or parsed.
@@ -62,11 +65,11 @@ export function createRecentFolders(deps: {
   }
 
   async function write(projectDir: string, profile: string): Promise<void> {
-    const folders = addRecentFolder(await readSaved(), {
-      projectDir,
-      profile,
-      lastUsed: clock.now(),
-    });
+    const folders = addRecentFolder(
+      await readSaved(),
+      { projectDir, profile, lastUsed: clock.now() },
+      paths,
+    );
     await data.write(RECENT_FOLDERS_FILE, JSON.stringify(folders, null, 2));
   }
 

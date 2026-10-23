@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatEntry, SessionControl } from '../../../contracts/agent';
+import { posixPaths } from '../../../shared/paths/posix-paths';
+import { windowsPaths } from '../../../shared/paths/windows-paths';
 import {
   applyEntry,
   changedControls,
@@ -108,6 +110,12 @@ describe('chat state', () => {
   });
 
   it('folderName_LastSegmentTrailingSlashIgnored', () => {
-    expect(folderName('/Users/u/dev/app/')).toBe('app');
+    expect(folderName('/Users/u/dev/app/', posixPaths)).toBe('app');
+  });
+
+  it('folderName_WindowsFolder_LastSegment', () => {
+    expect(folderName('C:\\_root\\dev\\wigley-ai-gui', windowsPaths)).toBe(
+      'wigley-ai-gui',
+    );
   });
 });

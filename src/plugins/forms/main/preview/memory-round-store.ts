@@ -1,4 +1,5 @@
 import type { Clock, RandomHex } from '../../../../contracts/ambient';
+import type { Paths } from '../../../../contracts/paths';
 import {
   isFinished,
   openRecord,
@@ -8,10 +9,11 @@ import {
 } from '../round-store';
 
 // A RoundStore that writes nothing to disk: the preview's rounds and answers
-// last only as long as the app runs.
+// last only as long as the app runs. `paths` compares project folders.
 export function createMemoryRoundStore(
   clock: Clock,
   randomHex: RandomHex,
+  paths: Paths,
 ): RoundStore {
   const records: SavedRound[] = [];
   const stamp = (record: SavedRound) => {
@@ -47,7 +49,7 @@ export function createMemoryRoundStore(
       record.returned = true;
       stamp(record);
     },
-    ...roundQueries(() => records),
+    ...roundQueries(() => records, paths),
     prune: () => undefined,
   };
 }

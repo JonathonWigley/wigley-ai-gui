@@ -78,6 +78,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     });
     const view = mountChatView({
       channel: api.channel,
+      paths: services.paths,
       sessions,
       onSessionRemoved: (listener) =>
         api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
@@ -123,6 +124,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       channel: api.channel,
       profiles: () => api.settings().profiles,
       reveal: (sessionId) => view.reveal(sessionId),
+      paths: services.paths,
       log: services.log,
       toast: services.toast,
     });

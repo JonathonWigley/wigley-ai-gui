@@ -8,6 +8,7 @@ import type {
 } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { Paths } from '../../../contracts/paths';
 import type { Platform } from '../../../contracts/platform';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
@@ -90,9 +91,10 @@ export interface PermissionActions {
 // Chat tab shown is another session's than the Chat tab shown before;
 // `onSessionRemoved` hears the sessions plugin drop a row's tabs. `run` runs
 // a command, as the composer's chips and send button do; `platform` prints
-// the key hints.
+// the key hints; `paths` names each tab by its project folder.
 export interface ChatViewDeps {
   channel: PageChannel<ChatChannel>;
+  paths: Paths;
   sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'closeSession'>;
   onSessionRemoved(listener: (sessionId: string) => void): void;
   editor: EditorHost;
@@ -328,7 +330,7 @@ function createTab(
   deps: ChatViewDeps,
   view: { shown(tab: HeldTab): void; beforeClose(tab: HeldTab): boolean },
 ): HeldTab {
-  const name = folderName(state.projectDir);
+  const name = folderName(state.projectDir, deps.paths);
   const ref: SessionRef = { sessionId: state.sessionId, name };
   const entries = createEntryList({
     shown,

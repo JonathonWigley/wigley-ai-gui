@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { posixPaths } from '../../../../shared/paths/posix-paths';
 import type { FormBody } from '../../contract';
 import type { RoundOwner, RoundStore } from '../round-store';
 import { createMemoryRoundStore } from './memory-round-store';
@@ -10,8 +11,10 @@ let nowMs: number;
 let hexCount: number;
 
 function store(): RoundStore {
-  return createMemoryRoundStore({ now: () => nowMs }, () =>
-    (++hexCount).toString(16).padStart(8, '0'),
+  return createMemoryRoundStore(
+    { now: () => nowMs },
+    () => (++hexCount).toString(16).padStart(8, '0'),
+    posixPaths,
   );
 }
 

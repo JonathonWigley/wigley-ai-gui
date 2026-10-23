@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
+import { posixPaths } from '../../../shared/paths/posix-paths';
+import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type { RecentFolder } from '../contract';
 import {
+  addRecentFolder,
   createRecentFolders,
   MAX_RECENT_FOLDERS,
   RECENT_FOLDERS_FILE,
@@ -14,6 +17,7 @@ function setUp() {
   const recent = createRecentFolders({
     data,
     clock: { now: () => now },
+    paths: posixPaths,
     log: (source, message) => logged.push(`[${source}] ${message}`),
   });
   return {
@@ -44,6 +48,19 @@ describe('createRecentFolders', () => {
       { projectDir: '/b', profile: 'work', lastUsed: 2000 },
       { projectDir: '/a', profile: 'work', lastUsed: 10 },
     ]);
+  });
+
+  it('addRecentFolder_WindowsCaseDiffers_OneEntry', () => {
+    const earlier: RecentFolder[] = [
+      { projectDir: 'C:\\Dev\\App', profile: 'work', lastUsed: 10 },
+    ];
+    const added: RecentFolder = {
+      projectDir: 'c:\\dev\\app\\',
+      profile: 'work',
+      lastUsed: 20,
+    };
+
+    expect(addRecentFolder(earlier, added, windowsPaths)).toEqual([added]);
   });
 
   it('record_keepsAtMostTwenty', async () => {

@@ -10,6 +10,9 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { Paths } from '../../../contracts/paths';
+import { posixPaths } from '../../../shared/paths/posix-paths';
+import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type { FormBody } from '../contract';
 import {
   createRoundStore,
@@ -28,11 +31,12 @@ let nowMs: number;
 let hexCount: number;
 let logLines: string[];
 
-function storeIn(dir: string): RoundStore {
+function storeIn(dir: string, paths: Paths = posixPaths): RoundStore {
   return createRoundStore({
     roundsDir: dir,
     clock: { now: () => nowMs },
     randomHex: () => (++hexCount).toString(16).padStart(8, '0'),
+    paths,
     log: (source, message) => logLines.push(`[${source}] ${message}`),
   });
 }
@@ -261,6 +265,25 @@ describe('RoundStore', () => {
         NONE,
       )?.id,
     ).toBe(mine.id);
+  });
+
+  it('isOwnedBy_WindowsCaseDiffers_Owned', () => {
+    const store = storeIn(roundsDir, windowsPaths);
+    const record = store.create(
+      { sessionId: null, projectDir: 'C:\\Dev\\App' },
+      'fp',
+      ARGS,
+      null,
+      null,
+    );
+    store.finish(record, 'submitted', withNote(''));
+
+    expect(
+      store.newestUnreturnedFinished(
+        { sessionId: null, projectDir: 'c:\\dev\\app' },
+        NONE,
+      )?.id,
+    ).toBe(record.id);
   });
 
   it('finds nothing as mine with neither a session id nor a project folder, yet still pre-fills', () => {

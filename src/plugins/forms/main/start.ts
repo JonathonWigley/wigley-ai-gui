@@ -65,6 +65,7 @@ function createForms(
     roundsDir: path.join(services.homeDir, '.agents', 'wigley-forms', 'rounds'),
     clock: services.clock,
     randomHex: services.randomHex,
+    paths: services.paths,
     log: services.log,
   });
   store.prune();
@@ -85,7 +86,11 @@ function createForms(
     sessions,
     forms: createFormsService({
       presenter: presenter.quiet,
-      store: createMemoryRoundStore(services.clock, services.randomHex),
+      store: createMemoryRoundStore(
+        services.clock,
+        services.randomHex,
+        services.paths,
+      ),
       defaultDeadlineSeconds,
     }),
     savedArgs: () => store.recentArgs(PREVIEW_SAVED_ROUNDS),

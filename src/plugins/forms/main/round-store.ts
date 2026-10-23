@@ -10,6 +10,7 @@ import {
 import path from 'node:path';
 import type { Clock, RandomHex } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
+import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import type { FormBody } from '../contract';
 import type { SessionInfo } from '../../sessions/contract';
@@ -87,16 +88,25 @@ export function isFinished(record: SavedRound): record is FinishedSavedRound {
   return record.outcome !== 'open';
 }
 
-// With no session id the project folder decides; with neither, as under
-// Codex, nothing is anyone's, so one session never gets another's answers.
-function isOwnedBy(record: SavedRound, owner: RoundOwner): boolean {
+// With no session id the project folder decides, compared as the same path;
+// with neither, as under Codex, nothing is anyone's, so one session never
+// gets another's answers.
+function isOwnedBy(
+  record: SavedRound,
+  owner: RoundOwner,
+  paths: Paths,
+): boolean {
   if (owner.sessionId !== null) {
     return record.session_id === owner.sessionId;
   }
   if (owner.projectDir === null) {
     return false;
   }
-  return record.session_id === null && record.project_dir === owner.projectDir;
+  return (
+    record.session_id === null &&
+    record.project_dir !== null &&
+    paths.samePath(record.project_dir, owner.projectDir)
+  );
 }
 
 function stringOrNull(value: unknown): string | null {
@@ -198,9 +208,11 @@ function recentArgsOf(records: SavedRound[], limit: number): unknown[] {
   return args;
 }
 
-// The store's reads, answered over every round `readAll` returns.
+// The store's reads, answered over every round `readAll` returns; `paths`
+// compares project folders.
 export function roundQueries(
   readAll: () => SavedRound[],
+  paths: Paths,
 ): Pick<RoundStore, 'newestFor' | 'newestUnreturnedFinished' | 'recentArgs'> {
   return {
     newestFor: (fingerprint) =>
@@ -213,7 +225,7 @@ export function roundQueries(
           (record): record is FinishedSavedRound =>
             isFinished(record) &&
             !record.returned &&
-            isOwnedBy(record, owner) &&
+            isOwnedBy(record, owner, paths) &&
             !excluding.has(record.id),
         ),
       ),
@@ -315,9 +327,10 @@ export function createRoundStore(deps: {
   roundsDir: string;
   clock: Clock;
   randomHex: RandomHex;
+  paths: Paths;
   log: Log;
 }): RoundStore {
-  const { roundsDir, clock, randomHex, log } = deps;
+  const { roundsDir, clock, randomHex, paths, log } = deps;
   const write = (record: SavedRound) =>
     writeRecordOrLog(roundsDir, record, clock, log);
   return {
@@ -350,7 +363,7 @@ export function createRoundStore(deps: {
       record.returned = true;
       write(record);
     },
-    ...roundQueries(() => readAllRounds(roundsDir)),
+    ...roundQueries(() => readAllRounds(roundsDir), paths),
     prune: () =>
       pruneOlderThan(roundsDir, clock.now() - RETENTION_SECONDS * 1000, log),
   };
