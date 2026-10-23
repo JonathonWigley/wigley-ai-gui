@@ -8,10 +8,13 @@ import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
 import { errorText } from '../../shared/error-text';
 import {
+  endsInsideLine,
   readTranscriptHead,
   SESSION_ID,
   sessionTitle,
   TRANSCRIPT_HEAD_BYTES,
+  TRANSCRIPT_HEAD_MAX_BYTES,
+  type TranscriptHead,
   transcriptEntries,
 } from './transcripts';
 
@@ -52,7 +55,7 @@ export async function listPastSessions(
 }
 
 // Every project folder in `projectsRoot` (`<config>/projects`) named by the
-// `cwd` in the head of its newest transcript, with that transcript's modified
+// `cwd` at the start of its newest transcript, with that transcript's modified
 // time, newest first, then by folder; read `TRANSCRIPT_READ_BATCH` folders at
 // a time. A folder with no readable transcript or no `cwd` is left out and
 // logged; a missing `projectsRoot` lists none.
@@ -116,11 +119,15 @@ async function pastSession(
   sessionId: string,
 ): Promise<PastSession | null> {
   const transcript = transcriptPath(deps.paths, projectsFolder, sessionId);
-  let head: string;
+  let head: TranscriptHead;
   let modified: number;
   try {
     [head, modified] = await Promise.all([
-      deps.files.readStart(transcript, TRANSCRIPT_HEAD_BYTES),
+      readHead(
+        deps,
+        transcript,
+        (read) => read.cwd !== null && read.firstMessage !== null,
+      ),
       deps.files.modified(transcript),
     ]);
   } catch (error) {
@@ -130,7 +137,7 @@ async function pastSession(
     );
     return null;
   }
-  const { cwd, firstMessage } = readTranscriptHead(head);
+  const { cwd, firstMessage } = head;
   if (cwd === null || !deps.paths.samePath(cwd, projectDir)) {
     return null;
   }
@@ -157,9 +164,9 @@ async function projectFolder(
     deps.log('claude', `project folder ${folder} has no readable transcript`);
     return null;
   }
-  let head: string;
+  let head: TranscriptHead;
   try {
-    head = await deps.files.readStart(newest.path, TRANSCRIPT_HEAD_BYTES);
+    head = await readHead(deps, newest.path, (read) => read.cwd !== null);
   } catch (error) {
     deps.log(
       'claude',
@@ -167,12 +174,45 @@ async function projectFolder(
     );
     return null;
   }
-  const { cwd } = readTranscriptHead(head);
+  const { cwd } = head;
   if (cwd === null) {
     deps.log('claude', `transcript ${newest.path} names no folder`);
     return null;
   }
   return { projectDir: cwd, modified: newest.modified };
+}
+
+// The folder and first user message at the start of the transcript at
+// `path`: its first `TRANSCRIPT_HEAD_BYTES`, read again at twice the length
+// while the read ends inside a line and lacks what `hasEnough` asks for, up to
+// `TRANSCRIPT_HEAD_MAX_BYTES`. A head that cap still cuts short is logged.
+async function readHead(
+  deps: PastSessionsDeps,
+  path: string,
+  hasEnough: (head: TranscriptHead) => boolean,
+): Promise<TranscriptHead> {
+  let maxBytes = TRANSCRIPT_HEAD_BYTES;
+  let text = await deps.files.readStart(path, maxBytes);
+  let head = readTranscriptHead(text);
+  while (!hasEnough(head) && endsInsideLine(text)) {
+    if (maxBytes === TRANSCRIPT_HEAD_MAX_BYTES) {
+      deps.log(
+        'claude',
+        `transcript ${path} cut at ${TRANSCRIPT_HEAD_MAX_BYTES} bytes`,
+      );
+      break;
+    }
+    maxBytes = Math.min(maxBytes * 2, TRANSCRIPT_HEAD_MAX_BYTES);
+    const longer = await deps.files.readStart(path, maxBytes);
+    // An unchanged read is the whole file, ending in a line that does not parse.
+    const isWholeFile = longer.length === text.length;
+    text = longer;
+    head = readTranscriptHead(text);
+    if (isWholeFile) {
+      break;
+    }
+  }
+  return head;
 }
 
 // The most recently changed `<session id>.jsonl` in `folder`; a transcript

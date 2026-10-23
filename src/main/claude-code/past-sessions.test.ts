@@ -9,6 +9,10 @@ import {
   readHistory,
   TRANSCRIPT_READ_BATCH,
 } from './past-sessions';
+import {
+  TRANSCRIPT_HEAD_BYTES,
+  TRANSCRIPT_HEAD_MAX_BYTES,
+} from './transcripts';
 
 const FOLDER = '/config/projects/-w-app';
 const OLD_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
@@ -28,6 +32,60 @@ function transcript(cwd: string, firstMessage: string): string {
   ]
     .map((line) => JSON.stringify(line))
     .join('\n');
+}
+
+// A transcript whose first user line, the only one carrying `cwd`, holds an
+// image of `imageBytes` base64 characters ahead of its `firstMessage` text.
+function imageFirstTranscript(
+  cwd: string,
+  firstMessage: string,
+  imageBytes: number,
+): string {
+  return [
+    { type: 'mode', mode: 'auto' },
+    {
+      type: 'user',
+      uuid: 'u1',
+      cwd,
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: 'image/png',
+              data: 'A'.repeat(imageBytes),
+            },
+          },
+          { type: 'text', text: firstMessage },
+        ],
+      },
+    },
+    { type: 'assistant', uuid: 'a1', message: { content: [] } },
+  ]
+    .map((line) => JSON.stringify(line))
+    .join('\n');
+}
+
+// Files whose `readStart` of `path` answers a first line that never ends,
+// however many bytes are asked for, and records each `maxBytes` asked.
+function endlessLineFiles(path: string) {
+  const asked: number[] = [];
+  const files: Files = {
+    ...createMemoryFiles(),
+    list: async () => [],
+    modified: async () => 1000,
+    readStart: async (read, maxBytes) => {
+      if (read !== path) {
+        throw new Error(`missing ${read}`);
+      }
+      asked.push(maxBytes);
+      const opening = '{"type":"user","cwd":"/w/app","message":{"content":"';
+      return opening + 'x'.repeat(maxBytes - opening.length);
+    },
+  };
+  return { files, asked };
 }
 
 // Memory files holding three transcripts (two in `/w/app`, one in
@@ -184,6 +242,45 @@ describe('listPastSessions', () => {
       { sessionId: OLD_ID, title: 'hello', modified: 1000 },
     ]);
   });
+
+  it('listPastSessions_FirstLinePastHead_TitledFromTheWholeLine', async () => {
+    const files = createMemoryFiles();
+    await files.write(
+      `${FOLDER}/${OLD_ID}.jsonl`,
+      imageFirstTranscript('/w/app', 'see image', TRANSCRIPT_HEAD_BYTES * 5),
+    );
+    const { log } = recordingLog();
+
+    const sessions = await listPastSessions(
+      { files, paths: posixPaths, log },
+      FOLDER,
+      '/w/app',
+    );
+
+    expect(sessions).toEqual([
+      { sessionId: OLD_ID, title: 'see image', modified: 0 },
+    ]);
+  });
+
+  it('listPastSessions_FirstLinePastCap_LeftOutAndLogged', async () => {
+    const path = `${FOLDER}/${OLD_ID}.jsonl`;
+    const { files, asked } = endlessLineFiles(path);
+    files.list = async () => [{ path: `${OLD_ID}.jsonl`, kind: 'file' }];
+    const { log, logged } = recordingLog();
+
+    const sessions = await listPastSessions(
+      { files, paths: posixPaths, log },
+      FOLDER,
+      '/w/app',
+    );
+
+    expect(sessions).toEqual([]);
+    expect(asked.at(-1)).toBe(TRANSCRIPT_HEAD_MAX_BYTES);
+    expect(logged).toContainEqual([
+      'claude',
+      `transcript ${path} cut at ${TRANSCRIPT_HEAD_MAX_BYTES} bytes`,
+    ]);
+  });
 });
 
 describe('readHistory', () => {
@@ -289,5 +386,21 @@ describe('listProjectFolders', () => {
     );
 
     expect(projects).toEqual([]);
+  });
+
+  it('listProjects_FirstLinePastHead_NamedByItsCwd', async () => {
+    const files = createMemoryFiles();
+    await files.write(
+      `/config/projects/-w-app/${NEW_ID}.jsonl`,
+      imageFirstTranscript('/w/app', 'see image', TRANSCRIPT_HEAD_BYTES * 5),
+    );
+    const { log } = recordingLog();
+
+    const projects = await listProjectFolders(
+      { files, paths: posixPaths, log },
+      '/config/projects',
+    );
+
+    expect(projects).toEqual([{ projectDir: '/w/app', modified: 0 }]);
   });
 });

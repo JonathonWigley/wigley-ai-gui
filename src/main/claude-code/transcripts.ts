@@ -6,8 +6,13 @@ import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
 // `<config>/projects/<projectFolderName>/<session id>.jsonl`. The format is
 // undocumented; every rule reading it lives in this file.
 
-// How much of a transcript the session list reads for its folder and title.
+// How much of a transcript the session list reads first for its folder and
+// title.
 export const TRANSCRIPT_HEAD_BYTES = 65536;
+// The most of a transcript the session list reads to reach the end of its
+// first user message: that line holds its pasted images' base64 ahead of its
+// text, and this is room for four images at the 5 MB per-image limit.
+export const TRANSCRIPT_HEAD_MAX_BYTES = 24 * 1024 * 1024;
 export const TITLE_LENGTH = 80;
 export const UNTITLED_SESSION = 'Untitled session';
 export const SESSION_ID =
@@ -75,6 +80,13 @@ export function readTranscriptHead(head: string): TranscriptHead {
     }
   }
   return { cwd, firstMessage };
+}
+
+// Whether `head` ends inside a line: its text after the last newline is not a
+// whole JSON line, so the cut fell inside it.
+export function endsInsideLine(head: string): boolean {
+  const tail = head.slice(head.lastIndexOf('\n') + 1);
+  return tail.trim() !== '' && !parsed(tail).ok;
 }
 
 // The session list's title for a first user message, at most `TITLE_LENGTH`
