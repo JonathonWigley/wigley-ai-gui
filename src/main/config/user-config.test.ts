@@ -231,10 +231,22 @@ describe('createUserConfig', () => {
     expect(await files.read(`${FOLDER}/settings.json`)).toContain('"dusk"');
   });
 
-  it('refuses a theme name no theme has while a user theme file is broken', async () => {
+  it('writes the name of a user theme whose file does not parse, which may be the one meant', async () => {
     const { files, userConfig } = await createWithFile(
-      'themes/bad.json',
-      '{ not json',
+      'themes/dawn.json',
+      '{ "name": ',
+    );
+
+    const result = await userConfig.writeSettings({ theme: 'dawn' }, null);
+
+    expect(result).toEqual({ type: 'written' });
+    expect(await files.read(`${FOLDER}/settings.json`)).toContain('"dawn"');
+  });
+
+  it('refuses a theme name no theme has while every user theme file parses to a name, one of them broken', async () => {
+    const { files, userConfig } = await createWithFile(
+      'themes/half.json',
+      JSON.stringify({ name: 'half', extends: 'mocha', tokens: 'oops' }),
     );
 
     const result = await userConfig.writeSettings({ theme: 'nope' }, null);
@@ -244,6 +256,17 @@ describe('createUserConfig', () => {
       problem: '"theme" names "nope", which no theme has',
     });
     expect(await files.stat(`${FOLDER}/settings.json`)).toBeNull();
+  });
+
+  it('writes a theme name no theme has while a user theme file has no name, which may be the one meant', async () => {
+    const { userConfig } = await createWithFile(
+      'themes/nameless.json',
+      '{"tokens": {}}',
+    );
+
+    const result = await userConfig.writeSettings({ theme: 'nope' }, null);
+
+    expect(result).toEqual({ type: 'written' });
   });
 
   it('writes the name of a user theme whose file parses but is broken', async () => {
@@ -380,6 +403,21 @@ describe('createUserConfig', () => {
       state: 'broken',
       problem: '"theme" names "nope", which no theme has',
       text: '{"theme": "nope"}',
+    });
+  });
+
+  it('reads a settings file naming the theme of a user file that does not parse as ok', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${FOLDER}/settings.json`, '{"theme": "dawn"}');
+    await files.write(`${FOLDER}/themes/dawn.json`, '{ "name": ');
+    const userConfig = await create(files);
+
+    const read = await userConfig.read();
+
+    expect(read.settings).toEqual({
+      state: 'ok',
+      layer: { theme: 'dawn' },
+      text: '{"theme": "dawn"}',
     });
   });
 

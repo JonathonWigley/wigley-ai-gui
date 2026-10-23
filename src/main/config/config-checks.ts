@@ -226,22 +226,15 @@ function parsedOrNull(text: string): unknown {
   }
 }
 
-// The theme `settings.json` selects as `name`, resolved over the built-in
-// themes and `userThemes`. Throws a ThemeError on `settings.json` when no
-// name in `themeNames` is `name`, so a theme named while its file is broken
-// elsewhere still passes and one no file names fails at once; otherwise
-// throws the loader's error, naming the file that set the bad value.
+// The theme `settings.json` selects as `name`, resolved by the theme loader
+// over the built-in themes and `userThemes`. Throws the loader's ThemeError,
+// naming the file that set the bad value: a user theme file that does not
+// parse or has no name is that file's error, wherever the name points.
 export function resolveConfigTheme(
   name: string,
   userThemes: readonly ThemeFileText[],
   deps: ConfigCheckDeps,
 ): Theme {
-  if (!themeNames(deps.builtInThemes, userThemes).includes(name)) {
-    throw new ThemeError(
-      SETTINGS_FILE,
-      `"theme" names "${name}", which no theme has`,
-    );
-  }
   return deps.resolveTheme(
     name,
     deps.builtInThemes,
@@ -249,6 +242,26 @@ export function resolveConfigTheme(
     deps.themeTokens,
     deps.checkTokens,
   );
+}
+
+// The problem on `settings.json` when it selects the theme `name`: one when
+// no theme can hold it, that is when no name in `themeNames` is `name` and
+// every user theme file parses to a name. While a user theme file does not,
+// that file may be the one meant, so `name` passes and the loader reports
+// that file. Matches the error `resolveConfigTheme` throws on
+// `settings.json`, without resolving the theme.
+export function settingsThemeProblem(
+  name: string,
+  builtInThemes: readonly unknown[],
+  userThemes: readonly ThemeFileText[],
+): string | null {
+  const isKnown = themeNames(builtInThemes, userThemes).includes(name);
+  const everyUserFileNamed = userThemes.every(
+    (theme) => readableName(parsedOrNull(theme.text)) !== null,
+  );
+  return !isKnown && everyUserFileNamed
+    ? `"theme" names "${name}", which no theme has`
+    : null;
 }
 
 // The problem a `resolveConfigTheme` error is in the user's own files: on

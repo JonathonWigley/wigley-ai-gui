@@ -5,6 +5,7 @@ import type { PluginManifest } from '../../contracts/plugin';
 import type { AppConfig, Settings } from '../../contracts/settings';
 import type { Theme } from '../../contracts/theme';
 import { definePlugin } from '../../shared/define-plugin';
+import { errorText } from '../../shared/error-text';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
 import {
   ThemeError,
@@ -64,7 +65,8 @@ const listPlugin = definePlugin({
 });
 
 // Task 01's signature: a theme named `name`, a user text of that name over a
-// built-in, `"broken": true` in the selected user text failing on its file
+// built-in, a user text that does not parse failing on its file whatever the
+// name, `"broken": true` in the selected user text failing on its file
 // and in the selected built-in failing on a file of the app's, and `check`'s
 // problem failing on the selected theme's file.
 function resolveTheme(
@@ -81,11 +83,19 @@ function resolveTheme(
     }
     return resolved;
   };
-  const user = userThemes.find(
-    (theme) => (JSON.parse(theme.text) as { name: string }).name === name,
-  );
+  const parsed = userThemes.map(({ file, text }) => {
+    try {
+      return {
+        file,
+        json: JSON.parse(text) as { name: string; broken?: boolean },
+      };
+    } catch (error) {
+      throw new ThemeError(file, errorText(error));
+    }
+  });
+  const user = parsed.find((theme) => theme.json.name === name);
   if (user !== undefined) {
-    if ((JSON.parse(user.text) as { broken?: boolean }).broken) {
+    if (user.json.broken) {
       throw new ThemeError(user.file, 'broken');
     }
     return checked(theme(name, user.file), user.file);
@@ -553,19 +563,22 @@ describe('loadConfigStore', () => {
     ]);
   });
 
-  it('reports a theme name that names no theme while a user theme file does not parse', async () => {
+  it('reports a selected user theme file that stops parsing on that file and keeps the last good theme', async () => {
     const files = createMemoryFiles();
-    await files.write(`${FOLDER}/settings.json`, '{"theme":"nope"}');
-    await files.write(`${FOLDER}/themes/bad.json`, '{ not json');
-
+    await files.write(`${FOLDER}/settings.json`, '{"theme":"dawn"}');
+    await files.write(`${FOLDER}/themes/dawn.json`, '{"name":"dawn"}');
     const store = await load(files);
 
-    expect(store.current().theme.name).toBe('mocha');
-    expect(store.current().problems).toEqual([
-      {
-        file: 'settings.json',
-        message: '"theme" names "nope", which no theme has',
-      },
+    const config = await writeAndWait(
+      files,
+      store,
+      'themes/dawn.json',
+      '{ "name": ',
+    );
+
+    expect(config.theme).toEqual(theme('dawn', 'themes/dawn.json'));
+    expect(config.problems).toEqual([
+      { file: 'themes/dawn.json', message: expect.any(String) },
     ]);
   });
 

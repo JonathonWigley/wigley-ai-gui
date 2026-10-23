@@ -27,10 +27,9 @@ import {
   KEYMAP_FILE,
   readConfigFile,
   readUserThemes,
-  resolveConfigTheme,
   SETTINGS_FILE,
+  settingsThemeProblem,
   themeNames,
-  usersThemeProblem,
 } from './config-checks';
 import type { ConfigStore } from './config-store';
 
@@ -157,9 +156,9 @@ export function createUserConfig(deps: UserConfigDeps): UserConfig {
 }
 
 // The problem the ConfigStore would show on `settings.json` holding `text`:
-// the merge's, or the theme's when it is on `settings.json`. A theme error on
-// any other file is that file's, which the ConfigStore reports there while
-// keeping the last good theme.
+// the merge's, or a theme name no theme can hold. A theme error on any other
+// file is that file's, which the ConfigStore reports there while keeping the
+// last good theme.
 function settingsProblem(
   text: string,
   userThemes: readonly ThemeFileText[],
@@ -172,15 +171,7 @@ function settingsProblem(
   } catch (error) {
     return errorText(error);
   }
-  try {
-    resolveConfigTheme(themeName, userThemes, deps);
-  } catch (error) {
-    const usersProblem = usersThemeProblem(error, userThemes);
-    if (usersProblem?.file === SETTINGS_FILE) {
-      return usersProblem.message;
-    }
-  }
-  return null;
+  return settingsThemeProblem(themeName, deps.builtInThemes, userThemes);
 }
 
 function userConfigSchema(
