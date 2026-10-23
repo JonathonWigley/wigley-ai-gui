@@ -24,15 +24,6 @@ const ADVANCED_SECTIONS = [
   'unbind',
 ] as const;
 
-// Spelling `<Leader>` as itself compares keys as written.
-const LEADER_AS_WRITTEN = '<Leader>';
-
-// The leader an edit without the schema compares keys with: the layer's own,
-// else `<Leader>` as written.
-function layerLeader(layer: UserKeymap | null): string {
-  return layer?.leader ?? LEADER_AS_WRITTEN;
-}
-
 function isKeysUnbind(
   entry: KeymapUnbind,
 ): entry is Extract<KeymapUnbind, { keys: string }> {
@@ -55,13 +46,15 @@ function tidied(layer: UserKeymap): UserKeymap {
   return kept as UserKeymap;
 }
 
-// `layer` with `bind` appended, after dropping every user bind on its keys in
-// its scope.
+// `layer` with `bind` appended, after dropping every user bind in its scope on
+// its keys, `<Leader>` spelled as the layer's leader, else the schema's
+// default.
 export function withAddedBind(
   layer: UserKeymap | null,
   bind: KeyBind,
+  schema: UserConfigSchema,
 ): UserKeymap {
-  const leader = layerLeader(layer);
+  const leader = keymapLeader(schema, layer);
   const kept = (layer?.binds ?? []).filter(
     (user) =>
       user.scope !== bind.scope || !isSameKeys(user.keys, bind.keys, leader),
@@ -69,14 +62,16 @@ export function withAddedBind(
   return tidied({ ...layer, binds: [...kept, bind] });
 }
 
-// `layer` without `line`'s bind: a user bind leaves `binds`; a default gets a
-// `keys` unbind entry.
+// `layer` without `line`'s bind: a user bind leaves `binds`, matched with
+// `<Leader>` spelled as the layer's leader, else the schema's default; a
+// default gets a `keys` unbind entry.
 export function withRemovedBind(
   layer: UserKeymap | null,
   line: BindLine,
+  schema: UserConfigSchema,
 ): UserKeymap {
   if (line.origin === 'user') {
-    const leader = layerLeader(layer);
+    const leader = keymapLeader(schema, layer);
     return tidied({
       ...layer,
       binds: (layer?.binds ?? []).filter(

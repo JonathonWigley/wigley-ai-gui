@@ -95,4 +95,18 @@ describe('sameBind', () => {
 
     expect(sameBind(user, fallback, '<Space>')).toBe(true);
   });
+
+  it('sameBind_ModeAbsent_MatchesNormal', () => {
+    const absent = { keys: 'x', scope: 'p.s', command: 'p.a' };
+    const normal = { ...absent, mode: 'normal' as const };
+
+    expect(sameBind(absent, normal, '<Space>')).toBe(true);
+  });
+
+  it('sameBind_WhereDefault_MatchesBoth', () => {
+    const absent = { keys: '<Leader>x', scope: 'p.s', command: 'p.a' };
+    const both = { ...absent, where: 'both' as const };
+
+    expect(sameBind(absent, both, '<Space>')).toBe(true);
+  });
 });

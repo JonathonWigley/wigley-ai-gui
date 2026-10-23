@@ -175,7 +175,11 @@ function addBind(ctx: RowContext, command: CommandId) {
         selected: scopes.indexOf(preselected),
         chosen: (scope) =>
           ctx.commitKeymap(
-            withAddedBind(ctx.keymapLayer(), { keys, scope, command }),
+            withAddedBind(
+              ctx.keymapLayer(),
+              { keys, scope, command },
+              ctx.schema,
+            ),
             { box },
           ),
         cancelled: () => box.focus(),
@@ -190,7 +194,10 @@ function removeBind(ctx: RowContext, row: CommandRow) {
     return;
   }
   if (active.length === 1) {
-    ctx.commitKeymap(withRemovedBind(ctx.keymapLayer(), active[0]), null);
+    ctx.commitKeymap(
+      withRemovedBind(ctx.keymapLayer(), active[0], ctx.schema),
+      null,
+    );
     return;
   }
   ctx.openPicker({
@@ -202,7 +209,7 @@ function removeBind(ctx: RowContext, row: CommandRow) {
       return `${keys} — ${scopeTitle(ctx, line.bind.scope)}`;
     },
     chosen: (line, expectedText) =>
-      ctx.commitKeymap(withRemovedBind(ctx.keymapLayer(), line), {
+      ctx.commitKeymap(withRemovedBind(ctx.keymapLayer(), line, ctx.schema), {
         expectedText,
       }),
   });
