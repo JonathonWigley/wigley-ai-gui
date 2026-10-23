@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { Keymap, PageBind } from '../../../contracts/keymap';
+import type { EditorBind, Keymap, PageBind } from '../../../contracts/keymap';
 import { keysFor } from './keys-for';
 
-function keymap(page: PageBind[]): Keymap {
+function keymap(page: PageBind[], box: EditorBind[] = []): Keymap {
   return {
-    editor: { leader: '<Space>', remaps: [], binds: [] },
+    editor: { leader: '<Space>', remaps: [], binds: box },
     page,
     app: [],
     intercept: [],
@@ -59,6 +59,27 @@ describe('keysFor', () => {
     ]);
 
     expect(keysFor(map, 'a.change', undefined, 'macos')).toBe('c');
+  });
+
+  it('keysFor_Box_ReturnsTheBoxBindWithItsLeaderSpelled', () => {
+    const map = keymap(
+      [{ keys: ['y'], scope: 'a.other', command: 'a.copy' }],
+      [
+        { keys: '<Leader>cy', scope: 'a.other', command: 'a.copy' },
+        { keys: '<Leader>cz', scope: 'a.s', command: 'a.copy' },
+      ],
+    );
+
+    expect(keysFor(map, 'a.copy', 'a.s', 'macos', 'box')).toBe('Space c z');
+  });
+
+  it('keysFor_BoundOnlyInABox_PageReadsNull', () => {
+    const map = keymap(
+      [],
+      [{ keys: '<Leader>cy', scope: 'a.s', command: 'a.copy' }],
+    );
+
+    expect(keysFor(map, 'a.copy', 'a.s', 'macos')).toBeNull();
   });
 
   it('keysFor_Unbound_ReturnsNull', () => {

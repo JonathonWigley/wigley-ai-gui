@@ -82,15 +82,21 @@ export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
   });
 
   let hasLink = false;
-  // The Copy button runs the copy command and shows its keys, drawn again on
-  // each keymap change.
+  // The Copy button runs the copy command and shows its keys in the box, which
+  // holds focus while the dialog is open, drawn again on each keymap change.
   const drawCopy = () => {
     const drawn = textButton(
       'Copy',
       () => deps.run(chatCommand('copySignInLink')),
       {
         variant: 'ghost',
-        hint: keyHint(deps.keys, deps.platform, 'copySignInLink', 'signIn'),
+        hint: keyHint(
+          deps.keys,
+          deps.platform,
+          'copySignInLink',
+          'signIn',
+          'box',
+        ),
       },
     );
     drawn.disabled = !hasLink;

@@ -101,7 +101,7 @@ describe('listenForImages paste', () => {
     onPaste({
       clipboardData: {
         files: [oversizePng],
-        getData: () => text,
+        getData: (format: string) => (format === 'text/plain' ? text : ''),
       },
       preventDefault: () => {
         prevented = true;

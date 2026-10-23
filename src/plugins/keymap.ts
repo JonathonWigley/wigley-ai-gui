@@ -198,7 +198,6 @@ export const defaultKeymap = {
     { keys: '<Esc>', scope: 'chat.reason', command: 'chat.cancelReason' },
     { keys: '<D-Enter>', scope: 'chat.signIn', command: 'chat.submitCode' },
     { keys: '<Esc>', scope: 'chat.signIn', command: 'chat.cancelSignIn' },
-    { keys: 'y', scope: 'chat.signIn', command: 'chat.copySignInLink' },
     { keys: 'y', scope: 'chat.confirm', command: 'chat.endSession' },
     { keys: 'n', scope: 'chat.confirm', command: 'chat.keepSession' },
     { keys: '<Esc>', scope: 'chat.confirm', command: 'chat.keepSession' },

@@ -162,8 +162,8 @@ interview on 2026-10-23; this file is the record of both.
   further.
 - **Sign-in dialog**: one at a time, in the overlay layer over the `chat.signIn` scope: "Finish sign-in in your
   browser", the fallback link with a Copy button, and a vim box for a code the browser page shows, which Enter (in
-  either vim mode, since a code is one line) or Cmd+Enter sends. `y` on the dialog, `Space c y` in the box's normal
-  mode and the Copy button copy the link. The box opens in insert mode, so Esc first leaves insert mode and Esc
+  either vim mode, since a code is one line) or Cmd+Enter sends. `Space c y` in the box's normal mode and the Copy
+  button, which shows those keys, copy the link. The box opens in insert mode, so Esc first leaves insert mode and Esc
   again cancels the sign-in. When the sign-in ends the dialog closes; a sign-in that finished with no error and
   reads signed in toasts `Signed in to <profile> as <account>`, any other end toasts `Sign-in failed: <reason>` (a
   wrong code on a profile already signed in fails, though the profile still reads signed in), and a sign-in that

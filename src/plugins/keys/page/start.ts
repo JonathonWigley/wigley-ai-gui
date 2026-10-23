@@ -90,8 +90,8 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
     });
 
     const exports: KeysPageExports = {
-      keysFor: (command, scope) =>
-        keysFor(keys.keymap(), command, scope, platform),
+      keysFor: (command, scope, where) =>
+        keysFor(keys.keymap(), command, scope, platform, where),
       onChanged: (listener) => keys.onKeymapChanged(() => listener()),
     };
     return {
