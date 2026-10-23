@@ -170,11 +170,11 @@ the settings plugin imports only `src/contracts`, `src/shared`, its own folder a
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Setting declarations and the userConfig contract](01-declarations-and-contract.md)
+- [x] [Setting declarations and the userConfig contract](01-declarations-and-contract.md)
 
 ### Wave 2
 - [ ] [userConfig service](02-user-config-service.md) — after 01
-- [ ] [Row and edit logic](04-row-and-edit-logic.md) — after 01
+- [x] [Row and edit logic](04-row-and-edit-logic.md) — after 01
 
 ### Wave 3
 - [ ] [Settings plugin skeleton](03-plugin-skeleton.md) — after 01, 02
@@ -196,7 +196,21 @@ the settings plugin imports only `src/contracts`, `src/shared`, its own folder a
 Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is this run's commit list)
 
 ### Groups
+- 01 · efd5ab5 · proved (diff read, typecheck, lint) · concerns: pluginSettingInfo never run over the built-in manifests; SettingPath does not distribute over object|scalar unions
+- 04 · 19ca2d7 · proved (diff read, typecheck) · concerns: isSameJson copied from renderer/config-push.ts; fallback compare key-order sensitive; oxfmt needed two writes on keymap-rows.ts
 ### Contract changes
+- keymap-rows.ts: as planned → adds `keymapLeader(schema, layer)` and `isSameKeys(a, b, leader)` · why: keymap-edits shares the leader rule and key compare · consumers: 05 · group 04
+- withAdvanced: as planned → also `"unbind" must be a list` · why: keys unbinds merge into it · consumers: 05 · group 04
+- plugin-manifests.ts: exports `BindIdentities`, `bindIdentities`, `isSameAccelerator` (bodies unchanged) · why: rows reuse the merge compare · consumers: none · group 04
 ### Rulings
+- Peer chat plan C shares chat/manifest.ts and keymap.ts: agreed order C-05 → settings 01 → C-06; keymap.ts edits announced before dispatch and after commit — avoids two workers in one file — a missed message means a hand merge · lead
+- pluginSettingInfo returns declarations in settingInfo order, manifests in list order — settingDefaults walks a stack (reversed) — task 02 sorts if it wants defaults order · group 01
+- Test manifests through definePlugin (config-store.test listPlugin, define-plugin.test base) declare real paths, not `{}` — `{}` fails to compile — none · group 01
+- sameBind takes the `where` default from keys with <Leader> spelled out (so `<Space>?` under leader <Space> defaults to both) — the plan's named test fails under the literal-prefix rule — a row may show a default removed while its box half still fires · group 04
+- withAddedBind / withRemovedBind compare keys with the layer's leader else `<Leader>` literally (no schema arg); rows and withCommandReset fall back to schema.defaultLeader — the signatures take no schema — two user binds on one chord could slip through and the write's ambiguity check refuses · group 04
+- Accelerator lines filter by command id; user accelerators always active — the plan named only unbinds — a user accelerator taking another command's default does not mark it replaced · group 04
+- Default line: `unbound` beats `replaced`; a same-command user bind on the same keys marks the default replaced — the plan named no tie order — cosmetic · group 04
+- withSetting compares to the fallback by JSON.stringify (key order matters) — simple — an equal-but-reordered object is written · group 04
+- parseBoxText throws for choice, boolean and theme — those rows open no box — a caller passing them crashes · group 04
 ### Review rounds
 ### Test gate

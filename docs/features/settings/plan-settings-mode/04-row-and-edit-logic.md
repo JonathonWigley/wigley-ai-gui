@@ -1,6 +1,6 @@
 # 04 — Row and edit logic
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -163,3 +163,5 @@ One GIVEN/WHEN/THEN per named test, the data built in the test.
 - `matchesCommand_ByKeys` — a row with a line on `<Leader>ks` matches query `ks`.
 
 ## Proof
+
+19ca2d7 · typecheck passes; worker ran lint and 68 tests (19 new) green · concerns: `setting-edits.ts` copies `isSameJson` from `src/renderer/config-push.ts` (the plugin cannot import the renderer); fallback equality is key-order sensitive.

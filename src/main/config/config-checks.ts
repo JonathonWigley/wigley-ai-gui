@@ -1,0 +1,199 @@
+import type { CommandId } from '../../contracts/commands';
+import {
+  type FileEntry,
+  type Files,
+  isMissingFile,
+} from '../../contracts/files';
+import type { DefaultKeymap, Keymap } from '../../contracts/keymap';
+import type {
+  CommandDecl,
+  PluginManifest,
+  ScopeInfo,
+  SettingKind,
+} from '../../contracts/plugin';
+import type {
+  AppConfig,
+  ConfigProblem,
+  Settings,
+} from '../../contracts/settings';
+import type { Theme } from '../../contracts/theme';
+import { errorText } from '../../shared/error-text';
+import { requireUnambiguousKeymap } from '../../shared/keymap-checks';
+import {
+  commandInfos,
+  mergeKeymap,
+  pluginOptionalSettings,
+  pluginSettings,
+  scopeInfos,
+} from '../../shared/plugin-manifests';
+import type {
+  resolveTheme,
+  ThemeFileText,
+  ThemeTokenRegistry,
+  TokenCheck,
+} from '../themes/theme-loader';
+import { parseUserKeymap } from './user-keymap';
+import { mergeUserSettings, type UserSettings } from './user-settings';
+
+// What the checks of the user config files read: the core settings and keys,
+// the plugins' manifests and the themes. `resolveTheme` resolves a theme as
+// the theme loader does, running `checkTokens`, the check of the tokens the
+// native window takes, on every theme it resolves.
+export interface ConfigCheckDeps {
+  defaults: Settings;
+  optionalSettings: Readonly<Record<string, SettingKind>>;
+  settingChoices: Readonly<Record<string, readonly string[]>>;
+  defaultKeymap: DefaultKeymap;
+  coreCommands: Record<CommandId, CommandDecl>;
+  coreScopes: readonly ScopeInfo[];
+  manifests: readonly PluginManifest[];
+  builtInThemes: readonly unknown[];
+  themeTokens: ThemeTokenRegistry;
+  resolveTheme: (...args: Required<Parameters<typeof resolveTheme>>) => Theme;
+  checkTokens: TokenCheck;
+}
+
+// What every check reads with the defaults, worked out once from the deps:
+// every command and scope, each plugin's defaults by id, every optional
+// setting's kind (plugin paths qualified), and the keymap with no user layer.
+export interface ConfigSchema {
+  commands: AppConfig['commands'];
+  scopes: AppConfig['scopes'];
+  pluginDefaults: Record<string, object>;
+  optionalSettings: Readonly<Record<string, SettingKind>>;
+  defaultKeymap: Keymap;
+  defaultLeader: string;
+}
+
+// The user config folder's files and folder, relative to it.
+export const SETTINGS_FILE = 'settings.json';
+export const KEYMAP_FILE = 'keymap.json';
+export const THEMES_FOLDER = 'themes';
+
+// A config file's text: null when the file is missing, which overrides
+// nothing.
+export type ConfigFileText =
+  | { text: string | null }
+  | { problem: ConfigProblem };
+
+function requireNoCoreSettingIds(
+  manifests: readonly PluginManifest[],
+  defaults: Settings,
+) {
+  for (const manifest of manifests) {
+    if (Object.hasOwn(defaults, manifest.id)) {
+      throw new Error(
+        `Plugin "${manifest.id}" has the name of a core setting, so its settings cannot sit under its id`,
+      );
+    }
+  }
+}
+
+// Throws when a plugin's id is a core setting's name or a manifest holds
+// what its own checks reject (a command declared twice, a null default with
+// no kind); each is a bug in the app, not in the user's files.
+export function configSchema(deps: ConfigCheckDeps): ConfigSchema {
+  requireNoCoreSettingIds(deps.manifests, deps.defaults);
+  return {
+    commands: commandInfos(deps.coreCommands, deps.manifests),
+    scopes: scopeInfos(deps.coreScopes, deps.manifests),
+    pluginDefaults: pluginSettings(deps.manifests),
+    optionalSettings: {
+      ...deps.optionalSettings,
+      ...pluginOptionalSettings(deps.manifests),
+    },
+    defaultKeymap: mergeKeymap(deps.defaultKeymap, deps.manifests, {}),
+    defaultLeader: deps.defaultKeymap.leader,
+  };
+}
+
+// The settings `text`, a `settings.json`, merges over the defaults. Throws an
+// Error whose message is the first problem found, as the user reads it. The
+// theme it names is not resolved here.
+export function checkSettingsText(
+  text: string,
+  deps: ConfigCheckDeps,
+  schema: ConfigSchema,
+): UserSettings {
+  return mergeUserSettings(text, {
+    defaults: deps.defaults,
+    pluginDefaults: schema.pluginDefaults,
+    optionalSettings: schema.optionalSettings,
+    settingChoices: deps.settingChoices,
+  });
+}
+
+// The keymap the user's `text`, a `keymap.json`, merges into over the default
+// and plugin layers. Throws an Error whose message is the first problem found,
+// as the user reads it: in the file, or a key bound twice in one scope.
+export function checkKeymapText(
+  text: string,
+  deps: ConfigCheckDeps,
+  schema: ConfigSchema,
+): Keymap {
+  const user = parseUserKeymap(text, schema);
+  const keymap = mergeKeymap(deps.defaultKeymap, deps.manifests, user);
+  requireUnambiguousKeymap(keymap);
+  return keymap;
+}
+
+// The text of `relative`, a file in the user config folder `folder`; a file
+// that cannot be read is a problem on that file.
+export async function readConfigFile(
+  files: Files,
+  folder: string,
+  relative: string,
+): Promise<ConfigFileText> {
+  try {
+    return { text: await files.read(`${folder}/${relative}`) };
+  } catch (error) {
+    if (isMissingFile(error)) {
+      return { text: null };
+    }
+    return {
+      problem: {
+        file: relative,
+        message: `Could not read the file: ${errorText(error)}`,
+      },
+    };
+  }
+}
+
+// The `.json` files directly in the `themes` folder of `folder`, by path
+// (`themes/<name>.json`) in sorted order, and a problem for each file that
+// cannot be read, or one for the folder when it cannot be listed.
+export async function readUserThemes(
+  files: Files,
+  folder: string,
+): Promise<{ texts: ThemeFileText[]; problems: ConfigProblem[] }> {
+  let entries: FileEntry[];
+  try {
+    entries = await files.list(`${folder}/${THEMES_FOLDER}`);
+  } catch (error) {
+    return {
+      texts: [],
+      problems: [
+        {
+          file: THEMES_FOLDER,
+          message: `Could not read the folder: ${errorText(error)}`,
+        },
+      ],
+    };
+  }
+  const names = entries
+    .filter((entry) => entry.kind === 'file' && entry.path.endsWith('.json'))
+    .filter((entry) => !entry.path.includes('/'))
+    .map((entry) => `${THEMES_FOLDER}/${entry.path}`)
+    .sort();
+  const texts: ThemeFileText[] = [];
+  const problems: ConfigProblem[] = [];
+  for (const file of names) {
+    const read = await readConfigFile(files, folder, file);
+    if ('problem' in read) {
+      problems.push(read.problem);
+    } else if (read.text !== null) {
+      texts.push({ file, text: read.text });
+    }
+  }
+  return { texts, problems };
+}

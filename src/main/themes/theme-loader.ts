@@ -76,7 +76,8 @@ const DURATION = new RegExp(`^${NUMBER}(?:ms|s)$`);
 const NUMBER_VALUE = new RegExp(`^-?${NUMBER}$`);
 const FILTER_FUNCTION_NAME = /^[a-z-]+\(/;
 
-function readableName(json: unknown): string | null {
+// A theme's parsed JSON's `name`, or null when it has no non-empty one.
+export function readableName(json: unknown): string | null {
   const hasName =
     isJsonObject(json) && typeof json.name === 'string' && json.name !== '';
   return hasName ? (json.name as string) : null;

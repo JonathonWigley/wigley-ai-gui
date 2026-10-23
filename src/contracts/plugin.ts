@@ -21,6 +21,7 @@ import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
 import type { TokenDecl } from './theme';
 import type { UiState } from './ui-state';
+import type { UserConfig } from './user-config';
 
 export type ProcessName = 'page' | 'main';
 
@@ -520,7 +521,9 @@ export interface DriveHost {
 // `openExternal` opens an http or https URL in the user's default app,
 // and rejects with `Refused to open <url>: …` for any other scheme or a URL
 // that does not parse. `tempFolders` are the OS's temporary folders as real
-// paths; a folder inside one is scratch space.
+// paths; a folder inside one is scratch space. `userConfig` reads and writes
+// the user's `settings.json` and `keymap.json` layers through the ConfigStore's
+// checks.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -530,6 +533,7 @@ export interface MainServices {
   randomUuid: RandomUuid;
   homeDir: string;
   tempFolders: readonly string[];
+  userConfig: UserConfig;
   paths: Paths;
   alerts: Alerts;
   agentHarnesses: readonly AgentHarness[];

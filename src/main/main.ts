@@ -24,6 +24,7 @@ import {
   defaultSettings,
   optionalSettings,
   settingChoices,
+  settingInfo,
 } from '../config/settings';
 import { coreThemeTokens } from '../config/theme-tokens';
 import { builtInThemes } from '../config/themes';
@@ -34,6 +35,7 @@ import type { Log } from '../contracts/log';
 import type { Paths } from '../contracts/paths';
 import type { Platform } from '../contracts/platform';
 import type { AppConfig } from '../contracts/settings';
+import type { UserConfig } from '../contracts/user-config';
 import type {
   MainServices,
   MainStart,
@@ -58,7 +60,12 @@ import { scopedFiles } from '../shared/scoped-files';
 import { createElectronAlerts } from './alerts/electron-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import { createClaudeCodeHarness } from './claude-code/claude-code-harness';
-import { type ConfigStore, loadConfigStore } from './config/config-store';
+import {
+  type ConfigStore,
+  type ConfigStoreDeps,
+  loadConfigStore,
+} from './config/config-store';
+import { createUserConfig } from './config/user-config';
 import {
   registerDataScheme,
   serveDataScheme,
@@ -450,11 +457,11 @@ async function readStartInputs(): Promise<StartInputs> {
   };
 }
 
-// The ConfigStore over the user config folder in `homeDir`, logging to the
-// page and serving the real path of `homeDir`, since index entries and
-// session folders are real paths.
-async function loadConfig(homeDir: string): Promise<ConfigStore> {
-  return loadConfigStore({
+// What the ConfigStore over the user config folder in `homeDir` reads,
+// logging to the page and serving the real path of `homeDir`, since index
+// entries and session folders are real paths.
+async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
+  return {
     files,
     folder: path.join(homeDir, '.config', 'wigley-ai-gui'),
     defaults: defaultSettings,
@@ -474,7 +481,20 @@ async function loadConfig(homeDir: string): Promise<ConfigStore> {
     platform,
     homeDir: await files.realPath(homeDir),
     log: pageLog.log,
-  });
+  };
+}
+
+// The ConfigStore over the user config folder in `homeDir`, and the
+// `userConfig` service writing that folder through the store's checks.
+async function loadConfig(
+  homeDir: string,
+): Promise<{ store: ConfigStore; userConfig: UserConfig }> {
+  const deps = await configStoreDeps(homeDir);
+  const store = await loadConfigStore(deps);
+  return {
+    store,
+    userConfig: createUserConfig({ ...deps, store, settingInfo }),
+  };
 }
 
 // The window's page, or null once the window or its page is destroyed, as on
@@ -577,7 +597,11 @@ function disposeParts(parts: readonly MainStart<PluginManifest>[]) {
 // The window's size is read once: the one window hides rather than closes,
 // so a new size applies at the next start. Its background and title bar
 // overlay follow the theme and the effective transparency.
-function createWindow(inputs: StartInputs, store: ConfigStore) {
+function createWindow(
+  inputs: StartInputs,
+  store: ConfigStore,
+  userConfig: UserConfig,
+) {
   const startConfig = store.current();
   const window = createMainWindow(
     startConfig.settings.window,
@@ -657,6 +681,7 @@ function createWindow(inputs: StartInputs, store: ConfigStore) {
       randomUuid,
       homeDir: inputs.homeDir,
       tempFolders: inputs.tempFolders,
+      userConfig,
       paths,
       runMode,
       ...modeServices.forWindow({
@@ -787,10 +812,10 @@ function startApp() {
         process.env.PATH = shellPath;
       }
       const inputs = await readStartInputs();
-      const store = await loadConfig(inputs.homeDir);
+      const { store, userConfig } = await loadConfig(inputs.homeDir);
       onSelfTestExit('the config store', () => store.dispose());
       serveDataScheme(inputs.dataRoot, paths);
-      createWindow(inputs, store);
+      createWindow(inputs, store, userConfig);
       // After createWindow's quit tasks, so the parts dispose before it.
       onQuit(() => store.dispose());
       app.on('activate', () => mainWindow?.show());

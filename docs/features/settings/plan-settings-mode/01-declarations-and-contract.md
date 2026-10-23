@@ -1,6 +1,6 @@
 # 01 — Setting declarations and the userConfig contract
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -169,3 +169,5 @@ and `deadlineSeconds` (`src/plugins/forms/main/forms-service.ts`).
   - `pluginSettingInfo_Qualifies` — returns `{ 'p.a': <the declared info> }`
 
 ## Proof
+
+efd5ab5 · typecheck and lint pass; 6 touched test files pass in the worker (128 tests) · concerns: `pluginSettingInfo` not yet run over the built-in manifests (task 02 is its first caller); `SettingPath` does not distribute over an object|scalar union (none exists).

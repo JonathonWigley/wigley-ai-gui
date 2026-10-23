@@ -1,44 +1,26 @@
-import type { CommandId } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
-import {
-  type FileEntry,
-  type Files,
-  type FileWatch,
-  isMissingFile,
-} from '../../contracts/files';
-import type { DefaultKeymap, Keymap } from '../../contracts/keymap';
+import type { Files, FileWatch } from '../../contracts/files';
+import type { Keymap } from '../../contracts/keymap';
 import type { Log } from '../../contracts/log';
 import type { Platform } from '../../contracts/platform';
-import type {
-  CommandDecl,
-  PluginManifest,
-  ScopeInfo,
-  SettingKind,
-} from '../../contracts/plugin';
-import type {
-  AppConfig,
-  ConfigProblem,
-  Settings,
-} from '../../contracts/settings';
+import type { AppConfig, ConfigProblem } from '../../contracts/settings';
 import type { Theme } from '../../contracts/theme';
 import { errorText } from '../../shared/error-text';
 import { requireUnambiguousKeymap } from '../../shared/keymap-checks';
+import { ThemeError, type ThemeFileText } from '../themes/theme-loader';
 import {
-  commandInfos,
-  mergeKeymap,
-  pluginOptionalSettings,
-  pluginSettings,
-  scopeInfos,
-} from '../../shared/plugin-manifests';
-import {
-  type resolveTheme,
-  ThemeError,
-  type ThemeFileText,
-  type ThemeTokenRegistry,
-  type TokenCheck,
-} from '../themes/theme-loader';
-import { parseUserKeymap } from './user-keymap';
-import { mergeUserSettings, type UserSettings } from './user-settings';
+  checkKeymapText,
+  checkSettingsText,
+  type ConfigCheckDeps,
+  type ConfigFileText,
+  configSchema,
+  KEYMAP_FILE,
+  readConfigFile,
+  readUserThemes,
+  SETTINGS_FILE,
+  THEMES_FOLDER,
+} from './config-checks';
+import type { UserSettings } from './user-settings';
 
 // The served config, kept current with the user config folder.
 // `onChanged` listeners run, in registration order, each time a change to a
@@ -50,66 +32,23 @@ export interface ConfigStore extends Disposable {
   onChanged(listener: (config: AppConfig) => void): Disposable;
 }
 
-// `folder` is the absolute user config folder; `resolveTheme` resolves a
-// theme as the theme loader does, running `checkTokens`, the check of the
-// tokens the native window takes, on every theme it resolves; `log` takes the
-// store's own lines.
-export interface ConfigStoreDeps {
+// `folder` is the absolute user config folder; `log` takes the store's own
+// lines.
+export interface ConfigStoreDeps extends ConfigCheckDeps {
   files: Files;
   folder: string;
-  defaults: Settings;
-  optionalSettings: Readonly<Record<string, SettingKind>>;
-  settingChoices: Readonly<Record<string, readonly string[]>>;
-  defaultKeymap: DefaultKeymap;
-  coreCommands: Record<CommandId, CommandDecl>;
-  coreScopes: readonly ScopeInfo[];
-  manifests: readonly PluginManifest[];
-  builtInThemes: readonly unknown[];
-  themeTokens: ThemeTokenRegistry;
-  resolveTheme: (...args: Required<Parameters<typeof resolveTheme>>) => Theme;
-  checkTokens: TokenCheck;
   platform: Platform;
   homeDir: string;
   log: Log;
 }
 
-const SETTINGS_FILE = 'settings.json';
-const KEYMAP_FILE = 'keymap.json';
-const THEMES_FOLDER = 'themes';
 const THEME_FILE = /^themes\/[^/]+\.json$/;
-
-// A config file's text: null when the file is missing, which overrides
-// nothing.
-type FileRead = { text: string | null } | { problem: ConfigProblem };
 
 // The last good value of each slice, which a broken file leaves in place.
 interface Slices {
   settings: UserSettings;
   keymap: Keymap;
   theme: Theme;
-}
-
-// What every rebuild reads with the defaults, worked out once at load.
-interface Fixed {
-  commands: AppConfig['commands'];
-  scopes: AppConfig['scopes'];
-  pluginDefaults: Record<string, object>;
-  optionalSettings: Readonly<Record<string, SettingKind>>;
-  defaultKeymap: Keymap;
-  defaultLeader: string;
-}
-
-function requireNoCoreSettingIds(
-  manifests: readonly PluginManifest[],
-  defaults: Settings,
-) {
-  for (const manifest of manifests) {
-    if (Object.hasOwn(defaults, manifest.id)) {
-      throw new Error(
-        `Plugin "${manifest.id}" has the name of a core setting, so its settings cannot sit under its id`,
-      );
-    }
-  }
 }
 
 // File problems in the order the served list holds them: `settings.json`,
@@ -136,19 +75,7 @@ function inServedOrder(problems: ConfigProblem[]): ConfigProblem[] {
 export async function loadConfigStore(
   deps: ConfigStoreDeps,
 ): Promise<ConfigStore> {
-  requireNoCoreSettingIds(deps.manifests, deps.defaults);
-  const commands = commandInfos(deps.coreCommands, deps.manifests);
-  const fixed: Fixed = {
-    commands,
-    scopes: scopeInfos(deps.coreScopes, deps.manifests),
-    pluginDefaults: pluginSettings(deps.manifests),
-    optionalSettings: {
-      ...deps.optionalSettings,
-      ...pluginOptionalSettings(deps.manifests),
-    },
-    defaultKeymap: mergeKeymap(deps.defaultKeymap, deps.manifests, {}),
-    defaultLeader: deps.defaultKeymap.leader,
-  };
+  const fixed = configSchema(deps);
   requireUnambiguousKeymap(fixed.defaultKeymap);
   const defaultTheme = deps.resolveTheme(
     deps.defaults.theme,
@@ -166,61 +93,7 @@ export async function loadConfigStore(
   let current: AppConfig | null = null;
   const listeners = new Set<(config: AppConfig) => void>();
 
-  const pathOf = (relative: string) => `${deps.folder}/${relative}`;
-
-  const readFile = async (relative: string): Promise<FileRead> => {
-    try {
-      return { text: await deps.files.read(pathOf(relative)) };
-    } catch (error) {
-      if (isMissingFile(error)) {
-        return { text: null };
-      }
-      return {
-        problem: {
-          file: relative,
-          message: `Could not read the file: ${errorText(error)}`,
-        },
-      };
-    }
-  };
-
-  const readThemeFiles = async (): Promise<{
-    texts: ThemeFileText[];
-    problems: ConfigProblem[];
-  }> => {
-    let entries: FileEntry[];
-    try {
-      entries = await deps.files.list(pathOf(THEMES_FOLDER));
-    } catch (error) {
-      return {
-        texts: [],
-        problems: [
-          {
-            file: THEMES_FOLDER,
-            message: `Could not read the folder: ${errorText(error)}`,
-          },
-        ],
-      };
-    }
-    const names = entries
-      .filter((entry) => entry.kind === 'file' && entry.path.endsWith('.json'))
-      .filter((entry) => !entry.path.includes('/'))
-      .map((entry) => `${THEMES_FOLDER}/${entry.path}`)
-      .sort();
-    const texts: ThemeFileText[] = [];
-    const problems: ConfigProblem[] = [];
-    for (const file of names) {
-      const read = await readFile(file);
-      if ('problem' in read) {
-        problems.push(read.problem);
-      } else if (read.text !== null) {
-        texts.push({ file, text: read.text });
-      }
-    }
-    return { texts, problems };
-  };
-
-  const settingsSlice = (read: FileRead, problems: ConfigProblem[]) => {
+  const settingsSlice = (read: ConfigFileText, problems: ConfigProblem[]) => {
     if ('problem' in read) {
       problems.push(read.problem);
       return slices.settings;
@@ -229,19 +102,14 @@ export async function loadConfigStore(
       return { settings: deps.defaults, pluginSettings: fixed.pluginDefaults };
     }
     try {
-      return mergeUserSettings(read.text, {
-        defaults: deps.defaults,
-        pluginDefaults: fixed.pluginDefaults,
-        optionalSettings: fixed.optionalSettings,
-        settingChoices: deps.settingChoices,
-      });
+      return checkSettingsText(read.text, deps, fixed);
     } catch (error) {
       problems.push({ file: SETTINGS_FILE, message: errorText(error) });
       return slices.settings;
     }
   };
 
-  const keymapSlice = (read: FileRead, problems: ConfigProblem[]) => {
+  const keymapSlice = (read: ConfigFileText, problems: ConfigProblem[]) => {
     if ('problem' in read) {
       problems.push(read.problem);
       return slices.keymap;
@@ -250,10 +118,7 @@ export async function loadConfigStore(
       return fixed.defaultKeymap;
     }
     try {
-      const user = parseUserKeymap(read.text, fixed);
-      const keymap = mergeKeymap(deps.defaultKeymap, deps.manifests, user);
-      requireUnambiguousKeymap(keymap);
-      return keymap;
+      return checkKeymapText(read.text, deps, fixed);
     } catch (error) {
       problems.push({ file: KEYMAP_FILE, message: errorText(error) });
       return slices.keymap;
@@ -296,9 +161,11 @@ export async function loadConfigStore(
 
   const rebuild = async (isFirstRead: boolean): Promise<AppConfig> => {
     const problems: ConfigProblem[] = [];
+    const readFile = (relative: string) =>
+      readConfigFile(deps.files, deps.folder, relative);
     const settings = settingsSlice(await readFile(SETTINGS_FILE), problems);
     const keymap = keymapSlice(await readFile(KEYMAP_FILE), problems);
-    const themeFiles = await readThemeFiles();
+    const themeFiles = await readUserThemes(deps.files, deps.folder);
     problems.push(...themeFiles.problems);
     const theme = themeSlice(
       settings.settings.theme,

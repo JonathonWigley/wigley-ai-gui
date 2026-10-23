@@ -1,0 +1,310 @@
+import type { Files } from '../../contracts/files';
+import type { UserKeymap } from '../../contracts/keymap';
+import type { PluginManifest, SettingInfo } from '../../contracts/plugin';
+import type {
+  ConfigFileRead,
+  ConfigWriteResult,
+  SettingControl,
+  SettingLeaf,
+  SettingSection,
+  UserConfig,
+  UserConfigSchema,
+} from '../../contracts/user-config';
+import { errorText } from '../../shared/error-text';
+import { isJsonObject } from '../../shared/json';
+import {
+  dependencyOrder,
+  pluginKeys,
+  pluginSettingInfo,
+} from '../../shared/plugin-manifests';
+import {
+  readableName,
+  ThemeError,
+  type ThemeFileText,
+} from '../themes/theme-loader';
+import {
+  checkKeymapText,
+  checkSettingsText,
+  type ConfigCheckDeps,
+  type ConfigSchema,
+  configSchema,
+  KEYMAP_FILE,
+  readConfigFile,
+  readUserThemes,
+  SETTINGS_FILE,
+} from './config-checks';
+import type { ConfigStore } from './config-store';
+
+// `folder` is the absolute user config folder `store` watches; `settingInfo`
+// declares each core setting by its dotted path.
+export interface UserConfigDeps extends ConfigCheckDeps {
+  files: Files;
+  folder: string;
+  store: ConfigStore;
+  settingInfo: Readonly<Record<string, SettingInfo>>;
+}
+
+// A file's check: the problem it would show, or null when the text passes.
+type TextCheck = (
+  text: string,
+  userThemes: readonly ThemeFileText[],
+) => string | null;
+
+const CORE_SECTION = 'core';
+
+// The `userConfig` main service over the user config folder. Builds the
+// schema at once, so it throws on a plugin setting with no declaration or a
+// declaration naming no setting.
+export function createUserConfig(deps: UserConfigDeps): UserConfig {
+  const fixed = configSchema(deps);
+  const schema = userConfigSchema(deps, fixed);
+  const filePath = (file: string) => `${deps.folder}/${file}`;
+
+  const checkSettings: TextCheck = (text, userThemes) =>
+    settingsProblem(text, userThemes, deps, fixed);
+  const checkKeymap: TextCheck = (text) => {
+    try {
+      checkKeymapText(text, deps, fixed);
+      return null;
+    } catch (error) {
+      return errorText(error);
+    }
+  };
+
+  const readLayer = async <L>(
+    file: string,
+    check: TextCheck,
+    userThemes: readonly ThemeFileText[],
+  ): Promise<ConfigFileRead<L>> => {
+    const read = await readConfigFile(deps.files, deps.folder, file);
+    if ('problem' in read) {
+      return { state: 'broken', problem: read.problem.message, text: null };
+    }
+    if (read.text === null) {
+      return { state: 'ok', layer: null, text: null };
+    }
+    const problem = check(read.text, userThemes);
+    if (problem !== null) {
+      return { state: 'broken', problem, text: read.text };
+    }
+    return { state: 'ok', layer: JSON.parse(read.text) as L, text: read.text };
+  };
+
+  // Writes `layer` as `file` when the file still holds `expectedText` and the
+  // new text passes `check`.
+  const writeLayer = async (
+    file: string,
+    layer: object,
+    expectedText: string | null,
+    check: TextCheck,
+  ): Promise<ConfigWriteResult> => {
+    const read = await readConfigFile(deps.files, deps.folder, file);
+    if ('problem' in read) {
+      return { type: 'refused', problem: read.problem.message };
+    }
+    if (read.text !== expectedText) {
+      return { type: 'changedOnDisk' };
+    }
+    const text = `${JSON.stringify(layer, null, 2)}\n`;
+    const userThemes = (await readUserThemes(deps.files, deps.folder)).texts;
+    const problem = check(text, userThemes);
+    if (problem !== null) {
+      return { type: 'refused', problem };
+    }
+    await deps.files.write(filePath(file), text);
+    return { type: 'written' };
+  };
+
+  return {
+    schema: () => schema,
+    async read() {
+      const userThemes = (await readUserThemes(deps.files, deps.folder)).texts;
+      return {
+        settings: await readLayer<Record<string, unknown>>(
+          SETTINGS_FILE,
+          checkSettings,
+          userThemes,
+        ),
+        keymap: await readLayer<UserKeymap>(
+          KEYMAP_FILE,
+          checkKeymap,
+          userThemes,
+        ),
+        themes: themeNames(deps.builtInThemes, userThemes),
+      };
+    },
+    writeSettings: (layer, expectedText) =>
+      writeLayer(SETTINGS_FILE, layer, expectedText, checkSettings),
+    writeKeymap: (layer, expectedText) =>
+      writeLayer(KEYMAP_FILE, layer, expectedText, checkKeymap),
+    onChanged: (listener) => deps.store.onChanged(() => listener()),
+  };
+}
+
+// The problem the ConfigStore would show on `settings.json` holding `text`:
+// the merge's, or the theme's when it names `settings.json` (a name no theme
+// has). A theme error on any other file is that file's, which the ConfigStore
+// reports there while keeping the last good theme.
+function settingsProblem(
+  text: string,
+  userThemes: readonly ThemeFileText[],
+  deps: ConfigCheckDeps,
+  fixed: ConfigSchema,
+): string | null {
+  let themeName: string;
+  try {
+    themeName = checkSettingsText(text, deps, fixed).settings.theme;
+  } catch (error) {
+    return errorText(error);
+  }
+  try {
+    deps.resolveTheme(
+      themeName,
+      deps.builtInThemes,
+      userThemes,
+      deps.themeTokens,
+      deps.checkTokens,
+    );
+  } catch (error) {
+    if (error instanceof ThemeError && error.file === SETTINGS_FILE) {
+      return error.problem;
+    }
+  }
+  return null;
+}
+
+// Each built-in theme's name, then each user theme file's that parses to
+// one, sorted, every name once.
+function themeNames(
+  builtInThemes: readonly unknown[],
+  userThemes: readonly ThemeFileText[],
+): string[] {
+  const builtIn = builtInThemes.map(readableName);
+  const user = userThemes.map((theme) =>
+    readableName(parsedOrNull(theme.text)),
+  );
+  const names = [
+    ...builtIn,
+    ...user.filter((name) => name !== null).sort(),
+  ].filter((name) => name !== null);
+  return [...new Set(names)];
+}
+
+function parsedOrNull(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function userConfigSchema(
+  deps: UserConfigDeps,
+  fixed: ConfigSchema,
+): UserConfigSchema {
+  const sections: SettingSection[] = [
+    {
+      id: CORE_SECTION,
+      title: 'Core',
+      leaves: Object.entries(deps.settingInfo).map(([path, info]) =>
+        settingLeaf(path, info, deps, fixed),
+      ),
+    },
+  ];
+  for (const manifest of deps.manifests) {
+    const infos = Object.entries(pluginSettingInfo([manifest]));
+    if (infos.length > 0) {
+      sections.push({
+        id: manifest.id,
+        title: manifest.id.charAt(0).toUpperCase() + manifest.id.slice(1),
+        leaves: infos.map(([path, info]) =>
+          settingLeaf(path, info, deps, fixed),
+        ),
+      });
+    }
+  }
+  const layers = defaultKeyLayers(deps.defaultKeymap, deps.manifests);
+  return {
+    sections,
+    commands: fixed.commands,
+    scopes: fixed.scopes,
+    defaultBinds: layers.flatMap((layer) => layer.binds ?? []),
+    defaultAccelerators: {
+      app: layers.flatMap((layer) => layer.app ?? []),
+      global: layers.flatMap((layer) => layer.global ?? []),
+      intercept: layers.flatMap((layer) => layer.intercept ?? []),
+    },
+    defaultLeader: fixed.defaultLeader,
+  };
+}
+
+// The default keymap's keys, then each manifest's in the order `mergeKeymap`
+// lays them, commands and scopes qualified.
+function defaultKeyLayers(
+  defaultKeymap: ConfigCheckDeps['defaultKeymap'],
+  manifests: readonly PluginManifest[],
+): Pick<UserKeymap, 'binds' | 'app' | 'global' | 'intercept'>[] {
+  return [defaultKeymap, ...dependencyOrder(manifests).map(pluginKeys)];
+}
+
+// `path` is the setting's full dotted path, a plugin's under its id.
+function settingLeaf(
+  path: string,
+  info: SettingInfo,
+  deps: UserConfigDeps,
+  fixed: ConfigSchema,
+): SettingLeaf {
+  const fallback = defaultAt(path, {
+    ...deps.defaults,
+    ...fixed.pluginDefaults,
+  });
+  return {
+    path,
+    label: info.label,
+    description: info.description,
+    control: settingControl(path, fallback, deps, fixed),
+    fallback,
+  };
+}
+
+// The default at the dotted `path` of `defaults`, or null when the defaults
+// leave it unset.
+function defaultAt(path: string, defaults: object): { value: unknown } | null {
+  let value: unknown = defaults;
+  for (const key of path.split('.')) {
+    if (!isJsonObject(value) || !Object.hasOwn(value, key)) {
+      return null;
+    }
+    value = value[key];
+  }
+  return { value };
+}
+
+// A closed choice, then the core theme, then an array, then by the
+// default's kind or the declared kind of an unset or null setting.
+function settingControl(
+  path: string,
+  fallback: { value: unknown } | null,
+  deps: ConfigCheckDeps,
+  fixed: ConfigSchema,
+): SettingControl {
+  const choices = deps.settingChoices[path];
+  if (choices !== undefined) {
+    return { kind: 'choice', choices };
+  }
+  if (path === 'theme') {
+    return { kind: 'theme' };
+  }
+  const value = fallback?.value;
+  if (Array.isArray(value)) {
+    return { kind: 'json' };
+  }
+  const kind = fixed.optionalSettings[path];
+  if (typeof value === 'boolean' || kind === 'boolean') {
+    return { kind: 'boolean' };
+  }
+  if (typeof value === 'number' || kind === 'number') {
+    return { kind: 'number' };
+  }
+  return { kind: 'string' };
+}

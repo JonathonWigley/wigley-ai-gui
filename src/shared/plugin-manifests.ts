@@ -204,8 +204,9 @@ function keymapLayer(
 }
 
 // One plugin's default keys, their commands and scopes qualified as
-// `<pluginId>.<short>`; the `any` scope stays unqualified.
-function pluginKeys(
+// `<pluginId>.<short>`, as `mergeKeymap` lays them; the `any` scope stays
+// unqualified.
+export function pluginKeys(
   manifest: PluginManifest,
 ): Omit<UserKeymap, 'leader' | 'unbind'> {
   const keys = manifest.keys ?? {};
