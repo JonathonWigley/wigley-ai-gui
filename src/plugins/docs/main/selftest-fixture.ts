@@ -17,14 +17,30 @@ const LONG_SECTION = `\n## Long section\n\n${Array.from(
   (_, index) => `Line ${index + 1}.\n`,
 ).join('\n')}`;
 const KEPT_RULE = 'style.md';
+// One global doc per index load state other than `launch`, each written to
+// `<state>.md` in the load-states folder and judged for Claude only.
+const LOAD_STATE_DOCS: readonly LoadStateRecord[] = [
+  { state: 'on-demand', reason: 'loads when invoked' },
+  { state: 'listed', reason: 'listed by name only' },
+  { state: 'shadowed', reason: 'a nearer file wins' },
+  { state: 'not-loaded', reason: 'not read at launch' },
+];
+
+export interface DocsFixtureOptions {
+  // Adds the `LOAD_STATE_DOCS` docs under `.claude/load-states/` and their
+  // states in the home folder's context.
+  loadStates: boolean;
+}
 
 // Writes the self-test's docs, index and stand-in docs_index.py under
 // `homeDir` (the self-test's temp home), first removing what an earlier
-// self-test run's steps added.
+// self-test run's steps added, and the load-states folder when
+// `options.loadStates` is off.
 export async function writeDocsFixture(
   files: Files,
   homeDir: string,
   paths: Paths,
+  options: DocsFixtureOptions = { loadStates: false },
 ): Promise<void> {
   const home = await files.realPath(homeDir);
   const fixture = fixturePaths(home, paths);
@@ -33,7 +49,11 @@ export async function writeDocsFixture(
       await files.trash(paths.join(fixture.rules, entry.path));
     }
   }
-  const index = indexDocument(fixture);
+  const hasLoadStatesFolder = (await files.stat(fixture.loadStates)) !== null;
+  if (!options.loadStates && hasLoadStatesFolder) {
+    await files.trash(fixture.loadStates);
+  }
+  const index = indexDocument(fixture, options, paths);
   const writes: [string, string][] = [
     [
       fixture.claudeMd,
@@ -55,6 +75,10 @@ export async function writeDocsFixture(
       '---\nname: cached\ndescription: A plugin skill.\n---\n\n# Cached\n',
     ],
     [fixture.followups, '# Follow-ups\n\n- **First follow-up** — waits.\n'],
+    ...loadStateDocs(options, fixture, paths).map((doc): [string, string] => [
+      doc.path,
+      `# ${doc.title}\n`,
+    ]),
     [installedPluginsFile(fixture.claudeDir, paths), installedPlugins(fixture)],
     [paths.join(fixture.scriptFolder, 'index.fixture.json'), json(index)],
     [
@@ -83,6 +107,7 @@ function fixturePaths(home: string, paths: Paths) {
     home,
     claudeDir,
     rules: paths.join(claudeDir, 'rules'),
+    loadStates: paths.join(claudeDir, 'load-states'),
     claudeMd: paths.join(claudeDir, 'CLAUDE.md'),
     styleRule: paths.join(claudeDir, 'rules', KEPT_RULE),
     settings: paths.join(claudeDir, 'settings.json'),
@@ -137,7 +162,28 @@ function state(
   return codex === undefined ? { claude } : { claude, codex };
 }
 
-function indexDocument(fixture: FixturePaths): IndexDocument {
+// The `LOAD_STATE_DOCS` docs `options` asks for, each with its path and title.
+function loadStateDocs(
+  options: DocsFixtureOptions,
+  fixture: FixturePaths,
+  paths: Paths,
+): { path: string; title: string; record: LoadStateRecord }[] {
+  if (!options.loadStates) {
+    return [];
+  }
+  return LOAD_STATE_DOCS.map((record) => ({
+    path: paths.join(fixture.loadStates, `${record.state}.md`),
+    title: `Load state ${record.state}`,
+    record,
+  }));
+}
+
+function indexDocument(
+  fixture: FixturePaths,
+  options: DocsFixtureOptions,
+  paths: Paths,
+): IndexDocument {
+  const loadStates = loadStateDocs(options, fixture, paths);
   const repoOwned = { repo: 'selftest-repo', root: fixture.repo };
   const pluginOwned = { root: fixture.pluginRoot, plugin: FIXTURE_PLUGIN_KEY };
   const entries: IndexEntry[] = [
@@ -210,6 +256,15 @@ function indexDocument(fixture: FixturePaths): IndexDocument {
       title: 'First follow-up',
       meta: { status: 'open', gist: 'waits.', section: null },
     }),
+    ...loadStates.map((doc) =>
+      entry({
+        kind: 'instructions',
+        source: 'global',
+        path: doc.path,
+        title: doc.title,
+        meta: { imports: [] },
+      }),
+    ),
   ];
   const contexts: IndexContext[] = [
     {
@@ -224,6 +279,9 @@ function indexDocument(fixture: FixturePaths): IndexDocument {
           state: 'launch',
           reason: 'rule without paths',
         }),
+        ...Object.fromEntries(
+          loadStates.map((doc) => [doc.path, state(doc.record)]),
+        ),
       },
     },
     {

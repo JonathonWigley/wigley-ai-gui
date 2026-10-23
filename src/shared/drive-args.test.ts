@@ -3,10 +3,12 @@ import {
   argsObject,
   nullableNumberOr,
   nullableStringOr,
+  optionalBoolean,
   optionalNumber,
   optionalOneOf,
   optionalString,
   optionalStringList,
+  requiredBoolean,
   requiredNumber,
   requiredString,
   stringList,
@@ -75,6 +77,18 @@ describe('number readers', () => {
     expect(() => nullableNumberOr({ n: 'x' }, 'n', 9)).toThrow(
       'n must be a number',
     );
+  });
+});
+
+describe('boolean readers', () => {
+  it('read a boolean, a missing field as missing, and reject anything else', () => {
+    expect(optionalBoolean({ on: true }, 'on')).toBe(true);
+    expect(optionalBoolean({ on: false }, 'on')).toBe(false);
+    expect(optionalBoolean({}, 'on')).toBeUndefined();
+    expect(() => optionalBoolean({ on: 'true' }, 'on')).toThrow(
+      'on must be a boolean',
+    );
+    expect(() => requiredBoolean({}, 'on')).toThrow('on must be a boolean');
   });
 });
 

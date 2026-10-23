@@ -6,7 +6,7 @@ import type {
   ConnectedSession,
   SessionsMainExports,
 } from '../../sessions/contract';
-import { writeDocsFixture } from './selftest-fixture';
+import { type DocsFixtureOptions, writeDocsFixture } from './selftest-fixture';
 
 export interface DocsSelfTestDeps {
   files: Files;
@@ -384,17 +384,19 @@ const SCROLLS_ITSELF = [
   '.session-row-status',
 ];
 
-// Rewrites the fixture under `homeDir` and connects a session with host id
-// `sessionId` in the fixture's repo, then activates its row, which shows its
-// only tab, the Docs tab. A failed activation ends the session it connected.
+// Rewrites the fixture under `homeDir` with `options` and connects a session
+// with host id `sessionId` in the fixture's repo, then activates its row,
+// which shows its only tab, the Docs tab. A failed activation ends the session
+// it connected.
 export async function connectDocsFixtureSession(
   files: Files,
   homeDir: string,
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>,
   sessionId: string,
   paths: Paths,
+  options: DocsFixtureOptions = { loadStates: false },
 ): Promise<ConnectedSession> {
-  await writeDocsFixture(files, homeDir, paths);
+  await writeDocsFixture(files, homeDir, paths, options);
   const home = await files.realPath(homeDir);
   const connected = sessions.connect({
     sessionId,

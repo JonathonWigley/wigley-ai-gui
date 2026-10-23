@@ -64,6 +64,21 @@ export function optionalNumber(
   return args[name] === undefined ? undefined : requiredNumber(args, name);
 }
 
+export function requiredBoolean(args: JsonObject, name: string): boolean {
+  const value = args[name];
+  if (typeof value !== 'boolean') {
+    throw new Error(`${name} must be a boolean`);
+  }
+  return value;
+}
+
+export function optionalBoolean(
+  args: JsonObject,
+  name: string,
+): boolean | undefined {
+  return args[name] === undefined ? undefined : requiredBoolean(args, name);
+}
+
 // A field that may hold null as well as a number, read as `fallback` only
 // when the args leave it out: an explicit null stays null.
 export function nullableNumberOr(

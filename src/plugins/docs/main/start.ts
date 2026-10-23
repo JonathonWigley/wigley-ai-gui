@@ -8,7 +8,11 @@ import type {
   MainServices,
   QualifiedEvents,
 } from '../../../contracts/plugin';
-import { argsObject, optionalString } from '../../../shared/drive-args';
+import {
+  argsObject,
+  optionalBoolean,
+  optionalString,
+} from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
 import type {
   ConnectedSession,
@@ -103,7 +107,8 @@ interface DocsDriveDeps {
 }
 
 // `docs.seed` rewrites the fixture; `docs.connectSession` rewrites it and
-// connects a session in its repo, whose row shows its Docs tab. Disposing
+// connects a session in its repo, whose row shows its Docs tab. Each takes
+// `loadStates` to add a doc per non-launch index load state. Disposing
 // removes the actions and ends every session `docs.connectSession` connected.
 export function addDriveActions(
   drive: DriveHost,
@@ -115,30 +120,34 @@ export function addDriveActions(
   const actions = [
     drive.add('seed', {
       description:
-        "Rewrites the docs fixture under the temp home, removing what earlier steps added; returns the home's real path.",
-      args: '{}',
-      async run() {
+        "Rewrites the docs fixture under the temp home, removing what earlier steps added; loadStates adds one doc per index load state other than launch (on-demand, listed, shadowed, not-loaded) under .claude/load-states. Returns the home's real path.",
+      args: '{ loadStates?: boolean }',
+      async run(rawArgs) {
         await started;
-        await writeDocsFixture(files, homeDir, paths);
+        const loadStates =
+          optionalBoolean(argsObject(rawArgs), 'loadStates') ?? false;
+        await writeDocsFixture(files, homeDir, paths, { loadStates });
         return { home: await files.realPath(homeDir) };
       },
     }),
     drive.add('connectSession', {
       description:
-        'Rewrites the docs fixture and connects a session in its repo, activating the row on its Docs tab; sessionId defaults to drive-docs-<n>.',
-      args: '{ sessionId?: string }',
+        'Rewrites the docs fixture and connects a session in its repo, activating the row on its Docs tab; sessionId defaults to drive-docs-<n>; loadStates adds one doc per index load state other than launch, as docs.seed does.',
+      args: '{ sessionId?: string, loadStates?: boolean }',
       async run(rawArgs) {
         await started;
         connects += 1;
+        const args = argsObject(rawArgs);
         const sessionId =
-          optionalString(argsObject(rawArgs), 'sessionId') ??
-          `drive-docs-${String(connects)}`;
+          optionalString(args, 'sessionId') ?? `drive-docs-${String(connects)}`;
+        const loadStates = optionalBoolean(args, 'loadStates') ?? false;
         const session = await connectDocsFixtureSession(
           files,
           homeDir,
           sessions,
           sessionId,
           paths,
+          { loadStates },
         );
         connected.push(session);
         return { sessionId, rowId: session.session.id };
