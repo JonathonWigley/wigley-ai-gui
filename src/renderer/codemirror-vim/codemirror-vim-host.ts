@@ -6,6 +6,7 @@ import {
   highlightActiveLine,
   highlightActiveLineGutter,
   lineNumbers,
+  tooltips,
 } from '@codemirror/view';
 import { CodeMirror, getCM, Vim, vim } from '@replit/codemirror-vim';
 import {
@@ -527,7 +528,7 @@ function reportUserChanges(changed: (text: string) => void) {
 // `options.completions` is given, after vim so CodeMirror's keymap stays
 // behind vim; lines wrap. `leaving` runs on blur before the editor reports it,
 // so a box the user leaves drops its unfinished keys before any other box
-// reports.
+// reports. Its popups draw on the page body, past any scroll box it sits in.
 function boxExtensions(
   events: EditorEvents,
   options: EditorOptions | undefined,
@@ -542,6 +543,7 @@ function boxExtensions(
     minimalSetup,
     EditorView.lineWrapping,
     editorTheme,
+    tooltipsOnBody(),
     reportUserChanges(events.changed),
     EditorView.domEventHandlers({
       focus: () => events.focused(),
@@ -556,7 +558,8 @@ function boxExtensions(
 // A whole file: line numbers, the active-line band, wrapped lines, the
 // language `language` holds once it loads, highlighted through the Catppuccin
 // Mocha style. Read-only blocks typed input, and vim drops every edit it
-// dispatches under the same facet.
+// dispatches under the same facet. Its popups draw on the page body, as a
+// box's do.
 function documentExtensions(
   options: DocumentOptions,
   language: Compartment,
@@ -574,6 +577,7 @@ function documentExtensions(
     language.of([]),
     syntaxHighlighting(codeColours),
     editorTheme,
+    tooltipsOnBody(),
     EditorView.editorAttributes.of({ class: 'wg-document-editor' }),
     reportUserChanges(events.changed),
     EditorView.domEventHandlers({
@@ -582,6 +586,12 @@ function documentExtensions(
       },
     }),
   ];
+}
+
+// CodeMirror mounts tooltips in a container on the body that carries the
+// editor's theme classes, so the editor theme still styles them.
+function tooltipsOnBody() {
+  return tooltips({ parent: document.body });
 }
 
 // The completion popup belongs to insert mode, so any other mode closes it.

@@ -71,6 +71,9 @@ export const editorTheme = EditorView.theme({
     borderRadius: 'var(--wg-radius-lg)',
     color: 'var(--wg-fg)',
     fontSize: 'var(--wg-text-mono)',
+    // Boxes sit in the composer and in dialogs; the popup draws above every
+    // surface a box sits in and below toasts.
+    zIndex: 'calc(var(--wg-z-dialog) + 1)',
     // Autocomplete's base theme sets `monospace` on the list itself.
     '& > ul': { fontFamily: 'var(--wg-font-mono)' },
     '& > ul > li': { padding: 'var(--wg-space-0_5) var(--wg-space-2)' },
