@@ -80,6 +80,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   let hasFocus = false;
 
   const draw = () => {
+    pane.classList.toggle('is-pane-inactive', !hasFocus);
     rows = visibleRows(tree, state, pathOf);
     list.replaceChildren(...rows.map(rowElement));
     list.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });

@@ -238,10 +238,14 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   };
 
   // Marks the cursor row selected, and draws its focus ring while the keys
-  // act on the rows: an open box or filter draws its own ring instead.
+  // act on the rows: an open box or filter draws its own ring instead. The
+  // pane without focus is marked inactive, so its selected row takes the
+  // inactive selection fill.
   const markCursor = () => {
     const isRowsFocused =
       focus === 'rows' && openBox === null && filterScope === null;
+    rowsSheet.classList.toggle('is-pane-inactive', focus !== 'rows');
+    sections.element.classList.toggle('is-pane-inactive', focus !== 'sections');
     for (const row of rows) {
       const isCursor = row.key === cursorKey;
       row.element.classList.toggle('is-selected', isCursor);
@@ -499,7 +503,10 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       case 'changedOnDisk': {
         log(`changed on disk ${name}`);
         const reread = await refresh(true);
-        const text = `${name} changed on disk; the form now shows it`;
+        const text =
+          reread[file].state === 'broken'
+            ? `${name} changed on disk and is now broken; the form shows the problem and closed any open box`
+            : `${name} changed on disk; the form now shows it`;
         if (box !== null && isBoxOpen()) {
           box.expectedText = reread[file].text;
           showUnderBox(box, text);

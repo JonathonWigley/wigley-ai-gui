@@ -54,6 +54,13 @@
   color: var(--wg-list-active-foreground);
 }
 
+/* The pane without focus keeps its selection in the inactive fill. */
+.is-pane-inactive .settings-row.is-selected,
+.settings-sections.is-pane-inactive .ui-row.is-selected {
+  background: var(--wg-list-inactive-selection-background);
+  color: var(--wg-fg);
+}
+
 .settings-row.is-cursor {
   box-shadow: inset 0 0 0 1px var(--wg-focus-border);
 }
