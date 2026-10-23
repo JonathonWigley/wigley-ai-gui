@@ -267,11 +267,12 @@ export interface ModeContext {
 // runs each time another mode's `show` hides this one, after its element and
 // side bar are hidden and before the other mode's `shown`.
 // `sideBarHidden` runs each time this mode's side bar hides while the mode
-// shows: by `toggleSideBar`, `picked` or the window narrowing, and after
-// `shown` when the mode shows with its side bar hidden; the plugin moves
-// focus out of the side bar there. `sideBarOpenedOver` runs each time the
-// side bar opens over the content while the mode shows, by `toggleSideBar`
-// or after `shown`; the plugin moves focus into the side bar there. Neither
+// shows: by `toggleSideBar`, `picked` or the window narrowing or widening,
+// and after `shown` when the mode shows with its side bar hidden; the plugin
+// moves focus out of the side bar there. `sideBarOpenedOver` runs each time
+// the side bar opens over the content while the mode shows, by
+// `toggleSideBar` or after `shown`; the plugin moves focus into the side bar
+// there. Neither
 // runs for a hidden mode, a mode without a side bar, or a side bar already
 // in that state.
 export interface Mode {
@@ -310,8 +311,8 @@ export interface ModeHandle {
 
 // The first mode added shows and every later one is added hidden; a hidden
 // mode keeps its DOM and state. `add` throws on an id already added, and calls
-// the first mode's `shown` before it returns, so that `shown` cannot read the
-// handle. `shown` is the shown mode's id and throws before any `add`. A `show`
+// the first mode's `shown`, and its side bar callback, before it returns, so
+// that neither can read the handle. `shown` is the shown mode's id and throws before any `add`. A `show`
 // that changes the shown mode hides the old mode's element and side bar, calls
 // the old mode's `hidden`, unhides the new mode's element and side bar, marks
 // it in the activity bar, lays out its side bar, shows its context, calls its
