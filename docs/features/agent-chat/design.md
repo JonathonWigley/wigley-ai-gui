@@ -230,7 +230,7 @@ interview on 2026-10-23; this file is the record of both.
   permission cards, controls, alerts, and the start prompt with profiles and recent folders.
 - **Plan B — resume and completion** (landed, its plan folder closing): resume with history, archive, slash
   completion.
-- **Plan C — chat usability** (planned 2026-10-23, `plan-chat-usability/`): sign-in from the app, app slash commands,
+- **Plan C — chat usability** (landed 2026-10-23, its plan folder closed): sign-in from the app, app slash commands,
   the merged folder list, pasted images with previews, and the completion popup drawn outside the composer.
 
 ## Out of scope

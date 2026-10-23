@@ -54,6 +54,7 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - A Codex process started from a shell Claude Code spawned inherits `CLAUDECODE=1`, so its row reads `Claude`.
 - Chat raw events drop the streaming deltas (text, thinking and tool input) and `message_start` / `message_delta` / `message_stop`, while `agent-chat/design.md` says every entry carries the events it was built from. Chosen: rule the deltas covered by the start and final assistant events, and say so in design.md.
 - The Claude harness counts one result per sent message (measured on 2.1.304, `agent-chat/claude-stream.md` § Queued messages); a message that gets no result would leave the session `working` and the turn alert unfired. Chosen: probe the cases that might give none (local slash commands, a rejected message) and record them in claude-stream.md before guarding.
+- Chat main cancels a sign-in left running by a reloaded page when the page reads `sessions`, because the page reads it once per load (`src/plugins/chat/main/start.ts`, pinned by `start.test.ts`); a second `sessions` read would cancel a live sign-in. Chosen: a dedicated page `loaded` message that cancels it, apart from the sessions read.
 - Two tabs' take-overs released out of order give the session back to the first taker's tab even though its take-over has ended (pinned by `sessions/page/tabs.test.ts`); only forms takes over today, so it matters once a second plugin does.
 
 ## Extensibility review (2026-10-20)
