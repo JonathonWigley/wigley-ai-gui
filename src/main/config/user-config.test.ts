@@ -116,6 +116,22 @@ async function createWithFile(file: string, text: string) {
   return { files, userConfig: await create(files) };
 }
 
+// `files` whose `read` of the file at `path` rejects with `EACCES`, as a
+// file the user may not read does.
+function unreadableAt(files: MemoryFiles, path: string): MemoryFiles {
+  return {
+    ...files,
+    read: async (readPath) => {
+      if (readPath === path) {
+        throw Object.assign(new Error('permission denied'), {
+          code: 'EACCES',
+        });
+      }
+      return files.read(readPath);
+    },
+  };
+}
+
 describe('createUserConfig', () => {
   it('reads both files as ok with null layers when neither exists', async () => {
     const read = await (await create(createMemoryFiles())).read();
@@ -168,8 +184,12 @@ describe('createUserConfig', () => {
       '{"keySequenceTimeoutMs": 500}',
     );
 
-    await userConfig.writeSettings({}, '{"keySequenceTimeoutMs": 500}');
+    const result = await userConfig.writeSettings(
+      {},
+      '{"keySequenceTimeoutMs": 500}',
+    );
 
+    expect(result).toEqual({ type: 'written' });
     expect(await files.read(`${FOLDER}/settings.json`)).toBe('{}\n');
   });
 
@@ -368,6 +388,96 @@ describe('createUserConfig', () => {
           },
         ],
       },
+    ]);
+  });
+
+  it('reads a settings file it cannot read as broken, with no text', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${FOLDER}/settings.json`, '{}');
+    const userConfig = await create(
+      unreadableAt(files, `${FOLDER}/settings.json`),
+    );
+
+    const read = await userConfig.read();
+
+    expect(read.settings).toEqual({
+      state: 'broken',
+      problem: 'Could not read the file: permission denied',
+      text: null,
+    });
+  });
+
+  it('refuses to write over a file it cannot read', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${FOLDER}/settings.json`, '{}');
+    const userConfig = await create(
+      unreadableAt(files, `${FOLDER}/settings.json`),
+    );
+
+    const result = await userConfig.writeSettings(
+      { keySequenceTimeoutMs: 500 },
+      '{}',
+    );
+
+    expect(result).toEqual({
+      type: 'refused',
+      problem: 'Could not read the file: permission denied',
+    });
+    expect(await files.read(`${FOLDER}/settings.json`)).toBe('{}');
+  });
+
+  it('reads a keymap file that fails its check as broken, with its text', async () => {
+    const { userConfig } = await createWithFile('keymap.json', '{"nope": []}');
+
+    const read = await userConfig.read();
+
+    expect(read.keymap).toEqual({
+      state: 'broken',
+      problem: '"nope" is not a keymap section.',
+      text: '{"nope": []}',
+    });
+  });
+
+  it('gives a boolean control to a boolean default and a boolean kind', async () => {
+    const flagPlugin = definePlugin({
+      id: 'f',
+      dependsOn: [],
+      commands: {},
+      scopes: {},
+      settings: { wrap: true, strict: null as boolean | null },
+      optionalSettings: { strict: 'boolean' },
+      settingInfo: {
+        wrap: { label: 'Wrap', description: 'Wraps.' },
+        strict: { label: 'Strict', description: 'Strict.' },
+      },
+      themeTokens: {},
+    });
+    const files = createMemoryFiles();
+    const store = await loadConfigStore({
+      ...CHECK_DEPS,
+      manifests: [flagPlugin],
+      files,
+      folder: FOLDER,
+      platform: 'macos',
+      homeDir: HOME,
+      log: () => undefined,
+    });
+
+    const schema = createUserConfig({
+      ...CHECK_DEPS,
+      manifests: [flagPlugin],
+      files,
+      folder: FOLDER,
+      store,
+      settingInfo: {},
+    }).schema();
+
+    const controls = schema.sections
+      .flatMap((section) => section.leaves)
+      .map((leaf) => [leaf.path, leaf.control]);
+    expect(controls).toEqual([
+      ['f.wrap', { kind: 'boolean' }],
+      ['f.strict', { kind: 'boolean' }],
     ]);
   });
 
