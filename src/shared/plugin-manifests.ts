@@ -66,7 +66,7 @@ type SameBind<B> = (a: B, b: B) => boolean;
 
 // How the merge tells that a later layer's bind replaces an earlier one, for
 // each list of the keymap; the editor's compare keys with `leader` spelled.
-interface BindIdentities {
+export interface BindIdentities {
   page: SameBind<PageBind>;
   editorBinds: SameBind<EditorBind>;
   remaps: SameBind<EditorRemap>;
@@ -75,11 +75,11 @@ interface BindIdentities {
 }
 
 // Whether two accelerators name one chord, however each spells it.
-function isSameAccelerator(a: string, b: string): boolean {
+export function isSameAccelerator(a: string, b: string): boolean {
   return canonicalAccelerator(a) === canonicalAccelerator(b);
 }
 
-function bindIdentities(leader: string): BindIdentities {
+export function bindIdentities(leader: string): BindIdentities {
   const sameKeys = (a: string, b: string) =>
     withLeader(a, leader) === withLeader(b, leader);
   return {
