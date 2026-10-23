@@ -43,7 +43,7 @@ export function createMainApi(
 ): MainApi<PluginManifest, ChannelShape, UntypedEvents, UntypedEvents> {
   return {
     channel: deps.channels.forPlugin(manifest.id),
-    events: pluginEvents(deps.bus, manifest.id),
+    events: pluginEvents(deps.bus, manifest.id, deps.services.log),
     settings: () => deps.pluginSettings()[manifest.id],
     onSettingsChanged: (listener) => {
       let lastSeen = JSON.stringify(deps.pluginSettings()[manifest.id]);

@@ -203,8 +203,9 @@ export type QualifiedEvents<Id extends string, Ev extends EventShape> = {
 // payload. `on` hears another plugin's event by its qualified name, naming
 // only an event in `Heard` (built with `QualifiedEvents` from each
 // publisher's contract), its listener typed from it; a part that declares no
-// `Heard` hears nothing. Listeners run before `emit` returns, and a
-// listener's throw reaches the emitter.
+// `Heard` hears nothing. Listeners run before `emit` returns; a listener's
+// throw is logged under the listening plugin's id and never reaches the
+// emitter or the other listeners.
 export interface PluginEvents<
   Ev extends EventShape,
   Heard extends EventShape = Record<never, never>,

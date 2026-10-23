@@ -1,11 +1,16 @@
 // Each `@ts-expect-error` below is checked by `npm run typecheck`: the line
 // after it must fail to compile.
 import { describe, expect, it } from 'vitest';
+import type { Log } from '../contracts/log';
 import type { EventShape, QualifiedEvents } from '../contracts/plugin';
 import { createEventBus, pluginEvents } from './event-bus';
 
 interface TestEvents extends EventShape {
   connected: { id: string };
+}
+
+function logInto(lines: [string, string][]): Log {
+  return (source, message) => lines.push([source, message]);
 }
 
 describe('createEventBus', () => {
@@ -71,21 +76,49 @@ describe('pluginEvents', () => {
     bus.on('sessions.connected', (data) => qualified.push(data));
     bus.on('connected', (data) => bare.push(data));
 
-    pluginEvents(bus, 'sessions').emit('connected', { id: 'a' });
+    pluginEvents(bus, 'sessions', logInto([])).emit('connected', { id: 'a' });
 
     expect(qualified).toEqual([{ id: 'a' }]);
     expect(bare).toEqual([]);
   });
 
+  it("logs a listener's throw under the listening plugin and runs the rest", () => {
+    const bus = createEventBus();
+    const lines: [string, string][] = [];
+    const log = logInto(lines);
+    const heard: number[] = [];
+    pluginEvents<EventShape, { 'sessions.connected': number }>(
+      bus,
+      'forms',
+      log,
+    ).on('sessions.connected', () => {
+      throw new Error('boom');
+    });
+    pluginEvents<EventShape, { 'sessions.connected': number }>(
+      bus,
+      'docs',
+      log,
+    ).on('sessions.connected', (data) => heard.push(data));
+
+    expect(() =>
+      pluginEvents(bus, 'sessions', log).emit('connected', 1),
+    ).not.toThrow();
+    expect(heard).toEqual([1]);
+    expect(lines).toEqual([
+      ['forms', 'sessions.connected listener failed: boom'],
+    ]);
+  });
+
   it("lets a plugin hear another plugin's event", () => {
     const bus = createEventBus();
     const heard: number[] = [];
-    pluginEvents<EventShape, { 'sessions.connected': number }>(bus, 'forms').on(
-      'sessions.connected',
-      (data) => heard.push(data),
-    );
+    pluginEvents<EventShape, { 'sessions.connected': number }>(
+      bus,
+      'forms',
+      logInto([]),
+    ).on('sessions.connected', (data) => heard.push(data));
 
-    pluginEvents(bus, 'sessions').emit('connected', 1);
+    pluginEvents(bus, 'sessions', logInto([])).emit('connected', 1);
 
     expect(heard).toEqual([1]);
   });
@@ -94,7 +127,7 @@ describe('pluginEvents', () => {
     const bus = createEventBus();
     const heard: unknown[] = [];
     bus.on('sessions.conected', (data) => heard.push(data));
-    const events = pluginEvents<TestEvents>(bus, 'sessions');
+    const events = pluginEvents<TestEvents>(bus, 'sessions', logInto([]));
 
     // @ts-expect-error -- `conected` is not a declared event
     events.emit('conected', { id: 'a' });
@@ -110,14 +143,16 @@ describe('pluginEvents', () => {
     const events = pluginEvents<
       EventShape,
       QualifiedEvents<'sessions', TestEvents>
-    >(bus, 'forms');
+    >(bus, 'forms', logInto([]));
 
     events.on('sessions.connected', ({ id }) => heard.push(id));
     // @ts-expect-error -- `sessions.conected` is not a heard event
     events.on('sessions.conected', () => {});
     // @ts-expect-error -- `sessions.connected` carries an id, not a count
     events.on('sessions.connected', (data: { count: number }) => data);
-    pluginEvents<TestEvents>(bus, 'sessions').emit('connected', { id: 'a' });
+    pluginEvents<TestEvents>(bus, 'sessions', logInto([])).emit('connected', {
+      id: 'a',
+    });
 
     expect(heard).toEqual(['a']);
   });
@@ -125,12 +160,16 @@ describe('pluginEvents', () => {
   it('a part declaring no heard events can name none', () => {
     const bus = createEventBus();
     const heard: unknown[] = [];
-    const events = pluginEvents<EventShape, Record<never, never>>(bus, 'forms');
+    const events = pluginEvents<EventShape, Record<never, never>>(
+      bus,
+      'forms',
+      logInto([]),
+    );
 
     // @ts-expect-error -- this part hears no events
     events.on('sessions.connected', (data) => heard.push(data));
     // @ts-expect-error -- a primitive is not an events shape
-    pluginEvents<string>(bus, 'forms');
+    pluginEvents<string>(bus, 'forms', logInto([]));
     bus.emit('sessions.connected', 1);
 
     expect(heard).toEqual([1]);

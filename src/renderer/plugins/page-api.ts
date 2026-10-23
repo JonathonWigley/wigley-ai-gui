@@ -66,7 +66,7 @@ export function createPageApi(
   return {
     areas: pluginAreas(deps.areas),
     channel: pageChannel(manifest.id, deps.bridge),
-    events: pluginEvents(deps.bus, manifest.id),
+    events: pluginEvents(deps.bus, manifest.id, deps.services.log),
     keys: {
       setScope: (scope) => deps.scopeStack.setBase(qualify(manifest.id, scope)),
       pushScope: (scope) => deps.scopeStack.push(qualify(manifest.id, scope)),
