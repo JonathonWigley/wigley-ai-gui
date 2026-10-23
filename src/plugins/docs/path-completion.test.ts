@@ -61,10 +61,26 @@ describe('completions', () => {
     expect(texts(completions(entries, '.', posixPaths))).toEqual(['.claude/']);
   });
 
-  it('completions_CaseSensitive', () => {
+  it('completions_IgnoresCase_KeepsNameCase', () => {
     expect(
-      completions([{ name: 'Readme.md', isFolder: false }], 'r', posixPaths),
-    ).toEqual([]);
+      texts(
+        completions([{ name: 'CLAUDE.md', isFolder: false }], 'cl', posixPaths),
+      ),
+    ).toEqual(['CLAUDE.md']);
+  });
+
+  it('completions_NamesDifferingInCase_AllKeptByNameThenCodeUnit', () => {
+    const entries = [
+      { name: 'notes.md', isFolder: false },
+      { name: 'Nb.md', isFolder: false },
+      { name: 'Notes.md', isFolder: false },
+    ];
+
+    expect(texts(completions(entries, 'N', posixPaths))).toEqual([
+      'Nb.md',
+      'Notes.md',
+      'notes.md',
+    ]);
   });
 
   it('completions_FolderAndFileSharingPrefix_TabKeepsTyped', () => {
@@ -104,6 +120,55 @@ describe('completeTyped', () => {
     ).toBe('~/ab');
     expect(completeTyped('~/ab', [], posixPaths)).toBe('~/ab');
   });
+
+  it('completeTyped_SingleMatchOtherCase_TakesNameCase', () => {
+    const matches = completions(
+      [{ name: 'CLAUDE.md', isFolder: false }],
+      'cl',
+      posixPaths,
+    );
+
+    expect(completeTyped('~/.claude/cl', matches, posixPaths)).toBe(
+      '~/.claude/CLAUDE.md',
+    );
+  });
+
+  it('completeTyped_SeveralMatchesOtherCase_ExtendsInNameCase', () => {
+    const matches = completions(
+      [
+        { name: 'CLAUDE.md', isFolder: false },
+        { name: 'CLAUDE.local.md', isFolder: false },
+      ],
+      'cl',
+      posixPaths,
+    );
+
+    expect(completeTyped('~/cl', matches, posixPaths)).toBe('~/CLAUDE.');
+  });
+
+  it('completeTyped_MatchesDifferingOnlyInCase_Unchanged', () => {
+    const matches = completions(
+      [
+        { name: 'Notes.md', isFolder: false },
+        { name: 'notes.md', isFolder: false },
+      ],
+      'n',
+      posixPaths,
+    );
+
+    expect(matches).toHaveLength(2);
+    expect(completeTyped('~/n', matches, posixPaths)).toBe('~/n');
+  });
+
+  it('completeTyped_MixedCaseFolder_CompletesWithSlash', () => {
+    const matches = completions(
+      [{ name: 'MyDocs', isFolder: true }],
+      'myd',
+      posixPaths,
+    );
+
+    expect(completeTyped('~/myd', matches, posixPaths)).toBe('~/MyDocs/');
+  });
 });
 
 describe('path completion on Windows', () => {
@@ -142,5 +207,39 @@ describe('path completion on Windows', () => {
     expect(
       completeTyped('~\\.claude\\rules\\n', [file('neat.md')], windowsPaths),
     ).toBe('~\\.claude\\rules\\neat.md');
+  });
+
+  it('completions_WindowsIgnoresCase_KeepsNameCase', () => {
+    expect(
+      texts(
+        completions(
+          [{ name: 'CLAUDE.md', isFolder: false }],
+          'cl',
+          windowsPaths,
+        ),
+      ),
+    ).toEqual(['CLAUDE.md']);
+  });
+
+  it('completeTyped_WindowsOtherCase_TakesNameCase', () => {
+    const matches = completions(
+      [{ name: 'CLAUDE.md', isFolder: false }],
+      'cl',
+      windowsPaths,
+    );
+
+    expect(completeTyped('~/.claude/cl', matches, windowsPaths)).toBe(
+      '~/.claude/CLAUDE.md',
+    );
+  });
+
+  it('completeTyped_WindowsMixedCaseFolder_CompletesWithBackslash', () => {
+    const matches = completions(
+      [{ name: 'MyDocs', isFolder: true }],
+      'myd',
+      windowsPaths,
+    );
+
+    expect(completeTyped('~\\myd', matches, windowsPaths)).toBe('~\\MyDocs\\');
   });
 });

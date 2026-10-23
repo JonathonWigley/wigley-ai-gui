@@ -31,24 +31,27 @@ export function completionQuery(
   return { folder, prefix };
 }
 
-// The folder's entries that start with `prefix` (case-sensitive), dot names
-// only for a dot prefix; folders first, each part by name in code-unit order.
+// The folder's entries that start with `prefix` ignoring case, on every OS,
+// dot names only for a dot prefix; folders first, each part by name ignoring
+// case, names equal but for case in code-unit order.
 export function completions(
   entries: readonly { name: string; isFolder: boolean }[],
   prefix: string,
   paths: Paths,
 ): Completion[] {
   const showsHidden = prefix.startsWith('.');
+  const foldedPrefix = prefix.toLowerCase();
   return entries
     .filter(
       (entry) =>
-        entry.name.startsWith(prefix) &&
+        entry.name.toLowerCase().startsWith(foldedPrefix) &&
         (showsHidden || !entry.name.startsWith('.')),
     )
     .sort(
       (a, b) =>
         Number(b.isFolder) - Number(a.isFolder) ||
-        (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+        codeUnitOrder(a.name.toLowerCase(), b.name.toLowerCase()) ||
+        codeUnitOrder(a.name, b.name),
     )
     .map(({ name, isFolder }) => ({
       name,
@@ -57,8 +60,9 @@ export function completions(
     }));
 }
 
-// The typed text after Tab: one match completes whole, several extend to
-// their longest common prefix when it is longer than what was typed.
+// The typed text after Tab, the typed name replaced by the names' own case:
+// one match completes whole, several extend to the longest prefix they share
+// in exact case when it is longer than what was typed.
 export function completeTyped(
   typed: string,
   matches: readonly Completion[],
@@ -84,6 +88,10 @@ function typedFolderPart(typed: string, paths: Paths): string {
     typed.lastIndexOf(paths.separator),
   );
   return typed.slice(0, lastSeparator + 1);
+}
+
+function codeUnitOrder(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function commonPrefix(names: readonly string[]): string {
