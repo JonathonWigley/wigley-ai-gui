@@ -1,6 +1,6 @@
 # 06 — Settings self-test
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 02, 05
 Plan: [plan.md](plan.md)
@@ -59,3 +59,5 @@ Check that `<Leader>zh` is unbound in the default keymap before using it (`comma
 → nothing at plan time, re-verify); take another free key under `<Leader>z` if not.
 
 ## Proof
+
+b5bff28 · typecheck clean; worker ran `npm run selftest` → all passed, settings steps included; screenshots read against DESIGN.md · concerns: the core config-problem toast outlives its fix; a step failing before step 14 hangs the self-test (no result timeout, as forms and chat); two Forms commands share the label "pick a choice (again clears)".

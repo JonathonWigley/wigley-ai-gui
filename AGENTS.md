@@ -186,7 +186,7 @@ round), since main, not the page, decides.
   command, and main and the page both reject a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
   `<D-w>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
   too, in every vim mode, ahead of the editor. A plugin's own text box may keep typed keys from the page keys while
-  Tab, Enter, Escape and chords still reach its scope's binds (docs' `textBoxInput`). An editor key carries a scope as a page key does and runs only while
+  Tab, Enter, Escape and chords still reach its scope's binds (`textBoxInput`, `src/shared/page/text-box.ts`, which docs and settings share). An editor key carries a scope as a page key does and runs only while
   that scope is in force, so two plugins' editors may bind one vim key in different scopes. It fires in normal mode,
   or in insert mode with `mode: 'insert'` (one key the host can type unbound, today only `<CR>`, as in the chat
   picker's filter). Vim keeps one mapping per key sequence and mode for every editor, so a sequence bound in any
@@ -362,7 +362,9 @@ round), since main, not the page, decides.
   sessions over the fake agent harness, its steps covering the resume list, archive and slash completion. Docs'
   (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture (`selftest-fixture.ts`) that writes docs, an index
   and a stand-in `docs_index.py` into the temp home at start when the home holds none yet, and again at each script run,
-  so its steps never reach the user's docs or index. The self-test emulates page focus as a drive run does, so a
+  so its steps never reach the user's docs or index. Settings'
+  (`src/plugins/settings/main/selftest-script.ts`) drives the form over the temp home's empty config folder, its
+  steps editing `settings.json` and `keymap.json` through the form and, as outside changes, through `writeFile`. The self-test emulates page focus as a drive run does, so a
   focus-dependent check can be a self-test step.
 - A drive run (`npm run drive`) is how the agent checks a change in the running app: every change to what the app
   shows or how it reacts is driven end to end, and its captures read, before the work is done. It runs offscreen as

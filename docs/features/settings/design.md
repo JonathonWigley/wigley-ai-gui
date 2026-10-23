@@ -33,7 +33,7 @@ plan is written from them. A decision here stands unless the user changes it.
   `j`/`k` move the cursor and Enter opens the section in the content sheet. `Alt+l` / `Alt+h` move focus between the
   side bar and the form, as in Docs mode.
 - `/` filters the open section's rows: setting rows by label, dotted path and description, command rows by label,
-  qualified id and keys. Esc on the rows clears a kept filter; opening a section clears it too.
+  qualified id, keys and accelerators, and the Leader row by "leader" and its keys. Esc on the rows clears a kept filter; opening a section clears it too.
 
 ## Setting rows
 
@@ -47,8 +47,9 @@ plan is written from them. A decision here stands unless the user changes it.
   - number and string: a one-line text box; Enter commits, Esc reverts, and an empty box commits as unset
   - a closed choice (`transparency`), a boolean, and `theme`: the shared list picker. `theme` lists the built-in
     themes and the user's `themes/*.json` by name, as served at that moment
-  - an array, or an object inside one: a JSON document box (the document editor with the JSON language); `:w`
-    commits, `:q` reverts
+  - an array, or an object inside one: a JSON document box (the document editor with the JSON language); Enter on
+    the row focuses the editor and Esc closes the box; `:w`, `:wq` and `:x` commit, `:q` and `:q!` close without
+    committing
 - A value commits on Enter or a pick, never per keystroke. A value that fails the check stays in its box with the
   check's message under it.
 - A setting read only when something is created (window size, the claude command) says so in its description; the row
@@ -56,14 +57,17 @@ plan is written from them. A decision here stands unless the user changes it.
 
 ## Keymap section
 
-- The leader is a one-line field at the top.
+- The Leader row comes first ("The key every <Leader> bind starts with"): a one-line box, where an empty box or the
+  default leader leaves the leader unset.
 - One row per command, every command included so an unbound one can get a key, grouped by plugin under a section
   header (core first), each with its label. A row lists each bind in force as Kbd with its scope as a Tag, and `where`
   or `mode` as a further Tag when set. A bind the user added shows "Set"; a default the user removed shows struck
-  through with "Removed".
+  through with "Removed", and one a user bind on the same keys displaced shows "Replaced by <label>". A command with
+  no keys shows "Not bound".
 - A main command's row (`settings.show`, `window.summon`) lists its app menu, global or intercepted accelerators
   read-only; they are edited in the advanced box.
-- On a command row:
+- On a command row (Enter or `i` opens the add-bind box, as `a` does; on a main command's row they toast
+  "Accelerators are edited in the advanced box", as `a`, `d` and `r` do):
   - `a` adds a bind: a box takes vim notation and shows a live Kbd preview and, when a bind on the same keys and scope
     exists, "Replaces <label>". Enter then opens the list picker of scopes (`any` and every scope), preselecting the
     scope of the command's first default bind, else `any`. A bind added here carries no `where` or `mode`.
@@ -73,7 +77,7 @@ plan is written from them. A decision here stands unless the user changes it.
   - Adding a bind that another user bind already holds in that scope replaces that one in the user layer too.
 - An `Advanced` row at the bottom opens a JSON document box that edits `groups`, `remaps`, `app`, `intercept`, `global` and the
   accelerator `unbind` entries (`app`, `global`, `intercept`); the command rows own `binds`, `leader` and the `keys`
-  `unbind` entries. `:w` commits.
+  `unbind` entries. `:w`, `:wq` and `:x` commit.
 
 ## The userConfig service
 
@@ -81,12 +85,13 @@ plan is written from them. A decision here stands unless the user changes it.
   `src/main/config/user-config.ts` beside the ConfigStore, filled in by `main.ts`. Any plugin may use it; the
   `settings` plugin is its first caller.
 - It serves:
-  - the schema: core and plugin setting defaults, each leaf's declaration (label, description, kind, choices), the
+  - the schema: core and plugin setting defaults, each leaf's declaration (label, description, control, default), the
     plugin sections in order, every command and scope, the default binds as `KeyBind` entries by the layer they come
-    from (defaults, then each manifest's `keys`), and the default leader
-  - a read of both files: each file's user layer (null when the file is missing), its problem, and its revision, plus
+    from (defaults, then each manifest's `keys`), the default `app`, `global` and `intercept` accelerators, and the
+    default leader
+  - a read of both files: each file's user layer (null when the file is missing), its problem, and its text (null when missing), plus
     the theme names
-  - a write of each file's whole new user layer against the revision it was read at
+  - a write of each file's whole new user layer against the text it was read at (stale: `changedOnDisk`)
   - a change signal, each time the ConfigStore serves a new config
 - A write runs the same check the ConfigStore runs on that file — for `settings.json` the settings merge and the
   theme the layer names, for `keymap.json` the parse, the merge and the ambiguity check — and refuses a layer that
@@ -102,5 +107,5 @@ plan is written from them. A decision here stands unless the user changes it.
   stale: the box stays open with the user's text, under the message "<file> changed on disk; the form now shows
   it", over the redrawn rows, and a second commit writes over the change.
 - An edit or reset that changes nothing writes nothing.
-- A file that fails its check shows its problem in an error card at the top of its section, and the section refuses
+- A file that fails its check shows "<file> has a problem: …" in an error card at the top of its section, and the section refuses
   edits until the file is fixed, since a write would throw away the user's text.

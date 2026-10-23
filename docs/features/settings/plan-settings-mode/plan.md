@@ -183,10 +183,10 @@ the settings plugin imports only `src/contracts`, `src/shared`, its own folder a
 - [x] [Settings mode views](05-settings-views.md) — after 03, 04
 
 ### Wave 5
-- [ ] [Settings self-test](06-self-test.md) — after 02, 05
+- [x] [Settings self-test](06-self-test.md) — after 02, 05
 
 ### Wave 6
-- [ ] [Doc re-read](07-doc-re-read.md) — after 06
+- [x] [Doc re-read](07-doc-re-read.md) — after 06
 
 ### Wave 7
 - [ ] [Final verification](08-final-verification.md) — after 07
@@ -201,6 +201,8 @@ Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is thi
 - 02 · 890695e · proved (diff read, typecheck, lint) · concerns: configSchema built twice (store and userConfig); pluginSettingInfo over the built-ins verified only in a deleted throwaway test
 - 03 · 62370c9 · proved (diff read, typecheck, lint) · concerns: first app accelerator → plugin main command path, unexercised at runtime until 06
 - 05 · b7e76f9 · proved (diff read, typecheck, lint) · concerns: third isSameJson copy; box re-parented across redraws; read-race ordering; AGENTS.md text-box wording stale
+- 06 · b5bff28 · proved (diff read, typecheck, selftest by worker) · concerns: core config-problem toast lingers after the fix; selftest hangs if a step fails before 14; duplicate Forms command label
+- 07 · see commit "Settings docs true to the landed code" · proved (diff read, lint) · concerns: none
 ### Contract changes
 - keymap-rows.ts: as planned → adds `keymapLeader(schema, layer)` and `isSameKeys(a, b, leader)` · why: keymap-edits shares the leader rule and key compare · consumers: 05 · group 04
 - withAdvanced: as planned → also `"unbind" must be a list` · why: keys unbinds merge into it · consumers: 05 · group 04
@@ -229,5 +231,7 @@ Review base: bb7ccc2 (peer session on the tree, chat plan C: review range is thi
 - open/edit/addBind/removeBind pre-read; reset does not — the plan's "a row action with no box sends the latest read's text" — a reset over a stale read is refused changedOnDisk · group 05
 - The add-bind box stays open under the scope picker; Esc in the picker returns to the box; picker titles `Scope` and `Key to remove` — keeps typed keys on a refusal — none · group 05
 - Document box: Enter focuses the editor, Esc closes; `:w`, `:wq`, `:x` commit, `:q`, `:q!` close; a box closes when another mode shows — docs' filter pattern — box text lost on a mode switch · group 05
+- Spec steps waiting on two lines split into one step per line — row actions pre-read before a box opens, so batched keys could race it — extra steps only · group 06
+- Row counts asserted exactly: `filter "theme": 3 rows`, `filter "help": 2 rows` — the spec left them open — break if a label or description gains those words · group 06
 ### Review rounds
 ### Test gate

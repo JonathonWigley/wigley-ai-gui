@@ -1,6 +1,6 @@
 # 07 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 6 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -32,3 +32,5 @@ Fix the doc, not the code, unless the code contradicts a decision in `plan.md` �
 `wigley:writing-for-agents` on each fix.
 
 ## Proof
+
+Committed with this tick · every e02b5f0 claim checked; design.md (filter, JSON box keys, Leader row, command-row copy and actions, schema, read/write by text, broken card) and AGENTS.md (shared textBoxInput, settings self-test) fixed; lint passes · concerns: none.
