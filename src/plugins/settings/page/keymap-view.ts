@@ -1,5 +1,6 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { ViewScope } from '../../../contracts/keymap';
+import { capitalised } from '../../../shared/capitalised';
 import { element } from '../../../shared/page/dom';
 import { kbd } from '../../../shared/page/ui/kbd';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
@@ -52,11 +53,6 @@ function scopeTitle(ctx: RowContext, scope: ViewScope): string {
 
 function commandLabel(ctx: RowContext, command: CommandId): string {
   return ctx.schema.commands[command]?.label ?? command;
-}
-
-// `text` with its first letter capitalised, as a row's label shows it.
-function sentenceCase(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function leader(ctx: RowContext): string {
@@ -263,7 +259,7 @@ function commandRow(ctx: RowContext, row: CommandRow): SettingsRow {
     key: row.command.id,
     file: 'keymap',
     element: settingsRowElement({
-      label: sentenceCase(row.command.label),
+      label: capitalised(row.command.label),
       description: '',
       end,
       isSet: false,

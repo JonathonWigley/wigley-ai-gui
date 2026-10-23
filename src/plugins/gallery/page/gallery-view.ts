@@ -1,6 +1,7 @@
 import './gallery.css';
 import type { Platform } from '../../../contracts/platform';
 import type { UiState } from '../../../contracts/ui-state';
+import { capitalised } from '../../../shared/capitalised';
 import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { card, createCollapsibleCard } from '../../../shared/page/ui/card';
@@ -228,7 +229,7 @@ function tagSection(): HTMLElement {
   ];
   return section(
     'Tag',
-    tags.map(([text, tone]) => cell(tag(text, tone), sentenceCase(tone))),
+    tags.map(([text, tone]) => cell(tag(text, tone), capitalised(tone))),
   );
 }
 
@@ -243,7 +244,7 @@ function statusDotSection(): HTMLElement {
   ];
   return section(
     'StatusDot',
-    statuses.map((status) => cell(statusDot(status), sentenceCase(status))),
+    statuses.map((status) => cell(statusDot(status), capitalised(status))),
   );
 }
 
@@ -446,8 +447,4 @@ function sectionHeaderSection(platform: Platform): HTMLElement {
       true,
     ),
   ]);
-}
-
-function sentenceCase(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }

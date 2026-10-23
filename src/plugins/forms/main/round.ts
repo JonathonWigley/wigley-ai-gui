@@ -28,6 +28,7 @@ import type {
   PythonJsonValue,
 } from './kinds/item-format';
 import { RoundError } from './round-error';
+import { capitalised } from '../../../shared/capitalised';
 import { isJsonObject, type JsonObject } from '../../../shared/json';
 
 const ITEM_FIELDS = ITEM_KINDS.map((kind) => FORMATS[kind].argsKey);
@@ -51,10 +52,6 @@ const NEXT_ON_NO_ROUND =
 // a, b or c
 function eitherList(names: string[]): string {
   return `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`;
-}
-
-function capitalised(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function parseItems<Item>(format: ItemFormat<Item>, raw: unknown): Item[] {

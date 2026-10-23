@@ -9,6 +9,7 @@ import type {
 } from '../../../contracts/keymap';
 import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
+import { capitalised } from '../../../shared/capitalised';
 import { withLeader } from '../../../shared/key-hints';
 import {
   bindIdentities,
@@ -182,9 +183,7 @@ function acceleratorLines(
 }
 
 function groupTitle(plugin: string): string {
-  return plugin === 'core'
-    ? 'Core'
-    : plugin.charAt(0).toUpperCase() + plugin.slice(1);
+  return capitalised(plugin);
 }
 
 // Every command's row, grouped by plugin: `core` first, then each plugin in

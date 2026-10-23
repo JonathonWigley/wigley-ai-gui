@@ -4,6 +4,7 @@ import {
   type FindingCard,
   type FindingOrigin,
 } from '../../../contract';
+import { capitalised } from '../../../../../shared/capitalised';
 import {
   FINDING_ORIGIN_RULES,
   type OriginRules,
@@ -32,10 +33,6 @@ function cardGroups(): CardGroup[] {
     }
   }
   return [...groups.values()];
-}
-
-function capitalised(word: string): string {
-  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 // 'a', 'a or b', 'a, b or c'
