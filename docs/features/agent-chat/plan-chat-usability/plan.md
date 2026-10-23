@@ -1,0 +1,173 @@
+# Chat usability — plan
+
+Feature: agent chat, plan C · Implements: none · Ticket: none
+Target: main · Written: 2026-10-23
+
+REQUIRED SUB-SKILL: Use wigley:make to implement this plan
+
+## Goal
+
+The user runs Claude Code sessions from the Chat tab day to day with no terminal: signs a profile in from the app,
+types terminal-only commands (`/login`, `/logout`, `/status`) that the app runs itself, sees the whole slash
+completion list, picks a folder from every folder they already work in, and pastes or drops images into a message
+with previews before and after sending.
+
+## Architecture
+
+Systems touched:
+
+- **Harness seam** (`src/contracts/agent.ts`): messages carry images; new account calls (`accountStatus`, `logIn`,
+  `logOut`) and `listProjects`. Adapters: Claude (`src/main/claude-code/`) and the fake (`src/shared/fake-agent-harness.ts`).
+- **Core main services** (`src/contracts/plugin.ts`, `src/main/main.ts`): `MainServices.tempFolders`.
+- **Editor adapter** (`src/renderer/codemirror-vim/`): CodeMirror popups mount on the page body.
+- **Chat plugin** (`src/plugins/chat/`): main (sign-in, notices, merged folder list, image messages), page (app slash
+  command registry and its exports, the sign-in dialog and start-prompt step, attached images, the image viewer),
+  layouts (the `images()` kit part and the user entry's images), keys.
+
+No repository, submodule or package boundary is crossed; the relay contract with wigley-ai-marketplace is untouched.
+
+## Preconditions
+
+Each was run at plan time; `wigley:make` re-runs them before the first dispatch.
+
+- `claude --version` → `2.1.309 (Claude Code)`. The wire facts in `claude-stream.md` § Images, § Terminal-only
+  commands and § Auth were measured on this version.
+- `git merge-base --is-ancestor 3a0e6c2 HEAD && echo ancestor` → `ancestor` (the docs written ahead).
+- `command grep -n '"@codemirror/view"\|"@codemirror/autocomplete"' package.json` → both direct dependencies
+  (`@codemirror/view` `^6.43.15`, `@codemirror/autocomplete` `6.20.3`). No new package is added by this plan.
+- `command grep -n "cm-tooltip" src/renderer/codemirror-vim/editor-theme.ts` → the autocomplete popup is styled by
+  the editor theme (line 66 at plan time, re-verify).
+
+## Docs written ahead
+
+Commit `3a0e6c2`:
+
+- `docs/features/agent-chat/design.md` — Vocabulary (app slash command, sign-in, attached image), Flow, Agent
+  harness seam (images, accounts, project folders), Chat plugin (start prompt, sign-in dialog, app slash commands,
+  images, completion popup), Plans (plan C).
+- `docs/features/agent-chat/claude-stream.md` — § Images, § Terminal-only commands, § Auth.
+- `docs/keymap.md` — `<Leader>cx` in the `c` row.
+- `AGENTS.md` — the `chat/` line of the source tree.
+- `docs/features/followups.md` — the images follow-up narrowed to other file types.
+
+## Mandatory Reads
+
+- `AGENTS.md` (repo root) — architecture, layers, plugins, running and testing.
+- `DESIGN.md` — every view, CSS, primitive and key change (tasks 05, 06).
+- `docs/keymap.md` — every new bind (tasks 05, 06).
+- `docs/features/agent-chat/design.md` — the settled design; every task.
+- `docs/features/agent-chat/claude-stream.md` § User message, § Images, § Terminal-only commands, § Auth,
+  § Launch — task 01.
+- `.agents/skills/drive/SKILL.md` — task 08.
+- No `CLAUDE*.md`, `AGENTS.local.md` or `.claude/rules/*.md` exists in the repo at plan time
+  (`find . -name 'CLAUDE*.md' -o -name 'AGENTS*.md' -not -path './node_modules/*'` → `./AGENTS.md`; re-verify).
+
+## Design Overview
+
+```
+ Space k n ─► folder step: recentFolders() = recent-folders.json ∪ listProjects(each profile), newest first,
+ │            missing + temp folders dropped, "Choose folder…" last
+ ├─► profile step ─► accountStatus(profile) ─► signed out? ─► sign-in dialog ─► signed in ─► session step
+ └─► session step ─► start / resume (unchanged)
+
+ composer: paste / drop image ─► attachments (PNG/JPEG/GIF/WebP, base64 ≤ 5 MB) ─► thumbnail strip (× / <Leader>cx)
+ send ─► text matches a registered `/name`? ─► yes: command.run({ sessionId, profile, args }); box cleared,
+ │                                              images kept; output through channel `notice` → notice entry
+ └─► no: channel send(sessionId, { text, images }) ─► AgentProcess.send(message)
+          ─► Claude: user line with image blocks then the text block; user entry carries images
+ user entry ─► kit.images() thumbnails ─► click / Enter ─► image viewer (h / l / Esc)
+
+ /login ─► sign-in dialog.open(profile) ─► channel logIn(profile) ─► AgentHarness.logIn(profileDir, events)
+          ─► claude auth login (opens browser) ─► logInLink(url) ─► dialog shows link + code box (Cmd+Enter sends)
+          ─► process ends ─► accountStatus confirms ─► logInEnded ─► dialog closes, toast
+ /logout ─► channel logOut(profile) ─► claude auth logout ─► notice     /status ─► accountStatus ─► notice
+
+ every vim box: CodeMirror tooltips mount on document.body ─► slash popup no longer clipped by the composer
+```
+
+**Decisions** (interview rounds 1–2 and the design review):
+
+- Sign-in runs `claude auth login` through the adapter; the dialog shows the fallback link (Copy) and a box for a
+  pasted code; it closes itself on success with a toast; Esc cancels (round 1).
+- Sign-in, sign-out, account status and project listing are `AgentHarness` calls; chat draws them (round 1).
+- The folder step merges the app's recent folders with every folder each profile's harness has sessions in, drops
+  missing and temp folders, `Choose folder…` last (round 1).
+- Terminal-only commands are fixed as a class: app slash commands, a registry chat's page exports; chat registers
+  `/login`, `/logout`, `/status`; the start prompt checks the profile and offers sign-in (round 2).
+- Images: paste and drop; thumbnails before sending with remove; thumbnails in the sent entry opening a full-size
+  viewer; bytes kept in memory as base64 with the entry, resumed sessions showing theirs from the transcript;
+  `send({ text, images })` on the seam (rounds 1–2).
+- Design review, Decided: the account and project calls go on `AgentHarness` beside `listSessions` (locality: Claude's
+  CLI and transcript layout stay in its adapter); the Claude adapter reuses the session launch's environment for
+  `claude auth …` (one rule for the nested-session strip and `CLAUDE_CONFIG_DIR`); a sign-in's result is confirmed
+  with `accountStatus` because the login exit code is unmeasured; temp folders come from the composition root as
+  `MainServices.tempFolders` (the OS temp folder is ambient, so it is injected, and features carry no
+  `process.platform` check); the fake harness lists the folders it started sessions in, so the drive run and self-test
+  see the merged list without a fixture; one sign-in at a time, owned by chat main; app command output goes through a
+  main-kept notice entry so a reload keeps it; a second `addSlashCommand` of a registered name throws; the editor
+  adapter, not chat, fixes the popup (every box gains it); paste and drop are composer DOM listeners, leaving the
+  editor contract unchanged.
+
+**Out of scope**: files other than images in the composer (follow-up), `--console` and `--sso` sign-in, "Always
+allow" on permission cards, a read-only chat for terminal sessions, a key or command for sign-in outside `/login`
+and the start prompt.
+
+## File Structure
+
+**Modified**
+
+- `src/contracts/agent.ts` — `ChatImage`, `UserMessage`, the user entry's `images`, `AgentProcess.send(message)`,
+  `AccountStatus`, `LogInEvents`, `LogInProcess`, `ProjectFolder`, four `AgentHarness` calls.
+- `src/contracts/plugin.ts` — `MainServices.tempFolders`.
+- `src/main/main.ts` — fills `tempFolders`.
+- `src/main/claude-code/claude-code-harness.ts`, `claude-controls.ts`, `transcripts.ts`, `past-sessions.ts` (+ tests).
+- `src/shared/fake-agent-harness.ts` (+ test).
+- `src/renderer/codemirror-vim/codemirror-vim-host.ts` (or `prefix-completion.ts`, wherever the box extensions are
+  assembled).
+- `src/plugins/chat/contract.ts`, `manifest.ts`, `main/chat-sessions.ts`, `main/start.ts`, `main/selftest-script.ts`,
+  `page/start.ts`, `page/chat-commands.ts`, `page/chat-view.ts`, `page/chat-kit.ts`, `page/start-prompt.ts`,
+  `page/chat.css`, `layouts/layout.d.ts`, `layouts/default/layout.js`, `src/plugins/keymap.ts`.
+
+**New**
+
+- `src/main/claude-code/claude-auth.ts` (+ test) — the `claude auth` runs and the login line parser; keeps the
+  harness file to the process loop.
+- `src/main/temp-folders.ts` (+ test) — the temp folder list the composition root builds.
+- `src/plugins/chat/main/accounts.ts` (+ test) — the one running sign-in and the account calls by profile name.
+- `src/plugins/chat/main/folder-choices.ts` (+ test) — the merged folder list.
+- `src/plugins/chat/page/slash-commands.ts` (+ test) — the app slash command registry and matcher.
+- `src/plugins/chat/page/account-commands.ts` — `/login`, `/logout`, `/status` registrations.
+- `src/plugins/chat/page/sign-in-dialog.ts` — the sign-in dialog.
+- `src/plugins/chat/page/attachments.ts` (+ test) — attached images: accept rules, reading, the strip.
+- `src/plugins/chat/page/image-viewer.ts` — the full-size viewer.
+
+**Boundary rules**: only `src/main/claude-code/` names `claude auth` or reads transcripts; `src/contracts/` imports
+nothing; chat's page imports only `src/contracts`, `src/shared`, its own folder and its dependencies' `contract.ts`
+(`scripts/check-layers.mts` enforces it); `process.platform` appears only in `src/main/main.ts` for this plan.
+
+## Tasks
+
+> `wigley:make` ticks a box once its group is committed and proved, and sets `Status: done` in the
+> task document in the same change. The run is done when every box is ticked.
+
+### Wave 1
+- [ ] [Harness seam: images, accounts, project folders](01-harness-seam.md)
+- [ ] [Completion popup on the page body](02-completion-popup.md)
+- [ ] [Temp folders as a main service](03-temp-folders.md)
+
+### Wave 2
+- [ ] [Chat main: image messages, notices, sign-in, merged folders](04-chat-main.md) — after 01, 03
+
+### Wave 3
+- [ ] [App slash commands and sign-in in the page](05-slash-commands-sign-in.md) — after 04
+
+### Wave 4
+- [ ] [Attached images and the image viewer](06-images.md) — after 05
+
+### Wave 5
+- [ ] [Doc re-read](07-doc-re-read.md) — after 02, 06
+
+### Wave 6
+- [ ] [Final verification](08-final-verification.md) — after 07
+
+## Run log
