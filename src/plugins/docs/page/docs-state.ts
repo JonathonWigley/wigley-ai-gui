@@ -267,14 +267,16 @@ function renamedDocument(
     if (below === null) {
       return entry;
     }
-    const id = entry.id.startsWith(from)
-      ? to + entry.id.slice(from.length)
+    const path = paths.join(to, ...below);
+    // An id is its entry's path, with `#…` for an item inside the file.
+    const id = entry.id.startsWith(entry.path)
+      ? path + entry.id.slice(entry.path.length)
       : entry.id;
     movedIds.set(entry.id, id);
     return {
       ...entry,
       id,
-      path: paths.join(to, ...below),
+      path,
       title: entry.title === oldName ? paths.base(to) : entry.title,
     };
   });

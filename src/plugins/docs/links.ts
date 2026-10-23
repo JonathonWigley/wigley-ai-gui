@@ -17,10 +17,11 @@ const NAME_WITH_LINE = /^[^:]*[./][^:]*:\d+([#?]|$)/;
 const LINE_FRAGMENT = /^L(\d+)$/;
 const LINE_SUFFIX = /:(\d+)$/;
 
-// Where a link in the doc at `fromFile` leads. An empty href, or a
-// `file://` with no path, is unsupported; `#` alone is the doc's first line.
-// An absolute path is a file link, so a Windows drive path never reads as a
-// scheme.
+// Where a link in the doc at `fromFile` leads. An empty href is
+// unsupported; `#` alone is the doc's first line. An absolute path is a file
+// link, so a Windows drive path never reads as a scheme. A `file:` URL names
+// an absolute path, as `fileUrlPath` reads it, or is unsupported; it never
+// resolves against `fromFile`.
 export function resolveLink(
   href: string,
   fromFile: string,
@@ -34,12 +35,8 @@ export function resolveLink(
     return { type: 'external', url: href };
   }
   if (FILE_URL.test(href)) {
-    const urlPath = href.replace(FILE_URL, '');
-    // `file:///C:/x` carries a '/' before the drive.
-    const filePath = paths.isAbsolute(urlPath.slice(1))
-      ? urlPath.slice(1)
-      : urlPath;
-    return filePath === ''
+    const filePath = fileUrlPath(href, paths);
+    return filePath === null
       ? { type: 'unsupported', href }
       : fileTarget(filePath, fromFile, homeDir, paths);
   }
@@ -65,6 +62,23 @@ export function resolveLink(
         };
   }
   return fileTarget(href, fromFile, homeDir, paths);
+}
+
+// The absolute path a `file:` URL names (RFC 8089), still URI-encoded and
+// holding any `#…` or `?…`; null when it names none. `file://host/share/x`
+// is the UNC path `\\host\share\x`, which only a Windows `paths` accepts;
+// `localhost` reads as no host. With no host, `file:///C:/x` is `C:/x` and
+// `file:///x` is `/x`, which names no file on Windows.
+function fileUrlPath(href: string, paths: Paths): string | null {
+  const rest = href.replace(FILE_URL, '');
+  const slash = rest.indexOf('/');
+  const host = slash === -1 ? rest : rest.slice(0, slash);
+  const urlPath = slash === -1 ? '' : rest.slice(slash);
+  const candidates =
+    host === '' || host.toLowerCase() === 'localhost'
+      ? [urlPath.slice(1), urlPath]
+      : [`\\\\${host}${urlPath}`];
+  return candidates.find((path) => paths.isAbsolute(path)) ?? null;
 }
 
 // A path link: `#L<n>` or a trailing `:<n>` gives the line, any other `#…`

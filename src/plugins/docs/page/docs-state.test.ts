@@ -378,6 +378,45 @@ describe('applyChange', () => {
     ]);
   });
 
+  it('applyChange_WindowsRenamedFromOtherCase_PathAndIdMove', () => {
+    const launch = { claude: { state: 'launch' as const, reason: 'r' } };
+    const before = documentOf(
+      [
+        entry({ path: 'C:\\R\\Docs\\a.md' }),
+        entry({
+          id: 'C:\\R\\Docs\\a.md#L4',
+          path: 'C:\\R\\Docs\\a.md',
+          line: 4,
+        }),
+      ],
+      [
+        {
+          folder: 'C:\\R',
+          sessionId: null,
+          states: { 'C:\\R\\Docs\\a.md': launch },
+        },
+      ],
+    );
+
+    const after = applyChange(
+      before,
+      {
+        type: 'renamed',
+        from: 'c:\\r\\docs',
+        to: 'C:\\R\\Notes',
+      },
+      windowsPaths,
+    );
+
+    expect(
+      after.entries.map((each) => ({ id: each.id, path: each.path })),
+    ).toEqual([
+      { id: 'C:\\R\\Notes\\a.md', path: 'C:\\R\\Notes\\a.md' },
+      { id: 'C:\\R\\Notes\\a.md#L4', path: 'C:\\R\\Notes\\a.md' },
+    ]);
+    expect(after.contexts[0].states).toEqual({ 'C:\\R\\Notes\\a.md': launch });
+  });
+
   it('applyChange_Renamed_StatesFollowId', () => {
     const launch = { claude: { state: 'launch' as const, reason: 'r' } };
     const before = documentOf(

@@ -95,6 +95,22 @@ describe('resolveLink', () => {
     });
   });
 
+  it('resolve_FileUrlLocalhost_AsAbsolute', () => {
+    expect(resolve('file://localhost/r/c.md')).toEqual({
+      type: 'file',
+      path: '/r/c.md',
+      line: null,
+      fragment: null,
+    });
+  });
+
+  it('resolve_FileUrlWithHost_Unsupported', () => {
+    expect(resolve('file://server/share/c.md')).toEqual({
+      type: 'unsupported',
+      href: 'file://server/share/c.md',
+    });
+  });
+
   it('resolve_HostPortAndTel_Unsupported', () => {
     expect(resolve('localhost:3000')).toEqual({
       type: 'unsupported',
@@ -193,6 +209,32 @@ describe('resolveLink on Windows', () => {
       path: 'C:\\r\\y.md',
       line: null,
       fragment: null,
+    });
+    expect(resolveOnWindows('file://localhost/C:/r/y.md')).toEqual({
+      type: 'file',
+      path: 'C:\\r\\y.md',
+      line: null,
+      fragment: null,
+    });
+  });
+
+  it('resolve_WindowsFileUrlWithHost_UncPath', () => {
+    expect(resolveOnWindows('file://server/share/x.md#L2')).toEqual({
+      type: 'file',
+      path: '\\\\server\\share\\x.md',
+      line: 2,
+      fragment: null,
+    });
+  });
+
+  it('resolve_WindowsFileUrlNoDrive_Unsupported', () => {
+    expect(resolveOnWindows('file:///r/y.md')).toEqual({
+      type: 'unsupported',
+      href: 'file:///r/y.md',
+    });
+    expect(resolveOnWindows('file://server')).toEqual({
+      type: 'unsupported',
+      href: 'file://server',
     });
   });
 });
