@@ -1,5 +1,7 @@
 import type { Disposable } from '../../../contracts/disposable';
+import type { ScrollStep } from '../../../contracts/editor';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
+import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { galleryManifest } from '../manifest';
 import { createGalleryView } from './gallery-view';
 import { testShellLayout } from './test-shell-layout';
@@ -13,9 +15,9 @@ type GalleryApi = PageApi<
 
 // Adds Gallery mode, which sets the `gallery` scope when it shows. `t` there
 // switches the page's transparency override between reduced and full, which
-// lasts until the page loads again and writes no settings; `g g`, `G`,
-// `Ctrl+j` and `Ctrl+k` scroll the gallery's sheet, the last two a page at a
-// time, logging whether they reached the end or the top. `Space z s` swaps
+// lasts until the page loads again and writes no settings; `g g` and `G`
+// scroll the gallery's sheet to its top and end, and the line and half-page
+// scrolls step it, logging whether they reached the end or the top. `Space z s` swaps
 // the whole shell to the test layout and, pressed again, back; leaving the
 // gallery keeps the swap.
 export const galleryPagePart: PagePart<typeof galleryManifest> = {
@@ -44,6 +46,10 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
     let swappedLayout: Disposable | null = null;
     const scrollSheetTo = (top: number) =>
       view.sheet.scrollTo({ top, behavior: 'instant' });
+    const scrollSheet = (step: ScrollStep, direction: 1 | -1) => {
+      const scroll = scrollContent(view.sheet, step, direction);
+      log('gallery', scrollText('the gallery', step, direction, scroll));
+    };
 
     return {
       commands: {
@@ -76,21 +82,10 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
           scrollSheetTo(view.sheet.scrollHeight);
           log('gallery', 'scrolled to the end');
         },
-        pageDown() {
-          const { sheet } = view;
-          scrollSheetTo(sheet.scrollTop + sheet.clientHeight);
-          // scrollTop can be fractional while scrollHeight and clientHeight
-          // are rounded to whole pixels.
-          const isAtEnd =
-            sheet.scrollHeight - sheet.clientHeight - sheet.scrollTop < 1;
-          log('gallery', isAtEnd ? 'reached the end' : 'paged down');
-        },
-        pageUp() {
-          const { sheet } = view;
-          scrollSheetTo(sheet.scrollTop - sheet.clientHeight);
-          const isAtTop = sheet.scrollTop < 1;
-          log('gallery', isAtTop ? 'reached the top' : 'paged up');
-        },
+        lineDown: () => scrollSheet('line', 1),
+        lineUp: () => scrollSheet('line', -1),
+        halfPageDown: () => scrollSheet('halfPage', 1),
+        halfPageUp: () => scrollSheet('halfPage', -1),
       },
     };
   },

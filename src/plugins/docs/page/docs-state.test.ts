@@ -187,9 +187,17 @@ describe('treeRowAction', () => {
     });
   });
 
-  it('treeRowAction_ToggleLeaf_OpensIt', () => {
+  it('treeRowAction_ToggleLeaf_OpensItAndFocusesTheDoc', () => {
     expect(actionOf('c', 'toggle', rowsFor(['a', 'b']))).toEqual({
       type: 'openLeaf',
+      focusDoc: true,
+    });
+  });
+
+  it('treeRowAction_OpenLeaf_OpensItAndKeepsFocus', () => {
+    expect(actionOf('c', 'open', rowsFor(['a', 'b']))).toEqual({
+      type: 'openLeaf',
+      focusDoc: false,
     });
   });
 

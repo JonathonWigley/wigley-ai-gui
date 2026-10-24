@@ -28,7 +28,7 @@ export const docsManifest = definePlugin({
       runsIn: 'page',
     },
     treeToggle: {
-      label: 'open, expand or collapse',
+      label: 'open and focus, expand or collapse',
       group: 'tree',
       runsIn: 'page',
     },
@@ -48,6 +48,8 @@ export const docsManifest = definePlugin({
     focusTree: { label: 'focus the tree', group: 'focus', runsIn: 'page' },
     scrollDown: { label: 'scroll down', group: 'doc', runsIn: 'page' },
     scrollUp: { label: 'scroll up', group: 'doc', runsIn: 'page' },
+    lineDown: { label: 'scroll a line down', group: 'doc', runsIn: 'page' },
+    lineUp: { label: 'scroll a line up', group: 'doc', runsIn: 'page' },
     halfPageDown: {
       label: 'scroll half a page down',
       group: 'doc',
@@ -59,6 +61,7 @@ export const docsManifest = definePlugin({
       runsIn: 'page',
     },
     edit: { label: 'edit the doc', group: 'doc', runsIn: 'page' },
+    quitEditor: { label: 'close the editor', group: 'doc', runsIn: 'page' },
     conflictReload: {
       label: 'reload from disk',
       group: 'conflict',

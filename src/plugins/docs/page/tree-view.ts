@@ -25,8 +25,9 @@ import { textBoxInput } from '../../../shared/page/text-box';
 
 export interface TreeViewDeps {
   log: Log;
-  // What `l` or Enter does on a leaf: open its doc.
-  openLeaf(leaf: TreeLeaf): void;
+  // What `l` or Enter does on a leaf: open its doc, and for Enter
+  // (`focusDoc`) move focus to it.
+  openLeaf(leaf: TreeLeaf, focusDoc: boolean): void;
   // Pushes `docs.box` while the filter box is open.
   pushBoxScope(): PushedScope;
   // Runs once an accepted or cancelled filter box has closed and focus is
@@ -61,8 +62,8 @@ export interface TreeView {
   open(): void;
   // `h`: collapses an expanded group, else selects the parent.
   close(): void;
-  // Enter: opens a leaf, expands a collapsed group, collapses an expanded
-  // one; under a filter, steps into it.
+  // Enter: opens a leaf and focuses its doc, expands a collapsed group,
+  // collapses an expanded one; under a filter, steps into it.
   toggle(): void;
   // Selects the first or last visible row, logging its title; nothing on an
   // empty tree.
@@ -241,7 +242,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     const action = treeRowAction(tree, rows, row, state.filter, key);
     if (action.type === 'openLeaf' && node.type === 'entry') {
       draw();
-      deps.openLeaf(node);
+      deps.openLeaf(node, action.focusDoc);
     } else if (action.type === 'expand' || action.type === 'collapse') {
       const isExpanding = action.type === 'expand';
       setExpanded(node.id, isExpanding);

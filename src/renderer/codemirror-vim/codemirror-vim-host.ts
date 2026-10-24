@@ -15,9 +15,10 @@ import {
   type DocumentEditorEvents,
   type DocumentOptions,
   type EditorEvents,
-  type EditorHalfPageScroll,
+  type EditorScroll,
   type EditorOptions,
   type FocusOptions,
+  type ScrollStep,
   type TextEditor,
   UNBOUND_INSERT_KEYS,
   type UnboundInsertKey,
@@ -36,7 +37,7 @@ import {
 import { codeColours } from './code-colours';
 import { editorTheme } from './editor-theme';
 import { exBindName } from './ex-command-name';
-import { isScrolledToEnd } from '../../shared/half-page';
+import { isScrolledToEnd, scrollStepPx } from '../../shared/content-scroll';
 import { findLanguageByFile, loadLanguage } from './languages';
 import { prefixCompletion } from './prefix-completion';
 import {
@@ -242,46 +243,71 @@ function goToLine(view: EditorView, line: number) {
 }
 
 // Keys no user can type, mapped in visual mode to vim's own Ctrl+d and Ctrl+u
-// motion, so a remap of those keys never changes the half-page scroll.
-const HALF_PAGE_KEYS = {
-  down: '<WigleyHalfPageDown>',
-  up: '<WigleyHalfPageUp>',
+// motion and its `j` and `k` motion, so a remap of those keys never changes a
+// scroll.
+const SCROLL_MOTION_KEYS = {
+  halfPageDown: '<WigleyHalfPageDown>',
+  halfPageUp: '<WigleyHalfPageUp>',
+  lineDown: '<WigleyLineDown>',
+  lineUp: '<WigleyLineUp>',
 } as const;
 
 // Vim's mapCommand adds an entry on every call, so each key's earlier mapping,
 // when vim still holds one, is unmapped first.
-function mapHalfPageMotions() {
+function mapScrollMotions() {
   for (const forward of [true, false]) {
-    const keys = forward ? HALF_PAGE_KEYS.down : HALF_PAGE_KEYS.up;
-    Vim.unmap(keys, 'visual');
+    const halfPage = forward
+      ? SCROLL_MOTION_KEYS.halfPageDown
+      : SCROLL_MOTION_KEYS.halfPageUp;
+    const line = forward
+      ? SCROLL_MOTION_KEYS.lineDown
+      : SCROLL_MOTION_KEYS.lineUp;
+    Vim.unmap(halfPage, 'visual');
     Vim.mapCommand(
-      keys,
+      halfPage,
       'motion',
       'moveByScroll',
       { forward, explicitRepeat: true },
       { context: 'visual' },
     );
+    Vim.unmap(line, 'visual');
+    Vim.mapCommand(
+      line,
+      'motion',
+      'moveByLines',
+      { forward, linewise: true },
+      { context: 'visual' },
+    );
   }
 }
 
-// Scrolls the editor by half its visible height in `direction`. Visual mode
+// Scrolls the editor by `step` in `direction`. A half page in visual mode
 // runs vim's own half-page motion, which moves the cursor with the scroll;
-// any other mode keeps the cursor where it is unless the scroll leaves it out
-// of sight.
-function scrollHalfPage(
+// every other scroll keeps the cursor where it is unless the scroll leaves it
+// out of sight, as vim's Ctrl+e and Ctrl+y do.
+function scrollEditor(
   view: EditorView,
   cm: VimEditor,
+  step: ScrollStep,
   direction: 1 | -1,
-): EditorHalfPageScroll {
+): EditorScroll {
   const scroller = view.scrollDOM;
   const scrollTop = scroller.scrollTop;
   const { head } = view.state.selection.main;
-  if (cm.state.vim.visualMode) {
-    const key = direction === 1 ? HALF_PAGE_KEYS.down : HALF_PAGE_KEYS.up;
+  const isVisual = cm.state.vim.visualMode === true;
+  if (isVisual && step === 'halfPage') {
+    const key =
+      direction === 1
+        ? SCROLL_MOTION_KEYS.halfPageDown
+        : SCROLL_MOTION_KEYS.halfPageUp;
     Vim.handleKey(cm, key, 'user');
   } else {
-    scroller.scrollTop += (direction * scroller.clientHeight) / 2;
-    bringCursorIntoSight(view);
+    scroller.scrollTop += direction * scrollStepPx(scroller, step);
+    if (isVisual) {
+      bringVisualHeadIntoSight(view, cm);
+    } else {
+      bringCursorIntoSight(view);
+    }
   }
   return {
     moved: scroller.scrollTop !== scrollTop,
@@ -290,13 +316,47 @@ function scrollHalfPage(
   };
 }
 
+// The top and bottom of the editor's visible part, in line block heights.
+function sightOf(view: EditorView): { top: number; bottom: number } {
+  const scroller = view.scrollDOM;
+  const top = scroller.scrollTop - view.documentPadding.top;
+  return { top, bottom: top + scroller.clientHeight };
+}
+
+// Moves visual mode's cursor, when its line is wholly out of sight, by whole
+// lines through vim's own motion to the first line wholly in sight when it is
+// above, or the last when below, so the selection grows or shrinks with it.
+function bringVisualHeadIntoSight(view: EditorView, cm: VimEditor) {
+  const { top, bottom } = sightOf(view);
+  const { doc } = view.state;
+  const headLine = (cm.state.vim.sel as { head: { line: number } }).head.line;
+  const headBlock = view.lineBlockAt(doc.line(headLine + 1).from);
+  const isAboveSight = headBlock.bottom <= top;
+  const isBelowSight = headBlock.top >= bottom;
+  if (!isAboveSight && !isBelowSight) {
+    return;
+  }
+  const target = isAboveSight
+    ? firstWholeLineFrom(view, top)
+    : lastWholeLineTo(view, bottom);
+  const lines = Math.abs(doc.lineAt(target).number - 1 - headLine);
+  if (lines === 0) {
+    return;
+  }
+  for (const digit of String(lines)) {
+    Vim.handleKey(cm, digit, 'user');
+  }
+  const key = isAboveSight
+    ? SCROLL_MOTION_KEYS.lineDown
+    : SCROLL_MOTION_KEYS.lineUp;
+  Vim.handleKey(cm, key, 'user');
+}
+
 // Moves a cursor wholly out of sight to the start of the first line wholly in
 // sight when it is above, or the last when below; a non-empty selection keeps
 // its anchor.
 function bringCursorIntoSight(view: EditorView) {
-  const scroller = view.scrollDOM;
-  const top = scroller.scrollTop - view.documentPadding.top;
-  const bottom = top + scroller.clientHeight;
+  const { top, bottom } = sightOf(view);
   const selection = view.state.selection.main;
   const headLine = view.lineBlockAt(selection.head);
   const isAboveSight = headLine.bottom <= top;
@@ -623,7 +683,7 @@ function heldMappings(
 // Vim keymaps are global to the engine; the keymap is applied through one
 // hosted editor, since the vimrc lines need an editor instance: the first one
 // created, or the first after `setKeymap` ran with none hosted. Each apply maps
-// the half-page motions again, since `:mapclear` drops them with every map.
+// the scroll motions again, since `:mapclear` drops them with every map.
 export const createCodeMirrorVimHost: CreateEditorHost = (
   initialKeymap,
   run,
@@ -640,7 +700,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
   defineBindCommands(groups, hosted, run);
 
   const applyKeymap = (cm: VimEditor) => {
-    mapHalfPageMotions();
+    mapScrollMotions();
     const unmapsLeader = !unmappedLeaders.has(keymap.leader);
     for (const line of vimrcLines(keymap, groups, unmapsLeader)) {
       Vim.handleEx(cm, line);
@@ -732,8 +792,8 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
           ...shared,
           setText: (text) => replaceTextKeepingLine(view, text),
           goToLine: (line) => goToLine(view, line),
-          scrollHalfPage: (direction) =>
-            scrollHalfPage(view, vimEditorOf(view), direction),
+          scrollBy: (step, direction) =>
+            scrollEditor(view, vimEditorOf(view), step, direction),
         }),
         (event) => raiseDocumentEx(events, event),
       );

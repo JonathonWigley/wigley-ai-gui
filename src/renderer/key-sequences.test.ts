@@ -246,6 +246,20 @@ describe('createChordMatcher', () => {
     expect(chords.match(press('KeyO', {}), 'forms')).toBeUndefined();
   });
 
+  it('tells a Ctrl+Shift letter chord from the Ctrl one on its key', () => {
+    const chords = createChordMatcher([
+      { keys: ['<C-j>'], scope: 'forms', command: 'test.lineDown' },
+      { keys: ['<C-S-j>'], scope: 'forms', command: 'test.halfPageDown' },
+    ]);
+    expect(
+      chords.match(press('KeyJ', { ctrlKey: true }), 'forms')?.command,
+    ).toBe('test.lineDown');
+    expect(
+      chords.match(press('KeyJ', { ctrlKey: true, shiftKey: true }), 'forms')
+        ?.command,
+    ).toBe('test.halfPageDown');
+  });
+
   it('matches a digit chord on its top-row code', () => {
     const chords = createChordMatcher([
       { keys: ['<C-1>'], scope: 'forms', command: 'test.first' },

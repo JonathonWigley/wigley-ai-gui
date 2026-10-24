@@ -202,13 +202,22 @@ const TRANSCRIPT_SCROLL_STEPS: SelfTestStep[] = [
     why: 'Leaving the box resizes the sheet, and the transcript stays at the bottom, following.',
   },
   {
-    keys: ['<C-k>'],
+    keys: ['<C-S-k>'],
     expect: '[chat] scrolled the transcript up half a page; not following',
+  },
+  {
+    keys: ['<C-S-j>'],
+    expect:
+      '[chat] scrolled the transcript down half a page to the bottom; following the latest entry',
+  },
+  {
+    keys: ['<C-k>'],
+    expect: '[chat] scrolled the transcript up a line; not following',
   },
   {
     keys: ['<C-j>'],
     expect:
-      '[chat] scrolled the transcript down half a page to the bottom; following the latest entry',
+      '[chat] scrolled the transcript down a line to the bottom; following the latest entry',
   },
 ];
 
@@ -392,7 +401,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'transcript scroll',
-    why: 'A thirty-paragraph message makes the transcript taller than the sheet; scrolling half a page up off the bottom stops following, and back onto the bottom follows again.',
+    why: 'A thirty-paragraph message makes the transcript taller than the sheet; scrolling half a page or a line up off the bottom stops following, and back onto the bottom follows again.',
     steps: TRANSCRIPT_SCROLL_STEPS,
   },
   {

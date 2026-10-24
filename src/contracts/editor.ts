@@ -79,24 +79,32 @@ export interface DocumentEditor extends TextEditor {
   // Puts the cursor at the start of the 1-based `line`, clamped to the text,
   // and scrolls it to the top.
   goToLine(line: number): void;
-  // Scrolls by half the visible height, down for 1 and up for -1, keeping
-  // the vim mode. In visual mode the cursor moves half a page with the
-  // scroll, as vim's Ctrl+d and Ctrl+u do, so the selection grows or
-  // shrinks. Otherwise a cursor the scroll leaves out of sight moves to the
-  // start of the first line wholly in sight when it is above, or the last
-  // when it is below, a non-empty selection keeping its anchor.
-  scrollHalfPage(direction: 1 | -1): EditorHalfPageScroll;
+  // Scrolls by `step`, down for 1 and up for -1, keeping the vim mode.
+  // - `halfPage`: half the visible height. In visual mode the cursor moves
+  //   half a page with the scroll, as vim's Ctrl+d and Ctrl+u do, so the
+  //   selection grows or shrinks.
+  // - `line`: the app's line step, as vim's Ctrl+e and Ctrl+y scroll.
+  // A cursor the scroll leaves out of sight (in any mode for `line`, outside
+  // visual mode for `halfPage`) moves to the first line wholly in sight when
+  // it is above, or the last when it is below. In visual mode the selection
+  // grows or shrinks with it; otherwise the cursor lands at the line's start,
+  // a non-empty selection keeping its anchor.
+  scrollBy(step: ScrollStep, direction: 1 | -1): EditorScroll;
 }
 
-// What a half-page scroll did: `moved` when the view scrolled at all, and
-// `atEnd` when it rests at the end it scrolled toward, the top for up and the
-// bottom for down.
-export interface HalfPageScroll {
+// How far a scroll key moves content: one line of body text, or half the
+// visible height.
+export type ScrollStep = 'line' | 'halfPage';
+
+// What a scroll did: `moved` when the view scrolled at all, and `atEnd` when
+// it rests at the end it scrolled toward, the top for up and the bottom for
+// down.
+export interface ContentScroll {
   moved: boolean;
   atEnd: boolean;
 }
 
-export interface EditorHalfPageScroll extends HalfPageScroll {
+export interface EditorScroll extends ContentScroll {
   cursorMoved: boolean;
 }
 

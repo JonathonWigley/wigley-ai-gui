@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
+  ContentScroll,
   FocusOptions,
-  HalfPageScroll,
+  ScrollStep,
   TextEditor,
 } from '../../../contracts/editor';
 import type { PageCommandContext, ToastTone } from '../../../contracts/plugin';
@@ -75,9 +76,10 @@ function setup(
   const layoutCalls: unknown[][] = [];
   let layoutFailure: Error | null = null;
   let finishFailure: Error | null = null;
-  // Each direction the form was scrolled, and what every scroll returns.
-  const scrollDirections: (1 | -1)[] = [];
-  let scrollResult: HalfPageScroll | null = { moved: true, atEnd: false };
+  // Each step and direction the form was scrolled, and what every scroll
+  // returns.
+  const scrolls: [ScrollStep, 1 | -1][] = [];
+  let scrollResult: ContentScroll | null = { moved: true, atEnd: false };
   const invokeLayout = (...call: unknown[]) => {
     layoutCalls.push(call);
     return layoutFailure === null
@@ -120,8 +122,8 @@ function setup(
       copyLayout: () => invokeLayout('copyLayout'),
       openPreview: () => invokeLayout('openPreview'),
     },
-    scrollForm: (direction) => {
-      scrollDirections.push(direction);
+    scrollForm: (step, direction) => {
+      scrolls.push([step, direction]);
       return scrollResult;
     },
     toast,
@@ -159,9 +161,9 @@ function setup(
     failLayouts: (error: Error) => {
       layoutFailure = error;
     },
-    scrollDirections,
+    scrolls,
     // Makes every later form scroll return `result`.
-    setScroll: (result: HalfPageScroll | null) => {
+    setScroll: (result: ContentScroll | null) => {
       scrollResult = result;
     },
     // Makes every later finish reject with `error`.
@@ -496,22 +498,42 @@ describe('formsCommandHandlers', () => {
   });
 
   it('scrolls the form half a page down', () => {
-    const { run, logs, scrollDirections, setScroll } = setup();
+    const { run, logs, scrolls, setScroll } = setup();
     setScroll({ moved: true, atEnd: false });
 
     run('halfPageDown');
 
-    expect(scrollDirections).toEqual([1]);
+    expect(scrolls).toEqual([['halfPage', 1]]);
     expect(logs).toEqual(['scrolled the form down half a page']);
   });
 
+  it('scrolls the form a line down', () => {
+    const { run, logs, scrolls, setScroll } = setup();
+    setScroll({ moved: true, atEnd: false });
+
+    run('lineDown');
+
+    expect(scrolls).toEqual([['line', 1]]);
+    expect(logs).toEqual(['scrolled the form down a line']);
+  });
+
+  it('logs the top when a line up reaches it', () => {
+    const { run, logs, scrolls, setScroll } = setup();
+    setScroll({ moved: true, atEnd: true });
+
+    run('lineUp');
+
+    expect(scrolls).toEqual([['line', -1]]);
+    expect(logs).toEqual(['scrolled the form up a line to the top']);
+  });
+
   it('logs the top when scrolling up reaches it', () => {
-    const { run, logs, scrollDirections, setScroll } = setup();
+    const { run, logs, scrolls, setScroll } = setup();
     setScroll({ moved: true, atEnd: true });
 
     run('halfPageUp');
 
-    expect(scrollDirections).toEqual([-1]);
+    expect(scrolls).toEqual([['halfPage', -1]]);
     expect(logs).toEqual(['scrolled the form up half a page to the top']);
   });
 
@@ -538,6 +560,7 @@ describe('formsCommandHandlers', () => {
     const before = store.get();
 
     run('halfPageDown', { editor: editorOf(notes1) });
+    run('lineDown', { editor: editorOf(notes1) });
 
     expect(focused).toEqual([]);
     expect(leaves()).toBe(0);

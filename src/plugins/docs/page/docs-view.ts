@@ -58,9 +58,12 @@ export interface DocsViewCommands {
   focusTree(): void;
   scrollDown(): void;
   scrollUp(): void;
+  lineDown(): void;
+  lineUp(): void;
   halfPageDown(): void;
   halfPageUp(): void;
   edit(): void;
+  quitEditor(): void;
   conflictReload(): void;
   conflictOverwrite(): void;
   conflictCancel(): void;
@@ -315,14 +318,18 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   const tree = createTreeView({
     log,
-    openLeaf: (leaf: TreeLeaf) => {
+    openLeaf: (leaf: TreeLeaf, focusesDoc: boolean) => {
       const entry = entriesById.get(leaf.entryId);
       if (entry !== undefined) {
         void doc
           .open(targetFor(entry.path, entry, entry.line, null))
           .then((opened) => {
-            if (opened) {
-              deps.leafOpened();
+            if (!opened) {
+              return;
+            }
+            deps.leafOpened();
+            if (focusesDoc) {
+              focusDocAndLog();
             }
           });
       }
@@ -401,6 +408,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     focused = 'doc';
     doc.focus();
     applyScope();
+  };
+
+  const focusDocAndLog = () => {
+    focusDoc();
+    log('docs', 'doc focused');
   };
 
   const focusTreePane = () => {
@@ -661,10 +673,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     filter: () => tree.openFilter(),
     rescan: () => view.rescan(),
     pickContext,
-    focusDoc: () => {
-      focusDoc();
-      log('docs', 'doc focused');
-    },
+    focusDoc: focusDocAndLog,
     focusTree: () => {
       deps.revealTree();
       focusTreePane();
@@ -672,9 +681,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     scrollDown: () => doc.scroll(1),
     scrollUp: () => doc.scroll(-1),
-    halfPageDown: () => doc.scrollHalfPage(1),
-    halfPageUp: () => doc.scrollHalfPage(-1),
+    lineDown: () => doc.scrollBy('line', 1),
+    lineUp: () => doc.scrollBy('line', -1),
+    halfPageDown: () => doc.scrollBy('halfPage', 1),
+    halfPageUp: () => doc.scrollBy('halfPage', -1),
     edit: () => doc.edit(),
+    quitEditor: () => doc.quitEditor(),
     conflictReload: () => doc.conflictReload(),
     conflictOverwrite: () => doc.conflictOverwrite(),
     conflictCancel: () => doc.conflictCancel(),

@@ -135,14 +135,14 @@ export function parentId(
 export type TreeRowKey = 'open' | 'close' | 'toggle';
 
 export type TreeRowAction =
-  | { type: 'openLeaf' }
+  | { type: 'openLeaf'; focusDoc: boolean }
   | { type: 'expand' }
   | { type: 'collapse' }
   | { type: 'select'; id: string }
   | { type: 'none' };
 
 // What `key` does on `row`, one of the visible `rows`. A leaf opens on open
-// or toggle. Open expands a collapsed group and steps into an expanded one's
+// or toggle, and toggle focuses the doc it opens. Open expands a collapsed group and steps into an expanded one's
 // first shown child, the row after it. Close collapses an expanded group,
 // else selects the row's parent. Toggle expands a collapsed group and
 // collapses an expanded one. A filter shows every group expanded, so it
@@ -165,7 +165,7 @@ export function treeRowAction(
     return parent === null ? { type: 'none' } : { type: 'select', id: parent };
   }
   if (node.type === 'entry') {
-    return { type: 'openLeaf' };
+    return { type: 'openLeaf', focusDoc: key === 'toggle' };
   }
   if (!row.isExpanded) {
     return { type: 'expand' };

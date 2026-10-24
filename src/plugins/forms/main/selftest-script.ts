@@ -108,9 +108,12 @@ const GALLERY_STEPS: SelfTestStep[] = [
     screenshot: 'gallery-full-0',
   },
   {
-    keys: ['<C-j>'],
-    expect: '[gallery] paged down',
-    repeat: { until: '[gallery] reached the end', max: 12 },
+    keys: ['<C-S-j>'],
+    expect: '[gallery] scrolled the gallery down half a page',
+    repeat: {
+      until: '[gallery] scrolled the gallery down half a page to the bottom',
+      max: 24,
+    },
     screenshot: 'gallery-full',
   },
   { keys: ['G'], expect: '[gallery] scrolled to the end' },
@@ -124,14 +127,25 @@ const GALLERY_STEPS: SelfTestStep[] = [
     screenshot: 'gallery-reduced-0',
   },
   {
-    keys: ['<C-j>'],
-    expect: '[gallery] paged down',
-    repeat: { until: '[gallery] reached the end', max: 12 },
+    keys: ['<C-S-j>'],
+    expect: '[gallery] scrolled the gallery down half a page',
+    repeat: {
+      until: '[gallery] scrolled the gallery down half a page to the bottom',
+      max: 24,
+    },
     screenshot: 'gallery-reduced',
   },
-  { keys: ['<C-k>'], expect: '[gallery] paged up' },
+  {
+    keys: ['<C-S-k>'],
+    expect: '[gallery] scrolled the gallery up half a page',
+  },
   { keys: ['g', 'g'], expect: '[gallery] scrolled to the top' },
-  { keys: ['<C-k>'], expect: '[gallery] reached the top' },
+  { keys: ['<C-S-k>'], expect: '[gallery] the gallery did not scroll up' },
+  { keys: ['<C-j>'], expect: '[gallery] scrolled the gallery down a line' },
+  {
+    keys: ['<C-k>'],
+    expect: '[gallery] scrolled the gallery up a line to the top',
+  },
   {
     keys: [' ', 'k', 's'],
     expect: '[page] showed Sessions mode',
@@ -270,32 +284,42 @@ const QUESTION_BOXES_STEPS: SelfTestStep[] = [
     why: 'w deletes nothing, since leaving the box dropped the pending d.',
   },
   {
-    keys: ['<C-j>'],
+    keys: ['<C-S-j>'],
     expect: '[forms] scrolled the form down half a page',
     repeat: {
       until: '[forms] scrolled the form down half a page to the bottom',
       max: 8,
     },
-    why: "Ctrl+j scrolls the form's main column down until it reaches the bottom, since question 1's card overflows the column.",
+    why: "Ctrl+Shift+j scrolls the form's main column down until it reaches the bottom, since question 1's card overflows the column.",
   },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   {
-    keys: ['<C-k>'],
+    keys: ['<C-S-k>'],
     expect: '[forms] scrolled the form up half a page',
     repeat: {
       until: '[forms] scrolled the form up half a page to the top',
       max: 8,
     },
-    why: "Ctrl+k scrolls the form up to the top from inside a box, in INSERT; focusing the notes box from the bottom leaves the column off the top, since the box sits far below the card's top.",
+    why: "Ctrl+Shift+k scrolls the form up to the top from inside a box, in INSERT; focusing the notes box from the bottom leaves the column off the top, since the box sits far below the card's top.",
   },
   {
-    keys: ['<C-j>'],
+    keys: ['<C-S-j>'],
     expect: '[forms] scrolled the form down half a page',
     repeat: {
       until: '[forms] scrolled the form down half a page to the bottom',
       max: 8,
     },
-    why: 'Ctrl+j scrolls the form down to the bottom from inside the box, the column starting at the top.',
+    why: 'Ctrl+Shift+j scrolls the form down to the bottom from inside the box, the column starting at the top.',
+  },
+  {
+    keys: ['<C-k>'],
+    expect: '[forms] scrolled the form up a line',
+    why: 'Ctrl+k scrolls the form up a line from inside the box, off the bottom.',
+  },
+  {
+    keys: ['<C-j>'],
+    expect: '[forms] scrolled the form down a line to the bottom',
+    why: 'Ctrl+j scrolls the form back down a line from inside the box, onto the bottom.',
   },
   {
     keys: ['Escape', 'Escape'],
@@ -303,13 +327,22 @@ const QUESTION_BOXES_STEPS: SelfTestStep[] = [
     why: 'Esc leaving the box shows the box kept focus through the scrolls.',
   },
   {
-    keys: ['<C-k>'],
+    keys: ['<C-S-k>'],
     expect: '[forms] scrolled the form up half a page',
     repeat: {
       until: '[forms] scrolled the form up half a page to the top',
       max: 8,
     },
-    why: "Ctrl+k scrolls the form's main column up until it reaches the top.",
+    why: "Ctrl+Shift+k scrolls the form's main column up until it reaches the top.",
+  },
+  {
+    keys: ['<C-j>'],
+    expect: '[forms] scrolled the form down a line',
+    why: "Ctrl+j scrolls the form's main column down a line from the page.",
+  },
+  {
+    keys: ['<C-k>'],
+    expect: '[forms] scrolled the form up a line to the top',
   },
 ];
 
@@ -517,6 +550,11 @@ const REVIEW_STEPS: SelfTestStep[] = [
     keys: ['<C-k>'],
     expect: '[forms] the form did not scroll up',
     why: "Ctrl+k reaches the review's round: the layout cycle's last reload scrolled the main column to the top, and opening the review puts its cursor on the first row, finding 1's, which sits in view there, so the column stays at the top.",
+  },
+  {
+    keys: ['<C-S-k>'],
+    expect: '[forms] the form did not scroll up',
+    why: "Ctrl+Shift+k reaches the review's round too.",
   },
   {
     keys: [' ', '?'],
@@ -810,7 +848,7 @@ export function formsSelfTestScript(
     groups: [
       {
         name: 'gallery',
-        why: "The layout preview's sample round shows every card kind in Gallery mode, paged to the end and back under full and reduced transparency, and in Sessions mode under both; the shell swaps to the gallery's test layout and back.",
+        why: "The layout preview's sample round shows every card kind in Gallery mode, scrolled by half pages to the end and back, and by a line, under full and reduced transparency, and in Sessions mode under both; the shell swaps to the gallery's test layout and back.",
         steps: GALLERY_STEPS,
       },
       {
@@ -820,7 +858,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'question boxes',
-        why: "Question 1's notes and reason boxes enter INSERT at the end and hand focus between them, and which-key inside a box closes without leaving it; pending keys are dropped when the box is left. Ctrl+j and Ctrl+k scroll the form's main column to its bottom and top, from the page and from inside a box.",
+        why: "Question 1's notes and reason boxes enter INSERT at the end and hand focus between them, and which-key inside a box closes without leaving it; pending keys are dropped when the box is left. Ctrl+Shift+j and Ctrl+Shift+k scroll the form's main column to its bottom and top by half pages, and Ctrl+j and Ctrl+k by a line, from the page and from inside a box.",
         steps: QUESTION_BOXES_STEPS,
       },
       {

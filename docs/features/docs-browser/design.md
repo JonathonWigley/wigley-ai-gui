@@ -106,7 +106,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   change it. Each key shows as a Kbd and follows a rebind. No line shows until a read returns an index, or after one
   that returns none; the read's message shows instead.
 - **Viewing and editing**: a doc opens rendered; `i` swaps the pane to the vim document editor at the line shown;
-  `:w` saves, `:q` returns to the rendered view (refused with unsaved edits; `:q!` drops them), `:wq` both. YAML
+  `:w` saves, `:q` or Esc in normal mode returns to the rendered view (refused with unsaved edits; `:q!` drops
+  them), `:wq` both. YAML
   frontmatter shows as a field table above the rendered body. The editor highlights markdown, JSON, TOML and YAML by
   file extension.
 - **Load states**: a Claude and a Codex chip on each doc (state; reason on hover), judged for a folder the user picks
@@ -138,11 +139,13 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   `#heading` link scrolls. Links are real anchors: Tab moves between them, Enter follows. Forms keep literal links.
   Images show their alt text.
 - **Keys** (scopes `docs.tree`, `docs.doc`, `docs.conflict`, `docs.picker`, `docs.box`, `docs.confirm`): tree `j`/`k`
-  move; `l` opens a doc, expands a collapsed group or steps into an expanded one; Enter opens a doc or toggles a
-  group, expanding or collapsing it as `l` and `h` do, and under a filter, which shows every group expanded, steps
+  move; `l` opens a doc, expands a collapsed group or steps into an expanded one; Enter opens a doc and focuses
+  it, or toggles a group, expanding or collapsing it as `l` and `h` do, and under a filter, which shows every group expanded, steps
   into a group as `l` does; `h` collapses a group or goes to the parent; `/` filter, `a`, `A`, `r`, `d`, `R` rescan,
-  `c` pick the load-state folder; `Alt+l` / `Alt+h` move focus between tree and doc.
-  Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll the doc half a page, the editor too while editing, `i` edit.
+  `c` pick the load-state folder; `Alt+l` / `Alt+h` move focus between tree and doc; `Ctrl+j`/`Ctrl+k` and
+  `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll the doc beside the tree.
+  Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll the doc a line and `Ctrl+Shift+j`/`Ctrl+Shift+k` half a page, the
+  editor too while editing, `i` edit; Esc in the editor's normal mode closes it as `:q` does.
   Conflict prompt `r` reload, `o` overwrite, Esc keep editing. Picker `j`/`k` move, Enter or `l` choose, Esc cancel. Text box Tab
   completes the path, Enter accepts, Esc cancels. Trash confirm `y` yes, `n` or Esc keep.
 - **Packages** (the user's yes): `@codemirror/lang-markdown`, `@codemirror/language-data`; `@lezer/highlight`,

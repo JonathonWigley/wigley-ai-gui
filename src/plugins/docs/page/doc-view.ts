@@ -2,6 +2,7 @@ import type {
   DocumentEditor,
   DocumentEditorEvents,
   EditorHost,
+  ScrollStep,
 } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
@@ -11,9 +12,13 @@ import type {
   PushedScope,
   ToastTone,
 } from '../../../contracts/plugin';
+import {
+  LINE_STEP_PX,
+  scrollContent,
+  scrollText,
+} from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import { element, markdownElement } from '../../../shared/page/dom';
-import { halfPageText, scrollHalfPage } from '../../../shared/half-page';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { type TagTone, tag } from '../../../shared/page/ui/tag';
 import type { DocsChannel } from '../contract';
@@ -29,7 +34,6 @@ import {
 
 const BANNER_TEXT = 'Changed on disk since you opened it';
 const EMPTY_TEXT = 'Open a doc from the tree';
-const SCROLL_STEP_PX = 48;
 
 // The file a detail view's `i` edits, read, and the 1-based line it opens at.
 export interface DetailFile {
@@ -104,10 +108,14 @@ export interface DocView {
   diskChanged(path: string): void;
   // Opens the editor at `line`, else at the top visible line.
   edit(line?: number): void;
+  // Closes the open editor as `:q` does, refusing while it holds unsaved
+  // edits; nothing while no editor is open.
+  quitEditor(): void;
+  // Scrolls the pane a line, logging nothing.
   scroll(by: 1 | -1): void;
-  // Scrolls the open editor by half its visible height, else the pane by half
-  // its own, and logs how far it moved and whether the editor's cursor moved.
-  scrollHalfPage(direction: 1 | -1): void;
+  // Scrolls the open editor by `step`, else the pane, and logs how far it
+  // moved and whether the editor's cursor moved.
+  scrollBy(step: ScrollStep, direction: 1 | -1): void;
   // Focuses the open editor, else the pane.
   focus(): void;
   hasUnsavedEdits(): boolean;
@@ -450,7 +458,10 @@ export function createDocView(deps: DocViewDeps): DocView {
     const hasUnsaved = editor.text() !== shown.text;
     if (hasUnsaved && !force) {
       deps.toast(UNSAVED_TEXT, 'error');
-      deps.log('docs', `refused :q with unsaved edits on ${shown.name}`);
+      deps.log(
+        'docs',
+        `refused to close the editor with unsaved edits on ${shown.name}`,
+      );
       return;
     }
     if (hasUnsaved) {
@@ -662,21 +673,22 @@ export function createDocView(deps: DocViewDeps): DocView {
           topVisibleLine(sourceBlocks(body), pane.scrollTop, doc.bodyStartLine),
       );
     },
+    quitEditor: () => quitEditor(false),
     scroll(by) {
-      pane.scrollTop += by * SCROLL_STEP_PX;
+      pane.scrollTop += by * LINE_STEP_PX;
     },
-    scrollHalfPage(direction) {
+    scrollBy(step, direction) {
       const name = shown?.name ?? 'the doc pane';
       if (editor === null) {
-        const scroll = scrollHalfPage(pane, direction);
-        deps.log('docs', halfPageText(name, direction, scroll));
+        const scroll = scrollContent(pane, step, direction);
+        deps.log('docs', scrollText(name, step, direction, scroll));
         return;
       }
-      const scroll = editor.scrollHalfPage(direction);
+      const scroll = editor.scrollBy(step, direction);
       const cursor = scroll.cursorMoved ? 'moved' : 'stayed';
       deps.log(
         'docs',
-        `${halfPageText(`the editor on ${name}`, direction, scroll)}; the cursor ${cursor}`,
+        `${scrollText(`the editor on ${name}`, step, direction, scroll)}; the cursor ${cursor}`,
       );
     },
     focus() {

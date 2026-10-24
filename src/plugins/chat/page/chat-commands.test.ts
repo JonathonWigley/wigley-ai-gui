@@ -4,7 +4,7 @@ import type {
   ChatImage,
   SessionControl,
 } from '../../../contracts/agent';
-import type { TextEditor } from '../../../contracts/editor';
+import type { ScrollStep, TextEditor } from '../../../contracts/editor';
 import type { ChatSessionState, SlashCommandContext } from '../contract';
 import { createAttachments } from './attachments';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
@@ -38,13 +38,17 @@ const png: ChatImage = { mediaType: 'image/png', data: 'cG5n' };
 const jpeg: ChatImage = { mediaType: 'image/jpeg', data: 'anBn' };
 
 // `first` answers each call with `firstEntry` and counts it in `firstCalls`;
-// `scrollHalfPage` records each step in `scrolls` and answers with `scroll`.
+// `scrollBy` records each step and direction in `scrolls` and answers with
+// `scroll`.
 function session(
   ended: boolean,
   firstEntry: ChatEntry | null = null,
   scroll: TranscriptScroll = { moved: true, atEnd: false, following: false },
 ) {
-  const counts = { firstCalls: 0, scrolls: [] as number[] };
+  const counts = {
+    firstCalls: 0,
+    scrolls: [] as [ScrollStep, 1 | -1][],
+  };
   const state: ChatSessionState = {
     sessionId: 'row-1',
     projectDir: '/Users/u/dev/app',
@@ -60,8 +64,8 @@ function session(
       counts.firstCalls++;
       return firstEntry;
     },
-    scrollHalfPage(step: 1 | -1) {
-      counts.scrolls.push(step);
+    scrollBy(step: ScrollStep, direction: 1 | -1) {
+      counts.scrolls.push([step, direction]);
       return scroll;
     },
   } as ChatSession['entries'];
@@ -307,7 +311,7 @@ describe('chat commands', () => {
 
     run.handlers.halfPageDown({});
 
-    expect(shown.counts.scrolls).toEqual([1]);
+    expect(shown.counts.scrolls).toEqual([['halfPage', 1]]);
     expect(run.logs).toEqual([
       '[chat] scrolled the transcript down half a page to the bottom; following the latest entry',
     ]);
@@ -323,7 +327,7 @@ describe('chat commands', () => {
 
     run.handlers.halfPageUp({});
 
-    expect(shown.counts.scrolls).toEqual([-1]);
+    expect(shown.counts.scrolls).toEqual([['halfPage', -1]]);
     expect(run.logs).toEqual([
       '[chat] scrolled the transcript up half a page; not following',
     ]);
@@ -344,15 +348,49 @@ describe('chat commands', () => {
     ]);
   });
 
+  it('lineUp_scrollsOffTheBottom_logsALineAndItStoppedFollowing', () => {
+    const shown = session(false, null, {
+      moved: true,
+      atEnd: false,
+      following: false,
+    });
+    const run = setUp(shown);
+
+    run.handlers.lineUp({});
+
+    expect(shown.counts.scrolls).toEqual([['line', -1]]);
+    expect(run.logs).toEqual([
+      '[chat] scrolled the transcript up a line; not following',
+    ]);
+  });
+
+  it('lineDown_scrollsOntoTheBottom_logsALineAndItFollows', () => {
+    const shown = session(false, null, {
+      moved: true,
+      atEnd: true,
+      following: true,
+    });
+    const run = setUp(shown);
+
+    run.handlers.lineDown({});
+
+    expect(shown.counts.scrolls).toEqual([['line', 1]]);
+    expect(run.logs).toEqual([
+      '[chat] scrolled the transcript down a line to the bottom; following the latest entry',
+    ]);
+  });
+
   it('halfPageDown_noChatTabShown_scrollsNothingAndLogsIt', () => {
     const shown = session(false);
     const run = setUp(shown, undefined, false);
 
     run.handlers.halfPageDown({});
     run.handlers.halfPageUp({});
+    run.handlers.lineDown({});
 
     expect(shown.counts.scrolls).toEqual([]);
     expect(run.logs).toEqual([
+      '[chat] no Chat tab shown',
       '[chat] no Chat tab shown',
       '[chat] no Chat tab shown',
     ]);

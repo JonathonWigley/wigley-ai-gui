@@ -1,4 +1,8 @@
-import type { FocusOptions, HalfPageScroll } from '../../../contracts/editor';
+import type {
+  ContentScroll,
+  FocusOptions,
+  ScrollStep,
+} from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type {
   PageCommandContext,
@@ -6,7 +10,7 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import { halfPageText } from '../../../shared/half-page';
+import { scrollText } from '../../../shared/content-scroll';
 import type { FindingAction, RoundClosed, RoundEnd } from '../contract';
 import { actionLabel } from '../finding-origins';
 import type { formsManifest } from '../manifest';
@@ -45,9 +49,9 @@ export interface FormsCommandDeps {
   finish(roundId: string, end: RoundEnd): Promise<void>;
   closeSession(sessionId: string): void;
   layouts: LayoutCommandChannel;
-  // Scrolls the active round's main column half a page, down for 1 and up for
+  // Scrolls the active round's main column by `step`, down for 1 and up for
   // -1; null when no round is shown to scroll.
-  scrollForm(direction: 1 | -1): HalfPageScroll | null;
+  scrollForm(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
   toast(text: string, tone: ToastTone): void;
   log: Log;
 }
@@ -192,8 +196,10 @@ export function formsCommandHandlers(
       boxes.leave();
       log('forms', 'left the box');
     },
-    halfPageDown: () => scrollForm(deps, 1),
-    halfPageUp: () => scrollForm(deps, -1),
+    lineDown: () => scrollForm(deps, 'line', 1),
+    lineUp: () => scrollForm(deps, 'line', -1),
+    halfPageDown: () => scrollForm(deps, 'halfPage', 1),
+    halfPageUp: () => scrollForm(deps, 'halfPage', -1),
     nextItem: (context) => moveItem(deps, context, { type: 'nextItem' }),
     prevItem: (context) => moveItem(deps, context, { type: 'prevItem' }),
     nextUnanswered: (context) => jumpToUnanswered(deps, context, 1),
@@ -329,13 +335,17 @@ function stepFocus(
 }
 
 // Leaves focus where it is, so a box keeps focus and its vim mode.
-function scrollForm(deps: FormsCommandDeps, direction: 1 | -1) {
-  const scroll = deps.scrollForm(direction);
+function scrollForm(
+  deps: FormsCommandDeps,
+  step: ScrollStep,
+  direction: 1 | -1,
+) {
+  const scroll = deps.scrollForm(step, direction);
   deps.log(
     'forms',
     scroll === null
       ? 'no round to scroll'
-      : halfPageText('the form', direction, scroll),
+      : scrollText('the form', step, direction, scroll),
   );
 }
 

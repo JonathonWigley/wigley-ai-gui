@@ -39,6 +39,16 @@ export const chatManifest = definePlugin({
     },
     latestEntry: { label: 'latest entry', group: 'entries', runsIn: 'page' },
     firstEntry: { label: 'first entry', group: 'entries', runsIn: 'page' },
+    lineDown: {
+      label: 'scroll a line down',
+      group: 'entries',
+      runsIn: 'page',
+    },
+    lineUp: {
+      label: 'scroll a line up',
+      group: 'entries',
+      runsIn: 'page',
+    },
     halfPageDown: {
       label: 'scroll half a page down',
       group: 'entries',

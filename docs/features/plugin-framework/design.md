@@ -88,8 +88,8 @@ Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
 - `<leader>a<digit>` picks a choice and `<leader>ac` clears it inside a box; on the page raw digits pick and raw `c`
   `f` `u` `s` clear and act (changed by ui-design plan C). `<Leader>1`–`9` and
   `<Leader>c` inside a box go (A2 interview). Plan folder `plan-a2-sessions/` holds the rest of A2's settled design.
-- `<C-j>` / `<C-k>` scroll the form and its review half a page, as in docs and chat; the gallery takes them for a
-  whole page.
+- `<C-j>` / `<C-k>` scroll the form and its review a line and `<C-S-j>` / `<C-S-k>` half a page, as in docs, chat
+  and the gallery.
 - Folding goes: the fold keys (`za`, `zM`, `zR`) and the collapsible context and "Why recommended" sections are
   removed; both are always shown.
 

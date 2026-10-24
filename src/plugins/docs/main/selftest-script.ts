@@ -50,41 +50,109 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     { keys: ['g', 'g'], expect: '[docs] selected Global' },
     { keys: ['j', 'l'], expect: '[docs] expanded Instructions' },
     { keys: ['j', 'l'], expect: '[docs] opened CLAUDE.md', checksFit: true },
-    { keys: ['<A-l>'], expect: '[docs] doc focused' },
-    { keys: ['<C-j>'], expect: '[docs] scrolled CLAUDE.md down half a page' },
+    {
+      keys: ['<C-j>'],
+      expect: '[docs] scrolled CLAUDE.md down a line',
+      why: 'The tree takes the scroll keys and scrolls the doc beside it.',
+    },
+    {
+      keys: ['<C-S-j>'],
+      expect: '[docs] scrolled CLAUDE.md down half a page',
+    },
+    { keys: ['<C-S-k>'], expect: '[docs] scrolled CLAUDE.md up half a page' },
     {
       keys: ['<C-k>'],
-      expect: '[docs] scrolled CLAUDE.md up half a page to the top',
+      expect: '[docs] scrolled CLAUDE.md up a line to the top',
+    },
+    {
+      keys: ['k', 'j'],
+      expect: '[page] j ran docs.treeDown',
+      why: 'Scrolling the doc from the tree leaves focus in the tree.',
+    },
+    {
+      keys: ['Enter'],
+      expect: '[docs] doc focused',
+      why: 'Enter on a doc row opens it and focuses the doc.',
+    },
+    { keys: ['<C-j>'], expect: '[docs] scrolled CLAUDE.md down a line' },
+    {
+      keys: ['<C-S-j>'],
+      expect: '[docs] scrolled CLAUDE.md down half a page',
+    },
+    { keys: ['<C-S-k>'], expect: '[docs] scrolled CLAUDE.md up half a page' },
+    {
+      keys: ['<C-k>'],
+      expect: '[docs] scrolled CLAUDE.md up a line to the top',
     },
     { keys: ['i'], expect: '[docs] editing CLAUDE.md' },
     {
       keys: ['<C-j>'],
       expect:
-        '[docs] scrolled the editor on CLAUDE.md down half a page; the cursor moved',
+        '[docs] scrolled the editor on CLAUDE.md down a line; the cursor moved',
+      why: 'A line scroll leaves the first line, and the cursor on it, out of sight.',
     },
     {
       keys: ['<C-k>'],
+      expect:
+        '[docs] scrolled the editor on CLAUDE.md up a line to the top; the cursor stayed',
+    },
+    {
+      keys: ['<C-k>'],
+      expect:
+        '[docs] the editor on CLAUDE.md did not scroll up; the cursor stayed',
+    },
+    {
+      keys: ['<C-S-j>'],
+      expect:
+        '[docs] scrolled the editor on CLAUDE.md down half a page; the cursor moved',
+    },
+    {
+      keys: ['<C-S-k>'],
       expect:
         '[docs] scrolled the editor on CLAUDE.md up half a page to the top; the cursor stayed',
     },
     {
-      keys: ['G', '<C-k>'],
+      keys: ['G', '<C-S-k>'],
       expect:
         '[docs] scrolled the editor on CLAUDE.md up half a page; the cursor moved',
     },
     {
-      keys: ['g', 'g', 'V', '<C-j>'],
+      keys: ['g', 'g', 'V', '<C-S-j>'],
       expect:
         '[docs] scrolled the editor on CLAUDE.md down half a page; the cursor moved',
     },
     {
-      keys: ['<C-k>'],
+      keys: ['<C-S-k>'],
       expect:
         '[docs] scrolled the editor on CLAUDE.md up half a page to the top; the cursor moved',
     },
     {
-      keys: ['Escape', ':', 'q', 'Enter'],
+      keys: ['<C-j>'],
+      expect:
+        '[docs] scrolled the editor on CLAUDE.md down a line; the cursor moved',
+      why: 'In visual mode the cursor a line scroll leaves out of sight moves down, growing the selection.',
+    },
+    {
+      keys: ['<C-k>'],
+      expect:
+        '[docs] scrolled the editor on CLAUDE.md up a line to the top; the cursor stayed',
+    },
+    {
+      keys: ['Escape', 'g', 'g', '<C-k>'],
+      expect:
+        '[docs] the editor on CLAUDE.md did not scroll up; the cursor stayed',
+      why: 'Esc in visual mode returns to normal mode and leaves the editor open.',
+    },
+    {
+      keys: ['i', 'Escape', '<C-k>'],
+      expect:
+        '[docs] the editor on CLAUDE.md did not scroll up; the cursor stayed',
+      why: 'Esc in insert mode returns to normal mode and leaves the editor open.',
+    },
+    {
+      keys: ['Escape'],
       expect: '[docs] closed the editor on CLAUDE.md',
+      why: 'Esc in normal mode closes the editor as :q does.',
     },
   ];
   const linksAndDiskChanges: SelfTestStep[] = [
@@ -132,7 +200,8 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     { keys: ['i'], expect: '[docs] editing style.md' },
     {
       keys: ['x', ':', 'q', 'Enter'],
-      expect: '[docs] refused :q with unsaved edits on style.md',
+      expect:
+        '[docs] refused to close the editor with unsaved edits on style.md',
     },
     {
       keys: [':', 'q', '!', 'Enter'],
@@ -246,8 +315,10 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     { keys: ['<A-l>'], expect: '[docs] doc focused' },
     { keys: ['j'], expect: '[page] j ran docs.scrollDown' },
     { keys: ['k'], expect: '[page] k ran docs.scrollUp' },
-    { keys: ['<C-j>'], expect: '[page] <C-j> ran docs.halfPageDown' },
-    { keys: ['<C-k>'], expect: '[page] <C-k> ran docs.halfPageUp' },
+    { keys: ['<C-j>'], expect: '[page] <C-j> ran docs.lineDown' },
+    { keys: ['<C-k>'], expect: '[page] <C-k> ran docs.lineUp' },
+    { keys: ['<C-S-j>'], expect: '[page] <C-S-j> ran docs.halfPageDown' },
+    { keys: ['<C-S-k>'], expect: '[page] <C-S-k> ran docs.halfPageUp' },
     {
       keys: ['i'],
       expect: '[docs] refused to edit SKILL.md in the plugin cache',
@@ -374,7 +445,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   return [
     {
       name: 'doc editor',
-      why: "Docs mode shows and opens CLAUDE.md from a fresh index; the doc and its editor scroll by half pages, the editor's cursor and a visual selection following the scroll.",
+      why: "Docs mode shows and opens CLAUDE.md from a fresh index; the tree scrolls the doc beside it, and Enter on its row focuses the doc. The doc and its editor scroll by lines and half pages, the editor's cursor and a visual selection following the scroll, and Esc in normal mode closes the editor.",
       steps: docEditor,
     },
     {

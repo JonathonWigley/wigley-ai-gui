@@ -63,6 +63,7 @@ describe('formatChord', () => {
     expect(formatChord('<S-D-k>', 'macos')).toBe('⇧⌘K');
     expect(formatChord('<A-o>', 'macos')).toBe('⌥O');
     expect(formatChord('<C-h>', 'macos')).toBe('⌃H');
+    expect(formatChord('<C-S-j>', 'macos')).toBe('⌃⇧J');
     expect(formatChord('<D-Enter>', 'macos')).toBe('⌘↩');
     expect(formatChord('<C-A-S-D-1>', 'macos')).toBe('⌃⌥⇧⌘1');
   });
@@ -71,6 +72,7 @@ describe('formatChord', () => {
     expect(formatChord('<S-D-k>', 'windows')).toBe('Shift+Win+K');
     expect(formatChord('<A-o>', 'windows')).toBe('Alt+O');
     expect(formatChord('<C-h>', 'windows')).toBe('Ctrl+H');
+    expect(formatChord('<C-S-j>', 'windows')).toBe('Ctrl+Shift+J');
     expect(formatChord('<D-Enter>', 'windows')).toBe('Win+Enter');
     expect(formatChord('<C-A-S-D-1>', 'windows')).toBe('Ctrl+Alt+Shift+Win+1');
   });

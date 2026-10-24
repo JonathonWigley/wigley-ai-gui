@@ -79,7 +79,7 @@ export interface ChatSession extends SessionRef {
   attachments: Attachments;
   entries: Pick<
     EntryList,
-    'move' | 'latest' | 'first' | 'focused' | 'toggleFocused' | 'scrollHalfPage'
+    'move' | 'latest' | 'first' | 'focused' | 'toggleFocused' | 'scrollBy'
   >;
 }
 

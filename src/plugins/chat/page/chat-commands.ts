@@ -1,4 +1,5 @@
 import type { ControlChoice, SessionControl } from '../../../contracts/agent';
+import type { ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type {
   PageChannel,
@@ -7,7 +8,7 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import { halfPageText } from '../../../shared/half-page';
+import { scrollText } from '../../../shared/content-scroll';
 import type {
   AppSlashCommand,
   ChatChannel,
@@ -177,8 +178,14 @@ export function chatCommandHandlers(
           : 'focused the first entry',
       );
     }),
-    halfPageDown: inSession((session) => scrollTranscript(session, 1, log)),
-    halfPageUp: inSession((session) => scrollTranscript(session, -1, log)),
+    lineDown: inSession((session) => scrollTranscript(session, 'line', 1, log)),
+    lineUp: inSession((session) => scrollTranscript(session, 'line', -1, log)),
+    halfPageDown: inSession((session) =>
+      scrollTranscript(session, 'halfPage', 1, log),
+    ),
+    halfPageUp: inSession((session) =>
+      scrollTranscript(session, 'halfPage', -1, log),
+    ),
     // A focused user entry with images opens the viewer on its first image and
     // toggles nothing; any other focused entry toggles its expanders.
     toggleEntry: inSession((session) => {
@@ -345,15 +352,20 @@ function moveEntry(session: ChatSession, step: 1 | -1, log: Log) {
   );
 }
 
-// Logs e.g. `scrolled the transcript up half a page; not following`.
-function scrollTranscript(session: ChatSession, direction: 1 | -1, log: Log) {
-  const scroll = session.entries.scrollHalfPage(direction);
+// Logs e.g. `scrolled the transcript up a line; not following`.
+function scrollTranscript(
+  session: ChatSession,
+  step: ScrollStep,
+  direction: 1 | -1,
+  log: Log,
+) {
+  const scroll = session.entries.scrollBy(step, direction);
   const following = scroll.following
     ? 'following the latest entry'
     : 'not following';
   log(
     'chat',
-    `${halfPageText('the transcript', direction, scroll)}; ${following}`,
+    `${scrollText('the transcript', step, direction, scroll)}; ${following}`,
   );
 }
 

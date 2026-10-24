@@ -1,10 +1,10 @@
 import type { ChatEntry, ChatEntryKind } from '../../../contracts/agent';
 import type { Log } from '../../../contracts/log';
-import type { HalfPageScroll } from '../../../contracts/editor';
+import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
-import { isScrolledToEnd, scrollHalfPage } from '../../../shared/half-page';
+import { isScrolledToEnd, scrollContent } from '../../../shared/content-scroll';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   ChatKit,
@@ -42,8 +42,8 @@ export interface EntryListDeps {
 
 export type ToggleResult = 'expanded' | 'collapsed' | 'nothing';
 
-// A half-page scroll, and whether the list follows the latest entry after it.
-export interface TranscriptScroll extends HalfPageScroll {
+// A scroll, and whether the list follows the latest entry after it.
+export interface TranscriptScroll extends ContentScroll {
   following: boolean;
 }
 
@@ -72,11 +72,11 @@ export interface EntryList {
   // Scrolls to the bottom while following, else brings the focused entry
   // into view.
   scrollToFocus(): void;
-  // Scrolls the list by half its visible height. Scrolling up off the bottom
+  // Scrolls the list by `step`. Scrolling up off the bottom
   // stops following, so entries that arrive leave the scroll alone; scrolling
   // down onto the bottom (within 1px) follows the latest entry again. The
   // focused entry stays either way.
-  scrollHalfPage(direction: 1 | -1): TranscriptScroll;
+  scrollBy(step: ScrollStep, direction: 1 | -1): TranscriptScroll;
   // The focused entry; null with no focused entry.
   focused(): ChatEntry | null;
   // Opens every expander of the focused entry when any is closed, else
@@ -188,8 +188,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     scrollToFocus() {
       drawFocus(focus.following ? 'bottom' : 'slot');
     },
-    scrollHalfPage(direction) {
-      const scroll = scrollHalfPage(list, direction);
+    scrollBy(step, direction) {
+      const scroll = scrollContent(list, step, direction);
       focus = focusAfterScroll(focus, direction, isScrolledToEnd(list, 1));
       drawFocus('follow');
       return { ...scroll, following: focus.following };

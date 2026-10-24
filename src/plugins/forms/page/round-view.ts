@@ -1,11 +1,11 @@
 import type { CommandId } from '../../../contracts/commands';
-import type { HalfPageScroll } from '../../../contracts/editor';
+import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Platform } from '../../../contracts/platform';
 import type { UiState } from '../../../contracts/ui-state';
 import { errorText } from '../../../shared/error-text';
-import { scrollHalfPage } from '../../../shared/half-page';
+import { scrollContent } from '../../../shared/content-scroll';
 import type { KeysPageExports } from '../../keys/contract';
 import { type FormsCommandName, formsCommand, formsScope } from '../ids';
 import type { Layout } from '../layouts/layout';
@@ -64,14 +64,14 @@ export interface RoundViewDeps {
 }
 
 // `setLayout` rebuilds the view's children with `layout`'s cards and head
-// from `round`, remounting every box. `scrollHalfPage` scrolls the main
-// column half its height, down for 1 and up for -1. `dispose` stops the view
+// from `round`, remounting every box. `scrollBy` scrolls the main column by
+// `step`, down for 1 and up for -1. `dispose` stops the view
 // following keymap changes; its owner calls it when it drops the view.
 export interface RoundView {
   element: HTMLElement;
   update(round: RoundState, view: FormsView): void;
   setLayout(layout: Layout, layoutName: string, round: RoundState): void;
-  scrollHalfPage(direction: 1 | -1): HalfPageScroll;
+  scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll;
   dispose(): void;
 }
 
@@ -183,8 +183,8 @@ export function createRoundView(
       shownFocus = -1;
       view.update(current, shownView);
     },
-    scrollHalfPage(direction) {
-      return scrollHalfPage(parts.main, direction);
+    scrollBy(step, direction) {
+      return scrollContent(parts.main, step, direction);
     },
     dispose() {
       keysChange.dispose();

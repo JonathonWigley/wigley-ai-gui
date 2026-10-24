@@ -35,20 +35,24 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
 
 hjkl is the direction in every layer; the modifier picks the verb.
 
-- **Raw key** acts on the focused scope: `j`/`k` move, `Enter` acts, `Esc` backs out or closes,
-  `/` filters, `gg`/`G` first and last, `y`/`n` confirm, `i`/`a` enter the box. Letters are
-  mnemonic verbs.
+- **Raw key** acts on the focused scope: `j`/`k` move, `Enter` acts (on a docs tree row it opens
+  the doc and focuses it), `Esc` backs out or closes (in a box's normal mode it leaves the box, and
+  in the doc editor it closes the editor as `:q` does), `/` filters, `gg`/`G` first and last,
+  `y`/`n` confirm, `i`/`a` enter the box. Letters are mnemonic verbs.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `R` rescan.
 - **Ctrl+hjkl** moves inside the content. `Ctrl+j`/`Ctrl+k` are the app's scroll keys, and every
-  view that scrolls its content takes them: half a page in the doc, its editor too while editing
-  (in visual mode the selection grows or shrinks with the scroll, as vim's `Ctrl+d`/`Ctrl+u` do),
-  the chat transcript and the form and its review, and a whole page in the gallery. List views
-  with a cursor (the docs tree, settings, the pickers) move with `j`/`k` and bind no
-  `Ctrl+j`/`Ctrl+k` yet. `Ctrl+h`/`Ctrl+l` move to the previous and next unit (forms items). A
-  chord bind takes the key from vim inside a box too, in every vim mode: in a form box, the chat
-  box and the doc editor, vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by
-  design.
+  view that scrolls its content takes them: they scroll one line of body text, key repeat
+  supplying the speed, and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll half a page, Shift being the
+  bigger step. The views are the doc, its editor too while editing, the chat transcript, the form
+  and its review, and the gallery; the docs tree takes both pairs and scrolls the doc beside it.
+  In the editor the line scroll keeps the cursor unless it would leave the view, as vim's
+  `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
+  `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor. Other list
+  views with a cursor (settings, the pickers, the chat session list) move with `j`/`k` and bind
+  neither pair yet. `Ctrl+h`/`Ctrl+l` move to the previous and next unit (forms items). A chord
+  bind takes the key from vim inside a box too, in every vim mode: in a form box, the chat box and
+  the doc editor, vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by design.
 - **Ctrl+n / Ctrl+p** move to the next and previous text box, from the page or inside a box in
   every vim mode (forms' notes, reason and comment boxes). Every view with more than one box
   takes them, so the keys that move between boxes are the same on every page. Inside a box they
