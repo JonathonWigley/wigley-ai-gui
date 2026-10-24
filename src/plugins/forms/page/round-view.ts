@@ -10,6 +10,7 @@ import type { KeysPageExports } from '../../keys/contract';
 import { type FormsCommandName, formsCommand, formsScope } from '../ids';
 import type { Layout } from '../layouts/layout';
 import { button, element, markdownElement } from '../../../shared/page/dom';
+import { textLineHeightPx } from '../../../shared/page/text-line';
 import { textButton } from '../../../shared/page/ui/button';
 import { row as rowPart } from '../../../shared/page/ui/row';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
@@ -184,7 +185,12 @@ export function createRoundView(
       view.update(current, shownView);
     },
     scrollBy(step, direction) {
-      return scrollContent(parts.main, step, direction);
+      return scrollContent(
+        parts.main,
+        step,
+        direction,
+        textLineHeightPx(parts.main),
+      );
     },
     dispose() {
       keysChange.dispose();

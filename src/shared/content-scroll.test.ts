@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  LINE_STEP_PX,
   isScrolledToEnd,
   scrollContent,
+  scrollStepPx,
   scrollText,
 } from './content-scroll';
+
+// One line of 14px prose at 1.55 leading.
+const LINE_PX = 21.7;
 
 // A scroller that clamps `scrollTop` as an element does.
 function scroller(scrollTop: number, scrollHeight = 1000, clientHeight = 400) {
@@ -22,37 +25,47 @@ function scroller(scrollTop: number, scrollHeight = 1000, clientHeight = 400) {
 }
 
 describe('scrollContent', () => {
-  it('scrolls a line by the line step', () => {
+  it('scrolls a line by the line height it is given', () => {
     const box = scroller(100);
 
-    const scroll = scrollContent(box, 'line', 1);
+    const scroll = scrollContent(box, 'line', 1, LINE_PX);
 
-    expect(box.scrollTop).toBe(100 + LINE_STEP_PX);
+    expect(box.scrollTop).toBe(100 + LINE_PX);
     expect(scroll).toEqual({ moved: true, atEnd: false });
   });
 
   it('scrolls half a page by half the visible height', () => {
     const box = scroller(300);
 
-    const scroll = scrollContent(box, 'halfPage', -1);
+    const scroll = scrollContent(box, 'halfPage', -1, LINE_PX);
 
     expect(box.scrollTop).toBe(100);
     expect(scroll).toEqual({ moved: true, atEnd: false });
   });
 
   it('reports the end it reaches', () => {
-    const box = scroller(580);
+    const box = scroller(590);
 
-    expect(scrollContent(box, 'line', 1)).toEqual({ moved: true, atEnd: true });
+    expect(scrollContent(box, 'line', 1, LINE_PX)).toEqual({
+      moved: true,
+      atEnd: true,
+    });
   });
 
   it('reports no move at the end already', () => {
     const box = scroller(0);
 
-    expect(scrollContent(box, 'line', -1)).toEqual({
+    expect(scrollContent(box, 'line', -1, LINE_PX)).toEqual({
       moved: false,
       atEnd: true,
     });
+  });
+});
+
+describe('scrollStepPx', () => {
+  it('steps a line by the line height and half a page by half the visible height', () => {
+    expect(scrollStepPx(scroller(0), 'line', LINE_PX)).toBe(LINE_PX);
+    expect(scrollStepPx(scroller(0), 'halfPage', LINE_PX)).toBe(200);
   });
 });
 

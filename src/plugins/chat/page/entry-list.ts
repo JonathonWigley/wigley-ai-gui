@@ -4,6 +4,7 @@ import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
+import { textLineHeightPx } from '../../../shared/page/text-line';
 import { isScrolledToEnd, scrollContent } from '../../../shared/content-scroll';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -189,7 +190,12 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       drawFocus(focus.following ? 'bottom' : 'slot');
     },
     scrollBy(step, direction) {
-      const scroll = scrollContent(list, step, direction);
+      const scroll = scrollContent(
+        list,
+        step,
+        direction,
+        textLineHeightPx(list),
+      );
       focus = focusAfterScroll(focus, direction, isScrolledToEnd(list, 1));
       drawFocus('follow');
       return { ...scroll, following: focus.following };

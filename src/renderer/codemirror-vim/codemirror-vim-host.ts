@@ -302,7 +302,8 @@ function scrollEditor(
         : SCROLL_MOTION_KEYS.halfPageUp;
     Vim.handleKey(cm, key, 'user');
   } else {
-    scroller.scrollTop += direction * scrollStepPx(scroller, step);
+    scroller.scrollTop +=
+      direction * scrollStepPx(scroller, step, rowStepPx(view, direction));
     if (isVisual) {
       bringVisualHeadIntoSight(view, cm);
     } else {
@@ -315,6 +316,21 @@ function scrollEditor(
     cursorMoved: view.state.selection.main.head !== head,
   };
 }
+
+// How far a line scroll in `direction` moves the editor, in pixels: about one
+// row, landing the top of sight on a row's top so no sliver of the row above
+// stays in sight, and on the very top for the first row.
+function rowStepPx(view: EditorView, direction: 1 | -1): number {
+  const row = view.defaultLineHeight;
+  const topRow = Math.round(Math.max(sightOf(view).top, 0) / row);
+  const targetTop = (topRow + direction) * row;
+  const target = targetTop <= 0 ? 0 : targetTop + view.documentPadding.top;
+  return Math.abs(target - view.scrollDOM.scrollTop);
+}
+
+// How far a row may cross the edge of sight and still count as on its side,
+// since `scrollTop` lands on whole pixels and rows on fractions.
+const SIGHT_SLACK_PX = 1;
 
 // The top and bottom of the editor's visible part, in line block heights.
 function sightOf(view: EditorView): { top: number; bottom: number } {
@@ -331,8 +347,8 @@ function bringVisualHeadIntoSight(view: EditorView, cm: VimEditor) {
   const { doc } = view.state;
   const headLine = (cm.state.vim.sel as { head: { line: number } }).head.line;
   const headBlock = view.lineBlockAt(doc.line(headLine + 1).from);
-  const isAboveSight = headBlock.bottom <= top;
-  const isBelowSight = headBlock.top >= bottom;
+  const isAboveSight = headBlock.bottom <= top + SIGHT_SLACK_PX;
+  const isBelowSight = headBlock.top >= bottom - SIGHT_SLACK_PX;
   if (!isAboveSight && !isBelowSight) {
     return;
   }
@@ -359,8 +375,8 @@ function bringCursorIntoSight(view: EditorView) {
   const { top, bottom } = sightOf(view);
   const selection = view.state.selection.main;
   const headLine = view.lineBlockAt(selection.head);
-  const isAboveSight = headLine.bottom <= top;
-  const isBelowSight = headLine.top >= bottom;
+  const isAboveSight = headLine.bottom <= top + SIGHT_SLACK_PX;
+  const isBelowSight = headLine.top >= bottom - SIGHT_SLACK_PX;
   if (!isAboveSight && !isBelowSight) {
     return;
   }
@@ -371,19 +387,20 @@ function bringCursorIntoSight(view: EditorView) {
   view.dispatch({ selection: { anchor, head } });
 }
 
-// The start of the first line whose top is at or below `top`, or of the line
-// `top` cuts when it is the last.
+// The start of the first line whose top is at or below `top`, within the
+// slack, or of the line `top` cuts when it is the last.
 function firstWholeLineFrom(view: EditorView, top: number): number {
   const line = view.lineBlockAtHeight(top);
-  const isCutOff = line.top < top && line.to < view.state.doc.length;
+  const isCutOff =
+    line.top < top - SIGHT_SLACK_PX && line.to < view.state.doc.length;
   return isCutOff ? view.lineBlockAt(line.to + 1).from : line.from;
 }
 
-// The start of the last line whose bottom is at or above `bottom`, or of the
-// line `bottom` cuts when it is the first.
+// The start of the last line whose bottom is at or above `bottom`, within the
+// slack, or of the line `bottom` cuts when it is the first.
 function lastWholeLineTo(view: EditorView, bottom: number): number {
   const line = view.lineBlockAtHeight(bottom - 1);
-  const isCutOff = line.bottom > bottom && line.from > 0;
+  const isCutOff = line.bottom > bottom + SIGHT_SLACK_PX && line.from > 0;
   return isCutOff ? view.lineBlockAt(line.from - 1).from : line.from;
 }
 

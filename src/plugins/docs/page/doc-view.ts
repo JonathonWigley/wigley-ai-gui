@@ -12,13 +12,10 @@ import type {
   PushedScope,
   ToastTone,
 } from '../../../contracts/plugin';
-import {
-  LINE_STEP_PX,
-  scrollContent,
-  scrollText,
-} from '../../../shared/content-scroll';
+import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import { element, markdownElement } from '../../../shared/page/dom';
+import { textLineHeightPx } from '../../../shared/page/text-line';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { type TagTone, tag } from '../../../shared/page/ui/tag';
 import type { DocsChannel } from '../contract';
@@ -675,12 +672,17 @@ export function createDocView(deps: DocViewDeps): DocView {
     },
     quitEditor: () => quitEditor(false),
     scroll(by) {
-      pane.scrollTop += by * LINE_STEP_PX;
+      pane.scrollTop += by * textLineHeightPx(pane);
     },
     scrollBy(step, direction) {
       const name = shown?.name ?? 'the doc pane';
       if (editor === null) {
-        const scroll = scrollContent(pane, step, direction);
+        const scroll = scrollContent(
+          pane,
+          step,
+          direction,
+          textLineHeightPx(pane),
+        );
         deps.log('docs', scrollText(name, step, direction, scroll));
         return;
       }

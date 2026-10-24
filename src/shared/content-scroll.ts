@@ -1,8 +1,5 @@
 import type { ContentScroll, ScrollStep } from '../contracts/editor';
 
-// One line of body text: the step every view's line scroll takes.
-export const LINE_STEP_PX = 48;
-
 // The part of an element a vertical scroll reads and sets.
 interface Scroller {
   scrollTop: number;
@@ -10,9 +7,14 @@ interface Scroller {
   readonly clientHeight: number;
 }
 
-// How far `step` scrolls `scroller`, in pixels.
-export function scrollStepPx(scroller: Scroller, step: ScrollStep): number {
-  return step === 'line' ? LINE_STEP_PX : scroller.clientHeight / 2;
+// How far `step` scrolls `scroller`, in pixels: a line is `lineHeightPx`, the
+// height of one line of the text it shows.
+export function scrollStepPx(
+  scroller: Scroller,
+  step: ScrollStep,
+  lineHeightPx: number,
+): number {
+  return step === 'line' ? lineHeightPx : scroller.clientHeight / 2;
 }
 
 // Scrolls `scroller` by `step`, down for 1 and up for -1.
@@ -20,9 +22,10 @@ export function scrollContent(
   scroller: Scroller,
   step: ScrollStep,
   direction: 1 | -1,
+  lineHeightPx: number,
 ): ContentScroll {
   const before = scroller.scrollTop;
-  scroller.scrollTop += direction * scrollStepPx(scroller, step);
+  scroller.scrollTop += direction * scrollStepPx(scroller, step, lineHeightPx);
   return {
     moved: scroller.scrollTop !== before,
     atEnd: isScrolledToEnd(scroller, direction),

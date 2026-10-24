@@ -2,6 +2,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { ScrollStep } from '../../../contracts/editor';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { scrollContent, scrollText } from '../../../shared/content-scroll';
+import { textLineHeightPx } from '../../../shared/page/text-line';
 import { galleryManifest } from '../manifest';
 import { createGalleryView } from './gallery-view';
 import { testShellLayout } from './test-shell-layout';
@@ -47,7 +48,12 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
     const scrollSheetTo = (top: number) =>
       view.sheet.scrollTo({ top, behavior: 'instant' });
     const scrollSheet = (step: ScrollStep, direction: 1 | -1) => {
-      const scroll = scrollContent(view.sheet, step, direction);
+      const scroll = scrollContent(
+        view.sheet,
+        step,
+        direction,
+        textLineHeightPx(view.sheet),
+      );
       log('gallery', scrollText('the gallery', step, direction, scroll));
     };
 
