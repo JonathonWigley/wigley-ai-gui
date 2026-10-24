@@ -185,6 +185,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
           copyLayout: () => api.channel.invoke('copyLayout'),
           openPreview: () => api.channel.invoke('openPreview'),
         },
+        scrollForm: (direction) => view.scrollHalfPage(direction),
         toast: services.toast,
         log: services.log,
       }),

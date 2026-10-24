@@ -1,4 +1,5 @@
 import type { CommandId } from '../../../contracts/commands';
+import type { HalfPageScroll } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Platform } from '../../../contracts/platform';
@@ -68,10 +69,13 @@ interface ActiveLayout {
 // still open for the session in a new Form tab. `showForm` selects the
 // session's Form tab, a no-op when it has none. `setLayout` rebuilds every
 // open round view with `layout`, and rounds that open later are built with it.
+// `scrollHalfPage` scrolls the active round's main column half a page, down
+// for 1 and up for -1; null when no round is active or it has no view yet.
 export interface FormsView {
   forgetSession(sessionId: string): void;
   showForm(sessionId: string): void;
   setLayout(layout: Layout, layoutName: string): void;
+  scrollHalfPage(direction: 1 | -1): HalfPageScroll | null;
 }
 
 // A session's Form tab: it holds the session's round views and the idle
@@ -199,6 +203,12 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       for (const round of store.get().rounds) {
         roundViews.get(round.roundId)?.setLayout(layout, layoutName, round);
       }
+    },
+    scrollHalfPage(direction) {
+      const round = activeRound(store.get());
+      const roundView =
+        round === null ? undefined : roundViews.get(round.roundId);
+      return roundView?.scrollHalfPage(direction) ?? null;
     },
   };
 }

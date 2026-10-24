@@ -72,6 +72,16 @@ export const formsManifest = definePlugin({
     nextBox: { label: 'next box', group: 'boxes', runsIn: 'page' },
     prevBox: { label: 'previous box', group: 'boxes', runsIn: 'page' },
     leaveBox: { label: 'leave the box', group: 'boxes', runsIn: 'page' },
+    halfPageDown: {
+      label: 'scroll half a page down',
+      group: 'view',
+      runsIn: 'page',
+    },
+    halfPageUp: {
+      label: 'scroll half a page up',
+      group: 'view',
+      runsIn: 'page',
+    },
     openReview: { label: 'review', group: 'review', runsIn: 'page' },
     closeReview: {
       label: 'back to the form',

@@ -215,10 +215,10 @@ const QUESTION_BOXES_STEPS: SelfTestStep[] = [
   },
   { keys: ['d'], expect: '[forms] focused dontAskReason on question 1' },
   {
-    keys: ['A', ...LONG_WORD, '<C-k>'],
+    keys: ['A', ...LONG_WORD, '<C-p>'],
     expect: '[forms] focused notes on question 1',
     checksFit: true,
-    why: 'Ctrl+k, still in INSERT, moves back from the reason box to the notes box.',
+    why: 'Ctrl+p, still in INSERT, moves back from the reason box to the notes box.',
   },
   { keys: ['Escape'], expect: '[forms] left the box' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
@@ -248,21 +248,39 @@ const QUESTION_BOXES_STEPS: SelfTestStep[] = [
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   { keys: ['Escape', ' '], expect: '[keys] which-key shows Space' },
   {
-    keys: ['<C-j>'],
+    keys: ['<C-n>'],
     expect: '[keys] which-key closed',
-    why: 'Ctrl+j moves to the reason box, which it focuses in INSERT, and that closes which-key.',
+    why: 'Ctrl+n moves to the reason box, which it focuses in INSERT, and that closes which-key.',
   },
   { keys: ['Escape', 'Escape'], expect: '[forms] left the box' },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   {
-    keys: ['Escape', 'd', '<C-j>'],
+    keys: ['Escape', 'd', '<C-n>'],
     expect: '[forms] focused dontAskReason on question 1',
+    why: 'Ctrl+n moves from the notes box to the reason box.',
   },
-  { keys: ['<C-k>'], expect: '[forms] focused notes on question 1' },
+  {
+    keys: ['<C-p>'],
+    expect: '[forms] focused notes on question 1',
+    why: 'Ctrl+p moves back to the notes box.',
+  },
   {
     keys: ['w', 'Escape'],
     expect: '[forms] left the box',
     why: 'w deletes nothing, since leaving the box dropped the pending d.',
+  },
+  { keys: ['<C-j>'], expect: '[page] <C-j> ran forms.halfPageDown' },
+  { keys: ['<C-k>'], expect: '[page] <C-k> ran forms.halfPageUp' },
+  { keys: ['a'], expect: '[forms] focused notes on question 1' },
+  {
+    keys: ['<C-j>'],
+    expect: '[page] <C-j> ran forms.halfPageDown',
+    why: 'Ctrl+j scrolls the form from inside a box, in INSERT.',
+  },
+  {
+    keys: ['Escape', 'Escape'],
+    expect: '[forms] left the box',
+    why: 'Esc leaving the box shows the box kept focus through the scroll.',
   },
 ];
 
@@ -466,6 +484,7 @@ const REVIEW_STEPS: SelfTestStep[] = [
     checksFit: true,
     why: "Review opens only in forms' scope, so it proves the form took its scope back.",
   },
+  { keys: ['<C-k>'], expect: '[page] <C-k> ran forms.halfPageUp' },
   {
     keys: [' ', '?'],
     expect: '[page]  ? ran keys.toggleHelp',

@@ -43,7 +43,7 @@ export function boxDescription(box: BoxRef): string {
   }
 }
 
-// The boxes the user can reach now, in Ctrl+j order: the forms view shows the
+// The boxes the user can reach now, in Ctrl+n order: the forms view shows the
 // focused item's boxes, the review only the round note.
 export function shownBoxes(state: FormsState): BoxRef[] {
   const round = activeRound(state);
