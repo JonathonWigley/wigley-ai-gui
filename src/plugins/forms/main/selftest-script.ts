@@ -309,7 +309,7 @@ const QUESTION_BOXES_STEPS: SelfTestStep[] = [
       until: '[forms] scrolled the form up half a page to the top',
       max: 8,
     },
-    why: "Ctrl+k scrolls the form's main column up from the bottom until it reaches the top.",
+    why: "Ctrl+k scrolls the form's main column up until it reaches the top.",
   },
 ];
 
@@ -516,7 +516,7 @@ const REVIEW_STEPS: SelfTestStep[] = [
   {
     keys: ['<C-k>'],
     expect: '[forms] the form did not scroll up',
-    why: "Ctrl+k reaches the review's round: the layout cycle's last reload scrolled the main column to the top, and the review's selected row, question 2's and the last, sits in view there, so the column stays at the top.",
+    why: "Ctrl+k reaches the review's round: the layout cycle's last reload scrolled the main column to the top, and opening the review puts its cursor on the first row, finding 1's, which sits in view there, so the column stays at the top.",
   },
   {
     keys: [' ', '?'],
