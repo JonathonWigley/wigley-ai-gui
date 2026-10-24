@@ -1,6 +1,11 @@
 import type { Paths } from '../../contracts/paths';
 import type { DocKind, IndexEntry } from './contract';
-import { DOC_KINDS, metaString } from './index-document';
+import {
+  DOC_KINDS,
+  isKnownKind,
+  isKnownSource,
+  metaString,
+} from './index-document';
 
 export type TreeNode = TreeGroup | TreeLeaf;
 
@@ -50,8 +55,16 @@ export function compareTitles(a: string, b: string): number {
   );
 }
 
-// Global, then Plugins, then one node per repo; a root with no entries is
-// left out.
+// A title for a kind or source the app does not know, from its id: each `-`
+// and `_` a space, the first character upper-cased.
+export function titleFromId(id: string): string {
+  const spaced = id.replace(/[-_]/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+// Global, then Plugins, then one node per repo, then one node per source the
+// app does not know, ids `source:<source>`; a root with no entries is left
+// out.
 export function buildTree(
   entries: readonly IndexEntry[],
   homeDir: string,
@@ -81,6 +94,24 @@ export function buildTree(
   );
   for (const [name, repoEntries] of groupedBy(repoOwned, (e) => e.repo ?? '')) {
     roots.push(repoNode(name, repoEntries, homeDir, paths));
+  }
+  const unknownSourced = entries.filter(
+    (entry) => !isKnownSource(entry.source),
+  );
+  for (const [source, sourceEntries] of groupedBy(
+    unknownSourced,
+    (entry) => entry.source,
+  )) {
+    const id = `source:${source}`;
+    roots.push(
+      group(
+        id,
+        titleFromId(source),
+        sourceEntries,
+        kindGroups(id, sourceEntries, paths),
+        paths,
+      ),
+    );
   }
   return roots;
 }
@@ -129,7 +160,9 @@ function byTitleThenId(a: IndexEntry, b: IndexEntry): number {
   );
 }
 
-// One group per kind present, in `DOC_KINDS` order, ids `<parentId>/<kind>`.
+// One group per kind present, in `DOC_KINDS` order, ids `<parentId>/<kind>`;
+// then one per kind the app does not know, by kind id, ids
+// `<parentId>/kind:<kind>` so no such kind meets a known node's id.
 function kindGroups(
   parentId: string,
   entries: readonly IndexEntry[],
@@ -144,6 +177,19 @@ function kindGroups(
         group(`${parentId}/${kind}`, KIND_TITLES[kind], ofKind, leaves, paths),
       );
     }
+  }
+  const unknownKinded = entries.filter((entry) => !isKnownKind(entry.kind));
+  for (const [kind, ofKind] of groupedBy(unknownKinded, (e) => e.kind)) {
+    const leaves = [...ofKind].sort(byTitleThenId).map(leaf);
+    groups.push(
+      group(
+        `${parentId}/kind:${kind}`,
+        titleFromId(kind),
+        ofKind,
+        leaves,
+        paths,
+      ),
+    );
   }
   return groups;
 }
@@ -236,10 +282,18 @@ function featuresNode(
   );
 }
 
+// Known kinds in `DOC_KINDS` order, then unknown kinds by kind id.
 function byKindThenTitle(a: IndexEntry, b: IndexEntry): number {
   return (
-    DOC_KINDS.indexOf(a.kind) - DOC_KINDS.indexOf(b.kind) || byTitleThenId(a, b)
+    kindRank(a.kind) - kindRank(b.kind) ||
+    (isKnownKind(a.kind) ? 0 : compareTitles(a.kind, b.kind)) ||
+    byTitleThenId(a, b)
   );
+}
+
+// A kind's place in `DOC_KINDS`; every unknown kind ranks after them all.
+function kindRank(kind: string): number {
+  return isKnownKind(kind) ? DOC_KINDS.indexOf(kind) : DOC_KINDS.length;
 }
 
 // `meta.feature` (task, plan), else `meta.slug` (feature), else the first

@@ -1,4 +1,5 @@
 import { type Files, readIfPresent } from '../../../contracts/files';
+import { isStringArray } from '../../../shared/json';
 
 export const ARCHIVED_SESSIONS_FILE = 'archived-sessions.json';
 
@@ -8,12 +9,6 @@ export interface ArchivedSessions {
   ids(): Promise<ReadonlySet<string>>;
   // Writes run one after another, each reading the file the last one wrote.
   set(hostSessionId: string, archived: boolean): Promise<void>;
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) && value.every((item) => typeof item === 'string')
-  );
 }
 
 function parseArchivedIds(text: string): string[] {

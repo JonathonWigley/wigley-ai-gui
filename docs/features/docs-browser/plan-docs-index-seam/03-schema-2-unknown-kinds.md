@@ -1,6 +1,6 @@
 # 03 — Schema 2 and unknown kinds and sources in the app
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 01 (shares `doc-files.test.ts`)
 Plan: [plan.md](plan.md)

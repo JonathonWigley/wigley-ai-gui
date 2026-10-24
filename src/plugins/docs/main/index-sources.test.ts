@@ -22,11 +22,12 @@ const ENTRY: IndexEntry = {
   line: null,
   title: 'Mine',
   meta: {},
+  walked: [],
 };
 
 function documentOf(entries: IndexEntry[]): IndexDocument {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: '2026-10-20T00:00:00Z',
     entries,
     contexts: [],
@@ -70,14 +71,14 @@ describe('machine source', () => {
     });
   });
 
-  it('machineIndex_SchemaTwo_PinnedMessage', async () => {
+  it('machineIndex_SchemaThree_PinnedMessage', async () => {
     const test = setUp();
-    await test.files.write(INDEX_FILE, '{"schemaVersion":2}');
+    await test.files.write(INDEX_FILE, '{"schemaVersion":3}');
 
     const load = await test.sources.machineIndex();
 
     expect(load.message).toBe(
-      'Unsupported docs index schema 2; this app reads 1',
+      'Unsupported docs index schema 3; this app reads 2',
     );
     expect(test.sources.loadedEntries()).toEqual([]);
   });

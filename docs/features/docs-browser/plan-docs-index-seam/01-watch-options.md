@@ -1,6 +1,6 @@
 # 01 — Files.watch takes options; docs watches one level
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -46,3 +46,5 @@ Done when: `npm run typecheck`, `npm run lint` and the tests above pass
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 2884091 · proof: diff read: WatchOptions and watch(folder, onChange, options?) present in src/contracts/files.ts; typecheck clean · concerns: Node non-recursive watch reports a subfolder by its own name on macOS (memory adapter never does); test filters 'sub' — ride to review

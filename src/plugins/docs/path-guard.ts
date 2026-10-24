@@ -25,7 +25,7 @@ export function isIndexedPath(
 
 // Why a write, create, rename or trash at `target` (its folder a real path)
 // is refused, or null when it is allowed: at an entry's own file, inside a
-// repo or feature root, or inside a global docs folder. Anything inside a
+// `repo` or `features` entry's root, or inside a global docs folder. Anything inside a
 // plugin cache or a listed plugin install is refused, even inside an allowed
 // folder.
 export function changeRefusal(
@@ -52,7 +52,7 @@ export function changeRefusal(
   const isEntryOrInsideRoot = entries.some(
     (entry) =>
       paths.samePath(target, entry.path) ||
-      (entry.source !== 'plugin' &&
+      ((entry.source === 'repo' || entry.source === 'features') &&
         entry.root !== null &&
         paths.isInside(target, entry.root)),
   );

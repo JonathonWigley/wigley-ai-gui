@@ -291,7 +291,7 @@ describe('chips', () => {
 describe('contextChoices', () => {
   it('contextChoices_HomeFirstThenByFolder', () => {
     const document: IndexDocument = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt: '2026-10-20T00:00:00Z',
       entries: [],
       contexts: [
@@ -361,6 +361,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     line: null,
     title: overrides.path.slice(overrides.path.lastIndexOf('/') + 1),
     meta: {},
+    walked: [],
     ...overrides,
   };
 }
@@ -370,7 +371,7 @@ function documentOf(
   contexts: IndexContext[] = [],
 ): IndexDocument {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: '2026-10-20T00:00:00Z',
     entries,
     contexts,
@@ -1079,6 +1080,28 @@ describe('provisionalEntry', () => {
     );
 
     expect(made.kind).toBe('feature-doc');
+  });
+
+  it('provisionalEntry_InsideUnknownSourceRoot_OwnedGlobal', () => {
+    const owner = entry({
+      path: '/Users/u/scratch/a.md',
+      source: 'scratch',
+      root: '/Users/u/scratch',
+    });
+
+    const made = provisionalEntry(
+      '/Users/u/scratch/b.md',
+      null,
+      [owner],
+      posixPaths,
+    );
+
+    expect(made).toMatchObject({
+      source: 'global',
+      repo: null,
+      root: null,
+      walked: [],
+    });
   });
 
   it('provisionalEntry_OutsideEveryRoot_Global', () => {

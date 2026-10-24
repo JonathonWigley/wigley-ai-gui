@@ -26,6 +26,7 @@ function entry(fields: Partial<IndexEntry> & Pick<IndexEntry, 'path'>) {
     line: null,
     title: 't',
     meta: {},
+    walked: [],
     ...fields,
   } satisfies IndexEntry;
 }

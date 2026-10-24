@@ -14,13 +14,14 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     line: null,
     title: posixPaths.base(overrides.path),
     meta: {},
+    walked: [],
     ...overrides,
   };
 }
 
 function documentText(fields: Record<string, unknown>): string {
   return JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: '2026-10-19T14:02:11Z',
     entries: [],
     contexts: [],
@@ -71,10 +72,10 @@ describe('parseIndexDocument', () => {
     }
   });
 
-  it('parse_SchemaTwo_RefusesWithPinnedMessage', () => {
-    expect(parseIndexDocument(documentText({ schemaVersion: 2 }))).toEqual({
+  it('parse_Schema1_Unsupported', () => {
+    expect(parseIndexDocument(documentText({ schemaVersion: 1 }))).toEqual({
       ok: false,
-      message: 'Unsupported docs index schema 2; this app reads 1',
+      message: 'Unsupported docs index schema 1; this app reads 2',
     });
   });
 
@@ -85,17 +86,55 @@ describe('parseIndexDocument', () => {
     });
   });
 
-  it('parse_UnknownKind_NamesEntryAndField', () => {
+  it('parse_UnknownKind_Loads', () => {
     const text = documentText({
-      entries: [
-        entry({ path: '/a' }),
-        { ...entry({ path: '/b' }), kind: 'widget' },
-      ],
+      entries: [entry({ path: '/a', kind: 'experiment' })],
+    });
+
+    const parsed = parseIndexDocument(text);
+
+    expect(parsed.ok && parsed.document.entries[0].kind).toBe('experiment');
+  });
+
+  it('parse_UnknownSource_Loads', () => {
+    const text = documentText({
+      entries: [entry({ path: '/s/a', source: 'scratch', root: '/s' })],
+    });
+
+    const parsed = parseIndexDocument(text);
+
+    expect(parsed.ok && parsed.document.entries[0].source).toBe('scratch');
+  });
+
+  it('parse_UnknownSourceRootNotString_NamesRoot', () => {
+    const text = documentText({
+      entries: [{ ...entry({ path: '/s/a', source: 'scratch' }), root: 3 }],
     });
 
     expect(parseIndexDocument(text)).toEqual({
       ok: false,
-      message: 'Docs index entry 1 is malformed: kind',
+      message: 'Docs index entry 0 is malformed: root',
+    });
+  });
+
+  it('parse_MissingWalked_NamesWalked', () => {
+    const { walked: _walked, ...withoutWalked } = entry({ path: '/a' });
+    const text = documentText({ entries: [withoutWalked] });
+
+    expect(parseIndexDocument(text)).toEqual({
+      ok: false,
+      message: 'Docs index entry 0 is malformed: walked',
+    });
+  });
+
+  it('parse_WalkedNotStrings_NamesWalked', () => {
+    const text = documentText({
+      entries: [{ ...entry({ path: '/a' }), walked: ['/l', 2] }],
+    });
+
+    expect(parseIndexDocument(text)).toEqual({
+      ok: false,
+      message: 'Docs index entry 0 is malformed: walked',
     });
   });
 

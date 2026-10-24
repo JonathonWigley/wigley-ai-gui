@@ -5,6 +5,7 @@ import type {
   DocSource,
   IndexEntry,
 } from './contract';
+import { isKnownSource } from './index-document';
 import { compareTitles } from './tree';
 
 // The order the kind list shows.
@@ -95,7 +96,8 @@ const KIND_RULES: Record<CreateKind, KindRule> = {
 };
 
 // The places a doc of `kind` may be created: the folders the index finds
-// that kind in, outside plugins; global places first, then by title.
+// that kind in, outside plugins and sources the app does not know; global
+// places first, then by title.
 export function placesFor(
   kind: CreateKind,
   entries: readonly IndexEntry[],
@@ -104,15 +106,17 @@ export function placesFor(
 ): CreatePlace[] {
   const places = new Map<string, CreatePlace>();
   for (const entry of entries) {
-    if (entry.kind !== kind || entry.source === 'plugin') {
+    const { source } = entry;
+    const isPlaceSource = isKnownSource(source) && source !== 'plugin';
+    if (entry.kind !== kind || !isPlaceSource) {
       continue;
     }
     const folder = KIND_RULES[kind].placeFolder(entry, paths);
     if (folder === null || places.has(folder)) {
       continue;
     }
-    const title = placeTitle(entry, paths.tilde(folder, homeDir));
-    places.set(folder, { title, folder, source: entry.source });
+    const title = placeTitle(entry, source, paths.tilde(folder, homeDir));
+    places.set(folder, { title, folder, source });
   }
   return [...places.values()].sort(
     (a, b) =>
@@ -192,14 +196,18 @@ function instructionsFolder(entry: IndexEntry, paths: Paths): string | null {
   return folderName === '.claude' ? paths.parent(folder) : folder;
 }
 
-function placeTitle(entry: IndexEntry, tildeFolder: string): string {
+function placeTitle(
+  entry: IndexEntry,
+  source: DocSource,
+  tildeFolder: string,
+): string {
   const owners: Record<DocSource, string> = {
     global: 'Global',
     repo: `${entry.repo}`,
     features: `${entry.repo} features`,
     plugin: `${entry.plugin}`,
   };
-  return `${owners[entry.source]} · ${tildeFolder}`;
+  return `${owners[source]} · ${tildeFolder}`;
 }
 
 // `existing` with `- **<name>** — ` appended as a new last line.

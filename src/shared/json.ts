@@ -6,6 +6,13 @@ export function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+// Whether `value` is an array holding only strings.
+export function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === 'string')
+  );
+}
+
 // The keys of `object` whose value JSON would write: an undefined value is
 // left out, as `JSON.stringify` leaves it out.
 function writtenKeys(object: JsonObject): string[] {

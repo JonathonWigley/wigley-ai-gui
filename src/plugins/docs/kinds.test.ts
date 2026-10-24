@@ -17,6 +17,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     line: null,
     title: posixPaths.base(overrides.path),
     meta: {},
+    walked: [],
     ...overrides,
   };
 }
@@ -95,6 +96,19 @@ describe('placesFor', () => {
         source: 'plugin',
         plugin: 'p@m',
         root: '/Users/u/.claude/plugins/cache/m/p/1',
+      }),
+    ];
+
+    expect(placesFor('skill', entries, HOME, posixPaths)).toEqual([]);
+  });
+
+  it('placesFor_UnknownSource_NoPlace', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/scratch/skills/s/SKILL.md',
+        kind: 'skill',
+        source: 'scratch',
+        root: '/Users/u/scratch',
       }),
     ];
 

@@ -6,9 +6,9 @@ import type {
   IndexDocument,
   IndexEntry,
 } from './contract';
-import { isJsonObject } from '../../shared/json';
+import { isJsonObject, isStringArray } from '../../shared/json';
 
-export const INDEX_SCHEMA_VERSION = 1;
+export const INDEX_SCHEMA_VERSION = 2;
 
 // `model.py`'s KINDS order; the tree groups kinds in this order.
 export const DOC_KINDS: readonly DocKind[] = [
@@ -30,12 +30,20 @@ export const DOC_KINDS: readonly DocKind[] = [
   'followup',
 ];
 
-const DOC_SOURCES: readonly DocSource[] = [
+export const DOC_SOURCES: readonly DocSource[] = [
   'global',
   'repo',
   'plugin',
   'features',
 ];
+
+export function isKnownKind(kind: string): kind is DocKind {
+  return (DOC_KINDS as readonly string[]).includes(kind);
+}
+
+export function isKnownSource(source: string): source is DocSource {
+  return (DOC_SOURCES as readonly string[]).includes(source);
+}
 
 export type ParsedIndex =
   | { ok: true; document: IndexDocument }
@@ -97,27 +105,49 @@ function failed(message: string): ParsedIndex {
   return { ok: false, message };
 }
 
-// The first field of `entry` that breaks the schema, or null.
+// The first field of `entry` that breaks the schema, or null. A kind or
+// source need only be a string; the known sources' own fields are checked,
+// and an unknown source's `repo`, `root` and `plugin` are each a string or
+// null.
 function malformedEntryField(entry: unknown): string | null {
   if (!isJsonObject(entry)) {
     return 'entry';
   }
-  const source = entry.source as DocSource;
+  const { source } = entry;
+  const sourceIsKnown = typeof source === 'string' && isKnownSource(source);
   const ownedByRepo = source === 'repo' || source === 'features';
   const ownedByPlugin = source === 'plugin';
   const checks: [string, boolean][] = [
     ['id', typeof entry.id === 'string'],
-    ['kind', DOC_KINDS.includes(entry.kind as DocKind)],
-    ['source', DOC_SOURCES.includes(source)],
-    ['repo', !ownedByRepo || typeof entry.repo === 'string'],
-    ['root', !(ownedByRepo || ownedByPlugin) || typeof entry.root === 'string'],
-    ['plugin', !ownedByPlugin || typeof entry.plugin === 'string'],
+    ['kind', typeof entry.kind === 'string'],
+    ['source', typeof source === 'string'],
+    ['repo', fieldValid(entry.repo, sourceIsKnown, ownedByRepo)],
+    [
+      'root',
+      fieldValid(entry.root, sourceIsKnown, ownedByRepo || ownedByPlugin),
+    ],
+    ['plugin', fieldValid(entry.plugin, sourceIsKnown, ownedByPlugin)],
     ['path', typeof entry.path === 'string'],
     ['line', entry.line === null || typeof entry.line === 'number'],
     ['title', typeof entry.title === 'string'],
     ['meta', isJsonObject(entry.meta)],
+    ['walked', isStringArray(entry.walked)],
   ];
   return checks.find(([, valid]) => !valid)?.[0] ?? null;
+}
+
+// A source-specific field: a string where a known source requires it; any
+// value for a known source that does not; a string or null for an unknown
+// source.
+function fieldValid(
+  value: unknown,
+  sourceIsKnown: boolean,
+  isRequired: boolean,
+): boolean {
+  if (!sourceIsKnown) {
+    return value === null || typeof value === 'string';
+  }
+  return !isRequired || typeof value === 'string';
 }
 
 // The first field of `context` that breaks the schema, or null.

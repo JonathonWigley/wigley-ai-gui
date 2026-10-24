@@ -589,8 +589,8 @@ const INSTRUCTION_NAMES = new Set([
 ]);
 
 // The entry a new file gets until a build lists it: owned by the deepest
-// non-plugin root holding it (else global), its kind `kind` or, when null,
-// guessed from the path.
+// `repo` or `features` root holding it (else global), its kind `kind` or,
+// when null, guessed from the path.
 export function provisionalEntry(
   path: string,
   kind: DocKind | null,
@@ -610,6 +610,7 @@ export function provisionalEntry(
     line: null,
     title: skill === null ? paths.base(path) : paths.base(skill),
     meta: {},
+    walked: [],
   };
 }
 
@@ -622,8 +623,8 @@ function owningEntry(
   let ownerRoot = '';
   for (const entry of entries) {
     const { root } = entry;
-    const holdsPath =
-      root !== null && entry.source !== 'plugin' && paths.isInside(path, root);
+    const ownsFolder = entry.source === 'repo' || entry.source === 'features';
+    const holdsPath = root !== null && ownsFolder && paths.isInside(path, root);
     if (holdsPath && root.length > ownerRoot.length) {
       owner = entry;
       ownerRoot = root;

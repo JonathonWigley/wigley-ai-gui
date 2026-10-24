@@ -15,6 +15,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     line: null,
     title: posixPaths.base(overrides.path),
     meta: {},
+    walked: [],
     ...overrides,
   };
 }
@@ -81,6 +82,34 @@ describe('changeRefusal', () => {
     expect(refusal('/Users/u/notes/other.md')).toBe(
       'Refused: /Users/u/notes/other.md is outside the indexed folders',
     );
+  });
+
+  it('changeRefusal_InsideUnknownSourceRoot_Refused', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/scratch/a.md',
+        source: 'scratch',
+        root: '/Users/u/scratch',
+      }),
+    ];
+
+    expect(
+      changeRefusal('/Users/u/scratch/b.md', entries, FOLDERS, posixPaths),
+    ).toBe('Refused: /Users/u/scratch/b.md is outside the indexed folders');
+  });
+
+  it('changeRefusal_UnknownSourceEntryPath_Allowed', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/scratch/a.md',
+        source: 'scratch',
+        root: '/Users/u/scratch',
+      }),
+    ];
+
+    expect(
+      changeRefusal('/Users/u/scratch/a.md', entries, FOLDERS, posixPaths),
+    ).toBe(null);
   });
 
   it('changeRefusal_UnlistedCachedVersion_RefusedNamingCache', () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { IndexDocument } from '../contract';
+import { parseIndexDocument } from '../index-document';
 import { writeDocsFixture } from './selftest-fixture';
 
 const HOME = '/home';
@@ -84,6 +85,15 @@ describe('writeDocsFixture', () => {
       expect(home?.states[doc.path]).toEqual({ claude: doc.claude });
       expect(await files.read(doc.path)).toBe(`# ${doc.title}\n`);
     }
+  });
+
+  it('GIVEN loadStates on WHEN the index fixture is parsed THEN the app reads it', async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths, { loadStates: true });
+
+    const parsed = parseIndexDocument(await files.read(INDEX_FIXTURE));
+    expect(parsed.ok || parsed.message).toBe(true);
   });
 
   it('GIVEN loadStates on then off WHEN the files are listed THEN no load-state doc remains on disk or in the index', async () => {

@@ -160,6 +160,7 @@ function entry(
     root: null,
     plugin: null,
     line: null,
+    walked: [],
     ...fields,
   };
 }
@@ -305,7 +306,7 @@ function indexDocument(
     },
   ];
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: '2026-10-19T00:00:00Z',
     entries,
     contexts,
@@ -363,7 +364,7 @@ def built_index():
         if name.endswith(".md") and path not in known:
             doc["entries"].append({"id": path, "kind": "rule", "source": "global", "repo": None,
                 "root": None, "plugin": None, "path": path, "line": None, "title": name,
-                "meta": {"paths": []}})
+                "meta": {"paths": []}, "walked": []})
     doc["entries"].sort(key=lambda entry: entry["id"])
     return json.dumps(doc, indent=2)
 command = sys.argv[1] if len(sys.argv) > 1 else ""

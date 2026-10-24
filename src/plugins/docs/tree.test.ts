@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
 import type { IndexEntry } from './contract';
-import { buildTree, type TreeGroup, type TreeNode } from './tree';
+import { buildTree, titleFromId, type TreeGroup, type TreeNode } from './tree';
 
 const HOME = '/Users/u';
 
@@ -17,6 +17,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     line: null,
     title: posixPaths.base(overrides.path),
     meta: {},
+    walked: [],
     ...overrides,
   };
 }
@@ -95,6 +96,78 @@ describe('buildTree', () => {
       'Instructions',
       'Rules',
       'Skills',
+    ]);
+  });
+
+  it('buildTree_UnknownKind_GroupAfterKnownKinds', () => {
+    const entries = [
+      entry({ path: '/Users/u/.claude/x/a.md', kind: 'experiment' }),
+      entry({ path: '/Users/u/.claude/rules/b.md', kind: 'rule' }),
+      entry({ path: '/Users/u/.claude/CLAUDE.md', kind: 'followup' }),
+    ];
+
+    const global = child(buildTree(entries, HOME, posixPaths), 'Global');
+
+    expect(titles(global.children)).toEqual([
+      'Rules',
+      'Follow-ups',
+      'Experiment',
+    ]);
+    expect(global.children[2].id).toBe('global/kind:experiment');
+  });
+
+  it('buildTree_UnknownSource_RootAfterRepos', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/scratch/a.md',
+        source: 'scratch',
+        root: '/Users/u/scratch',
+      }),
+      entry({
+        path: '/Users/u/notes/b.md',
+        source: 'my_notes',
+        root: '/Users/u/notes',
+      }),
+      entry({
+        path: '/Users/u/dev/r/AGENTS.md',
+        kind: 'instructions',
+        source: 'repo',
+        repo: 'r',
+        root: '/Users/u/dev/r',
+      }),
+    ];
+
+    const roots = buildTree(entries, HOME, posixPaths);
+
+    expect(titles(roots)).toEqual(['r', 'My notes', 'Scratch']);
+    const scratch = child(roots, 'Scratch');
+    expect(scratch.id).toBe('source:scratch');
+    expect(titles(scratch.children)).toEqual(['Rules']);
+  });
+
+  it('buildTree_UnknownKindNamedFeatures_IdUnique', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/dev/r/odd.md',
+        kind: 'features',
+        source: 'repo',
+        repo: 'r',
+        root: '/Users/u/dev/r',
+      }),
+      entry({
+        path: '/Users/u/wigley-features/r/followups.md',
+        kind: 'followup',
+        source: 'features',
+        repo: 'r',
+        root: '/Users/u/wigley-features/r',
+      }),
+    ];
+
+    const repo = child(buildTree(entries, HOME, posixPaths), 'r');
+
+    expect(repo.children.map((node) => node.id)).toEqual([
+      'repo:r/kind:features',
+      'repo:r/features',
     ]);
   });
 
@@ -271,6 +344,13 @@ describe('buildTree', () => {
       title: 'x.md',
       entryId: '/x.md#L3',
     });
+  });
+});
+
+describe('titleFromId', () => {
+  it('titleFromId_HyphensAndUnderscores_BecomeSpaces', () => {
+    expect(titleFromId('my-kind')).toBe('My kind');
+    expect(titleFromId('scratch_notes')).toBe('Scratch notes');
   });
 });
 

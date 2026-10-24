@@ -1,9 +1,11 @@
-// The docs index document (schema 1), as `docs_index.py` writes it (the
+// The docs index document (schema 2), as `docs_index.py` writes it (the
 // marketplace's `plugins/wigley/scripts/docs-index/README.md` is its schema),
 // and the docs plugin's channel between its main and page parts.
 
 import type { ChannelShape } from '../../contracts/plugin';
 
+// The kinds and sources the app knows; an index entry may name others, which
+// still load (`isKnownKind`, `isKnownSource`).
 export type DocKind =
   | 'instructions'
   | 'reference'
@@ -42,8 +44,10 @@ export interface IndexEntry {
   // The real path, with `#L<line>` for an item inside a file and
   // `#hook:<event>:<n>` for a hook.
   id: string;
-  kind: DocKind;
-  source: DocSource;
+  // A `DocKind`, or a kind the app does not know.
+  kind: string;
+  // A `DocSource`, or a source the app does not know.
+  source: string;
   // A string for `repo` and `features` entries.
   repo: string | null;
   // The clone, feature home or plugin install folder; a string for every
@@ -56,6 +60,8 @@ export interface IndexEntry {
   line: number | null;
   title: string;
   meta: Record<string, unknown>;
+  // Each path where the index's walk reached this entry through a link.
+  walked: string[];
 }
 
 export interface IndexContext {
@@ -66,7 +72,7 @@ export interface IndexContext {
 }
 
 export interface IndexDocument {
-  schemaVersion: 1;
+  schemaVersion: 2;
   generatedAt: string;
   entries: IndexEntry[];
   contexts: IndexContext[];

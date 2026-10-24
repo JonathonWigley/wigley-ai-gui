@@ -204,7 +204,7 @@ other plugin reaches docs only through `DocsMainExports` and `DocsPageExports` (
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Files.watch options, one-level docs watch](01-watch-options.md)
+- [x] [Files.watch options, one-level docs watch](01-watch-options.md)
 - [x] [Index export: schema 2 and walked](02-index-walked-export.md)
 
 ### Wave 2
@@ -229,8 +229,11 @@ Review base: c04112eecae26d302e9320a509cba760cb383b58
 
 ### Groups
 - 02 · marketplace bb31807 · diff read matches Produces (SCHEMA_VERSION = 2, to_json walked); docs-index unittest 155 OK · concerns: none
+- 01 · 2884091 · diff read: WatchOptions and watch(folder, onChange, options?) present in src/contracts/files.ts; typecheck clean · concerns: Node non-recursive watch reports a subfolder by its own name on macOS (memory adapter never does); test filters 'sub' — ride to review
 ### Contract changes
 ### Rulings
 - wigley bumped 1.9.0 → 1.9.1 in both manifests: local and origin/main matched, and § Changing a plugin names no other version field — the version rule — none, a later bump in the same push is harmless · group 02 · group 02
+- node-files test drops a 'sub' report before asserting ['b.txt'], and the contract comment names the Node adapter's subfolder-name report — macOS fs.watch non-recursive reports the changed subfolder entry; no adapter filter, which would hide direct folder creates — a consumer needing no folder reports would need a stat filter · group 01 · group 01
+- watch_WatchesFolderOneLevel uses its own recording fake in the watch describe — the Windows fake near line 920 is out of that describe's reach — none · group 01 · group 01
 ### Review rounds
 ### Test gate
