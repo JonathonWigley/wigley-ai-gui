@@ -30,6 +30,10 @@ export interface DocsFixtureOptions {
   // Adds the `LOAD_STATE_DOCS` docs under `.claude/load-states/` and their
   // states in the home folder's context.
   loadStates: boolean;
+  // Milliseconds the stand-in docs_index.py waits before answering any
+  // command, so the index run an in-app change starts outlasts the Docs
+  // tree's pending chip. 0 or absent answers at once.
+  indexDelayMs?: number;
 }
 
 // Writes the self-test's docs, index and stand-in docs_index.py under
@@ -76,7 +80,10 @@ export async function writeDocsFixture(
       paths.join(fixture.scriptFolder, 'session.fixture.json'),
       json(sessionDocument(fixture, index)),
     ],
-    [paths.join(fixture.scriptFolder, 'docs_index.py'), standInScript(home)],
+    [
+      paths.join(fixture.scriptFolder, 'docs_index.py'),
+      standInScript(home, options.indexDelayMs ?? 0),
+    ],
   ];
   for (const [path, text] of writes) {
     await files.write(path, text);
@@ -338,9 +345,10 @@ function json(document: IndexDocument): string {
 // `build` drops entries whose file is gone and lists each new `.md` in the
 // rules folder as a global rule, so the self-test's changes there survive a
 // background build. It never reads HOME: the temp home is a literal.
-function standInScript(home: string): string {
-  return `import json, os, sys
+function standInScript(home: string, indexDelayMs: number): string {
+  return `import json, os, sys, time
 HOME = ${JSON.stringify(home)}
+DELAY_SECONDS = ${JSON.stringify(indexDelayMs / 1000)}
 HERE = os.path.dirname(os.path.abspath(__file__))
 def text(name):
     with open(os.path.join(HERE, name), encoding="utf-8") as file:
@@ -359,6 +367,7 @@ def built_index():
     doc["entries"].sort(key=lambda entry: entry["id"])
     return json.dumps(doc, indent=2)
 command = sys.argv[1] if len(sys.argv) > 1 else ""
+time.sleep(DELAY_SECONDS)
 if command == "build":
     target = os.path.join(HOME, ".agents", "wigley-docs", "index.json")
     with open(target + ".tmp", "w", encoding="utf-8") as file:

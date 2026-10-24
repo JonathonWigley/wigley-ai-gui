@@ -43,7 +43,28 @@ async function readIndex(
   return JSON.parse(await files.read(INDEX_FIXTURE)) as IndexDocument;
 }
 
+const STAND_IN_SCRIPT = `${HOME}/.claude/plugins/cache/wigley-ai-marketplace/wigley/0.0.0/scripts/docs-index/docs_index.py`;
+
 describe('writeDocsFixture', () => {
+  it('GIVEN indexDelayMs 1500 WHEN the stand-in script is read back THEN it sleeps 1.5 seconds before answering', async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths, {
+      loadStates: false,
+      indexDelayMs: 1500,
+    });
+
+    expect(await files.read(STAND_IN_SCRIPT)).toContain('DELAY_SECONDS = 1.5');
+  });
+
+  it('GIVEN no indexDelayMs WHEN the stand-in script is read back THEN it sleeps 0 seconds', async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths, { loadStates: false });
+
+    expect(await files.read(STAND_IN_SCRIPT)).toContain('DELAY_SECONDS = 0\n');
+  });
+
   it('GIVEN loadStates on WHEN the index fixture is read back THEN it holds each load-state doc and the home context its Claude state', async () => {
     const files = await homeFiles();
 

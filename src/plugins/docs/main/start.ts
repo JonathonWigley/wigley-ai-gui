@@ -11,9 +11,11 @@ import type {
 import {
   argsObject,
   optionalBoolean,
+  optionalNumber,
   optionalString,
 } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
+import type { JsonObject } from '../../../shared/json';
 import type {
   ConnectedSession,
   SessionsMainEvents,
@@ -106,10 +108,20 @@ interface DocsDriveDeps {
   paths: Paths;
 }
 
+function indexDelayMsArg(args: JsonObject): number {
+  const indexDelayMs = optionalNumber(args, 'indexDelayMs') ?? 0;
+  if (indexDelayMs < 0) {
+    throw new Error('indexDelayMs must not be negative');
+  }
+  return indexDelayMs;
+}
+
 // `docs.seed` rewrites the fixture; `docs.connectSession` rewrites it and
 // connects a session in its repo, whose row shows its Docs tab. Each takes
-// `loadStates` to add a doc per non-launch index load state. Disposing
-// removes the actions and ends every session `docs.connectSession` connected.
+// `loadStates` to add a doc per non-launch index load state and
+// `indexDelayMs` to make the stand-in index script wait before answering.
+// Disposing removes the actions and ends every session `docs.connectSession`
+// connected.
 export function addDriveActions(
   drive: DriveHost,
   deps: DocsDriveDeps,
@@ -120,20 +132,24 @@ export function addDriveActions(
   const actions = [
     drive.add('seed', {
       description:
-        "Rewrites the docs fixture under the temp home, removing what earlier steps added; loadStates adds one doc per index load state other than launch (on-demand, listed, shadowed, not-loaded) under .claude/load-states. Returns the home's real path.",
-      args: '{ loadStates?: boolean }',
+        'Rewrites the docs fixture under the temp home, removing what earlier steps added; loadStates adds one doc per index load state other than launch (on-demand, listed, shadowed, not-loaded) under .claude/load-states; indexDelayMs makes the stand-in docs_index.py wait that many milliseconds before answering, so a docs index run outlasts the Docs tree\'s "Claude pending" chip (default 0). Returns the home\'s real path.',
+      args: '{ loadStates?: boolean, indexDelayMs?: number }',
       async run(rawArgs) {
         await started;
-        const loadStates =
-          optionalBoolean(argsObject(rawArgs), 'loadStates') ?? false;
-        await writeDocsFixture(files, homeDir, paths, { loadStates });
+        const args = argsObject(rawArgs);
+        const loadStates = optionalBoolean(args, 'loadStates') ?? false;
+        const indexDelayMs = indexDelayMsArg(args);
+        await writeDocsFixture(files, homeDir, paths, {
+          loadStates,
+          indexDelayMs,
+        });
         return { home: await files.realPath(homeDir) };
       },
     }),
     drive.add('connectSession', {
       description:
         'Rewrites the docs fixture and connects a session in its repo, activating the row on its Docs tab; sessionId defaults to drive-docs-<n>; loadStates adds one doc per index load state other than launch, as docs.seed does.',
-      args: '{ sessionId?: string, loadStates?: boolean }',
+      args: '{ sessionId?: string, loadStates?: boolean, indexDelayMs?: number }',
       async run(rawArgs) {
         await started;
         connects += 1;
@@ -141,13 +157,14 @@ export function addDriveActions(
         const sessionId =
           optionalString(args, 'sessionId') ?? `drive-docs-${String(connects)}`;
         const loadStates = optionalBoolean(args, 'loadStates') ?? false;
+        const indexDelayMs = indexDelayMsArg(args);
         const session = await connectDocsFixtureSession(
           files,
           homeDir,
           sessions,
           sessionId,
           paths,
-          { loadStates },
+          { loadStates, indexDelayMs },
         );
         connected.push(session);
         return { sessionId, rowId: session.session.id };
