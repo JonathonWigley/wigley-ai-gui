@@ -44,11 +44,6 @@ export async function writeDocsFixture(
 ): Promise<void> {
   const home = await files.realPath(homeDir);
   const fixture = fixturePaths(home, paths);
-  for (const entry of await files.list(fixture.rules)) {
-    if (entry.path !== KEPT_RULE) {
-      await files.trash(paths.join(fixture.rules, entry.path));
-    }
-  }
   const index = indexDocument(fixture, options, paths);
   const writes: [string, string][] = [
     [
@@ -86,10 +81,15 @@ export async function writeDocsFixture(
   for (const [path, text] of writes) {
     await files.write(path, text);
   }
-  // After the docs it lists are written and before the load-state docs it no
-  // longer lists are trashed, so a reader never sees an index whose files are
-  // missing.
+  // After the docs it lists are written and before the rules and load-state
+  // docs it no longer lists are trashed, so a reader never sees an index whose
+  // files are missing.
   await files.write(paths.join(home, MACHINE_INDEX_FILE), json(index));
+  for (const entry of await files.list(fixture.rules)) {
+    if (entry.path !== KEPT_RULE) {
+      await files.trash(paths.join(fixture.rules, entry.path));
+    }
+  }
   const hasLoadStatesFolder = (await files.stat(fixture.loadStates)) !== null;
   if (!options.loadStates && hasLoadStatesFolder) {
     await files.trash(fixture.loadStates);

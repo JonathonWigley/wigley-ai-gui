@@ -408,6 +408,10 @@ export async function runScript(
   stepTimeoutMs = STEP_TIMEOUT_MS,
 ): Promise<number | null> {
   const mark = await markLog(window);
+  // A later run may have begun while the log was read.
+  if (!isCurrent()) {
+    return null;
+  }
   let failures = (await restoreStartWidth(
     window,
     pluginId,
@@ -416,7 +420,7 @@ export async function runScript(
   ))
     ? 0
     : 1;
-  // A later run may have begun while the log was read or the width restored.
+  // A later run may have begun while the width was restored.
   if (!isCurrent()) {
     return null;
   }
