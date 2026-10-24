@@ -307,6 +307,19 @@ describe('checkGroups', () => {
     expect(noWhy).toThrow('Self-test group forms: rounds has no why');
   });
 
+  it.each(['', '  '])('throws on a step whose why is "%s"', (why) => {
+    const check = () =>
+      checkGroups([
+        withGroups('forms', [
+          { name: 'rounds', why: 'w', steps: [{ ...step, why }] },
+        ]),
+      ]);
+
+    expect(check).toThrow(
+      'Self-test group forms: rounds has a step (x) with no why',
+    );
+  });
+
   it.each([1, 2.5])('throws on a repeat with max %s', (max) => {
     const check = () =>
       checkGroups([

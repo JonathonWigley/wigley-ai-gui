@@ -96,9 +96,10 @@ function pressFiles(base: string, repeatMax: number | undefined): string[] {
 }
 
 // Throws on a script whose groups the runner cannot report or run: a group
-// with a blank `name` or `why`, two groups of one script with one name, a
-// `repeat` whose `max` is not a whole number of at least 2 or whose `until` is
-// blank, and a `width` that is neither `'start'` nor a positive whole number.
+// with a blank `name` or `why`, two groups of one script with one name, a step
+// whose `why` is given but blank, a `repeat` whose `max` is not a whole number
+// of at least 2 or whose `until` is blank, and a `width` that is neither
+// `'start'` nor a positive whole number.
 export function checkGroups(handed: readonly HandedScript[]): void {
   for (const { pluginId, script } of handed) {
     const names = new Set<string>();
@@ -123,6 +124,9 @@ export function checkGroups(handed: readonly HandedScript[]): void {
 
 // Throws, naming `where` and the step's line, on a step `checkGroups` rejects.
 function checkStep(where: string, step: SelfTestStep): void {
+  if (step.why !== undefined && step.why.trim() === '') {
+    throw new Error(`${where} has a step (${step.expect}) with no why`);
+  }
   const isWidthValid =
     step.width === undefined ||
     step.width === 'start' ||

@@ -166,15 +166,16 @@ interface RepeatOutcome {
   isSaved: boolean;
 }
 
-// Waits for `expect` or `until` after the first press, and after each
-// `expect` presses the keys again from a fresh mark, until `until` is logged,
-// a press logs neither, or `max` presses ran without `until`. Saves
+// Waits up to `timeoutMs` for `expect` or `until` after the first press, and
+// after each `expect` presses the keys again from a fresh mark, until `until`
+// is logged, a press logs neither, or `max` presses ran without `until`. Saves
 // `pngs[n - 1]` after the n-th press's wait when the step has screenshots.
 async function repeatUntil(
   window: DrivenWindow,
   step: RepeatingStep,
   firstMark: LogMark,
   pngs: readonly string[],
+  timeoutMs: number,
   isCurrent: () => boolean,
 ): Promise<RepeatOutcome> {
   const { until, max } = step.repeat;
@@ -191,6 +192,7 @@ async function repeatUntil(
       window,
       [until, step.expect],
       mark,
+      timeoutMs,
     );
     if (pngs.length > 0 && isCurrent()) {
       isSaved =
@@ -211,17 +213,18 @@ async function repeatUntil(
   }
 }
 
-// Waits for the step's line and reports it, then saves the window to `png`
-// when the step has one.
+// Waits up to `timeoutMs` for the step's line and reports it, then saves the
+// window to `png` when the step has one.
 async function waitForStepLine(
   window: DrivenWindow,
   step: SelfTestStep,
   mark: LogMark,
   label: string,
   png: string | undefined,
+  timeoutMs: number,
   isCurrent: () => boolean,
 ): Promise<{ passed: boolean; isSaved: boolean }> {
-  const passed = await waitForNewLogLine(window, step.expect, mark);
+  const passed = await waitForNewLogLine(window, step.expect, mark, timeoutMs);
   if (isCurrent()) {
     report(passed, `${label} -> ${step.expect}`);
   }
@@ -240,9 +243,17 @@ async function repeatStep(
   mark: LogMark,
   label: string,
   pngs: readonly string[],
+  timeoutMs: number,
   isCurrent: () => boolean,
 ): Promise<{ passed: boolean; isSaved: boolean }> {
-  const outcome = await repeatUntil(window, step, mark, pngs, isCurrent);
+  const outcome = await repeatUntil(
+    window,
+    step,
+    mark,
+    pngs,
+    timeoutMs,
+    isCurrent,
+  );
   if (isCurrent()) {
     const failure = outcome.failure === null ? '' : `: ${outcome.failure}`;
     report(
@@ -266,13 +277,13 @@ function stepLabel(step: SelfTestStep): string {
 // Sets the step's `width` (`'start'` being `startWidth`) when it has one,
 // writes its file through `homeFiles` (rooted at the self-test's temp home, so
 // a path outside it rejects), presses its keys, and waits for its line; a
-// repeating step presses again after each `expect` until its `until` line.
-// The log is marked before the resize and the write, so a line either alone
-// causes counts. A width that never lands fails the step before its write and
-// keys. Then, whether the line came or not, saves the window to each of
-// `pngs` the presses reached, and, when the step passed, runs its fit check,
-// which resizes the window, so it comes after the screenshots, and returns to
-// the width the step left.
+// repeating step presses again after each `expect` until its `until` line, each
+// line waited for up to `timeoutMs`. The log is marked before the resize and
+// the write, so a line either alone causes counts. A width that never lands
+// fails the step before its write and keys. Then, whether the line came or not,
+// saves the window to each of `pngs` the presses reached, and, when the step
+// passed, runs its fit check, which resizes the window, so it comes after the
+// screenshots, and returns to the width the step left.
 async function runStep(
   window: DrivenWindow,
   homeFiles: Files,
@@ -280,6 +291,7 @@ async function runStep(
   pngs: readonly string[],
   startWidth: number,
   scrollsItself: string[],
+  timeoutMs: number,
   isCurrent: () => boolean,
 ): Promise<boolean> {
   const label = stepLabel(step);
@@ -310,13 +322,22 @@ async function runStep(
   }
   const { passed, isSaved } =
     step.repeat === undefined
-      ? await waitForStepLine(window, step, mark, label, pngs[0], isCurrent)
+      ? await waitForStepLine(
+          window,
+          step,
+          mark,
+          label,
+          pngs[0],
+          timeoutMs,
+          isCurrent,
+        )
       : await repeatStep(
           window,
           { ...step, repeat: step.repeat },
           mark,
           label,
           pngs,
+          timeoutMs,
           isCurrent,
         );
   if (!passed || !isSaved || !step.checksFit) {
@@ -366,16 +387,16 @@ function reportWhys(group: SelfTestGroup, step: SelfTestStep) {
 
 // Opens the script's fixture, runs its groups' steps in order and checks its
 // result, reporting each under `pluginId` and each group's name before its
-// steps; a result that has not settled within the step timeout once the
-// steps end fails as timed out, and a result that rejects, even before the
-// steps end, stops the run and rejects with its error. The window starts and
-// ends the script at `startWidth`, the content width the self-test started
-// on: a run that opens on another (a reload interrupted a held width) resizes
-// back first, and a width a step held is restored once the result is checked.
-// `screenshots` maps each step that saves PNGs to their paths, and the fit
-// check lets the script's `scrollsItself` and the primitives' ellipsis parts
-// clip. Returns how many checks failed, or null when a reload interrupted the
-// run.
+// steps; the shown line and each step's lines are waited for up to
+// `stepTimeoutMs`, a result that has not settled within it once the steps end
+// fails as timed out, and a result that rejects, even before the steps end,
+// stops the run and rejects with its error. The window starts and ends the
+// script at `startWidth`, the content width the self-test started on: a run
+// that opens on another (a reload interrupted a held width) resizes back first,
+// and a width a step held is restored once the result is checked. `screenshots`
+// maps each step that saves PNGs to their paths, and the fit check lets the
+// script's `scrollsItself` and the primitives' ellipsis parts clip. Returns how
+// many checks failed, or null when a reload interrupted the run.
 export async function runScript(
   window: DrivenWindow,
   homeFiles: Files,
@@ -384,6 +405,7 @@ export async function runScript(
   startWidth: number,
   run: number,
   isCurrent: () => boolean,
+  stepTimeoutMs = STEP_TIMEOUT_MS,
 ): Promise<number | null> {
   const mark = await markLog(window);
   let failures = (await restoreStartWidth(
@@ -403,7 +425,7 @@ export async function runScript(
   // raced against it ends as soon as the result rejects.
   const rejection = result.then(() => new Promise<never>(() => {}));
   const isShown = await Promise.race([
-    waitForNewLogLine(window, shownLine, mark),
+    waitForNewLogLine(window, shownLine, mark, stepTimeoutMs),
     rejection,
   ]);
   if (!isShown) {
@@ -431,6 +453,7 @@ export async function runScript(
           screenshots.get(step) ?? [],
           startWidth,
           scrollsItself,
+          stepTimeoutMs,
           isCurrent,
         ),
         rejection,
@@ -443,14 +466,14 @@ export async function runScript(
       }
     }
   }
-  const outcome = await settleWithin(result, STEP_TIMEOUT_MS);
+  const outcome = await settleWithin(result, stepTimeoutMs);
   if (!isCurrent()) {
     return null;
   }
   if (outcome.timedOut) {
     report(
       false,
-      `${pluginId} result did not settle within ${STEP_TIMEOUT_MS} ms`,
+      `${pluginId} result did not settle within ${stepTimeoutMs} ms`,
     );
     failures++;
   } else {
@@ -589,12 +612,12 @@ export interface SelfTestDriver {
 // `homeFiles` is the files service rooted at the self-test's temp home, which
 // steps' `writeFile` writes through. `cleanUp` closes what holds files there
 // and deletes what the self-test made outside the repo; the self-test awaits
-// it before it exits. `screenshotFolder` is
-// emptied here, so it ends the run holding only that run's PNGs. Each plugin
-// hands at most one script while the parts start; a host throws on its
-// plugin's second script or one handed over late. Every page load runs the
-// handed scripts in hand-over order. The window's content width as the
-// self-test starts is the width every script starts and ends on.
+// it before it exits. `screenshotFolder` is emptied here, so it ends the run
+// holding only that run's PNGs. Each plugin hands at most one script while the
+// parts start; a host throws on its plugin's second script or one handed over
+// late. Every page load runs the handed scripts in hand-over order. The
+// window's content width as the self-test starts is the width every script
+// starts and ends on.
 export function startSelfTest(
   window: BrowserWindow,
   homeFiles: Files,

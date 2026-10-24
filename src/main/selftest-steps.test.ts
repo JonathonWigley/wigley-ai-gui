@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Files } from '../contracts/files';
 import type { SelfTestGroup, SelfTestStep } from '../contracts/plugin';
-import type { DrivenWindow } from './drive/driven-window';
+import { type DrivenWindow, PageNavigatedError } from './drive/driven-window';
 import { fakeDrivenWindow } from './drive/fake-driven-window';
 import { runScript } from './selftest';
 
@@ -39,13 +39,15 @@ function page(onKey: (key: string, log: string[]) => void) {
 }
 
 // Runs one script of `groups` for plugin `t` over `window`, its fixture
-// logging `[t] shown` as it opens, as the run `isCurrent` says is current.
+// logging `[t] shown` as it opens, as the run `isCurrent` says is current,
+// waiting `stepTimeoutMs` for each line when given.
 function runGroups(
   window: DrivenWindow,
   log: string[],
   groups: SelfTestGroup[],
   screenshots: ReadonlyMap<SelfTestStep, readonly string[]> = new Map(),
   isCurrent: () => boolean = () => true,
+  stepTimeoutMs?: number,
 ) {
   return runScript(
     window,
@@ -68,6 +70,7 @@ function runGroups(
     START_WIDTH,
     1,
     isCurrent,
+    stepTimeoutMs,
   );
 }
 
@@ -156,6 +159,36 @@ describe('runScript', () => {
     ]);
 
     expect(widthsAtKeys).toEqual([START_WIDTH]);
+  });
+
+  it('fails a step whose width never lands before its keys', async () => {
+    const { window, log, widthsAtKeys } = page(echo);
+    // The page reloads while it redraws at 600.
+    const reloadingWindow: DrivenWindow = {
+      ...window,
+      run: (script) => {
+        const isRedrawAt600 =
+          script.includes('redrawFrames = 0') &&
+          window.contentSize().width === 600;
+        return isRedrawAt600
+          ? Promise.reject(new PageNavigatedError())
+          : window.run(script);
+      },
+    };
+
+    const failures = await runGroups(reloadingWindow, log, [
+      {
+        name: 'narrow',
+        why: 'the page fits 600',
+        steps: [{ keys: ['a'], expect: '[t] a', width: 600 }],
+      },
+    ]);
+
+    expect(failures).toBe(1);
+    expect(widthsAtKeys).toEqual([]);
+    expect(lines).toContain(
+      '[selftest] FAIL a -> [t] a: width 600 never landed',
+    );
   });
 
   it('opens nothing when a reload lands while it resizes back to the start width', async () => {
@@ -254,6 +287,30 @@ describe('runScript', () => {
     expect(failures).toBe(1);
     expect(lines).toContain(
       '[selftest] FAIL n ×3 -> last page: last page not reached in 3 presses',
+    );
+  });
+
+  it('fails a repeating step at a press that logs neither its expect nor its until line', async () => {
+    let presses = 0;
+    const { window, log } = page((_key, pageLog) => {
+      presses++;
+      if (presses === 1) {
+        pageLog.unshift('next page');
+      }
+    });
+
+    const failures = await runGroups(
+      window,
+      log,
+      [{ name: 'pages', why: 'every page shows', steps: [PAGES_STEP] }],
+      new Map(),
+      () => true,
+      100,
+    );
+
+    expect(failures).toBe(1);
+    expect(lines).toContain(
+      '[selftest] FAIL n ×2 -> last page: next page or last page never logged after press 2',
     );
   });
 
