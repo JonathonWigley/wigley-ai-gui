@@ -5,63 +5,81 @@ export function isFindingAction(value: unknown): value is FindingAction {
   return (FINDING_ACTIONS as readonly unknown[]).includes(value);
 }
 
-// Whether a finding's pick holds everything the caller needs to act: an
-// action, plus a solution when the action is 'fix_now' or 'follow_up' and
-// the finding offers more than one. `choice` is 1-based, 0 for none.
-export function findingPickIsComplete(
-  solutionCount: number,
-  choice: number,
-  action: FindingAction | '',
-): boolean {
-  if (action === '') {
-    return false;
-  }
-  if (action === 'leave_it') {
-    return true;
-  }
-  const choiceIsInRange = choice >= 1 && choice <= solutionCount;
-  return solutionCount === 1 || choiceIsInRange;
+// One numbered pick on a finding card: a choice with the action it sits
+// under, or the header of an action with no choices, whose `choice` is 0.
+// `choice` is otherwise the choice's 1-based number in the finding's choices.
+export interface FindingEntry {
+  action: FindingAction;
+  choice: number;
 }
 
-// The 1-based solution the caller gets for a finding's pick: 1 on a
-// one-solution finding, whatever `choice` holds; 0 while the pick is
-// incomplete or the action is 'leave_it'. Whether the finding applies is the
-// caller's to check.
-export function findingSolution(
-  solutionCount: number,
+// What the entry rules read of a finding.
+export type PickableFinding = Pick<Finding, 'origin' | 'choices'>;
+
+// The finding's entries in card order: each action its origin offers, in
+// FINDING_ACTIONS order, then that action's choices in wire order, or its
+// header alone when it has none. Entry N is the card's number N, 1-based.
+export function findingEntries(finding: PickableFinding): FindingEntry[] {
+  const entries: FindingEntry[] = [];
+  for (const action of FINDING_ACTIONS) {
+    if (actionLabel(finding.origin, action) === null) {
+      continue;
+    }
+    const before = entries.length;
+    finding.choices.forEach((each, index) => {
+      if (each.action === action) {
+        entries.push({ action, choice: index + 1 });
+      }
+    });
+    if (entries.length === before) {
+      entries.push({ action, choice: 0 });
+    }
+  }
+  return entries;
+}
+
+// The 1-based card number of the pick `{ choice, action }`, 0 when the pick
+// is none of the finding's entries.
+export function findingEntryNumber(
+  finding: PickableFinding,
   choice: number,
   action: FindingAction | '',
 ): number {
-  const hasSolution =
-    action !== 'leave_it' &&
-    findingPickIsComplete(solutionCount, choice, action);
-  if (!hasSolution) {
-    return 0;
-  }
-  return solutionCount === 1 ? 1 : choice;
+  const index = findingEntries(finding).findIndex(
+    (entry) => entry.choice === choice && entry.action === action,
+  );
+  return index + 1;
 }
 
-// The finding's pick, or null when `choice` and `action` make none: `choice`
-// is a choice's 1-based number, which counts only with the action that choice
-// sits under, or 0 for the header of an action that has no choices. The action
-// must be one the finding's origin offers.
+// Whether the pick is one of the finding's entries, so it holds everything
+// the caller needs to act on.
+export function findingPickIsComplete(
+  finding: PickableFinding,
+  choice: number,
+  action: FindingAction | '',
+): boolean {
+  return findingEntryNumber(finding, choice, action) > 0;
+}
+
+// The picked choice's 1-based number when the pick is complete, else 0; a
+// header pick gives 0. Whether the finding applies is the caller's to check.
+export function findingSolution(
+  finding: PickableFinding,
+  choice: number,
+  action: FindingAction | '',
+): number {
+  return findingPickIsComplete(finding, choice, action) ? choice : 0;
+}
+
+// The finding's pick, or null when `{ choice, action }` is none of its
+// entries.
 export function completeFindingPick(
-  finding: Finding,
+  finding: PickableFinding,
   choice: number,
   action: FindingAction | '',
 ): { choice: number; action: FindingAction } | null {
-  if (action === '' || actionLabel(finding.origin, action) === null) {
+  if (action === '' || !findingPickIsComplete(finding, choice, action)) {
     return null;
   }
-  if (choice === 0) {
-    const actionHasChoices = finding.choices.some(
-      (each) => each.action === action,
-    );
-    return actionHasChoices ? null : { choice: 0, action };
-  }
-  const choiceSitsUnderAction =
-    choice >= 1 &&
-    choice <= finding.choices.length &&
-    finding.choices[choice - 1].action === action;
-  return choiceSitsUnderAction ? { choice, action } : null;
+  return { choice, action };
 }

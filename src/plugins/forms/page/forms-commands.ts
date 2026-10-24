@@ -11,8 +11,7 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { scrollText } from '../../../shared/content-scroll';
-import type { FindingAction, RoundClosed, RoundEnd } from '../contract';
-import { actionLabel } from '../finding-origins';
+import type { RoundClosed, RoundEnd } from '../contract';
 import type { formsManifest } from '../manifest';
 import {
   type BoxField,
@@ -30,10 +29,9 @@ import {
   type FormsAction,
   type FormsState,
   type FormsView,
-  findingActionOf,
-  findingActionWord,
   type ItemAnswer,
   itemAnswer,
+  pickNumber,
   railPosition,
   roundOfSession,
   unansweredItem,
@@ -82,40 +80,16 @@ export function formsCommandHandlers(
       focusBoxItem(store, boxIn(deps, context));
       store.dispatch(action);
     };
+  // Logs the number the item now holds, a question's choice or a finding's
+  // entry, or the clear when the same number was held.
   const choose =
-    (choice: number): Handler =>
+    (number: number): Handler =>
     (context) =>
-      changeAnswer(deps, context, { type: 'choose', choice }, (answer, item) =>
-        answer.choice === choice
-          ? `chose ${choice} on ${itemName(item)}`
+      changeAnswer(deps, context, { type: 'choose', number }, (_, item) =>
+        activePickNumber(store.get(), item) === number
+          ? `chose ${number} on ${itemName(item)}`
           : `cleared the choice on ${itemName(item)}`,
       );
-
-  // Acts only on a focused finding in the forms view, so a question or another
-  // view logs nothing. A finding whose card lacks the action logs that and
-  // keeps its answer.
-  const act =
-    (action: FindingAction): Handler =>
-    (context) => {
-      focusBoxItem(store, boxIn(deps, context));
-      const lacking = findingLackingAction(store.get(), action);
-      if (lacking !== null) {
-        log(
-          'forms',
-          `${itemName(lacking)} offers no ${defectActionWord(action).toLowerCase()}`,
-        );
-        return;
-      }
-      changeAnswer(
-        deps,
-        context,
-        { type: 'chooseAction', action },
-        (_, item) =>
-          findingAction(store.get(), item) === action
-            ? `chose ${activeFindingActionWord(store.get(), item, action)} on ${itemName(item)}`
-            : `cleared the action on ${itemName(item)}`,
-      );
-    };
 
   const layoutCommand =
     (invoke: () => Promise<unknown>): Handler =>
@@ -156,9 +130,6 @@ export function formsCommandHandlers(
         { type: 'acceptRecommendation' },
         (_answer, item) => `accepted the recommendation on ${itemName(item)}`,
       ),
-    actFixNow: act('fix_now'),
-    actFollowUp: act('follow_up'),
-    actLeaveIt: act('leave_it'),
     toggleNotApplicable: (context) =>
       changeAnswer(
         deps,
@@ -236,41 +207,10 @@ function focusBoxItem(store: FormsStore, box: BoxRef | undefined) {
   }
 }
 
-// The active round's action on `item`; '' on a question.
-function findingAction(
-  state: FormsState,
-  item: AnswerableItem,
-): FindingAction | '' {
+// The number `item` holds in the active round, 0 for none or no round.
+function activePickNumber(state: FormsState, item: AnswerableItem): number {
   const round = activeRound(state);
-  return round === null ? '' : findingActionOf(round, item);
-}
-
-// The finding card's word for `action` on `item` in the active round.
-function activeFindingActionWord(
-  state: FormsState,
-  item: AnswerableItem,
-  action: FindingAction,
-): string | null {
-  const round = activeRound(state);
-  return round === null ? null : findingActionWord(round, item, action);
-}
-
-// The Defect card's word for `action`, which offers every action.
-function defectActionWord(action: FindingAction): string {
-  return actionLabel('caused', action) ?? action;
-}
-
-// The focused finding when the forms view shows it and its card does not offer
-// `action`; null otherwise.
-function findingLackingAction(
-  state: FormsState,
-  action: FindingAction,
-): AnswerableItem | null {
-  const focused = state.view === 'forms' ? focusedAnswer(state) : null;
-  const isLacking =
-    focused?.item.kind === 'finding' &&
-    activeFindingActionWord(state, focused.item, action) === null;
-  return isLacking ? focused.item : null;
+  return round === null ? 0 : pickNumber(round, item);
 }
 
 function focusedAnswer(

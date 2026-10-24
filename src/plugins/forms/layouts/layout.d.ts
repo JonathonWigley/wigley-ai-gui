@@ -21,6 +21,14 @@ export interface NoticeCard {
   round: RoundInfo;
 }
 export type FindingAction = 'fix_now' | 'follow_up' | 'leave_it';
+// One numbered pick down a finding card: a choice with the action it sits under, or the header of an action with no
+// choices, whose `choice` is 0. `choice` is otherwise the choice's 1-based position in `choices`; `number` is the
+// entry's 1-based position down the card, which its key (`choose<number>`) picks.
+export interface FindingCardEntry {
+  number: number;
+  action: FindingAction;
+  choice: number;
+}
 export interface FindingCard {
   label: string;
   title: string;
@@ -34,7 +42,12 @@ export interface FindingCard {
   impact: string;
   finding: string;
   proof: string;
-  choices: { text: string; reason: string }[];
+  // Each choice with the action it sits under, in wire order.
+  choices: { text: string; reason: string; action: FindingAction }[];
+  // Every entry in card order: the actions the origin offers in `actions` order, each with its choices, or its header
+  // alone when it has none.
+  entries: FindingCardEntry[];
+  // The recommended choice's 1-based position in `choices`; 0 when the recommendation is recommendAction's header.
   recommend: number;
   recommendAction: FindingAction;
   // The actions the origin offers, in the card's words.
@@ -51,8 +64,9 @@ export interface CardAnswer {
 }
 
 export type LayoutAction =
-  | { type: 'choose'; choice: number }
-  | { type: 'chooseAction'; action: FindingAction }
+  // `number` is 1-based: a question's choice, or a finding's entry (`FindingCardEntry.number`), which sets its choice
+  // and action together. Picking the held number again clears the pick.
+  | { type: 'choose'; number: number }
   | { type: 'toggleNotApplicable' }
   | { type: 'toggleDontAsk' }
   | { type: 'accept' }
@@ -129,11 +143,11 @@ export interface Kit extends HeadKit {
   run(action: LayoutAction): void;
 }
 export interface AnswerKit extends Kit {
-  // `div.answer` with its 'Your answer' label and `ol.choices`; returns the `div.answer`, which `actionRow` and
-  // `answerControls` may be appended to. 'recommended': the recommended choice's reason under it (a question's
-  // rationale as 'Why recommended'; a finding's choice reason as 'Why'). 'all': every choice's reason as 'Why'; on a
-  // question the same as 'recommended'. A blank reason draws nothing. On a finding card the list dims while the
-  // action is leave_it.
+  // `div.answer` with its 'Your answer' label and `ol.choices`; returns the `div.answer`, which `answerControls` may be
+  // appended to. 'recommended': the recommended choice's reason under it (a question's rationale as 'Why
+  // recommended'; a finding's choice reason as 'Why'). 'all': every choice's reason as 'Why'; on a question the same
+  // as 'recommended'. A blank reason draws nothing. On a finding card each choice shows its entry's number
+  // (`FindingCardEntry.number`), and an action header draws no control.
   choiceList(
     parent: HTMLElement,
     reasons: 'recommended' | 'all' | 'none',
@@ -144,7 +158,6 @@ export interface AnswerKit extends Kit {
 }
 export interface FindingKit extends AnswerKit {
   verdict(parent: HTMLElement): HTMLElement;
-  actionRow(parent: HTMLElement): HTMLElement;
 }
 
 // `element` is the card's own node, appended to `parent` before the card mounts any text box; the app shows, hides and

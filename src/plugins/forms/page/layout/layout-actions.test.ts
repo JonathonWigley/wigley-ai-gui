@@ -3,9 +3,9 @@ import { layoutActions } from './card-kit';
 
 describe('layoutActions', () => {
   it('layoutActions_Choose_FocusesThenChooses', () => {
-    expect(layoutActions({ type: 'choose', choice: 2 }, 4)).toEqual([
+    expect(layoutActions({ type: 'choose', number: 2 }, 4)).toEqual([
       { type: 'focusItem', item: 4 },
-      { type: 'choose', choice: 2 },
+      { type: 'choose', number: 2 },
     ]);
   });
 

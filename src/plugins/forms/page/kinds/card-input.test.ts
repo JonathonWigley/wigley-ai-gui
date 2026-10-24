@@ -68,6 +68,31 @@ describe('cardInput', () => {
     expect(input.severityChip).toBe('Critical');
   });
 
+  it('findingCardInput_Entries_NumberDownTheCard', () => {
+    const { round } = presentedRound('r1', {
+      findings: [
+        finding('Delta', {
+          choices: [
+            { text: 'A', reason: 'A reason', action: 'follow_up' },
+            { text: 'B', reason: 'B reason', action: 'fix_now' },
+          ],
+        }),
+      ],
+    });
+
+    const input = findingFormat.cardInput(round, 1);
+
+    expect(input.entries).toEqual([
+      { number: 1, action: 'fix_now', choice: 2 },
+      { number: 2, action: 'follow_up', choice: 1 },
+      { number: 3, action: 'leave_it', choice: 0 },
+    ]);
+    expect(input.choices).toEqual([
+      { text: 'A', reason: 'A reason', action: 'follow_up' },
+      { text: 'B', reason: 'B reason', action: 'fix_now' },
+    ]);
+  });
+
   it('noticeCardInput_CarriesBadge', () => {
     const { round } = presentedRound('r1', {
       notices: [notice('Zeta'), { ...notice('Eta'), badge: 'Dispatched' }],

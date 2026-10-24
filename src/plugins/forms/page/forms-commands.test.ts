@@ -20,14 +20,7 @@ import {
   guardClose,
 } from './forms-commands';
 import { createFormsStore } from './forms-store';
-import {
-  decision,
-  finding,
-  nit,
-  notice,
-  presentedRound,
-  question,
-} from './test-rounds';
+import { finding, notice, presentedRound, question } from './test-rounds';
 
 type FormsCommand = keyof ReturnType<typeof formsCommandHandlers>;
 
@@ -210,82 +203,37 @@ describe('formsCommandHandlers', () => {
     ]);
   });
 
-  it('picks a choice on the focused finding and logs it', () => {
-    const { run, round, logs } = setup([finding('Leak')]);
-
-    run('choose2');
-
-    expect(round().findingAnswers[0].choice).toBe(2);
-    expect(logs).toEqual(['chose 2 on finding 1']);
+  // Entries: 1 fix_now/1, 2 fix_now/2, 3 follow_up/0, 4 leave_it/0.
+  const twoFix = finding('Leak', {
+    choices: [
+      { text: 'A', reason: 'A reason', action: 'fix_now' },
+      { text: 'B', reason: 'B reason', action: 'fix_now' },
+    ],
   });
 
-  it('actFixNow clears the fix_now a finding starts on, and again picks it', () => {
-    const { run, round, logs } = setup([finding('Leak')]);
+  it('picks an entry on the focused finding and logs its number', () => {
+    const { run, round, logs } = setup([twoFix]);
 
-    run('actFixNow');
-    expect(round().findingAnswers[0].action).toBe('');
-    run('actFixNow');
+    run('choose3');
 
-    expect(round().findingAnswers[0].action).toBe('fix_now');
+    expect(round().findingAnswers[0]).toMatchObject({
+      choice: 0,
+      action: 'follow_up',
+    });
+    expect(logs).toEqual(['chose 3 on finding 1']);
+  });
+
+  it('logs the clear when the same entry is picked again', () => {
+    const { run, round, logs } = setup([twoFix]);
+
+    run('choose3');
+    run('choose3');
+
+    expect(round().findingAnswers[0]).toMatchObject({ choice: 0, action: '' });
     expect(logs).toEqual([
-      'cleared the action on finding 1',
-      'chose Fix now on finding 1',
+      'chose 3 on finding 1',
+      'cleared the choice on finding 1',
     ]);
-  });
-
-  it.each([
-    ['actFollowUp', 'follow_up', 'Follow-up'],
-    ['actLeaveIt', 'leave_it', 'Leave it'],
-  ] as const)(
-    '%s picks its action on the focused finding, and again clears it',
-    (command, action, label) => {
-      const { run, round, logs } = setup([finding('Leak')]);
-
-      run(command);
-      expect(round().findingAnswers[0].action).toBe(action);
-      run(command);
-
-      expect(round().findingAnswers[0].action).toBe('');
-      expect(logs).toEqual([
-        `chose ${label} on finding 1`,
-        'cleared the action on finding 1',
-      ]);
-    },
-  );
-
-  it('logs the card word of the action it chose on a Decision', () => {
-    const { run, round, logs } = setup([decision('Shape')]);
-
-    run('actFixNow');
-    run('actFixNow');
-
-    expect(round().findingAnswers[0].action).toBe('fix_now');
-    expect(logs).toEqual([
-      'cleared the action on finding 1',
-      'chose Decide now on finding 1',
-    ]);
-  });
-
-  it('logs that a Nit offers no follow-up and keeps its answer', () => {
-    const { run, store, logs } = setup([nit('Typo')]);
-    const before = store.get();
-
-    run('actFollowUp');
-
-    expect(store.get()).toBe(before);
-    expect(logs).toEqual(['finding 1 offers no follow-up']);
-  });
-
-  it('logs nothing for a Nit lacking the action outside the forms view', () => {
-    const { run, store, logs } = setup([nit('Typo')]);
-    run('openReview');
-    logs.length = 0;
-    const before = store.get();
-
-    run('actFollowUp');
-
-    expect(store.get()).toBe(before);
-    expect(logs).toEqual([]);
   });
 
   it('accepts the recommendation on the focused question and logs it', () => {
@@ -306,14 +254,6 @@ describe('formsCommandHandlers', () => {
     logs.length = 0;
 
     run('acceptRecommendation');
-
-    expect(logs).toEqual([]);
-  });
-
-  it('logs nothing when an action command runs on a question', () => {
-    const { run, logs } = setup();
-
-    run('actFixNow');
 
     expect(logs).toEqual([]);
   });

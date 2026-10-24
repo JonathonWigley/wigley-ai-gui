@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Finding, PresentedRound } from '../contract';
+import type { Finding } from '../contract';
 import {
   activeRound,
   apply,
@@ -85,7 +85,7 @@ function stateAfter(...actions: FormsAction[]): FormsState {
 
 describe('reviewRows', () => {
   it('lists an answered question with its choice text', () => {
-    const [alpha] = reviewRows(roundAfter({ type: 'choose', choice: 2 }));
+    const [alpha] = reviewRows(roundAfter({ type: 'choose', number: 2 }));
     expect(alpha).toMatchObject({
       row: 0,
       number: 1,
@@ -115,7 +115,7 @@ describe('reviewRows', () => {
   });
 
   it('marks a choice other than the recommended one', () => {
-    const [alpha] = reviewRows(roundAfter({ type: 'choose', choice: 3 }));
+    const [alpha] = reviewRows(roundAfter({ type: 'choose', number: 3 }));
     expect(alpha.tookRecommendation).toBe(false);
   });
 
@@ -123,7 +123,7 @@ describe('reviewRows', () => {
     const rows = reviewRows(
       roundAfter(
         { type: 'focusItem', item: 1 },
-        { type: 'choose', choice: 1 },
+        { type: 'choose', number: 1 },
         { type: 'toggleNotApplicable' },
       ),
     );
@@ -179,11 +179,12 @@ describe('reviewRows', () => {
   });
 
   it('lists an answered finding with its choice text', () => {
-    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 2 }));
+    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', number: 2 }));
     expect(delta).toMatchObject({
       kind: 'finding',
       title: 'Delta',
       status: 'answered',
+      entry: 2,
       choice: 2,
       choiceText: 'second',
       tookRecommendation: true,
@@ -191,122 +192,84 @@ describe('reviewRows', () => {
   });
 
   it('marks a finding choice other than the recommended one', () => {
-    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 1 }));
-    expect(delta.tookRecommendation).toBe(false);
-  });
-
-  it('flags a fixed finding with no solution among several as missing one', () => {
-    const [delta] = reviewRows(mixedRoundAfter());
+    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', number: 1 }));
     expect(delta).toMatchObject({
-      status: 'untouched',
-      action: '',
-      actionLabel: '',
-      missing: 'solution',
+      tookRecommendation: false,
+      recommended: false,
     });
   });
 
-  it('flags a finding with a solution and no action as missing an action', () => {
-    const [delta] = reviewRows(
-      mixedRoundAfter(
-        { type: 'chooseAction', action: 'fix_now' },
-        { type: 'choose', choice: 2 },
-      ),
-    );
-    expect(delta).toMatchObject({ status: 'untouched', missing: 'action' });
+  it('lists an untouched finding with no pick', () => {
+    const [delta] = reviewRows(mixedRoundAfter());
+    expect(delta).toMatchObject({
+      status: 'untouched',
+      entry: 0,
+      action: '',
+      actionLabel: '',
+      choice: 0,
+    });
   });
 
-  it('shows no pick and no missing hint for a not-applicable finding that kept a solution', () => {
+  it('shows no pick for a not-applicable finding that kept one', () => {
     const [delta] = reviewRows(
       mixedRoundAfter(
-        { type: 'choose', choice: 2 },
+        { type: 'choose', number: 2 },
         { type: 'toggleNotApplicable' },
       ),
     );
     expect(delta).toMatchObject({
       status: 'not_applicable',
+      entry: 0,
       action: '',
       actionLabel: '',
       choice: 0,
-      missing: null,
     });
   });
 
-  it('answers a fixed one-solution finding with no missing pick', () => {
-    const start = initialState(
-      [
-        presentedRound('r1', {
-          questions: [],
-          findings: [
-            finding('Solo', {
-              choices: [{ text: 'only', reason: 'why', action: 'fix_now' }],
-            }),
-          ],
-        }),
+  it("lists a finding's header pick with its action word and no choice", () => {
+    // Entries: 1 fix_now/1, 2 fix_now/2, 3 follow_up/0, 4 leave_it/0.
+    const twoFix = finding('Delta', {
+      choices: [
+        { text: 'A', reason: 'A reason', action: 'fix_now' },
+        { text: 'B', reason: 'B reason', action: 'fix_now' },
       ],
-      'r1-session',
+    });
+    const [delta] = reviewRows(
+      roundWithFindingAfter(twoFix, { type: 'choose', number: 4 }),
     );
-    const round = activeRound(start);
-    if (round === null) {
-      throw new Error('The test round is not active');
-    }
-    const [solo] = reviewRows(round);
-    expect(solo).toMatchObject({
+    expect(delta).toMatchObject({
       status: 'answered',
-      action: 'fix_now',
-      actionLabel: 'Fix now',
-      choice: 1,
-      choiceText: 'only',
-      tookActionRecommendation: true,
-      missing: null,
+      entry: 4,
+      action: 'leave_it',
+      actionLabel: 'Leave it',
+      choice: 0,
+      choiceText: '',
     });
   });
 
-  it('gives a fixed one-solution finding restored with no solution picked its one solution', () => {
-    const solo = finding('Solo', {
-      choices: [{ text: 'only', reason: 'why', action: 'fix_now' }],
-      recommend: 1,
-      recommend_action: 'fix_now',
+  it("lists a finding's choice pick with its entry number", () => {
+    // Entries: 1 fix_now/2, 2 follow_up/1, 3 leave_it/0.
+    const grouped = finding('Delta', {
+      choices: [
+        { text: 'A', reason: 'A reason', action: 'follow_up' },
+        { text: 'B', reason: 'B reason', action: 'fix_now' },
+      ],
     });
-    const restored: PresentedRound = {
-      ...presentedRound('r1', { questions: [], findings: [solo] }),
-      draft: {
-        note: '',
-        answers: [],
-        finding_answers: [
-          {
-            index: 1,
-            choice: 0,
-            action: 'fix_now',
-            not_applicable: false,
-            notes: '',
-            dont_ask: false,
-            dont_ask_reason: '',
-          },
-        ],
-        notice_comments: [],
-      },
-    };
-    const round = activeRound(initialState([restored], 'r1-session'));
-    if (round === null) {
-      throw new Error('The test round is not active');
-    }
-    const [row] = reviewRows(round);
-    expect(row).toMatchObject({
-      status: 'answered',
+    const [delta] = reviewRows(
+      roundWithFindingAfter(grouped, { type: 'choose', number: 1 }),
+    );
+    expect(delta).toMatchObject({
+      entry: 1,
       action: 'fix_now',
-      choice: 1,
-      choiceText: 'only',
-      recommended: true,
+      choice: 2,
+      choiceText: 'B',
     });
   });
 
   it("names a design finding's follow-up in the decision card's word", () => {
+    // Foxtrot's two choices sit under fix_now, so entry 3 is follow_up's header.
     const [foxtrot] = reviewRows(
-      roundWithFindingAfter(
-        decision('Foxtrot'),
-        { type: 'choose', choice: 2 },
-        { type: 'chooseAction', action: 'follow_up' },
-      ),
+      roundWithFindingAfter(decision('Foxtrot'), { type: 'choose', number: 3 }),
     );
     expect(foxtrot).toMatchObject({
       action: 'follow_up',
@@ -314,49 +277,7 @@ describe('reviewRows', () => {
     });
   });
 
-  it('drops the kept solution from a finding left alone', () => {
-    const [delta] = reviewRows(
-      mixedRoundAfter(
-        { type: 'choose', choice: 2 },
-        { type: 'chooseAction', action: 'leave_it' },
-      ),
-    );
-    expect(delta).toMatchObject({
-      status: 'answered',
-      action: 'leave_it',
-      actionLabel: 'Leave it',
-      choice: 0,
-      choiceText: '',
-      tookRecommendation: false,
-      tookActionRecommendation: false,
-      missing: null,
-    });
-  });
-
-  it('drops the solution from a finding answered by notes with no action, and flags the action', () => {
-    const [delta] = reviewRows(
-      mixedRoundAfter(
-        { type: 'chooseAction', action: 'fix_now' },
-        {
-          type: 'setText',
-          roundId: 'r1',
-          target: { field: 'notes', item: { kind: 'finding', index: 1 } },
-          value: 'my own fix',
-        },
-        { type: 'choose', choice: 2 },
-      ),
-    );
-    expect(delta).toMatchObject({
-      status: 'answered',
-      choice: 0,
-      choiceText: '',
-      actionLabel: '',
-      tookRecommendation: false,
-      missing: 'action',
-    });
-  });
-
-  it('drops the action from a finding with notes, fix now and no solution among several, and flags the solution', () => {
+  it('answers a finding by notes alone, with no pick', () => {
     const [delta] = reviewRows(
       mixedRoundAfter({
         type: 'setText',
@@ -367,23 +288,22 @@ describe('reviewRows', () => {
     );
     expect(delta).toMatchObject({
       status: 'answered',
+      entry: 0,
       action: '',
       actionLabel: '',
       choice: 0,
       tookActionRecommendation: false,
       recommended: false,
-      missing: 'solution',
     });
   });
 
-  it('gives a question row no action and no missing pick', () => {
+  it('gives a question row no action', () => {
     const [, alpha] = reviewRows(mixedRoundAfter());
     expect(alpha).toMatchObject({
       kind: 'question',
       action: '',
       actionLabel: '',
       tookActionRecommendation: false,
-      missing: null,
     });
   });
 
@@ -391,54 +311,33 @@ describe('reviewRows', () => {
     const [, alpha] = reviewRows(
       mixedRoundAfter(
         { type: 'focusItem', item: 1 },
-        { type: 'choose', choice: 2 },
+        { type: 'choose', number: 2 },
       ),
     );
     expect(alpha).toMatchObject({ kind: 'question', recommended: true });
   });
 
-  it('recommends a fixed finding that took both recommendations', () => {
-    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', choice: 2 }));
+  it('recommends a finding whose pick is the recommended pick', () => {
+    const [delta] = reviewRows(mixedRoundAfter({ type: 'choose', number: 2 }));
     expect(delta.recommended).toBe(true);
   });
 
-  it('does not recommend a finding with the recommended solution but another action', () => {
-    const [delta] = reviewRows(
-      mixedRoundAfter(
-        { type: 'chooseAction', action: 'follow_up' },
-        { type: 'choose', choice: 2 },
-      ),
-    );
-    expect(delta).toMatchObject({ status: 'answered', recommended: false });
-  });
-
-  it('recommends a finding left alone as recommended', () => {
+  it("recommends a finding that took a null recommend's header", () => {
+    // Delta's three choices sit under fix_now, so entry 5 is leave_it's header.
     const [delta] = reviewRows(
       roundWithFindingAfter(
-        finding('Delta', { recommend_action: 'leave_it' }),
-        {
-          type: 'chooseAction',
-          action: 'leave_it',
-        },
+        finding('Delta', { recommend: null, recommend_action: 'leave_it' }),
+        { type: 'choose', number: 5 },
       ),
     );
-    expect(delta).toMatchObject({ status: 'answered', recommended: true });
-  });
-
-  it('does not recommend a finding answered by notes alone', () => {
-    const [delta] = reviewRows(
-      mixedRoundAfter(
-        { type: 'chooseAction', action: 'fix_now' },
-        {
-          type: 'setText',
-          roundId: 'r1',
-          target: { field: 'notes', item: { kind: 'finding', index: 1 } },
-          value: 'my own fix',
-        },
-        { type: 'choose', choice: 2 },
-      ),
-    );
-    expect(delta).toMatchObject({ status: 'answered', recommended: false });
+    expect(delta).toMatchObject({
+      status: 'answered',
+      entry: 5,
+      choice: 0,
+      tookRecommendation: false,
+      tookActionRecommendation: true,
+      recommended: true,
+    });
   });
 
   it('marks the row under the review cursor', () => {
@@ -614,7 +513,7 @@ describe('sessionTitle', () => {
   }
 
   it('sessionTitle counts answered and not-applicable questions', () => {
-    const choose: FormsAction = { type: 'choose', choice: 1 };
+    const choose: FormsAction = { type: 'choose', number: 1 };
 
     expect(titleAfter()).toBe('r1 heading 0/2');
     expect(titleAfter(choose)).toBe('r1 heading 1/2');
@@ -628,7 +527,7 @@ describe('sessionTitle', () => {
       [presentedRound('r1', { findings: [finding('Delta')] })],
       'r1-session',
     );
-    const round = activeRound(apply(start, { type: 'choose', choice: 1 }));
+    const round = activeRound(apply(start, { type: 'choose', number: 1 }));
     if (round === null) {
       throw new Error('The test round is not active');
     }

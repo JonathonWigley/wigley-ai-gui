@@ -14,6 +14,7 @@ import {
   type FormsView,
   itemAnswer,
   pickIsComplete,
+  pickNumber,
   type Progress,
   progress,
   type RailItem,
@@ -38,19 +39,20 @@ export interface ReviewRow {
   action: FindingAction | '';
   // The finding card's word for `action`; '' with no action.
   actionLabel: string;
+  // The pick's 1-based number down the card while the item's pick is
+  // complete and it applies, else 0: a question's choice, a finding's entry.
+  entry: number;
   // The choice the agent gets while the item's pick is complete and it
-  // applies, else 0: on a finding, the solution findingSolution gives.
+  // applies, else 0: on a finding, the solution findingSolution gives, 0 for
+  // an action's header.
   choice: number;
   choiceText: string;
   tookRecommendation: boolean;
   tookActionRecommendation: boolean;
-  // Whether the row earns its Recommended badge: a finding's for its action,
-  // and for its solution unless left alone; a question's for its choice.
+  // Whether the row earns its Recommended badge: a question whose choice is
+  // its recommend; a finding whose pick is its recommend_action with its
+  // recommend, or that action's header when recommend is null.
   recommended: boolean;
-  // What an applicable finding's incomplete pick still lacks, whatever its
-  // notes; null when it lacks both, when the pick is complete, and on every
-  // question.
-  missing: 'solution' | 'action' | null;
   notes: string;
   dontAsk: boolean;
   dontAskReason: string;
@@ -73,8 +75,8 @@ export function reviewRows(round: RoundState): ReviewRow[] {
     const pickCounts = isApplicable && pickIsComplete(round, item);
     const action = pickCounts ? findingActionOf(round, item) : '';
     const choice = pickCounts ? pickedChoice(round, item) : 0;
-    const tookRecommendation =
-      choice > 0 && choice === format.recommend(round.round, item.index);
+    const recommend = format.recommend(round.round, item.index);
+    const tookRecommendation = choice > 0 && choice === recommend;
     const tookActionRecommendation =
       action !== '' &&
       action === round.round.findings[item.index - 1].recommend_action;
@@ -85,6 +87,7 @@ export function reviewRows(round: RoundState): ReviewRow[] {
       label: itemLabel(item),
       title: format.title(round.round, item.index),
       status,
+      entry: pickCounts ? pickNumber(round, item) : 0,
       action,
       actionLabel:
         action === '' ? '' : (findingActionWord(round, item, action) ?? ''),
@@ -95,13 +98,10 @@ export function reviewRows(round: RoundState): ReviewRow[] {
           : '',
       tookRecommendation,
       tookActionRecommendation,
-      recommended: tookEveryRecommendation(
-        item.kind,
-        action,
-        tookRecommendation,
-        tookActionRecommendation,
-      ),
-      missing: isApplicable && !pickCounts ? missingPick(round, item) : null,
+      recommended:
+        action === ''
+          ? item.kind === 'question' && tookRecommendation
+          : tookActionRecommendation && choice === recommend,
       notes: answer.notes,
       dontAsk: answer.dontAsk,
       dontAskReason: answer.dontAskReason,
@@ -117,41 +117,8 @@ function pickedChoice(round: RoundState, item: AnswerableItem): number {
     return round.answers[item.index - 1].choice;
   }
   const answer = round.findingAnswers[item.index - 1];
-  const solutionCount = round.round.findings[item.index - 1].choices.length;
-  return findingSolution(solutionCount, answer.choice, answer.action);
-}
-
-// A finding left alone needs only its action recommendation; one fixed or
-// followed up needs both; a row with no action earns it only as a question.
-function tookEveryRecommendation(
-  kind: AnswerableKind,
-  action: FindingAction | '',
-  tookRecommendation: boolean,
-  tookActionRecommendation: boolean,
-): boolean {
-  if (action === 'leave_it') {
-    return tookActionRecommendation;
-  }
-  if (action === '') {
-    return kind === 'question' && tookRecommendation;
-  }
-  return tookRecommendation && tookActionRecommendation;
-}
-
-// What an item's incomplete pick lacks: on a finding, an action still needs a
-// solution, and a solution with no action needs an action.
-function missingPick(
-  round: RoundState,
-  item: AnswerableItem,
-): ReviewRow['missing'] {
-  if (item.kind !== 'finding') {
-    return null;
-  }
-  const answer = round.findingAnswers[item.index - 1];
-  if (answer.action !== '') {
-    return 'solution';
-  }
-  return answer.choice > 0 ? 'action' : null;
+  const finding = round.round.findings[item.index - 1];
+  return findingSolution(finding, answer.choice, answer.action);
 }
 
 // The dot a rail entry shows for its item's status: answered is success, an

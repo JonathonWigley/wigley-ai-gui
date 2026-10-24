@@ -1,6 +1,6 @@
 # 04 — Finding answer model on the page
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 02, 03
 Plan: [plan.md](plan.md)

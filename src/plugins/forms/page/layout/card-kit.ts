@@ -17,9 +17,9 @@ import type {
 import {
   type AnswerableItem,
   answerStatus,
-  findingActionOf,
   type FormsAction,
   itemAnswer,
+  pickNumber,
   type RailItem,
   type RoundState,
   type TextTarget,
@@ -62,11 +62,13 @@ interface ChoiceReason {
   text: string;
 }
 
-// An answerable card's choices, and the reason each shows for a
-// `choiceList` reasons mode; null where a choice shows none.
+// An answerable card's choices, each with the number the card shows and its
+// key picks; the number the Recommended tag sits on, null for none; and the
+// reason each choice shows for a `choiceList` reasons mode, null where it
+// shows none.
 interface ChoiceSet {
-  texts: string[];
-  recommend: number;
+  choices: { text: string; number: number }[];
+  recommended: number | null;
   reasons(mode: ReasonsMode): (ChoiceReason | null)[];
 }
 
@@ -101,13 +103,6 @@ const FIELD_CAPTIONS: Record<
   },
 };
 
-// The command that picks each action.
-const ACTION_COMMANDS: Record<FindingAction, CommandId> = {
-  fix_now: formsCommand('actFixNow'),
-  follow_up: formsCommand('actFollowUp'),
-  leave_it: formsCommand('actLeaveIt'),
-};
-
 const KIT_BUILDERS: {
   [K in ItemKind]: (card: CardContext, input: CardInputs[K]) => CardKits[K];
 } = {
@@ -118,8 +113,8 @@ const KIT_BUILDERS: {
       { kind: 'question', index: card.item.index },
       buildBaseKit(card),
       {
-        texts: input.choices,
-        recommend: input.recommend,
+        choices: input.choices.map((text, i) => ({ text, number: i + 1 })),
+        recommended: input.recommend,
         reasons: (mode) =>
           input.choices.map((_text, i) =>
             mode !== 'none' && i + 1 === input.recommend
@@ -134,8 +129,11 @@ const KIT_BUILDERS: {
       { kind: 'finding', index: card.item.index },
       buildBaseKit(card),
       {
-        texts: input.choices.map((choice) => choice.text),
-        recommend: input.recommend,
+        choices: input.choices.map((choice, i) => ({
+          text: choice.text,
+          number: findingEntryNumberOf(input, i + 1, choice.action),
+        })),
+        recommended: recommendedEntryNumber(input),
         reasons: (mode) =>
           input.choices.map((choice, i) => {
             const isShown =
@@ -159,9 +157,7 @@ export function layoutActions(
   const focus: FormsAction = { type: 'focusItem', item: position };
   switch (action.type) {
     case 'choose':
-      return [focus, { type: 'choose', choice: action.choice }];
-    case 'chooseAction':
-      return [focus, { type: 'chooseAction', action: action.action }];
+      return [focus, { type: 'choose', number: action.number }];
     case 'toggleNotApplicable':
       return [focus, { type: 'toggleNotApplicable' }];
     case 'accept':
@@ -438,9 +434,9 @@ function buildAnswerKit(
       parent.append(answerArea);
       const { entries, updateKeys } = buildChoiceList(
         list,
-        choices.texts,
-        choices.recommend,
-        (choice) => kit.run({ type: 'choose', choice }),
+        choices.choices,
+        choices.recommended,
+        (number) => kit.run({ type: 'choose', number }),
         card.deps,
       );
       choices.reasons(reasons).forEach((reason, i) => {
@@ -452,14 +448,16 @@ function buildAnswerKit(
       });
       card.updaters.push(updateKeys);
       card.updaters.push((current) => {
-        const answer = itemAnswer(current, item);
+        const picked = pickNumber(current, item);
         entries.forEach((entry, i) =>
-          entry.classList.toggle('is-selected', answer.choice === i + 1),
+          entry.classList.toggle(
+            'is-selected',
+            picked === choices.choices[i].number,
+          ),
         );
-        list.classList.toggle('is-locked', answer.notApplicable);
         list.classList.toggle(
-          'is-dimmed',
-          findingActionOf(current, item) === 'leave_it',
+          'is-locked',
+          itemAnswer(current, item).notApplicable,
         );
       });
       return answerArea;
@@ -492,7 +490,7 @@ function buildAnswerKit(
   };
 }
 
-// `verdict` and `actionRow` for the finding card `input` describes.
+// `verdict` for the finding card `input` describes.
 function buildFindingKit(
   card: CardContext,
   kit: AnswerKit,
@@ -501,7 +499,6 @@ function buildFindingKit(
   return {
     ...kit,
     verdict: (parent) => buildVerdict(parent, input, kit, card),
-    actionRow: (parent) => buildActionRow(parent, card, input, kit),
   };
 }
 
@@ -513,7 +510,7 @@ function showPressed(control: HTMLElement, isPressed: boolean) {
 
 // The verdict under the finding and proof: its origin and severity tags, the
 // impact, and the Accept button, which focuses the finding and picks the
-// recommended action and choice the choice list and action row tag.
+// recommended entry, which the choice list tags when it is a choice.
 function buildVerdict(
   parent: HTMLElement,
   input: CardInputs['finding'],
@@ -552,39 +549,26 @@ function buildVerdict(
   return block;
 }
 
-// The labelled Action row: one button per action the origin offers, in the
-// card's word, the recommended one tagged; a click focuses the finding and
-// picks that action, and shows the keys that pick it. Its updater shows the
-// picked action and locks the row while not applicable.
-function buildActionRow(
-  parent: HTMLElement,
-  card: CardContext,
+// The number of the finding card's entry `{ choice, action }`, 0 when the card
+// has no such entry.
+function findingEntryNumberOf(
   input: CardInputs['finding'],
-  kit: Kit,
-): HTMLElement {
-  const row = element('div', 'finding-actions');
-  const buttons = element('div', 'action-picks');
-  row.append(sectionHeader('Action'), buttons);
-  const picks = input.actions.map(({ action, label }) => {
-    const pick = textButton(label, () =>
-      kit.run({ type: 'chooseAction', action }),
-    );
-    if (action === input.recommendAction) {
-      pick.classList.add('is-recommended');
-      pick.append(tagPart('Recommended', 'accent'));
-    }
-    appendCardKeys(card, pick, ACTION_COMMANDS[action]);
-    buttons.append(pick);
-    return { action, pick };
-  });
-  const item = { kind: 'finding', index: card.item.index } as const;
-  card.updaters.push((current) => {
-    const answer = itemAnswer(current, item);
-    for (const { action, pick } of picks) {
-      showPressed(pick, answer.action === action);
-    }
-    buttons.classList.toggle('is-locked', answer.notApplicable);
-  });
-  parent.append(row);
-  return row;
+  choice: number,
+  action: FindingAction,
+): number {
+  const entry = input.entries.find(
+    (each) => each.choice === choice && each.action === action,
+  );
+  return entry?.number ?? 0;
+}
+
+// The number of the finding card's recommended entry, recommendAction with
+// recommend; null when the card has no such entry.
+function recommendedEntryNumber(input: CardInputs['finding']): number | null {
+  const number = findingEntryNumberOf(
+    input,
+    input.recommend,
+    input.recommendAction,
+  );
+  return number === 0 ? null : number;
 }

@@ -4,6 +4,7 @@ import {
   type FindingCard,
 } from '../../../contract';
 import { actionLabel } from '../../../finding-origins';
+import { findingEntries } from '../../../finding-pick';
 import { labelFor, roundInfo } from '../card-parts';
 import type { AnswerableFormat, CardInputs } from '../item-format';
 import { verdictOf } from './verdict';
@@ -41,7 +42,15 @@ export const findingFormat: AnswerableFormat<CardInputs['finding']> = {
       impact: verdict.impact,
       finding: finding.finding,
       proof: finding.proof,
-      choices: finding.choices.map(({ text, reason }) => ({ text, reason })),
+      choices: finding.choices.map(({ text, reason, action }) => ({
+        text,
+        reason,
+        action,
+      })),
+      entries: findingEntries(finding).map((entry, i) => ({
+        number: i + 1,
+        ...entry,
+      })),
       recommend: finding.recommend ?? 0,
       recommendAction: finding.recommend_action,
       actions: FINDING_ACTIONS.flatMap((action: FindingAction) => {

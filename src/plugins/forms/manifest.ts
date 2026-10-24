@@ -4,7 +4,7 @@ const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
 type Digit = (typeof DIGITS)[number];
 type ChoiceCommand = `choose${Digit}`;
 
-const CHOICE_LABEL = 'pick a choice (again clears)';
+const CHOICE_LABEL = 'pick the numbered choice or action (again clears)';
 
 const choiceCommands = Object.fromEntries(
   DIGITS.map((digit) => [
@@ -38,22 +38,6 @@ export const formsManifest = definePlugin({
     },
     acceptRecommendation: {
       label: 'accept the recommendation',
-      group: 'choices',
-      runsIn: 'page',
-    },
-    // Each label names every card's word for the action.
-    actFixNow: {
-      label: 'fix now · decide now · fix anyway',
-      group: 'choices',
-      runsIn: 'page',
-    },
-    actFollowUp: {
-      label: 'follow-up · plan it',
-      group: 'choices',
-      runsIn: 'page',
-    },
-    actLeaveIt: {
-      label: 'leave it · drop it',
       group: 'choices',
       runsIn: 'page',
     },

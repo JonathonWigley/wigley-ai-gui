@@ -175,7 +175,7 @@ depends on; `npm run lint` checks it. No new plugin, adapter or layer.
 - [x] [Round data: layout names, choice actions, deferral reasons](02-round-data.md) — after 01
 
 ### Wave 3
-- [ ] [Page loader and layout resolver](03-loader-and-resolver.md) — after 01, 02
+- [x] [Page loader and layout resolver](03-loader-and-resolver.md) — after 01, 02
 
 ### Wave 4
 - [ ] [Finding answer model on the page](04-finding-answer-model.md) — after 02, 03
@@ -201,11 +201,14 @@ Review base: 092ace4b241cdae4b0c66ce5933c8a1387c59c61
 ### Groups
 - 01 · e44a22ec · diff read: every Produces signature present; typecheck passes; worker ran lint and the three test files (90 tests) green · concerns: REVIEW_STEPS <C-k> why still names the layout cycle (08 rewords); both pages drop the onSettingsChanged disposable (brief's verbatim wiring); registry's 'not reloaded' catch now covers any folder's re-listing
 - 02 · b8661bcd · diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2783 tests) green · concerns: AGENTS.md's per-kind records list lacks ROUND_ITEM_LISTS (doc re-read 09); page test-rounds decision()/nit() fixtures no longer parse (04); holdsRecommendedPick wrong while recommend is null (04); selftest fixture finding 3 breaks recommend rule (08, planned)
+- 03 · d6537cad · diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2803 tests) green · concerns: forms page calls refresh() on every store dispatch, keystrokes included (cheap); layout.d.ts comments are read by layout authors (doc wording check); feature design docs may still describe the single-layout loader (09); DOM paths have no unit tests (08, 10 live checks)
 ### Contract changes
 ### Rulings
 - a layout first listed by a change report starts at revision 1; each later report adds 1, removal included — matches the plan's never-reset rule — a page could reload once more than needed · group 01 · group 01
 - showLayouts falls back to the set's builtIn entry and throws if the set has none — only reachable if the registry breaks its contract — a broken registry stops the page drawing · group 01 · group 01
 - ROUND_ITEM_LISTS per-kind record added in main/round.ts so requireKnownLayouts walks each kind — matches the per-kind record pattern — none · group 02 · group 02
 - an explicit recommend: null counts as present, not absent — the wire rule says leave it out — a null-sending agent gets a type error rather than the absent path · group 02 · group 02
+- form-state.ts's private ROUND_ITEMS exported for the resolver rather than copied — widen-don't-copy — one file outside 03's Files list · group 03 · group 03
+- showLayouts' queues-nothing check also compares the listed setting name, so a setting that moves from a listed layout to a missing one while a round still uses the old one still reloads — the plan's check missed that case — none · group 03 · group 03
 ### Review rounds
 ### Test gate

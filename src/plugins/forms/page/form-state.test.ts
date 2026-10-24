@@ -134,14 +134,19 @@ function findingRound(body: FormBody | null = null): FormsState {
   );
 }
 
-// Focuses rail position 0, finding F1, whose only solution is choice 1.
-function oneSolutionRound(): FormsState {
-  const lone = finding('F1', {
-    choices: [{ text: 'only', reason: 'only reason', action: 'fix_now' }],
-    recommend: 1,
+// Focuses rail position 0, finding F1, whose two choices sit under fix_now
+// and which recommends choice 2: entries 1 fix_now/1, 2 fix_now/2,
+// 3 follow_up/0, 4 leave_it/0.
+function twoFixRound(): FormsState {
+  const twoFix = finding('F1', {
+    choices: [
+      { text: 'A', reason: 'A reason', action: 'fix_now' },
+      { text: 'B', reason: 'B reason', action: 'fix_now' },
+    ],
+    recommend: 2,
   });
   return apply(
-    initialState([presented('r1', { findings: [lone] })], 'r1-session'),
+    initialState([presented('r1', { findings: [twoFix] })], 'r1-session'),
     { type: 'focusItem', item: 0 },
   );
 }
@@ -273,7 +278,7 @@ describe('restoring a draft', () => {
       findingRound(
         draft({
           finding_answers: [
-            findingEntry(1, { choice: 3, notes: 'seen', action: 'follow_up' }),
+            findingEntry(1, { choice: 3, notes: 'seen', action: 'fix_now' }),
           ],
         }),
       ),
@@ -281,7 +286,7 @@ describe('restoring a draft', () => {
     expect(round.findingAnswers[0]).toMatchObject({
       choice: 3,
       notes: 'seen',
-      action: 'follow_up',
+      action: 'fix_now',
     });
     expect(round.answers).toEqual([untouched, untouched]);
   });
@@ -295,47 +300,53 @@ describe('restoring a draft', () => {
     expect(round.findingAnswers[0].choice).toBe(0);
   });
 
-  it.each([
-    { action: 'fix_now', choice: 1 },
-    { action: 'follow_up', choice: 1 },
-    { action: 'leave_it', choice: 0 },
-    { action: '', choice: 0 },
-  ] as const)(
-    "restores a one-solution finding's $action draft with choice $choice",
-    ({ action, choice }) => {
-      const lone = finding('F1', {
-        choices: [{ text: 'only', reason: 'only reason', action: 'fix_now' }],
-        recommend: 1,
-      });
-      const state = initialState(
-        [
-          presented(
-            'r1',
-            { findings: [lone] },
-            draft({
-              finding_answers: [findingEntry(1, { choice: 0, action })],
-            }),
-          ),
-        ],
-        'r1-session',
-      );
-      expect(active(state).findingAnswers[0]).toMatchObject({ action, choice });
-    },
-  );
-
-  it('starts a finding with no draft entry on fix_now, picking a lone solution', () => {
-    const lone = finding('F2', {
-      choices: [{ text: 'only', reason: 'only reason', action: 'fix_now' }],
-      recommend: 1,
-    });
-    const state = initialState(
-      [presented('r1', { findings: [finding('F1'), lone] })],
-      'r1-session',
+  it('starts a finding with no draft entry with no pick', () => {
+    const round = active(findingRound());
+    expect(round.findingAnswers[0]).toMatchObject({ choice: 0, action: '' });
+    expect(answerStatus(round, { kind: 'finding', index: 1 })).toBe(
+      'untouched',
     );
-    expect(active(state).findingAnswers).toMatchObject([
-      { action: 'fix_now', choice: 0 },
-      { action: 'fix_now', choice: 1 },
-    ]);
+  });
+
+  it('restores a saved pick that is an entry', () => {
+    const round = active(
+      findingRound(
+        draft({
+          finding_answers: [
+            findingEntry(1, { choice: 0, action: 'follow_up' }),
+          ],
+        }),
+      ),
+    );
+    expect(round.findingAnswers[0]).toMatchObject({
+      choice: 0,
+      action: 'follow_up',
+    });
+  });
+
+  it('restores a saved pick that is no entry as none, keeping its notes', () => {
+    const round = active(
+      findingRound(
+        draft({
+          finding_answers: [
+            findingEntry(1, {
+              choice: 1,
+              action: 'leave_it',
+              notes: 'kept',
+              not_applicable: true,
+              dont_ask: true,
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(round.findingAnswers[0]).toMatchObject({
+      choice: 0,
+      action: '',
+      notes: 'kept',
+      notApplicable: true,
+      dontAsk: true,
+    });
   });
 
   it("restores a finding's unknown action as none", () => {
@@ -356,7 +367,7 @@ describe('restoring a draft', () => {
           { findings: [nit('N1')] },
           draft({
             finding_answers: [
-              findingEntry(1, { choice: 1, action: 'follow_up' }),
+              findingEntry(1, { choice: 0, action: 'follow_up' }),
             ],
           }),
         ),
@@ -365,7 +376,7 @@ describe('restoring a draft', () => {
     );
     expect(active(state).findingAnswers[0]).toMatchObject({
       action: '',
-      choice: 1,
+      choice: 0,
     });
   });
 
@@ -385,26 +396,54 @@ describe('choose', () => {
   const onQ1 = apply(mixedRound(), { type: 'focusItem', item: 1 });
 
   it('picks the numbered choice on the focused question', () => {
-    const state = apply(onQ1, { type: 'choose', choice: 2 });
+    const state = apply(onQ1, { type: 'choose', number: 2 });
     expect(active(state).answers[0].choice).toBe(2);
   });
 
-  it('picks the numbered choice on the focused finding', () => {
-    const state = run(
-      findingRound(),
-      { type: 'focusItem', item: 1 },
-      { type: 'choose', choice: 2 },
-    );
-    expect(active(state).findingAnswers[0].choice).toBe(2);
-    expect(active(state).answers[0].choice).toBe(0);
+  it('picks the numbered entry, setting choice and action', () => {
+    const state = apply(twoFixRound(), { type: 'choose', number: 2 });
+    expect(active(state).findingAnswers[0]).toMatchObject({
+      choice: 2,
+      action: 'fix_now',
+    });
     expect(active(state).revision).toBe(1);
   });
 
-  it('clears the choice when the same number is picked again', () => {
+  it('picks a bare header as choice 0', () => {
+    const state = apply(twoFixRound(), { type: 'choose', number: 4 });
+    expect(active(state).findingAnswers[0]).toMatchObject({
+      choice: 0,
+      action: 'leave_it',
+    });
+  });
+
+  it('clears the pick when the same number is picked again', () => {
+    const state = run(
+      twoFixRound(),
+      { type: 'choose', number: 3 },
+      { type: 'choose', number: 3 },
+    );
+    expect(active(state).findingAnswers[0]).toMatchObject({
+      choice: 0,
+      action: '',
+    });
+  });
+
+  it('changes nothing past the last entry', () => {
+    const state = twoFixRound();
+    expect(apply(state, { type: 'choose', number: 5 })).toBe(state);
+  });
+
+  it('changes nothing while not applicable', () => {
+    const state = apply(twoFixRound(), { type: 'toggleNotApplicable' });
+    expect(apply(state, { type: 'choose', number: 1 })).toBe(state);
+  });
+
+  it('clears the choice when the same number is picked again on a question', () => {
     const state = run(
       onQ1,
-      { type: 'choose', choice: 2 },
-      { type: 'choose', choice: 2 },
+      { type: 'choose', number: 2 },
+      { type: 'choose', number: 2 },
     );
     expect(active(state).answers[0].choice).toBe(0);
   });
@@ -412,25 +451,25 @@ describe('choose', () => {
   it('switches to another number', () => {
     const state = run(
       onQ1,
-      { type: 'choose', choice: 2 },
-      { type: 'choose', choice: 3 },
+      { type: 'choose', number: 2 },
+      { type: 'choose', number: 3 },
     );
     expect(active(state).answers[0].choice).toBe(3);
   });
 
   it('does nothing on a notice', () => {
     const state = onNotice(mixedRound());
-    expect(apply(state, { type: 'choose', choice: 1 })).toBe(state);
+    expect(apply(state, { type: 'choose', number: 1 })).toBe(state);
   });
 
   it('does nothing on a question marked not applicable', () => {
     const state = apply(onQ1, { type: 'toggleNotApplicable' });
-    expect(apply(state, { type: 'choose', choice: 1 })).toBe(state);
+    expect(apply(state, { type: 'choose', number: 1 })).toBe(state);
   });
 
   it('does nothing for a number outside the choices', () => {
-    expect(apply(onQ1, { type: 'choose', choice: 0 })).toBe(onQ1);
-    expect(apply(onQ1, { type: 'choose', choice: 4 })).toBe(onQ1);
+    expect(apply(onQ1, { type: 'choose', number: 0 })).toBe(onQ1);
+    expect(apply(onQ1, { type: 'choose', number: 4 })).toBe(onQ1);
   });
 });
 
@@ -438,7 +477,7 @@ describe('clearChoice', () => {
   const chosen = run(
     mixedRound(),
     { type: 'focusItem', item: 1 },
-    { type: 'choose', choice: 2 },
+    { type: 'choose', number: 2 },
   );
 
   it('clears the focused question’s choice', () => {
@@ -451,148 +490,21 @@ describe('clearChoice', () => {
     expect(apply(state, { type: 'clearChoice' })).toBe(state);
   });
 
-  it("clears a finding's solution and keeps its action", () => {
+  it("clears a finding's whole pick", () => {
     const state = run(
-      findingRound(),
-      { type: 'focusItem', item: 1 },
-      { type: 'choose', choice: 2 },
+      twoFixRound(),
+      { type: 'choose', number: 2 },
       { type: 'clearChoice' },
     );
     expect(active(state).findingAnswers[0]).toMatchObject({
       choice: 0,
-      action: 'fix_now',
-    });
-  });
-
-  it("keeps a one-solution finding's solution while it is fixed now", () => {
-    const fixed = oneSolutionRound();
-    expect(apply(fixed, { type: 'clearChoice' })).toBe(fixed);
-    expect(active(fixed).findingAnswers[0].choice).toBe(1);
-  });
-
-  it("keeps a one-solution finding's solution while it is followed up, when its number is picked again", () => {
-    const followed = apply(oneSolutionRound(), {
-      type: 'chooseAction',
-      action: 'follow_up',
-    });
-    expect(apply(followed, { type: 'choose', choice: 1 })).toBe(followed);
-  });
-
-  it("clears a one-solution finding's solution while it is left", () => {
-    const state = run(
-      oneSolutionRound(),
-      { type: 'choose', choice: 1 },
-      { type: 'chooseAction', action: 'leave_it' },
-      { type: 'clearChoice' },
-    );
-    expect(active(state).findingAnswers[0]).toMatchObject({
-      choice: 0,
-      action: 'leave_it',
-    });
-  });
-
-  it("clears a one-solution finding's solution with no action", () => {
-    const state = run(
-      oneSolutionRound(),
-      { type: 'chooseAction', action: 'fix_now' },
-      { type: 'clearChoice' },
-    );
-    expect(active(state).findingAnswers[0]).toMatchObject({
       action: '',
-      choice: 0,
-    });
-  });
-});
-
-describe('chooseAction', () => {
-  // Rail position 1 is finding F1, with three solutions.
-  const onF1 = apply(findingRound(), { type: 'focusItem', item: 1 });
-
-  it('sets the action on the focused finding, as an answer edit', () => {
-    const state = apply(onF1, { type: 'chooseAction', action: 'follow_up' });
-    expect(active(state).findingAnswers[0]).toMatchObject({
-      action: 'follow_up',
-      choice: 0,
-    });
-    expect(active(state).revision).toBe(1);
-  });
-
-  it('clears the action when the same one is picked again', () => {
-    const state = run(
-      onF1,
-      { type: 'chooseAction', action: 'follow_up' },
-      { type: 'chooseAction', action: 'follow_up' },
-    );
-    expect(active(state).findingAnswers[0].action).toBe('');
-  });
-
-  it('picks the one solution on fix_now, and keeps it when cleared', () => {
-    const set = run(
-      oneSolutionRound(),
-      { type: 'chooseAction', action: 'leave_it' },
-      { type: 'clearChoice' },
-      { type: 'chooseAction', action: 'fix_now' },
-    );
-    expect(active(set).findingAnswers[0]).toMatchObject({
-      action: 'fix_now',
-      choice: 1,
-    });
-
-    const cleared = apply(set, { type: 'chooseAction', action: 'fix_now' });
-    expect(active(cleared).findingAnswers[0]).toMatchObject({
-      action: '',
-      choice: 1,
     });
   });
 
-  it('keeps the solution on leave_it', () => {
-    const state = run(
-      onF1,
-      { type: 'choose', choice: 2 },
-      { type: 'chooseAction', action: 'leave_it' },
-    );
-    expect(active(state).findingAnswers[0]).toMatchObject({
-      action: 'leave_it',
-      choice: 2,
-    });
-  });
-
-  it('lets choose change the kept solution while the action is leave_it', () => {
-    const state = run(
-      onF1,
-      { type: 'chooseAction', action: 'leave_it' },
-      { type: 'choose', choice: 3 },
-    );
-    expect(active(state).findingAnswers[0]).toMatchObject({
-      action: 'leave_it',
-      choice: 3,
-    });
-  });
-
-  it('does nothing on a question', () => {
-    const state = apply(findingRound(), { type: 'focusItem', item: 2 });
-    expect(apply(state, { type: 'chooseAction', action: 'fix_now' })).toBe(
-      state,
-    );
-  });
-
-  it('does nothing while the finding is not applicable', () => {
-    const state = apply(onF1, { type: 'toggleNotApplicable' });
-    expect(apply(state, { type: 'chooseAction', action: 'fix_now' })).toBe(
-      state,
-    );
-  });
-});
-
-describe('chooseAction by origin', () => {
-  it('does nothing for an action the nit does not offer', () => {
-    const state = initialState(
-      [presented('r1', { findings: [nit('N1')] })],
-      'r1-session',
-    );
-    expect(apply(state, { type: 'chooseAction', action: 'follow_up' })).toBe(
-      state,
-    );
+  it('does nothing on a finding with no pick', () => {
+    const state = twoFixRound();
+    expect(apply(state, { type: 'clearChoice' })).toBe(state);
   });
 });
 
@@ -606,10 +518,9 @@ describe('acceptRecommendation', () => {
     expect(active(accepted).answers[0].choice).toBe(2);
   });
 
-  it("sets the focused finding's recommended action and solution, as an answer edit", () => {
-    // F1 recommends solution 2 with fix_now.
-    const onF1 = apply(findingRound(), { type: 'focusItem', item: 1 });
-    const accepted = apply(onF1, { type: 'acceptRecommendation' });
+  it('sets the recommended choice and action as one pick', () => {
+    // F1 recommends choice 2 with fix_now.
+    const accepted = apply(twoFixRound(), { type: 'acceptRecommendation' });
     expect(active(accepted).findingAnswers[0]).toMatchObject({
       action: 'fix_now',
       choice: 2,
@@ -617,9 +528,26 @@ describe('acceptRecommendation', () => {
     expect(active(accepted).revision).toBe(1);
   });
 
+  it("sets the recommended action's header when recommend is null", () => {
+    const state = initialState(
+      [
+        presented('r1', {
+          findings: [
+            finding('F1', { recommend: null, recommend_action: 'leave_it' }),
+          ],
+        }),
+      ],
+      'r1-session',
+    );
+    const accepted = apply(state, { type: 'acceptRecommendation' });
+    expect(active(accepted).findingAnswers[0]).toMatchObject({
+      choice: 0,
+      action: 'leave_it',
+    });
+  });
+
   it('does nothing when the answer already holds the recommended pick', () => {
-    const onF1 = apply(findingRound(), { type: 'focusItem', item: 1 });
-    const accepted = apply(onF1, { type: 'acceptRecommendation' });
+    const accepted = apply(twoFixRound(), { type: 'acceptRecommendation' });
     expect(apply(accepted, { type: 'acceptRecommendation' })).toBe(accepted);
   });
 
@@ -627,51 +555,28 @@ describe('acceptRecommendation', () => {
     const state = apply(mixedRound(), { type: 'toggleNotApplicable' });
     expect(apply(state, { type: 'acceptRecommendation' })).toBe(state);
   });
-
-  // Focuses the round's only finding, F1, restored from `body`.
-  function leaveItRound(body: FormBody | null = null): FormsState {
-    return initialState(
-      [
-        presented(
-          'r1',
-          { findings: [finding('F1', { recommend_action: 'leave_it' })] },
-          body,
-        ),
-      ],
-      'r1-session',
-    );
-  }
-
-  it('keeps the solution a recommended leave_it answer holds', () => {
-    const state = leaveItRound(
-      draft({
-        finding_answers: [findingEntry(1, { action: 'leave_it', choice: 3 })],
-      }),
-    );
-    expect(apply(state, { type: 'acceptRecommendation' })).toBe(state);
-  });
-
-  it('sets leave_it on an untouched finding without picking a solution', () => {
-    const accepted = apply(leaveItRound(), { type: 'acceptRecommendation' });
-    expect(active(accepted).findingAnswers[0]).toMatchObject({
-      action: 'leave_it',
-      choice: 0,
-    });
-    expect(active(accepted).revision).toBe(1);
-  });
 });
 
 describe('answerStatus', () => {
   const f1 = { kind: 'finding', index: 1 } as const;
   const onF1 = apply(findingRound(), { type: 'focusItem', item: 1 });
 
-  it('leaves a finding untouched with an action and no solution', () => {
-    expect(active(onF1).findingAnswers[0].action).toBe('fix_now');
+  it('a finding with no pick and no notes is untouched', () => {
     expect(answerStatus(active(onF1), f1)).toBe('untouched');
   });
 
   it('answers a finding with its action and solution', () => {
-    const state = apply(onF1, { type: 'choose', choice: 2 });
+    const state = apply(onF1, { type: 'choose', number: 2 });
+    expect(answerStatus(active(state), f1)).toBe('answered');
+  });
+
+  it('answers a finding with a header pick', () => {
+    // Entry 4 is follow_up's header: F1's three choices sit under fix_now.
+    const state = apply(onF1, { type: 'choose', number: 4 });
+    expect(active(state).findingAnswers[0]).toMatchObject({
+      choice: 0,
+      action: 'follow_up',
+    });
     expect(answerStatus(active(state), f1)).toBe('answered');
   });
 
@@ -691,7 +596,7 @@ describe('toggleNotApplicable', () => {
     const marked = run(
       mixedRound(),
       { type: 'focusItem', item: 1 },
-      { type: 'choose', choice: 2 },
+      { type: 'choose', number: 2 },
       { type: 'toggleNotApplicable' },
     );
     expect(active(marked).answers[0]).toMatchObject({
@@ -708,7 +613,7 @@ describe('toggleNotApplicable', () => {
     const state = run(
       findingRound(),
       { type: 'focusItem', item: 1 },
-      { type: 'choose', choice: 2 },
+      { type: 'choose', number: 2 },
       { type: 'toggleNotApplicable' },
     );
     expect(active(state).findingAnswers[0]).toMatchObject({
@@ -909,7 +814,7 @@ describe('sessionActivated', () => {
     const state = run(
       two,
       { type: 'focusItem', item: 0 },
-      { type: 'choose', choice: 2 },
+      { type: 'choose', number: 2 },
       { type: 'sessionActivated', sessionId: 'r2-session' },
     );
     expect(active(state).answers[0].choice).toBe(0);
@@ -1159,7 +1064,7 @@ describe('sending', () => {
       sendingReview,
       { type: 'sessionActivated', sessionId: 'r2-session' },
       { type: 'focusItem', item: 0 },
-      { type: 'choose', choice: 2 },
+      { type: 'choose', number: 2 },
       { type: 'openReview' },
     );
     expect(state.activeRoundId).toBe('r2');
@@ -1175,7 +1080,7 @@ describe('sending', () => {
     );
     const keys: FormsAction[] = [
       { type: 'focusItem', item: 0 },
-      { type: 'choose', choice: 2 },
+      { type: 'choose', number: 2 },
       { type: 'openReview' },
     ];
     for (const key of keys) {
@@ -1203,7 +1108,7 @@ describe('sending', () => {
   it('a failed send clears the mark and keeps the view and answers', () => {
     const state = run(
       two,
-      { type: 'choose', choice: 2 },
+      { type: 'choose', number: 2 },
       { type: 'openReview' },
       submitting,
       { type: 'sendFailed', roundId: 'r1' },
@@ -1252,7 +1157,7 @@ describe('roundShown', () => {
   it('keeps the live state of a round already open', () => {
     const chosen = run(initialState([presented('r1')], 'r1-session'), {
       type: 'choose',
-      choice: 2,
+      number: 2,
     });
     const state = apply(chosen, {
       type: 'roundShown',
@@ -1314,7 +1219,7 @@ describe('unansweredItem', () => {
     );
   const betaChosen: FormsAction[] = [
     { type: 'focusItem', item: 1 },
-    { type: 'choose', choice: 1 },
+    { type: 'choose', number: 1 },
   ];
 
   it('finds the nearest untouched question each way', () => {
@@ -1344,7 +1249,7 @@ describe('unansweredItem', () => {
     const round = threeQuestions(
       ...betaChosen,
       { type: 'focusItem', item: 2 },
-      { type: 'choose', choice: 1 },
+      { type: 'choose', number: 1 },
       { type: 'focusItem', item: 0 },
     );
     expect(unansweredItem(round, 1)).toEqual({
@@ -1434,7 +1339,7 @@ describe('item actions outside the forms view', () => {
   );
 
   it('leave the review state as it is', () => {
-    expect(apply(inReview, { type: 'choose', choice: 1 })).toBe(inReview);
+    expect(apply(inReview, { type: 'choose', number: 1 })).toBe(inReview);
     expect(apply(inReview, { type: 'toggleNotApplicable' })).toBe(inReview);
     expect(apply(inReview, { type: 'nextItem' })).toBe(inReview);
   });
@@ -1515,7 +1420,7 @@ describe('saveState', () => {
   const edited = run(
     mixedRound(),
     { type: 'focusItem', item: 1 },
-    { type: 'choose', choice: 1 },
+    { type: 'choose', number: 1 },
   );
   const revision = active(edited).revision;
 
@@ -1543,7 +1448,7 @@ describe('saveState', () => {
     const state = run(
       edited,
       { type: 'saveStarted', roundId: 'r1', revision },
-      { type: 'choose', choice: 2 },
+      { type: 'choose', number: 2 },
       { type: 'saveFinished', roundId: 'r1', revision, ok: true },
     );
     expect(saveState(active(state))).toBe('unsaved');
@@ -1622,7 +1527,7 @@ describe('buildBody', () => {
     const state = run(
       mixedRound(),
       { type: 'focusItem', item: 2 },
-      { type: 'choose', choice: 3 },
+      { type: 'choose', number: 3 },
       {
         type: 'setText',
         roundId: 'r1',
@@ -1651,10 +1556,10 @@ describe('buildBody', () => {
         'r1-session',
       ),
       { type: 'focusItem', item: 1 },
-      { type: 'choose', choice: 1 },
+      { type: 'choose', number: 1 },
     );
     expect(buildBody(active(state)).finding_answers).toEqual([
-      findingEntry(1, { action: 'fix_now' }),
+      findingEntry(1, {}),
       findingEntry(2, { choice: 1, action: 'fix_now' }),
     ]);
   });
@@ -1663,7 +1568,7 @@ describe('buildBody', () => {
     const state = run(
       mixedRound(),
       { type: 'focusItem', item: 1 },
-      { type: 'choose', choice: 2 },
+      { type: 'choose', number: 2 },
       { type: 'toggleNotApplicable' },
     );
     expect(buildBody(active(state)).answers[0]).toEqual(
@@ -1675,9 +1580,10 @@ describe('buildBody', () => {
     const state = run(
       findingRound(),
       { type: 'focusItem', item: 1 },
-      { type: 'chooseAction', action: 'follow_up' },
+      // Entry 4 is follow_up's header: F1's three choices sit under fix_now.
+      { type: 'choose', number: 4 },
       { type: 'focusItem', item: 2 },
-      { type: 'choose', choice: 2 },
+      { type: 'choose', number: 2 },
       { type: 'toggleNotApplicable' },
       { type: 'toggleDontAsk' },
       {
@@ -1704,7 +1610,7 @@ describe('apply', () => {
   it('leaves the state it was given unchanged', () => {
     const state = apply(mixedRound(), { type: 'focusItem', item: 1 });
     const before = structuredClone(state);
-    apply(state, { type: 'choose', choice: 1 });
+    apply(state, { type: 'choose', number: 1 });
     apply(state, { type: 'nextItem' });
     apply(state, { type: 'roundClosed', roundId: 'r1' });
     expect(state).toEqual(before);

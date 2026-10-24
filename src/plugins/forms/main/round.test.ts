@@ -919,7 +919,7 @@ describe('answersPayload finding actions', () => {
     });
   });
 
-  it('reports a header pick as choice 0 with its action', () => {
+  it('answers a header pick with choice 0 and its action', () => {
     expect(findingResult({ choice: 0, action: 'leave_it' })).toMatchObject({
       status: 'answered',
       choice: 0,
@@ -928,10 +928,32 @@ describe('answersPayload finding actions', () => {
     });
   });
 
-  it('leaves a header pick of an action that has choices untouched', () => {
+  it('leaves a finding untouched whose action has choices but none picked', () => {
     expect(findingResult({ choice: 0, action: 'fix_now' })).toMatchObject({
       status: 'untouched',
       action: '',
+    });
+  });
+
+  it('reports a leave_it choice with its choice and text', () => {
+    const leaveItChoice = finding({
+      choices: [
+        { text: 'Clear on reload', reason: 'It is one line.' },
+        {
+          text: 'Reloads are rare',
+          reason: 'Nobody reloads mid-task.',
+          action: 'leave_it',
+        },
+      ],
+    });
+
+    expect(
+      findingResult({ choice: 2, action: 'leave_it' }, leaveItChoice),
+    ).toMatchObject({
+      status: 'answered',
+      choice: 2,
+      choice_text: 'Reloads are rare',
+      action: 'leave_it',
     });
   });
 

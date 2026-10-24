@@ -39,8 +39,8 @@ type BuiltInKeymap = Omit<
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
 
-// A bare digit picks a choice on the page; in a text box, where vim reads a
-// digit as a count, `<Leader>a` and a digit picks.
+// A bare digit picks a numbered choice or action on the page; in a text box,
+// where vim reads a digit as a count, `<Leader>a` and a digit picks.
 const formsPageChoices = DIGITS.map((digit) => ({
   keys: digit,
   scope: 'forms.forms' as const,
@@ -57,9 +57,6 @@ function formsBoxBinds(scope: 'forms.forms' | 'forms.review') {
       command: `forms.choose${digit}` as const,
     })),
     { keys: '<Leader>ac', command: 'forms.clearChoice' as const },
-    { keys: '<Leader>af', command: 'forms.actFixNow' as const },
-    { keys: '<Leader>au', command: 'forms.actFollowUp' as const },
-    { keys: '<Leader>as', command: 'forms.actLeaveIt' as const },
     ...(scope === 'forms.review'
       ? [{ keys: '<Leader><Leader>', command: 'forms.openReview' as const }]
       : []),
@@ -181,9 +178,6 @@ export const defaultKeymap = {
       command: 'forms.acceptRecommendation',
     },
     { keys: 'c', scope: 'forms.forms', command: 'forms.clearChoice' },
-    { keys: 'f', scope: 'forms.forms', command: 'forms.actFixNow' },
-    { keys: 'u', scope: 'forms.forms', command: 'forms.actFollowUp' },
-    { keys: 's', scope: 'forms.forms', command: 'forms.actLeaveIt' },
     { keys: '<A-n>', scope: 'forms.forms', command: 'forms.nextUnanswered' },
     { keys: '<A-p>', scope: 'forms.forms', command: 'forms.prevUnanswered' },
     {

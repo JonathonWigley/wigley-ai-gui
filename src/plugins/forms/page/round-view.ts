@@ -512,14 +512,9 @@ function reviewKeysFor(
   return deps.keys.keysFor(formsCommand(command), formsScope('review'));
 }
 
-const MISSING_HINTS: Record<NonNullable<ReviewRow['missing']>, string> = {
-  solution: 'Needs a solution',
-  action: 'Needs an action',
-};
-
-// A finding with a complete pick reads as its action, then its solution; one
-// missing half its pick names the missing half in place of its status. The
-// cursor's row shows the keys that jump to its item, as clicking it does.
+// A finding's pick reads as its action, then its choice under the number the
+// card gives it; a header pick reads as its action alone, and a row with no
+// pick as its status. The cursor's row shows the keys that jump to its item, as clicking it does.
 function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
   const entry = element('li', 'review-row');
   entry.dataset.status = row.status;
@@ -536,7 +531,7 @@ function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
   }
   if (row.choice > 0) {
     answer.append(
-      element('span', 'choice-number', String(row.choice)),
+      element('span', 'choice-number', String(row.entry)),
       markdownElement(
         'span',
         'choice-text',
@@ -549,10 +544,7 @@ function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
   }
   const showsPick = row.actionLabel !== '' || row.choice > 0;
   if (!showsPick) {
-    answer.textContent =
-      row.missing === null
-        ? statusLabel(row.status)
-        : MISSING_HINTS[row.missing];
+    answer.textContent = statusLabel(row.status);
   }
   pick.append(
     element('span', 'review-number', row.label),

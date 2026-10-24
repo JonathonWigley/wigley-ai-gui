@@ -135,38 +135,39 @@ export function buildField(
   return { element: field, box };
 }
 
-// The choice list's entries in choice order, and `updateKeys`, which shows
-// each choice's keys again as the keymap now binds them.
+// The choice list's entries in the order of the choices drawn, and
+// `updateKeys`, which shows each choice's keys again as the keymap now binds
+// them.
 export interface ChoiceList {
   entries: HTMLLIElement[];
   updateKeys(): void;
 }
 
-// Appends one choice per text to `list`, each inline markdown with the keys
-// that pick it, the recommended one tagged; `pick` gets the clicked choice,
-// 1-based.
+// Appends one choice per entry of `choices` to `list`, each inline markdown
+// under its shown `number`, with the keys that pick that number; the choice
+// numbered `recommended` is tagged, none when null. `pick` gets the clicked
+// choice's number.
 export function buildChoiceList(
   list: HTMLElement,
-  texts: string[],
-  recommend: number,
-  pick: (choice: number) => void,
+  choices: { text: string; number: number }[],
+  recommended: number | null,
+  pick: (number: number) => void,
   deps: Pick<CardDeps, 'markdown' | 'keysFor' | 'platform'>,
 ): ChoiceList {
   const keyUpdaters: (() => void)[] = [];
-  const entries = texts.map((text, i) => {
-    const choice = i + 1;
+  const entries = choices.map(({ text, number }) => {
     const entry = element('li', 'choice');
-    const choicePick = button('choice-pick', '', () => pick(choice));
+    const choicePick = button('choice-pick', '', () => pick(number));
     choicePick.append(
-      element('span', 'choice-number', String(choice)),
+      element('span', 'choice-number', String(number)),
       markdownElement('span', 'choice-text', deps.markdown.inline(text)),
     );
     entry.append(choicePick);
-    if (choice === recommend) {
+    if (number === recommended) {
       entry.classList.add('is-recommended');
       choicePick.append(tag('Recommended', 'accent'));
     }
-    const command = numberedCommand('choose', choice);
+    const command = numberedCommand('choose', number);
     const readKeys = () => (command === null ? null : deps.keysFor(command));
     keyUpdaters.push(appendKeyHint(choicePick, readKeys, deps.platform));
     list.append(entry);

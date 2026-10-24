@@ -9,13 +9,20 @@ import {
 import { finding, presentedRound, question } from '../test-rounds';
 import { cardAnswer } from './layout-cards';
 
-// Finding Delta at rail position 0, question Alpha at 1.
+// Finding Delta at rail position 0, question Alpha at 1. Delta's entries:
+// 1 fix_now/1, 2 fix_now/2, 3 follow_up/0, 4 leave_it/0.
 function roundAfter(...actions: FormsAction[]): RoundState {
+  const delta = finding('Delta', {
+    choices: [
+      { text: 'A', reason: 'A reason', action: 'fix_now' },
+      { text: 'B', reason: 'B reason', action: 'fix_now' },
+    ],
+  });
   const start = initialState(
     [
       presentedRound('r1', {
         questions: [question('Alpha')],
-        findings: [finding('Delta')],
+        findings: [delta],
       }),
     ],
     'r1-session',
@@ -28,25 +35,8 @@ function roundAfter(...actions: FormsAction[]): RoundState {
 }
 
 describe('cardAnswer', () => {
-  it('cardAnswer_Untouched_HoldsFixNowAndNullChoice', () => {
+  it('cardAnswer_Untouched_HasNullChoiceAndAction', () => {
     const answer = cardAnswer(roundAfter(), { kind: 'finding', index: 1 });
-
-    expect(answer).toEqual({
-      status: 'untouched',
-      choice: null,
-      notApplicable: false,
-      dontAsk: false,
-      action: 'fix_now',
-    });
-  });
-
-  it('cardAnswer_ActionCleared_HasNullChoiceAndAction', () => {
-    const round = roundAfter(
-      { type: 'focusItem', item: 0 },
-      { type: 'chooseAction', action: 'fix_now' },
-    );
-
-    const answer = cardAnswer(round, { kind: 'finding', index: 1 });
 
     expect(answer).toEqual({
       status: 'untouched',
@@ -57,17 +47,33 @@ describe('cardAnswer', () => {
     });
   });
 
-  it('cardAnswer_FindingWithActionAndChoice_CarriesBoth', () => {
+  it('cardAnswer_HeaderPick_NullChoiceWithAction', () => {
     const round = roundAfter(
       { type: 'focusItem', item: 0 },
-      { type: 'chooseAction', action: 'follow_up' },
-      { type: 'choose', choice: 3 },
+      { type: 'choose', number: 4 },
     );
 
     const answer = cardAnswer(round, { kind: 'finding', index: 1 });
 
-    expect(answer.action).toBe('follow_up');
-    expect(answer.choice).toBe(3);
+    expect(answer).toEqual({
+      status: 'answered',
+      choice: null,
+      notApplicable: false,
+      dontAsk: false,
+      action: 'leave_it',
+    });
+  });
+
+  it('cardAnswer_FindingWithActionAndChoice_CarriesBoth', () => {
+    const round = roundAfter(
+      { type: 'focusItem', item: 0 },
+      { type: 'choose', number: 2 },
+    );
+
+    const answer = cardAnswer(round, { kind: 'finding', index: 1 });
+
+    expect(answer.action).toBe('fix_now');
+    expect(answer.choice).toBe(2);
     expect(answer.status).toBe('answered');
   });
 

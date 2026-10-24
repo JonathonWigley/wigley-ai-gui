@@ -31,7 +31,6 @@ const layout = {
       kit.section(proof, input.words.proof, input.proof);
       kit.verdict(card);
       const answer = kit.choiceList(card, 'all');
-      kit.actionRow(answer);
       kit.answerControls(answer);
       return { element: card };
     },

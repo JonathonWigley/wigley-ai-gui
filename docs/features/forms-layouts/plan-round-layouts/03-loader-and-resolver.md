@@ -1,6 +1,6 @@
 # 03 — Page loader and layout resolver
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -221,3 +221,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit d6537cad · proof: diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2803 tests) green · concerns: forms page calls refresh() on every store dispatch, keystrokes included (cheap); layout.d.ts comments are read by layout authors (doc wording check); feature design docs may still describe the single-layout loader (09); DOM paths have no unit tests (08, 10 live checks)

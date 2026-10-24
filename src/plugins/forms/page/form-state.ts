@@ -12,7 +12,12 @@ import type {
   RoundEnd,
 } from '../contract';
 import { actionLabel } from '../finding-origins';
-import { findingPickIsComplete, isFindingAction } from '../finding-pick';
+import {
+  findingEntries,
+  findingEntryNumber,
+  findingPickIsComplete,
+  isFindingAction,
+} from '../finding-pick';
 
 export type FormsView = 'forms' | 'review' | 'confirm' | 'idle';
 
@@ -41,8 +46,9 @@ export interface ItemAnswer {
   dontAskReason: string;
 }
 
-// `choice` is the solution, kept while the action is 'leave_it'; '' is no
-// action.
+// `choice` and `action` are one pick, one of the finding's numbered entries
+// (`findingEntries`): `choice` is 0 for an action's header. No pick is
+// `{ choice: 0, action: '' }`.
 export interface FindingAnswer extends ItemAnswer {
   action: FindingAction | '';
 }
@@ -107,17 +113,15 @@ export type ItemAction =
   | { type: 'prevItem' }
   // `item` is a rail position.
   | { type: 'focusItem'; item: number }
-  // Picking the held choice again clears it, except a one-solution finding's
-  // solution while its action is fix_now or follow_up.
-  | { type: 'choose'; choice: number }
-  // Clears only the solution on a finding; its action stays. Keeps a
-  // one-solution finding's solution while its action is fix_now or follow_up.
+  // `number` is 1-based: a question's choice, or a finding's entry down its
+  // card, which sets choice and action together. Picking the held number
+  // again clears the pick; a number past the last changes nothing.
+  | { type: 'choose'; number: number }
+  // Clears a question's choice, or a finding's whole pick.
   | { type: 'clearChoice' }
-  // On a finding: picking the action it holds clears it; an action the
-  // finding's origin does not offer changes nothing.
-  | { type: 'chooseAction'; action: FindingAction }
-  // Sets the recommended choice on a question, or the recommended action and
-  // solution on a finding.
+  // Sets the recommended choice on a question, or the recommended entry on a
+  // finding: its recommend_action with its recommend, or that action's header
+  // when recommend is null.
   | { type: 'acceptRecommendation' }
   | { type: 'toggleNotApplicable' }
   | { type: 'toggleDontAsk' };
@@ -171,7 +175,12 @@ const UNTOUCHED: ItemAnswer = {
   dontAskReason: '',
 };
 
-const UNTOUCHED_FINDING: FindingAnswer = { ...UNTOUCHED, action: '' };
+// A finding answer's pick alone.
+type FindingPick = Pick<FindingAnswer, 'choice' | 'action'>;
+
+const NO_PICK: FindingPick = { choice: 0, action: '' };
+
+const UNTOUCHED_FINDING: FindingAnswer = { ...UNTOUCHED, ...NO_PICK };
 
 const RAIL_ORDER: ItemKind[] = ['notice', 'finding', 'question'];
 
@@ -399,8 +408,8 @@ const PICK_ANSWERS = {
   question: (round, index) => round.answers[index - 1].choice >= 1,
   finding: (round, index) => {
     const answer = round.findingAnswers[index - 1];
-    const solutionCount = round.round.findings[index - 1].choices.length;
-    return findingPickIsComplete(solutionCount, answer.choice, answer.action);
+    const finding = round.round.findings[index - 1];
+    return findingPickIsComplete(finding, answer.choice, answer.action);
   },
 } satisfies Record<
   AnswerableKind,
@@ -408,12 +417,23 @@ const PICK_ANSWERS = {
 >;
 
 // Whether the item's picks alone answer it, notes aside: a choice on a
-// question, a complete pick of action and solution on a finding.
+// question, one of its numbered entries on a finding.
 export function pickIsComplete(
   round: RoundState,
   item: AnswerableItem,
 ): boolean {
   return PICK_ANSWERS[item.kind](round, item.index);
+}
+
+// The 1-based number the item's pick has down its card: a question's choice,
+// a finding's entry (`findingEntries`); 0 for no pick.
+export function pickNumber(round: RoundState, item: AnswerableItem): number {
+  if (item.kind === 'question') {
+    return round.answers[item.index - 1].choice;
+  }
+  const answer = round.findingAnswers[item.index - 1];
+  const finding = round.round.findings[item.index - 1];
+  return findingEntryNumber(finding, answer.choice, answer.action);
 }
 
 // The item's picks, or written notes, answer it. Throws when the round has no
@@ -475,16 +495,6 @@ export function saveState(round: RoundState): SaveState {
     return 'saved';
   }
   return round.savingRevision === round.revision ? 'saving' : 'unsaved';
-}
-
-// leave_it keeps whatever solution is held, so its solution is not compared.
-function holdsRecommendedPick(
-  answer: FindingAnswer,
-  finding: Finding,
-): boolean {
-  const isSolutionMatched =
-    answer.action === 'leave_it' || answer.choice === finding.recommend;
-  return answer.action === finding.recommend_action && isSolutionMatched;
 }
 
 // The saved-round body; a not-applicable answer keeps its choice.
@@ -574,24 +584,22 @@ function restoreAnswers<Item, Entry extends AnswerEntry, Answer>(
   );
 }
 
-// A finding with no draft entry starts on fix_now. A draft's unknown action,
-// or one the finding's origin does not offer, restores as none; an action
-// that pins a lone solution restores it picked.
+// A finding with no draft entry starts with no pick. A draft's pick restores
+// only when it is one of the finding's entries; any other restores as no
+// pick, keeping the entry's notes, Not applicable and Don't ask.
 function restoreFindingAnswer(
   entry: FindingAnswerEntry | undefined,
   finding: Finding,
 ): FindingAnswer {
   if (entry === undefined) {
-    return chooseAction(UNTOUCHED_FINDING, finding, 'fix_now');
+    return UNTOUCHED_FINDING;
   }
-  const isOffered =
-    isFindingAction(entry.action) &&
-    actionLabel(finding.origin, entry.action) !== null;
-  const action = isOffered ? entry.action : '';
-  const choiceCount = finding.choices.length;
-  const answer = restoreAnswer(entry, choiceCount);
-  const choice = pinsLoneSolution(action, choiceCount) ? 1 : answer.choice;
-  return { ...answer, action, choice };
+  const answer = restoreAnswer(entry, finding.choices.length);
+  const action = isFindingAction(entry.action) ? entry.action : '';
+  const isEntry = findingEntryNumber(finding, entry.choice, action) > 0;
+  return isEntry
+    ? { ...answer, choice: entry.choice, action }
+    : { ...answer, choice: 0, action: '' };
 }
 
 function restoreAnswer(
@@ -767,24 +775,22 @@ function applyItemAction(round: RoundState, action: ItemAction): RoundState {
     case 'focusItem':
       return focusAt(round, action.item);
     case 'choose':
-      if (holdsPinnedSolution(round)) {
-        return round;
+      if (focusedItem(round)?.kind === 'finding') {
+        return updateFocusedFinding(round, (answer, finding) =>
+          chooseEntry(answer, finding, action.number),
+        );
       }
       return updateFocusedAnswer(round, (answer, choiceCount) =>
-        choose(answer, choiceCount, action.choice),
+        choose(answer, choiceCount, action.number),
       );
     case 'clearChoice':
-      if (holdsPinnedSolution(round)) {
-        return round;
+      if (focusedItem(round)?.kind === 'finding') {
+        return updateFocusedFinding(round, clearFindingPick);
       }
       return updateFocusedAnswer(round, (answer) =>
         answer.notApplicable || answer.choice === 0
           ? answer
           : { ...answer, choice: 0 },
-      );
-    case 'chooseAction':
-      return updateFocusedFinding(round, (answer, finding) =>
-        chooseAction(answer, finding, action.action),
       );
     case 'acceptRecommendation':
       return acceptRecommendation(round);
@@ -827,46 +833,34 @@ function choose<Answer extends ItemAnswer>(
   return { ...answer, choice: answer.choice === choice ? 0 : choice };
 }
 
-// Same action again clears it, leaving the solution; locked while not
-// applicable, and an action the finding's origin does not offer changes
-// nothing. Fixing or following up a one-solution finding picks that solution.
-function chooseAction(
+// Picks the finding's entry `number` (1-based), choice and action together;
+// the held entry again clears to no pick. Locked while not applicable, and a
+// number past the last entry changes nothing.
+function chooseEntry(
   answer: FindingAnswer,
   finding: Finding,
-  action: FindingAction,
+  number: number,
 ): FindingAnswer {
-  const isOffered = actionLabel(finding.origin, action) !== null;
-  if (answer.notApplicable || !isOffered) {
+  const entry = findingEntries(finding)[number - 1];
+  if (answer.notApplicable || entry === undefined) {
     return answer;
   }
-  if (answer.action === action) {
-    return { ...answer, action: '' };
+  if (holdsPick(answer, entry)) {
+    return { ...answer, ...NO_PICK };
   }
-  const solutionCount = finding.choices.length;
-  const choice = pinsLoneSolution(action, solutionCount) ? 1 : answer.choice;
-  return { ...answer, action, choice };
+  return { ...answer, choice: entry.choice, action: entry.action };
 }
 
-// Fixing or following up a one-solution finding means its one solution.
-function pinsLoneSolution(
-  action: FindingAction | '',
-  solutionCount: number,
-): boolean {
-  const isFixOrFollowUp = action === 'fix_now' || action === 'follow_up';
-  return isFixOrFollowUp && solutionCount === 1;
+// Locked while not applicable; a no-op on a finding with no pick.
+function clearFindingPick(answer: FindingAnswer): FindingAnswer {
+  if (answer.notApplicable || holdsPick(answer, NO_PICK)) {
+    return answer;
+  }
+  return { ...answer, ...NO_PICK };
 }
 
-// Whether the focused item is a finding whose lone solution its action pins
-// and which holds it, so choose and clearChoice leave it picked.
-function holdsPinnedSolution(round: RoundState): boolean {
-  const focused = focusedItem(round);
-  if (focused === null || focused.kind !== 'finding') {
-    return false;
-  }
-  const answer = itemAnswer(round, { kind: 'finding', index: focused.index });
-  const solutionCount = ROUND_ITEMS.finding(round.round)[focused.index - 1]
-    .choices.length;
-  return answer.choice === 1 && pinsLoneSolution(answer.action, solutionCount);
+function holdsPick(answer: FindingAnswer, pick: FindingPick): boolean {
+  return answer.choice === pick.choice && answer.action === pick.action;
 }
 
 // A no-op unless a finding is focused, or when `change` returns the answer
@@ -896,8 +890,8 @@ type RecommendedPick<K extends AnswerableKind> = (
 ) => AnswerOf[K];
 
 // A mapped type, not `satisfies`: indexing it by a generic kind keeps the
-// kind's answer type. A finding recommending leave_it keeps the solution its
-// answer holds.
+// kind's answer type. A finding's recommended pick is its recommend_action
+// with its recommend, or that action's header when recommend is null.
 const RECOMMENDED_PICKS: { [K in AnswerableKind]: RecommendedPick<K> } = {
   question: (round, index, answer) => {
     const { recommend } = round.round.questions[index - 1];
@@ -907,16 +901,13 @@ const RECOMMENDED_PICKS: { [K in AnswerableKind]: RecommendedPick<K> } = {
   },
   finding: (round, index, answer) => {
     const finding = round.round.findings[index - 1];
-    if (holdsRecommendedPick(answer, finding)) {
-      return answer;
-    }
-    return finding.recommend_action === 'leave_it'
-      ? { ...answer, action: 'leave_it' }
-      : {
-          ...answer,
-          action: finding.recommend_action,
-          choice: finding.recommend ?? 0,
-        };
+    const recommended: FindingPick = {
+      choice: finding.recommend ?? 0,
+      action: finding.recommend_action,
+    };
+    return holdsPick(answer, recommended)
+      ? answer
+      : { ...answer, ...recommended };
   },
 };
 
