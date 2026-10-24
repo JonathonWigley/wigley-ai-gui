@@ -221,7 +221,7 @@ other plugin reaches docs only through `DocsMainExports` and `DocsPageExports` (
 - [x] [Doc re-read](07-doc-re-read.md) — after every code task
 
 ### Wave 6
-- [ ] [Final verification](08-final-verification.md) — after 07
+- [x] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
 
@@ -235,6 +235,7 @@ Review base: c04112eecae26d302e9320a509cba760cb383b58
 - 05 · 8c7f218 · diff read: IndexSource, SourceRead, DocsMainExports, loadIndex/rebuildIndex, IndexSourceRegistry, createIndexSourceRegistry/createMachineSource/createSessionSource, exports present; typecheck fails only in page/docs-view.ts (6, expected until 06) · concerns: SessionSourceSpec comment still names sessions' sessionAdded payload as its origin; a failed session load now clears that session's entries (registry rule)
 - 06 · 7cfc45e · diff read: DocsViewHandle, DocsPageExports, openDoc message, DocsViewDeps.sourceId, DocsView.openDoc, page exports, docs.openDoc drive action present; typecheck green tree-wide, lint clean · concerns: machine view shows 'Not read yet' and ignores other views' changes until Docs mode's first show; first show logs read then rebuilt — self-test order to check live; openDoc relies on mode.show() reaching showFirstTime; view ids now view:<n>
 - 07 · 5766b00 · design.md: 2 stale lines fixed (guard clears on failed load; openDoc waits for first index run); AGENTS.md, drive SKILL.md, marketplace README checked clean — no marketplace commit · concerns: none
+- 08 · none (drive runs c08a-c08d) · all 6 checks PASS: selftest all passed with machine index rebuilt 8 / session index read 4; first show never empty, Rebuilding line above tree under indexDelayMs 4000 (Reading line too fast to capture); session tab via addView hides/shows and keeps dragged width 410 across sessions; openDoc opens line 120 with row selected, unlisted path toasts; walked-link trash prompt names folder and link, both gone after y; real docs_index.py context: schemaVersion 2, 0 of 372 entries lack walked. Report: scratchpad/reports/08-1.md · concerns: the 'Reading the docs index…' line was never caught in a capture (read too fast)
 ### Contract changes
 - startDocs (not a listed Produces): startDocs(services, scriptPath) → { sources, docFiles } → startDocs(services, scriptPath, entries) → { indexDeps, docFiles } · why: the registry lives in start and createDocFiles reads registry.loadedEntries() · consumers: none outside main/start.ts and start.test.ts · group 05
 - docs.openDoc drive action args string: { path: string; line?: number } → { path: string, line?: number } · why: the other docs drive actions separate fields with commas · consumers: none · group 06

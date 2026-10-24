@@ -146,8 +146,8 @@ function indexDelayMsArg(args: JsonObject): number {
 // connects a session in its repo, whose row shows its Docs tab. Each takes
 // `loadStates` to add a doc per non-launch index load state and
 // `indexDelayMs` to make the stand-in index script wait before answering.
-// `docs.openDoc` asks the page to open a doc in Docs mode. Disposing removes the actions and ends every session `docs.connectSession`
-// connected.
+// `docs.openDoc` asks the page to open a doc in Docs mode. Disposing removes
+// the actions and ends every session `docs.connectSession` connected.
 export function addDriveActions(
   drive: DriveHost,
   deps: DocsDriveDeps,

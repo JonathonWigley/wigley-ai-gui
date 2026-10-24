@@ -81,11 +81,13 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   unknown) for its Docs tab. The page reaches a source through `loadIndex(sourceId)` and `rebuildIndex(sourceId)`; an
   unknown id rejects naming it. A view runs `load` on its first show, then `rebuild` when the source has one; Rescan
   runs `rebuild`, or `load` for a source with none. The write guard below reads the entries each registered source
-  last loaded, so a source's entries stop allowing changes once it is disposed, or once a load of it throws or gives no document.
-- **Page exports**: `addView(sourceId, { isVisible })` returns `{ element, shown(), hasUnsavedEdits(), dispose() }`: one element holding
-  the view's tree and doc in a split, its keys, `Space v t` and its changes reaching the other views as a session
-  tab's do (each session's Docs tab is built through it). `openDoc(path, line?)` shows Docs mode and opens the doc
-  there at that 1-based line once the machine view's first index run settles; a path the machine index does not list is refused with a toast.
+  last loaded, so a source's entries stop allowing changes once it is disposed, or once a load of it throws or gives
+  no document.
+- **Page exports**: `addView(sourceId, { isVisible })` returns `{ element, shown(), hasUnsavedEdits(), dispose() }`:
+  one element holding the view's tree and doc in a split, its keys, `Space v t` and its changes reaching the other
+  views as a session tab's do (each session's Docs tab is built through it). `openDoc(path, line?)` shows Docs mode
+  and opens the doc there at that 1-based line once the machine view's first index run settles; a path the machine
+  index does not list is refused with a toast.
 - The script is found through `installPath` in each configured Claude config folder's
   `plugins/installed_plugins.json`; a `docs.scriptPath` setting, empty by default, overrides it. `python3 -X utf8`
   runs it: UTF-8 mode lets it print the index's `→` to a Windows console's cp1252 pipe.

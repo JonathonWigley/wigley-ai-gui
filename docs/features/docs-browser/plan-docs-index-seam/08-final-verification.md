@@ -1,6 +1,6 @@
 # 08 — Final verification in drive runs
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -53,3 +53,5 @@ Done when: every check above ran and its result, with capture paths, is recorded
 Commit:    none; `wigley:make` records the Proof
 
 ## Proof
+
+Commit none (drive runs c08a-c08d) · proof: all 6 checks PASS: selftest all passed with machine index rebuilt 8 / session index read 4; first show never empty, Rebuilding line above tree under indexDelayMs 4000 (Reading line too fast to capture); session tab via addView hides/shows and keeps dragged width 410 across sessions; openDoc opens line 120 with row selected, unlisted path toasts; walked-link trash prompt names folder and link, both gone after y; real docs_index.py context: schemaVersion 2, 0 of 372 entries lack walked. Report: scratchpad/reports/08-1.md · concerns: the 'Reading the docs index…' line was never caught in a capture (read too fast)

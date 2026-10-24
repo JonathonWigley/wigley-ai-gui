@@ -70,17 +70,19 @@ export interface Files {
   // Moves a file or a folder to the OS Trash (under the self-test the Node
   // adapter deletes it for good).
   trash(path: string): Promise<void>;
-  // Watches `folder` and every folder under it, calling `onChange` with the
-  // changed path relative to `folder`, joined with `/`; with `recursive:
-  // false` it reports only changes to entries directly in `folder`, and the
-  // Node adapter also reports a subfolder by its own name when the OS reports
-  // its contents changing. The Node adapter reports a burst of events for one
-  // path once, 100 ms after its last event; the memory adapter reports each
-  // change at once. A temp file `write` makes never reports, so a write
-  // reports only its target. Creates `folder` when it is missing. When watching fails the watch closes, dropping any change not
-  // yet reported, and calls the options' `onError` once; with no `onError` it
-  // closes silently. A failure to start watching, creating `folder` or
-  // starting the watcher, throws from `watch` and never reaches `onError`.
+  // Watches `folder`, and every folder under it unless `recursive` is false,
+  // calling `onChange` with the changed path relative to `folder`, joined with
+  // `/`; with `recursive: false` it reports only changes to entries directly
+  // in `folder`, and the Node adapter also reports a subfolder by its own name
+  // when the OS reports its contents changing. The Node adapter reports a
+  // burst of events for one path once, 100 ms after its last event; the
+  // memory adapter reports each change at once. A temp file `write` makes
+  // never reports, so a write reports only its target. Creates `folder` when
+  // it is missing. When watching fails the watch closes, dropping any change
+  // not yet reported, and calls the options' `onError` once; with no
+  // `onError` it closes silently. A failure to start watching, creating
+  // `folder` or starting the watcher, throws from `watch` and never reaches
+  // `onError`.
   watch(
     folder: string,
     onChange: (path: string) => void,

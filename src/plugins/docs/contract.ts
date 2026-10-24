@@ -52,7 +52,8 @@ export interface IndexEntry {
   // A string for `repo` and `features` entries.
   repo: string | null;
   // The clone, feature home or plugin install folder; a string for every
-  // source but `global`.
+  // known source but `global`, and a string or null for a source the app does
+  // not know.
   root: string | null;
   // `<plugin>@<marketplace>` for a `plugin` entry.
   plugin: string | null;

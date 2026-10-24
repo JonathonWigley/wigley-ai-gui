@@ -25,9 +25,9 @@ export function isIndexedPath(
 
 // Why a write, create, rename or trash at `target` (its folder a real path)
 // is refused, or null when it is allowed: at an entry's own file, inside a
-// `repo` or `features` entry's root, or inside a global docs folder. Anything inside a
-// plugin cache or a listed plugin install is refused, even inside an allowed
-// folder.
+// `repo` or `features` entry's root, or inside a global docs folder.
+// Anything inside a plugin cache or a listed plugin install is refused, even
+// inside an allowed folder.
 export function changeRefusal(
   target: string,
   entries: readonly IndexEntry[],

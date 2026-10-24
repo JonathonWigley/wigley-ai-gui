@@ -30,7 +30,7 @@ export const DOC_KINDS: readonly DocKind[] = [
   'followup',
 ];
 
-export const DOC_SOURCES: readonly DocSource[] = [
+const DOC_SOURCES: readonly DocSource[] = [
   'global',
   'repo',
   'plugin',
