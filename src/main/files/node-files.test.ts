@@ -252,15 +252,33 @@ describe('createNodeFiles', () => {
     expect(reports).toEqual(['z.txt']);
   });
 
+  it('watch_NotRecursive_ReportsOnlyTheFolderOwnEntries', async () => {
+    mkdirSync(path.join(root, 'sub'));
+    const reports: string[] = [];
+    const watch = files.watch(root, (changed) => reports.push(changed), {
+      recursive: false,
+    });
+    try {
+      await files.write(path.join(root, 'sub', 'a.txt'), 'nested');
+      await files.write(path.join(root, 'b.txt'), 'direct');
+      await vi.waitFor(() => expect(reports).toContain('b.txt'), {
+        timeout: 5000,
+      });
+    } finally {
+      watch.close();
+    }
+
+    // The OS may report `sub` itself, its contents having changed.
+    expect(reports.filter((changed) => changed !== 'sub')).toEqual(['b.txt']);
+  });
+
   it('watch_WatcherErrors_ClosesAndReportsTheErrorOnce', async () => {
     const reports: string[] = [];
     const errors: unknown[] = [];
     const failure = new Error('watch failed');
-    const watch = files.watch(
-      root,
-      (changed) => reports.push(changed),
-      (error) => errors.push(error),
-    );
+    const watch = files.watch(root, (changed) => reports.push(changed), {
+      onError: (error) => errors.push(error),
+    });
     try {
       watchers.at(-1)?.emit('error', failure);
       watchers.at(-1)?.emit('error', new Error('second failure'));

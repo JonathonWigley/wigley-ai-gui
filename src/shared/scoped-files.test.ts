@@ -86,6 +86,19 @@ describe('scopedFiles', () => {
     expect(reports).toEqual(['a/layout.js']);
   });
 
+  it('watch_Options_PassedThrough', async () => {
+    const scoped = scopedFiles(inner, ROOT, posixPaths);
+    const reports: string[] = [];
+    scoped.watch('layouts', (changed) => reports.push(changed), {
+      recursive: false,
+    });
+
+    await scoped.write('layouts/a/layout.js', 'text');
+    await scoped.write('layouts/b.js', 'text');
+
+    expect(reports).toEqual(['b.js']);
+  });
+
   it('rename_DestinationOutsideRoot_RejectsBeforeMoving', async () => {
     await inner.write(`${ROOT}/a.md`, 'text');
     const scoped = scopedFiles(inner, ROOT, posixPaths);

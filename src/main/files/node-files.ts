@@ -26,6 +26,7 @@ import {
   type FileStat,
   type FileWatch,
   isMissingFile,
+  type WatchOptions,
 } from '../../contracts/files';
 
 // Editors save through a rename and FSEvents repeats events, so one save
@@ -225,11 +226,12 @@ async function listFolder(
 function watchDebounced(
   folder: string,
   onChange: (path: string) => void,
-  onError?: (error: unknown) => void,
+  options?: WatchOptions,
 ): FileWatch {
   mkdirSync(folder, { recursive: true });
   const pending = new Map<string, NodeJS.Timeout>();
-  const watcher = watchFolder(folder, { recursive: true }, (_event, name) => {
+  const recursive = options?.recursive ?? true;
+  const watcher = watchFolder(folder, { recursive }, (_event, name) => {
     if (name === null || isWatchedFolderItself(folder, name)) {
       return;
     }
@@ -262,7 +264,7 @@ function watchDebounced(
     }
     failed = true;
     close();
-    onError?.(error);
+    options?.onError?.(error);
   });
   return { close };
 }

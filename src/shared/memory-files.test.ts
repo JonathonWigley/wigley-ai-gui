@@ -102,6 +102,24 @@ describe('createMemoryFiles', () => {
     ]);
   });
 
+  it('watch_NotRecursive_SubfolderChangeNotReported', async () => {
+    const reports: string[] = [];
+    files.watch('/h', (changed) => reports.push(changed), { recursive: false });
+
+    await files.write('/h/s/a.md', 'text');
+
+    expect(reports).toEqual([]);
+  });
+
+  it('watch_NotRecursive_FolderChangeReported', async () => {
+    const reports: string[] = [];
+    files.watch('/h', (changed) => reports.push(changed), { recursive: false });
+
+    await files.write('/h/a.md', 'text');
+
+    expect(reports).toEqual(['a.md']);
+  });
+
   it('rename_SourceMissing_RejectsAsMissingFile', async () => {
     await files.makeFolder('/h');
 

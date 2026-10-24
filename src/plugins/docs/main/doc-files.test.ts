@@ -782,6 +782,25 @@ describe('watch', () => {
 
     expect(changes).toBe(0);
   });
+
+  it('watch_WatchesFolderOneLevel', async () => {
+    const memory = createMemoryFiles();
+    await memory.write(path, 'a');
+    const watched: { folder: string; recursive?: boolean }[] = [];
+    const test = setUp({
+      files: {
+        ...memory,
+        watch: (folder, onChange, options) => {
+          watched.push({ folder, recursive: options?.recursive });
+          return memory.watch(folder, onChange, options);
+        },
+      },
+    });
+
+    await test.docFiles.watch(path, () => {});
+
+    expect(watched).toEqual([{ folder: ROOT, recursive: false }]);
+  });
 });
 
 describe('on Windows', () => {

@@ -21,6 +21,7 @@ export interface MemoryFiles extends Files {
 interface MemoryWatch {
   folder: string;
   onChange: (path: string) => void;
+  recursive: boolean;
 }
 
 // A folder exists when `makeFolder` made it, it held a file or folder that
@@ -40,7 +41,9 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
   const report = (file: string) => {
     for (const watch of watches) {
       const relative = relativeUnder(watch.folder, file);
-      if (relative !== null) {
+      const isReported =
+        relative !== null && (watch.recursive || !relative.includes('/'));
+      if (isReported) {
         watch.onChange(relative);
       }
     }
@@ -162,8 +165,12 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
         keyOf(folder),
         options?.recursive ?? false,
       ),
-    watch: (folder, onChange) => {
-      const watch: MemoryWatch = { folder: keyOf(folder), onChange };
+    watch: (folder, onChange, options) => {
+      const watch: MemoryWatch = {
+        folder: keyOf(folder),
+        onChange,
+        recursive: options?.recursive ?? true,
+      };
       watches.add(watch);
       return { close: () => watches.delete(watch) };
     },

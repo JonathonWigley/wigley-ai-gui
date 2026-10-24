@@ -243,9 +243,11 @@ export async function loadConfigStore(
           requestRebuild();
         }
       },
-      (error) => {
-        reportWatchFailure(error);
-        requestRebuild();
+      {
+        onError: (error) => {
+          reportWatchFailure(error);
+          requestRebuild();
+        },
       },
     );
   } catch (error) {

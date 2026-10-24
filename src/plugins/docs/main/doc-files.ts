@@ -245,7 +245,8 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
     }));
   }
 
-  // Watches the file's folder, not the file, so an atomic replace is seen.
+  // Watches the file's folder, not the file, so an atomic replace is seen;
+  // one level only, since only the file's own name is reported.
   async function watch(path: string, changed: () => void): Promise<FileWatch> {
     const requested = absolute(path);
     const real = await realPathOrSelf(files, requested);
@@ -257,7 +258,11 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
           changed();
         }
       },
-      (error) => log('docs', `watch ${requested} stopped: ${errorText(error)}`),
+      {
+        recursive: false,
+        onError: (error) =>
+          log('docs', `watch ${requested} stopped: ${errorText(error)}`),
+      },
     );
   }
 

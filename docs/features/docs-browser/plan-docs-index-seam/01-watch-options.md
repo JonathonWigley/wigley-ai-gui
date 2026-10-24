@@ -1,6 +1,6 @@
 # 01 — Files.watch takes options; docs watches one level
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

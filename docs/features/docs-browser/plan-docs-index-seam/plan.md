@@ -205,7 +205,7 @@ other plugin reaches docs only through `DocsMainExports` and `DocsPageExports` (
 
 ### Wave 1
 - [ ] [Files.watch options, one-level docs watch](01-watch-options.md)
-- [ ] [Index export: schema 2 and walked](02-index-walked-export.md)
+- [x] [Index export: schema 2 and walked](02-index-walked-export.md)
 
 ### Wave 2
 - [ ] [Schema 2, unknown kinds and sources in the app](03-schema-2-unknown-kinds.md) — after 01 (shares `doc-files.test.ts`)
@@ -225,10 +225,12 @@ other plugin reaches docs only through `DocsMainExports` and `DocsPageExports` (
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: c04112eecae26d302e9320a509cba760cb383b58
 
 ### Groups
+- 02 · marketplace bb31807 · diff read matches Produces (SCHEMA_VERSION = 2, to_json walked); docs-index unittest 155 OK · concerns: none
 ### Contract changes
 ### Rulings
+- wigley bumped 1.9.0 → 1.9.1 in both manifests: local and origin/main matched, and § Changing a plugin names no other version field — the version rule — none, a later bump in the same push is harmless · group 02 · group 02
 ### Review rounds
 ### Test gate

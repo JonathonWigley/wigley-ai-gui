@@ -18,6 +18,14 @@ export interface FileWatch {
   close(): void;
 }
 
+export interface WatchOptions {
+  // Whether the watch covers every folder under the watched one; true when
+  // left out.
+  recursive?: boolean;
+  // Called once when watching fails after it started.
+  onError?(error: unknown): void;
+}
+
 // UTF-8 text files read whole or by their first bytes, any file read or
 // written whole as bytes, and the folders that hold them.
 export interface Files {
@@ -63,18 +71,20 @@ export interface Files {
   // adapter deletes it for good).
   trash(path: string): Promise<void>;
   // Watches `folder` and every folder under it, calling `onChange` with the
-  // changed path relative to `folder`, joined with `/`. The Node adapter
-  // reports a burst of events for one path once, 100 ms after its last event;
-  // the memory adapter reports each change at once. A temp file `write` makes
-  // never reports, so a write reports only its target. Creates `folder` when it
-  // is missing. When watching fails the watch closes, dropping any change not
-  // yet reported, and calls `onError` once; with no `onError` it closes
-  // silently. A failure to start watching, creating `folder` or starting the
-  // watcher, throws from `watch` and never reaches `onError`.
+  // changed path relative to `folder`, joined with `/`; with `recursive:
+  // false` it reports only changes to entries directly in `folder`, and the
+  // Node adapter also reports a subfolder by its own name when the OS reports
+  // its contents changing. The Node adapter reports a burst of events for one
+  // path once, 100 ms after its last event; the memory adapter reports each
+  // change at once. A temp file `write` makes never reports, so a write
+  // reports only its target. Creates `folder` when it is missing. When watching fails the watch closes, dropping any change not
+  // yet reported, and calls the options' `onError` once; with no `onError` it
+  // closes silently. A failure to start watching, creating `folder` or
+  // starting the watcher, throws from `watch` and never reaches `onError`.
   watch(
     folder: string,
     onChange: (path: string) => void,
-    onError?: (error: unknown) => void,
+    options?: WatchOptions,
   ): FileWatch;
 }
 

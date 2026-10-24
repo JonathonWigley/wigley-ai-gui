@@ -723,8 +723,8 @@ describe('loadConfigStore', () => {
     let fail: (error: unknown) => void = () => undefined;
     const files: Files = {
       ...createMemoryFiles(),
-      watch: (_folder, _onChange, onError) => {
-        fail = onError ?? fail;
+      watch: (_folder, _onChange, options) => {
+        fail = options?.onError ?? fail;
         return { close: () => undefined };
       },
     };
@@ -747,8 +747,8 @@ describe('loadConfigStore', () => {
     let closes = 0;
     const files: Files = {
       ...memory,
-      watch: (folder, onChange, onError) => {
-        const watch = memory.watch(folder, onChange, onError);
+      watch: (folder, onChange, options) => {
+        const watch = memory.watch(folder, onChange, options);
         return {
           close: () => {
             closes++;

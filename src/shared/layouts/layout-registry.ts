@@ -177,9 +177,10 @@ export async function startLayoutRegistry(
     );
   };
 
-  const watch = data.watch(LAYOUTS, onChange, (error) =>
-    log(logSource, `layouts watch failed: ${errorText(error)}`),
-  );
+  const watch = data.watch(LAYOUTS, onChange, {
+    onError: (error) =>
+      log(logSource, `layouts watch failed: ${errorText(error)}`),
+  });
 
   return {
     current: () => choice('start'),

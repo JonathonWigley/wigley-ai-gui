@@ -45,8 +45,8 @@ function withHeldReports(inner: Files): { data: Files; flush(): void } {
   return {
     data: {
       ...inner,
-      watch: (folder, onChange, onError) =>
-        inner.watch(folder, (path) => held.push(() => onChange(path)), onError),
+      watch: (folder, onChange, options) =>
+        inner.watch(folder, (path) => held.push(() => onChange(path)), options),
     },
     flush: () => {
       for (const report of held.splice(0)) {
@@ -56,7 +56,7 @@ function withHeldReports(inner: Files): { data: Files; flush(): void } {
   };
 }
 
-// `files` whose watch hands its `onError` to `fail`.
+// `files` whose watch hands its options' `onError` to `fail`.
 function withFailingWatch(inner: Files): {
   data: Files;
   fail(error: unknown): void;
@@ -65,8 +65,8 @@ function withFailingWatch(inner: Files): {
   return {
     data: {
       ...inner,
-      watch: (folder, onChange, onError) => {
-        onWatchError = onError;
+      watch: (folder, onChange, options) => {
+        onWatchError = options?.onError;
         return inner.watch(folder, onChange);
       },
     },

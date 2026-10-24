@@ -1,6 +1,6 @@
 # 02 — Index export: schema 2 with each entry's walked paths
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -43,3 +43,5 @@ Done when: `(cd plugins/wigley/scripts/docs-index && python3 -m unittest discove
 Commit:    one commit for the group, in wigley-ai-marketplace
 
 ## Proof
+
+Commit marketplace bb31807 · proof: diff read matches Produces (SCHEMA_VERSION = 2, to_json walked); docs-index unittest 155 OK · concerns: none

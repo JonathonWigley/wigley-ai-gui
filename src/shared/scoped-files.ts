@@ -53,8 +53,8 @@ export function scopedFiles(files: Files, root: string, paths: Paths): Files {
     write: async (path, text) => files.write(inside(path), text),
     writeBytes: async (path, bytes) => files.writeBytes(inside(path), bytes),
     list: async (folder, options) => files.list(inside(folder), options),
-    watch: (folder, onChange, onError) =>
-      files.watch(inside(folder), onChange, onError),
+    watch: (folder, onChange, options) =>
+      files.watch(inside(folder), onChange, options),
     stat: async (path) => files.stat(inside(path)),
     realPath: async (path) => {
       const [real, realRoot] = await Promise.all([
