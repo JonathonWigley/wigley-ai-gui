@@ -53,6 +53,7 @@ function session(
     controls: [mode],
     activity: 'working',
     commands: [],
+    ended,
   };
   const entries = {
     first() {

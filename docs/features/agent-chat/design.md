@@ -33,7 +33,8 @@ interview on 2026-10-23; this file is the record of both.
   value): Claude declares `mode` (permission mode), `effort` and `model`.
 - **Profile** — a named Claude config folder (`work` → `~/.claude`, `personal` → `~/.claude-personal`); it sets the
   login, plugins, settings and where transcripts live. Picked with the folder when starting a session.
-- **Owned session** — a session the app started; its row exists from start and ends when its process ends. A
+- **Owned session** — a session the app started; its row exists from start and stays after its process ends on its own,
+  the Chat tab showing the ended composer (chips and send disabled), until the user closes the row. A
   **connected session** is one a relay connection brought (a terminal session), as today.
 - **Take over** — a session tab selecting itself and later giving the session back to the tab shown before.
 - **App slash command** — a `/name` the app runs itself when typed in the message box, instead of sending it to the
@@ -190,7 +191,7 @@ interview on 2026-10-23; this file is the record of both.
   `run({ sessionId, profile, args, ended })` in place of sending, and clears the box; attached images stay. A registered
   name wins over the agent's command of the same name. The `/` completion offers the registered commands and the
   agent's, without repeats (§ Slash completion). A handler reports through chat's `notice` channel call, which adds a notice entry
-  main keeps, or through a toast in an ended session, which has no entries to show it. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile
+  main keeps, or through a toast in an ended session, which takes no new entries. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile
   out; a notice says so) and `/status` (a notice: `<profile>: signed in as <account>` or `<profile>: not signed in`).
 - **Images**: pasting an image file into the composer, or dropping one anywhere on the Chat tab, attaches it: PNG, JPEG, GIF and WebP whose base64 text is at most
   5 MB (the API's per-image limit, which counts that text); any other file is refused with a toast. Attached images show as a strip of

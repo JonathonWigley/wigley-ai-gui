@@ -245,6 +245,7 @@ describe('createChatSessions', () => {
         controls: [],
         activity: 'idle',
         commands: [],
+        ended: false,
       },
     ]);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
@@ -546,8 +547,9 @@ describe('createChatSessions', () => {
     expect(test.announced).toEqual([]);
   });
 
-  it('ended_reportsAndEndsTheOwnedSession', async () => {
+  it('ended_ReportsAndKeepsTheSessionEnded', async () => {
     const test = await started();
+    test.process.events.entry(assistant('a1', 'hi'));
     const entriesBefore = test.sent('entry').length;
 
     test.process.events.ended({ code: 1, error: 'crashed' });
@@ -556,11 +558,49 @@ describe('createChatSessions', () => {
     expect(test.sent('sessionEnded')).toEqual([
       { sessionId: ROW_ID, error: 'crashed' },
     ]);
-    expect(test.ownedEnds()).toBe(1);
-    expect(test.chat.sessions()).toEqual([]);
+    expect(test.ownedEnds()).toBe(0);
+    expect(test.chat.sessions()).toMatchObject([
+      { sessionId: ROW_ID, ended: true, entries: [assistant('a1', 'hi')] },
+    ]);
     expect(test.sent('entry')).toHaveLength(entriesBefore);
     expect(test.logged).toContain(`[chat] session ${ROW_ID} ended (code 1)`);
     expect(test.logged).toContain(`[chat] session ${ROW_ID} failed: crashed`);
+  });
+
+  it('closed_EndedSession_EndsTheOwnedSessionAtOnce', async () => {
+    const test = await started();
+    test.process.events.ended({ code: 0, error: null });
+    const callsBefore = test.process.calls.length;
+
+    test.chat.closed(ROW_ID);
+
+    expect(test.ownedEnds()).toBe(1);
+    expect(test.chat.sessions()).toEqual([]);
+    expect(test.process.calls).toHaveLength(callsBefore);
+    expect(test.logged).toContain(`[chat] session ${ROW_ID} closed (code 0)`);
+  });
+
+  it('endedSession_ProcessCallsLoggedAndIgnored', async () => {
+    const test = await started();
+    test.process.events.ended({ code: 0, error: null });
+    const entriesBefore = test.sent('entry').length;
+
+    test.chat.send(ROW_ID, { text: 'hi', images: [] });
+    test.chat.notice(ROW_ID, 'note', 'info');
+    test.chat.interrupt(ROW_ID);
+
+    expect(() => test.chat.setControl(ROW_ID, 'mode', 'plan')).toThrow(
+      `session ${ROW_ID} has ended`,
+    );
+    expect(test.logged).toEqual(
+      expect.arrayContaining([
+        `[chat] send for ended session ${ROW_ID} ignored`,
+        `[chat] notice for ended session ${ROW_ID} ignored`,
+        `[chat] interrupt for ended session ${ROW_ID} ignored`,
+      ]),
+    );
+    expect(test.process.calls).toEqual([]);
+    expect(test.sent('entry')).toHaveLength(entriesBefore);
   });
 
   it('closed_endsTheProcessThenTheOwnedSession', async () => {
@@ -874,7 +914,7 @@ describe('createChatSessions', () => {
     });
   });
 
-  it('permission_sessionEnds_answersCancelledWithNoEntry', async () => {
+  it('permission_sessionEnds_answersCancelledAndShowsIt', async () => {
     const test = await started();
     const call = test.chat
       .permissionToolSession(test.agentSession)
@@ -882,14 +922,33 @@ describe('createChatSessions', () => {
         toolUseId: 'tu-1',
         signal: signal().signal,
       });
-    const entriesBefore = test.sent('entry').length;
 
     test.process.events.ended({ code: 0, error: null });
 
     expect(replyText(await settled(call))).toBe(
       JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
     );
-    expect(test.sent('entry')).toHaveLength(entriesBefore);
+    expect(test.sent('entry').at(-1)?.entry).toMatchObject({
+      id: 'permission-1',
+      answer: { allowed: false, reason: CANCELLED_REASON },
+    });
+  });
+
+  it('permission_endedSession_answersCancelledWithNoEntry', async () => {
+    const test = await started();
+    test.process.events.ended({ code: 0, error: null });
+
+    const result = await test.chat
+      .permissionToolSession(test.agentSession)
+      .call('permission_prompt', BASH_ARGS, {
+        toolUseId: 'tu-1',
+        signal: signal().signal,
+      });
+
+    expect(replyText(result)).toBe(
+      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
+    );
+    expect(test.sent('entry')).toEqual([]);
   });
 
   it('permission_rowCloses_answersCancelledWithNoEntry', async () => {

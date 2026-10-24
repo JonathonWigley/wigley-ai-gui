@@ -85,7 +85,9 @@ export interface ChatSessions {
     entryId: string,
     answer: PermissionAnswer,
   ): void;
-  // The sessions plugin's `closed` event for `sessionId`.
+  // The sessions plugin's `closed` event for `sessionId`: ends the process,
+  // then the owned session, which drops its row; a session that ended on its
+  // own has its owned session ended at once.
   closed(sessionId: string): void;
   // Kills every process not yet exited, a closed session's still ending
   // included, for an app quit, which does not wait for `end`.
@@ -174,15 +176,24 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // Every started process until its `ended`, held or closed.
   const running = new Set<AgentProcess>();
 
-  function isHeld(session: HeldSession): boolean {
-    return held.get(session.state.sessionId) === session;
+  // Held and its process not yet ended.
+  function isLive(session: HeldSession): boolean {
+    return (
+      held.get(session.state.sessionId) === session && !session.state.ended
+    );
   }
 
-  // The session's held state, or null after logging that the call was ignored.
-  function heldFor(method: string, sessionId: string): HeldSession | null {
+  // The session's held state while its process runs, or null after logging
+  // that the call was ignored.
+  function liveFor(method: string, sessionId: string): HeldSession | null {
     const session = held.get(sessionId) ?? null;
     if (session === null) {
       log('chat', `${method} for unknown session ${sessionId} ignored`);
+      return null;
+    }
+    if (session.state.ended) {
+      log('chat', `${method} for ended session ${sessionId} ignored`);
+      return null;
     }
     return session;
   }
@@ -231,6 +242,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.pending.clear();
   }
 
+  // Sends each waiting permission card its cancelled answer, for a session
+  // whose tab stays open after its calls are cancelled.
+  function showPendingCancelled(session: HeldSession) {
+    for (const pending of session.pending.values()) {
+      sendEntry(session, {
+        ...pending.entry,
+        answer: { allowed: false, reason: CANCELLED_REASON },
+      });
+    }
+  }
+
   // The state is dropped first, so every later event for the session is
   // ignored.
   function drop(session: HeldSession) {
@@ -272,24 +294,24 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const { sessionId } = session.state;
     return {
       entry(entry) {
-        if (isHeld(session)) {
+        if (isLive(session)) {
           sendEntry(session, entry);
         }
       },
       controls(controls) {
-        if (isHeld(session)) {
+        if (isLive(session)) {
           session.state.controls = controls;
           send('controls', { sessionId, controls });
         }
       },
       activity(activity) {
-        if (isHeld(session)) {
+        if (isLive(session)) {
           session.harnessActivity = activity;
           updateActivity(session);
         }
       },
       commands(names) {
-        if (!isHeld(session) || sameNames(session.state.commands, names)) {
+        if (!isLive(session) || sameNames(session.state.commands, names)) {
           return;
         }
         session.state.commands = [...names];
@@ -300,16 +322,18 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         if (session.process !== null) {
           running.delete(session.process);
         }
-        if (!isHeld(session)) {
+        if (!isLive(session)) {
           return;
         }
         log('chat', `session ${sessionId} ended (code ${code})`);
         if (error !== null) {
           log('chat', `session ${sessionId} failed: ${error}`);
         }
-        drop(session);
+        // The row and its state stay, ended, until the user closes the row.
+        session.state.ended = true;
+        showPendingCancelled(session);
+        cancelPending(session);
         send('sessionEnded', { sessionId, error });
-        session.owned.end();
       },
     };
   }
@@ -346,6 +370,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         controls: [],
         activity: 'idle',
         commands: [],
+        ended: false,
       },
       owned,
       process: null,
@@ -521,10 +546,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       deps.archived.set(hostSessionId, archived),
     resume,
     send(sessionId, message) {
-      heldFor('send', sessionId)?.process?.send(message);
+      liveFor('send', sessionId)?.process?.send(message);
     },
     notice(sessionId, text, tone) {
-      const session = heldFor('notice', sessionId);
+      const session = liveFor('notice', sessionId);
       if (session === null) {
         return;
       }
@@ -538,17 +563,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       });
     },
     interrupt(sessionId) {
-      heldFor('interrupt', sessionId)?.process?.interrupt();
+      liveFor('interrupt', sessionId)?.process?.interrupt();
     },
     setControl(sessionId, controlId, value) {
       const session = held.get(sessionId);
-      if (session === undefined) {
+      if (session === undefined || session.state.ended) {
         throw new Error(`session ${sessionId} has ended`);
       }
       session.process?.setControl(controlId, value);
     },
     answerPermission(sessionId, entryId, answer) {
-      const session = heldFor('answerPermission', sessionId);
+      const session = liveFor('answerPermission', sessionId);
       if (session === null) {
         return;
       }
@@ -565,6 +590,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         return;
       }
       drop(session);
+      if (session.state.ended) {
+        logCloseExit(session);
+        session.owned.end();
+        return;
+      }
       const ended = session.process?.end() ?? Promise.resolve();
       ended.then(
         () => {
@@ -608,7 +638,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           } catch (error) {
             return errorResult(errorText(error));
           }
-          if (signal.aborted) {
+          if (signal.aborted || session.state.ended) {
             return textResult(
               permissionReplyText(
                 { allowed: false, reason: CANCELLED_REASON },

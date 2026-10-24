@@ -39,8 +39,9 @@ export interface ResumeRequest {
   hostSessionId: string;
 }
 
-// `sessionId` is the sessions plugin's id for the row; an ended session's
-// state is dropped at once.
+// `sessionId` is the sessions plugin's id for the row. A session whose process
+// ended on its own stays, `ended` true, until the user closes its row; a
+// closed session's state is dropped at once.
 export interface ChatSessionState {
   sessionId: string;
   projectDir: string;
@@ -51,6 +52,7 @@ export interface ChatSessionState {
   // The session's slash commands and skills, as typed after `/`; [] until the
   // harness reports them.
   commands: string[];
+  ended: boolean;
 }
 
 export interface PermissionAnswer {
@@ -114,6 +116,8 @@ export interface ChatChannel extends ChannelShape {
     controls: { sessionId: string; controls: SessionControl[] };
     activity: { sessionId: string; activity: ProcessActivity };
     commands: { sessionId: string; names: string[] };
+    // The session's process ended or failed to start; one that ended on its
+    // own keeps its row until the user closes it.
     sessionEnded: { sessionId: string; error: string | null };
     layoutChanged: LayoutChoice;
     // The page the user opens to finish sign-in `id`.
@@ -132,7 +136,8 @@ export interface ChatChannel extends ChannelShape {
 
 // The session an app slash command was sent in: `args` is the trimmed text
 // after the name, '' when none; `ended` is true when the session's agent
-// process has ended, where main keeps no entries and a notice shows nowhere.
+// process has ended, where main takes no new entries and a notice shows
+// nowhere.
 export interface SlashCommandContext {
   sessionId: string;
   profile: string;

@@ -133,7 +133,8 @@ lands in both repos together. Each relay connection is one agent session, owned 
 connected session has a row in the sessions sidebar until it disconnects or the user closes the row. A session the
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
 host session id joins that row instead of adding one (a newer relay takes the join from an older one still
-connected, as when the harness restarts its MCP connection), and the row ends when the agent process ends. A plugin's close
+connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps a
+self-ended session's row, its Chat tab showing the ended composer, until the user closes it. A plugin's close
 guard (`addCloseGuard`) refuses the user's close while the plugin still has something open there (forms: an open
 round), since main, not the page, decides.
 

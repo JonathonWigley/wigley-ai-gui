@@ -377,7 +377,7 @@ function createTab(
     sessionId: state.sessionId,
     name,
     state,
-    ended: false,
+    ended: state.ended,
     closeConfirmed: false,
     handle: null,
     status: '',
@@ -434,7 +434,7 @@ function createTab(
       },
     },
   );
-  sendStatus(tab, tabStatus(state.activity));
+  sendStatus(tab, state.ended ? '' : tabStatus(state.activity));
   tab.handle.select();
   return tab;
 }
