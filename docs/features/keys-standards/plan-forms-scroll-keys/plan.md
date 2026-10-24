@@ -126,5 +126,8 @@ Review base: 6015e496
 - plugin-framework/design.md 'Ctrl+j / Ctrl+k until the forms scroll keys moved them' kept, matching that doc's changed-by history style — a stale-history note if the doc drops that style — group 02 · group 02
 - Settings self-test timeout-reset failure was pre-existing (a keymap apply drops the pending gg); fixed test-side in 49b7033e outside the plan's files; the product-side replay of pending keys goes to the deferred list — a user typing gg as keymap.json applies still loses it — lead
 ### Review rounds
+- 1 · df521e43 · NEEDS FIXES (2 important, test-only: settings apply-wait race, forms scroll steps prove only the bind)
+- 2 · fbb4640b (fixes ac791cdc, fbb4640b) · NEEDS FIXES (1 minor: review and in-box scroll steps still proved only the bind; pinned lines pixel-dependent)
+- 3 · 9f3ee7c5 · finding closed at every site; 1 minor why-text fix applied in the next commit, prose-only, closed by commit
 ### Test gate
 - forms-commands.test.ts (edited, the new handlers) and keymap.test.ts (checks the default keymap's commands and clashes) · 55 passed; npm run selftest (new forms steps) · all passed after 49b7033e, which fixed a settings timeout-reset race that also fails at 6015e496
