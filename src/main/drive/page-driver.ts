@@ -451,12 +451,14 @@ function waitForPageWidth(window: DrivenWindow, width: number) {
 }
 
 // Waits for three of the page's frames, true once they have run and false when
-// they have not within the step timeout (a page that stops producing frames or
-// reloads mid-wait). The fit check waits after a resize, and a screenshot
-// before its capture: a change reaches the editors' ResizeObserver in the
-// first frame, which asks vim to redraw its cursor in the next, and the third
-// starts after that redraw.
+// they have not within the step timeout (a page that stops producing frames).
+// A navigation since the wait began ends it with false at the next poll, the
+// reloaded page holding no frame count. The fit check waits after a resize,
+// and a screenshot before its capture: a change reaches the editors'
+// ResizeObserver in the first frame, which asks vim to redraw its cursor in
+// the next, and the third starts after that redraw.
 export async function waitForRedraw(window: DrivenWindow): Promise<boolean> {
+  const navigation = window.navigationCount();
   try {
     await window.run(`{
   window.redrawFrames = 0;
@@ -472,9 +474,15 @@ export async function waitForRedraw(window: DrivenWindow): Promise<boolean> {
     }
     throw error;
   }
-  return waitFor(
-    async () => (await window.run<number>('window.redrawFrames')) >= 3,
-  );
+  let hasNavigated = false;
+  const isSettled = await waitFor(async () => {
+    if (window.navigationCount() !== navigation) {
+      hasNavigated = true;
+      return true;
+    }
+    return (await window.run<number>('window.redrawFrames')) >= 3;
+  });
+  return isSettled && !hasNavigated;
 }
 
 // Sets the window's content width to `width` and waits for the page to report

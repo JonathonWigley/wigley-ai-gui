@@ -235,6 +235,24 @@ describe('waitForRedraw', () => {
 
     expect(await waitForRedraw(window)).toBe(false);
   });
+
+  it('waitForRedraw_PageNavigatesDuringThePoll_ResolvesFalseWithoutPollingAgain', async () => {
+    let reads = 0;
+    const { window, navigate } = fakeDrivenWindow([
+      ['window.redrawFrames = 0', () => undefined],
+      [
+        'window.redrawFrames',
+        () => {
+          reads += 1;
+          navigate();
+          return undefined;
+        },
+      ],
+    ]);
+
+    expect(await waitForRedraw(window)).toBe(false);
+    expect(reads).toBe(1);
+  });
 });
 
 // A page that reports the window's content width as its own, redraws at once,

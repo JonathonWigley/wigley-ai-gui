@@ -233,9 +233,13 @@ describe('createDriveCommands', () => {
     );
     // The first check passes its 2 s cap; the poll gap after it is a
     // `node:timers/promises` wait the fake clock does not drive, so real time
-    // lets the second check start before the first settles at 2.5 s.
+    // lets the second check start before the first settles at 2.5 s; the test
+    // polls real time for it so a late timer never fails the count.
     await vi.advanceTimersByTimeAsync(2000);
-    await realWait(100);
+    // Counted in real waits, since the fake clock also stands in for `Date`.
+    for (let poll = 0; checks < 2 && poll < 400; poll++) {
+      await realWait(5);
+    }
     expect(checks).toBe(2);
     await vi.advanceTimersByTimeAsync(28_000);
 
