@@ -1,6 +1,6 @@
 # 04 — Trash takes every walked link to what goes
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -53,3 +53,5 @@ Done when: `npm run typecheck`, `npm run lint` and the tests above pass
 Commit:    one commit for the group
 
 ## Proof
+
+Commit c0cb014 · proof: diff read: trashTargets names walked links, trashQuestion words N targets, signatures unchanged; its 2 test files 139 pass; typecheck errors only in task 05's in-progress files · concerns: walkedLink stats every ancestor and calls realPath on each link it meets — a few calls per walked path, only on a user's trash

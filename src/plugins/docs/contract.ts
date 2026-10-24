@@ -2,6 +2,7 @@
 // marketplace's `plugins/wigley/scripts/docs-index/README.md` is its schema),
 // and the docs plugin's channel between its main and page parts.
 
+import type { Disposable } from '../../contracts/disposable';
 import type { ChannelShape } from '../../contracts/plugin';
 
 // The kinds and sources the app knows; an index entry may name others, which
@@ -110,6 +111,29 @@ export interface IndexLoad {
   message: string | null;
 }
 
+// A docs index the page shows a view over, registered by `id` in the docs main
+// part. `rebuild`, when present, refreshes the index before reading it.
+export interface IndexSource {
+  id: string;
+  title: string;
+  load(): Promise<IndexLoad>;
+  rebuild?(): Promise<IndexLoad>;
+}
+
+// One source's load or rebuild, with that source's title and whether it has a
+// `rebuild`.
+export interface SourceRead extends IndexLoad {
+  title: string;
+  canRebuild: boolean;
+}
+
+// The docs main part's exports. `addSource` throws on an id already
+// registered; while the source is registered, the entries it last loaded
+// allow changes to their docs.
+export interface DocsMainExports {
+  addSource(source: IndexSource): Disposable;
+}
+
 // A session's Docs tab's source, from sessions' `sessionAdded` payload.
 export interface SessionSourceSpec {
   hostSessionId: string | null;
@@ -147,9 +171,10 @@ export interface DocChange {
 // Every method rejects with main's own error text when its handler throws.
 export interface DocsChannel extends ChannelShape {
   invoke: {
-    machineIndex(): Promise<IndexLoad>;
-    rebuild(): Promise<IndexLoad>;
-    sessionIndex(spec: SessionSourceSpec): Promise<IndexLoad>;
+    // Each rejects `No docs index source <sourceId>` for an id not registered.
+    loadIndex(sourceId: string): Promise<SourceRead>;
+    // Runs the source's `rebuild`, or its `load` when it has none.
+    rebuildIndex(sourceId: string): Promise<SourceRead>;
     readDoc(path: string): Promise<string>;
     // `expectedText` null overwrites whatever is on disk.
     writeDoc(

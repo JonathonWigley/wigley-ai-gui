@@ -21,14 +21,26 @@ import type {
   SessionsMainEvents,
   SessionsMainExports,
 } from '../../sessions/contract';
-import type { DocsChannel, SessionSourceSpec } from '../contract';
+import type {
+  DocsChannel,
+  DocsMainExports,
+  IndexEntry,
+  IndexSource,
+} from '../contract';
 import { EXTERNAL_SCHEME } from '../links';
 import { docsManifest } from '../manifest';
 import { createDocFiles, type DocFiles } from './doc-files';
 import {
-  createIndexSources,
-  type IndexSources,
+  createIndexSourceRegistry,
+  createMachineSource,
+  createSessionSource,
+  type IndexSourceRegistry,
+  type IndexSourcesDeps,
   MACHINE_INDEX_FILE,
+  MACHINE_SOURCE_ID,
+  MACHINE_SOURCE_TITLE,
+  SESSION_SOURCE_TITLE,
+  sessionSourceId,
 } from './index-sources';
 import { writeDocsFixture } from './selftest-fixture';
 import {
@@ -46,9 +58,9 @@ type DocsApi = MainApi<
 
 // What every handler serves from, once the home folder is read and, under
 // the self-test or a drive run, the fixture written into a home that had
-// none.
+// none: the doc files and what an index source runs against.
 interface DocsMain {
-  sources: IndexSources;
+  indexDeps: IndexSourcesDeps;
   docFiles: DocFiles;
 }
 
@@ -63,14 +75,16 @@ async function hasDocsFixture(
 }
 
 // The index uses real paths, so the home folder every `~` expands to is the
-// real one. `scriptPath` is read at each index run. A drive run's restart
-// keeps the home, so the fixture is written only into a home without one.
+// real one. `scriptPath` is read at each index run, `entries` at each doc
+// change. A drive run's restart keeps the home, so the fixture is written
+// only into a home without one.
 export async function startDocs(
   services: Pick<
     MainServices,
     'files' | 'processes' | 'log' | 'homeDir' | 'runMode' | 'paths'
   >,
   scriptPath: () => string,
+  entries: () => readonly IndexEntry[],
 ): Promise<DocsMain> {
   const { files, processes, log, paths } = services;
   const homeDir = await files.realPath(services.homeDir);
@@ -80,22 +94,31 @@ export async function startDocs(
   if (needsFixture) {
     await writeDocsFixture(files, homeDir, paths);
   }
-  const sources = createIndexSources({
-    files,
-    processes,
-    homeDir,
-    scriptPath,
-    log,
-    paths,
-  });
-  const docFiles = createDocFiles({
-    files,
-    homeDir,
-    log,
-    paths,
-    entries: () => sources.loadedEntries(),
-  });
-  return { sources, docFiles };
+  const indexDeps = { files, processes, homeDir, scriptPath, log, paths };
+  const docFiles = createDocFiles({ files, homeDir, log, paths, entries });
+  return { indexDeps, docFiles };
+}
+
+// Registers, under `id` and `title` now, a source that runs `inner` once it
+// is built. `canRebuild` says whether `inner` has a `rebuild`.
+function addStartedSource(
+  registry: IndexSourceRegistry,
+  id: string,
+  title: string,
+  inner: Promise<IndexSource>,
+  canRebuild: boolean,
+): Disposable {
+  // A failed start is logged where docs starts.
+  inner.catch(() => undefined);
+  const load = async () => (await inner).load();
+  if (!canRebuild) {
+    return registry.add({ id, title, load });
+  }
+  const rebuild = async () => {
+    const source = await inner;
+    return source.rebuild !== undefined ? source.rebuild() : source.load();
+  };
+  return registry.add({ id, title, load, rebuild });
 }
 
 interface DocsDriveDeps {
@@ -183,44 +206,57 @@ export function addDriveActions(
   };
 }
 
-// Serves the page the machine and session indexes, the guarded doc changes,
-// one watched file per view, and external links. A session's index entries
-// stay writable until the session ends.
+// Serves the page every registered index source (the machine index and one
+// per live session, plus any a plugin adds through `addSource`), the guarded
+// doc changes, one watched file per view, and external links. A source's
+// index entries stay writable while it is registered.
 export const docsMainPart: MainPart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
     const { services, channel } = api;
-    const docs = startDocs(services, () => api.settings().scriptPath);
+    const registry = createIndexSourceRegistry();
+    const docs = startDocs(
+      services,
+      () => api.settings().scriptPath,
+      () => registry.loadedEntries(),
+    );
     docs.catch((error: unknown) =>
       services.log('docs', `docs not started: ${errorText(error)}`),
     );
-    const liveSessions = new Map<string, SessionSourceSpec>();
+    addStartedSource(
+      registry,
+      MACHINE_SOURCE_ID,
+      MACHINE_SOURCE_TITLE,
+      docs.then(({ indexDeps }) => createMachineSource(indexDeps)),
+      true,
+    );
+    // Keyed by the session row's id.
+    const sessionSources = new Map<string, Disposable>();
     api.events.on('sessions.connected', ({ id, info }) => {
-      liveSessions.set(id, {
+      const spec = {
         hostSessionId: info.sessionId,
         projectDir: info.projectDir,
         harness: info.harness,
-      });
-    });
-    // A failed start is logged above.
-    api.events.on('sessions.ended', ({ sessionId }) => {
-      liveSessions.delete(sessionId);
-      docs.then(
-        ({ sources }) => sources.retainSessions([...liveSessions.values()]),
-        () => undefined,
+      };
+      const added = addStartedSource(
+        registry,
+        sessionSourceId(id),
+        SESSION_SOURCE_TITLE,
+        docs.then(({ indexDeps }) => createSessionSource(indexDeps, id, spec)),
+        false,
       );
+      sessionSources.set(id, added);
+    });
+    api.events.on('sessions.ended', ({ sessionId }) => {
+      sessionSources.get(sessionId)?.dispose();
+      sessionSources.delete(sessionId);
     });
     const watches = createViewWatches(
       async (path, changed) => (await docs).docFiles.watch(path, changed),
       (change) => channel.send('docChanged', change),
     );
-    channel.handle('machineIndex', async () =>
-      (await docs).sources.machineIndex(),
-    );
-    channel.handle('rebuild', async () => (await docs).sources.rebuild());
-    channel.handle('sessionIndex', async (spec) =>
-      (await docs).sources.sessionIndex(spec),
-    );
+    channel.handle('loadIndex', (sourceId) => registry.load(sourceId));
+    channel.handle('rebuildIndex', (sourceId) => registry.rebuild(sourceId));
     channel.handle('readDoc', async (path) => (await docs).docFiles.read(path));
     channel.handle('writeDoc', async (path, text, expectedText) =>
       (await docs).docFiles.write(path, text, expectedText),
@@ -277,11 +313,19 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
             paths: services.paths,
           })
         : null;
+    const exports: DocsMainExports = {
+      addSource: (source) => registry.add(source),
+    };
     return {
       commands: {},
+      exports,
       dispose: () => {
         watches.closeAll();
         driveActions?.dispose();
+        for (const source of sessionSources.values()) {
+          source.dispose();
+        }
+        sessionSources.clear();
       },
     };
   },

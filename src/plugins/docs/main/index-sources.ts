@@ -1,9 +1,16 @@
+import type { Disposable } from '../../../contracts/disposable';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { ProcessRunner } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
-import type { IndexEntry, IndexLoad, SessionSourceSpec } from '../contract';
+import type {
+  IndexEntry,
+  IndexLoad,
+  IndexSource,
+  SessionSourceSpec,
+  SourceRead,
+} from '../contract';
 import { parseIndexDocument } from '../index-document';
 import { locateScript } from './script-locator';
 
@@ -32,63 +39,116 @@ export interface IndexSourcesDeps {
   paths: Paths;
 }
 
-export interface IndexSources {
-  // The machine index as it is on disk now.
-  machineIndex(): Promise<IndexLoad>;
-  // Builds the machine index, then reads it. A call while a build runs waits
-  // for one more build after it, which every such call shares.
-  rebuild(): Promise<IndexLoad>;
-  // A fresh index for one session, its entries kept for `loadedEntries`. A
-  // Claude session whose `session` run fails, as before its transcript
-  // exists, falls back to `context` on its project folder, unless no script
-  // was found to run.
-  sessionIndex(spec: SessionSourceSpec): Promise<IndexLoad>;
-  // Drops the kept entries of every session not in `specs`.
-  retainSessions(specs: readonly SessionSourceSpec[]): void;
-  // The entries of the machine document last read ([] before any read or
-  // after a failed one), then those of each kept session's last index that
-  // loaded.
+export const MACHINE_SOURCE_ID = 'machine';
+export const MACHINE_SOURCE_TITLE = 'machine index';
+export const SESSION_SOURCE_TITLE = 'session index';
+
+export function sessionSourceId(sessionId: string): string {
+  return `session:${sessionId}`;
+}
+
+export interface IndexSourceRegistry {
+  // Throws on an id already registered. Disposing removes the source and its
+  // kept entries.
+  add(source: IndexSource): Disposable;
+  // Each runs the source with `id` and keeps the entries of the document it
+  // gives; a result with no document, or a throw, clears them. Each rejects
+  // for an id not registered.
+  load(id: string): Promise<SourceRead>;
+  // Runs `rebuild`, or `load` for a source with none.
+  rebuild(id: string): Promise<SourceRead>;
+  // The kept entries of every registered source, in registration order.
   loadedEntries(): readonly IndexEntry[];
 }
 
-// The machine source (`index.json` and `docs_index.py build`) and the session
-// source (`docs_index.py session` or `context`).
-export function createIndexSources(deps: IndexSourcesDeps): IndexSources {
-  const { files, homeDir } = deps;
-  const indexFile = deps.paths.join(homeDir, MACHINE_INDEX_FILE);
-  let entries: readonly IndexEntry[] = [];
-  // Keyed by `sessionKey`.
-  const sessionEntries = new Map<string, readonly IndexEntry[]>();
+interface RegisteredSource {
+  source: IndexSource;
+  entries: readonly IndexEntry[];
+}
+
+export function createIndexSourceRegistry(): IndexSourceRegistry {
+  // Iterates in registration order.
+  const registered = new Map<string, RegisteredSource>();
+
+  function add(source: IndexSource): Disposable {
+    if (registered.has(source.id)) {
+      throw new Error(`Docs index source ${source.id} is already registered`);
+    }
+    const record: RegisteredSource = { source, entries: [] };
+    registered.set(source.id, record);
+    return {
+      dispose() {
+        if (registered.get(source.id) === record) {
+          registered.delete(source.id);
+        }
+      },
+    };
+  }
+
+  // A load still running when its source is disposed writes to the removed
+  // record, so its entries reach no `loadedEntries`.
+  async function run(
+    id: string,
+    read: (source: IndexSource) => Promise<IndexLoad>,
+  ): Promise<SourceRead> {
+    const record = registered.get(id);
+    if (record === undefined) {
+      throw new Error(`No docs index source ${id}`);
+    }
+    const { source } = record;
+    let load: IndexLoad;
+    try {
+      load = await read(source);
+    } catch (error) {
+      record.entries = [];
+      throw error;
+    }
+    record.entries = load.document?.entries ?? [];
+    return {
+      ...load,
+      title: source.title,
+      canRebuild: source.rebuild !== undefined,
+    };
+  }
+
+  return {
+    add,
+    load: (id) => run(id, (source) => source.load()),
+    rebuild: (id) =>
+      run(id, (source) =>
+        source.rebuild !== undefined ? source.rebuild() : source.load(),
+      ),
+    loadedEntries: () =>
+      [...registered.values()].flatMap((record) => record.entries),
+  };
+}
+
+// `index.json` as it is on disk, rebuilt by `docs_index.py build`. A rebuild
+// called while a build runs waits for one more build after it, which every
+// such call shares.
+export function createMachineSource(deps: IndexSourcesDeps): IndexSource {
+  const indexFile = deps.paths.join(deps.homeDir, MACHINE_INDEX_FILE);
   let runningBuild: Promise<IndexLoad> | null = null;
   let queuedBuild: Promise<IndexLoad> | null = null;
 
-  async function machineIndex(): Promise<IndexLoad> {
-    let text: string | null;
-    try {
-      text = await readIfPresent(files, indexFile);
-    } catch (error) {
-      entries = [];
-      throw error;
-    }
+  async function read(): Promise<IndexLoad> {
+    const text = await readIfPresent(deps.files, indexFile);
     if (text === null) {
-      entries = [];
       return { document: null, message: NO_INDEX_MESSAGE };
     }
     const parsed = parseIndexDocument(text);
     if (!parsed.ok) {
-      entries = [];
       return { document: null, message: parsed.message };
     }
-    entries = parsed.document.entries;
     return { document: parsed.document, message: null };
   }
 
   async function buildAndRead(): Promise<IndexLoad> {
     const outcome = await runScript(deps, 'build', []);
-    const read = await machineIndex();
+    const load = await read();
     return outcome.ok
-      ? read
-      : { document: read.document, message: outcome.message };
+      ? load
+      : { document: load.document, message: outcome.message };
   }
 
   function startBuild(): Promise<IndexLoad> {
@@ -117,52 +177,54 @@ export function createIndexSources(deps: IndexSourcesDeps): IndexSources {
     return queuedBuild;
   }
 
-  async function sessionIndex(spec: SessionSourceSpec): Promise<IndexLoad> {
-    const run = sessionRun(spec);
-    if (run === null) {
-      return { document: null, message: NO_FOLDER_MESSAGE };
-    }
-    let outcome = await runScript(deps, run.command, [run.argument]);
-    const fallbackDir = run.command === 'session' ? spec.projectDir : null;
-    if (!outcome.ok && !outcome.isScriptMissing && fallbackDir !== null) {
-      deps.log(
-        'docs',
-        `session ${run.argument} not indexed (${outcome.message}); indexing ${fallbackDir} instead`,
-      );
-      outcome = await runScript(deps, 'context', [fallbackDir]);
-    }
-    if (!outcome.ok) {
-      return { document: null, message: outcome.message };
-    }
-    const parsed = parseIndexDocument(outcome.stdout);
-    if (!parsed.ok) {
-      return { document: null, message: parsed.message };
-    }
-    sessionEntries.set(sessionKey(spec), parsed.document.entries);
-    return { document: parsed.document, message: null };
-  }
-
-  function retainSessions(specs: readonly SessionSourceSpec[]): void {
-    const kept = new Set(specs.map(sessionKey));
-    for (const key of sessionEntries.keys()) {
-      if (!kept.has(key)) {
-        sessionEntries.delete(key);
-      }
-    }
-  }
-
   return {
-    machineIndex,
+    id: MACHINE_SOURCE_ID,
+    title: MACHINE_SOURCE_TITLE,
+    load: read,
     rebuild,
-    sessionIndex,
-    retainSessions,
-    loadedEntries: () => [entries, ...sessionEntries.values()].flat(),
   };
 }
 
-// One key per distinct source, so sessions sharing a source share its entries.
-function sessionKey(spec: SessionSourceSpec): string {
-  return JSON.stringify([spec.hostSessionId, spec.projectDir, spec.harness]);
+// A fresh index for one session on each load. A Claude session whose
+// `session` run fails, as before its transcript exists, falls back to
+// `context` on its project folder, unless no script was found to run.
+export function createSessionSource(
+  deps: IndexSourcesDeps,
+  sessionId: string,
+  spec: SessionSourceSpec,
+): IndexSource {
+  return {
+    id: sessionSourceId(sessionId),
+    title: SESSION_SOURCE_TITLE,
+    load: () => sessionIndex(deps, spec),
+  };
+}
+
+async function sessionIndex(
+  deps: IndexSourcesDeps,
+  spec: SessionSourceSpec,
+): Promise<IndexLoad> {
+  const run = sessionRun(spec);
+  if (run === null) {
+    return { document: null, message: NO_FOLDER_MESSAGE };
+  }
+  let outcome = await runScript(deps, run.command, [run.argument]);
+  const fallbackDir = run.command === 'session' ? spec.projectDir : null;
+  if (!outcome.ok && !outcome.isScriptMissing && fallbackDir !== null) {
+    deps.log(
+      'docs',
+      `session ${run.argument} not indexed (${outcome.message}); indexing ${fallbackDir} instead`,
+    );
+    outcome = await runScript(deps, 'context', [fallbackDir]);
+  }
+  if (!outcome.ok) {
+    return { document: null, message: outcome.message };
+  }
+  const parsed = parseIndexDocument(outcome.stdout);
+  if (!parsed.ok) {
+    return { document: null, message: parsed.message };
+  }
+  return { document: parsed.document, message: null };
 }
 
 // Codex sets no Claude session id, so a Codex session runs `context`; a relay

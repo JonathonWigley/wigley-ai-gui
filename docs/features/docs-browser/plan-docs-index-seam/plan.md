@@ -211,7 +211,7 @@ other plugin reaches docs only through `DocsMainExports` and `DocsPageExports` (
 - [x] [Schema 2, unknown kinds and sources in the app](03-schema-2-unknown-kinds.md) — after 01 (shares `doc-files.test.ts`)
 
 ### Wave 3
-- [ ] [Trash takes walked links](04-trash-walked-links.md) — after 03
+- [x] [Trash takes walked links](04-trash-walked-links.md) — after 03
 - [ ] [Index source registry in main](05-source-registry.md) — after 03
 
 ### Wave 4
@@ -231,6 +231,7 @@ Review base: c04112eecae26d302e9320a509cba760cb383b58
 - 02 · marketplace bb31807 · diff read matches Produces (SCHEMA_VERSION = 2, to_json walked); docs-index unittest 155 OK · concerns: none
 - 01 · 2884091 · diff read: WatchOptions and watch(folder, onChange, options?) present in src/contracts/files.ts; typecheck clean · concerns: Node non-recursive watch reports a subfolder by its own name on macOS (memory adapter never does); test filters 'sub' — ride to review
 - 03 · faa0503 · diff read: every Produces present (contract kind/source string, walked, schemaVersion 2; INDEX_SCHEMA_VERSION 2, DOC_SOURCES exported, isKnownKind, isKnownSource; titleFromId); typecheck clean · concerns: stand-in docs_index.py walked change is covered only by the self-test's fresh.md rebuild
+- 04 · c0cb014 · diff read: trashTargets names walked links, trashQuestion words N targets, signatures unchanged; its 2 test files 139 pass; typecheck errors only in task 05's in-progress files · concerns: walkedLink stats every ancestor and calls realPath on each link it meets — a few calls per walked path, only on a user's trash
 ### Contract changes
 ### Rulings
 - wigley bumped 1.9.0 → 1.9.1 in both manifests: local and origin/main matched, and § Changing a plugin names no other version field — the version rule — none, a later bump in the same push is harmless · group 02 · group 02
@@ -240,5 +241,8 @@ Review base: c04112eecae26d302e9320a509cba760cb383b58
 - kinds.ts placeTitle takes the narrowed source: DocSource as a parameter — keeps the owner titles record exhaustive — none · group 03 · group 03
 - unknown-kind ties in byKindThenTitle break by compareTitles on the kind id, as kindGroups orders them — matches the groups' order — none · group 03 · group 03
 - the pinned unsupported-schema test moved to schema 3 (machineIndex_SchemaThree_PinnedMessage); parse_UnknownKind_NamesEntryAndField replaced by parse_UnknownKind_Loads; added parse_UnknownSourceRootNotString_NamesRoot and a fixture-parses test — the old tests asserted the old behaviour — none · group 03 · group 03
+- trashQuestion_TwoTargets_NamesLink is the old trashQuestion_LinkAndTarget_NamesBothByPath renamed — no duplicate — none · group 04 · group 04
+- walkedLink passes over a link that does not resolve into the real target and keeps climbing — the Behaviour's 'nearest … that is a link and whose realPath is inside' — a link further up could be named · group 04 · group 04
+- 'a link inside the real target adds nothing' is judged on the link with its folder resolved — the form the dedupe and guard see — a link inside only through another link could be named · group 04 · group 04
 ### Review rounds
 ### Test gate

@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import type { Disposable } from '../../../contracts/disposable';
 import type { RunMode } from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { ConnectedSession, SessionInfo } from '../../sessions/contract';
+import type { DocsMainExports, IndexDocument } from '../contract';
 import { MACHINE_INDEX_FILE } from './index-sources';
-import { addDriveActions, startDocs } from './start';
+import { addDriveActions, docsMainPart, startDocs } from './start';
 
 const HOME = '/home';
 const CLAUDE_MD = `${HOME}/.claude/CLAUDE.md`;
@@ -27,6 +29,7 @@ function start(files: ReturnType<typeof createMemoryFiles>, runMode: RunMode) {
       paths: posixPaths,
     },
     () => '/script.py',
+    () => [],
   );
 }
 
@@ -125,5 +128,104 @@ describe('docs drive actions', () => {
     const drive = await driveConnectingNothing();
 
     await expect(drive.run(action, { indexDelayMs })).rejects.toThrow(message);
+  });
+});
+
+// Docs' main part started live over an empty home, running `/script.py`
+// through `processes`. `invoke` calls the page channel's handler for `name`;
+// `emit` fires a sessions event at docs.
+function startDocsPart() {
+  const handlers = new Map<string, (...args: unknown[]) => unknown>();
+  const listeners = new Map<string, (payload: unknown) => void>();
+  const processes = new FakeProcesses();
+  const api = {
+    channel: {
+      handle: (name: string, handler: (...args: unknown[]) => unknown) =>
+        handlers.set(name, handler),
+      send: () => undefined,
+    },
+    events: {
+      on: (name: string, listener: (payload: unknown) => void): Disposable => {
+        listeners.set(name, listener);
+        return { dispose: () => listeners.delete(name) };
+      },
+    },
+    settings: () => ({ scriptPath: '/script.py' }),
+    services: {
+      files: createMemoryFiles(),
+      processes,
+      log: () => undefined,
+      homeDir: '/',
+      runMode: 'live',
+      paths: posixPaths,
+      selfTest: null,
+    },
+    dependency: () => ({}),
+    drive: null,
+  } as unknown as Parameters<typeof docsMainPart.start>[0];
+  const part = docsMainPart.start(api);
+  const invoke = (name: string, ...args: unknown[]) => {
+    const handler = handlers.get(name);
+    if (handler === undefined) {
+      throw new Error(`docs handles no ${name}`);
+    }
+    return handler(...args);
+  };
+  const emit = (name: string, payload: unknown) => {
+    listeners.get(name)?.(payload);
+  };
+  return { part, processes, invoke, emit };
+}
+
+const SESSION_DOCUMENT: IndexDocument = {
+  schemaVersion: 2,
+  generatedAt: '2026-10-20T00:00:00Z',
+  entries: [],
+  contexts: [],
+};
+
+describe('docs main part', () => {
+  it('sessionSource_RegisteredWhileConnected', async () => {
+    const docs = startDocsPart();
+    docs.processes.script(
+      'python3',
+      ['-X', 'utf8', '/script.py', 'session', 'abc'],
+      { code: 0, stdout: JSON.stringify(SESSION_DOCUMENT), stderr: '' },
+    );
+    const info: SessionInfo = {
+      sessionId: 'abc',
+      projectDir: '/p',
+      deadlineSeconds: null,
+      harness: 'claude',
+    };
+    docs.emit('sessions.connected', { id: 'row-1', info });
+
+    expect(await docs.invoke('loadIndex', 'session:row-1')).toEqual({
+      document: SESSION_DOCUMENT,
+      message: null,
+      title: 'session index',
+      canRebuild: false,
+    });
+    docs.emit('sessions.ended', { sessionId: 'row-1' });
+    await expect(docs.invoke('loadIndex', 'session:row-1')).rejects.toThrow(
+      'No docs index source session:row-1',
+    );
+  });
+
+  it('exports_AddSource_ServedOverChannel', async () => {
+    const docs = startDocsPart();
+    const exports = docs.part.exports as DocsMainExports;
+    exports.addSource({
+      id: 'x',
+      title: 'x index',
+      load: () => Promise.resolve({ document: null, message: 'from x' }),
+    });
+
+    expect(await docs.invoke('loadIndex', 'x')).toEqual({
+      document: null,
+      message: 'from x',
+      title: 'x index',
+      canRebuild: false,
+    });
   });
 });
