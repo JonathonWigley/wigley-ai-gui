@@ -269,8 +269,16 @@ const QUESTION_BOXES_STEPS: SelfTestStep[] = [
     expect: '[forms] left the box',
     why: 'w deletes nothing, since leaving the box dropped the pending d.',
   },
-  { keys: ['<C-j>'], expect: '[page] <C-j> ran forms.halfPageDown' },
-  { keys: ['<C-k>'], expect: '[page] <C-k> ran forms.halfPageUp' },
+  {
+    keys: ['<C-j>'],
+    expect: '[forms] scrolled the form down half a page to the bottom',
+    why: "The forms line, logged after the bind line, proves the scroll reached the form's main column: question 1's card overflows it at the start width, and focusing the notes box scrolled the box into view, within half a page of the bottom.",
+  },
+  {
+    keys: ['<C-k>'],
+    expect: '[forms] scrolled the form up half a page',
+    why: "Ctrl+k scrolls the form's main column up from the bottom, stopping short of the top since the column overflows by more than half its height.",
+  },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   {
     keys: ['<C-j>'],
