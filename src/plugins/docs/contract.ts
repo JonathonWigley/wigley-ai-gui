@@ -112,6 +112,16 @@ export interface IndexLoad {
   message: string | null;
 }
 
+// The id the docs main part registers the machine index under; Docs mode
+// shows it.
+export const MACHINE_SOURCE_ID = 'machine';
+
+// The id the docs main part registers a session's index under, by the
+// session row's id; that session's Docs tab shows it.
+export function sessionSourceId(sessionId: string): string {
+  return `session:${sessionId}`;
+}
+
 // A docs index the page shows a view over, registered by `id` in the docs main
 // part. `rebuild`, when present, refreshes the index before reading it.
 export interface IndexSource {
@@ -135,14 +145,6 @@ export interface DocsMainExports {
   addSource(source: IndexSource): Disposable;
 }
 
-// What a session's index source reads for: main builds it from the
-// `sessions.connected` payload's `info`.
-export interface SessionSourceSpec {
-  hostSessionId: string | null;
-  projectDir: string | null;
-  harness: IndexHarness | null;
-}
-
 // One docs view `addView` handed out: `element` holds its tree and doc in a
 // split. `shown` runs each time the caller shows the element (the view's
 // first show reads its index); `hasUnsavedEdits` is the caller's close guard;
@@ -156,8 +158,10 @@ export interface DocsViewHandle {
 
 // The docs page part's exports. `addView` builds a docs view over the index
 // source registered as `sourceId`, its keys active while `isVisible`.
-// `openDoc` shows Docs mode and opens `path` there at the 1-based `line`, or
-// toasts that the machine index does not list it.
+// `openDoc` shows Docs mode and opens `path` there at the 1-based `line`. When
+// the machine index's first read does not list `path` and a rebuild is coming
+// or running, it waits for that one rebuild; it toasts when the index still
+// does not list `path`.
 export interface DocsPageExports {
   addView(sourceId: string, options: { isVisible(): boolean }): DocsViewHandle;
   openDoc(path: string, line?: number): void;

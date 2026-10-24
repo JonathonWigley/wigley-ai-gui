@@ -4,12 +4,14 @@ import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { ProcessRunner } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
-import type {
-  IndexEntry,
-  IndexLoad,
-  IndexSource,
-  SessionSourceSpec,
-  SourceRead,
+import {
+  type IndexEntry,
+  type IndexHarness,
+  type IndexLoad,
+  type IndexSource,
+  MACHINE_SOURCE_ID,
+  type SourceRead,
+  sessionSourceId,
 } from '../contract';
 import { parseIndexDocument } from '../index-document';
 import { locateScript } from './script-locator';
@@ -39,21 +41,17 @@ export interface IndexSourcesDeps {
   paths: Paths;
 }
 
-export const MACHINE_SOURCE_ID = 'machine';
 export const MACHINE_SOURCE_TITLE = 'machine index';
 export const SESSION_SOURCE_TITLE = 'session index';
-
-export function sessionSourceId(sessionId: string): string {
-  return `session:${sessionId}`;
-}
 
 export interface IndexSourceRegistry {
   // Throws on an id already registered. Disposing removes the source and its
   // kept entries.
   add(source: IndexSource): Disposable;
-  // Each runs the source with `id` and keeps the entries of the document it
-  // gives; a result with no document, or a throw, clears them. Each rejects
-  // for an id not registered.
+  // Each runs the source with `id` and, while no later run of that source has
+  // started, keeps the entries of the document it gives; a result with no
+  // document, or a throw, clears them. Each run resolves or rejects with its
+  // own result, and rejects for an id not registered.
   load(id: string): Promise<SourceRead>;
   // Runs `rebuild`, or `load` for a source with none.
   rebuild(id: string): Promise<SourceRead>;
@@ -64,6 +62,8 @@ export interface IndexSourceRegistry {
 interface RegisteredSource {
   source: IndexSource;
   entries: readonly IndexEntry[];
+  // The number of the newest run started on this record.
+  newestRun: number;
 }
 
 export function createIndexSourceRegistry(): IndexSourceRegistry {
@@ -74,7 +74,7 @@ export function createIndexSourceRegistry(): IndexSourceRegistry {
     if (registered.has(source.id)) {
       throw new Error(`Docs index source ${source.id} is already registered`);
     }
-    const record: RegisteredSource = { source, entries: [] };
+    const record: RegisteredSource = { source, entries: [], newestRun: 0 };
     registered.set(source.id, record);
     return {
       dispose() {
@@ -86,7 +86,8 @@ export function createIndexSourceRegistry(): IndexSourceRegistry {
   }
 
   // A load still running when its source is disposed writes to the removed
-  // record, so its entries reach no `loadedEntries`.
+  // record, so its entries reach no `loadedEntries`. A run that settles after
+  // a newer run of its source started leaves the entries to that newer run.
   async function run(
     id: string,
     read: (source: IndexSource) => Promise<IndexLoad>,
@@ -96,14 +97,20 @@ export function createIndexSourceRegistry(): IndexSourceRegistry {
       throw new Error(`No docs index source ${id}`);
     }
     const { source } = record;
+    record.newestRun += 1;
+    const runNumber = record.newestRun;
     let load: IndexLoad;
     try {
       load = await read(source);
     } catch (error) {
-      record.entries = [];
+      if (runNumber === record.newestRun) {
+        record.entries = [];
+      }
       throw error;
     }
-    record.entries = load.document?.entries ?? [];
+    if (runNumber === record.newestRun) {
+      record.entries = load.document?.entries ?? [];
+    }
     return {
       ...load,
       title: source.title,
@@ -183,6 +190,14 @@ export function createMachineSource(deps: IndexSourcesDeps): IndexSource {
     load: read,
     rebuild,
   };
+}
+
+// What a session's index source reads for, built from the
+// `sessions.connected` payload's `info`.
+export interface SessionSourceSpec {
+  hostSessionId: string | null;
+  projectDir: string | null;
+  harness: IndexHarness | null;
 }
 
 // A fresh index for one session on each load. A Claude session whose

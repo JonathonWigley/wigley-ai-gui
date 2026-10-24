@@ -23,11 +23,13 @@ import type {
   SessionsMainEvents,
   SessionsMainExports,
 } from '../../sessions/contract';
-import type {
-  DocsChannel,
-  DocsMainExports,
-  IndexEntry,
-  IndexSource,
+import {
+  type DocsChannel,
+  type DocsMainExports,
+  type IndexEntry,
+  type IndexSource,
+  MACHINE_SOURCE_ID,
+  sessionSourceId,
 } from '../contract';
 import { EXTERNAL_SCHEME } from '../links';
 import { docsManifest } from '../manifest';
@@ -39,10 +41,8 @@ import {
   type IndexSourceRegistry,
   type IndexSourcesDeps,
   MACHINE_INDEX_FILE,
-  MACHINE_SOURCE_ID,
   MACHINE_SOURCE_TITLE,
   SESSION_SOURCE_TITLE,
-  sessionSourceId,
 } from './index-sources';
 import { writeDocsFixture } from './selftest-fixture';
 import {
@@ -142,6 +142,18 @@ function indexDelayMsArg(args: JsonObject): number {
   return indexDelayMs;
 }
 
+function lineArg(args: JsonObject): number | null {
+  const line = optionalNumber(args, 'line');
+  if (line === undefined) {
+    return null;
+  }
+  const isPositiveWhole = Number.isInteger(line) && line >= 1;
+  if (!isPositiveWhole) {
+    throw new Error('line must be a positive whole number');
+  }
+  return line;
+}
+
 // `docs.seed` rewrites the fixture; `docs.connectSession` rewrites it and
 // connects a session in its repo, whose row shows its Docs tab. Each takes
 // `loadStates` to add a doc per non-launch index load state and
@@ -198,13 +210,13 @@ export function addDriveActions(
     }),
     drive.add('openDoc', {
       description:
-        'Shows Docs mode and opens the doc at path (line 1-based), or toasts that the machine index does not list it.',
+        'Shows Docs mode and opens the doc at path (line 1-based, a positive whole number), or toasts that the machine index does not list it, waiting first for a rebuild coming or running when its first read does not.',
       args: '{ path: string, line?: number }',
       async run(rawArgs) {
         await started;
         const args = argsObject(rawArgs);
         const path = requiredString(args, 'path');
-        const line = optionalNumber(args, 'line') ?? null;
+        const line = lineArg(args);
         channel.send('openDoc', { path, line });
         return {};
       },

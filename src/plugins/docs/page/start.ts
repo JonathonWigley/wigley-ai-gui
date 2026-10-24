@@ -17,14 +17,19 @@ import type {
   SessionsPageEvents,
   SessionsPageExports,
 } from '../../sessions/contract';
-import type { DocsChannel, DocsPageExports, DocsViewHandle } from '../contract';
+import {
+  type DocsChannel,
+  type DocsPageExports,
+  type DocsViewHandle,
+  MACHINE_SOURCE_ID,
+  sessionSourceId,
+} from '../contract';
 import { docsManifest } from '../manifest';
 import { type DocChangeRecord, UNSAVED_TEXT } from './docs-state';
 import {
   createDocsView,
   type DocsView,
   type DocsViewCommands,
-  MACHINE_SOURCE_ID,
 } from './docs-view';
 import { commandOfKeysIn } from './hidden-tree-keys';
 
@@ -315,7 +320,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
 
     api.events.on('sessions.sessionAdded', ({ sessionId, projectDir }) => {
       const held: SessionDocs = {
-        view: addView(`session:${sessionId}`, {
+        view: addView(sessionSourceId(sessionId), {
           isVisible: () => held.tab?.isVisible() === true,
         }),
         tab: null,
@@ -369,8 +374,9 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       return null;
     };
 
-    // Shows Docs mode, then opens `path` in the machine view once it has read
-    // its index.
+    // Shows Docs mode, then opens `path` in the machine view by its
+    // `openDoc`, which waits for the view's first index read and, when that
+    // does not list `path`, for a rebuild coming or running.
     const openDoc = (path: string, line: number | null) => {
       if (!mode.isShown()) {
         mode.show();

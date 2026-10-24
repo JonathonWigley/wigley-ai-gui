@@ -144,6 +144,18 @@ describe('docs drive actions', () => {
     expect(drive.sent).toEqual([['openDoc', { path: CLAUDE_MD, line: null }]]);
   });
 
+  it.each([0, -2, 1.5])(
+    'driveOpenDoc_LineNotPositiveWhole_Rejects (%j)',
+    async (line) => {
+      const drive = await driveConnectingNothing();
+
+      await expect(
+        drive.run('openDoc', { path: CLAUDE_MD, line }),
+      ).rejects.toThrow('line must be a positive whole number');
+      expect(drive.sent).toEqual([]);
+    },
+  );
+
   it('driveOpenDoc_WaitsForStart', async () => {
     const started = Promise.withResolvers<void>();
     const drive = await driveConnectingNothing(started.promise);

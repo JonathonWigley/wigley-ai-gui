@@ -8,12 +8,12 @@ import type {
   IndexEntry,
   IndexLoad,
   IndexSource,
-  SessionSourceSpec,
 } from '../contract';
 import {
   createIndexSourceRegistry,
   createMachineSource,
   createSessionSource,
+  type SessionSourceSpec,
 } from './index-sources';
 
 const HOME = '/Users/u';
@@ -545,6 +545,37 @@ describe('registry', () => {
     await registry.load('x');
 
     expect(registry.loadedEntries()).toEqual([]);
+  });
+
+  it('load_OlderRunResolvesAfterNewer_KeepsNewerEntries', async () => {
+    const { registry } = setUp();
+    const older = Promise.withResolvers<IndexLoad>();
+    let next = () => older.promise;
+    registry.add(fixed('x', () => next()));
+    const olderLoad = registry.load('x');
+    next = loaded([SESSION_ENTRY]);
+    await registry.load('x');
+
+    older.resolve({ document: documentOf([ENTRY]), message: null });
+    const olderRead = await olderLoad;
+
+    expect(olderRead.document?.entries).toEqual([ENTRY]);
+    expect(registry.loadedEntries()).toEqual([SESSION_ENTRY]);
+  });
+
+  it('load_OlderRunRejectsAfterNewer_KeepsNewerEntries', async () => {
+    const { registry } = setUp();
+    const older = Promise.withResolvers<IndexLoad>();
+    let next = () => older.promise;
+    registry.add(fixed('x', () => next()));
+    const olderLoad = registry.load('x');
+    next = loaded([SESSION_ENTRY]);
+    await registry.load('x');
+
+    older.reject(new Error('older run failed'));
+
+    await expect(olderLoad).rejects.toThrow('older run failed');
+    expect(registry.loadedEntries()).toEqual([SESSION_ENTRY]);
   });
 
   it('load_Throws_ClearsEntriesAndRejects', async () => {

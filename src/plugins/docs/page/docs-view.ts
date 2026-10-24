@@ -9,12 +9,13 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import type {
-  DocsChannel,
-  IndexContext,
-  IndexDocument,
-  IndexEntry,
-  SourceRead,
+import {
+  type DocsChannel,
+  type IndexContext,
+  type IndexDocument,
+  type IndexEntry,
+  MACHINE_SOURCE_ID,
+  type SourceRead,
 } from '../contract';
 import { metaString } from '../index-document';
 import { isIndexedPath } from '../path-guard';
@@ -93,8 +94,10 @@ export interface DocsView {
   // index rebuilds, which lists a created doc.
   outsideChange(change: DocChangeRecord): void;
   // Once the view's first index read has settled, opens `path` at the
-  // 1-based `line` and selects its row, or toasts that the index does not
-  // list it.
+  // 1-based `line` and selects its row. When that read does not list `path`
+  // and a rebuild is coming (the first show's) or running, waits for that one
+  // rebuild to settle, resolved or rejected, and checks again; toasts when
+  // the index still does not list it.
   openDoc(path: string, line: number | null): void;
   // Closes the filter box, the dialogs and the changed-on-disk prompt, each
   // scope they pushed popped, without moving focus: another docs view is
@@ -159,9 +162,6 @@ export interface DocsViewDeps {
 
 const SESSION_CONTEXT_TEXT =
   "A session's Docs tab uses the session's own load states";
-
-// The index source Docs mode shows: main registers it under this id.
-export const MACHINE_SOURCE_ID = 'machine';
 
 type IndexRun = 'loadIndex' | 'rebuildIndex';
 
@@ -231,6 +231,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   let shownLoad = 0;
   // Settles with the first index run, resolved or rejected.
   const firstRead = Promise.withResolvers<void>();
+  // The first show's load and the rebuild it starts when the source can,
+  // until both settle; null before the first show and once they settle.
+  let firstShowRuns: Promise<unknown> | null = null;
+  // The newest rebuild started, until it settles.
+  let runningRebuild: Promise<unknown> | null = null;
 
   const applyScope = () => {
     if (deps.isActive()) {
@@ -356,6 +361,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
   });
 
+  const isListed = (path: string): boolean =>
+    document !== null && isIndexedPath(path, document.entries, deps.paths);
+
   // Opens `path` when the index lists it, selecting its entry's row; else
   // toasts that it does not.
   const followFile = (
@@ -363,15 +371,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     line: number | null,
     fragment: string | null,
   ) => {
-    if (
-      document === null ||
-      !isIndexedPath(path, document.entries, deps.paths)
-    ) {
+    if (!isListed(path)) {
       toast(`Not an indexed doc: ${path}`, 'error');
       return;
     }
     const entry =
-      document.entries.find((candidate) =>
+      document?.entries.find((candidate) =>
         deps.paths.samePath(candidate.path, path),
       ) ?? null;
     void doc.open(targetFor(path, entry, line, fragment)).then((opened) => {
@@ -505,9 +510,16 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       });
   };
 
-  // Only a rebuild lists a doc created since the last one.
+  // Only a rebuild lists a doc created since the last one. `runIndex` never
+  // rejects, so a wait on `runningRebuild` always ends.
   const rebuild = () => {
-    void runIndex('rebuildIndex');
+    const started = runIndex('rebuildIndex');
+    runningRebuild = started;
+    void started.then(() => {
+      if (runningRebuild === started) {
+        runningRebuild = null;
+      }
+    });
   };
 
   tree.setStatus('Not read yet');
@@ -712,10 +724,16 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         return;
       }
       hasRun = true;
-      void runIndex('loadIndex').then((result) => {
+      const runs = runIndex('loadIndex').then((result) => {
         if (result?.canRebuild === true) {
           rebuild();
+          return runningRebuild;
         }
+        return null;
+      });
+      firstShowRuns = runs;
+      void runs.then(() => {
+        firstShowRuns = null;
       });
     },
     rescan() {
@@ -732,7 +750,14 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       rebuild();
     },
     openDoc(path, line) {
-      void firstRead.promise.then(() => followFile(path, line, null));
+      void (async () => {
+        await firstRead.promise;
+        const awaitedRebuild = firstShowRuns ?? runningRebuild;
+        if (!isListed(path) && awaitedRebuild !== null) {
+          await awaitedRebuild;
+        }
+        followFile(path, line, null);
+      })();
     },
     closeOverlays() {
       tree.dismissFilter();
