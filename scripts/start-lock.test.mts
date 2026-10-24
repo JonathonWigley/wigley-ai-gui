@@ -11,8 +11,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  mayReleaseStartLock,
+  STARTUP_RELOAD_WAIT_MS,
   type StartLock,
   type StartLockOptions,
+  selfTestLoadOf,
   takeStartLock,
 } from './start-lock.mts';
 
@@ -170,5 +173,29 @@ describe('takeStartLock', () => {
     winner.release();
     await Promise.all([first, second]);
     expect(taken).toHaveLength(2);
+  });
+});
+
+describe('mayReleaseStartLock', () => {
+  it('GIVEN the first page load WHEN the reload wait has not passed THEN the lock is kept', () => {
+    expect(mayReleaseStartLock(1, STARTUP_RELOAD_WAIT_MS - 1)).toBe(false);
+  });
+
+  it('GIVEN the load after the startup reload WHEN it is reported at once THEN the lock may be released', () => {
+    expect(mayReleaseStartLock(2, 0)).toBe(true);
+  });
+
+  it('GIVEN the first page load WHEN the reload wait has passed THEN the lock may be released', () => {
+    expect(mayReleaseStartLock(1, STARTUP_RELOAD_WAIT_MS)).toBe(true);
+  });
+});
+
+describe('selfTestLoadOf', () => {
+  it('GIVEN the line main prints as a load starts its run WHEN it is read THEN it gives the load', () => {
+    expect(selfTestLoadOf('[selftest] page load 2 starts its run')).toBe(2);
+  });
+
+  it('GIVEN a check line WHEN it is read THEN it gives null', () => {
+    expect(selfTestLoadOf('[selftest] PASS [forms] round shown')).toBeNull();
   });
 });

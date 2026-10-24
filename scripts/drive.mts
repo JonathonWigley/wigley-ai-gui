@@ -24,7 +24,7 @@ import {
   type DriveInvocation,
   parseDriveArgs,
 } from './drive-args.mts';
-import { isAlive, takeStartLock } from './start-lock.mts';
+import { isAlive, mayReleaseStartLock, takeStartLock } from './start-lock.mts';
 
 const REPO_DIR = path.resolve(import.meta.dirname, '..');
 const DRIVE_DIR = path.join(REPO_DIR, '.drive');
@@ -84,12 +84,14 @@ async function main(invocation: DriveInvocation): Promise<void> {
 // Starts the app into `.drive/<runId>/`, reusing its home when the folder
 // exists, and returns once the page is ready for keys. `copyUserConfig` false
 // keeps the home's config as the run left it, on a restart. A dev start holds
-// `.drive/start.lock` from spawn until the app answers `ready`, since every
-// `electron-forge start` rewrites the shared `.vite/build` and the page's
-// startup reload reads its preload from there; `ready` can answer before that
-// reload, so the hold narrows the overlap rather than closing it.
-// `.drive/current` moves to the run once its `start.json` exists, so a command
-// without `--run` never targets a run still waiting on the lock.
+// `.drive/start.lock` from spawn until `ready` reports the page load after the
+// dev server's startup reload, since every `electron-forge start` rewrites the
+// shared `.vite/build` and that reload reads its preload from there; a page
+// that has not reloaded `STARTUP_RELOAD_WAIT_MS` after its first load answered
+// `ready` releases it anyway, since the reload is not guaranteed, and a reload
+// later than that can still read another start's build. `.drive/current`
+// moves to the run once its `start.json` exists, so a command without `--run`
+// never targets a run still waiting on the lock.
 async function start(
   runId: string,
   options: StartOptions,
@@ -136,6 +138,24 @@ async function start(
     );
     writeFileSync(CURRENT_FILE, runId);
     await waitForDriveFile(runDir, pid);
+    await waitUntilReady(runId, runDir, !options.packaged);
+  } finally {
+    startLock?.release();
+  }
+  console.log(`run ${runId}`);
+  console.log(runDir);
+}
+
+// Asks the run's app `ready` until it answers; with `waitsForReload`, asks
+// again until `mayReleaseStartLock` holds for the page load it reports. Throws
+// when the app answers with an error or does not answer.
+async function waitUntilReady(
+  runId: string,
+  runDir: string,
+  waitsForReload: boolean,
+): Promise<void> {
+  let firstLoadAt: number | null = null;
+  for (;;) {
     const ready = await send(runId, 'ready', {}, START_TIMEOUT_MS);
     if (typeof ready === 'string' || !ready.ok) {
       const why = typeof ready === 'string' ? ready : ready.error;
@@ -143,11 +163,16 @@ async function start(
         `Run ${runId} started but answered ready with ${why}; npm run drive -- restart --run ${runId}\n${logTail(runDir)}`,
       );
     }
-  } finally {
-    startLock?.release();
+    if (!waitsForReload) {
+      return;
+    }
+    const { load } = ready.result as { load: number };
+    firstLoadAt ??= Date.now();
+    if (mayReleaseStartLock(load, Date.now() - firstLoadAt)) {
+      return;
+    }
+    await wait(POLL_MS);
   }
-  console.log(`run ${runId}`);
-  console.log(runDir);
 }
 
 function newRunId(): string {

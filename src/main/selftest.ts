@@ -14,7 +14,7 @@ import {
   type SelfTestConfig,
   screenshotFiles,
 } from './selftest-config';
-import { report, runScript } from './selftest-runner';
+import { isOnLoad, report, runScript } from './selftest-runner';
 
 // Runs the plugins' self-test scripts on every page load, one after another,
 // each through `runScript`, which drives its keys into the page through
@@ -57,8 +57,10 @@ export function failSelfTest(
 }
 
 // Forge's dev server can reload the page once at startup, so every load starts
-// a fresh run and a run that a reload interrupted stands down.
-let latestRun = 0;
+// a fresh run, numbered by the window's navigation count, and a run that a
+// reload interrupted stands down. The load that started the latest run, so a
+// load starts at most one.
+let startedLoad = 0;
 
 // Waits for the page to be ready for keys and focuses it, acting as the
 // focused window as a drive run's page does, then runs every handed script in
@@ -69,7 +71,7 @@ async function runAllScripts(
   handed: readonly HandedScript[],
   screenshots: ReadonlyMap<SelfTestStep, readonly string[]>,
   startWidth: number,
-  run: number,
+  load: number,
   isCurrent: () => boolean,
   cleanUp: () => Promise<void>,
 ) {
@@ -81,10 +83,10 @@ async function runAllScripts(
   const isSettled = async () =>
     (await isReadyForKeys(window)) || (await hasStartFailed());
   const isReady = await waitFor(isSettled);
+  const startFailure = await readStartFailure(window);
   if (!isCurrent()) {
     return;
   }
-  const startFailure = await readStartFailure(window);
   if (startFailure !== null) {
     failSelfTest('the page starts', startFailure, cleanUp);
     return;
@@ -108,7 +110,7 @@ async function runAllScripts(
       script,
       screenshots,
       startWidth,
-      run,
+      load,
       isCurrent,
     );
     if (scriptFailures === null) {
@@ -122,11 +124,13 @@ async function runAllScripts(
   exit(failures === 0 ? 0 : 1);
 }
 
-// Starts a fresh run of every handed script; a step that throws or a script
-// result that rejects fails the self-test, unless a reload already interrupted
-// the run. The run stands down once the self-test begins to exit, so a step
-// still running when its script's result rejected presses, saves and reports
-// nothing more.
+// Starts a fresh run of every handed script on the page load the window is on,
+// printing `[selftest] page load <n> starts its run` (the drive's `ready`
+// reports the same number), unless that load already started one; a step that
+// throws or a script result that rejects fails the self-test, unless a reload
+// already interrupted the run. The run stands down once the page navigates or
+// the self-test begins to exit, so a step still running when its script's
+// result rejected presses, saves and reports nothing more.
 function startRun(
   window: DrivenWindow,
   homeFiles: Files,
@@ -135,18 +139,20 @@ function startRun(
   startWidth: number,
   cleanUp: () => Promise<void>,
 ) {
-  if (hasExited) {
+  const load = window.navigationCount();
+  if (hasExited || load === startedLoad) {
     return;
   }
-  const run = ++latestRun;
-  const isCurrent = () => run === latestRun && !hasExited;
+  startedLoad = load;
+  console.log(`[selftest] page load ${load} starts its run`);
+  const isCurrent = isOnLoad(window, load, () => hasExited);
   runAllScripts(
     window,
     homeFiles,
     handed,
     screenshots,
     startWidth,
-    run,
+    load,
     isCurrent,
     cleanUp,
   ).catch((error) => {
@@ -183,7 +189,8 @@ export interface SelfTestDriver {
 // it before it exits. `screenshotFolder` is emptied here, so it ends the run
 // holding only that run's PNGs. Each plugin hands at most one script while the
 // parts start; a host throws on its plugin's second script or one handed over
-// late. Every page load runs the handed scripts in hand-over order. The
+// late. Every page load runs the handed scripts in hand-over order, a run
+// begun on the previous page standing down as the new one commits. The
 // window's content width as the self-test starts is the width every script
 // starts and ends on.
 export function startSelfTest(
@@ -195,10 +202,6 @@ export function startSelfTest(
   emptyFolder(screenshotFolder);
   const drivenWindow = electronDrivenWindow(window);
   const startWidth = drivenWindow.contentSize().width;
-  window.webContents.on('did-navigate', () => {
-    // A run begun on the previous page stands down before its load finishes.
-    latestRun++;
-  });
   const handed: HandedScript[] = [];
   let isHandoverClosed = false;
   return {

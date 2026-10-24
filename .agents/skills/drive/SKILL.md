@@ -20,7 +20,8 @@ or touches their data, so start one whenever a check needs it.
 
 ## Loop
 
-1. `npm run drive -- start` returns once the page is ready and prints the run id and folder.
+1. `npm run drive -- start` returns once the page is ready and prints the run id and folder; a
+   dev start first waits up to 10 s for the dev server's startup reload (lock paragraph below).
    `.drive/current` names the newest run, and a command without `--run` goes there; `start --run
    <id>` names a run and reuses its home when the folder exists; a run id is one folder name
    inside `.drive/`, with no `/`, `\` or `..`. When another run may be live —
@@ -61,11 +62,16 @@ The app runs commands one at a time, so a command that never returns blocks ever
 the CLI then says the run did not answer. A script the drive runs in the page rejects
 (`PageNavigatedError`) when the page navigates under it or its renderer exits, and each wait caps
 a check at 2 s and re-polls on that rejection, so a reload during a command costs one poll rather
-than the whole 30 s wait. Dev starts (`start`, `restart`, `npm run selftest`) take
-`.drive/start.lock`, holding the taker's pid, because each `electron-forge start` empties and
-rewrites the shared `.vite/build`, which the page's startup reload reads its preload from: a drive
-start holds it from just before the spawn until the app answers `ready`, the self-test until its
-child closes (a packaged drive start skips the lock). A start waits while a live pid holds it,
+than the whole 30 s wait. `ready` returns `{ ready: true, load }`, `load` numbering the page load
+that is ready: 1 for the first, raised by each reload. Dev starts (`start`, `restart`, `npm run
+selftest`) take `.drive/start.lock`, holding the taker's pid, because each `electron-forge start`
+empties and rewrites the shared `.vite/build`, which the page's startup reload reads its preload
+from. A start holds it from just before the spawn until the app reports load 2, past that reload:
+a drive start asks `ready` until it does, the self-test reads its `[selftest] page load <n> starts
+its run` lines. The reload is not guaranteed, so a page still on load 1 10 s after it first
+reported releases the lock anyway, and a reload later than that can still read another start's
+build; the self-test also releases when its child closes, and a packaged drive start skips the
+lock. A start waits while a live pid holds it,
 printing `Waiting for another dev start (pid <pid>) to finish`, clears a dead holder's lock, and
 after 120 s fails naming the lock's absolute path to delete when no start is running. `restart`
 and `quit` end a stuck run: `quit` runs beside the stuck command, and the CLI waits up to 60 s for

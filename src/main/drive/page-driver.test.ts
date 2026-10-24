@@ -290,6 +290,23 @@ describe('cutOffAtWidth', () => {
 
     expect(fake.window.contentSize().width).toBe(400);
   });
+
+  it('cutOffAtWidth_RunNoLongerCurrentAtTheCall_ResizesNothing', async () => {
+    const fake = pageListingCutOff(() => []);
+    const widthsSet: number[] = [];
+    const window = {
+      ...fake.window,
+      setContentWidth: (width: number) => {
+        widthsSet.push(width);
+        fake.window.setContentWidth(width);
+      },
+    };
+
+    const problems = await cutOffAtWidth(window, 400, [], () => false);
+
+    expect(widthsSet).toEqual([]);
+    expect(problems).toEqual(['the run stood down before narrowing to 400px']);
+  });
 });
 
 describe('press', () => {

@@ -6,15 +6,17 @@ import type { Files } from '../contracts/files';
 import type { SelfTestGroup, SelfTestStep } from '../contracts/plugin';
 import { type DrivenWindow, PageNavigatedError } from './drive/driven-window';
 import { fakeDrivenWindow } from './drive/fake-driven-window';
-import { runScript } from './selftest-runner';
+import { isOnLoad, runScript } from './selftest-runner';
 
 const START_WIDTH = 800;
 
 // A page over the fake window: its log (newest first) answers `#log li`, its
 // width is the window's content width, every redraw lands at once, and each
-// key pressed runs `onKey`, which may log lines. `widthsAtKeys` holds the
-// content width at each key press.
-function page(onKey: (key: string, log: string[]) => void) {
+// key pressed runs `onKey`, which may log lines and navigate the page.
+// `widthsAtKeys` holds the content width at each key press.
+function page(
+  onKey: (key: string, log: string[], navigate: () => void) => void,
+) {
   const log: string[] = [];
   const widthsAtKeys: number[] = [];
   const fake = fakeDrivenWindow([
@@ -29,7 +31,7 @@ function page(onKey: (key: string, log: string[]) => void) {
       fake.window.sendInput(input);
       if (input.type === 'keyDown') {
         widthsAtKeys.push(fake.window.contentSize().width);
-        onKey(input.keyCode, log);
+        onKey(input.keyCode, log, fake.navigate);
       }
     },
   };
@@ -217,6 +219,47 @@ describe('runScript', () => {
 
     expect(failures).toBeNull();
     expect(log).not.toContain('[t] shown');
+  });
+
+  it('stands down once the page navigates past its load, resizing, pressing and reporting nothing more', async () => {
+    const { window, log, widthsAtKeys } = page((key, pageLog, navigate) => {
+      pageLog.unshift(`[t] ${key}`);
+      if (key === 'a') {
+        navigate();
+      }
+    });
+    const widthsSet: number[] = [];
+    const watchedWindow: DrivenWindow = {
+      ...window,
+      setContentWidth: (width) => {
+        widthsSet.push(width);
+        window.setContentWidth(width);
+      },
+    };
+
+    const failures = await runGroups(
+      watchedWindow,
+      log,
+      [
+        {
+          name: 'keys',
+          why: 'keys log and fit',
+          steps: [
+            { keys: ['a'], expect: '[t] a', checksFit: true },
+            { keys: ['b'], expect: '[t] b', width: 600 },
+          ],
+        },
+      ],
+      new Map(),
+      isOnLoad(watchedWindow, watchedWindow.navigationCount(), () => false),
+    );
+
+    expect(failures).toBeNull();
+    expect(widthsAtKeys).toEqual([START_WIDTH]);
+    expect(widthsSet).toEqual([]);
+    expect(lines.filter((line) => /PASS|FAIL/.test(line))).toEqual([
+      '[selftest] PASS [t] shown',
+    ]);
   });
 
   it('presses a repeating step until its until line and saves one file per press', async () => {

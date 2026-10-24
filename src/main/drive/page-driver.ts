@@ -503,7 +503,9 @@ export async function resizeContentWidth(
 // once the page has redrawn at that width, then restores the content width it
 // read and waits for the page to redraw at it, listing a restore that never
 // lands, and a page that navigates while its cut-off is listed, as problems
-// too. Once `isCurrent` turns false the restore is skipped, the run that set
+// too. `isCurrent` says whether the caller's run still owns the window: when
+// it is false at the call, nothing is resized and the one problem says so;
+// once it turns false after the list, the restore is skipped, the run that set
 // the width having been replaced by one that sets its own. Chromium reports
 // media query changes in the frame before its animation-frame callbacks, so
 // the redraw wait holds the next step's keys until the page's `change`
@@ -514,6 +516,9 @@ export async function cutOffAtWidth(
   scrollsItself: string[],
   isCurrent: () => boolean = () => true,
 ): Promise<string[]> {
+  if (!isCurrent()) {
+    return [`the run stood down before narrowing to ${width}px`];
+  }
   const oldWidth = window.contentSize().width;
   window.setContentWidth(width);
   const narrowWidth = window.contentSize().width;

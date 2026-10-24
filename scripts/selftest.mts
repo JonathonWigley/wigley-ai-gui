@@ -1,13 +1,22 @@
 // `npm run selftest`: runs the app's self-test through Electron Forge, its
 // output passed through, and exits 0 only when the self-test reports that all
-// its steps passed. It holds `.drive/start.lock` from before the spawn until
-// the self-test closes, since every `electron-forge start` rewrites the shared
-// `.vite/build` and the page's startup reload reads its preload from there: no
-// line the self-test prints proves that reload has landed.
+// its steps passed. It holds `.drive/start.lock` from before the spawn, since
+// every `electron-forge start` rewrites the shared `.vite/build` and the
+// page's startup reload reads its preload from there, until the self-test
+// prints that the page load after that reload starts its run, or
+// `STARTUP_RELOAD_WAIT_MS` after the first load's run started when no reload
+// comes, or until the self-test closes, whichever is first.
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
-import { isAlive, type StartLock, takeStartLock } from './start-lock.mts';
+import {
+  isAlive,
+  mayReleaseStartLock,
+  STARTUP_RELOAD_WAIT_MS,
+  type StartLock,
+  selfTestLoadOf,
+  takeStartLock,
+} from './start-lock.mts';
 
 const REPO_DIR = path.resolve(import.meta.dirname, '..');
 const START_LOCK_FILE = path.join(REPO_DIR, '.drive', 'start.lock');
@@ -31,7 +40,8 @@ try {
   process.exitCode = 1;
 }
 
-// Spawns the self-test and releases `startLock` when it closes or fails to
+// Spawns the self-test and releases `startLock` once `mayReleaseStartLock`
+// holds for the page loads its lines report, or when it closes or fails to
 // start.
 function runSelfTest(startLock: StartLock): void {
   const isWindows = process.platform === 'win32';
@@ -51,20 +61,40 @@ function runSelfTest(startLock: StartLock): void {
   });
 
   let hasPassed = false;
+  let firstLoadAt: number | null = null;
+  let reloadWait: NodeJS.Timeout | undefined;
+  const releaseOnLoad = (load: number) => {
+    if (firstLoadAt === null) {
+      firstLoadAt = Date.now();
+      reloadWait = setTimeout(
+        () => startLock.release(),
+        STARTUP_RELOAD_WAIT_MS,
+      );
+    }
+    if (mayReleaseStartLock(load, Date.now() - firstLoadAt)) {
+      startLock.release();
+    }
+  };
   for (const stream of [child.stdout, child.stderr]) {
     createInterface({ input: stream }).on('line', (line) => {
       process.stdout.write(`${line}\n`);
       if (line.includes(PASSED_LINE)) {
         hasPassed = true;
       }
+      const load = selfTestLoadOf(line);
+      if (load !== null) {
+        releaseOnLoad(load);
+      }
     });
   }
   child.on('error', (error) => {
+    clearTimeout(reloadWait);
     startLock.release();
     console.error(`Could not start ${forge}: ${error.message}`);
     process.exitCode = 1;
   });
   child.on('close', () => {
+    clearTimeout(reloadWait);
     startLock.release();
     process.exitCode = hasPassed ? 0 : 1;
   });

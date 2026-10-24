@@ -137,8 +137,9 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     },
     ready: {
       args: '{}',
-      description: 'waits for the page to be ready for keys',
-      run: async () => ({ ready: true }),
+      description:
+        "waits for the page to be ready for keys and returns its page load's number, 1 for the first load, which a reload raises",
+      run: async () => ({ ready: true, load: await readyLoad(window) }),
     },
     key: {
       args: '{ keys: string[] }',
@@ -433,6 +434,19 @@ async function waitForPage(window: DrivenWindow): Promise<void> {
   const startFailure = await readStartFailure(window);
   if (startFailure !== null) {
     throw new Error(startFailure);
+  }
+}
+
+// The number of the page load that is ready for keys: the window's navigation
+// count, read before a readiness check and kept only when no navigation
+// landed during it, so a load still loading is never reported as ready.
+async function readyLoad(window: DrivenWindow): Promise<number> {
+  for (;;) {
+    const load = window.navigationCount();
+    await waitForPage(window);
+    if (window.navigationCount() === load) {
+      return load;
+    }
   }
 }
 

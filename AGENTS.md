@@ -411,19 +411,22 @@ round), since main, not the page, decides.
   reads it only when the app's parent is launchd (`process.ppid === 1`): a terminal start (`npm start`) and the
   self-test keep the PATH of the shell that ran them, nvm or a venv included. The read's shell leads its own process
   group, and the 3 s cap kills that whole group.
-- Under `electron-forge start` the page loads twice at startup, the second load triggered by the dev server. Code
-  that acts on page load runs on every load, as the self-test does.
+- Under `electron-forge start` the page usually loads twice at startup: Forge's dev server reloads every connected
+  page when a build lands after the page connected, which nothing guarantees. Code that acts on page load runs on
+  every load, as the self-test does. Main numbers each load by the window's navigation count, 1 for the first: the
+  self-test prints `[selftest] page load <n> starts its run`, and a drive run's `ready` returns `load`.
 - Every `electron-forge start` (a dev drive run, the self-test, the user's `npm start`) empties and rewrites the one
   `.vite/build` and bakes its own dev-server URL into `main.cjs`. Two starts that overlap launch Electron on a
   missing `main.cjs` (Electron's "Error launching app" dialog, on the user's screen) or point one app's page at the
   other's dev server. Dev drive starts (`start`, `restart`) and `npm run selftest` take `.drive/start.lock`, which
-  holds the taker's pid: a drive start from just before the spawn until the app answers `ready`, the self-test until
-  its child closes (a packaged drive start skips it). The self-test holds past the page's startup reload, which
-  re-reads `preload.cjs` from `.vite/build`; a drive start's `ready` can answer before that reload, so its hold
-  narrows the overlap without closing it. A start that finds a live holder prints `Waiting for another dev start
-  (pid <pid>) to finish`; a dead holder's lock is cleared; after 120 s the start fails naming the lock's absolute
-  path to delete when no start is running. The user's `npm start` is outside it, so work that runs drive checks
-  beside a peer's runs in a worktree, which has its own `.vite`.
+  holds the taker's pid, from just before the spawn until the app reports load 2, past the startup reload that
+  re-reads `preload.cjs` from `.vite/build`: a drive start asks `ready` until it does, the self-test reads its page
+  load lines. A page with no reload 10 s after load 1 reported releases the lock anyway, and a reload later than that
+  can still read another start's build; the self-test also releases when its child closes, and a packaged drive start
+  skips the lock. A start that finds a live holder prints `Waiting for another dev start (pid <pid>) to finish`; a
+  dead holder's lock is cleared; after 120 s the start fails naming the lock's absolute path to delete when no start
+  is running. The user's `npm start` is outside it, so work that runs drive checks beside a peer's runs in a
+  worktree, which has its own `.vite`.
 - A session's `ask_round` schema is fixed when the session starts, so after a change to the forms tool contract the
   running session still offers the old shape. Take the fields the server now requires from its error, and send a
   sample round that needs the new schema from a new session.

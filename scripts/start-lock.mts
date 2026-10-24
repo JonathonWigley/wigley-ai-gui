@@ -1,6 +1,6 @@
 // The lock dev starts take while `electron-forge start` empties and rewrites
-// the shared `.vite/build`, so two starts never build over each other. The
-// lock file holds its taker's pid as text.
+// the shared `.vite/build`, so two starts never build over each other, and
+// when a start may release it. The lock file holds its taker's pid as text.
 import { randomUUID } from 'node:crypto';
 import {
   linkSync,
@@ -131,6 +131,32 @@ function readHolder(lockFile: string): number | null {
   }
   const pid = Number(text.trim());
   return Number.isInteger(pid) && pid > 0 ? pid : null;
+}
+
+// The page load a dev start's app is on once the dev server's startup reload,
+// which re-reads `preload.cjs` from `.vite/build`, has landed.
+export const RELOADED_LOAD = 2;
+// How long a dev start keeps the lock after its app first reports a page load,
+// waiting for a startup reload: the dev server reloads the page when a build
+// lands after the page has connected, which no code guarantees.
+export const STARTUP_RELOAD_WAIT_MS = 10_000;
+
+// Whether a dev start may release its start lock, given the page load its app
+// last reported and the time since it first reported one: once that load is
+// past the startup reload, or once `STARTUP_RELOAD_WAIT_MS` has passed without
+// one.
+export function mayReleaseStartLock(
+  load: number,
+  msSinceFirstLoad: number,
+): boolean {
+  return load >= RELOADED_LOAD || msSinceFirstLoad >= STARTUP_RELOAD_WAIT_MS;
+}
+
+// The page load a self-test line says starts its run, or null for any other
+// line; main prints `[selftest] page load <n> starts its run`.
+export function selfTestLoadOf(line: string): number | null {
+  const match = /\[selftest\] page load (\d+) starts its run/.exec(line);
+  return match === null ? null : Number(match[1]);
 }
 
 // Whether a process with `pid` exists.

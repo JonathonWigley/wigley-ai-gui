@@ -29,6 +29,7 @@ vi.mock('./electron-driven-window', () => ({
     focus: () => {},
     emulateFocus: async () => {},
     contentSize: () => ({ width: 800, height: 600 }),
+    navigationCount: () => 1,
   }),
 }));
 
@@ -274,6 +275,7 @@ describe('startSelfTest', () => {
 
     expect(press).toHaveBeenCalledTimes(1);
     expect(lines).toEqual([
+      '[selftest] page load 1 starts its run',
       '[selftest] PASS [plugin] shown',
       '[selftest] group plugin: keys',
       '[selftest] FAIL the steps run: fixture failed',

@@ -166,7 +166,7 @@ describe('createDriveCommands', () => {
 
     const result = await commands.run('ready', {});
 
-    expect(result).toEqual({ ready: true });
+    expect(result).toEqual({ ready: true, load: 0 });
     expect(logged).toEqual([
       '[main] drive: focus could not be emulated, so the page runs unfocused: Another debugger is already attached',
     ]);
@@ -193,6 +193,41 @@ describe('createDriveCommands', () => {
     const result = await commands.run('wait-log', { line: '[a] done' });
 
     expect(result).toEqual({ found: true });
+  });
+
+  it('ready_PageLoadedTwice_ReturnsTheSecondLoad', async () => {
+    const { fake, commands } = setUp(() => []);
+    fake.navigate();
+    fake.navigate();
+
+    const result = await commands.run('ready', {});
+
+    expect(result).toEqual({ ready: true, load: 2 });
+  });
+
+  it('ready_PageNavigatesDuringTheReadyCheck_ReturnsTheLoadAfterIt', async () => {
+    let checks = 0;
+    const { fake, commands } = setUp(
+      () => [],
+      [
+        [
+          'dataset.ready',
+          () => {
+            checks += 1;
+            // The first check is the command's own wait for the page.
+            if (checks === 2) {
+              fake.navigate();
+            }
+            return true;
+          },
+        ],
+      ],
+    );
+    fake.navigate();
+
+    const result = await commands.run('ready', {});
+
+    expect(result).toEqual({ ready: true, load: 2 });
   });
 
   it('ready_PageNeverAnswers_RejectsSayingItNeverFinishedLoading', async () => {

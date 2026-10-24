@@ -25,6 +25,21 @@ import type { HandedScript } from './selftest-config';
 // width, and the result the script checks, saving the screenshots steps ask
 // for. Imports no `electron`: the window is a `DrivenWindow`, so tests drive it
 // over a fake.
+//
+// A run belongs to one page load, numbered by the window's navigation count,
+// and stands down once the page has navigated past it: every press, resize,
+// file write, report line and fixture open checks `isCurrent` with no await
+// between the check and the act.
+
+// The `isCurrent` of a run started on page load `load`: true while the window
+// is still on that load and `hasExited` is false.
+export function isOnLoad(
+  window: DrivenWindow,
+  load: number,
+  hasExited: () => boolean,
+): () => boolean {
+  return () => window.navigationCount() === load && !hasExited();
+}
 
 // Prints one self-test check line.
 export function report(passed: boolean, what: string) {
@@ -32,14 +47,19 @@ export function report(passed: boolean, what: string) {
 }
 
 // Saves a PNG of the window to `png` once the page has redrawn; returns why it
-// was not saved, or null when it was.
+// was not saved, or null when it was. Writes nothing once `isCurrent` turns
+// false during the capture, since the next load's run saves to the same path.
 async function saveScreenshot(
   window: DrivenWindow,
   png: string,
+  isCurrent: () => boolean,
 ): Promise<string | null> {
   const capture = await capturePng(window);
   if (typeof capture === 'string') {
     return capture;
+  }
+  if (!isCurrent()) {
+    return 'the run stood down before the write';
   }
   try {
     await writeFile(png, capture);
@@ -70,7 +90,7 @@ export async function settleWithin<T>(
 }
 
 // Presses each key with a short gap after it; false, pressing nothing more,
-// once a later run has begun.
+// once `isCurrent` turns false.
 async function pressKeys(
   window: DrivenWindow,
   keys: readonly string[],
@@ -92,7 +112,7 @@ async function saveStepScreenshot(
   png: string,
   isCurrent: () => boolean,
 ): Promise<boolean> {
-  const failure = await saveScreenshot(window, png);
+  const failure = await saveScreenshot(window, png, isCurrent);
   const isSaved = failure === null;
   if (isCurrent()) {
     report(isSaved, `screenshot ${png}${isSaved ? '' : `: ${failure}`}`);
@@ -340,20 +360,22 @@ function reportWhys(group: SelfTestGroup, step: SelfTestStep) {
 // that opens on another (a reload interrupted a held width) resizes back first,
 // and a width a step held is restored once the result is checked. `screenshots`
 // maps each step that saves PNGs to their paths, and the fit check lets the
-// script's `scrollsItself` and the primitives' ellipsis parts clip. Returns how
-// many checks failed, or null when a reload interrupted the run.
+// script's `scrollsItself` and the primitives' ellipsis parts clip. `load` is
+// the page load the run belongs to, which the fixture opens under, and
+// `isCurrent` (`isOnLoad` of it) whether the run still owns the window.
+// Returns how many checks failed, or null when a reload interrupted the run.
 export async function runScript(
   window: DrivenWindow,
   homeFiles: Files,
   { pluginId, script }: HandedScript,
   screenshots: ReadonlyMap<SelfTestStep, readonly string[]>,
   startWidth: number,
-  run: number,
+  load: number,
   isCurrent: () => boolean,
   stepTimeoutMs = STEP_TIMEOUT_MS,
 ): Promise<number | null> {
   const mark = await markLog(window);
-  // A later run may have begun while the log was read.
+  // The page may have navigated while the log was read.
   if (!isCurrent()) {
     return null;
   }
@@ -365,11 +387,11 @@ export async function runScript(
   ))
     ? 0
     : 1;
-  // A later run may have begun while the width was restored.
+  // The page may have navigated while the width was restored.
   if (!isCurrent()) {
     return null;
   }
-  const { shownLine, result } = script.open(run);
+  const { shownLine, result } = script.open(load);
   // Rejects with the result's error and otherwise never settles, so a wait
   // raced against it ends as soon as the result rejects.
   const rejection = result.then(() => new Promise<never>(() => {}));
