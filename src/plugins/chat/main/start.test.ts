@@ -5,8 +5,9 @@ import type { ChatSessionState } from '../contract';
 import { addDriveActions, chatMainPart } from './start';
 
 // A chat holding one session, `held`, whose permission calls wait until the
-// test replies to them; `calls` holds each call's tool args.
-function fakeChat() {
+// test replies to them, and `held` ended when `ended` is true; `calls` holds
+// each call's tool args.
+function fakeChat(ended = false) {
   const replies: ((result: ToolResult) => void)[] = [];
   const calls: unknown[] = [];
   return {
@@ -15,7 +16,7 @@ function fakeChat() {
     closed: vi.fn<(sessionId: string) => void>(),
     start: () => 'started',
     sessions: () => [
-      { sessionId: 'held', projectDir: '/p' } as ChatSessionState,
+      { sessionId: 'held', projectDir: '/p', ended } as ChatSessionState,
     ],
     permissionToolSession: () => ({
       call: (_name: string, args: unknown) => {
@@ -103,6 +104,16 @@ describe('chat drive actions', () => {
       input: { command: 'ls' },
       tool_use_id: 'use-1',
     });
+  });
+
+  it('askPermission rejects an ended session and raises no card', async () => {
+    const chat = fakeChat(true);
+    const drive = chatDriveActions(chat);
+
+    await expect(
+      drive.run('askPermission', { sessionId: 'held' }),
+    ).rejects.toThrow('session held has ended');
+    expect(chat.calls).toEqual([]);
   });
 
   it('permissionAnswer rejects a toolUseId askPermission never returned', async () => {

@@ -34,7 +34,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Profile** — a named Claude config folder (`work` → `~/.claude`, `personal` → `~/.claude-personal`); it sets the
   login, plugins, settings and where transcripts live. Picked with the folder when starting a session.
 - **Owned session** — a session the app started; its row exists from start and stays after its process ends on its own,
-  the Chat tab showing the ended composer (chips and send disabled), until the user closes the row. A
+  the Chat tab showing the ended composer (chips and send disabled), until the user closes the row or resumes the
+  session's conversation, which closes the ended row first and opens it fresh. A
   **connected session** is one a relay connection brought (a terminal session), as today.
 - **Take over** — a session tab selecting itself and later giving the session back to the tab shown before.
 - **App slash command** — a `/name` the app runs itself when typed in the message box, instead of sending it to the
@@ -155,7 +156,11 @@ interview on 2026-10-23; this file is the record of both.
   interrupts. Tool calls show one compact line (tool name and a short input summary) that expands to the full input
   and output. These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows (the start
-  prompt and the sign-in dialog, tied to no session, stay open).
+  prompt and the sign-in dialog, tied to no session, stay open). An ended session's Chat tab keys in the
+  `chat.ended` scope, which holds only the entry keys, the box keys and send (an app slash command still runs there),
+  and the key bar lists those and closing the session: the tab sets it when shown, or at once when its session ends
+  while it is shown. Moving between a live and an ended Chat tab changes the base scope, which closes every pushed
+  scope's view: the start prompt closes then too, and the sign-in dialog stays.
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
   each opening a picker of its choices; raw `c` (`<Leader>cc` in the box) lists every control, so a control a new
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
@@ -224,7 +229,7 @@ interview on 2026-10-23; this file is the record of both.
   setting is on (default on), else `false`.
 - **Resume and archive**: after the folder and profile, the start prompt offers a new session or one of the folder's
   saved sessions (terminal and app alike, newest first, labelled by first message and time; one the app has open is
-  left out), resumed with its earlier conversation read from the transcript. `x` archives the entry under the
+  left out unless its process has ended, and resuming that one closes its ended row first), resumed with its earlier conversation read from the transcript. `x` archives the entry under the
   cursor or restores an archived one; `.` shows or hides archived entries. When the transcript cannot be read, the
   chat shows one notice and the session still resumes. Archived ids live in chat's plugin data; Claude's
   transcript files stay as Claude keeps them.

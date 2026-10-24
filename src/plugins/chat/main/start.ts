@@ -95,8 +95,8 @@ interface ChatDriveDeps {
 }
 
 // Offers a drive run chat's fixtures: `chat.start` opens a chat session and
-// selects its row, `chat.askPermission` raises a permission card in one, and
-// `chat.permissionAnswer` reads that card's reply.
+// selects its row, `chat.askPermission` raises a permission card in one whose
+// process still runs, and `chat.permissionAnswer` reads that card's reply.
 export function addDriveActions(
   drive: DriveHost,
   deps: ChatDriveDeps,
@@ -128,7 +128,7 @@ export function addDriveActions(
     },
   });
   const askPermission = drive.add('askPermission', {
-    description: `Raises a permission card in the chat session sessionId for a call of toolName (default ${DEFAULT_PERMISSION_TOOL}) with input (default ${JSON.stringify(DEFAULT_PERMISSION_INPUT)}). Returns the call's toolUseId at once, which chat.permissionAnswer reads the reply by; the main output logs the reply once the user answers.`,
+    description: `Raises a permission card in the chat session sessionId for a call of toolName (default ${DEFAULT_PERMISSION_TOOL}) with input (default ${JSON.stringify(DEFAULT_PERMISSION_INPUT)}). Returns the call's toolUseId at once, which chat.permissionAnswer reads the reply by; the main output logs the reply once the user answers. Fails when chat holds no session sessionId, or when that session has ended.`,
     args: '{ sessionId: string; toolName?: string; input?: unknown }',
     async run(rawArgs) {
       const args = argsObject(rawArgs);
@@ -138,6 +138,9 @@ export function addDriveActions(
         .find((held) => held.sessionId === sessionId);
       if (!state) {
         throw new Error(`chat holds no session ${sessionId}`);
+      }
+      if (state.ended) {
+        throw new Error(`session ${sessionId} has ended`);
       }
       const toolUseId = services.randomUuid();
       permissions.set(toolUseId, { state: 'pending' });

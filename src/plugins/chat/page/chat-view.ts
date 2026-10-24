@@ -97,7 +97,11 @@ export interface PermissionActions {
   deny(session: SessionRef, entry: PermissionEntry): void;
 }
 
-// `setScope` sets the base scope `chat`; `otherSessionShown` runs when the
+// The base scope a shown Chat tab sets: `ended` once its session has ended,
+// holding only the entry, box and send keys, else `chat`.
+export type ChatTabScope = 'chat' | 'ended';
+
+// `setScope` sets the base scope; `otherSessionShown` runs when the
 // Chat tab shown is another session's than the Chat tab shown before;
 // `onSessionRemoved` hears the sessions plugin drop a row's tabs. `run` runs
 // a command, as the composer's chips and send button do; `platform` prints
@@ -119,7 +123,7 @@ export interface ChatViewDeps {
   confirm: CloseConfirm;
   viewer: Pick<ImageViewer, 'open'>;
   slashCommandNames(): string[];
-  setScope(): void;
+  setScope(scope: ChatTabScope): void;
   otherSessionShown(): void;
   log: Log;
   toast(text: string, tone: ToastTone): void;
@@ -188,10 +192,12 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }
     const tab = createTab(state, shown, deps, {
       // Chat keys act only on the visible Chat tab's session. Another
-      // session's Chat tab sets the same scope, so no pushed dialog hears a
-      // base change: `otherSessionShown` closes the session's dialogs.
+      // session's Chat tab, live or ended as this one is, sets the same scope,
+      // so no pushed dialog hears a base change: `otherSessionShown` closes
+      // the session's dialogs. Between a live and an ended tab the base
+      // changes, closing every pushed chat dialog and picker.
       shown: (shownTab) => {
-        deps.setScope();
+        deps.setScope(tabScope(shownTab));
         if (
           lastShownSessionId !== null &&
           lastShownSessionId !== shownTab.sessionId
@@ -256,6 +262,9 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tab.ended = true;
+    if (tab.handle?.isVisible() === true) {
+      deps.setScope(tabScope(tab));
+    }
     tab.bar.draw(tab);
     sendStatus(tab, '');
     if (error === null) {
@@ -317,6 +326,10 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
   };
+}
+
+function tabScope(tab: Pick<HeldTab, 'ended'>): ChatTabScope {
+  return tab.ended ? 'ended' : 'chat';
 }
 
 // The commands' view of a held tab, reading its state live.

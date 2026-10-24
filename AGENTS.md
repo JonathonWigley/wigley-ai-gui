@@ -134,7 +134,8 @@ connected session has a row in the sessions sidebar until it disconnects or the 
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
 host session id joins that row instead of adding one (a newer relay takes the join from an older one still
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps a
-self-ended session's row, its Chat tab showing the ended composer, until the user closes it. A plugin's close
+self-ended session's row, its Chat tab showing the ended composer in the `chat.ended` key scope, until the user closes
+it or resumes that session's conversation, which closes the ended row first. A plugin's close
 guard (`addCloseGuard`) refuses the user's close while the plugin still has something open there (forms: an open
 round), since main, not the page, decides.
 

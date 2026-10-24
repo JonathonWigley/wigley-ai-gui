@@ -412,6 +412,52 @@ describe('createChatSessions', () => {
     expect(test.opened).toEqual([]);
   });
 
+  it('pastSessions_EndedSessionStillHeld_ListsIt', async () => {
+    const test = setUp();
+    const hostId = PAST_ONE.sessionId;
+    await test.chat.resume({
+      projectDir: '/w/app',
+      profile: 'work',
+      hostSessionId: hostId,
+    });
+    test.chat.sessionConnected(connected(ROW_ID, hostId));
+    await flush();
+    test.harness.processes[0].events.ended({ code: 0, error: null });
+
+    const rows = await test.chat.pastSessions('/w/app', 'work');
+
+    expect(rows.map((row) => row.hostSessionId)).toContain(hostId);
+  });
+
+  it('resume_EndedSessionStillHeld_ClosesItsRowAndOpensItFresh', async () => {
+    const test = setUp();
+    const hostId = PAST_ONE.sessionId;
+    const request = {
+      projectDir: '/w/app',
+      profile: 'work',
+      hostSessionId: hostId,
+    };
+    await test.chat.resume(request);
+    test.chat.sessionConnected(connected(ROW_ID, hostId));
+    await flush();
+    test.harness.processes[0].events.ended({ code: 0, error: null });
+
+    const sessionId = await test.chat.resume(request);
+    await flush();
+
+    expect(sessionId).toBe(ROW_ID);
+    expect(test.ownedEnds()).toBe(1);
+    expect(test.opened.map((info) => info.sessionId)).toEqual([hostId, hostId]);
+    expect(test.harness.processes).toHaveLength(2);
+    expect(test.harness.processes[1].request.resume).toBe(true);
+    expect(test.chat.sessions()).toMatchObject([
+      { sessionId: ROW_ID, ended: false },
+    ]);
+    expect(test.logged).toContain(
+      `[chat] session ${ROW_ID} closed to resume it`,
+    );
+  });
+
   it('commands_StoredAndSentOnChange', async () => {
     const test = await started();
 

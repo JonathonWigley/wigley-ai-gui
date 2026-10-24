@@ -49,8 +49,9 @@ type ChatApi = PageApi<
 // reason box, the end-session confirmation, the sign-in dialog and the image
 // viewer sit in the overlay layer, each over a scope of its own; another
 // session's Chat tab showing closes the reason box, the confirmation, a
-// control picker and the image viewer, and leaves the start prompt and the
-// sign-in dialog open.
+// control picker and the image viewer, and leaves the sign-in dialog open, and
+// the start prompt too unless one of the two sessions has ended and the other
+// has not. An ended session's Chat tab keys only its entries, box and send.
 export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -131,7 +132,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       confirm,
       viewer,
       slashCommandNames: () => slashCommands.names(),
-      setScope: () => api.keys.setScope('chat'),
+      setScope: (scope) => api.keys.setScope(scope),
       otherSessionShown: () => {
         picker.closeSessionBound();
         reasonBox.cancel();

@@ -67,6 +67,32 @@ function formsBoxBinds(scope: 'forms.forms' | 'forms.review') {
   ].map((bind) => ({ ...bind, scope, where: 'box' as const }));
 }
 
+// A live Chat tab and an ended one each hold the keys that read the entries
+// and focus the box.
+function chatEntryPageBinds(scope: 'chat.chat' | 'chat.ended') {
+  return [
+    { keys: 'i', scope, command: 'chat.focusBox' as const },
+    { keys: 'a', scope, command: 'chat.appendBox' as const },
+    { keys: 'j', scope, command: 'chat.nextEntry' as const },
+    { keys: 'k', scope, command: 'chat.prevEntry' as const },
+    { keys: '<CR>', scope, command: 'chat.toggleEntry' as const },
+    { keys: 'G', scope, command: 'chat.latestEntry' as const },
+    { keys: 'gg', scope, command: 'chat.firstEntry' as const },
+    { keys: '<C-j>', scope, command: 'chat.halfPageDown' as const },
+    { keys: '<C-k>', scope, command: 'chat.halfPageUp' as const },
+  ];
+}
+
+// A box's binds are normal-mode maps: `<CR>` sends only in normal mode, so
+// Enter in insert mode adds a line.
+function chatBoxBinds(scope: 'chat.chat' | 'chat.ended') {
+  return [
+    { keys: '<CR>', command: 'chat.send' as const },
+    { keys: '<Esc>', command: 'chat.leaveBox' as const },
+    { keys: '<Leader>cx', command: 'chat.removeImage' as const },
+  ].map((bind) => ({ ...bind, scope, where: 'box' as const }));
+}
+
 // The chat's picker and session list each hold the same list keys.
 function chatListPageBinds(scope: 'chat.picker' | 'chat.resume') {
   return [
@@ -175,15 +201,7 @@ export const defaultKeymap = {
     ...formsBoxBinds('forms.review'),
 
     // ── Chat ───────────────────────────────────────────────────────────────
-    { keys: 'i', scope: 'chat.chat', command: 'chat.focusBox' },
-    { keys: 'a', scope: 'chat.chat', command: 'chat.appendBox' },
-    { keys: 'j', scope: 'chat.chat', command: 'chat.nextEntry' },
-    { keys: 'k', scope: 'chat.chat', command: 'chat.prevEntry' },
-    { keys: '<CR>', scope: 'chat.chat', command: 'chat.toggleEntry' },
-    { keys: 'G', scope: 'chat.chat', command: 'chat.latestEntry' },
-    { keys: 'gg', scope: 'chat.chat', command: 'chat.firstEntry' },
-    { keys: '<C-j>', scope: 'chat.chat', command: 'chat.halfPageDown' },
-    { keys: '<C-k>', scope: 'chat.chat', command: 'chat.halfPageUp' },
+    ...chatEntryPageBinds('chat.chat'),
     { keys: 'y', scope: 'chat.chat', command: 'chat.allowPermission' },
     { keys: 'n', scope: 'chat.chat', command: 'chat.denyPermission' },
     { keys: '<C-c>', scope: 'chat.chat', command: 'chat.interrupt' },
@@ -192,6 +210,10 @@ export const defaultKeymap = {
     { keys: 'e', scope: 'chat.chat', command: 'chat.pickEffort' },
     { keys: 'o', scope: 'chat.chat', command: 'chat.pickModel' },
     { keys: 'c', scope: 'chat.chat', command: 'chat.pickControl' },
+    // An ended session takes no permission answer, interrupt or control
+    // change, so its tab keeps only the entry, box and send keys.
+    ...chatEntryPageBinds('chat.ended'),
+    { keys: '<D-Enter>', scope: 'chat.ended', command: 'chat.send' },
     ...chatListPageBinds('chat.picker'),
     ...chatListPageBinds('chat.resume'),
     { keys: 'x', scope: 'chat.resume', command: 'chat.toggleArchive' },
@@ -206,15 +228,8 @@ export const defaultKeymap = {
     { keys: 'h', scope: 'chat.image', command: 'chat.prevImage' },
     { keys: 'l', scope: 'chat.image', command: 'chat.nextImage' },
     { keys: '<Esc>', scope: 'chat.image', command: 'chat.closeImage' },
-    // A box's binds are normal-mode maps: `<CR>` sends only in normal mode, so
-    // Enter in insert mode adds a line.
-    { keys: '<CR>', scope: 'chat.chat', command: 'chat.send', where: 'box' },
-    {
-      keys: '<Esc>',
-      scope: 'chat.chat',
-      command: 'chat.leaveBox',
-      where: 'box',
-    },
+    ...chatBoxBinds('chat.chat'),
+    ...chatBoxBinds('chat.ended'),
     {
       keys: '<Leader>cm',
       scope: 'chat.chat',
@@ -237,12 +252,6 @@ export const defaultKeymap = {
       keys: '<Leader>cc',
       scope: 'chat.chat',
       command: 'chat.pickControl',
-      where: 'box',
-    },
-    {
-      keys: '<Leader>cx',
-      scope: 'chat.chat',
-      command: 'chat.removeImage',
       where: 'box',
     },
     ...chatListBoxBinds('chat.picker'),

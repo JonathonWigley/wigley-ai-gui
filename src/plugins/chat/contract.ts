@@ -40,8 +40,8 @@ export interface ResumeRequest {
 }
 
 // `sessionId` is the sessions plugin's id for the row. A session whose process
-// ended on its own stays, `ended` true, until the user closes its row; a
-// closed session's state is dropped at once.
+// ended on its own stays, `ended` true, until the user closes its row or
+// resumes its conversation; a closed session's state is dropped at once.
 export interface ChatSessionState {
   sessionId: string;
   projectDir: string;
@@ -74,13 +74,15 @@ export interface ChatChannel extends ChannelShape {
     chooseFolder(): Promise<string | null>;
     // The new row's sessionId.
     start(request: StartRequest): string;
-    // Newest first; a session open in the app is left out.
+    // Newest first; a session open in the app is left out, unless its process
+    // has ended.
     pastSessions(
       projectDir: string,
       profile: string,
     ): Promise<PastSessionRow[]>;
     setArchived(hostSessionId: string, archived: boolean): Promise<void>;
-    // Resolves to the new row's sessionId.
+    // Resolves to the new row's sessionId; closes the row of the session
+    // first when its process has ended, and rejects when it is open otherwise.
     resume(request: ResumeRequest): Promise<string>;
     send(sessionId: string, message: UserMessage): void;
     // Adds a notice entry to the session's chat, kept across a page reload.
