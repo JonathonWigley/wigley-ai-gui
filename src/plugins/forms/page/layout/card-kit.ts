@@ -1,18 +1,22 @@
 import type { CommandId } from '../../../../contracts/commands';
-import { element, markdownElement } from '../../../../shared/page/dom';
+import type { MarkdownRenderer } from '../../../../contracts/markdown';
+import { button, element, markdownElement } from '../../../../shared/page/dom';
 import { textButton } from '../../../../shared/page/ui/button';
 import { card as cardPart } from '../../../../shared/page/ui/card';
 import { kbd } from '../../../../shared/page/ui/kbd';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag as tagPart } from '../../../../shared/page/ui/tag';
-import type { FindingAction, ItemKind } from '../../contract';
-import { formsCommand, formsCommandNamed } from '../../ids';
+import type { ItemKind } from '../../contract';
+import { formsCommand, formsCommandNamed, numberedCommand } from '../../ids';
 import type {
   AnswerKit,
+  FindingAction,
+  FindingCard,
   FindingKit,
   HeadKit,
   Kit,
   LayoutAction,
+  QuestionKit,
 } from '../../layouts/layout';
 import {
   type AnswerableItem,
@@ -37,7 +41,7 @@ import {
 import type { CardDeps, CardInputs, CardKits } from '../kinds/item-format';
 
 type TextBoxField = Parameters<Kit['textBox']>[1];
-type ReasonsMode = Parameters<AnswerKit['choiceList']>[1];
+type ReasonsMode = Parameters<FindingKit['choiceGroups']>[1];
 
 // One of the item's text boxes, with the text it opens on.
 interface ItemTextBox {
@@ -56,20 +60,31 @@ interface CardContext {
   updaters: ((round: RoundState) => void)[];
 }
 
-// A labelled reason drawn under one choice.
-interface ChoiceReason {
+// One run of a finding card's entries under one action, as `choiceGroups`
+// draws it: the action's card word, its `actionReasons` text (null when
+// absent or blank), and the header's entry number when the action has no
+// choices (null when it has). `isRecommended` marks the recommended action's
+// group, and on a choice the recommended choice under it.
+export interface ChoiceGroup {
+  action: FindingAction;
   label: string;
-  text: string;
+  reason: string | null;
+  number: number | null;
+  isRecommended: boolean;
+  choices: {
+    number: number;
+    choice: number;
+    text: string;
+    reason: string;
+    isRecommended: boolean;
+  }[];
 }
 
-// An answerable card's choices, each with the number the card shows and its
-// key picks; the number the Recommended tag sits on, null for none; and the
-// reason each choice shows for a `choiceList` reasons mode, null where it
-// shows none.
-interface ChoiceSet {
-  choices: { text: string; number: number }[];
-  recommended: number | null;
-  reasons(mode: ReasonsMode): (ChoiceReason | null)[];
+// A drawn pick a finding card's updater marks when its entry `number` is the
+// item's pick: a choice's row or a bare header's button.
+interface DrawnPick {
+  number: number;
+  element: HTMLElement;
 }
 
 // A card's kit, and what the card host does with it.
@@ -107,45 +122,70 @@ const KIT_BUILDERS: {
   [K in ItemKind]: (card: CardContext, input: CardInputs[K]) => CardKits[K];
 } = {
   notice: (card) => buildBaseKit(card),
-  question: (card, input) =>
-    buildAnswerKit(
-      card,
-      { kind: 'question', index: card.item.index },
-      buildBaseKit(card),
-      {
-        choices: input.choices.map((text, i) => ({ text, number: i + 1 })),
-        recommended: input.recommend,
-        reasons: (mode) =>
-          input.choices.map((_text, i) =>
-            mode !== 'none' && i + 1 === input.recommend
-              ? { label: 'Why recommended', text: input.rationale }
-              : null,
-          ),
-      },
-    ),
+  question: (card, input) => {
+    const item: AnswerableItem = { kind: 'question', index: card.item.index };
+    const answerKit = buildAnswerKit(card, item, buildBaseKit(card));
+    return buildQuestionKit(card, item, answerKit, input);
+  },
   finding: (card, input) => {
-    const answerKit = buildAnswerKit(
-      card,
-      { kind: 'finding', index: card.item.index },
-      buildBaseKit(card),
-      {
-        choices: input.choices.map((choice, i) => ({
-          text: choice.text,
-          number: findingEntryNumberOf(input, i + 1, choice.action),
-        })),
-        recommended: recommendedEntryNumber(input),
-        reasons: (mode) =>
-          input.choices.map((choice, i) => {
-            const isShown =
-              mode === 'all' ||
-              (mode === 'recommended' && i + 1 === input.recommend);
-            return isShown ? { label: 'Why', text: choice.reason } : null;
-          }),
-      },
-    );
-    return buildFindingKit(card, answerKit, input);
+    const item: AnswerableItem = { kind: 'finding', index: card.item.index };
+    const answerKit = buildAnswerKit(card, item, buildBaseKit(card));
+    return buildFindingKit(card, item, answerKit, input);
   },
 };
+
+// The finding card's entries as `choiceGroups` draws them: one group per run
+// of entries under one action, in `entries` order, each choice and each bare
+// header keeping its entry number.
+export function choiceGroupsOf(input: FindingCard): ChoiceGroup[] {
+  const groups: ChoiceGroup[] = [];
+  for (const entry of input.entries) {
+    let group = groups.at(-1);
+    if (group === undefined || group.action !== entry.action) {
+      group = {
+        action: entry.action,
+        label: actionLabelOf(input, entry.action),
+        reason: actionReasonOf(input, entry.action),
+        number: null,
+        isRecommended: entry.action === input.recommendAction,
+        choices: [],
+      };
+      groups.push(group);
+    }
+    if (entry.choice === 0) {
+      group.number = entry.number;
+    } else {
+      const choice = input.choices[entry.choice - 1];
+      group.choices.push({
+        number: entry.number,
+        choice: entry.choice,
+        text: choice.text,
+        reason: choice.reason,
+        isRecommended: group.isRecommended && entry.choice === input.recommend,
+      });
+    }
+  }
+  return groups;
+}
+
+// The card's word for `action`; entries name only actions the card offers.
+function actionLabelOf(input: FindingCard, action: FindingAction): string {
+  const offered = input.actions.find((each) => each.action === action);
+  if (offered === undefined) {
+    throw new Error(`finding card offers no ${action} action`);
+  }
+  return offered.label;
+}
+
+// The round's reason for deferral `action`; null for none or blank text, and
+// for fix_now, which takes none.
+function actionReasonOf(
+  input: FindingCard,
+  action: FindingAction,
+): string | null {
+  const text = action === 'fix_now' ? undefined : input.actionReasons[action];
+  return text === undefined || text.trim() === '' ? null : text;
+}
 
 // The FormsActions a layout action dispatches: focusing the card's item at
 // rail `position`, then the action itself. Don't ask has none of its own: the
@@ -240,6 +280,26 @@ export function createHeadKit(
     sectionHeader(parent, text) {
       const node = sectionHeader(text);
       parent.append(node);
+      return node;
+    },
+  };
+}
+
+// The head kit for a card or pane that is never rebuilt on a keymap change:
+// each key hint pushes its redraw onto `updaters`, so it reads the keys again
+// on each update.
+export function createUpdatingHeadKit(
+  deps: Pick<CardDeps, 'markdown' | 'keysFor' | 'platform'>,
+  updaters: ((round: RoundState) => void)[],
+): HeadKit {
+  return {
+    ...createHeadKit(deps),
+    keyHint(parent, command, className = '') {
+      const node = element('span', className);
+      parent.append(node);
+      updaters.push(
+        appendKeyHint(node, () => keysOfNamed(deps, command), deps.platform),
+      );
       return node;
     },
   };
@@ -386,7 +446,7 @@ function runLayoutAction(card: CardContext, action: LayoutAction) {
 
 function buildBaseKit(card: CardContext): Kit {
   return {
-    ...createHeadKit(card.deps),
+    ...createUpdatingHeadKit(card.deps, card.updaters),
     itemHead(parent, kind) {
       const { header, status } = buildItemHead(parent, kind);
       const answerable = answerableOf(card.item);
@@ -399,69 +459,19 @@ function buildBaseKit(card: CardContext): Kit {
       }
       return header;
     },
-    // A card is never rebuilt on a keymap change, so its hint reads the keys
-    // again on each card update.
-    keyHint(parent, command, className = '') {
-      const node = element('span', className);
-      parent.append(node);
-      card.updaters.push(
-        appendKeyHint(
-          node,
-          () => keysOfNamed(card.deps, command),
-          card.deps.platform,
-        ),
-      );
-      return node;
-    },
     textBox: (parent, field) => mountTextBox(card, parent, field),
     run: (action) => runLayoutAction(card, action),
   };
 }
 
-// `choiceList` and `answerControls` for answerable `item` over `kit`.
+// `answerControls` for answerable `item` over `kit`.
 function buildAnswerKit(
   card: CardContext,
   item: AnswerableItem,
   kit: Kit,
-  choices: ChoiceSet,
 ): AnswerKit {
   return {
     ...kit,
-    choiceList(parent, reasons) {
-      const answerArea = element('div', 'answer');
-      const list = element('ol', 'choices');
-      answerArea.append(sectionHeader('Your answer'), list);
-      parent.append(answerArea);
-      const { entries, updateKeys } = buildChoiceList(
-        list,
-        choices.choices,
-        choices.recommended,
-        (number) => kit.run({ type: 'choose', number }),
-        card.deps,
-      );
-      choices.reasons(reasons).forEach((reason, i) => {
-        if (reason !== null && reason.text.trim() !== '') {
-          entries[i].append(
-            buildChoiceReason(reason.label, reason.text, card.deps.markdown),
-          );
-        }
-      });
-      card.updaters.push(updateKeys);
-      card.updaters.push((current) => {
-        const picked = pickNumber(current, item);
-        entries.forEach((entry, i) =>
-          entry.classList.toggle(
-            'is-selected',
-            picked === choices.choices[i].number,
-          ),
-        );
-        list.classList.toggle(
-          'is-locked',
-          itemAnswer(current, item).notApplicable,
-        );
-      });
-      return answerArea;
-    },
     answerControls(parent) {
       kit.textBox(parent, 'notes');
       const toggles = element('div', 'toggles');
@@ -490,16 +500,208 @@ function buildAnswerKit(
   };
 }
 
-// `verdict` for the finding card `input` describes.
+// `choiceList` for question `item`, whose card `input` describes.
+function buildQuestionKit(
+  card: CardContext,
+  item: AnswerableItem,
+  kit: AnswerKit,
+  input: CardInputs['question'],
+): QuestionKit {
+  return {
+    ...kit,
+    choiceList(parent, reasons) {
+      const answerArea = appendAnswerArea(parent);
+      const list = element('ol', 'choices');
+      answerArea.append(list);
+      const choices = input.choices.map((text, i) => ({ text, number: i + 1 }));
+      const { entries, updateKeys } = buildChoiceList(
+        list,
+        choices,
+        input.recommend,
+        (number) => kit.run({ type: 'choose', number }),
+        card.deps,
+      );
+      const recommended = entries[input.recommend - 1];
+      if (reasons !== 'none' && recommended !== undefined) {
+        appendChoiceReason(
+          recommended,
+          'Why recommended',
+          input.rationale,
+          card.deps.markdown,
+        );
+      }
+      card.updaters.push(updateKeys);
+      card.updaters.push((current) => {
+        const picked = pickNumber(current, item);
+        entries.forEach((entry, i) =>
+          entry.classList.toggle('is-selected', picked === choices[i].number),
+        );
+        list.classList.toggle(
+          'is-locked',
+          itemAnswer(current, item).notApplicable,
+        );
+      });
+      return answerArea;
+    },
+  };
+}
+
+// `verdict` and `choiceGroups` for finding `item`, whose card `input`
+// describes.
 function buildFindingKit(
   card: CardContext,
+  item: AnswerableItem,
   kit: AnswerKit,
   input: CardInputs['finding'],
 ): FindingKit {
   return {
     ...kit,
     verdict: (parent) => buildVerdict(parent, input, kit, card),
+    choiceGroups: (parent, reasons) =>
+      buildChoiceGroups(parent, reasons, input, item, kit, card),
   };
+}
+
+// Appends `div.answer` under its 'Your answer' header to `parent`.
+function appendAnswerArea(parent: HTMLElement): HTMLElement {
+  const answerArea = element('div', 'answer');
+  answerArea.append(sectionHeader('Your answer'));
+  parent.append(answerArea);
+  return answerArea;
+}
+
+// Appends the labelled reason to a choice's row; blank text draws nothing.
+function appendChoiceReason(
+  entry: HTMLElement,
+  label: string,
+  text: string,
+  markdown: MarkdownRenderer,
+) {
+  if (text.trim() !== '') {
+    entry.append(buildChoiceReason(label, text, markdown));
+  }
+}
+
+// The finding's answer area: one `section.choice-group` per group of
+// choiceGroupsOf, each choice and bare header picking its entry number. Its
+// updater marks the picked entry and locks every group while the finding is
+// not applicable.
+function buildChoiceGroups(
+  parent: HTMLElement,
+  reasons: ReasonsMode,
+  input: CardInputs['finding'],
+  item: AnswerableItem,
+  kit: Kit,
+  card: CardContext,
+): HTMLElement {
+  const answerArea = appendAnswerArea(parent);
+  const sections: HTMLElement[] = [];
+  const picks: DrawnPick[] = [];
+  for (const group of choiceGroupsOf(input)) {
+    const section = element('section', 'choice-group');
+    section.dataset.action = group.action;
+    answerArea.append(section);
+    sections.push(section);
+    if (group.number === null) {
+      picks.push(...appendGroupChoices(section, group, reasons, kit, card));
+    } else {
+      picks.push(appendGroupPick(section, group, group.number, kit, card));
+    }
+  }
+  card.updaters.push((current) => {
+    const picked = pickNumber(current, item);
+    for (const pick of picks) {
+      pick.element.classList.toggle('is-selected', pick.number === picked);
+    }
+    const isLocked = itemAnswer(current, item).notApplicable;
+    for (const section of sections) {
+      section.classList.toggle('is-locked', isLocked);
+    }
+  });
+  return answerArea;
+}
+
+// A group with choices: the action's word as a section header, its reason,
+// then its choices under their entry numbers, each with its reason as
+// `reasons` shows it.
+function appendGroupChoices(
+  section: HTMLElement,
+  group: ChoiceGroup,
+  reasons: ReasonsMode,
+  kit: Kit,
+  card: CardContext,
+): DrawnPick[] {
+  section.append(sectionHeader(group.label));
+  appendGroupReason(section, group.reason, card.deps.markdown);
+  const list = element('ol', 'choices');
+  section.append(list);
+  const recommended = group.choices.find((choice) => choice.isRecommended);
+  const { entries, updateKeys } = buildChoiceList(
+    list,
+    group.choices,
+    recommended?.number ?? null,
+    (number) => kit.run({ type: 'choose', number }),
+    card.deps,
+  );
+  card.updaters.push(updateKeys);
+  return group.choices.map((choice, i) => {
+    const isReasonShown =
+      reasons === 'all' || (reasons === 'recommended' && choice.isRecommended);
+    if (isReasonShown) {
+      appendChoiceReason(entries[i], 'Why', choice.reason, card.deps.markdown);
+    }
+    return { number: choice.number, element: entries[i] };
+  });
+}
+
+// A group with no choices: one pick reading as the action's word and its
+// entry number in parentheses, tagged when recommended, with the keys of its
+// number; then the group's reason.
+function appendGroupPick(
+  section: HTMLElement,
+  group: ChoiceGroup,
+  number: number,
+  kit: Kit,
+  card: CardContext,
+): DrawnPick {
+  const head = element('div', 'choice-group-head');
+  const pick = button('choice-pick choice-group-pick', '', () =>
+    kit.run({ type: 'choose', number }),
+  );
+  pick.append(
+    group.label,
+    ' ',
+    element('span', 'choice-number', `(${number})`),
+  );
+  if (group.isRecommended) {
+    pick.classList.add('is-recommended');
+    pick.append(tagPart('Recommended', 'accent'));
+  }
+  const command = numberedCommand('choose', number);
+  card.updaters.push(
+    appendKeyHint(
+      pick,
+      () => (command === null ? null : card.deps.keysFor(command)),
+      card.deps.platform,
+    ),
+  );
+  head.append(pick);
+  section.append(head);
+  appendGroupReason(section, group.reason, card.deps.markdown);
+  return { number, element: pick };
+}
+
+// The action's reason as block markdown under its header; nothing for null.
+function appendGroupReason(
+  section: HTMLElement,
+  reason: string | null,
+  markdown: MarkdownRenderer,
+) {
+  if (reason !== null) {
+    section.append(
+      markdownElement('div', 'choice-group-reason md', markdown.block(reason)),
+    );
+  }
 }
 
 // Shows a toggle or pick as on or off.
@@ -510,7 +712,7 @@ function showPressed(control: HTMLElement, isPressed: boolean) {
 
 // The verdict under the finding and proof: its origin and severity tags, the
 // impact, and the Accept button, which focuses the finding and picks the
-// recommended entry, which the choice list tags when it is a choice.
+// recommended entry, the one the choice groups tag.
 function buildVerdict(
   parent: HTMLElement,
   input: CardInputs['finding'],
@@ -547,28 +749,4 @@ function buildVerdict(
   );
   parent.append(block);
   return block;
-}
-
-// The number of the finding card's entry `{ choice, action }`, 0 when the card
-// has no such entry.
-function findingEntryNumberOf(
-  input: CardInputs['finding'],
-  choice: number,
-  action: FindingAction,
-): number {
-  const entry = input.entries.find(
-    (each) => each.choice === choice && each.action === action,
-  );
-  return entry?.number ?? 0;
-}
-
-// The number of the finding card's recommended entry, recommendAction with
-// recommend; null when the card has no such entry.
-function recommendedEntryNumber(input: CardInputs['finding']): number | null {
-  const number = findingEntryNumberOf(
-    input,
-    input.recommend,
-    input.recommendAction,
-  );
-  return number === 0 ? null : number;
 }

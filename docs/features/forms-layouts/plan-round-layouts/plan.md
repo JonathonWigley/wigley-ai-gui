@@ -178,11 +178,11 @@ depends on; `npm run lint` checks it. No new plugin, adapter or layer.
 - [x] [Page loader and layout resolver](03-loader-and-resolver.md) — after 01, 02
 
 ### Wave 4
-- [ ] [Finding answer model on the page](04-finding-answer-model.md) — after 02, 03
+- [x] [Finding answer model on the page](04-finding-answer-model.md) — after 02, 03
 
 ### Wave 5
 - [ ] [Layout contract: panes, grouped choices, default layout](05-layout-contract-and-default.md) — after 03, 04
-- [ ] [Marketplace contract and skills](06-marketplace-contract-and-skills.md) — after 02, 04
+- [x] [Marketplace contract and skills](06-marketplace-contract-and-skills.md) — after 02, 04
 
 ### Wave 6
 - [ ] [Forms page exports and events](07-page-exports-and-events.md) — after 05
@@ -202,7 +202,11 @@ Review base: 092ace4b241cdae4b0c66ce5933c8a1387c59c61
 - 01 · e44a22ec · diff read: every Produces signature present; typecheck passes; worker ran lint and the three test files (90 tests) green · concerns: REVIEW_STEPS <C-k> why still names the layout cycle (08 rewords); both pages drop the onSettingsChanged disposable (brief's verbatim wiring); registry's 'not reloaded' catch now covers any folder's re-listing
 - 02 · b8661bcd · diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2783 tests) green · concerns: AGENTS.md's per-kind records list lacks ROUND_ITEM_LISTS (doc re-read 09); page test-rounds decision()/nit() fixtures no longer parse (04); holdsRecommendedPick wrong while recommend is null (04); selftest fixture finding 3 breaks recommend rule (08, planned)
 - 03 · d6537cad · diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2803 tests) green · concerns: forms page calls refresh() on every store dispatch, keystrokes included (cheap); layout.d.ts comments are read by layout authors (doc wording check); feature design docs may still describe the single-layout loader (09); DOM paths have no unit tests (08, 10 live checks)
+- 04 · 731a30c3 · diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2782 tests) green; Done-when grep empty · concerns: forms.css keeps dead .choices.is-dimmed, .finding-actions and .action-picks rules (05 restyles; review); selftest still presses f/u/s until 08; test builder decision() recommends a pick that is no entry
+- 06 · f402c1eb (marketplace) · diff read; retro suite 162 tests OK; check_manifests passes (worker); forms Python suite's 12 relay/nvm failures pre-exist on this machine, fingerprint test passes · concerns: README now states the app's at-least-one fix_now choice rule, which the plan never named; nit plain-label test's claim moved to no-pick since no valid pick reaches the fallback; other marketplace suites fail identically at HEAD on Windows/Git Bash
 ### Contract changes
+- completeFindingPick(finding: Finding, …): Finding → PickableFinding (Pick<Finding, 'origin' | 'choices'>) · why: rewritten on findingEntries, which needs only origin and choices · consumers: 02's main/round.ts (unchanged call) · group 04
+- form-state.ts: new export pickNumber(round: RoundState, item: AnswerableItem): number — a question's choice or a finding's entry number · why: one source for the log line, ReviewRow.entry and the kit's selected state · consumers: 05, 07 · group 04
 ### Rulings
 - a layout first listed by a change report starts at revision 1; each later report adds 1, removal included — matches the plan's never-reset rule — a page could reload once more than needed · group 01 · group 01
 - showLayouts falls back to the set's builtIn entry and throws if the set has none — only reachable if the registry breaks its contract — a broken registry stops the page drawing · group 01 · group 01
@@ -210,5 +214,6 @@ Review base: 092ace4b241cdae4b0c66ce5933c8a1387c59c61
 - an explicit recommend: null counts as present, not absent — the wire rule says leave it out — a null-sending agent gets a type error rather than the absent path · group 02 · group 02
 - form-state.ts's private ROUND_ITEMS exported for the resolver rather than copied — widen-don't-copy — one file outside 03's Files list · group 03 · group 03
 - showLayouts' queues-nothing check also compares the listed setting name, so a setting that moves from a listed layout to a missing one while a round still uses the old one still reloads — the plan's check missed that case — none · group 03 · group 03
+- README Layouts sub-part placed before Outcomes — nearest the ask_round contract — none · group 06 · group 06
 ### Review rounds
 ### Test gate

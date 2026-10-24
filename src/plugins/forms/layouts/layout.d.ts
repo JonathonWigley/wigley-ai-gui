@@ -47,9 +47,11 @@ export interface FindingCard {
   // Every entry in card order: the actions the origin offers in `actions` order, each with its choices, or its header
   // alone when it has none.
   entries: FindingCardEntry[];
-  // The recommended choice's 1-based position in `choices`; 0 when the recommendation is recommendAction's header.
-  recommend: number;
+  // The recommended choice's 1-based position in `choices`; null when the recommendation is recommendAction's header.
+  recommend: number | null;
   recommendAction: FindingAction;
+  // Why the round recommends a deferral action, by action; a round carries one only for the action it recommends.
+  actionReasons: { follow_up?: string; leave_it?: string };
   // The actions the origin offers, in the card's words.
   actions: { action: FindingAction; label: string }[];
   round: RoundInfo;
@@ -107,7 +109,8 @@ export interface HeadKit {
   // rebind; draw a hint with `keyHint` for one that follows the keymap.
   keys(command: string): string | null;
   // `span` (with `className`) holding the hint of the keys `keys` reads for `command`, empty while unbound. The hint
-  // follows keymap changes: a card's redraws on each card update, and the head is drawn again after each change.
+  // follows keymap changes: a card's or pane's redraws on each of its updates, and the head is drawn again after each
+  // change.
   keyHint(
     parent: HTMLElement,
     command: string,
@@ -143,21 +146,33 @@ export interface Kit extends HeadKit {
   run(action: LayoutAction): void;
 }
 export interface AnswerKit extends Kit {
-  // `div.answer` with its 'Your answer' label and `ol.choices`; returns the `div.answer`, which `answerControls` may be
-  // appended to. 'recommended': the recommended choice's reason under it (a question's rationale as 'Why
-  // recommended'; a finding's choice reason as 'Why'). 'all': every choice's reason as 'Why'; on a question the same
-  // as 'recommended'. A blank reason draws nothing. On a finding card each choice shows its entry's number
-  // (`FindingCardEntry.number`), and an action header draws no control.
-  choiceList(
-    parent: HTMLElement,
-    reasons: 'recommended' | 'all' | 'none',
-  ): HTMLElement;
   // The Notes box, the Not applicable and Don't ask toggles, and the reason box, appended to `parent` in that order;
   // returns the toggles row (`div.toggles`).
   answerControls(parent: HTMLElement): HTMLElement;
 }
+export interface QuestionKit extends AnswerKit {
+  // `div.answer` with its 'Your answer' label and `ol.choices`; returns the `div.answer`, which `answerControls` may be
+  // appended to. 'recommended' and 'all': the rationale as 'Why recommended' under the recommended choice; 'none': no
+  // reason. A blank rationale draws nothing.
+  choiceList(
+    parent: HTMLElement,
+    reasons: 'recommended' | 'all' | 'none',
+  ): HTMLElement;
+}
 export interface FindingKit extends AnswerKit {
+  // The origin and severity tags, the impact, and the Accept button, which picks the recommended entry.
   verdict(parent: HTMLElement): HTMLElement;
+  // `div.answer` with its 'Your answer' label, then one `section.choice-group` (`data-action`) per run of entries of
+  // one action, in `entries` order; returns the `div.answer`, which `answerControls` may be appended to. A group with
+  // choices draws the action's word as a section header over `ol.choices`, each choice under its entry number; a
+  // group with no choices draws one pick of its own, the action's word with its number in parentheses, as
+  // `Follow-up (3)`. An action's `actionReasons` text sits under its header. 'all': every choice's reason as 'Why';
+  // 'recommended': the recommended choice's only; 'none': no choice reason. A blank reason draws nothing. The
+  // recommended pick, a choice or a header, is tagged Recommended.
+  choiceGroups(
+    parent: HTMLElement,
+    reasons: 'recommended' | 'all' | 'none',
+  ): HTMLElement;
 }
 
 // `element` is the card's own node, appended to `parent` before the card mounts any text box; the app shows, hides and
@@ -174,23 +189,88 @@ export interface LayoutCards {
   question(
     parent: HTMLElement,
     input: QuestionCard,
-    kit: AnswerKit,
+    kit: QuestionKit,
   ): LayoutCard;
   finding(parent: HTMLElement, input: FindingCard, kit: FindingKit): LayoutCard;
   notice(parent: HTMLElement, input: NoticeCard, kit: Kit): LayoutCard;
 }
 
+// One item as the rail lists it. `position` is its 0-based place in the rail, which `RailKit.entry` takes; `label` is
+// its rail number, as `F1` or `2`.
+export interface RailEntryInput {
+  position: number;
+  kind: 'question' | 'finding' | 'notice';
+  label: string;
+  title: string;
+}
+export interface RailInput {
+  round: RoundInfo;
+  items: RailEntryInput[];
+}
+// One question or finding as the review lists it. `row` is its 0-based place in the review, which `ReviewKit.row`
+// takes.
+export interface ReviewRowInput {
+  row: number;
+  kind: 'question' | 'finding';
+  label: string;
+  title: string;
+}
+export interface ReviewInput {
+  round: RoundInfo;
+  rows: ReviewRowInput[];
+}
+
+// `element` is the pane's own node, appended to `parent` before the pane mounts any text box. The app shows and hides
+// that node and sets `data-layout="<name>"` on it, `<name>` being the layout that drew it.
+export interface LayoutPane {
+  element: HTMLElement;
+}
+
+// The rail's parts, each keeping itself up to date while the round shows.
+export interface RailKit extends HeadKit {
+  // `li.rail-entry` for the item at rail `position`: a list row leading with the item's status dot and rail number,
+  // its title as label and tooltip. It carries `data-status`, marks the focused item `is-selected` and an untouched
+  // item `is-flagged` while the review or the cancel prompt shows, and a click jumps to its item. The app scrolls the
+  // focused item's entry into view; a rail drawn without entries scrolls nothing.
+  entry(parent: HTMLElement, position: number): HTMLElement;
+}
+
+// The review's parts, each keeping itself up to date while the review shows.
+export interface ReviewKit extends HeadKit {
+  // `li.review-row` for review row `row`: the item's label and title, then its pick (action word, entry number and
+  // choice text, the Recommended tag) or its status, the jump keys on the cursor row, and the Notes and Don't ask
+  // lines. A click jumps to its item. The app scrolls the cursor row into view.
+  row(parent: HTMLElement, row: number): HTMLElement;
+  // `p.round-progress`: how many items are answered and how many not applicable.
+  progress(parent: HTMLElement): HTMLElement;
+  // `p.review-summary`: the progress, and how many items are sent untouched.
+  summary(parent: HTMLElement): HTMLElement;
+  // The round note's field with its text box; returns the field. It mounts once per pane: a pane that leaves it out
+  // gets it appended at the end of its element, so the note keys always reach a box.
+  roundNote(parent: HTMLElement): HTMLElement;
+  // `Send answers`, the primary button, with its keys; a click sends the round.
+  sendButton(parent: HTMLElement): HTMLButtonElement;
+  // `Cancel round`, with its keys; a click asks to cancel the round.
+  cancelButton(parent: HTMLElement): HTMLButtonElement;
+}
+
 // A layout defines only the cards and panes it changes. Each card comes from the first layout defining its kind among
 // the item's `layout`, the round's `layout`, the `forms.layout` setting and `default`; each pane the same way without
-// the item.
+// the item. A card or pane that throws, or returns no element appended to `parent`, is drawn by `default` instead.
 export interface Layout {
   cards?: Partial<LayoutCards>;
   // Drawn above the cards in the forms view, once per round and again after each keymap change, into a slot carrying
   // `data-layout="<name>"`.
   head?(parent: HTMLElement, round: RoundInfo, kit: HeadKit): void;
+  // The rail beside the cards, built once per round.
+  rail?(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
+  // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round.
+  review?(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
 }
 
-// The built-in `default` layout, which defines every card.
+// The built-in `default` layout, which defines every card and pane but the head.
 export interface CompleteLayout extends Layout {
   cards: LayoutCards;
+  rail(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
+  review(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
 }

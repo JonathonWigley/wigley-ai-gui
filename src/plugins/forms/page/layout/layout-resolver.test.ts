@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Round } from '../../contract';
-import type { Layout, LayoutCard } from '../../layouts/layout';
+import type { Layout, LayoutCard, LayoutPane } from '../../layouts/layout';
 import { finding, notice, question } from '../test-rounds';
 import {
   itemLayout,
@@ -12,6 +12,7 @@ import {
 } from './layout-resolver';
 
 const card = (): LayoutCard => ({ element: {} as HTMLElement });
+const pane = (): LayoutPane => ({ element: {} as HTMLElement });
 
 function allCards(): Layout {
   return { cards: { question: card, finding: card, notice: card } };
@@ -86,19 +87,21 @@ describe('pickLayout', () => {
     );
   });
 
-  it('pickLayout_RailAndReview_PickDefault', () => {
-    const mine: Layout = { ...allCards(), head: () => undefined };
+  it('pickLayout_Rail_PicksFirstDefiningIt', () => {
+    const theirs: Layout = { rail: pane };
     const loaded = new Map([
-      ['mine', mine],
+      ['mine', allCards()],
+      ['theirs', theirs],
       ['default', allCards()],
     ]);
 
-    expect(pickLayout('rail', ['mine', 'default'], loaded).name).toBe(
-      'default',
-    );
-    expect(pickLayout('review', ['mine', 'default'], loaded).name).toBe(
-      'default',
-    );
+    expect(pickLayout('rail', ['mine', 'theirs', 'default'], loaded)).toEqual({
+      name: 'theirs',
+      layout: theirs,
+    });
+    expect(
+      pickLayout('review', ['mine', 'theirs', 'default'], loaded).name,
+    ).toBe('default');
   });
 
   it('pickLayout_DefaultNotLoaded_Throws', () => {
@@ -156,6 +159,19 @@ describe('pickRoundLayouts', () => {
     expect(picks.cards.map((pick) => pick.name)).toEqual(['u', 'f', 'u']);
     expect(picks.cards[1].layout).toBe(f);
     expect(picks.panes.head).toEqual({ name: 'u', layout: u });
+  });
+
+  it('pickRoundLayouts_PanesSkipTheItemLayout', () => {
+    const loaded = new Map<string, Layout>([
+      ['f', { ...allCards(), review: pane }],
+      ['default', allCards()],
+    ]);
+    const named = round({ findings: [finding('F1', { layout: 'f' })] });
+
+    const picks = pickRoundLayouts(named, 'default', loaded);
+
+    expect(picks.cards[0].name).toBe('f');
+    expect(picks.panes.review.name).toBe('default');
   });
 });
 

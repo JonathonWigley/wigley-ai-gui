@@ -17,6 +17,7 @@ import {
   railPickAction,
   reviewRows,
   reviewRowsChanged,
+  reviewSummaryText,
   roundSaveLabel,
   roundSaveState,
   saveLabel,
@@ -370,6 +371,30 @@ describe('progressText', () => {
     expect(
       progressText({ answered: 1, notApplicable: 1, untouched: 1, total: 3 }),
     ).toBe('1 of 3 answered, 1 not applicable');
+  });
+});
+
+describe('reviewSummaryText', () => {
+  it('reviewSummaryText_WithUntouched_AddsTheSentence', () => {
+    expect(
+      reviewSummaryText({
+        answered: 1,
+        notApplicable: 0,
+        untouched: 2,
+        total: 3,
+      }),
+    ).toBe('1 of 3 answered. 2 not answered; they are sent as untouched.');
+  });
+
+  it('reviewSummaryText_NoneUntouched_EndsAtTheCount', () => {
+    expect(
+      reviewSummaryText({
+        answered: 3,
+        notApplicable: 0,
+        untouched: 0,
+        total: 3,
+      }),
+    ).toBe('3 of 3 answered.');
   });
 });
 

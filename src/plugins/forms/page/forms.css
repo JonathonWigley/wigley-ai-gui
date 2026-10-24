@@ -204,11 +204,6 @@
   pointer-events: none;
 }
 
-/* A finding left alone keeps its solution, shown dimmed. */
-:where(.form-tab) .choices.is-dimmed {
-  opacity: 0.55;
-}
-
 /* The reason lines up under its choice's text: past the number, the gap and
    the pick's padding. */
 :where(.form-tab) .choice-reason {
@@ -232,22 +227,37 @@
   display: inline;
 }
 
-/* A finding's Action row, under its solutions. */
-:where(.form-tab) .finding-actions {
+/* A finding's answer: one group per action, its choices under the action's
+   header, or the header alone as the pick when the action has none. */
+:where(.form-tab) .choice-group + .choice-group {
   margin-top: var(--wg-space-3);
 }
 
-:where(.form-tab) .action-picks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--wg-space-2);
+:where(.form-tab) .choice-group-reason {
+  color: var(--wg-fg-secondary);
+  margin-left: calc(var(--wg-icon-button-sm) + var(--wg-space-2) * 2);
 }
 
-:where(.form-tab) .action-picks.is-locked {
+:where(.form-tab) .choice-group-pick.is-selected {
+  background: var(--wg-list-active-background);
+}
+
+:where(.form-tab) .choice-group-pick.is-recommended .choice-number {
+  border-color: var(--wg-accent);
+  color: var(--wg-accent);
+}
+
+:where(.form-tab) .choice-group-pick.is-selected .choice-number {
+  background: var(--wg-accent);
+  border-color: var(--wg-accent);
+  color: var(--wg-fg-on-accent);
+}
+
+:where(.form-tab) .choice-group.is-locked {
   opacity: 0.55;
 }
 
-:where(.form-tab) .action-picks.is-locked .ui-button {
+:where(.form-tab) .choice-group.is-locked .choice-pick {
   pointer-events: none;
 }
 

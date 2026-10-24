@@ -93,6 +93,23 @@ describe('cardInput', () => {
     ]);
   });
 
+  it('findingCardInput_ActionReasonsAndNullRecommend', () => {
+    const { round } = presentedRound('r1', {
+      findings: [
+        finding('Delta', {
+          recommend: null,
+          recommend_action: 'follow_up',
+          actionReasons: { follow_up: 'Needs a spike first' },
+        }),
+      ],
+    });
+
+    const input = findingFormat.cardInput(round, 1);
+
+    expect(input.actionReasons).toEqual({ follow_up: 'Needs a spike first' });
+    expect(input.recommend).toBeNull();
+  });
+
   it('noticeCardInput_CarriesBadge', () => {
     const { round } = presentedRound('r1', {
       notices: [notice('Zeta'), { ...notice('Eta'), badge: 'Dispatched' }],

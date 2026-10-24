@@ -1,6 +1,6 @@
 # 06 — Marketplace contract and skills
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 5 · Depends on: 02, 04
 Plan: [plan.md](plan.md)
@@ -230,3 +230,5 @@ Commit:    one marketplace commit: `git add` the seven paths by name (never `-A`
            grouped pick". No push; the reply says the commit waits on main for the user's push
 
 ## Proof
+
+Commit f402c1eb (marketplace) · proof: diff read; retro suite 162 tests OK; check_manifests passes (worker); forms Python suite's 12 relay/nvm failures pre-exist on this machine, fingerprint test passes · concerns: README now states the app's at-least-one fix_now choice rule, which the plan never named; nit plain-label test's claim moved to no-pick since no valid pick reaches the fallback; other marketplace suites fail identically at HEAD on Windows/Git Bash

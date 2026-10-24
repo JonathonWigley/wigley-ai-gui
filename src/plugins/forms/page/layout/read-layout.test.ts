@@ -62,6 +62,28 @@ describe('readLayout', () => {
     );
   });
 
+  it('readLayout_OnlyRail_ReturnsIt', () => {
+    const layout = { rail: () => ({ element: {} as HTMLElement }) };
+
+    expect(readLayout({ default: layout }, 'mine')).toBe(layout);
+  });
+
+  it('readLayout_RailNotFunction_Throws', () => {
+    const module = { default: { rail: 'left' } };
+
+    expect(() => readLayout(module, 'mine')).toThrow(
+      'layout mine: rail is not a function',
+    );
+  });
+
+  it('readLayout_ReviewNotFunction_Throws', () => {
+    const module = { default: { review: {} } };
+
+    expect(() => readLayout(module, 'mine')).toThrow(
+      'layout mine: review is not a function',
+    );
+  });
+
   it('readLayout_ValidModule_ReturnsItsDefault', () => {
     const layout = {
       cards: { question: card, finding: card, notice: card },

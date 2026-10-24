@@ -1,6 +1,6 @@
 # 05 — Layout contract: panes, grouped choices, default layout
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 03, 04
 Plan: [plan.md](plan.md)

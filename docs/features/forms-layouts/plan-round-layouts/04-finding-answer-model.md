@@ -1,6 +1,6 @@
 # 04 — Finding answer model on the page
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 03
 Plan: [plan.md](plan.md)
@@ -174,3 +174,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 731a30c3 · proof: diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2782 tests) green; Done-when grep empty · concerns: forms.css keeps dead .choices.is-dimmed, .finding-actions and .action-picks rules (05 restyles; review); selftest still presses f/u/s until 08; test builder decision() recommends a pick that is no entry

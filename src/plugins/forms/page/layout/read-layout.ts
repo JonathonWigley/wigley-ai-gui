@@ -1,7 +1,14 @@
 import type { Layout, LayoutCards } from '../../layouts/layout';
 
 // Every key a layout may define, and every key its `cards` may.
-const LAYOUT_PARTS: Record<keyof Layout, true> = { cards: true, head: true };
+const LAYOUT_PARTS: Record<keyof Layout, true> = {
+  cards: true,
+  head: true,
+  rail: true,
+  review: true,
+};
+// The parts a layout defines as functions.
+const FUNCTION_PARTS = ['head', 'rail', 'review'] as const;
 const CARD_KINDS: Record<keyof LayoutCards, true> = {
   question: true,
   finding: true,
@@ -26,10 +33,12 @@ export function readLayout(module: unknown, name: string): Layout {
   if (layout.cards !== undefined) {
     requireCards(layout.cards, name);
   }
-  const hasValidHead =
-    layout.head === undefined || typeof layout.head === 'function';
-  if (!hasValidHead) {
-    throw new Error(`layout ${name}: head is not a function`);
+  for (const part of FUNCTION_PARTS) {
+    const isValidPart =
+      layout[part] === undefined || typeof layout[part] === 'function';
+    if (!isValidPart) {
+      throw new Error(`layout ${name}: ${part} is not a function`);
+    }
   }
   return layout as unknown as Layout;
 }

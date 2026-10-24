@@ -147,6 +147,16 @@ export function progressText(progress: Progress): string {
     : answered;
 }
 
+// The review's summary line: the progress, and how many items are sent
+// untouched when any are.
+export function reviewSummaryText(counts: Progress): string {
+  const untouched =
+    counts.untouched > 0
+      ? ` ${counts.untouched} not answered; they are sent as untouched.`
+      : '';
+  return `${progressText(counts)}.${untouched}`;
+}
+
 // `error` is the last failed save's message, shown while the round is unsaved.
 export function saveLabel(state: SaveState, error: string | null): string {
   const hasError = state === 'unsaved' && error !== null;

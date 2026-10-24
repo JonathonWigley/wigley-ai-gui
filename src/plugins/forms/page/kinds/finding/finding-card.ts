@@ -51,8 +51,9 @@ export const findingFormat: AnswerableFormat<CardInputs['finding']> = {
         number: i + 1,
         ...entry,
       })),
-      recommend: finding.recommend ?? 0,
+      recommend: finding.recommend,
       recommendAction: finding.recommend_action,
+      actionReasons: { ...finding.actionReasons },
       actions: FINDING_ACTIONS.flatMap((action: FindingAction) => {
         const label = actionLabel(finding.origin, action);
         return label === null ? [] : [{ action, label }];

@@ -7,54 +7,38 @@ import type { UiState } from '../../../contracts/ui-state';
 import { errorText } from '../../../shared/error-text';
 import { scrollContent } from '../../../shared/content-scroll';
 import type { KeysPageExports } from '../../keys/contract';
-import { type FormsCommandName, formsCommand, formsScope } from '../ids';
+import { formsCommand, formsScope } from '../ids';
 import type { Layout } from '../layouts/layout';
-import { button, element, markdownElement } from '../../../shared/page/dom';
+import { element } from '../../../shared/page/dom';
 import type { ShownLayouts } from '../../../shared/page/layout-loader';
 import { textLineHeightPx } from '../../../shared/page/text-line';
-import { textButton } from '../../../shared/page/ui/button';
-import { row as rowPart } from '../../../shared/page/ui/row';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
-import { setDotStatus, statusDot } from '../../../shared/page/ui/status-dot';
-import { tag } from '../../../shared/page/ui/tag';
 import type { EditorBoxes } from './editor-boxes';
 import {
-  answerableItems,
-  answerStatus,
   type FormsAction,
   type FormsState,
   type FormsView,
-  progress,
-  type RailItem,
   railItems,
-  railPosition,
   type RoundState,
+  type TextTarget,
 } from './form-state';
-import {
-  appendKeyHint,
-  buildField,
-  keyHint,
-  roundInfo,
-  statusLabel,
-} from './kinds/card-parts';
-import { FORMATS, itemLabel } from './kinds/formats';
+import { roundInfo } from './kinds/card-parts';
 import type { CardDeps, ItemCard } from './kinds/item-format';
 import { createHeadKit } from './layout/card-kit';
 import { buildLayoutCard } from './layout/layout-cards';
+import {
+  buildRailPane,
+  buildReviewPane,
+  type PaneDeps,
+  type RailPane,
+  type ReviewPane,
+} from './layout/layout-panes';
 import {
   type LayoutPick,
   pickRoundLayouts,
   picksEqual,
   type RoundPicks,
 } from './layout/layout-resolver';
-import {
-  pickRailItem,
-  progressText,
-  railDotStatus,
-  type ReviewRow,
-  reviewRows,
-  reviewRowsChanged,
-} from './view-model';
 
 // `getState` reads the forms state, so a rail click logs only a jump that
 // moved. `platform` is the OS key hints are drawn for; `uiState` keeps the
@@ -86,39 +70,28 @@ export interface RoundView {
 
 // The children of a round view one build makes.
 interface RoundParts {
-  items: RailItem[];
   main: HTMLElement;
-  head: { element: HTMLElement; update(round: RoundState): void };
   layoutHead: HTMLElement | null;
   // Draws the layout's head again in its slot; nothing for a layout with no
   // head.
   redrawLayoutHead(): void;
-  railEntries: RailEntry[];
+  rail: RailPane;
   itemsPane: HTMLElement;
   itemCards: ItemCard[];
-  review: ReviewPart;
+  review: ReviewPane;
 }
 
-// `update` rebuilds the rows only when reviewRowsChanged says they differ
-// from the last draw, and scrolls the cursor row into view on a rebuild and
-// when `isNewlyShown`; `forgetRows` makes the next `update` rebuild them.
-interface ReviewPart {
-  element: HTMLElement;
-  update(round: RoundState, isNewlyShown: boolean): void;
-  forgetRows(): void;
-}
-
-// One open round's DOM, built with its editors: a split with the rail in its
-// start pane, and the layout's head, every item's card and the review with
-// the round note in its end pane, each card and the head drawn by the layout
-// `pickRoundLayouts` picks for it from `shown`. A render only updates it, the
-// rail taking the latest dragged width of any round; new layouts that change
-// a pick rebuild both panes, keeping the rail's dragged width. A keymap change
-// draws the layout's head again, shown or hidden, since showing the view only
-// updates it, and has the review rebuild its rows at its next update; while
-// the view shows, the change also updates it with the round it last showed,
-// so every key hint reads the new keys. `attach` places the
-// root in the page once, before any editor mounts.
+// One open round's DOM, built with its editors: a split with the rail pane in
+// its start pane, and the layout's head, every item's card and the review
+// pane, which holds the round note, in its end pane, each card and pane drawn
+// by the layout `pickRoundLayouts` picks for it from `shown`. A render only
+// updates it, the rail taking the latest dragged width of any round; new
+// layouts that change a pick rebuild both panes, keeping the rail's dragged
+// width. A keymap change draws the layout's head again, shown or hidden, since
+// showing the view only updates it, and has the review redraw its rows at its
+// next update; while the view shows, the change also updates it with the
+// round it last showed, so every key hint reads the new keys. `attach` places
+// the root in the page once, before any editor mounts.
 export function createRoundView(
   attach: (root: HTMLElement) => void,
   round: RoundState,
@@ -155,15 +128,10 @@ export function createRoundView(
       shownRound = current;
       const isForms = viewName === 'forms';
       const isReview = viewName === 'review' || viewName === 'confirm';
-      const { items } = parts;
-      parts.head.element.hidden = !isReview;
-      parts.head.update(current);
       if (parts.layoutHead !== null) {
         parts.layoutHead.hidden = !isForms;
       }
-      parts.railEntries.forEach((entry, position) => {
-        updateRailEntry(entry, current, items[position], position, isReview);
-      });
+      parts.rail.update(current, viewName);
       parts.itemsPane.hidden = !isForms;
       parts.itemCards.forEach((card, position) => {
         const isShown = isForms && position === current.focus;
@@ -180,9 +148,7 @@ export function createRoundView(
       if (current.focus !== shownFocus) {
         shownFocus = current.focus;
         parts.main.scrollTop = 0;
-        parts.railEntries[current.focus]?.element.scrollIntoView({
-          block: 'nearest',
-        });
+        parts.rail.showEntry(current.focus);
       }
     },
     setLayouts(nextShown, current) {
@@ -224,11 +190,11 @@ export function createRoundView(
   return view;
 }
 
-// Builds the rail into the split's start pane and the round's main column
-// into its end pane: the review's head, the layout's head, the items pane of
-// cards, and the review, each card and the head drawn by its pick in `picks`.
-// `shownView` reads the view last shown, which decides
-// what a rail click does.
+// Builds the rail pane into the split's start pane and the round's main
+// column into its end pane: the layout's head, the items pane of cards, and
+// the review pane, each card and pane drawn by its pick in `picks`.
+// `shownView` reads the view last shown, which decides what a rail click
+// does.
 function buildRoundParts(
   split: Split,
   round: RoundState,
@@ -237,14 +203,25 @@ function buildRoundParts(
   shownView: () => FormsView,
 ): RoundParts {
   const items = railItems(round.round);
-  const rail = element('nav', 'rail');
-  rail.setAttribute('aria-label', 'Items');
-  const railList = element('ol', 'rail-list');
-  rail.append(railList);
-  split.start.append(rail);
+  const mountBox = (parent: HTMLElement, target: TextTarget, text: string) =>
+    deps.boxes.mount(parent, { roundId: round.roundId, target }, text);
+  const destroyBox = (target: TextTarget) =>
+    deps.boxes.destroyBox({ roundId: round.roundId, target });
+  const paneDeps: PaneDeps = {
+    markdown: deps.markdown,
+    platform: deps.platform,
+    log: deps.log,
+    keys: deps.keys,
+    dispatch: deps.dispatch,
+    getState: deps.getState,
+    run: deps.run,
+    mountBox,
+    destroyBox,
+    shownView,
+  };
+  const rail = buildRailPane(picks.panes.rail, split.start, round, paneDeps);
   const main = split.end;
 
-  const head = buildHead(main, round, deps.markdown);
   const keysFor = (command: CommandId) =>
     deps.keys.keysFor(command, formsScope('forms'));
   const headDeps: HeadDeps = {
@@ -257,18 +234,10 @@ function buildRoundParts(
   const layoutHead = buildLayoutHead(main, round, headPick, headDeps);
   const itemsPane = element('div', 'items');
   main.append(itemsPane);
-  const reviewRowAt = reviewRowsByRailPosition(round);
-  const railEntries = items.map((item, position) =>
-    buildRailEntry(railList, round, item, () =>
-      pickRailItem(deps, shownView(), item, position, reviewRowAt[position]),
-    ),
-  );
   const cardDeps: CardDeps = {
     markdown: deps.markdown,
-    mountBox: (parent, target, text) =>
-      deps.boxes.mount(parent, { roundId: round.roundId, target }, text),
-    destroyBox: (target) =>
-      deps.boxes.destroyBox({ roundId: round.roundId, target }),
+    mountBox,
+    destroyBox,
     dispatch: deps.dispatch,
     toggleDontAsk: () => deps.run(formsCommand('toggleDontAsk')),
     keysFor,
@@ -285,18 +254,16 @@ function buildRoundParts(
       cardDeps,
     ),
   );
-  const review = buildReview(main, round, deps);
+  const review = buildReviewPane(picks.panes.review, main, round, paneDeps);
   return {
-    items,
     main,
-    head,
     layoutHead,
     redrawLayoutHead() {
       if (layoutHead !== null) {
         drawLayoutHead(layoutHead, round, headPick, headDeps);
       }
     },
-    railEntries,
+    rail,
     itemsPane,
     itemCards,
     review,
@@ -339,237 +306,4 @@ function drawLayoutHead(
     slot.replaceChildren();
     deps.log('forms', `layout ${pick.name} head failed: ${errorText(error)}`);
   }
-}
-
-function buildHead(
-  parent: HTMLElement,
-  round: RoundState,
-  markdown: MarkdownRenderer,
-): { element: HTMLElement; update(round: RoundState): void } {
-  const head = element('header', 'round-head');
-  head.append(element('h1', 'round-heading', round.round.heading));
-  if (round.round.overview.trim() !== '') {
-    head.append(
-      markdownElement(
-        'div',
-        'round-overview',
-        markdown.inline(round.round.overview),
-      ),
-    );
-  }
-  const progressLine = element('p', 'round-progress');
-  head.append(progressLine);
-  parent.append(head);
-  return {
-    element: head,
-    update(current) {
-      progressLine.textContent = progressText(progress(current));
-    },
-  };
-}
-
-// Each rail position's review row; undefined at a notice, which has none.
-function reviewRowsByRailPosition(round: RoundState): (number | undefined)[] {
-  const rows: (number | undefined)[] = [];
-  answerableItems(round.round).forEach((item, row) => {
-    rows[railPosition(round.round, item)] = row;
-  });
-  return rows;
-}
-
-// An item's row in the rail, and the status dot it leads with.
-interface RailEntry {
-  element: HTMLElement;
-  dot: HTMLElement;
-}
-
-// The item's number and title as a list row, its title also the tooltip for
-// the ellipsis.
-function buildRailEntry(
-  parent: HTMLElement,
-  round: RoundState,
-  item: RailItem,
-  onClick: () => void,
-): RailEntry {
-  const title = FORMATS[item.kind].title(round.round, item.index);
-  const dot = statusDot('idle');
-  const leading = element('span', 'rail-lead');
-  leading.append(dot, element('span', 'rail-number', itemLabel(item)));
-  const entry = rowPart({
-    density: 'list',
-    tag: 'li',
-    label: title,
-    leading,
-    onClick,
-  });
-  entry.classList.add('rail-entry');
-  entry.title = title;
-  parent.append(entry);
-  return { element: entry, dot };
-}
-
-// The focused item's row is selected; while the review is open, untouched
-// items are flagged in the rail.
-function updateRailEntry(
-  entry: RailEntry,
-  round: RoundState,
-  item: RailItem,
-  position: number,
-  isReview: boolean,
-) {
-  const status =
-    item.kind === 'notice'
-      ? 'notice'
-      : answerStatus(round, { kind: item.kind, index: item.index });
-  const isFlagged = isReview && status === 'untouched';
-  entry.element.dataset.status = status;
-  entry.element.classList.toggle('is-selected', position === round.focus);
-  entry.element.classList.toggle('is-flagged', isFlagged);
-  setDotStatus(entry.dot, railDotStatus(status, isFlagged));
-}
-
-// The review's rows, then the round note, then Send answers and Cancel round
-// with the review's keys for them; the note shows only while the review or the
-// cancel prompt does. The summary and the buttons' keys redraw on every
-// update; the rows only when they change. The cursor row scrolls into view
-// when the rows change and each time the review is shown again.
-function buildReview(
-  parent: HTMLElement,
-  round: RoundState,
-  deps: RoundViewDeps,
-): ReviewPart {
-  let drawn: RoundState | null = null;
-  const section = element('section', 'review');
-  const summary = element('p', 'review-summary');
-  const list = element('ol', 'review-rows');
-  section.append(element('h2', 'review-title', 'Review'), summary, list);
-  parent.append(section);
-  const note = buildField(
-    section,
-    'field-note',
-    'Round note',
-    'Optional. Anything about the round as a whole.',
-  );
-  deps.boxes.mount(
-    note.box,
-    { roundId: round.roundId, target: { field: 'note' } },
-    round.note,
-  );
-  const actions = element('div', 'review-actions');
-  const submit = textButton(
-    'Send answers',
-    () => deps.run(formsCommand('submit')),
-    { variant: 'primary' },
-  );
-  const redrawSubmitKeys = appendKeyHint(
-    submit,
-    () => reviewKeysFor(deps, 'submit'),
-    deps.platform,
-  );
-  const cancel = textButton('Cancel round', () =>
-    deps.run(formsCommand('askCancel')),
-  );
-  const redrawCancelKeys = appendKeyHint(
-    cancel,
-    () => reviewKeysFor(deps, 'askCancel'),
-    deps.platform,
-  );
-  actions.append(submit, cancel);
-  section.append(actions);
-  return {
-    element: section,
-    update(current, isNewlyShown) {
-      const counts = progress(current);
-      const untouched =
-        counts.untouched > 0
-          ? ` ${counts.untouched} not answered; they are sent as untouched.`
-          : '';
-      summary.textContent = `${progressText(counts)}.${untouched}`;
-      redrawSubmitKeys();
-      redrawCancelKeys();
-      const isRowsChanged = reviewRowsChanged(drawn, current);
-      if (isRowsChanged) {
-        drawn = current;
-        list.replaceChildren(
-          ...reviewRows(current).map((row) => buildReviewRow(row, deps)),
-        );
-      }
-      if (isRowsChanged || isNewlyShown) {
-        list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
-      }
-    },
-    forgetRows() {
-      drawn = null;
-    },
-  };
-}
-
-// The review scope's keys for a forms command; null when unbound there.
-function reviewKeysFor(
-  deps: RoundViewDeps,
-  command: FormsCommandName,
-): string | null {
-  return deps.keys.keysFor(formsCommand(command), formsScope('review'));
-}
-
-// A finding's pick reads as its action, then its choice under the number the
-// card gives it; a header pick reads as its action alone, and a row with no
-// pick as its status. The cursor's row shows the keys that jump to its item, as clicking it does.
-function buildReviewRow(row: ReviewRow, deps: RoundViewDeps): HTMLLIElement {
-  const entry = element('li', 'review-row');
-  entry.dataset.status = row.status;
-  entry.classList.toggle('is-cursor', row.isCursor);
-  const pick = button('review-pick', '', () =>
-    deps.dispatch({ type: 'reviewJump', row: row.row }),
-  );
-  const answer = element('span', 'review-answer');
-  if (row.actionLabel !== '') {
-    answer.append(element('span', 'review-action', row.actionLabel));
-    if (row.choice > 0) {
-      answer.append(element('span', 'review-separator', '—'));
-    }
-  }
-  if (row.choice > 0) {
-    answer.append(
-      element('span', 'choice-number', String(row.entry)),
-      markdownElement(
-        'span',
-        'choice-text',
-        deps.markdown.inline(row.choiceText),
-      ),
-    );
-  }
-  if (row.recommended) {
-    answer.append(tag('Recommended', 'accent'));
-  }
-  const showsPick = row.actionLabel !== '' || row.choice > 0;
-  if (!showsPick) {
-    answer.textContent = statusLabel(row.status);
-  }
-  pick.append(
-    element('span', 'review-number', row.label),
-    element('span', 'review-question', row.title),
-    answer,
-  );
-  const hint = row.isCursor
-    ? keyHint(reviewKeysFor(deps, 'reviewJump'), deps.platform)
-    : null;
-  if (hint !== null) {
-    pick.append(hint);
-  }
-  entry.append(pick);
-  if (row.notes.trim() !== '') {
-    entry.append(element('p', 'review-detail', `Notes: ${row.notes}`));
-  }
-  if (row.dontAsk) {
-    const reason = row.dontAskReason.trim();
-    entry.append(
-      element(
-        'p',
-        'review-detail',
-        reason === '' ? "Don't ask me this" : `Don't ask me this: ${reason}`,
-      ),
-    );
-  }
-  return entry;
 }

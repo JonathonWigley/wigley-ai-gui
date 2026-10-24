@@ -1,7 +1,17 @@
 // @ts-check
 
-// The built-in forms look. Every card appends its card to `parent` first,
-// so the text boxes mount into an attached element.
+// The built-in forms look. Every card and pane appends its element to
+// `parent` first, so the text boxes mount into an attached element.
+//
+// What a user layout may leave out of a card or pane it defines, and what the
+// app does then:
+// - question and finding cards: `itemHead` (the card still carries
+//   `data-status`), `answerControls` and `textBox` (each box left unmounted is
+//   appended at the end of the card)
+// - notice card: `textBox` (the comment box is appended at the end)
+// - rail: `entry` (a rail without entries scrolls nothing into view)
+// - review: `roundNote` (appended at the end of the pane), and every other
+//   part, which then draws nothing
 
 // A notice's badge tone; a badge not listed here is neutral.
 /** @type {Record<string, import('../layout').TagTone>} */
@@ -30,7 +40,7 @@ const layout = {
       const proof = kit.el(card, 'div', 'finding-proof');
       kit.section(proof, input.words.proof, input.proof);
       kit.verdict(card);
-      const answer = kit.choiceList(card, 'all');
+      const answer = kit.choiceGroups(card, 'all');
       kit.answerControls(answer);
       return { element: card };
     },
@@ -43,6 +53,36 @@ const layout = {
       kit.textBox(card, 'comment');
       return { element: card };
     },
+  },
+  rail(parent, input, kit) {
+    const nav = kit.el(parent, 'nav', 'rail');
+    nav.setAttribute('aria-label', 'Items');
+    const list = kit.el(nav, 'ol', 'rail-list');
+    for (const item of input.items) {
+      kit.entry(list, item.position);
+    }
+    return { element: nav };
+  },
+  review(parent, input, kit) {
+    const pane = kit.el(parent, 'div', 'review-pane');
+    const head = kit.el(pane, 'header', 'round-head');
+    kit.el(head, 'h1', 'round-heading', input.round.heading);
+    if (input.round.overview.trim() !== '') {
+      kit.inlineMarkdown(head, input.round.overview, 'round-overview');
+    }
+    kit.progress(head);
+    const review = kit.el(pane, 'section', 'review');
+    kit.el(review, 'h2', 'review-title', 'Review');
+    kit.summary(review);
+    const rows = kit.el(review, 'ol', 'review-rows');
+    for (const row of input.rows) {
+      kit.row(rows, row.row);
+    }
+    kit.roundNote(review);
+    const actions = kit.el(review, 'div', 'review-actions');
+    kit.sendButton(actions);
+    kit.cancelButton(actions);
+    return { element: pane };
   },
 };
 

@@ -35,9 +35,8 @@ const PART_READS: { [P in LayoutPart]: (layout: Layout) => unknown } = {
   finding: (layout) => layout.cards?.finding,
   notice: (layout) => layout.cards?.notice,
   head: (layout) => layout.head,
-  // No layout defines a rail or a review pane, so both resolve to `default`.
-  rail: () => undefined,
-  review: () => undefined,
+  rail: (layout) => layout.rail,
+  review: (layout) => layout.review,
 };
 
 // The names to look a part up in, first to last: the item's layout, the
