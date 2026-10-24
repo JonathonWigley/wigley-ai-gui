@@ -15,7 +15,12 @@ import {
 import { errorText } from '../../shared/error-text';
 import { isJsonObject, type JsonObject } from '../../shared/json';
 import type { DriveActions } from './action-registry';
-import type { Box, ConsoleMessage, DrivenWindow } from './driven-window';
+import {
+  type Box,
+  type ConsoleMessage,
+  type DrivenWindow,
+  PageNavigatedError,
+} from './driven-window';
 import type { FrameRecorder } from './frame-recorder';
 import {
   boxOf,
@@ -405,8 +410,10 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
 // Waits for the page to be ready for keys; rejects with the page's start
 // failure, or when it is not ready in time, saying so apart when a check's
 // script was still unanswered at that point. A script run mid-reload rejects,
-// which counts as not ready yet.
+// which counts as not ready yet, the start failure read after the wait
+// included: the wait then runs again within the same time.
 async function waitForPage(window: DrivenWindow): Promise<void> {
+  const deadline = Date.now() + READY_TIMEOUT_MS;
   // A count, since a check left running past its cap overlaps the next and
   // can settle after it.
   let checksRunning = 0;
@@ -423,17 +430,28 @@ async function waitForPage(window: DrivenWindow): Promise<void> {
       checksRunning -= 1;
     }
   };
-  if (!(await waitFor(hasSettled, READY_TIMEOUT_MS))) {
-    const seconds = READY_TIMEOUT_MS / 1000;
-    throw new Error(
-      checksRunning > 0
-        ? `The page never finished loading within ${seconds} s: it stopped answering scripts run in it`
-        : `The page was not ready for keys within ${seconds} s`,
-    );
-  }
-  const startFailure = await readStartFailure(window);
-  if (startFailure !== null) {
-    throw new Error(startFailure);
+  for (;;) {
+    if (!(await waitFor(hasSettled, deadline - Date.now()))) {
+      const seconds = READY_TIMEOUT_MS / 1000;
+      throw new Error(
+        checksRunning > 0
+          ? `The page never finished loading within ${seconds} s: it stopped answering scripts run in it`
+          : `The page was not ready for keys within ${seconds} s`,
+      );
+    }
+    let startFailure: string | null;
+    try {
+      startFailure = await readStartFailure(window);
+    } catch (error) {
+      if (error instanceof PageNavigatedError) {
+        continue;
+      }
+      throw error;
+    }
+    if (startFailure !== null) {
+      throw new Error(startFailure);
+    }
+    return;
   }
 }
 

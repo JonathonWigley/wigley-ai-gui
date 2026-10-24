@@ -230,6 +230,31 @@ describe('createDriveCommands', () => {
     expect(result).toEqual({ ready: true, load: 2 });
   });
 
+  it('ready_PageNavigatesDuringTheStartFailureRead_ReturnsTheLoadAfterIt', async () => {
+    let reads = 0;
+    const { fake, commands } = setUp(
+      () => [],
+      [
+        [
+          'dataset.startFailed',
+          () => {
+            reads += 1;
+            // The first read is the command's own wait for the page.
+            if (reads === 2) {
+              fake.navigate();
+            }
+            return null;
+          },
+        ],
+      ],
+    );
+    fake.navigate();
+
+    const result = await commands.run('ready', {});
+
+    expect(result).toEqual({ ready: true, load: 2 });
+  });
+
   it('ready_PageNeverAnswers_RejectsSayingItNeverFinishedLoading', async () => {
     vi.useFakeTimers();
     const { commands } = setUp(
