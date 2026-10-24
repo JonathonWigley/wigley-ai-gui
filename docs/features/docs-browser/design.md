@@ -107,9 +107,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   that returns none; the read's message shows instead.
 - **Viewing and editing**: a doc opens rendered; `i` swaps the pane to the vim document editor at the line shown;
   `:w` saves, `:q` or Esc in normal mode returns to the rendered view (refused with unsaved edits; `:q!` drops
-  them), `:wq` both. YAML
-  frontmatter shows as a field table above the rendered body. The editor highlights markdown, JSON, TOML and YAML by
-  file extension.
+  them), `:wq` both. YAML frontmatter shows as a field table above the rendered body. The editor highlights
+  markdown, JSON, TOML and YAML by file extension.
 - **Load states**: a Claude and a Codex chip on each doc (state; reason on hover), judged for a folder the user picks
   from the index's contexts (`c`), the home folder by default. A session's Docs tab uses that session's own states.
 - **Create**: `a` new doc by kind, `A` new file by path. By kind covers instructions, rule, skill, subagent, command,
@@ -140,8 +139,9 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   Images show their alt text.
 - **Keys** (scopes `docs.tree`, `docs.doc`, `docs.conflict`, `docs.picker`, `docs.box`, `docs.confirm`): tree `j`/`k`
   move; `l` opens a doc, expands a collapsed group or steps into an expanded one; Enter opens a doc and focuses
-  it, or toggles a group, expanding or collapsing it as `l` and `h` do, and under a filter, which shows every group expanded, steps
-  into a group as `l` does; `h` collapses a group or goes to the parent; `/` filter, `a`, `A`, `r`, `d`, `R` rescan,
+  it (on the doc already shown it only focuses it, keeping an open editor), or toggles a group, expanding or
+  collapsing it as `l` and `h` do, and under a filter, which shows every group expanded, steps into a group as `l`
+  does; `h` collapses a group or goes to the parent; `/` filter, `a`, `A`, `r`, `d`, `R` rescan,
   `c` pick the load-state folder; `Alt+l` / `Alt+h` move focus between tree and doc; `Ctrl+j`/`Ctrl+k` and
   `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll the doc beside the tree.
   Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll the doc a line and `Ctrl+Shift+j`/`Ctrl+Shift+k` half a page, the

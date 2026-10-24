@@ -1,7 +1,7 @@
 import { closeCompletion } from '@codemirror/autocomplete';
 import { EditorView, minimalSetup } from 'codemirror';
 import { syntaxHighlighting } from '@codemirror/language';
-import { Compartment, EditorState } from '@codemirror/state';
+import { Compartment, EditorState, Prec } from '@codemirror/state';
 import {
   highlightActiveLine,
   highlightActiveLineGutter,
@@ -284,7 +284,8 @@ function mapScrollMotions() {
 // Scrolls the editor by `step` in `direction`. A half page in visual mode
 // runs vim's own half-page motion, which moves the cursor with the scroll;
 // every other scroll keeps the cursor where it is unless the scroll leaves it
-// out of sight, as vim's Ctrl+e and Ctrl+y do.
+// out of sight, as vim's Ctrl+e and Ctrl+y do. A motion it runs through vim
+// first drops any count the user typed, since a chord cannot continue one.
 function scrollEditor(
   view: EditorView,
   cm: VimEditor,
@@ -300,6 +301,7 @@ function scrollEditor(
       direction === 1
         ? SCROLL_MOTION_KEYS.halfPageDown
         : SCROLL_MOTION_KEYS.halfPageUp;
+    discardUnfinishedInput(cm);
     Vim.handleKey(cm, key, 'user');
   } else {
     scroller.scrollTop +=
@@ -361,6 +363,7 @@ function bringVisualHeadIntoSight(view: EditorView, cm: VimEditor) {
     return;
   }
   const scroll = view.scrollSnapshot();
+  discardUnfinishedInput(cm);
   for (const digit of String(lines)) {
     Vim.handleKey(cm, digit, 'user');
   }
@@ -515,6 +518,40 @@ function holdsUnfinishedInput(cm: VimEditor): boolean {
   return hasKeys || hasCount || hasOperator || hasRegister || expectsLiteral;
 }
 
+// Vim clears its whole input state — buffer, count, operator, register — on a
+// key no command matches, and runs nothing; Esc would run the bind on Esc in
+// normal mode. Vim's command-done then reports `[]`. A recording macro logs
+// that key, so it is sent only when vim holds unfinished input.
+function discardUnfinishedInput(cm: VimEditor) {
+  if (holdsUnfinishedInput(cm)) {
+    Vim.handleKey(cm, UNMATCHED_KEY, 'user');
+  }
+}
+
+// Esc in normal mode cancels a command vim holds unfinished — an operator, a
+// count, a register — as vim does, so only the next Esc runs the bind on Esc.
+// Highest precedence runs it ahead of vim's keydown handler.
+function escapeCancelsUnfinishedInput() {
+  return Prec.highest(
+    EditorView.domEventHandlers({
+      keydown: (event, view) => {
+        if (event.key !== 'Escape') {
+          return false;
+        }
+        const cm = vimEditorOf(view);
+        const { vim } = cm.state;
+        const isNormalMode = !vim.insertMode && !vim.visualMode;
+        if (!isNormalMode || !holdsUnfinishedInput(cm)) {
+          return false;
+        }
+        discardUnfinishedInput(cm);
+        event.preventDefault();
+        return true;
+      },
+    }),
+  );
+}
+
 // Which editor holds the reported pending keys, and the listeners that hear
 // them; a report from any editor replaces the last. Keys never outlive their
 // editor's focus, so the holder is always the editor that last reported.
@@ -540,17 +577,7 @@ class PendingKeys {
 
   cancel() {
     if (this.holder) {
-      this.discardIn(this.holder);
-    }
-  }
-
-  // Vim clears its whole input state — buffer, count, operator, register — on
-  // a key no command matches, and runs nothing; Esc would run the bind on Esc
-  // in normal mode. Vim's command-done then reports `[]`. A recording macro
-  // logs that key, so it is sent only when vim holds unfinished input.
-  discardIn(cm: VimEditor) {
-    if (holdsUnfinishedInput(cm)) {
-      Vim.handleKey(cm, UNMATCHED_KEY, 'user');
+      discardUnfinishedInput(this.holder);
     }
   }
 
@@ -572,16 +599,12 @@ class PendingKeys {
 // The window may hold no focus while the host moves it between editors, and
 // the browser fires no blur then, so the editor focus leaves drops its
 // unfinished command here as well as on blur.
-function leaveFocusedEditor(
-  target: EditorView,
-  hosted: HostedEditor[],
-  pendingKeys: PendingKeys,
-) {
+function leaveFocusedEditor(target: EditorView, hosted: HostedEditor[]) {
   const focused = hosted.find(({ view }) =>
     view.dom.contains(document.activeElement),
   );
   if (focused && focused.view !== target) {
-    pendingKeys.discardIn(vimEditorOf(focused.view));
+    discardUnfinishedInput(vimEditorOf(focused.view));
   }
 }
 
@@ -619,6 +642,7 @@ function boxExtensions(
     ? prefixCompletion(options.completions)
     : [];
   return [
+    escapeCancelsUnfinishedInput(),
     vim({ status: true }),
     completion,
     minimalSetup,
@@ -648,6 +672,7 @@ function documentExtensions(
   leaving: (view: EditorView) => void,
 ) {
   return [
+    escapeCancelsUnfinishedInput(),
     vim({ status: true }),
     minimalSetup,
     lineNumbers(),
@@ -732,7 +757,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
 
   defineDocumentExCommands(hosted);
   const leaving = (left: EditorView) =>
-    pendingKeys.discardIn(vimEditorOf(left));
+    discardUnfinishedInput(vimEditorOf(left));
 
   // Joins `view` to the host: the keymap, mode and pending-key reports, and the
   // focus, blur and destroy every editor shares, which `editorOf` builds the
@@ -761,11 +786,11 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
       text: () => view.state.doc.toString(),
       setText: (text) => replaceText(view, text),
       focus: (options) => {
-        leaveFocusedEditor(view, hosted, pendingKeys);
+        leaveFocusedEditor(view, hosted);
         focusEditor(view, cm, options);
       },
       blur: () => {
-        pendingKeys.discardIn(cm);
+        discardUnfinishedInput(cm);
         view.contentDOM.blur();
       },
       destroy: () => {

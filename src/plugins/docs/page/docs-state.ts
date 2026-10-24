@@ -142,11 +142,12 @@ export type TreeRowAction =
   | { type: 'none' };
 
 // What `key` does on `row`, one of the visible `rows`. A leaf opens on open
-// or toggle, and toggle focuses the doc it opens. Open expands a collapsed group and steps into an expanded one's
-// first shown child, the row after it. Close collapses an expanded group,
-// else selects the row's parent. Toggle expands a collapsed group and
-// collapses an expanded one. A filter shows every group expanded, so it
-// collapses none: there toggle steps in as open does.
+// or toggle, and toggle focuses the doc it opens. Open expands a collapsed
+// group and steps into an expanded one's first shown child, the row after it.
+// Close collapses an expanded group, else selects the row's parent. Toggle
+// expands a collapsed group and collapses an expanded one. A filter shows
+// every group expanded, so it collapses none: there toggle steps in as open
+// does.
 export function treeRowAction(
   tree: readonly TreeNode[],
   rows: readonly TreeRow[],

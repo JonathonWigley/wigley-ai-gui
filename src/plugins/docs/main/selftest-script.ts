@@ -150,6 +150,24 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       why: 'Esc in insert mode returns to normal mode and leaves the editor open.',
     },
     {
+      keys: ['d', 'Escape', '<C-k>'],
+      expect:
+        '[docs] the editor on CLAUDE.md did not scroll up; the cursor stayed',
+      why: 'Esc after an unfinished d cancels the d and leaves the editor open.',
+    },
+    { keys: ['<A-h>'], expect: '[docs] tree focused' },
+    {
+      keys: ['Enter'],
+      expect: '[docs] doc focused',
+      why: 'Enter on the row of the doc in the editor focuses the editor.',
+    },
+    {
+      keys: ['<C-k>'],
+      expect:
+        '[docs] the editor on CLAUDE.md did not scroll up; the cursor stayed',
+      why: 'Enter on the shown doc keeps its editor open rather than reopening the doc.',
+    },
+    {
       keys: ['Escape'],
       expect: '[docs] closed the editor on CLAUDE.md',
       why: 'Esc in normal mode closes the editor as :q does.',
@@ -202,6 +220,12 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       keys: ['x', ':', 'q', 'Enter'],
       expect:
         '[docs] refused to close the editor with unsaved edits on style.md',
+    },
+    {
+      keys: ['Escape'],
+      expect:
+        '[docs] refused to close the editor with unsaved edits on style.md',
+      why: 'Esc in normal mode refuses as :q does while the editor holds unsaved edits.',
     },
     {
       keys: [':', 'q', '!', 'Enter'],
@@ -315,10 +339,10 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     { keys: ['<A-l>'], expect: '[docs] doc focused' },
     { keys: ['j'], expect: '[page] j ran docs.scrollDown' },
     { keys: ['k'], expect: '[page] k ran docs.scrollUp' },
-    { keys: ['<C-j>'], expect: '[page] <C-j> ran docs.lineDown' },
-    { keys: ['<C-k>'], expect: '[page] <C-k> ran docs.lineUp' },
-    { keys: ['<C-S-j>'], expect: '[page] <C-S-j> ran docs.halfPageDown' },
-    { keys: ['<C-S-k>'], expect: '[page] <C-S-k> ran docs.halfPageUp' },
+    { keys: ['<C-j>'], expect: '[docs] SKILL.md did not scroll down' },
+    { keys: ['<C-k>'], expect: '[docs] SKILL.md did not scroll up' },
+    { keys: ['<C-S-j>'], expect: '[docs] SKILL.md did not scroll down' },
+    { keys: ['<C-S-k>'], expect: '[docs] SKILL.md did not scroll up' },
     {
       keys: ['i'],
       expect: '[docs] refused to edit SKILL.md in the plugin cache',
@@ -475,7 +499,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       name: 'plugin cache',
-      why: "A plugin's cached SKILL.md scrolls by line and half page, and i refuses to edit it in the plugin cache.",
+      why: "The scroll keys reach a plugin's cached SKILL.md, too short to scroll, and i refuses to edit it in the plugin cache.",
       steps: pluginCache,
     },
     {

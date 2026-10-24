@@ -320,19 +320,32 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     log,
     openLeaf: (leaf: TreeLeaf, focusesDoc: boolean) => {
       const entry = entriesById.get(leaf.entryId);
-      if (entry !== undefined) {
-        void doc
-          .open(targetFor(entry.path, entry, entry.line, null))
-          .then((opened) => {
-            if (!opened) {
-              return;
-            }
-            deps.leafOpened();
-            if (focusesDoc) {
-              focusDocAndLog();
-            }
-          });
+      if (entry === undefined) {
+        return;
       }
+      // Reopening the shown doc would close its editor, dropping the cursor
+      // and undo history, so Enter on its row only focuses it.
+      const openPath = doc.openPath();
+      const isShownDoc =
+        openPath !== null &&
+        entry.line === null &&
+        deps.paths.samePath(openPath, entry.path);
+      if (focusesDoc && isShownDoc) {
+        deps.leafOpened();
+        focusDocAndLog();
+        return;
+      }
+      void doc
+        .open(targetFor(entry.path, entry, entry.line, null))
+        .then((opened) => {
+          if (!opened) {
+            return;
+          }
+          deps.leafOpened();
+          if (focusesDoc) {
+            focusDocAndLog();
+          }
+        });
     },
     pushBoxScope: () => deps.pushScope('box'),
     filterClosed: () => {

@@ -83,7 +83,8 @@ export interface DocumentEditor extends TextEditor {
   // - `halfPage`: half the visible height. In visual mode the cursor moves
   //   half a page with the scroll, as vim's Ctrl+d and Ctrl+u do, so the
   //   selection grows or shrinks.
-  // - `line`: the app's line step, as vim's Ctrl+e and Ctrl+y scroll.
+  // - `line`: one editor row, landing the top of sight on a row's top, as
+  //   vim's Ctrl+e and Ctrl+y scroll.
   // A cursor the scroll leaves out of sight (in any mode for `line`, outside
   // visual mode for `halfPage`) moves to the first line wholly in sight when
   // it is above, or the last when it is below. In visual mode the selection
@@ -92,8 +93,8 @@ export interface DocumentEditor extends TextEditor {
   scrollBy(step: ScrollStep, direction: 1 | -1): EditorScroll;
 }
 
-// How far a scroll key moves content: one line of body text, or half the
-// visible height.
+// How far a scroll key moves content: one line of the text the view shows,
+// or half the visible height.
 export type ScrollStep = 'line' | 'halfPage';
 
 // What a scroll did: `moved` when the view scrolled at all, and `atEnd` when
