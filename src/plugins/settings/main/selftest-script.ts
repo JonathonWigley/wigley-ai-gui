@@ -120,6 +120,11 @@ const KEYMAP_STEPS: SelfTestStep[] = [
     expect: '[settings] wrote keymap.json',
     why: 'The user bind is listed last.',
   },
+  {
+    keys: [],
+    expect: '[config] applied a new config',
+    why: 'Page keys rebuilt from the new keymap.json drop a pending key sequence, so later keys wait for the apply.',
+  },
   { keys: ['r'], expect: '[settings] unchanged' },
 ];
 
