@@ -126,8 +126,8 @@ Steps 1, the bug sweep, 2, drive reliability, and 3, the docs index seam, have l
 - Forms page state survives a reload
 
 **15. Layouts as a core service.** Builds on 4 and 14.
-- `api.layouts.define` with scoped CSS, replacing the wiring copied in forms and chat
-- Partial user layouts that fall back per kind
+- `api.layouts.define`, replacing the wiring copied in forms and chat
+- Partial chat layouts that fall back per entry kind
 - A layout hot reload keeps the user's place (`TextEditor` snapshot/restore)
 
 **16. Forms kinds and restructure.** Builds on 4 (`tools/list_changed`), 5 and 15.

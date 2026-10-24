@@ -239,12 +239,12 @@ interview on 2026-10-23; this file is the record of both.
 
 ## Layouts
 
-- The forms layout machinery moves to the shared layer: the registry (list, active, cycle, copy, watch, the `.d.ts`
-  copy) and the loader take a plugin's data folder, contract text, default layout and validator as inputs. Forms and
-  chat each keep their own contract and `default` layout.
+- The forms layout machinery moves to the shared layer: the registry (list, watch, the `.d.ts` copy) and the loader
+  take a plugin's data folder, contract text, default layout and validator as inputs. Forms and chat each keep their
+  own contract and `default` layout.
 - A **chat layout** builds each chat entry's element from the entry (with its raw events) and a kit of parts, like a
   forms layout builds cards. User chat layouts are folders in chat's plugin data, reloaded on save; an entry that
-  throws falls back to the default layout. Debug keys `Space z c n` / `p` / `c` cycle and copy chat layouts.
+  throws falls back to the default layout. The `chat.layout` setting names the user's layout.
 
 ## Plans
 

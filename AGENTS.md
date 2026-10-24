@@ -206,9 +206,9 @@ round), since main, not the page, decides.
   unbound, Enter breaking the line), and startup fails on two binds in one mode with the same keys in overlapping
   scopes or on keys that begin another same-mode bind's longer keys in any scope. Esc while a sequence waits cancels
   it and runs nothing.
-- **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout keys are
-  `Space z l …`, chat's `Space z c …`, the gallery's `Space z g`, which shows Gallery mode, and its `Space z s`,
-  which swaps the shell to a test layout and back).
+- **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout preview is
+  `Space z l o`, the gallery's `Space z g`, which shows Gallery mode, and its `Space z s`, which swaps the shell to a
+  test layout and back).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
   modal view never fights the plugin under it for the scope. The pushed scope's `onBaseChanged` hears the set scope
@@ -261,9 +261,12 @@ round), since main, not the page, decides.
   The rest it cannot check: the `FINDING_ORIGINS` list in the contract, an `origin-*` token in forms'
   manifest `themeTokens` with its `.badge-origin` rule in `forms.css`, and retro's
   `ORIGIN_ACTION_LABELS` in the marketplace's `answers.py`, which otherwise labels the new origin's actions with the
-  Defect words. Every card shows all its choices and its action row, the recommended ones tagged Recommended in the accent, and Accept (Enter)
-  takes them whole: the user ruled out folding the alternatives away, since it biased answers toward the
-  recommendation.
+  Defect words. Every finding card shows all its choices grouped under the action each one names (`fix_now` when it
+  names none), numbered down the card, and an action with no choices takes one number on its own header; picking a
+  choice or a bare header sets the action, so choice and action are one pick. The recommended pick is tagged
+  Recommended in the accent, and Accept (Enter) takes it: the user ruled out folding the alternatives away, since
+  it biased answers toward the recommendation. A deferral action shows its `action_reasons` entry under its header,
+  which a round carries only when it recommends that action.
 - **An agent harness** — Claude Code today, Codex and wigley-harness next — is an adapter behind `AgentHarness` in
   `src/contracts/agent.ts`, handed to plugins as a main service; the fake in `src/shared/` drives the tests and the
   self-test. The adapter alone reads its harness's output and turns it into chat entries, each carrying the raw
@@ -328,24 +331,37 @@ round), since main, not the page, decides.
   fresh.
 - **A layout** is a plugin's user-editable look: the shared registry (`src/shared/layouts/`) and loader
   (`src/shared/page/`) take the plugin's data folder, contract text, default layout and validator, and each plugin
-  keeps its own contract and built-in `default`. Forms' layouts build round cards and chat's build chat entries, a
-  chat entry's layout reading the entry's raw events for anything the entry does not name.
+  keeps its own contract and built-in `default`. Forms' layouts draw the forms view and chat's build chat entries, a
+  chat entry's layout reading the entry's raw events for anything the entry does not name. The registry watches every
+  layout folder and announces the set of layouts, each with its own revision, so saving one reloads only that one;
+  the user's layout is a plugin setting (`forms.layout`, `chat.layout`, `default` when unset). Every element a layout
+  draws carries `data-layout="<name>"`, and each layout in use gets its own stylesheet link, so a layout's CSS
+  selects under its own name and restyles nothing another layout drew.
 - **A chat layout** builds each entry kind's element from the entry and a `ChatKit`
   (`src/plugins/chat/layouts/layout.d.ts`): `markdown`, `json`, `expander` (a collapsible card), `collapsibleCard`,
   `card`, `statusDot` with `setDotStatus`, `sectionHeader`, and `permissionActions` (Allow once / Deny with their
   keys), and `images` (a user entry's thumbnails, which open the image viewer).
-- **A forms layout** builds each item's cards, and may add a head above them. Its contract is
-  `src/plugins/forms/layouts/layout.d.ts`: the card input for each kind, and the kit of ready-made parts (sections,
-  choice list, answer controls, verdict, action row, and the plain parts `card`, `tag`, `kbd`, `button` — variant
-  and `keys` — and `sectionHeader`), each of which keeps itself up to date. The built-in `default`
-  layout is `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract, and it draws the
-  forms look. The user's layouts are folders in forms' plugin data, `layouts/<name>/layout.js` and an optional
-  `layout.css`, and the app writes `layouts/layout.d.ts` there at every start. Saving the active layout's code
-  (`.js`, `.mjs`), style (`.css`), data (`.json`), image or font files redraws open rounds and keeps every answer;
-  editor swap and lock files do not. `Space z l n` / `Space z l p` cycle the layouts, `Space z l c` copies the
-  active one into a new folder, and `Space z l o` opens the preview round and selects its row; the round sends
-  nothing and raises no notification or badge. A card that throws falls back to `default`, and a reload that fails
-  keeps the last good layout.
+- **A forms layout** draws the forms view: a card per item kind (`question`, `finding`, `notice`) and the `head`,
+  `rail` and `review` panes. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
+  pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, review row,
+  round note, send and cancel buttons, and the plain parts `card`, `tag`, `kbd`, `button` — variant and `keys` —
+  and `sectionHeader`), each of which keeps itself up to date. The app keeps which item is selected, the keys,
+  scrolling, the split width, the status bar line and the cancel dialog. The built-in `default` layout is
+  `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract; it defines every card and
+  pane and draws the forms look. The user's layouts are folders in forms' plugin data, `layouts/<name>/layout.js` and
+  an optional `layout.css`, and the app writes `layouts/layout.d.ts` there at every start; a user layout defines
+  only the cards and panes it changes.
+  - **Which layout draws what:** a card comes from the first layout defining its kind among the item's `layout`,
+    the round's `layout`, the `forms.layout` setting and `default`; a pane the same way without the item. One page
+    module resolves this, so round-view names no layout. An `ask_round` naming a layout missing from the folder
+    fails with the names the folder holds.
+  - **An agent wanting a look no layout has** writes a new layout folder, names it in the round, and lists each
+    layout it wrote or changed in a notice on that round, so the user sees the file while its look is on screen.
+  - **Reloads:** saving a layout's code (`.js`, `.mjs`), style (`.css`), data (`.json`), image or font files redraws
+    the open rounds and keeps every answer; editor swap and lock files do not. A card or pane that throws falls back
+    to `default`, and a reload that fails keeps the last good version of that layout.
+  - `Space z l o` opens the preview round in the user's layout and selects its row; the round sends nothing and
+    raises no notification or badge.
 - `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its `LAYERS` table does
   not allow. A new layer, adapter or plugin folder gets a `LAYERS` entry, and the composition root's entry lists it.
   Every plugin's `page/` layer and `src/shared/page` may import `src/shared/page/ui`.

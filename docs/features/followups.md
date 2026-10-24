@@ -102,10 +102,10 @@ now, any harness later). Each item names its sites.
 - Commands take a count or argument, so `choose1..9` becomes one `forms.choose` (and choice 10 gets a key: `DIGITS`
   stops at 9 while `MAX_CHOICES` is 10).
 - Layouts as a core service: `api.layouts.define(slot, { contractText, defaultSource, read })` in both processes,
-  owning the channel, the `layouts/<slot>/` folder, the CSS link, the toasts and one set of cycle/copy/preview commands.
-  Replaces the hand wiring duplicated in forms and chat (`main/start.ts`, `page/start.ts`, three channel methods per
-  contract, keys per manifest), and gives any view (sessions sidebar row, docs, help, status bar) a user look. A
-  layout's CSS gets scoped so it can't restyle another plugin.
+  owning the channel, the `layouts/<slot>/` folder, the CSS links, the toasts, the layout setting and the preview
+  command. Replaces the hand wiring duplicated in forms and chat (`main/start.ts`, `page/start.ts`, the channel
+  methods per contract, keys per manifest), and gives any view (sessions sidebar row, docs, help, status bar) a user
+  look.
 - `EditorHost.defineEx(name, prefix, handler)`, disposable: the document editor's write/quit become ex commands the
   docs plugin registers, replacing the closed `DOCUMENT_EX_COMMANDS` and the `switch` in `codemirror-vim-host.ts`.
 - `MarkdownRenderer.addBlock({ opener, render })` and `addFence(language, render)` in the contract's own terms; the
@@ -116,9 +116,6 @@ now, any harness later). Each item names its sites.
 - Window commands (`window.summon`) move into a small `window` plugin.
 - Decide whether core services (`markdown`, `editor`, `alerts`) are replaceable by a plugin (a `provides` service
   registry) or deliberately not, and record it in `plugin-framework/design.md`.
-- Forms page exports and events: `activeRound()`, `answers(roundId)`, card parts and review columns, and
-  `roundShown` / `answerChanged` / `roundFinished` / `viewChanged`. Today it exports nothing and emits nothing.
-  Its layout kit gains `kit.command(qualifiedId)` and `kit.keysFor(qualifiedId)` for other plugins' commands.
 - Chat page exports `addEntryRenderer({ kind, match?, build })`, ordered user layout → plugin renderers → default.
 - Chat and docs events, typed in each `contract.ts`: chat's message sent, turn started and finished, and control
   changed (model, permission mode, effort); docs' doc opened, saved, created, trashed, and index rebuilt. Today both
@@ -142,14 +139,13 @@ now, any harness later). Each item names its sites.
   kind branches in `view-model.ts` and `round-view.ts`. The AGENTS.md "item kind" checklist shrinks to the module. The
   tool schema then needs the sessions `tools/list_changed` item above, and retro reads unknown result keys.
 - Finding origins become one `FindingOriginSpec` each (card, meaning, choice noun, choice bounds, severity required,
-  action words, chip, theme token), the single source for the parser, tool text, card input, manifest command labels
-  (today the literal `'fix now · decide now · fix anyway'`) and `defectActionWord`. One `Finding` type with
-  `severity: Severity | null` replaces the per-origin types; each saved round carries its origin action words so retro
-  reads data rather than keeping `ORIGIN_ACTION_LABELS`.
-- User layouts define only the cards or entries they change: `cards` and chat's `entries` become partial records that
-  fall back per kind to `default` (the fallback for a throwing card already exists), and `origin` / `card` /
-  `FindingAction` in `layout.d.ts` become strings. Today a missing card or entry rejects the whole layout, so adding a
-  kind breaks every user layout.
+  action words, chip, theme token), the single source for the parser, tool text, card input and `defectActionWord`.
+  One `Finding` type with `severity: Severity | null` replaces the per-origin types; each saved round carries its
+  origin action words so retro reads data rather than keeping `ORIGIN_ACTION_LABELS`.
+- Chat user layouts define only the entries they change: chat's `entries` becomes a partial record that falls back
+  per kind to `default`, as forms' cards and panes already do, and `origin` / `card` / `FindingAction` in forms'
+  `layout.d.ts` become strings. Today a missing entry rejects the whole chat layout, so adding an entry kind breaks
+  every user chat layout.
 - `ChatEntry.kind` opens for harness-specific kinds carrying only `raw`, drawn by the `raw` builder unless a layout
   names them.
 - `check-layers.mts` derives each plugin's rules from the folder convention and its manifest's `dependsOn`, and checks

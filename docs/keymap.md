@@ -82,11 +82,10 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                                                                                                    |
 | `v`                | view                                 | `vt` hide or show the docs tree                                                                                                                         |
 | `c`                | chat controls                        | in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cy` copy the sign-in link (sign-in dialog) |
-| `a`                | answer                               | in a box only: `a1`…`a9`, `ac` clear, `af` fix now, `au` follow-up, `as` leave it                                                                       |
+| `a`                | answer                               | in a box only: `a1`…`a9` pick the numbered choice or action header, `ac` clear                                                                          |
 | `x`                | none: forms not applicable           | in a box only: `x`                                                                                                                                      |
 | `z`                | debug                                | `zg` gallery, `zs` shell layout                                                                                                                         |
-| `zl`               | forms layouts                        | `zln` next, `zlp` previous, `zlc` copy, `zlo` open preview                                                                                              |
-| `zc`               | chat layouts                         | `zcn` next, `zcp` previous, `zcc` copy                                                                                                                  |
+| `zl`               | forms layouts                        | `zlo` open preview                                                                                                                                      |
 
 A row named `none` is a prefix without a `groups` entry; which-key labels it from its commands'
 groups, and its description here is only for readers of this table.
