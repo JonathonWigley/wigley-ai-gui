@@ -1,4 +1,4 @@
-import type { LayoutChoice } from '../../contracts/layouts';
+import type { LayoutSet } from '../../contracts/layouts';
 import type { ChannelShape } from '../../contracts/plugin';
 import type { AgentSession } from '../sessions/contract';
 
@@ -238,14 +238,14 @@ export interface RoundPresenter {
   close(roundId: string): void;
 }
 
-// The layout the Form tab builds cards with.
-export type { LayoutChoice } from '../../contracts/layouts';
+// The layouts the Form tab builds cards with.
+export type { LayoutEntry, LayoutSet } from '../../contracts/layouts';
 
 // The forms page part invokes `openRounds` and `layout` on load, `draft` as the
-// user types, `finish` on submit or cancel, and `cycleLayout`, `copyLayout` and
-// `openPreview` from the layout keys; main sends each round as it opens, each
-// round that closes, a round the page finished included, and each layout
-// change, the page's own cycles and copies included. A `draft` whose save
+// user types, `finish` on submit or cancel, and `openPreview` from the preview
+// key; main sends each round as it opens, each round that closes, a round the
+// page finished included, and the set of layouts after each change in a
+// layout's folder. A `draft` whose save
 // failed rejects with the reason; a `finish` whose answers main could not take
 // rejects with the reason and leaves the round open; `layout` rejects when the
 // layouts failed to start.
@@ -254,15 +254,13 @@ export interface FormsChannel extends ChannelShape {
     openRounds(): PresentedRound[];
     draft(roundId: string, body: FormBody): void;
     finish(roundId: string, end: RoundEnd): void;
-    layout(): Promise<LayoutChoice>;
-    cycleLayout(step: 1 | -1): Promise<LayoutChoice>;
-    copyLayout(): Promise<LayoutChoice>;
+    layout(): Promise<LayoutSet>;
     openPreview(): void;
   };
   messages: {
     roundShown: PresentedRound;
     roundClosed: RoundClosed;
-    layoutChanged: LayoutChoice;
+    layoutChanged: LayoutSet;
   };
 }
 

@@ -56,7 +56,7 @@ const COMMA_LEADER_KEYMAP = JSON.stringify({ leader: ',' });
 const LONG_WORD = 'unbroken'.repeat(14);
 
 // The layout forms' main writes into its data folder in the self-test only,
-// so the layout cycle holds `default` and `selftest`. Its question card builds
+// so the registry lists `default` and `selftest`. Its question card builds
 // through the kit and throws on every update, its finding card mounts its
 // notes box and then throws, so the default card can mount that box only once
 // the host has destroyed it, and its notice card mounts a notes box, which a
@@ -500,45 +500,6 @@ const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-o>'], expect: '[sessions] activated selftest' },
 ];
 
-const LAYOUT_CYCLE_STEPS: SelfTestStep[] = [
-  {
-    keys: [' ', 'z', 'l', 'n'],
-    expect: '[forms] layout selftest finding card failed: selftest throw',
-  },
-  {
-    keys: [' ', 'z', 'l', 'p'],
-    expect: '[forms] layout default shown (cycled, revision 3)',
-  },
-  {
-    keys: [' ', 'z', 'l', 'p'],
-    expect:
-      '[forms] layout selftest notice card failed: notice card has no notes box',
-  },
-  {
-    keys: [' ', 'z', 'l', 'n'],
-    expect: '[forms] layout default shown (cycled, revision 5)',
-  },
-  {
-    keys: [' ', 'z', 'l', 'p'],
-    expect: '[forms] layout selftest shown (cycled, revision 6)',
-  },
-  {
-    keys: ['k', '2'],
-    expect:
-      '[forms] layout selftest question card update failed: selftest update throw',
-    why: "The shown question 2 card's update threw on load; k shows question 1's card, whose first update throws on the pick.",
-  },
-  {
-    keys: ['Enter'],
-    expect: '[forms] accepted the recommendation on question 1',
-  },
-  { keys: ['j'], expect: '[page] j ran forms.nextItem' },
-  {
-    keys: [' ', 'z', 'l', 'n'],
-    expect: '[forms] layout default shown (cycled, revision 7)',
-  },
-];
-
 const REVIEW_STEPS: SelfTestStep[] = [
   {
     keys: [' ', ' '],
@@ -890,11 +851,6 @@ export function formsSelfTestScript(
         name: 'cancelled preview',
         why: "Cancelling the preview round closes its session and selects a Codex session with no folder, where no form keeps its scope; wrapping back gives the first session's form its scope again.",
         steps: CANCELLED_PREVIEW_STEPS,
-      },
-      {
-        name: 'layout cycle',
-        why: "Cycling layouts logs each selftest card's failure, a throwing build, a missing notes box and a throwing update, without breaking the form, and the cycle returns to default for the steps after. Each load logs every line its cards log at once, so each step checks one of them.",
-        steps: LAYOUT_CYCLE_STEPS,
       },
       {
         name: 'review',

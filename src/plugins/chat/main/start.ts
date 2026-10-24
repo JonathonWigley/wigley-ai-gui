@@ -24,7 +24,6 @@ import type {
   ToolResult,
 } from '../../sessions/contract';
 import type { ChatChannel } from '../contract';
-import defaultLayout from '../layouts/default/layout.js?raw';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { chatManifest } from '../manifest';
 import { createAccounts } from './accounts';
@@ -51,20 +50,15 @@ function serveLayouts(api: ChatApi): Promise<LayoutRegistry> {
   const { log } = api.services;
   const layouts = startLayoutRegistry({
     data: api.data,
-    send: (choice) => api.channel.send('layoutChanged', choice),
+    send: (set) => api.channel.send('layoutChanged', set),
     log,
     logSource: 'chat',
     layoutTypes,
-    defaultLayout,
   });
   layouts.catch((error: unknown) =>
     log('chat', `layouts not started: ${errorText(error)}`),
   );
   api.channel.handle('layout', async () => (await layouts).current());
-  api.channel.handle('cycleLayout', async (step) =>
-    (await layouts).cycle(step),
-  );
-  api.channel.handle('copyLayout', async () => (await layouts).copy());
   return layouts;
 }
 

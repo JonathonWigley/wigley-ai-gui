@@ -155,10 +155,13 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         head: document.head,
         read: readChatLayout,
       }),
+      chosen: () => api.settings().layout,
+      onChosenChanged: (listener) => {
+        api.onSettingsChanged(() => listener());
+      },
       setLayout: (layout, name) => view.setLayout(layout, name),
       log: services.log,
       logSource: 'chat',
-      dataFolderLabel: "chat's data folder",
       toast: services.toast,
     });
     const startPrompt = createStartPrompt({

@@ -109,13 +109,6 @@ export const formsManifest = definePlugin({
       group: 'confirm',
       runsIn: 'page',
     },
-    nextLayout: { label: 'next layout', group: 'debug', runsIn: 'page' },
-    prevLayout: { label: 'previous layout', group: 'debug', runsIn: 'page' },
-    copyLayout: {
-      label: 'copy the layout to a new folder',
-      group: 'debug',
-      runsIn: 'page',
-    },
     openPreview: {
       label: 'open the layout preview round',
       group: 'debug',
@@ -128,7 +121,7 @@ export const formsManifest = definePlugin({
     confirm: 'In the cancel confirmation',
     idle: 'With no round open',
   },
-  settings: { autosaveDelayMs: 400, deadlineSeconds: 240 },
+  settings: { autosaveDelayMs: 400, deadlineSeconds: 240, layout: 'default' },
   settingInfo: {
     autosaveDelayMs: {
       label: 'Autosave delay',
@@ -139,6 +132,11 @@ export const formsManifest = definePlugin({
       label: 'Round deadline',
       description:
         'How long an agent waits on a round before it gets a draft back, in seconds, when its session names no deadline.',
+    },
+    layout: {
+      label: 'Layout',
+      description:
+        "The forms layout that draws what a round and its items do not name a layout for: a folder name in forms' layouts folder, or default.",
     },
   },
   themeTokens: {

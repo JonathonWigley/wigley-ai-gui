@@ -56,12 +56,8 @@ export interface FormsCommandDeps {
   log: Log;
 }
 
-// Main's layout methods the layout keys invoke. The page applies a changed
-// layout only from main's `layoutChanged` message, so what these resolve to
-// is unused.
+// Main's layout method the preview key invokes; what it resolves to is unused.
 export interface LayoutCommandChannel {
-  cycleLayout(step: 1 | -1): Promise<unknown>;
-  copyLayout(): Promise<unknown>;
   openPreview(): Promise<unknown>;
 }
 
@@ -214,9 +210,6 @@ export function formsCommandHandlers(
     },
     submit: () => finishActiveRound(deps, 'review', 'submitted'),
     confirmCancel: () => finishActiveRound(deps, 'confirm', 'cancelled'),
-    nextLayout: layoutCommand(() => deps.layouts.cycleLayout(1)),
-    prevLayout: layoutCommand(() => deps.layouts.cycleLayout(-1)),
-    copyLayout: layoutCommand(() => deps.layouts.copyLayout()),
     openPreview: layoutCommand(() => deps.layouts.openPreview()),
   };
 }

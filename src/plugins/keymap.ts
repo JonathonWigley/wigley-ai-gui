@@ -137,7 +137,6 @@ export const defaultKeymap = {
     '<Leader>v': 'view',
     '<Leader>z': 'debug',
     '<Leader>zl': 'forms layouts',
-    '<Leader>zc': 'chat layouts',
     '<Leader>c': 'chat controls',
     '<Leader>a': 'answer',
   },
@@ -419,45 +418,9 @@ export const defaultKeymap = {
 
     // ── Debug and testing ──────────────────────────────────────────────────
     {
-      keys: '<Leader>zln',
-      scope: 'any',
-      command: 'forms.nextLayout',
-      where: 'page',
-    },
-    {
-      keys: '<Leader>zlp',
-      scope: 'any',
-      command: 'forms.prevLayout',
-      where: 'page',
-    },
-    {
-      keys: '<Leader>zlc',
-      scope: 'any',
-      command: 'forms.copyLayout',
-      where: 'page',
-    },
-    {
       keys: '<Leader>zlo',
       scope: 'any',
       command: 'forms.openPreview',
-      where: 'page',
-    },
-    {
-      keys: '<Leader>zcn',
-      scope: 'any',
-      command: 'chat.nextLayout',
-      where: 'page',
-    },
-    {
-      keys: '<Leader>zcp',
-      scope: 'any',
-      command: 'chat.prevLayout',
-      where: 'page',
-    },
-    {
-      keys: '<Leader>zcc',
-      scope: 'any',
-      command: 'chat.copyLayout',
       where: 'page',
     },
     {

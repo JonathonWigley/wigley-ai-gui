@@ -1,4 +1,4 @@
-import type { LayoutChoice } from '../../contracts/layouts';
+import type { LayoutEntry, LayoutSet } from '../../contracts/layouts';
 import type { Log } from '../../contracts/log';
 import type { ToastTone } from '../../contracts/plugin';
 import { errorText } from '../error-text';
@@ -14,24 +14,24 @@ export interface LayoutLoaderDeps<L> {
 }
 
 export interface LayoutLoader<L> {
-  load(choice: LayoutChoice): Promise<L>;
+  load(entry: LayoutEntry): Promise<L>;
 }
 
 // The URLs of a user layout's files in the plugin's data folder, at its revision.
 export function layoutUrls(
-  choice: LayoutChoice,
+  entry: LayoutEntry,
   dataUrl: (path: string, revision: number) => string,
 ): { script: string; style: string | null } {
-  const folder = `layouts/${choice.name}`;
+  const folder = `layouts/${entry.name}`;
   return {
-    script: dataUrl(`${folder}/layout.js`, choice.revision),
-    style: choice.hasCss
-      ? dataUrl(`${folder}/layout.css`, choice.revision)
+    script: dataUrl(`${folder}/layout.js`, entry.revision),
+    style: entry.hasCss
+      ? dataUrl(`${folder}/layout.css`, entry.revision)
       : null,
   };
 }
 
-// Loads each chosen layout, keeping one stylesheet link in `head` for the
+// Loads each layout it is handed, keeping one stylesheet link in `head` for the
 // user layout's CSS. The stylesheet changes only once the script has loaded,
 // so a failed load keeps the last good look whole.
 export function createLayoutLoader<L>(
@@ -52,15 +52,15 @@ export function createLayoutLoader<L>(
     link.href = url;
   };
   return {
-    async load(choice) {
-      if (choice.builtIn) {
+    async load(entry) {
+      if (entry.builtIn) {
         showStyle(null);
         return deps.defaultLayout;
       }
-      const urls = layoutUrls(choice, deps.dataUrl);
+      const urls = layoutUrls(entry, deps.dataUrl);
       const layout = deps.read(
         await deps.importModule(urls.script),
-        choice.name,
+        entry.name,
       );
       showStyle(urls.style);
       return layout;
@@ -71,86 +71,115 @@ export function createLayoutLoader<L>(
 // Main's layout channel as the page hears it: `layoutChanged` messages and the
 // `layout` answer.
 export interface LayoutChannel {
-  onLayoutChanged(listener: (choice: LayoutChoice) => void): void;
-  readLayout(): Promise<LayoutChoice>;
+  onLayoutChanged(listener: (set: LayoutSet) => void): void;
+  readLayout(): Promise<LayoutSet>;
 }
 
 export interface ShowLayoutsDeps<L> {
   channel: LayoutChannel;
   loader: LayoutLoader<L>;
+  // The name of the layout the user chose, read again on each set and on each
+  // `onChosenChanged`.
+  chosen(): string;
+  onChosenChanged(listener: () => void): void;
   setLayout(layout: L, name: string): void;
   log: Log;
   // The source name every log line carries.
   logSource: string;
-  // How the copied toast names the plugin's data folder.
-  dataFolderLabel: string;
   toast(text: string, tone: ToastTone): void;
 }
 
-// Shows main's chosen layout, then each layout main reports changed, loaded
-// one at a time in arrival order. A layout that fails to load leaves the
-// current one shown. A change heard before main answers `layout` is newer, so
-// the answer is then dropped.
+const DEFAULT_NAME = 'default';
+
+// Shows the chosen layout from main's latest set, or `default` when the set
+// does not hold it, and loads it again whenever a set or a new choice changes
+// its name or revision, so a change in a layout nobody draws loads nothing.
+// Loads run one at a time in arrival order; a layout that fails to load leaves
+// the current one shown, and its next revision is tried again. A set heard
+// before main answers `layout` is newer, so the answer is then dropped.
 export function showLayouts<L>(deps: ShowLayoutsDeps<L>): void {
   const { channel, loader, log, logSource, toast } = deps;
   let queue = Promise.resolve();
   let heardChange = false;
-  const shown = (layout: L, choice: LayoutChoice) => {
-    deps.setLayout(layout, choice.name);
-    log(
-      logSource,
-      `layout ${choice.name} shown (${choice.reason}, revision ${choice.revision})`,
-    );
-    const shownToast = layoutToast(choice, deps.dataFolderLabel);
-    if (shownToast !== null) {
-      toast(shownToast.text, shownToast.tone);
-    }
+  let latest: LayoutSet | null = null;
+  let queued: LayoutEntry | null = null;
+  let missingLogged: string | null = null;
+
+  const shown = (layout: L, entry: LayoutEntry) => {
+    deps.setLayout(layout, entry.name);
+    log(logSource, `layout ${entry.name} shown (revision ${entry.revision})`);
   };
-  const failed = (error: unknown, choice: LayoutChoice) => {
-    log(logSource, `layout ${choice.name} failed: ${errorText(error)}`);
-    toast(`Layout ${choice.name} failed: ${errorText(error)}`, 'error');
+  const failed = (error: unknown, entry: LayoutEntry) => {
+    log(logSource, `layout ${entry.name} failed: ${errorText(error)}`);
+    toast(`Layout ${entry.name} failed: ${errorText(error)}`, 'error');
   };
-  const show = (choice: LayoutChoice) => {
+  const show = (entry: LayoutEntry) => {
     queue = queue
       .then(() =>
-        loader.load(choice).then(
-          (layout) => shown(layout, choice),
-          (error: unknown) => failed(error, choice),
+        loader.load(entry).then(
+          (layout) => shown(layout, entry),
+          (error: unknown) => failed(error, entry),
         ),
       )
       .catch((error: unknown) =>
-        log(logSource, `layout ${choice.name} not shown: ${errorText(error)}`),
+        log(logSource, `layout ${entry.name} not shown: ${errorText(error)}`),
       );
   };
-  channel.onLayoutChanged((choice) => {
+
+  // The set's entry for the chosen layout, or its `default` entry, logging a
+  // missing name once until the choice changes or is found.
+  const target = (set: LayoutSet): LayoutEntry => {
+    const name = deps.chosen();
+    const found = set.layouts.find((layout) => layout.name === name);
+    if (found !== undefined) {
+      missingLogged = null;
+      return found;
+    }
+    if (missingLogged !== name) {
+      missingLogged = name;
+      log(logSource, `layout ${name} not found, drawing ${DEFAULT_NAME}`);
+    }
+    const fallback = set.layouts.find((layout) => layout.builtIn);
+    if (fallback === undefined) {
+      throw new Error(`layout set holds no ${DEFAULT_NAME} entry`);
+    }
+    return fallback;
+  };
+
+  const showTarget = () => {
+    if (latest === null) {
+      return;
+    }
+    const entry = target(latest);
+    const isQueued =
+      queued !== null &&
+      queued.name === entry.name &&
+      queued.revision === entry.revision;
+    if (isQueued) {
+      return;
+    }
+    queued = entry;
+    show(entry);
+  };
+
+  const heard = (set: LayoutSet) => {
+    latest = set;
+    showTarget();
+  };
+
+  channel.onLayoutChanged((set) => {
     heardChange = true;
-    show(choice);
+    heard(set);
   });
+  deps.onChosenChanged(showTarget);
   channel
     .readLayout()
-    .then((choice) => {
+    .then((set) => {
       if (!heardChange) {
-        show(choice);
+        heard(set);
       }
     })
     .catch((error: unknown) =>
       log(logSource, `layout not read: ${errorText(error)}`),
     );
-}
-
-function layoutToast(
-  choice: LayoutChoice,
-  dataFolderLabel: string,
-): { text: string; tone: ToastTone } | null {
-  switch (choice.reason) {
-    case 'cycled':
-      return { text: `Layout: ${choice.name}`, tone: 'info' };
-    case 'copied':
-      return {
-        text: `Layout copied to layouts/${choice.name} in ${dataFolderLabel}`,
-        tone: 'success',
-      };
-    default:
-      return null;
-  }
 }

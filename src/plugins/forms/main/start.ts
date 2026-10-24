@@ -28,7 +28,6 @@ import {
   type ToolResult,
 } from '../../sessions/contract';
 import type { FormsChannel, FormsService } from '../contract';
-import defaultLayout from '../layouts/default/layout.js?raw';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
 import { createChannelPresenter } from './channel-presenter';
@@ -110,21 +109,16 @@ function serveLayouts(
   const layouts = written.then(() =>
     startLayoutRegistry({
       data: api.data,
-      send: (choice) => api.channel.send('layoutChanged', choice),
+      send: (set) => api.channel.send('layoutChanged', set),
       log,
       logSource: 'forms',
       layoutTypes,
-      defaultLayout,
     }),
   );
   layouts.catch((error: unknown) =>
     log('forms', `layouts not started: ${errorText(error)}`),
   );
   api.channel.handle('layout', async () => (await layouts).current());
-  api.channel.handle('cycleLayout', async (step) =>
-    (await layouts).cycle(step),
-  );
-  api.channel.handle('copyLayout', async () => (await layouts).copy());
   return layouts;
 }
 
@@ -261,9 +255,8 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     );
     const { selfTest } = api.services;
     // Written before the registry starts, so the registry lists selftest. A
-    // late watch report of this write, arriving while selftest is inactive,
-    // changes nothing: a save in an inactive layout's folder leaves the
-    // revision alone.
+    // late watch report of this write announces a selftest change, which
+    // loads nothing while the forms.layout setting names another layout.
     const fixtureWritten =
       api.services.runMode === 'selfTest'
         ? api.data.write(SELFTEST_LAYOUT.path, SELFTEST_LAYOUT.text)

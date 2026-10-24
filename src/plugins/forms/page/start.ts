@@ -168,10 +168,13 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         head: document.head,
         read: readLayout,
       }),
+      chosen: () => api.settings().layout,
+      onChosenChanged: (listener) => {
+        api.onSettingsChanged(() => listener());
+      },
       setLayout: (layout, name) => view.setLayout(layout, name),
       log: services.log,
       logSource: 'forms',
-      dataFolderLabel: "forms' data folder",
       toast: services.toast,
     });
     return {
@@ -181,8 +184,6 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         finish: (roundId, end) => api.channel.invoke('finish', roundId, end),
         closeSession: (sessionId) => sessions.closeSession(sessionId),
         layouts: {
-          cycleLayout: (step) => api.channel.invoke('cycleLayout', step),
-          copyLayout: () => api.channel.invoke('copyLayout'),
           openPreview: () => api.channel.invoke('openPreview'),
         },
         scrollForm: (step, direction) => view.scrollBy(step, direction),

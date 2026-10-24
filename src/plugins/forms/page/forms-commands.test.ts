@@ -72,20 +72,12 @@ function setup(
   const toasts: string[] = [];
   const toastTones: ToastTone[] = [];
   const logs: string[] = [];
-  // Each layout method invoked, with its arguments.
-  const layoutCalls: unknown[][] = [];
   let layoutFailure: Error | null = null;
   let finishFailure: Error | null = null;
   // Each step and direction the form was scrolled, and what every scroll
   // returns.
   const scrolls: [ScrollStep, 1 | -1][] = [];
   let scrollResult: ContentScroll | null = { moved: true, atEnd: false };
-  const invokeLayout = (...call: unknown[]) => {
-    layoutCalls.push(call);
-    return layoutFailure === null
-      ? Promise.resolve()
-      : Promise.reject(layoutFailure);
-  };
   // Each closed session, with the rounds the store held at the call.
   const closedSessions: { sessionId: string; roundCount: number }[] = [];
   const log = (_source: string, message: string) => logs.push(message);
@@ -118,9 +110,10 @@ function setup(
     },
     closeSession,
     layouts: {
-      cycleLayout: (step) => invokeLayout('cycleLayout', step),
-      copyLayout: () => invokeLayout('copyLayout'),
-      openPreview: () => invokeLayout('openPreview'),
+      openPreview: () =>
+        layoutFailure === null
+          ? Promise.resolve()
+          : Promise.reject(layoutFailure),
     },
     scrollForm: (step, direction) => {
       scrolls.push([step, direction]);
@@ -156,8 +149,7 @@ function setup(
     toasts,
     toastTones,
     logs,
-    layoutCalls,
-    // Makes every later layout method reject with `error`.
+    // Makes every later openPreview reject with `error`.
     failLayouts: (error: Error) => {
       layoutFailure = error;
     },
@@ -856,22 +848,6 @@ describe('formsCommandHandlers', () => {
     expect(logs).toEqual(['session close kept: project · r2 is sending']);
     expect(toasts).toEqual(["Sending project · r2's round…"]);
     expect(activated).toEqual([]);
-  });
-
-  it('nextLayout_InvokesCycleLayoutForward', () => {
-    const { run, layoutCalls } = setup();
-
-    run('nextLayout');
-
-    expect(layoutCalls).toEqual([['cycleLayout', 1]]);
-  });
-
-  it('prevLayout_InvokesCycleLayoutBackward', () => {
-    const { run, layoutCalls } = setup();
-
-    run('prevLayout');
-
-    expect(layoutCalls).toEqual([['cycleLayout', -1]]);
   });
 
   it('openPreview_Rejects_ToastsError', async () => {

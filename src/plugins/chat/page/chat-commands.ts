@@ -129,13 +129,6 @@ export function chatCommandHandlers(
       }
       openChoices(deps, session, control);
     });
-  const layoutCommand =
-    (invoke: () => Promise<unknown>): Handler =>
-    () =>
-      void invoke().catch((error: unknown) => {
-        log('chat', `layout command failed: ${errorText(error)}`);
-        deps.toast(`Layout command failed: ${errorText(error)}`, 'error');
-      });
 
   return {
     focusBox: inSession((session) => {
@@ -263,9 +256,6 @@ export function chatCommandHandlers(
     pickerClose: () => picker.close(),
     pickerFilter: () => picker.focusFilter(),
     pickerList: () => picker.leaveFilter(),
-    nextLayout: layoutCommand(() => channel.invoke('cycleLayout', 1)),
-    prevLayout: layoutCommand(() => channel.invoke('cycleLayout', -1)),
-    copyLayout: layoutCommand(() => channel.invoke('copyLayout')),
   };
 }
 

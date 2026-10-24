@@ -124,17 +124,6 @@ export const chatManifest = definePlugin({
       group: 'picker',
       runsIn: 'page',
     },
-    nextLayout: { label: 'next chat layout', group: 'debug', runsIn: 'page' },
-    prevLayout: {
-      label: 'previous chat layout',
-      group: 'debug',
-      runsIn: 'page',
-    },
-    copyLayout: {
-      label: 'copy the chat layout to a new folder',
-      group: 'debug',
-      runsIn: 'page',
-    },
   },
   scopes: {
     chat: 'In the chat',
@@ -146,12 +135,17 @@ export const chatManifest = definePlugin({
     signIn: 'In the sign-in dialog',
     image: 'In the image viewer',
   },
-  settings: { profiles: DEFAULT_PROFILES },
+  settings: { profiles: DEFAULT_PROFILES, layout: 'default' },
   settingInfo: {
     profiles: {
       label: 'Profiles',
       description:
         'The Claude profiles a new session can start in: a name and its config folder each.',
+    },
+    layout: {
+      label: 'Layout',
+      description:
+        "The chat layout every Chat tab draws in: a folder name in chat's layouts folder, or default.",
     },
   },
   themeTokens: {},
