@@ -358,6 +358,26 @@ export function reapplyChange(
   return isReflected ? document : applyChange(document, change, paths);
 }
 
+// The paths a change made or moved, read from the document it produced
+// (`next`, null when no document shows yet): a created doc's own path even
+// then, a rename's only once a document lists what moved.
+export function changedPaths(
+  change: DocChangeRecord,
+  next: IndexDocument | null,
+  paths: Paths,
+): string[] {
+  switch (change.type) {
+    case 'created':
+      return [change.entry.path];
+    case 'renamed':
+      return (next?.entries ?? [])
+        .filter((entry) => paths.isInside(entry.path, change.to))
+        .map((entry) => entry.path);
+    case 'trashed':
+      return [];
+  }
+}
+
 // The record of renaming the doc at `path` to the file `renamed`: a skill's
 // rename moves its folder, so it names the folder before and after.
 export function renameRecord(

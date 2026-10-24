@@ -25,6 +25,7 @@ import { createDocsDialogs } from './docs-dialogs';
 import {
   applyChange,
   changeableEntry,
+  changedPaths,
   chips,
   conflictText,
   contextChoices,
@@ -341,9 +342,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     paths: deps.paths,
     toast,
     log,
-    chipsOf: (entryId) => {
-      const path = entriesById.get(entryId)?.path;
-      return chips(context(), entryId, path !== undefined && pending.has(path));
+    chipsOf: (entryId, path) => {
+      const entryPath = entriesById.get(entryId)?.path ?? path;
+      return chips(context(), entryId, pending.has(entryPath));
     },
     followFile(path, line, fragment) {
       if (
@@ -519,20 +520,6 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     tree.setStatus('Not read yet');
   }
 
-  // The paths a change made or moved, read from the document it produced.
-  const changedPaths = (record: DocChangeRecord, next: IndexDocument) => {
-    switch (record.type) {
-      case 'created':
-        return [record.entry.path];
-      case 'renamed':
-        return next.entries
-          .filter((entry) => deps.paths.isInside(entry.path, record.to))
-          .map((entry) => entry.path);
-      case 'trashed':
-        return [];
-    }
-  };
-
   const entryAt = (path: string) =>
     document?.entries.find(
       (entry) => deps.paths.samePath(entry.path, path) && entry.line === null,
@@ -560,16 +547,17 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   // Applies the change to the shown document, its paths pending until a run
   // asked after it lands, and moves the doc pane with it; false when no
-  // document shows yet.
+  // document shows yet, a created doc pending all the same.
   const showChange = (record: DocChangeRecord): boolean => {
     const seq = ++changeSeq;
     unsettled.push({ seq, record });
-    if (document === null) {
-      return false;
-    }
-    const next = applyChange(document, record, deps.paths);
-    for (const path of changedPaths(record, next)) {
+    const next =
+      document === null ? null : applyChange(document, record, deps.paths);
+    for (const path of changedPaths(record, next, deps.paths)) {
       pending.set(path, seq);
+    }
+    if (next === null) {
+      return false;
     }
     showDocument(next);
     followChange(record);

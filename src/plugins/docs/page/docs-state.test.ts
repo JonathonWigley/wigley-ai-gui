@@ -6,6 +6,7 @@ import type { TreeGroup, TreeLeaf, TreeNode } from '../tree';
 import {
   applyChange,
   changeableEntry,
+  changedPaths,
   chips,
   codeFence,
   conflictText,
@@ -1149,6 +1150,31 @@ describe('provisionalEntry', () => {
     const made = provisionalEntry('/Users/u/notes/rules', null, [], posixPaths);
 
     expect(made.kind).toBe('reference');
+  });
+});
+
+describe('changedPaths', () => {
+  it('changedPaths_CreatedWithNoDocument_ListsItsPath', () => {
+    const created = entry({ path: '/r/rules/tidy.md', kind: 'rule' });
+
+    expect(
+      changedPaths({ type: 'created', entry: created }, null, posixPaths),
+    ).toEqual(['/r/rules/tidy.md']);
+  });
+
+  it('changedPaths_Renamed_ListsEntriesInsideItsNewPath', () => {
+    const next = documentOf([
+      entry({ path: '/r/skills/new/SKILL.md' }),
+      entry({ path: '/r/skills/other/SKILL.md' }),
+    ]);
+
+    expect(
+      changedPaths(
+        { type: 'renamed', from: '/r/skills/old', to: '/r/skills/new' },
+        next,
+        posixPaths,
+      ),
+    ).toEqual(['/r/skills/new/SKILL.md']);
   });
 });
 

@@ -70,7 +70,8 @@ export interface DocViewDeps {
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: Log;
-  chipsOf(entryId: string): { claude: Chip; codex: Chip };
+  // The chips of the doc at `path` whose entry is `entryId`.
+  chipsOf(entryId: string, path: string): { claude: Chip; codex: Chip };
   // Opens a file a link leads to in this view.
   followFile(path: string, line: number | null, fragment: string | null): void;
   // Pushes `docs.conflict` while the changed-on-disk prompt shows.
@@ -244,12 +245,12 @@ export function createDocView(deps: DocViewDeps): DocView {
   let isDisposed = false;
 
   const drawChips = () => {
-    const entryId = shown?.target.entryId ?? null;
-    if (entryId === null) {
+    const target = shown?.target ?? null;
+    if (target?.entryId == null) {
       chipRow.replaceChildren();
       return;
     }
-    const { claude, codex } = deps.chipsOf(entryId);
+    const { claude, codex } = deps.chipsOf(target.entryId, target.path);
     chipRow.replaceChildren(chipElement(claude), chipElement(codex));
   };
 
