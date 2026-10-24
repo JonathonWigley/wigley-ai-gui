@@ -80,15 +80,16 @@ Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
   (Electron's `Input.code`, present in Electron 44.9.0), since macOS turns Option+o into `ø`.
 - Ctrl+h / Ctrl+l move to the previous / next question, on the page and inside a box (inside a box this takes
   Ctrl+h from backspace); `<Leader>n` / `<Leader>p` go.
-- Ctrl+j / Ctrl+k move to the next / previous box, on the page and inside a box; `<Leader>j` / `<Leader>k` go.
+- Ctrl+n / Ctrl+p move to the next / previous box, on the page and inside a box; `<Leader>j` / `<Leader>k` go
+  (Ctrl+j / Ctrl+k until the forms scroll keys moved them, `docs/keymap.md`).
 - There is no jump to question N; a bare digit on the page still picks a choice (changed by ui-design plan C).
 - `<A-n>` / `<A-p>` jump to the next / previous unanswered question, on the page and inside a box (changed by
   ui-design plan C).
 - `<leader>a<digit>` picks a choice and `<leader>ac` clears it inside a box; on the page raw digits pick and raw `c`
   `f` `u` `s` clear and act (changed by ui-design plan C). `<Leader>1`–`9` and
   `<Leader>c` inside a box go (A2 interview). Plan folder `plan-a2-sessions/` holds the rest of A2's settled design.
-- No half-page scroll in forms (`<C-j>` / `<C-k>` are the next and previous box there; docs and chat take them for
-  half a page and the gallery for a whole page, in the keymap rework).
+- `<C-j>` / `<C-k>` scroll the form and its review half a page, as in docs and chat; the gallery takes them for a
+  whole page.
 - Folding goes: the fold keys (`za`, `zM`, `zR`) and the collapsible context and "Why recommended" sections are
   removed; both are always shown.
 

@@ -40,12 +40,19 @@ hjkl is the direction in every layer; the modifier picks the verb.
   mnemonic verbs.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `R` rescan.
-- **Ctrl+hjkl** moves inside the content: `Ctrl+j`/`Ctrl+k` scroll half a page in the doc, its
-  editor too while editing (in visual mode the selection grows or shrinks with the scroll, as vim's
-  `Ctrl+d`/`Ctrl+u` do), and the chat transcript, and page the gallery a whole page (in forms,
-  the next and previous box); `Ctrl+h`/`Ctrl+l` the previous and next unit (forms items). A chord
-  bind takes the key from vim inside a box too, as forms' `Ctrl+j` does: in the chat box and the
-  doc editor vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by design.
+- **Ctrl+hjkl** moves inside the content. `Ctrl+j`/`Ctrl+k` are the app's scroll keys, and every
+  view that scrolls its content takes them: half a page in the doc, its editor too while editing
+  (in visual mode the selection grows or shrinks with the scroll, as vim's `Ctrl+d`/`Ctrl+u` do),
+  the chat transcript and the form and its review, and a whole page in the gallery. List views
+  with a cursor (the docs tree, settings, the pickers) move with `j`/`k` and bind no
+  `Ctrl+j`/`Ctrl+k` yet. `Ctrl+h`/`Ctrl+l` move to the previous and next unit (forms items). A
+  chord bind takes the key from vim inside a box too, in every vim mode: in a form box, the chat
+  box and the doc editor, vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by
+  design.
+- **Ctrl+n / Ctrl+p** move to the next and previous text box, from the page or inside a box in
+  every vim mode (forms' notes, reason and comment boxes). Every view with more than one box
+  takes them, so the keys that move between boxes are the same on every page. Inside a box they
+  take the key from vim's insert-mode completion.
 - **Alt+hjkl** moves focus between panes (`Alt+h`/`Alt+l` between the docs tree and the doc).
   Reserved for when the app has them: `Alt+Shift+hjkl` resize, `Ctrl+Alt+hjkl` swap,
   `Alt+'` / `Alt+;` split, `Alt+w` close a pane.
