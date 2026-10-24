@@ -3,8 +3,8 @@
 **Contents**
 
 - **Order** — the dependency tiers at a glance.
-- **Tier 0: fix and stabilise** — the docs index seam; steps 1, the bug sweep, and 2, drive reliability, have
-  landed.
+- **Tier 0: fix and stabilise** — landed: steps 1, the bug sweep, 2, drive reliability, and 3, the docs index
+  seam.
 - **Tier 1: core seams** — disposables, commands and events, keys, shared services, palette.
 - **Tier 2: harness and platform** — harness registry, harness-neutral app, Codex, platform, packaging.
 - **Tier 3: open the plugins** — plugin host, layouts service, forms kinds, sessions, chat and docs hooks.
@@ -20,7 +20,7 @@ after the steps it needs.
 ## Order
 
 ```
- Tier 0  fix and stabilise     1 Bug sweep (landed) ── 2 Drive reliability (landed) ── 3 Docs index seam
+ Tier 0  fix and stabilise     1 Bug sweep (landed) ── 2 Drive reliability (landed) ── 3 Docs index seam (landed)
               │
  Tier 1  core seams            4 Disposables ─┬─ 5 Commands & events ── 8 Palette & finders
               │                               ├─ 6 Keys core
@@ -36,15 +36,11 @@ after the steps it needs.
  Tier 5  cleanup               22 Test cleanup    23 Design skills (other repo)    24 Per-run drive build
 ```
 
-Steps 1, the bug sweep, and 2, drive reliability, have landed. Step 4 unblocks most of Tiers 1 and 3.
+Tier 0 has landed. Step 4 unblocks most of Tiers 1 and 3.
 
 ## Tier 0: fix and stabilise
 
-**3. Docs index seam.**
-- `IndexSource` registry with `addSource`; `openDoc(path, line?)`; `DocsView(source)`
-- Docs accepts unknown `kind` and `source` values
-- Docs delete trashes link locations (`to_json` exports them; includes a wigley-ai-marketplace change)
-- Non-recursive `watch` option
+Steps 1, the bug sweep, 2, drive reliability, and 3, the docs index seam, have landed.
 
 ## Tier 1: core seams
 
@@ -77,6 +73,7 @@ Steps 1, the bug sweep, and 2, drive reliability, have landed. Step 4 unblocks m
 **7. Shared page services and helpers.** Builds on 4.
 - `services.picker`, `services.confirm`, `chooseFolder`, `openExternal`
 - `readIfPresent`, `upsertById`, `orList`, `capitalised`
+- The two inline string-array checks use `isStringArray`
 - `timers` added to `MainServices`
 - One vim-mode status item fed by `EditorHost`
 - `Split` subscribes to its own ui-state key
@@ -172,6 +169,10 @@ Steps 1, the bug sweep, and 2, drive reliability, have landed. Step 4 unblocks m
 - Keyboard link hints
 - The docs editor-landing issues (Esc, a new round stealing focus, the hidden Form tab body)
 - Move the feature primer into the app
+- One open-intent sequence for docs opens (`openDoc`, tree, links)
+- An outside create in `.claude/rules` started no rebuild (check)
+- `ownsRoot(entry)` for the repo-or-features root rule
+- `addView`'s session-worded internals renamed, with the first non-session view
 
 ## Tier 5: cleanup
 
@@ -181,6 +182,7 @@ Steps 1, the bug sweep, and 2, drive reliability, have landed. Step 4 unblocks m
 - `forms-service` runs on the memory store
 - One test naming style
 - Cover the shell layout swap failure paths
+- The memory Files adapter reports folder changes as Node does
 - The latent `titleBarOverlayProblem` and settings-array notes, revisited only if their trigger appears
 
 **23. Design skills in wigley-ai-marketplace.** No dependencies, so this can run any time. Plan it in that repo.

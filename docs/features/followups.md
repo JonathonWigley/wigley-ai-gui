@@ -25,8 +25,6 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - Fuzzy finders: `Space f f` finds a file, `Space f s` searches text, ranked by the `FuzzyMatcher` page service (the fzf adapter, `src/renderer/fzf/`). Deferred from the docs browser (`docs-browser/design.md`).
 - Keyboard link hints (vimium style) in rendered docs, if Tab between links is not enough.
 - Images in rendered docs: loading local image files into the page needs a safe file protocol of its own; today they show their alt text.
-- Docs delete trashes every link that points at a trashed target. Deleting a synced skill from the tree trashes the repo's folder and leaves `~/.claude/skills/<name>` dangling, because each index entry carries only its real path. The docs index exports the link locations it walked, which `to_json` leaves out today, and `trashTargets` adds them (wigley-ai-marketplace `plugins/wigley/scripts/docs-index` `model.py` `to_json`; `src/plugins/docs/main/doc-files.ts` `trashTargets`).
-- The docs main part watches an open doc's parent folder with the recursive `watch`, so a doc directly in `~/.claude` also sees every transcript write under `~/.claude/projects`. Kept: the watch filters by name on a debounced FSEvents stream. If it costs CPU while sessions stream, add a non-recursive option to `watch` on the Files contract (`src/plugins/docs/main/view-watches.ts`, `src/contracts/files.ts`).
 - The `on-demand` load-state tag uses the accent tone (`CHIP_TONES`, `src/plugins/docs/page/doc-view.ts`), against DESIGN.md's rule that colour at rest means a status; it was `status-info` before plan C, and `listed` now reads the same as `not-loaded`. Needs an info tone on the Tag primitive (`src/shared/page/ui/`).
 - Docs prints keys as plain text inside three sentences — the conflict prompt (`conflictText`, `src/plugins/docs/page/docs-state.ts`), the trash question and the no-place text (`src/plugins/docs/page/docs-dialogs.ts`) — where AGENTS.md and DESIGN.md say every hint is drawn by Kbd. Draw them through `kbd`, or carve out keys inside a sentence in both docs.
 - One `keyHint` helper in place of four copies of "read `keysFor`, then nothing or a Kbd": chat's `keyHint(keys, platform, command, scope)` (`src/plugins/chat/page/key-hint.ts`), forms' `keyHint` / `appendKeyHint`, which also redraws on keymap change (`src/plugins/forms/page/kinds/card-parts.ts`), sessions' `noSelectionHint` (`src/plugins/sessions/page/start.ts`) and keys' `closeHelpHint` (`src/plugins/keys/page/start.ts`). Chat redraws on each draw and forms on `onChanged`; one helper settles one way.
@@ -131,9 +129,6 @@ now, any harness later). Each item names its sites.
 - `keysFor` moves into the core keys API, so `sessions` no longer depends on `keys` just to spell its toast; it returns
   unformatted hints (page and editor) with a keymap-changed subscription so drawn buttons follow a rebind. Box focus
   (`page` or `editor`) becomes a core `keys.onWhereChanged`, replacing keys' own `document.activeElement` reading.
-- Docs: an `IndexSource { id, load, rebuild? }` registry in main, addressed by source id, with `addSource` exported;
-  the page exports `openDoc(path, line?)` and the `DocsView(source)` factory, in place of the fixed `machineIndex` /
-  `rebuild` / `sessionIndex` channel methods.
 
 ### Closed lists that become registrations
 
@@ -156,9 +151,6 @@ now, any harness later). Each item names its sites.
   kind breaks every user layout.
 - `ChatEntry.kind` opens for harness-specific kinds carrying only `raw`, drawn by the `raw` builder unless a layout
   names them.
-- Docs accepts unknown `kind` and `source` values in the index, grouped under a title from the id after the known ones
-  (`index-document.ts`, `tree.ts`, `kinds.ts`); today one unknown kind fails the whole index, so `docs_index.py` can't
-  add a kind before the app ships it.
 - `check-layers.mts` derives each plugin's rules from the folder convention and its manifest's `dependsOn`, and checks
   `src/plugins/{main,page,manifests}.ts` against the folders, rather than about five hand entries per plugin.
 
@@ -240,6 +232,21 @@ now, any harness later). Each item names its sites.
 
 ### Bugs and code
 
+- Docs opens race each other with no shared rule: `openDoc` drops a waiting request only for a newer `openDoc`, so a
+  doc the user opens from the tree or a link while it waits on a rebuild is replaced when the rebuild lands. One
+  open-intent sequence shared by `openDoc`, tree leaf opens and in-doc links, checked where the open happens, gives
+  one newest-wins rule (`src/plugins/docs/page/docs-view.ts` `openDoc`, `followFile`). A path snapshot was tried and
+  dropped: it could not tell an earlier `openDoc`'s own open from a user's.
+- In a drive run, a doc written into the temp home's `.claude/rules/` from outside the app started no rebuild until
+  Rescan. Check whether the docs watches cover that folder or the change was debounced away
+  (`src/plugins/docs/main/view-watches.ts`).
+- "A `repo` or `features` entry owns its root" is spelled inline in four places; one `ownsRoot(entry)` beside
+  `isKnownSource` gives it one home (`src/plugins/docs/tree.ts` `buildTree`, `path-guard.ts`, `page/docs-state.ts`,
+  `index-document.ts`).
+- Two inline string-array checks repeat `isStringArray` from `src/shared/json.ts` (`src/plugins/docs/main/script-locator.ts`,
+  `src/shared/drive-args.ts`).
+- When a plugin first adds a non-session docs view, rename `addView`'s session-worded internals (`SESSION_TREE_SPLIT`,
+  `sessionTree`, the `Docs tab shown` log line, the `c` toast) in `src/plugins/docs/page/start.ts`.
 - `form-state.ts` (995 lines) splits into session state, answers (dispatching to `PageKind.reduce`), finding rules
   (into `kinds/finding/`), a save tracker and a draft codec.
 - Two types named `FormsView` (`form-state.ts:16`, `forms-view.ts:56`): rename the union, which also names the key scope.
@@ -252,6 +259,9 @@ now, any harness later). Each item names its sites.
 
 ### Tests
 
+- The memory Files adapter reports nothing to a watch when it makes, removes or trashes an empty folder, where Node's
+  `fs.watch` on the parent reports the folder's name (`src/shared/memory-files.ts` `makeFolder`, the `removeKey`
+  callers). No caller depends on it yet.
 - Drop or rewrite tests that restate shipped tables and authored text: `forms/manifest.test.ts` (every bind),
   `finding-origins.test.ts` and `tool-definitions.test.ts` (action words, `maxItems`, description sentences; build a
   local origin table and assert the derived functions), `verdict.test.ts` chip text, `formats.test.ts` `F1`/`N2`,
