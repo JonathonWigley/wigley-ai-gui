@@ -1,6 +1,6 @@
 # 01 — Forms scroll and box keys
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -91,3 +91,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 491d4a29 · proof: diff read: every Produces present; typecheck and lint clean · concerns: wigley:writing-tests not loadable in the worker; scroll test also pins store state unchanged (toBe); self-test steps unrun until the gate
