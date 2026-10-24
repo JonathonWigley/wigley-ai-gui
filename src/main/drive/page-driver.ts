@@ -347,13 +347,20 @@ export interface LogMark {
 }
 
 // Marks where the page's log stands now, so a later read can tell which lines
-// came after.
+// came after. A reload during the read gives the mark the navigation count
+// read before it, already stale, and a length of 0, so every line of the
+// reloaded log counts as new.
 export async function markLog(window: DrivenWindow): Promise<LogMark> {
-  // Counted before the read, so a reload during the read leaves a mark whose
-  // navigation is already stale, and every later line counts as new.
   const navigation = window.navigationCount();
-  const { length } = await readLog(window);
-  return { navigation, length };
+  try {
+    const { length } = await readLog(window);
+    return { navigation, length };
+  } catch (error) {
+    if (error instanceof PageNavigatedError) {
+      return { navigation, length: 0 };
+    }
+    throw error;
+  }
 }
 
 // The lines of `lines` (the log as read, newest first) logged after `mark`,
@@ -409,11 +416,29 @@ export async function waitForNewLogLine(
 
 // The page-log lines logged after `mark`, oldest first: every line once the
 // page has navigated since the mark or its log holds fewer lines than the
-// mark's.
+// mark's. A reload during the read reads the log once more, the reloaded log
+// then counting as all new; a second reload during that read rejects.
 export async function linesAfter(
   window: DrivenWindow,
   mark: LogMark,
 ): Promise<string[]> {
+  try {
+    return await readLinesSince(window, mark);
+  } catch (error) {
+    if (error instanceof PageNavigatedError) {
+      return readLinesSince(window, mark);
+    }
+    throw error;
+  }
+}
+
+// One read of the lines logged after `mark`, oldest first, as `linesAfter`
+// gives them.
+async function readLinesSince(
+  window: DrivenWindow,
+  mark: LogMark,
+): Promise<string[]> {
+  // Counted before the read, so an old log is never taken as all new.
   const navigation = window.navigationCount();
   const lines = await readLog(window);
   return linesSince(lines, mark, navigation).reverse();
@@ -469,13 +494,17 @@ export async function resizeContentWidth(
 // Shrinks the window's content to `width`, lists what the page cuts off there
 // once the page has redrawn at that width, then restores the content width it
 // read and waits for the page to redraw at it, listing a restore that never
-// lands as a problem too. Chromium reports media query changes in the frame
-// before its animation-frame callbacks, so the redraw wait holds the next
-// step's keys until the page's `change` listeners have seen each width.
+// lands, and a page that navigates while its cut-off is listed, as problems
+// too. Once `isCurrent` turns false the restore is skipped, the run that set
+// the width having been replaced by one that sets its own. Chromium reports
+// media query changes in the frame before its animation-frame callbacks, so
+// the redraw wait holds the next step's keys until the page's `change`
+// listeners have seen each width.
 export async function cutOffAtWidth(
   window: DrivenWindow,
   width: number,
   scrollsItself: string[],
+  isCurrent: () => boolean = () => true,
 ): Promise<string[]> {
   const oldWidth = window.contentSize().width;
   window.setContentWidth(width);
@@ -490,7 +519,10 @@ export async function cutOffAtWidth(
       `the page produced no frames after narrowing to ${narrowWidth}px`,
     ];
   } else {
-    problems = await window.run(cutOffScript(scrollsItself));
+    problems = await listCutOff(window, scrollsItself, narrowWidth);
+  }
+  if (!isCurrent()) {
+    return problems;
   }
   window.setContentWidth(oldWidth);
   const restoredWidth = window.contentSize().width;
@@ -504,6 +536,25 @@ export async function cutOffAtWidth(
     );
   }
   return problems;
+}
+
+// What the page cuts off, as `cutOffScript` lists it, or one problem saying
+// the page navigated while the list was read at `narrowWidth`.
+async function listCutOff(
+  window: DrivenWindow,
+  scrollsItself: string[],
+  narrowWidth: number,
+): Promise<string[]> {
+  try {
+    return await window.run<string[]>(cutOffScript(scrollsItself));
+  } catch (error) {
+    if (error instanceof PageNavigatedError) {
+      return [
+        `the page navigated while listing what it cuts off at ${narrowWidth}px`,
+      ];
+    }
+    throw error;
+  }
 }
 
 // A PNG of the window, or of `box` in it, once the page has redrawn; a string

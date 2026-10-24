@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -9,7 +10,11 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type StartLockOptions, takeStartLock } from './start-lock.mts';
+import {
+  type StartLock,
+  type StartLockOptions,
+  takeStartLock,
+} from './start-lock.mts';
 
 const HOLDER_PID = 4242;
 
@@ -80,6 +85,39 @@ describe('takeStartLock', () => {
 
     expect(onWait).not.toHaveBeenCalled();
     expect(readFileSync(lockFile, 'utf8')).toBe(String(process.pid));
+  });
+
+  it('GIVEN two takers that both read a dead holder WHEN the second clears and takes the lock before the first clears it THEN the first leaves the second its lock and takes it only once it is released', async () => {
+    writeHolder(lockFile, HOLDER_PID);
+    const isHolderAlive = (pid: number) => pid !== HOLDER_PID;
+    let second: Promise<StartLock> | undefined;
+    let isFirstTaken = false;
+    const first = takeStartLock(
+      lockFile,
+      options({
+        isAlive: (pid) => {
+          // Runs the second taker's clear and take, which never await,
+          // between the first taker's read of the dead pid and its clear.
+          second ??= takeStartLock(
+            lockFile,
+            options({ isAlive: isHolderAlive }),
+          );
+          return isHolderAlive(pid);
+        },
+      }),
+    ).then((lock) => {
+      isFirstTaken = true;
+      return lock;
+    });
+
+    const secondLock = await second!;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(isFirstTaken).toBe(false);
+    expect(readFileSync(lockFile, 'utf8')).toBe(String(process.pid));
+
+    secondLock.release();
+    await first;
+    expect(readdirSync(path.dirname(lockFile))).toEqual(['start.lock']);
   });
 
   it('GIVEN a released lock another taker has since taken WHEN the first lock is released again THEN the file still holds the second taker', async () => {

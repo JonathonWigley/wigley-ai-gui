@@ -402,13 +402,15 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
 }
 
 // Waits for the page to be ready for keys; rejects with the page's start
-// failure, or when it is not ready in time, saying so apart when the page
-// never answered the last script run in it. A script run mid-reload rejects,
+// failure, or when it is not ready in time, saying so apart when a check's
+// script was still unanswered at that point. A script run mid-reload rejects,
 // which counts as not ready yet.
 async function waitForPage(window: DrivenWindow): Promise<void> {
-  let isCheckUnanswered = false;
+  // A count, since a check left running past its cap overlaps the next and
+  // can settle after it.
+  let checksRunning = 0;
   const hasSettled = async () => {
-    isCheckUnanswered = true;
+    checksRunning += 1;
     try {
       return (
         (await isReadyForKeys(window)) ||
@@ -417,13 +419,13 @@ async function waitForPage(window: DrivenWindow): Promise<void> {
     } catch {
       return false;
     } finally {
-      isCheckUnanswered = false;
+      checksRunning -= 1;
     }
   };
   if (!(await waitFor(hasSettled, READY_TIMEOUT_MS))) {
     const seconds = READY_TIMEOUT_MS / 1000;
     throw new Error(
-      isCheckUnanswered
+      checksRunning > 0
         ? `The page never finished loading within ${seconds} s: it stopped answering scripts run in it`
         : `The page was not ready for keys within ${seconds} s`,
     );

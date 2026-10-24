@@ -1,3 +1,4 @@
+import { setTimeout as realWait } from 'node:timers/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeProcesses } from '../../shared/fake-processes';
 import { createMemoryFiles } from '../../shared/memory-files';
@@ -78,6 +79,27 @@ describe('createDriveCommands', () => {
     const result = await commands.run('key', { keys: ['j'] });
 
     expect(result).toEqual({ lines: ['[x] first', '[x] second'] });
+  });
+
+  it('key_PageReloadsAfterTheKeyLands_SendsItOnceAndReturnsTheReloadedLog', async () => {
+    let hasReloaded = false;
+    const { fake, commands } = setUp(() => {
+      if (fake.inputs.length === 0) {
+        return ['[a] before'];
+      }
+      if (!hasReloaded) {
+        hasReloaded = true;
+        fake.navigate();
+      }
+      return ['[x] reloaded'];
+    });
+
+    const result = await commands.run('key', { keys: ['j'] });
+
+    expect(result).toEqual({ lines: ['[x] reloaded'] });
+    expect(
+      fake.inputs.filter((input) => input.type === 'keyDown'),
+    ).toHaveLength(1);
   });
 
   it('setting_PluginSettingAndTheConfigChanges_KeepsBothSettingsAndIsApplied', async () => {
@@ -185,6 +207,37 @@ describe('createDriveCommands', () => {
       'The page never finished loading',
     );
     await vi.advanceTimersByTimeAsync(30_000);
+
+    await rejected;
+  });
+
+  it('ready_StaleCheckSettlesWhileTheLatestHangs_RejectsSayingItNeverFinishedLoading', async () => {
+    vi.useFakeTimers();
+    let checks = 0;
+    const { commands } = setUp(
+      () => [],
+      [
+        [
+          'dataset.ready',
+          () =>
+            ++checks === 1
+              ? new Promise((resolve) => setTimeout(() => resolve(false), 2500))
+              : new Promise(() => {}),
+        ],
+      ],
+    );
+
+    const result = commands.run('ready', {});
+    const rejected = expect(result).rejects.toThrow(
+      'The page never finished loading',
+    );
+    // The first check passes its 2 s cap; the poll gap after it is a
+    // `node:timers/promises` wait the fake clock does not drive, so real time
+    // lets the second check start before the first settles at 2.5 s.
+    await vi.advanceTimersByTimeAsync(2000);
+    await realWait(100);
+    expect(checks).toBe(2);
+    await vi.advanceTimersByTimeAsync(28_000);
 
     await rejected;
   });

@@ -3,6 +3,7 @@ import { CHORD_NOTATION_RULE } from '../../shared/chord-notation';
 import { fakeDrivenWindow } from './fake-driven-window';
 import {
   click,
+  cutOffAtWidth,
   drag,
   linesAfter,
   markLog,
@@ -106,7 +107,54 @@ describe('waitForNewLogLine', () => {
   });
 });
 
+describe('markLog', () => {
+  it('markLog_PageNavigatesDuringTheRead_MarksSoTheWholeReloadedLogIsNew', async () => {
+    let log = ['[x] 2', '[x] 1'];
+    let reads = 0;
+    const { window, navigate } = fakeDrivenWindow([
+      [
+        '#log li',
+        () => {
+          reads += 1;
+          if (reads === 1) {
+            navigate();
+          }
+          return log;
+        },
+      ],
+    ]);
+
+    const mark = await markLog(window);
+    log = ['[x] b', '[x] a'];
+
+    expect(await linesAfter(window, mark)).toEqual(['[x] a', '[x] b']);
+  });
+});
+
 describe('linesAfter', () => {
+  it('linesAfter_PageNavigatesDuringTheRead_ReadsAgainAndReturnsTheWholeNewLog', async () => {
+    let log = ['[x] 2', '[x] 1'];
+    let reads = 0;
+    const { window, navigate } = fakeDrivenWindow([
+      [
+        '#log li',
+        () => {
+          reads += 1;
+          if (reads === 2) {
+            navigate();
+          }
+          return log;
+        },
+      ],
+    ]);
+    const mark = await markLog(window);
+    log = ['[x] c', '[x] b', '[x] a'];
+
+    const lines = await linesAfter(window, mark);
+
+    expect(lines).toEqual(['[x] a', '[x] b', '[x] c']);
+  });
+
   it('linesAfter_PageNavigatedSinceTheMark_ReturnsTheWholeNewLogOldestFirst', async () => {
     let log = ['[x] 5', '[x] 4', '[x] 3', '[x] 2', '[x] 1'];
     const { window, navigate } = fakeDrivenWindow([['#log li', () => log]]);
@@ -186,6 +234,43 @@ describe('waitForRedraw', () => {
     ]);
 
     expect(await waitForRedraw(window)).toBe(false);
+  });
+});
+
+// A page that reports the window's content width as its own, redraws at once,
+// and answers the cut-off script with `cutOff`.
+function pageListingCutOff(cutOff: () => unknown) {
+  const fake = fakeDrivenWindow([
+    ['scrollsItself', cutOff],
+    ['innerWidth', () => fake.window.contentSize().width],
+    ['window.redrawFrames = 0', () => undefined],
+    ['window.redrawFrames', () => 3],
+  ]);
+  return fake;
+}
+
+describe('cutOffAtWidth', () => {
+  it('cutOffAtWidth_PageNavigatesDuringTheCutOffScript_ListsItAndRestoresTheWidth', async () => {
+    const fake = pageListingCutOff(() => fake.navigate());
+
+    const problems = await cutOffAtWidth(fake.window, 400, []);
+
+    expect(problems).toEqual([
+      'the page navigated while listing what it cuts off at 400px',
+    ]);
+    expect(fake.window.contentSize().width).toBe(800);
+  });
+
+  it('cutOffAtWidth_RunNoLongerCurrentAfterTheList_LeavesTheNarrowWidth', async () => {
+    let isCurrent = true;
+    const fake = pageListingCutOff(() => {
+      isCurrent = false;
+      return [];
+    });
+
+    await cutOffAtWidth(fake.window, 400, [], () => isCurrent);
+
+    expect(fake.window.contentSize().width).toBe(400);
   });
 });
 

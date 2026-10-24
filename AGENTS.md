@@ -417,9 +417,10 @@ round), since main, not the page, decides.
   `.vite/build` and bakes its own dev-server URL into `main.cjs`. Two starts that overlap launch Electron on a
   missing `main.cjs` (Electron's "Error launching app" dialog, on the user's screen) or point one app's page at the
   other's dev server. Dev drive starts (`start`, `restart`) and `npm run selftest` take `.drive/start.lock`, which
-  holds the taker's pid: a drive start from just before the spawn until `drive.json` appears, the self-test until
-  its first `[selftest]` line or its child closing (a packaged drive start skips it). A start that finds a live
-  holder prints `Waiting for another dev start (pid <pid>) to finish`; a dead holder's lock is cleared; after 120 s
+  holds the taker's pid: a drive start from just before the spawn until the app answers `ready`, the self-test until
+  its child closes (a packaged drive start skips it). Both hold past the page's startup reload, which re-reads
+  `preload.cjs` from `.vite/build`. A start that finds a live holder prints
+  `Waiting for another dev start (pid <pid>) to finish`; a dead holder's lock is cleared; after 120 s
   the start fails naming the lock's absolute path to delete when no start is running. The user's `npm start` is
   outside it, so work that runs drive checks beside a peer's runs in a worktree, which has its own `.vite`.
 - A session's `ask_round` schema is fixed when the session starts, so after a change to the forms tool contract the

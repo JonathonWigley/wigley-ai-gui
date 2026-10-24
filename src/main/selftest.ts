@@ -326,6 +326,7 @@ async function runStep(
     window,
     window.minimumWidth(),
     scrollsItself,
+    isCurrent,
   );
   if (isCurrent()) {
     report(

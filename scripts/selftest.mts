@@ -1,8 +1,9 @@
 // `npm run selftest`: runs the app's self-test through Electron Forge, its
 // output passed through, and exits 0 only when the self-test reports that all
 // its steps passed. It holds `.drive/start.lock` from before the spawn until
-// the self-test first prints, since every `electron-forge start` rewrites the
-// shared `.vite/build`.
+// the self-test closes, since every `electron-forge start` rewrites the shared
+// `.vite/build` and the page's startup reload reads its preload from there: no
+// line the self-test prints proves that reload has landed.
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
@@ -12,7 +13,6 @@ const REPO_DIR = path.resolve(import.meta.dirname, '..');
 const START_LOCK_FILE = path.join(REPO_DIR, '.drive', 'start.lock');
 const LOCK_TIMEOUT_MS = 120_000;
 const LOCK_POLL_MS = 250;
-const SELFTEST_PREFIX = '[selftest]';
 const PASSED_LINE = '[selftest] all passed';
 
 let startLock: StartLock | undefined;
@@ -31,8 +31,8 @@ try {
   process.exitCode = 1;
 }
 
-// Spawns the self-test and releases `startLock` at its first `[selftest]`
-// line, or when it closes or fails to start.
+// Spawns the self-test and releases `startLock` when it closes or fails to
+// start.
 function runSelfTest(startLock: StartLock): void {
   const isWindows = process.platform === 'win32';
   const forge = path.join(
@@ -54,9 +54,6 @@ function runSelfTest(startLock: StartLock): void {
   for (const stream of [child.stdout, child.stderr]) {
     createInterface({ input: stream }).on('line', (line) => {
       process.stdout.write(`${line}\n`);
-      if (line.includes(SELFTEST_PREFIX)) {
-        startLock.release();
-      }
       if (line.includes(PASSED_LINE)) {
         hasPassed = true;
       }

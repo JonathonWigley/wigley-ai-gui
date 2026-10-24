@@ -1,10 +1,12 @@
 // The lock dev starts take while `electron-forge start` empties and rewrites
 // the shared `.vite/build`, so two starts never build over each other. The
 // lock file holds its taker's pid as text.
+import { randomUUID } from 'node:crypto';
 import {
   linkSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   unlinkSync,
   writeFileSync,
@@ -40,7 +42,7 @@ export async function takeStartLock(
     const holder = readHolder(lockFile);
     const isHeld = holder !== null && options.isAlive(holder);
     if (!isHeld) {
-      rmSync(lockFile, { force: true });
+      clearDeadLock(lockFile, holder);
       continue;
     }
     if (Date.now() > deadline) {
@@ -67,7 +69,8 @@ export async function takeStartLock(
 
 // Creates `lockFile` holding this process's pid, or returns false when it
 // exists. The pid goes into a temp file first and is hard-linked into place,
-// so the lock file never exists without its pid.
+// so the lock file never exists without its pid. The write, link and unlink
+// must stay synchronous: two takers in one process share the temp file's name.
 function tryCreateLockFile(lockFile: string): boolean {
   const tempFile = `${lockFile}.${process.pid}`;
   writeFileSync(tempFile, String(process.pid));
@@ -81,6 +84,35 @@ function tryCreateLockFile(lockFile: string): boolean {
     throw error;
   } finally {
     unlinkSync(tempFile);
+  }
+}
+
+// Deletes `lockFile` when it still holds `deadHolder`. The file is first
+// renamed to a name only this call uses, and a rename is atomic, so of two
+// takers that read the same dead holder only one moves the file; the other's
+// rename fails with ENOENT. A file that no longer holds `deadHolder` is a
+// lock another taker has since taken, and is linked back into place.
+function clearDeadLock(lockFile: string, deadHolder: number | null): void {
+  const movedFile = `${lockFile}.clearing-${randomUUID()}`;
+  try {
+    renameSync(lockFile, movedFile);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+  try {
+    if (readHolder(movedFile) !== deadHolder) {
+      linkSync(movedFile, lockFile);
+    }
+  } catch (error) {
+    // EEXIST: a third taker created the lock while it was moved aside.
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+      throw error;
+    }
+  } finally {
+    unlinkSync(movedFile);
   }
 }
 
