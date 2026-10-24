@@ -271,24 +271,45 @@ const QUESTION_BOXES_STEPS: SelfTestStep[] = [
   },
   {
     keys: ['<C-j>'],
-    expect: '[forms] scrolled the form down half a page to the bottom',
-    why: "The forms line, logged after the bind line, proves the scroll reached the form's main column: question 1's card overflows it at the start width, and focusing the notes box scrolled the box into view, within half a page of the bottom.",
-  },
-  {
-    keys: ['<C-k>'],
-    expect: '[forms] scrolled the form up half a page',
-    why: "Ctrl+k scrolls the form's main column up from the bottom, stopping short of the top since the column overflows by more than half its height.",
+    expect: '[forms] scrolled the form down half a page',
+    repeat: {
+      until: '[forms] scrolled the form down half a page to the bottom',
+      max: 8,
+    },
+    why: "Ctrl+j scrolls the form's main column down until it reaches the bottom, since question 1's card overflows the column.",
   },
   { keys: ['a'], expect: '[forms] focused notes on question 1' },
   {
+    keys: ['<C-k>'],
+    expect: '[forms] scrolled the form up half a page',
+    repeat: {
+      until: '[forms] scrolled the form up half a page to the top',
+      max: 8,
+    },
+    why: "Ctrl+k scrolls the form up to the top from inside a box, in INSERT; focusing the notes box from the bottom leaves the column off the top, since the box sits far below the card's top.",
+  },
+  {
     keys: ['<C-j>'],
-    expect: '[page] <C-j> ran forms.halfPageDown',
-    why: 'Ctrl+j scrolls the form from inside a box, in INSERT.',
+    expect: '[forms] scrolled the form down half a page',
+    repeat: {
+      until: '[forms] scrolled the form down half a page to the bottom',
+      max: 8,
+    },
+    why: 'Ctrl+j scrolls the form down to the bottom from inside the box, the column starting at the top.',
   },
   {
     keys: ['Escape', 'Escape'],
     expect: '[forms] left the box',
-    why: 'Esc leaving the box shows the box kept focus through the scroll.',
+    why: 'Esc leaving the box shows the box kept focus through the scrolls.',
+  },
+  {
+    keys: ['<C-k>'],
+    expect: '[forms] scrolled the form up half a page',
+    repeat: {
+      until: '[forms] scrolled the form up half a page to the top',
+      max: 8,
+    },
+    why: "Ctrl+k scrolls the form's main column up from the bottom until it reaches the top.",
   },
 ];
 
@@ -492,7 +513,11 @@ const REVIEW_STEPS: SelfTestStep[] = [
     checksFit: true,
     why: "Review opens only in forms' scope, so it proves the form took its scope back.",
   },
-  { keys: ['<C-k>'], expect: '[page] <C-k> ran forms.halfPageUp' },
+  {
+    keys: ['<C-k>'],
+    expect: '[forms] the form did not scroll up',
+    why: "Ctrl+k reaches the review's round: the layout cycle's last reload scrolled the main column to the top, and the review's selected row, question 2's and the last, sits in view there, so the column stays at the top.",
+  },
   {
     keys: [' ', '?'],
     expect: '[page]  ? ran keys.toggleHelp',
@@ -795,7 +820,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'question boxes',
-        why: "Question 1's notes and reason boxes enter INSERT at the end and hand focus between them, and which-key inside a box closes without leaving it; pending keys are dropped when the box is left.",
+        why: "Question 1's notes and reason boxes enter INSERT at the end and hand focus between them, and which-key inside a box closes without leaving it; pending keys are dropped when the box is left. Ctrl+j and Ctrl+k scroll the form's main column to its bottom and top, from the page and from inside a box.",
         steps: QUESTION_BOXES_STEPS,
       },
       {
