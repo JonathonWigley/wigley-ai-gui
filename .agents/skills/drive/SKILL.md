@@ -56,9 +56,11 @@ index load state other than `launch`, under `.claude/load-states/`; `indexDelayM
 stand-in `docs_index.py` wait that long before answering, so an in-app create, rename or trash
 keeps the Docs tree's "Claude pending" chip on screen long enough to see; default 0).
 `docs.openDoc` (`{ path, line? }`) calls the docs page export `openDoc`: Docs mode shows and
-opens the doc at that line, or toasts that the machine index does not list it. A start with an unusable environment (a relative
-`WIGLEY_DRIVE_DIR`, a `WIGLEY_DRIVE_HARNESS` other than `fake` or `claude`) exits 1 with the
-reason on stderr before any window opens.
+opens the doc at that line, or toasts that the machine index does not list it. `line` is a
+positive whole number, or the command rejects with `line must be a positive whole number`. A
+path the first index read does not list waits for the pending rebuild before it toasts. A start
+with an unusable environment (a relative `WIGLEY_DRIVE_DIR`, a `WIGLEY_DRIVE_HARNESS` other than
+`fake` or `claude`) exits 1 with the reason on stderr before any window opens.
 
 The app runs commands one at a time, so a command that never returns blocks every later one, and
 the CLI then says the run did not answer. A script the drive runs in the page rejects

@@ -86,8 +86,9 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - **Page exports**: `addView(sourceId, { isVisible })` returns `{ element, shown(), hasUnsavedEdits(), dispose() }`:
   one element holding the view's tree and doc in a split, its keys, `Space v t` and its changes reaching the other
   views as a session tab's do (each session's Docs tab is built through it). `openDoc(path, line?)` shows Docs mode
-  and opens the doc there at that 1-based line once the machine view's first index run settles; a path the machine
-  index does not list is refused with a toast.
+  and opens the doc there at that 1-based line once the machine view's first index read settles, or, when that read
+  does not list the path and a rebuild is coming or running, once that rebuild settles; a path still not listed is
+  refused with a toast. A waiting request is dropped when a newer one is asked or another doc is opened meanwhile.
 - The script is found through `installPath` in each configured Claude config folder's
   `plugins/installed_plugins.json`; a `docs.scriptPath` setting, empty by default, overrides it. `python3 -X utf8`
   runs it: UTF-8 mode lets it print the index's `→` to a Windows console's cp1252 pipe.

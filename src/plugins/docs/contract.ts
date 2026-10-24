@@ -161,7 +161,8 @@ export interface DocsViewHandle {
 // `openDoc` shows Docs mode and opens `path` there at the 1-based `line`. When
 // the machine index's first read does not list `path` and a rebuild is coming
 // or running, it waits for that one rebuild; it toasts when the index still
-// does not list `path`.
+// does not list `path`. A waiting request is dropped when a newer `openDoc` is
+// asked or another doc is opened meanwhile.
 export interface DocsPageExports {
   addView(sourceId: string, options: { isVisible(): boolean }): DocsViewHandle;
   openDoc(path: string, line?: number): void;

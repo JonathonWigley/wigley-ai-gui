@@ -264,7 +264,9 @@ Review base: c04112eecae26d302e9320a509cba760cb383b58
 - SessionSourceSpec comment now says main builds it from sessions.connected's info — resolves group 05's concern — none · group 06 · group 06
 - R1 #3 openDoc: open at once when the first read lists the path, else wait for the first-show rebuild and check again before toasting — the user's standing instruction to take the agent's recommendations — a doc the rebuild drops still opens from the first read · lead
 - R1 #4 memory adapter: a non-recursive watch reports a nested change's first path segment, matching Node — same instruction — a consumer could see a folder name it did not expect · lead
+- R2#2 (repeat, taken on the agent's recommendation per the user's standing instruction): a waiting openDoc is dropped once a newer openDoc is asked or the open doc changed while it waited; newest request wins, as in the registry.
 ### Review rounds
 - R1 implementation review · 4e11b49 · NEEDS FIXES (8 findings: 6 determined, 2 open; 7 applied by lead in 9efa4b9 + marketplace 721687f)
+- R2 (re-review, correctness x1, 4e11b49..0065433 + marketplace 721687f): R1#1-8 closed. NEEDS FIXES: #1 design.md openDoc line stale (documentation, determined); #2 openDoc out-of-order opens (correctness, open, repeat of R1#3). F1 memory empty-folder reports; F2 drive SKILL.md openDoc line.
 ### Test gate
 - every test file the range edited (config-store, node-files, index-document, kinds, doc-files, index-sources, selftest-fixture, docs start, docs-state, path-guard, tree, layout-registry, memory-files, scoped-files) plus chat archived-sessions (isStringArray moved out of it); marketplace docs-index unittest ran at group 02 · 15 files, 400 tests passed

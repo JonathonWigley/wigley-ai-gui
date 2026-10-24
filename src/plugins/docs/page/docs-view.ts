@@ -236,6 +236,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   let firstShowRuns: Promise<unknown> | null = null;
   // The newest rebuild started, until it settles.
   let runningRebuild: Promise<unknown> | null = null;
+  // Each `openDoc` ask's number; one that waited on a rebuild opens only if
+  // it is still the newest.
+  let askedOpens = 0;
 
   const applyScope = () => {
     if (deps.isActive()) {
@@ -750,11 +753,18 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       rebuild();
     },
     openDoc(path, line) {
+      const number = ++askedOpens;
+      const openWhenAsked = doc.openPath();
       void (async () => {
         await firstRead.promise;
         const awaitedRebuild = firstShowRuns ?? runningRebuild;
         if (!isListed(path) && awaitedRebuild !== null) {
           await awaitedRebuild;
+          const isNewestAsk = number === askedOpens;
+          const isOpenDocUnchanged = doc.openPath() === openWhenAsked;
+          if (!isNewestAsk || !isOpenDocUnchanged) {
+            return;
+          }
         }
         followFile(path, line, null);
       })();
