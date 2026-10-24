@@ -272,6 +272,44 @@ describe('buildTree', () => {
     ]);
   });
 
+  it('buildTree_FeatureUnknownKinds_AfterKnownThenByKindId', () => {
+    const root = '/Users/u/wigley-features/r';
+    const feature = { source: 'features', repo: 'r', root } as const;
+    const entries = [
+      entry({
+        ...feature,
+        path: `${root}/a-feat/zeta.md`,
+        kind: 'zeta',
+        title: 'A first by title',
+      }),
+      entry({
+        ...feature,
+        path: `${root}/a-feat/alpha.md`,
+        kind: 'alpha',
+        title: 'B second by title',
+      }),
+      entry({
+        ...feature,
+        path: `${root}/a-feat/design.md`,
+        kind: 'feature-doc',
+        title: 'Z last by title',
+      }),
+    ];
+
+    const features = child(
+      child(buildTree(entries, HOME, posixPaths), 'r').children,
+      'Features',
+    );
+
+    expect(
+      child(features.children, 'a-feat').children.map((node) => node.id),
+    ).toEqual([
+      `entry:${root}/a-feat/design.md`,
+      `entry:${root}/a-feat/alpha.md`,
+      `entry:${root}/a-feat/zeta.md`,
+    ]);
+  });
+
   it('buildTree_FeatureSlugNamedLikeKind_IdsDistinct', () => {
     const root = '/Users/u/wigley-features/r';
     const feature = { source: 'features', repo: 'r', root } as const;

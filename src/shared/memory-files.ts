@@ -6,9 +6,10 @@ import { relativeSegments } from './scoped-files';
 // `rename`, `trash` and `remove` report each changed file's path to the
 // watches over it at once, with no debounce, so a test drives a save by
 // writing; a rename reports each moved file's old path and its new one. A
-// watch never fails, so it never calls its `onError`. There are no links, so
-// `stat` reports none and `realPath` returns the path's stored spelling. Names
-// are case-sensitive.
+// watch with `recursive: false` reports a change under a subfolder as the
+// subfolder's name, once per call. A watch never fails, so it never calls its
+// `onError`. There are no links, so `stat` reports none and `realPath` returns
+// the path's stored spelling. Names are case-sensitive.
 export interface MemoryFiles extends Files {
   // Deletes the file at `path`, or the folder at `path` and everything under
   // it; the folder holding `path` stays.
@@ -38,13 +39,20 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
   const madeFolders = new Set<string>();
   const watches = new Set<MemoryWatch>();
 
-  const report = (file: string) => {
+  // Reports the files one change touched to each watch over them, each path
+  // once; a watch that is not recursive hears a change under a subfolder as
+  // the subfolder's name, as Node's non-recursive `fs.watch` reports it.
+  const report = (files: string[]) => {
     for (const watch of watches) {
-      const relative = relativeUnder(watch.folder, file);
-      const isReported =
-        relative !== null && (watch.recursive || !relative.includes('/'));
-      if (isReported) {
-        watch.onChange(relative);
+      const reported = new Set<string>();
+      for (const file of files) {
+        const relative = relativeUnder(watch.folder, file);
+        if (relative !== null) {
+          reported.add(watch.recursive ? relative : relative.split('/')[0]);
+        }
+      }
+      for (const changed of reported) {
+        watch.onChange(changed);
       }
     }
   };
@@ -99,11 +107,12 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
     for (const folder of atOrUnder(madeFolders, target)) {
       madeFolders.delete(folder);
     }
-    for (const file of atOrUnder(contents.keys(), target)) {
+    const removed = atOrUnder(contents.keys(), target);
+    for (const file of removed) {
       contents.delete(file);
       modifiedTimes.delete(file);
-      report(file);
     }
+    report(removed);
   };
 
   const contentOf = (path: string): string | Uint8Array => {
@@ -139,7 +148,7 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
     }
     contents.set(file, content);
     modifiedTimes.set(file, clock?.now() ?? 0);
-    report(file);
+    report([file]);
   };
 
   return {
@@ -221,9 +230,8 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
         contents.set(moved(file), content);
         modifiedTimes.set(moved(file), modifiedTimes.get(file) ?? 0);
         modifiedTimes.delete(file);
-        report(file);
-        report(moved(file));
       }
+      report(movedContents.flatMap(([file]) => [file, moved(file)]));
     },
     trash: async (path) => {
       const key = keyOf(path);

@@ -102,13 +102,35 @@ describe('createMemoryFiles', () => {
     ]);
   });
 
-  it('watch_NotRecursive_SubfolderChangeNotReported', async () => {
+  it('watch_NotRecursive_SubfolderChange_ReportsSubfolderName', async () => {
     const reports: string[] = [];
     files.watch('/h', (changed) => reports.push(changed), { recursive: false });
 
     await files.write('/h/s/a.md', 'text');
 
-    expect(reports).toEqual([]);
+    expect(reports).toEqual(['s']);
+  });
+
+  it('watch_NotRecursive_SubfolderTrashed_ReportsSubfolderNameOnce', async () => {
+    await files.write('/h/s/a.md', 'a');
+    await files.write('/h/s/b.md', 'b');
+    const reports: string[] = [];
+    files.watch('/h', (changed) => reports.push(changed), { recursive: false });
+
+    await files.trash('/h/s');
+
+    expect(reports).toEqual(['s']);
+  });
+
+  it('watch_NotRecursive_SubfolderRenamed_ReportsBothNamesOnce', async () => {
+    await files.write('/h/s/a.md', 'a');
+    await files.write('/h/s/b.md', 'b');
+    const reports: string[] = [];
+    files.watch('/h', (changed) => reports.push(changed), { recursive: false });
+
+    await files.rename('/h/s', '/h/t');
+
+    expect(reports.sort()).toEqual(['s', 't']);
   });
 
   it('watch_NotRecursive_FolderChangeReported', async () => {

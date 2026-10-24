@@ -149,6 +149,17 @@ describe('parseIndexDocument', () => {
     });
   });
 
+  it('parse_GlobalRootNotStringOrNull_NamesRoot', () => {
+    const text = documentText({
+      entries: [{ ...entry({ path: '/a', source: 'global' }), root: 5 }],
+    });
+
+    expect(parseIndexDocument(text)).toEqual({
+      ok: false,
+      message: 'Docs index entry 0 is malformed: root',
+    });
+  });
+
   it('parse_ContextWithoutFolder_NamesFolder', () => {
     const text = documentText({ contexts: [{ sessionId: null, states: {} }] });
 

@@ -96,7 +96,7 @@ describe('scopedFiles', () => {
     await scoped.write('layouts/a/layout.js', 'text');
     await scoped.write('layouts/b.js', 'text');
 
-    expect(reports).toEqual(['b.js']);
+    expect(reports).toEqual(['a', 'b.js']);
   });
 
   it('rename_DestinationOutsideRoot_RejectsBeforeMoving', async () => {

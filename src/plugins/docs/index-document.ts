@@ -106,27 +106,22 @@ function failed(message: string): ParsedIndex {
 }
 
 // The first field of `entry` that breaks the schema, or null. A kind or
-// source need only be a string; the known sources' own fields are checked,
-// and an unknown source's `repo`, `root` and `plugin` are each a string or
-// null.
+// source need only be a string; `repo`, `root` and `plugin` are each a string
+// where a known source requires it, else a string or null.
 function malformedEntryField(entry: unknown): string | null {
   if (!isJsonObject(entry)) {
     return 'entry';
   }
   const { source } = entry;
-  const sourceIsKnown = typeof source === 'string' && isKnownSource(source);
   const ownedByRepo = source === 'repo' || source === 'features';
   const ownedByPlugin = source === 'plugin';
   const checks: [string, boolean][] = [
     ['id', typeof entry.id === 'string'],
     ['kind', typeof entry.kind === 'string'],
     ['source', typeof source === 'string'],
-    ['repo', fieldValid(entry.repo, sourceIsKnown, ownedByRepo)],
-    [
-      'root',
-      fieldValid(entry.root, sourceIsKnown, ownedByRepo || ownedByPlugin),
-    ],
-    ['plugin', fieldValid(entry.plugin, sourceIsKnown, ownedByPlugin)],
+    ['repo', fieldValid(entry.repo, ownedByRepo)],
+    ['root', fieldValid(entry.root, ownedByRepo || ownedByPlugin)],
+    ['plugin', fieldValid(entry.plugin, ownedByPlugin)],
     ['path', typeof entry.path === 'string'],
     ['line', entry.line === null || typeof entry.line === 'number'],
     ['title', typeof entry.title === 'string'],
@@ -136,18 +131,10 @@ function malformedEntryField(entry: unknown): string | null {
   return checks.find(([, valid]) => !valid)?.[0] ?? null;
 }
 
-// A source-specific field: a string where a known source requires it; any
-// value for a known source that does not; a string or null for an unknown
-// source.
-function fieldValid(
-  value: unknown,
-  sourceIsKnown: boolean,
-  isRequired: boolean,
-): boolean {
-  if (!sourceIsKnown) {
-    return value === null || typeof value === 'string';
-  }
-  return !isRequired || typeof value === 'string';
+// A source-specific field: a string where the entry's source requires it,
+// else a string or null.
+function fieldValid(value: unknown, isRequired: boolean): boolean {
+  return typeof value === 'string' || (!isRequired && value === null);
 }
 
 // The first field of `context` that breaks the schema, or null.
