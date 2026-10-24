@@ -24,12 +24,15 @@ vi.mock('./drive/page-driver', async (importOriginal) => ({
   readStartFailure: async () => null,
   waitForNewLogLine,
 }));
+// The window's navigation count, which a test moves to stand in for a new
+// navigation.
+const navigation = vi.hoisted(() => ({ count: 1 }));
 vi.mock('./electron-driven-window', () => ({
   electronDrivenWindow: () => ({
     focus: () => {},
     emulateFocus: async () => {},
     contentSize: () => ({ width: 800, height: 600 }),
-    navigationCount: () => 1,
+    navigationCount: () => navigation.count,
   }),
 }));
 
@@ -206,6 +209,22 @@ describe('runScript', () => {
   });
 });
 
+// A window whose `did-finish-load` listeners land in `loaded`, for the test to
+// fire as page loads.
+function windowFiringLoads() {
+  const loaded: (() => void)[] = [];
+  const window = {
+    webContents: {
+      on: (event: string, listener: () => void) => {
+        if (event === 'did-finish-load') {
+          loaded.push(listener);
+        }
+      },
+    },
+  } as unknown as BrowserWindow;
+  return { window, loaded };
+}
+
 describe('startSelfTest', () => {
   let screenshotFolder: string;
   let lines: string[];
@@ -213,6 +232,7 @@ describe('startSelfTest', () => {
   beforeEach(() => {
     exit.mockClear();
     press.mockClear();
+    navigation.count = 1;
     screenshotFolder = mkdtempSync(path.join(tmpdir(), 'selftest-test-'));
     lines = [];
     vi.spyOn(console, 'log').mockImplementation((line: string) => {
@@ -236,16 +256,7 @@ describe('startSelfTest', () => {
       rejectResult(new Error('fixture failed')),
     );
     waitForNewLogLine.mockResolvedValueOnce(true);
-    const loaded: (() => void)[] = [];
-    const window = {
-      webContents: {
-        on: (event: string, listener: () => void) => {
-          if (event === 'did-finish-load') {
-            loaded.push(listener);
-          }
-        },
-      },
-    } as unknown as BrowserWindow;
+    const { window, loaded } = windowFiringLoads();
     const script: SelfTestScript = {
       pageBinds: [],
       settings: {},
@@ -279,6 +290,50 @@ describe('startSelfTest', () => {
       '[selftest] PASS [plugin] shown',
       '[selftest] group plugin: keys',
       '[selftest] FAIL the steps run: fixture failed',
+    ]);
+  });
+
+  it('starts one run per page load however often the load finishes', async () => {
+    vi.resetModules();
+    const { startSelfTest } = await import('./selftest');
+    const open = vi.fn(() => ({
+      shownLine: '[plugin] shown',
+      result: new Promise<void>(() => {}),
+    }));
+    const { window, loaded } = windowFiringLoads();
+    const driver = startSelfTest(
+      window,
+      {} as Files,
+      async () => {},
+      screenshotFolder,
+    );
+    driver.hostFor('plugin').run({
+      pageBinds: [],
+      settings: {},
+      open,
+      groups: [
+        {
+          name: 'keys',
+          why: 'a proves the keys',
+          steps: [{ keys: ['a'], expect: '[plugin] a' }],
+        },
+      ],
+      scrollsItself: [],
+      problems: () => [],
+    });
+    driver.closeHandover();
+
+    loaded[0]();
+    loaded[0]();
+    await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+    navigation.count = 2;
+    loaded[0]();
+    await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+
+    expect(open.mock.calls).toEqual([[1], [2]]);
+    expect(lines).toEqual([
+      '[selftest] page load 1 starts its run',
+      '[selftest] page load 2 starts its run',
     ]);
   });
 });

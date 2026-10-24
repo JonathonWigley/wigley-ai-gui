@@ -58,6 +58,25 @@ describe('startDocs', () => {
   });
 });
 
+// The docs drive actions over a fresh home, whose sessions throw on connect.
+async function driveConnectingNothing() {
+  const files = await setUpFiles();
+  const drive = fakeDriveHost();
+  addDriveActions(drive.host, {
+    files,
+    homeDir: HOME,
+    started: Promise.resolve(),
+    paths: posixPaths,
+    sessions: {
+      activate: () => undefined,
+      connect: () => {
+        throw new Error('not reached');
+      },
+    },
+  });
+  return drive;
+}
+
 describe('docs drive actions', () => {
   it('dispose removes the actions and ends each session connectSession connected', async () => {
     const files = await setUpFiles();
@@ -90,23 +109,21 @@ describe('docs drive actions', () => {
   });
 
   it('connectSession rejects a sessionId that is not a string', async () => {
-    const files = await setUpFiles();
-    const drive = fakeDriveHost();
-    addDriveActions(drive.host, {
-      files,
-      homeDir: HOME,
-      started: Promise.resolve(),
-      paths: posixPaths,
-      sessions: {
-        activate: () => undefined,
-        connect: () => {
-          throw new Error('not reached');
-        },
-      },
-    });
+    const drive = await driveConnectingNothing();
 
     await expect(drive.run('connectSession', { sessionId: 3 })).rejects.toThrow(
       'sessionId must be a string',
     );
+  });
+
+  it.each([
+    ['seed', -1, 'indexDelayMs must not be negative'],
+    ['seed', 'slow', 'indexDelayMs must be a number'],
+    ['connectSession', -1, 'indexDelayMs must not be negative'],
+    ['connectSession', 'slow', 'indexDelayMs must be a number'],
+  ])('%s rejects indexDelayMs %j', async (action, indexDelayMs, message) => {
+    const drive = await driveConnectingNothing();
+
+    await expect(drive.run(action, { indexDelayMs })).rejects.toThrow(message);
   });
 });

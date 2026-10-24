@@ -8,6 +8,7 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
+  FAKE_END_TEXT,
   FAKE_HOLD_TEXT,
   FAKE_PAST_SESSIONS,
   FAKE_SIGN_IN_CODE,
@@ -124,6 +125,25 @@ const TWO_SESSIONS_STEPS: SelfTestStep[] = [
     expect: '[chat] assistant entry added in chat-selftest',
     why: 'Back on the first session, i leaves visual mode and inserts before the cursor, so ok sends hoki.',
   },
+];
+
+// The second session ends here and stays ended for the rest of the run; its
+// process's calls are not checked.
+const ENDED_SESSION_STEPS: SelfTestStep[] = [
+  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  { keys: sendKeys(FAKE_END_TEXT), expect: '[chat] chat-second ended' },
+  {
+    keys: [' ', 'c', 'e'],
+    expect: '[page] <Leader>ce has no bind in chat.ended',
+    why: "The ended tab's box holds no control picker.",
+  },
+  { keys: ['Escape'], expect: '[chat] left the box' },
+  {
+    keys: ['j'],
+    expect: '[chat] focused user entry',
+    why: 'The ended transcript holds only the sent message.',
+  },
+  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
 
 const SENDING_STEPS: SelfTestStep[] = [
@@ -349,6 +369,11 @@ const GROUPS: SelfTestGroup[] = [
     name: 'two sessions',
     why: "Each session keeps its own state across switching Chat tabs: y in the second leaves the first's permission alone, a picker closes, the start prompt stays open, and a box left in visual mode keeps its text and cursor across a blur.",
     steps: TWO_SESSIONS_STEPS,
+  },
+  {
+    name: 'ended session',
+    why: "fake: end ends the second session's process on its own: its Chat tab stays, ended, where the box's control keys have no bind, Esc still leaves the box and j still moves through the entries.",
+    steps: ENDED_SESSION_STEPS,
   },
   {
     name: 'sending',

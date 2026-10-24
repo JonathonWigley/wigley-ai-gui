@@ -613,6 +613,24 @@ describe('createChatSessions', () => {
     expect(test.logged).toContain(`[chat] session ${ROW_ID} failed: crashed`);
   });
 
+  it('ended_WhileWorking_ShowsIdleAndAnnouncesNothing', async () => {
+    const test = await started();
+    test.setFocused(false);
+    test.activity('working');
+
+    test.process.events.ended({ code: 0, error: null });
+
+    expect(test.sent('activity').at(-1)).toEqual({
+      sessionId: ROW_ID,
+      activity: 'idle',
+    });
+    expect(test.chat.sessions()).toMatchObject([
+      { sessionId: ROW_ID, ended: true, activity: 'idle' },
+    ]);
+    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
+  });
+
   it('closed_EndedSession_EndsTheOwnedSessionAtOnce', async () => {
     const test = await started();
     test.process.events.ended({ code: 0, error: null });

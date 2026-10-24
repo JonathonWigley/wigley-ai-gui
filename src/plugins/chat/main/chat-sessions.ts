@@ -231,6 +231,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
   }
 
+  // An ended session runs no turn, so it shows idle; unlike a turn going idle,
+  // its end announces nothing.
+  function showEndedIdle(session: HeldSession) {
+    session.harnessActivity = 'idle';
+    if (session.state.activity === 'idle') {
+      return;
+    }
+    session.state.activity = 'idle';
+    send('activity', { sessionId: session.state.sessionId, activity: 'idle' });
+  }
+
   // Resolves every pending call as cancelled, sending no entry.
   function cancelPending(session: HeldSession) {
     const cancelled = permissionReplyText(
@@ -344,6 +355,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         showPendingCancelled(session);
         cancelPending(session);
         send('sessionEnded', { sessionId, error });
+        showEndedIdle(session);
       },
     };
   }
