@@ -754,15 +754,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     openDoc(path, line) {
       const number = ++askedOpens;
-      const openWhenAsked = doc.openPath();
       void (async () => {
         await firstRead.promise;
         const awaitedRebuild = firstShowRuns ?? runningRebuild;
         if (!isListed(path) && awaitedRebuild !== null) {
           await awaitedRebuild;
-          const isNewestAsk = number === askedOpens;
-          const isOpenDocUnchanged = doc.openPath() === openWhenAsked;
-          if (!isNewestAsk || !isOpenDocUnchanged) {
+          if (number !== askedOpens) {
             return;
           }
         }
