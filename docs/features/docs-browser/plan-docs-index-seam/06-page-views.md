@@ -1,6 +1,6 @@
 # 06 — Page views by source id, `addView` and `openDoc`
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -75,3 +75,5 @@ Done when: `npm run typecheck` (green again for the whole tree), `npm run lint` 
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 7cfc45e · proof: diff read: DocsViewHandle, DocsPageExports, openDoc message, DocsViewDeps.sourceId, DocsView.openDoc, page exports, docs.openDoc drive action present; typecheck green tree-wide, lint clean · concerns: machine view shows 'Not read yet' and ignores other views' changes until Docs mode's first show; first show logs read then rebuilt — self-test order to check live; openDoc relies on mode.show() reaching showFirstTime; view ids now view:<n>

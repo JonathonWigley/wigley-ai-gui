@@ -1,6 +1,6 @@
 # 07 — Re-read the docs written ahead against the landed code
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 01, 02, 03, 04, 05, 06
 Plan: [plan.md](plan.md)
