@@ -134,11 +134,32 @@ export interface DocsMainExports {
   addSource(source: IndexSource): Disposable;
 }
 
-// A session's Docs tab's source, from sessions' `sessionAdded` payload.
+// What a session's index source reads for: main builds it from the
+// `sessions.connected` payload's `info`.
 export interface SessionSourceSpec {
   hostSessionId: string | null;
   projectDir: string | null;
   harness: IndexHarness | null;
+}
+
+// One docs view `addView` handed out: `element` holds its tree and doc in a
+// split. `shown` runs each time the caller shows the element (the view's
+// first show reads its index); `hasUnsavedEdits` is the caller's close guard;
+// `dispose` takes the view out of the docs plugin.
+export interface DocsViewHandle {
+  element: HTMLElement;
+  shown(): void;
+  hasUnsavedEdits(): boolean;
+  dispose(): void;
+}
+
+// The docs page part's exports. `addView` builds a docs view over the index
+// source registered as `sourceId`, its keys active while `isVisible`.
+// `openDoc` shows Docs mode and opens `path` there at the 1-based `line`, or
+// toasts that the machine index does not list it.
+export interface DocsPageExports {
+  addView(sourceId: string, options: { isVisible(): boolean }): DocsViewHandle;
+  openDoc(path: string, line?: number): void;
 }
 
 export type WriteResult =
@@ -207,5 +228,9 @@ export interface DocsChannel extends ChannelShape {
       harness: IndexHarness,
     ): Promise<{ path: string; line: number } | null>;
   };
-  messages: { docChanged: DocChange };
+  messages: {
+    docChanged: DocChange;
+    // Asks the page to run its `openDoc` export; `line` is 1-based.
+    openDoc: { path: string; line: number | null };
+  };
 }

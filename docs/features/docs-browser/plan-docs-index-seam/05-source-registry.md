@@ -1,6 +1,6 @@
 # 05 — Index source registry in main
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -80,3 +80,5 @@ Done when: `npm run typecheck`, `npm run lint` and the tests above pass. The pag
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 8c7f218 · proof: diff read: IndexSource, SourceRead, DocsMainExports, loadIndex/rebuildIndex, IndexSourceRegistry, createIndexSourceRegistry/createMachineSource/createSessionSource, exports present; typecheck fails only in page/docs-view.ts (6, expected until 06) · concerns: SessionSourceSpec comment still names sessions' sessionAdded payload as its origin; a failed session load now clears that session's entries (registry rule)

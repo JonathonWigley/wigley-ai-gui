@@ -4,6 +4,7 @@ import type { Paths } from '../../../contracts/paths';
 import type {
   DriveHost,
   MainApi,
+  MainChannel,
   MainPart,
   MainServices,
   QualifiedEvents,
@@ -13,6 +14,7 @@ import {
   optionalBoolean,
   optionalNumber,
   optionalString,
+  requiredString,
 } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
 import type { JsonObject } from '../../../shared/json';
@@ -129,6 +131,7 @@ interface DocsDriveDeps {
   // Settles once docs has started, so a seed never races the start's fixture.
   started: Promise<unknown>;
   paths: Paths;
+  channel: Pick<MainChannel<DocsChannel>, 'send'>;
 }
 
 function indexDelayMsArg(args: JsonObject): number {
@@ -143,13 +146,13 @@ function indexDelayMsArg(args: JsonObject): number {
 // connects a session in its repo, whose row shows its Docs tab. Each takes
 // `loadStates` to add a doc per non-launch index load state and
 // `indexDelayMs` to make the stand-in index script wait before answering.
-// Disposing removes the actions and ends every session `docs.connectSession`
+// `docs.openDoc` asks the page to open a doc in Docs mode. Disposing removes the actions and ends every session `docs.connectSession`
 // connected.
 export function addDriveActions(
   drive: DriveHost,
   deps: DocsDriveDeps,
 ): Disposable {
-  const { files, homeDir, sessions, started, paths } = deps;
+  const { files, homeDir, sessions, started, paths, channel } = deps;
   const connected: ConnectedSession[] = [];
   let connects = 0;
   const actions = [
@@ -191,6 +194,19 @@ export function addDriveActions(
         );
         connected.push(session);
         return { sessionId, rowId: session.session.id };
+      },
+    }),
+    drive.add('openDoc', {
+      description:
+        'Shows Docs mode and opens the doc at path (line 1-based), or toasts that the machine index does not list it.',
+      args: '{ path: string, line?: number }',
+      async run(rawArgs) {
+        await started;
+        const args = argsObject(rawArgs);
+        const path = requiredString(args, 'path');
+        const line = optionalNumber(args, 'line') ?? null;
+        channel.send('openDoc', { path, line });
+        return {};
       },
     }),
   ];
@@ -311,6 +327,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
             sessions,
             started: docs,
             paths: services.paths,
+            channel,
           })
         : null;
     const exports: DocsMainExports = {

@@ -43,7 +43,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       keys: ['R'],
-      expect: '[docs] index rebuilt: 8 entries',
+      expect: '[docs] machine index rebuilt: 8 entries',
       why: "Docs mode's first show built the index during an earlier plugin's steps, before this script rewrote the fixture.",
     },
     { keys: ['G'], expect: '[docs] selected Features' },
@@ -187,7 +187,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       checksFit: true,
     },
     { keys: ['y'], expect: '[docs] moved fresh.md to the Trash' },
-    { keys: ['R'], expect: '[docs] index rebuilt: 9 entries' },
+    { keys: ['R'], expect: '[docs] machine index rebuilt: 9 entries' },
   ];
   const treeFilter: SelfTestStep[] = [
     {

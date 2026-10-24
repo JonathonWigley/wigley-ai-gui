@@ -17,14 +17,14 @@ import type {
   SessionsPageEvents,
   SessionsPageExports,
 } from '../../sessions/contract';
-import type { DocsChannel } from '../contract';
+import type { DocsChannel, DocsPageExports, DocsViewHandle } from '../contract';
 import { docsManifest } from '../manifest';
 import { type DocChangeRecord, UNSAVED_TEXT } from './docs-state';
 import {
   createDocsView,
-  type DocsSource,
   type DocsView,
   type DocsViewCommands,
+  MACHINE_SOURCE_ID,
 } from './docs-view';
 import { commandOfKeysIn } from './hidden-tree-keys';
 
@@ -35,13 +35,19 @@ type DocsApi = PageApi<
   QualifiedEvents<'sessions', SessionsPageEvents>
 >;
 
-interface SessionDocs {
+// A view `addView` handed out.
+interface AddedView {
   view: DocsView;
-  // Null until `addTab` returns.
-  handle: SessionTabHandle | null;
   split: Split;
-  // Per tab and never stored: each connect starts with the tree shown.
+  // Per view and never stored: each view starts with the tree shown.
   isTreeHidden: boolean;
+  isVisible(): boolean;
+}
+
+interface SessionDocs {
+  view: DocsViewHandle;
+  // Null until `addTab` returns.
+  tab: SessionTabHandle | null;
 }
 
 // The tree commands that need the tree in sight. While a docs view's tree is
@@ -72,17 +78,18 @@ const TREE_COMMAND_IDS: ReadonlySet<CommandId> = new Set(
   ),
 );
 
-// A session Docs tab's tree width limits in CSS pixels; every session's tab
-// reads and writes the one stored width.
+// An added view's tree width limits in CSS pixels; every added view reads and
+// writes the one stored width.
 const SESSION_TREE_SPLIT = { initial: 288, min: 160, max: 480 };
 
 // Docs mode over the machine's index, its tree in the side bar and its doc in
-// the sheet, and a Docs tab in every session over that session's index, its
-// tree and doc side by side in a split. Each command acts on the active view:
-// the machine view while Docs mode shows, else the session view whose tab is
-// visible. A change made in one view reaches every other, and a view showing
-// closes the others' overlays, since two views' pane scopes may be equal.
-// `toggleTree` hides or shows the active view's tree.
+// the sheet, and the views `addView` hands out, each its tree and doc side by
+// side in a split: a Docs tab in every session over that session's index
+// among them. Each command acts on the active view: the machine view while
+// Docs mode shows, else the added view that is visible. A change made in one
+// view reaches every other, and a view showing closes the others' overlays,
+// since two views' pane scopes may be equal. `toggleTree` hides or shows the
+// active view's tree. `openDoc` opens a doc in Docs mode.
 export const docsPagePart: PagePart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
@@ -98,11 +105,14 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       );
 
     let isDocsModeShown = false;
+    // View id → the added view.
+    const addedViews = new Map<string, AddedView>();
+    let addedCount = 0;
     const sessionDocs = new Map<string, SessionDocs>();
 
     const allViews = (): DocsView[] => [
       machineView,
-      ...[...sessionDocs.values()].map((held) => held.view),
+      ...[...addedViews.values()].map((added) => added.view),
     ];
 
     const otherViews = (view: DocsView) =>
@@ -124,7 +134,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // `changed` reads the view only once a change is made, after creation.
     const createView = (
       viewId: string,
-      source: DocsSource,
+      sourceId: string,
       isActive: () => boolean,
       openChanged: (path: string | null) => void,
       revealTree: () => void,
@@ -132,7 +142,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     ): DocsView => {
       const view: DocsView = createDocsView({
         viewId,
-        source,
+        sourceId,
         channel: api.channel,
         homeDir: services.homeDir,
         editor: services.editor,
@@ -169,7 +179,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // side bar's overlay.
     const machineView = createView(
       'machine',
-      { type: 'machine' },
+      MACHINE_SOURCE_ID,
       () => isDocsModeShown,
       (path) =>
         mode.setContext(
@@ -238,106 +248,139 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       isDocsModeShown = modeId === 'docs.docs';
     });
 
-    api.events.on(
-      'sessions.sessionAdded',
-      ({ sessionId, projectDir, harness, hostSessionId }) => {
-        const split = createSplit({
-          ...SESSION_TREE_SPLIT,
-          uiState: services.uiState,
-          stateKey: 'sessionTree',
-        });
-        const held: SessionDocs = {
-          view: createView(
-            `session:${sessionId}`,
-            { type: 'session', spec: { hostSessionId, projectDir, harness } },
-            () => held.handle?.isVisible() === true,
-            () => undefined,
-            () => {
-              if (held.isTreeHidden) {
-                setSessionTreeHidden(held, false);
-              }
-            },
-            () => undefined,
-          ),
-          handle: null,
-          split,
-          isTreeHidden: false,
-        };
-        split.element.classList.add('docs-split');
-        split.start.append(held.view.tree);
-        split.end.append(held.view.doc);
-        sessionDocs.set(sessionId, held);
-        log(
-          'docs',
-          `Docs tab added for ${projectDir ?? 'a session with no folder'}`,
-        );
-        held.handle = sessions.addTab(sessionId, {
-          id: 'docs',
-          title: 'Docs',
-          element: split.element,
-          beforeClose() {
-            if (held.view.hasUnsavedEdits()) {
-              services.toast(UNSAVED_TEXT, 'error');
-              return false;
+    // Hiding moves focus by `treeHiddenIn`, as Docs mode's side bar hiding
+    // does. Showing leaves focus where it is, as the side bar showing beside
+    // the doc does.
+    const setTreeHidden = (added: AddedView, isHidden: boolean) => {
+      added.split.setStartHidden(isHidden);
+      added.isTreeHidden = isHidden;
+      log('docs', isHidden ? 'tree hidden' : 'tree shown');
+      if (isHidden) {
+        treeHiddenIn(added.view);
+      }
+    };
+
+    // A docs view over the source `sourceId`, its tree and doc in a split
+    // whose width every added view shares; its keys act while `isVisible`.
+    const addView = (
+      sourceId: string,
+      options: { isVisible(): boolean },
+    ): DocsViewHandle => {
+      addedCount += 1;
+      const viewId = `view:${String(addedCount)}`;
+      const split = createSplit({
+        ...SESSION_TREE_SPLIT,
+        uiState: services.uiState,
+        stateKey: 'sessionTree',
+      });
+      const added: AddedView = {
+        view: createView(
+          viewId,
+          sourceId,
+          () => options.isVisible(),
+          () => undefined,
+          () => {
+            if (added.isTreeHidden) {
+              setTreeHidden(added, false);
             }
-            return true;
           },
-          shown() {
-            // Another tab's drag may have stored a new width since this one
-            // last showed.
-            split.reloadWidth();
-            closeOverlaysBesides(held.view);
-            api.keys.setScope(held.view.focusScope());
-            log('docs', 'Docs tab shown');
-            held.view.showFirstTime();
-          },
-        });
-      },
-    );
+          () => undefined,
+        ),
+        split,
+        isTreeHidden: false,
+        isVisible: () => options.isVisible(),
+      };
+      split.element.classList.add('docs-split');
+      split.start.append(added.view.tree);
+      split.end.append(added.view.doc);
+      addedViews.set(viewId, added);
+      return {
+        element: split.element,
+        shown() {
+          // Another view's drag may have stored a new width since this one
+          // last showed.
+          split.reloadWidth();
+          closeOverlaysBesides(added.view);
+          api.keys.setScope(added.view.focusScope());
+          log('docs', 'Docs tab shown');
+          added.view.showFirstTime();
+        },
+        hasUnsavedEdits: () => added.view.hasUnsavedEdits(),
+        dispose() {
+          addedViews.delete(viewId);
+          added.view.dispose();
+        },
+      };
+    };
+
+    api.events.on('sessions.sessionAdded', ({ sessionId, projectDir }) => {
+      const held: SessionDocs = {
+        view: addView(`session:${sessionId}`, {
+          isVisible: () => held.tab?.isVisible() === true,
+        }),
+        tab: null,
+      };
+      sessionDocs.set(sessionId, held);
+      log(
+        'docs',
+        `Docs tab added for ${projectDir ?? 'a session with no folder'}`,
+      );
+      held.tab = sessions.addTab(sessionId, {
+        id: 'docs',
+        title: 'Docs',
+        element: held.view.element,
+        beforeClose() {
+          if (held.view.hasUnsavedEdits()) {
+            services.toast(UNSAVED_TEXT, 'error');
+            return false;
+          }
+          return true;
+        },
+        shown: () => held.view.shown(),
+      });
+    });
     api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
       const held = sessionDocs.get(sessionId);
       if (held === undefined) {
         return;
       }
       sessionDocs.delete(sessionId);
-      held.handle?.remove();
+      held.tab?.remove();
       held.view.dispose();
     });
 
-    // Hiding moves focus by `treeHiddenIn`, as Docs mode's side bar hiding
-    // does. Showing leaves focus where it is, as the side bar showing beside
-    // the doc does.
-    const setSessionTreeHidden = (held: SessionDocs, isHidden: boolean) => {
-      held.split.setStartHidden(isHidden);
-      held.isTreeHidden = isHidden;
-      log('docs', isHidden ? 'tree hidden' : 'tree shown');
-      if (isHidden) {
-        treeHiddenIn(held.view);
-      }
-    };
-
-    const sessionDocsOf = (view: DocsView): SessionDocs | undefined =>
-      [...sessionDocs.values()].find((held) => held.view === view);
+    const addedViewOf = (view: DocsView): AddedView | undefined =>
+      [...addedViews.values()].find((added) => added.view === view);
 
     const isTreeHiddenIn = (view: DocsView): boolean =>
       view === machineView
         ? !mode.sideBarShown()
-        : sessionDocsOf(view)?.isTreeHidden === true;
+        : addedViewOf(view)?.isTreeHidden === true;
 
     const activeView = (): DocsView | null => {
       if (isDocsModeShown) {
         return machineView;
       }
-      for (const held of sessionDocs.values()) {
-        if (held.handle?.isVisible() === true) {
-          return held.view;
+      for (const added of addedViews.values()) {
+        if (added.isVisible()) {
+          return added.view;
         }
       }
       return null;
     };
 
+    // Shows Docs mode, then opens `path` in the machine view once it has read
+    // its index.
+    const openDoc = (path: string, line: number | null) => {
+      if (!mode.isShown()) {
+        mode.show();
+      }
+      machineView.openDoc(path, line);
+    };
+    api.channel.on('openDoc', ({ path, line }) => openDoc(path, line));
+
     // On a docs view whose tree is hidden — Docs mode's side bar by `Space k
-    // d`, `Space v t` or a narrow window, or a session tab's tree by `Space v
+    // d`, `Space v t` or a narrow window, or an added view's tree by `Space v
     // t` — a tree command moves focus to the doc pane and runs the command
     // its key runs there, so no key moves a selection out of sight and `j`
     // scrolls the doc on its first press. The handler is not told which key
@@ -396,12 +439,16 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         mode.toggleSideBar();
         return;
       }
-      const held = sessionDocsOf(view);
-      if (held !== undefined) {
-        setSessionTreeHidden(held, !held.isTreeHidden);
+      const added = addedViewOf(view);
+      if (added !== undefined) {
+        setTreeHidden(added, !added.isTreeHidden);
       }
     };
 
+    const exports: DocsPageExports = {
+      addView,
+      openDoc: (path, line) => openDoc(path, line ?? null),
+    };
     return {
       commands: {
         showMode,
@@ -440,6 +487,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         confirmYes: onActiveView('confirmYes'),
         confirmNo: onActiveView('confirmNo'),
       },
+      exports,
     };
   },
 };

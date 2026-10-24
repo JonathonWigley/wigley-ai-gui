@@ -61,14 +61,18 @@ describe('startDocs', () => {
   });
 });
 
-// The docs drive actions over a fresh home, whose sessions throw on connect.
-async function driveConnectingNothing() {
+// The docs drive actions over a fresh home, whose sessions throw on connect,
+// once `started` settles. `sent` holds each channel message, in order.
+async function driveConnectingNothing(
+  started: Promise<unknown> = Promise.resolve(),
+) {
   const files = await setUpFiles();
   const drive = fakeDriveHost();
+  const sent: [string, unknown][] = [];
   addDriveActions(drive.host, {
     files,
     homeDir: HOME,
-    started: Promise.resolve(),
+    started,
     paths: posixPaths,
     sessions: {
       activate: () => undefined,
@@ -76,8 +80,9 @@ async function driveConnectingNothing() {
         throw new Error('not reached');
       },
     },
+    channel: { send: (message, data) => sent.push([message, data]) },
   });
-  return drive;
+  return { ...drive, sent };
 }
 
 describe('docs drive actions', () => {
@@ -90,6 +95,7 @@ describe('docs drive actions', () => {
       homeDir: HOME,
       started: Promise.resolve(),
       paths: posixPaths,
+      channel: { send: () => undefined },
       sessions: {
         activate: () => undefined,
         connect(info: SessionInfo): ConnectedSession {
@@ -128,6 +134,28 @@ describe('docs drive actions', () => {
     const drive = await driveConnectingNothing();
 
     await expect(drive.run(action, { indexDelayMs })).rejects.toThrow(message);
+  });
+
+  it('driveOpenDoc_SendsOpenDocMessage', async () => {
+    const drive = await driveConnectingNothing();
+
+    await drive.run('openDoc', { path: CLAUDE_MD });
+
+    expect(drive.sent).toEqual([['openDoc', { path: CLAUDE_MD, line: null }]]);
+  });
+
+  it('driveOpenDoc_WaitsForStart', async () => {
+    const started = Promise.withResolvers<void>();
+    const drive = await driveConnectingNothing(started.promise);
+
+    const running = drive.run('openDoc', { path: CLAUDE_MD, line: 3 });
+    await Promise.resolve();
+    const sentBeforeStart = [...drive.sent];
+    started.resolve();
+    await running;
+
+    expect(sentBeforeStart).toEqual([]);
+    expect(drive.sent).toEqual([['openDoc', { path: CLAUDE_MD, line: 3 }]]);
   });
 });
 

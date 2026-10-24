@@ -14,8 +14,7 @@ import type {
   IndexContext,
   IndexDocument,
   IndexEntry,
-  IndexLoad,
-  SessionSourceSpec,
+  SourceRead,
 } from '../contract';
 import { metaString } from '../index-document';
 import { isIndexedPath } from '../path-guard';
@@ -36,10 +35,6 @@ import {
   settlePending,
 } from './docs-state';
 import { createTreeView } from './tree-view';
-
-export type DocsSource =
-  | { type: 'machine' }
-  | { type: 'session'; spec: SessionSourceSpec };
 
 export type DocsPaneScope = 'tree' | 'doc';
 
@@ -88,15 +83,19 @@ export interface DocsViewCommands {
 export interface DocsView {
   tree: HTMLElement;
   doc: HTMLElement;
-  // Runs the source the first time; later calls do nothing (Docs mode's
-  // build, a tab's first show).
+  // The first call loads the source's index, then rebuilds it when the
+  // source can; later calls do nothing.
   showFirstTime(): void;
-  // Runs the source again: `R`.
+  // Rebuilds the source's index: `R`.
   rescan(): void;
-  // Another view made `change`. A view that has read nothing yet does
-  // nothing; else a rename or trash shows at once, the doc pane following its
-  // file, and the source runs again, which lists a created doc.
+  // Another view made `change`. A view not shown yet does nothing; else a
+  // rename or trash shows at once, the doc pane following its file, and the
+  // index rebuilds, which lists a created doc.
   outsideChange(change: DocChangeRecord): void;
+  // Once the view's first index read has settled, opens `path` at the
+  // 1-based `line` and selects its row, or toasts that the index does not
+  // list it.
+  openDoc(path: string, line: number | null): void;
   // Closes the filter box, the dialogs and the changed-on-disk prompt, each
   // scope they pushed popped, without moving focus: another docs view is
   // about to show, and its pane scope may equal this one's.
@@ -122,10 +121,12 @@ export interface DocsView {
 }
 
 // `setScope` and `pushScope` set and push the plugin's key scopes; the view
-// sets its pane's scope only while `isActive`.
+// sets its pane's scope only while `isActive`. `sourceId` names the index
+// source the view reads; the `machine` source's view chooses its load-state
+// context, every other view shows its document's one context.
 export interface DocsViewDeps {
   viewId: string;
-  source: DocsSource;
+  sourceId: string;
   channel: PageChannel<DocsChannel>;
   homeDir: string;
   editor: EditorHost;
@@ -159,30 +160,24 @@ export interface DocsViewDeps {
 const SESSION_CONTEXT_TEXT =
   "A session's Docs tab uses the session's own load states";
 
-// How each source reads its index, and the lines it shows and logs.
-interface SourceRun {
-  busyText: string;
-  run(): Promise<IndexLoad>;
-  readLine(entryCount: number): string;
-  messageLine(message: string): string;
-}
+// The index source Docs mode shows: main registers it under this id.
+export const MACHINE_SOURCE_ID = 'machine';
 
-function sourceRun(deps: DocsViewDeps): SourceRun {
-  const { channel, source } = deps;
-  if (source.type === 'machine') {
-    return {
-      busyText: 'Rebuilding the docs index…',
-      run: () => channel.invoke('rebuild'),
-      readLine: (count) => `index rebuilt: ${count} entries`,
-      messageLine: (message) => `index rebuild: ${message}`,
-    };
+type IndexRun = 'loadIndex' | 'rebuildIndex';
+
+const BUSY_TEXT: Record<IndexRun, string> = {
+  loadIndex: 'Reading the docs index…',
+  rebuildIndex: 'Rebuilding the docs index…',
+};
+
+// The line logged for one index run's result.
+function resultLine(result: SourceRead, run: IndexRun): string {
+  if (result.message !== null) {
+    return `${result.title}: ${result.message}`;
   }
-  return {
-    busyText: "Reading this session's docs…",
-    run: () => channel.invoke('sessionIndex', source.spec),
-    readLine: (count) => `session index read: ${count} entries`,
-    messageLine: (message) => `session index: ${message}`,
-  };
+  const count = result.document?.entries.length ?? 0;
+  const isRebuilt = run === 'rebuildIndex' && result.canRebuild;
+  return `${result.title} ${isRebuilt ? 'rebuilt' : 'read'}: ${count} entries`;
 }
 
 // The plugin entry whose cache holds `path`, if any.
@@ -214,14 +209,13 @@ interface AppliedChange {
 }
 
 // One docs view over an index source: the tree pane and the doc pane, its
-// dialogs placed over the window through `addOverlay`. A machine view reads
-// the last index at creation; a session view reads nothing until its first
-// show. A change made here shows
-// at once and its paths stay pending until a source run asked after it lands;
-// every other view hears it through `changed`.
+// dialogs placed over the window through `addOverlay`. It reads nothing until
+// its first show. A change made here shows at once and its paths stay pending
+// until an index run asked after it lands; every other view hears it through
+// `changed`.
 export function createDocsView(deps: DocsViewDeps): DocsView {
   const { log, toast } = deps;
-  const run = sourceRun(deps);
+  const isMachine = deps.sourceId === MACHINE_SOURCE_ID;
   let document: IndexDocument | null = null;
   let entriesById = new Map<string, IndexEntry>();
   let changeSeq = 0;
@@ -235,6 +229,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // Each load's number; a load older than the one shown is dropped.
   let startedLoads = 0;
   let shownLoad = 0;
+  // Settles with the first index run, resolved or rejected.
+  const firstRead = Promise.withResolvers<void>();
 
   const applyScope = () => {
     if (deps.isActive()) {
@@ -246,7 +242,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (document === null) {
       return null;
     }
-    if (deps.source.type === 'session') {
+    if (!isMachine) {
       return document.contexts[0] ?? null;
     }
     return (
@@ -346,24 +342,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       const entryPath = entriesById.get(entryId)?.path ?? path;
       return chips(context(), entryId, pending.has(entryPath));
     },
-    followFile(path, line, fragment) {
-      if (
-        document === null ||
-        !isIndexedPath(path, document.entries, deps.paths)
-      ) {
-        toast(`Not an indexed doc: ${path}`, 'error');
-        return;
-      }
-      const entry =
-        document.entries.find((candidate) =>
-          deps.paths.samePath(candidate.path, path),
-        ) ?? null;
-      void doc.open(targetFor(path, entry, line, fragment)).then((opened) => {
-        if (opened && entry !== null) {
-          tree.selectEntry(entry.id);
-        }
-      });
-    },
+    followFile: (path, line, fragment) => followFile(path, line, fragment),
     pushConflictScope: () => deps.pushScope('conflict'),
     conflictText: () =>
       conflictText({
@@ -376,6 +355,31 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       return shown === null ? null : deps.kbd(shown);
     },
   });
+
+  // Opens `path` when the index lists it, selecting its entry's row; else
+  // toasts that it does not.
+  const followFile = (
+    path: string,
+    line: number | null,
+    fragment: string | null,
+  ) => {
+    if (
+      document === null ||
+      !isIndexedPath(path, document.entries, deps.paths)
+    ) {
+      toast(`Not an indexed doc: ${path}`, 'error');
+      return;
+    }
+    const entry =
+      document.entries.find((candidate) =>
+        deps.paths.samePath(candidate.path, path),
+      ) ?? null;
+    void doc.open(targetFor(path, entry, line, fragment)).then((opened) => {
+      if (opened && entry !== null) {
+        tree.selectEntry(entry.id);
+      }
+    });
+  };
 
   const restoreFocus = () => {
     if (focused === 'doc') {
@@ -441,7 +445,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   const showDocument = (next: IndexDocument | null) => {
     document = next;
     entriesById = new Map(next?.entries.map((entry) => [entry.id, entry]));
-    if (next !== null && deps.source.type === 'machine') {
+    if (next !== null && isMachine) {
       const choices = contextChoices(next, deps.homeDir, deps.paths);
       const kept = choices.some((choice) => choice.folder === contextFolder);
       contextFolder = kept ? contextFolder : (choices[0]?.folder ?? null);
@@ -456,22 +460,21 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     doc.refreshChips();
   };
 
-  // Runs `read`, showing `busyText` while it runs, then its document and
-  // message; `lines` give the line logged on its result. The result covers
-  // every change up to `settledSeq`; later ones apply again over it, unless
-  // it already reflects them.
-  const load = (
-    read: () => Promise<IndexLoad>,
-    busyText: string | null,
-    lines: Pick<SourceRun, 'readLine' | 'messageLine'>,
-    settledSeq: number,
-  ) => {
+  // Runs `run` on the view's source, showing its busy line while it runs,
+  // then its document and message, and logs the result. The result covers
+  // every change made before the run was asked; later ones apply again over
+  // it, unless it already reflects them. Resolves to the result, or null on a
+  // rejection.
+  const runIndex = (run: IndexRun): Promise<SourceRead | null> => {
     const number = ++startedLoads;
-    tree.setStatus(busyText);
-    read()
+    const settledSeq = changeSeq;
+    tree.setStatus(BUSY_TEXT[run]);
+    return deps.channel
+      .invoke(run, deps.sourceId)
       .then((result) => {
+        firstRead.resolve();
         if (number < shownLoad) {
-          return;
+          return result;
         }
         shownLoad = number;
         pending = settlePending(pending, settledSeq);
@@ -486,39 +489,28 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
                 built,
               ),
         );
-        log(
-          'docs',
-          result.message === null
-            ? lines.readLine(result.document?.entries.length ?? 0)
-            : lines.messageLine(result.message),
-        );
+        log('docs', resultLine(result, run));
         if (number === startedLoads) {
           tree.setStatus(result.message);
         }
+        return result;
       })
-      .catch((error) => {
-        log('docs', lines.messageLine(errorText(error)));
+      .catch((error: unknown) => {
+        firstRead.resolve();
+        log('docs', `${deps.sourceId}: ${errorText(error)}`);
         if (number === startedLoads) {
           tree.setStatus(errorText(error));
         }
+        return null;
       });
   };
 
-  const runSource = () => load(() => run.run(), run.busyText, run, changeSeq);
+  // Only a rebuild lists a doc created since the last one.
+  const rebuild = () => {
+    void runIndex('rebuildIndex');
+  };
 
-  if (deps.source.type === 'machine') {
-    load(
-      () => deps.channel.invoke('machineIndex'),
-      null,
-      {
-        readLine: (count) => `machine index read: ${count} entries`,
-        messageLine: (message) => `machine index: ${message}`,
-      },
-      0,
-    );
-  } else {
-    tree.setStatus('Not read yet');
-  }
+  tree.setStatus('Not read yet');
 
   const entryAt = (path: string) =>
     document?.entries.find(
@@ -578,7 +570,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (isShown && selectId != null) {
       tree.selectEntry(selectId);
     }
-    runSource();
+    rebuild();
     deps.changed(record);
   };
 
@@ -617,7 +609,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const pickContext = () => {
-    if (deps.source.type === 'session') {
+    if (!isMachine) {
       toast(SESSION_CONTEXT_TEXT, 'info');
       return;
     }
@@ -716,25 +708,31 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     tree: tree.element,
     doc: doc.element,
     showFirstTime() {
-      if (!hasRun) {
-        hasRun = true;
-        runSource();
+      if (hasRun) {
+        return;
       }
+      hasRun = true;
+      void runIndex('loadIndex').then((result) => {
+        if (result?.canRebuild === true) {
+          rebuild();
+        }
+      });
     },
     rescan() {
       hasRun = true;
-      runSource();
+      rebuild();
     },
     outsideChange(change) {
-      const hasRead = hasRun || deps.source.type === 'machine';
-      if (!hasRead) {
+      if (!hasRun) {
         return;
       }
       if (change.type !== 'created') {
         showChange(change);
       }
-      hasRun = true;
-      runSource();
+      rebuild();
+    },
+    openDoc(path, line) {
+      void firstRead.promise.then(() => followFile(path, line, null));
     },
     closeOverlays() {
       tree.dismissFilter();

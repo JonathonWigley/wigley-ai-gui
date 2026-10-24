@@ -212,7 +212,7 @@ other plugin reaches docs only through `DocsMainExports` and `DocsPageExports` (
 
 ### Wave 3
 - [x] [Trash takes walked links](04-trash-walked-links.md) — after 03
-- [ ] [Index source registry in main](05-source-registry.md) — after 03
+- [x] [Index source registry in main](05-source-registry.md) — after 03
 
 ### Wave 4
 - [ ] [Page views by source id, addView and openDoc](06-page-views.md) — after 05
@@ -232,7 +232,9 @@ Review base: c04112eecae26d302e9320a509cba760cb383b58
 - 01 · 2884091 · diff read: WatchOptions and watch(folder, onChange, options?) present in src/contracts/files.ts; typecheck clean · concerns: Node non-recursive watch reports a subfolder by its own name on macOS (memory adapter never does); test filters 'sub' — ride to review
 - 03 · faa0503 · diff read: every Produces present (contract kind/source string, walked, schemaVersion 2; INDEX_SCHEMA_VERSION 2, DOC_SOURCES exported, isKnownKind, isKnownSource; titleFromId); typecheck clean · concerns: stand-in docs_index.py walked change is covered only by the self-test's fresh.md rebuild
 - 04 · c0cb014 · diff read: trashTargets names walked links, trashQuestion words N targets, signatures unchanged; its 2 test files 139 pass; typecheck errors only in task 05's in-progress files · concerns: walkedLink stats every ancestor and calls realPath on each link it meets — a few calls per walked path, only on a user's trash
+- 05 · 8c7f218 · diff read: IndexSource, SourceRead, DocsMainExports, loadIndex/rebuildIndex, IndexSourceRegistry, createIndexSourceRegistry/createMachineSource/createSessionSource, exports present; typecheck fails only in page/docs-view.ts (6, expected until 06) · concerns: SessionSourceSpec comment still names sessions' sessionAdded payload as its origin; a failed session load now clears that session's entries (registry rule)
 ### Contract changes
+- startDocs (not a listed Produces): startDocs(services, scriptPath) → { sources, docFiles } → startDocs(services, scriptPath, entries) → { indexDeps, docFiles } · why: the registry lives in start and createDocFiles reads registry.loadedEntries() · consumers: none outside main/start.ts and start.test.ts · group 05
 ### Rulings
 - wigley bumped 1.9.0 → 1.9.1 in both manifests: local and origin/main matched, and § Changing a plugin names no other version field — the version rule — none, a later bump in the same push is harmless · group 02 · group 02
 - node-files test drops a 'sub' report before asserting ['b.txt'], and the contract comment names the Node adapter's subfolder-name report — macOS fs.watch non-recursive reports the changed subfolder entry; no adapter filter, which would hide direct folder creates — a consumer needing no folder reports would need a stat filter · group 01 · group 01
@@ -244,5 +246,11 @@ Review base: c04112eecae26d302e9320a509cba760cb383b58
 - trashQuestion_TwoTargets_NamesLink is the old trashQuestion_LinkAndTarget_NamesBothByPath renamed — no duplicate — none · group 04 · group 04
 - walkedLink passes over a link that does not resolve into the real target and keeps climbing — the Behaviour's 'nearest … that is a link and whose realPath is inside' — a link further up could be named · group 04 · group 04
 - 'a link inside the real target adds nothing' is judged on the link with its folder resolved — the form the dedupe and guard see — a link inside only through another link could be named · group 04 · group 04
+- index-sources.ts also exports MACHINE_SOURCE_ID, MACHINE_SOURCE_TITLE, SESSION_SOURCE_TITLE and sessionSourceId — start's wrappers need id and title before startDocs settles — the page cannot import main code and spells 'machine' and 'session:<id>' itself · group 05 · group 05
+- private addStartedSource in start.ts builds the wrappers and attaches a no-op catch to inner — docs.catch already logs a failed start — none · group 05 · group 05
+- loadIndex/rebuildIndex handlers call the registry directly without awaiting docs — wrappers await their inner source; an unknown id rejects at once — an unknown-id call before start rejects rather than waits · group 05 · group 05
+- registry keeps entries per registration record, so a load outliving its dispose never touches a same-id re-add (extra test dispose_ThenSameIdAdded_OldLoadKeepsNoEntries) — none · group 05 · group 05
+- a failed session load now clears its kept entries (before, they stayed) — the registry rule 'a throw clears them' — a session's docs lose write access until its next good load · group 05 · group 05
+- machineIndex_*/sessionIndex_* tests renamed load_*, assertions unchanged; extra tests load_MachineSource_TitleAndCanRebuild, load_Throws_ClearsEntriesAndRejects — none · group 05 · group 05
 ### Review rounds
 ### Test gate
