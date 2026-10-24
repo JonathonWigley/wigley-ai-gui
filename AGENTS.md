@@ -382,17 +382,16 @@ round), since main, not the page, decides.
   script's `settings` override plugin settings in the config main serves the page (forms' sets a short
   `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the ConfigStore's config, which
   under the self-test is the empty config folder in its temp home, so the defaults, with no script `settings` over
-  them. Each plugin hands
-  at most one script, and the scripts run in plugin start order; the keys plugin has no main part, so its steps live
-  in forms' script, whose fixture gives them scopes full of binds and a box to type in. The gallery has no main part
-  either, so its steps live in forms' and docs' scripts. Chat's script runs its
-  sessions over the fake agent harness, its steps covering the resume list, archive and slash completion. Docs'
-  (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture (`selftest-fixture.ts`) that writes docs, an index
-  and a stand-in `docs_index.py` into the temp home at start when the home holds none yet, and again at each script run,
-  so its steps never reach the user's docs or index. Settings'
+  them. Each plugin hands at most one script, and the scripts run in plugin start order; the keys plugin has no main
+  part, so its steps live in forms' script, whose fixture gives them scopes full of binds and a box to type in. The
+  gallery has no main part either, so its steps live in forms' and docs' scripts. Chat's script runs its sessions
+  over the fake agent harness, its steps covering the resume list, archive and slash completion. Docs'
+  (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture (`selftest-fixture.ts`) that writes docs, an
+  index and a stand-in `docs_index.py` into the temp home at start when the home holds none yet, and again at each
+  script run, so its steps never reach the user's docs or index. Settings'
   (`src/plugins/settings/main/selftest-script.ts`) drives the form over the temp home's empty config folder, its
-  steps editing `settings.json` and `keymap.json` through the form and, as outside changes, through `writeFile`. The self-test emulates page focus as a drive run does, so a
-  focus-dependent check can be a self-test step.
+  steps editing `settings.json` and `keymap.json` through the form and, as outside changes, through `writeFile`. The
+  self-test emulates page focus as a drive run does, so a focus-dependent check can be a self-test step.
 - A drive run (`npm run drive`) is how the agent checks a change in the running app: every change to what the app
   shows or how it reacts is driven end to end, and its captures read, before the work is done. It runs offscreen as
   an accessory app on its own temp home, beside the user's app, so the agent starts one whenever a check needs it.
@@ -418,11 +417,12 @@ round), since main, not the page, decides.
   missing `main.cjs` (Electron's "Error launching app" dialog, on the user's screen) or point one app's page at the
   other's dev server. Dev drive starts (`start`, `restart`) and `npm run selftest` take `.drive/start.lock`, which
   holds the taker's pid: a drive start from just before the spawn until the app answers `ready`, the self-test until
-  its child closes (a packaged drive start skips it). Both hold past the page's startup reload, which re-reads
-  `preload.cjs` from `.vite/build`. A start that finds a live holder prints
-  `Waiting for another dev start (pid <pid>) to finish`; a dead holder's lock is cleared; after 120 s
-  the start fails naming the lock's absolute path to delete when no start is running. The user's `npm start` is
-  outside it, so work that runs drive checks beside a peer's runs in a worktree, which has its own `.vite`.
+  its child closes (a packaged drive start skips it). The self-test holds past the page's startup reload, which
+  re-reads `preload.cjs` from `.vite/build`; a drive start's `ready` can answer before that reload, so its hold
+  narrows the overlap without closing it. A start that finds a live holder prints `Waiting for another dev start
+  (pid <pid>) to finish`; a dead holder's lock is cleared; after 120 s the start fails naming the lock's absolute
+  path to delete when no start is running. The user's `npm start` is outside it, so work that runs drive checks
+  beside a peer's runs in a worktree, which has its own `.vite`.
 - A session's `ask_round` schema is fixed when the session starts, so after a change to the forms tool contract the
   running session still offers the old shape. Take the fields the server now requires from its error, and send a
   sample round that needs the new schema from a new session.

@@ -107,7 +107,9 @@ function clearDeadLock(lockFile: string, deadHolder: number | null): void {
       linkSync(movedFile, lockFile);
     }
   } catch (error) {
-    // EEXIST: a third taker created the lock while it was moved aside.
+    // EEXIST: a third taker created the lock while it was moved aside. The
+    // live holder and that taker then both hold it; the window is the few
+    // microseconds between the rename and the link, and is accepted.
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
       throw error;
     }

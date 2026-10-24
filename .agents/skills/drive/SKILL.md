@@ -63,16 +63,16 @@ the CLI then says the run did not answer. A script the drive runs in the page re
 a check at 2 s and re-polls on that rejection, so a reload during a command costs one poll rather
 than the whole 30 s wait. Dev starts (`start`, `restart`, `npm run selftest`) take
 `.drive/start.lock`, holding the taker's pid, because each `electron-forge start` empties and
-rewrites the shared `.vite/build`, which the page's startup reload reads its preload from: a
-drive start holds it from just before the spawn until the app answers `ready`, the self-test until
-its child closes (a packaged drive start skips the lock). A start waits while a live pid holds it, printing `Waiting
-for another dev start (pid <pid>) to finish`, clears a dead holder's lock, and after 120 s fails
-naming the lock's absolute path to delete when no start is running. `restart` and `quit` end a
-stuck run: `quit` runs beside the stuck command, and the CLI waits up to 60 s for the app to exit
-(time for a recording's encode), then terminates it; the app takes that SIGTERM as a second quit
-and exits without waiting further. Terminating skips any recorded pid whose process no longer
-carries the run's `WIGLEY_DRIVE_DIR` (a pid reused after a crash); on Windows it cannot check and
-terminates every live recorded pid.
+rewrites the shared `.vite/build`, which the page's startup reload reads its preload from: a drive
+start holds it from just before the spawn until the app answers `ready`, the self-test until its
+child closes (a packaged drive start skips the lock). A start waits while a live pid holds it,
+printing `Waiting for another dev start (pid <pid>) to finish`, clears a dead holder's lock, and
+after 120 s fails naming the lock's absolute path to delete when no start is running. `restart`
+and `quit` end a stuck run: `quit` runs beside the stuck command, and the CLI waits up to 60 s for
+the app to exit (time for a recording's encode), then terminates it; the app takes that SIGTERM as
+a second quit and exits without waiting further. Terminating skips any recorded pid whose process
+no longer carries the run's `WIGLEY_DRIVE_DIR` (a pid reused after a crash); on Windows it cannot
+check and terminates every live recorded pid.
 
 A run folder holds `home/` (the app's home: config, plugin data, ui-state), `user-data/`
 (Chromium's profile), `screenshots/`, `videos/`, `app.log`, and `start.json` and `drive.json`

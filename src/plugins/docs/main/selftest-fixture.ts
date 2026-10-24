@@ -33,7 +33,7 @@ export interface DocsFixtureOptions {
 }
 
 // Writes the self-test's docs, index and stand-in docs_index.py under
-// `homeDir` (the self-test's temp home), first removing what an earlier
+// `homeDir` (the self-test's temp home), then removes what an earlier
 // self-test run's steps added, and the load-states folder when
 // `options.loadStates` is off.
 export async function writeDocsFixture(
