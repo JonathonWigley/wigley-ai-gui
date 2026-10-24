@@ -155,21 +155,29 @@ export interface LayoutCard {
   update?(answer: CardAnswer): void;
 }
 
+// A card builder per item kind. The app sets `data-layout="<name>"` on each card's element, `<name>` being the layout
+// that drew it, so `[data-layout="<name>"] …` in a layout's CSS selects only its own cards.
+export interface LayoutCards {
+  question(
+    parent: HTMLElement,
+    input: QuestionCard,
+    kit: AnswerKit,
+  ): LayoutCard;
+  finding(parent: HTMLElement, input: FindingCard, kit: FindingKit): LayoutCard;
+  notice(parent: HTMLElement, input: NoticeCard, kit: Kit): LayoutCard;
+}
+
+// A layout defines only the cards and panes it changes. Each card comes from the first layout defining its kind among
+// the item's `layout`, the round's `layout`, the `forms.layout` setting and `default`; each pane the same way without
+// the item.
 export interface Layout {
-  cards: {
-    question(
-      parent: HTMLElement,
-      input: QuestionCard,
-      kit: AnswerKit,
-    ): LayoutCard;
-    finding(
-      parent: HTMLElement,
-      input: FindingCard,
-      kit: FindingKit,
-    ): LayoutCard;
-    notice(parent: HTMLElement, input: NoticeCard, kit: Kit): LayoutCard;
-  };
-  // Drawn above the cards in the forms view, once per round and again after
-  // each keymap change.
+  cards?: Partial<LayoutCards>;
+  // Drawn above the cards in the forms view, once per round and again after each keymap change, into a slot carrying
+  // `data-layout="<name>"`.
   head?(parent: HTMLElement, round: RoundInfo, kit: HeadKit): void;
+}
+
+// The built-in `default` layout, which defines every card.
+export interface CompleteLayout extends Layout {
+  cards: LayoutCards;
 }

@@ -142,7 +142,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       log: services.log,
       toast: services.toast,
     });
-    showLayouts<ChatLayout>({
+    const layoutShow = showLayouts<ChatLayout>({
       channel: {
         onLayoutChanged: (listener) =>
           api.channel.on('layoutChanged', listener),
@@ -155,15 +155,18 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         head: document.head,
         read: readChatLayout,
       }),
-      chosen: () => api.settings().layout,
-      onChosenChanged: (listener) => {
-        api.onSettingsChanged(() => listener());
-      },
-      setLayout: (layout, name) => view.setLayout(layout, name),
+      userLayout: () => api.settings().layout,
+      namesInUse: () => [],
+      setLayouts: (shown) =>
+        view.setLayout(
+          shown.layouts.get(shown.user) ?? defaultLayout,
+          shown.user,
+        ),
       log: services.log,
       logSource: 'chat',
       toast: services.toast,
     });
+    api.onSettingsChanged(() => layoutShow.refresh());
     const startPrompt = createStartPrompt({
       picker,
       signIn,

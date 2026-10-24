@@ -11,7 +11,7 @@ const NOTICE_TONES = {
   Decided: 'neutral',
 };
 
-/** @type {import('../layout').Layout} */
+/** @type {import('../layout').CompleteLayout} */
 const layout = {
   cards: {
     question(parent, input, kit) {

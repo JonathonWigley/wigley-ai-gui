@@ -1,7 +1,7 @@
 import { errorText } from '../../../../shared/error-text';
 import type { ItemKind } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
-import type { CardAnswer, Layout, LayoutCard } from '../../layouts/layout';
+import type { CardAnswer, LayoutCard } from '../../layouts/layout';
 import {
   type AnswerableItem,
   answerStatus,
@@ -20,6 +20,7 @@ import type {
   ItemFormat,
 } from '../kinds/item-format';
 import { answerableOf, type CardKit, createCardKit } from './card-kit';
+import type { LayoutPick } from './layout-resolver';
 
 type CardBuilders = {
   [K in ItemKind]: (
@@ -27,6 +28,17 @@ type CardBuilders = {
     input: CardInputs[K],
     kit: CardKits[K],
   ) => LayoutCard;
+};
+
+// The cards a card is built from, and the name of their layout.
+interface DrawingCards {
+  name: string;
+  cards: Partial<CardBuilders>;
+}
+
+const DEFAULT_CARDS: DrawingCards = {
+  name: 'default',
+  cards: defaultLayout.cards,
 };
 
 // FORMATS as a table of card inputs, which keeps each kind's input tied to
@@ -55,37 +67,44 @@ export function cardAnswer(
   };
 }
 
-// The item's card at rail `position`, built by `layout` into `parent`. When
-// the layout's builder throws, or returns no element appended to `parent`,
-// what it appended and the boxes it mounted are removed, the failure is
-// logged, and the default layout's card is built in its place.
+// The item's card at rail `position`, built into `parent` by the picked
+// layout, or by `default` when the pick lacks the item's kind. When the
+// picked card throws, or returns no element appended to `parent`, what it
+// appended and the boxes it mounted are removed, the failure is logged, and
+// the default layout's card is built in its place. The card's element carries
+// `data-layout` naming the layout that drew it.
 export function buildLayoutCard(
-  layout: Layout,
-  layoutName: string,
+  pick: LayoutPick,
   parent: HTMLElement,
   round: RoundState,
   item: RailItem,
   position: number,
   deps: CardDeps,
 ): ItemCard {
+  const picked = pick.layout.cards;
+  const definesKind =
+    picked !== undefined && typeof picked[item.kind] === 'function';
+  let drawn = definesKind ? { name: pick.name, cards: picked } : DEFAULT_CARDS;
   let built: BuiltCard;
   try {
-    built = buildCard(layout.cards, parent, round, item, position, deps);
+    built = buildCard(drawn.cards, parent, round, item, position, deps);
   } catch (error) {
     deps.log(
       'forms',
-      `layout ${layoutName} ${item.kind} card failed: ${errorText(error)}`,
+      `layout ${drawn.name} ${item.kind} card failed: ${errorText(error)}`,
     );
-    built = buildCard(defaultLayout.cards, parent, round, item, position, deps);
+    drawn = DEFAULT_CARDS;
+    built = buildCard(drawn.cards, parent, round, item, position, deps);
   }
-  return hostCard(built, layoutName, item, deps);
+  built.card.element.dataset.layout = drawn.name;
+  return hostCard(built, drawn.name, item, deps);
 }
 
 // Builds through `cards`, checks the card's element, then mounts the boxes
 // the card left unmounted. On a throw, destroys the boxes it mounted and
 // removes what it appended to `parent` before rethrowing.
 function buildCard(
-  cards: CardBuilders,
+  cards: Partial<CardBuilders>,
   parent: HTMLElement,
   round: RoundState,
   item: RailItem,
@@ -127,7 +146,7 @@ function buildCard(
 }
 
 function buildCardOf<K extends ItemKind>(
-  cards: CardBuilders,
+  cards: Partial<CardBuilders>,
   kind: K,
   index: number,
   parent: HTMLElement,
@@ -136,8 +155,12 @@ function buildCardOf<K extends ItemKind>(
   deps: CardDeps,
 ): BuiltCard {
   const input = CARD_INPUTS[kind].cardInput(round.round, index);
+  const build = cards[kind];
+  if (build === undefined) {
+    throw new Error(`${kind} card is not defined`);
+  }
   const kit = createCardKit(kind, index, input, round, position, deps);
-  const card = cards[kind](parent, input, kit.kit);
+  const card = build(parent, input, kit.kit);
   requireElementIn(card, kind, parent);
   kit.appendUnmountedBoxes(card.element);
   return { card, kit };

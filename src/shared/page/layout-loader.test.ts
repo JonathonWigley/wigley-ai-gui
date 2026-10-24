@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LayoutEntry, LayoutSet } from '../../contracts/layouts';
 import {
   createLayoutLoader,
+  type LayoutLoad,
   type LayoutLoader,
   layoutUrls,
+  type ShownLayouts,
   showLayouts,
 } from './layout-loader';
 
@@ -15,8 +17,20 @@ function readTestLayout(module: unknown): TestLayout {
   return (module as { default: TestLayout }).default;
 }
 
-function choice(hasCss: boolean): LayoutEntry {
-  return { name: 'mine', revision: 4, hasCss, builtIn: false };
+function entry(name: string, revision: number, hasCss = false): LayoutEntry {
+  return { name, revision, hasCss, builtIn: false };
+}
+
+const DEFAULT_ENTRY: LayoutEntry = {
+  name: 'default',
+  revision: 1,
+  hasCss: false,
+  builtIn: true,
+};
+
+// A set holding the built-in `default` and `users`.
+function setOf(...users: LayoutEntry[]): LayoutSet {
+  return { layouts: [DEFAULT_ENTRY, ...users], changed: null };
 }
 
 function recordingDataUrl() {
@@ -32,7 +46,7 @@ describe('layoutUrls', () => {
   it('layoutUrls_WithCss_BuildsBothWithRevision', () => {
     const { calls, dataUrl } = recordingDataUrl();
 
-    const urls = layoutUrls(choice(true), dataUrl);
+    const urls = layoutUrls(entry('mine', 4, true), dataUrl);
 
     expect(calls).toEqual([
       ['layouts/mine/layout.js', 4],
@@ -47,20 +61,17 @@ describe('layoutUrls', () => {
   it('layoutUrls_WithoutCss_StyleNull', () => {
     const { dataUrl } = recordingDataUrl();
 
-    expect(layoutUrls(choice(false), dataUrl)).toEqual({
+    expect(layoutUrls(entry('mine', 4), dataUrl)).toEqual({
       script: 'url:layouts/mine/layout.js@4',
       style: null,
     });
   });
 });
 
-function userLayout(): TestLayout {
-  return { tag: 'mine' };
-}
-
 interface FakeLink {
   rel: string;
   href: string;
+  dataset: Record<string, string>;
   removed: boolean;
   remove(): void;
 }
@@ -73,6 +84,7 @@ function fakeHead() {
       createElement: (): FakeLink => ({
         rel: '',
         href: '',
+        dataset: {},
         removed: false,
         remove() {
           this.removed = true;
@@ -84,70 +96,170 @@ function fakeHead() {
   return { head: head as unknown as HTMLElement, appended };
 }
 
+const BUILT_IN: TestLayout = { tag: 'built-in' };
+
+// A loader whose imports go to `importModule` (by default a module whose
+// layout is tagged with the script URL), recording every URL imported.
 function loaderWith(
-  importModule: (url: string) => Promise<unknown>,
+  importModule: (url: string) => Promise<unknown> = async (url) => ({
+    default: { tag: url },
+  }),
   read: (module: unknown, name: string) => TestLayout = readTestLayout,
 ) {
   const { head, appended } = fakeHead();
+  const imports: string[] = [];
   const loader = createLayoutLoader<TestLayout>({
-    importModule,
+    importModule: (url) => {
+      imports.push(url);
+      return importModule(url);
+    },
     dataUrl: (path, revision) => `url:${path}@${revision}`,
-    defaultLayout: { tag: 'built-in' },
+    defaultLayout: BUILT_IN,
     head,
     read,
   });
-  return { loader, appended };
+  return { loader, appended, imports };
+}
+
+function shownLinks(appended: FakeLink[]) {
+  return appended
+    .filter((link) => !link.removed)
+    .map((link) => ({ layout: link.dataset.layout, href: link.href }));
 }
 
 describe('createLayoutLoader', () => {
+  it('load_TwoUserLayoutsWithCss_OneLinkEach', async () => {
+    const { loader, appended } = loaderWith();
+
+    await loader.load(setOf(entry('a', 4, true), entry('b', 7, true)), [
+      'a',
+      'b',
+    ]);
+
+    expect(shownLinks(appended)).toEqual([
+      { layout: 'a', href: 'url:layouts/a/layout.css@4' },
+      { layout: 'b', href: 'url:layouts/b/layout.css@7' },
+    ]);
+    expect(appended.map((link) => link.rel)).toEqual([
+      'stylesheet',
+      'stylesheet',
+    ]);
+  });
+
   it('load_WithCss_AddsStylesheetOnlyAfterScriptLoads', async () => {
     const script = Promise.withResolvers<unknown>();
     const { loader, appended } = loaderWith(() => script.promise);
 
-    const loading = loader.load(choice(true));
+    const loading = loader.load(setOf(entry('mine', 4, true)), ['mine']);
     await Promise.resolve();
     expect(appended).toEqual([]);
-    script.resolve({ default: userLayout() });
+    script.resolve({ default: { tag: 'mine' } });
     await loading;
 
-    expect(appended).toHaveLength(1);
-    expect(appended[0]).toMatchObject({
-      rel: 'stylesheet',
-      href: 'url:layouts/mine/layout.css@4',
-    });
+    expect(shownLinks(appended)).toEqual([
+      { layout: 'mine', href: 'url:layouts/mine/layout.css@4' },
+    ]);
   });
 
-  it('load_ScriptFails_KeepsLastStylesheet', async () => {
-    let fail = false;
-    const { loader, appended } = loaderWith(async () => {
-      if (fail) {
+  it('load_SameRevision_ImportsOnce', async () => {
+    const { loader, imports } = loaderWith();
+    const set = setOf(entry('a', 4));
+
+    const first = await loader.load(set, ['a']);
+    const second = await loader.load(set, ['a']);
+
+    expect(imports).toEqual(['url:layouts/a/layout.js@4']);
+    expect(second.layouts.get('a')).toBe(first.layouts.get('a'));
+  });
+
+  it('load_NewRevision_ImportsAgainAndMovesLink', async () => {
+    const { loader, appended, imports } = loaderWith();
+
+    await loader.load(setOf(entry('a', 4, true)), ['a']);
+    await loader.load(setOf(entry('a', 5, true)), ['a']);
+
+    expect(imports).toEqual([
+      'url:layouts/a/layout.js@4',
+      'url:layouts/a/layout.js@5',
+    ]);
+    expect(shownLinks(appended)).toEqual([
+      { layout: 'a', href: 'url:layouts/a/layout.css@5' },
+    ]);
+  });
+
+  it('load_ScriptFails_KeepsLastGoodAndItsLink', async () => {
+    const broken = new Error('syntax');
+    const { loader, appended } = loaderWith(async (url) => {
+      if (url.endsWith('@5')) {
+        throw broken;
+      }
+      return { default: { tag: url } };
+    });
+    const good = await loader.load(setOf(entry('a', 4, true)), ['a']);
+
+    const failing = await loader.load(setOf(entry('a', 5, true)), ['a']);
+
+    expect(failing.layouts.get('a')).toBe(good.layouts.get('a'));
+    expect(failing.failed).toEqual([
+      { entry: entry('a', 5, true), error: broken },
+    ]);
+    expect(failing.loaded).toEqual([]);
+    expect(shownLinks(appended)).toEqual([
+      { layout: 'a', href: 'url:layouts/a/layout.css@4' },
+    ]);
+  });
+
+  it('load_FailedRevision_NotImportedAgain', async () => {
+    const { loader, imports } = loaderWith(async (url) => {
+      if (url.endsWith('@5')) {
         throw new Error('syntax');
       }
-      return { default: userLayout() };
+      return { default: { tag: url } };
     });
-    await loader.load(choice(true));
+    await loader.load(setOf(entry('a', 4)), ['a']);
+    await loader.load(setOf(entry('a', 5)), ['a']);
 
-    fail = true;
-    await expect(loader.load({ ...choice(true), revision: 5 })).rejects.toThrow(
-      'syntax',
-    );
+    const again = await loader.load(setOf(entry('a', 5)), ['a']);
 
-    expect(appended).toHaveLength(1);
-    expect(appended[0]).toMatchObject({
-      href: 'url:layouts/mine/layout.css@4',
-      removed: false,
-    });
+    expect(imports).toEqual([
+      'url:layouts/a/layout.js@4',
+      'url:layouts/a/layout.js@5',
+    ]);
+    expect(again.failed).toEqual([]);
   });
 
-  it('load_BuiltIn_RemovesStylesheet', async () => {
-    const { loader, appended } = loaderWith(async () => ({
-      default: userLayout(),
-    }));
-    await loader.load(choice(true));
+  it('load_NameLeavesNames_RemovesItsLink', async () => {
+    const { loader, appended } = loaderWith();
+    const set = setOf(entry('a', 4, true));
+    await loader.load(set, ['a']);
 
-    await loader.load({ ...choice(false), name: 'default', builtIn: true });
+    const after = await loader.load(set, []);
 
-    expect(appended[0]).toMatchObject({ removed: true });
+    expect(shownLinks(appended)).toEqual([]);
+    expect(appended).toHaveLength(1);
+    expect(after.layouts.has('a')).toBe(false);
+  });
+
+  it('load_NameNotInSet_Skipped', async () => {
+    const { loader, imports } = loaderWith();
+
+    const result = await loader.load(setOf(), ['ghost']);
+
+    expect(imports).toEqual([]);
+    expect([...result.layouts.keys()]).toEqual(['default']);
+  });
+
+  it('load_AlwaysHoldsDefault_NoLinkForBuiltIn', async () => {
+    const { loader, appended, imports } = loaderWith();
+
+    const result = await loader.load(
+      { layouts: [{ ...DEFAULT_ENTRY, hasCss: true }], changed: null },
+      ['default'],
+    );
+
+    expect(result.layouts.get('default')).toBe(BUILT_IN);
+    expect(imports).toEqual([]);
+    expect(appended).toEqual([]);
   });
 
   it('load_UserLayout_HandsReadTheModuleAndName', async () => {
@@ -160,74 +272,76 @@ describe('createLayoutLoader', () => {
       },
     );
 
-    const loaded = await loader.load(choice(false));
+    const result = await loader.load(setOf(entry('mine', 4)), ['mine']);
 
     expect(reads).toEqual([[{ default: { tag: 'mine' } }, 'mine']]);
-    expect(loaded).toEqual({ tag: 'read' });
-  });
-
-  it('load_ReadThrows_RejectsAndKeepsStylesheet', async () => {
-    let fail = false;
-    const { loader, appended } = loaderWith(
-      async () => ({ default: userLayout() }),
-      (module) => {
-        if (fail) {
-          throw new Error('layout mine: cards.notice is missing');
-        }
-        return readTestLayout(module);
-      },
-    );
-    await loader.load(choice(true));
-
-    fail = true;
-    await expect(loader.load({ ...choice(true), revision: 5 })).rejects.toThrow(
-      'layout mine: cards.notice is missing',
-    );
-
-    expect(appended).toHaveLength(1);
-    expect(appended[0]).toMatchObject({
-      href: 'url:layouts/mine/layout.css@4',
-      removed: false,
-    });
+    expect(result.layouts.get('mine')).toEqual({ tag: 'read' });
+    expect(result.loaded).toEqual([entry('mine', 4)]);
   });
 });
 
-// A loader whose every load waits for `finish(key)` or `fail(key)`, each
-// load keyed `<name>@<revision>`; `loads` lists every key in load order.
-function heldLoader() {
-  const pending = new Map<string, PromiseWithResolvers<TestLayout>>();
-  const loads: string[] = [];
-  const loader: LayoutLoader<TestLayout> = {
-    load: (entry) => {
-      const key = `${entry.name}@${entry.revision}`;
-      const held = Promise.withResolvers<TestLayout>();
-      pending.set(key, held);
-      loads.push(key);
-      return held.promise;
+// A loader recording each `(set, names)` it is handed. By default it answers
+// with `default` and every name the set lists, one layout object per name and
+// revision; `respond` replaces that answer.
+function recordingLoader() {
+  const calls: { set: LayoutSet; names: readonly string[] }[] = [];
+  const objects = new Map<string, TestLayout>();
+  const layoutAt = (listed: LayoutEntry) => {
+    const key = `${listed.name}@${listed.revision}`;
+    const existing = objects.get(key) ?? { tag: key };
+    objects.set(key, existing);
+    return existing;
+  };
+  const answer = (set: LayoutSet, names: readonly string[]) => {
+    const layouts = new Map<string, TestLayout>([['default', BUILT_IN]]);
+    for (const listed of set.layouts) {
+      if (!listed.builtIn && names.includes(listed.name)) {
+        layouts.set(listed.name, layoutAt(listed));
+      }
+    }
+    return layouts;
+  };
+  const recorder: {
+    calls: typeof calls;
+    respond(set: LayoutSet, names: readonly string[]): LayoutLoad<TestLayout>;
+    loader: LayoutLoader<TestLayout>;
+    answer: typeof answer;
+  } = {
+    calls,
+    respond: (set, names) => ({
+      layouts: answer(set, names),
+      loaded: [],
+      failed: [],
+    }),
+    loader: {
+      load: async (set, names) => {
+        calls.push({ set, names });
+        return recorder.respond(set, names);
+      },
     },
+    answer,
   };
-  return {
-    loader,
-    loads,
-    finish: (key: string) => pending.get(key)?.resolve(userLayout()),
-    fail: (key: string) => pending.get(key)?.reject(new Error('broken')),
-    isLoading: (key: string) => pending.has(key),
-  };
+  return recorder;
 }
 
 function showing(
   loader: LayoutLoader<TestLayout>,
-  chosen: string,
-  setLayout: (layout: TestLayout, name: string) => void = () => undefined,
+  setting: string,
+  setLayouts: (shown: ShownLayouts<TestLayout>) => void = () => undefined,
 ) {
   const answer = Promise.withResolvers<LayoutSet>();
   let listener: (changed: LayoutSet) => void = () => undefined;
-  let chosenListener: () => void = () => undefined;
-  let chosenName = chosen;
-  const shown: string[] = [];
-  const logLines: string[] = [];
-  const toasts: string[] = [];
-  showLayouts({
+  const page = {
+    setting,
+    namesInUse: [] as string[],
+    shown: [] as ShownLayouts<TestLayout>[],
+    logLines: [] as string[],
+    toasts: [] as string[],
+    answer,
+    change: (changed: LayoutSet) => listener(changed),
+    refresh: (): void => undefined,
+  };
+  const show = showLayouts<TestLayout>({
     channel: {
       onLayoutChanged: (heard) => {
         listener = heard;
@@ -235,198 +349,155 @@ function showing(
       readLayout: () => answer.promise,
     },
     loader,
-    chosen: () => chosenName,
-    onChosenChanged: (heard) => {
-      chosenListener = heard;
+    userLayout: () => page.setting,
+    namesInUse: () => page.namesInUse,
+    setLayouts: (shown) => {
+      setLayouts(shown);
+      page.shown.push(shown);
     },
-    setLayout: (layout, name) => {
-      setLayout(layout, name);
-      shown.push(name);
-    },
-    log: (source, message) => logLines.push(`[${source}] ${message}`),
+    log: (source, message) => page.logLines.push(`[${source}] ${message}`),
     logSource: 'demo',
-    toast: (text, tone) => toasts.push(`${tone}: ${text}`),
+    toast: (text, tone) => page.toasts.push(`${tone}: ${text}`),
   });
-  return {
-    answer,
-    change: (changed: LayoutSet) => listener(changed),
-    choose: (name: string) => {
-      chosenName = name;
-      chosenListener();
-    },
-    shown,
-    logLines,
-    toasts,
-  };
+  page.refresh = () => show.refresh();
+  return page;
 }
 
-function entry(name: string, revision: number): LayoutEntry {
-  return { name, revision, hasCss: false, builtIn: false };
-}
-
-// A set holding the built-in `default` and `users`.
-function setOf(changed: string | null, ...users: LayoutEntry[]): LayoutSet {
-  return {
-    layouts: [
-      { name: 'default', revision: 1, hasCss: false, builtIn: true },
-      ...users,
-    ],
-    changed,
-  };
+// Lets every queued load and its promise callbacks run.
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('showLayouts', () => {
-  it('showLayouts_AnswerSet_ShowsTheChosenLayout', async () => {
-    const held = heldLoader();
-    const page = showing(held.loader, 'mine');
+  it('showLayouts_Answer_LoadsSettingAndNamesInUse', async () => {
+    const recorder = recordingLoader();
+    const page = showing(recorder.loader, 'mine');
+    page.namesInUse = ['r'];
 
-    page.answer.resolve(setOf(null, entry('mine', 3)));
-    await vi.waitFor(() => expect(held.isLoading('mine@3')).toBe(true));
-    held.finish('mine@3');
+    page.answer.resolve(setOf(entry('mine', 3), entry('r', 1)));
 
-    await vi.waitFor(() => expect(page.shown).toEqual(['mine']));
-    expect(page.logLines).toEqual(['[demo] layout mine shown (revision 3)']);
+    await vi.waitFor(() => expect(page.shown).toHaveLength(1));
+    expect(recorder.calls.map((call) => call.names)).toEqual([['mine', 'r']]);
+    expect(page.shown[0].user).toBe('mine');
   });
 
-  it('showLayouts_ChosenMissing_ShowsDefaultAndLogs', async () => {
-    const held = heldLoader();
-    const page = showing(held.loader, 'gone');
+  it('showLayouts_SettingMissing_DrawsDefaultAndLogsOnce', async () => {
+    const recorder = recordingLoader();
+    const page = showing(recorder.loader, 'gone');
 
-    page.answer.resolve(setOf(null, entry('mine', 3)));
-    await vi.waitFor(() => expect(held.isLoading('default@1')).toBe(true));
-    held.finish('default@1');
-    await vi.waitFor(() => expect(page.shown).toEqual(['default']));
-    page.change(setOf('mine', entry('mine', 4)));
+    page.answer.resolve(setOf(entry('mine', 3)));
+    await vi.waitFor(() => expect(page.shown).toHaveLength(1));
+    page.refresh();
+    page.refresh();
+    await settle();
 
+    expect(page.shown[0].user).toBe('default');
     const missing = page.logLines.filter(
       (line) => line === '[demo] layout gone not found, drawing default',
     );
     expect(missing).toHaveLength(1);
-    expect(held.loads).toEqual(['default@1']);
   });
 
-  it('showLayouts_ChangeToAnotherLayout_LoadsNothing', async () => {
-    const held = heldLoader();
-    const page = showing(held.loader, 'mine');
-    page.answer.resolve(setOf(null, entry('mine', 3), entry('other', 1)));
-    await vi.waitFor(() => expect(held.isLoading('mine@3')).toBe(true));
-    held.finish('mine@3');
-    await vi.waitFor(() => expect(page.shown).toEqual(['mine']));
+  it('showLayouts_SettingMovesToAnotherMissingName_LogsItWithNoLoad', async () => {
+    const recorder = recordingLoader();
+    const page = showing(recorder.loader, 'gone1');
+    page.answer.resolve(setOf(entry('mine', 3)));
+    await vi.waitFor(() => expect(page.shown).toHaveLength(1));
 
-    page.change(setOf('other', entry('mine', 3), entry('other', 2)));
-    page.change(setOf('mine', entry('mine', 4), entry('other', 2)));
-    await vi.waitFor(() => expect(held.isLoading('mine@4')).toBe(true));
+    page.setting = 'gone2';
+    page.refresh();
+    await settle();
 
-    expect(held.loads).toEqual(['mine@3', 'mine@4']);
+    expect(page.logLines).toContain(
+      '[demo] layout gone2 not found, drawing default',
+    );
+    expect(recorder.calls).toHaveLength(1);
   });
 
-  it('showLayouts_ChosenLayoutReloaded_LoadsItAgain', async () => {
-    const held = heldLoader();
-    const page = showing(held.loader, 'mine');
-    page.answer.resolve(setOf(null, entry('mine', 3)));
-    await vi.waitFor(() => expect(held.isLoading('mine@3')).toBe(true));
-    held.finish('mine@3');
+  it('showLayouts_Loaded_LogsShownWithRevision', async () => {
+    const recorder = recordingLoader();
+    recorder.respond = (set, names) => ({
+      layouts: recorder.answer(set, names),
+      loaded: [entry('mine', 3)],
+      failed: [],
+    });
+    const page = showing(recorder.loader, 'mine');
 
-    page.change(setOf('mine', entry('mine', 4)));
-    await vi.waitFor(() => expect(held.isLoading('mine@4')).toBe(true));
-    held.finish('mine@4');
+    page.answer.resolve(setOf(entry('mine', 3)));
 
-    await vi.waitFor(() => expect(page.shown).toEqual(['mine', 'mine']));
-    expect(page.logLines).toContain('[demo] layout mine shown (revision 4)');
-  });
-
-  it('showLayouts_SettingChanged_LoadsTheNewChoice', async () => {
-    const held = heldLoader();
-    const page = showing(held.loader, 'mine');
-    page.answer.resolve(setOf(null, entry('mine', 3), entry('other', 2)));
-    await vi.waitFor(() => expect(held.isLoading('mine@3')).toBe(true));
-    held.finish('mine@3');
-
-    page.choose('other');
-    await vi.waitFor(() => expect(held.isLoading('other@2')).toBe(true));
-    held.finish('other@2');
-
-    await vi.waitFor(() => expect(page.shown).toEqual(['mine', 'other']));
-  });
-
-  it('showLayouts_Changes_ShownOneAtATimeInArrivalOrder', async () => {
-    const held = heldLoader();
-    const page = showing(held.loader, 'mine');
-
-    page.change(setOf('mine', entry('mine', 2)));
-    page.change(setOf('mine', entry('mine', 3)));
-    await vi.waitFor(() => expect(held.isLoading('mine@2')).toBe(true));
-    expect(held.isLoading('mine@3')).toBe(false);
-    held.finish('mine@2');
-    await vi.waitFor(() => expect(held.isLoading('mine@3')).toBe(true));
-    held.finish('mine@3');
-
-    await vi.waitFor(() => expect(page.shown).toEqual(['mine', 'mine']));
-    expect(page.logLines).toEqual([
-      '[demo] layout mine shown (revision 2)',
-      '[demo] layout mine shown (revision 3)',
-    ]);
-    expect(page.toasts).toEqual([]);
+    await vi.waitFor(() =>
+      expect(page.logLines).toEqual(['[demo] layout mine shown (revision 3)']),
+    );
   });
 
   it('showLayouts_ChangeHeardBeforeAnswer_DropsAnswer', async () => {
-    const held = heldLoader();
-    const page = showing(held.loader, 'mine');
+    const recorder = recordingLoader();
+    const page = showing(recorder.loader, 'mine');
+    const changed = setOf(entry('mine', 3));
 
-    page.change(setOf('mine', entry('mine', 3)));
-    page.answer.resolve(setOf(null, entry('mine', 2)));
-    await vi.waitFor(() => expect(held.isLoading('mine@3')).toBe(true));
-    held.finish('mine@3');
+    page.change(changed);
+    page.answer.resolve(setOf(entry('mine', 2)));
+    await settle();
 
-    await vi.waitFor(() => expect(page.shown).toEqual(['mine']));
-    expect(held.isLoading('mine@2')).toBe(false);
+    expect(recorder.calls.map((call) => call.set)).toEqual([changed]);
+    expect(page.shown).toHaveLength(1);
   });
 
   it('showLayouts_LoadFails_LogsAndToasts', async () => {
-    const held = heldLoader();
-    const page = showing(held.loader, 'mine');
+    const recorder = recordingLoader();
+    recorder.respond = (set) => ({
+      layouts: recorder.answer(set, []),
+      loaded: [],
+      failed: [{ entry: entry('mine', 2), error: new Error('broken') }],
+    });
+    const page = showing(recorder.loader, 'mine');
 
-    page.change(setOf('mine', entry('mine', 2)));
-    await vi.waitFor(() => expect(held.isLoading('mine@2')).toBe(true));
-    held.fail('mine@2');
+    page.change(setOf(entry('mine', 2)));
 
     await vi.waitFor(() =>
       expect(page.logLines).toEqual(['[demo] layout mine failed: broken']),
     );
     expect(page.toasts).toEqual(['error: Layout mine failed: broken']);
-    expect(page.shown).toEqual([]);
-
-    page.change(setOf('mine', entry('mine', 3)));
-    await vi.waitFor(() => expect(held.isLoading('mine@3')).toBe(true));
-    held.finish('mine@3');
-    await vi.waitFor(() => expect(page.shown).toEqual(['mine']));
+    expect(page.shown[0].user).toBe('default');
   });
 
-  it('showLayouts_SetLayoutThrows_LaterChangesStillShown', async () => {
-    const held = heldLoader();
+  it('showLayouts_RefreshUnchanged_QueuesNothing', async () => {
+    const recorder = recordingLoader();
+    const page = showing(recorder.loader, 'mine');
+    page.answer.resolve(setOf(entry('mine', 3)));
+    await vi.waitFor(() => expect(page.shown).toHaveLength(1));
+
+    page.refresh();
+    await settle();
+
+    expect(recorder.calls).toHaveLength(1);
+    expect(page.shown).toHaveLength(1);
+  });
+
+  it('showLayouts_SetLayoutsThrows_LaterSetsStillShown', async () => {
+    const recorder = recordingLoader();
     let calls = 0;
-    const page = showing(held.loader, 'mine', () => {
+    const page = showing(recorder.loader, 'mine', () => {
       calls++;
       if (calls === 1) {
         throw new Error('rebuild failed');
       }
     });
 
-    page.change(setOf('mine', entry('mine', 2)));
-    page.change(setOf('mine', entry('mine', 3)));
-    await vi.waitFor(() => expect(held.isLoading('mine@2')).toBe(true));
-    held.finish('mine@2');
-    await vi.waitFor(() => expect(held.isLoading('mine@3')).toBe(true));
-    held.finish('mine@3');
-
-    await vi.waitFor(() => expect(page.shown).toEqual(['mine']));
-    expect(page.logLines).toContain(
-      '[demo] layout mine not shown: rebuild failed',
+    page.change(setOf(entry('mine', 2)));
+    await vi.waitFor(() =>
+      expect(page.logLines).toContain(
+        '[demo] layouts not shown: rebuild failed',
+      ),
     );
+    page.change(setOf(entry('mine', 3)));
+
+    await vi.waitFor(() => expect(page.shown).toHaveLength(1));
+    expect(page.shown[0].layouts.get('mine')).toEqual({ tag: 'mine@3' });
   });
 
   it('showLayouts_AnswerRejects_LogsNotRead', async () => {
-    const page = showing(heldLoader().loader, 'mine');
+    const page = showing(recordingLoader().loader, 'mine');
 
     page.answer.reject(new Error('not started'));
 

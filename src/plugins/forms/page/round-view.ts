@@ -10,6 +10,7 @@ import type { KeysPageExports } from '../../keys/contract';
 import { type FormsCommandName, formsCommand, formsScope } from '../ids';
 import type { Layout } from '../layouts/layout';
 import { button, element, markdownElement } from '../../../shared/page/dom';
+import type { ShownLayouts } from '../../../shared/page/layout-loader';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { textButton } from '../../../shared/page/ui/button';
 import { row as rowPart } from '../../../shared/page/ui/row';
@@ -41,6 +42,12 @@ import type { CardDeps, ItemCard } from './kinds/item-format';
 import { createHeadKit } from './layout/card-kit';
 import { buildLayoutCard } from './layout/layout-cards';
 import {
+  type LayoutPick,
+  pickRoundLayouts,
+  picksEqual,
+  type RoundPicks,
+} from './layout/layout-resolver';
+import {
   pickRailItem,
   progressText,
   railDotStatus,
@@ -64,14 +71,15 @@ export interface RoundViewDeps {
   log: Log;
 }
 
-// `setLayout` rebuilds the view's children with `layout`'s cards and head
-// from `round`, remounting every box. `scrollBy` scrolls the main column by
+// `setLayouts` picks the round's layouts again from `shown` and, when a pick
+// changed, rebuilds the view's children from `round`, remounting every box.
+// `scrollBy` scrolls the main column by
 // `step`, down for 1 and up for -1. `dispose` stops the view
 // following keymap changes; its owner calls it when it drops the view.
 export interface RoundView {
   element: HTMLElement;
   update(round: RoundState, view: FormsView): void;
-  setLayout(layout: Layout, layoutName: string, round: RoundState): void;
+  setLayouts(shown: ShownLayouts<Layout>, round: RoundState): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll;
   dispose(): void;
 }
@@ -102,9 +110,10 @@ interface ReviewPart {
 
 // One open round's DOM, built with its editors: a split with the rail in its
 // start pane, and the layout's head, every item's card and the review with
-// the round note in its end pane. A render only updates it, the rail taking
-// the latest dragged width of any round; a new layout rebuilds both panes,
-// keeping the rail's dragged width. A keymap change
+// the round note in its end pane, each card and the head drawn by the layout
+// `pickRoundLayouts` picks for it from `shown`. A render only updates it, the
+// rail taking the latest dragged width of any round; new layouts that change
+// a pick rebuild both panes, keeping the rail's dragged width. A keymap change
 // draws the layout's head again, shown or hidden, since showing the view only
 // updates it, and has the review rebuild its rows at its next update; while
 // the view shows, the change also updates it with the round it last showed,
@@ -113,8 +122,7 @@ interface ReviewPart {
 export function createRoundView(
   attach: (root: HTMLElement) => void,
   round: RoundState,
-  layout: Layout,
-  layoutName: string,
+  shown: ShownLayouts<Layout>,
   deps: RoundViewDeps,
 ): RoundView {
   const split = createSplit({
@@ -132,9 +140,10 @@ export function createRoundView(
   let shownView: FormsView = 'forms';
   let shownRound: RoundState | null = null;
   let shownFocus = -1;
-  const build = (current: RoundState, cardLayout: Layout, name: string) =>
-    buildRoundParts(split, current, cardLayout, name, deps, () => shownView);
-  let parts = build(round, layout, layoutName);
+  const build = (current: RoundState, roundPicks: RoundPicks) =>
+    buildRoundParts(split, current, roundPicks, deps, () => shownView);
+  let picks = pickRoundLayouts(round.round, shown.user, shown.layouts);
+  let parts = build(round, picks);
 
   const view: RoundView = {
     element: root,
@@ -176,11 +185,20 @@ export function createRoundView(
         });
       }
     },
-    setLayout(nextLayout, nextName, current) {
+    setLayouts(nextShown, current) {
+      const nextPicks = pickRoundLayouts(
+        current.round,
+        nextShown.user,
+        nextShown.layouts,
+      );
+      if (picksEqual(nextPicks, picks)) {
+        return;
+      }
+      picks = nextPicks;
       deps.boxes.destroyRound(current.roundId);
       split.start.replaceChildren();
       split.end.replaceChildren();
-      parts = build(current, nextLayout, nextName);
+      parts = build(current, picks);
       shownFocus = -1;
       view.update(current, shownView);
     },
@@ -208,13 +226,13 @@ export function createRoundView(
 
 // Builds the rail into the split's start pane and the round's main column
 // into its end pane: the review's head, the layout's head, the items pane of
-// cards, and the review. `shownView` reads the view last shown, which decides
+// cards, and the review, each card and the head drawn by its pick in `picks`.
+// `shownView` reads the view last shown, which decides
 // what a rail click does.
 function buildRoundParts(
   split: Split,
   round: RoundState,
-  layout: Layout,
-  layoutName: string,
+  picks: RoundPicks,
   deps: RoundViewDeps,
   shownView: () => FormsView,
 ): RoundParts {
@@ -235,7 +253,8 @@ function buildRoundParts(
     platform: deps.platform,
     log: deps.log,
   };
-  const layoutHead = buildLayoutHead(main, round, layout, layoutName, headDeps);
+  const headPick = picks.panes.head;
+  const layoutHead = buildLayoutHead(main, round, headPick, headDeps);
   const itemsPane = element('div', 'items');
   main.append(itemsPane);
   const reviewRowAt = reviewRowsByRailPosition(round);
@@ -258,8 +277,7 @@ function buildRoundParts(
   };
   const itemCards = items.map((item, position) =>
     buildLayoutCard(
-      layout,
-      layoutName,
+      picks.cards[position],
       itemsPane,
       round,
       item,
@@ -275,7 +293,7 @@ function buildRoundParts(
     layoutHead,
     redrawLayoutHead() {
       if (layoutHead !== null) {
-        drawLayoutHead(layoutHead, round, layout, layoutName, headDeps);
+        drawLayoutHead(layoutHead, round, headPick, headDeps);
       }
     },
     railEntries,
@@ -287,40 +305,39 @@ function buildRoundParts(
 
 type HeadDeps = Pick<CardDeps, 'markdown' | 'keysFor' | 'platform' | 'log'>;
 
-// The slot above the cards the layout's head draws into; null for a layout
-// with no head.
+// The slot above the cards the picked layout's head draws into, carrying
+// `data-layout` naming that layout; null for a layout with no head.
 function buildLayoutHead(
   parent: HTMLElement,
   round: RoundState,
-  layout: Layout,
-  layoutName: string,
+  pick: LayoutPick,
   deps: HeadDeps,
 ): HTMLElement | null {
-  if (layout.head === undefined) {
+  if (pick.layout.head === undefined) {
     return null;
   }
   const slot = element('div', 'layout-head');
+  slot.dataset.layout = pick.name;
   parent.append(slot);
-  drawLayoutHead(slot, round, layout, layoutName, deps);
+  drawLayoutHead(slot, round, pick, deps);
   return slot;
 }
 
-// Empties `slot` and draws the layout's head into it, with the keys the
-// keymap binds now. The head holds no text boxes, so a redraw loses no
+// Empties `slot` and draws the picked layout's head into it, with the keys
+// the keymap binds now. The head holds no text boxes, so a redraw loses no
 // answer. A head that throws is logged and leaves the slot empty.
 function drawLayoutHead(
   slot: HTMLElement,
   round: RoundState,
-  layout: Layout,
-  layoutName: string,
+  pick: LayoutPick,
   deps: HeadDeps,
 ) {
   slot.replaceChildren();
   try {
-    layout.head?.(slot, roundInfo(round.round), createHeadKit(deps));
+    pick.layout.head?.(slot, roundInfo(round.round), createHeadKit(deps));
   } catch (error) {
     slot.replaceChildren();
-    deps.log('forms', `layout ${layoutName} head failed: ${errorText(error)}`);
+    deps.log('forms', `layout ${pick.name} head failed: ${errorText(error)}`);
   }
 }
 

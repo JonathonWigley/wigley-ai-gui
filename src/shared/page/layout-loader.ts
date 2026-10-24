@@ -9,13 +9,24 @@ export interface LayoutLoaderDeps<L> {
   defaultLayout: L;
   head: HTMLElement;
   // The plugin's layout validator: the layout a user's `layout.js` module
-  // holds, or a throw naming the first part it lacks.
+  // holds, or a throw naming the first part it gets wrong.
   read(module: unknown, name: string): L;
 }
 
-export interface LayoutLoader<L> {
-  load(entry: LayoutEntry): Promise<L>;
+// One load's outcome: every layout with a good version among the names asked
+// for, `default` always included; the entries this load imported and read;
+// and the entries whose import or read failed in this load.
+export interface LayoutLoad<L> {
+  layouts: ReadonlyMap<string, L>;
+  loaded: LayoutEntry[];
+  failed: { entry: LayoutEntry; error: unknown }[];
 }
+
+export interface LayoutLoader<L> {
+  load(set: LayoutSet, names: readonly string[]): Promise<LayoutLoad<L>>;
+}
+
+const DEFAULT_NAME = 'default';
 
 // The URLs of a user layout's files in the plugin's data folder, at its revision.
 export function layoutUrls(
@@ -31,41 +42,119 @@ export function layoutUrls(
   };
 }
 
-// Loads each layout it is handed, keeping one stylesheet link in `head` for the
-// user layout's CSS. The stylesheet changes only once the script has loaded,
-// so a failed load keeps the last good look whole.
+// A layout that loaded and read, and the entry it loaded at.
+interface GoodVersion<L> {
+  layout: L;
+  entry: LayoutEntry;
+}
+
+// An import and read of one entry, settled.
+type Attempt<L> =
+  | { entry: LayoutEntry; layout: L }
+  | { entry: LayoutEntry; error: unknown };
+
+// Loads the named layouts the set lists, each cached by name and revision: a
+// revision that loaded, or failed, is not imported again. A failed name keeps
+// its last good version. `head` holds one stylesheet link per loaded name
+// whose good version has CSS, marked `data-layout="<name>"`; a link moves only
+// once its name's script has loaded and read, so a failed reload keeps the
+// last good look whole, and a name left out of a load loses its link.
 export function createLayoutLoader<L>(
   deps: LayoutLoaderDeps<L>,
 ): LayoutLoader<L> {
-  let link: HTMLLinkElement | null = null;
-  const showStyle = (url: string | null) => {
-    if (url === null) {
-      link?.remove();
-      link = null;
-      return;
-    }
-    if (link === null) {
-      link = deps.head.ownerDocument.createElement('link');
-      link.rel = 'stylesheet';
-      deps.head.append(link);
-    }
-    link.href = url;
-  };
-  return {
-    async load(entry) {
-      if (entry.builtIn) {
-        showStyle(null);
-        return deps.defaultLayout;
-      }
+  const good = new Map<string, GoodVersion<L>>();
+  const failedRevisions = new Map<string, number>();
+  const links = new Map<string, HTMLLinkElement>();
+
+  const attempt = async (entry: LayoutEntry): Promise<Attempt<L>> => {
+    try {
       const urls = layoutUrls(entry, deps.dataUrl);
-      const layout = deps.read(
-        await deps.importModule(urls.script),
-        entry.name,
+      const module = await deps.importModule(urls.script);
+      return { entry, layout: deps.read(module, entry.name) };
+    } catch (error) {
+      return { entry, error };
+    }
+  };
+
+  return {
+    async load(set, names) {
+      const entries = listedEntries(set, names);
+      const toImport = entries.filter(
+        (entry) =>
+          !entry.builtIn &&
+          good.get(entry.name)?.entry.revision !== entry.revision &&
+          failedRevisions.get(entry.name) !== entry.revision,
       );
-      showStyle(urls.style);
-      return layout;
+      const attempts = await Promise.all(toImport.map(attempt));
+      const loaded: LayoutEntry[] = [];
+      const failed: LayoutLoad<L>['failed'] = [];
+      for (const settled of attempts) {
+        if ('error' in settled) {
+          failedRevisions.set(settled.entry.name, settled.entry.revision);
+          failed.push(settled);
+        } else {
+          good.set(settled.entry.name, settled);
+          failedRevisions.delete(settled.entry.name);
+          loaded.push(settled.entry);
+        }
+      }
+      const layouts = new Map<string, L>([[DEFAULT_NAME, deps.defaultLayout]]);
+      const shownVersions: GoodVersion<L>[] = [];
+      for (const entry of entries) {
+        const version = entry.builtIn ? undefined : good.get(entry.name);
+        if (version !== undefined) {
+          layouts.set(entry.name, version.layout);
+          shownVersions.push(version);
+        }
+      }
+      syncStylesheets(shownVersions, links, deps);
+      return { layouts, loaded, failed };
     },
   };
+}
+
+// The set's entry for each distinct name in `names`, skipping a name the set
+// does not list.
+function listedEntries(
+  set: LayoutSet,
+  names: readonly string[],
+): LayoutEntry[] {
+  return [...new Set(names)].flatMap((name) =>
+    set.layouts.filter((entry) => entry.name === name),
+  );
+}
+
+// Leaves `head` holding one stylesheet link per version with CSS, its href at
+// that version's revision, and removes every other layout's link.
+function syncStylesheets<L>(
+  versions: GoodVersion<L>[],
+  links: Map<string, HTMLLinkElement>,
+  deps: Pick<LayoutLoaderDeps<L>, 'dataUrl' | 'head'>,
+): void {
+  const styled = new Map<string, string>();
+  for (const { entry } of versions) {
+    const { style } = layoutUrls(entry, deps.dataUrl);
+    if (style !== null) {
+      styled.set(entry.name, style);
+    }
+  }
+  for (const [name, link] of links) {
+    if (!styled.has(name)) {
+      link.remove();
+      links.delete(name);
+    }
+  }
+  for (const [name, href] of styled) {
+    let link = links.get(name);
+    if (link === undefined) {
+      link = deps.head.ownerDocument.createElement('link');
+      link.rel = 'stylesheet';
+      link.dataset.layout = name;
+      deps.head.append(link);
+      links.set(name, link);
+    }
+    link.href = href;
+  }
 }
 
 // Main's layout channel as the page hears it: `layoutChanged` messages and the
@@ -75,111 +164,156 @@ export interface LayoutChannel {
   readLayout(): Promise<LayoutSet>;
 }
 
+// The layouts a page draws with, by name, `default` always included, and the
+// name of the user's layout: the setting's when `layouts` holds it, else
+// `default`.
+export interface ShownLayouts<L> {
+  layouts: ReadonlyMap<string, L>;
+  user: string;
+}
+
 export interface ShowLayoutsDeps<L> {
   channel: LayoutChannel;
   loader: LayoutLoader<L>;
-  // The name of the layout the user chose, read again on each set and on each
-  // `onChosenChanged`.
-  chosen(): string;
-  onChosenChanged(listener: () => void): void;
-  setLayout(layout: L, name: string): void;
+  // The setting's layout name, read again on each set and each `refresh()`.
+  userLayout(): string;
+  // The names of the layouts the page's content names beside the user's, read
+  // again on each set and each `refresh()`.
+  namesInUse(): readonly string[];
+  setLayouts(shown: ShownLayouts<L>): void;
   log: Log;
   // The source name every log line carries.
   logSource: string;
   toast(text: string, tone: ToastTone): void;
 }
 
-const DEFAULT_NAME = 'default';
+// `refresh` reads the setting and the names in use again, after either may
+// have changed.
+export interface LayoutShow {
+  refresh(): void;
+}
 
-// Shows the chosen layout from main's latest set, or `default` when the set
-// does not hold it, and loads it again whenever a set or a new choice changes
-// its name or revision, so a change in a layout nobody draws loads nothing.
-// Loads run one at a time in arrival order; a layout that fails to load leaves
-// the current one shown, and its next revision is tried again. A set heard
-// before main answers `layout` is newer, so the answer is then dropped.
-export function showLayouts<L>(deps: ShowLayoutsDeps<L>): void {
+// What a load was queued for: the set, the names to load, and the setting's
+// name when the set lists it, else null.
+interface QueuedLoad {
+  set: LayoutSet;
+  names: string[];
+  listedUser: string | null;
+}
+
+// Loads the user's layout and the layouts in use from main's latest set, and
+// hands the page the loaded layouts whenever a load changes them. Every set
+// and every `refresh()` that changes what to load queues a load; loads run
+// one at a time in order. A setting naming a layout the set lacks draws
+// `default` and is logged once, until the setting changes or a set lists it.
+// A set heard before main answers `layout` is newer, so the answer is then
+// dropped.
+export function showLayouts<L>(deps: ShowLayoutsDeps<L>): LayoutShow {
   const { channel, loader, log, logSource, toast } = deps;
   let queue = Promise.resolve();
   let heardChange = false;
   let latest: LayoutSet | null = null;
-  let queued: LayoutEntry | null = null;
+  let lastQueued: QueuedLoad | null = null;
+  let lastShown: ShownLayouts<L> | null = null;
   let missingLogged: string | null = null;
 
-  const shown = (layout: L, entry: LayoutEntry) => {
-    deps.setLayout(layout, entry.name);
-    log(logSource, `layout ${entry.name} shown (revision ${entry.revision})`);
-  };
-  const failed = (error: unknown, entry: LayoutEntry) => {
-    log(logSource, `layout ${entry.name} failed: ${errorText(error)}`);
-    toast(`Layout ${entry.name} failed: ${errorText(error)}`, 'error');
-  };
-  const show = (entry: LayoutEntry) => {
-    queue = queue
-      .then(() =>
-        loader.load(entry).then(
-          (layout) => shown(layout, entry),
-          (error: unknown) => failed(error, entry),
-        ),
-      )
-      .catch((error: unknown) =>
-        log(logSource, `layout ${entry.name} not shown: ${errorText(error)}`),
-      );
-  };
-
-  // The set's entry for the chosen layout, or its `default` entry, logging a
-  // missing name once until the choice changes or is found.
-  const target = (set: LayoutSet): LayoutEntry => {
-    const name = deps.chosen();
-    const found = set.layouts.find((layout) => layout.name === name);
-    if (found !== undefined) {
+  const logMissing = (user: string, isListed: boolean) => {
+    if (isListed) {
       missingLogged = null;
-      return found;
+      return;
     }
-    if (missingLogged !== name) {
-      missingLogged = name;
-      log(logSource, `layout ${name} not found, drawing ${DEFAULT_NAME}`);
+    if (missingLogged !== user) {
+      missingLogged = user;
+      log(logSource, `layout ${user} not found, drawing ${DEFAULT_NAME}`);
     }
-    const fallback = set.layouts.find((layout) => layout.builtIn);
-    if (fallback === undefined) {
-      throw new Error(`layout set holds no ${DEFAULT_NAME} entry`);
-    }
-    return fallback;
   };
 
-  const showTarget = () => {
+  const loadAndShow = async (queued: QueuedLoad) => {
+    const result = await loader.load(queued.set, queued.names);
+    for (const entry of result.loaded) {
+      log(logSource, `layout ${entry.name} shown (revision ${entry.revision})`);
+    }
+    for (const { entry, error } of result.failed) {
+      log(logSource, `layout ${entry.name} failed: ${errorText(error)}`);
+      toast(`Layout ${entry.name} failed: ${errorText(error)}`, 'error');
+    }
+    const { listedUser } = queued;
+    const isUserLoaded = listedUser !== null && result.layouts.has(listedUser);
+    const shown: ShownLayouts<L> = {
+      layouts: result.layouts,
+      user: isUserLoaded ? listedUser : DEFAULT_NAME,
+    };
+    if (lastShown === null || shownChanged(lastShown, shown)) {
+      deps.setLayouts(shown);
+      lastShown = shown;
+    }
+  };
+
+  const update = () => {
     if (latest === null) {
       return;
     }
-    const entry = target(latest);
+    const set = latest;
+    const user = deps.userLayout();
+    const isListed = set.layouts.some((entry) => entry.name === user);
+    logMissing(user, isListed);
+    const listedUser = isListed ? user : null;
+    const names = [
+      ...new Set([...(isListed ? [user] : []), ...deps.namesInUse()]),
+    ];
     const isQueued =
-      queued !== null &&
-      queued.name === entry.name &&
-      queued.revision === entry.revision;
+      lastQueued !== null &&
+      lastQueued.set === set &&
+      lastQueued.listedUser === listedUser &&
+      sameNames(lastQueued.names, names);
     if (isQueued) {
       return;
     }
-    queued = entry;
-    show(entry);
-  };
-
-  const heard = (set: LayoutSet) => {
-    latest = set;
-    showTarget();
+    const queued: QueuedLoad = { set, names, listedUser };
+    lastQueued = queued;
+    queue = queue
+      .then(() => loadAndShow(queued))
+      .catch((error: unknown) =>
+        log(logSource, `layouts not shown: ${errorText(error)}`),
+      );
   };
 
   channel.onLayoutChanged((set) => {
     heardChange = true;
-    heard(set);
+    latest = set;
+    update();
   });
-  deps.onChosenChanged(showTarget);
   channel
     .readLayout()
     .then((set) => {
       if (!heardChange) {
-        heard(set);
+        latest = set;
+        update();
       }
     })
     .catch((error: unknown) =>
       log(logSource, `layout not read: ${errorText(error)}`),
     );
+  return { refresh: update };
+}
+
+function sameNames(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((name, i) => name === b[i]);
+}
+
+// True when `next` names another user layout, or holds another name set or
+// another layout object at some name.
+function shownChanged<L>(
+  last: ShownLayouts<L>,
+  next: ShownLayouts<L>,
+): boolean {
+  if (last.user !== next.user || last.layouts.size !== next.layouts.size) {
+    return true;
+  }
+  for (const [name, layout] of next.layouts) {
+    if (!last.layouts.has(name) || last.layouts.get(name) !== layout) {
+      return true;
+    }
+  }
+  return false;
 }

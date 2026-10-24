@@ -8,6 +8,7 @@ import type { UiState } from '../../../contracts/ui-state';
 import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { createDialog, type Dialog } from '../../../shared/page/ui/dialog';
+import type { ShownLayouts } from '../../../shared/page/layout-loader';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
@@ -58,23 +59,23 @@ export interface FormsViewDeps {
   log: Log;
 }
 
-// The layout every round view builds its cards with, and its name.
-interface ActiveLayout {
-  layout: Layout;
-  name: string;
+// The layouts every round view picks its cards and panes from.
+interface ActiveLayouts {
+  shown: ShownLayouts<Layout>;
 }
 
 // `forgetSession` drops a session's Form tab entry and destroys its round
 // views once sessions dropped the tab, so the next render rebuilds a round
 // still open for the session in a new Form tab. `showForm` selects the
-// session's Form tab, a no-op when it has none. `setLayout` rebuilds every
-// open round view with `layout`, and rounds that open later are built with it.
+// session's Form tab, a no-op when it has none. `setLayouts` hands `shown` to
+// every open round view, which rebuilds when a layout it draws with changed,
+// and rounds that open later are built with it.
 // `scrollBy` scrolls the active round's main column by `step`, down for 1 and
 // up for -1; null when no round is active or it has no view yet.
 export interface FormsView {
   forgetSession(sessionId: string): void;
   showForm(sessionId: string): void;
-  setLayout(layout: Layout, layoutName: string): void;
+  setLayouts(shown: ShownLayouts<Layout>): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
 }
 
@@ -95,7 +96,7 @@ interface FormTab {
 // pushes its own scope over it and is dismissed when another view sets the
 // scope. While the round sends, that dismiss waits: a failed send dismisses
 // the prompt, and a sent round closes it with the round. Round views start on
-// the default layout.
+// the default layout alone.
 export function mountFormsView(deps: FormsViewDeps): FormsView {
   const { areas, store, boxes } = deps;
   const status = buildStatusLine(deps);
@@ -106,7 +107,12 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   const formTabs = new Map<string, FormTab>();
   const takeOvers: TakeOvers = new Map();
   const dispatch = (action: FormsAction) => store.dispatch(action);
-  const active: ActiveLayout = { layout: defaultLayout, name: 'default' };
+  const active: ActiveLayouts = {
+    shown: {
+      layouts: new Map<string, Layout>([['default', defaultLayout]]),
+      user: 'default',
+    },
+  };
   // The cancel prompt's pushed scope while the prompt shows, else null.
   let confirmScope: PushedScope | null = null;
   // Whether the base scope changed while the prompt's round was sending, so
@@ -197,11 +203,10 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       );
     },
     showForm: (sessionId) => formTabs.get(sessionId)?.handle.select(),
-    setLayout(layout, layoutName) {
-      active.layout = layout;
-      active.name = layoutName;
+    setLayouts(shown) {
+      active.shown = shown;
       for (const round of store.get().rounds) {
-        roundViews.get(round.roundId)?.setLayout(layout, layoutName, round);
+        roundViews.get(round.roundId)?.setLayouts(shown, round);
       }
     },
     scrollBy(step, direction) {
@@ -224,7 +229,7 @@ function syncRoundViews(
   roundViews: Map<string, RoundView>,
   formTabs: Map<string, FormTab>,
   takeOvers: TakeOvers,
-  active: ActiveLayout,
+  active: ActiveLayouts,
   deps: FormsViewDeps,
   dispatch: (action: FormsAction) => void,
 ) {
@@ -303,15 +308,14 @@ function formTabOf(
 function showRound(
   round: RoundState,
   formTab: FormTab,
-  active: ActiveLayout,
+  active: ActiveLayouts,
   deps: FormsViewDeps,
   dispatch: (action: FormsAction) => void,
 ): RoundView {
   return createRoundView(
     (root) => formTab.element.insertBefore(root, formTab.idle),
     round,
-    active.layout,
-    active.name,
+    active.shown,
     {
       markdown: deps.markdown,
       boxes: deps.boxes,

@@ -31,6 +31,7 @@ import {
 import { createFormsStore, type FormsStore } from './forms-store';
 import { mountFormsView } from './forms-view';
 import { readLayout } from './layout/read-layout';
+import { roundLayoutNames } from './layout/layout-resolver';
 
 type FormsApi = PageApi<
   typeof formsManifest,
@@ -104,8 +105,9 @@ function listenForRounds(
 // Shows each agent round in its session's Form tab and sends the user's
 // answers back to main; while a Form tab is the visible tab, the key scope
 // follows the forms view and the status line shows. A session with an open
-// round closes only through the cancel prompt. Rounds draw in the layout main
-// chooses.
+// round closes only through the cancel prompt. Each round draws with the
+// layouts it names, the user's layout and `default`, loaded from main's set
+// again whenever the set, the setting or the open rounds change.
 export const formsPagePart: PagePart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
@@ -155,7 +157,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       log: services.log,
     });
     listenForRounds(api, store, sessions);
-    showLayouts({
+    const layoutShow = showLayouts<Layout>({
       channel: {
         onLayoutChanged: (listener) =>
           api.channel.on('layoutChanged', listener),
@@ -168,15 +170,16 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         head: document.head,
         read: readLayout,
       }),
-      chosen: () => api.settings().layout,
-      onChosenChanged: (listener) => {
-        api.onSettingsChanged(() => listener());
-      },
-      setLayout: (layout, name) => view.setLayout(layout, name),
+      userLayout: () => api.settings().layout,
+      namesInUse: () =>
+        store.get().rounds.flatMap((round) => roundLayoutNames(round.round)),
+      setLayouts: (shown) => view.setLayouts(shown),
       log: services.log,
       logSource: 'forms',
       toast: services.toast,
     });
+    api.onSettingsChanged(() => layoutShow.refresh());
+    store.subscribe(() => layoutShow.refresh());
     return {
       commands: formsCommandHandlers({
         store,

@@ -1,6 +1,6 @@
 # 02 — Round data: layout names, choice actions, deferral reasons
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -324,3 +324,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit b8661bcd · proof: diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2783 tests) green · concerns: AGENTS.md's per-kind records list lacks ROUND_ITEM_LISTS (doc re-read 09); page test-rounds decision()/nit() fixtures no longer parse (04); holdsRecommendedPick wrong while recommend is null (04); selftest fixture finding 3 breaks recommend rule (08, planned)

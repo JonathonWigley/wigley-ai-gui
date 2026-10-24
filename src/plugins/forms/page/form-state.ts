@@ -175,7 +175,8 @@ const UNTOUCHED_FINDING: FindingAnswer = { ...UNTOUCHED, action: '' };
 
 const RAIL_ORDER: ItemKind[] = ['notice', 'finding', 'question'];
 
-const ROUND_ITEMS = {
+// Each kind's items in a round, in order.
+export const ROUND_ITEMS = {
   notice: (round) => round.notices,
   finding: (round) => round.findings,
   question: (round) => round.questions,

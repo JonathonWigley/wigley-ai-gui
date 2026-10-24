@@ -3,7 +3,7 @@ import type { Log } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
 import type { AnswerableKind, ItemKind, Round } from '../../contract';
-import type { Layout } from '../../layouts/layout';
+import type { LayoutCards } from '../../layouts/layout';
 import type { FormsAction, RoundState, TextTarget } from '../form-state';
 
 // One item's pane, built once; `update` shows the round's current answers.
@@ -27,14 +27,12 @@ export interface CardDeps {
   log: Log;
 }
 
-type CardBuilders = Layout['cards'];
-
 // Each kind's card input and kit, as the layout's card builder takes them.
 export type CardInputs = {
-  [K in keyof CardBuilders]: Parameters<CardBuilders[K]>[1];
+  [K in keyof LayoutCards]: Parameters<LayoutCards[K]>[1];
 };
 export type CardKits = {
-  [K in keyof CardBuilders]: Parameters<CardBuilders[K]>[2];
+  [K in keyof LayoutCards]: Parameters<LayoutCards[K]>[2];
 };
 
 // How the page shows one kind of item. `index` is 1-based within the kind.
