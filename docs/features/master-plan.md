@@ -3,7 +3,8 @@
 **Contents**
 
 - **Order** — the dependency tiers at a glance.
-- **Tier 0: fix and stabilise** — drive reliability, the docs index seam; step 1, the bug sweep, has landed.
+- **Tier 0: fix and stabilise** — the docs index seam; steps 1, the bug sweep, and 2, drive reliability, have
+  landed.
 - **Tier 1: core seams** — disposables, commands and events, keys, shared services, palette.
 - **Tier 2: harness and platform** — harness registry, harness-neutral app, Codex, platform, packaging.
 - **Tier 3: open the plugins** — plugin host, layouts service, forms kinds, sessions, chat and docs hooks.
@@ -19,7 +20,7 @@ after the steps it needs.
 ## Order
 
 ```
- Tier 0  fix and stabilise     1 Bug sweep (landed) ── 2 Drive reliability ── 3 Docs index seam
+ Tier 0  fix and stabilise     1 Bug sweep (landed) ── 2 Drive reliability (landed) ── 3 Docs index seam
               │
  Tier 1  core seams            4 Disposables ─┬─ 5 Commands & events ── 8 Palette & finders
               │                               ├─ 6 Keys core
@@ -35,18 +36,9 @@ after the steps it needs.
  Tier 5  cleanup               22 Test cleanup    23 Design skills (other repo)    24 Per-run drive build
 ```
 
-Step 1, the bug sweep, has landed. Steps 2 and 3 can run side by side. Step 4 unblocks most of Tiers 1 and 3.
+Steps 1, the bug sweep, and 2, drive reliability, have landed. Step 4 unblocks most of Tiers 1 and 3.
 
 ## Tier 0: fix and stabilise
-
-**2. Drive reliability and tooling.** Every later step's live checks run through it.
-- Restart sometimes never finishes loading (root-caused; the per-run build is step 24)
-- `wait-log` misses a reload between the length read and the wait
-- `drag --hold` / `release`
-- `SelfTestStep` width, plus the docs hidden-tree self-test step
-- A repeat-until-line step kind (removes the gallery page count)
-- Drive fixtures for the docs load states and for a fake session that ends itself
-- Narration in `selftest-script.ts` becomes per-step `why` and step groups
 
 **3. Docs index seam.**
 - `IndexSource` registry with `addSource`; `openDoc(path, line?)`; `DocsView(source)`
@@ -196,3 +188,4 @@ Step 1, the bug sweep, has landed. Steps 2 and 3 can run side by side. Step 4 un
 **24. Per-run drive build.** Builds on 2. Only if the user's `npm start` keeps getting hit by drive or self-test
 starts, which the step-2 start lock does not cover.
 - Each dev drive run builds into its own `.drive/<run>/build` and launches Electron on it directly
+- The window adapter exists before the first page load, so load numbers cannot shift (worth doing on its own)
