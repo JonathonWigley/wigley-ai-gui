@@ -1,6 +1,6 @@
 # 07 — Re-read the docs written ahead against the landed code
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 01, 02, 03, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -32,3 +32,5 @@ Done when: every line above checked; stale lines fixed and committed (the README
 Commit:    one commit per repo for the group, when anything changed
 
 ## Proof
+
+Commit 5766b00 · proof: design.md: 2 stale lines fixed (guard clears on failed load; openDoc waits for first index run); AGENTS.md, drive SKILL.md, marketplace README checked clean — no marketplace commit · concerns: none
