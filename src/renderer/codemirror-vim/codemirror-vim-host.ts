@@ -342,6 +342,7 @@ function sightOf(view: EditorView): { top: number; bottom: number } {
 // Moves visual mode's cursor, when its line is wholly out of sight, by whole
 // lines through vim's own motion to the first line wholly in sight when it is
 // above, or the last when below, so the selection grows or shrinks with it.
+// The editor keeps the scroll it had before the motion.
 function bringVisualHeadIntoSight(view: EditorView, cm: VimEditor) {
   const { top, bottom } = sightOf(view);
   const { doc } = view.state;
@@ -359,6 +360,7 @@ function bringVisualHeadIntoSight(view: EditorView, cm: VimEditor) {
   if (lines === 0) {
     return;
   }
+  const scroll = view.scrollSnapshot();
   for (const digit of String(lines)) {
     Vim.handleKey(cm, digit, 'user');
   }
@@ -366,6 +368,8 @@ function bringVisualHeadIntoSight(view: EditorView, cm: VimEditor) {
     ? SCROLL_MOTION_KEYS.lineDown
     : SCROLL_MOTION_KEYS.lineUp;
   Vim.handleKey(cm, key, 'user');
+  // Vim's motion scrolls its cursor into view with CodeMirror's 5px margin.
+  view.dispatch({ effects: scroll });
 }
 
 // Moves a cursor wholly out of sight to the start of the first line wholly in
