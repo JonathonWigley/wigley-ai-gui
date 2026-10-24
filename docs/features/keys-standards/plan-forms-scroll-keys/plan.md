@@ -104,10 +104,10 @@ No new files. Boundary: forms imports only `src/contracts`, `src/shared` and its
 - [x] [Forms scroll and box keys](01-forms-scroll-and-box-keys.md)
 
 ### Wave 2
-- [ ] [Doc re-read](02-doc-re-read.md) — after 01
+- [x] [Doc re-read](02-doc-re-read.md) — after 01
 
 ### Wave 3
-- [ ] [Final verification](03-final-verification.md) — after 02
+- [x] [Final verification](03-final-verification.md) — after 02
 
 ## Run log
 
@@ -115,10 +115,14 @@ Review base: 6015e496
 
 ### Groups
 - 01 · 491d4a29 · diff read: every Produces present; typecheck and lint clean · concerns: wigley:writing-tests not loadable in the worker; scroll test also pins store state unchanged (toBe); self-test steps unrun until the gate
+- 02 · efa4c404 · diff read: one followups line; keymap.md, plugin-framework/design.md and docs-browser/design.md lines checked true · concerns: none
+- 03 · 49b7033e · selftest all passed; drive run on the layout preview: page scroll moves only the main column, INSERT box keeps focus and mode through Ctrl+j and takes the next letter, review rows move at 900x360, key help lists Ctrl+N/P boxes and Ctrl+J/K scroll · concerns: none
 ### Contract changes
 ### Rulings
 - Test names kept as the plan wrote them, matching the file's plain-sentence style — rename only — group 01 · group 01
 - Review Ctrl+k self-test step placed right after the review opens, before help — passes even at the top since it expects only the command line — group 01 · group 01
 - Both handlers share a private scrollForm(deps, direction) helper beside stepFocus and moveItem — none — group 01 · group 01
+- Followups list-view entry gains the settings picker and chat session list; keymap.md's bracketed list stays as examples — a doc reader might expect it exhaustive — group 02 · group 02
+- plugin-framework/design.md 'Ctrl+j / Ctrl+k until the forms scroll keys moved them' kept, matching that doc's changed-by history style — a stale-history note if the doc drops that style — group 02 · group 02
 ### Review rounds
 ### Test gate

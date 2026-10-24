@@ -1,6 +1,6 @@
 # 03 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -33,3 +33,4 @@ Commit:    none
 
 ## Proof
 
+Commit 49b7033e · proof: selftest all passed; drive run on the layout preview: page scroll moves only the main column, INSERT box keeps focus and mode through Ctrl+j and takes the next letter, review rows move at 900x360, key help lists Ctrl+N/P boxes and Ctrl+J/K scroll · concerns: none

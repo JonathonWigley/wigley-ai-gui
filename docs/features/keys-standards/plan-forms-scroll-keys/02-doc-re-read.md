@@ -1,6 +1,6 @@
 # 02 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -27,3 +27,4 @@ Commit:    one commit for the fixes, or none when nothing changed
 
 ## Proof
 
+Commit efa4c404 · proof: diff read: one followups line; keymap.md, plugin-framework/design.md and docs-browser/design.md lines checked true · concerns: none
