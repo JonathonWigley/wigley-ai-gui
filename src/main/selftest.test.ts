@@ -135,7 +135,7 @@ describe('settleWithin', () => {
   });
 
   it('returns the value of a result that settles in time', async () => {
-    const { settleWithin } = await import('./selftest');
+    const { settleWithin } = await import('./selftest-runner');
 
     expect(await settleWithin(Promise.resolve('done'), 1000)).toEqual({
       timedOut: false,
@@ -145,7 +145,7 @@ describe('settleWithin', () => {
 
   it('times out on a result that never settles', async () => {
     vi.useFakeTimers();
-    const { settleWithin } = await import('./selftest');
+    const { settleWithin } = await import('./selftest-runner');
     let outcome: unknown = null;
 
     void settleWithin(new Promise(() => {}), 1000).then((settled) => {
@@ -159,7 +159,7 @@ describe('settleWithin', () => {
   });
 
   it('rejects with a result that rejects', async () => {
-    const { settleWithin } = await import('./selftest');
+    const { settleWithin } = await import('./selftest-runner');
 
     await expect(
       settleWithin(Promise.reject(new Error('boom')), 1000),
@@ -169,7 +169,7 @@ describe('settleWithin', () => {
 
 describe('runScript', () => {
   it('stops the steps and rejects once the result rejects early', async () => {
-    const { runScript } = await import('./selftest');
+    const { runScript } = await import('./selftest-runner');
     const script: SelfTestScript = {
       pageBinds: [],
       settings: {},

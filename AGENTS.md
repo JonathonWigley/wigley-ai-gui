@@ -358,9 +358,9 @@ round), since main, not the page, decides.
 - `npm test` runs the Vitest suite: every module whose correctness follows from inputs and outputs — round
   logic, saved rounds, answer state, markdown, theme loading, the keymap — is tested there, without Electron.
 - `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. It renders the window
-  offscreen as an accessory app, so it never takes the user's foreground; the core's driver (`src/main/selftest.ts`) runs
-  the script a plugin hands it — the forms plugin's opens fixture sessions through `sessions` and their rounds
-  through `FormsService` — drives keys with
+  offscreen as an accessory app, so it never takes the user's foreground; the core's driver (`src/main/selftest.ts`,
+  its step runner in `src/main/selftest-runner.ts`) runs the script a plugin hands it — the forms plugin's opens
+  fixture sessions through `sessions` and their rounds through `FormsService` — drives keys with
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms); a step with no keys waits for its line, and a step's

@@ -6,9 +6,7 @@ import type { Files } from '../contracts/files';
 import type { SelfTestGroup, SelfTestStep } from '../contracts/plugin';
 import { type DrivenWindow, PageNavigatedError } from './drive/driven-window';
 import { fakeDrivenWindow } from './drive/fake-driven-window';
-import { runScript } from './selftest';
-
-vi.mock('electron', () => ({ app: { exit: vi.fn() } }));
+import { runScript } from './selftest-runner';
 
 const START_WIDTH = 800;
 
