@@ -88,13 +88,23 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['<C-j>'],
       expect:
-        '[docs] scrolled the editor on CLAUDE.md down a line; the cursor moved',
-      why: 'A line scroll leaves the first line, and the cursor on it, out of sight.',
+        '[docs] scrolled the editor on CLAUDE.md down a line, line 2 at the top; the cursor moved',
+      why: 'A line scroll leaves the first line, and the cursor on it, wholly out of sight.',
+    },
+    {
+      keys: ['<C-j>'],
+      expect:
+        '[docs] scrolled the editor on CLAUDE.md down a line, line 3 at the top; the cursor moved',
     },
     {
       keys: ['<C-k>'],
       expect:
-        '[docs] scrolled the editor on CLAUDE.md up a line to the top; the cursor stayed',
+        '[docs] scrolled the editor on CLAUDE.md up a line, line 2 at the top; the cursor stayed',
+    },
+    {
+      keys: ['<C-k>'],
+      expect:
+        '[docs] scrolled the editor on CLAUDE.md up a line to the top, line 1 at the top; the cursor stayed',
     },
     {
       keys: ['<C-k>'],
@@ -129,13 +139,23 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['<C-j>'],
       expect:
-        '[docs] scrolled the editor on CLAUDE.md down a line; the cursor moved',
-      why: 'In visual mode the cursor a line scroll leaves out of sight moves down, growing the selection.',
+        '[docs] scrolled the editor on CLAUDE.md down a line, line 2 at the top; the cursor moved',
+      why: "In visual mode the cursor a line scroll leaves out of sight moves down, growing the selection, and vim's motion leaves no sliver of the first line in sight.",
+    },
+    {
+      keys: ['<C-j>'],
+      expect:
+        '[docs] scrolled the editor on CLAUDE.md down a line, line 3 at the top; the cursor moved',
     },
     {
       keys: ['<C-k>'],
       expect:
-        '[docs] scrolled the editor on CLAUDE.md up a line to the top; the cursor stayed',
+        '[docs] scrolled the editor on CLAUDE.md up a line, line 2 at the top; the cursor stayed',
+    },
+    {
+      keys: ['<C-k>'],
+      expect:
+        '[docs] scrolled the editor on CLAUDE.md up a line to the top, line 1 at the top; the cursor stayed',
     },
     {
       keys: ['Escape', 'g', 'g', '<C-k>'],

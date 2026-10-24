@@ -19,6 +19,7 @@ import {
   type EditorOptions,
   type FocusOptions,
   type ScrollStep,
+  type SightTop,
   type TextEditor,
   UNBOUND_INSERT_KEYS,
   type UnboundInsertKey,
@@ -286,12 +287,14 @@ function mapScrollMotions() {
 // every other scroll keeps the cursor where it is unless the scroll leaves it
 // out of sight, as vim's Ctrl+e and Ctrl+y do. A motion it runs through vim
 // first drops any count the user typed, since a chord cannot continue one.
-function scrollEditor(
+// It resolves after CodeMirror's next measure, with the scroll the motion
+// left for that measure applied.
+async function scrollEditor(
   view: EditorView,
   cm: VimEditor,
   step: ScrollStep,
   direction: 1 | -1,
-): EditorScroll {
+): Promise<EditorScroll> {
   const scroller = view.scrollDOM;
   const scrollTop = scroller.scrollTop;
   const { head } = view.state.selection.main;
@@ -312,10 +315,35 @@ function scrollEditor(
       bringCursorIntoSight(view);
     }
   }
+  await nextMeasure(view);
   return {
     moved: scroller.scrollTop !== scrollTop,
     atEnd: isScrolledToEnd(scroller, direction),
     cursorMoved: view.state.selection.main.head !== head,
+    top: topOfSight(view),
+  };
+}
+
+// Resolves once CodeMirror's next measure has run to its end: the measure
+// applies a transaction's scroll after its requests' write phase, and the
+// awaiting code runs as a microtask after the whole measure.
+function nextMeasure(view: EditorView): Promise<void> {
+  return new Promise((resolve) => {
+    view.requestMeasure({ read: () => undefined, write: () => resolve() });
+  });
+}
+
+// The line holding the row at the top of sight, and whether the top of sight
+// falls inside that row, outside the slack. A row whose bottom lies within the
+// slack below the top counts as out of sight.
+function topOfSight(view: EditorView): SightTop {
+  const top = Math.max(sightOf(view).top, 0);
+  const block = view.lineBlockAtHeight(top + SIGHT_SLACK_PX);
+  const row = view.defaultLineHeight;
+  const intoRow = (top - block.top) % row;
+  return {
+    line: view.state.doc.lineAt(block.from).number,
+    cut: intoRow > SIGHT_SLACK_PX && row - intoRow > SIGHT_SLACK_PX,
   };
 }
 

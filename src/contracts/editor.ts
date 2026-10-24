@@ -89,8 +89,9 @@ export interface DocumentEditor extends TextEditor {
   // visual mode for `halfPage`) moves to the first line wholly in sight when
   // it is above, or the last when it is below. In visual mode the selection
   // grows or shrinks with it; otherwise the cursor lands at the line's start,
-  // a non-empty selection keeping its anchor.
-  scrollBy(step: ScrollStep, direction: 1 | -1): EditorScroll;
+  // a non-empty selection keeping its anchor. It resolves once the editor
+  // has settled its scroll, with what the user then sees.
+  scrollBy(step: ScrollStep, direction: 1 | -1): Promise<EditorScroll>;
 }
 
 // How far a scroll key moves content: one line of the text the view shows,
@@ -105,8 +106,18 @@ export interface ContentScroll {
   atEnd: boolean;
 }
 
+// What an editor scroll did, measured once the scroll has settled: `top` is
+// the line at the top of sight.
 export interface EditorScroll extends ContentScroll {
   cursorMoved: boolean;
+  top: SightTop;
+}
+
+// The 1-based `line` holding the row at the top of sight; `cut` when the top
+// of sight falls inside that row, leaving part of it in sight.
+export interface SightTop {
+  line: number;
+  cut: boolean;
 }
 
 // While the editor is in insert mode and the text from the document's start to the cursor is `prefix`

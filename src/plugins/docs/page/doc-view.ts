@@ -2,6 +2,7 @@ import type {
   DocumentEditor,
   DocumentEditorEvents,
   EditorHost,
+  EditorScroll,
   ScrollStep,
 } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
@@ -111,7 +112,8 @@ export interface DocView {
   // Scrolls the pane a line, logging nothing.
   scroll(by: 1 | -1): void;
   // Scrolls the open editor by `step`, else the pane, and logs how far it
-  // moved and whether the editor's cursor moved.
+  // moved; for the editor, once its scroll has settled, also the line at the
+  // top of sight after a line scroll and whether the cursor moved.
   scrollBy(step: ScrollStep, direction: 1 | -1): void;
   // Focuses the open editor, else the pane.
   focus(): void;
@@ -208,6 +210,23 @@ function chipElement(chip: Chip): HTMLElement {
   const node = tag(chip.text, CHIP_TONES[chip.state]);
   node.title = chip.tooltip;
   return node;
+}
+
+// The log text for an editor scroll: what `scrollText` says, the line at the
+// top of sight after a line scroll that moved, and whether the cursor moved.
+function editorScrollText(
+  name: string,
+  step: ScrollStep,
+  direction: 1 | -1,
+  scroll: EditorScroll,
+): string {
+  const scrolled = scrollText(`the editor on ${name}`, step, direction, scroll);
+  const isLineScroll = step === 'line' && scroll.moved;
+  const top = isLineScroll
+    ? `, line ${scroll.top.line}${scroll.top.cut ? ' cut' : ''} at the top`
+    : '';
+  const cursor = scroll.cursorMoved ? 'moved' : 'stayed';
+  return `${scrolled}${top}; the cursor ${cursor}`;
 }
 
 // The rendered blocks' source lines and tops, measured from the pane.
@@ -686,12 +705,14 @@ export function createDocView(deps: DocViewDeps): DocView {
         deps.log('docs', scrollText(name, step, direction, scroll));
         return;
       }
-      const scroll = editor.scrollBy(step, direction);
-      const cursor = scroll.cursorMoved ? 'moved' : 'stayed';
-      deps.log(
-        'docs',
-        `${scrollText(`the editor on ${name}`, step, direction, scroll)}; the cursor ${cursor}`,
-      );
+      editor
+        .scrollBy(step, direction)
+        .then((scroll) =>
+          deps.log('docs', editorScrollText(name, step, direction, scroll)),
+        )
+        .catch((error) =>
+          deps.log('docs', `not scrolled ${name}: ${errorText(error)}`),
+        );
     },
     focus() {
       if (editor !== null) {
