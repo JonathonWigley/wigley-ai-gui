@@ -148,7 +148,7 @@ export function addDriveActions(
     }),
     drive.add('connectSession', {
       description:
-        'Rewrites the docs fixture and connects a session in its repo, activating the row on its Docs tab; sessionId defaults to drive-docs-<n>; loadStates adds one doc per index load state other than launch, as docs.seed does.',
+        'Rewrites the docs fixture and connects a session in its repo, activating the row on its Docs tab; sessionId defaults to drive-docs-<n>; loadStates and indexDelayMs as docs.seed takes them.',
       args: '{ sessionId?: string, loadStates?: boolean, indexDelayMs?: number }',
       async run(rawArgs) {
         await started;

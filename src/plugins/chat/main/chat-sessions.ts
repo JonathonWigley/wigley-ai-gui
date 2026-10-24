@@ -76,9 +76,9 @@ export interface ChatSessions {
   // entries travel, so `sessions()` keeps it.
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
   interrupt(sessionId: string): void;
-  // Throws for a session chat no longer holds, as the process's own
-  // `setControl` throws for a value it refuses, so the caller learns the
-  // change was not made.
+  // Throws for a session chat no longer holds or whose process has ended, as
+  // the process's own `setControl` throws for a value it refuses, so the
+  // caller learns the change was not made.
   setControl(sessionId: string, controlId: string, value: string): void;
   answerPermission(
     sessionId: string,

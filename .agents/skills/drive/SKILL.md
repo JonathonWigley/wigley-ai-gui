@@ -54,9 +54,9 @@ survives a restart runs the same way. The docs fixture survives a `restart` as t
 `docs.seed` and `docs.connectSession` rewrite it (`loadStates: true` on either adds one doc per
 index load state other than `launch`, under `.claude/load-states/`; `indexDelayMs: <ms>` makes the
 stand-in `docs_index.py` wait that long before answering, so an in-app create, rename or trash
-keeps the Docs tree's "Claude pending" chip on screen long enough to see; default 0). `docs.openDoc` (`{ path,
-line? }`) calls the docs page export `openDoc`: Docs mode shows and opens the doc at that line, or
-toasts that the machine index does not list it. A start with an unusable environment (a relative
+keeps the Docs tree's "Claude pending" chip on screen long enough to see; default 0).
+`docs.openDoc` (`{ path, line? }`) calls the docs page export `openDoc`: Docs mode shows and
+opens the doc at that line, or toasts that the machine index does not list it. A start with an unusable environment (a relative
 `WIGLEY_DRIVE_DIR`, a `WIGLEY_DRIVE_HARNESS` other than `fake` or `claude`) exits 1 with the
 reason on stderr before any window opens.
 
@@ -73,10 +73,9 @@ a drive start asks `ready` until it does, the self-test reads its `[selftest] pa
 its run` lines. The reload is not guaranteed, so a page still on load 1 10 s after it first
 reported releases the lock anyway, and a reload later than that can still read another start's
 build; the self-test also releases when its child closes, and a packaged drive start skips the
-lock. A start waits while a live pid holds it,
-printing `Waiting for another dev start (pid <pid>) to finish`, clears a dead holder's lock, and
-after 120 s fails naming the lock's absolute path to delete when no start is running. `restart`
-and `quit` end a stuck run: `quit` runs beside the stuck command, and the CLI waits up to 60 s for
+lock. A start waits while a live pid holds it, printing `Waiting for another dev start (pid
+<pid>) to finish`, clears a dead holder's lock, and after 120 s fails naming the lock's absolute
+path to delete when no start is running. `restart` and `quit` end a stuck run: `quit` runs beside the stuck command, and the CLI waits up to 60 s for
 the app to exit (time for a recording's encode), then terminates it; the app takes that SIGTERM as
 a second quit and exits without waiting further. Terminating skips any recorded pid whose process
 no longer carries the run's `WIGLEY_DRIVE_DIR` (a pid reused after a crash); on Windows it cannot
