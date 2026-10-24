@@ -111,19 +111,14 @@ const KEYMAP_STEPS: SelfTestStep[] = [
   },
   {
     keys: ['Enter'],
-    expect: '[settings] wrote keymap.json',
-    why: 'Enter picks the preselected scope.',
+    expect: '[config] applied a new config',
+    why: 'Enter picks the preselected scope, writing keymap.json. The step waits for the apply that follows the write, since the page keys it rebuilds drop a pending key sequence.',
   },
   { keys: ['d'], expect: '[settings] picker shown: Key to remove' },
   {
     keys: ['j', 'Enter'],
-    expect: '[settings] wrote keymap.json',
-    why: 'The user bind is listed last.',
-  },
-  {
-    keys: [],
     expect: '[config] applied a new config',
-    why: 'Page keys rebuilt from the new keymap.json drop a pending key sequence, so later keys wait for the apply.',
+    why: 'The user bind is listed last, and removing it writes keymap.json. The step waits for the apply that follows the write, since the page keys it rebuilds drop a pending key sequence.',
   },
   { keys: ['r'], expect: '[settings] unchanged' },
 ];
@@ -219,9 +214,7 @@ function resultProblems(read: UserConfigRead): string[] {
 // `settings.show` does. The result is the user config read on the first
 // change after which settings.json no longer holds the stale timeout that
 // follows one where it did: only the last step changes it, and `problems`
-// expects both layers empty then. The keymap steps' add and remove land too
-// close together for the config store to publish the state between them, so
-// the result cannot wait on that. It rejects when emptying the files fails.
+// expects both layers empty then. It rejects when emptying the files fails.
 export function settingsSelfTestScript(
   deps: SettingsSelfTestDeps,
 ): SelfTestScript {
