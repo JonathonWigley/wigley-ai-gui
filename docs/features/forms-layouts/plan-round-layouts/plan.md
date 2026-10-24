@@ -35,6 +35,9 @@ Each is re-run by `wigley:make` before the first dispatch.
 - The peer run `docs/features/keys-standards/plan-forms-scroll-keys/` has closed, so no other run edits forms in this
   tree: `test ! -d docs/features/keys-standards/plan-forms-scroll-keys && echo closed`. At plan time it was in its
   final verification, with uncommitted plan-folder edits that are that run's own.
+- No peer's uncommitted edits sit in the files this plan changes: `git status --short src` prints nothing. At plan
+  end a peer session had uncommitted edits in forms, chat, docs, gallery, keymap and `src/shared` (a scroll-keys
+  change); they are that session's own, and the run waits for them to land or runs in a worktree the user asks for.
 - The docs written ahead are at the target tip: `git merge-base --is-ancestor 8ff01a66 HEAD && echo ok`.
 - `relay.py` forwards `ask_round` unchanged and holds no schema of its own (its stand-in is `{"type": "object"}`):
   `grep -n '"inputSchema"' ../wigley-ai-marketplace/plugins/wigley/scripts/forms/relay.py`. So no relay code
