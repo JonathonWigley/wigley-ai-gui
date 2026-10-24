@@ -169,7 +169,7 @@ depends on; `npm run lint` checks it. No new plugin, adapter or layer.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Layout sets and the layout settings](01-layout-sets-and-settings.md)
+- [x] [Layout sets and the layout settings](01-layout-sets-and-settings.md)
 
 ### Wave 2
 - [ ] [Round data: layout names, choice actions, deferral reasons](02-round-data.md) — after 01
@@ -196,10 +196,13 @@ depends on; `npm run lint` checks it. No new plugin, adapter or layer.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 092ace4b241cdae4b0c66ce5933c8a1387c59c61
 
 ### Groups
+- 01 · e44a22ec · diff read: every Produces signature present; typecheck passes; worker ran lint and the three test files (90 tests) green · concerns: REVIEW_STEPS <C-k> why still names the layout cycle (08 rewords); both pages drop the onSettingsChanged disposable (brief's verbatim wiring); registry's 'not reloaded' catch now covers any folder's re-listing
 ### Contract changes
 ### Rulings
+- a layout first listed by a change report starts at revision 1; each later report adds 1, removal included — matches the plan's never-reset rule — a page could reload once more than needed · group 01 · group 01
+- showLayouts falls back to the set's builtIn entry and throws if the set has none — only reachable if the registry breaks its contract — a broken registry stops the page drawing · group 01 · group 01
 ### Review rounds
 ### Test gate

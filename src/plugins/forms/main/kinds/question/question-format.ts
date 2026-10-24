@@ -3,7 +3,9 @@ import { RoundError } from '../../round-error';
 import {
   fieldsMissing,
   fieldsOutside,
+  ITEM_LAYOUT_SCHEMA,
   MIN_CHOICES,
+  parseLayoutField,
   parseRecommend,
   requireText,
 } from '../fields';
@@ -20,6 +22,7 @@ const QUESTION_FIELDS = [
   'recommend',
   'rationale',
 ];
+const QUESTION_KNOWN_FIELDS = [...QUESTION_FIELDS, 'layout'];
 
 const QUESTIONS_DESCRIPTION =
   'Open decisions that are not review findings — one object per question. ' +
@@ -72,7 +75,7 @@ function parseQuestion(item: unknown, where: string): Question {
         `required: title, context, question, choices, recommend, rationale.`,
     );
   }
-  const extra = fieldsOutside(item, QUESTION_FIELDS);
+  const extra = fieldsOutside(item, QUESTION_KNOWN_FIELDS);
   if (extra.length > 0) {
     throw new RoundError(
       `${where}unknown field(s) ${extra.join(', ')}. The form draws ` +
@@ -92,7 +95,8 @@ function parseQuestion(item: unknown, where: string): Question {
     'choice',
     where,
   );
-  return { title, context, question, choices, recommend, rationale };
+  const layout = parseLayoutField(item, where);
+  return { title, context, question, choices, recommend, rationale, layout };
 }
 
 export const questionFormat: AnswerableFormat<Question> = {
@@ -138,6 +142,7 @@ export const questionFormat: AnswerableFormat<Question> = {
           type: 'string',
           description: 'Why that one is recommended.',
         },
+        layout: ITEM_LAYOUT_SCHEMA,
       },
     },
     description: QUESTIONS_DESCRIPTION,

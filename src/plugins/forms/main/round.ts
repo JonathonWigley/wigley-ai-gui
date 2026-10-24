@@ -15,16 +15,18 @@ import type {
   Round,
   RoundEnd,
 } from '../contract';
+import { completeFindingPick, isFindingAction } from '../finding-pick';
 import {
-  findingPickIsComplete,
-  findingSolution,
-  isFindingAction,
-} from '../finding-pick';
-import { fieldsOutside, quotedList, requireText } from './kinds/fields';
+  fieldsOutside,
+  parseLayoutField,
+  quotedList,
+  requireText,
+} from './kinds/fields';
 import { ANSWERABLE_KINDS, FORMATS, ITEM_KINDS } from './kinds/formats';
 import type {
   AnswerSubject,
   ItemFormat,
+  ItemOf,
   PythonJsonValue,
 } from './kinds/item-format';
 import { RoundError } from './round-error';
@@ -32,7 +34,10 @@ import { capitalised } from '../../../shared/capitalised';
 import { isJsonObject, type JsonObject } from '../../../shared/json';
 
 const ITEM_FIELDS = ITEM_KINDS.map((kind) => FORMATS[kind].argsKey);
-const ROUND_FIELDS = ['heading', 'overview', ...ITEM_FIELDS];
+const ROUND_FIELDS = ['heading', 'overview', 'layout', ...ITEM_FIELDS];
+
+// The `where` prefix of a message about the round's own fields.
+const ROUND_WHERE = "ask_round's ";
 
 export type FinishedOutcome = RoundEnd['kind'];
 
@@ -93,6 +98,7 @@ export function parseRound(args: unknown): Round {
   if (typeof overview !== 'string') {
     throw new RoundError("ask_round's overview must be a string.");
   }
+  const layout = parseLayoutField(args, ROUND_WHERE);
   const notices = parseItems(
     FORMATS.notice,
     args[FORMATS.notice.argsKey] ?? [],
@@ -112,10 +118,51 @@ export function parseRound(args: unknown): Round {
   return {
     heading,
     overview: overview.trim(),
+    layout,
     questions,
     notices,
     findings,
   };
+}
+
+// Each kind's items in a round.
+const ROUND_ITEM_LISTS: {
+  readonly [Kind in ItemKind]: (round: Round) => ItemOf[Kind][];
+} = {
+  notice: (round) => round.notices,
+  finding: (round) => round.findings,
+  question: (round) => round.questions,
+};
+
+function requireKnownLayout(
+  name: string | null,
+  where: string,
+  layoutNames: readonly string[],
+): void {
+  if (name !== null && !layoutNames.includes(name)) {
+    throw new RoundError(
+      `${where}layout '${name}' is not in the layouts folder, which holds ` +
+        `${quotedList(layoutNames)}. Write layouts/${name}/layout.js there ` +
+        `first, or leave layout out.`,
+    );
+  }
+}
+
+// Throws a RoundError for the first layout the round names that is not in
+// `layoutNames`: the round's own, then each item's in ITEM_KINDS order. Kept
+// apart from parseRound, so a saved round still parses once its layout has
+// left the folder.
+export function requireKnownLayouts(
+  round: Round,
+  layoutNames: readonly string[],
+): void {
+  requireKnownLayout(round.layout, ROUND_WHERE, layoutNames);
+  for (const kind of ITEM_KINDS) {
+    const noun = capitalised(FORMATS[kind].noun);
+    ROUND_ITEM_LISTS[kind](round).forEach((item, i) =>
+      requireKnownLayout(item.layout, `${noun} ${i + 1}: `, layoutNames),
+    );
+  }
 }
 
 function textOrEmpty(value: unknown): string {
@@ -221,37 +268,37 @@ function answerResult(
   return result;
 }
 
-// A finding is answered once its pick is complete. Its `choice` is the
-// solution — 1 on a one-solution finding — and is 0 on 'leave_it', where no
-// solution applies.
+// A finding is answered once its entry holds a pick: a choice with the
+// action it sits under, or the header of an action with no choices, whose
+// `choice` is 0. The recommendation is taken whole when the pick is the
+// recommended choice, or the recommended header, under recommend_action.
 function findingResult(
   finding: Finding,
   entry: FindingAnswerEntry,
 ): FindingResult {
   const subject = FORMATS.finding.answerSubject(finding);
-  const solutionCount = subject.choiceTexts.length;
-  const answered =
-    !entry.not_applicable &&
-    findingPickIsComplete(solutionCount, entry.choice, entry.action);
+  const pick = entry.not_applicable
+    ? null
+    : completeFindingPick(finding, entry.choice, entry.action);
   let status: AnswerStatus = 'untouched';
   if (entry.not_applicable) {
     status = 'not_applicable';
-  } else if (answered) {
+  } else if (pick !== null) {
     status = 'answered';
   }
-  const choice = entry.not_applicable
-    ? 0
-    : findingSolution(solutionCount, entry.choice, entry.action);
+  const choice = pick?.choice ?? 0;
+  const tookActionRecommendation =
+    pick !== null && pick.action === finding.recommend_action;
   const result: FindingResult = {
     index: entry.index,
     title: subject.title,
     status,
     choice,
     choice_text: choice > 0 ? subject.choiceTexts[choice - 1] : '',
-    took_recommendation: choice > 0 && choice === subject.recommend,
-    action: answered ? entry.action : '',
-    took_action_recommendation:
-      answered && entry.action === finding.recommend_action,
+    took_recommendation:
+      tookActionRecommendation && pick.choice === subject.recommend,
+    action: pick?.action ?? '',
+    took_action_recommendation: tookActionRecommendation,
   };
   addNotesAndDontAsk(result, entry);
   return result;
@@ -420,10 +467,11 @@ const FINGERPRINT_LISTS = {
   },
 } satisfies Record<ItemKind, FingerprintList>;
 
-// What a re-sent round is matched on: every field of its items, keyed by each
-// kind's ask_round field, never the heading or overview, which a re-send may
-// reword. An empty list joins only for a kind the Python server's fingerprint
-// holds, so a round it could send hashes the same and its saved rounds match.
+// What a re-sent round is matched on: every field of its items but their
+// layouts, keyed by each kind's ask_round field, never the heading, overview
+// or round layout, which a re-send may change and still match the open round.
+// An empty list joins only for a kind the Python server's fingerprint holds,
+// so a round it could send hashes the same and its saved rounds match.
 export function fingerprint(round: Round): string {
   const content: Record<string, PythonJsonValue> = {};
   for (const kind of ITEM_KINDS) {

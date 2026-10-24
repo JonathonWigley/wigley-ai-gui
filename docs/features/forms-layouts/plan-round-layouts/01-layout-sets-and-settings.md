@@ -1,6 +1,6 @@
 # 01 — Layout sets and the layout settings
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -185,3 +185,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit e44a22ec · proof: diff read: every Produces signature present; typecheck passes; worker ran lint and the three test files (90 tests) green · concerns: REVIEW_STEPS <C-k> why still names the layout cycle (08 rewords); both pages drop the onSettingsChanged disposable (brief's verbatim wiring); registry's 'not reloaded' catch now covers any folder's re-listing

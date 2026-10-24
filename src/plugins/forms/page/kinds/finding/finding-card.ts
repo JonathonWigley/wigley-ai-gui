@@ -25,7 +25,7 @@ export const findingFormat: AnswerableFormat<CardInputs['finding']> = {
   title: (round, index) => round.findings[index - 1].title,
   choiceTexts: (round, index) =>
     round.findings[index - 1].choices.map((choice) => choice.text),
-  recommend: (round, index) => round.findings[index - 1].recommend,
+  recommend: (round, index) => round.findings[index - 1].recommend ?? 0,
   cardInput(round, index) {
     const finding = round.findings[index - 1];
     const verdict = verdictOf(finding);
@@ -42,7 +42,7 @@ export const findingFormat: AnswerableFormat<CardInputs['finding']> = {
       finding: finding.finding,
       proof: finding.proof,
       choices: finding.choices.map(({ text, reason }) => ({ text, reason })),
-      recommend: finding.recommend,
+      recommend: finding.recommend ?? 0,
       recommendAction: finding.recommend_action,
       actions: FINDING_ACTIONS.flatMap((action: FindingAction) => {
         const label = actionLabel(finding.origin, action);

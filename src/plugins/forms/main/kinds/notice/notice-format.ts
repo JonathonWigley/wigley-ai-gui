@@ -1,6 +1,12 @@
 import type { Notice, NoticeBadge } from '../../../contract';
 import { RoundError } from '../../round-error';
-import { fieldsMissing, fieldsOutside, requireText } from '../fields';
+import {
+  fieldsMissing,
+  fieldsOutside,
+  ITEM_LAYOUT_SCHEMA,
+  parseLayoutField,
+  requireText,
+} from '../fields';
 import type { ItemFormat } from '../item-format';
 import { isJsonObject } from '../../../../../shared/json';
 
@@ -14,7 +20,7 @@ const NOTICE_BADGES: readonly NoticeBadge[] = [
 const DEFAULT_NOTICE_BADGE: NoticeBadge = 'Applied';
 
 const NOTICE_REQUIRED_FIELDS = ['title', 'context'];
-const NOTICE_FIELDS = [...NOTICE_REQUIRED_FIELDS, 'badge'];
+const NOTICE_FIELDS = [...NOTICE_REQUIRED_FIELDS, 'badge', 'layout'];
 
 const NOTICE_TITLE_DESCRIPTION =
   'One line saying what changed, in plain words: not a commit ref, not ' +
@@ -76,8 +82,8 @@ function parseNotice(item: unknown, where: string): Notice {
   if (extra.length > 0) {
     throw new RoundError(
       `${where}unknown field(s) ${extra.join(', ')}. A notice takes ` +
-        `only title, context, and the optional badge; the form draws its own ` +
-        `comment box, and a notice has no choices to describe.`,
+        `only title, context, and the optional badge and layout; the form ` +
+        `draws its own comment box, and a notice has no choices to describe.`,
     );
   }
   const title = requireText(item.title, 'title', where);
@@ -93,7 +99,8 @@ function parseNotice(item: unknown, where: string): Notice {
         `decision you took alone.`,
     );
   }
-  return { title, context, badge };
+  const layout = parseLayoutField(item, where);
+  return { title, context, badge, layout };
 }
 
 export const noticeFormat: ItemFormat<Notice> = {
@@ -119,6 +126,7 @@ export const noticeFormat: ItemFormat<Notice> = {
           default: DEFAULT_NOTICE_BADGE,
           description: NOTICE_BADGE_DESCRIPTION,
         },
+        layout: ITEM_LAYOUT_SCHEMA,
       },
     },
     description: NOTICES_DESCRIPTION,

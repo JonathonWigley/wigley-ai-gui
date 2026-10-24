@@ -237,7 +237,9 @@ describe('reviewRows', () => {
         presentedRound('r1', {
           questions: [],
           findings: [
-            finding('Solo', { choices: [{ text: 'only', reason: 'why' }] }),
+            finding('Solo', {
+              choices: [{ text: 'only', reason: 'why', action: 'fix_now' }],
+            }),
           ],
         }),
       ],
@@ -261,7 +263,7 @@ describe('reviewRows', () => {
 
   it('gives a fixed one-solution finding restored with no solution picked its one solution', () => {
     const solo = finding('Solo', {
-      choices: [{ text: 'only', reason: 'why' }],
+      choices: [{ text: 'only', reason: 'why', action: 'fix_now' }],
       recommend: 1,
       recommend_action: 'fix_now',
     });

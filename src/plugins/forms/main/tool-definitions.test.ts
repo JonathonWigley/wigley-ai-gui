@@ -26,6 +26,7 @@ interface ArraySchema {
 interface AskRoundSchema {
   required: string[];
   properties: {
+    layout: { type: string };
     questions: ArraySchema;
     findings: ArraySchema;
     notices: ArraySchema;
@@ -86,7 +87,7 @@ describe('FORMS_TOOLS', () => {
     expect(notices.items.required).not.toContain('badge');
   });
 
-  it('declares findings with every field but severity required and nothing else allowed', () => {
+  it('declares findings with every field but severity, recommend, layout and action_reasons required and nothing else allowed', () => {
     const findings = askRound.properties.findings;
 
     expect(findings.type).toBe('array');
@@ -97,7 +98,6 @@ describe('FORMS_TOOLS', () => {
       'finding',
       'proof',
       'choices',
-      'recommend',
       'recommend_action',
     ]);
     expect(findings.items.additionalProperties).toBe(false);
@@ -119,13 +119,46 @@ describe('FORMS_TOOLS', () => {
     ]);
   });
 
-  it('declares each finding choice as a strict text and reason pair', () => {
+  it('declares each finding choice as text and reason with an optional action', () => {
     const choices = askRound.properties.findings.items.properties.choices;
 
     expect(choices.minItems).toBe(1);
     expect(choices.maxItems).toBe(10);
     expect(choices.items?.required).toEqual(['text', 'reason']);
     expect(choices.items?.additionalProperties).toBe(false);
+    expect(choices.items?.properties.action.enum).toEqual([
+      'fix_now',
+      'follow_up',
+      'leave_it',
+    ]);
+    expect(choices.items?.properties.action.default).toBe('fix_now');
+  });
+
+  it('declares action_reasons with only follow_up and leave_it', () => {
+    const actionReasons = askRound.properties.findings.items.properties
+      .action_reasons as unknown as ItemsSchema;
+
+    expect(Object.keys(actionReasons.properties)).toEqual([
+      'follow_up',
+      'leave_it',
+    ]);
+    expect(actionReasons.additionalProperties).toBe(false);
+  });
+
+  it('declares an optional layout on the round and on every item kind', () => {
+    const { properties } = askRound;
+    const itemKinds = [
+      properties.notices,
+      properties.findings,
+      properties.questions,
+    ];
+
+    expect(properties.layout.type).toBe('string');
+    expect(askRound.required).not.toContain('layout');
+    for (const kind of itemKinds) {
+      expect(kind.items.properties.layout.type).toBe('string');
+      expect(kind.items.required).not.toContain('layout');
+    }
   });
 
   it('caps questions and findings at 20 and notices at 50', () => {
@@ -153,14 +186,31 @@ describe('FORMS_TOOLS', () => {
     );
   });
 
-  it('describes the verdict under the finding, with every choice shown', () => {
+  it('describes choices grouped under their actions, with header picks', () => {
     const description = descriptionOf('ask_round');
 
     expect(description).toContain(
       'A card shows the finding and a brief proof, then a verdict',
     );
     expect(description).toContain(
-      'Under it every choice shows with its reason',
+      'an action with no choices shows as a header the user picks alone',
+    );
+    expect(description).toContain('One pick sets the choice and its action.');
+  });
+
+  it('never describes an action control', () => {
+    expect(descriptionOf('ask_round')).not.toContain('action control');
+  });
+
+  it('describes round and item layouts and the unknown-name failure', () => {
+    expect(descriptionOf('ask_round')).toContain(
+      'A name the folder lacks fails the call with the names it holds.',
+    );
+  });
+
+  it('says a header pick answers with choice 0', () => {
+    expect(descriptionOf('ask_round')).toContain(
+      '0 when the user picked an action with no choices.',
     );
   });
 

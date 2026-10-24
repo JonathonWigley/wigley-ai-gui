@@ -30,6 +30,7 @@ const SECOND_SAVED = {
   notices: [{ title: 'Two', context: 'One line.' }],
 };
 const UNPARSEABLE = { heading: 'Broken', notices: [] };
+const NAMING_GONE = { ...FIRST_SAVED, layout: 'gone' };
 
 let connects: SessionInfo[];
 let activated: string[];
@@ -38,6 +39,7 @@ let formsEnds: number;
 let calls: Call[];
 let logLines: string[];
 let saved: unknown[];
+let layoutNames: readonly string[];
 
 function payload(outcome: Outcome): AnswersPayload {
   return {
@@ -97,6 +99,7 @@ function preview() {
     },
     forms: fakeForms,
     savedArgs: () => saved,
+    layoutNames: () => layoutNames,
     log: (source, message) => logLines.push(`[${source}] ${message}`),
   });
 }
@@ -114,6 +117,7 @@ beforeEach(() => {
   calls = [];
   logLines = [];
   saved = [FIRST_SAVED, SECOND_SAVED];
+  layoutNames = ['default'];
 });
 
 describe('open', () => {
@@ -173,6 +177,19 @@ describe('open', () => {
 
   it('open_SavedArgsUnparseable_SkipsAndLogs', () => {
     saved = [UNPARSEABLE, SECOND_SAVED];
+    const subject = preview();
+    subject.open();
+
+    subject.open();
+
+    expect(calls.at(-1)?.args).toBe(SECOND_SAVED);
+    expect(logLines).toHaveLength(1);
+    expect(logLines[0]).toMatch(/^\[forms\] preview skipped a saved round: /);
+  });
+
+  it('open_SavedArgsNameMissingLayout_SkipsAndLogs', () => {
+    saved = [NAMING_GONE, SECOND_SAVED];
+    layoutNames = ['default'];
     const subject = preview();
     subject.open();
 

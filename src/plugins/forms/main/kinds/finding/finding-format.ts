@@ -21,6 +21,8 @@ import { RoundError } from '../../round-error';
 import {
   fieldsMissing,
   fieldsOutside,
+  ITEM_LAYOUT_SCHEMA,
+  parseLayoutField,
   parseRecommend,
   quotedList,
   requireText,
@@ -52,12 +54,31 @@ const FINDING_FIELDS = [
   'finding',
   'proof',
   'choices',
-  'recommend',
   'recommend_action',
 ];
 const SEVERITY_FIELD = 'severity';
-const KNOWN_FIELDS = [...FINDING_FIELDS, SEVERITY_FIELD];
+const RECOMMEND_FIELD = 'recommend';
+const ACTION_REASONS_FIELD = 'action_reasons';
+const KNOWN_FIELDS = [
+  ...FINDING_FIELDS,
+  SEVERITY_FIELD,
+  RECOMMEND_FIELD,
+  ACTION_REASONS_FIELD,
+  'layout',
+];
 const CHOICE_FIELDS = ['text', 'reason'];
+const CHOICE_ACTION_FIELD = 'action';
+const KNOWN_CHOICE_FIELDS = [...CHOICE_FIELDS, CHOICE_ACTION_FIELD];
+
+// The action a choice sits under when it names none.
+const DEFAULT_CHOICE_ACTION: FindingAction = 'fix_now';
+
+type DeferralAction = keyof Finding['actionReasons'];
+
+// The actions that put a finding off, which action_reasons explains.
+const DEFERRAL_ACTIONS = FINDING_ACTIONS.filter(
+  (action): action is DeferralAction => action !== DEFAULT_CHOICE_ACTION,
+);
 
 type DefectOrigin = DefectFinding['origin'];
 
@@ -122,39 +143,89 @@ const CARD_CHOICES: Record<FindingCard, string> = {
 };
 
 const CHOICES_DESCRIPTION =
-  `One object per choice: ${cardChoicesText(CARD_CHOICES)}. A choice ` +
-  'names a solution only: each card draws its own action control, and a ' +
-  "choice whose text opens with an action's label " +
+  `One object per choice: ${cardChoicesText(CARD_CHOICES)}. The card draws ` +
+  'each choice under its action (its action field; fix_now when left out), ' +
+  'and an action with no choices as a header the user picks alone. At least ' +
+  'one choice is a fix_now choice. A choice names a solution only: a choice ' +
+  "whose text opens with an action's label " +
   `(${ACTION_WORDS.join(', ')}) fails the call.`;
 
+const CHOICE_ACTION_DESCRIPTION =
+  "The action this choice sits under on the card, one the finding's origin " +
+  `offers; fix_now when left out. ${unofferedActionsText()}`;
+
+const RECOMMEND_DESCRIPTION =
+  'The 1-based number, in choices, of the recommended choice: a choice of ' +
+  'recommend_action. Leave it out only when no choice has recommend_action.';
+
 const RECOMMEND_ACTION_DESCRIPTION =
-  "The recommended action, picked on the card's action control. The values " +
-  'are the same three on every card, each card labelling them its own way — ' +
+  'The recommended action. The values are the same three on every card, ' +
+  'each card labelling them its own way — ' +
   `${actionLabelsText()}. ${unofferedActionsText()}`.trimEnd();
+
+const ACTION_REASONS_DESCRIPTION =
+  "Why to take a deferral action, drawn under that action's header. Only an " +
+  'action the origin offers takes an entry. Send the entry for the action ' +
+  `you recommend when it is a deferral. ${unofferedActionsText()}`;
+
+// The actions the origin offers, in FINDING_ACTIONS order.
+function offeredActions(origin: FindingOrigin): FindingAction[] {
+  return FINDING_ACTIONS.filter(
+    (action) => FINDING_ORIGIN_RULES[origin].actions[action] !== undefined,
+  );
+}
+
+// A choice's action: fix_now when absent, else one of the three that the
+// origin offers.
+function parseChoiceAction(
+  raw: JsonObject,
+  field: string,
+  origin: FindingOrigin,
+  where: string,
+): FindingAction {
+  const action = Object.hasOwn(raw, CHOICE_ACTION_FIELD)
+    ? raw.action
+    : DEFAULT_CHOICE_ACTION;
+  if (!isFindingAction(action)) {
+    throw new RoundError(
+      `${where}${field}.action must be one of ${quotedList(FINDING_ACTIONS)}.`,
+    );
+  }
+  const offered = offeredActions(origin);
+  if (!offered.includes(action)) {
+    throw new RoundError(
+      `${where}${field}.action is ${action}, which a ${origin} finding does ` +
+        `not offer; it offers ${offered.join(' or ')}.`,
+    );
+  }
+  return action;
+}
 
 function parseChoice(
   raw: unknown,
   number: number,
+  origin: FindingOrigin,
   where: string,
 ): FindingChoice {
   const field = `choices[${number}]`;
   if (!isJsonObject(raw)) {
     throw new RoundError(
-      `${where}${field} must be an object with text and reason.`,
+      `${where}${field} must be an object with text, reason and an optional ` +
+        `action.`,
     );
   }
   const missing = fieldsMissing(raw, CHOICE_FIELDS);
   if (missing.length > 0) {
     throw new RoundError(
       `${where}${field} missing ${missing.join(', ')}. Each choice takes ` +
-        `exactly text and reason.`,
+        `text and reason, and an optional action.`,
     );
   }
-  const extra = fieldsOutside(raw, CHOICE_FIELDS);
+  const extra = fieldsOutside(raw, KNOWN_CHOICE_FIELDS);
   if (extra.length > 0) {
     throw new RoundError(
       `${where}${field} unknown field(s) ${extra.join(', ')}. Each choice ` +
-        `takes exactly text and reason.`,
+        `takes text and reason, and an optional action.`,
     );
   }
   const text = requireText(raw.text, `${field}.text`, where);
@@ -163,10 +234,12 @@ function parseChoice(
   if (actionWord !== null) {
     throw new RoundError(
       `${where}${field}.text opens with "${actionWord}", an action. A ` +
-        `choice names a solution; the card draws its own action control.`,
+        `choice names a solution; its action field sets the action it sits ` +
+        `under.`,
     );
   }
-  return { text, reason };
+  const action = parseChoiceAction(raw, field, origin, where);
+  return { text, reason, action };
 }
 
 // A run of inline-markdown emphasis or code marks.
@@ -207,7 +280,19 @@ function parseChoices(
       `${where}a ${origin} finding ${choiceCountText(origin)}.`,
     );
   }
-  return raw.map((choice, i) => parseChoice(choice, i + 1, where));
+  const choices = raw.map((choice, i) =>
+    parseChoice(choice, i + 1, origin, where),
+  );
+  const hasFixNowChoice = choices.some(
+    (choice) => choice.action === DEFAULT_CHOICE_ACTION,
+  );
+  if (!hasFixNowChoice) {
+    throw new RoundError(
+      `${where}no choice has action fix_now. A finding needs at least one ` +
+        `fix_now choice; a choice with no action is fix_now.`,
+    );
+  }
+  return choices;
 }
 
 function parseOriginFields(item: JsonObject, where: string): OriginFields {
@@ -248,15 +333,104 @@ function parseRecommendAction(
       `${where}recommend_action must be one of ${quotedList(FINDING_ACTIONS)}.`,
     );
   }
-  const offered = FINDING_ACTIONS.filter(
-    (action) => FINDING_ORIGIN_RULES[origin].actions[action] !== undefined,
-  );
+  const offered = offeredActions(origin);
   if (!offered.includes(raw)) {
     throw new RoundError(
       `${where}a ${origin} finding offers ${offered.join(' or ')}.`,
     );
   }
   return raw;
+}
+
+// Absent reads as none. Each entry is for a deferral action the origin offers.
+function parseActionReasons(
+  item: JsonObject,
+  origin: FindingOrigin,
+  where: string,
+): Finding['actionReasons'] {
+  if (!Object.hasOwn(item, ACTION_REASONS_FIELD)) {
+    return {};
+  }
+  const raw = item.action_reasons;
+  if (!isJsonObject(raw)) {
+    throw new RoundError(
+      `${where}action_reasons must be an object with ` +
+        `${DEFERRAL_ACTIONS.join(', ')} or both.`,
+    );
+  }
+  const extra = fieldsOutside(raw, DEFERRAL_ACTIONS);
+  if (extra.length > 0) {
+    throw new RoundError(
+      `${where}action_reasons unknown key(s) ${extra.join(', ')}. It takes ` +
+        `${DEFERRAL_ACTIONS.join(' and ')}, the deferral actions.`,
+    );
+  }
+  const offered = offeredActions(origin);
+  const reasons: Finding['actionReasons'] = {};
+  for (const action of DEFERRAL_ACTIONS) {
+    if (!Object.hasOwn(raw, action)) {
+      continue;
+    }
+    if (!offered.includes(action)) {
+      throw new RoundError(
+        `${where}action_reasons.${action} is for an action a ${origin} ` +
+          `finding does not offer; it offers ${offered.join(' or ')}.`,
+      );
+    }
+    reasons[action] = requireText(
+      raw[action],
+      `action_reasons.${action}`,
+      where,
+    );
+  }
+  return reasons;
+}
+
+// The recommended choice, which must sit under recommend_action; null, with
+// recommend left out, when recommend_action has no choices.
+function parseFindingRecommend(
+  item: JsonObject,
+  title: string,
+  choices: FindingChoice[],
+  recommendAction: FindingAction,
+  where: string,
+): number | null {
+  const actionHasChoices = choices.some(
+    (choice) => choice.action === recommendAction,
+  );
+  if (!Object.hasOwn(item, RECOMMEND_FIELD)) {
+    if (actionHasChoices) {
+      throw new RoundError(
+        `${where}missing recommend. recommend_action is ${recommendAction}, ` +
+          `which has choices, so recommend names one of them; leave ` +
+          `recommend out only when recommend_action has no choices.`,
+      );
+    }
+    return null;
+  }
+  if (!actionHasChoices) {
+    throw new RoundError(
+      `${where}recommend names a choice, but no choice has action ` +
+        `${recommendAction}, the recommend_action. Leave recommend out when ` +
+        `the recommended action has no choices.`,
+    );
+  }
+  const recommend = parseRecommend(
+    item.recommend,
+    title,
+    choices.length,
+    'solution',
+    where,
+  );
+  const choiceAction = choices[recommend - 1].action;
+  if (choiceAction !== recommendAction) {
+    throw new RoundError(
+      `${where}recommend is ${recommend}, a ${choiceAction} choice, but ` +
+        `recommend_action is ${recommendAction}. recommend names a choice of ` +
+        `the recommended action.`,
+    );
+  }
+  return recommend;
 }
 
 function parseFinding(item: unknown, where: string): Finding {
@@ -275,8 +449,8 @@ function parseFinding(item: unknown, where: string): Finding {
   if (extra.length > 0) {
     throw new RoundError(
       `${where}unknown field(s) ${extra.join(', ')}. The form draws ` +
-        `the action control, the not-applicable control and the Notes box ` +
-        `itself; do not describe them.`,
+        `the not-applicable control and the Notes box itself; do not ` +
+        `describe them.`,
     );
   }
   const originFields = parseOriginFields(item, where);
@@ -286,18 +460,20 @@ function parseFinding(item: unknown, where: string): Finding {
   const finding = requireText(item.finding, 'finding', where);
   const proof = requireText(item.proof, 'proof', where);
   const choices = parseChoices(item.choices, origin, where);
-  const recommend = parseRecommend(
-    item.recommend,
-    title,
-    choices.length,
-    'solution',
-    where,
-  );
   const recommend_action = parseRecommendAction(
     item.recommend_action,
     origin,
     where,
   );
+  const actionReasons = parseActionReasons(item, origin, where);
+  const recommend = parseFindingRecommend(
+    item,
+    title,
+    choices,
+    recommend_action,
+    where,
+  );
+  const layout = parseLayoutField(item, where);
   return {
     ...originFields,
     title,
@@ -307,7 +483,24 @@ function parseFinding(item: unknown, where: string): Finding {
     choices,
     recommend,
     recommend_action,
+    actionReasons,
+    layout,
   };
+}
+
+// The entries a finding's fingerprint holds of its action_reasons, in
+// DEFERRAL_ACTIONS order.
+function actionReasonsContent(
+  reasons: Finding['actionReasons'],
+): Record<string, string> {
+  const content: Record<string, string> = {};
+  for (const action of DEFERRAL_ACTIONS) {
+    const reason = reasons[action];
+    if (reason !== undefined) {
+      content[action] = reason;
+    }
+  }
+  return content;
 }
 
 export const findingFormat: AnswerableFormat<Finding> = {
@@ -362,6 +555,12 @@ export const findingFormat: AnswerableFormat<Finding> = {
                 description:
                   'Why one would pick this choice. Shown under it. Markdown.',
               },
+              action: {
+                type: 'string',
+                enum: [...FINDING_ACTIONS],
+                default: DEFAULT_CHOICE_ACTION,
+                description: CHOICE_ACTION_DESCRIPTION,
+              },
             },
           },
           description: CHOICES_DESCRIPTION,
@@ -369,35 +568,64 @@ export const findingFormat: AnswerableFormat<Finding> = {
         recommend: {
           type: 'integer',
           minimum: 1,
-          description: 'The 1-based number of the recommended choice.',
+          description: RECOMMEND_DESCRIPTION,
         },
         recommend_action: {
           type: 'string',
           enum: [...FINDING_ACTIONS],
           description: RECOMMEND_ACTION_DESCRIPTION,
         },
+        action_reasons: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            follow_up: {
+              type: 'string',
+              description: 'Drawn under the follow-up action. Markdown.',
+            },
+            leave_it: {
+              type: 'string',
+              description: 'Drawn under the leave-it action. Markdown.',
+            },
+          },
+          description: ACTION_REASONS_DESCRIPTION,
+        },
+        layout: ITEM_LAYOUT_SCHEMA,
       },
     },
     description: FINDINGS_DESCRIPTION,
   },
   parse: parseFinding,
-  fingerprintContent: (finding) => ({
-    title: finding.title,
-    origin: finding.origin,
-    ...('severity' in finding ? { severity: finding.severity } : {}),
-    impact: finding.impact,
-    finding: finding.finding,
-    proof: finding.proof,
-    choices: finding.choices.map((choice) => ({
-      text: choice.text,
-      reason: choice.reason,
-    })),
-    recommend: finding.recommend,
-    recommend_action: finding.recommend_action,
-  }),
+  // A fix_now choice action, a null recommend and empty action_reasons stay
+  // out, so a finding using none of them hashes as one sent before they
+  // existed; the layout never joins.
+  fingerprintContent: (finding) => {
+    const actionReasons = actionReasonsContent(finding.actionReasons);
+    return {
+      title: finding.title,
+      origin: finding.origin,
+      ...('severity' in finding ? { severity: finding.severity } : {}),
+      impact: finding.impact,
+      finding: finding.finding,
+      proof: finding.proof,
+      choices: finding.choices.map((choice) => ({
+        text: choice.text,
+        reason: choice.reason,
+        ...(choice.action !== DEFAULT_CHOICE_ACTION
+          ? { action: choice.action }
+          : {}),
+      })),
+      ...(finding.recommend !== null ? { recommend: finding.recommend } : {}),
+      recommend_action: finding.recommend_action,
+      ...(Object.keys(actionReasons).length > 0
+        ? { action_reasons: actionReasons }
+        : {}),
+    };
+  },
+  // 0: no recommended choice, as when recommend_action has none.
   answerSubject: (finding) => ({
     title: finding.title,
     choiceTexts: finding.choices.map((choice) => choice.text),
-    recommend: finding.recommend,
+    recommend: finding.recommend ?? 0,
   }),
 };

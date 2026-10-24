@@ -7,6 +7,7 @@ import {
   noRoundPayload,
   parseRound,
   readFormBody,
+  requireKnownLayouts,
 } from './round';
 import { RoundError } from './round-error';
 
@@ -110,6 +111,31 @@ describe('parseRound', () => {
       'Second',
     ]);
     expect(round.questions[1].question).toBe('Pick the second name.');
+    expect(round.layout).toBeNull();
+    expect(round.questions.map((each) => each.layout)).toEqual([null, null]);
+  });
+
+  it('reads an absent or null layout as null on the round', () => {
+    expect(parseRound({ heading: 'H', questions: [question()] }).layout).toBe(
+      null,
+    );
+    expect(
+      parseRound({ heading: 'H', layout: null, questions: [question()] })
+        .layout,
+    ).toBe(null);
+  });
+
+  it('keeps a round layout as sent', () => {
+    expect(
+      parseRound({ heading: 'H', layout: ' compact', questions: [question()] })
+        .layout,
+    ).toBe(' compact');
+  });
+
+  it('refuses a blank round layout', () => {
+    expect(
+      roundError({ heading: 'H', layout: '  ', questions: [question()] }),
+    ).toBe("ask_round's layout must be a layout name: a non-empty string.");
   });
 
   it.each([['not a dict'], [['a list']], [null]])(
@@ -118,7 +144,7 @@ describe('parseRound', () => {
       const message = roundError(args);
 
       expect(message).toContain(
-        "'heading', 'overview', 'notices', 'findings', and 'questions'",
+        "'heading', 'overview', 'layout', 'notices', 'findings', and 'questions'",
       );
       expect(message).toContain(
         'Each list is optional, but the round needs at least one item.',
@@ -271,7 +297,11 @@ describe('parseRound with findings', () => {
     expect(round.findings[0].choices[1]).toEqual({
       text: 'Keep the cache',
       reason: 'Reloads are rare.',
+      action: 'fix_now',
     });
+    expect(round.findings[0].actionReasons).toEqual({});
+    expect(round.findings[0].layout).toBeNull();
+    expect(round.notices[0].layout).toBeNull();
     expect(round.questions).toHaveLength(1);
     expect(round.notices).toHaveLength(1);
   });
@@ -313,6 +343,68 @@ describe('parseRound with findings', () => {
     expect(
       roundError({ heading: 'H', findings: [finding(), partial] }),
     ).toContain('Finding 2: missing proof');
+  });
+});
+
+describe('requireKnownLayouts', () => {
+  const LAYOUTS = ['default', 'compact'];
+
+  // The message of the RoundError requireKnownLayouts throws for these args.
+  function layoutError(args: unknown): string {
+    try {
+      requireKnownLayouts(parseRound(args), LAYOUTS);
+    } catch (error) {
+      if (error instanceof RoundError) {
+        return error.message;
+      }
+      throw error;
+    }
+    throw new Error('requireKnownLayouts accepted the round');
+  }
+
+  it('passes a round whose every layout the folder holds', () => {
+    const round = parseRound({
+      heading: 'H',
+      layout: 'compact',
+      questions: [question({ layout: 'default' })],
+      findings: [finding({ layout: 'compact' })],
+      notices: [notice()],
+    });
+
+    expect(() => requireKnownLayouts(round, LAYOUTS)).not.toThrow();
+  });
+
+  it("refuses an unknown round layout, listing the folder's layouts", () => {
+    expect(
+      layoutError({ heading: 'H', layout: 'dense', questions: [question()] }),
+    ).toBe(
+      "ask_round's layout 'dense' is not in the layouts folder, which holds " +
+        "'default' and 'compact'. Write layouts/dense/layout.js there first, " +
+        'or leave layout out.',
+    );
+  });
+
+  it('refuses an unknown item layout, naming the item', () => {
+    expect(
+      layoutError({
+        heading: 'H',
+        findings: [finding(), finding({ layout: 'dense' })],
+      }),
+    ).toBe(
+      "Finding 2: layout 'dense' is not in the layouts folder, which holds " +
+        "'default' and 'compact'. Write layouts/dense/layout.js there first, " +
+        'or leave layout out.',
+    );
+  });
+
+  it('names the round before its items', () => {
+    const message = layoutError({
+      heading: 'H',
+      layout: 'wide',
+      notices: [notice({ layout: 'dense' })],
+    });
+
+    expect(message).toContain("ask_round's layout 'wide'");
   });
 });
 
@@ -643,7 +735,19 @@ describe('answersPayload findings', () => {
     const round = parseRound({
       heading: 'H',
       questions: [question()],
-      findings: [finding(), finding({ title: 'Dead branch' })],
+      findings: [
+        finding({
+          choices: [
+            { text: 'Fix it now', reason: 'It is one line.' },
+            {
+              text: 'Keep the cache',
+              reason: 'Reloads are rare.',
+              action: 'follow_up',
+            },
+          ],
+        }),
+        finding({ title: 'Dead branch' }),
+      ],
     });
 
     const payload = answersPayload(
@@ -779,13 +883,21 @@ describe('answersPayload findings', () => {
 });
 
 describe('answersPayload finding actions', () => {
-  const oneSolution = finding({
-    choices: [{ text: 'Clear on reload', reason: 'It is one line.' }],
+  // Choice 1 sits under fix_now, choice 2 under follow_up; leave_it has none.
+  const TWO_ACTIONS = finding({
+    choices: [
+      { text: 'Clear on reload', reason: 'It is one line.' },
+      {
+        text: 'Track it in the cache plan',
+        reason: 'The plan reworks the cache.',
+        action: 'follow_up',
+      },
+    ],
   });
 
   function findingResult(
     entry: Partial<FindingAnswerEntry>,
-    raw: Record<string, unknown> = finding(),
+    raw: Record<string, unknown> = TWO_ACTIONS,
   ) {
     const round = parseRound({ heading: 'H', findings: [raw] });
     const payload = answersPayload(
@@ -796,44 +908,72 @@ describe('answersPayload finding actions', () => {
     return payload.findings[0];
   }
 
-  it('leaves a two-solution finding untouched until a solution is picked', () => {
-    expect(findingResult({ action: 'fix_now', choice: 0 })).toMatchObject({
-      status: 'untouched',
-      action: '',
-      choice: 0,
-      choice_text: '',
+  it('reports a picked choice with its number, text and action', () => {
+    expect(findingResult({ choice: 2, action: 'follow_up' })).toMatchObject({
+      status: 'answered',
+      choice: 2,
+      choice_text: 'Track it in the cache plan',
+      action: 'follow_up',
+      took_recommendation: false,
       took_action_recommendation: false,
     });
   });
 
-  it('answers a one-solution finding with its action alone, reporting that solution', () => {
-    expect(
-      findingResult({ action: 'follow_up', choice: 0 }, oneSolution),
-    ).toMatchObject({
-      status: 'answered',
-      choice: 1,
-      choice_text: 'Clear on reload',
-      action: 'follow_up',
-    });
-  });
-
-  it('reports no solution on leave_it, whatever solution was kept', () => {
-    expect(findingResult({ action: 'leave_it', choice: 2 })).toMatchObject({
+  it('reports a header pick as choice 0 with its action', () => {
+    expect(findingResult({ choice: 0, action: 'leave_it' })).toMatchObject({
       status: 'answered',
       choice: 0,
       choice_text: '',
-      took_recommendation: false,
       action: 'leave_it',
     });
   });
 
-  it('judges the solution and the action against their own recommendations', () => {
-    expect(findingResult({ action: 'follow_up', choice: 1 })).toMatchObject({
-      took_recommendation: true,
-      took_action_recommendation: false,
+  it('leaves a header pick of an action that has choices untouched', () => {
+    expect(findingResult({ choice: 0, action: 'fix_now' })).toMatchObject({
+      status: 'untouched',
+      action: '',
     });
-    expect(findingResult({ action: 'fix_now', choice: 2 })).toMatchObject({
-      took_recommendation: false,
+  });
+
+  it('leaves a choice picked with another action untouched', () => {
+    expect(findingResult({ choice: 1, action: 'follow_up' })).toMatchObject({
+      status: 'untouched',
+    });
+  });
+
+  it('leaves an action the origin lacks untouched', () => {
+    const {
+      severity: _severity,
+      recommend: _recommend,
+      ...nit
+    } = finding({
+      origin: 'nit',
+      choices: [{ text: 'Rename it', reason: 'The name reads better.' }],
+      recommend_action: 'leave_it',
+    });
+
+    expect(
+      findingResult({ choice: 0, action: 'follow_up' }, nit),
+    ).toMatchObject({ status: 'untouched' });
+  });
+
+  it('marks both recommendations on the recommended choice', () => {
+    expect(findingResult({ choice: 1, action: 'fix_now' })).toMatchObject({
+      took_recommendation: true,
+      took_action_recommendation: true,
+    });
+  });
+
+  it('marks both recommendations on a recommended header', () => {
+    const { recommend: _recommend, ...headerRecommended } = {
+      ...TWO_ACTIONS,
+      recommend_action: 'leave_it',
+    };
+
+    expect(
+      findingResult({ choice: 0, action: 'leave_it' }, headerRecommended),
+    ).toMatchObject({
+      took_recommendation: true,
       took_action_recommendation: true,
     });
   });
@@ -1059,6 +1199,38 @@ describe('fingerprint', () => {
   it('counts the findings', () => {
     expect(fingerprint(parseRound(args({ findings: [finding()] })))).not.toBe(
       fingerprint(parseRound(args())),
+    );
+  });
+
+  it('ignores the round layout and item layouts', () => {
+    const withFinding = args({ findings: [finding()] });
+    const laidOut = args({
+      layout: 'compact',
+      questions: [question({ ...BASE_QUESTION, layout: 'compact' })],
+      notices: [{ title: 'Renamed', context: 'done', layout: 'compact' }],
+      findings: [finding({ layout: 'compact' })],
+    });
+
+    expect(fingerprint(parseRound(laidOut))).toBe(
+      fingerprint(parseRound(withFinding)),
+    );
+  });
+
+  it("changes with a finding choice's action", () => {
+    const withAction = (action: string) =>
+      args({
+        findings: [
+          finding({
+            choices: [
+              { text: 'Fix it now', reason: 'It is one line.' },
+              { text: 'Keep the cache', reason: 'Reloads are rare.', action },
+            ],
+          }),
+        ],
+      });
+
+    expect(fingerprint(parseRound(withAction('fix_now')))).not.toBe(
+      fingerprint(parseRound(withAction('leave_it'))),
     );
   });
 

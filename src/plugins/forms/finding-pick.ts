@@ -1,4 +1,5 @@
-import { FINDING_ACTIONS, type FindingAction } from './contract';
+import { FINDING_ACTIONS, type Finding, type FindingAction } from './contract';
+import { actionLabel } from './finding-origins';
 
 export function isFindingAction(value: unknown): value is FindingAction {
   return (FINDING_ACTIONS as readonly unknown[]).includes(value);
@@ -38,4 +39,29 @@ export function findingSolution(
     return 0;
   }
   return solutionCount === 1 ? 1 : choice;
+}
+
+// The finding's pick, or null when `choice` and `action` make none: `choice`
+// is a choice's 1-based number, which counts only with the action that choice
+// sits under, or 0 for the header of an action that has no choices. The action
+// must be one the finding's origin offers.
+export function completeFindingPick(
+  finding: Finding,
+  choice: number,
+  action: FindingAction | '',
+): { choice: number; action: FindingAction } | null {
+  if (action === '' || actionLabel(finding.origin, action) === null) {
+    return null;
+  }
+  if (choice === 0) {
+    const actionHasChoices = finding.choices.some(
+      (each) => each.action === action,
+    );
+    return actionHasChoices ? null : { choice: 0, action };
+  }
+  const choiceSitsUnderAction =
+    choice >= 1 &&
+    choice <= finding.choices.length &&
+    finding.choices[choice - 1].action === action;
+  return choiceSitsUnderAction ? { choice, action } : null;
 }

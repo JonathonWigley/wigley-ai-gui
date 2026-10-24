@@ -47,16 +47,24 @@ describe('noticeFormat.parse', () => {
   });
 
   it('refuses choices on a notice as an unknown field', () => {
-    const message = parseError(notice({ choices: ['a', 'b'] }));
-
-    expect(message).toContain('unknown field(s) choices');
-    expect(message).toContain('no choices to describe');
+    expect(parseError(notice({ choices: ['a', 'b'] }))).toBe(
+      'Notice 1: unknown field(s) choices. A notice takes only title, ' +
+        'context, and the optional badge and layout; the form draws its own ' +
+        'comment box, and a notice has no choices to describe.',
+    );
   });
 
   it('refuses a notice that is not an object', () => {
     expect(parseError('not an object')).toBe(
       'Notice 1: each notice must be an object.',
     );
+  });
+
+  it('accepts an optional layout', () => {
+    expect(
+      noticeFormat.parse(notice({ layout: 'compact' }), 'Notice 1: ').layout,
+    ).toBe('compact');
+    expect(noticeFormat.parse(notice(), 'Notice 1: ').layout).toBeNull();
   });
 
   it('gives a notice the Applied badge by default', () => {

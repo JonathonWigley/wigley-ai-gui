@@ -16,23 +16,30 @@ export interface Question {
   // 1-based.
   recommend: number;
   rationale: string;
+  // The layout that draws this item's card, over the round's; null for none.
+  layout: string | null;
 }
 
 export interface Notice {
   title: string;
   context: string;
   badge: NoticeBadge;
+  // The layout that draws this item's card, over the round's; null for none.
+  layout: string | null;
 }
 
+// One of a finding's solutions, drawn under the action it sits under.
 export interface FindingChoice {
   text: string;
   reason: string;
+  action: FindingAction;
 }
 
-// What the user does with a finding, picked apart from its solution.
+// What the user does with a finding. Picking a choice picks the action it
+// sits under; an action with no choices is picked alone, as a header.
 export type FindingAction = 'fix_now' | 'follow_up' | 'leave_it';
 
-// In the order the action control draws them.
+// In the order a finding card draws them.
 export const FINDING_ACTIONS: readonly FindingAction[] = [
   'fix_now',
   'follow_up',
@@ -72,9 +79,15 @@ interface FindingFields {
   proof: string;
   // A Defect's solutions, a Decision's options, a Nit's one fix.
   choices: FindingChoice[];
-  // 1-based.
-  recommend: number;
+  // The 1-based number of the recommended choice, one of recommend_action;
+  // null when recommend_action has no choices, so its header is recommended.
+  recommend: number | null;
   recommend_action: FindingAction;
+  // Why to take a deferral action, drawn under that action's header; the
+  // ask_round key is action_reasons.
+  actionReasons: Partial<Record<'follow_up' | 'leave_it', string>>;
+  // The layout that draws this item's card, over the round's; null for none.
+  layout: string | null;
 }
 
 export interface DefectFinding extends FindingFields {
@@ -96,6 +109,9 @@ export type Finding = DefectFinding | DecisionFinding | NitFinding;
 export interface Round {
   heading: string;
   overview: string;
+  // The layout that draws this round's panes and the cards no item's own
+  // layout draws; null for none.
+  layout: string | null;
   questions: Question[];
   notices: Notice[];
   findings: Finding[];
@@ -112,8 +128,8 @@ export interface AnswerEntry {
   dont_ask_reason: string;
 }
 
-// `choice` is the solution, kept while the action is 'leave_it'; '' is no
-// action.
+// `choice` is the picked choice's 1-based number in `choices`, 0 for an action
+// header; `action` is the picked entry's action, '' for no pick.
 export interface FindingAnswerEntry extends AnswerEntry {
   action: FindingAction | '';
 }
@@ -151,8 +167,9 @@ export interface AnswerResult {
   dont_ask_reason?: string;
 }
 
-// `choice`, `choice_text` and `took_recommendation` describe the solution
-// alone; `action` is '' unless the finding is answered.
+// `choice` and `choice_text` are the picked choice, 0 and '' for a header
+// pick; `took_recommendation` is the recommended entry taken whole,
+// `took_action_recommendation` the recommended action.
 export interface FindingResult extends AnswerResult {
   action: FindingAction | '';
   took_action_recommendation: boolean;

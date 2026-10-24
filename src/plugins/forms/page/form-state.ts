@@ -914,7 +914,7 @@ const RECOMMENDED_PICKS: { [K in AnswerableKind]: RecommendedPick<K> } = {
       : {
           ...answer,
           action: finding.recommend_action,
-          choice: finding.recommend,
+          choice: finding.recommend ?? 0,
         };
   },
 };

@@ -10,7 +10,7 @@ import type {
   FormsService,
   FormsSession,
 } from '../../contract';
-import { parseRound } from '../round';
+import { parseRound, requireKnownLayouts } from '../round';
 import { PREVIEW_ROUND_ARGS } from './preview-round';
 
 // The row label is projectDir's basename.
@@ -32,15 +32,17 @@ interface OpenPreview {
 }
 
 // The sample when `cursor` is past the last saved round, else the first saved
-// round after `cursor` that parses, logging each one skipped.
+// round after `cursor` that parses and names only layouts in `layoutNames`,
+// logging each one skipped.
 function nextRound(
   cursor: number,
   saved: unknown[],
+  layoutNames: readonly string[],
   log: Log,
 ): { cursor: number; args: unknown } {
   for (let index = cursor + 1; index < saved.length; index++) {
     try {
-      parseRound(saved[index]);
+      requireKnownLayouts(parseRound(saved[index]), layoutNames);
       return { cursor: index, args: saved[index] };
     } catch (error) {
       log('forms', `preview skipped a saved round: ${errorText(error)}`);
@@ -57,6 +59,8 @@ export function createLayoutPreview(deps: {
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
   forms: FormsService;
   savedArgs(): unknown[];
+  // The layouts folder's layout names now.
+  layoutNames(): readonly string[];
   log: Log;
 }): { open(): void } {
   const { log } = deps;
@@ -118,7 +122,7 @@ export function createLayoutPreview(deps: {
       }
       preview.asking.abort();
       preview = { ...preview, asking: new AbortController() };
-      const next = nextRound(cursor, deps.savedArgs(), log);
+      const next = nextRound(cursor, deps.savedArgs(), deps.layoutNames(), log);
       cursor = next.cursor;
       deps.sessions.activate(preview.connected.session.id);
       ask(preview, next.args);

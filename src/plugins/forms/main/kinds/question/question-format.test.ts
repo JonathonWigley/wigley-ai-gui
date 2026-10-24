@@ -32,9 +32,10 @@ describe('questionFormat.parse', () => {
     const items = questionFormat.arraySchema.items as { required: string[] };
     items.required.push('owner');
     try {
-      expect(questionFormat.parse(question(), 'Question 1: ')).toEqual(
-        question(),
-      );
+      expect(questionFormat.parse(question(), 'Question 1: ')).toEqual({
+        ...question(),
+        layout: null,
+      });
     } finally {
       items.required.pop();
     }
@@ -95,6 +96,14 @@ describe('questionFormat.parse', () => {
     const message = parseError(question({ recommend: true }));
 
     expect(message).toContain('not bool');
+  });
+
+  it('accepts an optional layout', () => {
+    expect(
+      questionFormat.parse(question({ layout: 'compact' }), 'Question 1: ')
+        .layout,
+    ).toBe('compact');
+    expect(questionFormat.parse(question(), 'Question 1: ').layout).toBeNull();
   });
 
   it('refuses a fractional recommend', () => {

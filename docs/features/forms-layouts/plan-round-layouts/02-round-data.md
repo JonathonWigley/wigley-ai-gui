@@ -1,6 +1,6 @@
 # 02 — Round data: layout names, choice actions, deferral reasons
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)

@@ -18,9 +18,15 @@ const ROUND: PresentedRound = {
   round: {
     heading: 'Pick a theme',
     overview: 'Theme work; this round settles the accent.',
+    layout: null,
     questions: [],
     notices: [
-      { title: 'Mocha is built in', context: 'Done.', badge: 'Applied' },
+      {
+        title: 'Mocha is built in',
+        context: 'Done.',
+        badge: 'Applied',
+        layout: null,
+      },
     ],
     findings: [],
   },

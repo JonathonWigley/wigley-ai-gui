@@ -20,16 +20,26 @@ export function question(
     choices: ['first', 'second', 'third'],
     recommend: 2,
     rationale: `${title} rationale`,
+    layout: null,
     ...overrides,
   };
 }
 
 export function notice(title: string): Notice {
-  return { title, context: `${title} context`, badge: 'Applied' };
+  return {
+    title,
+    context: `${title} context`,
+    badge: 'Applied',
+    layout: null,
+  };
 }
 
 function choices(texts: string[]): FindingChoice[] {
-  return texts.map((text) => ({ text, reason: `${text} reason` }));
+  return texts.map((text) => ({
+    text,
+    reason: `${text} reason`,
+    action: 'fix_now',
+  }));
 }
 
 export function finding(
@@ -46,6 +56,8 @@ export function finding(
     choices: choices(['first', 'second', 'third']),
     recommend: 2,
     recommend_action: 'fix_now',
+    actionReasons: {},
+    layout: null,
     ...overrides,
   };
 }
@@ -63,6 +75,8 @@ export function decision(
     choices: choices(['first', 'second']),
     recommend: 1,
     recommend_action: 'follow_up',
+    actionReasons: {},
+    layout: null,
     ...overrides,
   };
 }
@@ -80,6 +94,8 @@ export function nit(
     choices: choices(['first']),
     recommend: 1,
     recommend_action: 'fix_now',
+    actionReasons: {},
+    layout: null,
     ...overrides,
   };
 }
@@ -99,6 +115,7 @@ export function presentedRound(
     round: {
       heading: `${roundId} heading`,
       overview: '',
+      layout: null,
       questions: parts.questions ?? [question('Alpha'), question('Beta')],
       notices: parts.notices ?? [],
       findings: parts.findings ?? [],

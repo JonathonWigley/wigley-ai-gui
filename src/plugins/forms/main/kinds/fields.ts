@@ -17,6 +17,35 @@ export function requireText(
   return value;
 }
 
+const ITEM_LAYOUT_DESCRIPTION =
+  "The layout that draws this item's card, over the round's layout: a " +
+  "folder name in the app's forms layouts folder.";
+
+// The optional `layout` of a question, notice or finding in the tool schema.
+export const ITEM_LAYOUT_SCHEMA: Record<string, unknown> = {
+  type: 'string',
+  description: ITEM_LAYOUT_DESCRIPTION,
+};
+
+// The round's or an item's layout name, kept as sent, or null when absent or
+// null. Whether the layouts folder holds it is checked apart, so a saved round
+// re-parses after its layout leaves the folder.
+export function parseLayoutField(
+  item: JsonObject,
+  where: string,
+): string | null {
+  const layout = item.layout;
+  if (layout === undefined || layout === null) {
+    return null;
+  }
+  if (typeof layout !== 'string' || layout.trim() === '') {
+    throw new RoundError(
+      `${where}layout must be a layout name: a non-empty string.`,
+    );
+  }
+  return layout;
+}
+
 export function fieldsMissing(item: JsonObject, required: string[]): string[] {
   return required.filter((field) => !Object.hasOwn(item, field)).sort();
 }

@@ -19,6 +19,7 @@ import {
   noRoundPayload,
   parseRound,
   readFormBody,
+  requireKnownLayouts,
 } from './round';
 import { RoundError } from './round-error';
 import type { RoundStore, SavedRound } from './round-store';
@@ -28,6 +29,8 @@ export interface FormsServiceDeps {
   store: RoundStore;
   // Reads the soft deadline when the host names none, once per session.
   defaultDeadlineSeconds(): number;
+  // The layouts folder's layout names now; read on every ask_round.
+  layoutNames: () => readonly string[];
 }
 
 interface RoundFinish {
@@ -73,6 +76,7 @@ interface SessionContext {
   deadlineSeconds: number;
   presenter: RoundPresenter;
   store: RoundStore;
+  layoutNames: () => readonly string[];
   open: OpenRound | null;
   lastFinished: FinishedRound | null;
   // Settles once every ask_round already called has returned; null when none
@@ -594,7 +598,8 @@ async function askRoundWhenFree(
 
 // Runs a call at once only when no earlier call is pending and no other round
 // is unfinished; any other call waits for both, so a new round never replaces
-// a round the user has not submitted or cancelled.
+// a round the user has not submitted or cancelled. A round naming a layout the
+// layouts folder lacks rejects before anything is saved or shown.
 async function askRoundQueuedOrNow(
   session: SessionContext,
   earlier: Promise<void> | null,
@@ -603,6 +608,7 @@ async function askRoundQueuedOrNow(
   signal: AbortSignal,
 ): Promise<AnswersPayload> {
   const round = parseRound(args);
+  requireKnownLayouts(round, session.layoutNames());
   const roundFingerprint = fingerprint(round);
   const runsNow =
     earlier === null &&
@@ -702,6 +708,7 @@ function startSession(
     deadlineSeconds: deadlineSeconds(info, deps.defaultDeadlineSeconds()),
     presenter: deps.presenter,
     store: deps.store,
+    layoutNames: deps.layoutNames,
     open: null,
     lastFinished: null,
     askTurn: null,

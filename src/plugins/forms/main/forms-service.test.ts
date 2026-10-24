@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -111,12 +111,15 @@ let nowMs: number;
 let hexCount: number;
 let presenter: ScriptedRoundPresenter;
 let store: RoundStore;
+// The layouts folder's names the service reads; a test may set its own.
+let layoutNames: readonly string[];
 
 function startSession(info: Partial<SessionInfo> = {}): FormsSession {
   return createFormsService({
     presenter,
     store,
     defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
+    layoutNames: () => layoutNames,
   }).startSession({ id: 'app-1', info: { ...SESSION, ...info } });
 }
 
@@ -184,6 +187,7 @@ beforeEach(() => {
   nowMs = 1_000_000;
   hexCount = 0;
   presenter = new ScriptedRoundPresenter();
+  layoutNames = ['default'];
   store = createRoundStore({
     roundsDir,
     clock: { now: () => nowMs },
@@ -322,6 +326,70 @@ describe('askRound', () => {
 
     expect((await pending).outcome).toBe('cancelled');
     expect(presenter.closed).toEqual([shown.roundId]);
+  });
+});
+
+describe('layouts a round names', () => {
+  it("fails ask_round naming a layout the folder lacks, listing the folder's layouts", async () => {
+    layoutNames = ['default', 'compact'];
+    const args = {
+      ...FINDING_ARGS,
+      findings: [
+        FINDING_ARGS.findings[0],
+        { ...FINDING_ARGS.findings[0], title: 'Dense', layout: 'dense' },
+      ],
+    };
+
+    const rejection = startSession().askRound(args, null, live());
+
+    await expect(rejection).rejects.toBeInstanceOf(RoundError);
+    await expect(rejection).rejects.toThrow(
+      "Finding 2: layout 'dense' is not in the layouts folder, which holds " +
+        "'default' and 'compact'. Write layouts/dense/layout.js there first, " +
+        'or leave layout out.',
+    );
+    expect(presenter.shown).toEqual([]);
+    expect(readdirSync(roundsDir)).toEqual([]);
+  });
+
+  it('opens a round whose layouts the folder holds', () => {
+    layoutNames = ['default', 'compact'];
+
+    void startSession().askRound(
+      { ...NAMING_ARGS, layout: 'compact' },
+      null,
+      live(),
+    );
+
+    expect(presenter.latest().round.layout).toBe('compact');
+  });
+
+  it('re-attaches a re-send that differs only in layout, keeping the layouts it opened with', async () => {
+    layoutNames = ['default', 'compact'];
+    const session = startSession();
+    const first = session.askRound(NAMING_ARGS, null, live());
+    const shown = presenter.latest();
+    await expireDeadline();
+    await first;
+
+    const second = session.askRound(
+      { ...NAMING_ARGS, layout: 'compact' },
+      null,
+      live(),
+    );
+    presenter.submit(shown.roundId, oneAnswer({ choice: 1 }));
+
+    expect((await second).outcome).toBe('submitted');
+    expect(presenter.shown).toHaveLength(1);
+    expect(presenter.latest().round.layout).toBeNull();
+  });
+
+  it('returns the answers of a saved round whose layout left the folder', async () => {
+    saveEarlier({ ...NAMING_ARGS, layout: 'gone' }, 'submitted', HALF_BODY);
+
+    const payload = await startSession().collectLastRound(true, live());
+
+    expect(payload.outcome).toBe('submitted');
   });
 });
 

@@ -6,23 +6,31 @@ const ASK_ROUND_DESCRIPTION =
   'Ask the user a whole round of interview questions and review findings in ' +
   'the wigley-ai-gui app and wait for the answers. Send every item whose ' +
   'prerequisites are already settled in one call. The app draws the ' +
-  "not-applicable control, the Notes box, the round note, the Don't ask me " +
-  "this control and each finding card's action control by itself — do not " +
+  "not-applicable control, the Notes box, the round note and the Don't ask " +
+  'me this control by itself — do not ' +
   'describe them as questions or choices. Use ' +
   "'findings' for review findings that need the user's decision: a " +
   `finding's origin sets its card — ${findingCardsText()}. A card shows ` +
   'the finding and a brief proof, then a verdict: the origin and severity ' +
-  'and the impact. Under it every choice shows with its reason, the ' +
-  'recommended choice and action badged, and the action control; the ' +
-  'user takes the recommendation whole with Accept, or picks any choice ' +
-  'and action. A choice never opens with ' +
+  "and the impact. Under it the card's actions show in order, each with its " +
+  'choices and their reasons under it; an action with no choices shows as a ' +
+  'header the user picks alone, with its action_reasons entry when you sent ' +
+  'one. One pick sets the choice and its action. The recommended choice, or ' +
+  "the recommended action's header when it has no choices, is badged; the " +
+  'user takes it with Accept or picks any other entry. A choice never opens with ' +
   "an action's label. Use 'questions' for any " +
   "other open decision. Pass 'notices' for anything already fixed, " +
   'dispatched, decided by you alone, or otherwise settled before this round ' +
   'opened: each one draws as its own card before the findings and ' +
   "questions, badged 'Applied', 'Dispatched' or 'Decided', with only a " +
   'comment box — no choices and nothing to decide. Never bundle a decided ' +
-  'fix into a question or a finding. A round needs at least one question, ' +
+  'fix into a question or a finding. A round and each item may name a ' +
+  "layout in 'layout', a folder in the app's forms layouts folder: an " +
+  "item's layout draws its card, the round's draws the rest, and the " +
+  "user's own layout draws what neither names. A name the folder lacks " +
+  'fails the call with the names it holds. For a look no layout has, write ' +
+  'a new layout folder, name it in the round, and list each layout file you ' +
+  'wrote or changed in a notice on that round. A round needs at least one question, ' +
   'finding or notice, and may carry any mix of the three. Re-sending a ' +
   'round is always safe: the same questions, findings and notices re-attach ' +
   'to the round still open, return the answers of the round just ' +
@@ -30,7 +38,10 @@ const ASK_ROUND_DESCRIPTION =
   "result carries 'earlier_heading', those answers belong to an earlier " +
   'round you never received; read them, then send your round again. ' +
   "Answers to questions come back in 'answers' " +
-  "and answers to findings in 'findings'. An answer may carry 'notes', the " +
+  "and answers to findings in 'findings'. A finding answer's 'action' is " +
+  "the picked action and its 'choice' the picked choice's 1-based number in " +
+  "'choices', 0 when the user picked an action with no choices. An answer " +
+  "may carry 'notes', the " +
   "user's own answer or reasoning, and 'dont_ask' (true), with " +
   "'dont_ask_reason' when the user gave one: the user pressed Don't ask me " +
   'this, so settle that kind of item yourself for the rest of the session ' +
@@ -47,6 +58,12 @@ const ASK_ROUND_DESCRIPTION =
   "'draft' whose 'next' says the round was not opened: send it again with " +
   'ask_round, not collect_last_round. A new round never closes an ' +
   'unfinished one: the user cancels a round you abandon.';
+
+const ROUND_LAYOUT_DESCRIPTION =
+  "The layout that draws this round: a folder name in the app's forms " +
+  "layouts folder. An item's own layout wins over it, and the user's " +
+  'forms.layout setting draws what neither names. A name the folder lacks ' +
+  'fails the call with the names it holds.';
 
 const COLLECT_LAST_ROUND_DESCRIPTION =
   'Re-attach to the round already open in the app and wait for the answers, ' +
@@ -80,6 +97,7 @@ export const FORMS_TOOLS: ToolDefinition[] = [
             'heading: the work underway, then what this round focuses on. ' +
             'Inline markdown only.',
         },
+        layout: { type: 'string', description: ROUND_LAYOUT_DESCRIPTION },
         ...Object.fromEntries(
           ITEM_KINDS.map((kind) => [
             FORMATS[kind].argsKey,

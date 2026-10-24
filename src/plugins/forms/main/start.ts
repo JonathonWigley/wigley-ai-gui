@@ -54,10 +54,12 @@ const PREVIEW_SAVED_ROUNDS = 20;
 // The agents' FormsService over the saved-round folder, and the layout
 // preview over a FormsService of its own whose store is in memory. Both share
 // one presenter, which owns the channel's `finish` and `draft` handlers; the
-// preview's rounds go through its quiet view.
+// preview's rounds go through its quiet view. All three read `layoutNames`
+// for the layouts a round may name.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
+  layoutNames: () => readonly string[],
 ): { forms: FormsService; preview: { open(): void } } {
   const { services } = api;
   const store = createRoundStore({
@@ -80,6 +82,7 @@ function createForms(
     presenter,
     store,
     defaultDeadlineSeconds,
+    layoutNames,
   });
   const preview = createLayoutPreview({
     sessions,
@@ -91,8 +94,10 @@ function createForms(
         services.paths,
       ),
       defaultDeadlineSeconds,
+      layoutNames,
     }),
     savedArgs: () => store.recentArgs(PREVIEW_SAVED_ROUNDS),
+    layoutNames,
     log: services.log,
   });
   return { forms, preview };
@@ -248,7 +253,11 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
     const sessions = api.dependency<SessionsMainExports>('sessions');
-    const { forms, preview } = createForms(api, sessions);
+    // Set once the registry starts; until then, or when it failed to start,
+    // only `default` is known, which is all the page can draw then.
+    let registry: LayoutRegistry | null = null;
+    const layoutNames = () => registry?.names() ?? ['default'];
+    const { forms, preview } = createForms(api, sessions, layoutNames);
     api.channel.handle('openPreview', () => preview.open());
     sessions.contributeTools(FORMS_TOOLS, (session) =>
       createFormsToolSession(forms.startSession(session)),
@@ -262,6 +271,12 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
         ? api.data.write(SELFTEST_LAYOUT.path, SELFTEST_LAYOUT.text)
         : Promise.resolve();
     const layouts = serveLayouts(api, fixtureWritten);
+    layouts.then(
+      (started) => {
+        registry = started;
+      },
+      () => undefined,
+    );
     selfTest?.run(formsSelfTestScript(sessions));
     const driveActions =
       api.drive !== null

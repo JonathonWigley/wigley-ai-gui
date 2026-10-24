@@ -36,11 +36,17 @@ function question(title: string, choiceCount = 3): Question {
     ),
     recommend: 1,
     rationale: `${title} rationale`,
+    layout: null,
   };
 }
 
 function notice(title: string): Notice {
-  return { title, context: `${title} context`, badge: 'Applied' };
+  return {
+    title,
+    context: `${title} context`,
+    badge: 'Applied',
+    layout: null,
+  };
 }
 
 function presented(
@@ -55,6 +61,7 @@ function presented(
     round: {
       heading: roundId,
       overview: '',
+      layout: null,
       questions: [question('Q1'), question('Q2')],
       notices: [],
       findings: [],
@@ -130,7 +137,7 @@ function findingRound(body: FormBody | null = null): FormsState {
 // Focuses rail position 0, finding F1, whose only solution is choice 1.
 function oneSolutionRound(): FormsState {
   const lone = finding('F1', {
-    choices: [{ text: 'only', reason: 'only reason' }],
+    choices: [{ text: 'only', reason: 'only reason', action: 'fix_now' }],
     recommend: 1,
   });
   return apply(
@@ -200,6 +207,7 @@ describe('railItems', () => {
     const round: Round = {
       heading: 'h',
       overview: '',
+      layout: null,
       questions: [question('Q1')],
       notices: [notice('N1')],
       findings: [finding('F1'), finding('F2')],
@@ -296,7 +304,7 @@ describe('restoring a draft', () => {
     "restores a one-solution finding's $action draft with choice $choice",
     ({ action, choice }) => {
       const lone = finding('F1', {
-        choices: [{ text: 'only', reason: 'only reason' }],
+        choices: [{ text: 'only', reason: 'only reason', action: 'fix_now' }],
         recommend: 1,
       });
       const state = initialState(
@@ -317,7 +325,7 @@ describe('restoring a draft', () => {
 
   it('starts a finding with no draft entry on fix_now, picking a lone solution', () => {
     const lone = finding('F2', {
-      choices: [{ text: 'only', reason: 'only reason' }],
+      choices: [{ text: 'only', reason: 'only reason', action: 'fix_now' }],
       recommend: 1,
     });
     const state = initialState(

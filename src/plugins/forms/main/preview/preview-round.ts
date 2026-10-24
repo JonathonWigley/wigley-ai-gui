@@ -58,9 +58,10 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
         {
           text: 'A typed token object in the layout kit.',
           reason: 'Layouts that draw on canvas can read colours too.',
+          action: 'follow_up',
         },
       ],
-      recommend: 1,
+      recommend: 2,
       recommend_action: 'follow_up',
     },
     {
@@ -70,7 +71,6 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
       finding: 'A comment says "recieve".',
       proof: '- comments are not shipped',
       choices: [{ text: 'Spell it "receive".', reason: 'It reads right.' }],
-      recommend: 1,
       recommend_action: 'leave_it',
     },
   ],

@@ -27,6 +27,33 @@ function findingWithoutSeverity(overrides: Record<string, unknown>) {
   return rest;
 }
 
+// A finding with no recommend field.
+function findingWithoutRecommend(overrides: Record<string, unknown>) {
+  const { recommend: _recommend, ...rest } = finding(overrides);
+  return rest;
+}
+
+// A nit finding: one fix, recommending leave_it, so no recommend.
+function nitFinding(overrides: Record<string, unknown> = {}) {
+  const {
+    severity: _severity,
+    recommend: _recommend,
+    ...rest
+  } = finding({
+    origin: 'nit',
+    choices: [{ text: 'Rename it', reason: 'The name reads better.' }],
+    recommend_action: 'leave_it',
+    ...overrides,
+  });
+  return rest;
+}
+
+// Choice 1 sits under fix_now, choice 2 under follow_up.
+const TWO_ACTION_CHOICES = [
+  { text: 'Fix it now', reason: 'It is one line.' },
+  { text: 'Keep the cache', reason: 'Reloads are rare.', action: 'follow_up' },
+];
+
 // The message of the RoundError the finding format throws for this item.
 function parseError(raw: unknown): string {
   try {
@@ -47,10 +74,11 @@ describe('findingFormat.parse', () => {
       properties: { choices: { items: { required: string[] } } };
     };
     const choiceItems = items.properties.choices.items;
+    const parsed = findingFormat.parse(finding(), 'Finding 1: ');
     items.required.push('owner');
     choiceItems.required.push('cost');
     try {
-      expect(findingFormat.parse(finding(), 'Finding 1: ')).toEqual(finding());
+      expect(findingFormat.parse(finding(), 'Finding 1: ')).toEqual(parsed);
     } finally {
       items.required.pop();
       choiceItems.required.pop();
@@ -66,17 +94,25 @@ describe('findingFormat.parse', () => {
       finding: 'The cache keeps entries after a reload.',
       proof: '- `cache.ts:40` never clears',
       choices: [
-        { text: 'Fix it now', reason: 'It is one line.' },
-        { text: 'Keep the cache', reason: 'Reloads are rare.' },
+        { text: 'Fix it now', reason: 'It is one line.', action: 'fix_now' },
+        {
+          text: 'Keep the cache',
+          reason: 'Reloads are rare.',
+          action: 'fix_now',
+        },
       ],
       recommend: 1,
       recommend_action: 'fix_now',
+      actionReasons: {},
+      layout: null,
     });
   });
 
   it('parses a design finding to a Decision with no severity', () => {
     const raw = findingWithoutSeverity({
       origin: 'design',
+      choices: TWO_ACTION_CHOICES,
+      recommend: 2,
       recommend_action: 'follow_up',
     });
 
@@ -87,31 +123,197 @@ describe('findingFormat.parse', () => {
       finding: 'The cache keeps entries after a reload.',
       proof: '- `cache.ts:40` never clears',
       choices: [
-        { text: 'Fix it now', reason: 'It is one line.' },
-        { text: 'Keep the cache', reason: 'Reloads are rare.' },
+        { text: 'Fix it now', reason: 'It is one line.', action: 'fix_now' },
+        {
+          text: 'Keep the cache',
+          reason: 'Reloads are rare.',
+          action: 'follow_up',
+        },
       ],
-      recommend: 1,
+      recommend: 2,
       recommend_action: 'follow_up',
+      actionReasons: {},
+      layout: null,
     });
   });
 
   it('parses a nit finding with its one fix', () => {
-    const raw = findingWithoutSeverity({
-      origin: 'nit',
-      choices: [{ text: 'Rename it', reason: 'The name reads better.' }],
-      recommend_action: 'leave_it',
-    });
-
-    expect(findingFormat.parse(raw, 'Finding 1: ')).toEqual({
+    expect(findingFormat.parse(nitFinding(), 'Finding 1: ')).toEqual({
       title: 'Stale cache',
       origin: 'nit',
       impact: 'Users see stale data after a reload.',
       finding: 'The cache keeps entries after a reload.',
       proof: '- `cache.ts:40` never clears',
-      choices: [{ text: 'Rename it', reason: 'The name reads better.' }],
-      recommend: 1,
+      choices: [
+        {
+          text: 'Rename it',
+          reason: 'The name reads better.',
+          action: 'fix_now',
+        },
+      ],
+      recommend: null,
       recommend_action: 'leave_it',
+      actionReasons: {},
+      layout: null,
     });
+  });
+
+  it('parses a choice with no action as fix_now', () => {
+    expect(
+      findingFormat.parse(finding(), 'Finding 1: ').choices[0].action,
+    ).toBe('fix_now');
+  });
+
+  it('keeps a choice action the origin offers', () => {
+    const raw = finding({ choices: TWO_ACTION_CHOICES });
+
+    expect(findingFormat.parse(raw, 'Finding 1: ').choices[1].action).toBe(
+      'follow_up',
+    );
+  });
+
+  it('refuses a choice action outside the three', () => {
+    const raw = finding({
+      choices: [
+        { text: 'Fix it now', reason: 'It is one line.' },
+        {
+          text: 'Keep the cache',
+          reason: 'Reloads are rare.',
+          action: 'later',
+        },
+      ],
+    });
+
+    expect(parseError(raw)).toBe(
+      "Finding 1: choices[2].action must be one of 'fix_now', 'follow_up', " +
+        "and 'leave_it'.",
+    );
+  });
+
+  it('refuses a follow_up choice on a nit finding, naming what it offers', () => {
+    const raw = nitFinding({
+      choices: [
+        { text: 'Rename it', reason: 'It reads better.', action: 'follow_up' },
+      ],
+    });
+
+    expect(parseError(raw)).toBe(
+      'Finding 1: choices[1].action is follow_up, which a nit finding does ' +
+        'not offer; it offers fix_now or leave_it.',
+    );
+  });
+
+  it('refuses a finding with no fix_now choice', () => {
+    const raw = finding({
+      choices: [
+        { text: 'Track it', reason: 'Later.', action: 'follow_up' },
+        {
+          text: 'Rework the cache',
+          reason: 'Later still.',
+          action: 'follow_up',
+        },
+      ],
+    });
+
+    expect(parseError(raw)).toBe(
+      'Finding 1: no choice has action fix_now. A finding needs at least one ' +
+        'fix_now choice; a choice with no action is fix_now.',
+    );
+  });
+
+  it('parses action_reasons for the deferral actions the origin offers', () => {
+    const raw = finding({
+      action_reasons: { follow_up: 'The plan covers it.', leave_it: 'Rare.' },
+    });
+
+    expect(findingFormat.parse(raw, 'Finding 1: ').actionReasons).toEqual({
+      follow_up: 'The plan covers it.',
+      leave_it: 'Rare.',
+    });
+  });
+
+  it('reads absent action_reasons as none', () => {
+    expect(findingFormat.parse(finding(), 'Finding 1: ').actionReasons).toEqual(
+      {},
+    );
+  });
+
+  it('refuses action_reasons for fix_now or an unknown key', () => {
+    const raw = finding({ action_reasons: { fix_now: 'x', later: 'y' } });
+
+    expect(parseError(raw)).toBe(
+      'Finding 1: action_reasons unknown key(s) fix_now, later. It takes ' +
+        'follow_up and leave_it, the deferral actions.',
+    );
+  });
+
+  it('refuses action_reasons.follow_up on a nit finding', () => {
+    const raw = nitFinding({ action_reasons: { follow_up: 'Later.' } });
+
+    expect(parseError(raw)).toBe(
+      'Finding 1: action_reasons.follow_up is for an action a nit finding ' +
+        'does not offer; it offers fix_now or leave_it.',
+    );
+  });
+
+  it('refuses action_reasons that is not an object', () => {
+    expect(parseError(finding({ action_reasons: 'Later.' }))).toBe(
+      'Finding 1: action_reasons must be an object with follow_up, leave_it ' +
+        'or both.',
+    );
+  });
+
+  it('refuses a blank action_reasons entry', () => {
+    expect(parseError(finding({ action_reasons: { leave_it: ' ' } }))).toBe(
+      'Finding 1: action_reasons.leave_it must be a non-empty string. Give ' +
+        'it the text you would have written in the reply.',
+    );
+  });
+
+  it('leaves recommend null when recommend_action has no choices', () => {
+    const raw = findingWithoutRecommend({ recommend_action: 'leave_it' });
+
+    expect(findingFormat.parse(raw, 'Finding 1: ').recommend).toBeNull();
+  });
+
+  it('refuses a missing recommend when recommend_action has choices', () => {
+    const raw = findingWithoutRecommend({ recommend_action: 'fix_now' });
+
+    expect(parseError(raw)).toBe(
+      'Finding 1: missing recommend. recommend_action is fix_now, which has ' +
+        'choices, so recommend names one of them; leave recommend out only ' +
+        'when recommend_action has no choices.',
+    );
+  });
+
+  it('refuses recommend when recommend_action has no choices', () => {
+    const raw = finding({ recommend: 1, recommend_action: 'leave_it' });
+
+    expect(parseError(raw)).toBe(
+      'Finding 1: recommend names a choice, but no choice has action ' +
+        'leave_it, the recommend_action. Leave recommend out when the ' +
+        'recommended action has no choices.',
+    );
+  });
+
+  it('refuses a recommend naming a choice of another action', () => {
+    const raw = finding({
+      choices: TWO_ACTION_CHOICES,
+      recommend: 2,
+      recommend_action: 'fix_now',
+    });
+
+    expect(parseError(raw)).toBe(
+      'Finding 1: recommend is 2, a follow_up choice, but recommend_action ' +
+        'is fix_now. recommend names a choice of the recommended action.',
+    );
+  });
+
+  it('keeps a layout name as sent and reads an absent one as null', () => {
+    expect(
+      findingFormat.parse(finding({ layout: 'compact' }), 'Finding 1: ').layout,
+    ).toBe('compact');
+    expect(findingFormat.parse(finding(), 'Finding 1: ').layout).toBeNull();
   });
 
   it('names a missing origin and impact and what each origin needs', () => {
@@ -121,8 +323,8 @@ describe('findingFormat.parse', () => {
 
     expect(parseError(partial)).toBe(
       'Finding 1: missing impact, origin. Every finding needs title, origin, ' +
-        'impact, finding, proof, choices, recommend, recommend_action; a ' +
-        'caused or pre_existing finding also needs severity.',
+        'impact, finding, proof, choices, recommend_action; a caused or ' +
+        'pre_existing finding also needs severity.',
     );
   });
 
@@ -180,7 +382,7 @@ describe('findingFormat.parse', () => {
 
     expect(parseError(raw)).toBe(
       'Finding 1: choices[1].text opens with "Fix now", an action. A choice ' +
-        'names a solution; the card draws its own action control.',
+        'names a solution; its action field sets the action it sits under.',
     );
   });
 
@@ -191,7 +393,7 @@ describe('findingFormat.parse', () => {
 
     expect(parseError(raw)).toBe(
       'Finding 1: choices[1].text opens with "Fix now", an action. A choice ' +
-        'names a solution; the card draws its own action control.',
+        'names a solution; its action field sets the action it sits under.',
     );
   });
 
@@ -200,8 +402,9 @@ describe('findingFormat.parse', () => {
       choices: [{ text: 'Leave it: keep the guard', reason: 'r' }],
     });
 
-    expect(parseError(raw)).toContain(
-      'choices[1].text opens with "Leave it", an action.',
+    expect(parseError(raw)).toBe(
+      'Finding 1: choices[1].text opens with "Leave it", an action. A choice ' +
+        'names a solution; its action field sets the action it sits under.',
     );
   });
 
@@ -211,7 +414,7 @@ describe('findingFormat.parse', () => {
     });
 
     expect(findingFormat.parse(raw, 'Finding 1: ').choices).toEqual([
-      { text: 'Leave items cached', reason: 'r' },
+      { text: 'Leave items cached', reason: 'r', action: 'fix_now' },
     ]);
   });
 
@@ -220,16 +423,18 @@ describe('findingFormat.parse', () => {
       choices: [{ text: '**Fix now**: share the rule', reason: 'r' }],
     });
 
-    expect(parseError(raw)).toContain(
-      'choices[1].text opens with "Fix now", an action.',
+    expect(parseError(raw)).toBe(
+      'Finding 1: choices[1].text opens with "Fix now", an action. A choice ' +
+        'names a solution; its action field sets the action it sits under.',
     );
   });
 
   it('refuses an action word wrapped in inline code', () => {
     const raw = finding({ choices: [{ text: '`Leave it`', reason: 'r' }] });
 
-    expect(parseError(raw)).toContain(
-      'choices[1].text opens with "Leave it", an action.',
+    expect(parseError(raw)).toBe(
+      'Finding 1: choices[1].text opens with "Leave it", an action. A choice ' +
+        'names a solution; its action field sets the action it sits under.',
     );
   });
 
@@ -239,7 +444,7 @@ describe('findingFormat.parse', () => {
     });
 
     expect(findingFormat.parse(raw, 'Finding 1: ').choices).toEqual([
-      { text: '_Leave items cached_', reason: 'r' },
+      { text: '_Leave items cached_', reason: 'r', action: 'fix_now' },
     ]);
   });
 
@@ -263,18 +468,17 @@ describe('findingFormat.parse', () => {
   });
 
   it('refuses an extra finding field, saying the form draws its own controls', () => {
-    const message = parseError(finding({ context: 'x' }));
-
-    expect(message).toContain('unknown field(s) context');
-    expect(message).toContain('the action control');
-    expect(message).toContain('the Notes box');
+    expect(parseError(finding({ context: 'x' }))).toBe(
+      'Finding 1: unknown field(s) context. The form draws the ' +
+        'not-applicable control and the Notes box itself; do not describe ' +
+        'them.',
+    );
   });
 
   it('refuses a choice given as a plain string', () => {
-    const message = parseError(finding({ choices: ['a', 'b'] }));
-
-    expect(message).toContain(
-      'Finding 1: choices[1] must be an object with text and reason.',
+    expect(parseError(finding({ choices: ['a', 'b'] }))).toBe(
+      'Finding 1: choices[1] must be an object with text, reason and an ' +
+        'optional action.',
     );
   });
 
@@ -283,7 +487,10 @@ describe('findingFormat.parse', () => {
       finding({ choices: [{ text: 'a', reason: 'r' }, { text: 'b' }] }),
     );
 
-    expect(message).toContain('Finding 1: choices[2] missing reason.');
+    expect(message).toBe(
+      'Finding 1: choices[2] missing reason. Each choice takes text and ' +
+        'reason, and an optional action.',
+    );
   });
 
   it('refuses an unknown choice field', () => {
@@ -296,7 +503,10 @@ describe('findingFormat.parse', () => {
       }),
     );
 
-    expect(message).toContain('choices[1] unknown field(s) recommended.');
+    expect(message).toBe(
+      'Finding 1: choices[1] unknown field(s) recommended. Each choice takes ' +
+        'text and reason, and an optional action.',
+    );
   });
 
   it('refuses a blank reason, naming its choice', () => {
@@ -317,7 +527,9 @@ describe('findingFormat.parse', () => {
   it('accepts a single solution on a caused finding', () => {
     const lone = finding({ choices: [{ text: 'a', reason: 'r' }] });
 
-    expect(findingFormat.parse(lone, 'Finding 1: ')).toEqual(lone);
+    expect(findingFormat.parse(lone, 'Finding 1: ').choices).toEqual([
+      { text: 'a', reason: 'r', action: 'fix_now' },
+    ]);
   });
 
   it('refuses a caused finding with zero choices or eleven', () => {
@@ -361,6 +573,11 @@ describe('findingFormat.answerSubject', () => {
       choiceTexts: ['Fix it now', 'Keep the cache'],
       recommend: 1,
     });
+    const headerRecommended = findingFormat.parse(
+      findingWithoutRecommend({ recommend_action: 'leave_it' }),
+      'Finding 1: ',
+    );
+    expect(findingFormat.answerSubject(headerRecommended).recommend).toBe(0);
   });
 });
 
@@ -408,7 +625,73 @@ describe('findingFormat.arraySchema', () => {
   });
 });
 
+describe('findingFormat.arraySchema choice actions', () => {
+  it('declares a choice action defaulting to fix_now and action_reasons with follow_up and leave_it', () => {
+    const items = findingFormat.arraySchema.items as {
+      required: string[];
+      properties: {
+        choices: {
+          items: {
+            required: string[];
+            additionalProperties: boolean;
+            properties: {
+              action: { enum: string[]; default: string; description: string };
+            };
+          };
+        };
+        action_reasons: {
+          type: string;
+          additionalProperties: boolean;
+          properties: Record<string, { description: string }>;
+          description: string;
+        };
+        recommend: { description: string };
+      };
+    };
+    const { choices, action_reasons, recommend } = items.properties;
+
+    expect(items.required).not.toContain('recommend');
+    expect(items.required).not.toContain('action_reasons');
+    expect(choices.items.required).toEqual(['text', 'reason']);
+    expect(choices.items.additionalProperties).toBe(false);
+    expect(choices.items.properties.action.enum).toEqual([...FINDING_ACTIONS]);
+    expect(choices.items.properties.action.default).toBe('fix_now');
+    expect(choices.items.properties.action.description).toBe(
+      "The action this choice sits under on the card, one the finding's " +
+        'origin offers; fix_now when left out. A Nit offers no follow_up.',
+    );
+    expect(action_reasons.type).toBe('object');
+    expect(action_reasons.additionalProperties).toBe(false);
+    expect(Object.keys(action_reasons.properties)).toEqual([
+      'follow_up',
+      'leave_it',
+    ]);
+    expect(action_reasons.properties.follow_up.description).toBe(
+      'Drawn under the follow-up action. Markdown.',
+    );
+    expect(action_reasons.properties.leave_it.description).toBe(
+      'Drawn under the leave-it action. Markdown.',
+    );
+    expect(action_reasons.description).toBe(
+      "Why to take a deferral action, drawn under that action's header. " +
+        'Only an action the origin offers takes an entry. Send the entry for ' +
+        'the action you recommend when it is a deferral. A Nit offers no ' +
+        'follow_up.',
+    );
+    expect(recommend.description).toBe(
+      'The 1-based number, in choices, of the recommended choice: a choice ' +
+        'of recommend_action. Leave it out only when no choice has ' +
+        'recommend_action.',
+    );
+  });
+});
+
 describe('findingFormat.fingerprintContent', () => {
+  const contentOf = (raw: unknown) =>
+    JSON.stringify(
+      findingFormat.fingerprintContent(findingFormat.parse(raw, 'Finding 1: ')),
+    );
+
   it('differs when only the origin, impact or severity differs', () => {
     const content = (overrides: Record<string, unknown>) =>
       JSON.stringify(
@@ -425,12 +708,48 @@ describe('findingFormat.fingerprintContent', () => {
 
   it('differs when only recommend_action differs', () => {
     const content = (recommend_action: string) =>
-      JSON.stringify(
-        findingFormat.fingerprintContent(
-          findingFormat.parse(finding({ recommend_action }), 'Finding 1: '),
-        ),
-      );
+      contentOf(findingWithoutRecommend({ recommend_action }));
 
-    expect(content('fix_now')).not.toBe(content('leave_it'));
+    expect(content('follow_up')).not.toBe(content('leave_it'));
+  });
+
+  it("differs when only a choice's action differs", () => {
+    const withSecondAction = (action: string) =>
+      finding({
+        choices: [
+          { text: 'Fix it now', reason: 'It is one line.' },
+          { text: 'Keep the cache', reason: 'Reloads are rare.', action },
+        ],
+      });
+
+    expect(contentOf(withSecondAction('follow_up'))).not.toBe(
+      contentOf(withSecondAction('leave_it')),
+    );
+  });
+
+  it('is the same for a choice with action fix_now and one with none', () => {
+    const explicit = finding({
+      choices: [
+        { text: 'Fix it now', reason: 'It is one line.', action: 'fix_now' },
+        { text: 'Keep the cache', reason: 'Reloads are rare.' },
+      ],
+    });
+
+    expect(contentOf(explicit)).toBe(contentOf(finding()));
+  });
+
+  it('differs when only action_reasons differs', () => {
+    const base = contentOf(finding());
+
+    expect(
+      contentOf(finding({ action_reasons: { leave_it: 'Rare.' } })),
+    ).not.toBe(base);
+    expect(contentOf(finding({ action_reasons: {} }))).toBe(base);
+  });
+
+  it('is the same when only layout differs', () => {
+    expect(contentOf(finding({ layout: 'compact' }))).toBe(
+      contentOf(finding()),
+    );
   });
 });
