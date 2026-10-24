@@ -835,13 +835,27 @@ describe('key hint texts', () => {
     ).toBe('Move a.md to the Trash?');
   });
 
-  it('trashQuestion_LinkAndTarget_NamesBothByPath', () => {
+  it('trashQuestion_TwoTargets_NamesLink', () => {
     const targets = ['/h/r/skills/s', '/h/.claude/skills/s'];
 
     expect(
       trashQuestion(targets, '/h', { yes: 'y', no: 'n' }, posixPaths),
     ).toBe(
       'Move ~/r/skills/s and its link ~/.claude/skills/s to the Trash? y/n',
+    );
+  });
+
+  it('trashQuestion_ThreeTargets_NamesLinks', () => {
+    const targets = [
+      '/h/repo/skills/s',
+      '/h/.claude/skills/s',
+      '/h/.codex/skills/s',
+    ];
+
+    expect(
+      trashQuestion(targets, '/h', { yes: null, no: null }, posixPaths),
+    ).toBe(
+      'Move ~/repo/skills/s and its links ~/.claude/skills/s, ~/.codex/skills/s to the Trash?',
     );
   });
 

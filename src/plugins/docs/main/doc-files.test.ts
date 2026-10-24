@@ -666,6 +666,129 @@ describe('trash', () => {
     expect(links.size).toBe(1);
     expect(await test.files.read(target)).toBe('real');
   });
+
+  // A repo skill `skills/s` the index walked into through `walkedSkill`, with
+  // `links` set and an entry for its SKILL.md walked at `walkedSkill`.
+  async function walkedSkillSetUp(
+    links: Map<string, string>,
+    walkedSkill: string,
+    files = createMemoryFiles(),
+  ) {
+    const skill = `${ROOT}/skills/s`;
+    await files.write(`${skill}/SKILL.md`, 'skill');
+    await files.makeFolder(`${HOME}/.claude/skills`);
+    const entries = [
+      entry({
+        path: `${skill}/SKILL.md`,
+        kind: 'skill',
+        walked: [`${walkedSkill}/SKILL.md`],
+      }),
+    ];
+    const docFiles = setUp({
+      files: withLinks(files, links),
+      entries,
+    }).docFiles;
+    return { skill, files, docFiles };
+  }
+
+  it('trashTargets_WalkedLinkToSkillFolder_NamesLinkAfterTarget', async () => {
+    const link = `${HOME}/.claude/skills/s`;
+    const links = new Map([[link, `${ROOT}/skills/s`]]);
+    const test = await walkedSkillSetUp(links, link);
+
+    expect(await test.docFiles.trashTargets(`${test.skill}/SKILL.md`)).toEqual([
+      test.skill,
+      link,
+    ]);
+  });
+
+  it('trashTargets_LinkedParentFolder_NotNamed', async () => {
+    const links = new Map([[`${HOME}/.claude/skills`, `${ROOT}/skills`]]);
+    const test = await walkedSkillSetUp(links, `${HOME}/.claude/skills/s`);
+
+    expect(await test.docFiles.trashTargets(`${test.skill}/SKILL.md`)).toEqual([
+      test.skill,
+    ]);
+  });
+
+  it('trashTargets_WalkedLinkInsideTarget_NotNamed', async () => {
+    const inner = `${ROOT}/skills/s/again`;
+    const links = new Map([[inner, `${ROOT}/skills/s`]]);
+    const test = await walkedSkillSetUp(links, inner);
+
+    expect(await test.docFiles.trashTargets(`${test.skill}/SKILL.md`)).toEqual([
+      test.skill,
+    ]);
+  });
+
+  it('trashTargets_TwoEntriesSameLink_NamedOnce', async () => {
+    const test = setUp();
+    const skill = `${ROOT}/skills/s`;
+    const link = `${HOME}/.claude/skills/s`;
+    await test.files.write(`${skill}/SKILL.md`, 'skill');
+    await test.files.write(`${skill}/ref.md`, 'ref');
+    await test.files.makeFolder(`${HOME}/.claude/skills`);
+    const links = new Map([[link, skill]]);
+    const entries = [
+      entry({ path: `${skill}/SKILL.md`, walked: [`${link}/SKILL.md`] }),
+      entry({ path: `${skill}/ref.md`, walked: [`${link}/ref.md`] }),
+    ];
+    const docFiles = setUp({
+      files: withLinks(test.files, links),
+      entries,
+    }).docFiles;
+
+    expect(await docFiles.trashTargets(`${skill}/SKILL.md`)).toEqual([
+      skill,
+      link,
+    ]);
+  });
+
+  it('trashTargets_WalkedLinkInLinkedConfigFolder_NamedWithRealFolder', async () => {
+    const dotfiles = `${HOME}/dotfiles/claude`;
+    const files = createMemoryFiles();
+    await files.makeFolder(`${dotfiles}/skills`);
+    const links = new Map([
+      [`${HOME}/.claude`, dotfiles],
+      [`${dotfiles}/skills/s`, `${ROOT}/skills/s`],
+    ]);
+    const test = await walkedSkillSetUp(
+      links,
+      `${HOME}/.claude/skills/s`,
+      files,
+    );
+
+    expect(await test.docFiles.trashTargets(`${test.skill}/SKILL.md`)).toEqual([
+      test.skill,
+      `${dotfiles}/skills/s`,
+    ]);
+  });
+
+  it('trash_WalkedLinkRefused_NothingMoves', async () => {
+    const link = `${HOME}/elsewhere/s`;
+    const links = new Map([[link, `${ROOT}/skills/s`]]);
+    const files = createMemoryFiles();
+    await files.makeFolder(`${HOME}/elsewhere`);
+    const test = await walkedSkillSetUp(links, link, files);
+
+    await expect(test.docFiles.trash(`${test.skill}/SKILL.md`)).rejects.toThrow(
+      `Refused: ${link} is outside the indexed folders`,
+    );
+    expect([...links]).toEqual([[link, `${ROOT}/skills/s`]]);
+    expect(await test.files.read(`${test.skill}/SKILL.md`)).toBe('skill');
+  });
+
+  it('trash_WalkedLink_TrashedAfterTarget', async () => {
+    const link = `${HOME}/.claude/skills/s`;
+    const links = new Map([[link, `${ROOT}/skills/s`]]);
+    const test = await walkedSkillSetUp(links, link);
+
+    const trashed = await test.docFiles.trash(`${test.skill}/SKILL.md`);
+
+    expect(trashed).toEqual({ trashed: [test.skill, link], error: null });
+    expect(links.size).toBe(0);
+    expect(await test.files.stat(test.skill)).toBeNull();
+  });
 });
 
 describe('pluginConfigFile', () => {

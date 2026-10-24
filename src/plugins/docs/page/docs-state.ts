@@ -474,8 +474,8 @@ export function conflictText(keys: {
 }
 
 // The Trash question over what `trashTargets` named, its yes and no keys
-// after it: one path by its base name, a link's target and the link by
-// their paths, since the two often share a name.
+// after it: one path by its base name, else the first target and its links
+// by their paths, since they often share a name.
 export function trashQuestion(
   targets: readonly string[],
   homeDir: string,
@@ -489,11 +489,12 @@ export function trashQuestion(
     ],
     '/',
   );
-  const [target, link] = targets;
+  const [target, ...links] = targets;
+  const linkNames = links.map((link) => paths.tilde(link, homeDir)).join(', ');
   const names =
-    link === undefined
+    links.length === 0
       ? paths.base(target)
-      : `${paths.tilde(target, homeDir)} and its link ${paths.tilde(link, homeDir)}`;
+      : `${paths.tilde(target, homeDir)} and its ${links.length === 1 ? 'link' : 'links'} ${linkNames}`;
   const question = `Move ${names} to the Trash?`;
   return hints === '' ? question : `${question} ${hints}`;
 }

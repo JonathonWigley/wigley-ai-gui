@@ -1,6 +1,6 @@
 # 04 — Trash takes every walked link to what goes
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)

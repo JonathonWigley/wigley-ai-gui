@@ -208,7 +208,7 @@ other plugin reaches docs only through `DocsMainExports` and `DocsPageExports` (
 - [x] [Index export: schema 2 and walked](02-index-walked-export.md)
 
 ### Wave 2
-- [ ] [Schema 2, unknown kinds and sources in the app](03-schema-2-unknown-kinds.md) — after 01 (shares `doc-files.test.ts`)
+- [x] [Schema 2, unknown kinds and sources in the app](03-schema-2-unknown-kinds.md) — after 01 (shares `doc-files.test.ts`)
 
 ### Wave 3
 - [ ] [Trash takes walked links](04-trash-walked-links.md) — after 03
@@ -230,10 +230,15 @@ Review base: c04112eecae26d302e9320a509cba760cb383b58
 ### Groups
 - 02 · marketplace bb31807 · diff read matches Produces (SCHEMA_VERSION = 2, to_json walked); docs-index unittest 155 OK · concerns: none
 - 01 · 2884091 · diff read: WatchOptions and watch(folder, onChange, options?) present in src/contracts/files.ts; typecheck clean · concerns: Node non-recursive watch reports a subfolder by its own name on macOS (memory adapter never does); test filters 'sub' — ride to review
+- 03 · faa0503 · diff read: every Produces present (contract kind/source string, walked, schemaVersion 2; INDEX_SCHEMA_VERSION 2, DOC_SOURCES exported, isKnownKind, isKnownSource; titleFromId); typecheck clean · concerns: stand-in docs_index.py walked change is covered only by the self-test's fresh.md rebuild
 ### Contract changes
 ### Rulings
 - wigley bumped 1.9.0 → 1.9.1 in both manifests: local and origin/main matched, and § Changing a plugin names no other version field — the version rule — none, a later bump in the same push is harmless · group 02 · group 02
 - node-files test drops a 'sub' report before asserting ['b.txt'], and the contract comment names the Node adapter's subfolder-name report — macOS fs.watch non-recursive reports the changed subfolder entry; no adapter filter, which would hide direct folder creates — a consumer needing no folder reports would need a stat filter · group 01 · group 01
 - watch_WatchesFolderOneLevel uses its own recording fake in the watch describe — the Windows fake near line 920 is out of that describe's reach — none · group 01 · group 01
+- isStringArray moved from chat/main/archived-sessions.ts into src/shared/json.ts, exported beside isJsonObject — widen, never copy — two files outside the task's list · group 03 · group 03
+- kinds.ts placeTitle takes the narrowed source: DocSource as a parameter — keeps the owner titles record exhaustive — none · group 03 · group 03
+- unknown-kind ties in byKindThenTitle break by compareTitles on the kind id, as kindGroups orders them — matches the groups' order — none · group 03 · group 03
+- the pinned unsupported-schema test moved to schema 3 (machineIndex_SchemaThree_PinnedMessage); parse_UnknownKind_NamesEntryAndField replaced by parse_UnknownKind_Loads; added parse_UnknownSourceRootNotString_NamesRoot and a fixture-parses test — the old tests asserted the old behaviour — none · group 03 · group 03
 ### Review rounds
 ### Test gate

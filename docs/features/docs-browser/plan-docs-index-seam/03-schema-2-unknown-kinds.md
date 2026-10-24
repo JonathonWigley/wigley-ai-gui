@@ -1,6 +1,6 @@
 # 03 — Schema 2 and unknown kinds and sources in the app
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01 (shares `doc-files.test.ts`)
 Plan: [plan.md](plan.md)
@@ -71,3 +71,5 @@ Done when: `npm run typecheck`, `npm run lint` and the tests above pass
 Commit:    one commit for the group
 
 ## Proof
+
+Commit faa0503 · proof: diff read: every Produces present (contract kind/source string, walked, schemaVersion 2; INDEX_SCHEMA_VERSION 2, DOC_SOURCES exported, isKnownKind, isKnownSource; titleFromId); typecheck clean · concerns: stand-in docs_index.py walked change is covered only by the self-test's fresh.md rebuild

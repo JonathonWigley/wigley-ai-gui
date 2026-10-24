@@ -43,7 +43,7 @@ export interface DocFilesDeps {
 // resolved, so a symlinked doc moves as the link and its target stays. A
 // trash of a link trashes its final target and then the link, so neither is
 // left behind and both can be restored; a link in between, in a chain of
-// links, stays.
+// links, stays. A trash also takes every link the index walked to what goes.
 export interface DocFiles {
   read(path: string): Promise<string>;
   // `expectedText` non-null: writes only while the disk (missing reads as
@@ -59,7 +59,11 @@ export interface DocFiles {
   rename(from: string, to: string): Promise<string>;
   // What a trash at `path` moves, in order: the real file or folder (a link
   // chain's final target), then the path itself (its folder real) when that
-  // is a link. A skill's `SKILL.md` stands for its whole folder.
+  // is a link, then each walked link (its folder real) of the entries at or
+  // inside the real one. A walked link is the nearest of an entry's `walked`
+  // path and its ancestors that is a link resolving to the real one or inside
+  // it; one inside the real one goes with it and is not named. A skill's
+  // `SKILL.md` stands for its whole folder.
   trashTargets(path: string): Promise<string[]>;
   // Moves `trashTargets(path)` to the Trash in order once the guard allows
   // every one, else rejects moving none. Rejects when the first move fails;
@@ -200,10 +204,29 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
       paths,
     );
     const found = await files.stat(itself);
-    if (found === null || !found.isLink) {
-      return [itself];
+    const targets =
+      found === null || !found.isLink
+        ? [itself]
+        : [await files.realPath(itself), itself];
+    const [real] = targets;
+    const goingEntries = deps
+      .entries()
+      .filter((entry) => paths.isInside(entry.path, real));
+    for (const entry of goingEntries) {
+      for (const walked of entry.walked) {
+        const link = await walkedLink(files, walked, real, paths);
+        if (link === null) {
+          continue;
+        }
+        const named = await folderRealTarget(files, link, paths);
+        const goesWithReal = paths.isInside(named, real);
+        const isNamed = targets.some((target) => paths.samePath(target, named));
+        if (!goesWithReal && !isNamed) {
+          targets.push(named);
+        }
+      }
     }
-    return [await files.realPath(itself), itself];
+    return targets;
   }
 
   // A full trash also names the path as asked, so entries and an open doc
@@ -355,6 +378,30 @@ async function folderRealTarget(
     await realTarget(files, paths.parent(path), paths),
     paths.base(path),
   );
+}
+
+// The nearest of `walked` and its ancestors that is a link resolving to
+// `real` or inside it, else null.
+async function walkedLink(
+  files: Files,
+  walked: string,
+  real: string,
+  paths: Paths,
+): Promise<string | null> {
+  let candidate = walked;
+  for (;;) {
+    const isLink = (await files.stat(candidate))?.isLink === true;
+    const resolvesIntoReal =
+      isLink && paths.isInside(await files.realPath(candidate), real);
+    if (resolvesIntoReal) {
+      return candidate;
+    }
+    const parent = paths.parent(candidate);
+    if (parent === candidate) {
+      return null;
+    }
+    candidate = parent;
+  }
 }
 
 // Whether `path` is a link that leads nowhere: its folder lists its name,
