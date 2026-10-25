@@ -150,14 +150,16 @@ const PREVIEW_ROUND_STEPS: SelfTestStep[] = [
     keys: [' ', 'z', 'l', 'o'],
     expect: '[sessions] activated Layout preview',
     checksFit: true,
-    screenshot: 'preview-notice',
+    screenshot: 'preview-defect',
+    why: 'A round opens on its first finding, the Defect.',
   },
   {
-    keys: ['j'],
-    expect: '[page] j ran forms.nextItem',
+    keys: ['k'],
+    expect: '[page] k ran forms.prevItem',
     checksFit: true,
-    screenshot: 'preview-defect',
+    screenshot: 'preview-notice',
   },
+  { keys: ['j'], expect: '[page] j ran forms.nextItem' },
   {
     keys: ['j'],
     expect: '[page] j ran forms.nextItem',
@@ -591,6 +593,12 @@ const ROUND_LAYOUTS_STEPS: SelfTestStep[] = [
   {
     keys: ['<A-S-o>', '<A-S-o>'],
     expect: '[sessions] activated selftest 3',
+    checksFit: true,
+    why: 'The round opens on its first finding, the Nit.',
+  },
+  {
+    keys: ['k'],
+    expect: '[page] k ran forms.prevItem',
     checksFit: true,
     screenshot: 'round-layout-notice',
     why: "The round's selftest notice card mounts a box a notice lacks, so the notice draws in default.",
