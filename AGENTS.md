@@ -8,8 +8,8 @@
   layers, the relay and agent sessions, and where a new plugin, shell area, mode, session tab, key, event, setting,
   user config file, theme, plugin data, layout, agent harness, session control, round source, MCP tool or
   third-party tool goes, and the layer check.
-- **Running and testing** — the stable and dev apps side by side and `npm run install-app`, Node version, the
-  self-test and the drive run the agent may start any time, and the checks only a real keyboard proves.
+- **Running and testing** — the stable and dev apps side by side, `npm run install-app` and the app icon, Node
+  version, the self-test and the drive run the agent may start any time, and the checks only a real keyboard proves.
 - **Dev quirks** — the startup reload, a session's stale forms schema, and the login-shell PATH.
 
 UI work — a view, its CSS, a theme, a primitive, a layout or a key — reads `DESIGN.md` first: it is the standard
@@ -81,7 +81,7 @@ src/main/        core main process; main.ts is its composition root
                  userConfig service, which reads and writes the user's `settings.json` and `keymap.json` layers
                  through the ConfigStore's own checks
   themes/        theme loader: parses a theme by the token registry and resolves `extends`
-  ui-state/      the uiState file: app-written view state (`ui-state.json`) in Electron's user data folder
+  ui-state/      the uiState file: app-written view state (`ui-state.json`) in the app instance's user data folder
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
                  project folders and runs `claude auth` sign-in, sign-out and status → the only place the app spawns `claude`
@@ -326,7 +326,8 @@ round), since main, not the page, decides.
   upstream tool's own behaviour (vim's for keys, neovim's pickers), before porting a subset or writing custom logic:
   the user picks the established behaviour every time.
 - **Plugin data** — files a plugin keeps for the user, such as forms layouts — lives in the plugin's own folder,
-  `plugins/<id>/` in Electron's per-user data folder (in the self-test and a drive run, `plugin-data/` in the temp home). Main reaches it through
+  `plugins/<id>/` in the app instance's user data folder, so the stable and dev apps keep separate data (in the
+  self-test and a drive run, `plugin-data/` in the temp home). Main reaches it through
   `api.data`, the files service scoped to that folder, which refuses a path outside it. The page loads a file from
   it by the URL `api.dataUrl(path, revision)` builds on the `wigley-data:` scheme, which the page's CSP allows for
   scripts and styles; `revision` sits in the URL's path, so a changed module and every relative import under it load
@@ -394,16 +395,24 @@ round), since main, not the page, decides.
   user config         ~/.config/wigley-ai-gui/, shared by both
   ```
 
-  Every agent session's relay finds the stable app. A dev app gets rounds only from the sessions it starts in its
-  own Chat tab, or from a session started with `WIGLEY_AI_GUI_ENDPOINT_DIR=~/.agents/wigley-ai-gui-dev`. "Auri" is
+  Every agent session's relay finds the stable app. A dev app gets rounds only from a session whose environment sets
+  `WIGLEY_AI_GUI_ENDPOINT_DIR` to the full path of `~/.agents/wigley-ai-gui-dev` (the relay expands no `~`); a
+  session its own Chat tab starts inherits the dev app's environment, so it reaches the stable app unless `npm start`
+  ran with that variable set. The self-test's user data is `<appData>/wigley-ai-gui-selftest` and a drive run's its
+  run folder's `user-data/`; a drive run points its Claude sessions at `<run home>/.agents/<instance id>`. "Auri" is
   only the name the app shows: the exe, the bundle and every path keep `wigley-ai-gui`. Under `npm start` the Mac
   Dock still says Electron, since Electron cannot rename the Dock label of an unbundled app.
+
 - `npm run install-app` builds and installs the stable app from a committed ref (`main` unless `--ref` names
   another). It packages in a build-only worktree beside the repo, `../.wigley-ai-gui-build`, so neither
-  uncommitted edits nor the dev app's `.vite/build` are touched, and runs `npm ci` there when the lockfile changed.
-  Then it quits the running stable app (Windows refuses to overwrite a running exe), replaces
-  `%LOCALAPPDATA%\Programs\wigley-ai-gui` (with a Start menu shortcut named Auri) or `/Applications/wigley-ai-gui.app`,
-  and starts the app again when it was running. Each OS builds its own app; a locally built app needs no signing.
+  uncommitted edits nor the dev app's `.vite/build` are touched, and runs `npm ci` there when its `node_modules` is
+  missing or the lockfile changed since the last one. Then it quits the running stable app (Windows refuses to
+  overwrite a running exe), never force-killing it: one still running after 15 s fails the install with nothing
+  replaced. It replaces `%LOCALAPPDATA%\Programs\wigley-ai-gui` (with a Start menu shortcut named Auri) or
+  `/Applications/wigley-ai-gui.app`, and starts the app again when it was running. Each OS builds its own app; a
+  locally built app needs no signing. The installed app's icon is `assets/icon/` (`icon.ico`, `icon.icns` and
+  `icon.png`, drawn from `auri-source.png`), which `node scripts/make-icon.mts` rebuilds on Windows; the dev app keeps
+  Electron's icon.
 - Node is pinned in `.nvmrc`. A shell that started on another version runs commands as
   `source ~/.nvm/nvm.sh && nvm use && npm run …`.
 - `npm test` runs the Vitest suite: every module whose correctness follows from inputs and outputs — round
