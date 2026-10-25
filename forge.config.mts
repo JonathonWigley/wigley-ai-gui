@@ -1,4 +1,10 @@
-import type { ForgeConfig } from '@electron-forge/shared-types';
+import { execFileSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
+import path from 'node:path';
+import type {
+  ForgeConfig,
+  ResolvedForgeConfig,
+} from '@electron-forge/shared-types';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
@@ -7,11 +13,22 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     win32metadata: { ProductName: 'Auri', FileDescription: 'Auri' },
-    extendInfo: { CFBundleName: 'Auri', CFBundleDisplayName: 'Auri' },
     // Packager adds `.ico` on Windows and `.icns` on macOS.
     icon: 'assets/icon/icon',
   },
   rebuildConfig: {},
+  hooks: {
+    // @electron/packager sets CFBundleName and CFBundleDisplayName from the app name after applying
+    // `extendInfo`, so the shown name is written into the packaged Info.plist here instead.
+    postPackage: async (forgeConfig, { platform, outputPaths }) => {
+      if (platform !== 'darwin') {
+        return;
+      }
+      for (const outputPath of outputPaths) {
+        showMacBundleAs('Auri', appBundleIn(outputPath), forgeConfig);
+      }
+    },
+  },
   plugins: [
     new VitePlugin({
       // `build` can specify multiple entry builds, which can be Main process, Preload scripts, Worker process, etc.
@@ -49,5 +66,48 @@ const config: ForgeConfig = {
     }),
   ],
 };
+
+function appBundleIn(outputPath: string): string {
+  const bundles = readdirSync(outputPath).filter((entry) =>
+    entry.endsWith('.app'),
+  );
+  if (bundles.length !== 1) {
+    throw new Error(
+      `Expected one .app in ${outputPath}, found ${bundles.length}`,
+    );
+  }
+  return path.join(outputPath, bundles[0]);
+}
+
+function showMacBundleAs(
+  displayName: string,
+  appPath: string,
+  forgeConfig: ResolvedForgeConfig,
+): void {
+  if (forgeConfig.packagerConfig.osxSign) {
+    throw new Error(
+      'postPackage edits Info.plist after osxSign has signed the app; move the edit before signing',
+    );
+  }
+  const infoPlist = path.join(appPath, 'Contents', 'Info.plist');
+  for (const key of ['CFBundleName', 'CFBundleDisplayName']) {
+    execFileSync('plutil', [
+      '-replace',
+      key,
+      '-string',
+      displayName,
+      infoPlist,
+    ]);
+  }
+  // Info.plist is sealed into the bundle's signature, and Apple Silicon launches only validly signed apps.
+  execFileSync('codesign', [
+    '--sign',
+    '-',
+    '--force',
+    '--deep',
+    '--preserve-metadata=entitlements,requirements,flags,runtime',
+    appPath,
+  ]);
+}
 
 export default config;
