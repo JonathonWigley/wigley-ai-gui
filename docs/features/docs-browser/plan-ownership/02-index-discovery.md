@@ -1,6 +1,6 @@
 # 02 — Index discovery: marketplace clones, merge, owner, skill files
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -84,3 +84,4 @@ Commit:    one commit for the group, in wigley-ai-marketplace, committed by path
 
 ## Proof
 
+Commit marketplace d9be9f30 · proof: diff read: claude/codex_marketplace_urls, origin_url, repo_slug, clone walk, ownership settle, skill-file walk present; py_compile clean · concerns: Tests line expected repo 'mkt' but origin_name keeps the remote's case ('Mkt'), test asserts Mkt; a './' source makes every file in that clone carry plugin, untested; two git calls per clone

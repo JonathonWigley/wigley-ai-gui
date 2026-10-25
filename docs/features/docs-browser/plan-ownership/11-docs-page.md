@@ -1,6 +1,6 @@
 # 11 — Docs page: read-only, statuses, rollups
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 4 · Depends on: 08, 09, 10
 Plan: [plan.md](plan.md)
@@ -203,3 +203,5 @@ Commit:    one commit for the group, in wigley-ai-gui, committed by path only (p
 - `provisionalEntry`'s `plugin` (06 leaves it null) is filled here: when the new file sits inside a folder holding entries with `source: 'repo'` and a `plugin` key (`Paths.isInside` on the common folder of that key's entries), the provisional entry takes that key, so a new skill shows under its plugin node at once.
 
 ## Proof
+
+Commit gui 5caae01e · proof: diff read: GroupRole/TreeGroup.role, read-only reasons, status texts, rollups and the pluginStatus reads present; tsc clean · concerns: a status reply redraws the tree, scrolling the selected row back into view even when the user scrolled away

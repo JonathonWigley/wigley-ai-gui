@@ -179,29 +179,29 @@ Tasks 01–05 land in wigley-ai-marketplace, 06–14 in wigley-ai-gui (each task
 - [x] [Process timeout](07-process-timeout.md)
 
 ### Wave 2
-- [ ] [Index discovery: marketplace clones, merge, owner, skill files](02-index-discovery.md) — after 01
+- [x] [Index discovery: marketplace clones, merge, owner, skill files](02-index-discovery.md) — after 01
 - [x] [Index load rules for skill files](03-index-load-rules.md) — after 01
 - [x] [Session loaded plugins](04-session-loaded-plugins.md) — after 01
-- [ ] [Docs contract and index parse, schema 3](06-docs-contract.md) — after 07 (both edit
+- [x] [Docs contract and index parse, schema 3](06-docs-contract.md) — after 07 (both edit
   `index-sources.test.ts` and `start.test.ts`)
 
 ### Wave 3
-- [ ] [Marketplace version bump and Done checks](05-marketplace-bump.md) — after 02, 03, 04
-- [ ] [Plugin status in main](08-plugin-status.md) — after 06, 07
-- [ ] [Write guard and create places by owner](09-guard-by-owner.md) — after 06
-- [ ] [Tree by owner](10-tree-by-owner.md) — after 06
+- [x] [Marketplace version bump and Done checks](05-marketplace-bump.md) — after 02, 03, 04
+- [x] [Plugin status in main](08-plugin-status.md) — after 06, 07
+- [x] [Write guard and create places by owner](09-guard-by-owner.md) — after 06
+- [x] [Tree by owner](10-tree-by-owner.md) — after 06
 
 ### Wave 4
-- [ ] [Docs page: read-only, statuses, rollups](11-docs-page.md) — after 08, 09, 10
+- [x] [Docs page: read-only, statuses, rollups](11-docs-page.md) — after 08, 09, 10
 
 ### Wave 5
-- [ ] [Self-test steps](12-selftest.md) — after 11
+- [x] [Self-test steps](12-selftest.md) — after 11
 
 ### Wave 6
-- [ ] [Doc re-read](13-doc-re-read.md) — after 05, 12
+- [x] [Doc re-read](13-doc-re-read.md) — after 05, 12
 
 ### Wave 7
-- [ ] [Final verification](14-final-verification.md) — after 13
+- [x] [Final verification](14-final-verification.md) — after 13
 
 ## Run log
 
@@ -212,11 +212,38 @@ Review base: 9d343328c9cc19209b8fe375398e619c8268df71
 - 07 · gui d4ad2fae · diff read: timeoutMs and timedOut present in contracts/processes.ts, adapter and fake; tsc clean · concerns: none
 - 03 · marketplace 689b9c5f · diff read: skill-file not-loaded in both rule sets, installed locations judged; py_compile clean · concerns: a disabled installed copy (Codex [[skills.config]], disabled Claude plugin) reports 'no load rule reaches this file' because the clone path is judged first and best_state keeps the first of equal states; the Codex merged-skill test checks the state only; fixes proposed: best_state prefers a specific reason, installed-first locations, or skipping the clone path
 - 04 · marketplace d602e09f · diff read: loaded_plugins filled in read_session and passed to Context; py_compile clean · concerns: cache-path match is case-sensitive (a differently cased Windows realpath misses); a \/-escaped path misses; regex speed on megabyte lines unmeasured
+- 06 · gui c2d9cae7 · diff read: every Produces present in contract.ts and index-document.ts; tsc clean · concerns: the Done-when grep for 'schemaVersion: 2' still finds the parse_Schema2_Unsupported test the Tests line asks for
+- 02 · marketplace d9be9f30 · diff read: claude/codex_marketplace_urls, origin_url, repo_slug, clone walk, ownership settle, skill-file walk present; py_compile clean · concerns: Tests line expected repo 'mkt' but origin_name keeps the remote's case ('Mkt'), test asserts Mkt; a './' source makes every file in that clone carry plugin, untested; two git calls per clone
+- 09 · gui ef0c12ec · diff read: thirdPartyFolders, owner refusal and placesFor skip present; tsc shows no error in 09's files (08/10 in flight) · concerns: none
+- 05 · marketplace 6a4497c9 · both manifests 1.10.1; check_manifests (plain and --against origin/main), check_pointers, claude plugin validate pass; suites deferred to the test gate · concerns: scripts/tests fails 2 tests in suites this plan did not touch (see test gate)
+- 10 · gui bcc3682d · diff read: MINE_ROOT_ID, THIRD_PARTY_ROOT_ID and owner roots in tree.ts; tsc clean per worker, 08 in flight · concerns: design.md lists a skill's files 'by path' while the task pins 'by title' — built by title, design.md for 13's re-read
+- 08 · gui 31a6132a · diff read: readPluginStatus, PluginStatusDeps, sourceEntries and the pluginStatus handler present; tsc clean · concerns: fetch dedupe is module-level state (the pinned signature leaves no other home); contract.ts's pluginStatus comment omits the unknown-source rejection; an installed copy is re-read per entry, no cache
+- 11 · gui 5caae01e · diff read: GroupRole/TreeGroup.role, read-only reasons, status texts, rollups and the pluginStatus reads present; tsc clean · concerns: a status reply redraws the tree, scrolling the selected row back into view even when the user scrolled away
+- 12 · gui 602164ca · diff read: ownership group and fixture entries present; tsc clean; npm run selftest all passed (worker run, log at scratchpad/selftest-12.log) · concerns: none
+- 13 · marketplace 575e6b7a, gui b537f9a5 · diff read: README 8 fixes, design.md and AGENTS.md fixes match the landed code; followups.md nothing stale · concerns: README makes no claim on a disabled installed copy's reason, so the 03 reason concern stays a code question for the review
+- 14 · none (no fix needed) · 1 real index: schema 3, no stray cache entries, 98 clone skill entries mine with installs claude 1.10.0 / codex 0.17.1 (39), 457 curated/synced third-party, 508 skill-file, feature SKILL.md listed in home; 2 session loadedPlugins wigley 1.10.0; 3 live readPluginStatus with fetch: 90 files Not installed codex (spot-checked debug/SKILL.md blob differs), none unpushed (no unpushed changed file is an index entry — the plan's README expectation was wrong), no Claude status (1.10.0 = origin/main); 4 selftest all passed; 5 drive captures (.drive/20261025-005454-fd23/screenshots) pass for roots, Third-party collapse, downloaded-copy line — status tags over real data uncapturable (drive run uses a temp home), left to the user's check · concerns: versions moved since plan time (Claude 1.10.0); status tags/rollups on real data not visually captured
 ### Contract changes
+- readOnlyText installed text: 'Installed copy — <key>. The clone has no such file.' → 'Installed copy — <key>. Edits are lost on its next update.' · why: the task document's Lead rulings override its Decisions line · consumers: 12 · group 11
+- fixturePaths: syncedSkill, vendorSkill → plus vendorRoot (the vendored entry's install folder, like pluginRoot) · why: the vendored entry's root names it · consumers: none · group 12
 ### Rulings
 - Two repos, two review bases: wigley-ai-gui 9d343328c9cc19209b8fe375398e619c8268df71 (the Review base line), wigley-ai-marketplace 37925feee7539acde5790672bcf9a3f9eb781a60; peer session ai-dev-9e on the same trees, so every commit is pathspec-scoped and each review range is an explicit commit list — lead
 - Stale precondition refreshed: the installed Claude copy is now wigley 1.10.0 (gitCommitSha 37925fee), not 1.9.1; the plugin.json version is 1.10.0, so task 05 bumps from 1.10.0 — lead
 - Installed's harness error reads 'installed <path>: harness <h> is not one of HARNESSES', matching Entry's checks — no task named it — a wording change only · group 01 · group 01
 - The timeout test uses timeoutMs 3000 (the lead's cap) rather than the Tests line's 500, asserting under 5000 ms; the child stays alive on setTimeout since stdin is 'ignore' — a slower test only · group 07 · group 07
+- No pluginStatus handler stub in 06: the compiler does not require one; the handler is 08's — none · group 06 · group 06
+- installedCopies treats meta.installed present but not an array (null included) as [] rather than null — a malformed clone file shows no installs instead of not-a-clone-file · group 06 · group 06
+- A clone lists a plugin only when its item has a name and a ./ source resolving inside the clone; an install of a skipped (e.g. github-sourced) item is third-party — such an install would show third-party · group 02 · group 02
+- The first clone in walk order whose origin slug matches is the source; if it does not list the plugin, the install has no source — a rare install shows third-party · group 02 · group 02
+- Duplicate plugin names in marketplace.json: first wins — negligible · group 02 · group 02
+- Entries outside their plugin's real source folder (through a link) are no counterparts and are not merged — odd linked layouts only · group 02 · group 02
+- Mine / Third-party root folder is the common folder of all that owner's entries, installed-only cache entries included — on a split-drive machine the Mine root's folder is null, so A on the Mine row gets no start folder · group 10 · group 10
+- A skill group's folder comes from the skill and its skill-file entries — only A's start folder on that row · group 10 · group 10
+- Installed-only entries go to the first plugin node of their key in tree order (repos, then clones sorted by title) through one shared map — a later clone never receives them · group 10 · group 10
+- A rejected rev-parse @{u} stops the clone and logs; a non-zero exit means no upstream — per the task's lead ruling · group 08 · group 08
+- Every settled rebuild re-reads statuses; first show and Rescan add a fetching read — more git runs per rebuild · group 11 · group 11
+- A read started while a fetching read runs also asks to fetch, joining main's running fetch, so the fetched reply is not taken as stale — none · group 11 · group 11
+- provisionalEntry's plugin key comes from the common folder per clone and plugin key, not per key across clones — none · group 11 · group 11
+- The fixture test that required every entry owner mine now checks only empty loadedPlugins; the owner claims moved to the new tests — none · group 12 · group 12
 ### Review rounds
 ### Test gate
+- marketplace docs-index suite (every module the series changed lives there): 206 tests, failure set identical by test name to the review base 37925fee (15F/26E, all Windows symlink privilege and / separator expectations), every new test passes; WSL cannot run it (Python 3.8, no tomllib) · gui vitest src/plugins/docs, src/main/processes, src/shared, src/main/drive (every directory the range touched): 54 files, 1043 passed · npm run lint clean · pass

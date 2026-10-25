@@ -1,6 +1,6 @@
 # 10 — Tree by owner
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -138,3 +138,5 @@ Commit:    one commit for the group, in wigley-ai-gui, committed by path only (p
 - The tree test pins Global's child order for the self-test fixture's entries: Instructions, Rules, then Hooks last (task 12's kept moves depend on it).
 
 ## Proof
+
+Commit gui bcc3682d · proof: diff read: MINE_ROOT_ID, THIRD_PARTY_ROOT_ID and owner roots in tree.ts; tsc clean per worker, 08 in flight · concerns: design.md lists a skill's files 'by path' while the task pins 'by title' — built by title, design.md for 13's re-read

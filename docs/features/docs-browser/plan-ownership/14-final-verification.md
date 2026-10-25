@@ -1,6 +1,6 @@
 # 14 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 7 · Depends on: 13
 Plan: [plan.md](plan.md)
@@ -54,3 +54,5 @@ Done when: every check above passes or its failure is fixed and re-run; the repo
 Commit:    none, unless a fix was needed (then one commit per fix, in its repo, by path only)
 
 ## Proof
+
+Commit none (no fix needed) · proof: 1 real index: schema 3, no stray cache entries, 98 clone skill entries mine with installs claude 1.10.0 / codex 0.17.1 (39), 457 curated/synced third-party, 508 skill-file, feature SKILL.md listed in home; 2 session loadedPlugins wigley 1.10.0; 3 live readPluginStatus with fetch: 90 files Not installed codex (spot-checked debug/SKILL.md blob differs), none unpushed (no unpushed changed file is an index entry — the plan's README expectation was wrong), no Claude status (1.10.0 = origin/main); 4 selftest all passed; 5 drive captures (.drive/20261025-005454-fd23/screenshots) pass for roots, Third-party collapse, downloaded-copy line — status tags over real data uncapturable (drive run uses a temp home), left to the user's check · concerns: versions moved since plan time (Claude 1.10.0); status tags/rollups on real data not visually captured

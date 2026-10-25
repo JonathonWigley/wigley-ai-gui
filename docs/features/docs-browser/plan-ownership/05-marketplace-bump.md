@@ -1,6 +1,6 @@
 # 05 — Marketplace version bump and Done checks
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -45,3 +45,4 @@ Commit:    one commit holding the two manifests when a bump was needed, else non
 
 ## Proof
 
+Commit marketplace 6a4497c9 · proof: both manifests 1.10.1; check_manifests (plain and --against origin/main), check_pointers, claude plugin validate pass; suites deferred to the test gate · concerns: scripts/tests fails 2 tests in suites this plan did not touch (see test gate)

@@ -1,6 +1,6 @@
 # 08 — Plugin status in main
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
@@ -141,3 +141,4 @@ Commit:    one commit for the group, in wigley-ai-gui, committed by path only (p
 
 ## Proof
 
+Commit gui 31a6132a · proof: diff read: readPluginStatus, PluginStatusDeps, sourceEntries and the pluginStatus handler present; tsc clean · concerns: fetch dedupe is module-level state (the pinned signature leaves no other home); contract.ts's pluginStatus comment omits the unknown-source rejection; an installed copy is re-read per entry, no cache

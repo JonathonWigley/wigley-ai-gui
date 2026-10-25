@@ -1,6 +1,6 @@
 # 09 — Write guard and create places by owner
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -82,3 +82,4 @@ Commit:    one commit for the group, in wigley-ai-gui, committed by path only (p
 
 ## Proof
 
+Commit gui ef0c12ec · proof: diff read: thirdPartyFolders, owner refusal and placesFor skip present; tsc shows no error in 09's files (08/10 in flight) · concerns: none

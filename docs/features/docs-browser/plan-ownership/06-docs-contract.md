@@ -1,6 +1,6 @@
 # 06 — Docs contract and index parse, schema 3
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -110,3 +110,4 @@ Commit:    one commit for the group, in wigley-ai-gui, committed by path only (p
 
 ## Proof
 
+Commit gui c2d9cae7 · proof: diff read: every Produces present in contract.ts and index-document.ts; tsc clean · concerns: the Done-when grep for 'schemaVersion: 2' still finds the parse_Schema2_Unsupported test the Tests line asks for

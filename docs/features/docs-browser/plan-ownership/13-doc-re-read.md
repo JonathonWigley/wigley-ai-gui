@@ -1,6 +1,6 @@
 # 13 — Doc re-read
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 6 · Depends on: 05, 12
 Plan: [plan.md](plan.md)
@@ -27,3 +27,5 @@ Done when: every stale line found is fixed; the reply lists each fix with its fi
 Commit:    one commit per repo for the fixes, by path only; none when nothing was stale
 
 ## Proof
+
+Commit marketplace 575e6b7a, gui b537f9a5 · proof: diff read: README 8 fixes, design.md and AGENTS.md fixes match the landed code; followups.md nothing stale · concerns: README makes no claim on a disabled installed copy's reason, so the 03 reason concern stays a code question for the review

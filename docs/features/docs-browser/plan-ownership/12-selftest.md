@@ -1,6 +1,6 @@
 # 12 — Self-test steps
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -95,3 +95,5 @@ Done when: `npm run typecheck` passes; `npx vitest run src/plugins/docs/main/sel
 Commit:    one commit for the group, in wigley-ai-gui, committed by path only (peer sessions have uncommitted edits)
 
 ## Proof
+
+Commit gui 602164ca · proof: diff read: ownership group and fixture entries present; tsc clean; npm run selftest all passed (worker run, log at scratchpad/selftest-12.log) · concerns: none
