@@ -53,7 +53,7 @@ Steps 1, the bug sweep, 2, drive reliability, and 3, the docs index seam, have l
 **5. Commands and events core.** Builds on 4.
 - Core events on the bus (mode, scope, focus, theme, config, page ready)
 - `commands.register`, `intercept`, `onDidRun`, `MainApi.commands.run`
-- Commands take a count or argument (`choose1..9` → `forms.choose`, which gives choice 10 a key)
+- Commands take a count or argument (`choose1..9` → `forms.choose`)
 - The AGENTS.md standing rule: actions are commands and state changes are events
 - Per-plugin `Alerts.setCount`
 - A `window` plugin

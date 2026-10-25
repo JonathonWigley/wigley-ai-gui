@@ -106,8 +106,7 @@ now, any harness later). Each item names its sites.
   `contract.ts`. Today publishing is opt-in (AGENTS.md § Architecture says how to emit, not that a plugin must), and
   only `sessions` and the forms page emit; chat and docs emit nothing.
 - Plugins may add editor remaps (a manifest's `keys` has binds and groups, no remaps).
-- Commands take a count or argument, so `choose1..9` becomes one `forms.choose` (and choice 10 gets a key: `DIGITS`
-  stops at 9 while `MAX_CHOICES` is 10).
+- Commands take a count or argument, so `choose1..9` becomes one `forms.choose`.
 - Layouts as a core service: `api.layouts.define(slot, { contractText, defaultSource, read })` in both processes,
   owning the channel, the `layouts/<slot>/` folder, the CSS links, the toasts, the layout setting and the preview
   command. Replaces the hand wiring duplicated in forms and chat (`main/start.ts`, `page/start.ts`, the channel

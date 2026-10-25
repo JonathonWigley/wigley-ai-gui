@@ -259,7 +259,7 @@ const FINDING_PICKS_STEPS: SelfTestStep[] = [
     expect: '[page] j ran forms.nextItem',
     checksFit: true,
     screenshot: 'round',
-    why: 'Fix now holds choices 1 and 2, then Follow-up (3) and Leave it (4) sit as bare headers, each number in its span.choice-number.',
+    why: 'Fix now holds choices 1 and 2, then Follow-up and Leave it sit as bare headers drawn as choice rows, numbered 3 and 4 in their span.choice-number.',
   },
   { keys: ['2'], expect: '[forms] chose 2 on finding 1' },
   {
