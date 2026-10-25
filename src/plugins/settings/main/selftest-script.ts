@@ -197,18 +197,16 @@ function resultProblems(read: UserConfigRead): string[] {
 // `settings.show` does. The result is the user config read on the first
 // change after which settings.json no longer holds the stale timeout that
 // follows one where it did: only the last step changes it, and `problems`
-// expects both layers empty then. Each open empties the files only once the
-// previous open's emptying has settled, so its read sees that open's write.
-// It rejects when this open's emptying fails. An open superseded by a later
-// one before its files are emptied shows nothing, and its result settles only
-// by rejecting, when its own emptying fails.
+// expects both layers empty then. It rejects when this open's emptying fails.
+// An open superseded by a later one before its files are emptied shows
+// nothing, and its result settles only by rejecting, when its own emptying
+// fails.
 export function settingsSelfTestScript(
   deps: SettingsSelfTestDeps,
 ): SelfTestScript {
   const { userConfig } = deps;
   let watching: Disposable | null = null;
   let latestOpen = 0;
-  let emptying: Promise<void> = Promise.resolve();
   return {
     pageBinds: [],
     settings: {},
@@ -233,9 +231,7 @@ export function settingsSelfTestScript(
           }, reject);
         });
         watching = watch;
-        const emptyFiles = () => emptyUserFiles(userConfig);
-        emptying = emptying.then(emptyFiles, emptyFiles);
-        emptying.then(() => {
+        emptyUserFiles(userConfig).then(() => {
           if (thisOpen === latestOpen) {
             deps.show();
           }

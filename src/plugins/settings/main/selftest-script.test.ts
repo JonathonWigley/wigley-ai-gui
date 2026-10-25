@@ -208,4 +208,31 @@ describe('settingsSelfTestScript', () => {
     await expect(result).rejects.toThrow('changedOnDisk');
     expect(show).not.toHaveBeenCalled();
   });
+
+  it('resets and shows the mode once when the previous open was refused', async () => {
+    const fake = fakeUserConfig(
+      { keySequenceTimeoutMs: 900 },
+      { binds: [ADDED_BIND] },
+    );
+    fake.userConfig.writeKeymap.mockResolvedValueOnce({
+      type: 'changedOnDisk',
+    } as never);
+    const show = vi.fn();
+    const script = settingsSelfTestScript({
+      userConfig: fake.userConfig,
+      show,
+    });
+
+    const first = script.open(1);
+    const second = script.open(2);
+
+    await expect(first.result).rejects.toThrow('changedOnDisk');
+    await vi.waitFor(() => expect(show).toHaveBeenCalled());
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(await isSettled(second.result)).toBe(false);
+    expect(await fake.userConfig.read()).toMatchObject({
+      settings: { layer: {} },
+      keymap: { layer: {} },
+    });
+  });
 });
