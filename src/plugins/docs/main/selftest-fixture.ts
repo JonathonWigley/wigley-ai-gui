@@ -156,6 +156,7 @@ function entry(
 ): IndexEntry {
   return {
     id: fields.path,
+    owner: 'mine',
     repo: null,
     root: null,
     plugin: null,
@@ -280,6 +281,7 @@ function indexDocument(
     {
       folder: fixture.home,
       sessionId: null,
+      loadedPlugins: {},
       states: {
         [fixture.claudeMd]: state(
           { state: 'launch', reason: 'user CLAUDE.md' },
@@ -297,6 +299,7 @@ function indexDocument(
     {
       folder: fixture.repo,
       sessionId: null,
+      loadedPlugins: {},
       states: {
         [fixture.repoAgentsMd]: state(
           { state: 'launch', reason: 'AGENTS.md in the folder' },
@@ -306,7 +309,7 @@ function indexDocument(
     },
   ];
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: '2026-10-19T00:00:00Z',
     entries,
     contexts,
@@ -330,6 +333,7 @@ function sessionDocument(
       {
         folder: fixture.repo,
         sessionId: 'selftest-session',
+        loadedPlugins: {},
         states: {
           [fixture.claudeMd]: state(inTranscript),
           [fixture.repoAgentsMd]: state(inTranscript),
@@ -362,8 +366,8 @@ def built_index():
     for name in sorted(os.listdir(rules)):
         path = os.path.join(rules, name)
         if name.endswith(".md") and path not in known:
-            doc["entries"].append({"id": path, "kind": "rule", "source": "global", "repo": None,
-                "root": None, "plugin": None, "path": path, "line": None, "title": name,
+            doc["entries"].append({"id": path, "kind": "rule", "source": "global", "owner": "mine",
+                "repo": None, "root": None, "plugin": None, "path": path, "line": None, "title": name,
                 "meta": {"paths": []}, "walked": []})
     doc["entries"].sort(key=lambda entry: entry["id"])
     return json.dumps(doc, indent=2)

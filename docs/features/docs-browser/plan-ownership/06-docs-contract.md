@@ -1,6 +1,6 @@
 # 06 — Docs contract and index parse, schema 3
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 07
 Plan: [plan.md](plan.md)

@@ -20,6 +20,7 @@ function entry(fields: Partial<IndexEntry> & Pick<IndexEntry, 'path'>) {
     id: fields.path,
     kind: 'instructions',
     source: 'repo',
+    owner: 'mine',
     repo: 'r',
     root: ROOT,
     plugin: null,

@@ -1,14 +1,17 @@
 import { errorText } from '../../shared/error-text';
 import type {
   DocKind,
+  DocOwner,
   DocSource,
   IndexContext,
   IndexDocument,
   IndexEntry,
+  IndexHarness,
+  InstalledCopy,
 } from './contract';
 import { isJsonObject, isStringArray } from '../../shared/json';
 
-export const INDEX_SCHEMA_VERSION = 2;
+export const INDEX_SCHEMA_VERSION = 3;
 
 // `model.py`'s KINDS order; the tree groups kinds in this order.
 export const DOC_KINDS: readonly DocKind[] = [
@@ -17,6 +20,7 @@ export const DOC_KINDS: readonly DocKind[] = [
   'learning',
   'rule',
   'skill',
+  'skill-file',
   'subagent',
   'command',
   'prompt',
@@ -29,6 +33,10 @@ export const DOC_KINDS: readonly DocKind[] = [
   'feature-doc',
   'followup',
 ];
+
+const DOC_OWNERS: readonly DocOwner[] = ['mine', 'third-party'];
+
+const INDEX_HARNESSES: readonly IndexHarness[] = ['claude', 'codex'];
 
 const DOC_SOURCES: readonly DocSource[] = [
   'global',
@@ -101,6 +109,36 @@ export function metaString(entry: IndexEntry, key: string): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+// The installs merged into a marketplace clone's plugin file, in install
+// order; null when the entry is no such file. An element of the wrong shape
+// is dropped.
+export function installedCopies(entry: IndexEntry): InstalledCopy[] | null {
+  const { installed } = entry.meta;
+  if (installed === undefined) {
+    return null;
+  }
+  if (!Array.isArray(installed)) {
+    return [];
+  }
+  const copies: InstalledCopy[] = [];
+  for (const element of installed) {
+    if (isInstalledCopy(element)) {
+      const { harness, version, path } = element;
+      copies.push({ harness, version, path });
+    }
+  }
+  return copies;
+}
+
+function isInstalledCopy(value: unknown): value is InstalledCopy {
+  return (
+    isJsonObject(value) &&
+    (INDEX_HARNESSES as readonly unknown[]).includes(value.harness) &&
+    typeof value.version === 'string' &&
+    typeof value.path === 'string'
+  );
+}
+
 function failed(message: string): ParsedIndex {
   return { ok: false, message };
 }
@@ -119,6 +157,7 @@ function malformedEntryField(entry: unknown): string | null {
     ['id', typeof entry.id === 'string'],
     ['kind', typeof entry.kind === 'string'],
     ['source', typeof source === 'string'],
+    ['owner', (DOC_OWNERS as readonly unknown[]).includes(entry.owner)],
     ['repo', fieldValid(entry.repo, ownedByRepo)],
     ['root', fieldValid(entry.root, ownedByRepo || ownedByPlugin)],
     ['plugin', fieldValid(entry.plugin, ownedByPlugin)],
@@ -148,7 +187,16 @@ function malformedContextField(context: unknown): string | null {
       'sessionId',
       context.sessionId === null || typeof context.sessionId === 'string',
     ],
+    ['loadedPlugins', isStringRecord(context.loadedPlugins)],
     ['states', isJsonObject(context.states)],
   ];
   return checks.find(([, valid]) => !valid)?.[0] ?? null;
+}
+
+// Whether `value` is an object whose every value is a string.
+function isStringRecord(value: unknown): boolean {
+  return (
+    isJsonObject(value) &&
+    Object.values(value).every((item) => typeof item === 'string')
+  );
 }

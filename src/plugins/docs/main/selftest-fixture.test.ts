@@ -96,6 +96,28 @@ describe('writeDocsFixture', () => {
     expect(parsed.ok || parsed.message).toBe(true);
   });
 
+  it('GIVEN the fixture WHEN the index fixture is read back THEN each entry has an owner and each context empty loadedPlugins', async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths, { loadStates: true });
+
+    const index = await readIndex(files);
+    for (const entry of index.entries) {
+      expect(entry.owner).toBe('mine');
+    }
+    for (const context of index.contexts) {
+      expect(context.loadedPlugins).toEqual({});
+    }
+  });
+
+  it('GIVEN the fixture WHEN the stand-in script is read back THEN a new rule entry is owned mine', async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths, { loadStates: false });
+
+    expect(await files.read(STAND_IN_SCRIPT)).toContain('"owner": "mine"');
+  });
+
   it('GIVEN loadStates on then off WHEN the files are listed THEN no load-state doc remains on disk or in the index', async () => {
     const files = await homeFiles();
     await writeDocsFixture(files, HOME, posixPaths, { loadStates: true });

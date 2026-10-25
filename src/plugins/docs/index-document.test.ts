@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import type { IndexEntry } from './contract';
-import { metaString, parseIndexDocument } from './index-document';
+import {
+  DOC_KINDS,
+  installedCopies,
+  metaString,
+  parseIndexDocument,
+} from './index-document';
 
 function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
   return {
     id: overrides.path,
     kind: 'rule',
     source: 'global',
+    owner: 'mine',
     repo: null,
     root: null,
     plugin: null,
@@ -21,7 +27,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
 
 function documentText(fields: Record<string, unknown>): string {
   return JSON.stringify({
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: '2026-10-19T14:02:11Z',
     entries: [],
     contexts: [],
@@ -37,6 +43,7 @@ describe('parseIndexDocument', () => {
         {
           folder: '/Users/u',
           sessionId: null,
+          loadedPlugins: {},
           states: { '/x': { claude: { state: 'launch', reason: 'r' } } },
         },
       ],
@@ -75,7 +82,14 @@ describe('parseIndexDocument', () => {
   it('parse_Schema1_Unsupported', () => {
     expect(parseIndexDocument(documentText({ schemaVersion: 1 }))).toEqual({
       ok: false,
-      message: 'Unsupported docs index schema 1; this app reads 2',
+      message: 'Unsupported docs index schema 1; this app reads 3',
+    });
+  });
+
+  it('parse_Schema2_Unsupported', () => {
+    expect(parseIndexDocument(documentText({ schemaVersion: 2 }))).toEqual({
+      ok: false,
+      message: 'Unsupported docs index schema 2; this app reads 3',
     });
   });
 
@@ -138,6 +152,37 @@ describe('parseIndexDocument', () => {
     });
   });
 
+  it('parse_MissingOwner_NamesOwner', () => {
+    const { owner: _owner, ...withoutOwner } = entry({ path: '/a' });
+    const text = documentText({ entries: [withoutOwner] });
+
+    expect(parseIndexDocument(text)).toEqual({
+      ok: false,
+      message: 'Docs index entry 0 is malformed: owner',
+    });
+  });
+
+  it('parse_UnknownOwner_NamesOwner', () => {
+    const text = documentText({
+      entries: [{ ...entry({ path: '/a' }), owner: 'theirs' }],
+    });
+
+    expect(parseIndexDocument(text)).toEqual({
+      ok: false,
+      message: 'Docs index entry 0 is malformed: owner',
+    });
+  });
+
+  it('parse_ThirdPartyOwner_Loads', () => {
+    const text = documentText({
+      entries: [entry({ path: '/a', owner: 'third-party' })],
+    });
+
+    const parsed = parseIndexDocument(text);
+
+    expect(parsed.ok && parsed.document.entries[0].owner).toBe('third-party');
+  });
+
   it('parse_RepoEntryWithoutRoot_NamesRoot', () => {
     const text = documentText({
       entries: [entry({ path: '/a', source: 'repo', repo: 'r', root: null })],
@@ -161,12 +206,110 @@ describe('parseIndexDocument', () => {
   });
 
   it('parse_ContextWithoutFolder_NamesFolder', () => {
-    const text = documentText({ contexts: [{ sessionId: null, states: {} }] });
+    const text = documentText({
+      contexts: [{ sessionId: null, loadedPlugins: {}, states: {} }],
+    });
 
     expect(parseIndexDocument(text)).toEqual({
       ok: false,
       message: 'Docs index context 0 is malformed: folder',
     });
+  });
+
+  it('parse_ContextWithoutLoadedPlugins_NamesLoadedPlugins', () => {
+    const text = documentText({
+      contexts: [{ folder: '/u', sessionId: null, states: {} }],
+    });
+
+    expect(parseIndexDocument(text)).toEqual({
+      ok: false,
+      message: 'Docs index context 0 is malformed: loadedPlugins',
+    });
+  });
+
+  it('parse_LoadedPluginsNotStrings_NamesLoadedPlugins', () => {
+    const text = documentText({
+      contexts: [
+        {
+          folder: '/u',
+          sessionId: null,
+          loadedPlugins: { 'w@m': 3 },
+          states: {},
+        },
+      ],
+    });
+
+    expect(parseIndexDocument(text)).toEqual({
+      ok: false,
+      message: 'Docs index context 0 is malformed: loadedPlugins',
+    });
+  });
+
+  it('parse_LoadedPlugins_Kept', () => {
+    const loadedPlugins = { 'wigley@wigley-ai-marketplace': '1.9.1' };
+    const text = documentText({
+      contexts: [{ folder: '/u', sessionId: 's', loadedPlugins, states: {} }],
+    });
+
+    const parsed = parseIndexDocument(text);
+
+    expect(parsed.ok && parsed.document.contexts[0].loadedPlugins).toEqual(
+      loadedPlugins,
+    );
+  });
+});
+
+describe('DOC_KINDS', () => {
+  it('docKinds_SkillFileAfterSkill', () => {
+    expect(DOC_KINDS.indexOf('skill-file')).toBe(
+      DOC_KINDS.indexOf('skill') + 1,
+    );
+  });
+});
+
+describe('installedCopies', () => {
+  it('installedCopies_NoInstalled_Null', () => {
+    expect(installedCopies(entry({ path: '/a', meta: {} }))).toBeNull();
+  });
+
+  it('installedCopies_Empty_Empty', () => {
+    const subject = entry({ path: '/a', meta: { installed: [] } });
+
+    expect(installedCopies(subject)).toEqual([]);
+  });
+
+  it('installedCopies_NotAList_Empty', () => {
+    const subject = entry({ path: '/a', meta: { installed: 'x' } });
+
+    expect(installedCopies(subject)).toEqual([]);
+  });
+
+  it('installedCopies_Copies_InOrder', () => {
+    const installed = [
+      { harness: 'claude', version: '1.9.1', path: '/c/a.md' },
+      { harness: 'codex', version: '0.17.1', path: '/x/a.md' },
+    ];
+
+    const copies = installedCopies(entry({ path: '/a', meta: { installed } }));
+
+    expect(copies).toEqual(installed);
+  });
+
+  it('installedCopies_WrongShape_Dropped', () => {
+    const installed = [
+      { harness: 'vim', version: '1', path: '/p' },
+      { harness: 'claude', version: 2, path: '/p' },
+      'x',
+      null,
+      { harness: 'codex', version: '1' },
+      { harness: 'claude', version: '1.0.0', path: '/ok' },
+    ];
+
+    const copies = installedCopies(entry({ path: '/a', meta: { installed } }));
+
+    expect(copies).toEqual([
+      { harness: 'claude', version: '1.0.0', path: '/ok' },
+    ]);
   });
 });
 

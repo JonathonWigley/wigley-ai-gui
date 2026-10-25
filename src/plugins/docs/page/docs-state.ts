@@ -590,9 +590,9 @@ const INSTRUCTION_NAMES = new Set([
   'AGENTS.override.md',
 ]);
 
-// The entry a new file gets until a build lists it: owned by the deepest
-// `repo` or `features` root holding it (else global), its kind `kind` or,
-// when null, guessed from the path.
+// The entry a new file gets until a build lists it: `mine`, sourced from the
+// deepest `repo` or `features` root holding it (else global), its kind `kind`
+// or, when null, guessed from the path.
 export function provisionalEntry(
   path: string,
   kind: DocKind | null,
@@ -605,6 +605,7 @@ export function provisionalEntry(
     id: path,
     kind: kind ?? guessedKind(path, skill, owner, paths),
     source: owner?.source ?? 'global',
+    owner: 'mine',
     repo: owner?.repo ?? null,
     root: owner?.root ?? null,
     plugin: null,

@@ -175,13 +175,13 @@ Boundary rules: the page reaches git only through `pluginStatus`; no module outs
 Tasks 01–05 land in wigley-ai-marketplace, 06–14 in wigley-ai-gui (each task document names its repo).
 
 ### Wave 1
-- [ ] [Index model, schema 3](01-index-model.md)
-- [ ] [Process timeout](07-process-timeout.md)
+- [x] [Index model, schema 3](01-index-model.md)
+- [x] [Process timeout](07-process-timeout.md)
 
 ### Wave 2
 - [ ] [Index discovery: marketplace clones, merge, owner, skill files](02-index-discovery.md) — after 01
-- [ ] [Index load rules for skill files](03-index-load-rules.md) — after 01
-- [ ] [Session loaded plugins](04-session-loaded-plugins.md) — after 01
+- [x] [Index load rules for skill files](03-index-load-rules.md) — after 01
+- [x] [Session loaded plugins](04-session-loaded-plugins.md) — after 01
 - [ ] [Docs contract and index parse, schema 3](06-docs-contract.md) — after 07 (both edit
   `index-sources.test.ts` and `start.test.ts`)
 
@@ -208,9 +208,15 @@ Tasks 01–05 land in wigley-ai-marketplace, 06–14 in wigley-ai-gui (each task
 Review base: 9d343328c9cc19209b8fe375398e619c8268df71
 
 ### Groups
+- 01 · marketplace 74c824a6 · diff read: every Produces present in model.py; py_compile clean · concerns: full docs-index suite fails on this machine before and after (Windows: symlink privilege WinError 1314 and / separators, 15F/26E at HEAD; WSL: Python 3.8 has no tomllib)
+- 07 · gui d4ad2fae · diff read: timeoutMs and timedOut present in contracts/processes.ts, adapter and fake; tsc clean · concerns: none
+- 03 · marketplace 689b9c5f · diff read: skill-file not-loaded in both rule sets, installed locations judged; py_compile clean · concerns: a disabled installed copy (Codex [[skills.config]], disabled Claude plugin) reports 'no load rule reaches this file' because the clone path is judged first and best_state keeps the first of equal states; the Codex merged-skill test checks the state only; fixes proposed: best_state prefers a specific reason, installed-first locations, or skipping the clone path
+- 04 · marketplace d602e09f · diff read: loaded_plugins filled in read_session and passed to Context; py_compile clean · concerns: cache-path match is case-sensitive (a differently cased Windows realpath misses); a \/-escaped path misses; regex speed on megabyte lines unmeasured
 ### Contract changes
 ### Rulings
 - Two repos, two review bases: wigley-ai-gui 9d343328c9cc19209b8fe375398e619c8268df71 (the Review base line), wigley-ai-marketplace 37925feee7539acde5790672bcf9a3f9eb781a60; peer session ai-dev-9e on the same trees, so every commit is pathspec-scoped and each review range is an explicit commit list — lead
 - Stale precondition refreshed: the installed Claude copy is now wigley 1.10.0 (gitCommitSha 37925fee), not 1.9.1; the plugin.json version is 1.10.0, so task 05 bumps from 1.10.0 — lead
+- Installed's harness error reads 'installed <path>: harness <h> is not one of HARNESSES', matching Entry's checks — no task named it — a wording change only · group 01 · group 01
+- The timeout test uses timeoutMs 3000 (the lead's cap) rather than the Tests line's 500, asserting under 5000 ms; the child stays alive on setTimeout since stdin is 'ignore' — a slower test only · group 07 · group 07
 ### Review rounds
 ### Test gate

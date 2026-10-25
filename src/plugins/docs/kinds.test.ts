@@ -11,6 +11,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     id: overrides.path,
     kind: 'rule',
     source: 'global',
+    owner: 'mine',
     repo: null,
     root: null,
     plugin: null,

@@ -1,6 +1,6 @@
 # 02 — Index discovery: marketplace clones, merge, owner, skill files
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)

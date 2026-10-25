@@ -1,6 +1,6 @@
 # 07 — Process timeout
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -58,3 +58,4 @@ Commit:    one commit for the group, in wigley-ai-gui, committed by path only (p
 
 ## Proof
 
+Commit gui d4ad2fae · proof: diff read: timeoutMs and timedOut present in contracts/processes.ts, adapter and fake; tsc clean · concerns: none

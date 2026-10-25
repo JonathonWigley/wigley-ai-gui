@@ -1,6 +1,6 @@
 # 01 — Index model, schema 3
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -62,3 +62,4 @@ Commit:    one commit for the group, in wigley-ai-marketplace, committed by path
 
 ## Proof
 
+Commit marketplace 74c824a6 · proof: diff read: every Produces present in model.py; py_compile clean · concerns: full docs-index suite fails on this machine before and after (Windows: symlink privilege WinError 1314 and / separators, 15F/26E at HEAD; WSL: Python 3.8 has no tomllib)

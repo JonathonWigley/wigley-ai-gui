@@ -25,6 +25,7 @@ const ENTRY: IndexEntry = {
   id: '/Users/u/.claude/CLAUDE.md',
   kind: 'instructions',
   source: 'global',
+  owner: 'mine',
   repo: null,
   root: null,
   plugin: null,
@@ -37,7 +38,7 @@ const ENTRY: IndexEntry = {
 
 function documentOf(entries: IndexEntry[]): IndexDocument {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: '2026-10-20T00:00:00Z',
     entries,
     contexts: [],
@@ -94,16 +95,16 @@ describe('machine source', () => {
     });
   });
 
-  it('load_SchemaThree_PinnedMessage', async () => {
+  it('load_SchemaFour_PinnedMessage', async () => {
     const test = setUp();
-    await test.files.write(INDEX_FILE, '{"schemaVersion":3}');
+    await test.files.write(INDEX_FILE, '{"schemaVersion":4}');
 
     test.registry.add(test.machine);
 
     const load = await test.registry.load('machine');
 
     expect(load.message).toBe(
-      'Unsupported docs index schema 3; this app reads 2',
+      'Unsupported docs index schema 4; this app reads 3',
     );
     expect(test.registry.loadedEntries()).toEqual([]);
   });

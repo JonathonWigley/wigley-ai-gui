@@ -80,7 +80,7 @@ const PATHS: Record<string, string> = {
 const pathOf = (entryId: string) => PATHS[entryId] ?? '';
 
 function context(folder: string): IndexContext {
-  return { folder, sessionId: null, states: {} };
+  return { folder, sessionId: null, loadedPlugins: {}, states: {} };
 }
 
 describe('visibleRows', () => {
@@ -263,6 +263,7 @@ describe('chips', () => {
     const withStates: IndexContext = {
       folder: '/Users/u',
       sessionId: null,
+      loadedPlugins: {},
       states: { e: { claude: { state: 'launch', reason: 'user CLAUDE.md' } } },
     };
 
@@ -299,7 +300,7 @@ describe('chips', () => {
 describe('contextChoices', () => {
   it('contextChoices_HomeFirstThenByFolder', () => {
     const document: IndexDocument = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       generatedAt: '2026-10-20T00:00:00Z',
       entries: [],
       contexts: [
@@ -363,6 +364,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     id: overrides.path,
     kind: 'reference',
     source: 'global',
+    owner: 'mine',
     repo: null,
     root: null,
     plugin: null,
@@ -379,7 +381,7 @@ function documentOf(
   contexts: IndexContext[] = [],
 ): IndexDocument {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: '2026-10-20T00:00:00Z',
     entries,
     contexts,
@@ -499,6 +501,7 @@ describe('applyChange', () => {
         {
           folder: 'C:\\R',
           sessionId: null,
+          loadedPlugins: {},
           states: { 'C:\\R\\Docs\\a.md': launch },
         },
       ],
@@ -527,7 +530,14 @@ describe('applyChange', () => {
     const launch = { claude: { state: 'launch' as const, reason: 'r' } };
     const before = documentOf(
       [entry({ path: '/r/a.md' })],
-      [{ folder: '/r', sessionId: null, states: { '/r/a.md': launch } }],
+      [
+        {
+          folder: '/r',
+          sessionId: null,
+          loadedPlugins: {},
+          states: { '/r/a.md': launch },
+        },
+      ],
     );
 
     const after = applyChange(
@@ -1050,6 +1060,17 @@ describe('provisionalEntry', () => {
       root: '/Users/u/dev/r/nested',
     }),
   ];
+
+  it('provisionalEntry_NewFile_OwnerMine', () => {
+    const made = provisionalEntry(
+      '/Users/u/dev/r/notes.md',
+      null,
+      repoEntries,
+      posixPaths,
+    );
+
+    expect(made.owner).toBe('mine');
+  });
 
   it('provisionalEntry_InsideRepoRoot_CopiesOwner', () => {
     const made = provisionalEntry(

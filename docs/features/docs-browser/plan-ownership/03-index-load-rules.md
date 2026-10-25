@@ -1,6 +1,6 @@
 # 03 — Index load rules for skill files
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -44,3 +44,4 @@ Commit:    one commit for the group, in wigley-ai-marketplace, committed by path
 
 ## Proof
 
+Commit marketplace 689b9c5f · proof: diff read: skill-file not-loaded in both rule sets, installed locations judged; py_compile clean · concerns: a disabled installed copy (Codex [[skills.config]], disabled Claude plugin) reports 'no load rule reaches this file' because the clone path is judged first and best_state keeps the first of equal states; the Codex merged-skill test checks the state only; fixes proposed: best_state prefers a specific reason, installed-first locations, or skipping the clone path

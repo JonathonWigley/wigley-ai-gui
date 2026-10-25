@@ -1,4 +1,4 @@
-// The docs index document (schema 2), as `docs_index.py` writes it (the
+// The docs index document (schema 3), as `docs_index.py` writes it (the
 // marketplace's `plugins/wigley/scripts/docs-index/README.md` is its schema),
 // and the docs plugin's channel between its main and page parts.
 
@@ -13,6 +13,7 @@ export type DocKind =
   | 'learning'
   | 'rule'
   | 'skill'
+  | 'skill-file'
   | 'subagent'
   | 'command'
   | 'prompt'
@@ -26,6 +27,9 @@ export type DocKind =
   | 'followup';
 
 export type DocSource = 'global' | 'repo' | 'plugin' | 'features';
+
+// `third-party`: a downloaded copy its next update or sync replaces.
+export type DocOwner = 'mine' | 'third-party';
 
 export type LoadState =
   | 'launch'
@@ -49,6 +53,7 @@ export interface IndexEntry {
   kind: string;
   // A `DocSource`, or a source the app does not know.
   source: string;
+  owner: DocOwner;
   // A string for `repo` and `features` entries.
   repo: string | null;
   // The clone, feature home or plugin install folder; a string for every
@@ -66,15 +71,26 @@ export interface IndexEntry {
   walked: string[];
 }
 
+// One install merged into a marketplace clone's plugin file; `path` is the
+// install's copy of the file.
+export interface InstalledCopy {
+  harness: IndexHarness;
+  version: string;
+  path: string;
+}
+
 export interface IndexContext {
   folder: string;
   sessionId: string | null;
+  // `<plugin>@<marketplace>` → the version the session loaded; `{}` outside a
+  // session.
+  loadedPlugins: Record<string, string>;
   // Entry id → harness → its load state there.
   states: Record<string, Partial<Record<IndexHarness, LoadStateRecord>>>;
 }
 
 export interface IndexDocument {
-  schemaVersion: 2;
+  schemaVersion: 3;
   generatedAt: string;
   entries: IndexEntry[];
   contexts: IndexContext[];
@@ -190,6 +206,28 @@ export interface TrashResult {
   error: string | null;
 }
 
+// One file's git statuses: changed from HEAD, HEAD ahead of its upstream, and
+// each harness whose installed copy differs from the upstream's file.
+export interface FileStatus {
+  uncommitted: boolean;
+  unpushed: boolean;
+  notInstalled: IndexHarness[];
+}
+
+// One marketplace clone's statuses. `files` is keyed by entry id and holds
+// only entries with a status set; `fetchedAt` is the clone's last fetch (ISO),
+// null when never fetched.
+export interface CloneStatus {
+  root: string;
+  fetchedAt: string | null;
+  fetchFailed: boolean;
+  files: Record<string, FileStatus>;
+}
+
+export interface PluginStatusRead {
+  clones: CloneStatus[];
+}
+
 export interface DocChange {
   viewId: string;
   path: string;
@@ -233,6 +271,9 @@ export interface DocsChannel extends ChannelShape {
       key: string,
       harness: IndexHarness,
     ): Promise<{ path: string; line: number } | null>;
+    // The git statuses of the marketplace clones among the source's entries;
+    // `fetch` runs a capped `git fetch` in each clone first.
+    pluginStatus(sourceId: string, fetch: boolean): Promise<PluginStatusRead>;
   };
   messages: {
     docChanged: DocChange;

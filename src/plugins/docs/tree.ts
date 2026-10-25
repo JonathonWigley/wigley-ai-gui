@@ -33,6 +33,7 @@ export const KIND_TITLES: Record<DocKind, string> = {
   learning: 'Learnings',
   rule: 'Rules',
   skill: 'Skills',
+  'skill-file': 'Skill files',
   subagent: 'Subagents',
   command: 'Commands',
   prompt: 'Prompts',

@@ -1,6 +1,6 @@
 # 04 — Session loaded plugins
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -47,3 +47,4 @@ Commit:    one commit for the group, in wigley-ai-marketplace, committed by path
 
 ## Proof
 
+Commit marketplace d602e09f · proof: diff read: loaded_plugins filled in read_session and passed to Context; py_compile clean · concerns: cache-path match is case-sensitive (a differently cased Windows realpath misses); a \/-escaped path misses; regex speed on megabyte lines unmeasured
