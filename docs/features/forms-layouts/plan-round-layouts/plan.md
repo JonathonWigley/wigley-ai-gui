@@ -240,6 +240,8 @@ Review base: 092ace4b241cdae4b0c66ce5933c8a1387c59c61
 ### Review rounds
 - Round 1 · implementation review at c81a58f8 (9 lanes: C1–C6, P-A, P-B, P-C) · Verdict: NEEDS FIXES · 20 findings (9 important, 11 minor) · lead-applied prose fixes 590a7726 · report scratchpad/review-c81a58f8.md
 - Round 1 fixes · triage answered by the user (cap finding entries at 9; header numbered like choices; review-pane scope; retro fallback; contributed-part CSS plus tooltip; nulls read as absent) · app 62edac02 1aff7bd3 f6b2a302 e312f9af 3f165b83 b0354298 098f7633 e05e47e5 73c1fc0b 5e82a640 829fa100 c90ff202 · marketplace c0853b4b cee92a13
+- Re-review 1 · correctness R1+R2 at c90ff202 · all 20 prior findings closed · NEEDS FIXES: 4 (overlapping resets, stale choice-10 docs, retro old partial pick, untested rebuild) · lead-applied 3e6cade9 · fixes f0585bfa 102dd0d7 · report scratchpad/review-c90ff202.md
+- Re-review 2 · correctness at 102dd0d7 · both prior findings closed · 2 minor left (cross-script reset overlap, a repeat; no test for a refused earlier reset) · lead-applied 048f9baa · cycles exhausted, remaining go to the user
 ### Test gate
 - compile: typecheck clean at 2f79e037 and after; log scan: self-test and drive logs hold no unexpected error lines; tests: npm test 2822 passed / 12 skipped, npm run lint clean, npm run selftest 526 checks all passed (screenshots read against DESIGN.md: names one card off, choice groups below the fold, covered by the drive captures), marketplace retro suite 162 OK at f402c1eb
 - after review round 1 fixes at cd605e5b: npm test 2881 passed / 12 skipped, lint clean, typecheck clean, npm run selftest all passed (screenshots read: header pick draws as a numbered choice row, notice captures named right)
