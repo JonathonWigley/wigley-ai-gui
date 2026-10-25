@@ -45,8 +45,8 @@ interface KindRule {
 
 const SLUG_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 // The name of the folder `~/wigley-agents` names, a link or a clone, and the
-// base name of that clone; the index walks its top level, `learning` and
-// `decisions.md`.
+// base name of that clone; the index walks its top level (`decisions.md` as
+// reference, every other file as instructions) and `learning`.
 export const WIGLEY_AGENTS_FOLDER = 'wigley-agents';
 
 const KIND_RULES: Record<CreateKind, KindRule> = {
