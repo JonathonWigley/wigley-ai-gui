@@ -151,25 +151,35 @@ export interface AppInstance {
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [App instance in main](01-app-instance-main.md)
-- [ ] [Packaged app shows Auri](04-packaged-metadata.md)
-- [ ] [install-app command](05-install-app.md)
-- [ ] [Relay starts the installed app](06-relay-installed-app.md) — waits on the peer's `start_app.py` edit
+- [x] [App instance in main](01-app-instance-main.md)
+- [x] [Packaged app shows Auri](04-packaged-metadata.md)
+- [x] [install-app command](05-install-app.md)
+- [x] [Relay starts the installed app](06-relay-installed-app.md) — waits on the peer's `start_app.py` edit
 
 ### Wave 2
 - [ ] [Relay per instance](02-relay-per-instance.md) — after 01
 - [ ] [Window title and Dev tag](03-title-and-dev-tag.md) — after 01
+- [ ] [App icon](09-app-icon.md) — after 04; added mid-run at the user's request
 
 ### Wave 3
-- [ ] [Doc re-read](07-doc-re-read.md) — after 01–06
+- [ ] [Doc re-read](07-doc-re-read.md) — after 01–06, 09
 - [ ] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 590a7726fd2b6b5a85022515b6b2be94ee82a24d
 
 ### Groups
+- 04 · 079e44ae · diff read: both options present, asar kept, name/executableName unset; worker typecheck passed; full compile at step 4 (01 mid-edit in tree) · concerns: @electron/packager 20.3.0 updatePlist overrides extendInfo CFBundleName/CFBundleDisplayName with name/executableName, so the Mac bundle likely still reads wigley-ai-gui; Windows metadata applies
+- 01 · 14d9a780 · diff read: every Produces present (AppInstance, appInstanceOf, MainServices/AppConfig/ConfigStoreDeps.appInstance); typecheck passes; app-instance + config tests pass; lead ran oxfmt --write on the 3 touched test files (tooling-only) · concerns: worker sent no report after one nudge; diff is the record. No other MainServices/AppConfig fakes needed changing (typecheck clean)
+- 05 · ec27018a · diff read: parseInstallArgs, InstallPaths, installPaths, isInstallDue present as planned; 10 steps in order; typecheck passes; install-steps tests pass; own files format-clean · concerns: PowerShell/shortcut/ditto/osascript steps untested until group 08; Windows rename of the install folder right after quit may hit EBUSY from lingering handles (lead)
+- 06 · marketplace 30ab1331 · diff read: installed_app_command replaces npm_start_command as planned; default-folder rule in spawn_installed_app; worker ran forms unittest (only pre-existing AF_UNIX errors) and check_manifests (passed, rides 1.10.0) · concerns: Path equality treats a differently spelled default folder as non-default; start_app docstring's inserted sentence breaks the 'before then' reference and overruns the line width (lead)
 ### Contract changes
 ### Rulings
+- Live run start split into startLiveApp(): setPath userData then requestSingleInstanceLock; self-test path chosen when runMode is not live and driveRunDir is null — self-test is the only such mode (RunMode = live|selfTest|drive) — lead · group 01
+- Group 09 (app icon) added to wave 2 at the user's mid-run request; crop, shape, transparency and stable-only decided in a forms round — user — lead
+- The AGENTS.md oxfmt failure, already at HEAD from the docs-ahead commit e5552191, goes to group 07, which edits that file — lint stays red until then — lead
+- Empty LOCALAPPDATA/APPDATA counts as missing; packaged app checked before quitting the running app; macOS pgrep pattern anchored to the binary path — group 05 · group 05
+- Default-folder rule lives in spawn_installed_app, so the recorded-command fallback shares it; tests patch start_app.ENDPOINT_DIR; launch_app(endpoint, endpoint_dir, env, spawn, installed_app) — group 06 · group 06
 ### Review rounds
 ### Test gate

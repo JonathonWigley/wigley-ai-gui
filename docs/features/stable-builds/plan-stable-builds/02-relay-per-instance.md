@@ -1,6 +1,6 @@
 # 02 — Relay channel and endpoint folder per app instance
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 05 — `npm run install-app` builds a committed ref and installs it
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -77,3 +77,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit ec27018a · proof: diff read: parseInstallArgs, InstallPaths, installPaths, isInstallDue present as planned; 10 steps in order; typecheck passes; install-steps tests pass; own files format-clean · concerns: PowerShell/shortcut/ditto/osascript steps untested until group 08; Windows rename of the install folder right after quit may hit EBUSY from lingering handles (lead)

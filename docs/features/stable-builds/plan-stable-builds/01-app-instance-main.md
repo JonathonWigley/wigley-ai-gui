@@ -1,6 +1,6 @@
 # 01 — App instance chosen in main and handed to plugins and the page
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -64,3 +64,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 14d9a780 · proof: diff read: every Produces present (AppInstance, appInstanceOf, MainServices/AppConfig/ConfigStoreDeps.appInstance); typecheck passes; app-instance + config tests pass; lead ran oxfmt --write on the 3 touched test files (tooling-only) · concerns: worker sent no report after one nudge; diff is the record. No other MainServices/AppConfig fakes needed changing (typecheck clean)

@@ -1,6 +1,6 @@
 # 04 — The packaged app shows Auri in the OS
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -26,3 +26,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 079e44ae · proof: diff read: both options present, asar kept, name/executableName unset; worker typecheck passed; full compile at step 4 (01 mid-edit in tree) · concerns: @electron/packager 20.3.0 updatePlist overrides extendInfo CFBundleName/CFBundleDisplayName with name/executableName, so the Mac bundle likely still reads wigley-ai-gui; Windows metadata applies

@@ -1,6 +1,6 @@
 # 06 — The relay starts the installed app, never `npm start`
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -59,3 +59,4 @@ Commit:    one commit in wigley-ai-marketplace for the group
 
 ## Proof
 
+Commit marketplace 30ab1331 · proof: diff read: installed_app_command replaces npm_start_command as planned; default-folder rule in spawn_installed_app; worker ran forms unittest (only pre-existing AF_UNIX errors) and check_manifests (passed, rides 1.10.0) · concerns: Path equality treats a differently spelled default folder as non-default; start_app docstring's inserted sentence breaks the 'before then' reference and overruns the line width (lead)
