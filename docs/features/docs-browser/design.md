@@ -97,12 +97,14 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - The tree shows the last `index.json` at once; a full `build` (12.7 s, 629 entries, 4 MB measured 2026-10-19) runs
   in the background on launch and on Rescan. After create, rename or delete the tree updates at once and a background
   build fills in load states; until then the changed entry's chips read `pending`.
-- **Tree**: two roots by the entry's `owner` (plan C). **Mine**, expanded: Global, then one node per repo. A repo
-  holds its docs by kind, then one node per plugin of a marketplace clone (its docs by kind, then an
-  **Installed only** node for its installed files the clone lacks), then its feature home, and splits by clone only
-  when it has more than one. **Third-party**, collapsed until the user expands it: Synced skills, then one node per
-  plugin. A skill with files beside its `SKILL.md` is a group: `SKILL.md` first, then its files by path. A kind or source the app does not know still loads: an unknown
-  kind is a group after the known kinds, an unknown source a root node after the repos holding kind groups, each
+- **Tree**: two roots by the entry's `owner` (plan C). **Mine**, expanded with its child nodes: Global, then
+  Plugins (installed-only plugins no clone carries), then one node per repo. A repo
+  holds its docs by kind, then one node per plugin of a marketplace clone (its docs by kind, the install's `plugin`
+  entry among them, then an **Installed only** node for its installed files the clone lacks), then its feature home,
+  and splits by clone only when it has more than one. **Third-party**, collapsed until the user expands it: Synced
+  skills, then one node per plugin. A skill with files beside its `SKILL.md` is a group: `SKILL.md` first, then its
+  files by title (the path below the skill folder). A kind or source the app does not know still loads: an unknown
+  kind is a group after the known kinds, an unknown source a node under Mine after the repos holding kind groups, each
   titled from its id (`my-kind` → `My kind`). An unknown source offers no create place, and only its entries' own
   files are changeable, never the rest of its root. Follow-up items open at their `line`. The filter fuzzy-matches each
   doc's title and path through the `FuzzyMatcher` page service and keeps the tree's order. A filter that matches nothing
@@ -132,10 +134,12 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   link's trash fails after its target went, the target's removal still shows and the failure is toasted.
 - Main writes, renames and deletes only files the index lists, files inside a repo or feature home the index lists,
   and files inside a folder the index walks for global docs: each Claude config folder, `~/.codex`, `~/.agents` and
-  `~/wigley-agents`. Never the home folder itself, and never anything inside a plugin cache.
+  `~/wigley-agents`. Never the home folder itself, and never a third-party entry or anything inside a plugin cache or
+  a config folder's `skills/synced`.
 - **Read-only docs**: a `third-party` entry, and any file inside a plugin cache (an installed-only file), opens
-  read-only with a line saying it is a downloaded copy whose edits are lost on update; `i`, rename and delete refuse
-  it, and so does main's write guard. Create offers no place inside one.
+  read-only with one line: `Downloaded copy — <plugin, or synced skill>. Edits are lost on its next update.` for a
+  third-party entry, `Installed copy — <plugin key>. Edits are lost on its next update.` for an installed-only file;
+  `i`, rename and delete refuse it with that line, and so does main's write guard. Create offers no place inside one.
 - **Hook and plugin entries** show a detail view (event, matcher, command / version, enabled) whose edit key opens
   the settings or config file holding it in the same editor.
 - **Disk changes**: the open file is watched, through a one-level watch (`recursive: false`) on its folder, so a doc
@@ -191,7 +195,7 @@ third-party copies, edit the user's own marketplace skills from the clone, and s
 sessions load.
 
 - **Ownership is the index's** (schema 3, `docs_index.py` README): each entry's `owner` is `mine` or `third-party`.
-  Third-party: a file of an installed plugin whose marketplace has no indexed clone, and a synced skill bucket
+  Third-party: a file of an installed plugin whose marketplace has no indexed clone listing it, and a synced skill bucket
   (`~/.claude/skills/synced/`, Anthropic's skills). Mine: everything else. The app groups, guards and offers create
   places by `owner` alone, and reads no plugin config of its own.
 - **Marketplace clones**: a clone holding `.claude-plugin/marketplace.json` has each listed plugin's files indexed
@@ -200,23 +204,27 @@ sessions load.
   leaves the document, and the clone entry carries its install in `meta.installed` (harness, version, cache path) and
   takes its load states. So the user sees each own file once, at the path the user edits, with how it loads. An
   installed file the clone lacks shows under the plugin's Installed only node, read-only.
-- **Statuses**, per merged file and per harness, each one step of commit → push → update → restart. The app runs
-  `git` through the processes service; the index runs none:
+- **Statuses**, per clone plugin file and per harness, each one step of commit → push → update → restart. The app
+  runs `git` through the processes service; the index runs none. Each shows as a chip on the doc and a mark on its
+  tree row:
 
   ```
-  working file ≠ HEAD                → uncommitted
-  HEAD ≠ origin/<branch>             → unpushed
-  origin/<branch> ≠ installed copy   → not installed for <harness>   (or: no installed copy, a new file)
-  session loaded an older version    → session stale                 (a session's Docs tab only)
+  working file ≠ HEAD                → Uncommitted
+  HEAD ahead of its upstream (@{u})  → Unpushed
+  @{u} ≠ installed copy              → Not installed · <harness>   (or: no installed copy, a new file)
+  session loaded another version     → Session stale               (a session's Docs tab only)
   ```
 
-  "Not installed" compares the installed copy's text with the file at `origin/<branch>` (`git show`), which works for
-  Codex, whose install records no commit. "Session stale" compares the session context's `loadedPlugins` version with
-  the installed one; a session that named no file of the plugin shows none. A file with every status clear shows
-  none. A plugin node and a repo node show the rollup (`3 uncommitted · 12 not installed for Codex`).
-- **Fetch**: when Docs first opens and on Rescan, each clone with merged plugins runs `git fetch` in the background,
+  "Not installed" hashes each installed copy's bytes (and again with CRLF turned to LF) as a git blob and compares it
+  with the file's blob in `git ls-tree @{u}`, which works for Codex, whose install records no commit; it is judged
+  only for a harness the plugin is installed for. A clone branch with no upstream shows Uncommitted alone. "Session
+  stale" compares the session context's `loadedPlugins` version with the Claude installed copy's; a session that
+  named no file of the plugin shows none. A file with every status clear shows none. A plugin, repo or clone node
+  shows the rollup (`3 uncommitted · 12 not installed for Codex`).
+- **Fetch**: when Docs first opens and on Rescan, each clone with plugin files runs `git fetch` in the background,
   capped at 15 s; statuses show at once from the last fetch and refresh after it. A failed or capped fetch shows
-  `origin as of <time>` on the repo node, the time of the clone's last fetch.
+  `origin as of <time>` on the repo node (the clone node in a split repo), the time of the clone's last fetch, or
+  `origin never fetched` when it has none.
 - **Skill folder files**: every file beside a skill's `SKILL.md`, at any depth, is a `skill-file` entry (references,
   templates, scripts the skill tells agents to run), `not-loaded` for both harnesses.
 - The schema change lands in both repos together, with no fallback for schema 2.

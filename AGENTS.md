@@ -87,7 +87,8 @@ src/main/        core main process; main.ts is its composition root
                  project folders and runs `claude auth` sign-in, sign-out and status → the only place the app spawns `claude`
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, rename, trash, folder lists
                  and watching, behind Files
-  processes/     runs a program and returns its exit code and output, behind ProcessRunner
+  processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
+                 ProcessRunner
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import
@@ -109,8 +110,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   forms/         manifest.ts, contract.ts, main/ (round logic, saved rounds, its MCP tools, layouts, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
-                 the indexed folders only, watching the open file), page/ (one docs view per source — tree,
-                 rendered doc, document editor — shown as Docs mode over the machine's index, its tree in the side
+                 the indexed folders only and never to a third-party doc, watching the open file, the git statuses
+                 of marketplace clone plugin files), page/ (one docs view per source — tree under Mine and
+                 Third-party roots by the index's `owner`, rendered doc with its status chips, document editor —
+                 shown as Docs mode over the machine's index, its tree in the side
                  bar, and as a split of tree and doc in each view `addView` hands out, each session's Docs tab
                  among them)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
