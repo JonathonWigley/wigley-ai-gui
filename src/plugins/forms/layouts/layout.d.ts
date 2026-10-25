@@ -155,7 +155,8 @@ export interface Kit extends HeadKit {
   // `div.card-parts`, holding one `div.card-part` (`data-part="<id>"`) per part other plugins added for this card's
   // kind, in the order they were added; returns the `div.card-parts`. Call it once, where the parts go: a card that
   // leaves it out gets the parts appended at the end of its element, after the boxes it left unmounted. A part that
-  // throws is logged and draws nothing. Each part updates after the card's own `update`.
+  // throws is logged and draws nothing. On a question or finding card, each part updates after the card's own `update`;
+  // a notice card's parts never update.
   contributedParts(parent: HTMLElement): HTMLElement;
 }
 export interface AnswerKit extends Kit {

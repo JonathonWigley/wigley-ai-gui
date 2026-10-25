@@ -38,7 +38,7 @@ export interface ItemFormat<Item> {
 export interface AnswerSubject {
   title: string;
   choiceTexts: string[];
-  // 1-based.
+  // 1-based; 0 when no choice is recommended.
   recommend: number;
 }
 

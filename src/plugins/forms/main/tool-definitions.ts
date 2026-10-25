@@ -17,8 +17,8 @@ const ASK_ROUND_DESCRIPTION =
   'header the user picks alone, with its action_reasons entry when you sent ' +
   'one. One pick sets the choice and its action. The recommended choice, or ' +
   "the recommended action's header when it has no choices, is badged; the " +
-  'user takes it with Accept or picks any other entry. A choice never opens with ' +
-  "an action's label. Use 'questions' for any " +
+  'user takes it with Accept or picks any other entry. A choice never opens ' +
+  "with an action's label. Use 'questions' for any " +
   "other open decision. Pass 'notices' for anything already fixed, " +
   'dispatched, decided by you alone, or otherwise settled before this round ' +
   'opened: each one draws as its own card before the findings and ' +
@@ -30,8 +30,9 @@ const ASK_ROUND_DESCRIPTION =
   "user's own layout draws what neither names. A name the folder lacks " +
   'fails the call with the names it holds. For a look no layout has, write ' +
   'a new layout folder, name it in the round, and list each layout file you ' +
-  'wrote or changed in a notice on that round. A round needs at least one question, ' +
-  'finding or notice, and may carry any mix of the three. Re-sending a ' +
+  'wrote or changed in a notice on that round. A round needs at least one ' +
+  'question, finding or notice, and may carry any mix of the three. ' +
+  'Re-sending a ' +
   'round is always safe: the same questions, findings and notices re-attach ' +
   'to the round still open, return the answers of the round just ' +
   "submitted, or open pre-filled with the user's saved answers. When the " +

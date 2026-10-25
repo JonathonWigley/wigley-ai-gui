@@ -270,8 +270,9 @@ function answerResult(
 
 // A finding is answered once its entry holds one of the card's numbered
 // picks (`findingEntries`): a choice with the action it sits under, or the
-// header of an action with no choices, whose `choice` is 0. The recommendation is taken whole when the pick is the
-// recommended choice, or the recommended header, under recommend_action.
+// header of an action with no choices, whose `choice` is 0. The
+// recommendation is taken whole when the pick is the recommended choice, or
+// the recommended header, under recommend_action.
 function findingResult(
   finding: Finding,
   entry: FindingAnswerEntry,

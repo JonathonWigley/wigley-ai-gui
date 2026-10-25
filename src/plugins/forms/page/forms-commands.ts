@@ -105,7 +105,8 @@ export function formsCommandHandlers(
     reviewJump: plain({ type: 'reviewJump' }),
     askCancel: plain({ type: 'askCancel' }),
     dismissConfirm: plain({ type: 'dismissConfirm' }),
-    // A tenth choice is picked by mouse.
+    // Past the ninth, a question's choice or a finding's entry is picked by
+    // mouse.
     choose1: choose(1),
     choose2: choose(2),
     choose3: choose(3),

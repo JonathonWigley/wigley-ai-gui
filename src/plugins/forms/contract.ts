@@ -263,10 +263,9 @@ export type { LayoutEntry, LayoutSet } from '../../contracts/layouts';
 // user types, `finish` on submit or cancel, and `openPreview` from the preview
 // key; main sends each round as it opens, each round that closes, a round the
 // page finished included, and the set of layouts after each change in a
-// layout's folder. A `draft` whose save
-// failed rejects with the reason; a `finish` whose answers main could not take
-// rejects with the reason and leaves the round open; `layout` rejects when the
-// layouts failed to start.
+// layout's folder. A `draft` whose save failed rejects with the reason; a
+// `finish` whose answers main could not take rejects with the reason and
+// leaves the round open; `layout` rejects when the layouts failed to start.
 export interface FormsChannel extends ChannelShape {
   invoke: {
     openRounds(): PresentedRound[];
