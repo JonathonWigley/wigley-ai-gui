@@ -45,12 +45,7 @@ async function main(ref: string): Promise<void> {
   const commit = resolveCommit(ref);
   checkOutBuildWorktree(paths.buildDir, commit);
   installDependenciesWhenDue(paths.buildDir);
-  runStep('npm run package', 'npm', ['run', 'package'], {
-    cwd: paths.buildDir,
-    stdio: 'inherit',
-    // Node refuses to spawn npm's `.cmd` without a shell.
-    shell: IS_WINDOWS,
-  });
+  runNpmStep('npm run package', paths.buildDir);
   if (!existsSync(paths.packagedApp)) {
     throw new Error(`npm run package left no app at ${paths.packagedApp}`);
   }
@@ -110,6 +105,17 @@ function runStep(
   return String(result.stdout ?? '');
 }
 
+// Runs an npm command line through the shell, as one string with no args:
+// Node spawns npm's Windows `.cmd` only through a shell, and warns (DEP0190)
+// when a shell spawn is handed args.
+function runNpmStep(commandLine: string, cwd: string): void {
+  runStep(commandLine, commandLine, [], {
+    cwd,
+    stdio: 'inherit',
+    shell: true,
+  });
+}
+
 function resolveCommit(ref: string): string {
   return runStep(
     `Resolving ${ref}`,
@@ -156,11 +162,7 @@ function installDependenciesWhenDue(buildDir: string): void {
   if (!isDue) {
     return;
   }
-  runStep('npm ci', 'npm', ['ci'], {
-    cwd: buildDir,
-    stdio: 'inherit',
-    shell: IS_WINDOWS,
-  });
+  runNpmStep('npm ci', buildDir);
   writeFileSync(hashFile, lockHash);
 }
 
@@ -175,7 +177,7 @@ function runningStablePids(binary: string): number[] {
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      `Get-Process wigley-ai-gui -ErrorAction SilentlyContinue | Where-Object Path -eq ${powerShellString(binary)} | ForEach-Object { $_.Id }`,
+      `${stableProcessesScript(binary)} | ForEach-Object { $_.Id }`,
     ]);
     return pidsOf(output);
   }
@@ -204,7 +206,7 @@ async function quitStableApp(paths: InstallPaths): Promise<void> {
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      `Get-Process wigley-ai-gui -ErrorAction SilentlyContinue | Where-Object Path -eq ${powerShellString(paths.binary)} | ForEach-Object { try { [void]$_.CloseMainWindow() } catch {} }`,
+      `${stableProcessesScript(paths.binary)} | ForEach-Object { try { [void]$_.CloseMainWindow() } catch {} }`,
     ]);
   } else {
     runStep('Quitting the stable app', 'osascript', [
@@ -346,6 +348,14 @@ function startStableApp(paths: InstallPaths): void {
     process.exitCode = 1;
   });
   child.unref();
+}
+
+// PowerShell that pipes out the processes running `binary`, none when no
+// wigley-ai-gui process runs. Get-Process throws ProcessCommandException when
+// the name matches nothing, which reads as none; under `Stop` any other error
+// ends the script with exit code 1.
+function stableProcessesScript(binary: string): string {
+  return `$ErrorActionPreference = 'Stop'; $found = try { Get-Process -Name wigley-ai-gui } catch [Microsoft.PowerShell.Commands.ProcessCommandException] { @() }; $found | Where-Object Path -eq ${powerShellString(binary)}`;
 }
 
 // A PowerShell single-quoted string, which expands nothing; `'` doubles.
