@@ -67,6 +67,7 @@ function openRelay(api: SessionsApi, list: SessionList) {
     process.platform,
     api.services.homeDir,
     os.userInfo().username,
+    api.services.appInstance.id,
   );
   const relay = startRelayServer({
     channel,
@@ -80,7 +81,12 @@ function openRelay(api: SessionsApi, list: SessionList) {
     launch:
       api.services.runMode === 'drive'
         ? endedDriveRunLaunch(process.platform, api.services.homeDir)
-        : launchCommand(process.env, process.execPath, process.cwd()),
+        : launchCommand(
+            process.env,
+            process.execPath,
+            process.cwd(),
+            api.services.appInstance.isDev,
+          ),
   };
   return { relay, endpoint };
 }
@@ -191,7 +197,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
     const endpointDir = path.join(
       api.services.homeDir,
       '.agents',
-      'wigley-ai-gui',
+      api.services.appInstance.id,
     );
     const exports: SessionsMainExports = {
       contributeTools(tools, start) {

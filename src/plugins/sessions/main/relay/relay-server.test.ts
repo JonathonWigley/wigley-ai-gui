@@ -68,7 +68,7 @@ function echoServe() {
 // The production channel over a test folder: a named pipe on Windows, a
 // socket file elsewhere.
 function testChannel(dir: string): string {
-  return channelPath(process.platform, dir, 'selftest', dir);
+  return channelPath(process.platform, dir, 'selftest', 'wigley-ai-gui', dir);
 }
 
 const channelIsPipe = testChannel(tmpdir()).startsWith('\\\\.\\pipe\\');

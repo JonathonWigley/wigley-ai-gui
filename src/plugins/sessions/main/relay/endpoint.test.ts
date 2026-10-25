@@ -40,24 +40,42 @@ function first8HexOfSha256(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 8);
 }
 
+const STABLE = 'wigley-ai-gui';
+const DEV = 'wigley-ai-gui-dev';
+
 describe('channelPath', () => {
-  it('names the Windows pipe by user and home', () => {
-    expect(channelPath('win32', 'C:\\Users\\u', 'u')).toBe(
+  it('names the Windows pipe by instance, user and home', () => {
+    expect(channelPath('win32', 'C:\\Users\\u', 'u', STABLE)).toBe(
       `\\\\.\\pipe\\wigley-ai-gui-u-${first8HexOfSha256('C:\\Users\\u')}`,
     );
   });
 
-  it('names a different Windows pipe for a different home', () => {
-    expect(channelPath('win32', 'C:\\Users\\u', 'u')).not.toBe(
-      channelPath('win32', 'D:\\drive\\home', 'u'),
+  it('names the Windows pipe after the dev instance', () => {
+    expect(channelPath('win32', 'C:\\Users\\u', 'u', DEV)).toBe(
+      `\\\\.\\pipe\\wigley-ai-gui-dev-u-${first8HexOfSha256('C:\\Users\\u')}`,
     );
   });
 
-  it('puts the socket in the agents folder on macOS', () => {
-    expect(channelPath('darwin', '/Users/u', 'u')).toBe(
+  it('names a different Windows pipe for a different home', () => {
+    expect(channelPath('win32', 'C:\\Users\\u', 'u', STABLE)).not.toBe(
+      channelPath('win32', 'D:\\drive\\home', 'u', STABLE),
+    );
+  });
+
+  it('puts the socket in the instance folder of the agents folder on macOS', () => {
+    expect(channelPath('darwin', '/Users/u', 'u', STABLE)).toBe(
       '/Users/u/.agents/wigley-ai-gui/app.sock',
     );
   });
+
+  it.each(['win32', 'darwin'] as const)(
+    'never gives the stable and dev instances one channel on %s',
+    (platform) => {
+      expect(channelPath(platform, '/Users/u', 'u', STABLE)).not.toBe(
+        channelPath(platform, '/Users/u', 'u', DEV),
+      );
+    },
+  );
 
   // 82 bytes of home and 31 of `/.agents/wigley-ai-gui/app.sock`: 113.
   const longHome = `/Users/u/${'d'.repeat(73)}`;
@@ -67,7 +85,7 @@ describe('channelPath', () => {
   it('falls back to a per-home socket in the temp folder when it fits in 103 bytes', () => {
     const tempDir = `/T${'t'.repeat(103 - 30 - 2)}`;
 
-    expect(channelPath('darwin', longHome, 'u', tempDir)).toBe(
+    expect(channelPath('darwin', longHome, 'u', STABLE, tempDir)).toBe(
       `${tempDir}/${socketName}`,
     );
     expect(Buffer.byteLength(`${tempDir}/${socketName}`)).toBe(103);
@@ -82,7 +100,13 @@ describe('channelPath', () => {
       folders.push(privateDir);
       const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
 
-      const channel = channelPath('darwin', longHome, username, tempDir);
+      const channel = channelPath(
+        'darwin',
+        longHome,
+        username,
+        STABLE,
+        tempDir,
+      );
 
       expect(channel).toBe(`${privateDir}/${first8HexOfSha256(longHome)}.sock`);
       expect(statSync(privateDir).mode & 0o777).toBe(0o700);
@@ -99,24 +123,31 @@ describe('channelPath', () => {
       mkdirSync(privateDir, { mode: 0o755 });
       const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
 
-      expect(() => channelPath('darwin', longHome, username, tempDir)).toThrow(
-        privateDir,
-      );
+      expect(() =>
+        channelPath('darwin', longHome, username, STABLE, tempDir),
+      ).toThrow(privateDir);
     },
   );
 });
 
 describe('launchCommand', () => {
-  it('runs npm start from the folder npm started in', () => {
-    const env = {
-      npm_node_execpath: '/opt/node/bin/node',
-      npm_execpath: '/opt/node/lib/npm-cli.js',
-      INIT_CWD: '/work/wigley-ai-gui',
-    };
+  const npmEnv = {
+    npm_node_execpath: '/opt/node/bin/node',
+    npm_execpath: '/opt/node/lib/npm-cli.js',
+    INIT_CWD: '/work/wigley-ai-gui',
+  };
 
-    expect(launchCommand(env, '/opt/electron', '/elsewhere')).toEqual({
+  it('runs npm start from the folder npm started in for the dev app', () => {
+    expect(launchCommand(npmEnv, '/opt/electron', '/elsewhere', true)).toEqual({
       command: ['/opt/node/bin/node', '/opt/node/lib/npm-cli.js', 'start'],
       cwd: '/work/wigley-ai-gui',
+    });
+  });
+
+  it('runs the executable itself for a stable app npm started', () => {
+    expect(launchCommand(npmEnv, '/opt/electron', '/work/app', false)).toEqual({
+      command: ['/opt/electron'],
+      cwd: '/work/app',
     });
   });
 
@@ -126,13 +157,13 @@ describe('launchCommand', () => {
       npm_execpath: '/opt/node/lib/npm-cli.js',
     };
 
-    expect(launchCommand(env, '/opt/electron', '/work/app').cwd).toBe(
+    expect(launchCommand(env, '/opt/electron', '/work/app', true).cwd).toBe(
       '/work/app',
     );
   });
 
   it('runs the executable itself outside npm', () => {
-    expect(launchCommand({}, '/opt/electron', '/work/app')).toEqual({
+    expect(launchCommand({}, '/opt/electron', '/work/app', true)).toEqual({
       command: ['/opt/electron'],
       cwd: '/work/app',
     });

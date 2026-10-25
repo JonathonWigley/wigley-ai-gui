@@ -51,7 +51,7 @@ export interface RelayHello {
 // The app's one-line answer to a hello; MCP follows only after `ok: true`.
 export type RelayHelloReply = { ok: true } | { ok: false; error: string };
 
-// `~/.agents/wigley-ai-gui/endpoint.json`.
+// `~/.agents/<instance id>/endpoint.json`.
 export interface RelayEndpoint {
   protocol: number;
   // A Unix socket path (macOS) or a named pipe path (Windows).

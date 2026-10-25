@@ -7,23 +7,25 @@ import type { RelayEndpoint, ToolDefinition } from '../../contract';
 // macOS's `sun_path` holds 104 bytes, the NUL included.
 const MAX_SOCKET_PATH_BYTES = 103;
 
-// Where the app listens for relays: a named pipe per user and home on
-// Windows; elsewhere a Unix socket in the agents folder, or, when the agents
-// folder's path is too long for one, a socket named per user and home in
-// `tempDir` (per user on macOS), or in a folder of `/tmp` only the user can
-// enter when `tempDir` is too long as well. Creates that `/tmp` folder, and
+// Where the app instance `instanceId` listens for relays: a named pipe per
+// instance, user and home on Windows; elsewhere a Unix socket in the
+// instance's agents folder, or, when that folder's path is too long for one, a
+// socket named per instance, user and home in `tempDir` (per user on macOS),
+// or in a folder of `/tmp` only the user can enter when `tempDir` is too long
+// as well. Creates that `/tmp` folder, and
 // throws when it exists but another user owns it or others can enter it.
 export function channelPath(
   platform: NodeJS.Platform,
   home: string,
   username: string,
+  instanceId: string,
   tempDir: string = os.tmpdir(),
 ): string {
-  const perHome = `wigley-ai-gui-${username}-${homeHash(home)}`;
+  const perHome = `${instanceId}-${username}-${homeHash(home)}`;
   if (platform === 'win32') {
     return `\\\\.\\pipe\\${perHome}`;
   }
-  const socket = path.posix.join(home, '.agents', 'wigley-ai-gui', 'app.sock');
+  const socket = path.posix.join(home, '.agents', instanceId, 'app.sock');
   if (fitsSocketPath(socket)) {
     return socket;
   }
@@ -31,7 +33,7 @@ export function channelPath(
   if (fitsSocketPath(tempSocket)) {
     return tempSocket;
   }
-  const privateDir = `/tmp/wigley-ai-gui-${username}`;
+  const privateDir = `/tmp/${instanceId}-${username}`;
   makePrivateFolder(privateDir);
   return path.posix.join(privateDir, `${homeHash(home)}.sock`);
 }
@@ -68,15 +70,17 @@ function homeHash(home: string): string {
   return createHash('sha256').update(home).digest('hex').slice(0, 8);
 }
 
-// How a relay starts the app: `npm start` from the repo when npm started this
-// run, else the running executable.
+// How a relay starts the app: `npm start` from the repo when this is the dev
+// app and npm started this run, else the running executable, so a stable app
+// started from under `npm run` still records its own executable.
 export function launchCommand(
   env: NodeJS.ProcessEnv,
   execPath: string,
   cwd: string,
+  isDev: boolean,
 ): RelayEndpoint['launch'] {
   const { npm_node_execpath: node, npm_execpath: npm } = env;
-  if (node && npm) {
+  if (isDev && node && npm) {
     return { command: [node, npm, 'start'], cwd: env.INIT_CWD ?? cwd };
   }
   return { command: [execPath], cwd };
