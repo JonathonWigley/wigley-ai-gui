@@ -200,8 +200,8 @@ function resultProblems(read: UserConfigRead): string[] {
 // expects both layers empty then. Each open empties the files only once the
 // previous open's emptying has settled, so its read sees that open's write.
 // It rejects when this open's emptying fails. An open superseded by a later
-// one before its files are emptied shows nothing, and its result never
-// settles.
+// one before its files are emptied shows nothing, and its result settles only
+// by rejecting, when its own emptying fails.
 export function settingsSelfTestScript(
   deps: SettingsSelfTestDeps,
 ): SelfTestScript {

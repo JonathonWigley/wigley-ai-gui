@@ -1060,7 +1060,8 @@ function payloadProblems(payload: AnswersPayload): string[] {
 // refusal. Each open empties the files only once the previous open's emptying
 // has settled, so its read sees that open's write. The result rejects when
 // this open's emptying fails. An open superseded by a later one before its
-// files are emptied connects nothing, and its result never settles.
+// files are emptied connects nothing, and its result settles only by
+// rejecting, when its own emptying fails.
 export function formsSelfTestScript(
   sessions: Pick<SessionsMainExports, 'connect'>,
   userConfig: Pick<UserConfig, 'read' | 'writeSettings' | 'writeKeymap'>,
