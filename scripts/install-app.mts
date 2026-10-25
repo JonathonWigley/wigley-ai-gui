@@ -1,6 +1,7 @@
 // `npm run install-app -- [--ref <ref>]`: packages a committed ref in a
-// build-only worktree beside the repo and installs it as the stable app,
-// quitting the running stable app first and starting it again after.
+// build-only worktree beside the repo and installs it as the stable app: it
+// copies the app beside the install while the stable app still runs, then
+// quits that app, swaps the copy in, and starts the app again.
 // `scripts/install-steps.mts` holds the paths and the argument parsing.
 import { type SpawnSyncOptions, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -48,12 +49,19 @@ async function main(ref: string): Promise<void> {
   if (!existsSync(packagedApp)) {
     throw new Error(`npm run package left no app at ${packagedApp}`);
   }
+  try {
+    stageInstall(packagedApp, paths.installDir);
+  } catch (error) {
+    throw new Error(
+      `Staging the app beside ${paths.installDir} failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   const wasRunning = runningStablePids(paths.binary).length > 0;
   if (wasRunning) {
     await quitStableApp(paths);
   }
   try {
-    replaceInstall(packagedApp, paths.installDir);
+    swapInStagedInstall(paths.installDir);
   } catch (error) {
     throw new Error(
       `Replacing ${paths.installDir} failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -188,12 +196,13 @@ function runningStablePids(binary: string): number[] {
 // Never force-kills: the app holds the user's open rounds.
 async function quitStableApp(paths: InstallPaths): Promise<void> {
   if (IS_WINDOWS) {
-    // Only the main process has a window; closing it quits the app.
+    // Only the main process has a window; closing it quits the app. A process
+    // that exits before its close call throws there, so the call is caught.
     runStep('Quitting the stable app', 'powershell.exe', [
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      `Get-Process wigley-ai-gui -ErrorAction SilentlyContinue | Where-Object Path -eq ${powerShellString(paths.binary)} | ForEach-Object { [void]$_.CloseMainWindow() }`,
+      `Get-Process wigley-ai-gui -ErrorAction SilentlyContinue | Where-Object Path -eq ${powerShellString(paths.binary)} | ForEach-Object { try { [void]$_.CloseMainWindow() } catch {} }`,
     ]);
   } else {
     runStep('Quitting the stable app', 'osascript', [
@@ -212,13 +221,13 @@ async function quitStableApp(paths: InstallPaths): Promise<void> {
   }
 }
 
-// Copies the packaged app beside the install as `.new`, then swaps it in for
-// the old one. A `.new` or `.old` left by an earlier failed run goes first.
-function replaceInstall(packagedApp: string, installDir: string): void {
+// Copies the packaged app beside the install as `<installDir>.new`, leaving
+// the installed app untouched, so it may still be running. A `.new` or `.old`
+// left by an earlier failed run is deleted first.
+function stageInstall(packagedApp: string, installDir: string): void {
   const newDir = `${installDir}.new`;
-  const oldDir = `${installDir}.old`;
   rmSync(newDir, { recursive: true, force: true });
-  rmSync(oldDir, { recursive: true, force: true });
+  rmSync(`${installDir}.old`, { recursive: true, force: true });
   mkdirSync(path.dirname(installDir), { recursive: true });
   if (IS_WINDOWS) {
     cpSync(packagedApp, newDir, { recursive: true });
@@ -226,6 +235,14 @@ function replaceInstall(packagedApp: string, installDir: string): void {
     // ditto keeps the bundle's symlinks.
     runStep('Copying the app', 'ditto', [packagedApp, newDir]);
   }
+}
+
+// Swaps the app `stageInstall` left at `<installDir>.new` in for the installed
+// one, which must no longer be running: renames the installed app to `.old`,
+// the staged one into its place, then deletes `.old`.
+function swapInStagedInstall(installDir: string): void {
+  const newDir = `${installDir}.new`;
+  const oldDir = `${installDir}.old`;
   if (existsSync(installDir)) {
     renameSync(installDir, oldDir);
   }
@@ -249,12 +266,19 @@ function writeShortcut(paths: InstallPaths): void {
   ]);
 }
 
+// Starts the installed app detached from this script, in the install folder
+// as the Start menu shortcut does; macOS's `open` hands the launch to
+// LaunchServices, which sets the app's working folder itself.
 function startStableApp(paths: InstallPaths): void {
   if (!IS_WINDOWS) {
     runStep('Starting the stable app', 'open', [paths.installDir]);
     return;
   }
-  const child = spawn(paths.binary, [], { detached: true, stdio: 'ignore' });
+  const child = spawn(paths.binary, [], {
+    cwd: paths.installDir,
+    detached: true,
+    stdio: 'ignore',
+  });
   // A failed start surfaces on 'error'; the install is done either way.
   child.once('error', (error) =>
     console.error(`Starting the stable app failed: ${error.message}`),

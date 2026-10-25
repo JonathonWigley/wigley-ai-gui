@@ -242,6 +242,11 @@ describe('loadConfigStore', () => {
     expect(config.problems).toEqual([]);
     expect(config.platform).toBe('windows');
     expect(config.homeDir).toBe(HOME);
+    expect(config.appInstance).toEqual({
+      id: 'wigley-ai-gui-dev',
+      displayName: 'Auri Dev',
+      isDev: true,
+    });
   });
 
   it('deep-merges settings.json over the defaults', async () => {

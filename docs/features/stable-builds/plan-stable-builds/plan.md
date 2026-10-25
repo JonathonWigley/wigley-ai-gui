@@ -190,5 +190,6 @@ Review base: 590a7726fd2b6b5a85022515b6b2be94ee82a24d
 - assets/ stays outside the asar (Forge Vite plugin packs only /.vite) — group 09 · group 09
 - Group 07's Q1 concern (dev Chat-tab sessions reached the stable app) fixed before review as a determined bug vs the user's decision: gui 5148782a endpointEnv for live and drive harness + AGENTS.md; marketplace 133f2011 README relay section + start_app docstring; rides plugin 1.10.0 (check_manifests passed) — lead
 ### Review rounds
+- R1 implementation review · gui 36433a6b, marketplace 133f2011 · NEEDS FIXES (3 important, 7 minor; 6 lead-applied in d22dde1d/dc137ea2)
 ### Test gate
 - app-instance.test (added), endpoint.test + relay-server.test (channelPath/launchCommand changed), install-steps.test (added), config-store/user-config/selftest-config tests (fakes edited), marketplace tests.test_start_app (rewritten); tsc clean · vitest 7 files 135 passed 3 skipped (POSIX-only); unittest 23 OK 3 skipped · pass
