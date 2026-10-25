@@ -96,8 +96,8 @@ const KIND_RULES: Record<CreateKind, KindRule> = {
 };
 
 // The places a doc of `kind` may be created: the folders the index finds
-// that kind in, outside plugins and sources the app does not know; global
-// places first, then by title.
+// that kind in, outside plugins, third-party docs and sources the app does
+// not know; global places first, then by title.
 export function placesFor(
   kind: CreateKind,
   entries: readonly IndexEntry[],
@@ -108,7 +108,8 @@ export function placesFor(
   for (const entry of entries) {
     const { source } = entry;
     const isPlaceSource = isKnownSource(source) && source !== 'plugin';
-    if (entry.kind !== kind || !isPlaceSource) {
+    const isThirdParty = entry.owner === 'third-party';
+    if (entry.kind !== kind || !isPlaceSource || isThirdParty) {
       continue;
     }
     const folder = KIND_RULES[kind].placeFolder(entry, paths);

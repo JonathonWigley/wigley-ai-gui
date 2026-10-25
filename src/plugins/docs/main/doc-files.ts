@@ -431,8 +431,9 @@ async function realPathOrSelf(files: Files, path: string): Promise<string> {
 }
 
 // The folders the index walks for global docs (each Claude config folder,
-// `~/.codex`, `~/.agents` and `~/wigley-agents`) and the plugin caches (each
-// config folder's and Codex's), all real. A docs folder at or above the home
+// `~/.codex`, `~/.agents` and `~/wigley-agents`), the plugin caches (each
+// config folder's and Codex's) and the synced skill folders (each config
+// folder's `skills/synced`), all real. A docs folder at or above the home
 // folder is dropped, so the home folder itself never becomes writable.
 async function guardFolders(
   files: Files,
@@ -451,14 +452,19 @@ async function guardFolders(
     ...configDirs.map((dir) => paths.join(dir, 'plugins', 'cache')),
     paths.join(homeDir, '.codex', 'plugins', 'cache'),
   ];
-  const [realDocFolders, realCaches] = await Promise.all([
+  const syncedSkills = configDirs.map((dir) =>
+    paths.join(dir, 'skills', 'synced'),
+  );
+  const [realDocFolders, realCaches, realSyncedSkills] = await Promise.all([
     Promise.all(docFolders.map((folder) => realTarget(files, folder, paths))),
     Promise.all(caches.map((folder) => realTarget(files, folder, paths))),
+    Promise.all(syncedSkills.map((folder) => realTarget(files, folder, paths))),
   ]);
   return {
     globalDocFolders: realDocFolders.filter(
       (folder) => !paths.isInside(homeDir, folder),
     ),
     pluginCaches: realCaches,
+    thirdPartyFolders: realSyncedSkills,
   };
 }

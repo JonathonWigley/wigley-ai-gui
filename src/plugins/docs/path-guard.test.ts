@@ -39,6 +39,16 @@ const ENTRIES = [
     root: '/Users/u/.claude/plugins/cache/m/p/1',
   }),
 ];
+const THIRD_PARTY_SKILL =
+  '/Users/u/.claude/plugins/cache/n/q/2/skills/s/SKILL.md';
+const THIRD_PARTY_PLUGIN_ENTRY = entry({
+  path: THIRD_PARTY_SKILL,
+  kind: 'skill',
+  source: 'plugin',
+  owner: 'third-party',
+  plugin: 'q@n',
+  root: '/Users/u/.claude/plugins/cache/n/q/2',
+});
 const FOLDERS: GuardFolders = {
   globalDocFolders: [
     '/Users/u/.claude',
@@ -49,6 +59,10 @@ const FOLDERS: GuardFolders = {
     '/Users/u/.claude/plugins/cache',
     '/Users/u/.claude-personal/plugins/cache',
     '/Users/u/.codex/plugins/cache',
+  ],
+  thirdPartyFolders: [
+    '/Users/u/.claude/skills/synced',
+    '/Users/u/.claude-personal/skills/synced',
   ],
 };
 
@@ -135,6 +149,45 @@ describe('changeRefusal', () => {
     );
   });
 
+  it('changeRefusal_InsideSyncedSkills_RefusedAsSyncedSkill', () => {
+    const target = '/Users/u/.claude/skills/synced/anthropic/pdf/SKILL.md';
+
+    expect(refusal(target)).toBe(
+      `Refused: ${target} is a downloaded copy (synced skill)`,
+    );
+  });
+
+  it('changeRefusal_SecondConfigFolderSynced_Refused', () => {
+    const target = '/Users/u/.claude-personal/skills/synced/b/x.md';
+
+    expect(refusal(target)).toBe(
+      `Refused: ${target} is a downloaded copy (synced skill)`,
+    );
+  });
+
+  it('changeRefusal_ThirdPartyPluginEntry_RefusedNamingPlugin', () => {
+    const entries = [...ENTRIES, THIRD_PARTY_PLUGIN_ENTRY];
+
+    expect(changeRefusal(THIRD_PARTY_SKILL, entries, FOLDERS, posixPaths)).toBe(
+      `Refused: ${THIRD_PARTY_SKILL} is a downloaded copy (q@n)`,
+    );
+  });
+
+  it('changeRefusal_ThirdPartyEntryNoPlugin_SyncedSkill', () => {
+    const target = '/Users/u/notes/synced.md';
+    const entries = [entry({ path: target, owner: 'third-party' })];
+    const folders = { ...FOLDERS, thirdPartyFolders: [] };
+
+    expect(changeRefusal(target, entries, folders, posixPaths)).toBe(
+      `Refused: ${target} is a downloaded copy (synced skill)`,
+    );
+  });
+
+  it('changeRefusal_BesideSynced_Allowed', () => {
+    expect(refusal('/Users/u/.claude/skills/mine/SKILL.md')).toBe(null);
+    expect(refusal('/Users/u/.claude/skills/syncedx/SKILL.md')).toBe(null);
+  });
+
   it('changeRefusal_Outside_RefusedNamingPath', () => {
     expect(refusal('/Users/u/Desktop/x.md')).toBe(
       'Refused: /Users/u/Desktop/x.md is outside the indexed folders',
@@ -148,6 +201,12 @@ describe('isIndexedPath', () => {
     expect(isIndexedPath('/Users/u/Desktop/x.md', ENTRIES, posixPaths)).toBe(
       false,
     );
+  });
+
+  it('isIndexedPath_ThirdPartyEntry_Openable', () => {
+    const entries = [...ENTRIES, THIRD_PARTY_PLUGIN_ENTRY];
+
+    expect(isIndexedPath(THIRD_PARTY_SKILL, entries, posixPaths)).toBe(true);
   });
 
   it('isIndexedPath_InsideRepoRoot_Openable', () => {
@@ -167,7 +226,11 @@ describe('isIndexedPath', () => {
 });
 
 describe('path guard on Windows', () => {
-  const NO_FOLDERS: GuardFolders = { globalDocFolders: [], pluginCaches: [] };
+  const NO_FOLDERS: GuardFolders = {
+    globalDocFolders: [],
+    pluginCaches: [],
+    thirdPartyFolders: [],
+  };
   const REPO_ENTRIES = [
     entry({
       path: 'C:\\Users\\u\\dev\\r\\AGENTS.md',
@@ -200,6 +263,18 @@ describe('path guard on Windows', () => {
       ),
     ).toBe(
       'Refused: C:\\Users\\u\\dev\\rx\\a.md is outside the indexed folders',
+    );
+  });
+
+  it('changeRefusal_WindowsSyncedOtherCase_Refused', () => {
+    const folders = {
+      ...NO_FOLDERS,
+      thirdPartyFolders: ['C:\\Users\\u\\.claude\\skills\\synced'],
+    };
+    const target = 'c:\\users\\u\\.claude\\skills\\synced\\a\\SKILL.md';
+
+    expect(changeRefusal(target, REPO_ENTRIES, folders, windowsPaths)).toBe(
+      `Refused: ${target} is a downloaded copy (synced skill)`,
     );
   });
 

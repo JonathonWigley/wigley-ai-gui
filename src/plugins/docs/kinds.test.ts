@@ -55,6 +55,25 @@ describe('placesFor', () => {
     ]);
   });
 
+  it('placesFor_ThirdPartyEntries_NoPlace', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/.claude/skills/synced/anthropic/pdf/SKILL.md',
+        kind: 'skill',
+        owner: 'third-party',
+      }),
+      entry({ path: '/Users/u/.claude/skills/a/SKILL.md', kind: 'skill' }),
+    ];
+
+    expect(placesFor('skill', entries, HOME, posixPaths)).toEqual([
+      {
+        title: 'Global · ~/.claude/skills',
+        folder: '/Users/u/.claude/skills',
+        source: 'global',
+      },
+    ]);
+  });
+
   it('placesFor_GlobalInstructions_OnlyWigleyAgentsFolder', () => {
     const entries = [
       '/Users/u/.claude/CLAUDE.md',

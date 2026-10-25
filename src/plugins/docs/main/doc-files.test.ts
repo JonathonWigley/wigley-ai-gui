@@ -241,6 +241,29 @@ describe('write', () => {
     );
   });
 
+  it('write_InsideSyncedSkills_RejectsAsDownloadedCopy', async () => {
+    const test = setUp();
+    const path = '/Users/u/.claude/skills/synced/anthropic/pdf/SKILL.md';
+
+    await expect(test.docFiles.write(path, 'b', null)).rejects.toThrow(
+      `Refused: ${path} is a downloaded copy (synced skill)`,
+    );
+    expect(await test.files.stat(path)).toBeNull();
+  });
+
+  it('write_SecondConfigFolderSynced_Rejects', async () => {
+    const test = setUp();
+    await test.files.write(
+      '/Users/u/.agents/wigley-docs/config.json',
+      '{"claudeConfigDirs":["~/.claude","~/.claude-personal"]}',
+    );
+    const path = '/Users/u/.claude-personal/skills/synced/b/s/SKILL.md';
+
+    await expect(test.docFiles.write(path, 'b', null)).rejects.toThrow(
+      `Refused: ${path} is a downloaded copy (synced skill)`,
+    );
+  });
+
   it('write_GlobalDocFolders_Written', async () => {
     const test = setUp();
 
@@ -646,6 +669,21 @@ describe('trash', () => {
 
     await expect(docFiles.trash(`${link}/SKILL.md`)).rejects.toThrow(
       `Refused: ${target} is inside the plugin cache of p@m`,
+    );
+    expect([...links]).toEqual([[link, target]]);
+    expect(await test.files.read(`${target}/SKILL.md`)).toBe('skill');
+  });
+
+  it('trash_LinkToSyncedSkill_RefusedTrashesNeither', async () => {
+    const test = setUp();
+    const target = `${HOME}/.claude/skills/synced/anthropic/pdf`;
+    const link = `${HOME}/.claude/skills/pdf`;
+    await test.files.write(`${target}/SKILL.md`, 'skill');
+    const links = new Map([[link, target]]);
+    const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
+
+    await expect(docFiles.trash(`${link}/SKILL.md`)).rejects.toThrow(
+      `Refused: ${target} is a downloaded copy (synced skill)`,
     );
     expect([...links]).toEqual([[link, target]]);
     expect(await test.files.read(`${target}/SKILL.md`)).toBe('skill');

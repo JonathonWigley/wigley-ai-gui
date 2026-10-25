@@ -7,6 +7,9 @@ export interface GuardFolders {
   globalDocFolders: readonly string[];
   // Plugin install caches: nothing inside one is changed.
   pluginCaches: readonly string[];
+  // Folders of downloaded third-party copies (each config folder's
+  // `skills/synced`): nothing inside one is changed.
+  thirdPartyFolders: readonly string[];
 }
 
 // Whether a link may open `path`: an indexed file, or a file inside an
@@ -26,7 +29,8 @@ export function isIndexedPath(
 // Why a write, create, rename or trash at `target` (its folder a real path)
 // is refused, or null when it is allowed: at an entry's own file, inside a
 // `repo` or `features` entry's root, or inside a global docs folder.
-// Anything inside a plugin cache or a listed plugin install is refused, even
+// A third-party entry's own file, anything inside a third-party folder, and
+// anything inside a plugin cache or a listed plugin install is refused, even
 // inside an allowed folder.
 export function changeRefusal(
   target: string,
@@ -34,6 +38,19 @@ export function changeRefusal(
   folders: GuardFolders,
   paths: Paths,
 ): string | null {
+  const thirdPartyEntry = entries.find(
+    (entry) =>
+      entry.owner === 'third-party' && paths.samePath(target, entry.path),
+  );
+  if (thirdPartyEntry !== undefined) {
+    return `Refused: ${target} is a downloaded copy (${thirdPartyEntry.plugin ?? 'synced skill'})`;
+  }
+  const isInsideThirdPartyFolder = folders.thirdPartyFolders.some((folder) =>
+    paths.isInside(target, folder),
+  );
+  if (isInsideThirdPartyFolder) {
+    return `Refused: ${target} is a downloaded copy (synced skill)`;
+  }
   const cachingPlugin = entries.find(
     (entry) =>
       entry.source === 'plugin' &&
