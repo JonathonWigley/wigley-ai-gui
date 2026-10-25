@@ -189,7 +189,7 @@ depends on; `npm run lint` checks it. No new plugin, adapter or layer.
 - [x] [Self-test and preview round](08-selftest-and-preview.md) — after 05
 
 ### Wave 7
-- [ ] [Doc re-read](09-doc-re-read.md) — after 06, 07, 08
+- [x] [Doc re-read](09-doc-re-read.md) — after 06, 07, 08
 
 ### Wave 8
 - [ ] [Final verification](10-final-verification.md) — after 09
@@ -207,6 +207,7 @@ Review base: 092ace4b241cdae4b0c66ce5933c8a1387c59c61
 - 05 · 29b72839 · diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2794 tests) green · concerns: header '(3)' sits in the fixed-size round .choice-number badge and may not fit (check on 08/10 captures); layout-panes rollback duplicates layout-cards' buildCard (outside Files list); two unnamed guards added: 'rail has no item at position N', 'review has no row N'
 - 07 · f443be9a · diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2822 tests) green · concerns: AGENTS.md forms layout kit list and events text now stale (09); default layout never calls contributedParts, so parts always go after the boxes; no CSS for .card-parts, .card-part, .review-cell; FormsReviewColumn.title drawn nowhere; each rebuild remounts every editor box in every open round
 - 08 · 26c5cf00 · diff read: every Produces signature present; typecheck passes over the whole tree; worker ran lint and the preview-round test · concerns: settings.json left as {} for the later settings self-test; unchecked whether the config store accepts forms.layout 'nosuch' (self-test run shows); header '(3)' badge overflow (screenshots)
+- 09 · 5e3a2dde; 4b43f73a (marketplace) · diff read: each fix checked against the code it names; comments-only edits to layout.d.ts and layout.js; typecheck unaffected · concerns: a notice card returns before updateContributedParts, so a part on a notice never updates (contract.ts says question or finding; layout.d.ts only implies it); prettier --check warns on layout.d.ts and layout.js at HEAD and now; DIGITS stops at 9 while a finding can show 12 numbered entries (followups item understates the gap); self-test screenshot names sit one card off (preview-notice shows the Defect, round-layout-notice and user-layout-setting show other cards) — group 08
 ### Contract changes
 - completeFindingPick(finding: Finding, …): Finding → PickableFinding (Pick<Finding, 'origin' | 'choices'>) · why: rewritten on findingEntries, which needs only origin and choices · consumers: 02's main/round.ts (unchanged call) · group 04
 - form-state.ts: new export pickNumber(round: RoundState, item: AnswerableItem): number — a question's choice or a finding's entry number · why: one source for the log line, ReviewRow.entry and the kit's selected state · consumers: 05, 07 · group 04
@@ -228,5 +229,8 @@ Review base: 092ace4b241cdae4b0c66ce5933c8a1387c59c61
 - state saved before emitting, so a listener's own dispatch diffs from it — no duplicate events — none · group 07
 - answerChanged log line deduplicated on each item's status and pick — a notes edit logs nothing — self-test expects no line per keystroke · group 07
 - contributed parts auto-appended only when at least one part names the card's kind — empty cards gain no wrapper — none · group 07
+- master-plan item 16's exports/events bullet removed though the task listed only item 15 — the plan's own rule removes a landed step — restore one line if wrong · group 09
+- AGENTS.md item-kind list gained KIT_BUILDERS, CARD_KINDS, LayoutPart beside ROUND_ITEM_LISTS — the list reads as the full set the compiler flags — a longer list · group 09
+- no marketplace version bump for 4b43f73a — 1.9.3 (f402c1eb) is still unpushed, so it rides that version — bump needed if f402c1eb is pushed alone · group 09
 ### Review rounds
 ### Test gate

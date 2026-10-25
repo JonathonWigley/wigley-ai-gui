@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 7 · Depends on: 06, 07, 08
 Plan: [plan.md](plan.md)
@@ -37,3 +37,4 @@ Commit:    one commit per repo for the fixes, or none when nothing changed; the 
 
 ## Proof
 
+Commit 5e3a2dde; 4b43f73a (marketplace) · proof: diff read: each fix checked against the code it names; comments-only edits to layout.d.ts and layout.js; typecheck unaffected · concerns: a notice card returns before updateContributedParts, so a part on a notice never updates (contract.ts says question or finding; layout.d.ts only implies it); prettier --check warns on layout.d.ts and layout.js at HEAD and now; DIGITS stops at 9 while a finding can show 12 numbered entries (followups item understates the gap); self-test screenshot names sit one card off (preview-notice shows the Defect, round-layout-notice and user-layout-setting show other cards) — group 08
