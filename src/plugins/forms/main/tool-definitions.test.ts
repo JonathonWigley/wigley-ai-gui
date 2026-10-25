@@ -123,7 +123,7 @@ describe('FORMS_TOOLS', () => {
     const choices = askRound.properties.findings.items.properties.choices;
 
     expect(choices.minItems).toBe(1);
-    expect(choices.maxItems).toBe(10);
+    expect(choices.maxItems).toBe(9);
     expect(choices.items?.required).toEqual(['text', 'reason']);
     expect(choices.items?.additionalProperties).toBe(false);
     expect(choices.items?.properties.action.enum).toEqual([
@@ -196,6 +196,13 @@ describe('FORMS_TOOLS', () => {
       'an action with no choices shows as a header the user picks alone',
     );
     expect(description).toContain('One pick sets the choice and its action.');
+  });
+
+  it('states the number-key limit on entries and choices', () => {
+    expect(descriptionOf('ask_round')).toContain(
+      'a finding holds at most 9 of them together and a question at most 9 ' +
+        'choices; more fails the call.',
+    );
   });
 
   it('never describes an action control', () => {

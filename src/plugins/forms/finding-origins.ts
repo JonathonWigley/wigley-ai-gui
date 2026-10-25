@@ -1,6 +1,6 @@
 import {
   FINDING_ORIGINS,
-  MAX_CHOICES,
+  MAX_ENTRIES,
   type DefectFinding,
   type FindingAction,
   type FindingCard,
@@ -27,21 +27,21 @@ const RULES = {
   caused: {
     card: 'defect',
     minChoices: 1,
-    maxChoices: MAX_CHOICES,
+    maxChoices: MAX_ENTRIES,
     requiresSeverity: true,
     actions: DEFECT_ACTIONS,
   },
   pre_existing: {
     card: 'defect',
     minChoices: 1,
-    maxChoices: MAX_CHOICES,
+    maxChoices: MAX_ENTRIES,
     requiresSeverity: true,
     actions: DEFECT_ACTIONS,
   },
   design: {
     card: 'decision',
     minChoices: 2,
-    maxChoices: MAX_CHOICES,
+    maxChoices: MAX_ENTRIES,
     requiresSeverity: false,
     actions: {
       fix_now: 'Decide now',

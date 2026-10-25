@@ -1,7 +1,7 @@
 import {
   FINDING_ACTIONS,
   FINDING_ORIGINS,
-  MAX_CHOICES,
+  MAX_ENTRIES,
   SEVERITIES,
   type DefectFinding,
   type Finding,
@@ -16,7 +16,7 @@ import {
   FINDING_ORIGIN_RULES,
   isFindingOrigin,
 } from '../../../finding-origins';
-import { isFindingAction } from '../../../finding-pick';
+import { findingEntries, isFindingAction } from '../../../finding-pick';
 import { RoundError } from '../../round-error';
 import {
   fieldsMissing,
@@ -146,7 +146,10 @@ const CHOICES_DESCRIPTION =
   `One object per choice: ${cardChoicesText(CARD_CHOICES)}. The card draws ` +
   'each choice under its action (its action field; fix_now when left out), ' +
   'and an action with no choices as a header the user picks alone. At least ' +
-  'one choice is a fix_now choice. A choice names a solution only: a choice ' +
+  'one choice is a fix_now choice. The card numbers its choices and headers ' +
+  `alike, one number key each, so a finding takes at most ${MAX_ENTRIES} of ` +
+  'them together; one past that fails the call. A choice names a solution ' +
+  'only: a choice ' +
   "whose text opens with an action's label " +
   `(${ACTION_WORDS.join(', ')}) fails the call.`;
 
@@ -156,7 +159,8 @@ const CHOICE_ACTION_DESCRIPTION =
 
 const RECOMMEND_DESCRIPTION =
   'The 1-based number, in choices, of the recommended choice: a choice of ' +
-  'recommend_action. Leave it out only when no choice has recommend_action.';
+  'recommend_action. Leave it out, or send null, only when no choice has ' +
+  'recommend_action.';
 
 const RECOMMEND_ACTION_DESCRIPTION =
   'The recommended action. The values are the same three on every card, ' +
@@ -166,7 +170,8 @@ const RECOMMEND_ACTION_DESCRIPTION =
 const ACTION_REASONS_DESCRIPTION =
   "Why to take a deferral action, drawn under that action's header. Only an " +
   'action the origin offers takes an entry. Send the entry for the action ' +
-  `you recommend when it is a deferral. ${unofferedActionsText()}`;
+  `you recommend when it is a deferral; null reads as none. ` +
+  unofferedActionsText();
 
 // The actions the origin offers, in FINDING_ACTIONS order.
 function offeredActions(origin: FindingOrigin): FindingAction[] {
@@ -292,7 +297,26 @@ function parseChoices(
         `fix_now choice; a choice with no action is fix_now.`,
     );
   }
+  requireEntriesWithinKeys(origin, choices, where);
   return choices;
+}
+
+// Each entry the card numbers takes a number key, so a finding with more
+// entries than keys is refused.
+function requireEntriesWithinKeys(
+  origin: FindingOrigin,
+  choices: FindingChoice[],
+  where: string,
+): void {
+  const entryCount = findingEntries({ origin, choices }).length;
+  if (entryCount > MAX_ENTRIES) {
+    throw new RoundError(
+      `${where}the card would number ${entryCount} entries — its choices ` +
+        `plus a header for each action with no choices — and the page has ` +
+        `${MAX_ENTRIES} number keys. Give fewer choices, or move a fix_now ` +
+        `choice under an action drawn as a header, which the choice replaces.`,
+    );
+  }
 }
 
 function parseOriginFields(item: JsonObject, where: string): OriginFields {
@@ -342,16 +366,17 @@ function parseRecommendAction(
   return raw;
 }
 
-// Absent reads as none. Each entry is for a deferral action the origin offers.
+// Absent or null reads as none. Each entry is for a deferral action the
+// origin offers.
 function parseActionReasons(
   item: JsonObject,
   origin: FindingOrigin,
   where: string,
 ): Finding['actionReasons'] {
-  if (!Object.hasOwn(item, ACTION_REASONS_FIELD)) {
+  const raw = item[ACTION_REASONS_FIELD];
+  if (raw === undefined || raw === null) {
     return {};
   }
-  const raw = item.action_reasons;
   if (!isJsonObject(raw)) {
     throw new RoundError(
       `${where}action_reasons must be an object with ` +
@@ -387,7 +412,7 @@ function parseActionReasons(
 }
 
 // The recommended choice, which must sit under recommend_action; null, with
-// recommend left out, when recommend_action has no choices.
+// recommend left out or null, when recommend_action has no choices.
 function parseFindingRecommend(
   item: JsonObject,
   title: string,
@@ -398,7 +423,8 @@ function parseFindingRecommend(
   const actionHasChoices = choices.some(
     (choice) => choice.action === recommendAction,
   );
-  if (!Object.hasOwn(item, RECOMMEND_FIELD)) {
+  const raw = item[RECOMMEND_FIELD];
+  if (raw === undefined || raw === null) {
     if (actionHasChoices) {
       throw new RoundError(
         `${where}missing recommend. recommend_action is ${recommendAction}, ` +
@@ -416,7 +442,7 @@ function parseFindingRecommend(
     );
   }
   const recommend = parseRecommend(
-    item.recommend,
+    raw,
     title,
     choices.length,
     'solution',
@@ -543,7 +569,7 @@ export const findingFormat: AnswerableFormat<Finding> = {
         choices: {
           type: 'array',
           minItems: MIN_SOLUTIONS,
-          maxItems: MAX_CHOICES,
+          maxItems: MAX_ENTRIES,
           items: {
             type: 'object',
             additionalProperties: false,

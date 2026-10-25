@@ -238,6 +238,12 @@ describe('findingFormat.parse', () => {
     );
   });
 
+  it('reads null action_reasons as none', () => {
+    const raw = finding({ action_reasons: null });
+
+    expect(findingFormat.parse(raw, 'Finding 1: ').actionReasons).toEqual({});
+  });
+
   it('refuses action_reasons for fix_now or an unknown key', () => {
     const raw = finding({ action_reasons: { fix_now: 'x', later: 'y' } });
 
@@ -272,6 +278,12 @@ describe('findingFormat.parse', () => {
 
   it('leaves recommend null when recommend_action has no choices', () => {
     const raw = findingWithoutRecommend({ recommend_action: 'leave_it' });
+
+    expect(findingFormat.parse(raw, 'Finding 1: ').recommend).toBeNull();
+  });
+
+  it('reads a null recommend as absent when recommend_action has no choices', () => {
+    const raw = finding({ recommend: null, recommend_action: 'leave_it' });
 
     expect(findingFormat.parse(raw, 'Finding 1: ').recommend).toBeNull();
   });
@@ -371,7 +383,7 @@ describe('findingFormat.parse', () => {
     });
 
     expect(parseError(raw)).toBe(
-      'Finding 1: a design finding takes 2 to 10 choices.',
+      'Finding 1: a design finding takes 2 to 9 choices.',
     );
   });
 
@@ -532,16 +544,37 @@ describe('findingFormat.parse', () => {
     ]);
   });
 
-  it('refuses a caused finding with zero choices or eleven', () => {
+  it('refuses a caused finding with zero choices or ten', () => {
     const choice = { text: 'a', reason: 'r' };
-    const bound = 'Finding 1: a caused finding takes 1 to 10 choices.';
+    const bound = 'Finding 1: a caused finding takes 1 to 9 choices.';
 
     expect(parseError(finding({ choices: [] }))).toBe(bound);
     expect(
       parseError(
-        finding({ choices: Array.from({ length: 11 }, () => choice) }),
+        finding({ choices: Array.from({ length: 10 }, () => choice) }),
       ),
     ).toBe(bound);
+  });
+
+  it('refuses a finding numbering 10 entries, one past the number keys', () => {
+    const choice = { text: 'a', reason: 'r' };
+    // 8 fix_now choices, then the follow_up and leave_it headers.
+    const raw = finding({ choices: Array.from({ length: 8 }, () => choice) });
+
+    expect(parseError(raw)).toBe(
+      'Finding 1: the card would number 10 entries — its choices plus a ' +
+        'header for each action with no choices — and the page has 9 number ' +
+        'keys. Give fewer choices, or move a fix_now choice under an action ' +
+        'drawn as a header, which the choice replaces.',
+    );
+  });
+
+  it('accepts a finding numbering exactly 9 entries', () => {
+    const choice = { text: 'a', reason: 'r' };
+    // 7 fix_now choices, then the follow_up and leave_it headers.
+    const raw = finding({ choices: Array.from({ length: 7 }, () => choice) });
+
+    expect(findingFormat.parse(raw, 'Finding 1: ').choices).toHaveLength(7);
   });
 
   it('names the title and the legal range for an out-of-range recommend', () => {
@@ -609,9 +642,14 @@ describe('findingFormat.arraySchema', () => {
 
     expect(origin.description).toContain("'design' (Decision): a design call");
     expect(choices.description).toContain(
-      'a Defect takes 1 to 10 choices, its solutions; a Decision takes 2 ' +
-        'to 10 choices, the options a plan would weigh; a Nit takes ' +
+      'a Defect takes 1 to 9 choices, its solutions; a Decision takes 2 ' +
+        'to 9 choices, the options a plan would weigh; a Nit takes ' +
         'exactly 1 choice, the fix.',
+    );
+    expect(choices.description).toContain(
+      'The card numbers its choices and headers alike, one number key each, ' +
+        'so a finding takes at most 9 of them together; one past that fails ' +
+        'the call.',
     );
     expect(recommend_action.description).toContain(
       'follow_up: Follow-up (Defect), Plan it (Decision);',
@@ -675,13 +713,13 @@ describe('findingFormat.arraySchema choice actions', () => {
     expect(action_reasons.description).toBe(
       "Why to take a deferral action, drawn under that action's header. " +
         'Only an action the origin offers takes an entry. Send the entry for ' +
-        'the action you recommend when it is a deferral. A Nit offers no ' +
-        'follow_up.',
+        'the action you recommend when it is a deferral; null reads as none. ' +
+        'A Nit offers no follow_up.',
     );
     expect(recommend.description).toBe(
       'The 1-based number, in choices, of the recommended choice: a choice ' +
-        'of recommend_action. Leave it out only when no choice has ' +
-        'recommend_action.',
+        'of recommend_action. Leave it out, or send null, only when no ' +
+        'choice has recommend_action.',
     );
   });
 });

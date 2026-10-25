@@ -2,6 +2,7 @@ import type { Disposable } from '../../contracts/disposable';
 import type { LayoutSet } from '../../contracts/layouts';
 import type { ChannelShape, EventShape } from '../../contracts/plugin';
 import type { AgentSession } from '../sessions/contract';
+import { NUMBER_KEY_COUNT } from './manifest';
 
 export type NoticeBadge = 'Applied' | 'Dispatched' | 'Decided';
 
@@ -47,8 +48,9 @@ export const FINDING_ACTIONS: readonly FindingAction[] = [
   'leave_it',
 ];
 
-// The most choices a question or finding may offer.
-export const MAX_CHOICES = 10;
+// The most numbered entries a card may show, one per number key: a
+// question's choices, or a finding's choices and choiceless action headers.
+export const MAX_ENTRIES = NUMBER_KEY_COUNT;
 
 // Where a finding comes from; it sets the card the finding draws as and the
 // fields it takes.
@@ -350,8 +352,9 @@ export interface FormsCardPart {
 }
 
 // A column another plugin adds to every review row: `cell` is the text drawn
-// after the row's own cells, read each time the row draws. A column that
-// throws is logged and draws nothing; the row still draws.
+// after the row's own cells, read each time the row draws, and `title` shows
+// as that cell's tooltip. A column that throws is logged and draws nothing;
+// the row still draws.
 export interface FormsReviewColumn {
   id: string;
   title: string;

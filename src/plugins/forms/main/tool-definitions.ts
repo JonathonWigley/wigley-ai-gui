@@ -1,4 +1,5 @@
 import type { ToolDefinition } from '../../sessions/contract';
+import { MAX_ENTRIES } from '../contract';
 import { findingCardsText } from './kinds/finding/finding-text';
 import { FORMATS, ITEM_KINDS } from './kinds/formats';
 
@@ -15,7 +16,10 @@ const ASK_ROUND_DESCRIPTION =
   "and the impact. Under it the card's actions show in order, each with its " +
   'choices and their reasons under it; an action with no choices shows as a ' +
   'header the user picks alone, with its action_reasons entry when you sent ' +
-  'one. One pick sets the choice and its action. The recommended choice, or ' +
+  'one. One pick sets the choice and its action. Each choice and header ' +
+  `takes a number key, so a finding holds at most ${MAX_ENTRIES} of them ` +
+  `together and a question at most ${MAX_ENTRIES} choices; more fails the ` +
+  'call. The recommended choice, or ' +
   "the recommended action's header when it has no choices, is badged; the " +
   'user takes it with Accept or picks any other entry. A choice never opens ' +
   "with an action's label. Use 'questions' for any " +

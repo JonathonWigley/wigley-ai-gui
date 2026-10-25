@@ -102,7 +102,7 @@ export function unofferedActionsText(): string {
     .join(' ');
 }
 
-// '1 to 10 choices', 'exactly 1 choice'
+// '1 to 9 choices', 'exactly 1 choice'
 function choiceRangeText({ minChoices, maxChoices }: OriginRules): string {
   if (minChoices !== maxChoices) {
     return `${minChoices} to ${maxChoices} choices`;
@@ -110,7 +110,7 @@ function choiceRangeText({ minChoices, maxChoices }: OriginRules): string {
   return `exactly ${minChoices} choice${minChoices === 1 ? '' : 's'}`;
 }
 
-// 'takes 1 to 10 choices', 'takes exactly 1 choice: the fix'
+// 'takes 1 to 9 choices', 'takes exactly 1 choice: the fix'
 export function choiceCountText(origin: FindingOrigin): string {
   const rules = FINDING_ORIGIN_RULES[origin];
   // A finding's lone choice is its fix.
@@ -118,7 +118,7 @@ export function choiceCountText(origin: FindingOrigin): string {
   return `takes ${choiceRangeText(rules)}${isLoneFix ? ': the fix' : ''}`;
 }
 
-// Each card's choice count with what its choices are: 'a Defect takes 1 to 10
+// Each card's choice count with what its choices are: 'a Defect takes 1 to 9
 // choices, its solutions; …'.
 export function cardChoicesText(nouns: Record<FindingCard, string>): string {
   return cardGroups()

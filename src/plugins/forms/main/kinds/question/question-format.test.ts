@@ -68,12 +68,15 @@ describe('questionFormat.parse', () => {
     expect(message).toContain('is not a question');
   });
 
-  it('refuses eleven choices and says to split the question', () => {
-    const choices = Array.from({ length: 11 }, (_, n) => `choice ${n + 1}`);
+  it('refuses ten choices, one past the number keys, and says to split the question', () => {
+    const choices = Array.from({ length: 10 }, (_, n) => `choice ${n + 1}`);
 
     const message = parseError(question({ choices }));
 
-    expect(message).toContain('Split it into two questions.');
+    expect(message).toBe(
+      'Question 1: has 10 choices; the maximum is 9, one per number key. ' +
+        'Split it into two questions.',
+    );
   });
 
   it('refuses a blank choice, naming its number', () => {

@@ -105,8 +105,8 @@ export function formsCommandHandlers(
     reviewJump: plain({ type: 'reviewJump' }),
     askCancel: plain({ type: 'askCancel' }),
     dismissConfirm: plain({ type: 'dismissConfirm' }),
-    // Past the ninth, a question's choice or a finding's entry is picked by
-    // mouse.
+    // Main refuses a round whose question choices or finding entries outnumber
+    // these keys, so every numbered entry has one.
     choose1: choose(1),
     choose2: choose(2),
     choose3: choose(3),

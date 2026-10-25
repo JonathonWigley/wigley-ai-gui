@@ -1,4 +1,4 @@
-import { MAX_CHOICES, type Question } from '../../../contract';
+import { MAX_ENTRIES, type Question } from '../../../contract';
 import { RoundError } from '../../round-error';
 import {
   fieldsMissing,
@@ -53,10 +53,10 @@ function parseChoices(raw: unknown, where: string): string[] {
         `${MIN_CHOICES} is not a question — give at least ${MIN_CHOICES}.`,
     );
   }
-  if (raw.length > MAX_CHOICES) {
+  if (raw.length > MAX_ENTRIES) {
     throw new RoundError(
-      `${where}has ${raw.length} choices; the maximum is ${MAX_CHOICES}. ` +
-        `Split it into two questions.`,
+      `${where}has ${raw.length} choices; the maximum is ${MAX_ENTRIES}, ` +
+        `one per number key. Split it into two questions.`,
     );
   }
   return raw.map((choice, i) =>
@@ -127,9 +127,10 @@ export const questionFormat: AnswerableFormat<Question> = {
         choices: {
           type: 'array',
           minItems: MIN_CHOICES,
-          maxItems: MAX_CHOICES,
+          maxItems: MAX_ENTRIES,
           items: { type: 'string' },
           description:
+            `${MIN_CHOICES} to ${MAX_ENTRIES} choices, one per number key. ` +
             'Each choice opens with one plain sentence saying what the ' +
             'user would get, before any symbol name or term of art.',
         },
