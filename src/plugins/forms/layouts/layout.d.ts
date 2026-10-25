@@ -179,10 +179,10 @@ export interface FindingKit extends AnswerKit {
   // `div.answer` with its 'Your answer' label, then one `section.choice-group` (`data-action`) per run of entries of
   // one action, in `entries` order; returns the `div.answer`, which `answerControls` may be appended to. A group with
   // choices draws the action's word as a section header over `ol.choices`, each choice under its entry number; a
-  // group with no choices draws one pick of its own as a choice row reads, its entry number in the choice number
-  // badge, then the action's word. An action's `actionReasons` text sits under its header. 'all': every choice's
-  // reason as 'Why'; 'recommended': the recommended choice's only; 'none': no choice reason. A blank reason draws
-  // nothing. The recommended pick, a choice or a header, is tagged Recommended.
+  // group with no choices draws one `div.choice` row of its own, its entry number in the choice number badge, then the
+  // action's word. An action's `actionReasons` text sits under its header, inside the row for a group with no
+  // choices. 'all': every choice's reason as 'Why'; 'recommended': the recommended choice's only; 'none': no choice
+  // reason. A blank reason draws nothing. The recommended pick, a choice or a header, is tagged Recommended.
   choiceGroups(
     parent: HTMLElement,
     reasons: 'recommended' | 'all' | 'none',

@@ -782,9 +782,10 @@ function appendGroupChoices(
   });
 }
 
-// A group with no choices: one pick drawn as a choice row, its entry number
-// in the choice number badge and the action's word as its text, tagged when
-// recommended, with the keys of its number; then the group's reason.
+// A group with no choices: one `div.choice` row as buildChoiceList draws a
+// choice, its entry number in the choice number badge and the action's word
+// as its text, tagged when recommended, with the keys of its number; then the
+// group's reason inside the row.
 function appendGroupPick(
   section: HTMLElement,
   group: ChoiceGroup,
@@ -792,7 +793,7 @@ function appendGroupPick(
   kit: Kit,
   card: CardContext,
 ): DrawnPick {
-  const head = element('div', 'choice-group-head');
+  const head = element('div', 'choice choice-group-head');
   const pick = button('choice-pick choice-group-pick', '', () =>
     kit.run({ type: 'choose', number }),
   );
@@ -801,7 +802,7 @@ function appendGroupPick(
     element('span', 'choice-text', group.label),
   );
   if (group.isRecommended) {
-    pick.classList.add('is-recommended');
+    head.classList.add('is-recommended');
     pick.append(tagPart('Recommended', 'accent'));
   }
   const command = numberedCommand('choose', number);
@@ -814,18 +815,19 @@ function appendGroupPick(
   );
   head.append(pick);
   section.append(head);
-  appendGroupReason(section, group.reason, card.deps.markdown);
-  return { number, element: pick };
+  appendGroupReason(head, group.reason, card.deps.markdown);
+  return { number, element: head };
 }
 
-// The action's reason as block markdown under its header; nothing for null.
+// The action's reason as block markdown appended to `parent`, under its
+// header; nothing for null.
 function appendGroupReason(
-  section: HTMLElement,
+  parent: HTMLElement,
   reason: string | null,
   markdown: MarkdownRenderer,
 ) {
   if (reason !== null) {
-    section.append(
+    parent.append(
       markdownElement('div', 'choice-group-reason md', markdown.block(reason)),
     );
   }

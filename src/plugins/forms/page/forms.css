@@ -228,30 +228,20 @@
 }
 
 /* A finding's answer: one group per action, its choices under the action's
-   header, or, when the action has none, the header alone as one pick drawn
-   as a choice row: its number in the badge, the action's word as its text. */
+   header, or, when the action has none, the header alone as one `.choice`
+   row (`.choice-group-head`), its number in the badge and the action's word
+   as its text, sitting flush under the group before it as one more row. */
 :where(.form-tab) .choice-group + .choice-group {
   margin-top: var(--wg-space-3);
+}
+
+:where(.form-tab) .choice-group + .choice-group:has(> .choice-group-head) {
+  margin-top: 0;
 }
 
 :where(.form-tab) .choice-group-reason {
   color: var(--wg-fg-secondary);
   margin-left: calc(var(--wg-icon-button-sm) + var(--wg-space-2) * 2);
-}
-
-:where(.form-tab) .choice-group-pick.is-selected {
-  background: var(--wg-list-active-background);
-}
-
-:where(.form-tab) .choice-group-pick.is-recommended .choice-number {
-  border-color: var(--wg-accent);
-  color: var(--wg-accent);
-}
-
-:where(.form-tab) .choice-group-pick.is-selected .choice-number {
-  background: var(--wg-accent);
-  border-color: var(--wg-accent);
-  color: var(--wg-fg-on-accent);
 }
 
 :where(.form-tab) .choice-group.is-locked {

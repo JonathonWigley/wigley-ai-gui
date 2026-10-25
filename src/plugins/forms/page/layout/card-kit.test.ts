@@ -290,6 +290,30 @@ describe('card kit', () => {
     ]);
   });
 
+  it('choiceGroups_ActionWithoutChoices_SitsInAChoiceRowWithItsReason', () => {
+    const overrides = {
+      choices: [choice('A', 'fix_now'), choice('B', 'fix_now')],
+      actionReasons: { leave_it: 'Out of scope' },
+    };
+    const { deps } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps, overrides);
+
+    const answer = asFake(
+      kit.choiceGroups(asHtml(new FakeElement('div')), 'none'),
+    );
+
+    const rows = findAll(answer, 'choice-group-head');
+    expect(
+      rows.map((row) => [
+        row.classList.contains('choice'),
+        row.children.map((part) => part.className),
+      ]),
+    ).toEqual([
+      [true, ['choice-pick choice-group-pick']],
+      [true, ['choice-pick choice-group-pick', 'choice-group-reason md']],
+    ]);
+  });
+
   it('kitRun_UnknownActionType_LogsAndDispatchesNothing', () => {
     const { deps, log } = fakeCardDeps(createFormsContributions());
     const { kit } = findingKit(deps);
