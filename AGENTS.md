@@ -243,12 +243,14 @@ round), since main, not the page, decides.
   the forms contract's `ItemKind` (and in `AnswerableKind`'s exclusion when it takes no answer), its item type, and
   its `ItemOf` entry in main's `kinds/item-format.ts`; from there the compiler flags each of the rest missing: that
   folder pair, its table entries, its array in the contract's `Round`, `FormBody` and `AnswersPayload`, `round.ts`'s
-  fixed keys (`parseRound`, `readFormBody`, the answers payload) and the per-kind records: `FINGERPRINT_LISTS` in
-  `round.ts`, `ROUND_ITEMS` in `page/form-state.ts`, and for an answerable kind `ANSWER_LISTS` in
+  fixed keys (`parseRound`, `readFormBody`, the answers payload) and the per-kind records: `ROUND_ITEM_LISTS` and
+  `FINGERPRINT_LISTS` in `round.ts`, `ROUND_ITEMS` in `page/form-state.ts`, and for an answerable kind `ANSWER_LISTS` in
   `forms-service.ts`, and `ANSWER_ARRAYS`, `PICK_ANSWERS` and `RECOMMENDED_PICKS` (what Enter accepts) in
-  `form-state.ts`, then its card input and kit parts in the Layout contract (`layouts/layout.d.ts`) and its card in
-  the `default` layout. The order lists are plain arrays the compiler cannot check: `formats.test.ts` fails when main's
-  `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind, and `RAIL_ORDER` in `form-state.ts` is added to by hand.
+  `form-state.ts`, then its card input and kit parts in the Layout contract (`layouts/layout.d.ts`), the page's
+  layout tables (`KIT_BUILDERS` in `page/layout/card-kit.ts`, `CARD_KINDS` in `read-layout.ts`, `LayoutPart` in
+  `layout-resolver.ts`) and its card in the `default` layout. The order lists are plain arrays the compiler cannot
+  check: `formats.test.ts` fails when main's `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind, and `RAIL_ORDER` in
+  `form-state.ts` is added to by hand.
 - **A finding origin** — `caused`, `pre_existing`, `design`, `nit` — is an entry in
   `src/plugins/forms/finding-origins.ts`: the card it draws as (Defect, Decision, Nit), the fields it requires and
   forbids, its choice bounds, and the actions it offers with the card's word for each. Main's parser (which rejects a
@@ -265,8 +267,8 @@ round), since main, not the page, decides.
   names none), numbered down the card, and an action with no choices takes one number on its own header; picking a
   choice or a bare header sets the action, so choice and action are one pick. The recommended pick is tagged
   Recommended in the accent, and Accept (Enter) takes it: the user ruled out folding the alternatives away, since
-  it biased answers toward the recommendation. A deferral action shows its `action_reasons` entry under its header,
-  which a round carries only when it recommends that action.
+  it biased answers toward the recommendation. A deferral action shows its `action_reasons` entry under its header;
+  the tool asks for the entry of the recommended action, and accepts one for any deferral action the origin offers.
 - **An agent harness** — Claude Code today, Codex and wigley-harness next — is an adapter behind `AgentHarness` in
   `src/contracts/agent.ts`, handed to plugins as a main service; the fake in `src/shared/` drives the tests and the
   self-test. The adapter alone reads its harness's output and turns it into chat entries, each carrying the raw
@@ -344,13 +346,14 @@ round), since main, not the page, decides.
 - **A forms layout** draws the forms view: a card per item kind (`question`, `finding`, `notice`) and the `head`,
   `rail` and `review` panes. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
   pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, review row,
-  round note, send and cancel buttons, and the plain parts `card`, `tag`, `kbd`, `button` — variant and `keys` —
-  and `sectionHeader`), each of which keeps itself up to date. The app keeps which item is selected, the keys,
+  round note, send and cancel buttons, other plugins' card parts (`contributedParts`), the plain parts `card`, `tag`,
+  `kbd`, `button` — variant and `keys` — and `sectionHeader`, and `command(qualifiedId)` and `keysFor(qualifiedId)`
+  for any plugin's command), each of which keeps itself up to date. The app keeps which item is selected, the keys,
   scrolling, the split width, the status bar line and the cancel dialog. The built-in `default` layout is
   `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract; it defines every card and
-  pane and draws the forms look. The user's layouts are folders in forms' plugin data, `layouts/<name>/layout.js` and
-  an optional `layout.css`, and the app writes `layouts/layout.d.ts` there at every start; a user layout defines
-  only the cards and panes it changes.
+  the rail and review panes, and draws the forms look. The user's layouts are folders in forms' plugin data,
+  `layouts/<name>/layout.js` and an optional `layout.css`, and the app writes `layouts/layout.d.ts` there at every
+  start; a user layout defines only the cards and panes it changes.
   - **Which layout draws what:** a card comes from the first layout defining its kind among the item's `layout`,
     the round's `layout`, the `forms.layout` setting and `default`; a pane the same way without the item. One page
     module resolves this, so round-view names no layout. An `ask_round` naming a layout missing from the folder
@@ -362,6 +365,11 @@ round), since main, not the page, decides.
     to `default`, and a reload that fails keeps the last good version of that layout.
   - `Space z l o` opens the preview round in the user's layout and selects its row; the round sends nothing and
     raises no notification or badge.
+  - **Other plugins** reach the forms view through the page exports (`FormsPageExports` in
+    `src/plugins/forms/contract.ts`): `activeRound`, `answers`, `addCardPart` (drawn where a card calls
+    `kit.contributedParts`, else at the card's end) and `addReviewColumn` (one `span.review-cell` per review row). The
+    page emits `roundShown`, `answerChanged`, `roundFinished` and `viewChanged` (`FormsPageEvents`, from
+    `page/forms-events.ts`), each logged as `[forms] event <name> …`.
 - `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its `LAYERS` table does
   not allow. A new layer, adapter or plugin folder gets a `LAYERS` entry, and the composition root's entry lists it.
   Every plugin's `page/` layer and `src/shared/page` may import `src/shared/page/ui`.

@@ -7,8 +7,10 @@
 // app does then:
 // - question and finding cards: `itemHead` (the card still carries
 //   `data-status`), `answerControls` and `textBox` (each box left unmounted is
-//   appended at the end of the card)
-// - notice card: `textBox` (the comment box is appended at the end)
+//   appended at the end of the card), and `contributedParts` (other plugins'
+//   parts are appended after those boxes)
+// - notice card: `textBox` (the comment box is appended at the end) and
+//   `contributedParts` (appended after it)
 // - rail: `entry` (a rail without entries scrolls nothing into view)
 // - review: `roundNote` (appended at the end of the pane), and every other
 //   part, which then draws nothing

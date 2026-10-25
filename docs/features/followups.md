@@ -84,9 +84,9 @@ now, any harness later). Each item names its sites.
   are what block it.
 - Forms page state survives a page reload: focus, review row and view (review, confirm) go into the draft or a core
   per-plugin page-state slot; pending autosaves flush on `pagehide`; restored rounds don't take over their session again.
-- A layout hot reload keeps the user's place: `round-view.ts` `setLayout` destroys every box, losing focus, cursor, vim
-  mode and undo. Add `snapshot`/`restore` to `TextEditor`, restore the active box, and swap a CSS-only change without
-  a rebuild.
+- A layout hot reload keeps the user's place: `round-view.ts` `setLayouts` rebuilds the round when a reload changes a
+  layout it draws with, destroying every box and losing focus, cursor, vim mode and undo. Add `snapshot`/`restore` to
+  `TextEditor`, restore the active box, and swap a CSS-only change without a rebuild.
 
 ### Hooks plugins don't have yet
 
@@ -104,8 +104,8 @@ now, any harness later). Each item names its sites.
 - Layouts as a core service: `api.layouts.define(slot, { contractText, defaultSource, read })` in both processes,
   owning the channel, the `layouts/<slot>/` folder, the CSS links, the toasts, the layout setting and the preview
   command. Replaces the hand wiring duplicated in forms and chat (`main/start.ts`, `page/start.ts`, the channel
-  methods per contract, keys per manifest), and gives any view (sessions sidebar row, docs, help, status bar) a user
-  look.
+  methods per contract, the `layout` setting per manifest), and gives any view (sessions sidebar row, docs, help,
+  status bar) a user look.
 - `EditorHost.defineEx(name, prefix, handler)`, disposable: the document editor's write/quit become ex commands the
   docs plugin registers, replacing the closed `DOCUMENT_EX_COMMANDS` and the `switch` in `codemirror-vim-host.ts`.
 - `MarkdownRenderer.addBlock({ opener, render })` and `addFence(language, render)` in the contract's own terms; the
@@ -135,11 +135,11 @@ now, any harness later). Each item names its sites.
   stay byte-compatible. `Round` / `FormBody` / `AnswersPayload` hold `Record<kind, …>` inside and convert at the store
   and payload edge. On the page each kind is a `PageKind` module (items, restore/entry codec, reduce, boxes, kit, card
   input, review facts, rail order), replacing `RAIL_ORDER`, `ROUND_ITEMS`, `ANSWER_ARRAYS`, `PICK_ANSWERS`,
-  `RECOMMENDED_PICKS`, `TextTarget`, `boxes.ts`, `card-kit.ts` tables, `read-layout.ts`'s unchecked `CARD_KINDS`, and the
+  `RECOMMENDED_PICKS`, `TextTarget`, `boxes.ts`, `card-kit.ts` tables, `read-layout.ts`'s `CARD_KINDS`, and the
   kind branches in `view-model.ts` and `round-view.ts`. The AGENTS.md "item kind" checklist shrinks to the module. The
   tool schema then needs the sessions `tools/list_changed` item above, and retro reads unknown result keys.
 - Finding origins become one `FindingOriginSpec` each (card, meaning, choice noun, choice bounds, severity required,
-  action words, chip, theme token), the single source for the parser, tool text, card input and `defectActionWord`.
+  action words, chip, theme token), the single source for the parser, tool text and card input.
   One `Finding` type with `severity: Severity | null` replaces the per-origin types; each saved round carries its
   origin action words so retro reads data rather than keeping `ORIGIN_ACTION_LABELS`.
 - Chat user layouts define only the entries they change: chat's `entries` becomes a partial record that falls back

@@ -135,7 +135,6 @@ Steps 1, the bug sweep, 2, drive reliability, and 3, the docs index seam, have l
 - `FindingOriginSpec`, with one `Finding` type
 - Split `form-state.ts`; rename one of the two `FormsView` types; `form-state.test.ts` uses the shared builders
 - Tool routing from one list; `SAVED_OUTCOMES`; a shared status ladder
-- Forms page exports and events; `kit.command` / `kit.keysFor`
 
 **17. Sessions decoupling.** Builds on 5 and 16.
 - Sessions stops knowing forms (`mark` text, `deadlineSeconds`, the preview `label`)

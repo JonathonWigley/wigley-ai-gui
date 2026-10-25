@@ -50,7 +50,7 @@ export interface FindingCard {
   // The recommended choice's 1-based position in `choices`; null when the recommendation is recommendAction's header.
   recommend: number | null;
   recommendAction: FindingAction;
-  // Why the round recommends a deferral action, by action; a round carries one only for the action it recommends.
+  // Why to take a deferral action, by action, for each one the round sent a reason for.
   actionReasons: { follow_up?: string; leave_it?: string };
   // The actions the origin offers, in the card's words.
   actions: { action: FindingAction; label: string }[];
