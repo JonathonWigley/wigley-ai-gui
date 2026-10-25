@@ -474,6 +474,36 @@ describe('showLayouts', () => {
     expect(page.shown).toHaveLength(1);
   });
 
+  it('showLayouts_SettingLeavesListedLayoutStillInUse_ShowsDefault', async () => {
+    const recorder = recordingLoader();
+    const page = showing(recorder.loader, 'mine');
+    page.namesInUse = ['mine'];
+    page.answer.resolve(setOf(entry('mine', 3)));
+    await vi.waitFor(() => expect(page.shown).toHaveLength(1));
+
+    page.setting = 'gone';
+    page.refresh();
+
+    await vi.waitFor(() => expect(page.shown).toHaveLength(2));
+    expect(page.shown[1].user).toBe('default');
+    expect(page.logLines).toContain(
+      '[demo] layout gone not found, drawing default',
+    );
+  });
+
+  it('showLayouts_NamesInUseGainsListedLayout_QueuesLoad', async () => {
+    const recorder = recordingLoader();
+    const page = showing(recorder.loader, 'mine');
+    page.answer.resolve(setOf(entry('mine', 3), entry('r', 1)));
+    await vi.waitFor(() => expect(page.shown).toHaveLength(1));
+
+    page.namesInUse = ['r'];
+    page.refresh();
+
+    await vi.waitFor(() => expect(recorder.calls).toHaveLength(2));
+    expect(recorder.calls[1].names).toEqual(['mine', 'r']);
+  });
+
   it('showLayouts_SetLayoutsThrows_LaterSetsStillShown', async () => {
     const recorder = recordingLoader();
     let calls = 0;

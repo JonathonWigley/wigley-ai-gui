@@ -28,8 +28,10 @@ export function createFormsContributions(): FormsContributions {
     cardParts: (kind) => parts.filter((part) => part.kinds.includes(kind)),
     reviewColumns: () => [...columns],
     onChanged(listener) {
-      listeners.add(listener);
-      return { dispose: () => listeners.delete(listener) };
+      // A wrapper per add, so each handle removes only its own add.
+      const held = () => listener();
+      listeners.add(held);
+      return { dispose: () => listeners.delete(held) };
     },
   };
 }
@@ -47,13 +49,14 @@ function addEntry<T extends { id: string }>(
   }
   entries.push(entry);
   notify();
+  let isDisposed = false;
   return {
     dispose() {
-      const position = entries.indexOf(entry);
-      if (position < 0) {
+      if (isDisposed) {
         return;
       }
-      entries.splice(position, 1);
+      isDisposed = true;
+      entries.splice(entries.indexOf(entry), 1);
       notify();
     },
   };

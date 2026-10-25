@@ -43,6 +43,61 @@ describe('createFormsContributions', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it('addCardPart_DisposeTwice_SecondDoesNothing', () => {
+    const contributions = createFormsContributions();
+    const added = contributions.addCardPart(part('p1', ['finding']));
+    contributions.addCardPart(part('p2', ['finding']));
+    const listener = vi.fn();
+    contributions.onChanged(listener);
+
+    added.dispose();
+    added.dispose();
+
+    const ids = contributions.cardParts('finding').map((each) => each.id);
+    expect(ids).toEqual(['p2']);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('addCardPart_OldHandleAfterReAdd_LeavesReAddedPart', () => {
+    const contributions = createFormsContributions();
+    const added = part('p1', ['finding']);
+    const first = contributions.addCardPart(added);
+    first.dispose();
+    contributions.addCardPart(added);
+    const listener = vi.fn();
+    contributions.onChanged(listener);
+
+    first.dispose();
+
+    expect(contributions.cardParts('finding')).toEqual([added]);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('addReviewColumn_OldHandleAfterReAdd_LeavesReAddedColumn', () => {
+    const contributions = createFormsContributions();
+    const added = column('c1');
+    const first = contributions.addReviewColumn(added);
+    first.dispose();
+    contributions.addReviewColumn(added);
+
+    first.dispose();
+
+    expect(contributions.reviewColumns()).toEqual([added]);
+  });
+
+  it('onChanged_OldHandleAfterReAdd_KeepsListener', () => {
+    const contributions = createFormsContributions();
+    const listener = vi.fn();
+    const first = contributions.onChanged(listener);
+    first.dispose();
+    contributions.onChanged(listener);
+
+    first.dispose();
+    contributions.addCardPart(part('p1', ['finding']));
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   it('addReviewColumn_Dispose_RemovesColumnAndNotifies', () => {
     const contributions = createFormsContributions();
     const added = contributions.addReviewColumn(column('c1'));

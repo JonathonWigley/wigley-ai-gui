@@ -54,6 +54,16 @@ function withFailingWatch(inner: Files): {
   };
 }
 
+// `files` whose watch reports each change as the top entry's name only, as
+// Node's `fs.watch` reports a folder renamed or moved inside the watched one.
+function withFolderNameWatch(inner: Files): Files {
+  return {
+    ...inner,
+    watch: (folder, onChange, options) =>
+      inner.watch(folder, onChange, { ...options, recursive: false }),
+  };
+}
+
 describe('start', () => {
   it('start_WritesLayoutTypes', async () => {
     await start();
@@ -194,6 +204,33 @@ describe('watch', () => {
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0].changed).toBe('alpha');
   });
+
+  it('watch_LayoutFolderRenamed_OldLeavesAndNewJoins', async () => {
+    await writeLayouts('alpha', 'beta');
+    const registry = await start(withFolderNameWatch(files));
+
+    await files.rename('layouts/alpha', 'layouts/gamma');
+
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+    expect(sent.map((set) => set.changed)).toEqual(['alpha', 'gamma']);
+    expect(entryIn(sent[1], 'alpha')).toBeUndefined();
+    expect(entryIn(sent[1], 'gamma')?.revision).toBeGreaterThanOrEqual(1);
+    expect(registry.names()).toEqual(['default', 'beta', 'gamma']);
+  });
+
+  it.each(['layout.d.ts', 'default/layout.js'])(
+    'watch_FolderNameReportFor_%s_SendsNothing',
+    async (saved) => {
+      await writeLayouts('alpha', 'default');
+      await start(withFolderNameWatch(files));
+
+      await files.write(`layouts/${saved}`, '// saved');
+      await files.write('layouts/alpha/layout.js', '// saved');
+
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      expect(sent[0].changed).toBe('alpha');
+    },
+  );
 
   it('watch_Fails_LogsIt', async () => {
     const failing = withFailingWatch(files);

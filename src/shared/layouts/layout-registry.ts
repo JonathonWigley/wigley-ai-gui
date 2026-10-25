@@ -6,7 +6,8 @@ import { errorText } from '../error-text';
 // The layouts in a plugin's data folder, each at the revision the page loads
 // it at. A save of a code, style, data, image or font file in any layout's
 // folder lists the layouts again and sends the new set, naming that layout as
-// changed. A watch failure is logged, and saves then go unseen until the next
+// changed; so does renaming, moving or deleting a layout's whole folder. A
+// watch failure is logged, and saves then go unseen until the next
 // start.
 export interface LayoutRegistry {
   current(): LayoutSet;
@@ -124,18 +125,31 @@ export async function startLayoutRegistry(
     send(setOf(folder));
   };
 
-  const onChange = (changed: string) => {
-    const slash = changed.indexOf('/');
-    const folder = slash === -1 ? null : changed.slice(0, slash);
-    const fileName = changed.slice(changed.lastIndexOf('/') + 1);
-    const isLayoutFile =
-      LAYOUT_FILE.test(fileName) && !fileName.startsWith('.');
-    if (folder === null || folder === DEFAULT_NAME || !isLayoutFile) {
-      return;
-    }
+  const relistInTurn = (folder: string) => {
     serially(() => relist(folder)).catch((error: unknown) =>
       log(logSource, `layout ${folder} not reloaded: ${errorText(error)}`),
     );
+  };
+
+  // A path with no slash names a whole entry in `layouts`, as a watch reports
+  // a folder renamed, moved or deleted; `relist` sends nothing for a name that
+  // never was a layout, `layout.d.ts` included.
+  const onChange = (changed: string) => {
+    const slash = changed.indexOf('/');
+    if (slash === -1) {
+      if (changed !== DEFAULT_NAME) {
+        relistInTurn(changed);
+      }
+      return;
+    }
+    const folder = changed.slice(0, slash);
+    const fileName = changed.slice(changed.lastIndexOf('/') + 1);
+    const isLayoutFile =
+      LAYOUT_FILE.test(fileName) && !fileName.startsWith('.');
+    if (folder === DEFAULT_NAME || !isLayoutFile) {
+      return;
+    }
+    relistInTurn(folder);
   };
 
   const watch = data.watch(LAYOUTS, onChange, {
