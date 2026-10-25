@@ -4,7 +4,9 @@ import type { ProcessResult, ProcessRunner } from '../../contracts/processes';
 
 // `ProcessRunner` through `node:child_process`, in the app's environment.
 // Output is collected whole, with no size cap. A run that cannot start
-// rejects naming the program, or the folder when `cwd` does not exist.
+// rejects naming the program, or the folder when `cwd` does not exist. Past
+// `timeoutMs` the program is killed and the run resolves at once with the
+// output so far; a grandchild it started is not killed.
 export function createNodeProcesses(): ProcessRunner {
   return { run: runToEnd };
 }
@@ -12,7 +14,7 @@ export function createNodeProcesses(): ProcessRunner {
 function runToEnd(
   command: string,
   args: string[],
-  options?: { cwd?: string },
+  options?: { cwd?: string; timeoutMs?: number },
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -21,19 +23,47 @@ function runToEnd(
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
+    let timedOut = false;
+    const timer =
+      options?.timeoutMs === undefined
+        ? undefined
+        : setTimeout(() => {
+            timedOut = true;
+            child.kill('SIGKILL');
+            // A grandchild holding the pipes would keep `close` from firing.
+            child.stdout.destroy();
+            child.stderr.destroy();
+            resolve(collected(-1, stdout, stderr, true));
+          }, options.timeoutMs);
     child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
     child.on('error', (error) => {
-      reject(new Error(startFailureMessage(command, options?.cwd, error)));
+      clearTimeout(timer);
+      if (!timedOut) {
+        reject(new Error(startFailureMessage(command, options?.cwd, error)));
+      }
     });
     child.on('close', (code) => {
-      resolve({
-        code: code ?? -1,
-        stdout: Buffer.concat(stdout).toString('utf8'),
-        stderr: Buffer.concat(stderr).toString('utf8'),
-      });
+      clearTimeout(timer);
+      if (!timedOut) {
+        resolve(collected(code ?? -1, stdout, stderr, false));
+      }
     });
   });
+}
+
+function collected(
+  code: number,
+  stdout: Buffer[],
+  stderr: Buffer[],
+  timedOut: boolean,
+): ProcessResult {
+  return {
+    code,
+    stdout: Buffer.concat(stdout).toString('utf8'),
+    stderr: Buffer.concat(stderr).toString('utf8'),
+    timedOut,
+  };
 }
 
 // Node reports ENOENT both for a missing program and for a missing `cwd`.

@@ -230,7 +230,12 @@ describe('docs main part', () => {
     docs.processes.script(
       'python3',
       ['-X', 'utf8', '/script.py', 'session', 'abc'],
-      { code: 0, stdout: JSON.stringify(SESSION_DOCUMENT), stderr: '' },
+      {
+        code: 0,
+        stdout: JSON.stringify(SESSION_DOCUMENT),
+        stderr: '',
+        timedOut: false,
+      },
     );
     const info: SessionInfo = {
       sessionId: 'abc',

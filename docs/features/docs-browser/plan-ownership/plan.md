@@ -205,10 +205,12 @@ Tasks 01–05 land in wigley-ai-marketplace, 06–14 in wigley-ai-gui (each task
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 9d343328c9cc19209b8fe375398e619c8268df71
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Two repos, two review bases: wigley-ai-gui 9d343328c9cc19209b8fe375398e619c8268df71 (the Review base line), wigley-ai-marketplace 37925feee7539acde5790672bcf9a3f9eb781a60; peer session ai-dev-9e on the same trees, so every commit is pathspec-scoped and each review range is an explicit commit list — lead
+- Stale precondition refreshed: the installed Claude copy is now wigley 1.10.0 (gitCommitSha 37925fee), not 1.9.1; the plugin.json version is 1.10.0, so task 05 bumps from 1.10.0 — lead
 ### Review rounds
 ### Test gate

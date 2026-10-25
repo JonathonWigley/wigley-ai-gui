@@ -45,7 +45,7 @@ function documentOf(entries: IndexEntry[]): IndexDocument {
 }
 
 function exited(code: number, stderr = '', stdout = ''): ProcessResult {
-  return { code, stdout, stderr };
+  return { code, stdout, stderr, timedOut: false };
 }
 
 function deferred<T>() {

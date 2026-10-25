@@ -7,7 +7,10 @@ import { createNodeProcesses } from './node-processes';
 const processes = createNodeProcesses();
 
 // Runs `script` in the Node that runs the tests.
-function runScript(script: string, options?: { cwd?: string }) {
+function runScript(
+  script: string,
+  options?: { cwd?: string; timeoutMs?: number },
+) {
   return processes.run(process.execPath, ['-e', script], options);
 }
 
@@ -17,7 +20,40 @@ describe('createNodeProcesses', () => {
       'process.stdout.write("out"); process.stderr.write("err"); process.exit(3)',
     );
 
-    expect(result).toEqual({ code: 3, stdout: 'out', stderr: 'err' });
+    expect(result).toEqual({
+      code: 3,
+      stdout: 'out',
+      stderr: 'err',
+      timedOut: false,
+    });
+  });
+
+  it(
+    'run_PastTimeout_KillsAndResolvesTimedOut',
+    { timeout: 10000 },
+    async () => {
+      const started = Date.now();
+
+      const result = await runScript(
+        'process.stdout.write("partial"); setTimeout(() => {}, 60000)',
+        { timeoutMs: 3000 },
+      );
+
+      expect(result).toEqual({
+        code: -1,
+        stdout: 'partial',
+        stderr: '',
+        timedOut: true,
+      });
+      expect(Date.now() - started).toBeLessThan(5000);
+    },
+  );
+
+  it('run_EndsBeforeTimeout_NotTimedOut', async () => {
+    const result = await runScript('process.exit(0)', { timeoutMs: 10000 });
+
+    expect(result.code).toBe(0);
+    expect(result.timedOut).toBe(false);
   });
 
   it('run_Cwd_RunsInTheFolder', async () => {

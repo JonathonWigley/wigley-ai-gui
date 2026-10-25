@@ -41,7 +41,12 @@ function setUp() {
     },
   };
   const processes = new FakeProcesses();
-  processes.script('ffmpeg', FFMPEG_ARGS, { code: 0, stdout: '', stderr: '' });
+  processes.script('ffmpeg', FFMPEG_ARGS, {
+    code: 0,
+    stdout: '',
+    stderr: '',
+    timedOut: false,
+  });
   const recorder = createFrameRecorder({
     window: fake.window,
     files,

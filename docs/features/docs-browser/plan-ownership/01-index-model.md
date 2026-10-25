@@ -1,6 +1,6 @@
 # 01 — Index model, schema 3
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

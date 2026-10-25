@@ -5,12 +5,14 @@ export interface FakeRun {
   command: string;
   args: string[];
   cwd: string | undefined;
+  timeoutMs: number | undefined;
 }
 
 type ScriptedResult = ProcessResult | Error | Promise<ProcessResult>;
 
 // A scripted `ProcessRunner` for the tests. A run nothing is scripted for
-// rejects with `FakeProcesses: no result scripted for <command> <args>`.
+// rejects with `FakeProcesses: no result scripted for <command> <args>`. It
+// sets no timer: a timed-out run is scripted as a result with `timedOut: true`.
 export class FakeProcesses implements ProcessRunner {
   // Every run, in call order.
   readonly runs: FakeRun[] = [];
@@ -26,9 +28,14 @@ export class FakeProcesses implements ProcessRunner {
   run(
     command: string,
     args: string[],
-    options?: { cwd?: string },
+    options?: { cwd?: string; timeoutMs?: number },
   ): Promise<ProcessResult> {
-    this.runs.push({ command, args: [...args], cwd: options?.cwd });
+    this.runs.push({
+      command,
+      args: [...args],
+      cwd: options?.cwd,
+      timeoutMs: options?.timeoutMs,
+    });
     const result = this.results.get(runKey(command, args));
     if (result === undefined) {
       return Promise.reject(
