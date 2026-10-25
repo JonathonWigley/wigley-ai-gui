@@ -1,6 +1,7 @@
 // The decisions `npm run install-app` makes from its inputs alone: the ref its
 // arguments name, where it builds, what it installs from the build and where on
-// each OS, and whether the build worktree needs `npm ci`. `scripts/install-app.mts` runs the steps.
+// each OS, and whether the build worktree needs `npm ci`.
+// `scripts/install-app.mts` runs the steps.
 import path from 'node:path';
 
 export interface InstallPaths {
@@ -39,9 +40,10 @@ export function parseInstallArgs(argv: readonly string[]): { ref: string } {
 }
 
 // Where the build worktree, its packaged output and the app in it, the
-// installed app, its binary and its Start menu shortcut sit. Built with the target platform's path module, so
-// the result is the same whichever OS computes it. Throws on a platform other
-// than Windows or macOS, and on Windows without LOCALAPPDATA and APPDATA.
+// installed app, its binary and its Start menu shortcut sit. Built with the
+// target platform's path module, so the result is the same whichever OS
+// computes it. Throws on a platform other than Windows or macOS, and on Windows
+// without LOCALAPPDATA and APPDATA.
 export function installPaths(
   platform: NodeJS.Platform,
   arch: string,
