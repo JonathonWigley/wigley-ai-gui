@@ -8,6 +8,8 @@ const config: ForgeConfig = {
     asar: true,
     win32metadata: { ProductName: 'Auri', FileDescription: 'Auri' },
     extendInfo: { CFBundleName: 'Auri', CFBundleDisplayName: 'Auri' },
+    // Packager adds `.ico` on Windows and `.icns` on macOS.
+    icon: 'assets/icon/icon',
   },
   rebuildConfig: {},
   plugins: [
