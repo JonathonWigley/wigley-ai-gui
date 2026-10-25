@@ -57,6 +57,9 @@ export interface IndexSourceRegistry {
   rebuild(id: string): Promise<SourceRead>;
   // The kept entries of every registered source, in registration order.
   loadedEntries(): readonly IndexEntry[];
+  // The kept entries of the source with `id`; throws for an id not
+  // registered.
+  sourceEntries(id: string): readonly IndexEntry[];
 }
 
 interface RegisteredSource {
@@ -85,6 +88,14 @@ export function createIndexSourceRegistry(): IndexSourceRegistry {
     };
   }
 
+  function registeredSource(id: string): RegisteredSource {
+    const record = registered.get(id);
+    if (record === undefined) {
+      throw new Error(`No docs index source ${id}`);
+    }
+    return record;
+  }
+
   // A load still running when its source is disposed writes to the removed
   // record, so its entries reach no `loadedEntries`. A run that settles after
   // a newer run of its source started leaves the entries to that newer run.
@@ -92,10 +103,7 @@ export function createIndexSourceRegistry(): IndexSourceRegistry {
     id: string,
     read: (source: IndexSource) => Promise<IndexLoad>,
   ): Promise<SourceRead> {
-    const record = registered.get(id);
-    if (record === undefined) {
-      throw new Error(`No docs index source ${id}`);
-    }
+    const record = registeredSource(id);
     const { source } = record;
     record.newestRun += 1;
     const runNumber = record.newestRun;
@@ -127,6 +135,7 @@ export function createIndexSourceRegistry(): IndexSourceRegistry {
       ),
     loadedEntries: () =>
       [...registered.values()].flatMap((record) => record.entries),
+    sourceEntries: (id) => registeredSource(id).entries,
   };
 }
 

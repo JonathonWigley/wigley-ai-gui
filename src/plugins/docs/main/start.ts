@@ -44,6 +44,7 @@ import {
   MACHINE_SOURCE_TITLE,
   SESSION_SOURCE_TITLE,
 } from './index-sources';
+import { readPluginStatus } from './plugin-status';
 import { writeDocsFixture } from './selftest-fixture';
 import {
   connectDocsFixtureSession,
@@ -236,7 +237,8 @@ export function addDriveActions(
 
 // Serves the page every registered index source (the machine index and one
 // per live session, plus any a plugin adds through `addSource`), the guarded
-// doc changes, one watched file per view, and external links. A source's
+// doc changes, one watched file per view, external links, and the git
+// statuses of the marketplace clones among a source's entries. A source's
 // index entries stay writable while it is registered.
 export const docsMainPart: MainPart<typeof docsManifest> = {
   manifest: docsManifest,
@@ -321,6 +323,18 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     });
     channel.handle('pluginConfigFile', async (key, harness) =>
       (await docs).docFiles.pluginConfigFile(key, harness),
+    );
+    channel.handle('pluginStatus', async (sourceId, fetch) =>
+      readPluginStatus(
+        registry.sourceEntries(sourceId),
+        {
+          processes: services.processes,
+          files: services.files,
+          paths: services.paths,
+          log: services.log,
+        },
+        { fetch },
+      ),
     );
     const sessions = api.dependency<SessionsMainExports>('sessions');
     services.selfTest?.run(

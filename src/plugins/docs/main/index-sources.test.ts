@@ -435,6 +435,23 @@ describe('registry', () => {
     expect(test.registry.loadedEntries()).toEqual([ENTRY, SESSION_ENTRY]);
   });
 
+  it('sourceEntries_EachSource_ItsOwnEntries', async () => {
+    const test = await withSessionLoaded();
+
+    expect(test.registry.sourceEntries('machine')).toEqual([ENTRY]);
+    expect(test.registry.sourceEntries('session:row-1')).toEqual([
+      SESSION_ENTRY,
+    ]);
+  });
+
+  it('sourceEntries_UnknownId_Throws', () => {
+    const { registry } = setUp();
+
+    expect(() => registry.sourceEntries('nope')).toThrow(
+      'No docs index source nope',
+    );
+  });
+
   it('loadedEntries_NoMachineIndex_SessionEntries', async () => {
     const test = setUp();
     test.processes.script(

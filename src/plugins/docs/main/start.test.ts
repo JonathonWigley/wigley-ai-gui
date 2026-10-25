@@ -257,6 +257,23 @@ describe('docs main part', () => {
     );
   });
 
+  it('pluginStatus_UnknownSource_Rejects', async () => {
+    const docs = startDocsPart();
+
+    await expect(docs.invoke('pluginStatus', 'nope', false)).rejects.toThrow(
+      'No docs index source nope',
+    );
+  });
+
+  it('pluginStatus_MachineSourceNoClones_Empty', async () => {
+    const docs = startDocsPart();
+    await docs.invoke('loadIndex', 'machine');
+
+    expect(await docs.invoke('pluginStatus', 'machine', false)).toEqual({
+      clones: [],
+    });
+  });
+
   it('exports_AddSource_ServedOverChannel', async () => {
     const docs = startDocsPart();
     const exports = docs.part.exports as DocsMainExports;
