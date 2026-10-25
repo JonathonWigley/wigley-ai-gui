@@ -8,6 +8,7 @@ import type {
   UserConfig,
   UserConfigRead,
 } from '../../../contracts/user-config';
+import { emptyUserFiles } from '../../../shared/empty-user-files';
 
 export interface SettingsSelfTestDeps {
   userConfig: Pick<
@@ -174,24 +175,6 @@ function holdsStaleTimeout(read: UserConfigRead): boolean {
     read.settings.state === 'ok' &&
     read.settings.layer?.keySequenceTimeoutMs === STALE_TIMEOUT_MS
   );
-}
-
-// Writes an empty layer to both user files, whatever a run before this one
-// left in them, broken text included.
-async function emptyUserFiles(
-  userConfig: SettingsSelfTestDeps['userConfig'],
-): Promise<void> {
-  const read = await userConfig.read();
-  const results = [
-    await userConfig.writeSettings({}, read.settings.text),
-    await userConfig.writeKeymap({}, read.keymap.text),
-  ];
-  const failed = results.find((result) => result.type !== 'written');
-  if (failed !== undefined) {
-    throw new Error(
-      `Emptying the user files before the settings steps failed: ${JSON.stringify(failed)}`,
-    );
-  }
 }
 
 function resultProblems(read: UserConfigRead): string[] {

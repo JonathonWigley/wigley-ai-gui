@@ -1,5 +1,7 @@
 import type { PageBind } from '../../../contracts/keymap';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
+import type { UserConfig } from '../../../contracts/user-config';
+import { emptyUserFiles } from '../../../shared/empty-user-files';
 import type {
   ConnectedSession,
   Harness,
@@ -1046,16 +1048,19 @@ function payloadProblems(payload: AnswersPayload): string[] {
   return checks.filter(([passed]) => !passed).map(([, problem]) => problem);
 }
 
-// Connects four sessions each run, ending the previous run's: a Claude and a
-// Codex session in project `selftest`, a Claude session there for the layouts
-// round, and a Codex session with no project that never shows a round. Asks
-// the fixture round in the first, a second round in the second, which the
-// steps never answer, the layouts round in the third, and the unknown-layout
-// round in the fourth, which refuses it. The first round is marked first, so
-// its row is selected; the script checks the answers the first call returns
-// and the fourth call's refusal.
+// Each run ends the previous run's sessions and empties both user files, since
+// a run a reload cut off can leave `forms.layout` set or the leader moved;
+// then it connects four sessions: a Claude and a Codex session in project
+// `selftest`, a Claude session there for the layouts round, and a Codex
+// session with no project that never shows a round. Asks the fixture round in
+// the first, a second round in the second, which the steps never answer, the
+// layouts round in the third, and the unknown-layout round in the fourth,
+// which refuses it. The first round is marked first, so its row is selected;
+// the script checks the answers the first call returns and the fourth call's
+// refusal. The result rejects when emptying the files fails.
 export function formsSelfTestScript(
   sessions: Pick<SessionsMainExports, 'connect'>,
+  userConfig: Pick<UserConfig, 'read' | 'writeSettings' | 'writeKeymap'>,
 ): SelfTestScript {
   let connected: ConnectedSession[] = [];
   const connect = (
@@ -1077,21 +1082,29 @@ export function formsSelfTestScript(
       for (const session of connected) {
         session.end();
       }
-      const first = connect(`selftest-${run}`, 'selftest', 'claude');
-      const second = connect(`selftest-${run}-2`, 'selftest', 'codex');
-      const layouts = connect(`selftest-${run}-layouts`, 'selftest', 'claude');
-      const idle = connect(`selftest-${run}-3`, null, 'codex');
-      connected = [first, second, layouts, idle];
-      const fixture = askFixtureRound(first, fixtureRound(run));
-      // Nothing checks the second and layouts calls' end: a later run ends
-      // their sessions.
-      askFixtureRound(second, secondRound(run)).catch(() => undefined);
-      askFixtureRound(layouts, layoutsRound(run)).catch(() => undefined);
-      const unknownLayout = askFixtureRound(idle, unknownLayoutRound(run));
-      const result: Promise<FormsSelfTestResult> = Promise.all([
-        fixture,
-        unknownLayout,
-      ]).then(([fixture, unknownLayout]) => ({ fixture, unknownLayout }));
+      connected = [];
+      const result: Promise<FormsSelfTestResult> = emptyUserFiles(
+        userConfig,
+      ).then(() => {
+        const first = connect(`selftest-${run}`, 'selftest', 'claude');
+        const second = connect(`selftest-${run}-2`, 'selftest', 'codex');
+        const layouts = connect(
+          `selftest-${run}-layouts`,
+          'selftest',
+          'claude',
+        );
+        const idle = connect(`selftest-${run}-3`, null, 'codex');
+        connected = [first, second, layouts, idle];
+        const fixture = askFixtureRound(first, fixtureRound(run));
+        // Nothing checks the second and layouts calls' end: a later run ends
+        // their sessions.
+        askFixtureRound(second, secondRound(run)).catch(() => undefined);
+        askFixtureRound(layouts, layoutsRound(run)).catch(() => undefined);
+        const unknownLayout = askFixtureRound(idle, unknownLayoutRound(run));
+        return Promise.all([fixture, unknownLayout]).then(
+          ([fixture, unknownLayout]) => ({ fixture, unknownLayout }),
+        );
+      });
       return {
         shownLine: '[forms] round shown: selftest · Layouts self-test round',
         result,

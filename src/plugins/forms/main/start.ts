@@ -280,7 +280,7 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       },
       () => undefined,
     );
-    selfTest?.run(formsSelfTestScript(sessions));
+    selfTest?.run(formsSelfTestScript(sessions, api.services.userConfig));
     const driveActions =
       api.drive !== null
         ? addDriveActions(api.drive, sessions, (listener) =>
