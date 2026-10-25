@@ -24,6 +24,11 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - A notification click focusing its round is untested live: an unsigned dev build gets no macOS notification (the alerts adapter falls back to Dock bounce and badge), so check it on the first signed build from the packaging follow-up.
 - Fuzzy finders: `Space f f` finds a file, `Space f s` searches text, ranked by the `FuzzyMatcher` page service (the fzf adapter, `src/renderer/fzf/`). Deferred from the docs browser (`docs-browser/design.md`).
 - `Ctrl+j`/`Ctrl+k` and `Ctrl+Shift+j`/`Ctrl+Shift+k` in the list views with a cursor — settings sections and rows, the chat, docs and settings pickers, and the chat session list — moving the cursor a line and half a page, so the scroll keys (`docs/keymap.md`, Layers) reach every view.
+- Plugin sync from the Docs view: commit, push, update the plugin for each harness (`claude plugin update` and
+  Codex's) and reload, acting on docs-browser plan C's statuses (uncommitted, unpushed, not installed, session stale;
+  `docs-browser/design.md`). Split out of plan C in its 2026-10-24 interview so it is designed against the landed
+  statuses; plan it with `wigley:feature`, its first question which statuses each step acts on. The harness update and
+  reload calls belong behind `AgentHarness`, and a push still needs the user's press each time.
 - Keyboard link hints (vimium style) in rendered docs, if Tab between links is not enough.
 - Images in rendered docs: loading local image files into the page needs a safe file protocol of its own; today they show their alt text.
 - The `on-demand` load-state tag uses the accent tone (`CHIP_TONES`, `src/plugins/docs/page/doc-view.ts`), against DESIGN.md's rule that colour at rest means a status; it was `status-info` before plan C, and `listed` now reads the same as `not-loaded`. Needs an info tone on the Tag primitive (`src/shared/page/ui/`).

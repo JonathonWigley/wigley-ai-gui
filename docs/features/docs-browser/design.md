@@ -6,12 +6,12 @@
 - **Modes and layout (plan A)** — modes, the sessions sidebar, session tabs, keys, rounds.
 - **Docs browser (plan B)** — index sources, the tree, viewing and editing, CRUD, load states, disk changes.
 - **Core services and seams** — the files and processes services, editor binds, markdown, the document editor.
-- **Plugin-source status (plan C)** — cache to source, git status, skill folder files.
+- **Ownership and plugin-source status (plan C)** — Mine and Third-party, cache merged into source, git
+  statuses, skill folder files.
 - **Out of scope** — follow-ups.
 
-The decisions the user settled in the 2026-10-19 interview (five rounds), kept so each plan is written from them.
-Plans A and B were written in that session; plan C is written from this file once B lands, against the code as it then
-stands. A decision here stands unless the user changes it.
+The decisions the user settled in the 2026-10-19 interview (five rounds), and plan C's in the 2026-10-24 interview,
+kept so each plan is written from them. A decision here stands unless the user changes it.
 
 ## Plans
 
@@ -20,7 +20,9 @@ stands. A decision here stands unless the user changes it.
 - **B — docs** (landed): the core `files` and `processes` services, the markdown document render and code
   highlighter, the document editor, the `docs` plugin (Docs mode and each session's Docs tab), and the docs index's
   `claudeConfigDirs` (wigley-ai-marketplace).
-- **C — plugin-source status**: written after B lands.
+- **C — ownership and plugin-source status**: the docs index's `owner`, marketplace clones and merged installs
+  (schema 3, wigley-ai-marketplace); the Mine and Third-party tree, read-only third-party docs and the git statuses
+  (`plan-ownership/`).
 
 Each plan lands green on its own, the self-test passing, and is reviewed on its own.
 
@@ -95,8 +97,11 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - The tree shows the last `index.json` at once; a full `build` (12.7 s, 629 entries, 4 MB measured 2026-10-19) runs
   in the background on launch and on Rescan. After create, rename or delete the tree updates at once and a background
   build fills in load states; until then the changed entry's chips read `pending`.
-- **Tree**: Global, then Plugins, then one node per repo; a repo holds its docs by kind and its feature home, and
-  splits by clone only when it has more than one. A kind or source the app does not know still loads: an unknown
+- **Tree**: two roots by the entry's `owner` (plan C). **Mine**, expanded: Global, then one node per repo. A repo
+  holds its docs by kind, then one node per plugin of a marketplace clone (its docs by kind, then an
+  **Installed only** node for its installed files the clone lacks), then its feature home, and splits by clone only
+  when it has more than one. **Third-party**, collapsed until the user expands it: Synced skills, then one node per
+  plugin. A skill with files beside its `SKILL.md` is a group: `SKILL.md` first, then its files by path. A kind or source the app does not know still loads: an unknown
   kind is a group after the known kinds, an unknown source a root node after the repos holding kind groups, each
   titled from its id (`my-kind` → `My kind`). An unknown source offers no create place, and only its entries' own
   files are changeable, never the rest of its root. Follow-up items open at their `line`. The filter fuzzy-matches each
@@ -128,7 +133,9 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - Main writes, renames and deletes only files the index lists, files inside a repo or feature home the index lists,
   and files inside a folder the index walks for global docs: each Claude config folder, `~/.codex`, `~/.agents` and
   `~/wigley-agents`. Never the home folder itself, and never anything inside a plugin cache.
-- **Plugin cache files** open read-only with a line naming the plugin; the source repo's copy is the one to edit.
+- **Read-only docs**: a `third-party` entry, and any file inside a plugin cache (an installed-only file), opens
+  read-only with a line saying it is a downloaded copy whose edits are lost on update; `i`, rename and delete refuse
+  it, and so does main's write guard. Create offers no place inside one.
 - **Hook and plugin entries** show a detail view (event, matcher, command / version, enabled) whose edit key opens
   the settings or config file holding it in the same editor.
 - **Disk changes**: the open file is watched, through a one-level watch (`recursive: false`) on its folder, so a doc
@@ -177,21 +184,45 @@ From the design review; each named by the `wigley:codebase-design` term behind i
 - **Pure, tested modules** (locality): index parsing and its `schemaVersion` check, tree grouping, path completion,
   frontmatter split, kind templates and target paths, link resolution, the on-disk-changed check.
 
-## Plugin-source status (plan C)
+## Ownership and plugin-source status (plan C)
 
-- `docs_index.py` records, for each plugin cache entry, its source entry: `known_marketplaces.json` gives the
-  marketplace's git URL (repo name), its `.claude-plugin/marketplace.json` gives the plugin folder
-  (`./plugins/wigley`), and any indexed clone of that repo holds the file. It also records, for a `session` document,
-  which plugin version's files the session loaded.
-- The app hides a cache entry that has a source, and runs `git` live (through the processes service), when Docs opens
-  and on Rescan, for four statuses shown on the source repo's node and on each session that loaded it:
-  uncommitted changes, unpushed commits, pushed but not yet installed (installed `gitCommitSha` behind origin), and
-  installed but the session started on an older version.
-- The index adds only agent-instruction files: every file in a skill's folder (references, templates, scripts it
-  tells agents to run). No settings, keybindings or config files.
-- The index's schema change bumps `schemaVersion` in both repos together.
+The user's aim: see which docs are the user's own — on disk, edited in place or pushed — apart from downloaded
+third-party copies, edit the user's own marketplace skills from the clone, and see how each edit stands against what
+sessions load.
+
+- **Ownership is the index's** (schema 3, `docs_index.py` README): each entry's `owner` is `mine` or `third-party`.
+  Third-party: a file of an installed plugin whose marketplace has no indexed clone, and a synced skill bucket
+  (`~/.claude/skills/synced/`, Anthropic's skills). Mine: everything else. The app groups, guards and offers create
+  places by `owner` alone, and reads no plugin config of its own.
+- **Marketplace clones**: a clone holding `.claude-plugin/marketplace.json` has each listed plugin's files indexed
+  from its `source` folder. An installed plugin whose marketplace URL names the same `<owner>/<repo>` as a clone's
+  origin (an SSH host alias and `https` match) is merged into the clone: each installed file with a counterpart
+  leaves the document, and the clone entry carries its install in `meta.installed` (harness, version, cache path) and
+  takes its load states. So the user sees each own file once, at the path the user edits, with how it loads. An
+  installed file the clone lacks shows under the plugin's Installed only node, read-only.
+- **Statuses**, per merged file and per harness, each one step of commit → push → update → restart. The app runs
+  `git` through the processes service; the index runs none:
+
+  ```
+  working file ≠ HEAD                → uncommitted
+  HEAD ≠ origin/<branch>             → unpushed
+  origin/<branch> ≠ installed copy   → not installed for <harness>   (or: no installed copy, a new file)
+  session loaded an older version    → session stale                 (a session's Docs tab only)
+  ```
+
+  "Not installed" compares the installed copy's text with the file at `origin/<branch>` (`git show`), which works for
+  Codex, whose install records no commit. "Session stale" compares the session context's `loadedPlugins` version with
+  the installed one; a session that named no file of the plugin shows none. A file with every status clear shows
+  none. A plugin node and a repo node show the rollup (`3 uncommitted · 12 not installed for Codex`).
+- **Fetch**: when Docs first opens and on Rescan, each clone with merged plugins runs `git fetch` in the background,
+  capped at 15 s; statuses show at once from the last fetch and refresh after it. A failed or capped fetch shows
+  `origin as of <time>` on the repo node, the time of the clone's last fetch.
+- **Skill folder files**: every file beside a skill's `SKILL.md`, at any depth, is a `skill-file` entry (references,
+  templates, scripts the skill tells agents to run), `not-loaded` for both harnesses.
+- The schema change lands in both repos together, with no fallback for schema 2.
 
 ## Out of scope
 
 Follow-ups in `../followups.md`: fuzzy finders (`Space f f` files, `Space f s` text, on a Neovim finder's matcher),
-keyboard link hints, images in rendered docs, the user config file, settings hot reload.
+keyboard link hints, images in rendered docs, the user config file, settings hot reload, and the plugin sync action
+(commit, push, update and reload from the Docs view, on plan C's statuses).
