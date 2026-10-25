@@ -645,7 +645,6 @@ const ROUND_LAYOUTS_STEPS: SelfTestStep[] = [
     keys: [],
     expect:
       '[forms] layout selftest-user notice card failed: selftest user throw',
-    screenshot: 'user-layout-setting',
     why: "The fixture round names no layout, so its notice takes the setting's layout; its other cards fall through to default.",
   },
   {
