@@ -12,6 +12,7 @@ export class FakeElement {
   title = '';
   type = '';
   tabIndex = 0;
+  scrollTop = 0;
   innerHTML = '';
   private ownText = '';
   private classes = new Set<string>();
