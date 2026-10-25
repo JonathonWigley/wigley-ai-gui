@@ -93,7 +93,8 @@ now, any harness later). Each item names its sites.
   layout it draws with, and by a card part or review column added or disposed) destroys and remounts every box. It
   focuses the focused box again (`keepFocusedBox`), in insert mode at the text's end when it was inserting, and keeps
   the main column's scroll, but loses the cursor, a visual mode and undo. Add `snapshot`/`restore` to `TextEditor`,
-  restore them in `keepFocusedBox`, and swap a CSS-only change without a rebuild.
+  restore them in `keepFocusedBox`, and swap a CSS-only change without a rebuild. Redraw only the cards a changed
+  layout draws, reading `LayoutSet.changed` (kept unread for this, by the user's ruling).
 
 ### Hooks plugins don't have yet
 
