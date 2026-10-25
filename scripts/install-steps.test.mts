@@ -52,6 +52,8 @@ describe('installPaths', () => {
       buildDir: 'D:\\ai-dev\\.wigley-ai-gui-build',
       packagedDir:
         'D:\\ai-dev\\.wigley-ai-gui-build\\out\\wigley-ai-gui-win32-x64',
+      packagedApp:
+        'D:\\ai-dev\\.wigley-ai-gui-build\\out\\wigley-ai-gui-win32-x64',
       installDir: 'C:\\Users\\me\\AppData\\Local\\Programs\\wigley-ai-gui',
       binary:
         'C:\\Users\\me\\AppData\\Local\\Programs\\wigley-ai-gui\\wigley-ai-gui.exe',
@@ -60,7 +62,7 @@ describe('installPaths', () => {
     });
   });
 
-  it('GIVEN darwin, arm64 WHEN installPaths runs THEN installDir is /Applications/wigley-ai-gui.app and shortcut null', () => {
+  it('GIVEN darwin, arm64 WHEN installPaths runs THEN packagedApp is the bundle in packagedDir, installDir is /Applications/wigley-ai-gui.app and shortcut null', () => {
     const paths = installPaths(
       'darwin',
       'arm64',
@@ -71,6 +73,8 @@ describe('installPaths', () => {
       buildDir: '/Users/me/ai-dev/.wigley-ai-gui-build',
       packagedDir:
         '/Users/me/ai-dev/.wigley-ai-gui-build/out/wigley-ai-gui-darwin-arm64',
+      packagedApp:
+        '/Users/me/ai-dev/.wigley-ai-gui-build/out/wigley-ai-gui-darwin-arm64/wigley-ai-gui.app',
       installDir: '/Applications/wigley-ai-gui.app',
       binary: '/Applications/wigley-ai-gui.app/Contents/MacOS/wigley-ai-gui',
       shortcut: null,

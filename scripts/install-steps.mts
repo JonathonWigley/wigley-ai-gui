@@ -1,11 +1,14 @@
 // The decisions `npm run install-app` makes from its inputs alone: the ref its
-// arguments name, where it builds and installs on each OS, and whether the
-// build worktree needs `npm ci`. `scripts/install-app.mts` runs the steps.
+// arguments name, where it builds, what it installs from the build and where on
+// each OS, and whether the build worktree needs `npm ci`. `scripts/install-app.mts` runs the steps.
 import path from 'node:path';
 
 export interface InstallPaths {
   buildDir: string;
   packagedDir: string;
+  // What gets copied to installDir: packagedDir itself on Windows, the bundle
+  // inside it on macOS.
+  packagedApp: string;
   installDir: string;
   binary: string;
   shortcut: string | null;
@@ -35,8 +38,8 @@ export function parseInstallArgs(argv: readonly string[]): { ref: string } {
   return { ref };
 }
 
-// Where the build worktree, its packaged app, the installed app, its binary and
-// its Start menu shortcut sit. Built with the target platform's path module, so
+// Where the build worktree, its packaged output and the app in it, the
+// installed app, its binary and its Start menu shortcut sit. Built with the target platform's path module, so
 // the result is the same whichever OS computes it. Throws on a platform other
 // than Windows or macOS, and on Windows without LOCALAPPDATA and APPDATA.
 export function installPaths(
@@ -61,6 +64,7 @@ export function installPaths(
     return {
       buildDir,
       packagedDir,
+      packagedApp: paths.join(packagedDir, 'wigley-ai-gui.app'),
       installDir,
       binary: paths.join(installDir, 'Contents', 'MacOS', 'wigley-ai-gui'),
       shortcut: null,
@@ -76,6 +80,7 @@ export function installPaths(
   return {
     buildDir,
     packagedDir,
+    packagedApp: packagedDir,
     installDir,
     binary: paths.join(installDir, 'wigley-ai-gui.exe'),
     shortcut: paths.join(
