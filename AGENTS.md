@@ -338,8 +338,9 @@ round), since main, not the page, decides.
   chat entry's layout reading the entry's raw events for anything the entry does not name. The registry watches every
   layout folder and announces the set of layouts, each with its own revision, so saving one reloads only that one;
   the user's layout is a plugin setting (`forms.layout`, `chat.layout`, `default` when unset). The root of every
-  card and pane a layout draws carries `data-layout="<name>"`, and each layout in use gets its own stylesheet link,
-  so a layout's CSS selects under its own name and restyles nothing another layout drew.
+  card and pane a layout draws carries `data-layout="<name>"`, and each loaded layout gets its own stylesheet link,
+  so a layout's CSS selects under its own name and restyles nothing another layout drew. A loaded layout stays
+  available while its revision is current, so a round naming one another round loaded draws with it at once.
 - **A chat layout** builds each entry kind's element from the entry and a `ChatKit`
   (`src/plugins/chat/layouts/layout.d.ts`): `markdown`, `json`, `expander` (a collapsible card), `collapsibleCard`,
   `card`, `statusDot` with `setDotStatus`, `sectionHeader`, and `permissionActions` (Allow once / Deny with their

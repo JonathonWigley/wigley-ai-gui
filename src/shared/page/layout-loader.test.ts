@@ -228,16 +228,48 @@ describe('createLayoutLoader', () => {
     expect(again.failed).toEqual([]);
   });
 
-  it('load_NameLeavesNames_RemovesItsLink', async () => {
-    const { loader, appended } = loaderWith();
+  it('load_NameLeavesNamesAtSameRevision_KeepsLayoutAndLink', async () => {
+    const { loader, appended, imports } = loaderWith();
     const set = setOf(entry('a', 4, true));
-    await loader.load(set, ['a']);
+    const first = await loader.load(set, ['a']);
 
     const after = await loader.load(set, []);
 
-    expect(shownLinks(appended)).toEqual([]);
-    expect(appended).toHaveLength(1);
+    expect(after.layouts.get('a')).toBe(first.layouts.get('a'));
+    expect(shownLinks(appended)).toEqual([
+      { layout: 'a', href: 'url:layouts/a/layout.css@4' },
+    ]);
+    expect(imports).toEqual(['url:layouts/a/layout.js@4']);
+  });
+
+  it('load_NameLeftOutAtNewRevision_DropsLayoutAndLink', async () => {
+    const { loader, appended, imports } = loaderWith();
+    await loader.load(setOf(entry('a', 4, true)), ['a']);
+
+    const after = await loader.load(setOf(entry('a', 5, true)), []);
+
     expect(after.layouts.has('a')).toBe(false);
+    expect(shownLinks(appended)).toEqual([]);
+    expect(imports).toEqual(['url:layouts/a/layout.js@4']);
+  });
+
+  it('load_NameLeavesTheSet_DropsLayoutAndLink', async () => {
+    const { loader, appended } = loaderWith();
+    await loader.load(setOf(entry('a', 4, true)), ['a']);
+
+    const after = await loader.load(setOf(), []);
+
+    expect(after.layouts.has('a')).toBe(false);
+    expect(shownLinks(appended)).toEqual([]);
+  });
+
+  it('load_NeverLoadedName_NotInLayouts', async () => {
+    const { loader, imports } = loaderWith();
+
+    const result = await loader.load(setOf(entry('a', 4)), []);
+
+    expect(imports).toEqual([]);
+    expect([...result.layouts.keys()]).toEqual(['default']);
   });
 
   it('load_NameNotInSet_Skipped', async () => {
@@ -524,6 +556,23 @@ describe('showLayouts', () => {
 
     await vi.waitFor(() => expect(page.shown).toHaveLength(1));
     expect(page.shown[0].layouts.get('mine')).toEqual({ tag: 'mine@3' });
+  });
+
+  it('showLayouts_NameLeavesUse_LastShownStillHoldsItsLayout', async () => {
+    const { loader } = loaderWith();
+    const page = showing(loader, 'default');
+    page.namesInUse = ['r'];
+    page.answer.resolve(setOf(entry('r', 1)));
+    await vi.waitFor(() => expect(page.shown).toHaveLength(1));
+    const loaded = page.shown[0].layouts.get('r');
+
+    page.namesInUse = [];
+    page.refresh();
+    await settle();
+
+    const lastShown = page.shown.at(-1);
+    expect(loaded).toBeDefined();
+    expect(lastShown?.layouts.get('r')).toBe(loaded);
   });
 
   it('showLayouts_AnswerRejects_LogsNotRead', async () => {

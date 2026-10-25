@@ -13,9 +13,10 @@ export interface LayoutLoaderDeps<L> {
   read(module: unknown, name: string): L;
 }
 
-// One load's outcome: every layout with a good version among the names asked
-// for, `default` always included; the entries this load imported and read;
-// and the entries whose import or read failed in this load.
+// One load's outcome: `default`, every layout with a good version among the
+// names asked for, and every other layout the set lists whose good version is
+// at the set's revision; the entries this load imported and read; and the
+// entries whose import or read failed in this load.
 export interface LayoutLoad<L> {
   layouts: ReadonlyMap<string, L>;
   loaded: LayoutEntry[];
@@ -55,10 +56,13 @@ type Attempt<L> =
 
 // Loads the named layouts the set lists, each cached by name and revision: a
 // revision that loaded, or failed, is not imported again. A failed name keeps
-// its last good version. `head` holds one stylesheet link per loaded name
-// whose good version has CSS, marked `data-layout="<name>"`; a link moves only
-// once its name's script has loaded and read, so a failed reload keeps the
-// last good look whole, and a name left out of a load loses its link.
+// its last good version. A name left out of a load stays in its layouts while
+// its good version is at the set's revision, so content that names it again
+// draws with it before the next load; at another revision it drops out.
+// `head` holds one stylesheet link per layout in the load's layouts whose good
+// version has CSS, marked `data-layout="<name>"`; a link moves only once its
+// name's script has loaded and read, so a failed reload keeps the last good
+// look whole, and a layout that drops out loses its link.
 export function createLayoutLoader<L>(
   deps: LayoutLoaderDeps<L>,
 ): LayoutLoader<L> {
@@ -100,9 +104,11 @@ export function createLayoutLoader<L>(
       }
       const layouts = new Map<string, L>([[DEFAULT_NAME, deps.defaultLayout]]);
       const shownVersions: GoodVersion<L>[] = [];
-      for (const entry of entries) {
+      for (const entry of set.layouts) {
         const version = entry.builtIn ? undefined : good.get(entry.name);
-        if (version !== undefined) {
+        const isAsked = entries.includes(entry);
+        const isCurrent = version?.entry.revision === entry.revision;
+        if (version !== undefined && (isAsked || isCurrent)) {
           layouts.set(entry.name, version.layout);
           shownVersions.push(version);
         }
