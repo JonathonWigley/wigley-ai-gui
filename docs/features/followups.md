@@ -84,9 +84,11 @@ now, any harness later). Each item names its sites.
   are what block it.
 - Forms page state survives a page reload: focus, review row and view (review, confirm) go into the draft or a core
   per-plugin page-state slot; pending autosaves flush on `pagehide`; restored rounds don't take over their session again.
-- A layout hot reload keeps the user's place: `round-view.ts` `setLayouts` rebuilds the round when a reload changes a
-  layout it draws with, destroying every box and losing focus, cursor, vim mode and undo. Add `snapshot`/`restore` to
-  `TextEditor`, restore the active box, and swap a CSS-only change without a rebuild.
+- A layout hot reload keeps the user's place: `round-view.ts` `rebuild` (run by `setLayouts` when a reload changes a
+  layout it draws with, and by a card part or review column added or disposed) destroys and remounts every box. It
+  focuses the focused box again (`keepFocusedBox`), in insert mode at the text's end when it was inserting, and keeps
+  the main column's scroll, but loses the cursor, a visual mode and undo. Add `snapshot`/`restore` to `TextEditor`,
+  restore them in `keepFocusedBox`, and swap a CSS-only change without a rebuild.
 
 ### Hooks plugins don't have yet
 

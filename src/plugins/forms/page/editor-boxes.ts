@@ -16,6 +16,7 @@ export interface EditorBoxEvents {
 // One editor per text box, created once when its round first renders.
 export interface EditorBoxes {
   mount(parent: HTMLElement, box: BoxRef, text: string): void;
+  isMounted(box: BoxRef): boolean;
   boxOf(editor: TextEditor): BoxRef | undefined;
   // Focuses the box's editor; the box counts as focused at once.
   focus(box: BoxRef, options?: FocusOptions): void;
@@ -97,6 +98,9 @@ export function createEditorBoxes(
         },
       });
       mounted.set(key, { box, editor });
+    },
+    isMounted(box) {
+      return mounted.has(boxKey(box));
     },
     boxOf(editor) {
       return [...mounted.values()].find((entry) => entry.editor === editor)

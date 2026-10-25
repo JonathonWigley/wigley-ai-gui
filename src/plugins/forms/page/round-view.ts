@@ -49,7 +49,16 @@ import {
 // added.
 export interface RoundViewDeps {
   markdown: MarkdownRenderer;
-  boxes: Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>;
+  boxes: Pick<
+    EditorBoxes,
+    | 'mount'
+    | 'destroyBox'
+    | 'destroyRound'
+    | 'isMounted'
+    | 'active'
+    | 'activeMode'
+    | 'focus'
+  >;
   keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   dispatch(action: FormsAction): void;
   getState(): FormsState;
@@ -62,7 +71,9 @@ export interface RoundViewDeps {
 }
 
 // `rebuild` rebuilds the view's children from `round` with the layouts it
-// picked, remounting every box from the round's answers. `setLayouts` picks
+// picked, remounting every box from the round's answers; the round's focused
+// box takes focus again, and the main column keeps its scroll while the round
+// shows the same item. `setLayouts` picks
 // the round's layouts again from `shown` and rebuilds when a pick changed.
 // `scrollBy` scrolls the main column by `step`, down for 1 and up for -1.
 // `dispose` stops the view following keymap changes; its owner calls it when
@@ -95,7 +106,8 @@ interface RoundParts {
 // by the layout `pickRoundLayouts` picks for it from `shown`. A render only
 // updates it, the rail taking the latest dragged width of any round; new
 // layouts that change a pick rebuild both panes, as `rebuild` does, keeping
-// the rail's dragged width. A keymap change draws the layout's head again, shown or hidden, since
+// the rail's dragged width, the focused box and the main column's scroll. A
+// keymap change draws the layout's head again, shown or hidden, since
 // showing the view only updates it, and has the review redraw its rows at its
 // next update; while the view shows, the change also updates it with the
 // round it last showed, so every key hint reads the new keys. `attach` places
@@ -160,12 +172,19 @@ export function createRoundView(
       }
     },
     rebuild(current) {
-      deps.boxes.destroyRound(current.roundId);
-      split.start.replaceChildren();
-      split.end.replaceChildren();
-      parts = build(current, picks);
-      shownFocus = -1;
-      view.update(current, shownView);
+      const showsSameItem = current.focus === shownFocus;
+      const scrollTop = parts.main.scrollTop;
+      keepFocusedBox(deps.boxes, current.roundId, () => {
+        deps.boxes.destroyRound(current.roundId);
+        split.start.replaceChildren();
+        split.end.replaceChildren();
+        parts = build(current, picks);
+        shownFocus = -1;
+        view.update(current, shownView);
+        if (showsSameItem) {
+          parts.main.scrollTop = scrollTop;
+        }
+      });
     },
     setLayouts(nextShown, current) {
       const nextPicks = pickRoundLayouts(
@@ -199,6 +218,25 @@ export function createRoundView(
     }
   });
   return view;
+}
+
+// Runs `rebuild`, which destroys and remounts the boxes of round `roundId`,
+// then focuses the round's box that had focus before it again, when the
+// rebuilt round still mounts it. A box in insert mode comes back in insert
+// mode at its text's end; the cursor, any other vim mode and undo are lost.
+export function keepFocusedBox(
+  boxes: Pick<EditorBoxes, 'active' | 'activeMode' | 'focus' | 'isMounted'>,
+  roundId: string,
+  rebuild: () => void,
+) {
+  const active = boxes.active();
+  const focused = active?.roundId === roundId ? active : null;
+  const wasInserting = boxes.activeMode()?.mode === 'insert';
+  rebuild();
+  if (focused === null || !boxes.isMounted(focused)) {
+    return;
+  }
+  boxes.focus(focused, wasInserting ? { insertAtEnd: true } : undefined);
 }
 
 // Builds the rail pane into the split's start pane and the round's main
