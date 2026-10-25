@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
-import type { IndexContext, IndexDocument, IndexEntry } from '../contract';
-import type { TreeGroup, TreeLeaf, TreeNode } from '../tree';
+import type {
+  CloneStatus,
+  FileStatus,
+  IndexContext,
+  IndexDocument,
+  IndexEntry,
+} from '../contract';
+import type { GroupRole, TreeGroup, TreeLeaf, TreeNode } from '../tree';
 import {
   applyChange,
   changeableEntry,
@@ -11,16 +17,21 @@ import {
   codeFence,
   conflictText,
   contextChoices,
+  defaultExpandedIds,
   detailFields,
   edgeSelection,
+  fetchText,
+  fileStatuses,
   noPlaceText,
   parentId,
   provisionalEntry,
+  readOnlyReason,
   readOnlyText,
   reapplyChange,
   renameRecord,
-  rootIds,
+  rollupText,
   settlePending,
+  statusTexts,
   stepSelection,
   type TreeRow,
   type TreeState,
@@ -30,12 +41,18 @@ import {
   type TreeLineState,
   type TreeRowKey,
   treeRowAction,
+  treeRowStatus,
   UNSAVED_TEXT,
   visibleRows,
 } from './docs-state';
 
-function group(id: string, title: string, children: TreeNode[]): TreeGroup {
-  return { type: 'group', id, title, folder: '/', children };
+function group(
+  id: string,
+  title: string,
+  children: TreeNode[],
+  role: GroupRole = { type: 'other' },
+): TreeGroup {
+  return { type: 'group', id, title, folder: '/', role, children };
 }
 
 function leaf(id: string, title: string, entryId: string): TreeLeaf {
@@ -252,9 +269,23 @@ describe('treeRowAction', () => {
   });
 });
 
-describe('rootIds', () => {
-  it('rootIds_Tree_RootsOnly', () => {
-    expect([...rootIds(FILTER_TREE)]).toEqual(['root']);
+describe('defaultExpandedIds', () => {
+  it('defaultExpandedIds_MineAndChildren_ThirdPartyCollapsed', () => {
+    const tree = [
+      group('owner:mine', 'Mine', [
+        group('global', 'Global', []),
+        group('repo:r', 'r', [group('repo:r/rule', 'Rules', [])]),
+      ]),
+      group('owner:third-party', 'Third-party', [
+        group('owner:third-party/synced', 'Synced skills', []),
+      ]),
+    ];
+
+    expect([...defaultExpandedIds(tree)]).toEqual([
+      'owner:mine',
+      'global',
+      'repo:r',
+    ]);
   });
 });
 
@@ -745,8 +776,16 @@ describe('changeableEntry', () => {
     plugin: 'p@m',
     root: '/c/p',
   });
+  const synced = entry({
+    path: '/Users/u/.claude/skills/synced/pdf/SKILL.md',
+    kind: 'skill',
+    owner: 'third-party',
+  });
   const byId = new Map(
-    [rule, skill, followup, hook, cached].map((each) => [each.id, each]),
+    [rule, skill, followup, hook, cached, synced].map((each) => [
+      each.id,
+      each,
+    ]),
   );
   const check = (entryId: string, unsavedPaths: string[] = []) =>
     changeableEntry(
@@ -806,7 +845,19 @@ describe('changeableEntry', () => {
 
   it('changeableEntry_PluginCache_RefusedReadOnly', () => {
     expect(check(cached.id)).toEqual({
-      refusal: { text: readOnlyText('p@m'), tone: 'info' },
+      refusal: {
+        text: 'Installed copy — p@m. Edits are lost on its next update.',
+        tone: 'info',
+      },
+    });
+  });
+
+  it('changeableEntry_SyncedSkill_RefusedReadOnly', () => {
+    expect(check(synced.id)).toEqual({
+      refusal: {
+        text: 'Downloaded copy — synced skill. Edits are lost on its next update.',
+        tone: 'info',
+      },
     });
   });
 
@@ -1217,6 +1268,43 @@ describe('provisionalEntry', () => {
 
     expect(made.kind).toBe('reference');
   });
+
+  it('provisionalEntry_InsideClonePluginFolder_TakesPluginKey', () => {
+    const clone = '/Users/u/dev/m';
+    const pluginEntries = [
+      entry({
+        path: `${clone}/AGENTS.md`,
+        source: 'repo',
+        repo: 'm',
+        root: clone,
+      }),
+      ...['f', 'g'].map((skill) =>
+        entry({
+          path: `${clone}/plugins/w/skills/${skill}/SKILL.md`,
+          kind: 'skill',
+          source: 'repo',
+          repo: 'm',
+          root: clone,
+          plugin: 'w@m',
+        }),
+      ),
+    ];
+    const inPlugin = provisionalEntry(
+      `${clone}/plugins/w/skills/h/SKILL.md`,
+      'skill',
+      pluginEntries,
+      posixPaths,
+    );
+    const outside = provisionalEntry(
+      `${clone}/notes.md`,
+      null,
+      pluginEntries,
+      posixPaths,
+    );
+
+    expect(inPlugin.plugin).toBe('w@m');
+    expect(outside.plugin).toBe(null);
+  });
 });
 
 describe('changedPaths', () => {
@@ -1291,5 +1379,330 @@ describe('detailFields', () => {
       ['Enabled', '—'],
       ['Installs', 'user, project · ~/dev/r'],
     ]);
+  });
+});
+
+describe('readOnlyReason', () => {
+  it('readOnlyReason_ThirdPartyPlugin_Downloaded', () => {
+    const plugin = entry({
+      path: '/c/v/skills/s/SKILL.md',
+      owner: 'third-party',
+      source: 'plugin',
+      plugin: 'v@m',
+      root: '/c/v',
+    });
+
+    expect(readOnlyReason(plugin)).toEqual({
+      type: 'downloaded',
+      plugin: 'v@m',
+    });
+  });
+
+  it('readOnlyReason_SyncedSkill_DownloadedNoPlugin', () => {
+    const synced = entry({
+      path: '/Users/u/.claude/skills/synced/pdf/SKILL.md',
+      owner: 'third-party',
+      source: 'global',
+    });
+
+    expect(readOnlyReason(synced)).toEqual({
+      type: 'downloaded',
+      plugin: null,
+    });
+  });
+
+  it('readOnlyReason_InstalledOnly_Installed', () => {
+    const installed = entry({
+      path: '/c/p/skills/s/SKILL.md',
+      source: 'plugin',
+      plugin: 'p@m',
+      root: '/c/p',
+    });
+
+    expect(readOnlyReason(installed)).toEqual({
+      type: 'installed',
+      plugin: 'p@m',
+    });
+  });
+
+  it('readOnlyReason_OwnRepoFile_Null', () => {
+    const own = entry({
+      path: '/Users/u/dev/m/plugins/w/skills/f/SKILL.md',
+      source: 'repo',
+      repo: 'm',
+      root: '/Users/u/dev/m',
+      plugin: 'w@m',
+    });
+
+    expect(readOnlyReason(own)).toBe(null);
+  });
+});
+
+describe('readOnlyText', () => {
+  it('readOnlyText_Downloaded_NamesPlugin', () => {
+    expect(readOnlyText({ type: 'downloaded', plugin: 'v@m' })).toBe(
+      'Downloaded copy — v@m. Edits are lost on its next update.',
+    );
+  });
+
+  it('readOnlyText_DownloadedSynced_SaysSyncedSkill', () => {
+    expect(readOnlyText({ type: 'downloaded', plugin: null })).toBe(
+      'Downloaded copy — synced skill. Edits are lost on its next update.',
+    );
+  });
+
+  it('readOnlyText_Installed_NamesPlugin', () => {
+    expect(readOnlyText({ type: 'installed', plugin: 'p@m' })).toBe(
+      'Installed copy — p@m. Edits are lost on its next update.',
+    );
+  });
+});
+
+function fileStatus(overrides: Partial<FileStatus>): FileStatus {
+  return {
+    uncommitted: false,
+    unpushed: false,
+    notInstalled: [],
+    ...overrides,
+  };
+}
+
+function cloneStatus(overrides: Partial<CloneStatus>): CloneStatus {
+  return {
+    root: '/r',
+    fetchedAt: null,
+    fetchFailed: false,
+    files: {},
+    ...overrides,
+  };
+}
+
+describe('fileStatuses', () => {
+  it('fileStatuses_TwoClones_MergedByEntryId', () => {
+    const s1 = fileStatus({ uncommitted: true });
+    const s2 = fileStatus({ notInstalled: ['codex'] });
+    const read = {
+      clones: [
+        cloneStatus({ root: '/a', files: { a: s1 } }),
+        cloneStatus({ root: '/b', files: { b: s2 } }),
+      ],
+    };
+
+    expect([...fileStatuses(read)]).toEqual([
+      ['a', s1],
+      ['b', s2],
+    ]);
+    expect(fileStatuses(null).size).toBe(0);
+  });
+});
+
+describe('statusTexts', () => {
+  // Plugin `w@m`'s file in the clone, with the given installed copies.
+  const pluginFile = (installed: object[]) =>
+    entry({
+      path: '/Users/u/dev/m/plugins/w/skills/f/SKILL.md',
+      source: 'repo',
+      repo: 'm',
+      root: '/Users/u/dev/m',
+      plugin: 'w@m',
+      meta: { installed },
+    });
+  const claudeCopy = {
+    harness: 'claude',
+    version: '1.9.1',
+    path: '/Users/u/.claude/plugins/cache/m/w/1.9.1/skills/f/SKILL.md',
+  };
+
+  it('statusTexts_EverySet_InPinnedOrder', () => {
+    const status = fileStatus({
+      uncommitted: true,
+      unpushed: true,
+      notInstalled: ['codex', 'claude'],
+    });
+
+    expect(
+      statusTexts(pluginFile([claudeCopy]), status, { 'w@m': '1.9.0' }),
+    ).toEqual([
+      'Uncommitted',
+      'Unpushed',
+      'Not installed · Claude',
+      'Not installed · Codex',
+      'Session stale',
+    ]);
+  });
+
+  it('statusTexts_LoadedSameVersion_NotStale', () => {
+    expect(
+      statusTexts(pluginFile([claudeCopy]), undefined, { 'w@m': '1.9.1' }),
+    ).toEqual([]);
+  });
+
+  it('statusTexts_KeyNotLoaded_NotStale', () => {
+    expect(statusTexts(pluginFile([claudeCopy]), undefined, {})).toEqual([]);
+  });
+
+  it('statusTexts_NoClaudeCopy_NotStale', () => {
+    const codexCopy = {
+      harness: 'codex',
+      version: '0.17.1',
+      path: '/Users/u/.codex/plugins/cache/m/w/0.17.1/skills/f/SKILL.md',
+    };
+
+    expect(
+      statusTexts(pluginFile([codexCopy]), undefined, { 'w@m': '0.1.0' }),
+    ).toEqual([]);
+  });
+});
+
+describe('rollupText', () => {
+  it('rollupText_Counts_InOrderZerosLeftOut', () => {
+    const counts = {
+      uncommitted: 3,
+      unpushed: 1,
+      notInstalled: { claude: 0, codex: 12 },
+    };
+
+    expect(rollupText(counts)).toBe(
+      '3 uncommitted · 1 unpushed · 12 not installed for Codex',
+    );
+  });
+
+  it('rollupText_BothHarnesses_ClaudeFirst', () => {
+    const counts = {
+      uncommitted: 0,
+      unpushed: 0,
+      notInstalled: { claude: 2, codex: 5 },
+    };
+
+    expect(rollupText(counts)).toBe(
+      '2 not installed for Claude · 5 not installed for Codex',
+    );
+  });
+
+  it('rollupText_AllZero_Null', () => {
+    const counts = {
+      uncommitted: 0,
+      unpushed: 0,
+      notInstalled: { claude: 0, codex: 0 },
+    };
+
+    expect(rollupText(counts)).toBe(null);
+  });
+});
+
+describe('fetchText', () => {
+  const wrapped = (iso: string) => `T(${iso})`;
+
+  it('fetchText_FailedFetched_OriginAsOf', () => {
+    const clone = cloneStatus({
+      fetchFailed: true,
+      fetchedAt: '2026-10-24T10:00:00Z',
+    });
+
+    expect(fetchText(clone, wrapped)).toBe(
+      'origin as of T(2026-10-24T10:00:00Z)',
+    );
+  });
+
+  it('fetchText_FailedNeverFetched_OriginNeverFetched', () => {
+    const clone = cloneStatus({ fetchFailed: true, fetchedAt: null });
+
+    expect(fetchText(clone, wrapped)).toBe('origin never fetched');
+  });
+
+  it('fetchText_NotFailed_Null', () => {
+    const clone = cloneStatus({
+      fetchFailed: false,
+      fetchedAt: '2026-10-24T10:00:00Z',
+    });
+
+    expect(fetchText(clone, wrapped)).toBe(null);
+  });
+});
+
+describe('treeRowStatus', () => {
+  const noTexts = () => [];
+  const asIs = (iso: string) => iso;
+  const leafA = leaf('entry:a', 'A', 'a');
+  const uncommittedA = new Map([['a', fileStatus({ uncommitted: true })]]);
+  const failedClone = cloneStatus({
+    root: '/r',
+    fetchFailed: true,
+    files: { a: fileStatus({ uncommitted: true }) },
+  });
+
+  it('treeRowStatus_LeafWithTexts_MarkJoined', () => {
+    const texts = () => ['Uncommitted', 'Not installed · Codex'];
+
+    expect(
+      treeRowStatus(leafA, texts, new Map(), [], asIs, posixPaths),
+    ).toEqual({ mark: 'Uncommitted · Not installed · Codex', detail: null });
+  });
+
+  it('treeRowStatus_LeafNoTexts_Nothing', () => {
+    expect(
+      treeRowStatus(leafA, noTexts, new Map(), [], asIs, posixPaths),
+    ).toEqual({ mark: null, detail: null });
+  });
+
+  it('treeRowStatus_PluginNode_Rollup', () => {
+    const plugin = group(
+      'repo:m/plugin:w@m',
+      'w@m',
+      [
+        group('repo:m/plugin:w@m/skill', 'Skills', [
+          leafA,
+          leaf('entry:b', 'B', 'b'),
+          leaf('entry:c', 'C', 'c'),
+        ]),
+      ],
+      { type: 'plugin' },
+    );
+    const files = new Map([
+      ['a', fileStatus({ uncommitted: true })],
+      ['b', fileStatus({ uncommitted: true, unpushed: true })],
+    ]);
+
+    expect(treeRowStatus(plugin, noTexts, files, [], asIs, posixPaths)).toEqual(
+      { mark: null, detail: '2 uncommitted · 1 unpushed' },
+    );
+  });
+
+  it('treeRowStatus_RepoNodeFetchFailed_RollupThenOrigin', () => {
+    const repo = group('repo:m', 'm', [leafA], { type: 'repo', clone: '/r' });
+
+    const status = treeRowStatus(
+      repo,
+      noTexts,
+      uncommittedA,
+      [failedClone],
+      asIs,
+      posixPaths,
+    );
+
+    expect(status.detail).toBe('1 uncommitted · origin never fetched');
+  });
+
+  it('treeRowStatus_SplitRepoNode_RollupNoOrigin', () => {
+    const repo = group('repo:m', 'm', [leafA], { type: 'repo', clone: null });
+
+    const status = treeRowStatus(
+      repo,
+      noTexts,
+      uncommittedA,
+      [failedClone],
+      asIs,
+      posixPaths,
+    );
+
+    expect(status.detail).toBe('1 uncommitted');
+  });
+
+  it('treeRowStatus_KindGroup_NoDetail', () => {
+    const kind = group('repo:m/skill', 'Skills', [leafA]);
+
+    expect(
+      treeRowStatus(kind, noTexts, uncommittedA, [], asIs, posixPaths),
+    ).toEqual({ mark: null, detail: null });
   });
 });

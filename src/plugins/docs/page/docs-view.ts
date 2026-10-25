@@ -15,11 +15,12 @@ import {
   type IndexDocument,
   type IndexEntry,
   MACHINE_SOURCE_ID,
+  type PluginStatusRead,
   type SourceRead,
 } from '../contract';
 import { metaString } from '../index-document';
 import { isIndexedPath } from '../path-guard';
-import { buildTree, type TreeLeaf } from '../tree';
+import { buildTree, type TreeLeaf, type TreeNode } from '../tree';
 import { type DocDetail, type DocTarget, createDocView } from './doc-view';
 import { createDocsDialogs } from './docs-dialogs';
 import {
@@ -32,8 +33,12 @@ import {
   type DocChangeRecord,
   type DocsKeysFor,
   detailFields,
+  fileStatuses,
+  readOnlyReason,
   reapplyChange,
   settlePending,
+  statusTexts,
+  treeRowStatus,
 } from './docs-state';
 import { createTreeView } from './tree-view';
 
@@ -87,10 +92,13 @@ export interface DocsViewCommands {
 export interface DocsView {
   tree: HTMLElement;
   doc: HTMLElement;
-  // The first call loads the source's index, then rebuilds it when the
-  // source can; later calls do nothing.
+  // The first call loads the source's index, then reads its plugin-source
+  // statuses, again after a fetch, and rebuilds the index when the source
+  // can; later calls do nothing. Every rebuild reads the statuses again once
+  // it settles.
   showFirstTime(): void;
-  // Rebuilds the source's index: `R`.
+  // Rebuilds the source's index, then reads its statuses and reads them
+  // again after a fetch: `R`.
   rescan(): void;
   // Another view made `change`. A view not shown yet does nothing; else a
   // rename or trash shows at once, the doc pane following its file, and the
@@ -183,19 +191,25 @@ function resultLine(result: SourceRead, run: IndexRun): string {
   return `${result.title} ${isRebuilt ? 'rebuilt' : 'read'}: ${count} entries`;
 }
 
-// The plugin entry whose cache holds `path`, if any.
-function cachingPlugin(
+// The plugin entry whose install folder holds `path`, if any.
+function holdingPlugin(
   document: IndexDocument | null,
   path: string,
   paths: Paths,
-): string | null {
-  const entry = document?.entries.find(
-    (candidate) =>
-      candidate.source === 'plugin' &&
-      candidate.root !== null &&
-      paths.isInside(path, candidate.root),
+): IndexEntry | null {
+  return (
+    document?.entries.find(
+      (candidate) =>
+        candidate.source === 'plugin' &&
+        candidate.root !== null &&
+        paths.isInside(path, candidate.root),
+    ) ?? null
   );
-  return entry?.plugin ?? null;
+}
+
+// The local date and time an origin line shows.
+function localTime(iso: string): string {
+  return new Date(iso).toLocaleString();
 }
 
 // The line of `text` that first holds the hook's command as JSON writes it;
@@ -242,6 +256,14 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // Each `openDoc` ask's number; one that waited on a rebuild opens only if
   // it is still the newest.
   let askedOpens = 0;
+  // The plugin-source statuses shown, and their files by entry id.
+  let statusRead: PluginStatusRead | null = null;
+  let files = fileStatuses(null);
+  // Each status read's number; a reply older than the one shown is dropped.
+  let startedStatusReads = 0;
+  let shownStatusRead = 0;
+  // Status reads asking to fetch that have not settled.
+  let runningFetchReads = 0;
 
   const applyScope = () => {
     if (deps.isActive()) {
@@ -296,6 +318,29 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     return null;
   };
 
+  // A plugin entry's detail view edits its config file, so it is never
+  // read-only; any other doc is when its entry, or the plugin install folder
+  // holding it, has a read-only reason.
+  const readOnlyOf = (path: string, entry: IndexEntry | null) => {
+    if (entry?.kind === 'plugin') {
+      return null;
+    }
+    const own = entry === null ? null : readOnlyReason(entry);
+    if (own !== null) {
+      return own;
+    }
+    const holder = holdingPlugin(document, path, deps.paths);
+    return holder === null ? null : readOnlyReason(holder);
+  };
+
+  // The status texts of the entry `entryId`, from the statuses shown.
+  const textsOf = (entryId: string): string[] => {
+    const entry = entriesById.get(entryId);
+    return entry === undefined
+      ? []
+      : statusTexts(entry, files.get(entryId), context()?.loadedPlugins ?? {});
+  };
+
   const targetFor = (
     path: string,
     entry: IndexEntry | null,
@@ -307,10 +352,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       title: entry?.title ?? deps.paths.base(path),
       entryId: entry?.id ?? null,
       detail: detailOf(entry),
-      cachePlugin:
-        entry?.kind === 'plugin'
-          ? null
-          : cachingPlugin(document, path, deps.paths),
+      readOnly: readOnlyOf(path, entry),
       line,
       fragment,
     };
@@ -354,6 +396,15 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     keysFor: deps.keysFor,
     kbd: deps.kbd,
+    rowStatus: (node: TreeNode) =>
+      treeRowStatus(
+        node,
+        textsOf,
+        files,
+        statusRead?.clones ?? [],
+        localTime,
+        deps.paths,
+      ),
   });
 
   const doc = createDocView({
@@ -370,6 +421,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       const entryPath = entriesById.get(entryId)?.path ?? path;
       return chips(context(), entryId, pending.has(entryPath));
     },
+    statusesOf: textsOf,
     followFile: (path, line, fragment) => followFile(path, line, fragment),
     pushConflictScope: () => deps.pushScope('conflict'),
     conflictText: () =>
@@ -538,16 +590,62 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       });
   };
 
+  // One `pluginStatus` call, its reply shown unless a newer one was; a
+  // rejection keeps the statuses shown. Resolves once it settles.
+  const readStatus = (fetch: boolean): Promise<void> => {
+    const number = ++startedStatusReads;
+    if (fetch) {
+      runningFetchReads++;
+    }
+    return deps.channel
+      .invoke('pluginStatus', deps.sourceId, fetch)
+      .then((read) => {
+        if (number < shownStatusRead) {
+          return;
+        }
+        shownStatusRead = number;
+        statusRead = read;
+        files = fileStatuses(read);
+        const verb = fetch ? 'fetched' : 'read';
+        log('docs', `plugin status ${verb}: ${read.clones.length} clones`);
+        tree.statusesChanged();
+        doc.refreshChips();
+      })
+      .catch((error: unknown) => {
+        log('docs', `plugin status: ${errorText(error)}`);
+      })
+      .finally(() => {
+        if (fetch) {
+          runningFetchReads--;
+        }
+      });
+  };
+
+  // Reads the statuses, then, with `fetches`, reads them again after a fetch
+  // once the first read settles. A read while a fetching read runs asks to
+  // fetch too, joining main's running fetch, so its reply, the newer one,
+  // carries what that fetch brought.
+  const readStatuses = (fetches: boolean) => {
+    void readStatus(runningFetchReads > 0).then(() => {
+      if (fetches) {
+        void readStatus(true);
+      }
+    });
+  };
+
   // Only a rebuild lists a doc created since the last one. `runIndex` never
-  // rejects, so a wait on `runningRebuild` always ends.
-  const rebuild = () => {
+  // rejects, so a wait on `runningRebuild` always ends. Once the rebuild
+  // settles the statuses are read again, fetching first with `fetches`.
+  const rebuild = (fetches: boolean): Promise<SourceRead | null> => {
     const started = runIndex('rebuildIndex');
     runningRebuild = started;
     void started.then(() => {
       if (runningRebuild === started) {
         runningRebuild = null;
       }
+      readStatuses(fetches);
     });
+    return started;
   };
 
   tree.setStatus('Not read yet');
@@ -610,7 +708,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (isShown && selectId != null) {
       tree.selectEntry(selectId);
     }
-    rebuild();
+    void rebuild(false);
     deps.changed(record);
   };
 
@@ -670,6 +768,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       chosen: (choice) => {
         contextFolder = choice.folder;
         doc.refreshChips();
+        tree.statusesChanged();
         log('docs', `context ${deps.paths.tilde(choice.folder, homeDir)}`);
       },
     });
@@ -753,11 +852,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       }
       hasRun = true;
       const runs = runIndex('loadIndex').then((result) => {
-        if (result?.canRebuild === true) {
-          rebuild();
-          return runningRebuild;
-        }
-        return null;
+        readStatuses(true);
+        return result?.canRebuild === true ? rebuild(false) : null;
       });
       firstShowRuns = runs;
       void runs.then(() => {
@@ -766,7 +862,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     rescan() {
       hasRun = true;
-      rebuild();
+      void rebuild(true);
     },
     outsideChange(change) {
       if (!hasRun) {
@@ -775,7 +871,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       if (change.type !== 'created') {
         showChange(change);
       }
-      rebuild();
+      void rebuild(false);
     },
     openDoc(path, line) {
       const number = ++askedOpens;

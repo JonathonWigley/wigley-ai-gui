@@ -25,6 +25,7 @@ import { resolveLink } from '../links';
 import {
   type Chip,
   codeFence,
+  type ReadOnlyReason,
   readOnlyText,
   topVisibleLine,
   UNSAVED_TEXT,
@@ -55,8 +56,8 @@ export interface DocTarget {
   // The entry whose chips show; null for a file no entry names.
   entryId: string | null;
   detail: DocDetail | null;
-  // The plugin whose cache holds the file, which makes it read-only.
-  cachePlugin: string | null;
+  // Why the doc is read-only; null when it may be edited.
+  readOnly: ReadOnlyReason | null;
   // 1-based line of the whole file to scroll to.
   line: number | null;
   // A heading anchor to scroll to, after `line`.
@@ -74,6 +75,8 @@ export interface DocViewDeps {
   log: Log;
   // The chips of the doc at `path` whose entry is `entryId`.
   chipsOf(entryId: string, path: string): { claude: Chip; codex: Chip };
+  // The plugin-source status texts of the entry `entryId`, in chip order.
+  statusesOf(entryId: string): string[];
   // Opens a file a link leads to in this view.
   followFile(path: string, line: number | null, fragment: string | null): void;
   // Pushes `docs.conflict` while the changed-on-disk prompt shows.
@@ -88,9 +91,9 @@ export interface DocViewDeps {
 }
 
 // The doc pane: an empty state while no doc is open; then the header with its
-// chips, the plugin cache line, the frontmatter table and the rendered body (a
-// detail's field table), swapped for the document editor on `edit`; the
-// editor's `:q` returns to them.
+// chips (load states, then plugin-source statuses), the read-only line, the
+// frontmatter table and the rendered body (a detail's field table), swapped
+// for the document editor on `edit`; the editor's `:q` returns to them.
 // Opening another doc is refused while the editor holds unsaved edits.
 // `open` resolves to whether the doc opened.
 export interface DocView {
@@ -275,7 +278,14 @@ export function createDocView(deps: DocViewDeps): DocView {
       return;
     }
     const { claude, codex } = deps.chipsOf(target.entryId, target.path);
-    chipRow.replaceChildren(chipElement(claude), chipElement(codex));
+    const statuses = deps
+      .statusesOf(target.entryId)
+      .map((text) => tag(text, 'warning'));
+    chipRow.replaceChildren(
+      chipElement(claude),
+      chipElement(codex),
+      ...statuses,
+    );
   };
 
   const drawBody = (rendered: Rendered) => {
@@ -293,9 +303,9 @@ export function createDocView(deps: DocViewDeps): DocView {
     title.textContent = target.title;
     path.textContent = deps.paths.tilde(target.path, deps.homeDir);
     path.title = target.path;
-    readOnlyLine.hidden = target.cachePlugin === null;
+    readOnlyLine.hidden = target.readOnly === null;
     readOnlyLine.textContent =
-      target.cachePlugin === null ? '' : readOnlyText(target.cachePlugin);
+      target.readOnly === null ? '' : readOnlyText(target.readOnly);
     banner.hidden = true;
   };
 
@@ -668,9 +678,15 @@ export function createDocView(deps: DocViewDeps): DocView {
       if (doc === null) {
         return;
       }
-      if (doc.target.cachePlugin !== null) {
-        deps.toast(readOnlyText(doc.target.cachePlugin), 'info');
-        deps.log('docs', `refused to edit ${doc.name} in the plugin cache`);
+      const { readOnly } = doc.target;
+      if (readOnly !== null) {
+        deps.toast(readOnlyText(readOnly), 'info');
+        deps.log(
+          'docs',
+          readOnly.type === 'downloaded'
+            ? `refused to edit ${doc.name}, a downloaded copy`
+            : `refused to edit ${doc.name} in the plugin cache`,
+        );
         return;
       }
       if (editor !== null) {

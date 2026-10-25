@@ -3,22 +3,32 @@
 // choices, the editor's opening line, the fence a non-markdown file renders
 // in, the changes the view applies before a build lists them, which docs may
 // be renamed or trashed, the texts the view shows with their keys (the tree's
-// line among them), and a hook's or plugin's detail fields.
+// line among them), a hook's or plugin's detail fields, the read-only reasons,
+// the plugin-source status texts and the tree's rollups.
 
 import type { Paths } from '../../../contracts/paths';
 import type {
+  CloneStatus,
   DocKind,
+  FileStatus,
   IndexContext,
   IndexDocument,
   IndexEntry,
   IndexHarness,
   LoadState,
   LoadStateRecord,
+  PluginStatusRead,
 } from '../contract';
-import { metaString } from '../index-document';
+import { installedCopies, metaString } from '../index-document';
 import { skillFolder } from '../kinds';
 import type { docsManifest } from '../manifest';
-import type { TreeLeaf, TreeNode } from '../tree';
+import {
+  MINE_ROOT_ID,
+  THIRD_PARTY_ROOT_ID,
+  type TreeGroup,
+  type TreeLeaf,
+  type TreeNode,
+} from '../tree';
 
 // The page keys bound now to a docs command in a docs scope, as the user
 // reads them; null when none is.
@@ -39,8 +49,24 @@ export interface TreeState {
   filter: string;
 }
 
-export function rootIds(tree: readonly TreeNode[]): Set<string> {
-  return new Set(tree.map((node) => node.id));
+// The groups the first tree shows expanded: every root but Third-party, and
+// each group child of Mine.
+export function defaultExpandedIds(tree: readonly TreeNode[]): Set<string> {
+  const expanded = new Set<string>();
+  for (const root of tree) {
+    if (root.id === THIRD_PARTY_ROOT_ID) {
+      continue;
+    }
+    expanded.add(root.id);
+    if (root.id === MINE_ROOT_ID && root.type === 'group') {
+      for (const child of root.children) {
+        if (child.type === 'group') {
+          expanded.add(child.id);
+        }
+      }
+    }
+  }
+  return expanded;
 }
 
 // Unfiltered, a group's children show while it is expanded. Filtered, only
@@ -394,9 +420,30 @@ export function renameRecord(
 
 export const UNSAVED_TEXT = 'Unsaved changes — :w to save, :q! to discard';
 
-// The plugin cache line, shown under the header and toasted on `i`.
-export function readOnlyText(plugin: string): string {
-  return `Plugin cache — ${plugin}. Edit the source repo's copy.`;
+// Why a doc opens read-only: a third-party download (`plugin` null for a
+// synced skill), or an installed copy of the user's plugin with no file in
+// the clone.
+export type ReadOnlyReason =
+  | { type: 'downloaded'; plugin: string | null }
+  | { type: 'installed'; plugin: string };
+
+export function readOnlyReason(entry: IndexEntry): ReadOnlyReason | null {
+  if (entry.owner === 'third-party') {
+    return { type: 'downloaded', plugin: entry.plugin };
+  }
+  if (entry.source === 'plugin') {
+    return { type: 'installed', plugin: entry.plugin ?? entry.title };
+  }
+  return null;
+}
+
+// The read-only line, shown under the header and toasted on `i`, `r` and `d`.
+export function readOnlyText(reason: ReadOnlyReason): string {
+  if (reason.type === 'installed') {
+    return `Installed copy — ${reason.plugin}. Edits are lost on its next update.`;
+  }
+  const from = reason.plugin ?? 'synced skill';
+  return `Downloaded copy — ${from}. Edits are lost on its next update.`;
 }
 
 // Why a selected tree node may not be renamed or moved to the Trash.
@@ -407,8 +454,8 @@ export interface ChangeRefusal {
 
 // The selected doc when it may be renamed or trashed, else why not; null when
 // nothing is selected or its entry is gone. Refused: a group (`groupText`),
-// an item inside a file (a line, a hook or a plugin), a plugin cache doc, and
-// a doc whose file, or skill folder, holds a file in `unsavedPaths`.
+// an item inside a file (a line, a hook or a plugin), a read-only doc, and a
+// doc whose file, or skill folder, holds a file in `unsavedPaths`.
 export function changeableEntry(
   node: TreeNode | null,
   entryOf: (entryId: string) => IndexEntry | undefined,
@@ -432,9 +479,9 @@ export function changeableEntry(
     const text = `${entry.title} is an item inside ${paths.base(entry.path)}; it cannot be renamed or moved to the Trash alone`;
     return { refusal: { text, tone: 'info' } };
   }
-  if (entry.source === 'plugin') {
-    const text = readOnlyText(entry.plugin ?? entry.title);
-    return { refusal: { text, tone: 'info' } };
+  const reason = readOnlyReason(entry);
+  if (reason !== null) {
+    return { refusal: { text: readOnlyText(reason), tone: 'info' } };
   }
   const changed = skillFolder(entry.path, paths) ?? entry.path;
   if (unsavedPaths.some((path) => paths.isInside(path, changed))) {
@@ -591,7 +638,8 @@ const INSTRUCTION_NAMES = new Set([
 ]);
 
 // The entry a new file gets until a build lists it: `mine`, sourced from the
-// deepest `repo` or `features` root holding it (else global), its kind `kind`
+// deepest `repo` or `features` root holding it (else global), carrying the
+// plugin key of the deepest clone plugin folder holding it, its kind `kind`
 // or, when null, guessed from the path.
 export function provisionalEntry(
   path: string,
@@ -608,7 +656,7 @@ export function provisionalEntry(
     owner: 'mine',
     repo: owner?.repo ?? null,
     root: owner?.root ?? null,
-    plugin: null,
+    plugin: holdingPluginKey(path, entries, paths),
     path,
     line: null,
     title: skill === null ? paths.base(path) : paths.base(skill),
@@ -634,6 +682,42 @@ function owningEntry(
     }
   }
   return owner;
+}
+
+// The key of the deepest plugin folder holding `path`: the common folder of
+// one clone's `repo` entries carrying that key. Null when none holds it.
+function holdingPluginKey(
+  path: string,
+  entries: readonly IndexEntry[],
+  paths: Paths,
+): string | null {
+  const byClonePlugin = new Map<string, { plugin: string; paths: string[] }>();
+  for (const entry of entries) {
+    if (entry.source !== 'repo' || entry.plugin === null) {
+      continue;
+    }
+    const clonePlugin = `${entry.root ?? ''}|${entry.plugin}`;
+    const known = byClonePlugin.get(clonePlugin);
+    if (known === undefined) {
+      byClonePlugin.set(clonePlugin, {
+        plugin: entry.plugin,
+        paths: [entry.path],
+      });
+    } else {
+      known.paths.push(entry.path);
+    }
+  }
+  let key: string | null = null;
+  let keyFolder = '';
+  for (const { plugin, paths: entryPaths } of byClonePlugin.values()) {
+    const folder = paths.commonFolder(entryPaths);
+    const holdsPath = folder !== null && paths.isInside(path, folder);
+    if (holdsPath && folder.length > keyFolder.length) {
+      key = plugin;
+      keyFolder = folder;
+    }
+  }
+  return key;
 }
 
 function guessedKind(
@@ -736,4 +820,164 @@ function installsText(
         : scope;
     })
     .join(', ');
+}
+
+// Every clone's file statuses, by entry id.
+export function fileStatuses(
+  read: PluginStatusRead | null,
+): Map<string, FileStatus> {
+  const merged = new Map<string, FileStatus>();
+  for (const clone of read?.clones ?? []) {
+    for (const [entryId, status] of Object.entries(clone.files)) {
+      merged.set(entryId, status);
+    }
+  }
+  return merged;
+}
+
+const HARNESS_ORDER: readonly IndexHarness[] = ['claude', 'codex'];
+
+// The status chips' texts for `entry`, in their fixed order.
+export function statusTexts(
+  entry: IndexEntry,
+  status: FileStatus | undefined,
+  loadedPlugins: Readonly<Record<string, string>>,
+): string[] {
+  const texts: string[] = [];
+  if (status?.uncommitted === true) {
+    texts.push('Uncommitted');
+  }
+  if (status?.unpushed === true) {
+    texts.push('Unpushed');
+  }
+  for (const harness of HARNESS_ORDER) {
+    if (status?.notInstalled.includes(harness) === true) {
+      texts.push(`Not installed · ${HARNESS_NAMES[harness]}`);
+    }
+  }
+  if (isSessionStale(entry, loadedPlugins)) {
+    texts.push('Session stale');
+  }
+  return texts;
+}
+
+// The session loaded a version of the entry's plugin other than its Claude
+// copy's.
+function isSessionStale(
+  entry: IndexEntry,
+  loadedPlugins: Readonly<Record<string, string>>,
+): boolean {
+  const { plugin } = entry;
+  if (plugin === null || !Object.hasOwn(loadedPlugins, plugin)) {
+    return false;
+  }
+  const claudeCopy = installedCopies(entry)?.find(
+    (copy) => copy.harness === 'claude',
+  );
+  return (
+    claudeCopy !== undefined && claudeCopy.version !== loadedPlugins[plugin]
+  );
+}
+
+// How many of a group's leaves have each status.
+export interface StatusCounts {
+  uncommitted: number;
+  unpushed: number;
+  notInstalled: Record<IndexHarness, number>;
+}
+
+// `<n> uncommitted · <n> unpushed · <n> not installed for <harness>`, each
+// part only when its count is above 0; null when every count is 0.
+export function rollupText(counts: StatusCounts): string | null {
+  const parts: [number, string][] = [
+    [counts.uncommitted, 'uncommitted'],
+    [counts.unpushed, 'unpushed'],
+    ...HARNESS_ORDER.map((harness): [number, string] => [
+      counts.notInstalled[harness],
+      `not installed for ${HARNESS_NAMES[harness]}`,
+    ]),
+  ];
+  const shown = parts
+    .filter(([count]) => count > 0)
+    .map(([count, what]) => `${count} ${what}`);
+  return shown.length === 0 ? null : shown.join(' · ');
+}
+
+// The clone's origin line when its last fetch failed; null otherwise.
+export function fetchText(
+  clone: CloneStatus,
+  formatTime: (iso: string) => string,
+): string | null {
+  if (!clone.fetchFailed) {
+    return null;
+  }
+  return clone.fetchedAt === null
+    ? 'origin never fetched'
+    : `origin as of ${formatTime(clone.fetchedAt)}`;
+}
+
+// A tree row's status: a leaf's mark, its status texts joined; a plugin,
+// repo or clone group's detail, its leaves' rollup then its clone's origin
+// line.
+export interface TreeRowStatus {
+  mark: string | null;
+  detail: string | null;
+}
+
+export function treeRowStatus(
+  node: TreeNode,
+  textsOf: (entryId: string) => string[],
+  files: ReadonlyMap<string, FileStatus>,
+  clones: readonly CloneStatus[],
+  formatTime: (iso: string) => string,
+  paths: Paths,
+): TreeRowStatus {
+  if (node.type === 'entry') {
+    const texts = textsOf(node.entryId);
+    const mark = texts.length === 0 ? null : texts.join(' · ');
+    return { mark, detail: null };
+  }
+  const { role } = node;
+  if (role.type === 'other') {
+    return { mark: null, detail: null };
+  }
+  const cloneRoot = role.type === 'plugin' ? null : role.clone;
+  const clone =
+    cloneRoot === null
+      ? undefined
+      : clones.find((each) => paths.samePath(each.root, cloneRoot));
+  const parts = [
+    rollupText(statusCounts(node, files)),
+    clone === undefined ? null : fetchText(clone, formatTime),
+  ].filter((part) => part !== null);
+  return { mark: null, detail: parts.length === 0 ? null : parts.join(' · ') };
+}
+
+// The counts over the group's descendant leaves.
+function statusCounts(
+  group: TreeGroup,
+  files: ReadonlyMap<string, FileStatus>,
+): StatusCounts {
+  const counts: StatusCounts = {
+    uncommitted: 0,
+    unpushed: 0,
+    notInstalled: { claude: 0, codex: 0 },
+  };
+  const pending: TreeNode[] = [...group.children];
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'group') {
+      pending.push(...node.children);
+      continue;
+    }
+    const status = files.get(node.entryId);
+    if (status === undefined) {
+      continue;
+    }
+    counts.uncommitted += status.uncommitted ? 1 : 0;
+    counts.unpushed += status.unpushed ? 1 : 0;
+    for (const harness of status.notInstalled) {
+      counts.notInstalled[harness] += 1;
+    }
+  }
+  return counts;
 }

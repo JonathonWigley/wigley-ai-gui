@@ -18,8 +18,20 @@ export interface TreeGroup {
   // repo, clone or plugin node leaves out its installed-only entries); null
   // when the entries are on different roots.
   folder: string | null;
+  role: GroupRole;
   children: TreeNode[];
 }
+
+// What a group stands for, for the page's status rollups: a repo (`clone`
+// its one clone's root, null when it has none or is split by clone), one
+// clone of a split repo, a plugin inside a repo or clone, or any other group.
+export type GroupRole =
+  | { type: 'repo'; clone: string | null }
+  | { type: 'clone'; clone: string }
+  | { type: 'plugin' }
+  | { type: 'other' };
+
+const OTHER_ROLE: GroupRole = { type: 'other' };
 
 export interface TreeLeaf {
   type: 'entry';
@@ -209,9 +221,10 @@ function group(
   entries: readonly IndexEntry[],
   children: TreeNode[],
   paths: Paths,
+  role: GroupRole = OTHER_ROLE,
 ): TreeGroup {
   const folder = paths.commonFolder(entries.map((entry) => entry.path));
-  return { type: 'group', id, title, folder, children };
+  return { type: 'group', id, title, folder, role, children };
 }
 
 function leaf(entry: IndexEntry): TreeLeaf {
@@ -388,7 +401,8 @@ function repoNode(
   if (featureEntries.length > 0) {
     children.push(featuresNode(id, featureEntries, paths));
   }
-  return group(id, name, entries, children, paths);
+  const clone = clones.length === 1 ? clones[0][0] : null;
+  return group(id, name, entries, children, paths, { type: 'repo', clone });
 }
 
 function cloneNodes(
@@ -413,6 +427,7 @@ function cloneNodes(
         cloneEntries,
         cloneChildren(id, cloneEntries, unclaimed, paths),
         paths,
+        { type: 'clone', clone: root },
       );
     });
 }
@@ -464,7 +479,7 @@ function clonePluginNode(
       ),
     );
   }
-  return group(id, key, keyEntries, children, paths);
+  return group(id, key, keyEntries, children, paths, { type: 'plugin' });
 }
 
 // One node per feature slug, ids `<featuresId>/feature:<slug>` so no slug

@@ -5,18 +5,20 @@ import { emptyState } from '../../../shared/page/ui/empty-state';
 import { icon } from '../../../shared/page/ui/icon';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { row as rowPart } from '../../../shared/page/ui/row';
+import { statusDot } from '../../../shared/page/ui/status-dot';
 import type { TreeLeaf, TreeNode } from '../tree';
 import {
   type DocsKeysFor,
   edgeSelection,
+  defaultExpandedIds,
   parentId,
-  rootIds,
   stepSelection,
   type TreeLine,
   type TreeLineHintPart,
   treeLine,
   type TreeRow,
   type TreeRowKey,
+  type TreeRowStatus,
   treeRowAction,
   type TreeState,
   visibleRows,
@@ -36,12 +38,15 @@ export interface TreeViewDeps {
   keysFor: DocsKeysFor;
   // Draws keys `keysFor` read as a key hint.
   kbd(keys: string): HTMLElement;
+  // The node's status mark and detail, as the plugin-source statuses read now.
+  rowStatus(node: TreeNode): TreeRowStatus;
 }
 
 // The tree pane: a status line, the filter box, a line for an empty index, a
 // filter matching nothing or a filter on, and the rows. `setTree` keeps the
 // expanded ids, the selection and the filter; the first tree with rows expands
-// its roots and selects its first row. The selected row draws as the keyboard
+// `defaultExpandedIds` and selects its first row. A row draws its status: a
+// leaf's mark as a warning StatusDot, a group's rollup as its detail. The selected row draws as the keyboard
 // cursor while focus is inside the pane.
 export interface TreeView {
   element: HTMLElement;
@@ -84,6 +89,8 @@ export interface TreeView {
   dismissFilter(): void;
   // Shows the line again with the keys bound now.
   keysChanged(): void;
+  // Redraws the rows with the statuses `rowStatus` reads now.
+  statusesChanged(): void;
 }
 
 function isSameLine(a: TreeLine | null, b: TreeLine | null): boolean {
@@ -202,12 +209,20 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     if (row.node.type === 'group') {
       caret.append(icon(row.isExpanded ? 'chevron-down' : 'chevron-right'));
     }
+    const { mark, detail } = deps.rowStatus(row.node);
+    let markDot: HTMLElement | null = null;
+    if (mark !== null) {
+      markDot = statusDot('warning');
+      markDot.title = mark;
+    }
     const item = rowPart({
       density: 'tree',
       tag: 'li',
       label: row.node.title,
+      detail,
       depth: row.depth,
       leading: caret,
+      trailing: markDot,
       onClick: () => {
         state = { ...state, selectedId: row.node.id };
         pane.focus();
@@ -297,7 +312,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       const isFirstTree = !hasRows && next.length > 0;
       if (isFirstTree) {
         hasRows = true;
-        state = { ...state, expanded: rootIds(next) };
+        state = { ...state, expanded: defaultExpandedIds(next) };
         rows = visibleRows(tree, state, pathOf);
         state = { ...state, selectedId: rows[0]?.node.id ?? null };
       }
@@ -375,6 +390,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       }
     },
     keysChanged: () => showLine(),
+    statusesChanged: () => draw(),
   };
 
   pane.addEventListener('focusin', () => {

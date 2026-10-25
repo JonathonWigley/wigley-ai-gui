@@ -285,6 +285,31 @@ describe('buildTree', () => {
     ).toEqual([]);
   });
 
+  it('buildTree_Roles_RepoClonePluginOther', () => {
+    const roots = buildTree(marketplaceRepo(), HOME, posixPaths);
+    const repo = child(child(roots, 'Mine').children, 'm');
+    const plugin = child(repo.children, 'w@m');
+
+    expect(repo.role).toEqual({ type: 'repo', clone: '/Users/u/dev/m' });
+    expect(plugin.role).toEqual({ type: 'plugin' });
+    expect(child(plugin.children, 'Skills').role).toEqual({ type: 'other' });
+    expect(child(roots, 'Mine').role).toEqual({ type: 'other' });
+  });
+
+  it('buildTree_RolesSplit_CloneRolesRepoNull', () => {
+    const repo = child(mineChildren(twoClonesCarryingKey()), 'm');
+
+    expect(repo.role).toEqual({ type: 'repo', clone: null });
+    expect(child(repo.children, '~/dev/m').role).toEqual({
+      type: 'clone',
+      clone: '/Users/u/dev/m',
+    });
+    expect(child(repo.children, '~/work/m').role).toEqual({
+      type: 'clone',
+      clone: '/Users/u/work/m',
+    });
+  });
+
   it('buildTree_ThirdParty_SyncedThenPluginsByKey', () => {
     const entries = [
       entry({
