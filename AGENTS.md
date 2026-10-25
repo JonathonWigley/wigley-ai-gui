@@ -406,9 +406,11 @@ round), since main, not the page, decides.
 - `npm run install-app` builds and installs the stable app from a committed ref (`main` unless `--ref` names
   another). It packages in a build-only worktree beside the repo, `../.wigley-ai-gui-build`, so neither
   uncommitted edits nor the dev app's `.vite/build` are touched, and runs `npm ci` there when its `node_modules` is
-  missing or the lockfile changed since the last one. Then it quits the running stable app (Windows refuses to
-  overwrite a running exe), never force-killing it: one still running after 15 s fails the install with nothing
-  replaced. It replaces `%LOCALAPPDATA%\Programs\wigley-ai-gui` (with a Start menu shortcut named Auri) or
+  missing or the lockfile changed since the last one. It copies the packaged app beside the install while the
+  stable app still runs, then quits that app (Windows refuses to rename a running exe's folder), never
+  force-killing it: one still running after 15 s fails the install and leaves the installed app untouched, the
+  staged copy waiting for the next run, which deletes it. Then it swaps the copy in for
+  `%LOCALAPPDATA%\Programs\wigley-ai-gui` (with a Start menu shortcut named Auri) or
   `/Applications/wigley-ai-gui.app`, and starts the app again when it was running. Each OS builds its own app; a
   locally built app needs no signing. The installed app's icon is `assets/icon/` (`icon.ico`, `icon.icns` and
   `icon.png`, drawn from `auri-source.png`), which `node scripts/make-icon.mts` rebuilds on Windows; the dev app keeps
