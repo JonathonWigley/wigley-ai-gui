@@ -37,7 +37,7 @@ import { createLayoutPreview } from './preview/layout-preview';
 import { createMemoryRoundStore } from './preview/memory-round-store';
 import { PREVIEW_ROUND_ARGS } from './preview/preview-round';
 import { createRoundStore } from './round-store';
-import { formsSelfTestScript, SELFTEST_LAYOUT } from './selftest-script';
+import { formsSelfTestScript, SELFTEST_LAYOUTS } from './selftest-script';
 import { FORMS_TOOLS } from './tool-definitions';
 import { createFormsToolSession } from './tool-session';
 
@@ -247,7 +247,7 @@ export function addDriveActions(
 
 // Serves its two tools to every agent session, shows each session's rounds on
 // the page, serves the page its layouts and opens the layout preview on the
-// page's ask; in the self-test it writes the fixture layout and hands the
+// page's ask; in the self-test it writes the fixture layouts and hands the
 // driver its script, and in a drive run it adds the drive actions.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
@@ -263,12 +263,15 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       createFormsToolSession(forms.startSession(session)),
     );
     const { selfTest } = api.services;
-    // Written before the registry starts, so the registry lists selftest. A
-    // late watch report of this write announces a selftest change, which
-    // loads nothing while the forms.layout setting names another layout.
+    // Written before the registry starts, so the registry lists every
+    // self-test layout.
     const fixtureWritten =
       api.services.runMode === 'selfTest'
-        ? api.data.write(SELFTEST_LAYOUT.path, SELFTEST_LAYOUT.text)
+        ? Promise.all(
+            SELFTEST_LAYOUTS.map((layout) =>
+              api.data.write(layout.path, layout.text),
+            ),
+          ).then(() => undefined)
         : Promise.resolve();
     const layouts = serveLayouts(api, fixtureWritten);
     layouts.then(

@@ -1,5 +1,7 @@
 // The preview's built-in sample: ask_round arguments holding every card kind,
-// with long and short titles, inline code and a choice long enough to wrap.
+// with long and short titles, inline code and a choice long enough to wrap. Its
+// Defect groups a deferral choice under Follow-up, and its Decision and Nit each
+// carry the reason for the deferral action they recommend.
 export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
   heading: 'Layout preview',
   overview:
@@ -36,6 +38,7 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
         {
           text: 'Keep the round queued until the user reopens the row.',
           reason: 'Nothing is lost, but nothing shows either.',
+          action: 'follow_up',
         },
       ],
       recommend: 1,
@@ -63,6 +66,10 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
       ],
       recommend: 2,
       recommend_action: 'follow_up',
+      action_reasons: {
+        follow_up:
+          'No layout draws on canvas yet, so a plan can weigh the token object when one does.',
+      },
     },
     {
       title: 'Typo',
@@ -72,6 +79,9 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
       proof: '- comments are not shipped',
       choices: [{ text: 'Spell it "receive".', reason: 'It reads right.' }],
       recommend_action: 'leave_it',
+      action_reasons: {
+        leave_it: 'Comments are not shipped, so nobody reads the typo.',
+      },
     },
   ],
   questions: [

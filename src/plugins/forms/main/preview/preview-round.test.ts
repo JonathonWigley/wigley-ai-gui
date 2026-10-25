@@ -12,4 +12,23 @@ describe('PREVIEW_ROUND_ARGS', () => {
     );
     expect(round.questions.length).toBeGreaterThan(0);
   });
+
+  it('previewRoundArgs_Parse_HoldGroupedChoicesAndReasons', () => {
+    const { findings } = parseRound(PREVIEW_ROUND_ARGS);
+
+    const groupsAChoiceOutsideFixNow = findings.some((finding) =>
+      finding.choices.some((choice) => choice.action !== 'fix_now'),
+    );
+    const showsAFollowUpReason = findings.some(
+      (finding) => finding.actionReasons.follow_up !== undefined,
+    );
+    const recommendsABareLeaveIt = findings.some(
+      (finding) =>
+        finding.actionReasons.leave_it !== undefined &&
+        finding.recommend === null,
+    );
+    expect(groupsAChoiceOutsideFixNow).toBe(true);
+    expect(showsAFollowUpReason).toBe(true);
+    expect(recommendsABareLeaveIt).toBe(true);
+  });
 });
