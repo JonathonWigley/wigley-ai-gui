@@ -75,6 +75,34 @@ describe('placesFor', () => {
     ]);
   });
 
+  it('placesFor_GlobalReferenceInWigleyAgents_NoPlace', () => {
+    const entries = ['/Users/u/wigley-agents/decisions.md'].map((path) =>
+      entry({ path, kind: 'reference' }),
+    );
+
+    expect(placesFor('reference', entries, HOME, posixPaths)).toEqual([]);
+  });
+
+  it('placesFor_ProjectReference_EntryFolder', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/dev/r/docs/notes.md',
+        kind: 'reference',
+        source: 'repo',
+        repo: 'r',
+        root: '/Users/u/dev/r',
+      }),
+    ];
+
+    expect(placesFor('reference', entries, HOME, posixPaths)).toEqual([
+      {
+        title: 'r · ~/dev/r/docs',
+        folder: '/Users/u/dev/r/docs',
+        source: 'repo',
+      },
+    ]);
+  });
+
   it('placesFor_GlobalInstructionsLinkedClone_CloneFolder', () => {
     const entries = [
       entry({
