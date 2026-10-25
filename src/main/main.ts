@@ -57,6 +57,7 @@ import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
 import { scopedFiles } from '../shared/scoped-files';
 import { createElectronAlerts } from './alerts/electron-alerts';
+import { appInstanceOf } from './app-instance';
 import { silentAlerts } from './alerts/silent-alerts';
 import { createClaudeCodeHarness } from './claude-code/claude-code-harness';
 import {
@@ -127,6 +128,8 @@ function readRunEnvironment(): RunEnvironment {
 // files.
 const runEnvironment = readRunEnvironment();
 const runMode = runEnvironment.mode;
+// The installed stable app, or the dev app run from the repo.
+const appInstance = appInstanceOf(app.isPackaged);
 // A drive run's folder; null outside a drive run.
 const driveRunDir =
   runEnvironment.mode === 'drive' ? runEnvironment.runDir : null;
@@ -225,7 +228,8 @@ function offscreenRunServices(
 
 // A drive run's agent harness, as `WIGLEY_DRIVE_HARNESS` named it: the fake
 // harness, or Claude Code logged in as the user, whose relays find this run's
-// endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`.
+// endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, the app instance's endpoint
+// folder in the run's home.
 function driveHarness(
   name: DriveHarnessName,
   { store, homeDir, log }: ModeServicesContext,
@@ -238,11 +242,7 @@ function driveHarness(
     os.homedir(),
     {
       ...process.env,
-      WIGLEY_AI_GUI_ENDPOINT_DIR: path.join(
-        homeDir,
-        '.agents',
-        'wigley-ai-gui',
-      ),
+      WIGLEY_AI_GUI_ENDPOINT_DIR: path.join(homeDir, '.agents', appInstance.id),
     },
     log,
   );
@@ -485,6 +485,7 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
     checkTokens: titleBarOverlayProblem,
     platform,
     homeDir: await files.realPath(homeDir),
+    appInstance,
     log: pageLog.log,
   };
 }
@@ -610,6 +611,7 @@ function createWindow(
   const startConfig = store.current();
   const window = createMainWindow(
     startConfig.settings.window,
+    appInstance.displayName,
     windowBackgroundOf(startConfig.theme, isTransparencyReduced(startConfig)),
     runMode !== 'live',
     titleBarOptions(startConfig, pageLog.log),
@@ -690,6 +692,7 @@ function createWindow(
       userConfig,
       paths,
       runMode,
+      appInstance,
       ...modeServices.forWindow({
         window,
         store,
@@ -740,7 +743,7 @@ function createWindow(
     }
     try {
       keybindings.setKeymap(config.keymap);
-      if (runMode === 'live' && hasPageLoaded) {
+      if (runMode === 'live' && !appInstance.isDev && hasPageLoaded) {
         registerGlobalShortcuts(config.keymap.global, commands, log);
       }
       appliedKeymap = keymap;
@@ -752,9 +755,13 @@ function createWindow(
   if (runMode !== 'live') {
     return;
   }
+  // Only the stable app registers global shortcuts, so the dev app running
+  // beside it never takes them.
   window.webContents.once('did-finish-load', () => {
     hasPageLoaded = true;
-    registerGlobalShortcuts(served().keymap.global, commands, log);
+    if (!appInstance.isDev) {
+      registerGlobalShortcuts(served().keymap.global, commands, log);
+    }
   });
   // The window holds every open round, so on macOS closing it hides it
   // until the app quits.
@@ -793,11 +800,16 @@ function startApp() {
   if (runMode !== 'live' && process.platform === 'darwin') {
     app.setActivationPolicy('accessory');
   }
-  if (driveRunDir !== null) {
-    // Chromium's profile and caches, apart from the user's app and every
-    // other run; set before the app is ready.
+  if (runMode !== 'live') {
+    // Chromium's profile and caches, apart from both apps; set before the app
+    // is ready. Each drive run has its own; every self-test reuses one.
     try {
-      app.setPath('userData', path.join(driveRunDir, 'user-data'));
+      app.setPath(
+        'userData',
+        driveRunDir === null
+          ? path.join(app.getPath('appData'), 'wigley-ai-gui-selftest')
+          : path.join(driveRunDir, 'user-data'),
+      );
     } catch (error) {
       failStart(error);
       return;
@@ -837,10 +849,27 @@ function startApp() {
   });
 }
 
+// The user's app, in the app instance's own user data folder. The
+// single-instance lock is keyed on that folder, so the stable and the dev app
+// each take their own lock and run side by side.
+function startLiveApp() {
+  try {
+    app.setPath('userData', path.join(app.getPath('appData'), appInstance.id));
+  } catch (error) {
+    failStart(error);
+    return;
+  }
+  if (app.requestSingleInstanceLock()) {
+    startApp();
+  } else {
+    app.quit();
+  }
+}
+
 // The self-test and a drive run run beside the user's own app, so they take
 // no lock.
-if (runMode !== 'live' || app.requestSingleInstanceLock()) {
-  startApp();
+if (runMode === 'live') {
+  startLiveApp();
 } else {
-  app.quit();
+  startApp();
 }

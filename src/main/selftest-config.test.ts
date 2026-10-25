@@ -125,6 +125,11 @@ describe('applySelfTestConfig', () => {
       theme: { name: 't', colorScheme: 'dark', tokens: {}, reduced: {} },
       platform: 'macos',
       homeDir: '/Users/u',
+      appInstance: {
+        id: 'wigley-ai-gui-dev',
+        displayName: 'Auri Dev',
+        isDev: true,
+      },
       problems: [],
     };
 

@@ -1,3 +1,4 @@
+import type { AppInstance } from '../../contracts/app-instance';
 import type { Disposable } from '../../contracts/disposable';
 import type { Files, FileWatch } from '../../contracts/files';
 import type { Keymap } from '../../contracts/keymap';
@@ -42,6 +43,7 @@ export interface ConfigStoreDeps extends ConfigCheckDeps {
   folder: string;
   platform: Platform;
   homeDir: string;
+  appInstance: AppInstance;
   log: Log;
 }
 
@@ -179,6 +181,7 @@ export async function loadConfigStore(
       theme,
       platform: deps.platform,
       homeDir: deps.homeDir,
+      appInstance: deps.appInstance,
       problems: [
         ...(watchProblem === null ? [] : [watchProblem]),
         ...inServedOrder(problems),

@@ -1,3 +1,4 @@
+import type { AppInstance } from './app-instance';
 import type { CommandId } from './commands';
 import type { Keymap } from './keymap';
 import type { Platform } from './platform';
@@ -53,6 +54,8 @@ export interface AppConfig {
   // The real path of the home folder main's plugins run in: the user's in a
   // live run, the temp home under the self-test and a drive run.
   homeDir: string;
+  // Which app runs, the stable or the dev one.
+  appInstance: AppInstance;
   // Every config file that could not be applied; empty when none.
   problems: ConfigProblem[];
 }

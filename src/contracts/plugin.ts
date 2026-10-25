@@ -1,4 +1,5 @@
 import type { AgentHarness } from './agent';
+import type { AppInstance } from './app-instance';
 import type { Alerts } from './alerts';
 import type { Clock, RandomHex, RandomUuid, Timers } from './ambient';
 import type { CommandId } from './commands';
@@ -565,7 +566,8 @@ export interface DriveHost {
 // that does not parse. `tempFolders` are the OS's temporary folders as real
 // paths, none in the self-test; a folder inside one is scratch space.
 // `userConfig` reads and writes the user's `settings.json` and `keymap.json`
-// layers through the ConfigStore's checks.
+// layers through the ConfigStore's checks. `appInstance` names which app runs,
+// the stable or the dev one.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -586,6 +588,7 @@ export interface MainServices {
   };
   openExternal(url: string): Promise<void>;
   runMode: RunMode;
+  appInstance: AppInstance;
   selfTest: SelfTestHost | null;
 }
 

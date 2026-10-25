@@ -149,6 +149,11 @@ function load(
     checkTokens: () => null,
     platform: 'windows',
     homeDir: HOME,
+    appInstance: {
+      id: 'wigley-ai-gui-dev',
+      displayName: 'Auri Dev',
+      isDev: true,
+    },
     log: () => undefined,
     ...overrides,
   });

@@ -99,6 +99,11 @@ async function create(files: MemoryFiles): Promise<UserConfig> {
     folder: FOLDER,
     platform: 'macos',
     homeDir: HOME,
+    appInstance: {
+      id: 'wigley-ai-gui-dev',
+      displayName: 'Auri Dev',
+      isDev: true,
+    },
     log: () => undefined,
   });
   return createUserConfig({
@@ -566,6 +571,11 @@ describe('createUserConfig', () => {
       folder: FOLDER,
       platform: 'macos',
       homeDir: HOME,
+      appInstance: {
+        id: 'wigley-ai-gui-dev',
+        displayName: 'Auri Dev',
+        isDev: true,
+      },
       log: () => undefined,
     });
 
@@ -628,6 +638,11 @@ describe('createUserConfig', () => {
       folder: FOLDER,
       platform: 'macos',
       homeDir: HOME,
+      appInstance: {
+        id: 'wigley-ai-gui-dev',
+        displayName: 'Auri Dev',
+        isDev: true,
+      },
       log: () => undefined,
     });
 
@@ -652,6 +667,11 @@ describe('createUserConfig', () => {
       folder: FOLDER,
       platform: 'macos',
       homeDir: HOME,
+      appInstance: {
+        id: 'wigley-ai-gui-dev',
+        displayName: 'Auri Dev',
+        isDev: true,
+      },
       log: () => undefined,
     });
     const undeclared = {
