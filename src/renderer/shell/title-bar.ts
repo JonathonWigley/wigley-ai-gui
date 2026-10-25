@@ -1,5 +1,7 @@
+import type { AppInstance } from '../../contracts/app-instance';
 import type { Area, ModeContext } from '../../contracts/plugin';
 import { element } from '../../shared/page/dom';
+import { tag } from '../../shared/page/ui/tag';
 
 // The title bar's centre: the shown mode's context, its title then its detail,
 // hidden while the mode has none. The full detail, or the title without one,
@@ -25,4 +27,13 @@ export function mountTitleBarContext(area: Area): {
       root.title = context.detail ?? context.title;
     },
   };
+}
+
+// A Dev tag at the title bar's start in the dev app, so it reads apart from
+// the stable app; nothing in the stable app.
+export function mountDevTag(area: Area, instance: AppInstance): void {
+  if (!instance.isDev) {
+    return;
+  }
+  area.contribute(tag('Dev', 'neutral'), { align: 'start' });
 }

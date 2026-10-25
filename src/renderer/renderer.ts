@@ -41,7 +41,7 @@ import { createActivityBar } from './shell/activity-bar';
 import { createModes, SIDE_BAR_OVER_QUERY } from './shell/modes';
 import { mountShell } from './shell/shell';
 import { defaultShellLayout } from './shell/shell-layout';
-import { mountTitleBarContext } from './shell/title-bar';
+import { mountDevTag, mountTitleBarContext } from './shell/title-bar';
 import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
 import { overrideTransparency } from './transparency-override';
@@ -96,6 +96,7 @@ async function start() {
   themeApplier.apply(config.theme, settings);
 
   document.documentElement.dataset.platform = config.platform;
+  document.title = config.appInstance.displayName;
   const shell = mountShell(
     document.getElementById('app') as HTMLElement,
     defaultShellLayout,
@@ -103,6 +104,7 @@ async function start() {
   const { areas } = shell;
   const activityBar = createActivityBar(areas.activityBar, log);
   const titleContext = mountTitleBarContext(areas.titleBar);
+  mountDevTag(areas.titleBar, config.appInstance);
   const narrow = window.matchMedia(SIDE_BAR_OVER_QUERY);
   const modes = createModes({
     place(mode, handle) {
