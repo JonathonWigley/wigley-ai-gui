@@ -1057,12 +1057,15 @@ function payloadProblems(payload: AnswersPayload): string[] {
 // layouts round in the third, and the unknown-layout round in the fourth,
 // which refuses it. The first round is marked first, so its row is selected;
 // the script checks the answers the first call returns and the fourth call's
-// refusal. The result rejects when emptying the files fails.
+// refusal. The result rejects when emptying the files fails. An open
+// superseded by a later one before its files are emptied connects nothing,
+// and its result never settles.
 export function formsSelfTestScript(
   sessions: Pick<SessionsMainExports, 'connect'>,
   userConfig: Pick<UserConfig, 'read' | 'writeSettings' | 'writeKeymap'>,
 ): SelfTestScript {
   let connected: ConnectedSession[] = [];
+  let latestOpen = 0;
   const connect = (
     sessionId: string,
     projectDir: string | null,
@@ -1079,6 +1082,7 @@ export function formsSelfTestScript(
     settings: SETTINGS,
     scrollsItself: SCROLLS_ITSELF,
     open(run) {
+      const thisOpen = ++latestOpen;
       for (const session of connected) {
         session.end();
       }
@@ -1086,6 +1090,9 @@ export function formsSelfTestScript(
       const result: Promise<FormsSelfTestResult> = emptyUserFiles(
         userConfig,
       ).then(() => {
+        if (thisOpen !== latestOpen) {
+          return new Promise<never>(() => {});
+        }
         const first = connect(`selftest-${run}`, 'selftest', 'claude');
         const second = connect(`selftest-${run}-2`, 'selftest', 'codex');
         const layouts = connect(

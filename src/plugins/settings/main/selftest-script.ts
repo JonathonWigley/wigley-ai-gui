@@ -198,16 +198,20 @@ function resultProblems(read: UserConfigRead): string[] {
 // change after which settings.json no longer holds the stale timeout that
 // follows one where it did: only the last step changes it, and `problems`
 // expects both layers empty then. It rejects when emptying the files fails.
+// An open superseded by a later one before its files are emptied shows
+// nothing, and its result never settles.
 export function settingsSelfTestScript(
   deps: SettingsSelfTestDeps,
 ): SelfTestScript {
   const { userConfig } = deps;
   let watching: Disposable | null = null;
+  let latestOpen = 0;
   return {
     pageBinds: [],
     settings: {},
     scrollsItself: ['.settings-sheet'],
     open() {
+      const thisOpen = ++latestOpen;
       watching?.dispose();
       let hasSeenStaleTimeout = false;
       const result = new Promise<UserConfigRead>((resolve, reject) => {
@@ -226,7 +230,11 @@ export function settingsSelfTestScript(
           }, reject);
         });
         watching = watch;
-        emptyUserFiles(userConfig).then(deps.show, reject);
+        emptyUserFiles(userConfig).then(() => {
+          if (thisOpen === latestOpen) {
+            deps.show();
+          }
+        }, reject);
       });
       return { shownLine: '[settings] shown', result };
     },
