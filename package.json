@@ -19,7 +19,8 @@
     "lint:fix": "oxlint --fix && oxfmt --write && node scripts/check-layers.mts && node scripts/check-styles.mts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "drive": "node scripts/drive.mts"
+    "drive": "node scripts/drive.mts",
+    "install-app": "node scripts/install-app.mts"
   },
   "devDependencies": {
     "@electron-forge/cli": "^8.0.1",
