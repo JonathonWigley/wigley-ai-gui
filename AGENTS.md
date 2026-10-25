@@ -395,11 +395,10 @@ round), since main, not the page, decides.
   user config         ~/.config/wigley-ai-gui/, shared by both
   ```
 
-  Every agent session's relay finds the stable app. A dev app gets rounds only from a session whose environment sets
-  `WIGLEY_AI_GUI_ENDPOINT_DIR` to the full path of `~/.agents/wigley-ai-gui-dev` (the relay expands no `~`); a
-  session its own Chat tab starts inherits the dev app's environment, so it reaches the stable app unless `npm start`
-  ran with that variable set. The self-test's user data is `<appData>/wigley-ai-gui-selftest` and a drive run's its
-  run folder's `user-data/`; a drive run points its Claude sessions at `<run home>/.agents/<instance id>`. "Auri" is
+  An agent session's relay finds the stable app by default. The dev app gets rounds from the sessions its own Chat tab
+  starts, which the app points at its endpoint folder, and from a session started with `WIGLEY_AI_GUI_ENDPOINT_DIR`
+  set to the full path of `~/.agents/wigley-ai-gui-dev` (the relay expands no `~`). The self-test's user data is
+  `<appData>/wigley-ai-gui-selftest` and a drive run's its run folder's `user-data/`; a drive run points its Claude sessions at `<run home>/.agents/<instance id>`. "Auri" is
   only the name the app shows: the exe, the bundle and every path keep `wigley-ai-gui`. Under `npm start` the Mac
   Dock still says Electron, since Electron cannot rename the Dock label of an unbundled app.
 

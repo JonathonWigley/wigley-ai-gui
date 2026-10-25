@@ -187,14 +187,31 @@ function claudeHarness(
   });
 }
 
-// The user's app: the OS Trash, native alerts and dialogs, Claude Code, and
+// The app's environment with `WIGLEY_AI_GUI_ENDPOINT_DIR` set to the app
+// instance's endpoint folder in `endpointHome`, so the relays of the Claude
+// sessions this app starts send their rounds to this app.
+function endpointEnv(endpointHome: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    WIGLEY_AI_GUI_ENDPOINT_DIR: path.join(
+      endpointHome,
+      '.agents',
+      appInstance.id,
+    ),
+  };
+}
+
+// The user's app: the OS Trash, native alerts and dialogs, Claude Code, whose
+// relays find this app's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, and
 // links opened in the user's browser.
 function liveServices(): ModeServices {
   return {
     trashItem: (file) => shell.trashItem(file),
     forWindow: ({ window, store, homeDir, log }) => ({
       alerts: createElectronAlerts(window, log),
-      agentHarnesses: [claudeHarness(store, homeDir, process.env, log)],
+      agentHarnesses: [
+        claudeHarness(store, homeDir, endpointEnv(homeDir), log),
+      ],
       window: windowService(window),
       openExternal: gateExternalLinks((url) => shell.openExternal(url)),
     }),
@@ -237,15 +254,7 @@ function driveHarness(
   if (name === 'fake') {
     return createFakeAgentHarness();
   }
-  return claudeHarness(
-    store,
-    os.homedir(),
-    {
-      ...process.env,
-      WIGLEY_AI_GUI_ENDPOINT_DIR: path.join(homeDir, '.agents', appInstance.id),
-    },
-    log,
-  );
+  return claudeHarness(store, os.homedir(), endpointEnv(homeDir), log);
 }
 
 function modeServicesOf(environment: RunEnvironment): ModeServices {
