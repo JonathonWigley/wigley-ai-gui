@@ -18,7 +18,6 @@ import { mkdirSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import started from 'electron-squirrel-startup';
 import { coreCommands, coreScopes } from '../config/keymap';
 import {
   defaultSettings,
@@ -108,11 +107,6 @@ import {
   registerWindowCommands,
   windowService,
 } from './window';
-
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (started) {
-  app.quit();
-}
 
 // The run the environment selects, read before the app makes anything. A bad
 // value exits 1 with its reason on stderr, which the drive CLI keeps in the

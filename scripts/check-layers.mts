@@ -85,7 +85,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/manifests.ts',
       'src/plugins/keymap.ts',
     ],
-    packages: ['electron', 'electron-squirrel-startup', 'node:'],
+    packages: ['electron', 'node:'],
   },
   // Checks the shipped themes against the loader and the title bar overlay.
   'src/main/built-in-themes.test.ts': {
