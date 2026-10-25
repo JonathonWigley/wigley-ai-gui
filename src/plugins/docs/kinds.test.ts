@@ -116,6 +116,17 @@ describe('placesFor', () => {
     ).toEqual(['/Users/u/dev/personal/wigley-agents']);
   });
 
+  it('placesFor_GlobalReferenceInLinkedClone_NoPlace', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/dev/personal/wigley-agents/decisions.md',
+        kind: 'reference',
+      }),
+    ];
+
+    expect(placesFor('reference', entries, HOME, posixPaths)).toEqual([]);
+  });
+
   it('placesFor_PluginEntries_NoPlace', () => {
     const entries = [
       entry({
