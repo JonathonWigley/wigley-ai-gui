@@ -7,8 +7,12 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   rail: true,
   review: true,
 };
-// The parts a layout defines as functions.
-const FUNCTION_PARTS = ['head', 'rail', 'review'] as const;
+// The parts a layout defines as functions: every part but `cards`.
+const FUNCTION_PARTS: Record<Exclude<keyof Layout, 'cards'>, true> = {
+  head: true,
+  rail: true,
+  review: true,
+};
 const CARD_KINDS: Record<keyof LayoutCards, true> = {
   question: true,
   finding: true,
@@ -33,7 +37,7 @@ export function readLayout(module: unknown, name: string): Layout {
   if (layout.cards !== undefined) {
     requireCards(layout.cards, name);
   }
-  for (const part of FUNCTION_PARTS) {
+  for (const part of Object.keys(FUNCTION_PARTS)) {
     const isValidPart =
       layout[part] === undefined || typeof layout[part] === 'function';
     if (!isValidPart) {

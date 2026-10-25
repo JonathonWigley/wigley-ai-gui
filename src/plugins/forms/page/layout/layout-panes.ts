@@ -17,7 +17,6 @@ import { type FormsCommandName, formsCommand, formsScope } from '../../ids';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
   CompleteLayout,
-  LayoutPane,
   RailInput,
   RailKit,
   ReviewInput,
@@ -55,6 +54,7 @@ import {
 import type { FormsContributions } from '../contributions';
 import { createUpdatingHeadKit, type HeadKitDeps } from './card-kit';
 import type { KitCommands } from './kit-commands';
+import { drawRollingBack, requireElementIn } from './layout-cards';
 import type { LayoutPick } from './layout-resolver';
 
 // What a pane reaches outside itself: the markdown renderer, the platform key
@@ -153,11 +153,12 @@ function hostPane<F, P extends { element: HTMLElement }>(
   deps: PaneDeps,
   draw: (pane: F, deps: PaneDeps) => P,
 ): P {
-  let name = picked === undefined ? DEFAULT_NAME : pick.name;
+  const definesPart = typeof picked === 'function';
+  let name = definesPart ? pick.name : DEFAULT_NAME;
   let built: P;
   try {
     built = drawRollingBack(parent, deps, (recording) =>
-      draw(picked ?? fallback, recording),
+      draw(definesPart ? picked : fallback, recording),
     );
   } catch (error) {
     deps.log('forms', `layout ${name} ${part} failed: ${errorText(error)}`);
@@ -170,54 +171,12 @@ function hostPane<F, P extends { element: HTMLElement }>(
   return built;
 }
 
-// Runs `draw` with deps that record each box it mounts. On a throw, destroys
-// those boxes and removes what it appended to `parent` before rethrowing.
-function drawRollingBack<P>(
-  parent: HTMLElement,
-  deps: PaneDeps,
-  draw: (deps: PaneDeps) => P,
-): P {
-  const mounted: TextTarget[] = [];
-  const recording: PaneDeps = {
-    ...deps,
-    mountBox(boxParent, target, text) {
-      deps.mountBox(boxParent, target, text);
-      mounted.push(target);
-    },
-  };
-  const existing = new Set(parent.childNodes);
-  try {
-    return draw(recording);
-  } catch (error) {
-    for (const target of mounted) {
-      deps.destroyBox(target);
-    }
-    // childNodes is live, so the appended nodes are collected before removal.
-    const appended = Array.from(parent.childNodes).filter(
-      (node) => !existing.has(node),
-    );
-    for (const node of appended) {
-      node.remove();
-    }
-    throw error;
+// Throws `message` unless `index` is a whole number in [0, `length`).
+function requireIndexIn(index: number, length: number, message: string) {
+  const isInRange = Number.isInteger(index) && index >= 0 && index < length;
+  if (!isInRange) {
+    throw new Error(message);
   }
-}
-
-// A layout's pane must return an element it appended to `parent`: the host
-// shows, hides and marks that node.
-function requirePaneElement(
-  pane: LayoutPane | null | undefined,
-  part: PanePart,
-  parent: HTMLElement,
-): HTMLElement {
-  const paneElement = pane?.element;
-  if (!(paneElement instanceof HTMLElement)) {
-    throw new Error(`${part} pane returned no element`);
-  }
-  if (paneElement.parentNode !== parent) {
-    throw new Error(`${part} pane's element is not appended to parent`);
-  }
-  return paneElement;
 }
 
 // The head kit's deps over the forms view's keys.
@@ -245,11 +204,11 @@ function drawRail(
   const kit: RailKit = {
     ...createUpdatingHeadKit(headDepsOf(deps), updaters),
     entry(entryParent, position) {
-      const isRailPosition =
-        Number.isInteger(position) && position >= 0 && position < items.length;
-      if (!isRailPosition) {
-        throw new Error(`rail has no item at position ${position}`);
-      }
+      requireIndexIn(
+        position,
+        items.length,
+        `rail has no item at position ${position}`,
+      );
       const item = items[position];
       const entry = buildRailEntry(entryParent, round, item, () =>
         pickRailItem(
@@ -276,9 +235,9 @@ function drawRail(
       title: FORMATS[item.kind].title(round.round, item.index),
     })),
   };
-  const paneElement = requirePaneElement(
+  const paneElement = requireElementIn(
     rail(parent, input, kit),
-    'rail',
+    'rail pane',
     parent,
   );
   return {
@@ -382,11 +341,7 @@ function drawReview(
     keysFor: (qualifiedId) =>
       deps.keys.keysFor(qualifiedId, formsScope('review')),
     row(rowParent, row) {
-      const isReviewRow =
-        Number.isInteger(row) && row >= 0 && row < input.rows.length;
-      if (!isReviewRow) {
-        throw new Error(`review has no row ${row}`);
-      }
+      requireIndexIn(row, input.rows.length, `review has no row ${row}`);
       const entry = element('li', 'review-row');
       rowParent.append(entry);
       rowElements.set(row, entry);
@@ -447,9 +402,9 @@ function drawReview(
         updaters,
       ),
   };
-  const paneElement = requirePaneElement(
+  const paneElement = requireElementIn(
     review(parent, input, kit),
-    'review',
+    'review pane',
     parent,
   );
   if (!isNoteMounted) {

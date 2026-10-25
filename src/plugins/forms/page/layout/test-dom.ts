@@ -7,7 +7,7 @@ export class FakeElement {
   parentNode: FakeElement | null = null;
   dataset: Record<string, string> = {};
   attributes = new Map<string, string>();
-  style: Record<string, string> = {};
+  style = new FakeStyle();
   hidden = false;
   title = '';
   type = '';
@@ -94,6 +94,15 @@ export class FakeElement {
   addEventListener() {}
 
   scrollIntoView() {}
+}
+
+// An element's inline style; `setProperty` sets a custom property too.
+class FakeStyle {
+  [name: string]: string | ((name: string, value: string) => void);
+
+  setProperty(name: string, value: string) {
+    this[name] = value;
+  }
 }
 
 function textNode(text: string): FakeElement {

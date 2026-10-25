@@ -7,7 +7,7 @@ import {
 } from '../contributions';
 import { apply, type FormsState, initialState } from '../form-state';
 import { presentedRound } from '../test-rounds';
-import { buildReviewPane, type PaneDeps } from './layout-panes';
+import { buildRailPane, buildReviewPane, type PaneDeps } from './layout-panes';
 import {
   asFake,
   asHtml,
@@ -148,5 +148,156 @@ describe('review pane', () => {
 
     expect(read).toBeNull();
     expect(keysFor).toHaveBeenCalledWith('demo.run', 'forms.review');
+  });
+});
+
+// A layout's pane drawn into a fresh parent, with its deps.
+function drawPane(
+  build: typeof buildRailPane | typeof buildReviewPane,
+  layout: Layout,
+) {
+  const state = openRound();
+  const { deps, log } = fakePaneDeps(createFormsContributions(), state);
+  const parent = new FakeElement('div');
+  const pane = build(
+    { name: 'test', layout },
+    asHtml(parent),
+    state.rounds[0],
+    deps,
+  );
+  return { pane, parent, deps, log };
+}
+
+// A review that appends a stray node and mounts the round note, then throws.
+function throwingReview(): Layout {
+  return {
+    review(parent, _input, kit) {
+      const pane = kit.el(parent, 'div', 'stray');
+      kit.roundNote(pane);
+      throw new Error('boom');
+    },
+  };
+}
+
+describe('pane host', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('hostPane_ReviewThrows_FallsBackToDefault', () => {
+    const { pane, parent, log } = drawPane(buildReviewPane, throwingReview());
+
+    expect(log).toHaveBeenCalledWith(
+      'forms',
+      'layout test review failed: boom',
+    );
+    expect(pane.element.dataset.layout).toBe('default');
+    expect(parent.children.map((child) => child.className)).toEqual([
+      'review-pane',
+    ]);
+  });
+
+  it('hostPane_ReviewThrows_DestroysTheBoxesItMounted', () => {
+    const { deps } = drawPane(buildReviewPane, throwingReview());
+
+    expect(deps.destroyBox).toHaveBeenCalledTimes(1);
+    expect(deps.destroyBox).toHaveBeenCalledWith({ field: 'note' });
+  });
+
+  it('hostPane_RailThrows_FallsBackToDefault', () => {
+    const { pane, parent, log } = drawPane(buildRailPane, {
+      rail(parent, _input, kit) {
+        kit.el(parent, 'div', 'stray');
+        throw new Error('boom');
+      },
+    });
+
+    expect(log).toHaveBeenCalledWith('forms', 'layout test rail failed: boom');
+    expect(pane.element.dataset.layout).toBe('default');
+    expect(parent.children.map((child) => child.className)).toEqual(['rail']);
+  });
+
+  it('hostPane_RailElementNotInParent_FallsBackToDefault', () => {
+    const { pane, parent, log } = drawPane(buildRailPane, {
+      rail: () => ({ element: asHtml(new FakeElement('nav')) }),
+    });
+
+    expect(log).toHaveBeenCalledWith(
+      'forms',
+      "layout test rail failed: rail pane's element is not appended to parent",
+    );
+    expect(pane.element.dataset.layout).toBe('default');
+    expect(parent.children).toEqual([asFake(pane.element)]);
+  });
+
+  it('hostPane_ReviewElementNotInParent_FallsBackToDefault', () => {
+    const { pane, log } = drawPane(buildReviewPane, {
+      review(parent, _input, kit) {
+        kit.el(parent, 'div', 'stray');
+        return { element: asHtml(new FakeElement('div')) };
+      },
+    });
+
+    expect(log).toHaveBeenCalledWith(
+      'forms',
+      "layout test review failed: review pane's element is not appended to parent",
+    );
+    expect(pane.element.dataset.layout).toBe('default');
+  });
+
+  it('hostPane_PickedPaneDraws_MarksItWithItsLayout', () => {
+    const { pane, log } = drawPane(buildReviewPane, oneRowReview());
+
+    expect(log).not.toHaveBeenCalled();
+    expect(pane.element.dataset.layout).toBe('test');
+  });
+
+  it('reviewPane_NoteLeftOut_AppendsItToThePane', () => {
+    const { pane, deps } = drawPane(buildReviewPane, oneRowReview());
+
+    expect(asFake(pane.element).children.at(-1)?.className).toBe(
+      'field field-note',
+    );
+    expect(deps.mountBox).toHaveBeenCalledWith(
+      expect.anything(),
+      { field: 'note' },
+      expect.any(String),
+    );
+  });
+
+  it.each([-1, 0.5, 99])(
+    'railKit_EntryAt_%s_FallsBackToDefault',
+    (position) => {
+      const { pane, log } = drawPane(buildRailPane, {
+        rail(parent, _input, kit) {
+          const nav = kit.el(parent, 'nav', 'rail');
+          kit.entry(nav, position);
+          return { element: nav };
+        },
+      });
+
+      expect(log).toHaveBeenCalledWith(
+        'forms',
+        `layout test rail failed: rail has no item at position ${position}`,
+      );
+      expect(pane.element.dataset.layout).toBe('default');
+    },
+  );
+
+  it.each([-1, 0.5, 2])('reviewKit_RowAt_%s_FallsBackToDefault', (row) => {
+    const { pane, log } = drawPane(buildReviewPane, {
+      review(parent, _input, kit) {
+        const rows = kit.el(parent, 'ul', 'review-rows');
+        kit.row(rows, row);
+        return { element: rows };
+      },
+    });
+
+    expect(log).toHaveBeenCalledWith(
+      'forms',
+      `layout test review failed: review has no row ${row}`,
+    );
+    expect(pane.element.dataset.layout).toBe('default');
   });
 });

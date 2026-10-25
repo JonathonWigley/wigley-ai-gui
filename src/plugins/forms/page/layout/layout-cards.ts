@@ -102,8 +102,8 @@ export function buildLayoutCard(
 
 // Builds through `cards`, checks the card's element, then mounts the boxes
 // the card left unmounted and places the contributed parts it left unplaced,
-// in that order, at the end of its element. On a throw, destroys the boxes it
-// mounted and removes what it appended to `parent` before rethrowing.
+// in that order, at the end of its element. Rolls back on a throw, as
+// drawRollingBack does.
 function buildCard(
   cards: Partial<CardBuilders>,
   parent: HTMLElement,
@@ -112,17 +112,8 @@ function buildCard(
   position: number,
   deps: CardDeps,
 ): BuiltCard {
-  const mounted: TextTarget[] = [];
-  const recordingDeps: CardDeps = {
-    ...deps,
-    mountBox(boxParent, target, text) {
-      deps.mountBox(boxParent, target, text);
-      mounted.push(target);
-    },
-  };
-  const existing = new Set(parent.childNodes);
-  try {
-    return buildCardOf(
+  return drawRollingBack(parent, deps, (recordingDeps) =>
+    buildCardOf(
       cards,
       item.kind,
       item.index,
@@ -130,7 +121,34 @@ function buildCard(
       round,
       position,
       recordingDeps,
-    );
+    ),
+  );
+}
+
+// What a layout's card or pane mounts its text boxes through.
+interface BoxDeps {
+  mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
+  destroyBox(target: TextTarget): void;
+}
+
+// Runs `draw` with deps that record each box it mounts. On a throw, destroys
+// those boxes and removes what it appended to `parent` before rethrowing.
+export function drawRollingBack<D extends BoxDeps, R>(
+  parent: HTMLElement,
+  deps: D,
+  draw: (deps: D) => R,
+): R {
+  const mounted: TextTarget[] = [];
+  const recordingDeps: D = {
+    ...deps,
+    mountBox(boxParent: HTMLElement, target: TextTarget, text: string) {
+      deps.mountBox(boxParent, target, text);
+      mounted.push(target);
+    },
+  };
+  const existing = new Set(parent.childNodes);
+  try {
+    return draw(recordingDeps);
   } catch (error) {
     for (const target of mounted) {
       deps.destroyBox(target);
@@ -162,26 +180,28 @@ function buildCardOf<K extends ItemKind>(
   }
   const kit = createCardKit(kind, index, input, round, position, deps);
   const card = build(parent, input, kit.kit);
-  requireElementIn(card, kind, parent);
+  requireElementIn(card, `${kind} card`, parent);
   kit.appendUnmountedBoxes(card.element);
   kit.appendUnplacedParts(card.element);
   return { card, kit };
 }
 
-// A layout's card must return an element it appended to `parent`: the host
-// shows, hides and marks that node.
-function requireElementIn(
-  card: LayoutCard | null | undefined,
-  kind: ItemKind,
+// A layout's card or pane must return an element it appended to `parent`:
+// the host shows, hides and marks that node. `drawn` names it in the error,
+// as `question card` or `rail pane`.
+export function requireElementIn(
+  built: { element: HTMLElement } | null | undefined,
+  drawn: string,
   parent: HTMLElement,
-): void {
-  const element = card?.element;
+): HTMLElement {
+  const element = built?.element;
   if (!(element instanceof HTMLElement)) {
-    throw new Error(`${kind} card returned no element`);
+    throw new Error(`${drawn} returned no element`);
   }
   if (element.parentNode !== parent) {
-    throw new Error(`${kind} card's element is not appended to parent`);
+    throw new Error(`${drawn}'s element is not appended to parent`);
   }
+  return element;
 }
 
 // The ItemCard over a built card: `update` runs the kit's updaters, then, on
