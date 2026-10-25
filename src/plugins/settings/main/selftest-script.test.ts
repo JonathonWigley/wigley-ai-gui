@@ -11,7 +11,9 @@ function layerRead<L>(layer: L): ConfigFileRead<L> {
 }
 
 // A user config whose files the test sets, and whose change listeners the
-// test runs; its writes replace the file's layer.
+// test runs; its writes replace the file's layer, refusing with
+// `changedOnDisk` when the expected text is not the file's text, as the
+// user config service does.
 function fakeUserConfig(settings: object, keymap: UserKeymap) {
   let current: UserConfigRead = {
     settings: layerRead<Record<string, unknown>>({ ...settings }),
@@ -30,17 +32,30 @@ function fakeUserConfig(settings: object, keymap: UserKeymap) {
       ...(next.keymap === undefined ? {} : { keymap: layerRead(next.keymap) }),
     };
   };
+  const writeSettings = async (
+    layer: Record<string, unknown>,
+    expectedText: string | null,
+  ) => {
+    if (expectedText !== current.settings.text) {
+      return { type: 'changedOnDisk' as const };
+    }
+    set({ settings: layer });
+    return { type: 'written' as const };
+  };
   return {
+    writeSettings,
     userConfig: {
-      read: async () => current,
-      writeSettings: vi.fn(async (layer: Record<string, unknown>) => {
-        set({ settings: layer });
-        return { type: 'written' as const };
-      }),
-      writeKeymap: vi.fn(async (layer: UserKeymap) => {
-        set({ keymap: layer });
-        return { type: 'written' as const };
-      }),
+      read: vi.fn(async () => current),
+      writeSettings: vi.fn(writeSettings),
+      writeKeymap: vi.fn(
+        async (layer: UserKeymap, expectedText: string | null) => {
+          if (expectedText !== current.keymap.text) {
+            return { type: 'changedOnDisk' as const };
+          }
+          set({ keymap: layer });
+          return { type: 'written' as const };
+        },
+      ),
       onChanged(listener: () => void) {
         listeners.add(listener);
         return { dispose: () => listeners.delete(listener) };
@@ -130,6 +145,52 @@ describe('settingsSelfTestScript', () => {
     expect(script.problems(await result)).toEqual([
       `keymap.json held ${JSON.stringify({ binds: [ADDED_BIND] })}`,
     ]);
+  });
+
+  it('empties the files after the previous open has emptied them', async () => {
+    const fake = fakeUserConfig({ keySequenceTimeoutMs: 900 }, {});
+    let releaseFirstWrite = () => {};
+    const firstWriteReleased = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+    let releaseSecondRead = () => {};
+    const secondReadReleased = new Promise<void>((resolve) => {
+      releaseSecondRead = resolve;
+    });
+    fake.userConfig.writeSettings.mockImplementationOnce(
+      async (layer, expectedText) => {
+        await firstWriteReleased;
+        return fake.writeSettings(layer, expectedText);
+      },
+    );
+    const show = vi.fn();
+    const script = settingsSelfTestScript({
+      userConfig: fake.userConfig,
+      show,
+    });
+
+    script.open(1);
+    await vi.waitFor(() =>
+      expect(fake.userConfig.writeSettings).toHaveBeenCalledTimes(1),
+    );
+    // The second open's read sees the files as they are when it is called,
+    // and returns once the first open's write has landed.
+    const read = fake.userConfig.read.getMockImplementation();
+    fake.userConfig.read.mockImplementationOnce(async () => {
+      const files = await read!();
+      await secondReadReleased;
+      return files;
+    });
+    const { result } = script.open(2);
+    releaseFirstWrite();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releaseSecondRead();
+
+    await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(1));
+    expect(await isSettled(result)).toBe(false);
+    expect(await fake.userConfig.read()).toMatchObject({
+      settings: { layer: {} },
+    });
   });
 
   it('rejects when emptying the files is refused', async () => {

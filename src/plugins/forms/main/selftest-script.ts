@@ -1057,15 +1057,17 @@ function payloadProblems(payload: AnswersPayload): string[] {
 // layouts round in the third, and the unknown-layout round in the fourth,
 // which refuses it. The first round is marked first, so its row is selected;
 // the script checks the answers the first call returns and the fourth call's
-// refusal. The result rejects when emptying the files fails. An open
-// superseded by a later one before its files are emptied connects nothing,
-// and its result never settles.
+// refusal. Each open empties the files only once the previous open's emptying
+// has settled, so its read sees that open's write. The result rejects when
+// this open's emptying fails. An open superseded by a later one before its
+// files are emptied connects nothing, and its result never settles.
 export function formsSelfTestScript(
   sessions: Pick<SessionsMainExports, 'connect'>,
   userConfig: Pick<UserConfig, 'read' | 'writeSettings' | 'writeKeymap'>,
 ): SelfTestScript {
   let connected: ConnectedSession[] = [];
   let latestOpen = 0;
+  let emptying: Promise<void> = Promise.resolve();
   const connect = (
     sessionId: string,
     projectDir: string | null,
@@ -1087,9 +1089,9 @@ export function formsSelfTestScript(
         session.end();
       }
       connected = [];
-      const result: Promise<FormsSelfTestResult> = emptyUserFiles(
-        userConfig,
-      ).then(() => {
+      const emptyFiles = () => emptyUserFiles(userConfig);
+      emptying = emptying.then(emptyFiles, emptyFiles);
+      const result: Promise<FormsSelfTestResult> = emptying.then(() => {
         if (thisOpen !== latestOpen) {
           return new Promise<never>(() => {});
         }
