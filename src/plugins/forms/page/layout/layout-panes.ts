@@ -52,7 +52,7 @@ import {
   reviewSummaryText,
 } from '../view-model';
 import type { FormsContributions } from '../contributions';
-import { createUpdatingHeadKit, type HeadKitDeps } from './card-kit';
+import { createUpdatingHeadKit, headKitDepsFor } from './card-kit';
 import type { KitCommands } from './kit-commands';
 import { drawRollingBack, requireElementIn } from './layout-cards';
 import type { LayoutPick } from './layout-resolver';
@@ -179,17 +179,6 @@ function requireIndexIn(index: number, length: number, message: string) {
   }
 }
 
-// The head kit's deps over the forms view's keys.
-function headDepsOf(deps: PaneDeps): HeadKitDeps {
-  return {
-    markdown: deps.markdown,
-    platform: deps.platform,
-    keysFor: (command: CommandId) =>
-      deps.keys.keysFor(command, formsScope('forms')),
-    commands: deps.commands,
-  };
-}
-
 function drawRail(
   rail: CompleteLayout['rail'],
   parent: HTMLElement,
@@ -202,7 +191,10 @@ function drawRail(
   const entries = new Map<number, HTMLElement>();
   let shownView: FormsView = 'forms';
   const kit: RailKit = {
-    ...createUpdatingHeadKit(headDepsOf(deps), updaters),
+    ...createUpdatingHeadKit(
+      headKitDepsFor(deps, formsScope('forms')),
+      updaters,
+    ),
     entry(entryParent, position) {
       requireIndexIn(
         position,
@@ -337,9 +329,10 @@ function drawReview(
     })),
   };
   const kit: ReviewKit = {
-    ...createUpdatingHeadKit(headDepsOf(deps), updaters),
-    keysFor: (qualifiedId) =>
-      deps.keys.keysFor(qualifiedId, formsScope('review')),
+    ...createUpdatingHeadKit(
+      headKitDepsFor(deps, formsScope('review')),
+      updaters,
+    ),
     row(rowParent, row) {
       requireIndexIn(row, input.rows.length, `review has no row ${row}`);
       const entry = element('li', 'review-row');
@@ -534,7 +527,8 @@ function drawReviewRow(
 }
 
 // One `span.review-cell` (`data-column="<id>"`) per contributed column, in add
-// order, holding its text; a column that throws is logged and draws nothing.
+// order, holding its text, with the column's title as its tooltip; a column
+// that throws is logged and draws nothing.
 function reviewCells(
   roundId: string,
   item: FormsItemRef,
@@ -545,6 +539,7 @@ function reviewCells(
     try {
       const cell = element('span', 'review-cell', column.cell(roundId, item));
       cell.dataset.column = column.id;
+      cell.title = column.title;
       cells.push(cell);
     } catch (error) {
       deps.log(

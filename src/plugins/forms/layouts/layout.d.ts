@@ -104,9 +104,9 @@ export interface HeadKit {
     className?: string,
   ): HTMLElement;
   section(parent: HTMLElement, label: string, text: string): HTMLElement | null;
-  // The keys bound to a forms command (its short name, as `choose1`) in the forms view; null when unbound or unknown.
-  // It reads the keymap once, when called, so text a card draws from it keeps the keys of the card's build after a
-  // rebind; draw a hint with `keyHint` for one that follows the keymap.
+  // The keys bound to a forms command (its short name, as `choose1`) in the scope of the part drawing, as `keysFor`
+  // reads it; null when unbound or unknown. It reads the keymap once, when called, so text a card draws from it keeps
+  // the keys of the card's build after a rebind; draw a hint with `keyHint` for one that follows the keymap.
   keys(command: string): string | null;
   // `span` (with `className`) holding the hint of the keys `keys` reads for `command`, empty while unbound. The hint
   // follows keymap changes: a card's or pane's redraws on each of its updates, and the head is drawn again after each
@@ -121,8 +121,8 @@ export interface HeadKit {
   // throws `no command <id>`, and the card or pane falls back to `default` like any that throws.
   command(qualifiedId: string): () => void;
   // The keys bound to any plugin's command by its qualified id, in the scope of the part drawing: the forms view for
-  // cards, the head and the rail, the review for the review pane; null when unbound. It reads the keymap once, when
-  // called, as `keys` does.
+  // cards, the head and the rail, the review for the review pane; null when unbound. `keys` and `keyHint` read the
+  // same scope. It reads the keymap once, when called, as `keys` does.
   keysFor(qualifiedId: string): string | null;
   // `div.ui-card` with `className` added: the card every built-in card draws on.
   card(parent: HTMLElement, className?: string): HTMLElement;
@@ -179,10 +179,10 @@ export interface FindingKit extends AnswerKit {
   // `div.answer` with its 'Your answer' label, then one `section.choice-group` (`data-action`) per run of entries of
   // one action, in `entries` order; returns the `div.answer`, which `answerControls` may be appended to. A group with
   // choices draws the action's word as a section header over `ol.choices`, each choice under its entry number; a
-  // group with no choices draws one pick of its own, the action's word with its number in parentheses, as
-  // `Follow-up (3)`. An action's `actionReasons` text sits under its header. 'all': every choice's reason as 'Why';
-  // 'recommended': the recommended choice's only; 'none': no choice reason. A blank reason draws nothing. The
-  // recommended pick, a choice or a header, is tagged Recommended.
+  // group with no choices draws one pick of its own as a choice row reads, its entry number in the choice number
+  // badge, then the action's word. An action's `actionReasons` text sits under its header. 'all': every choice's
+  // reason as 'Why'; 'recommended': the recommended choice's only; 'none': no choice reason. A blank reason draws
+  // nothing. The recommended pick, a choice or a header, is tagged Recommended.
   choiceGroups(
     parent: HTMLElement,
     reasons: 'recommended' | 'all' | 'none',
@@ -253,8 +253,8 @@ export interface RailKit extends HeadKit {
 export interface ReviewKit extends HeadKit {
   // `li.review-row` for review row `row`: the item's label and title, then its pick (action word, entry number and
   // choice text, the Recommended tag) or its status, the jump keys on the cursor row, the Notes and Don't ask lines,
-  // and last one `span.review-cell` (`data-column="<id>"`) per column other plugins added, holding its text. A click
-  // jumps to its item. The app scrolls the cursor row into view.
+  // and last one `span.review-cell` (`data-column="<id>"`) per column other plugins added, holding its text, with the
+  // column's title as its tooltip. A click jumps to its item. The app scrolls the cursor row into view.
   row(parent: HTMLElement, row: number): HTMLElement;
   // `p.round-progress`: how many items are answered and how many not applicable.
   progress(parent: HTMLElement): HTMLElement;

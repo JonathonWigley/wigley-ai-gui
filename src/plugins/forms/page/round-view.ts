@@ -25,7 +25,11 @@ import {
 } from './form-state';
 import { roundInfo } from './kinds/card-parts';
 import type { CardDeps, ItemCard } from './kinds/item-format';
-import { createHeadKit, type HeadKitDeps } from './layout/card-kit';
+import {
+  createHeadKit,
+  type HeadKitDeps,
+  headKitDepsFor,
+} from './layout/card-kit';
 import type { KitCommands } from './layout/kit-commands';
 import { buildLayoutCard } from './layout/layout-cards';
 import {
@@ -274,11 +278,8 @@ function buildRoundParts(
   const main = split.end;
 
   const headDeps: HeadDeps = {
-    markdown: deps.markdown,
-    keysFor: (command) => deps.keys.keysFor(command, formsScope('forms')),
-    platform: deps.platform,
+    ...headKitDepsFor(deps, formsScope('forms')),
     log: deps.log,
-    commands: deps.commands,
   };
   const headPick = picks.panes.head;
   const layoutHead = buildLayoutHead(main, round, headPick, headDeps);
@@ -333,7 +334,7 @@ function buildLayoutHead(
   pick: LayoutPick,
   deps: HeadDeps,
 ): HTMLElement | null {
-  if (pick.layout.head === undefined) {
+  if (typeof pick.layout.head !== 'function') {
     return null;
   }
   const slot = element('div', 'layout-head');

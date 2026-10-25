@@ -13,6 +13,7 @@ import { apply, initialState, type RoundState } from '../form-state';
 import { findingFormat } from '../kinds/finding/finding-card';
 import type { CardDeps } from '../kinds/item-format';
 import { finding, presentedRound } from '../test-rounds';
+import type { LayoutAction } from '../../layouts/layout';
 import { choiceGroupsOf, createCardKit } from './card-kit';
 import {
   asFake,
@@ -125,11 +126,11 @@ describe('choiceGroupsOf', () => {
   });
 });
 
-// A round of one finding, open and active.
-function findingRound(): RoundState {
+// A round of one finding, `overrides` over its defaults, open and active.
+function findingRound(overrides: Partial<DefectFinding> = {}): RoundState {
   const presented = presentedRound('r1', {
     questions: [],
-    findings: [finding('Delta')],
+    findings: [finding('Delta', overrides)],
   });
   return apply(initialState([], presented.sessionId), {
     type: 'roundShown',
@@ -164,8 +165,8 @@ function fakeCardDeps(contributions: FormsContributions) {
   return { deps, keysFor, run, log };
 }
 
-function findingKit(deps: CardDeps) {
-  const round = findingRound();
+function findingKit(deps: CardDeps, overrides: Partial<DefectFinding> = {}) {
+  const round = findingRound(overrides);
   const input = findingFormat.cardInput(round.round, 1);
   return createCardKit('finding', 1, input, round, 0, deps);
 }
@@ -258,6 +259,49 @@ describe('card kit', () => {
     const { kit } = findingKit(fakeCardDeps(createFormsContributions()).deps);
 
     expect(() => kit.command('docs.noSuch')).toThrow('no command docs.noSuch');
+  });
+
+  it('choiceGroups_ActionWithoutChoices_DrawsItsNumberAsAChoiceRowDoes', () => {
+    const overrides = {
+      choices: [choice('A', 'fix_now'), choice('B', 'fix_now')],
+    };
+    const { deps } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps, overrides);
+    const labels = choiceGroupsOf(cardOf(overrides)).map((g) => g.label);
+
+    const answer = asFake(
+      kit.choiceGroups(asHtml(new FakeElement('div')), 'none'),
+    );
+
+    const picks = findAll(answer, 'choice-group-pick');
+    expect(
+      picks.map((pick) =>
+        pick.children.map((part) => [part.className, part.textContent]),
+      ),
+    ).toEqual([
+      [
+        ['choice-number', '3'],
+        ['choice-text', labels[1]],
+      ],
+      [
+        ['choice-number', '4'],
+        ['choice-text', labels[2]],
+      ],
+    ]);
+  });
+
+  it('kitRun_UnknownActionType_LogsAndDispatchesNothing', () => {
+    const { deps, log } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps);
+
+    kit.run({ type: 'chooseAction' } as unknown as LayoutAction);
+
+    expect(log).toHaveBeenCalledWith(
+      'forms',
+      'layout action chooseAction is not known',
+    );
+    expect(deps.dispatch).not.toHaveBeenCalled();
+    expect(deps.toggleDontAsk).not.toHaveBeenCalled();
   });
 
   it('kitKeysFor_ReadsTheCardScope', () => {

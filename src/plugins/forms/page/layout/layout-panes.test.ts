@@ -64,7 +64,7 @@ function oneRowReview(onKit: (kit: ReviewKit) => void = () => {}): Layout {
 }
 
 function column(id: string, cell: FormsReviewColumn['cell']) {
-  return { id, title: id, cell };
+  return { id, title: `${id} title`, cell };
 }
 
 // The review pane built and updated once, and its row 0.
@@ -89,7 +89,7 @@ describe('review pane', () => {
     vi.unstubAllGlobals();
   });
 
-  it('reviewRow_DrawsOneCellPerColumn', () => {
+  it('reviewRow_DrawsOneCellPerColumnWithItsTitle', () => {
     const contributions = createFormsContributions();
     contributions.addReviewColumn(
       column('c1', (roundId, item) => `${roundId} ${item.kind} ${item.index}`),
@@ -104,10 +104,11 @@ describe('review pane', () => {
         cell.className,
         cell.dataset.column,
         cell.textContent,
+        cell.title,
       ]),
     ).toEqual([
-      ['review-cell', 'c1', 'r1 question 1'],
-      ['review-cell', 'c2', 'second'],
+      ['review-cell', 'c1', 'r1 question 1', 'c1 title'],
+      ['review-cell', 'c2', 'second', 'c2 title'],
     ]);
   });
 
@@ -148,6 +149,28 @@ describe('review pane', () => {
 
     expect(read).toBeNull();
     expect(keysFor).toHaveBeenCalledWith('demo.run', 'forms.review');
+  });
+
+  it('reviewKit_KeysAndKeyHint_ReadTheReviewScope', () => {
+    const state = openRound();
+    const { deps, keysFor } = fakePaneDeps(createFormsContributions(), state);
+
+    buildReviewPane(
+      {
+        name: 'test',
+        layout: oneRowReview((kit) => {
+          kit.keys('submit');
+          kit.keyHint(asHtml(new FakeElement('div')), 'askCancel');
+        }),
+      },
+      asHtml(new FakeElement('div')),
+      state.rounds[0],
+      deps,
+    );
+
+    expect(keysFor).toHaveBeenCalledWith('forms.submit', 'forms.review');
+    expect(keysFor).toHaveBeenCalledWith('forms.askCancel', 'forms.review');
+    expect(keysFor).not.toHaveBeenCalledWith(expect.anything(), 'forms.forms');
   });
 });
 

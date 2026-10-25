@@ -1,4 +1,5 @@
 import type { CommandId } from '../../../../contracts/commands';
+import type { ViewScope } from '../../../../contracts/keymap';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
@@ -215,11 +216,12 @@ function actionReasonOf(
 
 // The FormsActions a layout action dispatches: focusing the card's item at
 // rail `position`, then the action itself. Don't ask has none of its own: the
-// kit runs its command, which also focuses the reason box.
+// kit runs its command, which also focuses the reason box. Null for an action
+// type the contract does not name, as an older layout may still send.
 export function layoutActions(
   action: LayoutAction,
   position: number,
-): FormsAction[] {
+): FormsAction[] | null {
   const focus: FormsAction = { type: 'focusItem', item: position };
   switch (action.type) {
     case 'choose':
@@ -231,6 +233,8 @@ export function layoutActions(
     case 'toggleDontAsk':
     case 'focus':
       return [focus];
+    default:
+      return null;
   }
 }
 
@@ -241,12 +245,26 @@ export function answerableOf(item: RailItem): AnswerableItem | null {
 
 // What the base kit of every card and pane reads: `keysFor` reads the keys
 // bound to a qualified command in the scope of the part drawing, null when
-// unbound.
+// unbound; `keys`, `keyHint` and `keysFor` on the kit all read through it.
 export interface HeadKitDeps {
   markdown: MarkdownRenderer;
   platform: Platform;
   commands: KitCommands;
   keysFor(command: CommandId): string | null;
+}
+
+// The head kit's deps over the keys bound in `scope`, the scope of the part
+// drawing.
+export function headKitDepsFor(
+  deps: Pick<CardDeps, 'markdown' | 'platform' | 'commands' | 'keys'>,
+  scope: ViewScope,
+): HeadKitDeps {
+  return {
+    markdown: deps.markdown,
+    platform: deps.platform,
+    commands: deps.commands,
+    keysFor: (command) => deps.keys.keysFor(command, scope),
+  };
 }
 
 // The parts a layout's head draws with, over the keys `deps.keysFor` reads in
@@ -341,8 +359,8 @@ export function createUpdatingHeadKit(
   };
 }
 
-// The forms view's keys for the forms command short-named `command`; null
-// when unbound or no forms command has that name.
+// The keys `deps.keysFor` reads for the forms command short-named `command`;
+// null when unbound or no forms command has that name.
 function keysOfNamed(
   deps: Pick<HeadKitDeps, 'keysFor'>,
   command: string,
@@ -367,12 +385,7 @@ export function createCardKit<K extends ItemKind>(
     item,
     position,
     deps,
-    headDeps: {
-      markdown: deps.markdown,
-      platform: deps.platform,
-      commands: deps.commands,
-      keysFor: (command) => deps.keys.keysFor(command, formsScope('forms')),
-    },
+    headDeps: headKitDepsFor(deps, formsScope('forms')),
     boxes: itemTextBoxes(round, item),
     mounted: new Set(),
     updaters: [],
@@ -542,9 +555,15 @@ function appendCardKeys(
   );
 }
 
-// Dispatches the action's FormsActions, then Don't ask's command for it.
+// Dispatches the action's FormsActions, then Don't ask's command for it; an
+// action type the contract does not name is logged and runs nothing.
 function runLayoutAction(card: CardContext, action: LayoutAction) {
-  for (const formsAction of layoutActions(action, card.position)) {
+  const formsActions = layoutActions(action, card.position);
+  if (formsActions === null) {
+    card.deps.log('forms', `layout action ${action.type} is not known`);
+    return;
+  }
+  for (const formsAction of formsActions) {
     card.deps.dispatch(formsAction);
   }
   if (action.type === 'toggleDontAsk') {
@@ -763,9 +782,9 @@ function appendGroupChoices(
   });
 }
 
-// A group with no choices: one pick reading as the action's word and its
-// entry number in parentheses, tagged when recommended, with the keys of its
-// number; then the group's reason.
+// A group with no choices: one pick drawn as a choice row, its entry number
+// in the choice number badge and the action's word as its text, tagged when
+// recommended, with the keys of its number; then the group's reason.
 function appendGroupPick(
   section: HTMLElement,
   group: ChoiceGroup,
@@ -778,9 +797,8 @@ function appendGroupPick(
     kit.run({ type: 'choose', number }),
   );
   pick.append(
-    group.label,
-    ' ',
-    element('span', 'choice-number', `(${number})`),
+    element('span', 'choice-number', String(number)),
+    element('span', 'choice-text', group.label),
   );
   if (group.isRecommended) {
     pick.classList.add('is-recommended');

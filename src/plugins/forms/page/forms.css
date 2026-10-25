@@ -228,7 +228,8 @@
 }
 
 /* A finding's answer: one group per action, its choices under the action's
-   header, or the header alone as the pick when the action has none. */
+   header, or, when the action has none, the header alone as one pick drawn
+   as a choice row: its number in the badge, the action's word as its text. */
 :where(.form-tab) .choice-group + .choice-group {
   margin-top: var(--wg-space-3);
 }
@@ -328,6 +329,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-2);
+  margin-top: var(--wg-space-3);
+}
+
+/* Other plugins' parts sit apart from the box above them as a field does. */
+:where(.form-tab) .card-parts {
   margin-top: var(--wg-space-3);
 }
 
@@ -467,6 +473,15 @@
   color: var(--wg-fg-secondary);
   font-size: var(--wg-text-12);
   margin: 0 0 var(--wg-space-1);
+  overflow-wrap: anywhere;
+}
+
+/* Other plugins' columns read as detail lines, side by side. */
+:where(.form-tab) .review-cell {
+  color: var(--wg-fg-secondary);
+  display: inline-block;
+  font-size: var(--wg-text-12);
+  margin: 0 var(--wg-space-3) var(--wg-space-1) 0;
   overflow-wrap: anywhere;
 }
 
