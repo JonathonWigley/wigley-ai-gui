@@ -1,6 +1,6 @@
 # 09 — The installed app's icon is the Auri art
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 04 (shares `forge.config.mts`)
 Plan: [plan.md](plan.md)
@@ -45,3 +45,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 217960b7 · proof: diff read: packagerConfig.icon 'assets/icon/icon' (packager 20.3.0 adds .ico/.icns); four icon files present; lead viewed checker-1024 and 32px previews: no leak into the figure; worker: tsc, oxfmt, oxlint, layers clean · concerns: 16 px is hard to read with the head crop; pixel work is C# via Add-Type in PowerShell; no npm script for the rebuild

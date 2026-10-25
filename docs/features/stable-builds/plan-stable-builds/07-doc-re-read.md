@@ -1,6 +1,6 @@
 # 07 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -27,3 +27,4 @@ Commit:    one commit per repo that changed
 
 ## Proof
 
+Commit 9474ec0a · proof: diff read: every listed AGENTS.md line checked and fixed; lint passes; marketplace README left to the fix dispatch (peer edits at brief time, now clean) · concerns: Live dev app passes plain process.env to Claude (main.ts:197), so its Chat-tab sessions reach the stable app — contradicts Q1, AGENTS.md written to the bug; README Starting the app/Finding the app/failure list stale; WIGLEY_AI_GUI_ENDPOINT_DIR with ~ only expands in bash

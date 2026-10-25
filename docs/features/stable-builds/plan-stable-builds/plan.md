@@ -157,12 +157,12 @@ export interface AppInstance {
 - [x] [Relay starts the installed app](06-relay-installed-app.md) — waits on the peer's `start_app.py` edit
 
 ### Wave 2
-- [ ] [Relay per instance](02-relay-per-instance.md) — after 01
-- [ ] [Window title and Dev tag](03-title-and-dev-tag.md) — after 01
-- [ ] [App icon](09-app-icon.md) — after 04; added mid-run at the user's request
+- [x] [Relay per instance](02-relay-per-instance.md) — after 01
+- [x] [Window title and Dev tag](03-title-and-dev-tag.md) — after 01
+- [x] [App icon](09-app-icon.md) — after 04; added mid-run at the user's request
 
 ### Wave 3
-- [ ] [Doc re-read](07-doc-re-read.md) — after 01–06, 09
+- [x] [Doc re-read](07-doc-re-read.md) — after 01–06, 09
 - [ ] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
@@ -174,6 +174,10 @@ Review base: 590a7726fd2b6b5a85022515b6b2be94ee82a24d
 - 01 · 14d9a780 · diff read: every Produces present (AppInstance, appInstanceOf, MainServices/AppConfig/ConfigStoreDeps.appInstance); typecheck passes; app-instance + config tests pass; lead ran oxfmt --write on the 3 touched test files (tooling-only) · concerns: worker sent no report after one nudge; diff is the record. No other MainServices/AppConfig fakes needed changing (typecheck clean)
 - 05 · ec27018a · diff read: parseInstallArgs, InstallPaths, installPaths, isInstallDue present as planned; 10 steps in order; typecheck passes; install-steps tests pass; own files format-clean · concerns: PowerShell/shortcut/ditto/osascript steps untested until group 08; Windows rename of the install folder right after quit may hit EBUSY from lingering handles (lead)
 - 06 · marketplace 30ab1331 · diff read: installed_app_command replaces npm_start_command as planned; default-folder rule in spawn_installed_app; worker ran forms unittest (only pre-existing AF_UNIX errors) and check_manifests (passed, rides 1.10.0) · concerns: Path equality treats a differently spelled default folder as non-default; start_app docstring's inserted sentence breaks the 'before then' reference and overruns the line width (lead)
+- 03 · fbb31f31 · diff read: mountDevTag present as planned, document.title from appInstance, index.html title Auri; worker: own files pass oxfmt/oxlint/layers/styles; tsc clean outside group 02's in-flight endpoint.test.ts; full compile at step 4 · concerns: none
+- 02 · ef896213 · diff read: channelPath(…, instanceId, tempDir?) and launchCommand(…, isDev) as planned; every 4-arg call site carries an instance id (grep); worker: typecheck, oxfmt/oxlint, endpoint + relay-server tests pass · concerns: channelPath doc comment reflow leaves a short broken line (lead)
+- 09 · 217960b7 · diff read: packagerConfig.icon 'assets/icon/icon' (packager 20.3.0 adds .ico/.icns); four icon files present; lead viewed checker-1024 and 32px previews: no leak into the figure; worker: tsc, oxfmt, oxlint, layers clean · concerns: 16 px is hard to read with the head crop; pixel work is C# via Add-Type in PowerShell; no npm script for the rebuild
+- 07 · 9474ec0a · diff read: every listed AGENTS.md line checked and fixed; lint passes; marketplace README left to the fix dispatch (peer edits at brief time, now clean) · concerns: Live dev app passes plain process.env to Claude (main.ts:197), so its Chat-tab sessions reach the stable app — contradicts Q1, AGENTS.md written to the bug; README Starting the app/Finding the app/failure list stale; WIGLEY_AI_GUI_ENDPOINT_DIR with ~ only expands in bash
 ### Contract changes
 ### Rulings
 - Live run start split into startLiveApp(): setPath userData then requestSingleInstanceLock; self-test path chosen when runMode is not live and driveRunDir is null — self-test is the only such mode (RunMode = live|selfTest|drive) — lead · group 01
@@ -181,5 +185,10 @@ Review base: 590a7726fd2b6b5a85022515b6b2be94ee82a24d
 - The AGENTS.md oxfmt failure, already at HEAD from the docs-ahead commit e5552191, goes to group 07, which edits that file — lint stays red until then — lead
 - Empty LOCALAPPDATA/APPDATA counts as missing; packaged app checked before quitting the running app; macOS pgrep pattern anchored to the binary path — group 05 · group 05
 - Default-folder rule lives in spawn_installed_app, so the recorded-command fallback shares it; tests patch start_app.ENDPOINT_DIR; launch_app(endpoint, endpoint_dir, env, spawn, installed_app) — group 06 · group 06
+- No CSS change: the start track already sits inside the title bar's macOS and Windows padding — group 03 · group 03
+- New tests use the file's prose it() names instead of the plan's snake_case names; existing npm-env launchCommand tests pass isDev true — group 02 · group 02
+- assets/ stays outside the asar (Forge Vite plugin packs only /.vite) — group 09 · group 09
+- Group 07's Q1 concern (dev Chat-tab sessions reached the stable app) fixed before review as a determined bug vs the user's decision: gui 5148782a endpointEnv for live and drive harness + AGENTS.md; marketplace 133f2011 README relay section + start_app docstring; rides plugin 1.10.0 (check_manifests passed) — lead
 ### Review rounds
 ### Test gate
+- app-instance.test (added), endpoint.test + relay-server.test (channelPath/launchCommand changed), install-steps.test (added), config-store/user-config/selftest-config tests (fakes edited), marketplace tests.test_start_app (rewritten); tsc clean · vitest 7 files 135 passed 3 skipped (POSIX-only); unittest 23 OK 3 skipped · pass

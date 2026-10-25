@@ -1,6 +1,6 @@
 # 03 — Window title and a Dev tag in the title bar
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -33,3 +33,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit fbb31f31 · proof: diff read: mountDevTag present as planned, document.title from appInstance, index.html title Auri; worker: own files pass oxfmt/oxlint/layers/styles; tsc clean outside group 02's in-flight endpoint.test.ts; full compile at step 4 · concerns: none

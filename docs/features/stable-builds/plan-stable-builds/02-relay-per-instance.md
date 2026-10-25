@@ -1,6 +1,6 @@
 # 02 — Relay channel and endpoint folder per app instance
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -53,3 +53,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit ef896213 · proof: diff read: channelPath(…, instanceId, tempDir?) and launchCommand(…, isDev) as planned; every 4-arg call site carries an instance id (grep); worker: typecheck, oxfmt/oxlint, endpoint + relay-server tests pass · concerns: channelPath doc comment reflow leaves a short broken line (lead)
