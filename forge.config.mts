@@ -6,6 +6,8 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    win32metadata: { ProductName: 'Auri', FileDescription: 'Auri' },
+    extendInfo: { CFBundleName: 'Auri', CFBundleDisplayName: 'Auri' },
   },
   rebuildConfig: {},
   plugins: [
