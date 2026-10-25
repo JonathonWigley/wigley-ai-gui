@@ -1212,6 +1212,12 @@ describe('fingerprint', () => {
     );
   });
 
+  it('hashes a finding with no choice actions or action_reasons as it did before they existed', () => {
+    expect(
+      fingerprint(parseRound({ heading: 'H', findings: [finding()] })),
+    ).toBe('fc3a3a26e21f0c6e85e8ad1f4d000380e032b3b52e3bc6b2ffae5226034e77b1');
+  });
+
   it('ignores an empty findings list', () => {
     expect(fingerprint(parseRound(args({ findings: [] })))).toBe(
       fingerprint(parseRound(args())),

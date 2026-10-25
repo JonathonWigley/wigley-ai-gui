@@ -73,9 +73,9 @@ export function decision(
     finding: `${title} finding`,
     proof: `${title} proof`,
     choices: choices(['first', 'second']),
-    recommend: 1,
+    recommend: null,
     recommend_action: 'follow_up',
-    actionReasons: {},
+    actionReasons: { follow_up: `${title} follow-up reason` },
     layout: null,
     ...overrides,
   };

@@ -352,6 +352,22 @@ describe('layouts a round names', () => {
     expect(readdirSync(roundsDir)).toEqual([]);
   });
 
+  it('fails a round naming a layout the folder lacks before it queues behind an open round', async () => {
+    layoutNames = ['default'];
+    const session = startSession();
+    const first = watch(session.askRound(NAMING_ARGS, null, live()));
+
+    const rejection = session.askRound(
+      { ...PLACEMENT_ARGS, layout: 'dense' },
+      null,
+      live(),
+    );
+
+    await expect(rejection).rejects.toBeInstanceOf(RoundError);
+    expect(first.settled).toBe(false);
+    expect(presenter.shown).toHaveLength(1);
+  });
+
   it('opens a round whose layouts the folder holds', () => {
     layoutNames = ['default', 'compact'];
 

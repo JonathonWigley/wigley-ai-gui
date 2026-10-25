@@ -292,12 +292,15 @@ describe('restoring a draft', () => {
   });
 
   it("drops a choice beyond the finding's choices", () => {
+    // F1 has three choices, all under fix_now.
     const round = active(
       findingRound(
-        draft({ finding_answers: [findingEntry(1, { choice: 4 })] }),
+        draft({
+          finding_answers: [findingEntry(1, { choice: 4, action: 'fix_now' })],
+        }),
       ),
     );
-    expect(round.findingAnswers[0].choice).toBe(0);
+    expect(round.findingAnswers[0]).toMatchObject({ choice: 0, action: '' });
   });
 
   it('starts a finding with no draft entry with no pick', () => {
