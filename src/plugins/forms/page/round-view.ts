@@ -7,24 +7,26 @@ import type { UiState } from '../../../contracts/ui-state';
 import { errorText } from '../../../shared/error-text';
 import { scrollContent } from '../../../shared/content-scroll';
 import type { KeysPageExports } from '../../keys/contract';
+import type { FormsView } from '../contract';
 import { formsCommand, formsScope } from '../ids';
 import type { Layout } from '../layouts/layout';
 import { element } from '../../../shared/page/dom';
 import type { ShownLayouts } from '../../../shared/page/layout-loader';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
+import type { FormsContributions } from './contributions';
 import type { EditorBoxes } from './editor-boxes';
 import {
   type FormsAction,
   type FormsState,
-  type FormsView,
   railItems,
   type RoundState,
   type TextTarget,
 } from './form-state';
 import { roundInfo } from './kinds/card-parts';
 import type { CardDeps, ItemCard } from './kinds/item-format';
-import { createHeadKit } from './layout/card-kit';
+import { createHeadKit, type HeadKitDeps } from './layout/card-kit';
+import type { KitCommands } from './layout/kit-commands';
 import { buildLayoutCard } from './layout/layout-cards';
 import {
   buildRailPane,
@@ -42,7 +44,9 @@ import {
 
 // `getState` reads the forms state, so a rail click logs only a jump that
 // moved. `platform` is the OS key hints are drawn for; `uiState` keeps the
-// rail's dragged width.
+// rail's dragged width. `commands` is what every kit's `command` checks and
+// runs; `contributions` holds the card parts and review columns other plugins
+// added.
 export interface RoundViewDeps {
   markdown: MarkdownRenderer;
   boxes: Pick<EditorBoxes, 'mount' | 'destroyBox' | 'destroyRound'>;
@@ -50,19 +54,23 @@ export interface RoundViewDeps {
   dispatch(action: FormsAction): void;
   getState(): FormsState;
   run(command: CommandId): void;
+  commands: KitCommands;
+  contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
   platform: Platform;
   uiState: UiState;
   log: Log;
 }
 
-// `setLayouts` picks the round's layouts again from `shown` and, when a pick
-// changed, rebuilds the view's children from `round`, remounting every box.
-// `scrollBy` scrolls the main column by
-// `step`, down for 1 and up for -1. `dispose` stops the view
-// following keymap changes; its owner calls it when it drops the view.
+// `rebuild` rebuilds the view's children from `round` with the layouts it
+// picked, remounting every box from the round's answers. `setLayouts` picks
+// the round's layouts again from `shown` and rebuilds when a pick changed.
+// `scrollBy` scrolls the main column by `step`, down for 1 and up for -1.
+// `dispose` stops the view following keymap changes; its owner calls it when
+// it drops the view.
 export interface RoundView {
   element: HTMLElement;
   update(round: RoundState, view: FormsView): void;
+  rebuild(round: RoundState): void;
   setLayouts(shown: ShownLayouts<Layout>, round: RoundState): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll;
   dispose(): void;
@@ -86,8 +94,8 @@ interface RoundParts {
 // pane, which holds the round note, in its end pane, each card and pane drawn
 // by the layout `pickRoundLayouts` picks for it from `shown`. A render only
 // updates it, the rail taking the latest dragged width of any round; new
-// layouts that change a pick rebuild both panes, keeping the rail's dragged
-// width. A keymap change draws the layout's head again, shown or hidden, since
+// layouts that change a pick rebuild both panes, as `rebuild` does, keeping
+// the rail's dragged width. A keymap change draws the layout's head again, shown or hidden, since
 // showing the view only updates it, and has the review redraw its rows at its
 // next update; while the view shows, the change also updates it with the
 // round it last showed, so every key hint reads the new keys. `attach` places
@@ -151,6 +159,14 @@ export function createRoundView(
         parts.rail.showEntry(current.focus);
       }
     },
+    rebuild(current) {
+      deps.boxes.destroyRound(current.roundId);
+      split.start.replaceChildren();
+      split.end.replaceChildren();
+      parts = build(current, picks);
+      shownFocus = -1;
+      view.update(current, shownView);
+    },
     setLayouts(nextShown, current) {
       const nextPicks = pickRoundLayouts(
         current.round,
@@ -161,12 +177,7 @@ export function createRoundView(
         return;
       }
       picks = nextPicks;
-      deps.boxes.destroyRound(current.roundId);
-      split.start.replaceChildren();
-      split.end.replaceChildren();
-      parts = build(current, picks);
-      shownFocus = -1;
-      view.update(current, shownView);
+      view.rebuild(current);
     },
     scrollBy(step, direction) {
       return scrollContent(
@@ -218,17 +229,18 @@ function buildRoundParts(
     mountBox,
     destroyBox,
     shownView,
+    commands: deps.commands,
+    contributions: deps.contributions,
   };
   const rail = buildRailPane(picks.panes.rail, split.start, round, paneDeps);
   const main = split.end;
 
-  const keysFor = (command: CommandId) =>
-    deps.keys.keysFor(command, formsScope('forms'));
   const headDeps: HeadDeps = {
     markdown: deps.markdown,
-    keysFor,
+    keysFor: (command) => deps.keys.keysFor(command, formsScope('forms')),
     platform: deps.platform,
     log: deps.log,
+    commands: deps.commands,
   };
   const headPick = picks.panes.head;
   const layoutHead = buildLayoutHead(main, round, headPick, headDeps);
@@ -240,9 +252,11 @@ function buildRoundParts(
     destroyBox,
     dispatch: deps.dispatch,
     toggleDontAsk: () => deps.run(formsCommand('toggleDontAsk')),
-    keysFor,
+    keys: deps.keys,
     platform: deps.platform,
     log: deps.log,
+    commands: deps.commands,
+    contributions: deps.contributions,
   };
   const itemCards = items.map((item, position) =>
     buildLayoutCard(
@@ -270,7 +284,8 @@ function buildRoundParts(
   };
 }
 
-type HeadDeps = Pick<CardDeps, 'markdown' | 'keysFor' | 'platform' | 'log'>;
+// The head kit's deps over the forms view's keys, and the log.
+type HeadDeps = HeadKitDeps & Pick<CardDeps, 'log'>;
 
 // The slot above the cards the picked layout's head draws into, carrying
 // `data-layout` naming that layout; null for a layout with no head.

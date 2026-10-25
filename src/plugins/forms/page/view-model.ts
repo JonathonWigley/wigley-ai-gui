@@ -1,6 +1,11 @@
 import type { Log } from '../../../contracts/log';
 import type { DotStatus } from '../../../shared/page/ui/status-dot';
-import type { AnswerableKind, AnswerStatus, FindingAction } from '../contract';
+import type {
+  AnswerableKind,
+  AnswerStatus,
+  FindingAction,
+  FormsView,
+} from '../contract';
 import { findingSolution } from '../finding-pick';
 import {
   activeRound,
@@ -11,7 +16,6 @@ import {
   findingActionWord,
   type FormsAction,
   type FormsState,
-  type FormsView,
   itemAnswer,
   pickIsComplete,
   pickNumber,

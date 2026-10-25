@@ -1,13 +1,20 @@
 import type { CommandId } from '../../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
+import type { Platform } from '../../../../contracts/platform';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
 import { textButton } from '../../../../shared/page/ui/button';
 import { card as cardPart } from '../../../../shared/page/ui/card';
 import { kbd } from '../../../../shared/page/ui/kbd';
+import { errorText } from '../../../../shared/error-text';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag as tagPart } from '../../../../shared/page/ui/tag';
 import type { ItemKind } from '../../contract';
-import { formsCommand, formsCommandNamed, numberedCommand } from '../../ids';
+import {
+  formsCommand,
+  formsCommandNamed,
+  formsScope,
+  numberedCommand,
+} from '../../ids';
 import type {
   AnswerKit,
   FindingAction,
@@ -39,6 +46,7 @@ import {
   statusLabel,
 } from '../kinds/card-parts';
 import type { CardDeps, CardInputs, CardKits } from '../kinds/item-format';
+import { commandRunner, type KitCommands } from './kit-commands';
 
 type TextBoxField = Parameters<Kit['textBox']>[1];
 type ReasonsMode = Parameters<FindingKit['choiceGroups']>[1];
@@ -49,15 +57,28 @@ interface ItemTextBox {
   text: string;
 }
 
-// What every part of one card's kit shares: the item, its boxes, and the
-// updaters the parts that show answer state or keys register.
+// What every part of one card's kit shares: the item and its round, its
+// deps and the head kit's deps over the forms view's keys, its boxes, the
+// updaters the parts that show answer state or keys register, and the
+// contributed parts once placed, null before.
 interface CardContext {
+  roundId: string;
   item: RailItem;
   position: number;
   deps: CardDeps;
+  headDeps: HeadKitDeps;
   boxes: Map<TextBoxField, ItemTextBox>;
   mounted: Set<TextBoxField>;
   updaters: ((round: RoundState) => void)[];
+  placedParts: PlacedPart[] | null;
+}
+
+// A contributed part drawn on the card, with the update it returned; only a
+// part's first update failure is logged.
+interface PlacedPart {
+  id: string;
+  update: (() => void) | undefined;
+  isUpdateFailureLogged: boolean;
 }
 
 // One run of a finding card's entries under one action, as `choiceGroups`
@@ -92,9 +113,14 @@ export interface CardKit<K extends ItemKind> {
   kit: CardKits[K];
   // Runs every part's updater with the round's current state.
   update(round: RoundState): void;
+  // Runs the update each contributed part returned.
+  updateContributedParts(): void;
   // Mounts each of the item's boxes no part mounted, in its default field at
   // the end of `card`.
   appendUnmountedBoxes(card: HTMLElement): void;
+  // Places the contributed parts at the end of `card` when the card never
+  // called `contributedParts`; nothing when no part names the card's kind.
+  appendUnplacedParts(card: HTMLElement): void;
 }
 
 const FIELD_CAPTIONS: Record<
@@ -213,11 +239,19 @@ export function answerableOf(item: RailItem): AnswerableItem | null {
   return item.kind === 'notice' ? null : { kind: item.kind, index: item.index };
 }
 
-// The parts a layout's head draws with, over the forms view's keys, each key
-// hint drawn for the platform.
-export function createHeadKit(
-  deps: Pick<CardDeps, 'markdown' | 'keysFor' | 'platform'>,
-): HeadKit {
+// What the base kit of every card and pane reads: `keysFor` reads the keys
+// bound to a qualified command in the scope of the part drawing, null when
+// unbound.
+export interface HeadKitDeps {
+  markdown: MarkdownRenderer;
+  platform: Platform;
+  commands: KitCommands;
+  keysFor(command: CommandId): string | null;
+}
+
+// The parts a layout's head draws with, over the keys `deps.keysFor` reads in
+// the scope of the part drawing, each key hint drawn for the platform.
+export function createHeadKit(deps: HeadKitDeps): HeadKit {
   return {
     el(parent, tagName, className = '', text) {
       const node = element(
@@ -251,6 +285,8 @@ export function createHeadKit(
       appendKeyHint(node, () => keysOfNamed(deps, command), deps.platform);
       return node;
     },
+    command: (qualifiedId) => commandRunner(qualifiedId, deps.commands),
+    keysFor: (qualifiedId) => deps.keysFor(qualifiedId),
     card(parent, className = '') {
       const node = cardPart();
       if (className !== '') {
@@ -289,7 +325,7 @@ export function createHeadKit(
 // each key hint pushes its redraw onto `updaters`, so it reads the keys again
 // on each update.
 export function createUpdatingHeadKit(
-  deps: Pick<CardDeps, 'markdown' | 'keysFor' | 'platform'>,
+  deps: HeadKitDeps,
   updaters: ((round: RoundState) => void)[],
 ): HeadKit {
   return {
@@ -308,7 +344,7 @@ export function createUpdatingHeadKit(
 // The forms view's keys for the forms command short-named `command`; null
 // when unbound or no forms command has that name.
 function keysOfNamed(
-  deps: Pick<CardDeps, 'keysFor'>,
+  deps: Pick<HeadKitDeps, 'keysFor'>,
   command: string,
 ): string | null {
   const id = formsCommandNamed(command);
@@ -327,12 +363,20 @@ export function createCardKit<K extends ItemKind>(
 ): CardKit<K> {
   const item = { kind, index };
   const card: CardContext = {
+    roundId: round.roundId,
     item,
     position,
     deps,
+    headDeps: {
+      markdown: deps.markdown,
+      platform: deps.platform,
+      commands: deps.commands,
+      keysFor: (command) => deps.keys.keysFor(command, formsScope('forms')),
+    },
     boxes: itemTextBoxes(round, item),
     mounted: new Set(),
     updaters: [],
+    placedParts: null,
   };
   const kit = KIT_BUILDERS[kind](card, input);
   return {
@@ -342,6 +386,11 @@ export function createCardKit<K extends ItemKind>(
         updater(current);
       }
     },
+    updateContributedParts() {
+      for (const part of card.placedParts ?? []) {
+        updateContributedPart(part, deps);
+      }
+    },
     appendUnmountedBoxes(element) {
       for (const field of card.boxes.keys()) {
         if (!card.mounted.has(field)) {
@@ -349,7 +398,66 @@ export function createCardKit<K extends ItemKind>(
         }
       }
     },
+    appendUnplacedParts(element) {
+      const isUnplaced = card.placedParts === null;
+      if (isUnplaced && deps.contributions.cardParts(kind).length > 0) {
+        placeContributedParts(card, element);
+      }
+    },
   };
+}
+
+// `div.card-parts` at the end of `parent`, holding one `div.card-part`
+// (`data-part="<id>"`) per contributed part of the card's kind, in add order,
+// each built into its wrapper. A part that throws is logged and its wrapper
+// removed; the rest still draw. Throws when the card places them twice.
+function placeContributedParts(
+  card: CardContext,
+  parent: HTMLElement,
+): HTMLElement {
+  if (card.placedParts !== null) {
+    throw new Error(`${card.item.kind} card placed contributed parts twice`);
+  }
+  const placed: PlacedPart[] = [];
+  card.placedParts = placed;
+  const holder = element('div', 'card-parts');
+  parent.append(holder);
+  const { kind, index } = card.item;
+  for (const part of card.deps.contributions.cardParts(kind)) {
+    const wrapper = element('div', 'card-part');
+    wrapper.dataset.part = part.id;
+    holder.append(wrapper);
+    try {
+      const built = part.build(wrapper, { roundId: card.roundId, kind, index });
+      placed.push({
+        id: part.id,
+        update: built.update?.bind(built),
+        isUpdateFailureLogged: false,
+      });
+    } catch (error) {
+      wrapper.remove();
+      card.deps.log(
+        'forms',
+        `card part ${part.id} failed: ${errorText(error)}`,
+      );
+    }
+  }
+  return holder;
+}
+
+// Runs the part's update; only its first throw is logged.
+function updateContributedPart(part: PlacedPart, deps: CardDeps) {
+  try {
+    part.update?.();
+  } catch (error) {
+    if (!part.isUpdateFailureLogged) {
+      part.isUpdateFailureLogged = true;
+      deps.log(
+        'forms',
+        `card part ${part.id} update failed: ${errorText(error)}`,
+      );
+    }
+  }
 }
 
 // The item's text boxes in their default order, each with its current text.
@@ -428,7 +536,7 @@ function appendCardKeys(
   card.updaters.push(
     appendKeyHint(
       control,
-      () => card.deps.keysFor(command),
+      () => card.headDeps.keysFor(command),
       card.deps.platform,
     ),
   );
@@ -446,7 +554,7 @@ function runLayoutAction(card: CardContext, action: LayoutAction) {
 
 function buildBaseKit(card: CardContext): Kit {
   return {
-    ...createUpdatingHeadKit(card.deps, card.updaters),
+    ...createUpdatingHeadKit(card.headDeps, card.updaters),
     itemHead(parent, kind) {
       const { header, status } = buildItemHead(parent, kind);
       const answerable = answerableOf(card.item);
@@ -461,6 +569,7 @@ function buildBaseKit(card: CardContext): Kit {
     },
     textBox: (parent, field) => mountTextBox(card, parent, field),
     run: (action) => runLayoutAction(card, action),
+    contributedParts: (parent) => placeContributedParts(card, parent),
   };
 }
 
@@ -519,7 +628,7 @@ function buildQuestionKit(
         choices,
         input.recommend,
         (number) => kit.run({ type: 'choose', number }),
-        card.deps,
+        card.headDeps,
       );
       const recommended = entries[input.recommend - 1];
       if (reasons !== 'none' && recommended !== undefined) {
@@ -641,7 +750,7 @@ function appendGroupChoices(
     group.choices,
     recommended?.number ?? null,
     (number) => kit.run({ type: 'choose', number }),
-    card.deps,
+    card.headDeps,
   );
   card.updaters.push(updateKeys);
   return group.choices.map((choice, i) => {
@@ -681,7 +790,7 @@ function appendGroupPick(
   card.updaters.push(
     appendKeyHint(
       pick,
-      () => (command === null ? null : card.deps.keysFor(command)),
+      () => (command === null ? null : card.headDeps.keysFor(command)),
       card.deps.platform,
     ),
   );

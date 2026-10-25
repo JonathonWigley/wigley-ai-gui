@@ -1,3 +1,4 @@
+import type { CommandId } from '../../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
@@ -146,13 +147,15 @@ export interface ChoiceList {
 // Appends one choice per entry of `choices` to `list`, each inline markdown
 // under its shown `number`, with the keys that pick that number; the choice
 // numbered `recommended` is tagged, none when null. `pick` gets the clicked
-// choice's number.
+// choice's number. `deps.keysFor` reads the keys in the card's scope.
 export function buildChoiceList(
   list: HTMLElement,
   choices: { text: string; number: number }[],
   recommended: number | null,
   pick: (number: number) => void,
-  deps: Pick<CardDeps, 'markdown' | 'keysFor' | 'platform'>,
+  deps: Pick<CardDeps, 'markdown' | 'platform'> & {
+    keysFor(command: CommandId): string | null;
+  },
 ): ChoiceList {
   const keyUpdaters: (() => void)[] = [];
   const entries = choices.map(({ text, number }) => {

@@ -12,6 +12,7 @@ import { row as rowPart } from '../../../../shared/page/ui/row';
 import { setDotStatus, statusDot } from '../../../../shared/page/ui/status-dot';
 import { tag } from '../../../../shared/page/ui/tag';
 import type { KeysPageExports } from '../../../keys/contract';
+import type { FormsItemRef, FormsView } from '../../contract';
 import { type FormsCommandName, formsCommand, formsScope } from '../../ids';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
@@ -27,7 +28,6 @@ import {
   answerStatus,
   type FormsAction,
   type FormsState,
-  type FormsView,
   progress,
   type RailItem,
   railItems,
@@ -52,13 +52,16 @@ import {
   reviewRowsChanged,
   reviewSummaryText,
 } from '../view-model';
-import { createUpdatingHeadKit } from './card-kit';
+import type { FormsContributions } from '../contributions';
+import { createUpdatingHeadKit, type HeadKitDeps } from './card-kit';
+import type { KitCommands } from './kit-commands';
 import type { LayoutPick } from './layout-resolver';
 
 // What a pane reaches outside itself: the markdown renderer, the platform key
 // hints are drawn for, the log, the keys bound in a forms scope, the forms
-// state and its actions, a forms command, the round's text boxes, and the view
-// last shown, which decides what a rail click does.
+// state and its actions, a forms command, the round's text boxes, the view
+// last shown, which decides what a rail click does, the registered commands
+// `kit.command` checks and runs, and the review columns other plugins added.
 export interface PaneDeps {
   markdown: MarkdownRenderer;
   platform: Platform;
@@ -70,6 +73,8 @@ export interface PaneDeps {
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
   destroyBox(target: TextTarget): void;
   shownView(): FormsView;
+  commands: KitCommands;
+  contributions: Pick<FormsContributions, 'reviewColumns'>;
 }
 
 // `update` runs every rail part's updater with the round and the view shown;
@@ -216,12 +221,13 @@ function requirePaneElement(
 }
 
 // The head kit's deps over the forms view's keys.
-function headDepsOf(deps: PaneDeps) {
+function headDepsOf(deps: PaneDeps): HeadKitDeps {
   return {
     markdown: deps.markdown,
     platform: deps.platform,
     keysFor: (command: CommandId) =>
       deps.keys.keysFor(command, formsScope('forms')),
+    commands: deps.commands,
   };
 }
 
@@ -373,6 +379,8 @@ function drawReview(
   };
   const kit: ReviewKit = {
     ...createUpdatingHeadKit(headDepsOf(deps), updaters),
+    keysFor: (qualifiedId) =>
+      deps.keys.keysFor(qualifiedId, formsScope('review')),
     row(rowParent, row) {
       const isReviewRow =
         Number.isInteger(row) && row >= 0 && row < input.rows.length;
@@ -385,7 +393,7 @@ function drawReview(
       updaters.push(() => {
         const rows = changedRows;
         if (rows !== null) {
-          drawReviewRow(entry, rows[row], deps);
+          drawReviewRow(entry, rows[row], round.roundId, deps);
         }
       });
       return entry;
@@ -501,8 +509,14 @@ function appendReviewButton(
 // Redraws `entry`'s contents from `row`. A finding's pick reads as its action,
 // then its choice under the number the card gives it; a header pick reads as
 // its action alone, and a row with no pick as its status. The cursor's row
-// shows the keys that jump to its item, as clicking it does.
-function drawReviewRow(entry: HTMLElement, row: ReviewRow, deps: PaneDeps) {
+// shows the keys that jump to its item, as clicking it does. The row ends
+// with each contributed column's cell.
+function drawReviewRow(
+  entry: HTMLElement,
+  row: ReviewRow,
+  roundId: string,
+  deps: PaneDeps,
+) {
   entry.dataset.status = row.status;
   entry.classList.toggle('is-cursor', row.isCursor);
   const pick = button('review-pick', '', () =>
@@ -557,5 +571,32 @@ function drawReviewRow(entry: HTMLElement, row: ReviewRow, deps: PaneDeps) {
       ),
     );
   }
-  entry.replaceChildren(pick, ...details);
+  entry.replaceChildren(
+    pick,
+    ...details,
+    ...reviewCells(roundId, { kind: row.kind, index: row.number }, deps),
+  );
+}
+
+// One `span.review-cell` (`data-column="<id>"`) per contributed column, in add
+// order, holding its text; a column that throws is logged and draws nothing.
+function reviewCells(
+  roundId: string,
+  item: FormsItemRef,
+  deps: PaneDeps,
+): HTMLElement[] {
+  const cells: HTMLElement[] = [];
+  for (const column of deps.contributions.reviewColumns()) {
+    try {
+      const cell = element('span', 'review-cell', column.cell(roundId, item));
+      cell.dataset.column = column.id;
+      cells.push(cell);
+    } catch (error) {
+      deps.log(
+        'forms',
+        `review column ${column.id} failed: ${errorText(error)}`,
+      );
+    }
+  }
+  return cells;
 }

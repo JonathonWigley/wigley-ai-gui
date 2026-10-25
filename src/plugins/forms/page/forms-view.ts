@@ -20,6 +20,7 @@ import { type FormsCommandName, formsCommand, formsScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { isBoxShown } from './boxes';
+import type { FormsContributions } from './contributions';
 import type { EditorBoxes } from './editor-boxes';
 import { appendKeyHint } from './kinds/card-parts';
 import {
@@ -30,6 +31,7 @@ import {
   roundOfSession,
 } from './form-state';
 import type { FormsStore } from './forms-store';
+import type { KitCommands } from './layout/kit-commands';
 import { createRoundView, type RoundView } from './round-view';
 import { roundSaveLabel, roundSaveState, sessionTitle } from './view-model';
 
@@ -41,7 +43,8 @@ import { roundSaveLabel, roundSaveState, sessionTitle } from './view-model';
 // the visible view off or onto a Form tab: a key scope or mode change. The
 // status line shows only over a Form tab, and is rechecked on each store
 // render, box change, scope or mode change, and base change under the
-// cancel prompt.
+// cancel prompt. `commands` and `contributions` reach every round view's kits
+// and cards.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'statusBar' | 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
@@ -54,6 +57,8 @@ export interface FormsViewDeps {
   markdown: MarkdownRenderer;
   keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   run(command: CommandId): void;
+  commands: KitCommands;
+  contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
   platform: Platform;
   uiState: UiState;
   log: Log;
@@ -69,13 +74,16 @@ interface ActiveLayouts {
 // still open for the session in a new Form tab. `showForm` selects the
 // session's Form tab, a no-op when it has none. `setLayouts` hands `shown` to
 // every open round view, which rebuilds when a layout it draws with changed,
-// and rounds that open later are built with it.
+// and rounds that open later are built with it. `rebuild` rebuilds every open
+// round view with the layouts it holds, keeping its answers, as after a card
+// part or review column is added or removed.
 // `scrollBy` scrolls the active round's main column by `step`, down for 1 and
 // up for -1; null when no round is active or it has no view yet.
 export interface FormsView {
   forgetSession(sessionId: string): void;
   showForm(sessionId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
+  rebuild(): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
 }
 
@@ -209,6 +217,11 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
         roundViews.get(round.roundId)?.setLayouts(shown, round);
       }
     },
+    rebuild() {
+      for (const round of store.get().rounds) {
+        roundViews.get(round.roundId)?.rebuild(round);
+      }
+    },
     scrollBy(step, direction) {
       const round = activeRound(store.get());
       const roundView =
@@ -323,6 +336,8 @@ function showRound(
       dispatch,
       getState: deps.store.get,
       run: deps.run,
+      commands: deps.commands,
+      contributions: deps.contributions,
       platform: deps.platform,
       uiState: deps.uiState,
       log: deps.log,

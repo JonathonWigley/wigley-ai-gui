@@ -116,6 +116,14 @@ export interface HeadKit {
     command: string,
     className?: string,
   ): HTMLElement;
+  // A runner for any plugin's command by its qualified id (as `docs.openDoc`): each call runs the command, and getting
+  // it runs nothing. It checks the id when called, so call it while the card or pane builds: an id no plugin registers
+  // throws `no command <id>`, and the card or pane falls back to `default` like any that throws.
+  command(qualifiedId: string): () => void;
+  // The keys bound to any plugin's command by its qualified id, in the scope of the part drawing: the forms view for
+  // cards, the head and the rail, the review for the review pane; null when unbound. It reads the keymap once, when
+  // called, as `keys` does.
+  keysFor(qualifiedId: string): string | null;
   // `div.ui-card` with `className` added: the card every built-in card draws on.
   card(parent: HTMLElement, className?: string): HTMLElement;
   // `span.ui-tag`; tone `neutral` when left out.
@@ -144,6 +152,11 @@ export interface Kit extends HeadKit {
   ): HTMLElement;
   // Focuses this card's item, then runs the action. Call it from event handlers, not while the card builds.
   run(action: LayoutAction): void;
+  // `div.card-parts`, holding one `div.card-part` (`data-part="<id>"`) per part other plugins added for this card's
+  // kind, in the order they were added; returns the `div.card-parts`. Call it once, where the parts go: a card that
+  // leaves it out gets the parts appended at the end of its element, after the boxes it left unmounted. A part that
+  // throws is logged and draws nothing. Each part updates after the card's own `update`.
+  contributedParts(parent: HTMLElement): HTMLElement;
 }
 export interface AnswerKit extends Kit {
   // The Notes box, the Not applicable and Don't ask toggles, and the reason box, appended to `parent` in that order;
@@ -238,8 +251,9 @@ export interface RailKit extends HeadKit {
 // The review's parts, each keeping itself up to date while the review shows.
 export interface ReviewKit extends HeadKit {
   // `li.review-row` for review row `row`: the item's label and title, then its pick (action word, entry number and
-  // choice text, the Recommended tag) or its status, the jump keys on the cursor row, and the Notes and Don't ask
-  // lines. A click jumps to its item. The app scrolls the cursor row into view.
+  // choice text, the Recommended tag) or its status, the jump keys on the cursor row, the Notes and Don't ask lines,
+  // and last one `span.review-cell` (`data-column="<id>"`) per column other plugins added, holding its text. A click
+  // jumps to its item. The app scrolls the cursor row into view.
   row(parent: HTMLElement, row: number): HTMLElement;
   // `p.round-progress`: how many items are answered and how many not applicable.
   progress(parent: HTMLElement): HTMLElement;

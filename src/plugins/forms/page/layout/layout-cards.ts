@@ -101,8 +101,9 @@ export function buildLayoutCard(
 }
 
 // Builds through `cards`, checks the card's element, then mounts the boxes
-// the card left unmounted. On a throw, destroys the boxes it mounted and
-// removes what it appended to `parent` before rethrowing.
+// the card left unmounted and places the contributed parts it left unplaced,
+// in that order, at the end of its element. On a throw, destroys the boxes it
+// mounted and removes what it appended to `parent` before rethrowing.
 function buildCard(
   cards: Partial<CardBuilders>,
   parent: HTMLElement,
@@ -163,6 +164,7 @@ function buildCardOf<K extends ItemKind>(
   const card = build(parent, input, kit.kit);
   requireElementIn(card, kind, parent);
   kit.appendUnmountedBoxes(card.element);
+  kit.appendUnplacedParts(card.element);
   return { card, kit };
 }
 
@@ -183,8 +185,9 @@ function requireElementIn(
 }
 
 // The ItemCard over a built card: `update` runs the kit's updaters, then, on
-// an answerable item, shows its status on the card's element and runs the
-// card's own `update`, whose first throw is logged.
+// an answerable item, shows its status on the card's element, runs the card's
+// own `update`, whose first throw is logged, and then each contributed part's
+// update.
 function hostCard(
   built: BuiltCard,
   layoutName: string,
@@ -213,6 +216,7 @@ function hostCard(
           );
         }
       }
+      kit.updateContributedParts();
     },
   };
 }

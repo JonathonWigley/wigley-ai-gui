@@ -1,10 +1,12 @@
-import type { CommandId } from '../../../../contracts/commands';
 import type { Log } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
+import type { KeysPageExports } from '../../../keys/contract';
 import type { AnswerableKind, ItemKind, Round } from '../../contract';
 import type { LayoutCards } from '../../layouts/layout';
+import type { FormsContributions } from '../contributions';
 import type { FormsAction, RoundState, TextTarget } from '../form-state';
+import type { KitCommands } from '../layout/kit-commands';
 
 // One item's pane, built once; `update` shows the round's current answers.
 export interface ItemCard {
@@ -13,18 +15,21 @@ export interface ItemCard {
 }
 
 // What a card reaches outside itself: the round's boxes, its actions, the
-// Don't-ask command, which also focuses the reason box, the keys that run a
-// qualified command in the forms view, null when none is bound, the platform
-// key hints are drawn for, and the log.
+// Don't-ask command, which also focuses the reason box, the keys bound in a
+// scope (a card reads the forms view's), the platform key hints are drawn
+// for, the log, the registered commands `kit.command` checks and runs, and
+// the card parts other plugins added.
 export interface CardDeps {
   markdown: MarkdownRenderer;
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
   destroyBox(target: TextTarget): void;
   dispatch(action: FormsAction): void;
   toggleDontAsk(): void;
-  keysFor(command: CommandId): string | null;
+  keys: Pick<KeysPageExports, 'keysFor'>;
   platform: Platform;
   log: Log;
+  commands: KitCommands;
+  contributions: Pick<FormsContributions, 'cardParts'>;
 }
 
 // Each kind's card input and kit, as the layout's card builder takes them.

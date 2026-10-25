@@ -1,8 +1,26 @@
-import { describe, expect, it } from 'vitest';
-import type { DefectFinding, FindingChoice } from '../../contract';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  DefectFinding,
+  FindingChoice,
+  FormsCardPart,
+  ItemKind,
+} from '../../contract';
+import {
+  createFormsContributions,
+  type FormsContributions,
+} from '../contributions';
+import { apply, initialState, type RoundState } from '../form-state';
 import { findingFormat } from '../kinds/finding/finding-card';
+import type { CardDeps } from '../kinds/item-format';
 import { finding, presentedRound } from '../test-rounds';
-import { choiceGroupsOf } from './card-kit';
+import { choiceGroupsOf, createCardKit } from './card-kit';
+import {
+  asFake,
+  asHtml,
+  FakeElement,
+  findAll,
+  installFakeDom,
+} from './test-dom';
 
 function choice(text: string, action: FindingChoice['action']): FindingChoice {
   return { text, reason: `${text} reason`, action };
@@ -104,5 +122,153 @@ describe('choiceGroupsOf', () => {
       [1, false],
       [2, true],
     ]);
+  });
+});
+
+// A round of one finding, open and active.
+function findingRound(): RoundState {
+  const presented = presentedRound('r1', {
+    questions: [],
+    findings: [finding('Delta')],
+  });
+  return apply(initialState([], presented.sessionId), {
+    type: 'roundShown',
+    round: presented,
+  }).rounds[0];
+}
+
+// Card deps over `contributions`, whose keys lookup binds only `demo.run`
+// (to `g d`) and whose commands register only `demo.run`.
+function fakeCardDeps(contributions: FormsContributions) {
+  const keysFor = vi.fn((command: string) =>
+    command === 'demo.run' ? 'g d' : null,
+  );
+  const run = vi.fn();
+  const log = vi.fn();
+  const deps: CardDeps = {
+    markdown: {
+      block: (text) => text,
+      inline: (text) => text,
+      document: async (text) => text,
+    },
+    mountBox: vi.fn(),
+    destroyBox: vi.fn(),
+    dispatch: vi.fn(),
+    toggleDontAsk: vi.fn(),
+    keys: { keysFor },
+    platform: 'macos',
+    log,
+    commands: { exists: (id) => id === 'demo.run', run },
+    contributions,
+  };
+  return { deps, keysFor, run, log };
+}
+
+function findingKit(deps: CardDeps) {
+  const round = findingRound();
+  const input = findingFormat.cardInput(round.round, 1);
+  return createCardKit('finding', 1, input, round, 0, deps);
+}
+
+// A part that records what each build received.
+function recordingPart(id: string, kinds: ItemKind[], built: unknown[]) {
+  const part: FormsCardPart = {
+    id,
+    kinds,
+    build(_parent, item) {
+      built.push({ id, item });
+      return {};
+    },
+  };
+  return part;
+}
+
+describe('card kit', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('contributedParts_DrawsOnePartPerPartOfTheKind', () => {
+    const contributions = createFormsContributions();
+    const built: unknown[] = [];
+    contributions.addCardPart(recordingPart('p1', ['finding'], built));
+    contributions.addCardPart(recordingPart('q1', ['question'], built));
+    contributions.addCardPart(recordingPart('p2', ['finding'], built));
+    const { kit } = findingKit(fakeCardDeps(contributions).deps);
+    const card = new FakeElement('div');
+
+    const holder = asFake(kit.contributedParts(asHtml(card)));
+
+    expect(holder.className).toBe('card-parts');
+    const drawn = findAll(holder, 'card-part');
+    expect(drawn.map((wrapper) => wrapper.dataset.part)).toEqual(['p1', 'p2']);
+    expect(built).toEqual([
+      { id: 'p1', item: { roundId: 'r1', kind: 'finding', index: 1 } },
+      { id: 'p2', item: { roundId: 'r1', kind: 'finding', index: 1 } },
+    ]);
+  });
+
+  it('contributedParts_DisposedPart_NotDrawn', () => {
+    const contributions = createFormsContributions();
+    const added = contributions.addCardPart(
+      recordingPart('p1', ['finding'], []),
+    );
+    added.dispose();
+    const { kit } = findingKit(fakeCardDeps(contributions).deps);
+
+    const holder = asFake(kit.contributedParts(asHtml(new FakeElement('div'))));
+
+    expect(findAll(holder, 'card-part')).toEqual([]);
+  });
+
+  it('contributedParts_PartThrows_LogsAndDrawsTheRest', () => {
+    const contributions = createFormsContributions();
+    contributions.addCardPart({
+      id: 'p1',
+      kinds: ['finding'],
+      build: () => {
+        throw new Error('boom');
+      },
+    });
+    contributions.addCardPart(recordingPart('p2', ['finding'], []));
+    const { deps, log } = fakeCardDeps(contributions);
+    const { kit } = findingKit(deps);
+
+    const holder = asFake(kit.contributedParts(asHtml(new FakeElement('div'))));
+
+    expect(log).toHaveBeenCalledWith('forms', 'card part p1 failed: boom');
+    expect(
+      findAll(holder, 'card-part').map((wrapper) => wrapper.dataset.part),
+    ).toEqual(['p2']);
+  });
+
+  it('kitCommand_KnownId_RunsOnlyWhenCalled', () => {
+    const { deps, run } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps);
+
+    const runner = kit.command('demo.run');
+    expect(run).not.toHaveBeenCalled();
+    runner();
+
+    expect(run.mock.calls).toEqual([['demo.run']]);
+  });
+
+  it('kitCommand_UnknownId_Throws', () => {
+    const { kit } = findingKit(fakeCardDeps(createFormsContributions()).deps);
+
+    expect(() => kit.command('docs.noSuch')).toThrow('no command docs.noSuch');
+  });
+
+  it('kitKeysFor_ReadsTheCardScope', () => {
+    const { deps, keysFor } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps);
+
+    const bound = kit.keysFor('demo.run');
+    const unbound = kit.keysFor('docs.openDoc');
+
+    expect(bound).toBe('g d');
+    expect(unbound).toBeNull();
+    expect(keysFor).toHaveBeenCalledWith('demo.run', 'forms.forms');
   });
 });

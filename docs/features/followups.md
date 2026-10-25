@@ -97,7 +97,7 @@ now, any harness later). Each item names its sites.
 - A standing rule in the AGENTS.md Intent, so new work stays hookable once these items land: every user action runs as
   a command through the lifecycle above, and every state change a plugin owns is published as an event typed in its
   `contract.ts`. Today publishing is opt-in (AGENTS.md § Architecture says how to emit, not that a plugin must), and
-  only `sessions` emits; forms, chat and docs shipped emitting nothing.
+  only `sessions` and the forms page emit; chat and docs emit nothing.
 - Plugins may add editor remaps (a manifest's `keys` has binds and groups, no remaps).
 - Commands take a count or argument, so `choose1..9` becomes one `forms.choose` (and choice 10 gets a key: `DIGITS`
   stops at 9 while `MAX_CHOICES` is 10).

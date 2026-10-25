@@ -6,6 +6,7 @@ import type {
   Finding,
   FindingAnswerEntry,
   FormBody,
+  FormsView,
   ItemKind,
   PresentedRound,
   Round,
@@ -18,8 +19,6 @@ import {
   findingPickIsComplete,
   isFindingAction,
 } from '../finding-pick';
-
-export type FormsView = 'forms' | 'review' | 'confirm' | 'idle';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved';
 

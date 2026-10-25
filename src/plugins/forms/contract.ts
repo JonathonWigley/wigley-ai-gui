@@ -1,5 +1,6 @@
+import type { Disposable } from '../../contracts/disposable';
 import type { LayoutSet } from '../../contracts/layouts';
-import type { ChannelShape } from '../../contracts/plugin';
+import type { ChannelShape, EventShape } from '../../contracts/plugin';
 import type { AgentSession } from '../sessions/contract';
 
 export type NoticeBadge = 'Applied' | 'Dispatched' | 'Decided';
@@ -286,4 +287,85 @@ export interface FormsChannel extends ChannelShape {
 export interface RoundClosed {
   roundId: string;
   byFinish: boolean;
+}
+
+// The page part's exports and events.
+
+// What the forms page shows: a round's cards, its review, the cancel prompt
+// over the review, or no round.
+export type FormsView = 'forms' | 'review' | 'confirm' | 'idle';
+
+// A round the forms page holds, as main presented it.
+export interface OpenRound {
+  roundId: string;
+  sessionId: string;
+  label: string;
+  round: Round;
+}
+
+// A question or finding in a round; `index` is 1-based in its kind's array.
+export interface FormsItemRef {
+  kind: AnswerableKind;
+  index: number;
+}
+
+// How a round left the page: sent or cancelled by the page's finish, or
+// `closed` when main closed it on its own (a disconnect, a host cancel).
+export type RoundFinishOutcome = 'submitted' | 'cancelled' | 'closed';
+
+// `roundShown` fires once when a round joins the page, the rounds open at
+// page load included; a restored draft emits no `answerChanged`.
+// `answerChanged` fires on each change to a question's or finding's answer,
+// its notes and reason text included, never for a notice comment or the round
+// note. `roundFinished` fires once when a round leaves the page, for every
+// reason, with the answers it left with. `viewChanged` fires when the view or
+// the active round changes. In one store change they fire in that order.
+export interface FormsPageEvents extends EventShape {
+  roundShown: OpenRound;
+  answerChanged: { roundId: string; item: FormsItemRef; status: AnswerStatus };
+  roundFinished: {
+    roundId: string;
+    sessionId: string;
+    outcome: RoundFinishOutcome;
+    body: FormBody;
+  };
+  viewChanged: { view: FormsView; roundId: string | null };
+}
+
+// The card a part draws on; `index` is 1-based in its kind's array.
+export interface FormsCardPartItem {
+  roundId: string;
+  kind: ItemKind;
+  index: number;
+}
+
+// A part another plugin adds to every card of `kinds`. `build` draws into
+// `parent`, its own wrapper on the card; `update`, when returned, runs on each
+// update of a question or finding card, after the card's own. A part that
+// throws is logged and draws nothing; the card still draws.
+export interface FormsCardPart {
+  id: string;
+  kinds: readonly ItemKind[];
+  build(parent: HTMLElement, item: FormsCardPartItem): { update?(): void };
+}
+
+// A column another plugin adds to every review row: `cell` is the text drawn
+// after the row's own cells, read each time the row draws. A column that
+// throws is logged and draws nothing; the row still draws.
+export interface FormsReviewColumn {
+  id: string;
+  title: string;
+  cell(roundId: string, item: FormsItemRef): string;
+}
+
+// `activeRound` is the round the page shows, null with none; `answers` a held
+// round's answers as its saved body, null for a round the page does not hold.
+// `addCardPart` and `addReviewColumn` throw on an id already added; each
+// `Disposable` removes its part or column, and adding or removing one redraws
+// every open round, keeping its answers.
+export interface FormsPageExports {
+  activeRound(): OpenRound | null;
+  answers(roundId: string): FormBody | null;
+  addCardPart(part: FormsCardPart): Disposable;
+  addReviewColumn(column: FormsReviewColumn): Disposable;
 }

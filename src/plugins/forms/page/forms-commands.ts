@@ -11,7 +11,7 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { scrollText } from '../../../shared/content-scroll';
-import type { RoundClosed, RoundEnd } from '../contract';
+import type { FormsView, RoundClosed, RoundEnd } from '../contract';
 import type { formsManifest } from '../manifest';
 import {
   type BoxField,
@@ -28,7 +28,6 @@ import {
   focusedItem,
   type FormsAction,
   type FormsState,
-  type FormsView,
   type ItemAnswer,
   itemAnswer,
   pickNumber,

@@ -15,19 +15,29 @@ import type {
   SessionsPageExports,
 } from '../../sessions/contract';
 import type { KeysPageExports } from '../../keys/contract';
-import type { FormsChannel } from '../contract';
+import type {
+  FormsChannel,
+  FormsPageEvents,
+  FormsPageExports,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { formsManifest } from '../manifest';
 import { startAutosave } from './autosave';
 import { focusActionFor } from './boxes';
+import { createFormsContributions } from './contributions';
 import { createEditorBoxes, type EditorBoxes } from './editor-boxes';
-import { initialState } from './form-state';
+import { activeRound, buildBody, initialState } from './form-state';
 import {
   closeRoundFromMain,
   formsCommandHandlers,
   guardClose,
 } from './forms-commands';
+import {
+  createFormsEventLog,
+  openRoundOf,
+  startFormsEvents,
+} from './forms-events';
 import { createFormsStore, type FormsStore } from './forms-store';
 import { mountFormsView } from './forms-view';
 import { readLayout } from './layout/read-layout';
@@ -36,7 +46,7 @@ import { roundLayoutNames } from './layout/layout-resolver';
 type FormsApi = PageApi<
   typeof formsManifest,
   FormsChannel,
-  Record<never, never>,
+  FormsPageEvents,
   QualifiedEvents<'sessions', SessionsPageEvents>
 >;
 
@@ -107,7 +117,10 @@ function listenForRounds(
 // follows the forms view and the status line shows. A session with an open
 // round closes only through the cancel prompt. Each round draws with the
 // layouts it names, the user's layout and `default`, loaded from main's set
-// again whenever the set, the setting or the open rounds change.
+// again whenever the set, the setting or the open rounds change. Every store
+// change emits the forms page events it makes, each logged as it goes; other
+// plugins read the open rounds and add card parts and review columns through
+// the exports, each add or removal rebuilding the open rounds.
 export const formsPagePart: PagePart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
@@ -117,6 +130,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       initialState([], sessions.selectedSessionId()),
     );
     const boxes = createBoxes(api, store);
+    const contributions = createFormsContributions();
     const view = mountFormsView({
       areas: api.areas,
       sessions,
@@ -142,6 +156,11 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       markdown: services.markdown,
       keys: api.dependency<KeysPageExports>('keys'),
       run: (command) => api.commands.run(command),
+      commands: {
+        exists: (command) => api.keys.command(command) !== undefined,
+        run: (command) => api.commands.run(command),
+      },
+      contributions,
       platform: api.platform,
       uiState: services.uiState,
       log: services.log,
@@ -155,6 +174,12 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       delayMs: () => api.settings().autosaveDelayMs,
       timers: services.timers,
       log: services.log,
+    });
+    contributions.onChanged(() => view.rebuild());
+    const logEvent = createFormsEventLog(store.get, services.log);
+    startFormsEvents(store, (event) => {
+      logEvent(event);
+      api.events.emit(event.name, event.data);
     });
     listenForRounds(api, store, sessions);
     const layoutShow = showLayouts<Layout>({
@@ -180,7 +205,22 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
     });
     api.onSettingsChanged(() => layoutShow.refresh());
     store.subscribe(() => layoutShow.refresh());
+    const exports: FormsPageExports = {
+      activeRound() {
+        const round = activeRound(store.get());
+        return round === null ? null : openRoundOf(round);
+      },
+      answers(roundId) {
+        const round = store
+          .get()
+          .rounds.find((candidate) => candidate.roundId === roundId);
+        return round === undefined ? null : buildBody(round);
+      },
+      addCardPart: (part) => contributions.addCardPart(part),
+      addReviewColumn: (column) => contributions.addReviewColumn(column),
+    };
     return {
+      exports,
       commands: formsCommandHandlers({
         store,
         boxes,
