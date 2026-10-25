@@ -8,8 +8,8 @@
   layers, the relay and agent sessions, and where a new plugin, shell area, mode, session tab, key, event, setting,
   user config file, theme, plugin data, layout, agent harness, session control, round source, MCP tool or
   third-party tool goes, and the layer check.
-- **Running and testing** — Node version, the self-test and the drive run the agent may start any time, and the
-  checks only a real keyboard proves.
+- **Running and testing** — the stable and dev apps side by side and `npm run install-app`, Node version, the
+  self-test and the drive run the agent may start any time, and the checks only a real keyboard proves.
 - **Dev quirks** — the startup reload, a session's stale forms schema, and the login-shell PATH.
 
 UI work — a view, its CSS, a theme, a primitive, a layout or a key — reads `DESIGN.md` first: it is the standard
@@ -379,6 +379,29 @@ round), since main, not the page, decides.
 
 ## Running and testing
 
+- **The stable app and the dev app** run side by side, so the user keeps working in the stable app while editing
+  and testing the repo. A packaged app is the stable one; `npm start` is the dev one. `main.ts` decides this once,
+  from `app.isPackaged`, as the app instance (`src/contracts/app-instance.ts`):
+
+  ```
+                      stable (installed)                 dev (npm start)
+  shows as            Auri                               Auri Dev, with a Dev tag in the title bar
+  user data, lock     <appData>/wigley-ai-gui            <appData>/wigley-ai-gui-dev
+  relay endpoint      ~/.agents/wigley-ai-gui/           ~/.agents/wigley-ai-gui-dev/
+  global shortcuts    registered                         none
+  user config         ~/.config/wigley-ai-gui/, shared by both
+  ```
+
+  Every agent session's relay finds the stable app. A dev app gets rounds only from the sessions it starts in its
+  own Chat tab, or from a session started with `WIGLEY_AI_GUI_ENDPOINT_DIR=~/.agents/wigley-ai-gui-dev`. "Auri" is
+  only the name the app shows: the exe, the bundle and every path keep `wigley-ai-gui`. Under `npm start` the Mac
+  Dock still says Electron, since Electron cannot rename the Dock label of an unbundled app.
+- `npm run install-app` builds and installs the stable app from a committed ref (`main` unless `--ref` names
+  another). It packages in a build-only worktree beside the repo, `../.wigley-ai-gui-build`, so neither
+  uncommitted edits nor the dev app's `.vite/build` are touched, and runs `npm ci` there when the lockfile changed.
+  Then it quits the running stable app (Windows refuses to overwrite a running exe), replaces
+  `%LOCALAPPDATA%\Programs\wigley-ai-gui` (with a Start menu shortcut named Auri) or `/Applications/wigley-ai-gui.app`,
+  and starts the app again when it was running. Each OS builds its own app; a locally built app needs no signing.
 - Node is pinned in `.nvmrc`. A shell that started on another version runs commands as
   `source ~/.nvm/nvm.sh && nvm use && npm run …`.
 - `npm test` runs the Vitest suite: every module whose correctness follows from inputs and outputs — round
