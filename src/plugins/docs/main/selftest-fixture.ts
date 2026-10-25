@@ -10,6 +10,7 @@ import { installedPluginsFile, WIGLEY_PLUGIN_KEY } from './script-locator';
 import { MACHINE_INDEX_FILE } from './index-sources';
 
 const FIXTURE_PLUGIN_KEY = 'selftest-plugin@selftest-market';
+const VENDOR_PLUGIN_KEY = 'vendor-plugin@vendor-market';
 // Makes CLAUDE.md several pages long, rendered and in the editor, so a
 // half-page scroll moves it.
 const LONG_SECTION = `\n## Long section\n\n${Array.from(
@@ -70,6 +71,14 @@ export async function writeDocsFixture(
       '---\nname: cached\ndescription: A plugin skill.\n---\n\n# Cached\n',
     ],
     [fixture.followups, '# Follow-ups\n\n- **First follow-up** — waits.\n'],
+    [
+      fixture.syncedSkill,
+      '---\nname: synced-demo\ndescription: A synced skill.\n---\n\n# Synced demo\n',
+    ],
+    [
+      fixture.vendorSkill,
+      '---\nname: vendored\ndescription: A third-party plugin skill.\n---\n\n# Vendored\n',
+    ],
     ...loadStateDocs(options, fixture, paths).map((doc): [string, string] => [
       doc.path,
       `# ${doc.title}\n`,
@@ -112,6 +121,10 @@ function fixturePaths(home: string, paths: Paths) {
     claudeDir,
     'plugins/cache/selftest-market/selftest-plugin/1.0.0',
   );
+  const vendorRoot = paths.join(
+    claudeDir,
+    'plugins/cache/vendor-market/vendor-plugin/2.0.0',
+  );
   return {
     home,
     claudeDir,
@@ -125,6 +138,12 @@ function fixturePaths(home: string, paths: Paths) {
     repoSkill: paths.join(repo, '.claude/skills/demo/SKILL.md'),
     pluginRoot,
     pluginSkill: paths.join(pluginRoot, 'skills/cached/SKILL.md'),
+    syncedSkill: paths.join(
+      claudeDir,
+      'skills/synced/selftest-bucket/synced-demo/SKILL.md',
+    ),
+    vendorRoot,
+    vendorSkill: paths.join(vendorRoot, 'skills/vendored/SKILL.md'),
     featuresHome: paths.join(home, 'wigley-features', 'selftest-repo'),
     followups: paths.join(home, 'wigley-features/selftest-repo/followups.md'),
     wigleyInstall: paths.join(
@@ -266,6 +285,24 @@ function indexDocument(
       line: 3,
       title: 'First follow-up',
       meta: { status: 'open', gist: 'waits.', section: null },
+    }),
+    entry({
+      kind: 'skill',
+      source: 'global',
+      owner: 'third-party',
+      path: fixture.syncedSkill,
+      title: 'synced-demo',
+      meta: { name: 'synced-demo', description: 'A synced skill.' },
+    }),
+    entry({
+      kind: 'skill',
+      source: 'plugin',
+      owner: 'third-party',
+      root: fixture.vendorRoot,
+      plugin: VENDOR_PLUGIN_KEY,
+      path: fixture.vendorSkill,
+      title: 'vendored',
+      meta: { name: 'vendored', description: 'A third-party plugin skill.' },
     }),
     ...loadStates.map((doc) =>
       entry({

@@ -43,12 +43,16 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       keys: ['R'],
-      expect: '[docs] machine index rebuilt: 8 entries',
+      expect: '[docs] machine index rebuilt: 10 entries',
       why: "Docs mode's first show built the index during an earlier plugin's steps, before this script rewrote the fixture.",
     },
-    { keys: ['G'], expect: '[docs] selected Features' },
-    { keys: ['g', 'g'], expect: '[docs] selected Global' },
-    { keys: ['j', 'l'], expect: '[docs] expanded Instructions' },
+    { keys: ['G'], expect: '[docs] selected Third-party' },
+    { keys: ['g', 'g'], expect: '[docs] selected Mine' },
+    {
+      keys: ['j', 'j', 'l'],
+      expect: '[docs] expanded Instructions',
+      why: "Mine's first child is Global, expanded, whose first child is Instructions.",
+    },
     { keys: ['j', 'l'], expect: '[docs] opened CLAUDE.md', checksFit: true },
     {
       keys: ['<C-j>'],
@@ -300,14 +304,19 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       checksFit: true,
     },
     { keys: ['y'], expect: '[docs] moved fresh.md to the Trash' },
-    { keys: ['R'], expect: '[docs] machine index rebuilt: 9 entries' },
+    { keys: ['R'], expect: '[docs] machine index rebuilt: 11 entries' },
   ];
   const treeFilter: SelfTestStep[] = [
     {
       keys: ['/', ...'neat', 'Enter'],
       expect: '[docs] filtered the tree: neat',
     },
-    { keys: ['g', 'g'], expect: '[docs] selected Global' },
+    { keys: ['g', 'g'], expect: '[docs] selected Mine' },
+    {
+      keys: ['Enter'],
+      expect: '[docs] selected Global',
+      why: "Under a filter Enter steps into Mine's first shown child.",
+    },
     {
       keys: ['Enter'],
       expect: '[docs] selected Rules',
@@ -368,6 +377,42 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       expect: '[docs] refused to edit SKILL.md in the plugin cache',
     },
     { keys: ['<A-h>'], expect: '[docs] tree focused' },
+  ];
+  const ownership: SelfTestStep[] = [
+    {
+      keys: ['G'],
+      expect: '[docs] selected Third-party',
+      why: "Third-party is the tree's last row.",
+    },
+    {
+      keys: ['l'],
+      expect: '[docs] expanded Third-party',
+      why: 'l expands only a collapsed group, so Third-party was collapsed.',
+    },
+    {
+      keys: ['l'],
+      expect: '[docs] selected Synced skills',
+      why: "Synced skills is Third-party's first node.",
+    },
+    { keys: ['l'], expect: '[docs] expanded Synced skills' },
+    { keys: ['j', 'l'], expect: '[docs] expanded Skills' },
+    {
+      keys: ['j', 'l'],
+      expect: '[docs] opened SKILL.md',
+      checksFit: true,
+      screenshot: 'third-party',
+    },
+    { keys: ['<A-l>'], expect: '[docs] doc focused' },
+    {
+      keys: ['i'],
+      expect: '[docs] refused to edit SKILL.md, a downloaded copy',
+    },
+    { keys: ['<A-h>'], expect: '[docs] tree focused' },
+    {
+      keys: ['h', 'h', 'h', 'h', 'h', 'h'],
+      expect: '[docs] collapsed Third-party',
+      why: 'h steps up from the skill and collapses each group on the way: Skills, Synced skills, Third-party.',
+    },
   ];
   const pickers: SelfTestStep[] = [
     { keys: ['a'], expect: '[docs] create: pick a kind' },
@@ -521,6 +566,11 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       name: 'plugin cache',
       why: "The scroll keys reach a plugin's cached SKILL.md, too short to scroll, and i refuses to edit it in the plugin cache.",
       steps: pluginCache,
+    },
+    {
+      name: 'ownership',
+      why: "The tree holds the user's docs under Mine and downloaded copies under Third-party, collapsed until expanded; Synced skills is Third-party's first node, and i refuses to edit a synced skill as a downloaded copy.",
+      steps: ownership,
     },
     {
       name: 'pickers',

@@ -8,6 +8,9 @@ import { writeDocsFixture } from './selftest-fixture';
 const HOME = '/home';
 const LOAD_STATES = `${HOME}/.claude/load-states`;
 const INDEX_FIXTURE = `${HOME}/.claude/plugins/cache/wigley-ai-marketplace/wigley/0.0.0/scripts/docs-index/index.fixture.json`;
+const SESSION_FIXTURE = `${HOME}/.claude/plugins/cache/wigley-ai-marketplace/wigley/0.0.0/scripts/docs-index/session.fixture.json`;
+const SYNCED_SKILL = `${HOME}/.claude/skills/synced/selftest-bucket/synced-demo/SKILL.md`;
+const VENDOR_SKILL = `${HOME}/.claude/plugins/cache/vendor-market/vendor-plugin/2.0.0/skills/vendored/SKILL.md`;
 
 const LOAD_STATE_DOCS = [
   {
@@ -96,18 +99,71 @@ describe('writeDocsFixture', () => {
     expect(parsed.ok || parsed.message).toBe(true);
   });
 
-  it('GIVEN the fixture WHEN the index fixture is read back THEN each entry has an owner and each context empty loadedPlugins', async () => {
+  it('GIVEN the fixture WHEN the index fixture is read back THEN each context has empty loadedPlugins', async () => {
     const files = await homeFiles();
 
     await writeDocsFixture(files, HOME, posixPaths, { loadStates: true });
 
-    const index = await readIndex(files);
-    for (const entry of index.entries) {
-      expect(entry.owner).toBe('mine');
-    }
-    for (const context of index.contexts) {
+    for (const context of (await readIndex(files)).contexts) {
       expect(context.loadedPlugins).toEqual({});
     }
+  });
+
+  it('GIVEN the fixture WHEN the index fixture is read back THEN it holds a synced skill and a third-party plugin skill, both owner third-party', async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths, { loadStates: false });
+
+    const entries = (await readIndex(files)).entries;
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        path: SYNCED_SKILL,
+        kind: 'skill',
+        source: 'global',
+        owner: 'third-party',
+      }),
+    );
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        path: VENDOR_SKILL,
+        kind: 'skill',
+        source: 'plugin',
+        owner: 'third-party',
+        plugin: 'vendor-plugin@vendor-market',
+      }),
+    );
+    expect(await files.stat(SYNCED_SKILL)).not.toBeNull();
+    expect(await files.stat(VENDOR_SKILL)).not.toBeNull();
+  });
+
+  it("GIVEN the fixture WHEN the index fixture is read back THEN the fixture plugin's entries are owner mine", async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths, { loadStates: false });
+
+    const pluginEntries = (await readIndex(files)).entries.filter(
+      (entry) => entry.plugin === 'selftest-plugin@selftest-market',
+    );
+    expect(pluginEntries).not.toEqual([]);
+    for (const entry of pluginEntries) {
+      expect(entry.owner).toBe('mine');
+    }
+  });
+
+  it('GIVEN the fixture WHEN the session fixture is read back THEN it lists the same four entries', async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths, { loadStates: false });
+
+    const session = JSON.parse(
+      await files.read(SESSION_FIXTURE),
+    ) as IndexDocument;
+    expect(session.entries.map((entry) => entry.path)).toEqual([
+      `${HOME}/.claude/CLAUDE.md`,
+      `${HOME}/.claude/rules/style.md`,
+      `${HOME}/dev/selftest-repo/AGENTS.md`,
+      `${HOME}/dev/selftest-repo/.claude/skills/demo/SKILL.md`,
+    ]);
   });
 
   it('GIVEN the fixture WHEN the stand-in script is read back THEN a new rule entry is owned mine', async () => {
