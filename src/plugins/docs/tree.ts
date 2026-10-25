@@ -14,8 +14,9 @@ export interface TreeGroup {
   type: 'group';
   id: string;
   title: string;
-  // The common folder of every descendant entry's path; null when the
-  // entries are on different roots.
+  // The common folder of the paths of the entries the group stands for (a
+  // repo, clone or plugin node leaves out its installed-only entries); null
+  // when the entries are on different roots.
   folder: string | null;
   children: TreeNode[];
 }
@@ -63,18 +64,61 @@ export function titleFromId(id: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-// Global, then Plugins, then one node per repo, then one node per source the
-// app does not know, ids `source:<source>`; a root with no entries is left
-// out.
+export const MINE_ROOT_ID = 'owner:mine';
+export const THIRD_PARTY_ROOT_ID = 'owner:third-party';
+
+// Two roots by owner: Mine (`owner:mine`), holding Global, the user's
+// installed-only plugins without a clone (`owner:mine/plugins`), one node per
+// repo and one node per source the app does not know; then Third-party
+// (`owner:third-party`), holding Synced skills and one node per plugin. A
+// repo holds its kind groups, then one node per plugin of a marketplace clone
+// (its kind groups, then Installed only), then Features. A root with no
+// entries is left out.
 export function buildTree(
   entries: readonly IndexEntry[],
   homeDir: string,
   paths: Paths,
 ): TreeNode[] {
   const roots: TreeNode[] = [];
+  const mine = entries.filter((entry) => entry.owner === 'mine');
+  if (mine.length > 0) {
+    roots.push(
+      group(
+        MINE_ROOT_ID,
+        'Mine',
+        mine,
+        mineChildren(mine, homeDir, paths),
+        paths,
+      ),
+    );
+  }
+  const thirdParty = entries.filter((entry) => entry.owner === 'third-party');
+  if (thirdParty.length > 0) {
+    roots.push(
+      group(
+        THIRD_PARTY_ROOT_ID,
+        'Third-party',
+        thirdParty,
+        thirdPartyChildren(thirdParty, paths),
+        paths,
+      ),
+    );
+  }
+  return roots;
+}
+
+// Global, then Plugins (installed-only entries whose key no clone carries),
+// then one node per repo, then one node per source the app does not know,
+// ids `source:<source>`; a node with no entries is left out.
+function mineChildren(
+  entries: readonly IndexEntry[],
+  homeDir: string,
+  paths: Paths,
+): TreeNode[] {
+  const children: TreeNode[] = [];
   const global = entries.filter((entry) => entry.source === 'global');
   if (global.length > 0) {
-    roots.push(
+    children.push(
       group(
         'global',
         'Global',
@@ -84,17 +128,38 @@ export function buildTree(
       ),
     );
   }
-  const plugins = entries.filter((entry) => entry.source === 'plugin');
-  if (plugins.length > 0) {
-    roots.push(
-      group('plugins', 'Plugins', plugins, pluginNodes(plugins, paths), paths),
+  const carriedKeys = new Set(
+    entries
+      .filter((entry) => entry.source === 'repo' && entry.plugin !== null)
+      .map((entry) => entry.plugin),
+  );
+  const installedOnly = entries.filter((entry) => entry.source === 'plugin');
+  const uncarried = installedOnly.filter(
+    (entry) => !carriedKeys.has(entry.plugin),
+  );
+  if (uncarried.length > 0) {
+    const id = `${MINE_ROOT_ID}/plugins`;
+    children.push(
+      group(
+        id,
+        'Plugins',
+        uncarried,
+        pluginNodes(`${id}/`, uncarried, paths),
+        paths,
+      ),
     );
   }
+  const unclaimed = new Map(
+    groupedBy(
+      installedOnly.filter((entry) => carriedKeys.has(entry.plugin)),
+      (entry) => entry.plugin ?? '',
+    ),
+  );
   const repoOwned = entries.filter(
     (entry) => entry.source === 'repo' || entry.source === 'features',
   );
   for (const [name, repoEntries] of groupedBy(repoOwned, (e) => e.repo ?? '')) {
-    roots.push(repoNode(name, repoEntries, homeDir, paths));
+    children.push(repoNode(name, repoEntries, unclaimed, homeDir, paths));
   }
   const unknownSourced = entries.filter(
     (entry) => !isKnownSource(entry.source),
@@ -104,7 +169,7 @@ export function buildTree(
     (entry) => entry.source,
   )) {
     const id = `source:${source}`;
-    roots.push(
+    children.push(
       group(
         id,
         titleFromId(source),
@@ -114,7 +179,28 @@ export function buildTree(
       ),
     );
   }
-  return roots;
+  return children;
+}
+
+// Synced skills (every entry not from a plugin), then one node per plugin
+// key, ids `owner:third-party/plugin:<key>`.
+function thirdPartyChildren(
+  entries: readonly IndexEntry[],
+  paths: Paths,
+): TreeNode[] {
+  const children: TreeNode[] = [];
+  const synced = entries.filter((entry) => entry.source !== 'plugin');
+  if (synced.length > 0) {
+    const id = `${THIRD_PARTY_ROOT_ID}/synced`;
+    children.push(
+      group(id, 'Synced skills', synced, kindGroups(id, synced, paths), paths),
+    );
+  }
+  const plugins = entries.filter((entry) => entry.source === 'plugin');
+  children.push(
+    ...pluginNodes(`${THIRD_PARTY_ROOT_ID}/plugin:`, plugins, paths),
+  );
+  return children;
 }
 
 function group(
@@ -163,31 +249,46 @@ function byTitleThenId(a: IndexEntry, b: IndexEntry): number {
 
 // One group per kind present, in `DOC_KINDS` order, ids `<parentId>/<kind>`;
 // then one per kind the app does not know, by kind id, ids
-// `<parentId>/kind:<kind>` so no such kind meets a known node's id.
+// `<parentId>/kind:<kind>` so no such kind meets a known node's id. A skill
+// whose skill-files are in `entries` becomes a skill group holding them.
 function kindGroups(
   parentId: string,
   entries: readonly IndexEntry[],
   paths: Paths,
 ): TreeNode[] {
+  const filesBySkill = skillFilesBySkill(entries);
+  const listed = entries.filter(
+    (entry) =>
+      entry.kind !== 'skill-file' ||
+      !filesBySkill.has(metaString(entry, 'skill') ?? ''),
+  );
+  const nodesOf = (ofKind: readonly IndexEntry[]): TreeNode[] =>
+    [...ofKind]
+      .sort(byTitleThenId)
+      .map((entry) => skillGroupOrLeaf(entry, filesBySkill, paths));
   const groups: TreeNode[] = [];
   for (const kind of DOC_KINDS) {
-    const ofKind = entries.filter((entry) => entry.kind === kind);
+    const ofKind = listed.filter((entry) => entry.kind === kind);
     if (ofKind.length > 0) {
-      const leaves = [...ofKind].sort(byTitleThenId).map(leaf);
       groups.push(
-        group(`${parentId}/${kind}`, KIND_TITLES[kind], ofKind, leaves, paths),
+        group(
+          `${parentId}/${kind}`,
+          KIND_TITLES[kind],
+          ofKind,
+          nodesOf(ofKind),
+          paths,
+        ),
       );
     }
   }
-  const unknownKinded = entries.filter((entry) => !isKnownKind(entry.kind));
+  const unknownKinded = listed.filter((entry) => !isKnownKind(entry.kind));
   for (const [kind, ofKind] of groupedBy(unknownKinded, (e) => e.kind)) {
-    const leaves = [...ofKind].sort(byTitleThenId).map(leaf);
     groups.push(
       group(
         `${parentId}/kind:${kind}`,
         titleFromId(kind),
         ofKind,
-        leaves,
+        nodesOf(ofKind),
         paths,
       ),
     );
@@ -195,10 +296,65 @@ function kindGroups(
   return groups;
 }
 
-function pluginNodes(entries: readonly IndexEntry[], paths: Paths): TreeNode[] {
+// The skill-file entries of each skill in `entries`, by the skill's id; a
+// skill-file whose skill is not in `entries` is in none.
+function skillFilesBySkill(
+  entries: readonly IndexEntry[],
+): Map<string, IndexEntry[]> {
+  const filesBySkill = new Map<string, IndexEntry[]>();
+  const skillIds = new Set(
+    entries.filter((entry) => entry.kind === 'skill').map((entry) => entry.id),
+  );
+  for (const entry of entries) {
+    const skillId = metaString(entry, 'skill');
+    const hasListedSkill =
+      entry.kind === 'skill-file' && skillId !== null && skillIds.has(skillId);
+    if (hasListedSkill) {
+      const files = filesBySkill.get(skillId);
+      if (files === undefined) {
+        filesBySkill.set(skillId, [entry]);
+      } else {
+        files.push(entry);
+      }
+    }
+  }
+  return filesBySkill;
+}
+
+// A skill with files: group `skill:<entryId>` titled as the skill, holding
+// its SKILL.md leaf (titled `SKILL.md`), then its files by title. Any other
+// entry: its leaf.
+function skillGroupOrLeaf(
+  entry: IndexEntry,
+  filesBySkill: ReadonlyMap<string, readonly IndexEntry[]>,
+  paths: Paths,
+): TreeNode {
+  const files = entry.kind === 'skill' ? filesBySkill.get(entry.id) : undefined;
+  if (files === undefined) {
+    return leaf(entry);
+  }
+  const children = [
+    { ...leaf(entry), title: 'SKILL.md' },
+    ...[...files].sort(byTitleThenId).map(leaf),
+  ];
+  return group(
+    `skill:${entry.id}`,
+    entry.title,
+    [entry, ...files],
+    children,
+    paths,
+  );
+}
+
+// One node per plugin key, ids `<idPrefix><key>`, titled the key.
+function pluginNodes(
+  idPrefix: string,
+  entries: readonly IndexEntry[],
+  paths: Paths,
+): TreeNode[] {
   return groupedBy(entries, (entry) => entry.plugin ?? '').map(
     ([plugin, pluginEntries]) => {
-      const id = `plugins/${plugin}`;
+      const id = `${idPrefix}${plugin}`;
       return group(
         id,
         plugin,
@@ -210,11 +366,14 @@ function pluginNodes(entries: readonly IndexEntry[], paths: Paths): TreeNode[] {
   );
 }
 
-// A repo's kind groups, split by clone when its entries span several roots,
-// then its Features node.
+// A repo's clone docs, split by clone when its entries span several roots,
+// then its Features node. Each repo or clone node takes from `unclaimed` the
+// installed-only entries of the plugin keys its clone entries carry, so the
+// first one in tree order holds them.
 function repoNode(
   name: string,
   entries: readonly IndexEntry[],
+  unclaimed: Map<string, IndexEntry[]>,
   homeDir: string,
   paths: Paths,
 ): TreeGroup {
@@ -224,8 +383,8 @@ function repoNode(
   const clones = groupedBy(cloneEntries, (entry) => entry.root ?? '');
   const children: TreeNode[] =
     clones.length > 1
-      ? cloneNodes(id, clones, homeDir, paths)
-      : kindGroups(id, cloneEntries, paths);
+      ? cloneNodes(id, clones, unclaimed, homeDir, paths)
+      : cloneChildren(id, cloneEntries, unclaimed, paths);
   if (featureEntries.length > 0) {
     children.push(featuresNode(id, featureEntries, paths));
   }
@@ -235,22 +394,77 @@ function repoNode(
 function cloneNodes(
   repoId: string,
   clones: [string, IndexEntry[]][],
+  unclaimed: Map<string, IndexEntry[]>,
   homeDir: string,
   paths: Paths,
 ): TreeNode[] {
   return clones
-    .map(([root, cloneEntries]) => {
+    .map(([root, cloneEntries]) => ({
+      root,
+      cloneEntries,
+      title: paths.tilde(root, homeDir),
+    }))
+    .sort((a, b) => compareTitles(a.title, b.title))
+    .map(({ root, cloneEntries, title }) => {
       const id = `${repoId}/clone:${root}`;
-      const title = paths.tilde(root, homeDir);
       return group(
         id,
         title,
         cloneEntries,
-        kindGroups(id, cloneEntries, paths),
+        cloneChildren(id, cloneEntries, unclaimed, paths),
         paths,
       );
-    })
-    .sort((a, b) => compareTitles(a.title, b.title));
+    });
+}
+
+// The kind groups of the entries with no plugin, then one node per plugin key
+// among the entries, ids `<parentId>/plugin:<key>`.
+function cloneChildren(
+  parentId: string,
+  cloneEntries: readonly IndexEntry[],
+  unclaimed: Map<string, IndexEntry[]>,
+  paths: Paths,
+): TreeNode[] {
+  const ownDocs = cloneEntries.filter((entry) => entry.plugin === null);
+  const pluginDocs = cloneEntries.filter((entry) => entry.plugin !== null);
+  const pluginKeyNodes = groupedBy(pluginDocs, (e) => e.plugin ?? '').map(
+    ([key, keyEntries]) => {
+      const installedOnly = unclaimed.get(key) ?? [];
+      unclaimed.delete(key);
+      return clonePluginNode(parentId, key, keyEntries, installedOnly, paths);
+    },
+  );
+  return [...kindGroups(parentId, ownDocs, paths), ...pluginKeyNodes];
+}
+
+// A marketplace clone's plugin: the kind groups of its clone entries and its
+// installed-only `plugin` entries, then Installed only (id
+// `<pluginNodeId>/installed`) for its other installed-only entries, left out
+// when it has none.
+function clonePluginNode(
+  parentId: string,
+  key: string,
+  keyEntries: readonly IndexEntry[],
+  installedOnly: readonly IndexEntry[],
+  paths: Paths,
+): TreeGroup {
+  const id = `${parentId}/plugin:${key}`;
+  const installedPlugins = installedOnly.filter((e) => e.kind === 'plugin');
+  const installedFiles = installedOnly.filter((e) => e.kind !== 'plugin');
+  const children = kindGroups(id, [...keyEntries, ...installedPlugins], paths);
+  if (installedFiles.length > 0) {
+    const installedId = `${id}/installed`;
+    children.push(
+      group(
+        installedId,
+        'Installed only',
+        installedFiles,
+        kindGroups(installedId, installedFiles, paths),
+        paths,
+      ),
+    );
+  }
+  return group(id, key, keyEntries, children, paths);
 }
 
 // One node per feature slug, ids `<featuresId>/feature:<slug>` so no slug

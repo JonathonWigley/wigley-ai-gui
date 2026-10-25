@@ -35,8 +35,154 @@ function child(nodes: readonly TreeNode[], title: string): TreeGroup {
   return found;
 }
 
+function mineChildren(
+  entries: readonly IndexEntry[],
+  homeDir = HOME,
+  paths = posixPaths,
+): TreeNode[] {
+  return child(buildTree(entries, homeDir, paths), 'Mine').children;
+}
+
+function ids(nodes: readonly TreeNode[]): string[] {
+  return nodes.map((node) => node.id);
+}
+
+// Every group and leaf id under `nodes`, depth first.
+function flattenedIds(nodes: readonly TreeNode[]): string[] {
+  const found: string[] = [];
+  const pending = [...nodes].reverse();
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    found.push(node.id);
+    if (node.type === 'group') {
+      pending.push(...[...node.children].reverse());
+    }
+  }
+  return found;
+}
+
+// A third-party skill of an installed plugin whose marketplace has no clone.
+function thirdPartyPluginSkill(plugin: string): IndexEntry {
+  const name = plugin.split('@')[0];
+  const root = `/Users/u/.claude/plugins/cache/m/${name}/1`;
+  return entry({
+    path: `${root}/skills/s/SKILL.md`,
+    kind: 'skill',
+    source: 'plugin',
+    owner: 'third-party',
+    plugin,
+    root,
+  });
+}
+
+// Repo `m` cloned at `root`, carrying plugin `w@m`'s skill `f`.
+function marketplaceSkill(root: string): IndexEntry {
+  return entry({
+    path: `${root}/plugins/w/skills/f/SKILL.md`,
+    kind: 'skill',
+    source: 'repo',
+    repo: 'm',
+    root,
+    plugin: 'w@m',
+  });
+}
+
+const INSTALLED_ROOT = '/Users/u/.claude/plugins/cache/m/w/1';
+
+function installedOnlySkill(): IndexEntry {
+  return entry({
+    path: `${INSTALLED_ROOT}/skills/g/SKILL.md`,
+    kind: 'skill',
+    source: 'plugin',
+    plugin: 'w@m',
+    root: INSTALLED_ROOT,
+  });
+}
+
+// Repo `m` at `/Users/u/dev/m`: an AGENTS.md, plugin `w@m`'s skill and a
+// feature-home follow-up.
+function marketplaceRepo(): IndexEntry[] {
+  return [
+    entry({
+      path: '/Users/u/dev/m/AGENTS.md',
+      kind: 'instructions',
+      source: 'repo',
+      repo: 'm',
+      root: '/Users/u/dev/m',
+    }),
+    marketplaceSkill('/Users/u/dev/m'),
+    entry({
+      path: '/Users/u/wigley-features/m/followups.md',
+      kind: 'followup',
+      source: 'features',
+      repo: 'm',
+      root: '/Users/u/wigley-features/m',
+    }),
+  ];
+}
+
+function marketplaceRepoWithInstalledOnly(): IndexEntry[] {
+  return [
+    ...marketplaceRepo(),
+    installedOnlySkill(),
+    entry({
+      path: INSTALLED_ROOT,
+      kind: 'plugin',
+      source: 'plugin',
+      plugin: 'w@m',
+      root: INSTALLED_ROOT,
+      title: 'w@m',
+    }),
+  ];
+}
+
+function twoClonesCarryingKey(): IndexEntry[] {
+  return [
+    marketplaceSkill('/Users/u/dev/m'),
+    marketplaceSkill('/Users/u/work/m'),
+    installedOnlySkill(),
+  ];
+}
+
+function globalSkill(name: string, title = name): IndexEntry {
+  return entry({
+    path: `/Users/u/.claude/skills/${name}/SKILL.md`,
+    kind: 'skill',
+    title,
+  });
+}
+
+function skillFile(path: string, skill: string): IndexEntry {
+  return entry({ path, kind: 'skill-file', meta: { skill } });
+}
+
 describe('buildTree', () => {
-  it('buildTree_AllSources_RootsInOrder', () => {
+  it('buildTree_BothOwners_MineThenThirdParty', () => {
+    const entries = [
+      entry({ path: '/Users/u/.claude/rules/a.md' }),
+      thirdPartyPluginSkill('v@m'),
+    ];
+
+    const roots = buildTree(entries, HOME, posixPaths);
+
+    expect(titles(roots)).toEqual(['Mine', 'Third-party']);
+    expect(ids(roots)).toEqual(['owner:mine', 'owner:third-party']);
+  });
+
+  it('buildTree_NoThirdParty_OnlyMine', () => {
+    const entries = [entry({ path: '/Users/u/.claude/rules/a.md' })];
+
+    expect(titles(buildTree(entries, HOME, posixPaths))).toEqual(['Mine']);
+  });
+
+  it('buildTree_OnlyThirdParty_OnlyThirdPartyRoot', () => {
+    const entries = [thirdPartyPluginSkill('v@m')];
+
+    expect(titles(buildTree(entries, HOME, posixPaths))).toEqual([
+      'Third-party',
+    ]);
+  });
+
+  it('buildTree_MineChildren_GlobalPluginsReposUnknownSources', () => {
     const entries = [
       entry({ path: '/Users/u/.claude/rules/a.md' }),
       entry({
@@ -60,14 +206,201 @@ describe('buildTree', () => {
         repo: 'Alpha',
         root: '/Users/u/dev/Alpha',
       }),
+      entry({
+        path: '/Users/u/scratch/a.md',
+        source: 'scratch',
+        root: '/Users/u/scratch',
+      }),
+      entry({
+        path: '/Users/u/notes/b.md',
+        source: 'my_notes',
+        root: '/Users/u/notes',
+      }),
     ];
 
-    expect(titles(buildTree(entries, HOME, posixPaths))).toEqual([
+    const mine = mineChildren(entries);
+
+    expect(titles(mine)).toEqual([
       'Global',
       'Plugins',
       'Alpha',
       'zeta',
+      'My notes',
+      'Scratch',
     ]);
+    const plugins = child(mine, 'Plugins');
+    expect(plugins.id).toBe('owner:mine/plugins');
+    expect(ids(plugins.children)).toEqual(['owner:mine/plugins/p@m']);
+    expect(titles(plugins.children)).toEqual(['p@m']);
+  });
+
+  it('buildTree_MarketplaceClone_PluginNodeBetweenKindsAndFeatures', () => {
+    const repo = child(mineChildren(marketplaceRepo()), 'm');
+
+    expect(ids(repo.children)).toEqual([
+      'repo:m/instructions',
+      'repo:m/plugin:w@m',
+      'repo:m/features',
+    ]);
+    const plugin = child(repo.children, 'w@m');
+    expect(ids(plugin.children)).toEqual(['repo:m/plugin:w@m/skill']);
+  });
+
+  it('buildTree_InstalledOnly_KindPluginInNodeRestInInstalledOnly', () => {
+    const repo = child(mineChildren(marketplaceRepoWithInstalledOnly()), 'm');
+
+    const plugin = child(repo.children, 'w@m');
+    expect(ids(plugin.children)).toEqual([
+      'repo:m/plugin:w@m/skill',
+      'repo:m/plugin:w@m/plugin',
+      'repo:m/plugin:w@m/installed',
+    ]);
+    const installed = child(plugin.children, 'Installed only');
+    expect(ids(installed.children)).toEqual([
+      'repo:m/plugin:w@m/installed/skill',
+    ]);
+    expect(plugin.folder).toBe('/Users/u/dev/m/plugins/w/skills/f');
+  });
+
+  it('buildTree_InstalledOnly_NoMinePluginsNode', () => {
+    const mine = mineChildren(marketplaceRepoWithInstalledOnly());
+
+    expect(titles(mine)).not.toContain('Plugins');
+  });
+
+  it('buildTree_TwoClonesCarryKey_PluginNodesInClonesInstalledOnlyInFirst', () => {
+    const repo = child(mineChildren(twoClonesCarryingKey()), 'm');
+
+    const devId = 'repo:m/clone:/Users/u/dev/m';
+    const dev = child(repo.children, '~/dev/m');
+    expect(ids(dev.children)).toEqual([`${devId}/plugin:w@m`]);
+    const devPlugin = child(dev.children, 'w@m');
+    expect(ids(devPlugin.children).at(-1)).toBe(
+      `${devId}/plugin:w@m/installed`,
+    );
+    const work = child(repo.children, '~/work/m');
+    const workPlugin = child(work.children, 'w@m');
+    expect(
+      ids(workPlugin.children).filter((id) => id.endsWith('/installed')),
+    ).toEqual([]);
+  });
+
+  it('buildTree_ThirdParty_SyncedThenPluginsByKey', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/.claude/skills/synced/b/s/SKILL.md',
+        kind: 'skill',
+        owner: 'third-party',
+      }),
+      thirdPartyPluginSkill('v@m'),
+      thirdPartyPluginSkill('a@m'),
+    ];
+
+    const thirdParty = child(
+      buildTree(entries, HOME, posixPaths),
+      'Third-party',
+    );
+
+    expect(titles(thirdParty.children)).toEqual([
+      'Synced skills',
+      'a@m',
+      'v@m',
+    ]);
+    expect(ids(thirdParty.children)).toEqual([
+      'owner:third-party/synced',
+      'owner:third-party/plugin:a@m',
+      'owner:third-party/plugin:v@m',
+    ]);
+    const synced = child(thirdParty.children, 'Synced skills');
+    expect(ids(synced.children)).toEqual(['owner:third-party/synced/skill']);
+  });
+
+  it('buildTree_SkillWithFiles_GroupSkillMdFirstThenFilesByTitle', () => {
+    const skill = '/Users/u/.claude/skills/s/SKILL.md';
+    const entries = [
+      globalSkill('s'),
+      skillFile('/Users/u/.claude/skills/s/zeta.md', skill),
+      skillFile('/Users/u/.claude/skills/s/ref/alpha.md', skill),
+    ];
+
+    const global = child(mineChildren(entries), 'Global');
+
+    expect(titles(global.children)).toEqual(['Skills']);
+    const skills = child(global.children, 'Skills');
+    expect(skills.children).toHaveLength(1);
+    const skillGroup = child(skills.children, 's');
+    expect(skillGroup.id).toBe(`skill:${skill}`);
+    expect(titles(skillGroup.children)).toEqual([
+      'SKILL.md',
+      'alpha.md',
+      'zeta.md',
+    ]);
+    expect(ids(skillGroup.children)).toEqual([
+      `entry:${skill}`,
+      'entry:/Users/u/.claude/skills/s/ref/alpha.md',
+      'entry:/Users/u/.claude/skills/s/zeta.md',
+    ]);
+  });
+
+  it('buildTree_SkillGroupAmongSkills_SortedBySkillTitle', () => {
+    const entries = [
+      globalSkill('c'),
+      globalSkill('b'),
+      skillFile(
+        '/Users/u/.claude/skills/b/notes.md',
+        '/Users/u/.claude/skills/b/SKILL.md',
+      ),
+      globalSkill('a'),
+    ];
+
+    const skills = child(
+      child(mineChildren(entries), 'Global').children,
+      'Skills',
+    );
+
+    expect(titles(skills.children)).toEqual(['a', 'b', 'c']);
+    expect(skills.children.map((node) => node.type)).toEqual([
+      'entry',
+      'group',
+      'entry',
+    ]);
+  });
+
+  it('buildTree_OrphanSkillFile_SkillFilesGroup', () => {
+    const entries = [
+      skillFile(
+        '/Users/u/.claude/skills/gone/notes.md',
+        '/Users/u/.claude/skills/gone/SKILL.md',
+      ),
+    ];
+
+    const global = child(mineChildren(entries), 'Global');
+
+    expect(titles(global.children)).toEqual(['Skill files']);
+    expect(global.children[0].id).toBe('global/skill-file');
+  });
+
+  it('buildTree_SameIndexTwice_SameIds', () => {
+    const first = buildTree(twoClonesCarryingKey(), HOME, posixPaths);
+    const second = buildTree(twoClonesCarryingKey(), HOME, posixPaths);
+
+    expect(flattenedIds(second)).toEqual(flattenedIds(first));
+  });
+
+  it('buildTree_SelfTestGlobalKinds_InstructionsRulesHooksLast', () => {
+    const entries = [
+      entry({ path: '/Users/u/.claude/CLAUDE.md', kind: 'instructions' }),
+      entry({ path: '/Users/u/.claude/rules/style.md', kind: 'rule' }),
+      entry({
+        path: '/Users/u/.claude/settings.json',
+        id: '/Users/u/.claude/settings.json#hook:PreToolUse:0',
+        kind: 'hook',
+      }),
+    ];
+
+    const global = child(mineChildren(entries), 'Global');
+
+    expect(titles(global.children)).toEqual(['Instructions', 'Rules', 'Hooks']);
   });
 
   it('buildTree_NoGlobalEntries_LeavesGlobalOut', () => {
@@ -81,7 +414,7 @@ describe('buildTree', () => {
       }),
     ];
 
-    expect(titles(buildTree(entries, HOME, posixPaths))).toEqual(['r']);
+    expect(titles(mineChildren(entries))).toEqual(['r']);
   });
 
   it('buildTree_KindGroups_InKindsOrder', () => {
@@ -91,7 +424,7 @@ describe('buildTree', () => {
       entry({ path: '/Users/u/.claude/CLAUDE.md', kind: 'instructions' }),
     ];
 
-    const global = child(buildTree(entries, HOME, posixPaths), 'Global');
+    const global = child(mineChildren(entries), 'Global');
 
     expect(titles(global.children)).toEqual([
       'Instructions',
@@ -107,7 +440,7 @@ describe('buildTree', () => {
       entry({ path: '/Users/u/.claude/CLAUDE.md', kind: 'followup' }),
     ];
 
-    const global = child(buildTree(entries, HOME, posixPaths), 'Global');
+    const global = child(mineChildren(entries), 'Global');
 
     expect(titles(global.children)).toEqual([
       'Rules',
@@ -138,7 +471,7 @@ describe('buildTree', () => {
       }),
     ];
 
-    const roots = buildTree(entries, HOME, posixPaths);
+    const roots = mineChildren(entries);
 
     expect(titles(roots)).toEqual(['r', 'My notes', 'Scratch']);
     const scratch = child(roots, 'Scratch');
@@ -164,7 +497,7 @@ describe('buildTree', () => {
       }),
     ];
 
-    const repo = child(buildTree(entries, HOME, posixPaths), 'r');
+    const repo = child(mineChildren(entries), 'r');
 
     expect(repo.children.map((node) => node.id)).toEqual([
       'repo:r/kind:features',
@@ -190,7 +523,7 @@ describe('buildTree', () => {
       }),
     ];
 
-    const repo = child(buildTree(entries, HOME, posixPaths), 'r');
+    const repo = child(mineChildren(entries), 'r');
 
     expect(titles(repo.children)).toEqual(['~/dev/r', '~/work/r']);
     expect(repo.children.map((node) => node.id)).toEqual([
@@ -217,7 +550,7 @@ describe('buildTree', () => {
       }),
     ];
 
-    const repo = child(buildTree(entries, HOME, posixPaths), 'r');
+    const repo = child(mineChildren(entries), 'r');
 
     expect(repo.children[0].id).toBe('repo:r/instructions');
     expect(titles(repo.children)).toEqual(['Instructions', 'Rules']);
@@ -256,7 +589,7 @@ describe('buildTree', () => {
     ];
 
     const features = child(
-      child(buildTree(entries, HOME, posixPaths), 'r').children,
+      child(mineChildren(entries), 'r').children,
       'Features',
     );
 
@@ -298,7 +631,7 @@ describe('buildTree', () => {
     ];
 
     const features = child(
-      child(buildTree(entries, HOME, posixPaths), 'r').children,
+      child(mineChildren(entries), 'r').children,
       'Features',
     );
 
@@ -330,7 +663,7 @@ describe('buildTree', () => {
     ];
 
     const features = child(
-      child(buildTree(entries, HOME, posixPaths), 'r').children,
+      child(mineChildren(entries), 'r').children,
       'Features',
     );
 
@@ -348,7 +681,7 @@ describe('buildTree', () => {
     ];
 
     const rules = child(
-      child(buildTree(entries, HOME, posixPaths), 'Global').children,
+      child(mineChildren(entries), 'Global').children,
       'Rules',
     );
 
@@ -362,7 +695,7 @@ describe('buildTree', () => {
     ];
 
     const rules = child(
-      child(buildTree(entries, HOME, posixPaths), 'Global').children,
+      child(mineChildren(entries), 'Global').children,
       'Rules',
     );
 
@@ -373,7 +706,7 @@ describe('buildTree', () => {
     const entries = [entry({ path: '/x.md', id: '/x.md#L3', line: 3 })];
 
     const rules = child(
-      child(buildTree(entries, HOME, posixPaths), 'Global').children,
+      child(mineChildren(entries), 'Global').children,
       'Rules',
     );
 
@@ -411,7 +744,7 @@ describe('buildTree on Windows', () => {
     ];
 
     const global = child(
-      buildTree(entries, WINDOWS_HOME, windowsPaths),
+      mineChildren(entries, WINDOWS_HOME, windowsPaths),
       'Global',
     );
 
@@ -438,7 +771,7 @@ describe('buildTree on Windows', () => {
     ];
 
     const features = child(
-      child(buildTree(entries, WINDOWS_HOME, windowsPaths), 'r').children,
+      child(mineChildren(entries, WINDOWS_HOME, windowsPaths), 'r').children,
       'Features',
     );
 
@@ -465,7 +798,7 @@ describe('buildTree on Windows', () => {
       }),
     ];
 
-    const repo = child(buildTree(entries, WINDOWS_HOME, windowsPaths), 'r');
+    const repo = child(mineChildren(entries, WINDOWS_HOME, windowsPaths), 'r');
 
     expect(titles(repo.children)).toEqual(['~\\dev\\r', '~\\src\\r']);
   });
