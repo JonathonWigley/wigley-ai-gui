@@ -7,6 +7,9 @@ import { keysManifest } from './keys/manifest';
 import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
 
+// The digits that pick forms' numbered choices, which the default keymap binds.
+export { DIGITS } from './forms/manifest';
+
 // Every built-in plugin's manifest, each keeping its literal id, command ids
 // and scopes in its type, which the default keymap is checked against.
 export const builtInManifests = [

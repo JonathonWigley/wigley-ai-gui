@@ -7,7 +7,7 @@ import type {
   KeyBind,
 } from '../contracts/keymap';
 import type { QualifiedCommandId, QualifiedScopeId } from '../contracts/plugin';
-import type { builtInManifests } from './manifests';
+import { type builtInManifests, DIGITS } from './manifests';
 
 type BuiltInManifest = (typeof builtInManifests)[number];
 
@@ -36,8 +36,6 @@ type BuiltInKeymap = Omit<
   })[];
   global: BuiltInAcceleratorBind[];
 };
-
-const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
 
 // A bare digit picks a numbered choice or action on the page; in a text box,
 // where vim reads a digit as a count, `<Leader>a` and a digit picks.
