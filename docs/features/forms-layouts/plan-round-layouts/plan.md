@@ -215,6 +215,7 @@ Review base: 092ace4b241cdae4b0c66ce5933c8a1387c59c61
 - CardDeps.keysFor(command) → keys: Pick<KeysPageExports, 'keysFor'>; the card kit binds the forms scope itself · why: kit keysFor needs the scope · consumers: card-parts.ts buildChoiceList (type line) · group 07
 - base kit deps: Pick<CardDeps,…> → new HeadKitDeps (markdown, platform, keysFor, commands) in card-kit.ts · why: panes and head share it without CardDeps · consumers: layout-panes, round-view · group 07
 - SelfTestScript.open result promise: ToolResult → {fixture: ToolResult, unknownLayout: ToolResult} · why: the unknown-layout refusal is checked on its own tool result · consumers: none outside selftest-script.ts · group 08
+- SelfTestScript.open (forms, settings): a superseded open still connected or showed after its reset → a run token makes a superseded chain do nothing and never settle · why: reload during the reset overwrote sessions · consumers: src/main/selftest-runner.ts
 ### Rulings
 - a layout first listed by a change report starts at revision 1; each later report adds 1, removal included — matches the plan's never-reset rule — a page could reload once more than needed · group 01 · group 01
 - showLayouts falls back to the set's builtIn entry and throws if the set has none — only reachable if the registry breaks its contract — a broken registry stops the page drawing · group 01 · group 01
@@ -234,6 +235,10 @@ Review base: 092ace4b241cdae4b0c66ce5933c8a1387c59c61
 - AGENTS.md item-kind list gained KIT_BUILDERS, CARD_KINDS, LayoutPart beside ROUND_ITEM_LISTS — the list reads as the full set the compiler flags — a longer list · group 09
 - no marketplace version bump for 4b43f73a — 1.9.3 (f402c1eb) is still unpushed, so it rides that version — bump needed if f402c1eb is pushed alone · group 09
 - check 3's 'only that card redraws' graded against 03's decision that a changed pick rebuilds the whole round view: only that card changes look, other rounds untouched, answers kept — 03's decision stands; per-box restore is the existing followups item (layout hot reload keeps the user's place) — the user may want the finer redraw sooner · group 10
+- finding 1 toast path left unchanged: main's finish handler rejects only while the round is still open, so the page's catch runs before roundClosed — a stray 'Round not sent' toast if Electron's reply timing differs · fix12
+- keymap.ts reads DIGITS through a manifests.ts re-export rather than widening check-layers — keymap keeps reading built-in manifests through one module — none beyond one re-export line · fix13
 ### Review rounds
+- Round 1 · implementation review at c81a58f8 (9 lanes: C1–C6, P-A, P-B, P-C) · Verdict: NEEDS FIXES · 20 findings (9 important, 11 minor) · lead-applied prose fixes 590a7726 · report scratchpad/review-c81a58f8.md
+- Round 1 fixes · triage answered by the user (cap finding entries at 9; header numbered like choices; review-pane scope; retro fallback; contributed-part CSS plus tooltip; nulls read as absent) · app 62edac02 1aff7bd3 f6b2a302 e312f9af 3f165b83 b0354298 098f7633 e05e47e5 73c1fc0b 5e82a640 829fa100 c90ff202 · marketplace c0853b4b cee92a13
 ### Test gate
 - compile: typecheck clean at 2f79e037 and after; log scan: self-test and drive logs hold no unexpected error lines; tests: npm test 2822 passed / 12 skipped, npm run lint clean, npm run selftest 526 checks all passed (screenshots read against DESIGN.md: names one card off, choice groups below the fold, covered by the drive captures), marketplace retro suite 162 OK at f402c1eb
