@@ -32,8 +32,8 @@ const ASK_ROUND_DESCRIPTION =
   'a new layout folder, name it in the round, and list each layout file you ' +
   'wrote or changed in a notice on that round. A round needs at least one ' +
   'question, finding or notice, and may carry any mix of the three. ' +
-  'Re-sending a ' +
-  'round is always safe: the same questions, findings and notices re-attach ' +
+  'Re-sending a round is safe (leave out a layout the folder no longer ' +
+  'holds): the same questions, findings and notices re-attach ' +
   'to the round still open, return the answers of the round just ' +
   "submitted, or open pre-filled with the user's saved answers. When the " +
   "result carries 'earlier_heading', those answers belong to an earlier " +

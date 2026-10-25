@@ -357,7 +357,9 @@ round), since main, not the page, decides.
   - **Which layout draws what:** a card comes from the first layout defining its kind among the item's `layout`,
     the round's `layout`, the `forms.layout` setting and `default`; a pane the same way without the item. One page
     module resolves this, so round-view names no layout. An `ask_round` naming a layout missing from the folder
-    fails with the names the folder holds.
+    fails with the names the folder holds. A user layout counts as missing until the layout registry has listed it,
+    which briefly it has not at app start and just after a new layout folder is written, so an agent retries such a
+    refusal once.
   - **An agent wanting a look no layout has** writes a new layout folder, names it in the round, and lists each
     layout it wrote or changed in a notice on that round, so the user sees the file while its look is on screen.
   - **Reloads:** saving a layout's code (`.js`, `.mjs`), style (`.css`), data (`.json`), image or font files redraws

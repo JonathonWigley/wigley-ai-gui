@@ -406,7 +406,8 @@ export type CloseRoundFromMainDeps = Pick<
 // Closes a round main closed. A round the page was sending closes its session
 // when the close prompt asked the cancel, whoever closed the round. Only a
 // round the page's finish closed logs and toasts its send; one main closed on
-// its own stays quiet, since main dropped those answers.
+// its own stays quiet, since main dropped those answers, and its send is
+// failed first, so its `roundFinished` says `closed`.
 export function closeRoundFromMain(
   deps: CloseRoundFromMainDeps,
   closed: RoundClosed,
@@ -415,8 +416,11 @@ export function closeRoundFromMain(
   const round = deps.store
     .get()
     .rounds.find((candidate) => candidate.roundId === roundId);
-  deps.store.dispatch({ type: 'roundClosed', roundId });
   const sending = round?.sending ?? null;
+  if (!closed.byFinish && sending !== null) {
+    deps.store.dispatch({ type: 'sendFailed', roundId });
+  }
+  deps.store.dispatch({ type: 'roundClosed', roundId });
   if (round === undefined || sending === null) {
     return;
   }

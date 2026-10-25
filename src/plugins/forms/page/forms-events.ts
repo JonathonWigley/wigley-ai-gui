@@ -59,19 +59,36 @@ export function formsEventsBetween(
 }
 
 // Emits the events of each store change, diffed against the state the last
-// change left (the store's state at start for the first). The state is saved
-// before emitting, so a listener's own dispatch diffs from it.
+// change left (the store's state at start for the first). A change a
+// listener's own dispatch makes is diffed at once but queued, and its events
+// go out after the events already queued, in change order, so the last event
+// a host hears matches the state.
 export function startFormsEvents(
   store: FormsStore,
   emit: (event: FormsPageEvent) => void,
 ): void {
   let previous = store.get();
+  const queued: FormsPageEvent[] = [];
+  let isEmitting = false;
   store.subscribe(() => {
     const next = store.get();
-    const events = formsEventsBetween(previous, next);
+    queued.push(...formsEventsBetween(previous, next));
     previous = next;
-    for (const event of events) {
-      emit(event);
+    if (isEmitting) {
+      return;
+    }
+    isEmitting = true;
+    try {
+      for (
+        let event = queued.shift();
+        event !== undefined;
+        event = queued.shift()
+      ) {
+        emit(event);
+      }
+    } finally {
+      queued.length = 0;
+      isEmitting = false;
     }
   });
 }
@@ -189,8 +206,9 @@ function answersDiffer(
   return Object.keys(is).some((field) => was[field] !== is[field]);
 }
 
-// The round's `roundFinished`: the kind of the page's own send when one was
-// in flight as the round left, else `closed`.
+// The round's `roundFinished`: the kind of the page's own send when its
+// finish closed the round, else `closed` (a round main closes on its own has
+// its send failed first).
 function finishOf(round: RoundState): FormsPageEvents['roundFinished'] {
   return {
     roundId: round.roundId,

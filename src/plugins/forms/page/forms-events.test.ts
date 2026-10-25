@@ -188,6 +188,25 @@ describe('startFormsEvents', () => {
     ]);
     expect(names(emitted.slice(afterShown))).toEqual(['answerChanged']);
   });
+
+  it('startFormsEvents_ListenerDispatches_EmitsItsEventsAfterTheOuterChange', () => {
+    const store = fakeStore(noRounds());
+    const emitted: FormsPageEvent[] = [];
+    startFormsEvents(store, (event) => {
+      emitted.push(event);
+      if (event.name === 'roundShown') {
+        store.dispatch({ type: 'openReview' });
+      }
+    });
+
+    store.dispatch({ type: 'roundShown', round: presented });
+
+    expect(emitted).toEqual([
+      expect.objectContaining({ name: 'roundShown' }),
+      { name: 'viewChanged', data: { view: 'forms', roundId: 'r1' } },
+      { name: 'viewChanged', data: { view: 'review', roundId: 'r1' } },
+    ]);
+  });
 });
 
 describe('createFormsEventLog', () => {

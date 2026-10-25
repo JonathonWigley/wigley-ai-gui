@@ -19,6 +19,7 @@ import {
   formsCommandHandlers,
   guardClose,
 } from './forms-commands';
+import { type FormsPageEvent, startFormsEvents } from './forms-events';
 import { createFormsStore } from './forms-store';
 import { finding, notice, presentedRound, question } from './test-rounds';
 
@@ -757,6 +758,36 @@ describe('formsCommandHandlers', () => {
     expect(closedSessions).toEqual([
       { sessionId: 'r1-session', roundCount: 0 },
     ]);
+  });
+
+  it('main closing a sending round on its own finishes it as closed', () => {
+    const { run, store, closeFromMain } = setup();
+    const emitted: FormsPageEvent[] = [];
+    startFormsEvents(store, (event) => emitted.push(event));
+    run('openReview');
+    run('submit');
+
+    closeFromMain('r1', false);
+
+    const outcomes = emitted.flatMap((event) =>
+      event.name === 'roundFinished' ? [event.data.outcome] : [],
+    );
+    expect(outcomes).toEqual(['closed']);
+  });
+
+  it("a round the page's finish closed finishes with its send's kind", () => {
+    const { run, store, closeFromMain } = setup();
+    const emitted: FormsPageEvent[] = [];
+    startFormsEvents(store, (event) => emitted.push(event));
+    run('openReview');
+    run('submit');
+
+    closeFromMain('r1');
+
+    const outcomes = emitted.flatMap((event) =>
+      event.name === 'roundFinished' ? [event.data.outcome] : [],
+    );
+    expect(outcomes).toEqual(['submitted']);
   });
 
   it('the close guard keeps the session of the active round while it sends, and says so', () => {

@@ -318,7 +318,8 @@ export type RoundFinishOutcome = 'submitted' | 'cancelled' | 'closed';
 // its notes and reason text included, never for a notice comment or the round
 // note. `roundFinished` fires once when a round leaves the page, for every
 // reason, with the answers it left with. `viewChanged` fires when the view or
-// the active round changes. In one store change they fire in that order.
+// the active round changes. In one store change they fire in that order, and
+// a change a listener makes fires its events after the change it interrupted.
 export interface FormsPageEvents extends EventShape {
   roundShown: OpenRound;
   answerChanged: { roundId: string; item: FormsItemRef; status: AnswerStatus };

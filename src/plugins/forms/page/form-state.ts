@@ -75,7 +75,8 @@ export interface RoundState {
   savedRevision: number;
   // The last failed save's message; cleared when a save starts or succeeds.
   saveError: string | null;
-  // Set from the send until main closes the round or the send fails.
+  // Set from the send until the page's finish closes the round or the send
+  // fails; a round main closes on its own fails its send first.
   sending: RoundSend | null;
 }
 
@@ -145,6 +146,8 @@ export type FormsAction =
   | { type: 'dismissConfirm' }
   // The round's finish went to main; it closes on main's roundClosed.
   | { type: 'sendStarted'; roundId: string; kind: RoundEnd['kind'] }
+  // The finish never reached the agent: main refused it, or closed the round
+  // on its own first.
   | { type: 'sendFailed'; roundId: string }
   | { type: 'setText'; roundId: string; target: TextTarget; value: string }
   | { type: 'saveStarted'; roundId: string; revision: number }
