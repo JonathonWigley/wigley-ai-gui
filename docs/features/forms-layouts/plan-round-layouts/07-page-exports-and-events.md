@@ -1,6 +1,6 @@
 # 07 — Forms page exports and events
 
-Status: not started
+Status: done
 Type: Task
 Wave: 6 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -238,3 +238,5 @@ Done when: `npm run typecheck` passes; `npm run lint` passes (forms imports noth
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f443be9a · proof: diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2822 tests) green · concerns: AGENTS.md forms layout kit list and events text now stale (09); default layout never calls contributedParts, so parts always go after the boxes; no CSS for .card-parts, .card-part, .review-cell; FormsReviewColumn.title drawn nowhere; each rebuild remounts every editor box in every open round

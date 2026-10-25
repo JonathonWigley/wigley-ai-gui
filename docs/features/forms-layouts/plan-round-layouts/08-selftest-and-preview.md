@@ -1,6 +1,6 @@
 # 08 — Self-test and preview round
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 6 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -202,3 +202,5 @@ Done when: compiles; `npm run lint` passes; the test gate runs the test above an
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 26c5cf00 · proof: diff read: every Produces signature present; typecheck passes over the whole tree; worker ran lint and the preview-round test · concerns: settings.json left as {} for the later settings self-test; unchecked whether the config store accepts forms.layout 'nosuch' (self-test run shows); header '(3)' badge overflow (screenshots)

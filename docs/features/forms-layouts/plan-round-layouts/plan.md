@@ -181,12 +181,12 @@ depends on; `npm run lint` checks it. No new plugin, adapter or layer.
 - [x] [Finding answer model on the page](04-finding-answer-model.md) — after 02, 03
 
 ### Wave 5
-- [ ] [Layout contract: panes, grouped choices, default layout](05-layout-contract-and-default.md) — after 03, 04
+- [x] [Layout contract: panes, grouped choices, default layout](05-layout-contract-and-default.md) — after 03, 04
 - [x] [Marketplace contract and skills](06-marketplace-contract-and-skills.md) — after 02, 04
 
 ### Wave 6
-- [ ] [Forms page exports and events](07-page-exports-and-events.md) — after 05
-- [ ] [Self-test and preview round](08-selftest-and-preview.md) — after 05
+- [x] [Forms page exports and events](07-page-exports-and-events.md) — after 05
+- [x] [Self-test and preview round](08-selftest-and-preview.md) — after 05
 
 ### Wave 7
 - [ ] [Doc re-read](09-doc-re-read.md) — after 06, 07, 08
@@ -204,9 +204,15 @@ Review base: 092ace4b241cdae4b0c66ce5933c8a1387c59c61
 - 03 · d6537cad · diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2803 tests) green · concerns: forms page calls refresh() on every store dispatch, keystrokes included (cheap); layout.d.ts comments are read by layout authors (doc wording check); feature design docs may still describe the single-layout loader (09); DOM paths have no unit tests (08, 10 live checks)
 - 04 · 731a30c3 · diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2782 tests) green; Done-when grep empty · concerns: forms.css keeps dead .choices.is-dimmed, .finding-actions and .action-picks rules (05 restyles; review); selftest still presses f/u/s until 08; test builder decision() recommends a pick that is no entry
 - 06 · f402c1eb (marketplace) · diff read; retro suite 162 tests OK; check_manifests passes (worker); forms Python suite's 12 relay/nvm failures pre-exist on this machine, fingerprint test passes · concerns: README now states the app's at-least-one fix_now choice rule, which the plan never named; nit plain-label test's claim moved to no-pick since no valid pick reaches the fallback; other marketplace suites fail identically at HEAD on Windows/Git Bash
+- 05 · 29b72839 · diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2794 tests) green · concerns: header '(3)' sits in the fixed-size round .choice-number badge and may not fit (check on 08/10 captures); layout-panes rollback duplicates layout-cards' buildCard (outside Files list); two unnamed guards added: 'rail has no item at position N', 'review has no row N'
+- 07 · f443be9a · diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2822 tests) green · concerns: AGENTS.md forms layout kit list and events text now stale (09); default layout never calls contributedParts, so parts always go after the boxes; no CSS for .card-parts, .card-part, .review-cell; FormsReviewColumn.title drawn nowhere; each rebuild remounts every editor box in every open round
+- 08 · 26c5cf00 · diff read: every Produces signature present; typecheck passes over the whole tree; worker ran lint and the preview-round test · concerns: settings.json left as {} for the later settings self-test; unchecked whether the config store accepts forms.layout 'nosuch' (self-test run shows); header '(3)' badge overflow (screenshots)
 ### Contract changes
 - completeFindingPick(finding: Finding, …): Finding → PickableFinding (Pick<Finding, 'origin' | 'choices'>) · why: rewritten on findingEntries, which needs only origin and choices · consumers: 02's main/round.ts (unchanged call) · group 04
 - form-state.ts: new export pickNumber(round: RoundState, item: AnswerableItem): number — a question's choice or a finding's entry number · why: one source for the log line, ReviewRow.entry and the kit's selected state · consumers: 05, 07 · group 04
+- CardDeps.keysFor(command) → keys: Pick<KeysPageExports, 'keysFor'>; the card kit binds the forms scope itself · why: kit keysFor needs the scope · consumers: card-parts.ts buildChoiceList (type line) · group 07
+- base kit deps: Pick<CardDeps,…> → new HeadKitDeps (markdown, platform, keysFor, commands) in card-kit.ts · why: panes and head share it without CardDeps · consumers: layout-panes, round-view · group 07
+- SelfTestScript.open result promise: ToolResult → {fixture: ToolResult, unknownLayout: ToolResult} · why: the unknown-layout refusal is checked on its own tool result · consumers: none outside selftest-script.ts · group 08
 ### Rulings
 - a layout first listed by a change report starts at revision 1; each later report adds 1, removal included — matches the plan's never-reset rule — a page could reload once more than needed · group 01 · group 01
 - showLayouts falls back to the set's builtIn entry and throws if the set has none — only reachable if the registry breaks its contract — a broken registry stops the page drawing · group 01 · group 01
@@ -215,5 +221,12 @@ Review base: 092ace4b241cdae4b0c66ce5933c8a1387c59c61
 - form-state.ts's private ROUND_ITEMS exported for the resolver rather than copied — widen-don't-copy — one file outside 03's Files list · group 03 · group 03
 - showLayouts' queues-nothing check also compares the listed setting name, so a setting that moves from a listed layout to a missing one while a round still uses the old one still reloads — the plan's check missed that case — none · group 03 · group 03
 - README Layouts sub-part placed before Outcomes — nearest the ask_round contract — none · group 06 · group 06
+- createUpdatingHeadKit exported from card-kit.ts, widening the cards' self-updating keyHint override so cards and panes share it — widen-don't-copy — none · group 05 · group 05
+- in a pane, kit keys()/keyHint read the forms scope per HeadKit; only Send, Cancel and the cursor row's hint read the review scope — HeadKit's stated scope — a review key hint could show the forms binding · group 05 · group 05
+- the round overview is now a span drawn by inlineMarkdown, was a div — the review pane's head draws it inline — a block-level overview would lose its layout · group 05 · group 05
+- roundFinished outcome is sending?.kind ?? 'closed', read from state alone — a disconnect mid-send reports the send's kind — a host reading outcome could see submitted for a send that never reached the agent · group 07
+- state saved before emitting, so a listener's own dispatch diffs from it — no duplicate events — none · group 07
+- answerChanged log line deduplicated on each item's status and pick — a notes edit logs nothing — self-test expects no line per keystroke · group 07
+- contributed parts auto-appended only when at least one part names the card's kind — empty cards gain no wrapper — none · group 07
 ### Review rounds
 ### Test gate

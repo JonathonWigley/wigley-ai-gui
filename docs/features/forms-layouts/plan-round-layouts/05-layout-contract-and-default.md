@@ -1,6 +1,6 @@
 # 05 — Layout contract: panes, grouped choices, default layout
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 03, 04
 Plan: [plan.md](plan.md)
@@ -193,3 +193,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 29b72839 · proof: diff read: every Produces signature present; typecheck passes; worker ran lint and the full suite (2794 tests) green · concerns: header '(3)' sits in the fixed-size round .choice-number badge and may not fit (check on 08/10 captures); layout-panes rollback duplicates layout-cards' buildCard (outside Files list); two unnamed guards added: 'rail has no item at position N', 'review has no row N'
