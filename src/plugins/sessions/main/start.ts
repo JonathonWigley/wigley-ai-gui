@@ -1,5 +1,4 @@
 import os from 'node:os';
-import path from 'node:path';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
   DriveHost,
@@ -7,6 +6,7 @@ import type {
   MainPart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { appEndpointDir } from '../../../shared/app-endpoint-dir';
 import {
   argsObject,
   nullableNumberOr,
@@ -194,9 +194,9 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
     const list = createList(api);
     const opened =
       api.services.runMode === 'selfTest' ? null : openRelay(api, list);
-    const endpointDir = path.join(
+    const endpointDir = appEndpointDir(
+      api.services.paths,
       api.services.homeDir,
-      '.agents',
       api.services.appInstance.id,
     );
     const exports: SessionsMainExports = {

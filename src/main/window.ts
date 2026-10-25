@@ -10,12 +10,12 @@ import type { MainServices } from '../contracts/plugin';
 import type { Settings } from '../contracts/settings';
 import type { MainCommands } from './keybindings';
 
-// `title` is the window's title, the name the app shows; `offscreen` renders
-// without showing the window or taking focus; `backgroundColor` shows before
-// the page paints; `titleBar` hides the native title bar the platform's way,
-// keeping the OS window buttons. The window
-// stays on the app's page: a navigation the page starts to another URL, such
-// as Chromium opening a file dropped on the window, is refused and logged.
+// `title` is the window's title, the name the app shows, held over any title
+// the page sets; `offscreen` renders without showing the window or taking
+// focus; `backgroundColor` shows before the page paints; `titleBar` hides the
+// native title bar the platform's way, keeping the OS window buttons. The
+// window stays on the app's page: a navigation the page starts to another URL,
+// such as Chromium opening a file dropped on the window, is refused and logged.
 export function createMainWindow(
   settings: Settings['window'],
   title: string,
@@ -40,6 +40,10 @@ export function createMainWindow(
       preload: path.join(__dirname, 'preload.cjs'),
       offscreen,
     },
+  });
+  // Electron otherwise replaces the window title with the page's `<title>`.
+  window.on('page-title-updated', (event) => {
+    event.preventDefault();
   });
   window.webContents.on('will-navigate', (event) => {
     if (!isSamePage(event.url, window.webContents.getURL())) {

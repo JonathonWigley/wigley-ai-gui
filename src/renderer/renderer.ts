@@ -96,7 +96,6 @@ async function start() {
   themeApplier.apply(config.theme, settings);
 
   document.documentElement.dataset.platform = config.platform;
-  document.title = config.appInstance.displayName;
   const shell = mountShell(
     document.getElementById('app') as HTMLElement,
     defaultShellLayout,

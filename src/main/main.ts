@@ -43,6 +43,7 @@ import type {
 import { defaultKeymap } from '../plugins/keymap';
 import { mainParts } from '../plugins/main';
 import { manifests } from '../plugins/manifests';
+import { appEndpointDir } from '../shared/app-endpoint-dir';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
@@ -193,9 +194,9 @@ function claudeHarness(
 function endpointEnv(endpointHome: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
-    WIGLEY_AI_GUI_ENDPOINT_DIR: path.join(
+    WIGLEY_AI_GUI_ENDPOINT_DIR: appEndpointDir(
+      paths,
       endpointHome,
-      '.agents',
       appInstance.id,
     ),
   };
