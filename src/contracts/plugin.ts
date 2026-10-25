@@ -1,7 +1,7 @@
 import type { AgentHarness } from './agent';
-import type { AppInstance } from './app-instance';
 import type { Alerts } from './alerts';
 import type { Clock, RandomHex, RandomUuid, Timers } from './ambient';
+import type { AppInstance } from './app-instance';
 import type { CommandId } from './commands';
 import type { Disposable } from './disposable';
 import type { EditorHost, TextEditor } from './editor';

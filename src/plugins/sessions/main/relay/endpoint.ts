@@ -12,8 +12,8 @@ const MAX_SOCKET_PATH_BYTES = 103;
 // instance's agents folder, or, when that folder's path is too long for one, a
 // socket named per instance, user and home in `tempDir` (per user on macOS),
 // or in a folder of `/tmp` only the user can enter when `tempDir` is too long
-// as well. Creates that `/tmp` folder, and
-// throws when it exists but another user owns it or others can enter it.
+// as well. Creates that `/tmp` folder, and throws when it exists but another
+// user owns it or others can enter it.
 export function channelPath(
   platform: NodeJS.Platform,
   home: string,

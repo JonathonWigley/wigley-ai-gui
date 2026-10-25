@@ -327,7 +327,7 @@ round), since main, not the page, decides.
   the user picks the established behaviour every time.
 - **Plugin data** — files a plugin keeps for the user, such as forms layouts — lives in the plugin's own folder,
   `plugins/<id>/` in the app instance's user data folder, so the stable and dev apps keep separate data (in the
-  self-test and a drive run, `plugin-data/` in the temp home). Main reaches it through
+  self-test, `plugin-data/` in the temp home; in a drive run, in the run's own home). Main reaches it through
   `api.data`, the files service scoped to that folder, which refuses a path outside it. The page loads a file from
   it by the URL `api.dataUrl(path, revision)` builds on the `wigley-data:` scheme, which the page's CSP allows for
   scripts and styles; `revision` sits in the URL's path, so a changed module and every relative import under it load
@@ -398,9 +398,10 @@ round), since main, not the page, decides.
   An agent session's relay finds the stable app by default. The dev app gets rounds from the sessions its own Chat tab
   starts, which the app points at its endpoint folder, and from a session started with `WIGLEY_AI_GUI_ENDPOINT_DIR`
   set to the full path of `~/.agents/wigley-ai-gui-dev` (the relay expands no `~`). The self-test's user data is
-  `<appData>/wigley-ai-gui-selftest` and a drive run's its run folder's `user-data/`; a drive run points its Claude sessions at `<run home>/.agents/<instance id>`. "Auri" is
-  only the name the app shows: the exe, the bundle and every path keep `wigley-ai-gui`. Under `npm start` the Mac
-  Dock still says Electron, since Electron cannot rename the Dock label of an unbundled app.
+  `<appData>/wigley-ai-gui-selftest` and a drive run's its run folder's `user-data/`; a drive run points its Claude
+  sessions at `<run home>/.agents/<instance id>`. "Auri" is only the name the app shows: the exe, the bundle and
+  every path keep `wigley-ai-gui`. Under `npm start` the Mac Dock still says Electron, since Electron cannot rename
+  the Dock label of an unbundled app.
 
 - `npm run install-app` builds and installs the stable app from a committed ref (`main` unless `--ref` names
   another). It packages in a build-only worktree beside the repo, `../.wigley-ai-gui-build`, so neither

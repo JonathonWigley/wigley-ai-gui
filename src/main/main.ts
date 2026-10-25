@@ -57,8 +57,8 @@ import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
 import { scopedFiles } from '../shared/scoped-files';
 import { createElectronAlerts } from './alerts/electron-alerts';
-import { appInstanceOf } from './app-instance';
 import { silentAlerts } from './alerts/silent-alerts';
+import { appInstanceOf } from './app-instance';
 import { createClaudeCodeHarness } from './claude-code/claude-code-harness';
 import {
   type ConfigStore,

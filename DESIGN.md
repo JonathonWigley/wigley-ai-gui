@@ -266,7 +266,8 @@ Conventions every primitive follows:
 ## Surfaces
 
 - **Title bar:** L1, `toolbar-height`, draggable; the shown mode's context centred; actions on the
-  right as `icon-button` buttons when a feature contributes one. The OS window buttons stay native.
+  right as `icon-button` buttons when a feature contributes one; in the dev app, a neutral Dev
+  tag at the start. The OS window buttons stay native.
 - **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
 - **Side bar:** L1 dense glass. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard

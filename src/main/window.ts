@@ -11,9 +11,9 @@ import type { Settings } from '../contracts/settings';
 import type { MainCommands } from './keybindings';
 
 // `title` is the window's title, the name the app shows; `offscreen` renders
-// without showing the window or taking focus;
-// `backgroundColor` shows before the page paints; `titleBar` hides the native
-// title bar the platform's way, keeping the OS window buttons. The window
+// without showing the window or taking focus; `backgroundColor` shows before
+// the page paints; `titleBar` hides the native title bar the platform's way,
+// keeping the OS window buttons. The window
 // stays on the app's page: a navigation the page starts to another URL, such
 // as Chromium opening a file dropped on the window, is refused and logged.
 export function createMainWindow(

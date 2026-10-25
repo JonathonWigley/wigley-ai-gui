@@ -155,8 +155,10 @@ function packagedAppOf(packagedDir: string): string {
 }
 
 // The pids running the installed binary. Matched by path, not by name, so a
-// packaged drive run from `out/` is left alone; every Electron process of the
-// app runs from that path, so a running app has several.
+// packaged drive run from `out/` is left alone. On Windows every Electron
+// process of the app runs from that path, so a running app has several; on
+// macOS the helpers run from their own bundles, so only the main process
+// matches, and waiting on it is enough.
 function runningStablePids(binary: string): number[] {
   if (IS_WINDOWS) {
     const output = runStep('Finding the stable app', 'powershell.exe', [

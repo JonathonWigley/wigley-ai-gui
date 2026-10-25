@@ -187,7 +187,7 @@ export function addDriveActions(
 // contribute for them, and their sidebar rows. Each contribution rewrites the
 // endpoint files, so a relay that starts the app finds every tool listed. In
 // the self-test it opens no relay and writes no file; a drive run opens it in
-// its temp home and gets the drive actions.
+// the run's own home and gets the drive actions.
 export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
