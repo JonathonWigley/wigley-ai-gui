@@ -16,15 +16,15 @@ Decisions: dev shows as "Auri Dev" with a Dev tag in the title bar (Q6) · displ
 - `index.html`'s `<title>` becomes `Auri`; `renderer.ts` sets `document.title = config.appInstance.displayName`
   where it reads the served config (beside `dataset.platform`, line ~98). The page title is what Windows shows in
   the taskbar and Alt+Tab for the hidden-title-bar window.
-- `mountDevTag` contributes the `tag` primitive (`src/shared/page/ui/tag.ts`) with the text `Dev` to the title bar
-  area when `instance.isDev`, and nothing otherwise. Tone and alignment follow `DESIGN.md` (pick the tone it gives
-  for a status marker; place it so it clears the macOS traffic lights and the Windows overlay buttons). No raw
-  values: tokens only (`npm run lint` checks).
+- `mountDevTag` contributes `tag('Dev', 'neutral')` (`src/shared/page/ui/tag.ts`) to the title bar area with
+  `{ align: 'start' }` when `instance.isDev`, and nothing otherwise. Neutral, since colour at rest means a status
+  or the brand accent (`DESIGN.md`); the title bar already pads clear of the macOS traffic lights and the Windows
+  overlay (`src/renderer/shell/shell.css`). No raw values (`npm run lint` checks).
 - `renderer.ts` calls `mountDevTag(areas.titleBar, config.appInstance)` next to `mountTitleBarContext`.
 
 **Pinned values**
 
-- Tag text: `Dev`
+- Tag: `tag('Dev', 'neutral')`, `align: 'start'`
 - Titles: `Auri` (stable), `Auri Dev` (dev)
 
 Tests:     none — what shows on screen is a live check in group 08 (`wigley:writing-tests` § What earns a live run instead)

@@ -22,12 +22,16 @@ Runs on Windows (this machine). Every check below the agent runs itself; the use
 4. **A dev drive run uses the dev instance** — low confidence (the drive harness's endpoint name changed). Run a
    dev drive start (`.agents/skills/drive/SKILL.md`). Pass: the run home holds `.agents/wigley-ai-gui-dev/endpoint.json`,
    and the stable app from step 3 is still running (the run took no lock from it).
-5. **A packaged drive run still starts** — low confidence (packaging config changed). After `npm run package` in the
-   repo, run a drive start with `--packaged`. Pass: it reports ready.
+5. **A packaged drive run still starts** — low confidence (packaging config changed). `npm run package` rewrites the
+   repo's `.vite/build`, which a running `npm start` reads, and `.drive/start.lock` does not cover it: first confirm
+   no `npm start` or dev drive run from this repo is running (no `electron.exe` whose command line holds the repo
+   path); if one is, skip this check and report it skipped. Then `npm run package` and a drive start with
+   `--packaged`. Pass: it reports ready.
 6. **An agent round reaches the stable app** — expected path. With only the installed app running, send a small
    `ask_round` from a session. Pass: the round opens in the installed app (the relay found `~/.agents/wigley-ai-gui`).
 7. **install-app replaces a running app** — low confidence (the quit-and-replace path). Run `npm run install-app`
-   again with the installed app running. Pass: the app quits, the folder is replaced, and the app starts again.
+   again with the installed app running. Pass: the app quits, the folder is replaced, the app starts again, and
+   `~/.agents/wigley-ai-gui/endpoint.json`'s `launch.command` is still the installed exe (not `npm start`).
 8. **The self-test still passes** — `npm run selftest`. Pass: `[selftest] all passed`.
 
 **For the user, in the wrap-up only** (eyes and hands)

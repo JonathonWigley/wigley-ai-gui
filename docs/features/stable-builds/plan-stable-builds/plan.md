@@ -94,8 +94,10 @@ Each re-run by `wigley:make` before the first dispatch.
 - User data is set explicitly to `<appData>/<id>`; stable keeps today's folder and its forms layouts, dev starts
   empty and nothing is copied (design review).
 - `install-app` starts the stable app again after installing when it was running (design review).
-- Drive runs and the self-test keep their own homes and user data; only the drive harness's endpoint folder name
-  follows the instance (design review).
+- Drive runs keep their own homes and user data; only the drive harness's endpoint folder name follows the
+  instance (design review). The self-test, which set no user data path, gets a fixed
+  `<appData>/wigley-ai-gui-selftest`, so it never shares a profile with the stable app (cold reader).
+- A stable app records its own exe as its launch command even when started from under `npm run` (cold reader).
 
 **Out of scope**
 
@@ -116,8 +118,9 @@ Each re-run by `wigley:make` before the first dispatch.
 
 **Modified**
 
-- `src/main/main.ts`, `src/contracts/plugin.ts`, `src/contracts/settings.ts`, `src/main/config/config-store.ts`
-  (01); `src/plugins/sessions/main/start.ts`, `src/plugins/sessions/main/relay/endpoint.ts` (02);
+- `src/main/main.ts`, `src/main/window.ts`, `src/contracts/plugin.ts`, `src/contracts/settings.ts`,
+  `src/main/config/config-store.ts` (01); `src/plugins/sessions/main/start.ts`,
+  `src/plugins/sessions/main/relay/endpoint.ts`, `src/plugins/sessions/contract.ts` and the relay tests (02);
   `src/renderer/shell/title-bar.ts`, `src/renderer/renderer.ts`, `index.html` (03); `forge.config.mts` (04);
   `package.json` (05); `wigley-ai-marketplace/plugins/wigley/scripts/forms/start_app.py` (06).
 

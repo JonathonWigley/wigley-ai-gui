@@ -12,19 +12,26 @@ wait. Never stash, revert or commit that edit.
 
 Files:     modify `plugins/wigley/scripts/forms/start_app.py` · test `plugins/wigley/scripts/forms/tests/test_start_app.py`
 Consumes:  the install paths in `plan.md` § File Structure (group 05 writes the app there)
-Produces:  `def installed_app_command(env, platform: str = sys.platform, is_file: Callable[[Path], bool] = Path.is_file) -> tuple[list[str], str]`
+Produces:  `def installed_app_command(env, platform: str = sys.platform, is_file: Callable[[PurePath], bool] = lambda p: Path(p).is_file()) -> tuple[list[str], str]`
            in `start_app.py`, replacing `npm_start_command`
 Decisions: start the installed stable app and drop the `npm start` fallback (Q7) · README already says so (commit
            `590de60d`, docs written ahead)
 
 **Changes**
 
-- `installed_app_command` returns `([<binary>], <folder holding it>)`:
+- `installed_app_command` returns `([str(<binary>)], str(<folder holding it>))`, the path built with
+  `PureWindowsPath` on win32 and `PurePosixPath` on darwin, so the tests pass on either OS:
   - win32: `<LOCALAPPDATA>\Programs\wigley-ai-gui\wigley-ai-gui.exe` (`LOCALAPPDATA` read from `env`)
   - darwin: `/Applications/wigley-ai-gui.app/Contents/MacOS/wigley-ai-gui`
-  - When the binary is missing, or the platform is neither, raise
-    `StartFailed("there is no installed wigley-ai-gui app at <path>; run npm run install-app in the wigley-ai-gui repo")`
-    (for another platform: `"... no installed wigley-ai-gui app on <platform>; ..."` with the same ending).
+  - Binary missing: `StartFailed("there is no installed wigley-ai-gui app at <path>; run npm run install-app in the wigley-ai-gui repo")`
+  - Another platform: `StartFailed("there is no installed wigley-ai-gui app on <platform>; run npm run install-app in the wigley-ai-gui repo")`
+  - win32 with no `LOCALAPPDATA`: `StartFailed("LOCALAPPDATA is not set, so the installed wigley-ai-gui app cannot be found")`
+- **Only the stable folder starts the installed app.** With no endpoint file, `launch_app` starts the installed app
+  only when the endpoint folder is the default `ENDPOINT_DIR`; any other folder (a session pointed at
+  `~/.agents/wigley-ai-gui-dev` before the dev app ever ran) fails at once with
+  `StartFailed("no app has run with its endpoint in <folder>; start that app first")`, since the installed app never
+  answers on another folder (cold reader, Decided). `launch_app` takes the endpoint folder to decide this. The
+  recorded-command fallback to the installed app follows the same rule.
 - Rename `npm_start` parameters and `spawn_npm_start` to `installed_app` / `spawn_installed_app` and their
   docstrings to the installed app; the fallback error text becomes
   `the recorded launch failed (<a>), and so did starting the installed app (<b>)`.
@@ -38,13 +45,16 @@ GIVEN a recorded command that cannot spawn WHEN `start_app` runs THEN it falls b
 GIVEN no installed app WHEN `installed_app_command` runs THEN it raises naming the path and `npm run install-app`
 GIVEN win32 with `LOCALAPPDATA=C:\L` WHEN `installed_app_command` runs THEN the command is `C:\L\Programs\wigley-ai-gui\wigley-ai-gui.exe`
 GIVEN linux WHEN `installed_app_command` runs THEN it raises naming the platform
+GIVEN win32 with no LOCALAPPDATA WHEN `installed_app_command` runs THEN it raises the pinned LOCALAPPDATA message
+GIVEN an endpoint folder other than the default and no endpoint file WHEN `start_app` runs THEN it fails with the pinned message and spawns nothing
 
 Tests:     rename the `NpmStartCommandTests` class to `InstalledAppCommandTests` and replace its tests with one per
            GIVEN above that targets `installed_app_command` (inject `is_file`); the `StartTests` and `EarlyExitTests`
            tests that pass `npm_start=` pass `installed_app=` and keep their claims, with "npm start" in their names
            reworded to "the installed app"
-Done when: `python3 -m unittest discover -s plugins/wigley/scripts/forms/tests` passes, apart from failures that
-           fail without this change too; `python3 scripts/check_manifests.py` passes
+Done when: `(cd plugins/wigley/scripts/forms && python3 -m unittest discover)` passes, apart from failures that
+           fail without this change too; `python3 scripts/check_manifests.py --against origin/main` passes
+           (the marketplace `AGENTS.md` § Done)
 Commit:    one commit in wigley-ai-marketplace for the group
 
 ## Proof

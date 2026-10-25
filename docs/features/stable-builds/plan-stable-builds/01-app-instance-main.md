@@ -6,7 +6,7 @@ Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
 Files:     create `src/contracts/app-instance.ts` · create `src/main/app-instance.ts` · test `src/main/app-instance.test.ts`
-           · modify `src/main/main.ts` · modify `src/contracts/plugin.ts` · modify `src/contracts/settings.ts`
+           · modify `src/main/main.ts` · modify `src/main/window.ts` · modify `src/contracts/plugin.ts` · modify `src/contracts/settings.ts`
            · modify `src/main/config/config-store.ts` · modify every test fake of `MainServices` or `AppConfig` the
            compiler flags (measured at plan time, re-verify: `main-api.test.ts`, `claude-code-harness.test.ts`,
            `user-config.test.ts`, `selftest-config.test.ts`, chat and docs `start.test.ts`, forms layout tests,
@@ -31,15 +31,21 @@ Decisions: stable vs dev from `app.isPackaged`, read once (interview) · one rec
 **main.ts changes**
 
 - A module-level `const appInstance = appInstanceOf(app.isPackaged);` beside `runEnvironment`.
-- **User data, live only:** before `app.requestSingleInstanceLock()` (today line ~848, at module load) a live run
+- **User data, live only:** before `app.requestSingleInstanceLock()` (today main.ts:842, at module load) a live run
   calls `app.setPath('userData', path.join(app.getPath('appData'), appInstance.id))`. The lock is keyed on the user
-  data folder, so this one call also splits the locks. Drive runs keep their own `setPath` in `startApp`; the
-  self-test is unchanged. A failed `setPath` goes through `failStart`.
-- **Window title:** the main window is created with `title: appInstance.displayName` (pass it through
-  `createMainWindow`'s options in `src/main/window.ts` if that function builds the options; add the file to Files
-  then).
-- **Global shortcuts:** both `registerGlobalShortcuts` calls in `createWindow` run only when
-  `runMode === 'live' && !appInstance.isDev`. The `globalShortcut.unregisterAll()` calls stay as they are.
+  data folder, so this one call also splits the locks. Drive runs keep their own `setPath` in `startApp`. A failed
+  `setPath` goes through `failStart`.
+- **User data, self-test:** today the self-test sets no user data path, so its Chromium profile is the default
+  `<appData>/wigley-ai-gui` — after this change the stable app's. `startApp` sets it, beside the drive run's
+  `setPath`, to `path.join(app.getPath('appData'), 'wigley-ai-gui-selftest')`: one fixed folder reused by every
+  self-test (`.drive/start.lock` already keeps self-tests from overlapping), so it leaves no temp folders behind and
+  never shares a profile with either app (cold reader, Decided).
+- **Window title:** the main window is created with `title: appInstance.displayName`; `createMainWindow` in
+  `src/main/window.ts` (line ~28) builds the `BrowserWindow` options and takes the title as a new parameter.
+- **Global shortcuts:** gate the two `registerGlobalShortcuts` call sites in `createWindow` (the one in the
+  `store.onChanged` listener, and the one in the `did-finish-load` handler) on `!appInstance.isDev`. Keep the
+  `if (runMode !== 'live') return;` early return as it is: the macOS close-hides-window handler after it belongs to
+  both live instances. The `globalShortcut.unregisterAll()` calls stay as they are.
 - **Services:** `startMainParts`' services object gets `appInstance`.
 - **Config:** `configStoreDeps` passes `appInstance`; the ConfigStore serves it as `AppConfig.appInstance` next to
   `platform` and `homeDir`.
