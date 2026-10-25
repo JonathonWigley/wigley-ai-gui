@@ -1,6 +1,6 @@
 # 10 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 8 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -48,3 +48,4 @@ Commit:    none, or one commit per fix
 
 ## Proof
 
+Commit none (verification only) · proof: drive run t10: checks 1, 2, 4, 5, 6 pass with read captures (.drive/t10/screenshots); check 3 passes look, answers and log, the whole round rebuilds; npm test 2822 passed; lint passes · concerns: a bare header draws its number twice ('Follow-up (3) 3': span.choice-number plus key hint); bare action headers sit ~8px right of the section header above, so header edges do not line up; hidden cards carry no data-status after a rebuild until shown; check 1's second finding needed a fix_now choice (the app requires at least one)
