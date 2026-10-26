@@ -182,6 +182,25 @@ describe('writeDocsFixture', () => {
     expect(await files.read(STAND_IN_SCRIPT)).toContain('"lastLoaded": None');
   });
 
+  it('GIVEN the fixture WHEN the index fixture is read back THEN the style rule alone carries a last-loaded time', async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths, { loadStates: false });
+
+    const entries = (await readIndex(files)).entries;
+    const styleRule = `${HOME}/.claude/rules/style.md`;
+    expect(entries.find((entry) => entry.path === styleRule)?.lastLoaded).toBe(
+      '2026-10-18T12:00:00.000Z',
+    );
+    const lastLoadedOfOthers = entries
+      .filter((entry) => entry.path !== styleRule)
+      .map((entry) => entry.lastLoaded);
+    expect(lastLoadedOfOthers).not.toEqual([]);
+    expect(lastLoadedOfOthers.every((lastLoaded) => lastLoaded === null)).toBe(
+      true,
+    );
+  });
+
   it('GIVEN loadStates on then off WHEN the files are listed THEN no load-state doc remains on disk or in the index', async () => {
     const files = await homeFiles();
     await writeDocsFixture(files, HOME, posixPaths, { loadStates: true });

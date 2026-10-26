@@ -338,6 +338,46 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
     { keys: ['h', 'h'], expect: '[docs] collapsed Rules' },
   ];
+  const recencyAndStars: SelfTestStep[] = [
+    { keys: ['l'], expect: '[docs] expanded Rules' },
+    {
+      keys: ['l'],
+      expect: '[docs] selected Style',
+      why: 'Style was loaded and neat.md never was, so Style leads Rules though neat.md comes first by title.',
+    },
+    {
+      keys: ['s'],
+      expect: '[docs] starred Style',
+      checksFit: true,
+      screenshot: 'starred',
+      why: "The screenshot shows the star on both Style rows and Style's time at its row's end.",
+    },
+    {
+      keys: ['g', 'g'],
+      expect: '[docs] selected Starred',
+      why: 'The Starred group shows above Mine.',
+    },
+    {
+      keys: ['l'],
+      expect: '[docs] selected Style',
+      why: 'A Starred group that first shows starts expanded, and it holds Style.',
+    },
+    {
+      keys: ['j', 'j', 'j', 'j', 'j', 'j', 's'],
+      expect: '[docs] unstarred Style',
+      why: "Six rows down from Starred's Style are Mine, Global, Instructions, CLAUDE.md, Rules, then Style in its usual place.",
+    },
+    {
+      keys: ['g', 'g'],
+      expect: '[docs] selected Mine',
+      why: 'Unstarring the only starred doc removes the Starred group.',
+    },
+    {
+      keys: ['j', 'j', 'j', 'j', 'h'],
+      expect: '[docs] collapsed Rules',
+      why: 'Global, Instructions, CLAUDE.md, then Rules; h collapses it, where detail views starts.',
+    },
+  ];
   const detailViews: SelfTestStep[] = [
     { keys: ['j', 'l'], expect: '[docs] expanded Hooks' },
     { keys: ['j', 'l'], expect: '[docs] opened settings.json' },
@@ -556,6 +596,11 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       name: 'tree filter',
       why: '/ filters the tree and Enter keeps the filter: Enter steps into the first child it shows, a trash asked on a match is kept by n or Esc, a filter matching nothing says so, and / Esc clear it; h goes up and collapses.',
       steps: treeFilter,
+    },
+    {
+      name: 'recency and stars',
+      why: 'Rules lists its loaded doc before a never-loaded one that comes first by title; s stars a doc into a Starred group above Mine, shown expanded and starred in both places, and s on its usual row unstars it and removes the group.',
+      steps: recencyAndStars,
     },
     {
       name: 'detail views',

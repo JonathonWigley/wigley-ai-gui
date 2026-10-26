@@ -231,6 +231,7 @@ function indexDocument(
       path: fixture.styleRule,
       title: 'Style',
       meta: { paths: [] },
+      lastLoaded: '2026-10-18T12:00:00.000Z',
     }),
     entry({
       id: `${fixture.settings}#hook:PreToolUse:0`,
