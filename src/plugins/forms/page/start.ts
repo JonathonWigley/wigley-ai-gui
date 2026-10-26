@@ -7,9 +7,14 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
+  createEditorBoxes,
+  type EditorBoxes,
+} from '../../../shared/page/editor-boxes';
+import {
   createLayoutLoader,
   showLayouts,
 } from '../../../shared/page/layout-loader';
+import { createReducerStore } from '../../../shared/page/reducer-store';
 import type {
   SessionsPageEvents,
   SessionsPageExports,
@@ -23,11 +28,16 @@ import type {
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { formsManifest } from '../manifest';
-import { startAutosave } from './autosave';
-import { focusActionFor } from './boxes';
+import { startRoundAutosave } from './autosave';
+import { type BoxRef, FORMS_BOX_IDENTITY, focusActionFor } from './boxes';
 import { createFormsContributions } from './contributions';
-import { createEditorBoxes, type EditorBoxes } from './editor-boxes';
-import { activeRound, buildBody, initialState } from './form-state';
+import {
+  activeRound,
+  apply,
+  buildBody,
+  type FormsStore,
+  initialState,
+} from './form-state';
 import {
   closeRoundFromMain,
   formsCommandHandlers,
@@ -38,7 +48,6 @@ import {
   openRoundOf,
   startFormsEvents,
 } from './forms-events';
-import { createFormsStore, type FormsStore } from './forms-store';
 import { mountFormsView } from './forms-view';
 import { readLayout } from './layout/read-layout';
 import { roundLayoutNames } from './layout/layout-resolver';
@@ -52,7 +61,7 @@ type FormsApi = PageApi<
 >;
 
 // Each box's edits reach the store, and a box taking focus focuses its item.
-function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes {
+function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes<BoxRef> {
   return createEditorBoxes(
     api.services.editor,
     {
@@ -71,6 +80,7 @@ function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes {
       },
     },
     api.services.log,
+    FORMS_BOX_IDENTITY,
   );
 }
 
@@ -127,8 +137,9 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
   start(api: FormsApi) {
     const { services } = api;
     const sessions = api.dependency<SessionsPageExports>('sessions');
-    const store = createFormsStore(
+    const store = createReducerStore(
       initialState([], sessions.selectedSessionId()),
+      apply,
     );
     const boxes = createBoxes(api, store);
     const contributions = createFormsContributions();
@@ -169,7 +180,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
     api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
       view.forgetSession(sessionId),
     );
-    startAutosave({
+    startRoundAutosave({
       store,
       save: (roundId, body) => api.channel.invoke('draft', roundId, body),
       delayMs: () => api.settings().autosaveDelayMs,

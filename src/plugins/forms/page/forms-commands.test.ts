@@ -6,10 +6,12 @@ import type {
   TextEditor,
 } from '../../../contracts/editor';
 import type { PageCommandContext, ToastTone } from '../../../contracts/plugin';
+import { createReducerStore } from '../../../shared/page/reducer-store';
 import type { Finding, Question, RoundEnd } from '../contract';
 import type { BoxRef } from './boxes';
 import {
   activeRound,
+  apply,
   buildBody,
   focusedItem,
   initialState,
@@ -20,7 +22,6 @@ import {
   guardClose,
 } from './forms-commands';
 import { type FormsPageEvent, startFormsEvents } from './forms-events';
-import { createFormsStore } from './forms-store';
 import { finding, notice, presentedRound, question } from './test-rounds';
 
 type FormsCommand = keyof ReturnType<typeof formsCommandHandlers>;
@@ -46,7 +47,7 @@ function setup(
   findings: Finding[] = [],
   questions: Question[] = [question('Alpha'), question('Beta')],
 ) {
-  const store = createFormsStore(
+  const store = createReducerStore(
     initialState(
       [
         presentedRound('r1', {
@@ -57,6 +58,7 @@ function setup(
       ],
       'r1-session',
     ),
+    apply,
   );
   const focused: BoxRef[] = [];
   const focusOptions: (FocusOptions | undefined)[] = [];

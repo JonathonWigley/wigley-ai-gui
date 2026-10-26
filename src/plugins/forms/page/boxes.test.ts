@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stepBox } from '../../../shared/page/editor-boxes';
 import {
   type BoxRef,
   boxDescription,
@@ -7,7 +8,6 @@ import {
   isBoxShown,
   shownBox,
   shownBoxes,
-  stepBox,
 } from './boxes';
 import {
   apply,
@@ -94,22 +94,24 @@ describe('stepBox', () => {
   const dontAskOn = stateAfter(onAlpha, { type: 'toggleDontAsk' });
 
   it('steps to the next and previous shown box', () => {
-    expect(stepBox(dontAskOn, notes1, 1)).toEqual(reason1);
-    expect(stepBox(dontAskOn, reason1, -1)).toEqual(notes1);
+    expect(stepBox(shownBoxes(dontAskOn), boxKey, notes1, 1)).toEqual(reason1);
+    expect(stepBox(shownBoxes(dontAskOn), boxKey, reason1, -1)).toEqual(notes1);
   });
 
   it('clamps at both ends', () => {
-    expect(stepBox(dontAskOn, reason1, 1)).toEqual(reason1);
-    expect(stepBox(dontAskOn, notes1, -1)).toEqual(notes1);
+    expect(stepBox(shownBoxes(dontAskOn), boxKey, reason1, 1)).toEqual(reason1);
+    expect(stepBox(shownBoxes(dontAskOn), boxKey, notes1, -1)).toEqual(notes1);
   });
 
   it('starts from the first box without a box, or from a hidden one', () => {
-    expect(stepBox(dontAskOn, null, 1)).toEqual(notes1);
-    expect(stepBox(dontAskOn, comment, 1)).toEqual(notes1);
+    expect(stepBox(shownBoxes(dontAskOn), boxKey, null, 1)).toEqual(notes1);
+    expect(stepBox(shownBoxes(dontAskOn), boxKey, comment, 1)).toEqual(notes1);
   });
 
   it('finds nothing when no box is shown', () => {
-    expect(stepBox(initialState([], null), null, 1)).toBeNull();
+    expect(
+      stepBox(shownBoxes(initialState([], null)), boxKey, null, 1),
+    ).toBeNull();
   });
 });
 

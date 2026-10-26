@@ -4,13 +4,13 @@ import type {
   EditorHost,
   FocusOptions,
 } from '../../../contracts/editor';
+import { createEditorBoxes } from '../../../shared/page/editor-boxes';
 import type { Layout } from '../layouts/layout';
-import type { BoxRef } from './boxes';
+import { type BoxRef, FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
-import { createEditorBoxes } from './editor-boxes';
 import { apply, type FormsState, initialState } from './form-state';
 import { asFake, findAll, installFakeDom } from './layout/test-dom';
-import { createRoundView, keepFocusedBox } from './round-view';
+import { createRoundView } from './round-view';
 import { presentedRound } from './test-rounds';
 
 interface CreatedEditor {
@@ -48,78 +48,16 @@ function fakeHost() {
   return { host, created };
 }
 
-const parent = {} as HTMLElement;
-const notes: BoxRef = {
-  roundId: 'r1',
-  target: { field: 'notes', item: { kind: 'question', index: 1 } },
-};
-const note: BoxRef = { roundId: 'r1', target: { field: 'note' } };
-const other: BoxRef = { roundId: 'r2', target: { field: 'note' } };
-
 function setup() {
   const { host, created } = fakeHost();
   const boxes = createEditorBoxes(
     host,
     { changed: () => undefined, activated: () => undefined },
     () => undefined,
+    FORMS_BOX_IDENTITY,
   );
-  // Destroys round r1's boxes and mounts `remounted` again, as a rebuild does.
-  const rebuildWith = (remounted: BoxRef[]) => () => {
-    boxes.destroyRound('r1');
-    for (const box of remounted) {
-      boxes.mount(parent, box, '');
-    }
-  };
-  return { boxes, created, rebuildWith };
+  return { boxes, created };
 }
-
-describe('keepFocusedBox', () => {
-  it('focuses the round box that had focus again after the rebuild', () => {
-    const { boxes, created, rebuildWith } = setup();
-    boxes.mount(parent, notes, '');
-    boxes.mount(parent, note, '');
-    boxes.focus(notes);
-
-    keepFocusedBox(boxes, 'r1', rebuildWith([notes, note]));
-
-    expect(boxes.active()).toEqual(notes);
-    expect(created[2].focusOptions).toEqual([undefined]);
-  });
-
-  it('brings a box in insert mode back in insert mode at its end', () => {
-    const { boxes, created, rebuildWith } = setup();
-    boxes.mount(parent, notes, '');
-    boxes.focus(notes);
-    created[0].events.modeChanged({ mode: 'insert', subMode: '' });
-
-    keepFocusedBox(boxes, 'r1', rebuildWith([notes]));
-
-    expect(boxes.active()).toEqual(notes);
-    expect(created[1].focusOptions).toEqual([{ insertAtEnd: true }]);
-  });
-
-  it('focuses nothing when the rebuilt round no longer mounts the box', () => {
-    const { boxes, rebuildWith } = setup();
-    boxes.mount(parent, notes, '');
-    boxes.focus(notes);
-
-    keepFocusedBox(boxes, 'r1', rebuildWith([note]));
-
-    expect(boxes.active()).toBeNull();
-  });
-
-  it("leaves another round's focused box alone", () => {
-    const { boxes, created, rebuildWith } = setup();
-    boxes.mount(parent, notes, '');
-    boxes.mount(parent, other, '');
-    boxes.focus(other);
-
-    keepFocusedBox(boxes, 'r1', rebuildWith([notes]));
-
-    expect(boxes.active()).toEqual(other);
-    expect(created[2].focusOptions).toEqual([]);
-  });
-});
 
 // A layout of bare panes and question cards, which leave every box to the
 // app.

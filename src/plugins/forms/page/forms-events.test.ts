@@ -4,6 +4,7 @@ import {
   buildBody,
   type FormsAction,
   type FormsState,
+  type FormsStore,
   initialState,
 } from './form-state';
 import {
@@ -12,7 +13,6 @@ import {
   formsEventsBetween,
   startFormsEvents,
 } from './forms-events';
-import type { FormsStore } from './forms-store';
 import { presentedRound } from './test-rounds';
 
 const presented = presentedRound('r1');

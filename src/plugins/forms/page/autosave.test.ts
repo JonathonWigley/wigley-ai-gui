@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Timers } from '../../../contracts/ambient';
+import { saveState } from '../../../shared/page/autosave';
+import { createReducerStore } from '../../../shared/page/reducer-store';
 import type { FormBody } from '../contract';
-import { startAutosave } from './autosave';
-import { activeRound, initialState, saveState } from './form-state';
-import { createFormsStore, type FormsStore } from './forms-store';
+import { startRoundAutosave } from './autosave';
+import {
+  activeRound,
+  apply,
+  type FormsStore,
+  initialState,
+} from './form-state';
 import { presentedRound } from './test-rounds';
 
 const DELAY_MS = 400;
@@ -35,12 +41,13 @@ function setup(
   save: (roundId: string, body: FormBody) => Promise<void>,
   delayMs: () => number = () => DELAY_MS,
 ) {
-  const store = createFormsStore(
+  const store = createReducerStore(
     initialState([presentedRound('r1')], 'r1-session'),
+    apply,
   );
   const clock = fakeTimers();
   const logs: string[] = [];
-  startAutosave({
+  startRoundAutosave({
     store,
     save,
     delayMs,
@@ -87,7 +94,7 @@ function saveErrorOf(store: FormsStore) {
   return activeRound(store.get())?.saveError;
 }
 
-describe('startAutosave', () => {
+describe('startRoundAutosave', () => {
   it('saves once after edits pause, with the latest text', async () => {
     const saves: { roundId: string; body: FormBody }[] = [];
     const { store, scheduled, runDue } = setup(async (roundId, body) => {

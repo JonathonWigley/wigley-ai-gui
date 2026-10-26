@@ -4,6 +4,7 @@ import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
 import { textButton } from '../../../../shared/page/ui/button';
+import { appendKeyHint, keyHint } from '../../../../shared/page/key-hint';
 import { card as cardPart } from '../../../../shared/page/ui/card';
 import { kbd } from '../../../../shared/page/ui/kbd';
 import { errorText } from '../../../../shared/error-text';
@@ -37,13 +38,11 @@ import {
   type TextTarget,
 } from '../form-state';
 import {
-  appendKeyHint,
   buildChoiceList,
   buildChoiceReason,
   buildField,
   buildItemHead,
   buildSection,
-  keyHint,
   statusLabel,
 } from '../kinds/card-parts';
 import type { CardDeps, CardInputs, CardKits } from '../kinds/item-format';

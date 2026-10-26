@@ -1,9 +1,8 @@
 import type { CommandId } from '../../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import type { Platform } from '../../../../contracts/platform';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
+import { appendKeyHint } from '../../../../shared/page/key-hint';
 import { inputFrame } from '../../../../shared/page/ui/input-frame';
-import { kbd } from '../../../../shared/page/ui/kbd';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag } from '../../../../shared/page/ui/tag';
 import type { AnswerStatus, Round } from '../../contract';
@@ -34,42 +33,6 @@ export function labelFor(railPrefix: string, index: number): string {
 // The round's heading and overview, as every card input carries them.
 export function roundInfo(round: Round): RoundInfo {
   return { heading: round.heading, overview: round.overview };
-}
-
-// The hint of `keys` as the keymap prints them, drawn for `platform`; null
-// for null keys, which draw nothing.
-export function keyHint(
-  keys: string | null,
-  platform: Platform,
-): HTMLElement | null {
-  return keys === null ? null : kbd(keys, platform);
-}
-
-// Appends the hint of `readKeys()` to the end of `control`, and returns the
-// redraw that shows `readKeys()` there again in its place, leaving the hint
-// alone while the keys read the same.
-export function appendKeyHint(
-  control: HTMLElement,
-  readKeys: () => string | null,
-  platform: Platform,
-): () => void {
-  let shownKeys = readKeys();
-  let hint = keyHint(shownKeys, platform);
-  if (hint !== null) {
-    control.append(hint);
-  }
-  return () => {
-    const keys = readKeys();
-    if (keys === shownKeys) {
-      return;
-    }
-    hint?.remove();
-    shownKeys = keys;
-    hint = keyHint(keys, platform);
-    if (hint !== null) {
-      control.append(hint);
-    }
-  };
 }
 
 // The header naming the item's kind as a tag, with the status slot after it.

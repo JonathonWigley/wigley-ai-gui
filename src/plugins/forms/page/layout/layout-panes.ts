@@ -4,6 +4,7 @@ import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
 import { errorText } from '../../../../shared/error-text';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
+import { appendKeyHint, keyHint } from '../../../../shared/page/key-hint';
 import {
   type ButtonVariant,
   textButton,
@@ -34,13 +35,7 @@ import {
   type RoundState,
   type TextTarget,
 } from '../form-state';
-import {
-  appendKeyHint,
-  buildField,
-  keyHint,
-  roundInfo,
-  statusLabel,
-} from '../kinds/card-parts';
+import { buildField, roundInfo, statusLabel } from '../kinds/card-parts';
 import { FORMATS, itemLabel } from '../kinds/formats';
 import {
   pickRailItem,

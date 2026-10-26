@@ -6,11 +6,11 @@ import {
   answerStatus,
   buildBody,
   type FormsState,
+  type FormsStore,
   itemAnswer,
   pickNumber,
   type RoundState,
 } from './form-state';
-import type { FormsStore } from './forms-store';
 
 // One forms page event with its payload, as `api.events.emit` takes them.
 export type FormsPageEvent = {

@@ -8,6 +8,7 @@ import type {
   Question,
   Round,
 } from '../contract';
+import { saveState } from '../../../shared/page/autosave';
 import {
   activeRound,
   answerStatus,
@@ -17,7 +18,6 @@ import {
   initialState,
   progress,
   railItems,
-  saveState,
   type FormsAction,
   type FormsState,
   type RoundState,

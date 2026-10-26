@@ -1,14 +1,15 @@
-import { apply, type FormsAction, type FormsState } from './form-state';
-
-export interface FormsStore {
-  get(): FormsState;
+export interface ReducerStore<State, Action> {
+  get(): State;
   // Applies the action; listeners run only when the state changed.
-  dispatch(action: FormsAction): void;
+  dispatch(action: Action): void;
   // Listeners read `get()`, so a dispatch made inside one stays consistent.
   subscribe(listener: () => void): void;
 }
 
-export function createFormsStore(initial: FormsState): FormsStore {
+export function createReducerStore<State, Action>(
+  initial: State,
+  apply: (state: State, action: Action) => State,
+): ReducerStore<State, Action> {
   let state = initial;
   const listeners: (() => void)[] = [];
   return {

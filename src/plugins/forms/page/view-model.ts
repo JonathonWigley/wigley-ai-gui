@@ -1,4 +1,9 @@
 import type { Log } from '../../../contracts/log';
+import {
+  type SaveState,
+  saveLabel,
+  saveState,
+} from '../../../shared/page/autosave';
 import type { DotStatus } from '../../../shared/page/ui/status-dot';
 import type {
   AnswerableKind,
@@ -23,8 +28,6 @@ import {
   progress,
   type RailItem,
   type RoundState,
-  type SaveState,
-  saveState,
 } from './form-state';
 import { FORMATS, itemLabel } from './kinds/formats';
 
@@ -62,12 +65,6 @@ export interface ReviewRow {
   dontAskReason: string;
   isCursor: boolean;
 }
-
-const SAVE_LABELS: Record<SaveState, string> = {
-  saved: 'Saved',
-  saving: 'Saving…',
-  unsaved: 'Unsaved',
-};
 
 // Findings, then questions, as answerableItems orders them.
 export function reviewRows(round: RoundState): ReviewRow[] {
@@ -159,12 +156,6 @@ export function reviewSummaryText(counts: Progress): string {
       ? ` ${counts.untouched} not answered; they are sent as untouched.`
       : '';
   return `${progressText(counts)}.${untouched}`;
-}
-
-// `error` is the last failed save's message, shown while the round is unsaved.
-export function saveLabel(state: SaveState, error: string | null): string {
-  const hasError = state === 'unsaved' && error !== null;
-  return hasError ? `${SAVE_LABELS[state]} — ${error}` : SAVE_LABELS[state];
 }
 
 // The status line's save text: `Sending…` while the round's finish is with

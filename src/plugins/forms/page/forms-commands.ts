@@ -11,16 +11,17 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { scrollText } from '../../../shared/content-scroll';
+import { type EditorBoxes, stepBox } from '../../../shared/page/editor-boxes';
 import type { FormsView, RoundClosed, RoundEnd } from '../contract';
 import type { formsManifest } from '../manifest';
 import {
   type BoxField,
   type BoxRef,
+  boxKey,
   focusActionFor,
   shownBox,
-  stepBox,
+  shownBoxes,
 } from './boxes';
-import type { EditorBoxes } from './editor-boxes';
 import {
   activeRound,
   type AnswerableItem,
@@ -28,6 +29,7 @@ import {
   focusedItem,
   type FormsAction,
   type FormsState,
+  type FormsStore,
   type ItemAnswer,
   itemAnswer,
   pickNumber,
@@ -35,12 +37,11 @@ import {
   roundOfSession,
   unansweredItem,
 } from './form-state';
-import type { FormsStore } from './forms-store';
 import { itemName, jumpedToLine, jumpMoved } from './view-model';
 
 export interface FormsCommandDeps {
   store: FormsStore;
-  boxes: Pick<EditorBoxes, 'focus' | 'leave' | 'active' | 'boxOf'>;
+  boxes: Pick<EditorBoxes<BoxRef>, 'focus' | 'leave' | 'active' | 'boxOf'>;
   // Hands the finished round to main; rejects with the reason when main keeps
   // the round open.
   finish(roundId: string, end: RoundEnd): Promise<void>;
@@ -261,7 +262,7 @@ function stepFocus(
   step: number,
 ) {
   const from = boxIn(deps, context) ?? null;
-  const next = stepBox(deps.store.get(), from, step);
+  const next = stepBox(shownBoxes(deps.store.get()), boxKey, from, step);
   if (next !== null) {
     deps.boxes.focus(next);
   }

@@ -1,3 +1,4 @@
+import type { BoxIdentity } from '../../../shared/page/editor-boxes';
 import {
   activeRound,
   focusedItem,
@@ -42,6 +43,14 @@ export function boxDescription(box: BoxRef): string {
       return `${target.field} on ${target.item.kind} ${target.item.index}`;
   }
 }
+
+// Forms' boxes, one round's boxes to a form.
+export const FORMS_BOX_IDENTITY: BoxIdentity<BoxRef> = {
+  formIdOf: (box) => box.roundId,
+  keyOf: boxKey,
+  describe: boxDescription,
+  logSource: 'forms',
+};
 
 // The boxes the user can reach now, in Ctrl+n order: the forms view shows the
 // focused item's boxes, the review only the round note.
@@ -91,21 +100,6 @@ export function shownBox(state: FormsState, fields: BoxField[]): BoxRef | null {
   return (
     shownBoxes(state).find((box) => fields.includes(box.target.field)) ?? null
   );
-}
-
-// The shown box `step` places away from `from`, clamped at the ends; with no
-// `from`, or one no longer shown, the first shown box.
-export function stepBox(
-  state: FormsState,
-  from: BoxRef | null,
-  step: number,
-): BoxRef | null {
-  const boxes = shownBoxes(state);
-  const position = from === null ? -1 : boxes.map(boxKey).indexOf(boxKey(from));
-  if (position < 0) {
-    return boxes[0] ?? null;
-  }
-  return boxes[Math.min(Math.max(position + step, 0), boxes.length - 1)];
 }
 
 // Focuses the box's item in the active round; null for the round note or a

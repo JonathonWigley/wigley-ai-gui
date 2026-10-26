@@ -12,6 +12,8 @@ import type {
   Round,
   RoundEnd,
 } from '../contract';
+import { finishSave, startSave } from '../../../shared/page/autosave';
+import type { ReducerStore } from '../../../shared/page/reducer-store';
 import { actionLabel } from '../finding-origins';
 import {
   findingEntries,
@@ -19,8 +21,6 @@ import {
   findingPickIsComplete,
   isFindingAction,
 } from '../finding-pick';
-
-export type SaveState = 'saved' | 'saving' | 'unsaved';
 
 // `index` is 1-based within its kind, as the forms contract numbers items.
 export type RailItem = { kind: ItemKind; index: number };
@@ -249,6 +249,9 @@ const SENDING_ACTIONS: ReadonlySet<FormsAction['type']> = new Set([
   'saveFinished',
   'sendFailed',
 ]);
+
+// The forms page's store, over `apply`.
+export type FormsStore = ReducerStore<FormsState, FormsAction>;
 
 // Returns `state` itself when the action changes nothing. Item actions apply
 // only in the forms view. While the active round is sending, only the
@@ -490,13 +493,6 @@ export function progress(round: RoundState): Progress {
     untouched: count('untouched'),
     total: statuses.length,
   };
-}
-
-export function saveState(round: RoundState): SaveState {
-  if (round.savedRevision === round.revision) {
-    return 'saved';
-  }
-  return round.savingRevision === round.revision ? 'saving' : 'unsaved';
 }
 
 // The saved-round body; a not-applicable answer keeps its choice.
@@ -1022,33 +1018,4 @@ function setText(
       return updateItemAnswer(round, item, writeField);
     }
   }
-}
-
-function startSave(round: RoundState, revision: number): RoundState {
-  const isUnchanged =
-    round.savingRevision === revision && round.saveError === null;
-  return isUnchanged
-    ? round
-    : { ...round, savingRevision: revision, saveError: null };
-}
-
-// `error` is null for a save that succeeded.
-function finishSave(
-  round: RoundState,
-  revision: number,
-  error: string | null,
-): RoundState {
-  const savingRevision =
-    round.savingRevision === revision ? null : round.savingRevision;
-  const savedRevision =
-    error === null
-      ? Math.max(round.savedRevision, revision)
-      : round.savedRevision;
-  const isUnchanged =
-    savingRevision === round.savingRevision &&
-    savedRevision === round.savedRevision &&
-    error === round.saveError;
-  return isUnchanged
-    ? round
-    : { ...round, savingRevision, savedRevision, saveError: error };
 }

@@ -4,9 +4,17 @@ import type {
   EditorHost,
   FocusOptions,
   TextEditor,
-} from '../../../contracts/editor';
-import type { BoxRef } from './boxes';
-import { createEditorBoxes } from './editor-boxes';
+} from '../../contracts/editor';
+import {
+  type BoxIdentity,
+  createEditorBoxes,
+  keepFocusedBox,
+} from './editor-boxes';
+
+interface TestBox {
+  formId: string;
+  key: string;
+}
 
 interface FakeEditor extends TextEditor {
   focusCalls: number;
@@ -44,7 +52,7 @@ function fakeHost() {
       return editor;
     },
     createDocument: () => {
-      throw new Error('not used by forms');
+      throw new Error('not used by editor boxes');
     },
     contains: () => false,
     typeInto: () => {},
@@ -55,21 +63,23 @@ function fakeHost() {
   return { host, created };
 }
 
-const parent = {} as HTMLElement;
-const notes: BoxRef = {
-  roundId: 'r1',
-  target: { field: 'notes', item: { kind: 'question', index: 1 } },
+const identity: BoxIdentity<TestBox> = {
+  formIdOf: (box) => box.formId,
+  keyOf: (box) => box.key,
+  describe: (box) => box.key,
+  logSource: 'test',
 };
-const reason: BoxRef = {
-  roundId: 'r1',
-  target: { field: 'dontAskReason', item: { kind: 'question', index: 1 } },
-};
-const other: BoxRef = { roundId: 'r2', target: { field: 'note' } };
 
-function setup() {
+const parent = {} as HTMLElement;
+const notes: TestBox = { formId: 'f1', key: 'f1/notes' };
+const reason: TestBox = { formId: 'f1', key: 'f1/reason' };
+const other: TestBox = { formId: 'f2', key: 'f2/note' };
+
+// Editor boxes with no box mounted, logging into `logs`.
+function emptySetup() {
   const { host, created } = fakeHost();
-  const changes: { box: BoxRef; text: string }[] = [];
-  const activated: BoxRef[] = [];
+  const changes: { box: TestBox; text: string }[] = [];
+  const activated: TestBox[] = [];
   const logs: string[] = [];
   const boxes = createEditorBoxes(
     host,
@@ -78,11 +88,17 @@ function setup() {
       activated: (box) => activated.push(box),
     },
     (_source, message) => logs.push(message),
+    identity,
   );
-  boxes.mount(parent, notes, '');
-  boxes.mount(parent, reason, '');
-  boxes.mount(parent, other, '');
   return { boxes, created, changes, activated, logs };
+}
+
+function setup() {
+  const made = emptySetup();
+  made.boxes.mount(parent, notes, '');
+  made.boxes.mount(parent, reason, '');
+  made.boxes.mount(parent, other, '');
+  return made;
 }
 
 describe('createEditorBoxes', () => {
@@ -94,7 +110,7 @@ describe('createEditorBoxes', () => {
     expect(created[0].editor.focusCalls).toBe(1);
     expect(boxes.active()).toEqual(notes);
     expect(activated).toEqual([notes]);
-    expect(logs).toEqual(['focused notes on question 1']);
+    expect(logs).toEqual(['focused f1/notes']);
   });
 
   it('hands the focus options to the editor', () => {
@@ -152,11 +168,11 @@ describe('createEditorBoxes', () => {
     expect(changes).toEqual([{ box: reason, text: 'because' }]);
   });
 
-  it("finds a box by its editor, and destroys only one round's editors", () => {
+  it("finds a box by its editor, and destroys only one form's editors", () => {
     const { boxes, created } = setup();
     boxes.focus(notes);
 
-    boxes.destroyRound('r1');
+    boxes.destroyForm('f1');
 
     expect(created.map((entry) => entry.editor.isDestroyed)).toEqual([
       true,
@@ -183,11 +199,71 @@ describe('createEditorBoxes', () => {
 
   it('refuses a box mounted twice, and focusing a box never mounted', () => {
     const { boxes } = setup();
-    expect(() => boxes.mount(parent, notes, '')).toThrow(
-      /r1\/notes\/question\/1/,
+    expect(() => boxes.mount(parent, notes, '')).toThrow(/f1\/notes/);
+    expect(() => boxes.focus({ formId: 'f9', key: 'f9/note' })).toThrow(
+      /f9\/note/,
     );
-    expect(() =>
-      boxes.focus({ roundId: 'r9', target: { field: 'note' } }),
-    ).toThrow(/r9\/note/);
+  });
+});
+
+describe('keepFocusedBox', () => {
+  const note: TestBox = { formId: 'f1', key: 'f1/note' };
+
+  function keepSetup() {
+    const { boxes, created } = emptySetup();
+    // Destroys form f1's boxes and mounts `remounted` again, as a rebuild does.
+    const rebuildWith = (remounted: TestBox[]) => () => {
+      boxes.destroyForm('f1');
+      for (const box of remounted) {
+        boxes.mount(parent, box, '');
+      }
+    };
+    return { boxes, created, rebuildWith };
+  }
+
+  it('focuses the form box that had focus again after the rebuild', () => {
+    const { boxes, created, rebuildWith } = keepSetup();
+    boxes.mount(parent, notes, '');
+    boxes.mount(parent, note, '');
+    boxes.focus(notes);
+
+    keepFocusedBox(boxes, 'f1', rebuildWith([notes, note]));
+
+    expect(boxes.active()).toEqual(notes);
+    expect(created[2].editor.focusOptions).toEqual([undefined]);
+  });
+
+  it('brings a box in insert mode back in insert mode at its end', () => {
+    const { boxes, created, rebuildWith } = keepSetup();
+    boxes.mount(parent, notes, '');
+    boxes.focus(notes);
+    created[0].events.modeChanged({ mode: 'insert', subMode: '' });
+
+    keepFocusedBox(boxes, 'f1', rebuildWith([notes]));
+
+    expect(boxes.active()).toEqual(notes);
+    expect(created[1].editor.focusOptions).toEqual([{ insertAtEnd: true }]);
+  });
+
+  it('focuses nothing when the rebuilt form no longer mounts the box', () => {
+    const { boxes, rebuildWith } = keepSetup();
+    boxes.mount(parent, notes, '');
+    boxes.focus(notes);
+
+    keepFocusedBox(boxes, 'f1', rebuildWith([note]));
+
+    expect(boxes.active()).toBeNull();
+  });
+
+  it("leaves another form's focused box alone", () => {
+    const { boxes, created, rebuildWith } = keepSetup();
+    boxes.mount(parent, notes, '');
+    boxes.mount(parent, other, '');
+    boxes.focus(other);
+
+    keepFocusedBox(boxes, 'f1', rebuildWith([notes]));
+
+    expect(boxes.active()).toEqual(other);
+    expect(created[2].editor.focusOptions).toEqual([]);
   });
 });

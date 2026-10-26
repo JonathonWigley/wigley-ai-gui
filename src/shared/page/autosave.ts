@@ -1,0 +1,159 @@
+import type { Timers } from '../../contracts/ambient';
+import type { Log } from '../../contracts/log';
+import { errorText } from '../error-text';
+
+export type SaveState = 'saved' | 'saving' | 'unsaved';
+
+// What autosave reads of one open form's state.
+export interface DraftRevisions {
+  // Counts body edits; a save carries the revision it sent.
+  revision: number;
+  savingRevision: number | null;
+  savedRevision: number;
+  // The last failed save's message; cleared when a save starts or succeeds.
+  saveError: string | null;
+}
+
+const SAVE_LABELS: Record<SaveState, string> = {
+  saved: 'Saved',
+  saving: 'Saving…',
+  unsaved: 'Unsaved',
+};
+
+export function saveState(draft: DraftRevisions): SaveState {
+  if (draft.savedRevision === draft.revision) {
+    return 'saved';
+  }
+  return draft.savingRevision === draft.revision ? 'saving' : 'unsaved';
+}
+
+export function startSave<Draft extends DraftRevisions>(
+  draft: Draft,
+  revision: number,
+): Draft {
+  const isUnchanged =
+    draft.savingRevision === revision && draft.saveError === null;
+  return isUnchanged
+    ? draft
+    : { ...draft, savingRevision: revision, saveError: null };
+}
+
+// `error` is null for a save that succeeded.
+export function finishSave<Draft extends DraftRevisions>(
+  draft: Draft,
+  revision: number,
+  error: string | null,
+): Draft {
+  const savingRevision =
+    draft.savingRevision === revision ? null : draft.savingRevision;
+  const savedRevision =
+    error === null
+      ? Math.max(draft.savedRevision, revision)
+      : draft.savedRevision;
+  const isUnchanged =
+    savingRevision === draft.savingRevision &&
+    savedRevision === draft.savedRevision &&
+    error === draft.saveError;
+  return isUnchanged
+    ? draft
+    : { ...draft, savingRevision, savedRevision, saveError: error };
+}
+
+// `error` is the last failed save's message, shown while the draft is unsaved.
+export function saveLabel(state: SaveState, error: string | null): string {
+  const hasError = state === 'unsaved' && error !== null;
+  return hasError ? `${SAVE_LABELS[state]} — ${error}` : SAVE_LABELS[state];
+}
+
+export interface AutosaveDeps<Draft extends DraftRevisions, Body> {
+  subscribe(listener: () => void): void;
+  // The open drafts now, read after each change `subscribe` reports.
+  drafts(): readonly Draft[];
+  idOf(draft: Draft): string;
+  bodyOf(draft: Draft): Body;
+  // Each dispatches the caller's own save action for draft `id`.
+  saveStarted(id: string, revision: number): void;
+  saveFinished(id: string, revision: number, error: string | null): void;
+  // Resolves once main has written the draft; rejects with main's error.
+  save(id: string, body: Body): Promise<void>;
+  // Read each time a save is scheduled.
+  delayMs(): number;
+  timers: Timers;
+  log: Log;
+  // The log line's source, the plugin id.
+  logSource: string;
+}
+
+interface PendingSave {
+  revision: number;
+  // null once a save of `revision` failed: the next edit schedules again.
+  handle: number | null;
+}
+
+// Saves a draft once its edits pause for `delayMs`. A save is in flight until
+// `save` settles; a failed one leaves the draft unsaved with its message, and
+// the next edit schedules a save again.
+export function startAutosave<Draft extends DraftRevisions, Body>(
+  deps: AutosaveDeps<Draft, Body>,
+): void {
+  const pending = new Map<string, PendingSave>();
+  deps.subscribe(() => {
+    const drafts = deps.drafts();
+    for (const [id, entry] of pending) {
+      if (!drafts.some((draft) => deps.idOf(draft) === id)) {
+        cancel(deps.timers, entry);
+        pending.delete(id);
+      }
+    }
+    for (const draft of drafts) {
+      const id = deps.idOf(draft);
+      const entry = pending.get(id);
+      const isUnsaved = saveState(draft) === 'unsaved';
+      const isHandled = entry?.revision === draft.revision;
+      if (!isUnsaved || isHandled) {
+        continue;
+      }
+      if (entry !== undefined) {
+        cancel(deps.timers, entry);
+      }
+      const handle = deps.timers.set(
+        () => void saveDraft(deps, pending, id),
+        deps.delayMs(),
+      );
+      pending.set(id, { revision: draft.revision, handle });
+    }
+  });
+}
+
+async function saveDraft<Draft extends DraftRevisions, Body>(
+  deps: AutosaveDeps<Draft, Body>,
+  pending: Map<string, PendingSave>,
+  id: string,
+) {
+  pending.delete(id);
+  const draft = deps.drafts().find((candidate) => deps.idOf(candidate) === id);
+  if (draft === undefined || saveState(draft) !== 'unsaved') {
+    return;
+  }
+  const { revision } = draft;
+  deps.saveStarted(id, revision);
+  try {
+    await deps.save(id, deps.bodyOf(draft));
+  } catch (error) {
+    const message = errorText(error);
+    // An edit made during the save has its own save scheduled already.
+    if (!pending.has(id)) {
+      pending.set(id, { revision, handle: null });
+    }
+    deps.log(deps.logSource, `draft not saved for ${id}: ${message}`);
+    deps.saveFinished(id, revision, message);
+    return;
+  }
+  deps.saveFinished(id, revision, null);
+}
+
+function cancel(timers: Timers, entry: PendingSave) {
+  if (entry.handle !== null) {
+    timers.clear(entry.handle);
+  }
+}

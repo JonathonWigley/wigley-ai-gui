@@ -5,32 +5,30 @@ import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Platform } from '../../../contracts/platform';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
+import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
 import { element } from '../../../shared/page/dom';
-import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
-import { createDialog, type Dialog } from '../../../shared/page/ui/dialog';
+import type { EditorBoxes } from '../../../shared/page/editor-boxes';
 import type { ShownLayouts } from '../../../shared/page/layout-loader';
-import { emptyState } from '../../../shared/page/ui/empty-state';
+import {
+  createSessionFormTabs,
+  type SessionFormTabs,
+} from '../../../shared/page/session-form-tabs';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
-import type {
-  SessionsPageExports,
-  SessionTabHandle,
-} from '../../sessions/contract';
-import { type FormsCommandName, formsCommand, formsScope } from '../ids';
+import type { SessionsPageExports } from '../../sessions/contract';
+import { formsCommand, formsScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
-import { isBoxShown } from './boxes';
+import { type BoxRef, isBoxShown } from './boxes';
 import type { FormsContributions } from './contributions';
-import type { EditorBoxes } from './editor-boxes';
-import { appendKeyHint } from './kinds/card-parts';
 import {
   activeRound,
   type FormsAction,
   type FormsState,
+  type FormsStore,
   type RoundState,
   roundOfSession,
 } from './form-state';
-import type { FormsStore } from './forms-store';
 import type { KitCommands } from './layout/kit-commands';
 import { createRoundView, type RoundView } from './round-view';
 import { roundSaveLabel, roundSaveState, sessionTitle } from './view-model';
@@ -53,7 +51,7 @@ export interface FormsViewDeps {
   onViewChanged(listener: () => void): void;
   pushConfirmScope(): PushedScope;
   store: FormsStore;
-  boxes: EditorBoxes;
+  boxes: EditorBoxes<BoxRef>;
   markdown: MarkdownRenderer;
   keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   run(command: CommandId): void;
@@ -87,15 +85,6 @@ export interface FormsView {
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
 }
 
-// A session's Form tab: it holds the session's round views and the idle
-// state, with the status last sent to the session's row.
-interface FormTab {
-  handle: SessionTabHandle;
-  element: HTMLElement;
-  idle: HTMLElement;
-  status: string;
-}
-
 // The whole forms UI: each round in its session's Form tab, the status line in
 // the status bar, the cancel prompt in the overlay layer, all serving the
 // active round. Every store change re-renders it; editors live in the round
@@ -108,64 +97,55 @@ interface FormTab {
 export function mountFormsView(deps: FormsViewDeps): FormsView {
   const { areas, store, boxes } = deps;
   const status = buildStatusLine(deps);
-  const confirm = buildConfirm(deps);
+  const tabs = createSessionFormTabs({
+    addTab: (sessionId, tab) => deps.sessions.addTab(sessionId, tab),
+    tabId: 'form',
+    title: 'Form',
+    className: 'form-tab',
+    idleText: "No round open. The agent's next round opens here.",
+    beforeClose: (sessionId) => deps.beforeClose(sessionId),
+    shown: () => deps.setScope(deps.store.get().view),
+  });
+  const updateStatus = () => status.update(store.get(), tabs.isShown());
+  const dispatch = (action: FormsAction) => store.dispatch(action);
+  const confirm = createConfirmPrompt({
+    title: 'Cancel this round?',
+    body: 'The agent is told the round was cancelled. Your answers stay saved.',
+    keep: { label: 'Keep answering', command: formsCommand('dismissConfirm') },
+    confirm: { label: 'Cancel round', command: formsCommand('confirmCancel') },
+    scope: formsScope('confirm'),
+    keys: deps.keys,
+    run: (command) => deps.run(command),
+    platform: deps.platform,
+    pushScope: () => deps.pushConfirmScope(),
+    isAsked: () => store.get().view === 'confirm',
+    isSending: () => (activeRound(store.get())?.sending ?? null) !== null,
+    dismiss: () => dispatch({ type: 'dismissConfirm' }),
+    // Under the pushed scope a base change reaches no onViewChanged.
+    onBaseChanged: updateStatus,
+    log: deps.log,
+    logSource: 'forms',
+  });
   areas.statusBar.contribute(status.element);
   areas.overlay.contribute(confirm.element);
   const roundViews = new Map<string, RoundView>();
-  const formTabs = new Map<string, FormTab>();
-  const takeOvers: TakeOvers = new Map();
-  const dispatch = (action: FormsAction) => store.dispatch(action);
   const active: ActiveLayouts = {
     shown: {
       layouts: new Map<string, Layout>([['default', defaultLayout]]),
       user: 'default',
     },
   };
-  // The cancel prompt's pushed scope while the prompt shows, else null.
-  let confirmScope: PushedScope | null = null;
-  // Whether the base scope changed while the prompt's round was sending, so
-  // the prompt is dismissed once the send fails.
-  let isDismissOwed = false;
-  const isFormShown = () =>
-    [...formTabs.values()].some((tab) => tab.handle.isVisible());
-  const pushConfirmScope = () => {
-    const pushed = deps.pushConfirmScope();
-    pushed.onBaseChanged(() => {
-      // Under the pushed scope a base change reaches no onViewChanged.
-      updateStatus();
-      if (confirmScope !== pushed) {
-        return;
-      }
-      dispatch({ type: 'dismissConfirm' });
-      if (store.get().view !== 'confirm') {
-        deps.log('forms', 'cancel prompt dismissed: the view moved on');
-      } else if ((activeRound(store.get())?.sending ?? null) !== null) {
-        isDismissOwed = true;
-      }
-    });
-    confirmScope = pushed;
-  };
 
   const render = () => {
-    const state = store.get();
-    if (state.view !== 'confirm') {
-      isDismissOwed = false;
-    } else if (isDismissOwed && activeRound(state)?.sending === null) {
-      isDismissOwed = false;
-      dispatch({ type: 'dismissConfirm' });
-      deps.log('forms', 'cancel prompt dismissed: the view moved on');
+    if (!confirm.settleOwedDismiss()) {
       return;
     }
-    syncRoundViews(
-      state,
-      roundViews,
-      formTabs,
-      takeOvers,
-      active,
-      deps,
-      dispatch,
-    );
-    syncFormTabs(state, formTabs);
+    const state = store.get();
+    syncRoundViews(state, roundViews, tabs, active, deps, dispatch);
+    tabs.sync((sessionId) => {
+      const round = roundOfSession(state, sessionId);
+      return round === undefined ? null : sessionTitle(round);
+    });
     const view = state.view;
     const shown = view === 'idle' ? null : activeRound(state);
     for (const [roundId, roundView] of roundViews) {
@@ -176,41 +156,27 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     }
     // The prompt's scope comes off before the base changes, so forms' own view
     // change never reaches its listener, and goes on after, over `confirm`.
-    if (view !== 'confirm' && confirmScope !== null) {
-      confirm.hide();
-      confirmScope.pop();
-      confirmScope = null;
-    }
-    if (isFormShown()) {
+    confirm.hideIfDone();
+    if (tabs.isShown()) {
       deps.setScope(view);
     }
-    if (view === 'confirm' && confirmScope === null) {
-      confirm.show();
-      pushConfirmScope();
-    }
-    status.update(state, isFormShown());
+    confirm.showIfAsked();
+    status.update(state, tabs.isShown());
     const box = boxes.active();
     if (box !== null && !isBoxShown(state, box)) {
       boxes.leave();
     }
   };
-  const updateStatus = () => status.update(store.get(), isFormShown());
   store.subscribe(render);
   boxes.onChange(updateStatus);
   deps.onViewChanged(updateStatus);
   render();
   return {
     forgetSession(sessionId) {
-      formTabs.delete(sessionId);
-      destroySessionRoundViews(
-        sessionId,
-        store.get(),
-        roundViews,
-        takeOvers,
-        deps,
-      );
+      tabs.forget(sessionId);
+      destroySessionRoundViews(sessionId, store.get(), roundViews, tabs, deps);
     },
-    showForm: (sessionId) => formTabs.get(sessionId)?.handle.select(),
+    showForm: (sessionId) => tabs.select(sessionId),
     setLayouts(shown) {
       active.shown = shown;
       for (const round of store.get().rounds) {
@@ -231,34 +197,29 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   };
 }
 
-// Each open round's take over of its session's tabs, by round id.
-type TakeOvers = Map<string, { release(): void }>;
-
 // A round view per open round, in its session's Form tab: built when the
 // round appears, adding the Form tab when the session has none and taking
 // over the session with it; destroyed with its editors when the round leaves.
 function syncRoundViews(
   state: FormsState,
   roundViews: Map<string, RoundView>,
-  formTabs: Map<string, FormTab>,
-  takeOvers: TakeOvers,
+  tabs: SessionFormTabs,
   active: ActiveLayouts,
   deps: FormsViewDeps,
   dispatch: (action: FormsAction) => void,
 ) {
   for (const roundId of roundViews.keys()) {
     if (!state.rounds.some((round) => round.roundId === roundId)) {
-      destroyRoundView(roundId, roundViews, takeOvers, deps);
+      destroyRoundView(roundId, roundViews, tabs, deps);
     }
   }
   for (const round of state.rounds) {
     if (!roundViews.has(round.roundId)) {
-      const formTab = formTabOf(round.sessionId, formTabs, deps);
       roundViews.set(
         round.roundId,
-        showRound(round, formTab, active, deps, dispatch),
+        showRound(round, tabs, active, deps, dispatch),
       );
-      takeOvers.set(round.roundId, formTab.handle.takeOver());
+      tabs.takeOver(round.roundId, round.sessionId);
     }
   }
 }
@@ -267,12 +228,12 @@ function destroySessionRoundViews(
   sessionId: string,
   state: FormsState,
   roundViews: Map<string, RoundView>,
-  takeOvers: TakeOvers,
+  tabs: SessionFormTabs,
   deps: Pick<FormsViewDeps, 'boxes'>,
 ) {
   for (const round of state.rounds) {
     if (round.sessionId === sessionId && roundViews.has(round.roundId)) {
-      destroyRoundView(round.roundId, roundViews, takeOvers, deps);
+      destroyRoundView(round.roundId, roundViews, tabs, deps);
     }
   }
 }
@@ -282,51 +243,26 @@ function destroySessionRoundViews(
 function destroyRoundView(
   roundId: string,
   roundViews: Map<string, RoundView>,
-  takeOvers: TakeOvers,
+  tabs: SessionFormTabs,
   deps: Pick<FormsViewDeps, 'boxes'>,
 ) {
-  deps.boxes.destroyRound(roundId);
+  deps.boxes.destroyForm(roundId);
   const roundView = roundViews.get(roundId);
   roundView?.dispose();
   roundView?.element.remove();
   roundViews.delete(roundId);
-  takeOvers.get(roundId)?.release();
-  takeOvers.delete(roundId);
-}
-
-function formTabOf(
-  sessionId: string,
-  formTabs: Map<string, FormTab>,
-  deps: FormsViewDeps,
-): FormTab {
-  const existing = formTabs.get(sessionId);
-  if (existing !== undefined) {
-    return existing;
-  }
-  const tab = element('div', 'form-tab');
-  const idle = emptyState("No round open. The agent's next round opens here.");
-  tab.append(idle);
-  const handle = deps.sessions.addTab(sessionId, {
-    id: 'form',
-    title: 'Form',
-    element: tab,
-    beforeClose: () => deps.beforeClose(sessionId),
-    shown: () => deps.setScope(deps.store.get().view),
-  });
-  const created: FormTab = { handle, element: tab, idle, status: '' };
-  formTabs.set(sessionId, created);
-  return created;
+  tabs.release(roundId);
 }
 
 function showRound(
   round: RoundState,
-  formTab: FormTab,
+  tabs: SessionFormTabs,
   active: ActiveLayouts,
   deps: FormsViewDeps,
   dispatch: (action: FormsAction) => void,
 ): RoundView {
   return createRoundView(
-    (root) => formTab.element.insertBefore(root, formTab.idle),
+    (root) => tabs.mount(round.sessionId, root),
     round,
     active.shown,
     {
@@ -343,20 +279,6 @@ function showRound(
       log: deps.log,
     },
   );
-}
-
-// Shows each Form tab's idle state while its session has no round, and
-// sends the tab's status, the round's title or '' with none, when it changed.
-function syncFormTabs(state: FormsState, formTabs: Map<string, FormTab>) {
-  for (const [sessionId, formTab] of formTabs) {
-    const round = roundOfSession(state, sessionId);
-    formTab.idle.hidden = round !== undefined;
-    const status = round === undefined ? '' : sessionTitle(round);
-    if (formTab.status !== status) {
-      formTab.status = status;
-      formTab.handle.setStatus(status);
-    }
-  }
 }
 
 // The status line, hidden while no Form tab is the visible tab.
@@ -379,41 +301,4 @@ function buildStatusLine(deps: FormsViewDeps): {
       save.dataset.state = roundSave ?? '';
     },
   };
-}
-
-// The cancel prompt, the safe action first; each button shows the confirm
-// scope's keys for it, and shows them again after each keymap change, for as
-// long as the page lives, as the prompt does.
-function buildConfirm(
-  deps: Pick<FormsViewDeps, 'keys' | 'run' | 'platform'>,
-): Dialog {
-  const dialog = createDialog('Cancel this round?');
-  const confirmButton = (
-    label: string,
-    command: FormsCommandName,
-    variant: ButtonVariant,
-  ) => {
-    const control = textButton(label, () => deps.run(formsCommand(command)), {
-      variant,
-    });
-    const redrawKeys = appendKeyHint(
-      control,
-      () => deps.keys.keysFor(formsCommand(command), formsScope('confirm')),
-      deps.platform,
-    );
-    deps.keys.onChanged(redrawKeys);
-    return control;
-  };
-  dialog.body.append(
-    element(
-      'p',
-      '',
-      'The agent is told the round was cancelled. Your answers stay saved.',
-    ),
-  );
-  dialog.actions.append(
-    confirmButton('Keep answering', 'dismissConfirm', 'secondary'),
-    confirmButton('Cancel round', 'confirmCancel', 'danger'),
-  );
-  return dialog;
 }

@@ -11,11 +11,15 @@ import type { FormsView } from '../contract';
 import { formsCommand, formsScope } from '../ids';
 import type { Layout } from '../layouts/layout';
 import { element } from '../../../shared/page/dom';
+import {
+  type EditorBoxes,
+  keepFocusedBox,
+} from '../../../shared/page/editor-boxes';
 import type { ShownLayouts } from '../../../shared/page/layout-loader';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import type { FormsContributions } from './contributions';
-import type { EditorBoxes } from './editor-boxes';
+import type { BoxRef } from './boxes';
 import {
   type FormsAction,
   type FormsState,
@@ -54,14 +58,15 @@ import {
 export interface RoundViewDeps {
   markdown: MarkdownRenderer;
   boxes: Pick<
-    EditorBoxes,
+    EditorBoxes<BoxRef>,
     | 'mount'
     | 'destroyBox'
-    | 'destroyRound'
+    | 'destroyForm'
     | 'isMounted'
     | 'active'
     | 'activeMode'
     | 'focus'
+    | 'formIdOf'
   >;
   keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
   dispatch(action: FormsAction): void;
@@ -179,7 +184,7 @@ export function createRoundView(
       const showsSameItem = current.focus === shownFocus;
       const scrollTop = parts.main.scrollTop;
       keepFocusedBox(deps.boxes, current.roundId, () => {
-        deps.boxes.destroyRound(current.roundId);
+        deps.boxes.destroyForm(current.roundId);
         split.start.replaceChildren();
         split.end.replaceChildren();
         parts = build(current, picks);
@@ -222,25 +227,6 @@ export function createRoundView(
     }
   });
   return view;
-}
-
-// Runs `rebuild`, which destroys and remounts the boxes of round `roundId`,
-// then focuses the round's box that had focus before it again, when the
-// rebuilt round still mounts it. A box in insert mode comes back in insert
-// mode at its text's end; the cursor, any other vim mode and undo are lost.
-export function keepFocusedBox(
-  boxes: Pick<EditorBoxes, 'active' | 'activeMode' | 'focus' | 'isMounted'>,
-  roundId: string,
-  rebuild: () => void,
-) {
-  const active = boxes.active();
-  const focused = active?.roundId === roundId ? active : null;
-  const wasInserting = boxes.activeMode()?.mode === 'insert';
-  rebuild();
-  if (focused === null || !boxes.isMounted(focused)) {
-    return;
-  }
-  boxes.focus(focused, wasInserting ? { insertAtEnd: true } : undefined);
 }
 
 // Builds the rail pane into the split's start pane and the round's main
