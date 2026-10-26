@@ -1,0 +1,358 @@
+import { describe, expect, it } from 'vitest';
+import type { PrimerEntry } from '../contract';
+import {
+  activePrimer,
+  apply,
+  initialState,
+  type OpenPrimer,
+  type PrimerAction,
+  type PrimerState,
+  railRows,
+  scopeOf,
+  selectedEntry,
+  sessionTitle,
+  submitProblems,
+} from './primer-state';
+import {
+  presentedPrimer,
+  primerEntries,
+  primerEntry,
+  primerFeature,
+  primerItem,
+} from './test-primers';
+
+// One primer, `p1`, active in view 'primer'; rows: the feature (0), `1`
+// (1), `s1` (2), `extra-1` (3) unless `entries` says otherwise.
+function stateWith(entries: PrimerEntry[] = primerEntries()): PrimerState {
+  return initialState([presentedPrimer('p1', { entries })], 'p1-session');
+}
+
+function primerOf(state: PrimerState): OpenPrimer {
+  const primer = activePrimer(state);
+  if (primer === null) {
+    throw new Error('No primer is active');
+  }
+  return primer;
+}
+
+function applyAll(state: PrimerState, actions: PrimerAction[]): PrimerState {
+  return actions.reduce(apply, state);
+}
+
+// Selects row `row` of the active primer.
+function onRow(state: PrimerState, row: number): PrimerState {
+  return apply(state, { type: 'selectRow', row });
+}
+
+function setNewItemText(
+  state: PrimerState,
+  entryId: string,
+  value: string,
+): PrimerState {
+  return apply(state, {
+    type: 'setText',
+    primerId: 'p1',
+    target: { field: 'newItem', entryId },
+    value,
+  });
+}
+
+describe('primer state', () => {
+  it('restores a primer from its draft, and shows the same formId once', () => {
+    const draftEntries = [primerEntry('1', 'primer', { need: 'no' })];
+    const draftFeature = primerFeature({ name: 'Drafted' });
+    const presented = presentedPrimer('p1', {
+      draft: { feature: draftFeature, entries: draftEntries },
+    });
+    const state = initialState([presented], 'p1-session');
+
+    const primer = primerOf(state);
+    expect(primer.feature).toEqual(draftFeature);
+    expect(primer.entries).toEqual(draftEntries);
+    expect(primer.primer).toEqual(presented.form);
+    expect(state.view).toBe('primer');
+    expect(apply(state, { type: 'primerShown', primer: presented })).toBe(
+      state,
+    );
+  });
+
+  it('keeps a primer for another session in the background', () => {
+    const state = initialState([presentedPrimer('p1')], 'other-session');
+
+    expect(state.primers).toHaveLength(1);
+    expect(state.activePrimerId).toBeNull();
+    expect(state.view).toBe('idle');
+  });
+
+  it('orders the rail rows feature, primer, standing, extra', () => {
+    const state = stateWith([
+      primerEntry('x', 'extra'),
+      primerEntry('s', 'standing'),
+      primerEntry('p', 'primer'),
+    ]);
+
+    expect(railRows(primerOf(state))).toEqual([
+      { kind: 'feature' },
+      { kind: 'task', entryId: 'p' },
+      { kind: 'task', entryId: 's' },
+      { kind: 'task', entryId: 'x' },
+    ]);
+  });
+
+  it('clamps nextRow and prevRow at both ends and resets the item cursor', () => {
+    let state = applyAll(stateWith(), [
+      { type: 'nextRow' },
+      { type: 'nextItem' },
+    ]);
+    expect(primerOf(state).itemCursor).toBe(1);
+
+    state = apply(state, { type: 'nextRow' });
+    expect(primerOf(state)).toMatchObject({ railCursor: 2, itemCursor: 0 });
+    state = applyAll(state, [{ type: 'nextRow' }]);
+    expect(apply(state, { type: 'nextRow' })).toBe(state);
+    state = applyAll(state, [
+      { type: 'prevRow' },
+      { type: 'prevRow' },
+      { type: 'prevRow' },
+    ]);
+    expect(primerOf(state).railCursor).toBe(0);
+    expect(apply(state, { type: 'prevRow' })).toBe(state);
+  });
+
+  it('changes nothing when setNeed applies on the Feature row', () => {
+    const state = stateWith();
+
+    expect(apply(state, { type: 'setNeed', need: 'yes' })).toBe(state);
+  });
+
+  it('sets the need on the selected task and grows the revision by one', () => {
+    const state = onRow(stateWith(), 1);
+
+    const next = apply(state, { type: 'setNeed', need: 'yes' });
+
+    expect(selectedEntry(primerOf(next))?.need).toBe('yes');
+    expect(primerOf(next).revision).toBe(primerOf(state).revision + 1);
+  });
+
+  it('adds the trimmed add-item text as an item and clears the text', () => {
+    const state = setNewItemText(
+      onRow(stateWith(), 1),
+      '1',
+      '  Write the store ',
+    );
+
+    const next = apply(state, {
+      type: 'addItem',
+      primerId: 'p1',
+      entryId: '1',
+    });
+
+    const primer = primerOf(next);
+    expect(selectedEntry(primer)?.items.at(-1)).toEqual({
+      text: 'Write the store',
+      include: true,
+      comment: '',
+      added: true,
+    });
+    expect(primer.newItemTexts['1']).toBe('');
+    expect(primer.itemCursor).toBe(2);
+    expect(primer.revision).toBe(primerOf(state).revision + 1);
+  });
+
+  it('adds no item from blank text or onto a task holding 20 items', () => {
+    const blank = setNewItemText(onRow(stateWith(), 1), '1', '   ');
+    const fullEntries = [
+      primerEntry('1', 'primer', {
+        items: Array.from({ length: 20 }, (_, i) => primerItem(`Item ${i}`)),
+      }),
+    ];
+    const full = setNewItemText(onRow(stateWith(fullEntries), 1), '1', 'More');
+
+    expect(
+      apply(blank, { type: 'addItem', primerId: 'p1', entryId: '1' }),
+    ).toBe(blank);
+    expect(apply(full, { type: 'addItem', primerId: 'p1', entryId: '1' })).toBe(
+      full,
+    );
+  });
+
+  it('changes nothing when addExtraTask applies at 60 entries', () => {
+    const entries = Array.from({ length: 60 }, (_, i) =>
+      primerEntry(`${i + 1}`, 'primer'),
+    );
+    const state = stateWith(entries);
+
+    expect(apply(state, { type: 'addExtraTask' })).toBe(state);
+  });
+
+  it('gives a new extra task the smallest free id and selects it in the card', () => {
+    const state = stateWith([
+      primerEntry('extra-1', 'extra'),
+      primerEntry('extra-3', 'extra'),
+    ]);
+
+    const primer = primerOf(apply(state, { type: 'addExtraTask' }));
+
+    expect(primer.entries.at(-1)).toEqual({
+      id: 'extra-2',
+      group: 'extra',
+      number: null,
+      area: '',
+      question: '',
+      task: '',
+      need: 'yes',
+      evidence: '',
+      probes: '',
+      pointer: '',
+      comment: '',
+      items: [],
+    });
+    expect(selectedEntry(primer)?.id).toBe('extra-2');
+    expect(primer.pane).toBe('card');
+  });
+
+  it('refuses to remove a standing task', () => {
+    const state = onRow(stateWith(), 2);
+
+    expect(apply(state, { type: 'removeExtraTask' })).toBe(state);
+  });
+
+  it('removes the last extra task and clamps the cursor to the last row', () => {
+    const state = onRow(setNewItemText(stateWith(), 'extra-1', 'draft'), 3);
+
+    const primer = primerOf(apply(state, { type: 'removeExtraTask' }));
+
+    expect(primer.entries.map((entry) => entry.id)).toEqual(['1', 's1']);
+    expect(primer.railCursor).toBe(2);
+    expect(primer.newItemTexts).toEqual({});
+  });
+
+  it('changes nothing when toggleInclude applies on the Feature row', () => {
+    const state = stateWith();
+
+    expect(apply(state, { type: 'toggleInclude' })).toBe(state);
+  });
+
+  it('toggles the include mark on the item at the cursor', () => {
+    const state = applyAll(stateWith(), [
+      { type: 'nextRow' },
+      { type: 'nextItem' },
+    ]);
+
+    const primer = primerOf(apply(state, { type: 'toggleInclude' }));
+
+    expect(selectedEntry(primer)?.items.map((item) => item.include)).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  it('leaves the revision when setText changes add-item text', () => {
+    const state = stateWith();
+
+    const next = setNewItemText(state, '1', 'Some text');
+
+    expect(primerOf(next).newItemTexts['1']).toBe('Some text');
+    expect(primerOf(next).revision).toBe(primerOf(state).revision);
+  });
+
+  it('grows the revision when setText changes a body field', () => {
+    const state = stateWith();
+
+    const next = apply(state, {
+      type: 'setText',
+      primerId: 'p1',
+      target: { field: 'itemComment', entryId: '1', item: 2 },
+      value: 'Why',
+    });
+
+    expect(primerOf(next).entries[0].items[1].comment).toBe('Why');
+    expect(primerOf(next).revision).toBe(primerOf(state).revision + 1);
+  });
+
+  it('shows a target by selecting its row and item and focusing the card', () => {
+    const state = stateWith();
+
+    const primer = primerOf(
+      apply(state, {
+        type: 'showTarget',
+        primerId: 'p1',
+        target: { field: 'itemComment', entryId: '1', item: 2 },
+      }),
+    );
+
+    expect(primer).toMatchObject({
+      railCursor: 1,
+      itemCursor: 1,
+      pane: 'card',
+    });
+  });
+
+  it('applies only the sending actions while the active primer sends', () => {
+    const sending = applyAll(onRow(stateWith(), 1), [
+      { type: 'openReview' },
+      { type: 'sendStarted', primerId: 'p1', kind: 'submitted' },
+    ]);
+    const blocked: PrimerAction[] = [
+      { type: 'closeReview' },
+      { type: 'askCancel' },
+      { type: 'addItem', primerId: 'p1', entryId: '1' },
+      { type: 'askClose', sessionId: 'p1-session' },
+    ];
+
+    for (const action of blocked) {
+      expect(apply(sending, action)).toBe(sending);
+    }
+    const edited = apply(sending, {
+      type: 'setText',
+      primerId: 'p1',
+      target: { field: 'taskComment', entryId: '1' },
+      value: 'note',
+    });
+    expect(edited).not.toBe(sending);
+    expect(
+      primerOf(apply(sending, { type: 'sendFailed', primerId: 'p1' })).sending,
+    ).toBeNull();
+  });
+
+  it('applies row actions only in view primer', () => {
+    const review = apply(stateWith(), { type: 'openReview' });
+
+    expect(review.view).toBe('review');
+    expect(apply(review, { type: 'nextRow' })).toBe(review);
+  });
+
+  it('lists the slug problem, then each unnamed extra task', () => {
+    const state = initialState(
+      [
+        presentedPrimer('p1', {
+          feature: primerFeature({ slug: 'Bad Slug' }),
+          entries: [primerEntry('extra-1', 'extra', { task: '  ' })],
+        }),
+      ],
+      'p1-session',
+    );
+
+    expect(submitProblems(primerOf(state))).toEqual([
+      'The slug must be lowercase letters, digits and dashes, starting with a letter or digit.',
+      'Extra task 1 needs a name.',
+    ]);
+  });
+
+  it('titles the session with the feature name and the decided tasks', () => {
+    const state = stateWith([
+      primerEntry('1', 'primer', { need: 'yes' }),
+      primerEntry('2', 'primer', { need: 'no' }),
+      primerEntry('3', 'primer', { need: 'unclear' }),
+    ]);
+
+    expect(sessionTitle(primerOf(state))).toBe('Primer port 2/3');
+  });
+
+  it('gives the card scope in view primer with the card pane focused', () => {
+    const state = apply(stateWith(), { type: 'focusPane', pane: 'card' });
+
+    expect(scopeOf(state)).toBe('card');
+    expect(scopeOf(apply(state, { type: 'openReview' }))).toBe('review');
+  });
+});

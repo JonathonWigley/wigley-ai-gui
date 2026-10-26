@@ -279,6 +279,18 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: ['node:'],
   },
+  'src/plugins/primer/page': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page',
+      'src/shared/page/ui',
+      'src/plugins/primer',
+      'src/plugins/keys/contract.ts',
+      'src/plugins/sessions/contract.ts',
+    ],
+    packages: [],
+  },
   'src/plugins/gallery': {
     layers: ['src/contracts', 'src/shared'],
     packages: [],

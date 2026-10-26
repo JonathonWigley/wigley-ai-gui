@@ -62,6 +62,16 @@ function formsBoxBinds(scope: 'forms.forms' | 'forms.review') {
   ].map((bind) => ({ ...bind, scope, where: 'box' as const }));
 }
 
+// The primer card and its review each scroll by a line and by half a page.
+function primerScrollBinds(scope: 'primer.card' | 'primer.review') {
+  return [
+    { keys: '<C-j>', scope, command: 'primer.lineDown' as const },
+    { keys: '<C-k>', scope, command: 'primer.lineUp' as const },
+    { keys: '<C-S-j>', scope, command: 'primer.halfPageDown' as const },
+    { keys: '<C-S-k>', scope, command: 'primer.halfPageUp' as const },
+  ];
+}
+
 // A live Chat tab and an ended one each hold the keys that read the entries
 // and focus the box.
 function chatEntryPageBinds(scope: 'chat.chat' | 'chat.ended') {
@@ -202,6 +212,58 @@ export const defaultKeymap = {
     { keys: '<Esc>', scope: 'forms.confirm', command: 'forms.dismissConfirm' },
     ...formsBoxBinds('forms.forms'),
     ...formsBoxBinds('forms.review'),
+
+    // ── Primer ─────────────────────────────────────────────────────────────
+    { keys: 'j', scope: 'primer.rail', command: 'primer.nextRow' },
+    { keys: '<C-l>', scope: 'primer.rail', command: 'primer.nextRow' },
+    { keys: 'k', scope: 'primer.rail', command: 'primer.prevRow' },
+    { keys: '<C-h>', scope: 'primer.rail', command: 'primer.prevRow' },
+    { keys: 'y', scope: 'primer.rail', command: 'primer.needYes' },
+    { keys: 'n', scope: 'primer.rail', command: 'primer.needNo' },
+    { keys: 'u', scope: 'primer.rail', command: 'primer.needUnclear' },
+    { keys: 'A', scope: 'primer.rail', command: 'primer.addExtraTask' },
+    { keys: 'D', scope: 'primer.rail', command: 'primer.removeExtraTask' },
+    { keys: '<A-l>', scope: 'primer.rail', command: 'primer.focusCard' },
+    {
+      keys: '<Leader><Leader>',
+      scope: 'primer.rail',
+      command: 'primer.openReview',
+      where: 'page',
+    },
+    { keys: 'j', scope: 'primer.card', command: 'primer.nextItem' },
+    { keys: 'k', scope: 'primer.card', command: 'primer.prevItem' },
+    { keys: 'x', scope: 'primer.card', command: 'primer.toggleInclude' },
+    { keys: 'c', scope: 'primer.card', command: 'primer.editItemComment' },
+    { keys: 'C', scope: 'primer.card', command: 'primer.editTaskComment' },
+    { keys: 'a', scope: 'primer.card', command: 'primer.addItem' },
+    { keys: 'i', scope: 'primer.card', command: 'primer.editFirstField' },
+    { keys: '<A-h>', scope: 'primer.card', command: 'primer.focusRail' },
+    { keys: '<C-n>', scope: 'primer.card', command: 'primer.nextBox' },
+    { keys: '<C-p>', scope: 'primer.card', command: 'primer.prevBox' },
+    ...primerScrollBinds('primer.card'),
+    {
+      keys: '<Leader><Leader>',
+      scope: 'primer.card',
+      command: 'primer.openReview',
+      where: 'both',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'primer.card',
+      command: 'primer.leaveBox',
+      where: 'box',
+    },
+    { keys: '<D-Enter>', scope: 'primer.review', command: 'primer.submit' },
+    { keys: '<Esc>', scope: 'primer.review', command: 'primer.closeReview' },
+    { keys: 'C', scope: 'primer.review', command: 'primer.askCancel' },
+    ...primerScrollBinds('primer.review'),
+    { keys: 'y', scope: 'primer.confirm', command: 'primer.confirmCancel' },
+    { keys: 'n', scope: 'primer.confirm', command: 'primer.dismissConfirm' },
+    {
+      keys: '<Esc>',
+      scope: 'primer.confirm',
+      command: 'primer.dismissConfirm',
+    },
 
     // ── Chat ───────────────────────────────────────────────────────────────
     ...chatEntryPageBinds('chat.chat'),
