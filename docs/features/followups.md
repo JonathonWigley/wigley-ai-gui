@@ -29,6 +29,10 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
   `docs-browser/design.md`). Split out of plan C in its 2026-10-24 interview so it is designed against the landed
   statuses; plan it with `wigley:feature`, its first question which statuses each step acts on. The harness update and
   reload calls belong behind `AgentHarness`, and a push still needs the user's press each time.
+- Codex last-loaded times in the docs index (docs-browser plan D, `docs_index.py` README § Last loaded): Codex
+  sessions (`~/.codex/sessions/`) record no list of loaded files. Older ones carry a `# AGENTS.md instructions for
+  <cwd>` message, and skills show only as `exec_command` calls running `cat …/SKILL.md`, so a reader would match
+  those commands by pattern.
 - Keyboard link hints (vimium style) in rendered docs, if Tab between links is not enough.
 - Images in rendered docs: loading local image files into the page needs a safe file protocol of its own; today they show their alt text.
 - The `on-demand` load-state tag uses the accent tone (`CHIP_TONES`, `src/plugins/docs/page/doc-view.ts`), against DESIGN.md's rule that colour at rest means a status; it was `status-info` before plan C, and `listed` now reads the same as `not-loaded`. Needs an info tone on the Tag primitive (`src/shared/page/ui/`).

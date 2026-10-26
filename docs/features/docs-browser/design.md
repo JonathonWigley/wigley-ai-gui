@@ -8,10 +8,13 @@
 - **Core services and seams** — the files and processes services, editor binds, markdown, the document editor.
 - **Ownership and plugin-source status (plan C)** — Mine and Third-party, cache merged into source, git
   statuses, skill folder files.
+- **Recency and stars (plan D)** — docs ordered by when a session last loaded them, the time on each row,
+  and the Starred group.
 - **Out of scope** — follow-ups.
 
 The decisions the user settled in the 2026-10-19 interview (five rounds), and plan C's in the 2026-10-24 interview,
-kept so each plan is written from them. A decision here stands unless the user changes it.
+and plan D's in the 2026-10-26 interview, kept so each plan is written from them. A decision here stands unless
+the user changes it.
 
 ## Plans
 
@@ -23,6 +26,8 @@ kept so each plan is written from them. A decision here stands unless the user c
 - **C — ownership and plugin-source status**: the docs index's `owner`, marketplace clones and merged installs
   (schema 3, wigley-ai-marketplace); the Mine and Third-party tree, read-only third-party docs and the git statuses
   (`plan-ownership/`).
+- **D — recency and stars**: the docs index's `lastLoaded` (schema 4, wigley-ai-marketplace); docs ordered newest
+  loaded first, the time on each row and in the doc view, and the Starred group (`plan-recency-stars/`).
 
 Each plan lands green on its own, the self-test passing, and is reviewed on its own.
 
@@ -153,7 +158,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   it (on the doc already shown it only focuses it, keeping an open editor), or toggles a group, expanding or
   collapsing it as `l` and `h` do, and under a filter, which shows every group expanded, steps into a group as `l`
   does; `h` collapses a group or goes to the parent; `/` filter, `a`, `A`, `r`, `d`, `R` rescan,
-  `c` pick the load-state folder; `Alt+l` / `Alt+h` move focus between tree and doc; `Ctrl+j`/`Ctrl+k` and
+  `c` pick the load-state folder, `s` star or unstar the selected doc; `Alt+l` / `Alt+h` move focus between tree and doc; `Ctrl+j`/`Ctrl+k` and
   `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll the doc beside the tree.
   Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll the doc a line and `Ctrl+Shift+j`/`Ctrl+Shift+k` half a page, the
   editor too while editing, `i` edit; Esc in the editor's normal mode closes it as `:q` does.
@@ -229,8 +234,38 @@ sessions load.
   templates, scripts the skill tells agents to run), `not-loaded` for both harnesses.
 - The schema change lands in both repos together, with no fallback for schema 2.
 
+## Recency and stars (plan D)
+
+The user's aim: see the docs agents use most recently first, see when each was last loaded, and keep favourite docs
+at the top of the tree.
+
+- **Last loaded is the index's** (schema 4, `docs_index.py` README § Last loaded): each entry's `lastLoaded` is the
+  latest transcript row that loaded it — an instruction or nested load, an `@` mention, a skill, a `Read`, a subagent
+  launch, a slash command — subagent transcripts included. Docs mode reads the machine-wide time; a session's Docs tab
+  reads that session's own, as it reads that session's load states. Codex records no loaded files, so Codex sessions
+  add no times (follow-up). Times refresh with each index build: launch and Rescan for Docs mode, each load of a
+  session's Docs tab.
+- **Order**: inside every group, its docs sort by `lastLoaded`, newest first, and docs with none follow, by title
+  as before. A skill group counts as a doc here: it sorts among its siblings by the newest time of any file in it,
+  and keeps `SKILL.md` first inside it. Every other group keeps its fixed place (Global, Plugins, repos, clones,
+  plugins, kinds in index order, feature folders), so a doc stays where the user knows it. A follow-up item takes its
+  file's time.
+- **Time on a row**: a doc with a time shows it dimmed at the row's end, short and relative — `now` under a minute
+  (and for a time ahead of the clock), `4m` under an hour, `3h` under a day, `2d` under a week, `5w` under 8 weeks,
+  then the local date, `Mar 3`, with the year when it is not the current one (`Mar 3, 2025`) — and the full local
+  date and time on hover. A doc never loaded shows none. The doc view adds `Loaded 3h ago` beside its
+  load chips. A row's time is drawn fresh on each redraw of the tree; nothing redraws on a timer.
+- **Starred**: `s` on a doc row stars or unstars it, and the row shows a filled star. A **Starred** group above Mine
+  lists every starred doc the view's index holds, newest loaded first; each also stays in its usual place, starred
+  there too. The group shows only when it holds a doc, carries no status rollup, and the filter applies to it as to
+  any group. `s` on a group row does nothing. Opening a doc in Docs mode from elsewhere selects its usual place.
+- **One star set**, saved in the docs plugin's `uiState` by entry id, shared by Docs mode and every session's Docs
+  tab; starring in one view shows in all. The stable and dev apps keep separate stars, as they keep separate split
+  widths. A rename or move through the app carries the star to the new path; a trash through the app drops the star
+  of every entry it removes. A starred doc that leaves the index another way keeps its star, hidden until it returns.
+
 ## Out of scope
 
 Follow-ups in `../followups.md`: fuzzy finders (`Space f f` files, `Space f s` text, on a Neovim finder's matcher),
-keyboard link hints, images in rendered docs, the user config file, settings hot reload, and the plugin sync action
-(commit, push, update and reload from the Docs view, on plan C's statuses).
+keyboard link hints, images in rendered docs, the user config file, settings hot reload, the plugin sync action
+(commit, push, update and reload from the Docs view, on plan C's statuses), and Codex last-loaded times (plan D).

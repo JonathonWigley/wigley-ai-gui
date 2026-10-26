@@ -111,7 +111,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
                  the indexed folders only and never to a third-party doc, watching the open file, the git statuses
-                 of marketplace clone plugin files), page/ (one docs view per source — tree under Mine and
+                 of marketplace clone plugin files), page/ (one docs view per source — tree under Starred, Mine and
                  Third-party roots by the index's `owner`, rendered doc with its status chips, document editor —
                  shown as Docs mode over the machine's index, its tree in the side
                  bar, and as a split of tree and doc in each view `addView` hands out, each session's Docs tab
