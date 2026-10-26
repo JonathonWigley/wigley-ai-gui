@@ -158,6 +158,7 @@ async function start() {
     toast: (text, tone) => toasts.show(text, tone),
     log,
     timers,
+    clock: { now: () => Date.now() },
     paths: config.platform === 'windows' ? windowsPaths : posixPaths,
     homeDir: config.homeDir,
   };

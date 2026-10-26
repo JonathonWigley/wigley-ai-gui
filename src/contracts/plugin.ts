@@ -358,6 +358,8 @@ export interface PageServices {
   toast(text: string, tone: ToastTone): void;
   log: Log;
   timers: Timers;
+  // Epoch milliseconds, for times drawn relative to now.
+  clock: Clock;
   // Full paths by the rules of the OS the served config names.
   paths: Paths;
   // The home folder the served config names, which `paths.tilde` shows as `~`.

@@ -308,6 +308,7 @@ export const defaultKeymap = {
     { keys: '/', scope: 'docs.tree', command: 'docs.filter' },
     { keys: 'R', scope: 'docs.tree', command: 'docs.rescan' },
     { keys: 'c', scope: 'docs.tree', command: 'docs.pickContext' },
+    { keys: 's', scope: 'docs.tree', command: 'docs.toggleStar' },
     { keys: 'a', scope: 'docs.tree', command: 'docs.createByKind' },
     { keys: 'A', scope: 'docs.tree', command: 'docs.createByPath' },
     { keys: 'r', scope: 'docs.tree', command: 'docs.rename' },

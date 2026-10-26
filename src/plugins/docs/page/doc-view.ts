@@ -77,6 +77,9 @@ export interface DocViewDeps {
   chipsOf(entryId: string, path: string): { claude: Chip; codex: Chip };
   // The plugin-source status texts of the entry `entryId`, in chip order.
   statusesOf(entryId: string): string[];
+  // The last-loaded line of the entry `entryId`; null when it was never
+  // loaded or is gone.
+  loadedOf(entryId: string): string | null;
   // Opens a file a link leads to in this view.
   followFile(path: string, line: number | null, fragment: string | null): void;
   // Pushes `docs.conflict` while the changed-on-disk prompt shows.
@@ -91,9 +94,10 @@ export interface DocViewDeps {
 }
 
 // The doc pane: an empty state while no doc is open; then the header with its
-// chips (load states, then plugin-source statuses), the read-only line, the
-// frontmatter table and the rendered body (a detail's field table), swapped
-// for the document editor on `edit`; the editor's `:q` returns to them.
+// chips (load states, then plugin-source statuses, then the last-loaded
+// line), the read-only line, the frontmatter table and the rendered body (a
+// detail's field table), swapped for the document editor on `edit`; the
+// editor's `:q` returns to them.
 // Opening another doc is refused while the editor holds unsaved edits.
 // `open` resolves to whether the doc opened.
 export interface DocView {
@@ -281,10 +285,12 @@ export function createDocView(deps: DocViewDeps): DocView {
     const statuses = deps
       .statusesOf(target.entryId)
       .map((text) => tag(text, 'warning'));
+    const loaded = deps.loadedOf(target.entryId);
     chipRow.replaceChildren(
       chipElement(claude),
       chipElement(codex),
       ...statuses,
+      ...(loaded === null ? [] : [element('span', 'docs-loaded', loaded)]),
     );
   };
 

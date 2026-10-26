@@ -44,6 +44,11 @@ export const docsManifest = definePlugin({
       group: 'tree',
       runsIn: 'page',
     },
+    toggleStar: {
+      label: 'star or unstar the doc',
+      group: 'tree',
+      runsIn: 'page',
+    },
     focusDoc: { label: 'focus the doc', group: 'focus', runsIn: 'page' },
     focusTree: { label: 'focus the tree', group: 'focus', runsIn: 'page' },
     scrollDown: { label: 'scroll down', group: 'doc', runsIn: 'page' },

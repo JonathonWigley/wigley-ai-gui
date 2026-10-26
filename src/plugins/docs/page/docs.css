@@ -97,6 +97,23 @@
   width: var(--wg-icon-size);
 }
 
+/* A starred leaf's star, in its caret slot. */
+.docs-row-star {
+  color: var(--wg-fg-secondary);
+}
+
+/* A leaf's end: its last-loaded time, then its status dot. */
+.docs-row-end {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-1_5);
+}
+
+.docs-row-time {
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Docs mode's sheet holds the doc pane, which scrolls itself. */
 .docs-sheet {
   display: grid;
@@ -186,6 +203,12 @@
   flex-wrap: wrap;
   gap: var(--wg-space-1_5);
   margin-top: var(--wg-space-1_5);
+}
+
+.docs-loaded {
+  align-self: center;
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
 }
 
 .docs-readonly {

@@ -28,6 +28,7 @@ import { skillFolder } from '../kinds';
 import type { docsManifest } from '../manifest';
 import {
   MINE_ROOT_ID,
+  STARRED_ROOT_ID,
   THIRD_PARTY_ROOT_ID,
   type TreeGroup,
   type TreeLeaf,
@@ -53,8 +54,8 @@ export interface TreeState {
   filter: string;
 }
 
-// The groups the first tree shows expanded: every root but Third-party, and
-// each group child of Mine.
+// The groups the first tree shows expanded: every root but Third-party
+// (Starred and Mine among them), and each group child of Mine.
 export function defaultExpandedIds(tree: readonly TreeNode[]): Set<string> {
   const expanded = new Set<string>();
   for (const root of tree) {
@@ -71,6 +72,20 @@ export function defaultExpandedIds(tree: readonly TreeNode[]): Set<string> {
     }
   }
   return expanded;
+}
+
+// `expanded` plus the Starred root when `next` shows it and `previous` did
+// not, so a Starred group that first shows in a later tree starts expanded;
+// else `expanded` unchanged.
+export function expandNewStarred(
+  previous: readonly TreeNode[],
+  next: readonly TreeNode[],
+  expanded: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const hasStarred = (tree: readonly TreeNode[]) =>
+    tree.some((root) => root.id === STARRED_ROOT_ID);
+  const isStarredNew = hasStarred(next) && !hasStarred(previous);
+  return isStarredNew ? new Set([...expanded, STARRED_ROOT_ID]) : expanded;
 }
 
 // Unfiltered, a group's children show while it is expanded. Filtered, only

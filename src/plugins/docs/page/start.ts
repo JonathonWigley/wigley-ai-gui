@@ -32,6 +32,7 @@ import {
   type DocsViewCommands,
 } from './docs-view';
 import { commandOfKeysIn } from './hidden-tree-keys';
+import { createStarredDocs } from './starred-docs';
 
 type DocsApi = PageApi<
   typeof docsManifest,
@@ -71,6 +72,7 @@ const TREE_COMMANDS_IN_SIGHT: ReadonlySet<keyof DocsViewCommands> = new Set<
   'filter',
   'rescan',
   'pickContext',
+  'toggleStar',
   'createByKind',
   'createByPath',
   'rename',
@@ -92,9 +94,10 @@ const SESSION_TREE_SPLIT = { initial: 288, min: 160, max: 480 };
 // side in a split: a Docs tab in every session over that session's index
 // among them. Each command acts on the active view: the machine view while
 // Docs mode shows, else the added view that is visible. A change made in one
-// view reaches every other, and a view showing closes the others' overlays,
-// since two views' pane scopes may be equal. `toggleTree` hides or shows the
-// active view's tree. `openDoc` opens a doc in Docs mode.
+// view reaches every other and the star set every view shares, and a view
+// showing closes the others' overlays, since two views' pane scopes may be
+// equal. `toggleTree` hides or shows the active view's tree. `openDoc` opens a
+// doc in Docs mode.
 export const docsPagePart: PagePart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
@@ -114,6 +117,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const addedViews = new Map<string, AddedView>();
     let addedCount = 0;
     const sessionDocs = new Map<string, SessionDocs>();
+    // One star set, shared by every view.
+    const starred = createStarredDocs(services.uiState, services.paths);
 
     const allViews = (): DocsView[] => [
       machineView,
@@ -123,7 +128,9 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const otherViews = (view: DocsView) =>
       allViews().filter((each) => each !== view);
 
+    // The star set hears each change once, from the view that made it.
     const changedIn = (view: DocsView, change: DocChangeRecord) => {
+      starred.applyChange(change);
       for (const other of otherViews(view)) {
         other.outsideChange(change);
       }
@@ -154,6 +161,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         markdown: services.markdown,
         paths: services.paths,
         toast: services.toast,
+        starred,
+        now: () => services.clock.now(),
         log,
         keysFor: (command, scope) =>
           keys.keysFor(
@@ -469,6 +478,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         filter: onActiveView('filter'),
         rescan: onActiveView('rescan'),
         pickContext: onActiveView('pickContext'),
+        toggleStar: onActiveView('toggleStar'),
         focusDoc: onActiveView('focusDoc'),
         focusTree: onActiveView('focusTree'),
         scrollDown: onActiveView('scrollDown'),

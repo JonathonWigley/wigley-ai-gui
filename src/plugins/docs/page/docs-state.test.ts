@@ -20,6 +20,7 @@ import {
   defaultExpandedIds,
   detailFields,
   edgeSelection,
+  expandNewStarred,
   fetchText,
   fileStatuses,
   isEntryIdInside,
@@ -288,6 +289,54 @@ describe('defaultExpandedIds', () => {
       'global',
       'repo:r',
     ]);
+  });
+
+  it('defaultExpandedIds_StarredRoot_Expanded', () => {
+    const tree = [
+      group('owner:starred', 'Starred', [
+        leaf('owner:starred/entry:/a', 'A', '/a'),
+      ]),
+      group('owner:mine', 'Mine', [group('global', 'Global', [])]),
+      group('owner:third-party', 'Third-party', []),
+    ];
+
+    const expanded = defaultExpandedIds(tree);
+
+    expect(expanded.has('owner:starred')).toBe(true);
+    expect(expanded.has('owner:mine')).toBe(true);
+    expect(expanded.has('global')).toBe(true);
+    expect(expanded.has('owner:third-party')).toBe(false);
+  });
+});
+
+describe('expandNewStarred', () => {
+  const mine = group('owner:mine', 'Mine', []);
+  const starred = group('owner:starred', 'Starred', []);
+
+  it('expandNewStarred_StarredAppears_Added', () => {
+    const expanded = expandNewStarred(
+      [mine],
+      [starred, mine],
+      new Set(['owner:mine']),
+    );
+
+    expect([...expanded].sort()).toEqual(['owner:mine', 'owner:starred']);
+  });
+
+  it('expandNewStarred_StarredWasThere_Unchanged', () => {
+    const expanded = expandNewStarred(
+      [starred, mine],
+      [starred, mine],
+      new Set(['owner:mine']),
+    );
+
+    expect([...expanded]).toEqual(['owner:mine']);
+  });
+
+  it('expandNewStarred_NoStarred_Unchanged', () => {
+    const before = new Set(['owner:mine']);
+
+    expect(expandNewStarred([starred, mine], [mine], before)).toBe(before);
   });
 });
 
@@ -1730,6 +1779,16 @@ describe('treeRowStatus', () => {
     root: '/r',
     fetchFailed: true,
     files: { a: fileStatus({ uncommitted: true }) },
+  });
+
+  it('treeRowStatus_StarredGroup_NoDetail', () => {
+    const starredGroup = group('owner:starred', 'Starred', [
+      leaf('owner:starred/entry:a', 'A', 'a'),
+    ]);
+
+    expect(
+      treeRowStatus(starredGroup, noTexts, uncommittedA, [], asIs, posixPaths),
+    ).toEqual({ mark: null, detail: null });
   });
 
   it('treeRowStatus_LeafWithTexts_MarkJoined', () => {

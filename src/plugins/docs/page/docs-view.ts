@@ -19,8 +19,14 @@ import {
   type SourceRead,
 } from '../contract';
 import { metaString } from '../index-document';
+import { loadedAgo, loadedAt, loadedLine } from '../loaded-time';
 import { isIndexedPath } from '../path-guard';
-import { buildTree, type TreeLeaf, type TreeNode } from '../tree';
+import {
+  buildTree,
+  STARRED_ROOT_ID,
+  type TreeLeaf,
+  type TreeNode,
+} from '../tree';
 import { type DocDetail, type DocTarget, createDocView } from './doc-view';
 import { createDocsDialogs } from './docs-dialogs';
 import {
@@ -40,7 +46,8 @@ import {
   statusTexts,
   treeRowStatus,
 } from './docs-state';
-import { createTreeView } from './tree-view';
+import type { StarredDocs } from './starred-docs';
+import { createTreeView, type LeafMarks } from './tree-view';
 
 export type DocsPaneScope = 'tree' | 'doc';
 
@@ -59,6 +66,7 @@ export interface DocsViewCommands {
   filter(): void;
   rescan(): void;
   pickContext(): void;
+  toggleStar(): void;
   focusDoc(): void;
   focusTree(): void;
   scrollDown(): void;
@@ -128,8 +136,8 @@ export interface DocsView {
   // The open doc's path while its editor holds unsaved edits, else null.
   unsavedPath(): string | null;
   // Closes the overlays, takes the dialogs off the window, stops the view's
-  // watch, its `docChanged` listener and its following of keymap changes, and
-  // destroys its editor.
+  // watch, its `docChanged` listener and its following of keymap and star
+  // changes, and destroys its editor.
   dispose(): void;
   commands: DocsViewCommands;
 }
@@ -148,6 +156,10 @@ export interface DocsViewDeps {
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: Log;
+  // The star set every docs view shares; each view redraws on its changes.
+  starred: StarredDocs;
+  // Epoch milliseconds, for the last-loaded times.
+  now(): number;
   keysFor: DocsKeysFor;
   // Hears each change to the keys `keysFor` reads, until its `dispose`.
   onKeysChanged(listener: () => void): Disposable;
@@ -405,6 +417,19 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         localTime,
         deps.paths,
       ),
+    leafMarks: (leaf: TreeLeaf): LeafMarks => {
+      const lastLoaded = entriesById.get(leaf.entryId)?.lastLoaded ?? null;
+      return {
+        time:
+          lastLoaded === null
+            ? null
+            : {
+                text: loadedAgo(lastLoaded, deps.now()),
+                title: `Last loaded ${loadedAt(lastLoaded)}`,
+              },
+        isStarred: deps.starred.has(leaf.entryId),
+      };
+    },
   });
 
   const doc = createDocView({
@@ -422,6 +447,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       return chips(context(), entryId, pending.has(entryPath));
     },
     statusesOf: textsOf,
+    loadedOf: (entryId) => {
+      const lastLoaded = entriesById.get(entryId)?.lastLoaded ?? null;
+      return lastLoaded === null ? null : loadedLine(lastLoaded, deps.now());
+    },
     followFile: (path, line, fragment) => followFile(path, line, fragment),
     pushConflictScope: () => deps.pushScope('conflict'),
     conflictText: () =>
@@ -540,7 +569,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         next?.entries ?? [],
         deps.homeDir,
         deps.paths,
-        new Set<string>(),
+        deps.starred.ids(),
       ),
       (entryId) => {
         return entriesById.get(entryId)?.path ?? '';
@@ -779,6 +808,27 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     });
   };
 
+  // Stars or unstars the selected doc and logs it; nothing on a group, with
+  // no row selected, or for an entry gone from the index. Unstarring from its
+  // Starred row, whose row is then gone, selects its usual row.
+  const toggleStar = () => {
+    const node = tree.selected();
+    if (node?.type !== 'entry') {
+      return;
+    }
+    const entry = entriesById.get(node.entryId);
+    if (entry === undefined) {
+      return;
+    }
+    deps.starred.toggle(entry.id);
+    const isStarred = deps.starred.has(entry.id);
+    log('docs', `${isStarred ? 'starred' : 'unstarred'} ${entry.title}`);
+    const isStarredRow = node.id.startsWith(`${STARRED_ROOT_ID}/`);
+    if (!isStarred && isStarredRow) {
+      tree.selectEntry(entry.id);
+    }
+  };
+
   const commands: DocsViewCommands = {
     treeDown: () => tree.down(),
     treeUp: () => tree.up(),
@@ -790,6 +840,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     filter: () => tree.openFilter(),
     rescan: () => view.rescan(),
     pickContext,
+    toggleStar,
     focusDoc: focusDocAndLog,
     focusTree: () => {
       deps.revealTree();
@@ -841,6 +892,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     confirmYes: () => dialogs.confirmYes(),
     confirmNo: () => dialogs.confirmNo(),
   };
+
+  // A star change from any view redraws this one's tree, once it has read.
+  const starChange = deps.starred.onChanged(() => {
+    if (document !== null) {
+      showDocument(document);
+    }
+  });
 
   const listening = deps.channel.on('docChanged', (change) => {
     if (change.viewId === deps.viewId) {
@@ -907,6 +965,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       view.closeOverlays();
       listening.remove();
       keysChange.dispose();
+      starChange.dispose();
       for (const overlay of overlays) {
         overlay.dispose();
       }

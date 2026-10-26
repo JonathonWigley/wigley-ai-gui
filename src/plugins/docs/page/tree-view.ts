@@ -11,6 +11,7 @@ import {
   type DocsKeysFor,
   defaultExpandedIds,
   edgeSelection,
+  expandNewStarred,
   parentId,
   stepSelection,
   type TreeLine,
@@ -40,13 +41,24 @@ export interface TreeViewDeps {
   kbd(keys: string): HTMLElement;
   // The node's status mark and detail, as the plugin-source statuses read now.
   rowStatus(node: TreeNode): TreeRowStatus;
+  // The leaf's last-loaded time and star, read at each draw.
+  leafMarks(leaf: TreeLeaf): LeafMarks;
+}
+
+// A leaf's last-loaded time, short with the full date and time as its
+// `title`, or null when its doc was never loaded; and whether it is starred.
+export interface LeafMarks {
+  time: { text: string; title: string } | null;
+  isStarred: boolean;
 }
 
 // The tree pane: a status line, the filter box, a line for an empty index, a
 // filter matching nothing or a filter on, and the rows. `setTree` keeps the
 // expanded ids, the selection and the filter; the first tree with rows expands
-// `defaultExpandedIds` and selects its first row. A row draws its status: a
-// leaf's mark as a warning StatusDot, a group's rollup as its detail. The
+// `defaultExpandedIds` and selects its first row; a later tree that first
+// shows the Starred group expands it. A row draws its status: a leaf's mark as
+// a warning StatusDot, a group's rollup as its detail. A leaf's star shows in
+// its caret slot, and its last-loaded time and status mark at its end. The
 // selected row draws as the keyboard cursor while focus is inside the pane.
 export interface TreeView {
   element: HTMLElement;
@@ -147,6 +159,25 @@ function lineElement(
   return above;
 }
 
+// A leaf's row end: its time then its status dot, or the dot alone with no
+// time.
+function rowEnd(
+  time: LeafMarks['time'],
+  markDot: HTMLElement | null,
+): HTMLElement | null {
+  if (time === null) {
+    return markDot;
+  }
+  const end = element('span', 'docs-row-end');
+  const shown = element('span', 'docs-row-time', time.text);
+  shown.title = time.title;
+  end.append(shown);
+  if (markDot !== null) {
+    end.append(markDot);
+  }
+  return end;
+}
+
 export function createTreeView(deps: TreeViewDeps): TreeView {
   const pane = element('div', 'docs-tree');
   pane.tabIndex = -1;
@@ -206,8 +237,13 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
 
   const rowElement = (row: TreeRow) => {
     const caret = element('span', 'docs-row-caret');
+    const marks = row.node.type === 'entry' ? deps.leafMarks(row.node) : null;
     if (row.node.type === 'group') {
       caret.append(icon(row.isExpanded ? 'chevron-down' : 'chevron-right'));
+    } else if (marks?.isStarred === true) {
+      const star = icon('star-full');
+      star.classList.add('docs-row-star');
+      caret.append(star);
     }
     const { mark, detail } = deps.rowStatus(row.node);
     let markDot: HTMLElement | null = null;
@@ -222,7 +258,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       detail,
       depth: row.depth,
       leading: caret,
-      trailing: markDot,
+      trailing: rowEnd(marks?.time ?? null, markDot),
       onClick: () => {
         state = { ...state, selectedId: row.node.id };
         pane.focus();
@@ -306,6 +342,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       status.title = text ?? '';
     },
     setTree(next, nextPathOf, hasIndex) {
+      const previous = tree;
       tree = next;
       pathOf = nextPathOf;
       hasTree = hasIndex;
@@ -315,6 +352,9 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
         state = { ...state, expanded: defaultExpandedIds(next) };
         rows = visibleRows(tree, state, pathOf);
         state = { ...state, selectedId: rows[0]?.node.id ?? null };
+      } else {
+        const expanded = expandNewStarred(previous, next, state.expanded);
+        state = { ...state, expanded };
       }
       draw();
     },
