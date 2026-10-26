@@ -1,6 +1,6 @@
 # 02 — Last-loaded times in the index
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -109,3 +109,5 @@ Done when: `(cd plugins/wigley/scripts/docs-index && python3 -m unittest discove
 Commit:    one commit for the group, in wigley-ai-marketplace, committed by path only (peer sessions may hold uncommitted edits)
 
 ## Proof
+
+Commit adf9e75 (marketplace) · proof: diff read: all 8 Produces present; docs-index unittest discover OK · concerns: none raised; lead note: session_load_times does not catch OSError on a subagent file vanishing mid-read

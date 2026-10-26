@@ -193,20 +193,20 @@ Each was verified at plan time (2026-10-26). `wigley:make` re-runs each before t
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Listing names and the transcript load reader](01-load-reader.md)
-- [ ] [Schema 4 in the app](04-app-schema.md)
+- [x] [Listing names and the transcript load reader](01-load-reader.md)
+- [x] [Schema 4 in the app](04-app-schema.md)
 
 ### Wave 2
-- [ ] [Last-loaded times in the index](02-index-times.md) — after 01
-- [ ] [Tree order and the Starred group](05-tree-order.md) — after 04
-- [ ] [Loaded-time text and the star set](06-time-and-stars.md) — after 04 (shares `page/docs-state.ts`)
+- [x] [Last-loaded times in the index](02-index-times.md) — after 01
+- [x] [Tree order and the Starred group](05-tree-order.md) — after 04
+- [x] [Loaded-time text and the star set](06-time-and-stars.md) — after 04 (shares `page/docs-state.ts`)
 
 ### Wave 3
-- [ ] [Marketplace version bump](03-marketplace-bump.md) — after 02
-- [ ] [Page wiring: star key, row times, doc view line](07-page-wiring.md) — after 05, 06
+- [x] [Marketplace version bump](03-marketplace-bump.md) — after 02
+- [x] [Page wiring: star key, row times, doc view line](07-page-wiring.md) — after 05, 06
 
 ### Wave 4
-- [ ] [Self-test steps](08-selftest.md) — after 07
+- [x] [Self-test steps](08-selftest.md) — after 07
 
 ### Wave 5
 - [ ] [Doc re-read](09-doc-re-read.md) — after 03, 08
@@ -219,8 +219,24 @@ Each was verified at plan time (2026-10-26). `wigley:make` re-runs each before t
 Review base: db28609cefd0114b348eff18e3ba9cb8baf5ca66
 
 ### Groups
+- 04 · c3f1719 · diff read: all 5 Produces present; typecheck pass; worker ran docs tests (442) and lint green · concerns: Done-when grep for schemaVersion: 3 still hits index-document.test.ts:98, the required parse_Schema3_Unsupported input — kept
+- 01 · d73a6b1 (marketplace) · diff read: all 6 Produces present; py_compile + docs-index unittest discover OK · concerns: session.py dropped the orphaned Location import
+- 05 · 7ca9a37 · diff read: STARRED_ROOT_ID and 4-arg buildTree present; typecheck pass · concerns: none
+- 06 · c303a00 · diff read: loadedAgo/loadedAt/loadedLine, createStarredDocs/StarredDocs, movedEntryId/isEntryIdInside present; typecheck pass · concerns: entry ids split at first #, so a path holding # mis-matches — now reaches renamedDocument too, which used entry.path before; renamedDocument no longer checks id starts with entry.path
+- 02 · adf9e75 (marketplace) · diff read: all 8 Produces present; docs-index unittest discover OK · concerns: none raised; lead note: session_load_times does not catch OSError on a subagent file vanishing mid-read
+- 03 · 621ee51 (marketplace) · both manifests 1.10.3; check_manifests (+--against origin/main), check_pointers, claude plugin validate, and all 9 unittest suites (dashboard and primer still present) exit 0 · concerns: none
+- 07 · 0ec60ee · diff read: PageServices.clock, toggleStar command + s bind, LeafMarks, expandNewStarred present; typecheck pass; star-full codicon exists · concerns: renderer builds the clock inline rather than as a module constant like timers; a star change redraws other views before outsideChange applies a rename, so one short-lived tree without Starred
+- 08 · ce66200 · diff read: recency and stars group present; typecheck pass · concerns: row counts in steps 6 and 8 assume Instructions stays expanded after the earlier filter groups — npm run selftest at task 10 proves it
 ### Contract changes
 ### Rulings
 - Two repos: gui review base db28609 (above), marketplace review base 0285c19; peer session ai-dev-4e on the same trees, so every commit is pathspec-scoped and review ranges are this run's commit lists — two bases, one Review base line — wrong base would mis-scope the review · lead
+- The 'no schemaVersion: 3' grep in task 04's Done when excludes the parse_Schema3_Unsupported test input, which the same task requires — the grep meant fixtures/literals, not the refusal test — none · lead · group 04
+- An empty stripped command name or empty skill <dir> adds nothing — matches the non-empty-name rule — none · group 01 · group 01
+- LoadTimes.merge does not validate times; a reader of cached times must reject offset-less ones or merge raises TypeError — carried to task 02 — a crash on a bad cache · group 01 · group 01
+- applyChange counts a rename or trash as a change only when the resulting set differs — same result on every listed test — a spurious save/notify if wrong · group 06 · group 06
+- Cache version and offsets must be exactly int (type is int), rejecting true and 1.0 too — stricter than spec's not-bool — none · group 02 · group 02
+- Corrupt-cache test gains a case for a cached time with no UTC offset, the check that keeps merge from raising — none · group 02 · group 02
+- toggleStar spots a Starred row by the STARRED_ROOT_ID + '/' prefix — no third copy of the leaf-id literal — none · group 07 · group 07
+- expandNewStarred runs on every setTree but the first tree with rows — a Starred group appearing later starts expanded — none · group 07 · group 07
 ### Review rounds
 ### Test gate

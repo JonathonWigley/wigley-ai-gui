@@ -253,16 +253,19 @@ at the top of the tree.
 - **Time on a row**: a doc with a time shows it dimmed at the row's end, short and relative — `now` under a minute
   (and for a time ahead of the clock), `4m` under an hour, `3h` under a day, `2d` under a week, `5w` under 8 weeks,
   then the local date, `Mar 3`, with the year when it is not the current one (`Mar 3, 2025`) — and the full local
-  date and time on hover. A doc never loaded shows none. The doc view adds `Loaded 3h ago` beside its
+  date and time on hover. A doc never loaded shows none. The doc view adds `Loaded 3h ago` (`Loaded just now`, `Loaded Mar 3`) beside its
   load chips. A row's time is drawn fresh on each redraw of the tree; nothing redraws on a timer.
 - **Starred**: `s` on a doc row stars or unstars it, and the row shows a filled star at its start, where a group shows its chevron. A **Starred** group above Mine
   lists every starred doc the view's index holds, newest loaded first; each also stays in its usual place, starred
   there too. The group shows only when it holds a doc, carries no status rollup, and the filter applies to it as to
-  any group. `s` on a group row does nothing. Opening a doc in Docs mode from elsewhere selects its usual place.
+  any group. The group starts expanded, also when it first appears in a later tree (the first star, or an index
+  that now holds a starred doc). `s` on a group row does nothing. Unstarring from a Starred row selects the doc's usual
+  row, since the Starred row is gone. Opening a doc in Docs mode from elsewhere selects its usual place.
 - **One star set**, saved in the docs plugin's `uiState` by entry id, shared by Docs mode and every session's Docs
   tab; starring in one view shows in all. The stable and dev apps keep separate stars, as they keep separate split
   widths. A rename or move through the app carries the star to the new path; a trash through the app drops the star
-  of every entry it removes. A starred doc that leaves the index another way keeps its star, hidden until it returns.
+  of every entry it removes; a rename or trash that leaves the set the same saves nothing. A starred doc that leaves
+  the index another way keeps its star, hidden until it returns.
 
 ## Out of scope
 

@@ -1,6 +1,6 @@
 # 05 — Tree order and the Starred group
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -110,3 +110,4 @@ Commit:    one commit for the group, in wigley-ai-gui, committed by path only (p
 
 ## Proof
 
+Commit 7ca9a37 · proof: diff read: STARRED_ROOT_ID and 4-arg buildTree present; typecheck pass · concerns: none

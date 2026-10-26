@@ -1,6 +1,6 @@
 # 08 — Self-test steps
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -77,3 +77,4 @@ Commit:    one commit for the group, in wigley-ai-gui, committed by path only (p
 
 ## Proof
 
+Commit ce66200 · proof: diff read: recency and stars group present; typecheck pass · concerns: row counts in steps 6 and 8 assume Instructions stays expanded after the earlier filter groups — npm run selftest at task 10 proves it

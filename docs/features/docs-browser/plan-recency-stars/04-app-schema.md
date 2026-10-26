@@ -1,6 +1,6 @@
 # 04 — Schema 4 in the app
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -96,3 +96,4 @@ Commit:    one commit for the group, in wigley-ai-gui, committed by path only (p
 
 ## Proof
 
+Commit c3f1719 · proof: diff read: all 5 Produces present; typecheck pass; worker ran docs tests (442) and lint green · concerns: Done-when grep for schemaVersion: 3 still hits index-document.test.ts:98, the required parse_Schema3_Unsupported input — kept

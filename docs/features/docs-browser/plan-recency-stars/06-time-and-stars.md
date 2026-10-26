@@ -1,6 +1,6 @@
 # 06 — Loaded-time text and the star set
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 04 (both change `page/docs-state.ts` and its test)
 Plan: [plan.md](plan.md)
@@ -151,3 +151,4 @@ Commit:    one commit for the group, in wigley-ai-gui, committed by path only (p
 
 ## Proof
 
+Commit c303a00 · proof: diff read: loadedAgo/loadedAt/loadedLine, createStarredDocs/StarredDocs, movedEntryId/isEntryIdInside present; typecheck pass · concerns: entry ids split at first #, so a path holding # mis-matches — now reaches renamedDocument too, which used entry.path before; renamedDocument no longer checks id starts with entry.path

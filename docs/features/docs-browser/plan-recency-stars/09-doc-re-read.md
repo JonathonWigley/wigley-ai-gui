@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 5 · Depends on: 03, 08
 Plan: [plan.md](plan.md)

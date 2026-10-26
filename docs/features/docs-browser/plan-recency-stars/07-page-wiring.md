@@ -1,6 +1,6 @@
 # 07 — Page wiring: star key, row times, doc view line
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 05, 06
 Plan: [plan.md](plan.md)
@@ -153,3 +153,4 @@ Commit:    one commit for the group, in wigley-ai-gui, committed by path only (p
 
 ## Proof
 
+Commit 0ec60ee · proof: diff read: PageServices.clock, toggleStar command + s bind, LeafMarks, expandNewStarred present; typecheck pass; star-full codicon exists · concerns: renderer builds the clock inline rather than as a module constant like timers; a star change redraws other views before outsideChange applies a rename, so one short-lived tree without Starred

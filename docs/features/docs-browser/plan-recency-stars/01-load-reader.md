@@ -1,6 +1,6 @@
 # 01 — Listing names and the transcript load reader
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -71,3 +71,5 @@ Done when: `(cd plugins/wigley/scripts/docs-index && python3 -m unittest discove
 Commit:    one commit for the group, in wigley-ai-marketplace, committed by path only (peer sessions may hold uncommitted edits)
 
 ## Proof
+
+Commit d73a6b1 (marketplace) · proof: diff read: all 6 Produces present; py_compile + docs-index unittest discover OK · concerns: session.py dropped the orphaned Location import

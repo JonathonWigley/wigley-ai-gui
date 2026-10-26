@@ -1,6 +1,6 @@
 # 03 — Marketplace version bump and Done checks
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -47,3 +47,5 @@ Done when: both manifests hold the same version, ahead of origin/main's; when th
 Commit:    one commit holding the two manifests when a bump was needed, else none; in wigley-ai-marketplace, by path only (peer sessions may hold uncommitted edits)
 
 ## Proof
+
+Commit 621ee51 (marketplace) · proof: both manifests 1.10.3; check_manifests (+--against origin/main), check_pointers, claude plugin validate, and all 9 unittest suites (dashboard and primer still present) exit 0 · concerns: none
