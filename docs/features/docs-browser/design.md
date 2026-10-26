@@ -255,7 +255,7 @@ at the top of the tree.
   then the local date, `Mar 3`, with the year when it is not the current one (`Mar 3, 2025`) — and the full local
   date and time on hover. A doc never loaded shows none. The doc view adds `Loaded 3h ago` beside its
   load chips. A row's time is drawn fresh on each redraw of the tree; nothing redraws on a timer.
-- **Starred**: `s` on a doc row stars or unstars it, and the row shows a filled star. A **Starred** group above Mine
+- **Starred**: `s` on a doc row stars or unstars it, and the row shows a filled star at its start, where a group shows its chevron. A **Starred** group above Mine
   lists every starred doc the view's index holds, newest loaded first; each also stays in its usual place, starred
   there too. The group shows only when it holds a doc, carries no status rollup, and the filter applies to it as to
   any group. `s` on a group row does nothing. Opening a doc in Docs mode from elsewhere selects its usual place.
