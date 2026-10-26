@@ -403,8 +403,8 @@ round), since main, not the page, decides.
   starts, which the app points at its endpoint folder, and from a session started with `WIGLEY_AI_GUI_ENDPOINT_DIR`
   set to the full path of `~/.agents/wigley-ai-gui-dev` (the relay expands no `~`). The self-test's user data is
   `<appData>/wigley-ai-gui-selftest` and a drive run's its run folder's `user-data/`; a drive run points its Claude
-  sessions at `<run home>/.agents/<instance id>`. "Auri" is only the name the app shows: the exe, the bundle and
-  every path keep `wigley-ai-gui`. Under `npm start` the Mac Dock still says Electron, since Electron cannot rename
+  sessions at `<run home>/.agents/<instance id>`. "Auri" is only the name the app shows (`app.setName` at start,
+  for the Mac app menu's items): the exe, the bundle and every path keep `wigley-ai-gui`. Under `npm start` the Mac Dock still says Electron, since Electron cannot rename
   the Dock label of an unbundled app.
 
 - `npm run install-app` builds and installs the stable app from a committed ref (`main` unless `--ref` names
@@ -416,10 +416,12 @@ round), since main, not the page, decides.
   staged copy waiting for the next run, which deletes it. Then it swaps the copy in for
   `%LOCALAPPDATA%\Programs\wigley-ai-gui` (with a Start menu shortcut named Auri) or
   `/Applications/wigley-ai-gui.app`, and starts the app again when it was running. Each OS builds its own app; a
-  locally built app needs no signing identity. On macOS, packaging rewrites the bundle's shown name
-  (`CFBundleDisplayName`) to Auri in `Info.plist` and re-signs it ad hoc (`forge.config.mts`'s `postPackage`), which refuses an `osxSign` config. The
+  locally built app needs no signing identity. On macOS, packaging rewrites the bundle's shown names
+  (`CFBundleName`, which the menu bar shows, and `CFBundleDisplayName`) to Auri in `Info.plist`, renames the
+  `wigley-ai-gui Helper*.app` bundles to `Auri Helper*.app` (Electron finds its helpers by `CFBundleName`), and
+  re-signs it ad hoc (`forge.config.mts`'s `postPackage`), which refuses an `osxSign` config. The
   installed app's icon is `assets/icon/` (`icon.ico`, `icon.icns` and `icon.png`, drawn from `auri-source.png`),
-  which `node scripts/make-icon.mts` rebuilds on Windows; the dev app keeps Electron's icon.
+  which `node scripts/make-icon.mts` rebuilds on Windows (`make-icon.ps1` holds the crop); the dev app keeps Electron's icon.
 - Node is pinned in `.nvmrc`. A shell that started on another version runs commands as
   `source ~/.nvm/nvm.sh && nvm use && npm run …`.
 - `npm test` runs the Vitest suite: every module whose correctness follows from inputs and outputs — round

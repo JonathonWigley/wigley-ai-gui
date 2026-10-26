@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+import { readdirSync, renameSync } from 'node:fs';
 import path from 'node:path';
 import type {
   ForgeConfig,
@@ -18,8 +18,8 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   hooks: {
-    // @electron/packager sets CFBundleDisplayName from the app name after applying `extendInfo`, so
-    // the shown name is written into the packaged Info.plist here instead.
+    // @electron/packager sets CFBundleName and CFBundleDisplayName from the app name after applying
+    // `extendInfo`, so the shown name is written into the packaged Info.plist here instead.
     postPackage: async (forgeConfig, { platform, outputPaths }) => {
       if (platform !== 'darwin') {
         return;
@@ -89,16 +89,37 @@ function showMacBundleAs(
       'postPackage edits Info.plist after osxSign has signed the app; move the edit before signing',
     );
   }
-  const infoPlist = path.join(appPath, 'Contents', 'Info.plist');
-  // CFBundleName stays the packaged name: Electron finds `<CFBundleName> Helper.app` by it, and
-  // exits at launch when no helper has that name.
-  execFileSync('plutil', [
-    '-replace',
-    'CFBundleDisplayName',
-    '-string',
-    displayName,
-    infoPlist,
-  ]);
+  // The menu bar shows CFBundleName. Electron finds its helpers as `<CFBundleName> Helper*.app` and
+  // exits at launch when none has that name, so each helper takes the shown name too. The app
+  // bundle and its executable keep the packaged name.
+  const packagedName = path.basename(appPath, '.app');
+  const frameworks = path.join(appPath, 'Contents', 'Frameworks');
+  for (const entry of readdirSync(frameworks)) {
+    if (
+      !entry.startsWith(`${packagedName} Helper`) ||
+      !entry.endsWith('.app')
+    ) {
+      continue;
+    }
+    const helperName = path.basename(entry, '.app');
+    const shownHelperName = displayName + helperName.slice(packagedName.length);
+    const helperPath = path.join(frameworks, entry);
+    const macOsDir = path.join(helperPath, 'Contents', 'MacOS');
+    renameSync(
+      path.join(macOsDir, helperName),
+      path.join(macOsDir, shownHelperName),
+    );
+    setPlistStrings(path.join(helperPath, 'Contents', 'Info.plist'), {
+      CFBundleExecutable: shownHelperName,
+      CFBundleName: shownHelperName,
+      CFBundleDisplayName: shownHelperName,
+    });
+    renameSync(helperPath, path.join(frameworks, `${shownHelperName}.app`));
+  }
+  setPlistStrings(path.join(appPath, 'Contents', 'Info.plist'), {
+    CFBundleName: displayName,
+    CFBundleDisplayName: displayName,
+  });
   // Info.plist is sealed into the bundle's signature, and Apple Silicon launches only validly signed apps.
   execFileSync('codesign', [
     '--sign',
@@ -108,6 +129,15 @@ function showMacBundleAs(
     '--preserve-metadata=entitlements,requirements,flags,runtime',
     appPath,
   ]);
+}
+
+function setPlistStrings(
+  infoPlist: string,
+  values: Record<string, string>,
+): void {
+  for (const [key, value] of Object.entries(values)) {
+    execFileSync('plutil', ['-replace', key, '-string', value, infoPlist]);
+  }
 }
 
 export default config;

@@ -803,6 +803,9 @@ function failStart(error: unknown) {
 }
 
 function startApp() {
+  // The Mac app menu's About, Hide and Quit items show the app name. Every run
+  // mode sets its user data folder itself, so the name moves no data.
+  app.setName(appInstance.displayName);
   if (process.platform === 'win32') {
     // Windows shows a toast only for an app with an AppUserModelID.
     app.setAppUserModelId(process.execPath);

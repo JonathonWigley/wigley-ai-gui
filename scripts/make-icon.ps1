@@ -13,10 +13,10 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
-# The head with the ears and bow, in source pixels.
+# The whole face down to the chin, with the ears and bow, in source pixels.
 $CropX = 250
-$CropY = 0
-$CropSide = 1000
+$CropY = 110
+$CropSide = 1024
 $IconSide = 1024
 # The macOS icon shape's corner radius, as a share of the side.
 $CornerRadiusShare = 0.225
