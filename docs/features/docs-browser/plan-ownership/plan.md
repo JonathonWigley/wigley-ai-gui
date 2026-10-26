@@ -31,11 +31,11 @@ The index reads no git beyond the origin URL; the app reads no plugin config. Ea
 
 Each was verified at plan time (2026-10-24) and is re-run by `wigley:make` before the first dispatch.
 
-- This machine's index config indexes the clones: `cat ~/.agents/wigley-docs/config.json` shows `"roots": ["D:/ai-dev"]`
+- This machine's index config indexes the clones: `cat ~/.agents/wigley-docs/config.json` lists, under `roots`, the folder the wigley clones sit in (the machine file names it)
   (changed this session at the user's yes; machine-local, not committed).
 - The marketplace URL matches the clone's origin: `~/.claude/plugins/known_marketplaces.json`
   `wigley-ai-marketplace.source.url` and `~/.codex/config.toml` `[marketplaces.wigley-ai-marketplace] source` are both
-  `git@github-personal:JonathonWigley/wigley-ai-marketplace.git`, and so is `git -C D:/ai-dev/wigley-ai-marketplace
+  `git@github-personal:JonathonWigley/wigley-ai-marketplace.git`, and so is `git -C <marketplace clone>
   remote get-url origin`.
 - The clone's `.claude-plugin/marketplace.json` names `wigley-ai-marketplace` with plugin `wigley`, source
   `./plugins/wigley`.
@@ -45,7 +45,7 @@ Each was verified at plan time (2026-10-24) and is re-run by `wigley:make` befor
 - A transcript names a plugin's cache folder with its version: `command grep -a -o
   'plugins[\\/]*cache[\\/]*wigley-ai-marketplace[\\/]*wigley[\\/]*[0-9.]*' <latest ~/.claude/projects/*/*.jsonl>`
   prints `…\wigley\1.9.1` (a skill's "Base directory for this skill" line).
-- `git -C D:/ai-dev/wigley-ai-marketplace config core.autocrlf` is `true`: working files and installed copies may be
+- `git -C <marketplace clone> config core.autocrlf` is `true`: working files and installed copies may be
   CRLF where the blob is LF (task 08's blob compare).
 - The app runs the **installed** `docs_index.py` (`src/plugins/docs/main/script-locator.ts`, through
   `installed_plugins.json`) unless the `docs.scriptPath` setting names another; the live check in task 14 points it at

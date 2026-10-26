@@ -15,7 +15,7 @@ Decisions: the app normally runs the installed `docs_index.py`, which stays on s
 Approach:  run in this order; each check is tagged expected or low-confidence with its reason
 
 1. **Real index, from the clone** (expected: tasks 01–04 unit tests pin each rule; this proves it on this machine's
-   real installs). Run `python3 -X utf8 D:/ai-dev/wigley-ai-marketplace/plugins/wigley/scripts/docs-index/docs_index.py
+   real installs). Run `python3 -X utf8 <marketplace clone>/plugins/wigley/scripts/docs-index/docs_index.py
    build --stdout` into a scratch file. It writes `~/.agents/wigley-docs/index.json` too. That file is app-written
    cache data that the next build rewrites, so this is not a destructive step. Check with a short Python reading of the
    output:
@@ -23,7 +23,7 @@ Approach:  run in this order; each check is tagged expected or low-confidence wi
    - No entry has a path under `~/.claude/plugins/cache/wigley-ai-marketplace/` or
      `~/.codex/plugins/cache/wigley-ai-marketplace/` except installed-only files (`source: plugin`, `owner: mine`)
      and the two `kind: plugin` install entries.
-   - Entries under `D:\ai-dev\wigley-ai-marketplace\plugins\wigley\skills\` have `source: repo`,
+   - Entries under `<marketplace clone>/plugins/wigley/skills/` have `source: repo`,
      `plugin: wigley@wigley-ai-marketplace`, `owner: mine` and a non-empty `meta.installed` naming harness `claude`
      version `1.9.1`, and for skills Codex still holds, harness `codex` version `0.17.1` (versions measured at plan
      time, re-verify).

@@ -38,8 +38,8 @@ function assistantLine(uuid: string, block: object) {
 
 describe('projectFolderName', () => {
   it('projectFolderName_ReplacesEveryNonAlphanumeric', () => {
-    expect(projectFolderName('/Users/jonathonwigley/.claude')).toBe(
-      '-Users-jonathonwigley--claude',
+    expect(projectFolderName('/Users/u/.claude')).toBe(
+      '-Users-u--claude',
     );
     expect(projectFolderName('/a/b_c d')).toBe('-a-b-c-d');
   });

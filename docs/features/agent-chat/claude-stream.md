@@ -118,7 +118,7 @@ start comes from § Initialize. It then arrives again at the start of **every** 
                        {"name":"claude.ai Claude Docs","status":"pending","source":"claudeai"},
                        {"name":"claude.ai Google Drive","status":"needs-auth","source":"claudeai"},
                        {"name":"claude.ai Google Calendar","status":"needs-auth","source":"claudeai"}]
-"plugins":         4  [{"name":"wigley","path":"/Users/jonathonwigley/.claude/plugins/cache/wigley-ai-marketplace/wigley/1.3.1","source":"wigley@wigley-ai-marketplace","version":"1.3.1"},
+"plugins":         4  [{"name":"wigley","path":"/Users/u/.claude/plugins/cache/wigley-ai-marketplace/wigley/1.3.1","source":"wigley@wigley-ai-marketplace","version":"1.3.1"},
                        {"name":"cc-plugin-agents-md","path":"builtin",…},{"name":"cc-plugin-telemetry",…},{"name":"cc-plugin-plugin-authoring",…}]
 "capabilities":   11  ["interrupt_receipt_v1","interrupt_cancel_queued_v1","interrupt_send_now_v1","msg_lifecycle_v1",
                        "request_marker_lists_v1","sdk_mcp_tools_list_changed","sdk_mcp_manifests","mcp_read_resource_v1",
