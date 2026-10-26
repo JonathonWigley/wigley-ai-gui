@@ -51,7 +51,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
   `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor. Other list
   views with a cursor (settings, the pickers, the chat session list) move with `j`/`k` and bind
-  neither pair yet. `Ctrl+h`/`Ctrl+l` move to the previous and next unit (forms items). A chord
+  neither pair yet. `Ctrl+h`/`Ctrl+l` move to the previous and next unit (forms items, primer rows). A chord
   bind takes the key from vim inside a box too, in every vim mode: in a form box, the chat box and
   the doc editor, vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by design.
 - **Ctrl+n / Ctrl+p** move to the next and previous text box, from the page or inside a box in

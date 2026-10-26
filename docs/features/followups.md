@@ -36,7 +36,7 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - Images in rendered docs: loading local image files into the page needs a safe file protocol of its own; today they show their alt text.
 - The `on-demand` load-state tag uses the accent tone (`CHIP_TONES`, `src/plugins/docs/page/doc-view.ts`), against DESIGN.md's rule that colour at rest means a status; it was `status-info` before plan C, and `listed` now reads the same as `not-loaded`. Needs an info tone on the Tag primitive (`src/shared/page/ui/`).
 - Docs prints keys as plain text inside three sentences — the conflict prompt (`conflictText`, `src/plugins/docs/page/docs-state.ts`), the trash question and the no-place text (`src/plugins/docs/page/docs-dialogs.ts`) — where AGENTS.md and DESIGN.md say every hint is drawn by Kbd. Draw them through `kbd`, or carve out keys inside a sentence in both docs.
-- One `keyHint` helper in place of four copies of "read `keysFor`, then nothing or a Kbd": chat's `keyHint(keys, platform, command, scope)` (`src/plugins/chat/page/key-hint.ts`), forms' `keyHint` / `appendKeyHint`, which also redraws on keymap change (`src/plugins/forms/page/kinds/card-parts.ts`), sessions' `noSelectionHint` (`src/plugins/sessions/page/start.ts`) and keys' `closeHelpHint` (`src/plugins/keys/page/start.ts`). Chat redraws on each draw and forms on `onChanged`; one helper settles one way.
+- One `keyHint` helper in place of four copies of "read `keysFor`, then nothing or a Kbd": chat's `keyHint(keys, platform, command, scope)` (`src/plugins/chat/page/key-hint.ts`), the shared `keyHint` / `appendKeyHint`, which also redraws on keymap change (`src/shared/page/key-hint.ts`; forms and primer use it), sessions' `noSelectionHint` (`src/plugins/sessions/page/start.ts`) and keys' `closeHelpHint` (`src/plugins/keys/page/start.ts`). Chat redraws on each draw and forms on `onChanged`; one helper settles one way.
 - A Codex harness adapter behind `AgentHarness`, declaring Codex's own session controls (`agent-chat/design.md`).
 - A wigley-harness adapter behind `AgentHarness`, so the app drives the C# harness as it drives Claude Code.
 - A read-only Chat tab for sessions started in a terminal, following the session's transcript file.
@@ -75,7 +75,7 @@ now, any harness later). Each item names its sites.
   (`src/shared/plugin-host.ts`, `src/main/main.ts:240-258`). Dependents hold a dependency's `exports` directly, so a
   reload leaves them stale: hand them a stable proxy or restart them too.
 - Each plugin collects and disposes its own handles once the core returns them: forms page (`start.ts`, `forms-view.ts`
-  drops `contribute` handles, `editor-boxes`, `forms-store`, autosave timers), forms main (`createChannelPresenter`,
+  drops `contribute` handles, the shared `editor-boxes` and reducer store (`src/shared/page/editor-boxes.ts`, `reducer-store.ts`), autosave timers), forms main (`createAgentFormChannelPresenter`,
   close guard, tool contribution; `dispose` also ends every live `FormsSession`, its deadline timers and the preview),
   chat page (`channel.on` ×5, `events.on`, tabs, overlay), keys (dropped area handles, `focusin`/`focusout` listeners,
   which-key timers), sessions page (`narrow` listener, mode), shell (`ResizeObserver`), `installPageKeys` (four
@@ -215,7 +215,7 @@ now, any harness later). Each item names its sites.
   `claude-code-harness.ts:367`).
 - Forms round logic returns structured results and the MCP adapter words them: `RoundError` as
   `{ path, problem, detail }`, payloads as an outcome plus a `reason`; `ask_round` / `collect_last_round` wording and
-  "relay" leave `round.ts`, `forms-service.ts` and the format errors, and `needs_manual_open` leaves forms' `Outcome`
+  "relay" leave `round.ts`, `round-type.ts` and the format errors, and `needs_manual_open` leaves forms' `Outcome`
   for the relay's. Each `ItemFormat` splits its model-facing `describe()` schema text from parse and fingerprint.
 
 ### Decoupling and shared services
@@ -275,7 +275,7 @@ now, any harness later). Each item names its sites.
   `view-model.test.ts` `Saving…`, sessions' `harnessText` and `roundToastText`, `languages.test.ts`'s
   `@codemirror/language-data` aliases, and docs' `nameProblem_Rules_PinnedMessages` unless those messages are a contract.
 - `chat-sessions.test.ts` builds its own profiles instead of the shipped `DEFAULT_PROFILES`.
-- `forms-service.test.ts` runs its logic over `createMemoryRoundStore`, leaving disk behaviour to `round-store.test.ts`.
+- `form-service.test.ts` (`src/shared/agent-forms/`) runs its logic over `createMemoryFormStore`, leaving disk behaviour to `form-store.test.ts`.
 - `form-state.test.ts` uses the shared `test-rounds.ts` builders.
 - One test naming style: sentences. `Name_Case_Result` names remain in `main-api.test.ts`, `layout-loader.test.ts`,
   `layout-registry.test.ts`, `card-input.test.ts`, `which-key.test.ts`, `key-bar.test.ts`, `help-sections.test.ts`.

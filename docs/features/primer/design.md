@@ -48,8 +48,8 @@ The tool contract, the payload and the outcomes are stated once, in wigley-ai-ma
   its own open form. A second `open_primer` while one is open waits behind it, as a second round does, rather than
   closing the first.
 - **The primer plugin** (`src/plugins/primer/`) holds the port of the old `primer.py` rules (parse, read the body
-  back, the summary and next texts), its two tool definitions, its tool session, fixtures, its drive actions and its
-  self-test script, and its page. It reaches sessions only through the sessions contract, as forms does.
+  back, the summary and next texts), its two tool definitions, fixtures, its drive actions and its self-test script,
+  and its page. Its main part wires the shared tool session to those two tools. It reaches sessions only through the sessions contract, as forms does.
 - **The old server retires.** wigley-ai-marketplace deletes `scripts/primer/` and `scripts/dashboard/` and the
   `wigley-primer` server entries; the relay's built-in tool list gains the two primer tools so the agent sees them
   while the app is away.
@@ -72,10 +72,10 @@ The tab is a fixed view built from the `DESIGN.md` primitives; the user does not
   SectionHeaders Primer, Every feature and Extra tasks. Each task row shows its need as a Tag (yes, no, unclear)
   and its included items as a count (included of total).
 - **Card** for the selected row. The Feature row's card holds the name, slug, spec, summary and notes boxes. A
-  task's card holds its question, its items as rows each with a ToggleMark (included) and a comment box, an add-item
-  box, and the task's own comment box. An extra task's card also holds its name box.
-- **Review pane** before send: every task's need, its included items and every comment, with the tallies; submit
-  from there checks that the slug matches the slug rule and every extra task is named, and shows what failed.
+  task's card holds its question, evidence, probes and pointer when not blank, its items as rows each with a ToggleMark
+  (included) and a comment box, an add-item box, and the task's own comment box. An extra task's card also holds its name box.
+- **Review pane** before send: every task's need, its items (the left-out ones tagged) and every comment, with the
+  tallies; submit from there checks that the slug matches the slug rule and every extra task is named, and shows what failed.
 - Autosave sends a draft `autosaveDelayMs` (manifest setting, default 400) after the last edit; the deadline
   (`deadlineSeconds`, default 240) is the forms default.
 - **Page events:** `primerShown`, `needChanged`, `primerFinished`. **Page export:** `activePrimer`.
@@ -121,4 +121,4 @@ ready".
 
 - A user-editable primer layout (forms layouts stay forms-only).
 - Migrating old primer files.
-- The other copies of the key-hint helper in the forms kinds, which stay with their tracked follow-up.
+- The other copies of the key-hint helper in chat, sessions and keys, which stay with their tracked follow-up.

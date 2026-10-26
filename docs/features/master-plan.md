@@ -178,7 +178,7 @@ Steps 1, the bug sweep, 2, drive reliability, and 3, the docs index seam, have l
 **22. Test cleanup.** This goes last because the earlier steps rewrite many of these tests anyway.
 - Drop tests that restate tables and authored text
 - `chat-sessions` builds its own profiles
-- `forms-service` runs on the memory store
+- `form-service` (`src/shared/agent-forms/`) runs on the memory store
 - One test naming style
 - Cover the shell layout swap failure paths
 - The memory Files adapter reports folder changes as Node does
