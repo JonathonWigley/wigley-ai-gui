@@ -69,7 +69,7 @@ does.
 The tab is a fixed view built from the `DESIGN.md` primitives; the user does not edit its layout.
 
 - **Rail** (the start pane of a Split with its own `uiState` key): a Feature row first, then the tasks under
-  SectionHeaders Primer, Every feature and Extra tasks. Each task row shows its need as a Tag (yes, no, undecided)
+  SectionHeaders Primer, Every feature and Extra tasks. Each task row shows its need as a Tag (yes, no, unclear)
   and its included items as a count (included of total).
 - **Card** for the selected row. The Feature row's card holds the name, slug, spec, summary and notes boxes. A
   task's card holds its question, its items as rows each with a ToggleMark (included) and a comment box, an add-item
@@ -89,7 +89,7 @@ Scopes `primer.rail`, `primer.card`, `primer.review`, `primer.confirm`. Every bi
 | Keys | Scope | Action |
 | --- | --- | --- |
 | `j` / `k`, `<C-l>` / `<C-h>` | rail | next / previous row |
-| `y` / `n` / `u` | rail | set the task's need to yes / no / undecided |
+| `y` / `n` / `u` | rail | set the task's need to yes / no / unclear |
 | `A` | rail | add an extra task |
 | `D` | rail | remove the selected extra task |
 | `<A-l>` / `<A-h>` | rail / card | focus the card / the rail |
@@ -99,7 +99,7 @@ Scopes `primer.rail`, `primer.card`, `primer.review`, `primer.confirm`. Every bi
 | `C` | card | edit the task's comment |
 | `a` | card | add an item |
 | `i` | card | edit the first field (Feature card: name; extra task: its name) |
-| `<C-n>` / `<C-p>` | card, review, box | next / previous box |
+| `<C-n>` / `<C-p>` | card, box | next / previous box |
 | `<Esc>` | box | leave the box |
 | `<C-j>` / `<C-k>`, `<C-S-j>` / `<C-S-k>` | card, review | scroll a line / half a page |
 | `<Leader><Leader>` | rail, card, box | open the review |
