@@ -5,7 +5,6 @@ file, settings and keymap hot reload (the ConfigStore), the layered keymap, the 
 tokens, the platform chord formatter, the active-line band, and the sessions and forms-layouts live checks.
 
 - Command palette.
-- Move the feature primer into the app.
 - Packaging and installers for macOS and Windows.
 - A Latte (light) theme and OS light/dark following. The token model is theme-neutral (`colorScheme` per theme), so
   this is a theme file, its `DESIGN.md` light rules, and a light/dark choice.

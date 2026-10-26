@@ -167,7 +167,7 @@ Steps 1, the bug sweep, 2, drive reliability, and 3, the docs index seam, have l
 - Images in rendered docs (safe file protocol)
 - Keyboard link hints
 - The docs editor-landing issues (Esc, a new round stealing focus, the hidden Form tab body)
-- Move the feature primer into the app
+- Move the feature primer into the app (`docs/features/primer/`)
 - One open-intent sequence for docs opens (`openDoc`, tree, links)
 - An outside create in `.claude/rules` started no rebuild (check)
 - `ownsRoot(entry)` for the repo-or-features root rule

@@ -234,6 +234,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.
 - **Tag** (`tag`): a small static label in a tone.
+- **ToggleMark** (`toggleMark`): an on/off mark beside a row's label, such as an included item; a click
+  toggles it, and the key that toggles it belongs to the view.
 - **StatusDot** (`statusDot`): a static dot for idle, running, success, warning, attention or error.
 - **InputFrame** (`inputFrame`): the frame around a text box.
 - **Row** (`row`): a list or tree row, density `list` or `tree`.
@@ -279,6 +281,10 @@ Conventions every primitive follows:
 - **Status bar:** L1, `statusbar-height`, `text-12`. Status colours only on status items.
 - **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Cards are `card-background` with
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.
+- **Primer:** the Primer tab is built like the Form tab: a rail of the feature row and the tasks, grouped under
+  section headers (Primer, Every feature, Extra tasks), each task row carrying its need as a Tag and its included
+  items as a count; the selected task's card holds its items as rows with a ToggleMark and a comment box. Submit
+  opens a review pane of every answer before it sends.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
   the sheet. Tool calls are collapsible cards: a mono head with the tool and its summary, a status
   dot (running, success, error), built closed; a result changes only the dot. Permission prompts are cards with a

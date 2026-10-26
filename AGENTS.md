@@ -6,7 +6,7 @@
   any agent harness or model later, one user and no backwards compatibility.
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the core and its plugins, the
   layers, the relay and agent sessions, and where a new plugin, shell area, mode, session tab, key, event, setting,
-  user config file, theme, plugin data, layout, agent harness, session control, round source, MCP tool or
+  user config file, theme, plugin data, layout, agent harness, session control, agent form type, MCP tool or
   third-party tool goes, and the layer check.
 - **Running and testing** — the stable and dev apps side by side, `npm run install-app` and the app icon, Node
   version, the self-test and the drive run the agent may start any time, and the checks only a real keyboard proves.
@@ -18,7 +18,8 @@ the rule for which key an action takes.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
 vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `wigley-forms`
-tools, receiving agents' review rounds and showing each in its agent session's Form tab for the user to answer; and it
+tools, receiving agents' review rounds and feature primers and showing each in its agent session's Form or Primer tab
+for the user to answer; and it
 browses and edits every agent doc on the machine through the docs index (`docs_index.py`, `plugins/wigley/scripts/docs-index/`
 in wigley-ai-marketplace, whose README states the index schema). It also starts Claude Code sessions itself and
 chats with them in each session's Chat tab, a round from that session swapping in over the chat and back
@@ -69,8 +70,12 @@ src/config/      core commands and scopes, default settings, the core token regi
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
                  theme variables, `errorText`, the fake agent harness)
   layouts/       the layout registry plugins' main parts share (forms and chat layouts)
+  agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
+                 its per-session open form, deadline, re-attach and hand-back, the saved-form folder and memory stores,
+                 and the channel and scripted presenters → main-side only
   paths/         the POSIX and Windows adapters behind `Paths`, picked by each composition root
-  page/          page-only DOM builders plugins share, the layout loader among them
+  page/          page-only DOM builders plugins share: the layout loader, the reducer store, autosave, editor boxes,
+                 key hints, the confirm prompt and the session form tab helper
                  → imported only by src/renderer and plugins' page/ parts
     ui/          the design primitives `DESIGN.md` lists, each a builder with its CSS beside it; `icon.ts` is the only
                  module naming the Codicons font
@@ -82,7 +87,8 @@ src/main/        core main process; main.ts is its composition root
                  through the ConfigStore's own checks
   themes/        theme loader: parses a theme by the token registry and resolves `extends`
   ui-state/      the uiState file: app-written view state (`ui-state.json`) in the app instance's user data folder
-  alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts
+  alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts; the badge sums the
+                 open counts each source sets
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
                  project folders and runs `claude auth` sign-in, sign-out and status → the only place the app spawns `claude`
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, rename, trash, folder lists
@@ -107,8 +113,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
                  endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions mode: the
                  sidebar and each session's tabs)
-  forms/         manifest.ts, contract.ts, main/ (round logic, saved rounds, its MCP tools, layouts, the preview
+  forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, layouts, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
+  primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures),
+                 page/ (the Primer tab: the task rail, the task card and the review pane)
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
                  the indexed folders only and never to a third-party doc, watching the open file, the git statuses
                  of marketplace clone plugin files), page/ (one docs view per source — tree under Starred, Mine and
@@ -140,7 +148,7 @@ connected, as when the harness restarts its MCP connection), and the row ends wh
 self-ended session's row, its Chat tab showing the ended composer in the `chat.ended` key scope, until the user closes
 it or resumes that session's conversation, which closes the ended row first. A plugin's close
 guard (`addCloseGuard`) refuses the user's close while the plugin still has something open there (forms: an open
-round), since main, not the page, decides.
+round; primer: an open primer), since main, not the page, decides.
 
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
   and the process it runs in), key scopes (each with the title help shows over its keys), settings
@@ -288,9 +296,14 @@ round), since main, not the page, decides.
   command in chat's manifest (raw `m`, `e`, `o` in the chat scope; `<Leader>cm`, `<Leader>ce`, `<Leader>co` in the
   composer box, where raw keys are vim's); `c` (`<Leader>cc` in the box) lists every control, so a new adapter's
   controls are reachable before they get a key.
-- **A round source** — MCP today, the wigley harness next — is an adapter that calls `FormsService`; it never
-  reaches the round store, the deadline or the window directly. It reads saved rounds only through a
-  function the composition root injects, as the layout preview reads saved round args through `savedArgs`.
+- **An agent form type** — a kind of form an agent opens and waits on, forms' round and the feature primer today —
+  is an `AgentFormType` (`src/contracts/agent-forms.ts`): how to parse the agent's args, fingerprint them, read the
+  page's body back and build each reply payload. Its plugin hands the type to the shared service in
+  `src/shared/agent-forms/`, which owns the one open form per session, the deadline, re-attach, hand-back and the
+  saved-form files, and adds only its own MCP tools and page.
+- **An agent form source** — MCP today, the wigley harness next — is an adapter that calls the form type's
+  `AgentFormService`; it never reaches the store, the deadline or the window directly. It reads saved forms only
+  through a function the composition root injects, as the layout preview reads saved round args through `savedArgs`.
 - **A docs index source** — the machine index, one per live session today — is an `IndexSource` registered through
   the `docs` main export `addSource`, which returns a Disposable; the source's entries feed the docs write guard while
   it is registered. A plugin shows a docs view over a source through the `docs` page export `addView`, and opens a
@@ -432,7 +445,8 @@ round), since main, not the page, decides.
   fixture sessions through `sessions` and their rounds through `FormsService` — drives keys with
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
-  (`src/plugins/forms/main/selftest-script.ts` for forms); a step with no keys waits for its line, and a step's
+  (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
+  primer); a step with no keys waits for its line, and a step's
   `writeFile` writes a file under the self-test's temp home before its keys, as an outside change on disk, and a
   step's `screenshot` (a lowercase name in words joined by `-`) saves a PNG of the window, once the step's line has
   been waited for, to `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)
