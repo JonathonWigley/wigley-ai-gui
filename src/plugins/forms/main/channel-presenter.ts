@@ -36,6 +36,7 @@ export function createChannelPresenter(
   const open = new Map<string, OpenRound>();
   const updateOpenCount = () =>
     alerts.setOpenCount(
+      'forms',
       [...open.values()].filter((entry) => !entry.quiet).length,
     );
   const hasOpenRound = (sessionId: string) =>

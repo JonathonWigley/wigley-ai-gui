@@ -7,6 +7,7 @@ import {
 } from 'electron';
 import type { Alerts } from '../../contracts/alerts';
 import type { Log } from '../../contracts/log';
+import { createOpenCounts } from './open-counts';
 
 const OVERLAY_SIZE = 16;
 // Catppuccin Mocha red in the BGRA byte order createFromBitmap reads.
@@ -44,6 +45,7 @@ export function createElectronAlerts(window: BrowserWindow, log: Log): Alerts {
   // A notification nothing references is collected, and its click never fires.
   const shown = new Set<Notification>();
   const dot = process.platform === 'win32' ? overlayDot() : null;
+  const openCounts = createOpenCounts();
   if (process.platform === 'win32') {
     window.on('focus', () => window.flashFrame(false));
   }
@@ -72,12 +74,13 @@ export function createElectronAlerts(window: BrowserWindow, log: Log): Alerts {
       });
       notification.show();
     },
-    setOpenCount(count) {
+    setOpenCount(source, count) {
+      const total = openCounts.set(source, count);
       if (process.platform === 'darwin') {
-        app.setBadgeCount(count);
+        app.setBadgeCount(total);
       } else if (process.platform === 'win32') {
-        const description = count > 0 ? `${count} open review rounds` : '';
-        window.setOverlayIcon(count > 0 ? dot : null, description);
+        const description = total > 0 ? `${total} open agent forms` : '';
+        window.setOverlayIcon(total > 0 ? dot : null, description);
       }
     },
   };

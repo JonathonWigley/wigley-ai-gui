@@ -75,11 +75,11 @@ function fakeWindow() {
 
 function fakeAlerts() {
   const announced: { title: string; body: string; onClick: () => void }[] = [];
-  const counts: number[] = [];
+  const counts: [string, number][] = [];
   const alerts: Alerts = {
     announce: (title, body, onClick) =>
       announced.push({ title, body, onClick }),
-    setOpenCount: (count) => counts.push(count),
+    setOpenCount: (source, count) => counts.push([source, count]),
   };
   return { alerts, announced, counts };
 }
@@ -165,7 +165,7 @@ describe('createChannelPresenter', () => {
     expect(attention.announced.map(({ title, body }) => [title, body])).toEqual(
       [['New review round', 'wigley-ai-gui · Pick a theme']],
     );
-    expect(attention.counts).toEqual([1]);
+    expect(attention.counts).toEqual([['forms', 1]]);
     expect(logged).toEqual([
       '[forms] round shown: wigley-ai-gui · Pick a theme',
     ]);
@@ -199,7 +199,7 @@ describe('createChannelPresenter', () => {
     finish('round-q', { kind: 'submitted', body: BODY });
     presenter.quiet.close('round-q2');
 
-    expect(attention.counts).toEqual([1]);
+    expect(attention.counts).toEqual([['forms', 1]]);
     expect(page.sent.at(-1)).toEqual([
       'roundClosed',
       { roundId: 'round-q2', byFinish: false },
@@ -279,7 +279,10 @@ describe('createChannelPresenter', () => {
     expect(finishes).toEqual([end]);
     expect(drafts).toEqual([]);
     expect(openRounds()).toEqual([]);
-    expect(attention.counts).toEqual([1, 0]);
+    expect(attention.counts).toEqual([
+      ['forms', 1],
+      ['forms', 0],
+    ]);
     expect(page.sent.at(-1)).toEqual([
       'roundClosed',
       { roundId: 'round-1', byFinish: true },
@@ -301,7 +304,7 @@ describe('createChannelPresenter', () => {
     );
     expect(openRounds()).toEqual([ROUND]);
     expect(page.sent).toEqual([['roundShown', ROUND]]);
-    expect(attention.counts).toEqual([1]);
+    expect(attention.counts).toEqual([['forms', 1]]);
     expect(mayClose('app-1')).toBe(false);
   });
 
@@ -331,7 +334,10 @@ describe('createChannelPresenter', () => {
     expect(page.sent.slice(1)).toEqual([
       ['roundClosed', { roundId: 'round-1', byFinish: false }],
     ]);
-    expect(attention.counts).toEqual([1, 0]);
+    expect(attention.counts).toEqual([
+      ['forms', 1],
+      ['forms', 0],
+    ]);
     expect(openRounds()).toEqual([]);
   });
 });
