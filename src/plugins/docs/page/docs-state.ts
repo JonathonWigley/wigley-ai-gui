@@ -362,7 +362,10 @@ function renamedDocument(
       return entry;
     }
     const path = paths.join(to, ...below);
-    const id = movedEntryId(entry.id, from, to, paths) ?? entry.id;
+    // An id is its entry's path, with a suffix for an item inside the file.
+    const id = entry.id.startsWith(entry.path)
+      ? path + entry.id.slice(entry.path.length)
+      : entry.id;
     movedIds.set(entry.id, id);
     return {
       ...entry,
@@ -383,9 +386,8 @@ function renamedDocument(
   return { ...document, entries, contexts };
 }
 
-// The id an entry at or inside `from` gets when `from` moves to `to`: an id is
-// its entry's path, with `#…` for an item inside the file. Null when the move
-// does not reach it.
+// The id an entry at or inside `from` gets when `from` moves to `to`. Null
+// when the move does not reach it.
 export function movedEntryId(
   entryId: string,
   from: string,
@@ -397,8 +399,7 @@ export function movedEntryId(
   return below === null ? null : paths.join(to, ...below) + suffix;
 }
 
-// True when the entry with this id is `path` or lies inside it: an id is its
-// entry's path, with `#…` for an item inside the file.
+// True when the entry with this id is `path` or lies inside it.
 export function isEntryIdInside(
   entryId: string,
   path: string,
@@ -407,13 +408,18 @@ export function isEntryIdInside(
   return paths.isInside(splitEntryId(entryId).path, path);
 }
 
-// An entry id split at its first `#`: the entry's path, and the item suffix
-// (`#…`, empty for a whole file).
+// An entry id's item suffix, at the end of the id: `#L<line>` for an item
+// inside a file, `#hook:<event>:<n>` for a hook.
+const ENTRY_ID_SUFFIX = /#(?:L\d+|hook:[^#:]+:\d+)$/;
+
+// An entry id split into the entry's path and its item suffix (empty for a
+// whole file); a `#` the path itself holds stays in the path.
 function splitEntryId(entryId: string): { path: string; suffix: string } {
-  const hash = entryId.indexOf('#');
-  return hash === -1
-    ? { path: entryId, suffix: '' }
-    : { path: entryId.slice(0, hash), suffix: entryId.slice(hash) };
+  const suffix = ENTRY_ID_SUFFIX.exec(entryId)?.[0] ?? '';
+  return {
+    path: entryId.slice(0, entryId.length - suffix.length),
+    suffix,
+  };
 }
 
 // The change applied again over a source run's document, which may already

@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
 import type { IndexEntry } from './contract';
-import { buildTree, titleFromId, type TreeGroup, type TreeNode } from './tree';
+import {
+  buildTree,
+  isStarredLeafId,
+  titleFromId,
+  type TreeGroup,
+  type TreeNode,
+} from './tree';
 
 const HOME = '/Users/u';
 const NO_STARS: ReadonlySet<string> = new Set();
@@ -810,6 +816,24 @@ describe('buildTree', () => {
       'Rules',
     );
     expect(ids(rules.children)).toEqual(['entry:/Users/u/.claude/rules/a.md']);
+  });
+
+  it('isStarredLeafId_StarredAndUsualLeaves_TrueOnlyForStarred', () => {
+    const rule = '/Users/u/.claude/rules/a.md';
+    const roots = buildTree(
+      [entry({ path: rule })],
+      HOME,
+      posixPaths,
+      new Set([rule]),
+    );
+
+    const [starredLeaf] = child(roots, 'Starred').children;
+    const [usualLeaf] = child(
+      child(child(roots, 'Mine').children, 'Global').children,
+      'Rules',
+    ).children;
+    expect(isStarredLeafId(starredLeaf.id)).toBe(true);
+    expect(isStarredLeafId(usualLeaf.id)).toBe(false);
   });
 
   it('buildTree_StarredIdNotInIndex_NoStarredRoot', () => {

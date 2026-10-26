@@ -209,6 +209,7 @@
   align-self: center;
   color: var(--wg-fg-tertiary);
   font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
 }
 
 .docs-readonly {

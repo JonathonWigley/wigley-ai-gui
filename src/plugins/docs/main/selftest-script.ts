@@ -363,9 +363,24 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       why: 'A Starred group that first shows starts expanded, and it holds Style.',
     },
     {
-      keys: ['j', 'j', 'j', 'j', 'j', 'j', 's'],
+      keys: ['s'],
       expect: '[docs] unstarred Style',
-      why: "Six rows down from Starred's Style are Mine, Global, Instructions, CLAUDE.md, Rules, then Style in its usual place.",
+      why: "Unstarring from Starred's Style removes its row, and the cursor moves to Style's usual row.",
+    },
+    {
+      keys: ['l'],
+      expect: '[docs] opened style.md',
+      why: "Starred's Style row is gone, so the cursor sits on Style's usual row, which l opens.",
+    },
+    {
+      keys: ['s'],
+      expect: '[docs] starred Style',
+      why: 'Starring it again from its usual row brings back the Starred group.',
+    },
+    {
+      keys: ['s'],
+      expect: '[docs] unstarred Style',
+      why: 'The cursor stays on the usual row, where s unstars it.',
     },
     {
       keys: ['g', 'g'],
@@ -599,7 +614,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       name: 'recency and stars',
-      why: 'Rules lists its loaded doc before a never-loaded one that comes first by title; s stars a doc into a Starred group above Mine, shown expanded and starred in both places, and s on its usual row unstars it and removes the group.',
+      why: 'Rules lists its loaded doc before a never-loaded one that comes first by title; s stars a doc into a Starred group above Mine, shown expanded and starred in both places, and s unstars it from either row and removes the group, an unstar from Starred moving the cursor to its usual row.',
       steps: recencyAndStars,
     },
     {

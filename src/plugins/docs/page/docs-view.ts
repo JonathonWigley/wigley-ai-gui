@@ -23,7 +23,7 @@ import { loadedAgo, loadedAt, loadedLine } from '../loaded-time';
 import { isIndexedPath } from '../path-guard';
 import {
   buildTree,
-  STARRED_ROOT_ID,
+  isStarredLeafId,
   type TreeLeaf,
   type TreeNode,
 } from '../tree';
@@ -823,7 +823,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     deps.starred.toggle(entry.id);
     const isStarred = deps.starred.has(entry.id);
     log('docs', `${isStarred ? 'starred' : 'unstarred'} ${entry.title}`);
-    const isStarredRow = node.id.startsWith(`${STARRED_ROOT_ID}/`);
+    const isStarredRow = isStarredLeafId(node.id);
     if (!isStarred && isStarredRow) {
       tree.selectEntry(entry.id);
     }

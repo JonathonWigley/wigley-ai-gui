@@ -526,6 +526,24 @@ describe('applyChange', () => {
     expect(renamedC.entries[1].title).toBe('Alpha');
   });
 
+  it('applyChange_RenamedHashFolder_IdFollowsPath', () => {
+    const before = documentOf([
+      entry({ path: '/Users/u/dev/C#/AGENTS.md' }),
+      entry({ id: '/Users/u/dev/C#/f.md#L3', path: '/Users/u/dev/C#/f.md' }),
+    ]);
+
+    const after = applyChange(
+      before,
+      { type: 'renamed', from: '/Users/u/dev/C#', to: '/Users/u/dev/D' },
+      posixPaths,
+    );
+
+    expect(after.entries.map((each) => [each.id, each.path])).toEqual([
+      ['/Users/u/dev/D/AGENTS.md', '/Users/u/dev/D/AGENTS.md'],
+      ['/Users/u/dev/D/f.md#L3', '/Users/u/dev/D/f.md'],
+    ]);
+  });
+
   it('applyChange_Renamed_KeepsLastLoaded', () => {
     const before = documentOf([
       entry({
@@ -723,6 +741,39 @@ describe('movedEntryId', () => {
     );
   });
 
+  it('movedEntryId_HashInFolderName_KeepsPath', () => {
+    expect(
+      movedEntryId(
+        '/Users/u/dev/C#/AGENTS.md',
+        '/Users/u/dev/C#',
+        '/Users/u/dev/D',
+        posixPaths,
+      ),
+    ).toBe('/Users/u/dev/D/AGENTS.md');
+    expect(
+      movedEntryId('/u/C#notes/x.md', '/u/C', '/u/D', posixPaths),
+    ).toBeNull();
+  });
+
+  it('movedEntryId_HashInFileName_KeepsPathAndSuffix', () => {
+    expect(
+      movedEntryId(
+        '/r/docs/#drafts.md#L3',
+        '/r/docs/#drafts.md',
+        '/r/docs/a.md',
+        posixPaths,
+      ),
+    ).toBe('/r/docs/a.md#L3');
+    expect(
+      movedEntryId(
+        '/r/C#/settings.json#hook:PreToolUse:0',
+        '/r/C#',
+        '/r/D',
+        posixPaths,
+      ),
+    ).toBe('/r/D/settings.json#hook:PreToolUse:0');
+  });
+
   it('movedEntryId_Outside_Null', () => {
     expect(
       movedEntryId('/r/a.md', '/r/x.md', '/r/y.md', posixPaths),
@@ -752,6 +803,16 @@ describe('isEntryIdInside', () => {
       isEntryIdInside('/f/followups.md#L3', '/f/followups.md', posixPaths),
     ).toBe(true);
     expect(isEntryIdInside('/r/ab.md', '/r/a', posixPaths)).toBe(false);
+  });
+
+  it('isEntryIdInside_HashInPath_WholePathCompared', () => {
+    expect(isEntryIdInside('/u/C#notes/x.md', '/u/C#notes', posixPaths)).toBe(
+      true,
+    );
+    expect(isEntryIdInside('/u/C#notes/x.md', '/u/C', posixPaths)).toBe(false);
+    expect(
+      isEntryIdInside('/r/docs/#drafts/a.md#L2', '/r/docs/#drafts', posixPaths),
+    ).toBe(true);
   });
 
   it('isEntryIdInside_WindowsItemOtherCase_True', () => {

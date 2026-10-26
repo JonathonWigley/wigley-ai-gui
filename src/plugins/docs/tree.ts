@@ -135,8 +135,15 @@ function starredNode(entries: readonly IndexEntry[], paths: Paths): TreeGroup {
   const leaves = [...entries]
     .sort(byLoaded(byTitleThenId))
     .map(leaf)
-    .map((usual) => ({ ...usual, id: `${STARRED_ROOT_ID}/${usual.id}` }));
+    .map((usual) => ({ ...usual, id: `${STARRED_LEAF_PREFIX}${usual.id}` }));
   return group(STARRED_ROOT_ID, 'Starred', entries, leaves, paths);
+}
+
+const STARRED_LEAF_PREFIX = `${STARRED_ROOT_ID}/`;
+
+// True for the id of a leaf under Starred, false for an entry's usual leaf.
+export function isStarredLeafId(id: string): boolean {
+  return id.startsWith(STARRED_LEAF_PREFIX);
 }
 
 // Global, then Plugins (installed-only entries whose key no clone carries),
