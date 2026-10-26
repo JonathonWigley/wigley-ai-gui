@@ -17,6 +17,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     title: posixPaths.base(overrides.path),
     meta: {},
     walked: [],
+    lastLoaded: null,
     ...overrides,
   };
 }

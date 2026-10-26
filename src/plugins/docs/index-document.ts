@@ -11,7 +11,7 @@ import type {
 } from './contract';
 import { isJsonObject, isStringArray } from '../../shared/json';
 
-export const INDEX_SCHEMA_VERSION = 3;
+export const INDEX_SCHEMA_VERSION = 4;
 
 // `model.py`'s KINDS order; the tree groups kinds in this order.
 export const DOC_KINDS: readonly DocKind[] = [
@@ -145,7 +145,8 @@ function failed(message: string): ParsedIndex {
 
 // The first field of `entry` that breaks the schema, or null. A kind or
 // source need only be a string; `repo`, `root` and `plugin` are each a string
-// where a known source requires it, else a string or null.
+// where a known source requires it, else a string or null. `lastLoaded` is
+// null or a time `Date.parse` reads.
 function malformedEntryField(entry: unknown): string | null {
   if (!isJsonObject(entry)) {
     return 'entry';
@@ -166,6 +167,12 @@ function malformedEntryField(entry: unknown): string | null {
     ['title', typeof entry.title === 'string'],
     ['meta', isJsonObject(entry.meta)],
     ['walked', isStringArray(entry.walked)],
+    [
+      'lastLoaded',
+      entry.lastLoaded === null ||
+        (typeof entry.lastLoaded === 'string' &&
+          !Number.isNaN(Date.parse(entry.lastLoaded))),
+    ],
   ];
   return checks.find(([, valid]) => !valid)?.[0] ?? null;
 }

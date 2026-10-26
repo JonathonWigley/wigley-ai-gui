@@ -21,13 +21,14 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     title: posixPaths.base(overrides.path),
     meta: {},
     walked: [],
+    lastLoaded: null,
     ...overrides,
   };
 }
 
 function documentText(fields: Record<string, unknown>): string {
   return JSON.stringify({
-    schemaVersion: 3,
+    schemaVersion: 4,
     generatedAt: '2026-10-19T14:02:11Z',
     entries: [],
     contexts: [],
@@ -82,14 +83,21 @@ describe('parseIndexDocument', () => {
   it('parse_Schema1_Unsupported', () => {
     expect(parseIndexDocument(documentText({ schemaVersion: 1 }))).toEqual({
       ok: false,
-      message: 'Unsupported docs index schema 1; this app reads 3',
+      message: 'Unsupported docs index schema 1; this app reads 4',
     });
   });
 
   it('parse_Schema2_Unsupported', () => {
     expect(parseIndexDocument(documentText({ schemaVersion: 2 }))).toEqual({
       ok: false,
-      message: 'Unsupported docs index schema 2; this app reads 3',
+      message: 'Unsupported docs index schema 2; this app reads 4',
+    });
+  });
+
+  it('parse_Schema3_Unsupported', () => {
+    expect(parseIndexDocument(documentText({ schemaVersion: 3 }))).toEqual({
+      ok: false,
+      message: 'Unsupported docs index schema 3; this app reads 4',
     });
   });
 
@@ -150,6 +158,51 @@ describe('parseIndexDocument', () => {
       ok: false,
       message: 'Docs index entry 0 is malformed: walked',
     });
+  });
+
+  it('parse_MissingLastLoaded_NamesLastLoaded', () => {
+    const { lastLoaded: _lastLoaded, ...withoutLastLoaded } = entry({
+      path: '/a',
+    });
+    const text = documentText({ entries: [withoutLastLoaded] });
+
+    expect(parseIndexDocument(text)).toEqual({
+      ok: false,
+      message: 'Docs index entry 0 is malformed: lastLoaded',
+    });
+  });
+
+  it('parse_LastLoadedNotATime_NamesLastLoaded', () => {
+    for (const lastLoaded of [3, 'yesterday']) {
+      const text = documentText({
+        entries: [{ ...entry({ path: '/a' }), lastLoaded }],
+      });
+
+      expect(parseIndexDocument(text)).toEqual({
+        ok: false,
+        message: 'Docs index entry 0 is malformed: lastLoaded',
+      });
+    }
+  });
+
+  it('parse_LastLoadedNull_Loads', () => {
+    const text = documentText({ entries: [entry({ path: '/a' })] });
+
+    const parsed = parseIndexDocument(text);
+
+    expect(parsed.ok && parsed.document.entries[0].lastLoaded).toBeNull();
+  });
+
+  it('parse_LastLoadedTime_KeptVerbatim', () => {
+    const text = documentText({
+      entries: [entry({ path: '/a', lastLoaded: '2026-10-26T21:01:32.174Z' })],
+    });
+
+    const parsed = parseIndexDocument(text);
+
+    expect(parsed.ok && parsed.document.entries[0].lastLoaded).toBe(
+      '2026-10-26T21:01:32.174Z',
+    );
   });
 
   it('parse_MissingOwner_NamesOwner', () => {

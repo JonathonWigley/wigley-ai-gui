@@ -218,7 +218,7 @@ function startDocsPart() {
 }
 
 const SESSION_DOCUMENT: IndexDocument = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   generatedAt: '2026-10-20T00:00:00Z',
   entries: [],
   contexts: [],

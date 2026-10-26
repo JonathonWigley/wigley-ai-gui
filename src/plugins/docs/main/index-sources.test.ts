@@ -34,11 +34,12 @@ const ENTRY: IndexEntry = {
   title: 'Mine',
   meta: {},
   walked: [],
+  lastLoaded: null,
 };
 
 function documentOf(entries: IndexEntry[]): IndexDocument {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     generatedAt: '2026-10-20T00:00:00Z',
     entries,
     contexts: [],
@@ -95,16 +96,16 @@ describe('machine source', () => {
     });
   });
 
-  it('load_SchemaFour_PinnedMessage', async () => {
+  it('load_SchemaFive_PinnedMessage', async () => {
     const test = setUp();
-    await test.files.write(INDEX_FILE, '{"schemaVersion":4}');
+    await test.files.write(INDEX_FILE, '{"schemaVersion":5}');
 
     test.registry.add(test.machine);
 
     const load = await test.registry.load('machine');
 
     expect(load.message).toBe(
-      'Unsupported docs index schema 4; this app reads 3',
+      'Unsupported docs index schema 5; this app reads 4',
     );
     expect(test.registry.loadedEntries()).toEqual([]);
   });

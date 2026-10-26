@@ -29,6 +29,7 @@ function entry(fields: Partial<IndexEntry> & { id: string }): IndexEntry {
     title: fields.id,
     meta: {},
     walked: [],
+    lastLoaded: null,
     ...fields,
   };
 }

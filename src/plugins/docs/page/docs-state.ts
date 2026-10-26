@@ -644,7 +644,7 @@ const INSTRUCTION_NAMES = new Set([
 // The entry a new file gets until a build lists it: `mine`, sourced from the
 // deepest `repo` or `features` root holding it (else global), carrying the
 // plugin key of the deepest clone plugin folder holding it, its kind `kind`
-// or, when null, guessed from the path.
+// or, when null, guessed from the path; never loaded.
 export function provisionalEntry(
   path: string,
   kind: DocKind | null,
@@ -666,6 +666,7 @@ export function provisionalEntry(
     title: skill === null ? paths.base(path) : paths.base(skill),
     meta: {},
     walked: [],
+    lastLoaded: null,
   };
 }
 

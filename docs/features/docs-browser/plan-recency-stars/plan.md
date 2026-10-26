@@ -216,10 +216,11 @@ Each was verified at plan time (2026-10-26). `wigley:make` re-runs each before t
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: db28609cefd0114b348eff18e3ba9cb8baf5ca66
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Two repos: gui review base db28609 (above), marketplace review base 0285c19; peer session ai-dev-4e on the same trees, so every commit is pathspec-scoped and review ranges are this run's commit lists — two bases, one Review base line — wrong base would mis-scope the review · lead
 ### Review rounds
 ### Test gate

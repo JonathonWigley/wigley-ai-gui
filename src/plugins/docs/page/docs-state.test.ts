@@ -331,7 +331,7 @@ describe('chips', () => {
 describe('contextChoices', () => {
   it('contextChoices_HomeFirstThenByFolder', () => {
     const document: IndexDocument = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       generatedAt: '2026-10-20T00:00:00Z',
       entries: [],
       contexts: [
@@ -403,6 +403,7 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     title: overrides.path.slice(overrides.path.lastIndexOf('/') + 1),
     meta: {},
     walked: [],
+    lastLoaded: null,
     ...overrides,
   };
 }
@@ -412,7 +413,7 @@ function documentOf(
   contexts: IndexContext[] = [],
 ): IndexDocument {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     generatedAt: '2026-10-20T00:00:00Z',
     entries,
     contexts,
@@ -472,6 +473,30 @@ describe('applyChange', () => {
       title: 'b.md',
     });
     expect(renamedC.entries[1].title).toBe('Alpha');
+  });
+
+  it('applyChange_Renamed_KeepsLastLoaded', () => {
+    const before = documentOf([
+      entry({
+        path: '/Users/u/.claude/rules/a.md',
+        lastLoaded: '2026-10-26T09:00:00Z',
+      }),
+    ]);
+
+    const after = applyChange(
+      before,
+      {
+        type: 'renamed',
+        from: '/Users/u/.claude/rules/a.md',
+        to: '/Users/u/.claude/rules/b.md',
+      },
+      posixPaths,
+    );
+
+    const moved = after.entries.find(
+      (each) => each.id === '/Users/u/.claude/rules/b.md',
+    );
+    expect(moved?.lastLoaded).toBe('2026-10-26T09:00:00Z');
   });
 
   it('applyChange_RenamedFolder_MovesEntriesInside', () => {
@@ -1123,6 +1148,17 @@ describe('provisionalEntry', () => {
     expect(made.owner).toBe('mine');
   });
 
+  it('provisionalEntry_NewFile_NeverLoaded', () => {
+    const made = provisionalEntry(
+      '/Users/u/dev/r/notes.md',
+      null,
+      [],
+      posixPaths,
+    );
+
+    expect(made.lastLoaded).toBeNull();
+  });
+
   it('provisionalEntry_InsideRepoRoot_CopiesOwner', () => {
     const made = provisionalEntry(
       '/Users/u/dev/r/nested/x.md',
@@ -1195,6 +1231,7 @@ describe('provisionalEntry', () => {
       repo: null,
       root: null,
       walked: [],
+      lastLoaded: null,
     });
   });
 

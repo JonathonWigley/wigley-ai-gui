@@ -1,4 +1,4 @@
-// The docs index document (schema 3), as `docs_index.py` writes it (the
+// The docs index document (schema 4), as `docs_index.py` writes it (the
 // marketplace's `plugins/wigley/scripts/docs-index/README.md` is its schema),
 // and the docs plugin's channel between its main and page parts.
 
@@ -70,6 +70,10 @@ export interface IndexEntry {
   meta: Record<string, unknown>;
   // Each path where the index's walk reached this entry through a link.
   walked: string[];
+  // The transcript timestamp (ISO 8601) of the latest load of the entry; null
+  // when no transcript read shows one. Machine-wide in the `machine` source,
+  // the session's own in a `session:<id>` source.
+  lastLoaded: string | null;
 }
 
 // One install merged into a marketplace clone's plugin file; `path` is the
@@ -91,7 +95,7 @@ export interface IndexContext {
 }
 
 export interface IndexDocument {
-  schemaVersion: 3;
+  schemaVersion: 4;
   generatedAt: string;
   entries: IndexEntry[];
   contexts: IndexContext[];

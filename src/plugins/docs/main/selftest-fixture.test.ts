@@ -174,6 +174,14 @@ describe('writeDocsFixture', () => {
     expect(await files.read(STAND_IN_SCRIPT)).toContain('"owner": "mine"');
   });
 
+  it('GIVEN the fixture WHEN the stand-in script is read back THEN a new rule entry is never loaded', async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths, { loadStates: false });
+
+    expect(await files.read(STAND_IN_SCRIPT)).toContain('"lastLoaded": None');
+  });
+
   it('GIVEN loadStates on then off WHEN the files are listed THEN no load-state doc remains on disk or in the index', async () => {
     const files = await homeFiles();
     await writeDocsFixture(files, HOME, posixPaths, { loadStates: true });
