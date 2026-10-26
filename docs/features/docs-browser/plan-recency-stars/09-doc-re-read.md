@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 5 · Depends on: 03, 08
 Plan: [plan.md](plan.md)
@@ -32,3 +32,5 @@ Done when: every stale line found is fixed; the reply lists each fix with its fi
 Commit:    one commit per repo for the fixes, by path only; none when nothing was stale
 
 ## Proof
+
+Commit b3daa93 (marketplace), 17de0c3 (gui) · proof: diff read: README timestamp rule and cache paragraph, AGENTS.md Done gains dashboard+primer, design.md Starred rules — each matches landed code; followups.md, gui AGENTS.md, keymap.md not stale · concerns: none

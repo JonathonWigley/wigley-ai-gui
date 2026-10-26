@@ -209,10 +209,10 @@ Each was verified at plan time (2026-10-26). `wigley:make` re-runs each before t
 - [x] [Self-test steps](08-selftest.md) — after 07
 
 ### Wave 5
-- [ ] [Doc re-read](09-doc-re-read.md) — after 03, 08
+- [x] [Doc re-read](09-doc-re-read.md) — after 03, 08
 
 ### Wave 6
-- [ ] [Final verification](10-final-verification.md) — after 09
+- [x] [Final verification](10-final-verification.md) — after 09
 
 ## Run log
 
@@ -227,6 +227,8 @@ Review base: db28609cefd0114b348eff18e3ba9cb8baf5ca66
 - 03 · 621ee51 (marketplace) · both manifests 1.10.3; check_manifests (+--against origin/main), check_pointers, claude plugin validate, and all 9 unittest suites (dashboard and primer still present) exit 0 · concerns: none
 - 07 · 0ec60ee · diff read: PageServices.clock, toggleStar command + s bind, LeafMarks, expandNewStarred present; typecheck pass; star-full codicon exists · concerns: renderer builds the clock inline rather than as a module constant like timers; a star change redraws other views before outsideChange applies a rename, so one short-lived tree without Starred
 - 08 · ce66200 · diff read: recency and stars group present; typecheck pass · concerns: row counts in steps 6 and 8 assume Instructions stays expanded after the earlier filter groups — npm run selftest at task 10 proves it
+- 09 · b3daa93 (marketplace), 17de0c3 (gui) · diff read: README timestamp rule and cache paragraph, AGENTS.md Done gains dashboard+primer, design.md Starred rules — each matches landed code; followups.md, gui AGENTS.md, keymap.md not stale · concerns: none
+- 10 · none (no fix needed) · all 5 checks pass: schema 4 real build (1638 entries, all lastLoaded), session times, npm run selftest 551 PASS, drive captures in .drive/v10-recency/screenshots match DESIGN.md (lead viewed starred.png, docview-loaded.png), stars survive restart · concerns: cold real build 66.7 s vs ~30 s expected (warm 15.4 s); a file read only through Bash cat is not a load, so the installed plan-folder.md had no time
 ### Contract changes
 ### Rulings
 - Two repos: gui review base db28609 (above), marketplace review base 0285c19; peer session ai-dev-4e on the same trees, so every commit is pathspec-scoped and review ranges are this run's commit lists — two bases, one Review base line — wrong base would mis-scope the review · lead
@@ -240,3 +242,4 @@ Review base: db28609cefd0114b348eff18e3ba9cb8baf5ca66
 - expandNewStarred runs on every setTree but the first tree with rows — a Starred group appearing later starts expanded — none · group 07 · group 07
 ### Review rounds
 ### Test gate
+- gui: typecheck + lint (PageServices contract change reaches every plugin stub); vitest src/plugins/docs, src/plugins/keymap, src/plugins/keys, src/renderer (changed modules, keymap bind, renderer services) — 45 files, 771 tests pass; marketplace: docs-index unittest discover (changed suite) 233 OK, all other marketplace suites ran green at task 03 and 09 touched docs only · pass

@@ -1,6 +1,6 @@
 # 10 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 6 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -58,3 +58,5 @@ Done when: every check above passes or its failure is fixed and re-run; the repo
 Commit:    none, unless a fix was needed (then one commit per fix, in its repo, by path only)
 
 ## Proof
+
+Commit none (no fix needed) · proof: all 5 checks pass: schema 4 real build (1638 entries, all lastLoaded), session times, npm run selftest 551 PASS, drive captures in .drive/v10-recency/screenshots match DESIGN.md (lead viewed starred.png, docview-loaded.png), stars survive restart · concerns: cold real build 66.7 s vs ~30 s expected (warm 15.4 s); a file read only through Bash cat is not a load, so the installed plan-folder.md had no time
