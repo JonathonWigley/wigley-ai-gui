@@ -5,6 +5,7 @@ import type { IndexEntry } from './contract';
 import { buildTree, titleFromId, type TreeGroup, type TreeNode } from './tree';
 
 const HOME = '/Users/u';
+const NO_STARS: ReadonlySet<string> = new Set();
 
 function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
   return {
@@ -41,7 +42,7 @@ function mineChildren(
   homeDir = HOME,
   paths = posixPaths,
 ): TreeNode[] {
-  return child(buildTree(entries, homeDir, paths), 'Mine').children;
+  return child(buildTree(entries, homeDir, paths, NO_STARS), 'Mine').children;
 }
 
 function ids(nodes: readonly TreeNode[]): string[] {
@@ -156,6 +157,44 @@ function skillFile(path: string, skill: string): IndexEntry {
   return entry({ path, kind: 'skill-file', meta: { skill } });
 }
 
+const FEATURES_ROOT = '/Users/u/wigley-features/r';
+
+// Repo `r`'s feature home: `b-feat`'s task, `a-feat`'s design (loaded at
+// `designLoaded`) and checklist, and a follow-up.
+function featureHomeEntries(designLoaded: string | null = null): IndexEntry[] {
+  const root = FEATURES_ROOT;
+  const feature = { source: 'features', repo: 'r', root } as const;
+  return [
+    entry({
+      ...feature,
+      path: `${root}/b-feat/01-task.md`,
+      kind: 'task',
+      meta: { feature: 'b-feat' },
+    }),
+    entry({
+      ...feature,
+      path: `${root}/a-feat/design.md`,
+      kind: 'feature-doc',
+      title: 'Design',
+      lastLoaded: designLoaded,
+    }),
+    entry({
+      ...feature,
+      path: `${root}/a-feat/checklist.md`,
+      kind: 'feature',
+      title: 'Zeta checklist',
+      meta: { slug: 'a-feat' },
+    }),
+    entry({
+      ...feature,
+      path: `${root}/followups.md`,
+      id: `${root}/followups.md#L3`,
+      kind: 'followup',
+      line: 3,
+    }),
+  ];
+}
+
 describe('buildTree', () => {
   it('buildTree_BothOwners_MineThenThirdParty', () => {
     const entries = [
@@ -163,7 +202,7 @@ describe('buildTree', () => {
       thirdPartyPluginSkill('v@m'),
     ];
 
-    const roots = buildTree(entries, HOME, posixPaths);
+    const roots = buildTree(entries, HOME, posixPaths, NO_STARS);
 
     expect(titles(roots)).toEqual(['Mine', 'Third-party']);
     expect(ids(roots)).toEqual(['owner:mine', 'owner:third-party']);
@@ -172,13 +211,15 @@ describe('buildTree', () => {
   it('buildTree_NoThirdParty_OnlyMine', () => {
     const entries = [entry({ path: '/Users/u/.claude/rules/a.md' })];
 
-    expect(titles(buildTree(entries, HOME, posixPaths))).toEqual(['Mine']);
+    expect(titles(buildTree(entries, HOME, posixPaths, NO_STARS))).toEqual([
+      'Mine',
+    ]);
   });
 
   it('buildTree_OnlyThirdParty_OnlyThirdPartyRoot', () => {
     const entries = [thirdPartyPluginSkill('v@m')];
 
-    expect(titles(buildTree(entries, HOME, posixPaths))).toEqual([
+    expect(titles(buildTree(entries, HOME, posixPaths, NO_STARS))).toEqual([
       'Third-party',
     ]);
   });
@@ -287,7 +328,7 @@ describe('buildTree', () => {
   });
 
   it('buildTree_Roles_RepoClonePluginOther', () => {
-    const roots = buildTree(marketplaceRepo(), HOME, posixPaths);
+    const roots = buildTree(marketplaceRepo(), HOME, posixPaths, NO_STARS);
     const repo = child(child(roots, 'Mine').children, 'm');
     const plugin = child(repo.children, 'w@m');
 
@@ -323,7 +364,7 @@ describe('buildTree', () => {
     ];
 
     const thirdParty = child(
-      buildTree(entries, HOME, posixPaths),
+      buildTree(entries, HOME, posixPaths, NO_STARS),
       'Third-party',
     );
 
@@ -407,10 +448,29 @@ describe('buildTree', () => {
   });
 
   it('buildTree_SameIndexTwice_SameIds', () => {
-    const first = buildTree(twoClonesCarryingKey(), HOME, posixPaths);
-    const second = buildTree(twoClonesCarryingKey(), HOME, posixPaths);
+    const first = buildTree(twoClonesCarryingKey(), HOME, posixPaths, NO_STARS);
+    const second = buildTree(
+      twoClonesCarryingKey(),
+      HOME,
+      posixPaths,
+      NO_STARS,
+    );
+    const starred = new Set([installedOnlySkill().id]);
+    const firstStarred = buildTree(
+      twoClonesCarryingKey(),
+      HOME,
+      posixPaths,
+      starred,
+    );
+    const secondStarred = buildTree(
+      twoClonesCarryingKey(),
+      HOME,
+      posixPaths,
+      starred,
+    );
 
     expect(flattenedIds(second)).toEqual(flattenedIds(first));
+    expect(flattenedIds(secondStarred)).toEqual(flattenedIds(firstStarred));
   });
 
   it('buildTree_SelfTestGlobalKinds_InstructionsRulesHooksLast', () => {
@@ -583,36 +643,8 @@ describe('buildTree', () => {
   });
 
   it('buildTree_Features_GroupedBySlugThenKinds', () => {
-    const root = '/Users/u/wigley-features/r';
-    const feature = { source: 'features', repo: 'r', root } as const;
-    const entries = [
-      entry({
-        ...feature,
-        path: `${root}/b-feat/01-task.md`,
-        kind: 'task',
-        meta: { feature: 'b-feat' },
-      }),
-      entry({
-        ...feature,
-        path: `${root}/a-feat/design.md`,
-        kind: 'feature-doc',
-        title: 'Design',
-      }),
-      entry({
-        ...feature,
-        path: `${root}/a-feat/checklist.md`,
-        kind: 'feature',
-        title: 'Zeta checklist',
-        meta: { slug: 'a-feat' },
-      }),
-      entry({
-        ...feature,
-        path: `${root}/followups.md`,
-        id: `${root}/followups.md#L3`,
-        kind: 'followup',
-        line: 3,
-      }),
-    ];
+    const root = FEATURES_ROOT;
+    const entries = featureHomeEntries();
 
     const features = child(
       child(mineChildren(entries), 'r').children,
@@ -742,6 +774,218 @@ describe('buildTree', () => {
       title: 'x.md',
       entryId: '/x.md#L3',
     });
+  });
+
+  it('buildTree_StarredDoc_StarredRootAboveMine', () => {
+    const rule = '/Users/u/.claude/rules/a.md';
+
+    const roots = buildTree(
+      [entry({ path: rule })],
+      HOME,
+      posixPaths,
+      new Set([rule]),
+    );
+
+    expect(titles(roots)).toEqual(['Starred', 'Mine']);
+    expect(ids(roots)).toEqual(['owner:starred', 'owner:mine']);
+    const starred = child(roots, 'Starred');
+    expect(ids(starred.children)).toEqual([
+      'owner:starred/entry:/Users/u/.claude/rules/a.md',
+    ]);
+    expect(titles(starred.children)).toEqual(['a.md']);
+  });
+
+  it('buildTree_StarredDoc_StaysInItsPlace', () => {
+    const rule = '/Users/u/.claude/rules/a.md';
+
+    const roots = buildTree(
+      [entry({ path: rule })],
+      HOME,
+      posixPaths,
+      new Set([rule]),
+    );
+
+    const rules = child(
+      child(child(roots, 'Mine').children, 'Global').children,
+      'Rules',
+    );
+    expect(ids(rules.children)).toEqual(['entry:/Users/u/.claude/rules/a.md']);
+  });
+
+  it('buildTree_StarredIdNotInIndex_NoStarredRoot', () => {
+    const entries = [entry({ path: '/Users/u/.claude/rules/a.md' })];
+
+    const roots = buildTree(
+      entries,
+      HOME,
+      posixPaths,
+      new Set(['/Users/u/gone.md']),
+    );
+
+    expect(titles(roots)).toEqual(['Mine']);
+  });
+
+  it('buildTree_StarredThirdParty_Listed', () => {
+    const skill = thirdPartyPluginSkill('v@m');
+    const entries = [entry({ path: '/Users/u/.claude/rules/a.md' }), skill];
+
+    const roots = buildTree(entries, HOME, posixPaths, new Set([skill.id]));
+
+    expect(titles(roots)).toEqual(['Starred', 'Mine', 'Third-party']);
+  });
+
+  it('buildTree_StarredRoot_RoleOther', () => {
+    const rule = '/Users/u/.claude/rules/a.md';
+
+    const roots = buildTree(
+      [entry({ path: rule })],
+      HOME,
+      posixPaths,
+      new Set([rule]),
+    );
+
+    expect(child(roots, 'Starred').role).toEqual({ type: 'other' });
+  });
+
+  it('buildTree_Starred_NewestLoadedFirstThenByTitle', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/.claude/rules/b.md',
+        lastLoaded: '2026-10-20T10:00:00Z',
+      }),
+      entry({ path: '/Users/u/.claude/rules/d.md' }),
+      entry({
+        path: '/Users/u/.claude/rules/a.md',
+        lastLoaded: '2026-10-26T09:00:00.500Z',
+      }),
+      entry({ path: '/Users/u/.claude/rules/c.md' }),
+    ];
+    const starred = new Set(entries.map((starredEntry) => starredEntry.id));
+
+    const roots = buildTree(entries, HOME, posixPaths, starred);
+
+    expect(titles(child(roots, 'Starred').children)).toEqual([
+      'a.md',
+      'b.md',
+      'c.md',
+      'd.md',
+    ]);
+  });
+
+  it('buildTree_KindGroup_NewestLoadedFirstThenNeverByTitle', () => {
+    const entries = [
+      entry({ path: '/Users/u/.claude/rules/beta.md' }),
+      entry({
+        path: '/Users/u/.claude/rules/mid.md',
+        lastLoaded: '2026-10-25T10:00:00Z',
+      }),
+      entry({ path: '/Users/u/.claude/rules/alpha.md' }),
+      entry({
+        path: '/Users/u/.claude/rules/zeta.md',
+        lastLoaded: '2026-10-26T10:00:00.000Z',
+      }),
+    ];
+
+    const rules = child(
+      child(mineChildren(entries), 'Global').children,
+      'Rules',
+    );
+
+    expect(titles(rules.children)).toEqual([
+      'zeta.md',
+      'mid.md',
+      'alpha.md',
+      'beta.md',
+    ]);
+  });
+
+  it('buildTree_SameInstant_ByTitle', () => {
+    const entries = [
+      entry({
+        path: '/Users/u/.claude/rules/b.md',
+        lastLoaded: '2026-10-26T10:00:00Z',
+      }),
+      entry({
+        path: '/Users/u/.claude/rules/a.md',
+        lastLoaded: '2026-10-26T10:00:00.000Z',
+      }),
+    ];
+
+    const rules = child(
+      child(mineChildren(entries), 'Global').children,
+      'Rules',
+    );
+
+    expect(titles(rules.children)).toEqual(['a.md', 'b.md']);
+  });
+
+  it('buildTree_SkillGroup_SortsByNewestFile', () => {
+    const skillB = '/Users/u/.claude/skills/b/SKILL.md';
+    const entries = [
+      entry({
+        path: '/Users/u/.claude/skills/a/SKILL.md',
+        kind: 'skill',
+        title: 'a',
+        lastLoaded: '2026-10-20T10:00:00Z',
+      }),
+      entry({ path: skillB, kind: 'skill', title: 'b' }),
+      entry({
+        path: '/Users/u/.claude/skills/b/x.md',
+        kind: 'skill-file',
+        title: 'x.md',
+        meta: { skill: skillB },
+      }),
+      entry({
+        path: '/Users/u/.claude/skills/b/y.md',
+        kind: 'skill-file',
+        title: 'y.md',
+        meta: { skill: skillB },
+        lastLoaded: '2026-10-26T10:00:00Z',
+      }),
+    ];
+
+    const skills = child(
+      child(mineChildren(entries), 'Global').children,
+      'Skills',
+    );
+
+    expect(titles(skills.children)).toEqual(['b', 'a']);
+    expect(titles(child(skills.children, 'b').children)).toEqual([
+      'SKILL.md',
+      'y.md',
+      'x.md',
+    ]);
+  });
+
+  it('buildTree_FeatureFolder_LoadedFirstNeverInKindOrder', () => {
+    const root = FEATURES_ROOT;
+    const entries = featureHomeEntries('2026-10-26T10:00:00Z');
+
+    const features = child(
+      child(mineChildren(entries), 'r').children,
+      'Features',
+    );
+
+    expect(ids(child(features.children, 'a-feat').children)).toEqual([
+      `entry:${root}/a-feat/design.md`,
+      `entry:${root}/a-feat/checklist.md`,
+    ]);
+  });
+
+  it('buildTree_LoadedRepoDocs_GroupsKeepPlace', () => {
+    const entries = [
+      entry({ path: '/Users/u/.claude/rules/a.md' }),
+      entry({
+        path: '/Users/u/dev/r/AGENTS.md',
+        kind: 'instructions',
+        source: 'repo',
+        repo: 'r',
+        root: '/Users/u/dev/r',
+        lastLoaded: '2026-10-26T10:00:00Z',
+      }),
+    ];
+
+    expect(titles(mineChildren(entries))).toEqual(['Global', 'r']);
   });
 });
 

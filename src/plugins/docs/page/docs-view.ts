@@ -536,7 +536,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       contextFolder = kept ? contextFolder : (choices[0]?.folder ?? null);
     }
     tree.setTree(
-      buildTree(next?.entries ?? [], deps.homeDir, deps.paths),
+      buildTree(
+        next?.entries ?? [],
+        deps.homeDir,
+        deps.paths,
+        new Set<string>(),
+      ),
       (entryId) => {
         return entriesById.get(entryId)?.path ?? '';
       },

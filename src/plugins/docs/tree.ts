@@ -76,22 +76,32 @@ export function titleFromId(id: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+export const STARRED_ROOT_ID = 'owner:starred';
 export const MINE_ROOT_ID = 'owner:mine';
 export const THIRD_PARTY_ROOT_ID = 'owner:third-party';
 
-// Two roots by owner: Mine (`owner:mine`), holding Global, the user's
-// installed-only plugins without a clone (`owner:mine/plugins`), one node per
-// repo and one node per source the app does not know; then Third-party
+// Up to three roots: Starred (`owner:starred`), listing every entry whose id
+// is in `starred`, newest loaded first, when there is one; then two roots by
+// owner: Mine (`owner:mine`), holding Global, the user's installed-only
+// plugins without a clone (`owner:mine/plugins`), one node per repo and one
+// node per source the app does not know; then Third-party
 // (`owner:third-party`), holding Synced skills and one node per plugin. A
 // repo holds its kind groups, then one node per plugin of a marketplace clone
 // (its kind groups, then Installed only), then Features. A root with no
-// entries is left out.
+// entries is left out. Inside every group, docs sort newest loaded first,
+// then the never-loaded ones in the group's own order; a skill group sorts by
+// its newest file.
 export function buildTree(
   entries: readonly IndexEntry[],
   homeDir: string,
   paths: Paths,
+  starred: ReadonlySet<string>,
 ): TreeNode[] {
   const roots: TreeNode[] = [];
+  const starredEntries = entries.filter((entry) => starred.has(entry.id));
+  if (starredEntries.length > 0) {
+    roots.push(starredNode(starredEntries, paths));
+  }
   const mine = entries.filter((entry) => entry.owner === 'mine');
   if (mine.length > 0) {
     roots.push(
@@ -117,6 +127,16 @@ export function buildTree(
     );
   }
   return roots;
+}
+
+// One leaf per starred entry, ids `owner:starred/entry:<entryId>`, titled as
+// the entry, so each stays unique beside its leaf in its usual place.
+function starredNode(entries: readonly IndexEntry[], paths: Paths): TreeGroup {
+  const leaves = [...entries]
+    .sort(byLoaded(byTitleThenId))
+    .map(leaf)
+    .map((usual) => ({ ...usual, id: `${STARRED_ROOT_ID}/${usual.id}` }));
+  return group(STARRED_ROOT_ID, 'Starred', entries, leaves, paths);
 }
 
 // Global, then Plugins (installed-only entries whose key no clone carries),
@@ -254,16 +274,60 @@ function groupedBy(
   return [...groups].sort(([a], [b]) => compareTitles(a, b));
 }
 
+type EntryOrder = (a: IndexEntry, b: IndexEntry) => number;
+
 function byTitleThenId(a: IndexEntry, b: IndexEntry): number {
   return (
     compareTitles(a.title, b.title) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
   );
 }
 
+// Entries with a time first, newest first, then those with none; equal times
+// and the never-loaded keep `fallback`'s order. `loadedOf` is the time of the
+// node an entry stands for.
+function byLoaded(
+  fallback: EntryOrder,
+  loadedOf: (entry: IndexEntry) => number | null = loadedTime,
+): EntryOrder {
+  return (a, b) => {
+    const aLoaded = loadedOf(a);
+    const bLoaded = loadedOf(b);
+    if (aLoaded === bLoaded) {
+      return fallback(a, b);
+    }
+    if (aLoaded === null) {
+      return 1;
+    }
+    if (bLoaded === null) {
+      return -1;
+    }
+    return bLoaded - aLoaded;
+  };
+}
+
+// `lastLoaded` as a `Date.parse` value, so differently written equal instants
+// compare equal; null when never loaded.
+function loadedTime(entry: IndexEntry): number | null {
+  return entry.lastLoaded === null ? null : Date.parse(entry.lastLoaded);
+}
+
+// The newest time among `entries`; null when none was loaded.
+function newestLoaded(entries: readonly IndexEntry[]): number | null {
+  let newest: number | null = null;
+  for (const entry of entries) {
+    const loaded = loadedTime(entry);
+    if (loaded !== null && (newest === null || loaded > newest)) {
+      newest = loaded;
+    }
+  }
+  return newest;
+}
+
 // One group per kind present, in `DOC_KINDS` order, ids `<parentId>/<kind>`;
 // then one per kind the app does not know, by kind id, ids
 // `<parentId>/kind:<kind>` so no such kind meets a known node's id. A skill
-// whose skill-files are in `entries` becomes a skill group holding them.
+// whose skill-files are in `entries` becomes a skill group holding them, timed
+// by its newest file.
 function kindGroups(
   parentId: string,
   entries: readonly IndexEntry[],
@@ -275,9 +339,11 @@ function kindGroups(
       entry.kind !== 'skill-file' ||
       !filesBySkill.has(metaString(entry, 'skill') ?? ''),
   );
+  const nodeLoaded = (entry: IndexEntry): number | null =>
+    newestLoaded([entry, ...(filesBySkill.get(entry.id) ?? [])]);
   const nodesOf = (ofKind: readonly IndexEntry[]): TreeNode[] =>
     [...ofKind]
-      .sort(byTitleThenId)
+      .sort(byLoaded(byTitleThenId, nodeLoaded))
       .map((entry) => skillGroupOrLeaf(entry, filesBySkill, paths));
   const groups: TreeNode[] = [];
   for (const kind of DOC_KINDS) {
@@ -335,8 +401,8 @@ function skillFilesBySkill(
 }
 
 // A skill with files: group `skill:<entryId>` titled as the skill, holding
-// its SKILL.md leaf (titled `SKILL.md`), then its files by title. Any other
-// entry: its leaf.
+// its SKILL.md leaf (titled `SKILL.md`), then its files newest loaded first,
+// the never-loaded by title. Any other entry: its leaf.
 function skillGroupOrLeaf(
   entry: IndexEntry,
   filesBySkill: ReadonlyMap<string, readonly IndexEntry[]>,
@@ -348,7 +414,7 @@ function skillGroupOrLeaf(
   }
   const children = [
     { ...leaf(entry), title: 'SKILL.md' },
-    ...[...files].sort(byTitleThenId).map(leaf),
+    ...[...files].sort(byLoaded(byTitleThenId)).map(leaf),
   ];
   return group(
     `skill:${entry.id}`,
@@ -500,7 +566,7 @@ function featuresNode(
     withSlug,
     (entry) => featureSlug(entry, paths) ?? '',
   ).map(([slug, slugEntries]) => {
-    const leaves = [...slugEntries].sort(byKindThenTitle).map(leaf);
+    const leaves = [...slugEntries].sort(byLoaded(byKindThenTitle)).map(leaf);
     return group(`${id}/feature:${slug}`, slug, slugEntries, leaves, paths);
   });
   return group(
