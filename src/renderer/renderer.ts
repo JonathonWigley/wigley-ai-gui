@@ -6,7 +6,7 @@ import '@fontsource/jetbrains-mono/600.css';
 import './index.css';
 import '../shared/page/ui/materials.css';
 import './shell/shell.css';
-import type { Timers } from '../contracts/ambient';
+import type { Clock, Timers } from '../contracts/ambient';
 import type { CommandId } from '../contracts/commands';
 import type { PageCommandContext, PageServices } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
@@ -54,6 +54,8 @@ const timers: Timers = {
   set: (run, ms) => window.setTimeout(run, ms),
   clear: (handle) => window.clearTimeout(handle),
 };
+
+const clock: Clock = { now: () => Date.now() };
 
 // Throws for a page part main served nothing for: its manifest is missing from
 // the built-in manifests list, so it would get no keys, labels or settings.
@@ -158,7 +160,7 @@ async function start() {
     toast: (text, tone) => toasts.show(text, tone),
     log,
     timers,
-    clock: { now: () => Date.now() },
+    clock,
     paths: config.platform === 'windows' ? windowsPaths : posixPaths,
     homeDir: config.homeDir,
   };
