@@ -239,6 +239,10 @@ now, any harness later). Each item names its sites.
 
 ### Bugs and code
 
+- When another docs view renames or trashes a doc, a view whose selected row was that doc (its usual row or its
+  Starred row) keeps a selection with no row, so `l` and `s` do nothing until the user moves. Star toggles already
+  reselect the doc's usual row (`starChange`, `src/plugins/docs/page/docs-view.ts`); `outsideChange` could select
+  the renamed doc's new row, or the nearest row after a trash.
 - Docs opens race each other with no shared rule: `openDoc` drops a waiting request only for a newer `openDoc`, so a
   doc the user opens from the tree or a link while it waits on a rebuild is replaced when the rebuild lands. One
   open-intent sequence shared by `openDoc`, tree leaf opens and in-doc links, checked where the open happens, gives

@@ -26,8 +26,8 @@ the user changes it.
 - **C — ownership and plugin-source status**: the docs index's `owner`, marketplace clones and merged installs
   (schema 3, wigley-ai-marketplace); the Mine and Third-party tree, read-only third-party docs and the git statuses
   (`plan-ownership/`).
-- **D — recency and stars**: the docs index's `lastLoaded` (schema 4, wigley-ai-marketplace); docs ordered newest
-  loaded first, the time on each row and in the doc view, and the Starred group (`plan-recency-stars/`).
+- **D — recency and stars** (landed): the docs index's `lastLoaded` (schema 4, wigley-ai-marketplace); docs ordered
+  newest loaded first, the time on each row and in the doc view, and the Starred group.
 
 Each plan lands green on its own, the self-test passing, and is reviewed on its own.
 
@@ -259,8 +259,9 @@ at the top of the tree.
   lists every starred doc the view's index holds, newest loaded first; each also stays in its usual place, starred
   there too. The group shows only when it holds a doc, carries no status rollup, and the filter applies to it as to
   any group. The group starts expanded, also when it first appears in a later tree (the first star, or an index
-  that now holds a starred doc). `s` on a group row does nothing. Unstarring from a Starred row selects the doc's usual
-  row, since the Starred row is gone. Opening a doc in Docs mode from elsewhere selects its usual place.
+  that now holds a starred doc). `s` on a group row does nothing. An unstar in any view that removes the view's selected Starred row selects
+  the doc's usual row there, since the Starred row is gone. A rename that carries every star leaves a collapsed Starred
+  group collapsed. Opening a doc in Docs mode from elsewhere selects its usual place.
 - **One star set**, saved in the docs plugin's `uiState` by entry id, shared by Docs mode and every session's Docs
   tab; starring in one view shows in all. The stable and dev apps keep separate stars, as they keep separate split
   widths. A rename or move through the app carries the star to the new path; a trash through the app drops the star
