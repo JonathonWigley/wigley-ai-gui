@@ -22,6 +22,8 @@ import {
   edgeSelection,
   fetchText,
   fileStatuses,
+  isEntryIdInside,
+  movedEntryId,
   noPlaceText,
   parentId,
   provisionalEntry,
@@ -645,6 +647,68 @@ describe('applyChange', () => {
     );
 
     expect(pathsOf(after)).toEqual(['/h/.claude/skills/t/SKILL.md']);
+  });
+});
+
+describe('movedEntryId', () => {
+  it('movedEntryId_FileItself_ToPath', () => {
+    expect(movedEntryId('/r/a.md', '/r/a.md', '/r/b.md', posixPaths)).toBe(
+      '/r/b.md',
+    );
+  });
+
+  it('movedEntryId_ItemOfFile_KeepsSuffix', () => {
+    expect(
+      movedEntryId(
+        '/f/followups.md#L3',
+        '/f/followups.md',
+        '/f/later.md',
+        posixPaths,
+      ),
+    ).toBe('/f/later.md#L3');
+  });
+
+  it('movedEntryId_InsideFolder_Joined', () => {
+    expect(movedEntryId('/r/s/ref/x.md', '/r/s', '/r/t', posixPaths)).toBe(
+      '/r/t/ref/x.md',
+    );
+  });
+
+  it('movedEntryId_Outside_Null', () => {
+    expect(
+      movedEntryId('/r/a.md', '/r/x.md', '/r/y.md', posixPaths),
+    ).toBeNull();
+    expect(
+      movedEntryId('/r/a.mdx', '/r/a.md', '/r/b.md', posixPaths),
+    ).toBeNull();
+  });
+
+  it('movedEntryId_WindowsItemOtherCase_Moves', () => {
+    expect(
+      movedEntryId(
+        'C:\\R\\a.md#L4',
+        'c:\\r\\a.md',
+        'C:\\R\\b.md',
+        windowsPaths,
+      ),
+    ).toBe('C:\\R\\b.md#L4');
+  });
+});
+
+describe('isEntryIdInside', () => {
+  it('isEntryIdInside_AtInsideItemOutside', () => {
+    expect(isEntryIdInside('/r/a.md', '/r/a.md', posixPaths)).toBe(true);
+    expect(isEntryIdInside('/r/s/x.md', '/r/s', posixPaths)).toBe(true);
+    expect(
+      isEntryIdInside('/f/followups.md#L3', '/f/followups.md', posixPaths),
+    ).toBe(true);
+    expect(isEntryIdInside('/r/ab.md', '/r/a', posixPaths)).toBe(false);
+  });
+
+  it('isEntryIdInside_WindowsItemOtherCase_True', () => {
+    expect(isEntryIdInside('C:\\R\\a.md#L4', 'c:\\r\\a.md', windowsPaths)).toBe(
+      true,
+    );
   });
 });
 

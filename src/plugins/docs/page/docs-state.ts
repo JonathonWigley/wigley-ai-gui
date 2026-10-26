@@ -347,10 +347,7 @@ function renamedDocument(
       return entry;
     }
     const path = paths.join(to, ...below);
-    // An id is its entry's path, with `#…` for an item inside the file.
-    const id = entry.id.startsWith(entry.path)
-      ? path + entry.id.slice(entry.path.length)
-      : entry.id;
+    const id = movedEntryId(entry.id, from, to, paths) ?? entry.id;
     movedIds.set(entry.id, id);
     return {
       ...entry,
@@ -369,6 +366,39 @@ function renamedDocument(
     ),
   }));
   return { ...document, entries, contexts };
+}
+
+// The id an entry at or inside `from` gets when `from` moves to `to`: an id is
+// its entry's path, with `#…` for an item inside the file. Null when the move
+// does not reach it.
+export function movedEntryId(
+  entryId: string,
+  from: string,
+  to: string,
+  paths: Paths,
+): string | null {
+  const { path, suffix } = splitEntryId(entryId);
+  const below = paths.segmentsBelow(path, from);
+  return below === null ? null : paths.join(to, ...below) + suffix;
+}
+
+// True when the entry with this id is `path` or lies inside it: an id is its
+// entry's path, with `#…` for an item inside the file.
+export function isEntryIdInside(
+  entryId: string,
+  path: string,
+  paths: Paths,
+): boolean {
+  return paths.isInside(splitEntryId(entryId).path, path);
+}
+
+// An entry id split at its first `#`: the entry's path, and the item suffix
+// (`#…`, empty for a whole file).
+function splitEntryId(entryId: string): { path: string; suffix: string } {
+  const hash = entryId.indexOf('#');
+  return hash === -1
+    ? { path: entryId, suffix: '' }
+    : { path: entryId.slice(0, hash), suffix: entryId.slice(hash) };
 }
 
 // The change applied again over a source run's document, which may already
