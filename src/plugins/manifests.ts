@@ -4,6 +4,7 @@ import { docsManifest } from './docs/manifest';
 import { formsManifest } from './forms/manifest';
 import { galleryManifest } from './gallery/manifest';
 import { keysManifest } from './keys/manifest';
+import { primerManifest } from './primer/manifest';
 import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
 
@@ -15,6 +16,7 @@ export { DIGITS } from './forms/manifest';
 export const builtInManifests = [
   sessionsManifest,
   formsManifest,
+  primerManifest,
   chatManifest,
   keysManifest,
   docsManifest,

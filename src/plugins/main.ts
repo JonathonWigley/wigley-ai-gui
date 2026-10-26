@@ -2,6 +2,7 @@ import type { MainPart } from '../contracts/plugin';
 import { chatMainPart } from './chat/main/start';
 import { docsMainPart } from './docs/main/start';
 import { formsMainPart } from './forms/main/start';
+import { primerMainPart } from './primer/main/start';
 import { sessionsMainPart } from './sessions/main/start';
 import { settingsMainPart } from './settings/main/start';
 
@@ -10,6 +11,7 @@ import { settingsMainPart } from './settings/main/start';
 export const mainParts: readonly MainPart[] = [
   sessionsMainPart,
   formsMainPart,
+  primerMainPart,
   chatMainPart,
   docsMainPart,
   settingsMainPart,

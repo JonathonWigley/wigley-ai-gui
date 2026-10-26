@@ -264,6 +264,21 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
+  'src/plugins/primer': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
+  'src/plugins/primer/main': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/shared/agent-forms',
+      'src/plugins/primer',
+      'src/plugins/sessions/contract.ts',
+    ],
+    packages: ['node:'],
+  },
   'src/plugins/gallery': {
     layers: ['src/contracts', 'src/shared'],
     packages: [],
@@ -343,6 +358,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/docs/main',
       'src/plugins/forms',
       'src/plugins/forms/main',
+      'src/plugins/primer',
+      'src/plugins/primer/main',
       'src/plugins/sessions',
       'src/plugins/sessions/main',
       'src/plugins/settings',
@@ -359,6 +376,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/forms',
       'src/plugins/gallery',
       'src/plugins/keys',
+      'src/plugins/primer',
       'src/plugins/sessions',
       'src/plugins/settings',
     ],
