@@ -128,9 +128,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const otherViews = (view: DocsView) =>
       allViews().filter((each) => each !== view);
 
-    // The star set hears each change once, from the view that made it.
     const changedIn = (view: DocsView, change: DocChangeRecord) => {
-      starred.applyChange(change);
       for (const other of otherViews(view)) {
         other.outsideChange(change);
       }

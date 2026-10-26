@@ -156,7 +156,8 @@ export interface DocsViewDeps {
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: Log;
-  // The star set every docs view shares; each view redraws on its changes.
+  // The star set every docs view shares; each view redraws on its toggles.
+  // The view that makes a change moves the set's stars with it.
   starred: StarredDocs;
   // Epoch milliseconds, for the last-loaded times.
   now(): number;
@@ -728,10 +729,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     return true;
   };
 
+  // The stars move before any view draws the change, so no draw shows the
+  // Starred group without them.
   const applyDocChange = (
     record: DocChangeRecord,
     selectPath: string | null,
   ) => {
+    deps.starred.applyChange(record);
     const isShown = showChange(record);
     const selectId =
       record.type === 'created'
@@ -809,8 +813,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   // Stars or unstars the selected doc and logs it; nothing on a group, with
-  // no row selected, or for an entry gone from the index. Unstarring from its
-  // Starred row, whose row is then gone, selects its usual row.
+  // no row selected, or for an entry gone from the index.
   const toggleStar = () => {
     const node = tree.selected();
     if (node?.type !== 'entry') {
@@ -823,10 +826,6 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     deps.starred.toggle(entry.id);
     const isStarred = deps.starred.has(entry.id);
     log('docs', `${isStarred ? 'starred' : 'unstarred'} ${entry.title}`);
-    const isStarredRow = isStarredLeafId(node.id);
-    if (!isStarred && isStarredRow) {
-      tree.selectEntry(entry.id);
-    }
   };
 
   const commands: DocsViewCommands = {
@@ -893,10 +892,20 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     confirmNo: () => dialogs.confirmNo(),
   };
 
-  // A star change from any view redraws this one's tree, once it has read.
+  // A star toggle from any view redraws this one's tree, once it has read. An
+  // unstar that drops the selected Starred row selects the doc's usual row.
   const starChange = deps.starred.onChanged(() => {
-    if (document !== null) {
-      showDocument(document);
+    if (document === null) {
+      return;
+    }
+    const before = tree.selected();
+    showDocument(document);
+    const isStarredRowDropped =
+      before?.type === 'entry' &&
+      isStarredLeafId(before.id) &&
+      tree.selected() === null;
+    if (isStarredRowDropped) {
+      tree.selectEntry(before.entryId);
     }
   });
 

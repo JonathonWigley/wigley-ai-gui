@@ -16,9 +16,10 @@ import {
 const STARRED_KEY = 'starred';
 
 // The star set. `ids()` is the live set, read and never changed by callers.
-// `toggle` and a change that alters the set save the whole set, sorted, then
-// run each `onChanged` listener synchronously in subscribe order; a change
-// that alters nothing saves nothing and runs none.
+// `toggle` saves the whole set, sorted, then runs each `onChanged` listener
+// synchronously in subscribe order. A change that alters the set saves it the
+// same way and runs no listener: every view redraws with the change itself.
+// A change that alters nothing saves nothing.
 export interface StarredDocs {
   ids(): ReadonlySet<string>;
   has(entryId: string): boolean;
@@ -35,12 +36,7 @@ export function createStarredDocs(uiState: UiState, paths: Paths): StarredDocs {
   const saved = uiState.get(STARRED_KEY);
   const ids = new Set<string>(isStringArray(saved) ? saved : []);
   const listeners = new Set<() => void>();
-  const saveAndNotify = () => {
-    uiState.set(STARRED_KEY, [...ids].sort());
-    for (const listener of listeners) {
-      listener();
-    }
-  };
+  const save = () => uiState.set(STARRED_KEY, [...ids].sort());
   return {
     ids: () => ids,
     has: (entryId) => ids.has(entryId),
@@ -48,7 +44,10 @@ export function createStarredDocs(uiState: UiState, paths: Paths): StarredDocs {
       if (!ids.delete(entryId)) {
         ids.add(entryId);
       }
-      saveAndNotify();
+      save();
+      for (const listener of listeners) {
+        listener();
+      }
     },
     applyChange(change) {
       const next = changedIds(ids, change, paths);
@@ -59,7 +58,7 @@ export function createStarredDocs(uiState: UiState, paths: Paths): StarredDocs {
       for (const id of next) {
         ids.add(id);
       }
-      saveAndNotify();
+      save();
     },
     onChanged(listener) {
       // A wrapper per subscribe, so each handle removes only its own.

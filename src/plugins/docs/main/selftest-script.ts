@@ -388,9 +388,41 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       why: 'Unstarring the only starred doc removes the Starred group.',
     },
     {
-      keys: ['j', 'j', 'j', 'j', 'h'],
+      keys: [...Array<string>(6).fill('j'), 's'],
+      expect: '[docs] starred neat.md',
+      why: 'Global, Instructions, CLAUDE.md, Rules, Style, then neat.md.',
+    },
+    { keys: ['g', 'g'], expect: '[docs] selected Starred' },
+    { keys: ['h'], expect: '[docs] collapsed Starred' },
+    {
+      keys: [...Array<string>(7).fill('j'), 'r'],
+      expect: '[docs] rename: type the new path',
+      why: "Below the collapsed Starred row, neat.md's usual row is seven rows down.",
+    },
+    {
+      keys: [...Array<string>(7).fill('Backspace'), ...'tidy.md', 'Enter'],
+      expect: '[docs] renamed neat.md to tidy.md',
+    },
+    { keys: ['g', 'g'], expect: '[docs] selected Starred' },
+    {
+      keys: ['l'],
+      expect: '[docs] expanded Starred',
+      why: 'Renaming the starred doc keeps the Starred group collapsed.',
+    },
+    { keys: ['l'], expect: '[docs] selected tidy.md' },
+    {
+      keys: ['s', 'r'],
+      expect: '[docs] rename: type the new path',
+      why: "Unstarring from Starred's row moves the cursor to tidy.md's usual row, which r renames.",
+    },
+    {
+      keys: [...Array<string>(7).fill('Backspace'), ...'neat.md', 'Enter'],
+      expect: '[docs] renamed tidy.md to neat.md',
+    },
+    {
+      keys: ['g', 'g', 'j', 'j', 'j', 'j', 'h'],
       expect: '[docs] collapsed Rules',
-      why: 'Global, Instructions, CLAUDE.md, then Rules; h collapses it, where detail views starts.',
+      why: 'Mine, Global, Instructions, CLAUDE.md, then Rules; h collapses it, where detail views starts.',
     },
   ];
   const detailViews: SelfTestStep[] = [
@@ -570,6 +602,39 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
   ];
+  const starsAcrossViews: SelfTestStep[] = [
+    {
+      keys: ['/', ...'style', 'Enter'],
+      expect: '[docs] filtered the tree: style',
+    },
+    { keys: ['g', 'g'], expect: '[docs] selected Mine' },
+    {
+      keys: ['Enter', 'Enter', 'Enter'],
+      expect: '[docs] selected Style',
+      why: 'Under the filter Enter steps from Mine to Global, Rules, then Style.',
+    },
+    { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
+    { keys: ['s'], expect: '[docs] starred Style' },
+    { keys: ['g', 'g'], expect: '[docs] selected Starred' },
+    { keys: ['l'], expect: '[docs] selected Style' },
+    { keys: [' ', 'k', 's'], expect: '[docs] Docs tab shown' },
+    {
+      keys: ['g', 'g'],
+      expect: '[docs] selected Starred',
+      why: "The session view's index lists Style too, so it shows the Starred group.",
+    },
+    { keys: ['l'], expect: '[docs] selected Style' },
+    { keys: ['s'], expect: '[docs] unstarred Style' },
+    {
+      keys: [' ', 'k', 'd'],
+      expect: '[page] marked Docs in the activity bar',
+    },
+    {
+      keys: ['l'],
+      expect: '[docs] opened style.md',
+      why: "The session view's unstar dropped Docs mode's selected Starred row, so its cursor moved to Style's usual row, which l opens.",
+    },
+  ];
   const transparency: SelfTestStep[] = [
     { keys: [' ', 'z', 'g'], expect: '[page] showed Gallery mode' },
     { keys: ['t'], expect: '[gallery] transparency reduced' },
@@ -614,7 +679,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       name: 'recency and stars',
-      why: 'Rules lists its loaded doc before a never-loaded one that comes first by title; s stars a doc into a Starred group above Mine, shown expanded and starred in both places, and s unstars it from either row and removes the group, an unstar from Starred moving the cursor to its usual row.',
+      why: 'Rules lists its loaded doc before a never-loaded one that comes first by title; s stars a doc into a Starred group above Mine, shown expanded and starred in both places, and s unstars it from either row and removes the group, an unstar from Starred moving the cursor to its usual row; renaming a starred doc keeps a collapsed Starred group collapsed.',
       steps: recencyAndStars,
     },
     {
@@ -656,6 +721,11 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       name: 'Docs mode from a session',
       why: "Showing Docs mode from a session tab closes that view's kind picker, so tree keys move Docs mode's tree, and a rename there makes the session view read its index again.",
       steps: docsModeFromSession,
+    },
+    {
+      name: 'stars across views',
+      why: "A star in Docs mode shows in the session view's Starred group, and an unstar there that drops Docs mode's selected Starred row moves its cursor to the doc's usual row.",
+      steps: starsAcrossViews,
     },
     {
       name: 'transparency',

@@ -90,11 +90,11 @@ describe('onChanged', () => {
 });
 
 describe('applyChange', () => {
-  it('applyChange_RenamedFile_MovesId', () => {
+  it('applyChange_RenamedFile_MovesIdAndRunsNoListener', () => {
     const { starred, sets, calls } = starredOver(['/r/a.md']);
     starred.applyChange({ type: 'renamed', from: '/r/a.md', to: '/r/b.md' });
     expect(sets.at(-1)).toEqual(['/r/b.md']);
-    expect(calls()).toBe(1);
+    expect(calls()).toBe(0);
   });
 
   it('applyChange_RenamedFolder_MovesIdsInside', () => {
