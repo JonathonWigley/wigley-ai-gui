@@ -416,8 +416,8 @@ round), since main, not the page, decides.
   staged copy waiting for the next run, which deletes it. Then it swaps the copy in for
   `%LOCALAPPDATA%\Programs\wigley-ai-gui` (with a Start menu shortcut named Auri) or
   `/Applications/wigley-ai-gui.app`, and starts the app again when it was running. Each OS builds its own app; a
-  locally built app needs no signing identity. On macOS, packaging rewrites the bundle's shown name to Auri in
-  `Info.plist` and re-signs it ad hoc (`forge.config.mts`'s `postPackage`), which refuses an `osxSign` config. The
+  locally built app needs no signing identity. On macOS, packaging rewrites the bundle's shown name
+  (`CFBundleDisplayName`) to Auri in `Info.plist` and re-signs it ad hoc (`forge.config.mts`'s `postPackage`), which refuses an `osxSign` config. The
   installed app's icon is `assets/icon/` (`icon.ico`, `icon.icns` and `icon.png`, drawn from `auri-source.png`),
   which `node scripts/make-icon.mts` rebuilds on Windows; the dev app keeps Electron's icon.
 - Node is pinned in `.nvmrc`. A shell that started on another version runs commands as

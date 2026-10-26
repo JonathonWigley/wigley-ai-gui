@@ -18,8 +18,8 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   hooks: {
-    // @electron/packager sets CFBundleName and CFBundleDisplayName from the app name after applying
-    // `extendInfo`, so the shown name is written into the packaged Info.plist here instead.
+    // @electron/packager sets CFBundleDisplayName from the app name after applying `extendInfo`, so
+    // the shown name is written into the packaged Info.plist here instead.
     postPackage: async (forgeConfig, { platform, outputPaths }) => {
       if (platform !== 'darwin') {
         return;
@@ -90,15 +90,15 @@ function showMacBundleAs(
     );
   }
   const infoPlist = path.join(appPath, 'Contents', 'Info.plist');
-  for (const key of ['CFBundleName', 'CFBundleDisplayName']) {
-    execFileSync('plutil', [
-      '-replace',
-      key,
-      '-string',
-      displayName,
-      infoPlist,
-    ]);
-  }
+  // CFBundleName stays the packaged name: Electron finds `<CFBundleName> Helper.app` by it, and
+  // exits at launch when no helper has that name.
+  execFileSync('plutil', [
+    '-replace',
+    'CFBundleDisplayName',
+    '-string',
+    displayName,
+    infoPlist,
+  ]);
   // Info.plist is sealed into the bundle's signature, and Apple Silicon launches only validly signed apps.
   execFileSync('codesign', [
     '--sign',
