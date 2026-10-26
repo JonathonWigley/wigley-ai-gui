@@ -20,6 +20,7 @@ import { createSplit } from '../../../shared/page/ui/split';
 import { type DotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import { tab, tabStrip } from '../../../shared/page/ui/tabs';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
+import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
 
 export interface GalleryViewDeps {
   platform: Platform;
@@ -63,6 +64,7 @@ export function createGalleryView(deps: GalleryViewDeps): GalleryView {
     iconButtonSection(),
     chipSection(),
     tagSection(),
+    toggleMarkSection(),
     statusDotSection(),
     inputFrameSection(),
     listRowSection(),
@@ -230,6 +232,44 @@ function tagSection(): HTMLElement {
   return section(
     'Tag',
     tags.map(([text, tone]) => cell(tag(text, tone), capitalised(tone))),
+  );
+}
+
+function toggleMarkSection(): HTMLElement {
+  const make = (isOn: boolean) =>
+    toggleMark({ isOn, label: 'Include the item', onToggle: ignore });
+  let isLiveOn = false;
+  const live = toggleMark({
+    isOn: isLiveOn,
+    label: 'Include the item',
+    onToggle: () => {
+      isLiveOn = !isLiveOn;
+      setToggleMark(live, isLiveOn);
+    },
+  });
+  return section(
+    'ToggleMark',
+    [
+      cell(make(false), 'Off'),
+      cell(make(true), 'On'),
+      cell(withClass(make(false), 'is-hover'), 'Off, hover'),
+      cell(withClass(make(true), 'is-hover'), 'On, hover'),
+      cell(withClass(make(false), 'is-pressed'), 'Off, pressed'),
+      cell(disabled(make(false)), 'Off, disabled'),
+      cell(disabled(make(true)), 'On, disabled'),
+      cell(live, 'Live'),
+    ],
+    [
+      cell(
+        row({
+          density: 'list',
+          label: 'Write the store',
+          leading: make(true),
+        }),
+        'Beside a row label',
+        true,
+      ),
+    ],
   );
 }
 

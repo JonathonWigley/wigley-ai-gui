@@ -1,0 +1,61 @@
+/* The accent marks "on": selection takes the one accent. No focus ring: the
+   keyboard cursor draws on the row the mark sits in. `.is-hover` and
+   `.is-pressed` draw hover and press at rest in the gallery. */
+.ui-toggle-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--wg-icon-size);
+  height: var(--wg-icon-size);
+  padding: 0;
+  border: 1px solid var(--wg-border-strong);
+  border-radius: var(--wg-radius-sm);
+  background: transparent;
+  color: var(--wg-fg-on-accent);
+  cursor: pointer;
+  transition:
+    background-color var(--wg-duration-fast) var(--wg-ease-out),
+    border-color var(--wg-duration-fast) var(--wg-ease-out);
+}
+
+/* Outranks icon.css's `.codicon[class*='codicon-']`. */
+.ui-toggle-mark .codicon[class*='codicon-'] {
+  font-size: var(--wg-text-12);
+  visibility: hidden;
+}
+
+.ui-toggle-mark.is-selected {
+  background: var(--wg-accent);
+  border-color: var(--wg-accent);
+}
+
+.ui-toggle-mark.is-selected .codicon[class*='codicon-'] {
+  visibility: visible;
+}
+
+.ui-toggle-mark:not(:disabled):hover,
+.ui-toggle-mark:not(:disabled).is-hover {
+  border-color: var(--wg-accent);
+}
+
+.ui-toggle-mark.is-selected:not(:disabled):hover,
+.ui-toggle-mark.is-selected:not(:disabled).is-hover {
+  background: var(--wg-accent-hover);
+  border-color: var(--wg-accent-hover);
+}
+
+.ui-toggle-mark:not(.is-selected):not(:disabled):active,
+.ui-toggle-mark:not(.is-selected):not(:disabled).is-pressed {
+  background: var(--wg-accent-tint-strong);
+}
+
+.ui-toggle-mark:disabled {
+  border-color: var(--wg-border-default);
+  cursor: default;
+}
+
+.ui-toggle-mark.is-selected:disabled {
+  background: var(--wg-border-default);
+  color: var(--wg-fg-disabled);
+}
