@@ -12,11 +12,13 @@ import type {
   InstalledCopy,
   PluginStatusRead,
 } from '../contract';
-import { installedCopies, metaString } from '../index-document';
+import {
+  INDEX_HARNESSES,
+  installedCopies,
+  metaString,
+} from '../index-document';
 
 const FETCH_TIMEOUT_MS = 15000;
-
-const HARNESS_ORDER: readonly IndexHarness[] = ['claude', 'codex'];
 
 export interface PluginStatusDeps {
   processes: ProcessRunner;
@@ -300,7 +302,7 @@ function upstreamBlobsOf(
 }
 
 // The harnesses the entry's plugin is installed for whose copies do not all
-// match the upstream blob, in `HARNESS_ORDER`; every one of them when the
+// match the upstream blob, in `INDEX_HARNESSES`; every one of them when the
 // file is absent upstream.
 async function harnessesNotInstalled(
   entry: IndexEntry,
@@ -323,7 +325,7 @@ async function harnessesNotInstalled(
   return notInstalled;
 }
 
-// The `meta.harness` of each `plugin` entry for `plugin`, in `HARNESS_ORDER`.
+// The `meta.harness` of each `plugin` entry for `plugin`, in `INDEX_HARNESSES`.
 function pluginHarnesses(
   plugin: string | null,
   entries: readonly IndexEntry[],
@@ -334,7 +336,7 @@ function pluginHarnesses(
   const named = entries
     .filter((entry) => entry.kind === 'plugin' && entry.plugin === plugin)
     .map((entry) => metaString(entry, 'harness'));
-  return HARNESS_ORDER.filter((harness) => named.includes(harness));
+  return INDEX_HARNESSES.filter((harness) => named.includes(harness));
 }
 
 async function allCopiesMatch(

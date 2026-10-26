@@ -60,7 +60,8 @@ export interface IndexEntry {
   // known source but `global`, and a string or null for a source the app does
   // not know.
   root: string | null;
-  // `<plugin>@<marketplace>` for a `plugin` entry.
+  // `<plugin>@<marketplace>` for a `plugin` entry, and for a marketplace
+  // clone's plugin file in a `repo` entry.
   plugin: string | null;
   path: string;
   // 1-based.
@@ -272,7 +273,8 @@ export interface DocsChannel extends ChannelShape {
       harness: IndexHarness,
     ): Promise<{ path: string; line: number } | null>;
     // The git statuses of the marketplace clones among the source's entries;
-    // `fetch` runs a capped `git fetch` in each clone first.
+    // `fetch` runs a capped `git fetch` in each clone first. Rejects
+    // `No docs index source <sourceId>` for an id not registered.
     pluginStatus(sourceId: string, fetch: boolean): Promise<PluginStatusRead>;
   };
   messages: {

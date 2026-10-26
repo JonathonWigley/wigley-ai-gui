@@ -19,7 +19,11 @@ import type {
   LoadStateRecord,
   PluginStatusRead,
 } from '../contract';
-import { installedCopies, metaString } from '../index-document';
+import {
+  INDEX_HARNESSES,
+  installedCopies,
+  metaString,
+} from '../index-document';
 import { skillFolder } from '../kinds';
 import type { docsManifest } from '../manifest';
 import {
@@ -835,8 +839,6 @@ export function fileStatuses(
   return merged;
 }
 
-const HARNESS_ORDER: readonly IndexHarness[] = ['claude', 'codex'];
-
 // The status chips' texts for `entry`, in their fixed order.
 export function statusTexts(
   entry: IndexEntry,
@@ -850,7 +852,7 @@ export function statusTexts(
   if (status?.unpushed === true) {
     texts.push('Unpushed');
   }
-  for (const harness of HARNESS_ORDER) {
+  for (const harness of INDEX_HARNESSES) {
     if (status?.notInstalled.includes(harness) === true) {
       texts.push(`Not installed · ${HARNESS_NAMES[harness]}`);
     }
@@ -892,7 +894,7 @@ export function rollupText(counts: StatusCounts): string | null {
   const parts: [number, string][] = [
     [counts.uncommitted, 'uncommitted'],
     [counts.unpushed, 'unpushed'],
-    ...HARNESS_ORDER.map((harness): [number, string] => [
+    ...INDEX_HARNESSES.map((harness): [number, string] => [
       counts.notInstalled[harness],
       `not installed for ${HARNESS_NAMES[harness]}`,
     ]),

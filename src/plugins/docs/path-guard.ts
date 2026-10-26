@@ -1,7 +1,8 @@
 import type { Paths } from '../../contracts/paths';
 import type { IndexEntry } from './contract';
 
-// The folders a change may land in that no index entry names, as real paths.
+// The folders, outside any index entry, that the guard judges a change
+// against, as real paths.
 export interface GuardFolders {
   // The folders the index walks for global docs.
   globalDocFolders: readonly string[];

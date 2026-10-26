@@ -9,8 +9,8 @@ import { statusDot } from '../../../shared/page/ui/status-dot';
 import type { TreeLeaf, TreeNode } from '../tree';
 import {
   type DocsKeysFor,
-  edgeSelection,
   defaultExpandedIds,
+  edgeSelection,
   parentId,
   stepSelection,
   type TreeLine,
@@ -46,8 +46,8 @@ export interface TreeViewDeps {
 // filter matching nothing or a filter on, and the rows. `setTree` keeps the
 // expanded ids, the selection and the filter; the first tree with rows expands
 // `defaultExpandedIds` and selects its first row. A row draws its status: a
-// leaf's mark as a warning StatusDot, a group's rollup as its detail. The selected row draws as the keyboard
-// cursor while focus is inside the pane.
+// leaf's mark as a warning StatusDot, a group's rollup as its detail. The
+// selected row draws as the keyboard cursor while focus is inside the pane.
 export interface TreeView {
   element: HTMLElement;
   setStatus(text: string | null): void;

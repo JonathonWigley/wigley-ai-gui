@@ -36,7 +36,7 @@ export const DOC_KINDS: readonly DocKind[] = [
 
 const DOC_OWNERS: readonly DocOwner[] = ['mine', 'third-party'];
 
-const INDEX_HARNESSES: readonly IndexHarness[] = ['claude', 'codex'];
+export const INDEX_HARNESSES: readonly IndexHarness[] = ['claude', 'codex'];
 
 const DOC_SOURCES: readonly DocSource[] = [
   'global',
@@ -110,8 +110,8 @@ export function metaString(entry: IndexEntry, key: string): string | null {
 }
 
 // The installs merged into a marketplace clone's plugin file, in install
-// order; null when the entry is no such file. An element of the wrong shape
-// is dropped.
+// order; null when the entry is no such file, and [] when its `installed` is
+// not a list. An element of the wrong shape is dropped.
 export function installedCopies(entry: IndexEntry): InstalledCopy[] | null {
   const { installed } = entry.meta;
   if (installed === undefined) {

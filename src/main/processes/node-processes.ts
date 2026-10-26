@@ -30,7 +30,8 @@ function runToEnd(
         : setTimeout(() => {
             timedOut = true;
             child.kill('SIGKILL');
-            // A grandchild holding the pipes would keep `close` from firing.
+            // Releases the pipe handles and stops a surviving grandchild's
+            // output from growing the buffers.
             child.stdout.destroy();
             child.stderr.destroy();
             resolve(collected(-1, stdout, stderr, true));
