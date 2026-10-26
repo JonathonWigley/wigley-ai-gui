@@ -65,8 +65,8 @@ function relative(elapsed: number, unit: number, letter: string): LoadedAge {
   return { form: 'relative', text: `${Math.floor(elapsed / unit)}${letter}` };
 }
 
-// US English in every locale, so row and Loaded-line dates keep one format and
-// width; only the hover date follows the user's locale.
+// US English in every locale, so row and Loaded-line dates keep one format;
+// only the hover date follows the user's locale.
 function localDate(iso: string, now: number): string {
   const date = new Date(iso);
   const isThisYear = date.getFullYear() === new Date(now).getFullYear();
