@@ -1,6 +1,6 @@
 # 06 — Primer page state, commands and keys
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03, 05
 Plan: [plan.md](plan.md)
@@ -411,3 +411,5 @@ passes with the tests above. Driving the keys is task 08's; the live pass is tas
 Commit: one commit for the group in wigley-ai-gui
 
 ## Proof
+
+Commit c439c93 · proof: diff read: ids, primer-state, primer-store, boxes, primer-commands exports present as planned; 29 commands and five scopes in the manifest; keymap Primer section; typecheck passes; worker ran lint and 61 tests over primer page and keymap · concerns: add-item commit clears newItemTexts but the mounted editor keeps its text unless 07 reacts; addExtraTask focuses the new taskName box synchronously, so 07 must mount the new card's boxes in its store listener; boxText throws on a stale task or item; ids.ts sits in page/ (forms and chat keep theirs at the plugin root)

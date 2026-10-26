@@ -1,6 +1,6 @@
 # 13 — Doc re-read against the landed code
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 7 · Depends on: 01–12
 Plan: [plan.md](plan.md)

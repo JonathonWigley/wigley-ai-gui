@@ -1,6 +1,6 @@
 # 07 — Primer page view, review and start
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 04, 06
 Plan: [plan.md](plan.md)
@@ -175,3 +175,5 @@ Done when: `npm run typecheck` and `npm run lint` pass (layers and style checks 
 Commit: one commit for the group in wigley-ai-gui
 
 ## Proof
+
+Commit 8d153fb · proof: diff read: primerPagePart, primer-events, primer-review and mountPrimerTab exports present; registration and layer lines added; typecheck passes; worker ran lint and 71 primer page tests; the view, card and CSS first run in task 08's self-test · concerns: startPrimerEvents copies forms' startFormsEvents queue and primer.css copies forms' status-line and box rules (lift candidates); the rail's 'Press A to add one' text is fixed, not read from the keymap; view, re-entrant render and keepFocusedBox rebuild are untested until the self-test; primerPagePart is listed before keysPagePart it depends on, relying on dependency ordering

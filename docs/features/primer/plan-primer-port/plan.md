@@ -415,18 +415,18 @@ Every dispatch prompt carries these:
 - [x] [Retire the primer server and dashboard; relay tools](09-retire-primer-server.md) — after 10
 
 ### Wave 3
-- [ ] [Shared page modules; forms adopts them](03-shared-page-modules.md) — after 02
-- [ ] [Primer main part, manifest and contract](05-primer-main.md) — after 02
+- [x] [Shared page modules; forms adopts them](03-shared-page-modules.md) — after 02
+- [x] [Primer main part, manifest and contract](05-primer-main.md) — after 02
 - [x] [Marketplace version bump](12-marketplace-bump.md) — after 09, 10, 11
 
 ### Wave 4
-- [ ] [Primer page state, commands and keys](06-primer-page-state.md) — after 03, 05
+- [x] [Primer page state, commands and keys](06-primer-page-state.md) — after 03, 05
 
 ### Wave 5
-- [ ] [Primer page view, review and start](07-primer-page-view.md) — after 04, 06
+- [x] [Primer page view, review and start](07-primer-page-view.md) — after 04, 06
 
 ### Wave 6
-- [ ] [Primer self-test and drive actions](08-primer-selftest.md) — after 07
+- [x] [Primer self-test and drive actions](08-primer-selftest.md) — after 07
 
 ### Wave 7
 - [ ] [Doc re-read](13-doc-re-read.md) — after every code task
@@ -446,6 +446,11 @@ Review base: 87af8bb
 - 09 · 0f1370f (marketplace) · diff read: four BUILT_IN_TOOLS, OPEN_PRIMER_INPUT_SCHEMA as pinned, NOT_STARTED_NEXT and APP_GONE templates, not_started(reason, tool), _pending dict present as planned; both folders gone from git; forms suite OK, retro suite OK (wave check), check_manifests passes · concerns: marketplace AGENTS.md § Done (lines 101, 104) still lists the dashboard and primer unittest commands, now failing — the task's 'nothing to remove there' was wrong; task 13 removes them
 - 12 · 3bf1f34 (marketplace) · diff read: only version lines changed, 1.11.0 in both; check_manifests passes with and without --against origin/main · concerns: none
 - 02 · 8c2adbf · diff read: every agent-forms contract name, the six shared modules, roundType, withKnownLayouts, presentedRoundOf and the forms contract aliases present; layers entry added; typecheck passes; worker ran lint and 845 tests across shared/agent-forms, forms and chat main · concerns: stale doc lines name deleted files: AGENTS.md 259 (ANSWER_LISTS in forms-service.ts), followups.md 218 and 278, master-plan.md 181 (task 13); preview-round.ts sample text quotes FormsSession.askRound; form-store.test.ts keeps roundsDir/roundFiles helper names
+- 05 · f241356 · diff read: every contract.ts name plus PRIMER_NEEDS, primerManifest, primer.ts functions, primerType, PRIMER_TOOLS, fixtures, primerMainPart and registration present; typecheck clean outside task 03's in-flight forms page files (full compile re-checked when 03 lands); worker ran 44 primer main tests and the layer check · concerns: no test pins the TS open_primer schema against relay.py's copy, so they can drift; the pinned items error says 'two to six of them' while the limit is 20 (kept verbatim from primer.py)
+- 03 · 2e2a0e5 · diff read: all six shared modules' Produces and the forms-side FormsStore, FORMS_BOX_IDENTITY, startRoundAutosave present; no shared name holds round/forms/primer; full typecheck passes (also closes task 05's compile proof); worker ran lint and 702 tests over shared/page and forms · concerns: isSending as specified differs from the old render check in one state (view confirm with no active round now settles an owed dismiss) — looks unreachable; followups.md lines 39 and 78 name moved forms page modules (task 13)
+- 06 · c439c93 · diff read: ids, primer-state, primer-store, boxes, primer-commands exports present as planned; 29 commands and five scopes in the manifest; keymap Primer section; typecheck passes; worker ran lint and 61 tests over primer page and keymap · concerns: add-item commit clears newItemTexts but the mounted editor keeps its text unless 07 reacts; addExtraTask focuses the new taskName box synchronously, so 07 must mount the new card's boxes in its store listener; boxText throws on a stale task or item; ids.ts sits in page/ (forms and chat keep theirs at the plugin root)
+- 07 · 8d153fb · diff read: primerPagePart, primer-events, primer-review and mountPrimerTab exports present; registration and layer lines added; typecheck passes; worker ran lint and 71 primer page tests; the view, card and CSS first run in task 08's self-test · concerns: startPrimerEvents copies forms' startFormsEvents queue and primer.css copies forms' status-line and box rules (lift candidates); the rail's 'Press A to add one' text is fixed, not read from the keymap; view, re-entrant render and keepFocusedBox rebuild are untested until the self-test; primerPagePart is listed before keysPagePart it depends on, relying on dependency ordering
+- 08 · 9e8b8f7 · diff read: primerSelfTestScript and addDriveActions present, wired in primerMainPart with dispose; worker ran typecheck, lint, 50 primer main tests and npm run selftest — all groups pass, primer result as expected (screenshots .selftest/screenshots/primer-{rail,card,review}.png) · concerns: addDriveActions copies forms' word for word (follow-up candidate: a shared drive helper); review lists included items before left-out ones while the payload keeps sent order; status bar shows Unsaved while the review is open; forms' answers toast overlaps the bottom of the primer screenshots
 ### Contract changes
 ### Rulings
 - Two repos, two review bases: wigley-ai-gui 87af8bb (the Review base line), wigley-ai-marketplace b3daa93. A peer session (ai-dev-05, recency-stars plan) shares the GUI tree, so every commit is pathspec-scoped and each review range is this run's explicit commit list — lead
@@ -465,5 +470,21 @@ Review base: 87af8bb
 - Moved test names keep askRound/collectLastRound/no_round wording while calling open/collect and asserting no_form · group 02 · group 02
 - withKnownLayouts parses and checks layouts before the service's turn queue, so a malformed round rejects ahead of the queue (same RoundError, nothing saved or shown) · group 02 · group 02
 - createFolderFormStore's private writeRecordOrLog and pruneOlderThan take logSource · group 02 · group 02
+- A group sent as JSON null is rejected; only a missing group defaults to primer · group 05 · group 05
+- readPrimerBody keeps the last sent entry per id and takes non-slug feature fields untrimmed, as the Python did · group 05 · group 05
+- primer-type.test.ts runs on createMemoryFormStore, so no on-disk assertions · group 05 · group 05
+- SessionFormTabs.takeOver throws on a session with no mounted tab instead of adding one, so a caller that skipped mount fails loudly · group 03 · group 03
+- forms-view wraps the sessions and keys export methods in arrows when handing them to shared modules · group 03 · group 03
+- The autosave loop's private saveRound is renamed saveDraft · group 03 · group 03
+- The primer page layer entry in check-layers.mts landed with 06 (task 07's line, without the page.ts part) so 06's lint could pass; 07 adds only the page.ts lines · group 06 · group 06
+- Every handler first dispatches the box's focusActionFor, scroll and leaveBox included (forms skips those) · group 06 · group 06
+- showTarget applies only to the active primer; removeExtraTask resets itemCursor to 0 · group 06 · group 06
+- Need, remove-extra, add-item and toggle handlers log only when the store changed, so a sending-blocked dispatch logs nothing · group 06 · group 06
+- needTag and taskName are exported from primer-review.ts and imported by the view, avoiding a parts module · group 07 · group 07
+- The view's render re-runs once when a dispatch lands during a render (keepFocusedBox refocus, settleOwedDismiss) · group 07 · group 07
+- Card and review each scroll in their own container so leaving the review keeps the card's scroll · group 07 · group 07
+- A toggle-mark click dispatches selectItem then toggleInclude on the store, not the command, so a click logs no 'included item' line — drive toggles by key · group 07 · group 07
+- scrollsItself stays [] — .primer-card and .primer-review-pane scroll in their own boxes but all three checksFit steps pass · group 08 · group 08
+- No forms or chat step needed a changed expectation · group 08 · group 08
 ### Review rounds
 ### Test gate

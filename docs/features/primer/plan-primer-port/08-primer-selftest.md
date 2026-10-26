@@ -1,6 +1,6 @@
 # 08 — Primer self-test and drive actions
 
-Status: not started
+Status: done
 Type: Task
 Wave: 6 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -146,3 +146,5 @@ Done when: `npm run typecheck` and `npm run lint` pass; the gate runs `npm test 
 Commit:    one commit for the group in wigley-ai-gui
 
 ## Proof
+
+Commit 9e8b8f7 · proof: diff read: primerSelfTestScript and addDriveActions present, wired in primerMainPart with dispose; worker ran typecheck, lint, 50 primer main tests and npm run selftest — all groups pass, primer result as expected (screenshots .selftest/screenshots/primer-{rail,card,review}.png) · concerns: addDriveActions copies forms' word for word (follow-up candidate: a shared drive helper); review lists included items before left-out ones while the payload keeps sent order; status bar shows Unsaved while the review is open; forms' answers toast overlaps the bottom of the primer screenshots

@@ -1,6 +1,6 @@
 # 03 — Shared page modules; forms adopts them
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -360,3 +360,5 @@ the tests above. The forms self-test run is task 14's (live check 3).
 Commit: one commit for the group in wigley-ai-gui
 
 ## Proof
+
+Commit 2e2a0e5 · proof: diff read: all six shared modules' Produces and the forms-side FormsStore, FORMS_BOX_IDENTITY, startRoundAutosave present; no shared name holds round/forms/primer; full typecheck passes (also closes task 05's compile proof); worker ran lint and 702 tests over shared/page and forms · concerns: isSending as specified differs from the old render check in one state (view confirm with no active round now settles an owed dismiss) — looks unreachable; followups.md lines 39 and 78 name moved forms page modules (task 13)

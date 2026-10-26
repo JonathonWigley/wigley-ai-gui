@@ -1,6 +1,6 @@
 # 05 — Primer main part, manifest and contract
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -301,3 +301,5 @@ Done when: `npm run typecheck` and `npm run lint` pass; the gate runs `npm test 
 Commit:    one commit for the group in wigley-ai-gui
 
 ## Proof
+
+Commit f241356 · proof: diff read: every contract.ts name plus PRIMER_NEEDS, primerManifest, primer.ts functions, primerType, PRIMER_TOOLS, fixtures, primerMainPart and registration present; typecheck clean outside task 03's in-flight forms page files (full compile re-checked when 03 lands); worker ran 44 primer main tests and the layer check · concerns: no test pins the TS open_primer schema against relay.py's copy, so they can drift; the pinned items error says 'two to six of them' while the limit is 20 (kept verbatim from primer.py)
