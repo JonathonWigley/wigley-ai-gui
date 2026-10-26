@@ -4,6 +4,7 @@ import { docsPagePart } from './docs/page/start';
 import { formsPagePart } from './forms/page/start';
 import { galleryPagePart } from './gallery/page/start';
 import { keysPagePart } from './keys/page/start';
+import { primerPagePart } from './primer/page/start';
 import { sessionsPagePart } from './sessions/page/start';
 import { settingsPagePart } from './settings/page/start';
 
@@ -12,6 +13,7 @@ import { settingsPagePart } from './settings/page/start';
 export const pageParts: readonly PagePart[] = [
   sessionsPagePart,
   formsPagePart,
+  primerPagePart,
   keysPagePart,
   chatPagePart,
   docsPagePart,

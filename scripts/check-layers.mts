@@ -409,6 +409,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/gallery/page',
       'src/plugins/keys',
       'src/plugins/keys/page',
+      'src/plugins/primer',
+      'src/plugins/primer/page',
       'src/plugins/sessions',
       'src/plugins/sessions/page',
       'src/plugins/settings',

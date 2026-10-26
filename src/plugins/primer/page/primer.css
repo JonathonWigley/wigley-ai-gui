@@ -1,0 +1,243 @@
+/* A session's Primer tab holds its primer views and the idle state. */
+.primer-tab {
+  height: 100%;
+}
+
+.primer-tab > .ui-empty {
+  height: 100%;
+  align-content: center;
+}
+
+/* A primer fills its tab: the rail in the split's start pane, on the sheet
+   colour, and the card and the review in its end pane, each scrolling on its
+   own. */
+.primer-tab .primer-form {
+  height: 100%;
+}
+
+.primer-tab .primer-main {
+  overflow: hidden;
+}
+
+.primer-tab .primer-card,
+.primer-tab .primer-review-pane {
+  box-sizing: border-box;
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--wg-space-4) var(--wg-space-6) var(--wg-space-8);
+}
+
+.primer-tab .primer-card > *,
+.primer-tab .primer-review {
+  max-width: var(--wg-prose-measure);
+}
+
+@media (max-width: 800px) {
+  .primer-tab .primer-card,
+  .primer-tab .primer-review-pane {
+    padding: var(--wg-space-3) var(--wg-space-4) var(--wg-space-6);
+  }
+}
+
+/* Rail */
+.primer-rail-list {
+  padding: var(--wg-space-2);
+}
+
+.primer-rail-list > .ui-section-header {
+  margin-top: var(--wg-space-3);
+}
+
+.primer-rail-trailing {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-2);
+}
+
+.primer-count {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+}
+
+/* While the card has the keys the rail keeps its selected row in the
+   inactive fill. */
+.primer-rail.is-pane-inactive .ui-row.is-selected {
+  background: var(--wg-list-inactive-selection-background);
+  color: var(--wg-fg);
+}
+
+/* Card */
+.primer-card-heading {
+  font-size: var(--wg-text-20);
+  font-weight: var(--wg-weight-semibold);
+  margin: 0 0 var(--wg-space-2);
+}
+
+.primer-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1_5);
+  margin-bottom: var(--wg-space-3);
+}
+
+.primer-card-section {
+  margin-top: var(--wg-space-4);
+}
+
+.primer-card-section-body {
+  margin-top: var(--wg-space-1);
+}
+
+.primer-item {
+  border-radius: var(--wg-radius-sm);
+  padding: var(--wg-space-1) 0 var(--wg-space-2);
+}
+
+/* The item the card's keys act on. */
+.primer-item.is-cursor {
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
+.primer-item-comment {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--wg-space-2);
+  padding: 0 var(--wg-space-2);
+}
+
+.primer-item-comment > .primer-box {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Text boxes: the input frame owns background, border, radius and the focus
+   ring; this sets the editor's height only. Editors grow with their text up
+   to a cap, then scroll. */
+.primer-field {
+  margin-top: var(--wg-space-3);
+}
+
+.primer-field > .ui-section-header {
+  gap: var(--wg-space-2);
+  justify-content: flex-start;
+}
+
+.primer-field-hint {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  font-weight: var(--wg-weight-regular);
+}
+
+.primer-box {
+  overflow: hidden;
+}
+
+.primer-box .cm-editor {
+  max-height: calc(var(--wg-space-8) * 8);
+}
+
+.primer-box .cm-scroller {
+  overflow: auto;
+}
+
+.primer-box .cm-content {
+  min-height: var(--wg-row-list);
+}
+
+/* Review */
+.primer-review-tallies {
+  color: var(--wg-fg-secondary);
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 var(--wg-space-3);
+}
+
+.primer-review-problem-list {
+  color: var(--wg-status-warning);
+  margin: var(--wg-space-1) 0 var(--wg-space-3);
+  padding-left: var(--wg-space-6);
+}
+
+.primer-review-block {
+  border-top: 1px solid var(--wg-border-default);
+  padding: var(--wg-space-3) 0;
+}
+
+.primer-review-fields {
+  display: grid;
+  gap: var(--wg-space-1) var(--wg-space-4);
+  grid-template-columns: auto 1fr;
+  margin: var(--wg-space-1) 0 0;
+}
+
+.primer-review-field-label {
+  color: var(--wg-fg-secondary);
+}
+
+.primer-review-field-value {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.primer-review-task-head,
+.primer-review-item-line {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+.primer-review-task-name {
+  font-weight: var(--wg-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.primer-review-items {
+  margin: var(--wg-space-2) 0 0;
+  padding-left: var(--wg-space-6);
+}
+
+.primer-review-item-text {
+  overflow-wrap: anywhere;
+}
+
+.primer-review-comment {
+  color: var(--wg-fg-secondary);
+  margin: var(--wg-space-1) 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.primer-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+  margin-top: var(--wg-space-4);
+}
+
+/* Status line: it fills the status bar's row, beside a core item when both
+   fit and on a row of its own when not. */
+.primer-status-line {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-0_5) var(--wg-space-4);
+  min-width: 0;
+  padding: 0 var(--wg-space-3);
+}
+
+.primer-status-mode {
+  color: var(--wg-fg);
+  font-weight: var(--wg-weight-medium);
+}
+
+.primer-status-save {
+  color: var(--wg-fg-tertiary);
+}
+
+.primer-status-save[data-state='unsaved'] {
+  color: var(--wg-status-warning);
+}
