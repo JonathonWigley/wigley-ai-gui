@@ -13,6 +13,11 @@ import {
   optionalString,
   requiredString,
 } from '../../../shared/drive-args';
+import { createAgentFormChannelPresenter } from '../../../shared/agent-forms/channel-presenter';
+import { createAgentFormService } from '../../../shared/agent-forms/form-service';
+import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
+import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
+import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
 import { errorText } from '../../../shared/error-text';
 import {
   type LayoutRegistry,
@@ -27,19 +32,19 @@ import {
   type SessionsMainExports,
   type ToolResult,
 } from '../../sessions/contract';
-import type { FormsChannel, FormsService } from '../contract';
+import {
+  type FormsChannel,
+  type FormsService,
+  ROUND_ERROR_NAME,
+} from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
-import { createChannelPresenter } from './channel-presenter';
 import { askFixtureRound, connectFixtureSession } from './fixtures';
-import { createFormsService } from './forms-service';
 import { createLayoutPreview } from './preview/layout-preview';
-import { createMemoryRoundStore } from './preview/memory-round-store';
 import { PREVIEW_ROUND_ARGS } from './preview/preview-round';
-import { createRoundStore } from './round-store';
+import { roundType, withKnownLayouts } from './round-type';
 import { formsSelfTestScript, SELFTEST_LAYOUTS } from './selftest-script';
 import { FORMS_TOOLS } from './tool-definitions';
-import { createFormsToolSession } from './tool-session';
 
 type FormsApi = MainApi<
   typeof formsManifest,
@@ -54,48 +59,57 @@ const PREVIEW_SAVED_ROUNDS = 20;
 // The agents' FormsService over the saved-round folder, and the layout
 // preview over a FormsService of its own whose store is in memory. Both share
 // one presenter, which owns the channel's `finish` and `draft` handlers; the
-// preview's rounds go through its quiet view. All three read `layoutNames`
-// for the layouts a round may name.
+// preview's rounds go through its quiet view. Both services and the preview
+// read `layoutNames` for the layouts a round may name.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
   layoutNames: () => readonly string[],
 ): { forms: FormsService; preview: { open(): void } } {
   const { services } = api;
-  const store = createRoundStore({
-    roundsDir: path.join(services.homeDir, '.agents', 'wigley-forms', 'rounds'),
+  const store = createFolderFormStore({
+    dir: path.join(services.homeDir, '.agents', 'wigley-forms', 'rounds'),
     clock: services.clock,
     randomHex: services.randomHex,
     paths: services.paths,
     log: services.log,
+    logSource: 'forms',
   });
   store.prune();
-  const presenter = createChannelPresenter(
-    api.channel,
-    services.alerts,
-    services.window,
-    services.log,
+  const presenter = createAgentFormChannelPresenter({
+    channel: api.channel,
+    alerts: services.alerts,
+    source: 'forms',
+    announceTitle: 'New review round',
+    window: services.window,
+    log: services.log,
     sessions,
-  );
-  const defaultDeadlineSeconds = () => api.settings().deadlineSeconds;
-  const forms = createFormsService({
-    presenter,
-    store,
-    defaultDeadlineSeconds,
-    layoutNames,
   });
+  const defaultDeadlineSeconds = () => api.settings().deadlineSeconds;
+  const forms = withKnownLayouts(
+    createAgentFormService({
+      type: roundType,
+      presenter,
+      store,
+      defaultDeadlineSeconds,
+    }),
+    layoutNames,
+  );
   const preview = createLayoutPreview({
     sessions,
-    forms: createFormsService({
-      presenter: presenter.quiet,
-      store: createMemoryRoundStore(
-        services.clock,
-        services.randomHex,
-        services.paths,
-      ),
-      defaultDeadlineSeconds,
+    forms: withKnownLayouts(
+      createAgentFormService({
+        type: roundType,
+        presenter: presenter.quiet,
+        store: createMemoryFormStore(
+          services.clock,
+          services.randomHex,
+          services.paths,
+        ),
+        defaultDeadlineSeconds,
+      }),
       layoutNames,
-    }),
+    ),
     savedArgs: () => store.recentArgs(PREVIEW_SAVED_ROUNDS),
     layoutNames,
     log: services.log,
@@ -260,7 +274,11 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     const { forms, preview } = createForms(api, sessions, layoutNames);
     api.channel.handle('openPreview', () => preview.open());
     sessions.contributeTools(FORMS_TOOLS, (session) =>
-      createFormsToolSession(forms.startSession(session)),
+      createAgentFormToolSession(
+        forms.startSession(session),
+        { open: 'ask_round', collect: 'collect_last_round' },
+        ROUND_ERROR_NAME,
+      ),
     );
     const { selfTest } = api.services;
     // Written before the registry starts, so the registry lists every

@@ -1,22 +1,22 @@
-import type { Clock, RandomHex } from '../../../../contracts/ambient';
-import type { Paths } from '../../../../contracts/paths';
+import type { Clock, RandomHex } from '../../contracts/ambient';
+import type { Paths } from '../../contracts/paths';
 import {
+  type AgentFormStore,
+  formQueries,
   isFinished,
   openRecord,
-  type RoundStore,
-  roundQueries,
-  type SavedRound,
-} from '../round-store';
+  type SavedAgentForm,
+} from './form-store';
 
-// A RoundStore that writes nothing to disk: the preview's rounds and answers
-// last only as long as the app runs. `paths` compares project folders.
-export function createMemoryRoundStore(
+// An AgentFormStore that writes nothing to disk: its forms and answers last
+// only as long as the app runs. `paths` compares project folders.
+export function createMemoryFormStore(
   clock: Clock,
   randomHex: RandomHex,
   paths: Paths,
-): RoundStore {
-  const records: SavedRound[] = [];
-  const stamp = (record: SavedRound) => {
+): AgentFormStore {
+  const records: SavedAgentForm[] = [];
+  const stamp = (record: SavedAgentForm) => {
     record.updated = clock.now() / 1000;
   };
   return {
@@ -49,7 +49,7 @@ export function createMemoryRoundStore(
       record.returned = true;
       stamp(record);
     },
-    ...roundQueries(() => records, paths),
+    ...formQueries(() => records, paths),
     prune: () => undefined,
   };
 }

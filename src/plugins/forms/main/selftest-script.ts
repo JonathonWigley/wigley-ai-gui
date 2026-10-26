@@ -1113,7 +1113,7 @@ export function formsSelfTestScript(
         );
       });
       return {
-        shownLine: '[forms] round shown: selftest · Layouts self-test round',
+        shownLine: '[forms] form shown: selftest · Layouts self-test round',
         result,
       };
     },

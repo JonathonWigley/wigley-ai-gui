@@ -166,7 +166,7 @@ const SENDING_STEPS: SelfTestStep[] = [
 const PERMISSION_CARD_STEPS: SelfTestStep[] = [
   {
     keys: ['y'],
-    expect: `[forms] round shown: chat-selftest · ${ROUND_HEADING}`,
+    expect: `[forms] form shown: chat-selftest · ${ROUND_HEADING}`,
   },
   { keys: [' ', ' '], expect: '[forms] review opened' },
   {

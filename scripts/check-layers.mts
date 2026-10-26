@@ -19,6 +19,10 @@ const LAYERS: Record<string, LayerRule> = {
   'src/config': { layers: ['src/contracts'], packages: [] },
   'src/shared': { layers: ['src/contracts', 'src/shared/paths'], packages: [] },
   'src/shared/paths': { layers: ['src/contracts'], packages: [] },
+  'src/shared/agent-forms': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
+    packages: ['node:'],
+  },
   'src/shared/page': {
     layers: ['src/contracts', 'src/shared', 'src/shared/page/ui'],
     packages: [],
@@ -238,6 +242,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/agent-forms',
       'src/shared/paths',
       'src/plugins/forms',
       'src/plugins/forms/layouts',

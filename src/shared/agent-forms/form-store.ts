@@ -8,28 +8,32 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
-import type { Clock, RandomHex } from '../../../contracts/ambient';
-import type { Log } from '../../../contracts/log';
-import type { Paths } from '../../../contracts/paths';
-import { errorText } from '../../../shared/error-text';
-import type { FormBody } from '../contract';
-import type { SessionInfo } from '../../sessions/contract';
-import type { FinishedOutcome } from './round';
-import { isJsonObject } from '../../../shared/json';
+import type {
+  AgentFormEndKind,
+  AgentFormOwnerInfo,
+} from '../../contracts/agent-forms';
+import type { Clock, RandomHex } from '../../contracts/ambient';
+import type { Log } from '../../contracts/log';
+import type { Paths } from '../../contracts/paths';
+import { errorText } from '../error-text';
+import { isJsonObject } from '../json';
 
 // retro's backfill reaches back 90 days (scripts/retro/ledger.py STALE_DAYS).
 export const RETENTION_SECONDS = 90 * 24 * 60 * 60;
 
-export type SavedOutcome = 'open' | FinishedOutcome;
+export type SavedOutcome = 'open' | AgentFormEndKind;
 
-// Whose round a file is: a restart hands back only the owner's own rounds.
-export type RoundOwner = Pick<SessionInfo, 'sessionId' | 'projectDir'>;
+// Whose form a file is: a restart hands back only the owner's own forms.
+export type AgentFormOwnerRef = Pick<
+  AgentFormOwnerInfo,
+  'sessionId' | 'projectDir'
+>;
 
-// One round's file. The field names are the saved-round format retro reads.
-export interface SavedRound {
+// One form's file. The field names are the saved-round format retro reads.
+export interface SavedAgentForm {
   id: string;
   fingerprint: string;
-  // The ask_round arguments as sent.
+  // The open tool's arguments as sent.
   args: unknown;
   // The answers as last saved; a file another version wrote may hold any shape.
   body: unknown;
@@ -44,47 +48,55 @@ export interface SavedRound {
   updated: number;
 }
 
-export type FinishedSavedRound = SavedRound & { outcome: FinishedOutcome };
+export type FinishedSavedAgentForm = SavedAgentForm & {
+  outcome: AgentFormEndKind;
+};
 
-// Where a round's answers are kept: every draft and every finish. The
-// folder store (createRoundStore) keeps them on disk, so they outlive a
-// deadline, the next round and an app restart; the preview's store keeps them
-// in memory only.
-export interface RoundStore {
+// Where a form's answers are kept: every draft and every finish. The
+// folder store (createFolderFormStore) keeps them on disk, so they outlive a
+// deadline, the next form and an app restart; the memory store
+// (createMemoryFormStore) keeps them in memory only.
+export interface AgentFormStore {
   create(
-    owner: RoundOwner,
+    owner: AgentFormOwnerRef,
     fingerprint: string,
     args: unknown,
-    body: FormBody | null,
+    body: unknown | null,
     toolUseId: string | null,
-  ): SavedRound;
-  // A finished round keeps the body it finished with: a late draft is dropped.
-  // Throws an Error naming the round and the disk's reason when the write fails.
-  saveBody(record: SavedRound, body: FormBody): void;
-  finish(record: SavedRound, outcome: FinishedOutcome, body: FormBody): void;
-  markReturned(record: SavedRound): void;
+  ): SavedAgentForm;
+  // A finished form keeps the body it finished with: a late draft is dropped.
+  // Throws an Error naming the form and the disk's reason when the write fails.
+  saveBody(record: SavedAgentForm, body: unknown): void;
+  finish(
+    record: SavedAgentForm,
+    outcome: AgentFormEndKind,
+    body: unknown,
+  ): void;
+  markReturned(record: SavedAgentForm): void;
   // The newest by `updated` with this fingerprint, from any owner and in any
-  // state: what a re-sent round is pre-filled from.
-  newestFor(fingerprint: string): SavedRound | null;
-  // The newest finished round of this owner that no tool reply has carried,
-  // passing over the rounds whose ids are in `excluding`.
+  // state: what a re-sent form is pre-filled from.
+  newestFor(fingerprint: string): SavedAgentForm | null;
+  // The newest finished form of this owner that no tool reply has carried,
+  // passing over the forms whose ids are in `excluding`.
   newestUnreturnedFinished(
-    owner: RoundOwner,
+    owner: AgentFormOwnerRef,
     excluding: ReadonlySet<string>,
-  ): FinishedSavedRound | null;
-  // The args of the newest rounds by `updated`, newest first: one per
+  ): FinishedSavedAgentForm | null;
+  // The args of the newest forms by `updated`, newest first: one per
   // fingerprint, at most `limit`.
   recentArgs(limit: number): unknown[];
-  // Deletes every round file, and any temp file a crash left, last written more
+  // Deletes every form file, and any temp file a crash left, last written more
   // than RETENTION_SECONDS ago.
   prune(): void;
 }
 
-const ROUND_FILE_SUFFIX = '.json';
+const FORM_FILE_SUFFIX = '.json';
 // What a crash between the write and the rename leaves behind.
 const TEMPORARY_FILE_SUFFIX = '.tmp';
 
-export function isFinished(record: SavedRound): record is FinishedSavedRound {
+export function isFinished(
+  record: SavedAgentForm,
+): record is FinishedSavedAgentForm {
   return record.outcome !== 'open';
 }
 
@@ -92,8 +104,8 @@ export function isFinished(record: SavedRound): record is FinishedSavedRound {
 // with neither, as under Codex, nothing is anyone's, so one session never
 // gets another's answers.
 function isOwnedBy(
-  record: SavedRound,
-  owner: RoundOwner,
+  record: SavedAgentForm,
+  owner: AgentFormOwnerRef,
   paths: Paths,
 ): boolean {
   if (owner.sessionId !== null) {
@@ -123,7 +135,7 @@ function isSavedOutcome(value: unknown): value is SavedOutcome {
 
 // Reads the fields this version knows, so a field a newer version added never
 // hides a file from this one.
-function savedRoundFrom(data: unknown): SavedRound | null {
+function savedFormFrom(data: unknown): SavedAgentForm | null {
   if (!isJsonObject(data)) {
     return null;
   }
@@ -152,29 +164,27 @@ function savedRoundFrom(data: unknown): SavedRound | null {
   };
 }
 
-function roundFileNames(roundsDir: string): string[] {
+function formFileNames(dir: string): string[] {
   try {
-    return readdirSync(roundsDir).filter((name) =>
-      name.endsWith(ROUND_FILE_SUFFIX),
-    );
+    return readdirSync(dir).filter((name) => name.endsWith(FORM_FILE_SUFFIX));
   } catch {
     return [];
   }
 }
 
-function readSavedRound(filePath: string): SavedRound | null {
+function readSavedForm(filePath: string): SavedAgentForm | null {
   try {
-    return savedRoundFrom(JSON.parse(readFileSync(filePath, 'utf8')));
+    return savedFormFrom(JSON.parse(readFileSync(filePath, 'utf8')));
   } catch {
     // A corrupt or unreadable file is skipped, never fatal.
     return null;
   }
 }
 
-function readAllRounds(roundsDir: string): SavedRound[] {
-  const records: SavedRound[] = [];
-  for (const name of roundFileNames(roundsDir)) {
-    const record = readSavedRound(path.join(roundsDir, name));
+function readAllForms(dir: string): SavedAgentForm[] {
+  const records: SavedAgentForm[] = [];
+  for (const name of formFileNames(dir)) {
+    const record = readSavedForm(path.join(dir, name));
     if (record !== null) {
       records.push(record);
     }
@@ -182,7 +192,7 @@ function readAllRounds(roundsDir: string): SavedRound[] {
   return records;
 }
 
-function newestUpdated<T extends SavedRound>(records: T[]): T | null {
+function newestUpdated<T extends SavedAgentForm>(records: T[]): T | null {
   let newest: T | null = null;
   for (const record of records) {
     if (newest === null || record.updated > newest.updated) {
@@ -192,7 +202,7 @@ function newestUpdated<T extends SavedRound>(records: T[]): T | null {
   return newest;
 }
 
-function recentArgsOf(records: SavedRound[], limit: number): unknown[] {
+function recentArgsOf(records: SavedAgentForm[], limit: number): unknown[] {
   const newestFirst = records.toSorted((a, b) => b.updated - a.updated);
   const seenFingerprints = new Set<string>();
   const args: unknown[] = [];
@@ -208,12 +218,15 @@ function recentArgsOf(records: SavedRound[], limit: number): unknown[] {
   return args;
 }
 
-// The store's reads, answered over every round `readAll` returns; `paths`
+// The store's reads, answered over every form `readAll` returns; `paths`
 // compares project folders.
-export function roundQueries(
-  readAll: () => SavedRound[],
+export function formQueries(
+  readAll: () => SavedAgentForm[],
   paths: Paths,
-): Pick<RoundStore, 'newestFor' | 'newestUnreturnedFinished' | 'recentArgs'> {
+): Pick<
+  AgentFormStore,
+  'newestFor' | 'newestUnreturnedFinished' | 'recentArgs'
+> {
   return {
     newestFor: (fingerprint) =>
       newestUpdated(
@@ -222,7 +235,7 @@ export function roundQueries(
     newestUnreturnedFinished: (owner, excluding) =>
       newestUpdated(
         readAll().filter(
-          (record): record is FinishedSavedRound =>
+          (record): record is FinishedSavedAgentForm =>
             isFinished(record) &&
             !record.returned &&
             isOwnedBy(record, owner, paths) &&
@@ -233,16 +246,16 @@ export function roundQueries(
   };
 }
 
-// A new open round's record, stamped now, with an `<epoch seconds>-<hex>` id.
+// A new open form's record, stamped now, with an `<epoch seconds>-<hex>` id.
 export function openRecord(
-  owner: RoundOwner,
+  owner: AgentFormOwnerRef,
   fingerprint: string,
   args: unknown,
-  body: FormBody | null,
+  body: unknown | null,
   toolUseId: string | null,
   clock: Clock,
   randomHex: RandomHex,
-): SavedRound {
+): SavedAgentForm {
   const now = clock.now() / 1000;
   // Field order is Python's dataclass order, so a file reads the same.
   return {
@@ -262,77 +275,81 @@ export function openRecord(
 
 // Rewrites the whole file through a temp file and a rename, so a crash
 // mid-write leaves the previous file intact. Throws when the write fails.
-function writeRecord(
-  roundsDir: string,
-  record: SavedRound,
-  clock: Clock,
-): void {
+function writeRecord(dir: string, record: SavedAgentForm, clock: Clock): void {
   record.updated = clock.now() / 1000;
-  const filePath = path.join(roundsDir, `${record.id}${ROUND_FILE_SUFFIX}`);
+  const filePath = path.join(dir, `${record.id}${FORM_FILE_SUFFIX}`);
   const temporaryPath = `${filePath}${TEMPORARY_FILE_SUFFIX}`;
   try {
-    mkdirSync(roundsDir, { recursive: true });
+    mkdirSync(dir, { recursive: true });
     writeFileSync(temporaryPath, JSON.stringify(record), 'utf8');
     renameSync(temporaryPath, filePath);
   } catch (error) {
-    throw new Error(`could not save round ${record.id}: ${errorText(error)}`, {
+    throw new Error(`could not save form ${record.id}: ${errorText(error)}`, {
       cause: error,
     });
   }
 }
 
 function writeRecordOrLog(
-  roundsDir: string,
-  record: SavedRound,
+  dir: string,
+  record: SavedAgentForm,
   clock: Clock,
   log: Log,
+  logSource: string,
 ): void {
   try {
-    writeRecord(roundsDir, record, clock);
+    writeRecord(dir, record, clock);
   } catch (error) {
-    log('forms', errorText(error));
+    log(logSource, errorText(error));
   }
 }
 
-function pruneFileNames(roundsDir: string): string[] {
+function pruneFileNames(dir: string): string[] {
   try {
-    return readdirSync(roundsDir).filter(
+    return readdirSync(dir).filter(
       (name) =>
-        name.endsWith(ROUND_FILE_SUFFIX) ||
-        name.endsWith(`${ROUND_FILE_SUFFIX}${TEMPORARY_FILE_SUFFIX}`),
+        name.endsWith(FORM_FILE_SUFFIX) ||
+        name.endsWith(`${FORM_FILE_SUFFIX}${TEMPORARY_FILE_SUFFIX}`),
     );
   } catch {
     return [];
   }
 }
 
-function pruneOlderThan(roundsDir: string, cutoffMs: number, log: Log): void {
-  for (const name of pruneFileNames(roundsDir)) {
+function pruneOlderThan(
+  dir: string,
+  cutoffMs: number,
+  log: Log,
+  logSource: string,
+): void {
+  for (const name of pruneFileNames(dir)) {
     try {
-      const filePath = path.join(roundsDir, name);
+      const filePath = path.join(dir, name);
       if (statSync(filePath).mtimeMs < cutoffMs) {
         unlinkSync(filePath);
       }
     } catch (error) {
-      log('forms', `could not prune ${name}: ${errorText(error)}`);
+      log(logSource, `could not prune ${name}: ${errorText(error)}`);
     }
   }
 }
 
-// The saved-round folder. A disk failure is logged and never thrown, losing
-// the copy must not cost the live round — except a draft's, which saveBody
+// The saved-round folder `dir`; `logSource` names the type in its log lines.
+// A disk failure is logged and never thrown, losing
+// the copy must not cost the live form — except a draft's, which saveBody
 // throws so the page can show it unsaved. A file that does not parse is
 // skipped by every read.
-export function createRoundStore(deps: {
-  roundsDir: string;
+export function createFolderFormStore(deps: {
+  dir: string;
   clock: Clock;
   randomHex: RandomHex;
   paths: Paths;
   log: Log;
-}): RoundStore {
-  const { roundsDir, clock, randomHex, paths, log } = deps;
-  const write = (record: SavedRound) =>
-    writeRecordOrLog(roundsDir, record, clock, log);
+  logSource: string;
+}): AgentFormStore {
+  const { dir, clock, randomHex, paths, log, logSource } = deps;
+  const write = (record: SavedAgentForm) =>
+    writeRecordOrLog(dir, record, clock, log, logSource);
   return {
     create: (owner, fingerprint, args, body, toolUseId) => {
       const record = openRecord(
@@ -352,7 +369,7 @@ export function createRoundStore(deps: {
         return;
       }
       record.body = body;
-      writeRecord(roundsDir, record, clock);
+      writeRecord(dir, record, clock);
     },
     finish: (record, outcome, body) => {
       record.body = body;
@@ -363,8 +380,13 @@ export function createRoundStore(deps: {
       record.returned = true;
       write(record);
     },
-    ...roundQueries(() => readAllRounds(roundsDir), paths),
+    ...formQueries(() => readAllForms(dir), paths),
     prune: () =>
-      pruneOlderThan(roundsDir, clock.now() - RETENTION_SECONDS * 1000, log),
+      pruneOlderThan(
+        dir,
+        clock.now() - RETENTION_SECONDS * 1000,
+        log,
+        logSource,
+      ),
   };
 }

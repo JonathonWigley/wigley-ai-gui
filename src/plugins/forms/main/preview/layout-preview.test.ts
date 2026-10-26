@@ -14,7 +14,7 @@ import { createLayoutPreview } from './layout-preview';
 import { PREVIEW_ROUND_ARGS } from './preview-round';
 
 interface Call {
-  method: 'askRound' | 'collectLastRound';
+  method: 'open' | 'collect';
   args: unknown;
   signal: AbortSignal;
   settle(outcome: Outcome): void;
@@ -69,9 +69,8 @@ function record(
 }
 
 const fakeFormsSession: FormsSession = {
-  askRound: (args, _toolUseId, signal) => record('askRound', args, signal),
-  collectLastRound: (_wait, signal) =>
-    record('collectLastRound', undefined, signal),
+  open: (args, _toolUseId, signal) => record('open', args, signal),
+  collect: (_wait, signal) => record('collect', undefined, signal),
   end: () => {
     formsEnds++;
   },
@@ -281,7 +280,7 @@ describe('settle', () => {
     calls[0].settle('draft');
     await flush();
 
-    expect(calls[1].method).toBe('collectLastRound');
+    expect(calls[1].method).toBe('collect');
     expect(calls[1].signal).toBe(calls[0].signal);
     expect(connectedEnds).toBe(0);
 

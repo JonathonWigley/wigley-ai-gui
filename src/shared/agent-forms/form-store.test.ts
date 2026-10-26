@@ -10,18 +10,17 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Paths } from '../../../contracts/paths';
-import { posixPaths } from '../../../shared/paths/posix-paths';
-import { windowsPaths } from '../../../shared/paths/windows-paths';
-import type { FormBody } from '../contract';
+import type { Paths } from '../../contracts/paths';
+import { posixPaths } from '../paths/posix-paths';
+import { windowsPaths } from '../paths/windows-paths';
 import {
-  createRoundStore,
+  type AgentFormOwnerRef,
+  type AgentFormStore,
+  createFolderFormStore,
   RETENTION_SECONDS,
-  type RoundOwner,
-  type RoundStore,
-} from './round-store';
+} from './form-store';
 
-const MINE: RoundOwner = { sessionId: 's1', projectDir: '/p' };
+const MINE: AgentFormOwnerRef = { sessionId: 's1', projectDir: '/p' };
 const ARGS = { heading: 'h' };
 const NONE: ReadonlySet<string> = new Set();
 
@@ -31,18 +30,19 @@ let nowMs: number;
 let hexCount: number;
 let logLines: string[];
 
-function storeIn(dir: string, paths: Paths = posixPaths): RoundStore {
-  return createRoundStore({
-    roundsDir: dir,
+function storeIn(dir: string, paths: Paths = posixPaths): AgentFormStore {
+  return createFolderFormStore({
+    dir,
     clock: { now: () => nowMs },
     randomHex: () => (++hexCount).toString(16).padStart(8, '0'),
     paths,
     log: (source, message) => logLines.push(`[${source}] ${message}`),
+    logSource: 'forms',
   });
 }
 
-function withNote(note: string): FormBody {
-  return { note, answers: [], finding_answers: [], notice_comments: [] };
+function withNote(note: string): { note: string } {
+  return { note };
 }
 
 function roundFiles(): string[] {
@@ -52,7 +52,7 @@ function roundFiles(): string[] {
 }
 
 beforeEach(() => {
-  root = mkdtempSync(path.join(tmpdir(), 'wigley-round-store-'));
+  root = mkdtempSync(path.join(tmpdir(), 'wigley-form-store-'));
   roundsDir = path.join(root, 'rounds');
   nowMs = 1_000_000;
   hexCount = 0;
@@ -63,7 +63,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe('RoundStore', () => {
+describe('createFolderFormStore', () => {
   it('writes one file per round, named by its <epoch seconds>-<8 hex> id', () => {
     const record = storeIn(roundsDir).create(
       MINE,
@@ -94,12 +94,7 @@ describe('RoundStore', () => {
       id: '1000-00000001',
       fingerprint: 'fp',
       args: { heading: 'h' },
-      body: {
-        note: 'n',
-        answers: [],
-        finding_answers: [],
-        notice_comments: [],
-      },
+      body: { note: 'n' },
       outcome: 'open',
       returned: false,
       session_id: 's1',
@@ -287,7 +282,7 @@ describe('RoundStore', () => {
   });
 
   it('finds nothing as mine with neither a session id nor a project folder, yet still pre-fills', () => {
-    const nobody: RoundOwner = { sessionId: null, projectDir: null };
+    const nobody: AgentFormOwnerRef = { sessionId: null, projectDir: null };
     const store = storeIn(roundsDir);
     const record = store.create(nobody, 'fp', ARGS, null, null);
     store.finish(record, 'submitted', withNote(''));
@@ -413,7 +408,7 @@ describe('RoundStore', () => {
     const record = store.create(MINE, 'fp', ARGS, null, null);
     store.finish(record, 'submitted', withNote(''));
 
-    expect(logLines.some((line) => line.includes('could not save round'))).toBe(
+    expect(logLines.some((line) => line.includes('could not save form'))).toBe(
       true,
     );
     expect(store.newestFor('fp')).toBeNull();
@@ -426,7 +421,7 @@ describe('RoundStore', () => {
     const record = store.create(MINE, 'fp', ARGS, null, null);
 
     expect(() => store.saveBody(record, withNote('half'))).toThrow(
-      `could not save round ${record.id}: `,
+      `could not save form ${record.id}: `,
     );
   });
 });

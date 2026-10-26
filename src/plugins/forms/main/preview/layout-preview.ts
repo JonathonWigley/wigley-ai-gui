@@ -84,10 +84,7 @@ export function createLayoutPreview(deps: {
           return;
         }
         if (payload.outcome === 'draft') {
-          settle(
-            shown,
-            shown.forms.collectLastRound(true, shown.asking.signal),
-          );
+          settle(shown, shown.forms.collect(true, shown.asking.signal));
           return;
         }
         end(shown);
@@ -103,7 +100,7 @@ export function createLayoutPreview(deps: {
   };
 
   const ask = (shown: OpenPreview, args: unknown) => {
-    settle(shown, shown.forms.askRound(args, null, shown.asking.signal));
+    settle(shown, shown.forms.open(args, null, shown.asking.signal));
   };
 
   return {

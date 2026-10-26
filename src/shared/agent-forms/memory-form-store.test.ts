@@ -1,25 +1,24 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { posixPaths } from '../../../../shared/paths/posix-paths';
-import type { FormBody } from '../../contract';
-import type { RoundOwner, RoundStore } from '../round-store';
-import { createMemoryRoundStore } from './memory-round-store';
+import { posixPaths } from '../paths/posix-paths';
+import type { AgentFormOwnerRef, AgentFormStore } from './form-store';
+import { createMemoryFormStore } from './memory-form-store';
 
-const MINE: RoundOwner = { sessionId: 's1', projectDir: '/p' };
+const MINE: AgentFormOwnerRef = { sessionId: 's1', projectDir: '/p' };
 const NONE: ReadonlySet<string> = new Set();
 
 let nowMs: number;
 let hexCount: number;
 
-function store(): RoundStore {
-  return createMemoryRoundStore(
+function store(): AgentFormStore {
+  return createMemoryFormStore(
     { now: () => nowMs },
     () => (++hexCount).toString(16).padStart(8, '0'),
     posixPaths,
   );
 }
 
-function withNote(note: string): FormBody {
-  return { note, answers: [], finding_answers: [], notice_comments: [] };
+function withNote(note: string): { note: string } {
+  return { note };
 }
 
 beforeEach(() => {
@@ -27,7 +26,7 @@ beforeEach(() => {
   hexCount = 0;
 });
 
-describe('createMemoryRoundStore', () => {
+describe('createMemoryFormStore', () => {
   it('create_StampsAnOpenRecordAndFindsIt', () => {
     const subject = store();
 

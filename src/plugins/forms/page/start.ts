@@ -42,6 +42,7 @@ import { createFormsStore, type FormsStore } from './forms-store';
 import { mountFormsView } from './forms-view';
 import { readLayout } from './layout/read-layout';
 import { roundLayoutNames } from './layout/layout-resolver';
+import { presentedRoundOf } from './presented-round';
 
 type FormsApi = PageApi<
   typeof formsManifest,
@@ -73,20 +74,20 @@ function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes {
   );
 }
 
-// Listeners first: a round shown while openRounds is in flight arrives in
+// Listeners first: a round shown while openForms is in flight arrives in
 // both, and showing an open round again changes nothing. The active round
 // follows the session the sessions plugin shows, and a round leaves only when
-// main closes it.
+// main closes it. Main's forms map to the page's rounds here.
 function listenForRounds(
   api: FormsApi,
   store: FormsStore,
   sessions: SessionsPageExports,
 ) {
   const { log, toast } = api.services;
-  api.channel.on('roundShown', (round) =>
-    store.dispatch({ type: 'roundShown', round }),
+  api.channel.on('formShown', (form) =>
+    store.dispatch({ type: 'roundShown', round: presentedRoundOf(form) }),
   );
-  api.channel.on('roundClosed', (closed) =>
+  api.channel.on('formClosed', (closed) =>
     closeRoundFromMain(
       {
         store,
@@ -94,17 +95,17 @@ function listenForRounds(
         toast,
         log,
       },
-      closed,
+      { roundId: closed.formId, byFinish: closed.byFinish },
     ),
   );
   api.events.on('sessions.activeChanged', ({ sessionId }) =>
     store.dispatch({ type: 'sessionActivated', sessionId }),
   );
   void api.channel
-    .invoke('openRounds')
-    .then((rounds) => {
-      for (const round of rounds) {
-        store.dispatch({ type: 'roundShown', round });
+    .invoke('openForms')
+    .then((forms) => {
+      for (const form of forms) {
+        store.dispatch({ type: 'roundShown', round: presentedRoundOf(form) });
       }
     })
     .catch((error) =>
