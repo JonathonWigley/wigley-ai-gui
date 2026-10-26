@@ -1,6 +1,6 @@
 # 13 — Doc re-read against the landed code
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 01–12
 Plan: [plan.md](plan.md)
@@ -46,3 +46,5 @@ fixes are committed (one commit per repo that changed).
 Commit:    one commit per repo, message naming each doc fixed and why
 
 ## Proof
+
+Commit 6ce6b3b (gui), 0617159 (marketplace) · proof: diff read: GUI AGENTS.md, DESIGN.md, keymap.md, primer/design.md, master-plan.md, followups.md and marketplace AGENTS.md hooks line + forms README tool count match the code; stale-reference grep clean in code both repos; npm run lint, check_pointers and check_manifests pass; marketplace Done lines already dropped by peer commit 4f6bb42 · concerns: retro answers.py:24 and owners.py:21 docstrings say 'forms or primer' (primer folder gone); peer docs-browser plan folders (plan-recency-stars 03, plan-ownership 05) still run scripts/dashboard and scripts/primer suites; form-service.test.ts still uses the folder store (follow-up stays open); claude-stream.md keeps the wigley-primer name as a recorded capture

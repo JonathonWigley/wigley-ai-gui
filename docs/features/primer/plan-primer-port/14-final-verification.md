@@ -1,6 +1,6 @@
 # 14 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 8 · Depends on: 13
 Plan: [plan.md](plan.md)
@@ -65,3 +65,5 @@ result and screenshot path in Proof, and the wrap-up lists the user checks.
 Commit:    none
 
 ## Proof
+
+Commit none (verification only) · proof: GUI: npm run typecheck 0, npm run lint 0, npm test 200 files / 3205 tests pass. Marketplace: check_manifests (plain and --against origin/main), check_pointers, claude plugin validate, and the scripts, docs-index, forms, plan, retro, unity-playtest, unity-ux-flow suites pass. npm run selftest: all passed (rerun after a peer edit reloaded the page mid-run in attempt 1; pre-reload pass was clean too). Drive run 20261026-182946-61e4 (.drive/20261026-182946-61e4/screenshots/): 1 primer submit PASS (c1-rail/card/review.png); 2 NOT RUN — forms.openRound and primer.openPrimer each connect their own session, so no drive action puts both in one session; primer cancel prompt alone reads well (c2-primer-prompt.png), moved to the user checks; 3 forms unchanged PASS (status chip Saved, answers read back); 4 bad slug PASS, submit refused, answers pending (c4-review.png); 5 gallery ToggleMark PASS (c5-gallery.png) · concerns: check 2 (two guards on one session) unverified live; forms log says 'finding 1 answered' for a note-only answer while the payload says untouched; the primer cancel dialog showed the review view behind it on a row whose review was never opened

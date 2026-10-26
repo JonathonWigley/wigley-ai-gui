@@ -429,10 +429,10 @@ Every dispatch prompt carries these:
 - [x] [Primer self-test and drive actions](08-primer-selftest.md) — after 07
 
 ### Wave 7
-- [ ] [Doc re-read](13-doc-re-read.md) — after every code task
+- [x] [Doc re-read](13-doc-re-read.md) — after every code task
 
 ### Wave 8
-- [ ] [Final verification](14-final-verification.md) — after 13
+- [x] [Final verification](14-final-verification.md) — after 13
 
 ## Run log
 
@@ -451,6 +451,8 @@ Review base: 87af8bb
 - 06 · c439c93 · diff read: ids, primer-state, primer-store, boxes, primer-commands exports present as planned; 29 commands and five scopes in the manifest; keymap Primer section; typecheck passes; worker ran lint and 61 tests over primer page and keymap · concerns: add-item commit clears newItemTexts but the mounted editor keeps its text unless 07 reacts; addExtraTask focuses the new taskName box synchronously, so 07 must mount the new card's boxes in its store listener; boxText throws on a stale task or item; ids.ts sits in page/ (forms and chat keep theirs at the plugin root)
 - 07 · 8d153fb · diff read: primerPagePart, primer-events, primer-review and mountPrimerTab exports present; registration and layer lines added; typecheck passes; worker ran lint and 71 primer page tests; the view, card and CSS first run in task 08's self-test · concerns: startPrimerEvents copies forms' startFormsEvents queue and primer.css copies forms' status-line and box rules (lift candidates); the rail's 'Press A to add one' text is fixed, not read from the keymap; view, re-entrant render and keepFocusedBox rebuild are untested until the self-test; primerPagePart is listed before keysPagePart it depends on, relying on dependency ordering
 - 08 · 9e8b8f7 · diff read: primerSelfTestScript and addDriveActions present, wired in primerMainPart with dispose; worker ran typecheck, lint, 50 primer main tests and npm run selftest — all groups pass, primer result as expected (screenshots .selftest/screenshots/primer-{rail,card,review}.png) · concerns: addDriveActions copies forms' word for word (follow-up candidate: a shared drive helper); review lists included items before left-out ones while the payload keeps sent order; status bar shows Unsaved while the review is open; forms' answers toast overlaps the bottom of the primer screenshots
+- 13 · 6ce6b3b (gui), 0617159 (marketplace) · diff read: GUI AGENTS.md, DESIGN.md, keymap.md, primer/design.md, master-plan.md, followups.md and marketplace AGENTS.md hooks line + forms README tool count match the code; stale-reference grep clean in code both repos; npm run lint, check_pointers and check_manifests pass; marketplace Done lines already dropped by peer commit 4f6bb42 · concerns: retro answers.py:24 and owners.py:21 docstrings say 'forms or primer' (primer folder gone); peer docs-browser plan folders (plan-recency-stars 03, plan-ownership 05) still run scripts/dashboard and scripts/primer suites; form-service.test.ts still uses the folder store (follow-up stays open); claude-stream.md keeps the wigley-primer name as a recorded capture
+- 14 · none (verification only) · GUI: npm run typecheck 0, npm run lint 0, npm test 200 files / 3205 tests pass. Marketplace: check_manifests (plain and --against origin/main), check_pointers, claude plugin validate, and the scripts, docs-index, forms, plan, retro, unity-playtest, unity-ux-flow suites pass. npm run selftest: all passed (rerun after a peer edit reloaded the page mid-run in attempt 1; pre-reload pass was clean too). Drive run 20261026-182946-61e4 (.drive/20261026-182946-61e4/screenshots/): 1 primer submit PASS (c1-rail/card/review.png); 2 NOT RUN — forms.openRound and primer.openPrimer each connect their own session, so no drive action puts both in one session; primer cancel prompt alone reads well (c2-primer-prompt.png), moved to the user checks; 3 forms unchanged PASS (status chip Saved, answers read back); 4 bad slug PASS, submit refused, answers pending (c4-review.png); 5 gallery ToggleMark PASS (c5-gallery.png) · concerns: check 2 (two guards on one session) unverified live; forms log says 'finding 1 answered' for a note-only answer while the payload says untouched; the primer cancel dialog showed the review view behind it on a row whose review was never opened
 ### Contract changes
 ### Rulings
 - Two repos, two review bases: wigley-ai-gui 87af8bb (the Review base line), wigley-ai-marketplace b3daa93. A peer session (ai-dev-05, recency-stars plan) shares the GUI tree, so every commit is pathspec-scoped and each review range is this run's explicit commit list — lead
@@ -488,3 +490,4 @@ Review base: 87af8bb
 - No forms or chat step needed a changed expectation · group 08 · group 08
 ### Review rounds
 ### Test gate
+- Gate: full npm test (3205 pass), npm run selftest (all groups pass), marketplace Done suites (all pass) — picked whole because tasks 02 and 03 move code under every forms path and 09 deletes two marketplace suites; drive run checks 1,3,4,5 pass, 2 not reachable by drive (user check)
