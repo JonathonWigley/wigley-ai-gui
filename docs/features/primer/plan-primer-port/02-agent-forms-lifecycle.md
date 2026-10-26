@@ -1,6 +1,6 @@
 # 02 — Shared agent form lifecycle; forms adopts it
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -402,3 +402,5 @@ Done when: `npm run typecheck` and `npm run lint` pass; the gate runs `npm test 
 Commit:    one commit for the group in wigley-ai-gui
 
 ## Proof
+
+Commit 8c2adbf · proof: diff read: every agent-forms contract name, the six shared modules, roundType, withKnownLayouts, presentedRoundOf and the forms contract aliases present; layers entry added; typecheck passes; worker ran lint and 845 tests across shared/agent-forms, forms and chat main · concerns: stale doc lines name deleted files: AGENTS.md 259 (ANSWER_LISTS in forms-service.ts), followups.md 218 and 278, master-plan.md 181 (task 13); preview-round.ts sample text quotes FormsSession.askRound; form-store.test.ts keeps roundsDir/roundFiles helper names

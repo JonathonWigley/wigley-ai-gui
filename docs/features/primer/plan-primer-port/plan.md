@@ -405,19 +405,19 @@ Every dispatch prompt carries these:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Alerts open count per source](01-alerts-per-source.md)
-- [ ] [Toggle mark primitive](04-toggle-mark.md)
-- [ ] [Retro reads primer files in the saved-round format](10-retro-readers.md)
-- [ ] [Wait guard covers primers](11-wait-guard.md)
+- [x] [Alerts open count per source](01-alerts-per-source.md)
+- [x] [Toggle mark primitive](04-toggle-mark.md)
+- [x] [Retro reads primer files in the saved-round format](10-retro-readers.md)
+- [x] [Wait guard covers primers](11-wait-guard.md)
 
 ### Wave 2
-- [ ] [Shared agent form lifecycle; forms adopts it](02-agent-forms-lifecycle.md) — after 01
-- [ ] [Retire the primer server and dashboard; relay tools](09-retire-primer-server.md) — after 10
+- [x] [Shared agent form lifecycle; forms adopts it](02-agent-forms-lifecycle.md) — after 01
+- [x] [Retire the primer server and dashboard; relay tools](09-retire-primer-server.md) — after 10
 
 ### Wave 3
 - [ ] [Shared page modules; forms adopts them](03-shared-page-modules.md) — after 02
 - [ ] [Primer main part, manifest and contract](05-primer-main.md) — after 02
-- [ ] [Marketplace version bump](12-marketplace-bump.md) — after 09, 10, 11
+- [x] [Marketplace version bump](12-marketplace-bump.md) — after 09, 10, 11
 
 ### Wave 4
 - [ ] [Primer page state, commands and keys](06-primer-page-state.md) — after 03, 05
@@ -436,10 +436,34 @@ Every dispatch prompt carries these:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 87af8bb
 
 ### Groups
+- 01 · 7b5daeb · diff read: Alerts and createOpenCounts present as planned; typecheck passes · concerns: none
+- 04 · 9a512e3 · diff read: toggleMark, setToggleMark, ToggleMarkOptions and the gallery section present as planned; typecheck passes; worker ran lint clean; visual check is task 14 live check 5 · concerns: none
+- 11 · 38df6cc (marketplace) · diff read: PRIMERS_DIR, PRIMER_CALL_SUFFIXES, PRIMER_STAND_DOWN_OUTCOMES, both pinned reasons, decide(hook_input, rounds_dir, primers_dir) and main present as planned; forms suite 86 OK · concerns: marketplace AGENTS.md's hooks.json tree line names only the round (task 13 owns it)
+- 10 · e623def (marketplace) · diff read: primer_lines on args/body, owners key args.feature.slug, digest heading args.feature.name, PRIMER_KEYS and saved_round_fields present as planned; retro suite 166 OK; check_pointers passes · concerns: saved_round_fields returns every backticked name in the contract paragraph (tool and outcome names too), so its name promises slightly more; answers.py module docstring has one line past the wrap width
+- 09 · 0f1370f (marketplace) · diff read: four BUILT_IN_TOOLS, OPEN_PRIMER_INPUT_SCHEMA as pinned, NOT_STARTED_NEXT and APP_GONE templates, not_started(reason, tool), _pending dict present as planned; both folders gone from git; forms suite OK, retro suite OK (wave check), check_manifests passes · concerns: marketplace AGENTS.md § Done (lines 101, 104) still lists the dashboard and primer unittest commands, now failing — the task's 'nothing to remove there' was wrong; task 13 removes them
+- 12 · 3bf1f34 (marketplace) · diff read: only version lines changed, 1.11.0 in both; check_manifests passes with and without --against origin/main · concerns: none
+- 02 · 8c2adbf · diff read: every agent-forms contract name, the six shared modules, roundType, withKnownLayouts, presentedRoundOf and the forms contract aliases present; layers entry added; typecheck passes; worker ran lint and 845 tests across shared/agent-forms, forms and chat main · concerns: stale doc lines name deleted files: AGENTS.md 259 (ANSWER_LISTS in forms-service.ts), followups.md 218 and 278, master-plan.md 181 (task 13); preview-round.ts sample text quotes FormsSession.askRound; form-store.test.ts keeps roundsDir/roundFiles helper names
 ### Contract changes
 ### Rulings
+- Two repos, two review bases: wigley-ai-gui 87af8bb (the Review base line), wigley-ai-marketplace b3daa93. A peer session (ai-dev-05, recency-stars plan) shares the GUI tree, so every commit is pathspec-scoped and each review range is this run's explicit commit list — lead
+- The presenter test's fake records [source, count] tuples in one array — one toEqual per assertion — only that test file changes if wrong · group 01 · group 01
+- The pressed style applies to an off mark only (:not(.is-selected)); a pressed on mark keeps its accent-hover fill — an on mark shows no press feedback if the plan wanted some · group 04 · group 04
+- _Kind holds a heading_path key tuple, not a callable — a kind whose heading is not a key path needs a function · group 11 · group 11
+- _Transcript keeps the last outcome per tool_use_id (reply_outcomes) — a twice-answered call uses its last outcome · group 11 · group 11
+- A round whose args.heading is a truthy non-string now reads untitled, per the both-kinds fallback · group 11 · group 11
+- Sent items are a set of trimmed texts and _item_lines takes was_sent: bool — same meaning as the spec's sent-is-not-None form · group 10 · group 10
+- Body-side entry ids are not trimmed (the app trims body) — a padded body id would read as [PRIMER-TASK] · group 10 · group 10
+- saved_round_fields raises AssertionError when the contract paragraph is missing, so a README rewording fails loudly · group 10 · group 10
+- Test helper is a new named_tool_call(request_id, name, arguments) beside tool_call, which delegates to it · group 09 · group 09
+- _tool_name is read in _forward and in each _answer_alone branch, not once in handle_line · group 09 · group 09
+- not_started gives the primer shape only for the primer words; any unknown tool name gets the round payload, as today · group 09 · group 09
+- Bumped 1.10.3 → 1.11.0, past the peer's unpushed docs-index bump 621ee51; origin holds 1.10.2 · group 12 · group 12
+- The unparseable-saved-round test lives in both round-type.test.ts (round texts) and form-service.test.ts (generic texts) — one redundant test if wrong · group 02 · group 02
+- Moved test names keep askRound/collectLastRound/no_round wording while calling open/collect and asserting no_form · group 02 · group 02
+- withKnownLayouts parses and checks layouts before the service's turn queue, so a malformed round rejects ahead of the queue (same RoundError, nothing saved or shown) · group 02 · group 02
+- createFolderFormStore's private writeRecordOrLog and pruneOlderThan take logSource · group 02 · group 02
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 04 — Toggle mark primitive
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -88,3 +88,5 @@ Done when: `npm run typecheck` and `npm run lint` pass (the style check judges `
 Commit: one commit for the group in wigley-ai-gui
 
 ## Proof
+
+Commit 9a512e3 · proof: diff read: toggleMark, setToggleMark, ToggleMarkOptions and the gallery section present as planned; typecheck passes; worker ran lint clean; visual check is task 14 live check 5 · concerns: none

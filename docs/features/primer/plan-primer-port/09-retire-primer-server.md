@@ -1,6 +1,6 @@
 # 09 — Retire the primer server and dashboard; relay tools
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 10
 Plan: [plan.md](plan.md)
@@ -208,3 +208,5 @@ Commit:    one commit for the group in wigley-ai-marketplace, for example "Retir
            dashboard; the relay serves the primer tools while the app is away"
 
 ## Proof
+
+Commit 0f1370f (marketplace) · proof: diff read: four BUILT_IN_TOOLS, OPEN_PRIMER_INPUT_SCHEMA as pinned, NOT_STARTED_NEXT and APP_GONE templates, not_started(reason, tool), _pending dict present as planned; both folders gone from git; forms suite OK, retro suite OK (wave check), check_manifests passes · concerns: marketplace AGENTS.md § Done (lines 101, 104) still lists the dashboard and primer unittest commands, now failing — the task's 'nothing to remove there' was wrong; task 13 removes them

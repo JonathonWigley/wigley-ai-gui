@@ -1,6 +1,6 @@
 # 12 — Marketplace version bump
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 09, 10, 11
 Plan: [plan.md](plan.md)
@@ -50,3 +50,5 @@ Commit:    one commit for the group in wigley-ai-marketplace, for example "wigle
            `f0475a0 wigley plugin 1.10.2: …`).
 
 ## Proof
+
+Commit 3bf1f34 (marketplace) · proof: diff read: only version lines changed, 1.11.0 in both; check_manifests passes with and without --against origin/main · concerns: none

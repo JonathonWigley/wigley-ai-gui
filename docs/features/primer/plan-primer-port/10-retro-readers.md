@@ -1,6 +1,6 @@
 # 10 — Retro reads primer files in the saved-round format
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -140,3 +140,5 @@ Commit:    one commit for the group in wigley-ai-marketplace, for example "Retro
            saved-round format the wigley-ai-gui app writes"
 
 ## Proof
+
+Commit e623def (marketplace) · proof: diff read: primer_lines on args/body, owners key args.feature.slug, digest heading args.feature.name, PRIMER_KEYS and saved_round_fields present as planned; retro suite 166 OK; check_pointers passes · concerns: saved_round_fields returns every backticked name in the contract paragraph (tool and outcome names too), so its name promises slightly more; answers.py module docstring has one line past the wrap width

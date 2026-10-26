@@ -1,6 +1,6 @@
 # 01 — Alerts open count per source
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -80,3 +80,5 @@ Done when: `npm run typecheck` and `npm run lint` pass; the gate runs `npm test 
 Commit:    one commit for the group in wigley-ai-gui
 
 ## Proof
+
+Commit 7b5daeb · proof: diff read: Alerts and createOpenCounts present as planned; typecheck passes · concerns: none

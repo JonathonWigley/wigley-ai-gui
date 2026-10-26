@@ -1,6 +1,6 @@
 # 11 — Wait guard covers primers
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -123,3 +123,5 @@ Commit:    one commit for the group in wigley-ai-marketplace, for example "Stop 
            feature primer as it does on a round"
 
 ## Proof
+
+Commit 38df6cc (marketplace) · proof: diff read: PRIMERS_DIR, PRIMER_CALL_SUFFIXES, PRIMER_STAND_DOWN_OUTCOMES, both pinned reasons, decide(hook_input, rounds_dir, primers_dir) and main present as planned; forms suite 86 OK · concerns: marketplace AGENTS.md's hooks.json tree line names only the round (task 13 owns it)
