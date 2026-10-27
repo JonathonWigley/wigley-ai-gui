@@ -144,7 +144,7 @@ docs only through `DocsMainExports` and `DocsPageExports`, typed by `src/plugins
 - [x] [Backlog self-test](10-backlog-selftest.md) — after 09
 
 ### Wave 6
-- [ ] [Doc re-read](11-doc-reread.md) — after every code task
+- [x] [Doc re-read](11-doc-reread.md) — after every code task
 
 ### Wave 7
 - [ ] [Final verification](12-final-verification.md) — after 11
@@ -164,6 +164,7 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - 08 · d4855da · diff read; backlog tests 44 pass; typecheck clean · concerns: homes.ts copies docs' small metaString helper (backlog main may import only docs' contract); a symlinked clone could read as not uncommitted
 - 09 · 21dce15 · diff read; backlog, keymap and manifest tests pass; typecheck clean; app started in selftest · concerns: delete prompt text fixed (createConfirmPrompt body is fixed at creation); discard prompt reuses the delete confirm labels; one-line boxes accept line breaks; view/editor/keys paths need the live run
 - 10 · 317f450 · diff read; full npm run selftest passed (worker run 3, before the peer's fabric install); backlog and docs main tests 236 pass; screenshots read · concerns: typecheck fails only at backlog start.test.ts:100 from the Notes peer's uncommitted DocsMainExports change (stub handoff agreed); wrote log line shows the full real path for edits but the ~ root for creates; leaveBox label says body box whatever box is focused
+- 11 · gui bfd22bf, marketplace 6e444db · diff read; oxfmt check passes on the gui docs · concerns: the TS Contents reader stops at the first non-list line after **Contents** while the Python one reads to the first ##, so odd files can disagree
 ### Contract changes
 - KindRule.contents (module-private): (name, existing) → (name, existing, place, paths) · why: the new-file title needs the place's folder · consumers: none · group 06
 - Git doc comments: unpushedPaths is files HEAD changed since the merge base with upstream; methods but fetch/lastFetch reject when git cannot start; commitPaths rejects on empty paths · why: state the error modes · consumers: 08 · group 02
@@ -194,5 +195,6 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - Backlog main writes the fixture repo at start outside a live run (as docs does), so docs' entry counts do not depend on run order — drive runs also get a dev/backlog-repo · group 10 · group 10
 - Fixture git identity, no signing and an empty hooks path live in the fixture repo's own config, since ProcessRunner takes no env and the app's own C commit needs them too · group 10 · group 10
 - One-line fix in backlog-view closeFilter (render(true)) so DOM focus leaves the filter box after Enter · group 10 · group 10
+- Notes lines in AGENTS.md and backlog/design.md left as written (unlanded Notes work) · group 11 · group 11
 ### Review rounds
 ### Test gate

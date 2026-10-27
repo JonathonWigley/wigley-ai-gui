@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 6 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10
 Plan: [plan.md](plan.md)
@@ -31,3 +31,5 @@ Commit:    one commit per repo that changed, `Backlog docs trued to the landed c
            series (no second bump).
 
 ## Proof
+
+Commit gui bfd22bf, marketplace 6e444db · proof: diff read; oxfmt check passes on the gui docs · concerns: the TS Contents reader stops at the first non-list line after **Contents** while the Python one reads to the first ##, so odd files can disagree
