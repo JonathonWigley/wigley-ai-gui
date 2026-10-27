@@ -187,5 +187,6 @@ Review base: f676c293b1c5b8de5ce197b9ebf280691835f557
 - missing-profile send described as a 'message not sent' toast naming the profile, not the exact error string — reworded errors don't stale the doc — none · group 06 · group 06
 - first process of a row keeps unprefixed entry ids; later processes get process-<n>: — smaller change — a consumer reading harness ids back would see the prefix · lead (fix b3e9123)
 ### Review rounds
+- R1 implementation review · c4b411f · NEEDS FIXES (3 important, 4 minor, 1 pre-existing; 4 applied by lead in the next commit)
 ### Test gate
 - full vitest suite (npm test) — the range touches the chat contract both sides, sessions and keymap, and the whole suite runs in seconds, covering every planned test (open-sessions, session-list, chat-sessions, start, the four page files) · 237 files / 3619 tests pass; npm run selftest all passed at 0625058

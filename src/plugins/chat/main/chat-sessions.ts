@@ -150,7 +150,8 @@ interface HeldSession {
   process: AgentProcess | null;
   // A message was ever sent, so a start resumes the conversation.
   sent: boolean;
-  // A restored session whose earlier conversation is not read yet.
+  // A restored session ever sent to whose earlier conversation is not read
+  // yet.
   historyPending: boolean;
   harnessActivity: ProcessActivity;
   pending: Map<string, PendingPermission>;
@@ -273,10 +274,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       );
   }
 
-  // Held and its process running.
-  function isLive(session: HeldSession): boolean {
+  // Held, and `processStart` is its running process.
+  function isLive(session: HeldSession, processStart: number): boolean {
     return (
-      held.get(session.state.sessionId) === session && session.state.running
+      held.get(session.state.sessionId) === session &&
+      session.state.running &&
+      session.processStarts === processStart
     );
   }
 
@@ -417,31 +420,37 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     updateActivity(session);
   }
 
+  // The events of the row's `processStart`th process; `started.process` is
+  // that process once the harness's `start` returns.
   function processEvents(
     session: HeldSession,
     processStart: number,
+    started: { process: AgentProcess | null },
   ): AgentProcessEvents {
     const { sessionId } = session.state;
     return {
       entry(entry) {
-        if (isLive(session)) {
+        if (isLive(session, processStart)) {
           sendEntry(session, rowEntryOf(entry, processStart));
         }
       },
       controls(controls) {
-        if (isLive(session)) {
+        if (isLive(session, processStart)) {
           session.state.controls = controls;
           send('controls', { sessionId, controls });
         }
       },
       activity(activity) {
-        if (isLive(session)) {
+        if (isLive(session, processStart)) {
           session.harnessActivity = activity;
           updateActivity(session);
         }
       },
       commands(names) {
-        if (!isLive(session) || sameNames(session.state.commands, names)) {
+        if (
+          !isLive(session, processStart) ||
+          sameNames(session.state.commands, names)
+        ) {
           return;
         }
         session.state.commands = [...names];
@@ -449,10 +458,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       },
       ended({ code, error }) {
         session.exit = { code, error };
-        if (session.process !== null) {
-          running.delete(session.process);
+        if (started.process !== null) {
+          running.delete(started.process);
         }
-        if (!isLive(session)) {
+        if (!isLive(session, processStart)) {
           return;
         }
         log('chat', `session ${sessionId} ended (code ${code})`);
@@ -551,6 +560,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   ) {
     const { sessionId, projectDir } = session.state;
     session.processStarts += 1;
+    const started: { process: AgentProcess | null } = { process: null };
     const process = harness.start(
       {
         sessionId: session.hostId,
@@ -558,8 +568,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         projectDir,
         profileDir: profileDirOf(profile),
       },
-      processEvents(session, session.processStarts),
+      processEvents(session, session.processStarts, started),
     );
+    started.process = process;
     session.process = process;
     session.exit = null;
     running.add(process);
@@ -574,7 +585,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Opens the row for `hostId` and starts its process; a start that throws
-  // ends the owned session and drops it. Returns the row's sessionId.
+  // drops the session, then ends the owned session. Returns the row's
+  // sessionId.
   function openAndStart(
     harness: AgentHarness,
     profile: ChatProfile,
@@ -597,8 +609,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     try {
       startProcess(session, harness, profile, opening.resume);
     } catch (error) {
-      session.owned.end();
       drop(session);
+      session.owned.end();
       send('sessionRested', { sessionId, error: errorText(error) });
       throw error;
     }
@@ -681,7 +693,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           hostId: hostSessionId,
           entries: [],
           sent: record.sent,
-          historyPending: true,
+          historyPending: record.sent,
         },
         { select: false },
       );

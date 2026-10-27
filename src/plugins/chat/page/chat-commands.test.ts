@@ -362,6 +362,17 @@ describe('chat commands', () => {
     ]);
   });
 
+  it('send_MainRejects_ToastsAndLogsTheReason', async () => {
+    const shown = Object.assign(session(false), { box: box('hi') });
+    const run = setUp(shown, new Error('profile gone'));
+
+    run.handlers.send({});
+    await flush();
+
+    expect(run.toasts).toEqual(['Message not sent: profile gone']);
+    expect(run.logs).toContainEqual(expect.stringContaining('profile gone'));
+  });
+
   it('send_ImagesOnly_Sends', () => {
     const shown = Object.assign(session(true), { box: box('') });
     shown.attachments.add(png);
