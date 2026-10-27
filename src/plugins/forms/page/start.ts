@@ -120,7 +120,7 @@ function listenForRounds(
 
 // Shows each agent round in its session's Form tab and sends the user's
 // answers back to main; while a Form tab is the visible tab, the key scope
-// follows the forms view and the status line shows. A session with an open
+// follows the forms view. A session with an open
 // round closes only through the cancel prompt. Each round draws with the
 // layouts it names, the user's layout and `default`, loaded from main's set
 // again whenever the set, the setting or the open rounds change. Every store
@@ -153,10 +153,6 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
           sessionId,
         ),
       setScope: (formsView) => api.keys.setScope(formsView),
-      onViewChanged: (listener) => {
-        api.keys.onScopeChanged(listener);
-        api.modes.onChanged(listener);
-      },
       pushConfirmScope: () => api.keys.pushScope('confirm'),
       store,
       boxes,

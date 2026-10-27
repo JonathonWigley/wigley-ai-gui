@@ -39,7 +39,10 @@ function fakeCardDeps(contributions: FormsContributions): CardDeps {
     destroyBox: vi.fn(),
     dispatch: vi.fn(),
     toggleDontAsk: vi.fn(),
-    keys: { keysFor: () => null },
+    keys: {
+      keysFor: () => null,
+      anchor: () => ({ dispose: () => undefined }),
+    },
     platform: 'macos',
     log: vi.fn(),
     commands: { exists: () => false, run: vi.fn() },

@@ -31,6 +31,70 @@
   }
 }
 
+/* The rail's column: the app's header, the layout's rail, which scrolls, and
+   the app's Review button. */
+:where(.form-tab) .round > .ui-split-start {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+:where(.form-tab) .round > .ui-split-start > :not(.rail-head, .rail-foot) {
+  min-height: 0;
+  overflow: auto;
+}
+
+/* An edge prompt pair with nothing else to move to keeps its space. */
+:where(.form-tab) .is-no-target {
+  visibility: hidden;
+}
+
+:where(.form-tab) .rail-head {
+  align-items: baseline;
+  border-bottom: 1px solid var(--wg-border-default);
+  color: var(--wg-fg-secondary);
+  display: flex;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-1_5);
+  padding: var(--wg-space-2) var(--wg-space-3);
+  white-space: nowrap;
+}
+
+:where(.form-tab) .rail-head-separator {
+  color: var(--wg-fg-tertiary);
+}
+
+:where(.form-tab) .rail-edge,
+:where(.form-tab) .item-pager-edge {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--wg-space-1);
+}
+
+:where(.form-tab) .rail-edge {
+  margin-left: auto;
+}
+
+:where(.form-tab) .rail-foot {
+  border-top: 1px solid var(--wg-border-default);
+  padding: var(--wg-space-2);
+}
+
+/* Item pager: the focused item's place between the item keys, above the
+   card. */
+:where(.form-tab) .item-pager {
+  align-items: baseline;
+  color: var(--wg-fg-secondary);
+  display: flex;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-2);
+  margin-bottom: var(--wg-space-3);
+}
+
+:where(.form-tab) .item-pager-text {
+  font-family: var(--wg-font-mono);
+}
+
 /* Rail */
 :where(.form-tab) .rail-list {
   list-style: none;
@@ -345,9 +409,38 @@
   font-weight: var(--wg-weight-regular);
 }
 
-/* The field's label stays whole; the hint beside it wraps instead. */
-:where(.form-tab) .field > .ui-section-header > .ui-section-header-text {
+/* The field's label and its keys stay whole; the hint beside them wraps
+   instead. */
+:where(.form-tab) .field > .ui-section-header > .ui-section-header-text,
+:where(.form-tab) .field-keys {
   flex-shrink: 0;
+}
+
+:where(.form-tab) .field-keys {
+  font-weight: var(--wg-weight-regular);
+}
+
+/* A box's keys sit on its frame's bottom edge at the right end, shown while
+   the box has focus. The anchors inside set no visibility of their own, so a
+   hidden hint stays hidden. */
+:where(.form-tab) .field {
+  position: relative;
+}
+
+:where(.form-tab) .box-keys {
+  background: var(--wg-input-background);
+  bottom: 0;
+  display: inline-flex;
+  gap: var(--wg-space-1);
+  padding: 0 var(--wg-space-1);
+  position: absolute;
+  right: var(--wg-space-3);
+  transform: translateY(50%);
+  visibility: hidden;
+}
+
+:where(.form-tab) .field:focus-within .box-keys {
+  visibility: visible;
 }
 
 /* A scroll container of its own, so the vim panel, which is sticky, stays at

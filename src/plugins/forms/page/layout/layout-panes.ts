@@ -4,7 +4,6 @@ import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
 import { errorText } from '../../../../shared/error-text';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
-import { appendKeyHint, keyHint } from '../../../../shared/page/key-hint';
 import {
   type ButtonVariant,
   textButton,
@@ -35,7 +34,12 @@ import {
   type RoundState,
   type TextTarget,
 } from '../form-state';
-import { buildField, roundInfo, statusLabel } from '../kinds/card-parts';
+import {
+  appendBoxKeys,
+  buildField,
+  roundInfo,
+  statusLabel,
+} from '../kinds/card-parts';
 import { FORMATS, itemLabel } from '../kinds/formats';
 import {
   pickRailItem,
@@ -47,13 +51,14 @@ import {
   reviewSummaryText,
 } from '../view-model';
 import type { FormsContributions } from '../contributions';
-import { createUpdatingHeadKit, headKitDepsFor } from './card-kit';
+import { createHeadKit, type HeadKitDeps, headKitDepsFor } from './card-kit';
 import type { KitCommands } from './kit-commands';
 import { drawRollingBack, requireElementIn } from './layout-cards';
 import type { LayoutPick } from './layout-resolver';
 
 // What a pane reaches outside itself: the markdown renderer, the platform key
-// hints are drawn for, the log, the keys bound in a forms scope, the forms
+// hints are drawn for, the log, the keys bound in a forms scope and the
+// anchors that show them, the forms
 // state and its actions, a forms command, the round's text boxes, the forms
 // view now, which decides what a rail click does, the registered commands
 // `kit.command` checks and runs, and the review columns other plugins added.
@@ -61,7 +66,7 @@ export interface PaneDeps {
   markdown: MarkdownRenderer;
   platform: Platform;
   log: Log;
-  keys: Pick<KeysPageExports, 'keysFor'>;
+  keys: Pick<KeysPageExports, 'keysFor' | 'anchor'>;
   dispatch(action: FormsAction): void;
   getState(): FormsState;
   run(command: CommandId): void;
@@ -83,12 +88,10 @@ export interface RailPane {
 
 // `update` runs every review part's updater; the rows redraw only when
 // reviewRowsChanged says they differ from the last draw, and the cursor row
-// scrolls into view on a redraw and when `isNewlyShown`. `forgetRows` makes
-// the next `update` redraw the rows.
+// scrolls into view on a redraw and when `isNewlyShown`.
 export interface ReviewPane {
   element: HTMLElement;
   update(round: RoundState, isNewlyShown: boolean): void;
-  forgetRows(): void;
 }
 
 type PanePart = 'rail' | 'review';
@@ -186,10 +189,7 @@ function drawRail(
   const entries = new Map<number, HTMLElement>();
   let shownView: FormsView = 'forms';
   const kit: RailKit = {
-    ...createUpdatingHeadKit(
-      headKitDepsFor(deps, formsScope('forms')),
-      updaters,
-    ),
+    ...createHeadKit(headKitDepsFor(deps, formsScope('forms'))),
     entry(entryParent, position) {
       requireIndexIn(
         position,
@@ -310,6 +310,10 @@ function drawReview(
 ): ReviewPane {
   const updaters: Updater[] = [];
   const rowElements = new Map<number, HTMLElement>();
+  const headDeps = headKitDepsFor(deps, formsScope('review'));
+  // The cursor row's prompt, which each draw of the rows moves to that row.
+  const jumpPrompt = element('span', 'review-jump-prompt');
+  headDeps.anchor(jumpPrompt, formsCommand('reviewJump'), true);
   let drawn: RoundState | null = null;
   // The rows the latest update redraws; null when they were unchanged.
   let changedRows: ReviewRow[] | null = null;
@@ -324,10 +328,7 @@ function drawReview(
     })),
   };
   const kit: ReviewKit = {
-    ...createUpdatingHeadKit(
-      headKitDepsFor(deps, formsScope('review')),
-      updaters,
-    ),
+    ...createHeadKit(headDeps),
     row(rowParent, row) {
       requireIndexIn(row, input.rows.length, `review has no row ${row}`);
       const entry = element('li', 'review-row');
@@ -336,7 +337,7 @@ function drawReview(
       updaters.push(() => {
         const rows = changedRows;
         if (rows !== null) {
-          drawReviewRow(entry, rows[row], round.formId, deps);
+          drawReviewRow(entry, rows[row], round.formId, deps, jumpPrompt);
         }
       });
       return entry;
@@ -367,8 +368,10 @@ function drawReview(
         'field-note',
         'Round note',
         'Optional. Anything about the round as a whole.',
+        { command: formsCommand('editNote'), anchor: headDeps.anchor },
       );
       deps.mountBox(note.box, { field: 'note' }, round.note);
+      appendBoxKeys(note, headDeps.anchor);
       return note.element;
     },
     sendButton: (buttonParent) =>
@@ -378,7 +381,7 @@ function drawReview(
         'submit',
         'primary',
         deps,
-        updaters,
+        headDeps,
       ),
     cancelButton: (buttonParent) =>
       appendReviewButton(
@@ -387,7 +390,7 @@ function drawReview(
         'askCancel',
         'secondary',
         deps,
-        updaters,
+        headDeps,
       ),
   };
   const paneElement = requireElementIn(
@@ -415,36 +418,24 @@ function drawReview(
           ?.scrollIntoView({ block: 'nearest' });
       }
     },
-    forgetRows() {
-      drawn = null;
-    },
   };
 }
 
-// The review scope's keys for a forms command; null when unbound there.
-function reviewKeysFor(
-  deps: PaneDeps,
-  command: FormsCommandName,
-): string | null {
-  return deps.keys.keysFor(formsCommand(command), formsScope('review'));
-}
-
-// A button running forms `command`, with the review scope's keys for it,
-// redrawn on each update.
+// A button running forms `command`, with its anchor in the review scope.
 function appendReviewButton(
   parent: HTMLElement,
   label: string,
   command: FormsCommandName,
   variant: ButtonVariant,
   deps: PaneDeps,
-  updaters: Updater[],
+  headDeps: HeadKitDeps,
 ): HTMLButtonElement {
   const control = textButton(label, () => deps.run(formsCommand(command)), {
     variant,
   });
-  updaters.push(
-    appendKeyHint(control, () => reviewKeysFor(deps, command), deps.platform),
-  );
+  const keys = element('span');
+  control.append(keys);
+  headDeps.anchor(keys, formsCommand(command));
   parent.append(control);
   return control;
 }
@@ -452,13 +443,14 @@ function appendReviewButton(
 // Redraws `entry`'s contents from `row`. A finding's pick reads as its action,
 // then its choice under the number the card gives it; a header pick reads as
 // its action alone, and a row with no pick as its status. The cursor's row
-// shows the keys that jump to its item, as clicking it does. The row ends
-// with each contributed column's cell.
+// takes `jumpPrompt`, the keys that jump to its item, as clicking it does. The
+// row ends with each contributed column's cell.
 function drawReviewRow(
   entry: HTMLElement,
   row: ReviewRow,
   roundId: string,
   deps: PaneDeps,
+  jumpPrompt: HTMLElement,
 ) {
   entry.dataset.status = row.status;
   entry.classList.toggle('is-cursor', row.isCursor);
@@ -494,11 +486,8 @@ function drawReviewRow(
     element('span', 'review-question', row.title),
     answer,
   );
-  const hint = row.isCursor
-    ? keyHint(reviewKeysFor(deps, 'reviewJump'), deps.platform)
-    : null;
-  if (hint !== null) {
-    pick.append(hint);
+  if (row.isCursor) {
+    pick.append(jumpPrompt);
   }
   const details: HTMLElement[] = [];
   if (row.notes.trim() !== '') {

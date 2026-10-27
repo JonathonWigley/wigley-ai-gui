@@ -17,10 +17,6 @@ import {
   formOfSession,
   paneView,
 } from '../../../shared/page/session-forms';
-import {
-  createStatusLine,
-  type StatusLineContent,
-} from '../../../shared/page/status-line';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
 import { formsCommand, formsScope } from '../ids';
@@ -36,24 +32,19 @@ import {
 } from './form-state';
 import type { KitCommands } from './layout/kit-commands';
 import { createRoundView, type RoundView } from './round-view';
-import { roundSaveLabel, roundSaveState, sessionTitle } from './view-model';
+import { sessionTitle } from './view-model';
 
 // `beforeClose` answers whether a session may close now. `setScope` sets the
 // key scope to the forms view while a Form tab is the visible tab;
 // `pushConfirmScope` lays the cancel prompt's scope over it. `platform` is the
 // OS key hints are drawn for; `uiState` keeps the rail's dragged width, which
-// every round's rail opens at. `onViewChanged` hears each change that can move
-// the visible view off or onto a Form tab: a key scope or mode change. The
-// status line shows only over a Form tab, and is rechecked on each store
-// render, box change, scope or mode change, and base change under the
-// cancel prompt. `commands` and `contributions` reach every round view's kits
-// and cards.
+// every round's rail opens at. `commands` and `contributions` reach every
+// round view's kits and cards.
 export interface FormsViewDeps {
-  areas: Pick<PluginAreas, 'statusBar' | 'overlay'>;
+  areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
   beforeClose(sessionId: string): boolean;
   setScope(view: FormsState['view']): void;
-  onViewChanged(listener: () => void): void;
   pushConfirmScope(): PushedScope;
   store: FormsStore;
   boxes: EditorBoxes<BoxRef>;
@@ -90,18 +81,16 @@ export interface FormsView {
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
 }
 
-// The whole forms UI: each round in its session's Form tab, the status line in
-// the status bar, the cancel prompt in the overlay layer, all serving the
-// active round. Every store change re-renders it; editors live in the round
-// views and survive every render. While a Form tab is the visible tab the
-// status line shows and the key scope follows the view; the cancel prompt
-// pushes its own scope over it and is dismissed when another view sets the
-// scope. While the round sends, that dismiss waits: a failed send dismisses
-// the prompt, and a sent round closes it with the round. Round views start on
-// the default layout alone.
+// The whole forms UI: each round in its session's Form tab and the cancel
+// prompt in the overlay layer, both serving the active round. Every store
+// change re-renders it; editors live in the round views and survive every
+// render. While a Form tab is the visible tab the key scope follows the view;
+// the cancel prompt pushes its own scope over it and is dismissed when another
+// view sets the scope. While the round sends, that dismiss waits: a failed
+// send dismisses the prompt, and a sent round closes it with the round. Round
+// views start on the default layout alone.
 export function mountFormsView(deps: FormsViewDeps): FormsView {
   const { areas, store, boxes } = deps;
-  const status = createStatusLine();
   const tabs = createSessionFormTabs({
     addTab: (sessionId, tab) => deps.sessions.addTab(sessionId, tab),
     tabId: 'form',
@@ -111,8 +100,6 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     beforeClose: (sessionId) => deps.beforeClose(sessionId),
     shown: () => deps.setScope(deps.store.get().view),
   });
-  const updateStatus = () =>
-    status.update(tabs.isShown(), statusContent(store.get()));
   const dispatch = (action: FormsAction) => store.dispatch(action);
   const confirm = createConfirmPrompt({
     title: 'Cancel this round?',
@@ -127,12 +114,9 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     isAsked: () => store.get().view === 'confirm',
     isSending: () => (activeForm(store.get())?.sending ?? null) !== null,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),
-    // Under the pushed scope a base change reaches no onViewChanged.
-    onBaseChanged: updateStatus,
     log: deps.log,
     logSource: 'forms',
   });
-  areas.statusBar.contribute(status.element);
   areas.overlay.contribute(confirm.element);
   const roundViews = new Map<string, RoundView>();
   const active: ActiveLayouts = {
@@ -165,15 +149,12 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
         deps.setScope(view);
       }
     });
-    status.update(tabs.isShown(), statusContent(state));
     const box = boxes.active();
     if (box !== null && !isBoxShown(state, box)) {
       boxes.leave();
     }
   };
   store.subscribe(render);
-  boxes.onChange(updateStatus);
-  deps.onViewChanged(updateStatus);
   render();
   return {
     forgetSession(sessionId) {
@@ -283,16 +264,4 @@ function showRound(
       log: deps.log,
     },
   );
-}
-
-// The status line's content: the active round's save state.
-function statusContent(state: FormsState): StatusLineContent {
-  const round = activeForm(state);
-  if (round === null) {
-    return { save: '', saveState: '' };
-  }
-  return {
-    save: roundSaveLabel(round),
-    saveState: roundSaveState(round) ?? '',
-  };
 }

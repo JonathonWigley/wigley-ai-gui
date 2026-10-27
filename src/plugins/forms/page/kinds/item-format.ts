@@ -16,8 +16,8 @@ export interface ItemCard {
 
 // What a card reaches outside itself: the round's boxes, its actions, the
 // Don't-ask command, which also focuses the reason box, the keys bound in a
-// scope (a card reads the forms view's), the platform key hints are drawn
-// for, the log, the registered commands `kit.command` checks and runs, and
+// scope and the anchors that show them (a card reads and anchors in the forms
+// view's), the platform key hints are drawn for, the log, the registered commands `kit.command` checks and runs, and
 // the card parts other plugins added.
 export interface CardDeps {
   markdown: MarkdownRenderer;
@@ -25,7 +25,7 @@ export interface CardDeps {
   destroyBox(target: TextTarget): void;
   dispatch(action: FormsAction): void;
   toggleDontAsk(): void;
-  keys: Pick<KeysPageExports, 'keysFor'>;
+  keys: Pick<KeysPageExports, 'keysFor' | 'anchor'>;
   platform: Platform;
   log: Log;
   commands: KitCommands;

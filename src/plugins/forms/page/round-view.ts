@@ -1,4 +1,5 @@
 import type { CommandId } from '../../../contracts/commands';
+import type { Disposable } from '../../../contracts/disposable';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
@@ -16,13 +17,16 @@ import {
   keepFocusedBox,
 } from '../../../shared/page/editor-boxes';
 import type { ShownLayouts } from '../../../shared/page/layout-loader';
+import { createStatusLine } from '../../../shared/page/status-line';
 import { textLineHeightPx } from '../../../shared/page/text-line';
+import { textButton } from '../../../shared/page/ui/button';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import type { FormsContributions } from './contributions';
 import type { BoxRef } from './boxes';
 import {
   type FormsAction,
   type FormsState,
+  progress,
   railItems,
   type RoundState,
   type TextTarget,
@@ -49,6 +53,13 @@ import {
   picksEqual,
   type RoundPicks,
 } from './layout/layout-resolver';
+import {
+  hasOtherUnanswered,
+  pagerText,
+  railHeadText,
+  roundSaveLabel,
+  roundSaveState,
+} from './view-model';
 
 // `getState` reads the forms state, so a rail click logs only a jump that
 // moved. `platform` is the OS key hints are drawn for; `uiState` keeps the
@@ -68,7 +79,7 @@ export interface RoundViewDeps {
     | 'focus'
     | 'formIdOf'
   >;
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
+  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'>;
   dispatch(action: FormsAction): void;
   getState(): FormsState;
   run(command: CommandId): void;
@@ -87,8 +98,8 @@ export interface RoundViewDeps {
 // `setLayouts` picks the round's layouts again from `shown` and rebuilds when
 // a pick changed.
 // `scrollBy` scrolls the main column by `step`, down for 1 and up for -1.
-// `dispose` stops the view following keymap changes; its owner calls it when
-// it drops the view.
+// `dispose` disposes every anchor the view named and stops it following
+// keymap changes; its owner calls it when it drops the view.
 export interface RoundView {
   element: HTMLElement;
   update(round: RoundState, view: FormsView): void;
@@ -102,27 +113,41 @@ export interface RoundView {
 interface RoundParts {
   main: HTMLElement;
   layoutHead: HTMLElement | null;
-  // Draws the layout's head again in its slot; nothing for a layout with no
-  // head.
+  // Disposes the head's anchors and draws the layout's head again in its
+  // slot; nothing for a layout with no head.
   redrawLayoutHead(): void;
+  railHead: RailHead;
   rail: RailPane;
+  pager: ItemPager;
   itemsPane: HTMLElement;
   itemCards: ItemCard[];
   review: ReviewPane;
+  // Disposes every anchor the build named, the head's included.
+  dispose(): void;
 }
 
-// One open round's DOM, built with its editors: a split with the rail pane in
-// its start pane, and the layout's head, every item's card and the review
-// pane, which holds the round note, in its end pane, each card and pane drawn
-// by the layout `pickRoundLayouts` picks for it from `shown`. A render only
-// updates it, the rail taking the latest dragged width of any round; new
-// layouts that change a pick rebuild both panes, as `rebuild` does, keeping
-// the rail's dragged width, the focused box and the main column's scroll. A
-// keymap change draws the layout's head again, shown or hidden, since
-// showing the view only updates it, and has the review redraw its rows at its
-// next update; while the view shows, the change also updates it with the
-// round it last showed, so every key hint reads the new keys. `attach` places
-// the root in the page once, before any editor mounts.
+// The rail's header: the open count, the save state and the unanswered pair.
+interface RailHead {
+  update(round: RoundState): void;
+}
+
+// The focused item's place in the round, between the item keys.
+interface ItemPager {
+  element: HTMLElement;
+  update(round: RoundState): void;
+}
+
+// One open round's DOM, built with its editors: a split with the rail header,
+// the rail pane and the Review button in its start pane, and the layout's
+// head, the item pager, every item's card and the review pane, which holds the
+// round note, in its end pane, each card and pane drawn by the layout
+// `pickRoundLayouts` picks for it from `shown`. A render only updates it, the
+// rail taking the latest dragged width of any round; new layouts that change a
+// pick rebuild both panes, as `rebuild` does, keeping the rail's dragged
+// width, the focused box and the main column's scroll. Every key hint is an
+// anchor, which redraws itself on a keymap change; the change draws the
+// layout's head again, shown or hidden, for the text it drew from the keys.
+// `attach` places the root in the page once, before any editor mounts.
 export function createRoundView(
   attach: (root: HTMLElement) => void,
   round: RoundState,
@@ -142,7 +167,6 @@ export function createRoundView(
   // Editors mount into attached elements, so they can measure themselves.
   attach(root);
   let shownView: FormsView = 'forms';
-  let shownRound: RoundState | null = null;
   let shownFocus = -1;
   const build = (current: RoundState, roundPicks: RoundPicks) =>
     buildRoundParts(split, current, roundPicks, deps);
@@ -156,13 +180,15 @@ export function createRoundView(
       // each time it is shown, so this picks up another round's drag.
       split.reloadWidth();
       shownView = viewName;
-      shownRound = current;
       const isForms = viewName === 'forms';
       const isReview = viewName === 'review';
       if (parts.layoutHead !== null) {
         parts.layoutHead.hidden = !isForms;
       }
+      parts.railHead.update(current);
       parts.rail.update(current, viewName);
+      parts.pager.element.hidden = !isForms;
+      parts.pager.update(current);
       parts.itemsPane.hidden = !isForms;
       parts.itemCards.forEach((card, position) => {
         const isShown = isForms && position === current.focus;
@@ -187,6 +213,7 @@ export function createRoundView(
       const scrollTop = parts.main.scrollTop;
       keepFocusedBox(deps.boxes, current.formId, () => {
         deps.boxes.destroyForm(current.formId);
+        parts.dispose();
         split.start.replaceChildren();
         split.end.replaceChildren();
         parts = build(current, picks);
@@ -218,30 +245,53 @@ export function createRoundView(
       );
     },
     dispose() {
+      parts.dispose();
       keysChange.dispose();
     },
   };
-  const keysChange = deps.keys.onChanged(() => {
-    parts.review.forgetRows();
-    parts.redrawLayoutHead();
-    if (shownRound !== null && !root.hidden) {
-      view.update(shownRound, shownView);
-    }
-  });
+  const keysChange = deps.keys.onChanged(() => parts.redrawLayoutHead());
   return view;
 }
 
-// Builds the rail pane into the split's start pane and the round's main
-// column into its end pane: the layout's head, the items pane of cards, and
-// the review pane, each card and pane drawn by its pick in `picks`. A rail
-// click acts on the forms view the state holds as it lands, the cancel
-// prompt included.
+// The anchor keys a build hands its parts: `anchor` names the anchor through
+// `keys` and keeps the Disposable it returns in `anchors`.
+type AnchorKeys = Pick<KeysPageExports, 'keysFor' | 'anchor'>;
+
+function recordingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {
+  return {
+    keysFor: (command, scope, where) => keys.keysFor(command, scope, where),
+    anchor(element, command, options) {
+      const anchor = keys.anchor(element, command, options);
+      anchors.push(anchor);
+      return anchor;
+    },
+  };
+}
+
+// Disposes every Disposable in `disposables` and empties it.
+function disposeAll(disposables: Disposable[]) {
+  for (const disposable of disposables) {
+    disposable.dispose();
+  }
+  disposables.length = 0;
+}
+
+// Builds the split's start pane, the rail header, the rail pane and the rail
+// foot, and the round's main column in its end pane: the layout's head, the
+// item pager, the items pane of cards, and the review pane, each card and pane
+// drawn by its pick in `picks`. A rail click acts on the forms view the state
+// holds as it lands, the cancel prompt included. Every part anchors its keys
+// through one recording `keys`, the head through its own, so `dispose`
+// reaches them all.
 function buildRoundParts(
   split: Split,
   round: RoundState,
   picks: RoundPicks,
   deps: RoundViewDeps,
 ): RoundParts {
+  const anchors: Disposable[] = [];
+  const headAnchors: Disposable[] = [];
+  const keys = recordingKeys(deps.keys, anchors);
   const items = railItems(round.round);
   const mountBox = (parent: HTMLElement, target: TextTarget, text: string) =>
     deps.boxes.mount(parent, { roundId: round.formId, target }, text);
@@ -251,7 +301,7 @@ function buildRoundParts(
     markdown: deps.markdown,
     platform: deps.platform,
     log: deps.log,
-    keys: deps.keys,
+    keys,
     dispatch: deps.dispatch,
     getState: deps.getState,
     run: deps.run,
@@ -261,15 +311,21 @@ function buildRoundParts(
     commands: deps.commands,
     contributions: deps.contributions,
   };
+  const railHead = buildRailHead(split.start, keys);
   const rail = buildRailPane(picks.panes.rail, split.start, round, paneDeps);
+  buildRailFoot(split.start, keys, deps);
   const main = split.end;
 
   const headDeps: HeadDeps = {
-    ...headKitDepsFor(deps, formsScope('forms')),
+    ...headKitDepsFor(
+      { ...deps, keys: recordingKeys(deps.keys, headAnchors) },
+      formsScope('forms'),
+    ),
     log: deps.log,
   };
   const headPick = picks.panes.head;
   const layoutHead = buildLayoutHead(main, round, headPick, headDeps);
+  const pager = buildItemPager(main, keys);
   const itemsPane = element('div', 'items');
   main.append(itemsPane);
   const cardDeps: CardDeps = {
@@ -278,7 +334,7 @@ function buildRoundParts(
     destroyBox,
     dispatch: deps.dispatch,
     toggleDontAsk: () => deps.run(formsCommand('toggleDontAsk')),
-    keys: deps.keys,
+    keys,
     platform: deps.platform,
     log: deps.log,
     commands: deps.commands,
@@ -300,14 +356,105 @@ function buildRoundParts(
     layoutHead,
     redrawLayoutHead() {
       if (layoutHead !== null) {
+        disposeAll(headAnchors);
         drawLayoutHead(layoutHead, round, headPick, headDeps);
       }
     },
+    railHead,
     rail,
+    pager,
     itemsPane,
     itemCards,
     review,
+    dispose() {
+      disposeAll(anchors);
+      disposeAll(headAnchors);
+    },
   };
+}
+
+// Appends `header.rail-head` to `parent`: the open count, the round's save
+// state, and the unanswered pair, `⌥P ◂ ▸ ⌥N`, hidden while no other
+// untouched item is left to jump to.
+function buildRailHead(parent: HTMLElement, keys: AnchorKeys): RailHead {
+  const head = element('header', 'rail-head');
+  const text = element('span', 'rail-head-text');
+  const statusLine = createStatusLine();
+  const edge = element('span', 'rail-edge');
+  const previous = element('span');
+  const next = element('span');
+  edge.append(previous, chevron('◂'), chevron('▸'), next);
+  head.append(
+    text,
+    element('span', 'rail-head-separator', '·'),
+    statusLine.element,
+    edge,
+  );
+  parent.append(head);
+  const scope = formsScope('forms');
+  keys.anchor(previous, formsCommand('prevUnanswered'), { scope });
+  keys.anchor(next, formsCommand('nextUnanswered'), { scope });
+  return {
+    update(round) {
+      text.textContent = railHeadText(progress(round));
+      statusLine.update(true, {
+        save: roundSaveLabel(round),
+        saveState: roundSaveState(round) ?? '',
+      });
+      edge.classList.toggle('is-no-target', !hasOtherUnanswered(round));
+    },
+  };
+}
+
+// Appends `footer.rail-foot` to `parent`, holding the Review button.
+function buildRailFoot(
+  parent: HTMLElement,
+  keys: AnchorKeys,
+  deps: Pick<RoundViewDeps, 'run'>,
+) {
+  const command = formsCommand('openReview');
+  const review = textButton('Review', () => deps.run(command), {
+    variant: 'ghost',
+  });
+  const reviewKeys = element('span');
+  review.append(reviewKeys);
+  const foot = element('footer', 'rail-foot');
+  foot.append(review);
+  parent.append(foot);
+  keys.anchor(reviewKeys, command, { scope: formsScope('forms') });
+}
+
+// Appends `div.item-pager` to `parent`, `⌃H ‹ F1 of 6 › ⌃L`: each item key
+// with its chevron in an edge cell, hidden while the round holds fewer than
+// two items.
+function buildItemPager(parent: HTMLElement, keys: AnchorKeys): ItemPager {
+  const pager = element('div', 'item-pager');
+  const previous = element('span');
+  const next = element('span');
+  const start = element('span', 'item-pager-edge');
+  start.append(previous, chevron('‹'));
+  const text = element('span', 'item-pager-text');
+  const end = element('span', 'item-pager-edge');
+  end.append(chevron('›'), next);
+  pager.append(start, text, end);
+  parent.append(pager);
+  const scope = formsScope('forms');
+  keys.anchor(previous, formsCommand('prevItem'), { scope });
+  keys.anchor(next, formsCommand('nextItem'), { scope });
+  return {
+    element: pager,
+    update(round) {
+      text.textContent = pagerText(round);
+      const hasNoOtherItem = railItems(round.round).length < 2;
+      start.classList.toggle('is-no-target', hasNoOtherItem);
+      end.classList.toggle('is-no-target', hasNoOtherItem);
+    },
+  };
+}
+
+// A chevron beside an anchor, which hides with it.
+function chevron(text: string): HTMLElement {
+  return element('span', 'ui-key-chevron', text);
 }
 
 // The head kit's deps over the forms view's keys, and the log.

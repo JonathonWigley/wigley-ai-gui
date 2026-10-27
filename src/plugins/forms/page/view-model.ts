@@ -21,13 +21,17 @@ import {
   findingActionWord,
   type FormsAction,
   type FormsState,
+  focusedItem,
   itemAnswer,
   pickIsComplete,
   pickNumber,
   type Progress,
   progress,
   type RailItem,
+  railItems,
+  railPosition,
   type RoundState,
+  unansweredItem,
 } from './form-state';
 import { FORMATS, itemLabel } from './kinds/formats';
 
@@ -158,7 +162,28 @@ export function reviewSummaryText(counts: Progress): string {
   return `${progressText(counts)}.${untouched}`;
 }
 
-// The status line's save text: `Sending…` while the round's finish is with
+// The rail header's text: how many of the round's items are still untouched.
+export function railHeadText(counts: Progress): string {
+  return `Items · ${counts.untouched} open`;
+}
+
+// Whether an untouched item other than the focused one is left to jump to, as
+// the unanswered keys need.
+export function hasOtherUnanswered(round: RoundState): boolean {
+  const item = unansweredItem(round, 1);
+  return item !== null && railPosition(round.round, item) !== round.focus;
+}
+
+// The item pager's text: the focused item's label of the rail's item count;
+// '' with no item focused.
+export function pagerText(round: RoundState): string {
+  const focused = focusedItem(round);
+  return focused === null
+    ? ''
+    : `${itemLabel(focused)} of ${railItems(round.round).length}`;
+}
+
+// The rail header's save text: `Sending…` while the round's finish is with
 // main, else its save state.
 export function roundSaveLabel(round: RoundState): string {
   return round.sending === null
@@ -166,7 +191,7 @@ export function roundSaveLabel(round: RoundState): string {
     : 'Sending…';
 }
 
-// The status line's save state, which colours its text; null while the
+// The rail header's save state, which colours its text; null while the
 // round's finish is with main, so `Sending…` takes no save state's colour.
 export function roundSaveState(round: RoundState): SaveState | null {
   return round.sending === null ? saveState(round) : null;

@@ -27,6 +27,11 @@ function openRound(): FormsState {
 
 function fakePaneDeps(contributions: FormsContributions, state: FormsState) {
   const keysFor = vi.fn(() => null);
+  const anchor = vi.fn(
+    (_element: HTMLElement, _command: string, _options?: unknown) => ({
+      dispose: () => undefined,
+    }),
+  );
   const log = vi.fn();
   const deps: PaneDeps = {
     markdown: {
@@ -36,7 +41,7 @@ function fakePaneDeps(contributions: FormsContributions, state: FormsState) {
     },
     platform: 'macos',
     log,
-    keys: { keysFor },
+    keys: { keysFor, anchor },
     dispatch: vi.fn(),
     getState: () => state,
     run: vi.fn(),
@@ -46,7 +51,7 @@ function fakePaneDeps(contributions: FormsContributions, state: FormsState) {
     commands: { exists: () => false, run: vi.fn() },
     contributions,
   };
-  return { deps, keysFor, log };
+  return { deps, keysFor, anchor, log };
 }
 
 // A review drawing only row 0 into its `ul`; `onKit` sees the kit as it
@@ -151,15 +156,14 @@ describe('review pane', () => {
     expect(keysFor).toHaveBeenCalledWith('demo.run', 'forms.review');
   });
 
-  it('reviewKit_KeysAndKeyHint_ReadTheReviewScope', () => {
+  it('reviewKit_KeyHint_AnchorsInTheReviewScope', () => {
     const state = openRound();
-    const { deps, keysFor } = fakePaneDeps(createFormsContributions(), state);
+    const { deps, anchor } = fakePaneDeps(createFormsContributions(), state);
 
     buildReviewPane(
       {
         name: 'test',
         layout: oneRowReview((kit) => {
-          kit.keys('submit');
           kit.keyHint(asHtml(new FakeElement('div')), 'askCancel');
         }),
       },
@@ -168,9 +172,54 @@ describe('review pane', () => {
       deps,
     );
 
-    expect(keysFor).toHaveBeenCalledWith('forms.submit', 'forms.review');
-    expect(keysFor).toHaveBeenCalledWith('forms.askCancel', 'forms.review');
-    expect(keysFor).not.toHaveBeenCalledWith(expect.anything(), 'forms.forms');
+    expect(anchor).toHaveBeenCalledWith(expect.anything(), 'forms.askCancel', {
+      scope: 'forms.review',
+    });
+    expect(anchor).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ scope: 'forms.forms' }),
+    );
+  });
+
+  it('reviewRow_CursorRow_HoldsTheJumpPrompt', () => {
+    const opened = openRound();
+    const round = { ...opened.forms[0], reviewRow: 1 };
+    const { deps, anchor } = fakePaneDeps(createFormsContributions(), opened);
+    const pane = buildReviewPane(
+      {
+        name: 'test',
+        layout: {
+          review(parent, input, kit) {
+            const rows = kit.el(parent, 'ul', 'review-rows');
+            for (const row of input.rows) {
+              kit.row(rows, row.row);
+            }
+            return { element: rows };
+          },
+        },
+      },
+      asHtml(new FakeElement('div')),
+      round,
+      deps,
+    );
+
+    pane.update(round, true);
+
+    const rows = findAll(asFake(pane.element), 'review-row');
+    expect(
+      rows.map((row) => findAll(row, 'review-jump-prompt').length),
+    ).toEqual([0, 1]);
+    const jumpAnchors = anchor.mock.calls.filter(
+      ([, command]) => command === 'forms.reviewJump',
+    );
+    expect(jumpAnchors).toEqual([
+      [
+        expect.anything(),
+        'forms.reviewJump',
+        { scope: 'forms.review', label: true },
+      ],
+    ]);
   });
 });
 

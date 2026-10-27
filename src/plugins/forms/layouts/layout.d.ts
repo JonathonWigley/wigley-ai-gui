@@ -108,9 +108,9 @@ export interface HeadKit {
   // reads it; null when unbound or unknown. It reads the keymap once, when called, so text a card draws from it keeps
   // the keys of the card's build after a rebind; draw a hint with `keyHint` for one that follows the keymap.
   keys(command: string): string | null;
-  // `span` (with `className`) holding the hint of the keys `keys` reads for `command`, empty while unbound. The hint
-  // follows keymap changes: a card's or pane's redraws on each of its updates, and the head is drawn again after each
-  // change.
+  // `span` (with `className`): an anchor for `command` in the scope of the part drawing; it shows while that scope is
+  // in force and the hints setting is on, and follows keymap changes. Empty while unbound or for a name no forms
+  // command has.
   keyHint(
     parent: HTMLElement,
     command: string,
@@ -277,7 +277,7 @@ export interface Layout {
   // Drawn above the cards in the forms view, once per round and again after each keymap change, into a slot carrying
   // `data-layout="<name>"`.
   head?(parent: HTMLElement, round: RoundInfo, kit: HeadKit): void;
-  // The rail beside the cards, built once per round.
+  // The rail beside the cards, under the app's rail header and over its Review button, built once per round.
   rail?(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
   // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round.
   review?(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;

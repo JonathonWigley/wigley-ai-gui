@@ -49,7 +49,6 @@ function formTabSetup() {
   let tab: FakeElement | null = null;
   mountFormsView({
     areas: {
-      statusBar: { contribute: () => ({ dispose: () => undefined }) },
       overlay: { contribute: () => ({ dispose: () => undefined }) },
     },
     sessions: {
@@ -66,7 +65,6 @@ function formTabSetup() {
     },
     beforeClose: () => true,
     setScope: () => undefined,
-    onViewChanged: () => undefined,
     pushConfirmScope: () => ({
       pop: () => undefined,
       onBaseChanged: () => undefined,

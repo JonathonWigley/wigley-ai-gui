@@ -1,12 +1,11 @@
 import type { CommandId } from '../../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
-import { appendKeyHint } from '../../../../shared/page/key-hint';
 import { inputFrame } from '../../../../shared/page/ui/input-frame';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag } from '../../../../shared/page/ui/tag';
 import type { AnswerStatus, Round } from '../../contract';
-import { numberedCommand } from '../../ids';
+import { formsCommand, numberedCommand } from '../../ids';
 import type { RoundInfo } from '../../layouts/layout';
 import type { CardDeps } from './item-format';
 
@@ -14,6 +13,10 @@ export interface Field {
   element: HTMLElement;
   box: HTMLElement;
 }
+
+// Names the anchor for `command` on `element`, in the scope of the part
+// drawing.
+export type PartAnchor = (element: HTMLElement, command: CommandId) => void;
 
 const STATUS_LABELS: Record<AnswerStatus, string> = {
   answered: 'Answered',
@@ -82,16 +85,23 @@ export function buildChoiceReason(
   return reason;
 }
 
-// A text box's field: its label and hint over the input frame `box`, which
-// the editor mounts into.
+// A text box's field: its label, the anchor `labelKeys` names when given,
+// and its hint over the input frame `box`, which the editor mounts into.
 export function buildField(
   parent: HTMLElement,
   className: string,
   label: string,
   hint: string,
+  labelKeys: { command: CommandId; anchor: PartAnchor } | null = null,
 ): Field {
   const field = element('div', `field ${className}`);
-  const caption = sectionHeader(label, element('span', 'field-hint', hint));
+  const caption = sectionHeader(label);
+  if (labelKeys !== null) {
+    const keys = element('span', 'field-keys');
+    caption.append(keys);
+    labelKeys.anchor(keys, labelKeys.command);
+  }
+  caption.append(element('span', 'field-hint', hint));
   const box = inputFrame();
   box.classList.add('box');
   field.append(caption, box);
@@ -99,28 +109,34 @@ export function buildField(
   return { element: field, box };
 }
 
-// The choice list's entries in the order of the choices drawn, and
-// `updateKeys`, which shows each choice's keys again as the keymap now binds
-// them.
+// Appends `span.box-keys` after the field's input frame, holding the keys
+// that move to the previous and the next box.
+export function appendBoxKeys(field: Field, anchor: PartAnchor) {
+  const keys = element('span', 'box-keys');
+  const previous = element('span');
+  const next = element('span');
+  keys.append(previous, next);
+  field.element.append(keys);
+  anchor(previous, formsCommand('prevBox'));
+  anchor(next, formsCommand('nextBox'));
+}
+
+// The choice list's entries in the order of the choices drawn.
 export interface ChoiceList {
   entries: HTMLLIElement[];
-  updateKeys(): void;
 }
 
 // Appends one choice per entry of `choices` to `list`, each inline markdown
-// under its shown `number`, with the keys that pick that number; the choice
-// numbered `recommended` is tagged, none when null. `pick` gets the clicked
-// choice's number. `deps.keysFor` reads the keys in the card's scope.
+// under its shown `number`, with the anchor for the command that picks that
+// number; the choice numbered `recommended` is tagged, none when null. `pick`
+// gets the clicked choice's number.
 export function buildChoiceList(
   list: HTMLElement,
   choices: { text: string; number: number }[],
   recommended: number | null,
   pick: (number: number) => void,
-  deps: Pick<CardDeps, 'markdown' | 'platform'> & {
-    keysFor(command: CommandId): string | null;
-  },
+  deps: Pick<CardDeps, 'markdown'> & { anchor: PartAnchor },
 ): ChoiceList {
-  const keyUpdaters: (() => void)[] = [];
   const entries = choices.map(({ text, number }) => {
     const entry = element('li', 'choice');
     const choicePick = button('choice-pick', '', () => pick(number));
@@ -133,18 +149,24 @@ export function buildChoiceList(
       entry.classList.add('is-recommended');
       choicePick.append(tag('Recommended', 'accent'));
     }
-    const command = numberedCommand('choose', number);
-    const readKeys = () => (command === null ? null : deps.keysFor(command));
-    keyUpdaters.push(appendKeyHint(choicePick, readKeys, deps.platform));
+    appendPickKeys(choicePick, number, deps.anchor);
     list.append(entry);
     return entry;
   });
-  return {
-    entries,
-    updateKeys() {
-      for (const update of keyUpdaters) {
-        update();
-      }
-    },
-  };
+  return { entries };
+}
+
+// Appends `span.choice-keys` to `pick`, the anchor for the command picking
+// entry `number`; nothing past the ninth, which has no command.
+export function appendPickKeys(
+  pick: HTMLElement,
+  number: number,
+  anchor: PartAnchor,
+) {
+  const command = numberedCommand('choose', number);
+  if (command !== null) {
+    const keys = element('span', 'choice-keys');
+    pick.append(keys);
+    anchor(keys, command);
+  }
 }

@@ -11,8 +11,11 @@ import {
 } from './form-state';
 import { decision, finding, presentedRound, question } from './test-rounds';
 import {
+  hasOtherUnanswered,
+  pagerText,
   pickRailItem,
   progressText,
+  railHeadText,
   railDotStatus,
   railPickAction,
   reviewRows,
@@ -370,6 +373,58 @@ describe('progressText', () => {
     expect(
       progressText({ answered: 1, notApplicable: 1, untouched: 1, total: 3 }),
     ).toBe('1 of 3 answered, 1 not applicable');
+  });
+});
+
+describe('railHeadText', () => {
+  it('railHeadText counts the untouched items', () => {
+    const counts = { answered: 0, notApplicable: 0, total: 3 };
+
+    expect(railHeadText({ ...counts, untouched: 3 })).toBe('Items · 3 open');
+    expect(railHeadText({ ...counts, untouched: 0 })).toBe('Items · 0 open');
+  });
+});
+
+describe('hasOtherUnanswered', () => {
+  it('hasOtherUnanswered is false with every item responded, false with only the focused item untouched, and true with another item untouched', () => {
+    const everyResponded = roundAfter(
+      { type: 'choose', number: 1 },
+      { type: 'focusItem', item: 1 },
+      { type: 'choose', number: 1 },
+      { type: 'focusItem', item: 2 },
+      { type: 'choose', number: 1 },
+    );
+    const onlyFocusedUntouched = roundAfter(
+      { type: 'focusItem', item: 1 },
+      { type: 'choose', number: 1 },
+      { type: 'focusItem', item: 2 },
+      { type: 'choose', number: 1 },
+      { type: 'focusItem', item: 0 },
+    );
+    const anotherUntouched = roundAfter({ type: 'choose', number: 1 });
+
+    expect(hasOtherUnanswered(everyResponded)).toBe(false);
+    expect(hasOtherUnanswered(onlyFocusedUntouched)).toBe(false);
+    expect(hasOtherUnanswered(anotherUntouched)).toBe(true);
+  });
+});
+
+describe('pagerText', () => {
+  it("pagerText reads the focused item's label of the rail count", () => {
+    const round = activeOf(
+      initialState(
+        [
+          presentedRound('r1', {
+            questions: [question('Alpha')],
+            findings: [finding('Delta'), finding('Epsilon')],
+          }),
+        ],
+        'r1-session',
+      ),
+    );
+
+    expect(round.focus).toBe(0);
+    expect(pagerText(round)).toBe('F1 of 3');
   });
 });
 

@@ -4,7 +4,6 @@ import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
 import { textButton } from '../../../../shared/page/ui/button';
-import { appendKeyHint, keyHint } from '../../../../shared/page/key-hint';
 import { card as cardPart } from '../../../../shared/page/ui/card';
 import { kbd } from '../../../../shared/page/ui/kbd';
 import { errorText } from '../../../../shared/error-text';
@@ -12,10 +11,10 @@ import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag as tagPart } from '../../../../shared/page/ui/tag';
 import type { ItemKind } from '../../contract';
 import {
+  type FormsCommandName,
   formsCommand,
   formsCommandNamed,
   formsScope,
-  numberedCommand,
 } from '../../ids';
 import type {
   AnswerKit,
@@ -38,6 +37,8 @@ import {
   type TextTarget,
 } from '../form-state';
 import {
+  appendBoxKeys,
+  appendPickKeys,
   buildChoiceList,
   buildChoiceReason,
   buildField,
@@ -59,8 +60,8 @@ interface ItemTextBox {
 
 // What every part of one card's kit shares: the item and its round, its
 // deps and the head kit's deps over the forms view's keys, its boxes, the
-// updaters the parts that show answer state or keys register, and the
-// contributed parts once placed, null before.
+// updaters the parts that show answer state register, and the contributed
+// parts once placed, null before.
 interface CardContext {
   roundId: string;
   item: RailItem;
@@ -123,24 +124,34 @@ export interface CardKit<K extends ItemKind> {
   appendUnplacedParts(card: HTMLElement): void;
 }
 
+// Each box field's caption; `command` is the one its label shows the keys of,
+// null for none.
 const FIELD_CAPTIONS: Record<
   TextBoxField,
-  { className: string; label: string; hint: string }
+  {
+    className: string;
+    label: string;
+    hint: string;
+    command: FormsCommandName | null;
+  }
 > = {
   notes: {
     className: 'field-notes',
     label: 'Notes',
     hint: 'Optional. Your own answer or your reasoning, sent to the agent.',
+    command: 'editNotes',
   },
   dontAskReason: {
     className: 'field-reason',
     label: 'Why not ask this',
     hint: 'Optional. Sent to the agent with your answer.',
+    command: null,
   },
   comment: {
     className: 'field-comment',
     label: 'Comment',
     hint: 'Optional. Say if this needs a second look.',
+    command: 'editNotes',
   },
 };
 
@@ -244,12 +255,20 @@ export function answerableOf(item: RailItem): AnswerableItem | null {
 
 // What the base kit of every card and pane reads: `keysFor` reads the keys
 // bound to a qualified command in the scope of the part drawing, null when
-// unbound; `keys`, `keyHint` and `keysFor` on the kit all read through it.
+// unbound, and `keys` and `keysFor` on the kit read through it; `anchor` names
+// the anchor for a qualified command in that scope on `element`, drawing the
+// command's label after the keys as `label` says, and the kit's `keyHint`
+// anchors through it.
 export interface HeadKitDeps {
   markdown: MarkdownRenderer;
   platform: Platform;
   commands: KitCommands;
   keysFor(command: CommandId): string | null;
+  anchor(
+    element: HTMLElement,
+    command: CommandId,
+    label?: boolean | string,
+  ): void;
 }
 
 // The head kit's deps over the keys bound in `scope`, the scope of the part
@@ -263,11 +282,15 @@ export function headKitDepsFor(
     platform: deps.platform,
     commands: deps.commands,
     keysFor: (command) => deps.keys.keysFor(command, scope),
+    anchor(element, command, label) {
+      deps.keys.anchor(element, command, { scope, label });
+    },
   };
 }
 
-// The parts a layout's head draws with, over the keys `deps.keysFor` reads in
-// the scope of the part drawing, each key hint drawn for the platform.
+// The parts a layout's head draws with, over the keys `deps.keysFor` reads and
+// the anchors `deps.anchor` names in the scope of the part drawing, each
+// static key hint drawn for the platform.
 export function createHeadKit(deps: HeadKitDeps): HeadKit {
   return {
     el(parent, tagName, className = '', text) {
@@ -299,7 +322,10 @@ export function createHeadKit(deps: HeadKitDeps): HeadKit {
     keyHint(parent, command, className = '') {
       const node = element('span', className);
       parent.append(node);
-      appendKeyHint(node, () => keysOfNamed(deps, command), deps.platform);
+      const id = formsCommandNamed(command);
+      if (id !== null) {
+        deps.anchor(node, id);
+      }
       return node;
     },
     command: (qualifiedId) => commandRunner(qualifiedId, deps.commands),
@@ -323,9 +349,10 @@ export function createHeadKit(deps: HeadKitDeps): HeadKit {
       return node;
     },
     button(parent, label, onClick, options = {}) {
+      const keys = options.keys ?? null;
       const node = textButton(label, onClick, {
         variant: options.variant,
-        hint: keyHint(options.keys ?? null, deps.platform),
+        hint: keys === null ? null : kbd(keys, deps.platform),
       });
       parent.append(node);
       return node;
@@ -333,26 +360,6 @@ export function createHeadKit(deps: HeadKitDeps): HeadKit {
     sectionHeader(parent, text) {
       const node = sectionHeader(text);
       parent.append(node);
-      return node;
-    },
-  };
-}
-
-// The head kit for a card or pane that is never rebuilt on a keymap change:
-// each key hint pushes its redraw onto `updaters`, so it reads the keys again
-// on each update.
-export function createUpdatingHeadKit(
-  deps: HeadKitDeps,
-  updaters: ((round: RoundState) => void)[],
-): HeadKit {
-  return {
-    ...createHeadKit(deps),
-    keyHint(parent, command, className = '') {
-      const node = element('span', className);
-      parent.append(node);
-      updaters.push(
-        appendKeyHint(node, () => keysOfNamed(deps, command), deps.platform),
-      );
       return node;
     },
   };
@@ -520,13 +527,18 @@ function mountTextBox(
     throw new Error(`${card.item.kind} card mounted ${field} twice`);
   }
   const caption = FIELD_CAPTIONS[field];
+  const anchor = card.headDeps.anchor;
   const built = buildField(
     parent,
     caption.className,
     caption.label,
     caption.hint,
+    caption.command === null
+      ? null
+      : { command: formsCommand(caption.command), anchor },
   );
   card.deps.mountBox(built.box, box.target, box.text);
+  appendBoxKeys(built, anchor);
   card.mounted.add(field);
   const { target } = box;
   if (target.field === 'dontAskReason') {
@@ -537,21 +549,15 @@ function mountTextBox(
   return built.element;
 }
 
-// Shows the keys that run `command` at the end of `control`, read again on
-// each card update, so a changed keymap reaches the hint on the card's next
-// update.
+// Appends the anchor for `command` at the end of `control`.
 function appendCardKeys(
   card: CardContext,
   control: HTMLElement,
   command: CommandId,
 ) {
-  card.updaters.push(
-    appendKeyHint(
-      control,
-      () => card.headDeps.keysFor(command),
-      card.deps.platform,
-    ),
-  );
+  const keys = element('span');
+  control.append(keys);
+  card.headDeps.anchor(keys, command);
 }
 
 // Dispatches the action's FormsActions, then Don't ask's command for it; an
@@ -572,7 +578,7 @@ function runLayoutAction(card: CardContext, action: LayoutAction) {
 
 function buildBaseKit(card: CardContext): Kit {
   return {
-    ...createUpdatingHeadKit(card.headDeps, card.updaters),
+    ...createHeadKit(card.headDeps),
     itemHead(parent, kind) {
       const { header, status } = buildItemHead(parent, kind);
       const answerable = answerableOf(card.item);
@@ -637,11 +643,11 @@ function buildQuestionKit(
   return {
     ...kit,
     choiceList(parent, reasons) {
-      const answerArea = appendAnswerArea(parent);
+      const answerArea = appendAnswerArea(parent, card);
       const list = element('ol', 'choices');
       answerArea.append(list);
       const choices = input.choices.map((text, i) => ({ text, number: i + 1 }));
-      const { entries, updateKeys } = buildChoiceList(
+      const { entries } = buildChoiceList(
         list,
         choices,
         input.recommend,
@@ -657,7 +663,6 @@ function buildQuestionKit(
           card.deps.markdown,
         );
       }
-      card.updaters.push(updateKeys);
       card.updaters.push((current) => {
         const picked = pickNumber(current, item);
         entries.forEach((entry, i) =>
@@ -689,10 +694,21 @@ function buildFindingKit(
   };
 }
 
-// Appends `div.answer` under its 'Your answer' header to `parent`.
-function appendAnswerArea(parent: HTMLElement): HTMLElement {
+// Appends `div.answer` to `parent`, under its 'Your answer' header, which
+// ends with the Clear button: a click focuses the card's item, then clears its
+// choice.
+function appendAnswerArea(parent: HTMLElement, card: CardContext): HTMLElement {
+  const clear = textButton(
+    'Clear',
+    () => {
+      runLayoutAction(card, { type: 'focus' });
+      card.deps.dispatch({ type: 'clearChoice' });
+    },
+    { variant: 'ghost' },
+  );
+  appendCardKeys(card, clear, formsCommand('clearChoice'));
   const answerArea = element('div', 'answer');
-  answerArea.append(sectionHeader('Your answer'));
+  answerArea.append(sectionHeader('Your answer', clear));
   parent.append(answerArea);
   return answerArea;
 }
@@ -721,7 +737,7 @@ function buildChoiceGroups(
   kit: Kit,
   card: CardContext,
 ): HTMLElement {
-  const answerArea = appendAnswerArea(parent);
+  const answerArea = appendAnswerArea(parent, card);
   const sections: HTMLElement[] = [];
   const picks: DrawnPick[] = [];
   for (const group of choiceGroupsOf(input)) {
@@ -763,14 +779,13 @@ function appendGroupChoices(
   const list = element('ol', 'choices');
   section.append(list);
   const recommended = group.choices.find((choice) => choice.isRecommended);
-  const { entries, updateKeys } = buildChoiceList(
+  const { entries } = buildChoiceList(
     list,
     group.choices,
     recommended?.number ?? null,
     (number) => kit.run({ type: 'choose', number }),
     card.headDeps,
   );
-  card.updaters.push(updateKeys);
   return group.choices.map((choice, i) => {
     const isReasonShown =
       reasons === 'all' || (reasons === 'recommended' && choice.isRecommended);
@@ -783,7 +798,7 @@ function appendGroupChoices(
 
 // A group with no choices: one `div.choice` row as buildChoiceList draws a
 // choice, its entry number in the choice number badge and the action's word
-// as its text, tagged when recommended, with the keys of its number; then the
+// as its text, tagged when recommended, with the anchor of its number; then the
 // group's reason inside the row.
 function appendGroupPick(
   section: HTMLElement,
@@ -804,14 +819,7 @@ function appendGroupPick(
     head.classList.add('is-recommended');
     pick.append(tagPart('Recommended', 'accent'));
   }
-  const command = numberedCommand('choose', number);
-  card.updaters.push(
-    appendKeyHint(
-      pick,
-      () => (command === null ? null : card.headDeps.keysFor(command)),
-      card.deps.platform,
-    ),
-  );
+  appendPickKeys(pick, number, card.headDeps.anchor);
   head.append(pick);
   section.append(head);
   appendGroupReason(head, group.reason, card.deps.markdown);

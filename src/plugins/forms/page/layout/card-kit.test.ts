@@ -11,8 +11,9 @@ import {
 } from '../contributions';
 import { apply, initialState, type RoundState } from '../form-state';
 import { findingFormat } from '../kinds/finding/finding-card';
+import { questionFormat } from '../kinds/question/question-card';
 import type { CardDeps } from '../kinds/item-format';
-import { finding, presentedRound } from '../test-rounds';
+import { finding, presentedRound, question } from '../test-rounds';
 import type { LayoutAction } from '../../layouts/layout';
 import { choiceGroupsOf, createCardKit } from './card-kit';
 import {
@@ -139,10 +140,16 @@ function findingRound(overrides: Partial<DefectFinding> = {}): RoundState {
 }
 
 // Card deps over `contributions`, whose keys lookup binds only `demo.run`
-// (to `g d`) and whose commands register only `demo.run`.
+// (to `g d`), whose anchors are recorded, and whose commands register only
+// `demo.run`.
 function fakeCardDeps(contributions: FormsContributions) {
   const keysFor = vi.fn((command: string) =>
     command === 'demo.run' ? 'g d' : null,
+  );
+  const anchor = vi.fn(
+    (_element: HTMLElement, _command: string, _options?: unknown) => ({
+      dispose: () => undefined,
+    }),
   );
   const run = vi.fn();
   const log = vi.fn();
@@ -156,19 +163,39 @@ function fakeCardDeps(contributions: FormsContributions) {
     destroyBox: vi.fn(),
     dispatch: vi.fn(),
     toggleDontAsk: vi.fn(),
-    keys: { keysFor },
+    keys: { keysFor, anchor },
     platform: 'macos',
     log,
     commands: { exists: (id) => id === 'demo.run', run },
     contributions,
   };
-  return { deps, keysFor, run, log };
+  return { deps, keysFor, anchor, run, log };
+}
+
+// The commands `anchor` was called with, in call order.
+function anchoredCommands(anchor: ReturnType<typeof fakeCardDeps>['anchor']) {
+  return anchor.mock.calls.map(([, command]) => command);
 }
 
 function findingKit(deps: CardDeps, overrides: Partial<DefectFinding> = {}) {
   const round = findingRound(overrides);
   const input = findingFormat.cardInput(round.round, 1);
   return createCardKit('finding', 1, input, round, 0, deps);
+}
+
+// The kit of a round's second item, a question of two choices after one
+// finding, at rail position 1.
+function questionKit(deps: CardDeps) {
+  const presented = presentedRound('r1', {
+    questions: [question('Alpha', { choices: ['one', 'two'], recommend: 1 })],
+    findings: [finding('Delta')],
+  });
+  const round = apply(initialState([], presented.sessionId), {
+    type: 'formShown',
+    form: presented,
+  }).forms[0];
+  const input = questionFormat.cardInput(round.round, 1);
+  return createCardKit('question', 1, input, round, 1, deps);
 }
 
 // A part that records what each build received.
@@ -282,10 +309,12 @@ describe('card kit', () => {
       [
         ['choice-number', '3'],
         ['choice-text', labels[1]],
+        ['choice-keys', ''],
       ],
       [
         ['choice-number', '4'],
         ['choice-text', labels[2]],
+        ['choice-keys', ''],
       ],
     ]);
   });
@@ -338,5 +367,78 @@ describe('card kit', () => {
     expect(bound).toBe('g d');
     expect(unbound).toBeNull();
     expect(keysFor).toHaveBeenCalledWith('demo.run', 'forms.forms');
+  });
+
+  it('kitKeyHint_NamedCommand_AnchorsInTheCardScope', () => {
+    const { deps, anchor } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps);
+
+    const span = kit.keyHint(asHtml(new FakeElement('div')), 'toggleDontAsk');
+
+    expect(anchor).toHaveBeenCalledWith(span, 'forms.toggleDontAsk', {
+      scope: 'forms.forms',
+    });
+  });
+
+  it('kitKeyHint_UnknownName_AnchorsNothing', () => {
+    const { deps, anchor } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps);
+
+    const span = asFake(
+      kit.keyHint(asHtml(new FakeElement('div')), 'noSuchCommand'),
+    );
+
+    expect(anchor).not.toHaveBeenCalled();
+    expect(span.childNodes).toEqual([]);
+  });
+
+  it('answerControls_AnchorsNotApplicableAndDontAsk', () => {
+    const { deps, anchor } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps);
+
+    kit.answerControls(asHtml(new FakeElement('div')));
+
+    expect(anchor).toHaveBeenCalledWith(
+      expect.anything(),
+      'forms.toggleNotApplicable',
+      { scope: 'forms.forms' },
+    );
+    expect(anchor).toHaveBeenCalledWith(
+      expect.anything(),
+      'forms.toggleDontAsk',
+      { scope: 'forms.forms' },
+    );
+  });
+
+  it('choiceList_AnchorsEachChoice', () => {
+    const { deps, anchor } = fakeCardDeps(createFormsContributions());
+    const { kit } = questionKit(deps);
+
+    kit.choiceList(asHtml(new FakeElement('div')), 'none');
+
+    expect(
+      anchoredCommands(anchor).filter((command) =>
+        command.startsWith('forms.choose'),
+      ),
+    ).toEqual(['forms.choose1', 'forms.choose2']);
+  });
+
+  it('clearButton_Click_FocusesTheItemThenClears', () => {
+    const { deps } = fakeCardDeps(createFormsContributions());
+    const { kit } = questionKit(deps);
+    const answer = asFake(
+      kit.choiceList(asHtml(new FakeElement('div')), 'none'),
+    );
+
+    const clear = findAll(answer, 'ui-button').find(
+      (control) => control.textContent === 'Clear',
+    );
+    clear?.click();
+
+    expect(clear).toBeDefined();
+    expect(vi.mocked(deps.dispatch).mock.calls).toEqual([
+      [{ type: 'focusItem', item: 1 }],
+      [{ type: 'clearChoice' }],
+    ]);
   });
 });
