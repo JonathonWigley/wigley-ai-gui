@@ -132,7 +132,7 @@ docs only through `DocsMainExports` and `DocsPageExports`, typed by `src/plugins
 ### Wave 2
 - [ ] [Git contract and adapter](02-git-adapter.md) — after 04 (shares `docs/main/start.ts`), 01 (shares `check-layers.mts`)
 - [ ] [Docs creates follow-ups through the shared module](06-docs-create.md) — after 01
-- [ ] [Marketplace version bump](07-version-bump.md) — after 03
+- [x] [Marketplace version bump](07-version-bump.md) — after 03
 
 ### Wave 3
 - [ ] [Backlog main part](08-backlog-main.md) — after 01, 02, 04
@@ -156,6 +156,7 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 ### Groups
 - 03 · wigley-ai-marketplace 7c829f5 · diff read; docs-index unittest 249 OK · concerns: the README JSON example's followup meta lacks section and tags (task 11 re-read); one existing test's continuation-line title changed by design
 - 04 · 0d13dae · diff read; typecheck clean; docs start tests 24 pass · concerns: none
+- 07 · wigley-ai-marketplace db34d66 · diff read; check_manifests --against origin/main passed · concerns: none
 ### Contract changes
 ### Rulings
 - Two repos: the gui review base is 0f512f5; the marketplace review base is a139b88 — the plan targets both repos' main — lead

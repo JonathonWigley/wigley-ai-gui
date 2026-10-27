@@ -1,6 +1,6 @@
 # 07 — Marketplace version bump
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -26,3 +26,5 @@ Commit:    one commit, `wigley 1.12.0: follow-up tags in the index and the follo
            No push: the user pushes.
 
 ## Proof
+
+Commit wigley-ai-marketplace db34d66 · proof: diff read; check_manifests --against origin/main passed · concerns: none
