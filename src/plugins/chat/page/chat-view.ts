@@ -101,6 +101,7 @@ export type ChatTabScope = 'chat';
 
 // `setScope` sets the base scope; `otherSessionShown` runs when the
 // Chat tab shown is another session's than the Chat tab shown before;
+// `visibleSessionRested` runs when the visible Chat tab's process exits;
 // `onSessionRemoved` hears the sessions plugin drop a row's tabs. `run` runs
 // a command, as the composer's chips and send button do; `keys` anchors the
 // composer's key hints; `paths` names each tab by its project folder.
@@ -122,20 +123,19 @@ export interface ChatViewDeps {
   slashCommandNames(): string[];
   setScope(scope: ChatTabScope): void;
   otherSessionShown(): void;
+  visibleSessionRested(): void;
   log: Log;
   toast(text: string, tone: ToastTone): void;
 }
 
 // A held session's Chat tab. `handle` is null until `addTab` returns, and
 // `box` until the editor mounts into the attached tab. `composerSize` follows
-// the composer's height for as long as the tab is held. `historyAsked` is set
-// the first time the tab shows in this page load.
+// the composer's height for as long as the tab is held.
 interface HeldTab {
   sessionId: string;
   name: string;
   state: ChatSessionState;
   closeConfirmed: boolean;
-  historyAsked: boolean;
   handle: SessionTabHandle | null;
   status: string;
   box: TextEditor | null;
@@ -278,6 +278,9 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     tab.state = { ...tab.state, running: false };
     tab.bar.draw(tab);
     sendStatus(tab, '');
+    if (tab.handle?.isVisible() === true) {
+      deps.visibleSessionRested();
+    }
     if (error === null) {
       log('chat', `${tab.name} rested`);
     } else {
@@ -339,13 +342,9 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   };
 }
 
-// Reads the session's earlier conversation the first time its tab shows in
-// this page load; it arrives as an `entries` message.
+// Asks main for the session's earlier conversation each time its tab shows;
+// main reads it once, and it arrives as an `entries` message.
 function askHistory(tab: HeldTab, deps: ChatViewDeps) {
-  if (tab.historyAsked) {
-    return;
-  }
-  tab.historyAsked = true;
   void deps.channel
     .invoke('loadHistory', tab.sessionId)
     .catch((error: unknown) => {
@@ -412,7 +411,6 @@ function createTab(
     name,
     state,
     closeConfirmed: false,
-    historyAsked: false,
     handle: null,
     status: '',
     box: null,

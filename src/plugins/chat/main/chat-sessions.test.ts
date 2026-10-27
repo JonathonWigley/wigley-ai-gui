@@ -17,7 +17,7 @@ import type {
   SessionInfo,
   ToolResult,
 } from '../../sessions/contract';
-import type { ChatChannel } from '../contract';
+import type { ChatChannel, ChatProfile } from '../contract';
 import { DEFAULT_PROFILES } from '../manifest';
 import {
   ARCHIVED_SESSIONS_FILE,
@@ -127,6 +127,7 @@ function setUp(
   // Host ids whose `open` throws, and what each owned `end` also does.
   const refusedOpens = new Set<string>();
   let onOwnedEnd = () => {};
+  let profiles: readonly ChatProfile[] = DEFAULT_PROFILES;
   const archived = createArchivedSessions(data);
   const saved = fakeOpenSessions();
   // Rows are numbered in open order: the first is ROW_ID.
@@ -152,7 +153,7 @@ function setUp(
   const chat = createChatSessions({
     harnesses,
     sessions,
-    profiles: () => DEFAULT_PROFILES,
+    profiles: () => profiles,
     randomUuid: () => {
       uuidCalls++;
       return 'uuid-1';
@@ -213,6 +214,9 @@ function setUp(
     refuseOpen: (hostId: string) => refusedOpens.add(hostId),
     setOnOwnedEnd: (act: () => void) => {
       onOwnedEnd = act;
+    },
+    setProfiles: (next: readonly ChatProfile[]) => {
+      profiles = next;
     },
     sent: <K extends Message['message']>(message: K) =>
       messages
@@ -601,16 +605,15 @@ describe('createChatSessions', () => {
   // The sessions plugin selects a neighbouring row inside the failed row's
   // `end`, and that selection saves.
   it.each([
-    { given: 'no other row', saved: [], failedRow: 'row-1', rows: [] },
+    { given: 'no other row', saved: [], rows: [] },
     {
       given: 'a held row the selection moves to',
       saved: [record('host-a')],
-      failedRow: 'row-2',
       rows: ['row-1'],
     },
   ])(
-    'start_harnessThrows_endsTheOwnedSessionAndReportsTheError given $given',
-    ({ saved, failedRow, rows }) => {
+    'start_harnessThrows_endsTheOwnedSessionAndThrowsTheError given $given',
+    ({ saved, rows }) => {
       const test = setUp();
       test.chat.restore({ sessions: saved, selectedHostSessionId: null });
       test.setOnOwnedEnd(() => test.chat.selected(rows[0] ?? null));
@@ -620,9 +623,7 @@ describe('createChatSessions', () => {
         test.chat.start({ projectDir: PROJECT_DIR, profile: 'work' }),
       ).toThrow('spawn failed');
       expect(test.ownedEnds()).toBe(1);
-      expect(test.sent('sessionRested')).toEqual([
-        { sessionId: failedRow, error: 'spawn failed' },
-      ]);
+      expect(test.sent('sessionRested')).toEqual([]);
       expect(test.chat.sessions().map((state) => state.sessionId)).toEqual(
         rows,
       );
@@ -1619,13 +1620,6 @@ describe('createChatSessions saved sessions', () => {
       entries: [],
     },
     {
-      given: 'a missing profile',
-      saved: record(PAST_ONE.sessionId, { sent: true, profile: 'gone' }),
-      arrange: () => {},
-      historyCalls: 0,
-      entries: [],
-    },
-    {
       given: 'a failed read',
       saved: record(PAST_ONE.sessionId, { sent: true }),
       arrange: (test: ReturnType<typeof setUp>) =>
@@ -1661,6 +1655,38 @@ describe('createChatSessions saved sessions', () => {
       expect(test.sent('entries')).toEqual(entries);
     },
   );
+
+  it('loadHistory_ProfileMissing_ReadsOnceItIsBack', async () => {
+    const test = setUp();
+    test.chat.restore({
+      sessions: [record(PAST_ONE.sessionId, { sent: true, profile: 'gone' })],
+      selectedHostSessionId: null,
+    });
+    const historyCalls = () =>
+      test.harness.pastSessionCalls.filter((call) => call.method === 'history');
+
+    await test.chat.loadHistory(ROW_ID);
+    const callsWhileMissing = historyCalls().length;
+    test.setProfiles([
+      ...DEFAULT_PROFILES,
+      { name: 'gone', configDir: '/Users/u/.claude-gone' },
+    ]);
+    await test.chat.loadHistory(ROW_ID);
+
+    expect(callsWhileMissing).toBe(0);
+    expect(historyCalls()).toHaveLength(1);
+    expect(
+      test
+        .sent('entries')
+        .map(({ entries }) => entries.map((entry) => entry.id)),
+    ).toEqual([
+      [
+        `history:${PAST_ONE.sessionId}-user`,
+        `history:${PAST_ONE.sessionId}-assistant`,
+        'app-notice-1',
+      ],
+    ]);
+  });
 
   it('loadHistory_RowClosedWhileReading_SendsNothing', async () => {
     const test = setUp();

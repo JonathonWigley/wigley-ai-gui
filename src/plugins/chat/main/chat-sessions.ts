@@ -80,7 +80,8 @@ export interface ChatSessions {
   // starts here: nothing is saved before it runs.
   restore(saved: SavedSessions): void;
   // Reads a restored session's earlier conversation once and puts it before
-  // the entries held so far; does nothing for a session with none pending.
+  // the entries held so far; does nothing for a session with none pending,
+  // and reads nothing while its profile is missing, leaving it pending.
   loadHistory(sessionId: string): Promise<void>;
   // The sessions plugin's `selected` event: a row chat holds becomes the
   // saved selection; any other row, or none, leaves it as it was.
@@ -611,7 +612,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     } catch (error) {
       drop(session);
       session.owned.end();
-      send('sessionRested', { sessionId, error: errorText(error) });
       throw error;
     }
     save();
@@ -762,16 +762,18 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (session === undefined || !session.historyPending) {
       return;
     }
-    session.historyPending = false;
-    // A missing profile reads nothing: its restore notice says why.
+    // A missing profile reads nothing and leaves the history pending: its
+    // restore notice says why.
     const profile = deps
       .profiles()
       .find((candidate) => candidate.name === session.state.profile);
     if (profile === undefined) {
       return;
     }
+    const harness = requireHarness();
+    session.historyPending = false;
     const history = await readHistory(
-      requireHarness(),
+      harness,
       session.hostId,
       session.state.projectDir,
       profileDirOf(profile),

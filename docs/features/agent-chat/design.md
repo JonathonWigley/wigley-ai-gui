@@ -155,8 +155,9 @@ interview on 2026-10-23; this file is the record of both.
   `a` focus the box, `j` / `k` move between entries, `Enter` expands a tool call, `G` jumps to the latest, Ctrl+C
   interrupts. Tool calls show one compact line (tool name and a short input summary) that expands to the full input
   and output. These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
-  nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows (the start
-  prompt and the sign-in dialog, tied to no session, stay open). A resting session (§ Saved sessions) keys in the
+  nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows, or when the
+  shown session's process exits (the image viewer stays open then; the start prompt and the sign-in dialog, tied to
+  no session, stay open). A resting session (§ Saved sessions) keys in the
   same `chat.chat` scope as a running one; interrupt and the control pickers log and do nothing until its process
   runs.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
@@ -167,13 +168,14 @@ interview on 2026-10-23; this file is the record of both.
   instance, so the stable and dev apps, drive runs and the self-test each keep their own list. On start, chat opens a
   row for each record, in order and unselected, then selects the saved row: each row **rests**, holding no process.
   A record whose host id is already open, or whose open throws, is skipped and logged.
-  A restored row that was ever sent to has its earlier conversation read from its transcript the first time its Chat tab shows, so start reads
-  no transcripts. The first message sent in a resting row starts its process (`--resume` when a message was ever
+  A restored row that was ever sent to has its earlier conversation read from its transcript the first time its Chat tab shows
+  while its profile is in the settings, so start reads no transcripts. The first message sent in a resting row starts its process (`--resume` when a message was ever
   sent, else `--session-id`); app slash commands run without one, and the controls and the agent's slash commands
   fill in once it runs. A session whose process exits while the app runs rests the same way, a notice in its chat
   giving the exit and its reason. A restored session whose turn was running at quit gets a notice that the app quit
   during that turn; one whose profile is no longer in the settings gets a notice naming it, and a send there toasts
-  that the message was not sent because the profile is missing, instead of starting. A resting row looks like an
+  that the message was not sent because the profile is missing, instead of starting. A message main refuses goes
+  back into the box, above anything typed since, with its images ahead of any attached since. A resting row looks like an
   idle one in the sidebar. A file that cannot be read is logged (`open sessions not read`) and restores nothing, and the
   store refuses every save (logged `open sessions not saved: … unreadable`) so the file is never overwritten: it is
   the user's state. A later clean load lifts the refusal. Closing a

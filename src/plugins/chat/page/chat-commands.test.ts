@@ -362,16 +362,42 @@ describe('chat commands', () => {
     ]);
   });
 
-  it('send_MainRejects_ToastsAndLogsTheReason', async () => {
-    const shown = Object.assign(session(false), { box: box('hi') });
-    const run = setUp(shown, new Error('profile gone'));
+  it.each([
+    {
+      given: 'nothing new in the box',
+      typedSince: '',
+      attachedSince: [],
+      text: 'hi',
+      images: [png],
+    },
+    {
+      given: 'text and an image added since',
+      typedSince: 'more',
+      attachedSince: [jpeg],
+      text: 'hi\nmore',
+      images: [png, jpeg],
+    },
+  ])(
+    'send_MainRejects_ToastsAndPutsTheMessageBack given $given',
+    async ({ typedSince, attachedSince, text, images }) => {
+      const message = box('hi');
+      const shown = Object.assign(session(false), { box: message });
+      shown.attachments.add(png);
+      const run = setUp(shown, new Error('profile gone'));
 
-    run.handlers.send({});
-    await flush();
+      run.handlers.send({});
+      message.held.text = typedSince;
+      for (const image of attachedSince) {
+        shown.attachments.add(image);
+      }
+      await flush();
 
-    expect(run.toasts).toEqual(['Message not sent: profile gone']);
-    expect(run.logs).toContainEqual(expect.stringContaining('profile gone'));
-  });
+      expect(run.toasts).toEqual(['Message not sent: profile gone']);
+      expect(run.logs).toContainEqual(expect.stringContaining('profile gone'));
+      expect(message.held.text).toBe(text);
+      expect(shown.attachments.images()).toEqual(images);
+    },
+  );
 
   it('send_ImagesOnly_Sends', () => {
     const shown = Object.assign(session(true), { box: box('') });

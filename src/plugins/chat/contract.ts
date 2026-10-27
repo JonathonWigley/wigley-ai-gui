@@ -97,8 +97,10 @@ export interface ChatChannel extends ChannelShape {
     // Starts a resting session's process first; rejects, leaving it resting,
     // when its profile is missing or the start fails.
     send(sessionId: string, message: UserMessage): void;
-    // Reads a restored session's earlier conversation, arriving as `entries`;
-    // a later call, or one for a session with none pending, does nothing.
+    // Reads a restored session's earlier conversation, arriving as `entries`.
+    // While its profile is missing a call reads nothing and a later call
+    // tries again; once read, or for a session with none pending, a call does
+    // nothing.
     loadHistory(sessionId: string): Promise<void>;
     // Adds a notice entry to the session's chat, kept across a page reload.
     notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
@@ -136,8 +138,7 @@ export interface ChatChannel extends ChannelShape {
     entries: { sessionId: string; entries: ChatEntry[] };
     // The session's process started, for every start.
     sessionRunning: { sessionId: string };
-    // A started process exited, and its row rests until the user closes it;
-    // or a newly opened row's start failed, and its row is gone.
+    // A started process exited, and its row rests until the user closes it.
     sessionRested: { sessionId: string; error: string | null };
     layoutChanged: LayoutSet;
     // The page the user opens to finish sign-in `id`.

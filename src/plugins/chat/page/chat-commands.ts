@@ -1,4 +1,8 @@
-import type { ControlChoice, SessionControl } from '../../../contracts/agent';
+import type {
+  ControlChoice,
+  SessionControl,
+  UserMessage,
+} from '../../../contracts/agent';
 import type { ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type {
@@ -277,7 +281,8 @@ function sessionFor(
 // Sends the box's text as typed with the attached images, then clears the box
 // and the attachments; images send with an empty box too. A box and
 // attachments both empty send nothing. A message to a resting session starts
-// its process in main. A registered app slash command runs in place of
+// its process in main. When main refuses the message, it goes back into the
+// box (see `putBack`). A registered app slash command runs in place of
 // sending and clears the box, leaving the images attached.
 function send(deps: ChatCommandDeps, session: ChatSession) {
   const { log } = deps;
@@ -297,12 +302,38 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
     .catch((error: unknown) => {
       log('chat', `send failed: ${errorText(error)}`);
       deps.toast(`Message not sent: ${errorText(error)}`, 'error');
+      putBack(deps, session, { text, images });
     });
   session.box.setText('');
   session.attachments.clear();
   const withImages =
     images.length === 0 ? '' : ` with ${images.length} image(s)`;
   log('chat', `sent a message${withImages} in ${session.name}`);
+}
+
+// Puts a refused message back into its session's box, ahead of anything typed
+// or attached since: the text on its own line above the box's text, the
+// images before the attached ones. A session closed since takes nothing back.
+function putBack(
+  deps: ChatCommandDeps,
+  session: ChatSession,
+  refused: UserMessage,
+) {
+  if (deps.tabs.session(session.sessionId) === undefined) {
+    return;
+  }
+  const typed = session.box.text();
+  if (refused.text !== '') {
+    session.box.setText(
+      typed === '' ? refused.text : `${refused.text}\n${typed}`,
+    );
+  }
+  const attached = session.attachments.images();
+  session.attachments.clear();
+  for (const image of [...refused.images, ...attached]) {
+    session.attachments.add(image);
+  }
+  deps.log('chat', `put the refused message back in ${session.name}`);
 }
 
 // Runs the command for the session and clears the box; a run that throws or

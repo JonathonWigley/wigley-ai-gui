@@ -112,6 +112,12 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       reasonBox,
       log: services.log,
     });
+    // The pickers and dialogs that act on the visible session.
+    const closeSessionDialogs = () => {
+      picker.closeSessionBound();
+      reasonBox.cancel();
+      confirm.keep();
+    };
     const view = mountChatView({
       channel: api.channel,
       paths: services.paths,
@@ -130,11 +136,10 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       slashCommandNames: () => slashCommands.names(),
       setScope: (scope) => api.keys.setScope(scope),
       otherSessionShown: () => {
-        picker.closeSessionBound();
-        reasonBox.cancel();
-        confirm.keep();
+        closeSessionDialogs();
         viewer.close();
       },
+      visibleSessionRested: closeSessionDialogs,
       log: services.log,
       toast: services.toast,
     });
