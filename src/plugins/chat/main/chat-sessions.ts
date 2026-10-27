@@ -156,6 +156,8 @@ interface HeldSession {
   pending: Map<string, PendingPermission>;
   permissionCount: number;
   noticeCount: number;
+  // Processes started in this row, the one running included.
+  processStarts: number;
   // How the process exited, once its `ended` arrives; a user close logs it.
   exit: { code: number | null; error: string | null } | null;
 }
@@ -188,6 +190,15 @@ function upsertEntry(entries: ChatEntry[], entry: ChatEntry): ChatEntry[] {
     return [...entries, entry];
   }
   return entries.map((held, at) => (at === index ? entry : held));
+}
+
+// A harness numbers entry ids per process, so a row's later processes reuse
+// its first process's ids; each start after the first gets its own prefix.
+function rowEntryOf(entry: ChatEntry, processStart: number): ChatEntry {
+  if (processStart === 1) {
+    return entry;
+  }
+  return { ...entry, id: `process-${processStart}:${entry.id}` };
 }
 
 function copyState(state: ChatSessionState): ChatSessionState {
@@ -406,12 +417,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     updateActivity(session);
   }
 
-  function processEvents(session: HeldSession): AgentProcessEvents {
+  function processEvents(
+    session: HeldSession,
+    processStart: number,
+  ): AgentProcessEvents {
     const { sessionId } = session.state;
     return {
       entry(entry) {
         if (isLive(session)) {
-          sendEntry(session, entry);
+          sendEntry(session, rowEntryOf(entry, processStart));
         }
       },
       controls(controls) {
@@ -514,9 +528,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       pending: new Map(),
       permissionCount: 0,
       noticeCount: 0,
+      processStarts: 0,
       exit: null,
     };
     held.set(sessionId, session);
+    // The sessions plugin emits `selected` inside `open`, before the row is
+    // held, so `selected` cannot record it.
+    if (options.select) {
+      selectedHostId = hostId;
+    }
     send('sessionStarted', copyState(session.state));
     return session;
   }
@@ -530,6 +550,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     resume: boolean,
   ) {
     const { sessionId, projectDir } = session.state;
+    session.processStarts += 1;
     const process = harness.start(
       {
         sessionId: session.hostId,
@@ -537,7 +558,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         projectDir,
         profileDir: profileDirOf(profile),
       },
-      processEvents(session),
+      processEvents(session, session.processStarts),
     );
     session.process = process;
     session.exit = null;

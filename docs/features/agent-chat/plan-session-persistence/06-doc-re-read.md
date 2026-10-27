@@ -1,6 +1,6 @@
 # 06 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -26,3 +26,5 @@ Done when: every line above matches the code; the fixes are committed (none is a
 Commit:    one commit for the group, when there are fixes
 
 ## Proof
+
+Commit 6a27f81 · proof: diff read: six stale lines in design.md fixed (ended arg, /logout and /status notices, selection null, save after start, restore skips, unreadable file); AGENTS.md and the rest checked true; lint pass · concerns: none

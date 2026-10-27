@@ -150,7 +150,7 @@ needs no new entry (the new file sits in an existing layer).
 - [x] [Self-test: resting session](05-selftest-resting-session.md) — after 03, 04
 
 ### Wave 5
-- [ ] [Doc re-read](06-doc-re-read.md) — after 05
+- [x] [Doc re-read](06-doc-re-read.md) — after 05
 - [ ] [Final verification](07-final-verification.md) — after 05
 
 ## Run log
@@ -163,6 +163,7 @@ Review base: f676c293b1c5b8de5ce197b9ebf280691835f557
 - 03 · e04bc7f · diff read: every Produces present; typecheck errors only under src/plugins/chat/page/ (11); chat main tests 127 pass · concerns: selftest-script still expects chat.ended and an ended second session (task 05); old process controls/commands stay in state while resting (task 04 may hide); exit-with-error notice reads '(exit code 1): boom. Your next…' so test asserts contains '): boom'; fake sessions.open numbers rows row-<n>; send toast relies on sync throw, unverified end to end
 - 04 · 63d5732 · diff read: ChatTabScope 'chat' only, chat.ended gone from keymap/manifest, handlers for entries/sessionRunning/sessionRested and loadHistory present; typecheck clean; lint pass; page tests 138 pass · concerns: selftest-script still expects chat.ended (task 05); design.md:210 still documents ended in run({...}) (task 06); sessionRested for a failed new start finds no tab so the stopped toast may not show; a pickMode fixture text still says 'has ended'
 - 05 · 0625058 · diff read: RESTING_SESSION_STEPS / 'resting session' group present; typecheck clean; npm run selftest all passed (lead re-run) · concerns: the fake's process for chat-second is unchecked (selftestProcess filters to the self-test project), as before
+- 06 · 6a27f81 · diff read: six stale lines in design.md fixed (ended arg, /logout and /status notices, selection null, save after start, restore skips, unreadable file); AGENTS.md and the rest checked true; lint pass · concerns: none
 ### Contract changes
 - AccountCommandDeps.toast: present → removed · why: no path uses it once the toast branch is gone · consumers: none · group 04
 ### Rulings
@@ -182,6 +183,7 @@ Review base: f676c293b1c5b8de5ce197b9ebf280691835f557
 - entries logs '<n> entries read in <name>', sessionRunning logs '<name> running'; loadHistory rejection toast reuses the log text — spec named none — wording only · group 04 · group 04
 - composer anchors its keys once in chat.chat; send never disabled; running indicator hidden while resting — cost: none · group 04 · group 04
 - resume list group picks the folder by name (/chat-selftest Enter), since restarting chat-second records its folder newest — key path only — none · group 05 · group 05
+- missing-profile send described as a 'message not sent' toast naming the profile, not the exact error string — reworded errors don't stale the doc — none · group 06 · group 06
 ### Review rounds
 ### Test gate
 - full vitest suite (npm test) — the range touches the chat contract both sides, sessions and keymap, and the whole suite runs in seconds, covering every planned test (open-sessions, session-list, chat-sessions, start, the four page files) · 237 files / 3619 tests pass; npm run selftest all passed at 0625058

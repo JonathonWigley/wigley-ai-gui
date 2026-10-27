@@ -620,6 +620,27 @@ describe('createChatSessions', () => {
     });
   });
 
+  it('entry_SecondProcessReusesAnId_HeldAfterTheExitNotice', async () => {
+    const test = await started();
+    test.chat.send(ROW_ID, { text: 'first', images: [] });
+    await flush();
+    test.process.events.ended({ code: 0, error: null });
+
+    test.chat.send(ROW_ID, { text: 'second', images: [] });
+    await flush();
+
+    const userOrNotice = test.chat
+      .sessions()[0]
+      .entries.filter(
+        (entry) => entry.kind === 'user' || entry.kind === 'notice',
+      );
+    expect(userOrNotice).toEqual([
+      expect.objectContaining({ kind: 'user', text: 'first' }),
+      expect.objectContaining({ kind: 'notice' }),
+      expect.objectContaining({ kind: 'user', text: 'second' }),
+    ]);
+  });
+
   it('controls_storedAndSent', async () => {
     const test = await started();
     const controls: SessionControl[] = [
@@ -1475,6 +1496,36 @@ describe('createChatSessions saved sessions', () => {
       test.harness.pastSessionCalls.filter((call) => call.method === 'history'),
     ).toHaveLength(1);
   });
+
+  it.each([
+    {
+      given: 'a start',
+      open: (chat: ChatSessions) =>
+        chat.start({ projectDir: PROJECT_DIR, profile: 'personal' }),
+      selected: 'uuid-1',
+    },
+    {
+      given: 'a launch',
+      open: (chat: ChatSessions) =>
+        chat.launch({
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+          message: { text: 'hi', images: [] },
+        }),
+      selected: null,
+    },
+  ])(
+    'selected_RowChatOpens_SavedWhenOpenedSelected given $given',
+    async ({ open, selected }) => {
+      const test = setUp();
+      test.chat.restore(NOTHING_SAVED);
+
+      open(test.chat);
+      await flush();
+
+      expect(test.saved.last()?.selectedHostSessionId).toBe(selected);
+    },
+  );
 
   it('selected_ChatRowThenOtherRow_KeepsLastChatSelection', () => {
     const test = setUp();
