@@ -84,10 +84,12 @@ describe('listenForImages paste', () => {
     const toasts: string[] = [];
     listenForImages(
       { name: 'Chat 1', attachments: createAttachments() },
-      composer,
       root,
-      { log: () => {}, toast: (message) => toasts.push(message) },
-    );
+      {
+        log: () => {},
+        toast: (message) => toasts.push(message),
+      },
+    ).listenForPaste(composer);
     let prevented = false;
     onPaste({
       clipboardData: {

@@ -30,6 +30,7 @@ import type {
 import { CONTROL_IDS } from './control-commands';
 import type { ImageViewer } from './image-viewer';
 import type { Picker } from './picker';
+import { choiceRowInput, controlRowInput } from './picker-row';
 import type { SignInDialog } from './sign-in-dialog';
 import type { SlashCommands } from './slash-commands';
 
@@ -235,6 +236,7 @@ export function chatCommandHandlers(
         title: 'Controls',
         items: controls,
         label: controlText,
+        rowInput: controlRowInput,
         sessionBound: true,
         picked: (control) => openChoices(deps, session, control),
       });
@@ -402,6 +404,7 @@ function openChoices(
     title: control.label,
     items: control.choices,
     label: (choice) => choice.label,
+    rowInput: (choice) => choiceRowInput(choice, control),
     selected: Math.max(0, current),
     sessionBound: true,
     picked: (choice) => {

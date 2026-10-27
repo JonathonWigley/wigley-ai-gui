@@ -2,15 +2,20 @@ import type { EditorHost } from '../../../contracts/editor';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
 import { textButton } from '../../../shared/page/ui/button';
-import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type { ChatChannel } from '../contract';
 import { chatCommand, chatScope } from '../ids';
+import type { SignInInput } from '../layouts/layout';
 import {
-  type DialogAction,
+  createChatDialog,
   type DialogDeps,
-  drawDialogActions,
+  redrawOnLayoutChange,
 } from './chat-dialogs';
+import {
+  createSignInPart,
+  type DialogAction,
+  dialogActions,
+} from './dialog-kits';
 import { createSignInFlow } from './sign-in-flow';
 
 export interface SignInDialogDeps extends DialogDeps {
@@ -53,32 +58,10 @@ const SIGN_IN_ACTIONS: readonly DialogAction[] = [
   },
 ];
 
-const WAITING_TEXT = 'Waiting for the sign-in link…';
-
 export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
-  const dialog = createDialog('Sign in');
-  const link = element('span', 'chat-sign-in-link', WAITING_TEXT);
-  const linkRow = element('div', 'chat-sign-in-link-row');
+  const dialog = createChatDialog('Sign in', deps);
   const box = inputFrame();
   box.classList.add('chat-sign-in-box');
-  dialog.body.append(
-    element('p', 'chat-dialog-text', 'Finish sign-in in your browser.'),
-    linkRow,
-    element(
-      'p',
-      'chat-dialog-text',
-      'If the page shows a code, paste it here.',
-    ),
-    box,
-  );
-  deps.overlay.contribute(dialog.element);
-  drawDialogActions(dialog, SIGN_IN_ACTIONS, deps);
-  const editor = deps.editor.create(box, '', {
-    changed: () => undefined,
-    focused: () => undefined,
-    blurred: () => undefined,
-    modeChanged: () => undefined,
-  });
 
   // The Copy button runs the copy command and shows its keys in the box, which
   // holds focus while the dialog is open; it is enabled once main reports a
@@ -94,16 +77,32 @@ export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
     { variant: 'ghost', hint: copyHint },
   );
   copy.disabled = true;
-  linkRow.append(link, copy);
+  const part = createSignInPart(deps, dialog.body, {
+    codeBox: box,
+    copy,
+    actions: dialogActions(SIGN_IN_ACTIONS, deps),
+  });
+  let shown: SignInInput = { profile: '', link: null };
+  part.draw(shown);
+  const editor = deps.editor.create(box, '', {
+    changed: () => undefined,
+    focused: () => undefined,
+    blurred: () => undefined,
+    modeChanged: () => undefined,
+  });
+  redrawOnLayoutChange(deps, part, box, editor);
   const showLink = (url: string | null) => {
-    link.textContent = url ?? WAITING_TEXT;
+    shown = { ...shown, link: url };
     copy.disabled = url === null;
+    part.update(shown);
   };
 
   return createSignInFlow({
     view: {
       show(profile) {
         dialog.setTitle(`Sign in to ${profile}`);
+        shown = { profile, link: null };
+        part.update(shown);
         dialog.show();
         editor.focus({ insert: true });
       },

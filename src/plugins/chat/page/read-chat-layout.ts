@@ -4,6 +4,7 @@ import {
   readLayoutModule,
 } from '../../../shared/page/layout-host/read-layout-module';
 import type { ChatLayout, EntryInput, EntryKind } from '../layouts/layout';
+import type { ChatPartName } from './chat-layouts';
 
 // A `Record` over every kind, so a kind left out fails to compile.
 const KIND_SET: Record<ChatEntryKind, true> = {
@@ -44,8 +45,23 @@ void [
   LAYOUT_KINDS_ARE_CHAT_KINDS,
 ];
 
+// A `Record` over every part beside the entries, so a part left out fails to
+// compile.
+const PART_SET: Record<ChatPartName, true> = {
+  composer: true,
+  composerBar: true,
+  attachments: true,
+  pickerRow: true,
+  signIn: true,
+  reasonBox: true,
+  closeConfirm: true,
+  imageViewer: true,
+};
+const PART_NAMES = Object.keys(PART_SET) as ChatPartName[];
+
 // The chat layout a user's `layout.js` module exports as its default; throws
-// naming the first entry builder it lacks.
+// naming the first entry builder it lacks, or the first part it holds that is
+// not a function. Every part beside the entries may be left out.
 export function readChatLayout(module: unknown, name: string): ChatLayout {
   const layout = readLayoutModule(module, name);
   const entries = isRecord(layout.entries) ? layout.entries : {};
@@ -54,6 +70,12 @@ export function readChatLayout(module: unknown, name: string): ChatLayout {
       throw new Error(
         `layout ${name}: entries.${kind} is missing or not a function`,
       );
+    }
+  }
+  for (const part of PART_NAMES) {
+    const isPresent = layout[part] !== undefined;
+    if (isPresent && typeof layout[part] !== 'function') {
+      throw new Error(`layout ${name}: ${part} is not a function`);
     }
   }
   return layout as unknown as ChatLayout;

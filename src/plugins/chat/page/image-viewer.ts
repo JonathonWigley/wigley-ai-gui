@@ -1,10 +1,11 @@
 import type { ChatImage } from '../../../contracts/agent';
-import type { Log } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
 import '../../../shared/page/ui/dialog.css';
 import { imageUrl } from './attachments';
+import type { ImageViewerInput } from '../layouts/layout';
 import { blurFocusedElement } from './chat-dialogs';
+import { createImageViewerPart, type DialogPartDeps } from './dialog-kits';
 
 // The full-size image viewer over a message's images: `open` shows the image
 // at `index` and pushes the viewer's scope; `next` and `previous` step
@@ -18,11 +19,10 @@ export interface ImageViewer {
   close(): void;
 }
 
-export interface ImageViewerDeps {
+export interface ImageViewerDeps extends DialogPartDeps {
   overlay: PluginAreas['overlay'];
   // Pushes the viewer's own scope.
   pushScope(): PushedScope;
-  log: Log;
 }
 
 interface OpenImages {
@@ -31,29 +31,26 @@ interface OpenImages {
   scope: PushedScope;
 }
 
-// A dialog-layer surface in the overlay: the image fitted inside the window
-// on the dim backdrop, and `<n> of <count>` under it when there is more than
-// one.
+// A dialog-layer surface in the overlay: the `imageViewer` part on the dim
+// backdrop, the image fitted inside the window and `<n> of <count>` under it
+// when there is more than one in the default layout; it draws again on a
+// layout change, keeping its index.
 export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
   const { log } = deps;
   const backdrop = element('div', 'ui-scrim chat-image-viewer');
   backdrop.hidden = true;
   backdrop.setAttribute('role', 'dialog');
   backdrop.setAttribute('aria-modal', 'true');
-  const picture = element('img', 'chat-image-viewer-image');
-  const counter = element('div', 'chat-image-viewer-count');
-  backdrop.append(picture, counter);
   deps.overlay.contribute(backdrop);
+  const part = createImageViewerPart(deps, backdrop);
+  deps.layouts.onChange(() => part.redraw());
 
   let open: OpenImages | null = null;
-  const draw = (shown: OpenImages) => {
-    const count = shown.images.length;
-    picture.src = imageUrl(shown.images[shown.index]);
-    const place = `${shown.index + 1} of ${count}`;
-    picture.alt = `Image ${place}`;
-    counter.textContent = place;
-    counter.hidden = count < 2;
-    log('chat', `image viewer showing ${place}`);
+  // Draws the open image with `draw` (the part's `draw` or `update`).
+  const show = (shown: OpenImages, draw: (input: ImageViewerInput) => void) => {
+    const input = inputOf(shown);
+    draw(input);
+    log('chat', `image viewer showing ${input.index + 1} of ${input.count}`);
   };
   const step = (direction: 1 | -1) => {
     if (open === null) {
@@ -65,7 +62,7 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
       return;
     }
     open.index = index;
-    draw(open);
+    show(open, part.update);
   };
   const viewer: ImageViewer = {
     open(images, index) {
@@ -80,7 +77,7 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
       });
       open = opened;
       backdrop.hidden = false;
-      draw(opened);
+      show(opened, part.draw);
     },
     next: () => step(1),
     previous: () => step(-1),
@@ -91,10 +88,20 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
       }
       open = null;
       backdrop.hidden = true;
-      picture.removeAttribute('src');
+      part.clear();
       held.scope.pop();
       log('chat', 'image viewer closed');
     },
   };
   return viewer;
+}
+
+function inputOf(
+  shown: Pick<OpenImages, 'images' | 'index'>,
+): ImageViewerInput {
+  return {
+    src: imageUrl(shown.images[shown.index]),
+    index: shown.index,
+    count: shown.images.length,
+  };
 }

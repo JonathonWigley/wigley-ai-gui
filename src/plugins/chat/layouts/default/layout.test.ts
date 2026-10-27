@@ -3,10 +3,16 @@ import type {
   ChatKit,
   ChatLayout,
   CollapsibleCardOptions,
+  ComposerBarKit,
+  ComposerKit,
   EntryInput,
   EntryKind,
   EntryView,
+  PartView,
+  PickerRowKit,
+  SignInKit,
 } from '../layout';
+import type { KitRowOptions } from '../../../../shared/page/layout-host/kit';
 import layout from './layout.js';
 
 // The DOM surface the default layout uses. This layer may not import the
@@ -15,6 +21,9 @@ class FakeElement {
   tagName: string;
   className = '';
   textContent = '';
+  hidden = false;
+  src = '';
+  alt = '';
   dataset: Record<string, string> = {};
   parentNode: FakeElement | null = null;
   children: FakeElement[] = [];
@@ -33,6 +42,12 @@ class FakeElement {
         return isOn;
       },
       contains: (name: string) => names().includes(name),
+      add: (name: string) => {
+        this.className = [
+          ...names().filter((held) => held !== name),
+          name,
+        ].join(' ');
+      },
     };
   }
 
@@ -342,6 +357,175 @@ describe('default chat layout', () => {
     const body = asFake(calls.expanders[0].body());
     expect(describeChildren(body)).toEqual([
       `json:${JSON.stringify([{ type: 'x' }])}`,
+    ]);
+  });
+});
+
+// The kit parts of the surfaces beside the entries, each appending a tagged
+// fake element; `row` keeps its options.
+function fakeSurfaceKit() {
+  const rows: KitRowOptions[] = [];
+  const cursorEnd = new FakeElement('span');
+  const parts = {
+    floatingPanel: (parent: HTMLElement) =>
+      part(parent, 'div', 'floatingPanel'),
+    box: (parent: HTMLElement) => part(parent, 'div', 'box'),
+    attachments: (parent: HTMLElement) => part(parent, 'div', 'attachments'),
+    bar: (parent: HTMLElement) => part(parent, 'div', 'bar'),
+    typeHint: (parent: HTMLElement) => part(parent, 'span', 'typeHint'),
+    controlChip: (parent: HTMLElement, control: { id: string }) =>
+      part(parent, 'button', `chip:${control.id}`),
+    running: (parent: HTMLElement) => part(parent, 'span', 'running'),
+    sendButton: (parent: HTMLElement) => part(parent, 'button', 'send'),
+    row(parent: HTMLElement, options: KitRowOptions) {
+      rows.push(options);
+      return part(parent, 'li', `row:${options.label}`);
+    },
+    cursorEnd: () => asHtml(cursorEnd),
+    copyButton: (parent: HTMLElement) => part(parent, 'button', 'copy'),
+    codeBox: (parent: HTMLElement) => part(parent, 'div', 'codeBox'),
+    actions: (parent: HTMLElement) => part(parent, 'div', 'actions'),
+  };
+  const kit = parts as unknown as ComposerKit &
+    ComposerBarKit &
+    PickerRowKit &
+    SignInKit;
+  return { kit, rows, cursorEnd: asHtml(cursorEnd) };
+}
+
+type SurfacePart = Exclude<keyof ChatLayout, 'entries'>;
+
+// Draws `input` with the default layout's `name` part into a fresh parent,
+// and checks the element it returned is the parent's one child.
+function drawSurface<I>(
+  name: SurfacePart,
+  input: I,
+  kit: ReturnType<typeof fakeSurfaceKit>['kit'],
+): PartView<I> {
+  const parent = new FakeElement('div');
+  const builder = (layout as ChatLayout)[name] as unknown as (
+    parent: HTMLElement,
+    input: I,
+    kit: unknown,
+  ) => PartView<I>;
+  const view = builder(asHtml(parent), input, kit);
+  expect(parent.children).toEqual([asFake(view.element)]);
+  return view;
+}
+
+describe('default chat layout surfaces', () => {
+  beforeEach(() => {
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => new FakeElement(tag),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const composerInput = {
+    session: 'repo',
+    modeLabel: 'PAGE',
+    isBoxFocused: false,
+    running: true,
+    working: false,
+    controls: [
+      { id: 'mode', label: 'Mode', value: 'Auto', enabled: true },
+      { id: 'effort', label: 'Effort', value: 'High', enabled: true },
+    ],
+  };
+
+  it('composer_Default_PlacesEachSlotOnce', () => {
+    const { kit } = fakeSurfaceKit();
+
+    const view = drawSurface('composer', composerInput, kit);
+
+    const panel = asFake(view.element);
+    expect(panel.dataset.part).toBe('floatingPanel');
+    expect(describeChildren(panel)).toEqual(['attachments', 'box', 'bar']);
+  });
+
+  it('composerBar_Default_ChipsInControlOrderThenRunningThenSend', () => {
+    const { kit } = fakeSurfaceKit();
+
+    const view = drawSurface('composerBar', composerInput, kit);
+
+    expect(describeChildren(asFake(view.element))).toEqual([
+      'span.chat-box-mode:PAGE',
+      'typeHint',
+      'chip:mode',
+      'chip:effort',
+      'running',
+      'send',
+    ]);
+  });
+
+  it('pickerRow_Default_PlacesCursorEnd', () => {
+    const { kit, rows, cursorEnd } = fakeSurfaceKit();
+
+    drawSurface(
+      'pickerRow',
+      { item: { list: 'session', kind: 'new' }, label: 'New session' },
+      kit,
+    );
+
+    expect(rows).toEqual([
+      {
+        density: 'list',
+        tag: 'li',
+        label: 'New session',
+        trailing: cursorEnd,
+      },
+    ]);
+  });
+
+  it('signIn_Default_PlacesCopyCodeBoxAndActions', () => {
+    const { kit } = fakeSurfaceKit();
+
+    const view = drawSurface(
+      'signIn',
+      { profile: 'work', link: 'https://example.com/a' },
+      kit,
+    );
+
+    const root = asFake(view.element);
+    expect(describeChildren(root).slice(-2)).toEqual(['codeBox', 'actions']);
+    const linkRow = root.children.find(
+      (child) => child.className === 'chat-sign-in-link-row',
+    );
+    expect(describeChildren(linkRow!)).toEqual([
+      'span.chat-sign-in-link:https://example.com/a',
+      'copy',
+    ]);
+  });
+
+  it('imageViewer_Default_UpdateMovesCounterAndHidesItForOne', () => {
+    const { kit } = fakeSurfaceKit();
+    const view = drawSurface(
+      'imageViewer',
+      { src: 'data:a', index: 0, count: 2 },
+      kit,
+    );
+    const [picture, counter] = asFake(view.element).children;
+    expect([picture.src, counter.textContent, counter.hidden]).toEqual([
+      'data:a',
+      '1 of 2',
+      false,
+    ]);
+
+    view.update?.({ src: 'data:b', index: 1, count: 2 });
+    expect([picture.src, counter.textContent, counter.hidden]).toEqual([
+      'data:b',
+      '2 of 2',
+      false,
+    ]);
+
+    view.update?.({ src: 'data:c', index: 0, count: 1 });
+    expect([picture.src, counter.textContent, counter.hidden]).toEqual([
+      'data:c',
+      '1 of 1',
+      true,
     ]);
   });
 });

@@ -1,6 +1,6 @@
 # 06 — Docs layout
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -489,3 +489,4 @@ reload and keeps its doc, scroll, focus and editor`.
 
 ## Proof
 
+Commit ff4b9b1 · proof: diff read: Produces present (amended below); docs tests 525 pass; lint, layers, styles clean; selftest all passed, every key placed; tree typecheck errors only in chat's in-flight files · concerns: 02's list picker drawRow rows lose the pointer cursor (third report); docs-page-fakes.ts test fake added outside Files; focus and scroll keep proved only in the fake DOM

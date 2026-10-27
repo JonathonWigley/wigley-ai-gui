@@ -226,6 +226,12 @@
   gap: var(--wg-space-3);
 }
 
+/* A chat dialog's body part holds its actions, which keep the gap the dialog
+   puts above its own actions row. */
+.chat-dialog-part > .ui-dialog-actions {
+  margin-top: var(--wg-space-3);
+}
+
 /* The dialogs' text and the deny reason box. */
 .chat-dialog-text {
   color: var(--wg-fg-secondary);
@@ -272,6 +278,12 @@
 
 .ui-scrim.chat-image-viewer[hidden] {
   display: none;
+}
+
+/* The viewer part's root lays out nothing itself: the image and its place
+   sit in the scrim's column. */
+.chat-image-viewer-frame {
+  display: contents;
 }
 
 .chat-image-viewer-image {

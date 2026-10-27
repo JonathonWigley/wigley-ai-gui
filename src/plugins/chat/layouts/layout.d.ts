@@ -139,7 +139,148 @@ export interface ChatKit extends BaseKit {
   images(parent: HTMLElement): HTMLElement;
 }
 
-// The complete chat layout: a builder for every entry kind.
+// What a part other than an entry returns: its root, appended to `parent`, and an optional `update` the app runs with
+// each later input in place of drawing the part again.
+export interface PartView<I> {
+  element: HTMLElement;
+  update?(input: I): void;
+}
+
+// A session control as its chip shows it: `value` is the choice's label, else the raw value, else `unset`; `enabled`
+// holds while the session's process runs.
+export interface ComposerControlInput {
+  id: string;
+  label: string;
+  value: string;
+  enabled: boolean;
+}
+export interface ComposerInput {
+  // The tab's name.
+  session: string;
+  // The box's vim mode as the status line prints it; `PAGE` while the box has no focus.
+  modeLabel: string;
+  isBoxFocused: boolean;
+  // The session's process runs.
+  running: boolean;
+  // Running, and a turn is in progress.
+  working: boolean;
+  controls: ComposerControlInput[];
+}
+// The composer's pieces. Each slot and the box mounts once per draw: a second call throws `<part> placed twice`, and
+// the composer draws with `default`. A composer that leaves the box out gets it at the end of its element.
+export interface ComposerKit extends BaseKit {
+  // `div.ui-floating`: the glass panel; the composer's root in the default layout.
+  floatingPanel(parent: HTMLElement): HTMLElement;
+  // The message box frame, its editor inside.
+  box(parent: HTMLElement): HTMLElement;
+  // The slot the `attachments` part draws into; the app hides it while no image is attached.
+  attachments(parent: HTMLElement): HTMLElement;
+  // The slot the `composerBar` part draws into.
+  bar(parent: HTMLElement): HTMLElement;
+}
+// The bar's pieces that hold keys. Each places the same element on every draw.
+export interface ComposerBarKit extends BaseKit {
+  // The `i` and `a` prompts; hidden, keeping its space, while the box has focus.
+  typeHint(parent: HTMLElement): HTMLElement;
+  // A chip showing the control's label and value that opens its picker; disabled while not `enabled`. The first chip
+  // whose command opens a picker holds that command's keys.
+  controlChip(
+    parent: HTMLElement,
+    control: ComposerControlInput,
+  ): HTMLButtonElement;
+  // A running dot and the interrupt keys; hidden, keeping its space, while not working.
+  running(parent: HTMLElement): HTMLElement;
+  // Send with its keys.
+  sendButton(parent: HTMLElement): HTMLButtonElement;
+}
+// One attached image: `src` a `data:` URL, `index` its place from 0.
+export interface AttachmentInput {
+  src: string;
+  index: number;
+  count: number;
+}
+export interface AttachmentsInput {
+  images: AttachmentInput[];
+}
+export interface AttachmentsKit extends BaseKit {
+  // A small close button that removes the image at `index`.
+  removeButton(parent: HTMLElement, index: number): HTMLButtonElement;
+}
+
+// One row of a list chat opens, by list: the start prompt's Folder, Profile and Session steps, the Controls list and a
+// control's choices. A recent folder's `path` is spelled as the row shows it, the home folder as `~`; a control's
+// `value` as its chip shows it.
+export type PickerItemInput =
+  | {
+      list: 'folder';
+      kind: 'recent';
+      path: string;
+      profile: string;
+      lastUsed: number;
+    }
+  | { list: 'folder'; kind: 'choose' }
+  | { list: 'profile'; name: string; configDir: string }
+  | { list: 'session'; kind: 'new' }
+  | {
+      list: 'session';
+      kind: 'past';
+      title: string;
+      modified: number;
+      archived: boolean;
+    }
+  | { list: 'controls'; label: string; value: string }
+  | { list: 'choices'; label: string; isCurrent: boolean };
+// `label` is the line the list filters on.
+export interface PickerRowInput {
+  item: PickerItemInput;
+  label: string;
+}
+export interface PickerRowKit extends BaseKit {
+  // The cursor row's prompt (`x archive` / `x restore` in the Session step); null on every other row. A row draws
+  // through `row(parent, { density: 'list', tag: 'li', … })`; the app sets `is-selected` and `is-cursor` on it.
+  cursorEnd(): HTMLElement | null;
+}
+
+// `link` is null until the sign-in reports it.
+export interface SignInInput {
+  profile: string;
+  link: string | null;
+}
+export interface SignInKit extends BaseKit {
+  // Copy with its keys; disabled while `link` is null.
+  copyButton(parent: HTMLElement): HTMLButtonElement;
+  // The code box frame, its editor inside. Mounts once per draw; left out, it ends the part's element.
+  codeBox(parent: HTMLElement): HTMLElement;
+  // `div.ui-dialog-actions`: Cancel and Send code with their keys. Left out, it ends the part's element.
+  actions(parent: HTMLElement): HTMLElement;
+}
+export interface ReasonBoxInput {
+  toolName: string;
+}
+export interface ReasonBoxKit extends BaseKit {
+  // The reason box frame, its editor inside. Mounts once per draw; left out, it ends the part's element.
+  reasonBox(parent: HTMLElement): HTMLElement;
+  // `div.ui-dialog-actions`: Back and Deny with their keys. Left out, it ends the part's element.
+  actions(parent: HTMLElement): HTMLElement;
+}
+export interface CloseConfirmInput {
+  session: string;
+}
+export interface CloseConfirmKit extends BaseKit {
+  // `div.ui-dialog-actions`: Keep it running and End the session with their keys. Left out, it ends the part's
+  // element.
+  actions(parent: HTMLElement): HTMLElement;
+}
+// `src` a `data:` URL; `index` the image's place from 0 among `count`.
+export interface ImageViewerInput {
+  src: string;
+  index: number;
+  count: number;
+}
+
+// The complete chat layout: a builder for every entry kind, and the other surfaces' parts, which a user layout
+// defines only where it changes them. A dialog part draws into the dialog's body; the app keeps the dialog's frame and
+// title.
 export interface ChatLayout {
   // Builds one entry into `parent` from the entry and a kit made for that entry: the builder appends its element to
   // `parent` and returns it in `element`.
@@ -150,4 +291,49 @@ export interface ChatLayout {
       kit: ChatKit,
     ) => EntryView<K>;
   };
+  // The floating composer, appended to the Chat tab under the entries.
+  composer?(
+    parent: HTMLElement,
+    input: ComposerInput,
+    kit: ComposerKit,
+  ): PartView<ComposerInput>;
+  // The bar under the box, drawn into the composer's bar slot again on each change.
+  composerBar?(
+    parent: HTMLElement,
+    input: ComposerInput,
+    kit: ComposerBarKit,
+  ): PartView<ComposerInput>;
+  // The attached images, drawn into the composer's attachments slot again on each change.
+  attachments?(
+    parent: HTMLElement,
+    input: AttachmentsInput,
+    kit: AttachmentsKit,
+  ): PartView<AttachmentsInput>;
+  // One row of a list chat opens, appended to the list.
+  pickerRow?(
+    parent: HTMLElement,
+    input: PickerRowInput,
+    kit: PickerRowKit,
+  ): PartView<PickerRowInput>;
+  signIn?(
+    parent: HTMLElement,
+    input: SignInInput,
+    kit: SignInKit,
+  ): PartView<SignInInput>;
+  reasonBox?(
+    parent: HTMLElement,
+    input: ReasonBoxInput,
+    kit: ReasonBoxKit,
+  ): PartView<ReasonBoxInput>;
+  closeConfirm?(
+    parent: HTMLElement,
+    input: CloseConfirmInput,
+    kit: CloseConfirmKit,
+  ): PartView<CloseConfirmInput>;
+  // The image and its place on the viewer's scrim.
+  imageViewer?(
+    parent: HTMLElement,
+    input: ImageViewerInput,
+    kit: BaseKit,
+  ): PartView<ImageViewerInput>;
 }

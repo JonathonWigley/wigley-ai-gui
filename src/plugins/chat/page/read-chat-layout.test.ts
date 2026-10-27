@@ -32,9 +32,23 @@ describe('readChatLayout', () => {
     );
   });
 
-  it('readChatLayout_EveryKind_ReturnsTheDefaultExport', () => {
-    const layout = { entries: entriesWithout(null) };
+  it.each([
+    { parts: {} },
+    { parts: { composer: builder, imageViewer: builder } },
+  ])(
+    'readChatLayout_EveryKind_ReturnsTheDefaultExport ($parts)',
+    ({ parts }) => {
+      const layout = { entries: entriesWithout(null), ...parts };
 
-    expect(readChatLayout({ default: layout }, 'mine')).toBe(layout);
+      expect(readChatLayout({ default: layout }, 'mine')).toBe(layout);
+    },
+  );
+
+  it('readChatLayout_PartNotAFunction_ThrowsNamingIt', () => {
+    const layout = { entries: entriesWithout(null), composer: 'panel' };
+
+    expect(() => readChatLayout({ default: layout }, 'mine')).toThrow(
+      'layout mine: composer is not a function',
+    );
   });
 });

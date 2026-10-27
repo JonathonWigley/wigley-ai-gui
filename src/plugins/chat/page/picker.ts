@@ -1,16 +1,27 @@
+import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
 import { createListPicker } from '../../../shared/page/list-picker';
-import type { KeysPageExports } from '../../keys/contract';
 import {
   type ChatCommandName,
   type ChatScopeName,
   chatCommand,
   chatScope,
 } from '../ids';
+import type {
+  PickerItemInput,
+  PickerRowInput,
+  PickerRowKit,
+} from '../layouts/layout';
 import { blurFocusedElement } from './chat-dialogs';
+import {
+  type ChatLayouts,
+  drawChatPart,
+  type SurfaceKitDeps,
+  surfaceBaseKit,
+} from './chat-layouts';
 import type { ArchiveState } from './resume-items';
 
 export interface PickerRequest<T> {
@@ -29,6 +40,8 @@ export interface PickerRequest<T> {
   // The archive state of the item, which the `resume` scope's cursor row
   // prompts to archive or restore; null for an item with none.
   archiveState?(item: T): ArchiveState | null;
+  // The item as the chat layout's `pickerRow` part reads it.
+  rowInput(item: T): PickerItemInput;
   // Runs once the picker has closed.
   picked(item: T): void;
 }
@@ -50,7 +63,9 @@ export interface PickerHandle {
 // `focusFilter` types into the filter box, and `leaveFilter` leaves it with
 // the filter kept. The header ends in the open scope's keys (`/ filter`, and
 // `. archived` in `resume`), and in `resume` the cursor row ends in
-// `x archive` or `x restore` by its item's archive state.
+// `x archive` or `x restore` by its item's archive state. Each row draws
+// through the chat layout's `pickerRow` part, its keys in the open scope, and
+// the open list draws again on each layout change.
 export interface Picker {
   open<T>(request: PickerRequest<T>): PickerHandle;
   isOpen(): boolean;
@@ -64,14 +79,16 @@ export interface Picker {
   closeSessionBound(): void;
   focusFilter(): void;
   leaveFilter(): void;
+  // Draws the open list's rows again; nothing when closed.
+  redraw(): void;
 }
 
-export interface PickerDeps {
+export interface PickerDeps extends SurfaceKitDeps {
   overlay: PluginAreas['overlay'];
   editor: EditorHost;
   // Pushes the named chat scope.
   pushScope(scope: ChatScopeName): PushedScope;
-  keys: Pick<KeysPageExports, 'anchor'>;
+  layouts: ChatLayouts;
   log: Log;
 }
 
@@ -87,6 +104,7 @@ export function createPicker(deps: PickerDeps): Picker {
     filterEditor: deps.editor,
   });
   deps.overlay.contribute(list.element);
+  deps.layouts.onChange(() => list.redraw());
   // An empty span holding `command`'s keys in `scopeName`, then `label`.
   const anchored = (
     command: ChatCommandName,
@@ -152,6 +170,12 @@ export function createPicker(deps: PickerDeps): Picker {
           shown = null;
           deps.log('chat', `picker closed: ${next.title}`);
         },
+        drawRow: (parent, item, row) =>
+          drawPickerRow(deps, nextScope, parent, {
+            input: { item: next.rowInput(item), label: row.label },
+            trailing: row.trailing,
+            recordAnchor: row.recordAnchor,
+          }),
       });
       return handle;
     },
@@ -168,5 +192,40 @@ export function createPicker(deps: PickerDeps): Picker {
     },
     focusFilter: () => list.focusFilter(),
     leaveFilter: () => list.leaveFilter(),
+    redraw: () => list.redraw(),
   };
+}
+
+// One row drawn through the `pickerRow` part into the list, its kit's anchors
+// in `scope` handed to the list picker, which disposes them; the row's draw is
+// never disposed here.
+function drawPickerRow(
+  deps: PickerDeps,
+  scope: PickerScope,
+  parent: HTMLElement,
+  row: {
+    input: PickerRowInput;
+    trailing: HTMLElement | null;
+    recordAnchor(anchor: Disposable): void;
+  },
+): HTMLElement {
+  const drawn = drawChatPart({
+    layouts: deps.layouts,
+    parent,
+    partName: 'pickerRow',
+    part: (layout) => layout.pickerRow,
+    build(builder, at, rollback) {
+      const kit: PickerRowKit = {
+        ...surfaceBaseKit(deps, scope, (anchor) => {
+          rollback.recordAnchor(anchor);
+          row.recordAnchor(anchor);
+        }),
+        cursorEnd: () => row.trailing,
+      };
+      const view = builder(at, row.input, kit);
+      return { element: view.element };
+    },
+    log: deps.log,
+  });
+  return drawn.built.element;
 }

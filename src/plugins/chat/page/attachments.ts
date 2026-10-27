@@ -2,9 +2,7 @@ import type { ChatImage } from '../../../contracts/agent';
 import type { Log } from '../../../contracts/log';
 import type { ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import { element } from '../../../shared/page/dom';
 import { filesOf, holdsPastedText } from '../../../shared/page/pasted-images';
-import { iconButton } from '../../../shared/page/ui/icon-button';
 import { refusalOf } from '../image-rules';
 
 // The images attached to one Chat tab's next message, in the order attached.
@@ -114,34 +112,6 @@ export function imageUrl(image: ChatImage): string {
   return `data:${image.mediaType};base64,${image.data}`;
 }
 
-// A thumbnail per attached image, each with its remove button, redrawn on
-// each change and hidden while nothing is attached.
-export function buildAttachmentStrip(attachments: Attachments): HTMLElement {
-  const strip = element('div', 'chat-attachments');
-  strip.hidden = true;
-  attachments.onChange((images) => {
-    strip.hidden = images.length === 0;
-    strip.replaceChildren(
-      ...images.map((image, index) => {
-        const held = element('div', 'chat-attachment');
-        const thumbnail = element('img', 'chat-attachment-image');
-        thumbnail.src = imageUrl(image);
-        thumbnail.alt = `Attached image ${index + 1}`;
-        const remove = iconButton(
-          'close',
-          'Remove the image',
-          () => attachments.removeAt(index),
-          'sm',
-        );
-        remove.classList.add('chat-attachment-remove');
-        held.append(thumbnail, remove);
-        return held;
-      }),
-    );
-  });
-  return strip;
-}
-
 // The Chat tab images attach to: its name for the log and its attachments.
 export interface ImageTab {
   readonly name: string;
@@ -153,19 +123,24 @@ export interface ImageListenerDeps {
   toast(text: string, tone: ToastTone): void;
 }
 
+// Where pasted images are heard: each composer root the tab draws.
+export interface PasteListener {
+  listenForPaste(composer: HTMLElement): void;
+}
+
 // Attaches the image files pasted into the composer or dropped on the tab.
 // The composer hears paste in the capture phase, ahead of the editor; a paste
 // with no files, or one whose text is more than a file name or a link,
 // reaches the editor untouched (Excel, Numbers, Word and Pages put a picture
 // beside copied text; a Finder copy or Copy Image puts only a name or URL). The
 // whole tab hears drop, so a file dropped just outside the composer attaches
-// instead of the window navigating to it.
+// instead of the window navigating to it. The tab hands each composer root it
+// draws to `listenForPaste`.
 export function listenForImages(
   tab: ImageTab,
-  composer: HTMLElement,
   root: HTMLElement,
   deps: ImageListenerDeps,
-) {
+): PasteListener {
   const { log } = deps;
   const take = (event: Event, files: File[]) => {
     if (files.length === 0) {
@@ -185,16 +160,6 @@ export function listenForImages(
       },
     });
   };
-  composer.addEventListener(
-    'paste',
-    (event) => {
-      const files = filesOf(event.clipboardData);
-      if (!holdsPastedText(event.clipboardData, files)) {
-        take(event, files);
-      }
-    },
-    { capture: true },
-  );
   root.addEventListener('dragover', (event) => {
     if (event.dataTransfer?.types.includes('Files') === true) {
       event.preventDefault();
@@ -203,4 +168,18 @@ export function listenForImages(
   root.addEventListener('drop', (event) =>
     take(event, filesOf(event.dataTransfer)),
   );
+  return {
+    listenForPaste(composer) {
+      composer.addEventListener(
+        'paste',
+        (event) => {
+          const files = filesOf(event.clipboardData);
+          if (!holdsPastedText(event.clipboardData, files)) {
+            take(event, files);
+          }
+        },
+        { capture: true },
+      );
+    },
+  };
 }

@@ -176,6 +176,11 @@ function setUp(
         title,
         items,
         label: (item) => item,
+        rowInput: (item) => ({
+          list: 'choices',
+          label: item,
+          isCurrent: false,
+        }),
         picked: () => undefined,
       }),
   };

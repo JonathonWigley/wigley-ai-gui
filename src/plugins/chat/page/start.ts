@@ -18,6 +18,7 @@ import { chatManifest } from '../manifest';
 import { addAccountCommands } from './account-commands';
 import { chatCommandHandlers, createPermissionActions } from './chat-commands';
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
+import { createChatLayouts } from './chat-layouts';
 import { mountChatView } from './chat-view';
 import { createImageViewer } from './image-viewer';
 import { createPicker } from './picker';
@@ -33,9 +34,10 @@ type ChatApi = PageApi<
   QualifiedEvents<'sessions', SessionsPageEvents>
 >;
 
-// Shows each chat session main holds in its session's Chat tab: the entries,
-// drawn by the chat layout main chooses, under a floating composer holding
-// the message box, the controls as chips and send. The new-session prompt
+// Shows each chat session main holds in its session's Chat tab: the entries
+// under a floating composer holding the message box, the controls as chips
+// and send. The entries, the composer, the picker rows, the dialogs and the
+// image viewer draw through the chat layout the `chat.layout` setting names. The new-session prompt
 // asks for a folder, a profile and a new or saved session in the picker and
 // starts or resumes a session there, signing a signed-out profile in first.
 // Sending `/login`, `/logout`, `/status` or another app slash command runs it
@@ -60,28 +62,38 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const sessions = api.dependency<SessionsPageExports>('sessions');
     const keys = api.dependency<KeysPageExports>('keys');
     const run = (command: string) => api.commands.run(command);
+    const layouts = createChatLayouts();
+    // What every surface's layout kit reads.
+    const partDeps = {
+      layouts,
+      markdown: services.markdown,
+      keys,
+      commands: {
+        exists: (id: string) => api.keys.command(id) !== undefined,
+        run: (id: string) => api.commands.run(id),
+      },
+      platform: api.platform,
+      log: services.log,
+    };
     const reasonBox = createReasonBox({
+      ...partDeps,
       overlay: api.areas.overlay,
       editor: services.editor,
-      keys,
       run,
       pushScope: () => api.keys.pushScope('reason'),
-      log: services.log,
     });
     const confirm = createCloseConfirm({
+      ...partDeps,
       overlay: api.areas.overlay,
-      keys,
       run,
       pushScope: () => api.keys.pushScope('confirm'),
-      log: services.log,
     });
     const signIn = createSignInDialog({
+      ...partDeps,
       overlay: api.areas.overlay,
       editor: services.editor,
-      keys,
       run,
       pushScope: () => api.keys.pushScope('signIn'),
-      log: services.log,
       channel: api.channel,
       toast: services.toast,
     });
@@ -92,16 +104,15 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       channel: api.channel,
     });
     const picker = createPicker({
+      ...partDeps,
       overlay: api.areas.overlay,
       editor: services.editor,
       pushScope: (scope) => api.keys.pushScope(scope),
-      keys,
-      log: services.log,
     });
     const viewer = createImageViewer({
+      ...partDeps,
       overlay: api.areas.overlay,
       pushScope: () => api.keys.pushScope('image'),
-      log: services.log,
     });
     const permissions = createPermissionActions({
       channel: api.channel,
@@ -126,11 +137,9 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       markdown: services.markdown,
       keys,
       run,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        run: (id) => api.commands.run(id),
-      },
+      commands: partDeps.commands,
       platform: api.platform,
+      layouts,
       permissions,
       confirm,
       viewer,
@@ -148,11 +157,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       defaultLayout,
       read: readChatLayout,
       userLayout: () => api.settings().layout,
-      setLayouts: (shown) =>
-        view.setLayout(
-          shown.layouts.get(shown.user) ?? defaultLayout,
-          shown.user,
-        ),
+      setLayouts: (shown) => layouts.set(shown),
     });
     const startPrompt = createStartPrompt({
       picker,

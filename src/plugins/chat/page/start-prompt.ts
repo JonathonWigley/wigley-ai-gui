@@ -9,6 +9,7 @@ import type {
   RecentFolder,
 } from '../contract';
 import type { Picker, PickerHandle } from './picker';
+import { folderRowInput, profileRowInput, sessionRowInput } from './picker-row';
 import {
   archiveStateOf,
   type SessionItem,
@@ -129,6 +130,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       title: 'Folder',
       items: folderItems(context.recent, deps.homeDir, deps.paths),
       label: (item) => item.label,
+      rowInput: folderRowInput,
       selected: 0,
       picked: (item) =>
         item.kind === 'recent'
@@ -168,6 +170,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       title: 'Profile',
       items: profiles,
       label: profileLabel,
+      rowInput: profileRowInput,
       selected: preselectedProfile(
         profiles,
         context.recent,
@@ -272,6 +275,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       archiveState: archiveStateOf,
       items: opened.items,
       label: (item) => item.label,
+      rowInput: sessionRowInput,
       selected,
       picked: (item) => {
         step = null;

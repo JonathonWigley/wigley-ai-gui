@@ -9,33 +9,31 @@ import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Paths } from '../../../contracts/paths';
 import type { Platform } from '../../../contracts/platform';
-import type { PageChannel, ToastTone } from '../../../contracts/plugin';
+import type {
+  PageChannel,
+  ShownLayouts,
+  ToastTone,
+} from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
-import { textButton } from '../../../shared/page/ui/button';
-import { chip } from '../../../shared/page/ui/chip';
-import { floatingPanel } from '../../../shared/page/ui/floating-panel';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
-import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
-import { statusDot } from '../../../shared/page/ui/status-dot';
-import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
   SessionsPageExports,
   SessionTabHandle,
 } from '../../sessions/contract';
 import type { ChatChannel, ChatSessionState } from '../contract';
-import { type ChatCommandName, chatCommand, chatScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
 import {
   type Attachments,
-  buildAttachmentStrip,
   createAttachments,
   listenForImages,
+  type PasteListener,
 } from './attachments';
 import { blurFocusedElement, type CloseConfirm } from './chat-dialogs';
+import type { ChatLayouts } from './chat-layouts';
 import {
   applyEntry,
   changedControls,
@@ -44,7 +42,8 @@ import {
   tabStatus,
   valueLabel,
 } from './chat-state';
-import { controlCommand } from './control-commands';
+import { composerInputOf } from './composer-input';
+import { type ComposerSurface, createComposerSurface } from './composer-kit';
 import {
   createEntryList,
   type EntryList,
@@ -61,7 +60,6 @@ export interface ChatView {
   reveal(sessionId: string): void;
   // The session whose Chat tab is the visible tab.
   visibleSessionId(): string | null;
-  setLayout(layout: ChatLayout, name: string): void;
 }
 
 // A session as a log line and a call to main name it.
@@ -106,8 +104,9 @@ export type ChatTabScope = 'chat';
 // `visibleSessionRested` runs when the visible Chat tab's process exits;
 // `onSessionRemoved` hears the sessions plugin drop a row's tabs. `run` runs
 // a command, as the composer's chips and send button do; `keys` anchors the
-// composer's key hints; `commands`, `platform` and `keys` serve each entry's
-// layout kit; `paths` names each tab by its project folder.
+// composer's key hints; `commands`, `platform` and `keys` serve each part's
+// layout kit; `layouts` holds the chat layouts the entries and the composer
+// draw with; `paths` names each tab by its project folder.
 // `slashCommandNames` reads the app slash commands registered now, which the
 // `/` completion offers ahead of the agent's. `viewer` opens a sent message's
 // images full size.
@@ -122,6 +121,7 @@ export interface ChatViewDeps {
   run(command: CommandId): void;
   commands: KitCommands;
   platform: Platform;
+  layouts: ChatLayouts;
   permissions: PermissionActions;
   confirm: CloseConfirm;
   viewer: Pick<ImageViewer, 'open'>;
@@ -135,7 +135,8 @@ export interface ChatViewDeps {
 
 // A held session's Chat tab. `handle` is null until `addTab` returns, and
 // `box` until the editor mounts into the attached tab. `composerSize` follows
-// the composer's height for as long as the tab is held.
+// the drawn composer's height for as long as the tab is held, and `images`
+// hears paste on each drawn composer.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -146,17 +147,12 @@ interface HeldTab {
   box: TextEditor | null;
   boxMode: VimMode;
   isBoxFocused: boolean;
+  root: HTMLElement;
   entries: EntryList;
   attachments: Attachments;
-  bar: ComposerBar;
+  composer: ComposerSurface;
   composerSize: ResizeObserver;
-}
-
-// `draw` shows the tab's state; `dispose` disposes every anchor.
-interface ComposerBar {
-  element: HTMLElement;
-  draw(tab: HeldTab): void;
-  dispose(): void;
+  images: PasteListener;
 }
 
 const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
@@ -164,15 +160,19 @@ const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 // One Chat tab per chat session main holds, each with its entries and its
 // composer (attached images, message box, mode, type hint, running indicator,
 // control chips, send), kept up to date from chat main's messages. Each tab is
-// selected in its session when added.
+// selected in its session when added. A layout change draws every tab's
+// entries and composer again, each box keeping its text, vim mode and focus.
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
-  const shown: ShownLayout = {
-    layout: defaultLayout,
-    name: 'default',
-    toastedKinds: new Set(),
-  };
+  const shown: ShownLayout = shownLayoutOf(deps.layouts.current());
+  deps.layouts.onChange(() => {
+    Object.assign(shown, shownLayoutOf(deps.layouts.current()));
+    for (const tab of tabs.values()) {
+      tab.entries.rebuild(tab.state.entries);
+      drawComposer(tab);
+    }
+  });
   let pendingReveal: string | null = null;
   let lastShownSessionId: string | null = null;
 
@@ -208,7 +208,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         }
         lastShownSessionId = shownTab.sessionId;
         log('chat', `Chat tab shown in ${shownTab.name}`);
-        shownTab.bar.draw(shownTab);
+        drawBar(shownTab);
         shownTab.entries.scrollToFocus();
         focusIfRevealed(shownTab);
       },
@@ -250,7 +250,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       tab.state = { ...tab.state, activity };
       log('chat', `${tab.name} is ${activity}`);
       sendStatus(tab, tabStatus(activity));
-      tab.bar.draw(tab);
+      drawBar(tab);
     }
   });
   channel.on('commands', ({ sessionId, names }) => {
@@ -271,7 +271,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     const tab = heldFor('sessionRunning', sessionId);
     if (tab !== undefined) {
       tab.state = { ...tab.state, running: true };
-      tab.bar.draw(tab);
+      drawBar(tab);
       log('chat', `${tab.name} running`);
     }
   });
@@ -281,7 +281,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tab.state = { ...tab.state, running: false };
-    tab.bar.draw(tab);
+    drawBar(tab);
     sendStatus(tab, '');
     if (tab.handle?.isVisible() === true) {
       deps.visibleSessionRested();
@@ -301,7 +301,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     tabs.delete(sessionId);
     tab.box?.destroy();
     tab.composerSize.disconnect();
-    tab.bar.dispose();
+    tab.composer.dispose();
     tab.entries.dispose();
     if (pendingReveal === sessionId) {
       pendingReveal = null;
@@ -333,18 +333,37 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       }
     },
     visibleSessionId: () => visibleTab()?.sessionId ?? null,
-    setLayout(layout, name) {
-      shown.layout = layout;
-      shown.name = name;
-      shown.toastedKinds = new Set();
-      for (const tab of tabs.values()) {
-        tab.entries.rebuild(tab.state.entries);
-      }
-    },
     session: (sessionId) => asSession(tabs.get(sessionId)),
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
   };
+}
+
+// The entries' layout: the user's, else `default`, with no kind toasted yet.
+function shownLayoutOf(shown: ShownLayouts<ChatLayout>): ShownLayout {
+  return {
+    layout: shown.layouts.get(shown.user) ?? defaultLayout,
+    name: shown.layouts.has(shown.user) ? shown.user : 'default',
+    toastedKinds: new Set(),
+  };
+}
+
+// Draws the tab's composer through the chat layout in place of its last draw,
+// moving the box into it and focusing the box again when it held focus; the
+// height observer and the paste listener follow the new composer.
+function drawComposer(tab: HeldTab) {
+  const hadFocus = tab.isBoxFocused;
+  const composer = tab.composer.drawComposer(tab.root, composerInputOf(tab));
+  tab.composerSize.disconnect();
+  tab.composerSize.observe(composer);
+  tab.images.listenForPaste(composer);
+  if (hadFocus) {
+    tab.box?.focus();
+  }
+}
+
+function drawBar(tab: HeldTab) {
+  tab.composer.drawBar(composerInputOf(tab));
 }
 
 // Asks main for the session's earlier conversation each time its tab shows;
@@ -405,14 +424,25 @@ function createTab(
   });
   const boxElement = inputFrame();
   boxElement.classList.add('chat-box');
-  const bar = buildComposerBar(deps);
   const attachments = createAttachments();
-  const strip = buildAttachmentStrip(attachments);
-  const composer = floatingPanel();
-  composer.classList.add('chat-composer');
-  composer.append(strip, boxElement, bar.element);
+  const composer = createComposerSurface(
+    {
+      layouts: deps.layouts,
+      markdown: deps.markdown,
+      keys: deps.keys,
+      commands: deps.commands,
+      platform: deps.platform,
+      run: deps.run,
+      log: deps.log,
+    },
+    {
+      box: boxElement,
+      removeImage: (index) => attachments.removeAt(index),
+    },
+  );
+  attachments.onChange((images) => composer.drawAttachments(images));
   const root = element('div', 'chat-tab');
-  root.append(entries.element, composer);
+  root.append(entries.element);
   const tab: HeldTab = {
     sessionId: state.sessionId,
     name,
@@ -423,14 +453,15 @@ function createTab(
     box: null,
     boxMode: STARTING_MODE,
     isBoxFocused: false,
+    root,
     entries,
     attachments,
-    bar,
-    composerSize: followComposerHeight(composer, root, entries),
+    composer,
+    composerSize: followComposerHeight(root, entries),
+    images: listenForImages({ name, attachments }, root, deps),
   };
   entries.rebuild(state.entries);
-  bar.draw(tab);
-  listenForImages(tab, composer, root, deps);
+  drawComposer(tab);
   tab.handle = deps.sessions.addTab(state.sessionId, {
     id: 'chat',
     title: 'Chat',
@@ -445,15 +476,15 @@ function createTab(
       changed: () => undefined,
       focused: () => {
         tab.isBoxFocused = true;
-        bar.draw(tab);
+        drawBar(tab);
       },
       blurred: () => {
         tab.isBoxFocused = false;
-        bar.draw(tab);
+        drawBar(tab);
       },
       modeChanged: (mode) => {
         tab.boxMode = mode;
-        bar.draw(tab);
+        drawBar(tab);
       },
     },
     {
@@ -489,7 +520,7 @@ function putEntry(tab: HeldTab, entry: ChatEntry, log: Log) {
 function setControls(tab: HeldTab, controls: SessionControl[], log: Log) {
   const changed = changedControls(tab.state.controls, controls);
   tab.state = { ...tab.state, controls };
-  tab.bar.draw(tab);
+  drawBar(tab);
   for (const control of changed) {
     log('chat', `${control.label} is ${valueLabel(control)} in ${tab.name}`);
   }
@@ -521,12 +552,12 @@ function mayClose(tab: HeldTab, deps: ChatViewDeps): boolean {
   return false;
 }
 
-// Writes the composer's border-box height, rounded, as the unitless
+// Writes the observed composer's border-box height, rounded, as the unitless
 // `--chat-composer-height` on `root`, so the entries scroll clear of it, and
 // keeps a following list on its last entry as the composer grows. A height of
 // 0 is the tab hidden, so the last shown height stays for when it shows again.
+// The tab observes each composer it draws.
 function followComposerHeight(
-  composer: HTMLElement,
   root: HTMLElement,
   entries: Pick<EntryList, 'followBottom'>,
 ): ResizeObserver {
@@ -538,91 +569,5 @@ function followComposerHeight(
     root.style.setProperty('--chat-composer-height', String(height));
     entries.followBottom();
   });
-  observer.observe(composer);
   return observer;
-}
-
-// The bar's parts, built once per tab: the box's vim mode (PAGE while it has no
-// focus), the type hint (`i` and `a`, hidden while the box has focus), a chip
-// per control opening that control's picker, then at the end the running
-// indicator (shown while a turn is in progress on a running session, its
-// space kept while it hides) and send. The chips are disabled while the
-// session has no running process. Every key is anchored in `chat.chat`. Each
-// chip command's keys sit in the first chip that runs it; a command no chip
-// runs keeps its anchor element detached until a later draw places it.
-function buildComposerBar(
-  deps: Pick<ChatViewDeps, 'keys' | 'run'>,
-): ComposerBar {
-  const bar = element('div', 'chat-composer-bar');
-  const mode = element('span', 'chat-box-mode');
-  const typeKey = element('span', 'chat-type-key');
-  const appendKey = element('span', 'chat-type-key');
-  const typeHint = element('span', 'chat-type-hint');
-  typeHint.append(typeKey, appendKey);
-  const interruptKey = element('span', 'chat-running-key');
-  const running = element('span', 'chat-running');
-  running.append(statusDot('running'), interruptKey);
-  const sendKey = element('span', 'chat-send-key');
-  const send = textButton('Send', () => deps.run(chatCommand('send')), {
-    variant: 'ghost',
-    hint: sendKey,
-  });
-
-  const scope = { scope: chatScope('chat') };
-  const anchors = [
-    deps.keys.anchor(interruptKey, chatCommand('interrupt'), {
-      ...scope,
-      label: 'stop',
-    }),
-    deps.keys.anchor(typeKey, chatCommand('focusBox'), {
-      ...scope,
-      label: 'to type',
-    }),
-    deps.keys.anchor(appendKey, chatCommand('appendBox'), {
-      ...scope,
-      label: 'to append',
-    }),
-    deps.keys.anchor(sendKey, chatCommand('send'), scope),
-  ];
-  const chipKeys = new Map<ChatCommandName, HTMLElement>();
-  for (const command of [
-    'pickMode',
-    'pickEffort',
-    'pickModel',
-    'pickControl',
-  ] as const) {
-    const key = element('span', 'chat-chip-key');
-    chipKeys.set(command, key);
-    anchors.push(deps.keys.anchor(key, chatCommand(command), scope));
-  }
-
-  return {
-    element: bar,
-    draw(tab) {
-      mode.textContent = modeLabel(tab.isBoxFocused ? tab.boxMode : null);
-      typeHint.classList.toggle('is-box-focused', tab.isBoxFocused);
-      running.classList.toggle(
-        'is-idle',
-        !tab.state.running || tab.state.activity === 'idle',
-      );
-      const placed = new Set<ChatCommandName>();
-      const chips = tab.state.controls.map((control) => {
-        const command = controlCommand(control.id);
-        const controlChip = chip(control.label, valueLabel(control), () =>
-          deps.run(chatCommand(command)),
-        );
-        controlChip.toggleAttribute('disabled', !tab.state.running);
-        const key = chipKeys.get(command);
-        if (key !== undefined && !placed.has(command)) {
-          controlChip.append(key);
-          placed.add(command);
-        }
-        return controlChip;
-      });
-      bar.replaceChildren(mode, typeHint, ...chips, running, send);
-    },
-    dispose() {
-      disposeAnchors(anchors);
-    },
-  };
 }
