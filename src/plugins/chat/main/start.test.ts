@@ -117,15 +117,27 @@ describe('chat drive actions', () => {
   });
 });
 
-// Chat's main part started on a harness whose sign-ins record their cancel,
-// with one profile, `work`, and a data folder that cannot be read. `invoke`
-// calls the page channel's handler for `name`.
+// Chat's main part started on a harness whose sign-ins record their cancel
+// and whose processes record each message sent, with one profile, `work`, and
+// a data folder that cannot be read; sessions open rows `row-1`, `row-2`, ….
+// `invoke` calls the page channel's handler for `name`.
 function startChatPart() {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const cancelLogIn = vi.fn<() => void>();
+  const processSends = vi.fn<(message: unknown) => void>();
   const harness = {
     id: 'claude',
     logIn: () => ({ sendCode: () => undefined, cancel: cancelLogIn }),
+    start: () => ({ send: processSends }),
+  };
+  let rows = 0;
+  const sessions = {
+    contributeTools: () => undefined,
+    open: () => {
+      rows += 1;
+      return { session: { id: `row-${rows}` }, end: () => undefined };
+    },
+    activate: () => undefined,
   };
   const api = {
     channel: {
@@ -138,10 +150,15 @@ function startChatPart() {
     services: {
       log: () => undefined,
       agentHarnesses: [harness],
+      randomUuid: () => 'host-1',
       selfTest: null,
     },
-    dependency: () => ({ contributeTools: () => undefined }),
-    data: { list: () => Promise.reject(new Error('no data folder')) },
+    dependency: () => sessions,
+    data: {
+      list: () => Promise.reject(new Error('no data folder')),
+      read: () => Promise.reject(new Error('no data folder')),
+      write: () => Promise.reject(new Error('no data folder')),
+    },
     layouts: { register: () => ({ dispose: () => undefined }) },
     drive: null,
   } as unknown as Parameters<typeof chatMainPart.start>[0];
@@ -153,7 +170,7 @@ function startChatPart() {
     }
     return handler(...args);
   };
-  return { part, invoke, cancelLogIn };
+  return { part, invoke, cancelLogIn, processSends };
 }
 
 describe('chat main part', () => {
@@ -173,6 +190,26 @@ describe('chat main part', () => {
     chat.invoke('sessions');
 
     expect(chat.cancelLogIn).not.toHaveBeenCalled();
+  });
+
+  it('sessions_PreviewOpen_ListsItAfterChatSessions', () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('openPreview');
+
+    const listed = chat.invoke('sessions') as ChatSessionState[];
+
+    expect(listed.map((state) => state.sessionId)).toEqual(['row-1', 'row-2']);
+  });
+
+  it('send_PreviewSession_RejectsAndSkipsChat', async () => {
+    const chat = startChatPart();
+    chat.invoke('openPreview');
+
+    const sent = chat.invoke('send', 'row-1', { text: 'hi', images: [] });
+
+    await expect(sent).rejects.toThrow('sends nothing');
+    expect(chat.processSends).not.toHaveBeenCalled();
   });
 
   it('dispose_SignInRunning_CancelsIt', async () => {

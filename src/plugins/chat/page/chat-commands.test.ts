@@ -108,8 +108,8 @@ function box(text: string) {
 }
 
 // The handlers over one shown session; `invoked` records each call to chat
-// main, `opened` each picker request, `viewed` each image viewer opening and
-// `toasts` each toast. Every invoke
+// main, `opened` each picker request, `viewed` each image viewer opening,
+// `toasts` each toast and `toastTones` its tone. Every invoke
 // resolves, or rejects with `refusal` when one is given. With `visible`
 // false no Chat tab is the visible tab. `slashCommands` holds the app slash
 // commands send matches. `close` removes the session from the tabs.
@@ -123,6 +123,7 @@ function setUp(
   const opened: PickerRequest<unknown>[] = [];
   const logs: string[] = [];
   const toasts: string[] = [];
+  const toastTones: string[] = [];
   const viewed: { images: readonly ChatImage[]; index: number }[] = [];
   let isOpen = true;
   const tabs = {
@@ -157,7 +158,10 @@ function setUp(
         viewed.push({ images, index });
       },
     } as ImageViewer,
-    toast: (text) => toasts.push(text),
+    toast: (text, tone) => {
+      toasts.push(text);
+      toastTones.push(tone);
+    },
     log: (source, message) => logs.push(`[${source}] ${message}`),
   };
   return {
@@ -166,6 +170,7 @@ function setUp(
     opened,
     logs,
     toasts,
+    toastTones,
     viewed,
     close: () => {
       isOpen = false;
@@ -186,6 +191,17 @@ describe('chat commands', () => {
       expect(run.logs).toEqual([expect.stringContaining('no running process')]);
     },
   );
+
+  it('openPreview_Rejects_ToastsError', async () => {
+    const run = setUp(session(true), new Error('host id taken'));
+
+    run.handlers.openPreview({});
+    await flush();
+
+    expect(run.invoked).toEqual([['openPreview']]);
+    expect(run.toasts).toEqual(['Chat preview not opened: host id taken']);
+    expect(run.toastTones).toEqual(['error']);
+  });
 
   it('interrupt_runningWorkingSession_interruptsIt', () => {
     const run = setUp(session(true));

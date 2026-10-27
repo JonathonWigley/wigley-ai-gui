@@ -262,6 +262,11 @@ export function chatCommandHandlers(
     pickerClose: () => picker.close(),
     pickerFilter: () => picker.focusFilter(),
     pickerList: () => picker.leaveFilter(),
+    openPreview: () =>
+      void channel.invoke('openPreview').catch((error: unknown) => {
+        log('chat', `chat preview not opened: ${errorText(error)}`);
+        deps.toast(`Chat preview not opened: ${errorText(error)}`, 'error');
+      }),
   };
 }
 

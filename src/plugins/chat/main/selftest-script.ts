@@ -383,6 +383,24 @@ const IDLE_CLOSE_STEPS: SelfTestStep[] = [
   { keys: ['<D-w>'], expect: '[chat] session closed: chat-selftest' },
 ];
 
+// The preview row is named after its folder, `Chat preview`.
+const LAYOUT_PREVIEW_STEPS: SelfTestStep[] = [
+  {
+    keys: [' ', 'z', 'l', 'c'],
+    expect: '[chat] Chat tab shown in Chat preview',
+    screenshot: 'chat-preview',
+  },
+  {
+    keys: sendKeys('hi'),
+    expect: '[chat] send failed: the chat preview sends nothing',
+  },
+  {
+    keys: ['Escape', ' ', ';'],
+    expect: '[chat] session closed: Chat preview',
+    why: 'Esc leaves the box, then Space ; closes the session.',
+  },
+];
+
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'two sessions',
@@ -458,6 +476,11 @@ const GROUPS: SelfTestGroup[] = [
     name: 'idle close',
     why: 'Cmd+W closes an idle session without asking.',
     steps: IDLE_CLOSE_STEPS,
+  },
+  {
+    name: 'layout preview',
+    why: 'Space z l c opens the sample session with no agent, and a send there sends nothing.',
+    steps: LAYOUT_PREVIEW_STEPS,
   },
 ];
 

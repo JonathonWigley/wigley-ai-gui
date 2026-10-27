@@ -1,6 +1,6 @@
 # 13 — Shell layout
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -310,4 +310,4 @@ One commit for the group. Example message: "The shell chrome draws through a she
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 49878e5 · proof: diff read: Produces present; typecheck, layers, styles, oxlint clean; renderer/main/config/settings/shared tests 1276 pass; selftest all passed · concerns: read-shell-layout.ts is the fifth copy of the reader loop; title-bar.ts and activity-bar.ts deleted (folded into shell-chrome.ts); no doc names shell.layout yet (task 16); focus across redraw proved only in the fake DOM

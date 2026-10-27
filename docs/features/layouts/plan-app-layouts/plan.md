@@ -227,7 +227,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 - [x] [Notes layout](09-notes-layout.md) — after 02
 - [x] [Gallery layout](11-gallery-layout.md) — after 02
 - [x] [Keys overlays layout](12-keys-layout.md) — after 02
-- [ ] [Shell layout](13-shell-layout.md) — after 02
+- [x] [Shell layout](13-shell-layout.md) — after 02
 
 ### Wave 3
 - [x] [Sessions layout and preview](10-sessions-layout.md) — after 02, 05 (`keymap.ts`)
@@ -260,6 +260,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - 09 · c0bde46 · diff read: Produces present; notes tests 126 pass; typecheck clean; styles, oxlint, notes layers clean · concerns: notes.css .notes-row-value > .ui-tag no longer matches inside a display:contents root; the default sets overflow-wrap and white-space inline on each tag instead
 - 12 · 56e242c · diff read: Produces present (amended below); keys tests 81 pass; keys typecheck clean; layers, styles, oxlint clean; selftest all passed, every key placed · concerns: read-keys-layout.ts is the fourth copy of the reader skeleton (forms, docs, settings) that belongs in the layout host; AGENTS.md ~159 and ~532 say keys has no main part (task 16); setLayouts tests exercise the views' redraw, not start.ts's wiring
 - 10 · 4d9178a · diff read: Produces present (SessionsView amended); typecheck and lint clean; full npm test 3860 pass · concerns: sessions-view-fakes.ts added outside Files; AGENTS.md sessions/ entry names no layouts/ or preview (task 16); a second preview press restores real rows but leaves the mode and side bar shown
+- 13 · 49878e5 · diff read: Produces present; typecheck, layers, styles, oxlint clean; renderer/main/config/settings/shared tests 1276 pass; selftest all passed · concerns: read-shell-layout.ts is the fifth copy of the reader loop; title-bar.ts and activity-bar.ts deleted (folded into shell-chrome.ts); no doc names shell.layout yet (task 16); focus across redraw proved only in the fake DOM
 ### Contract changes
 - LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
 - LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
@@ -274,6 +275,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - NotePopupDeps.run → commands: KitCommands plus platform, keys adds keysFor; MarkupViewDeps keys and run → parts: NotesPartsDeps · why: base kit deps · consumers: none outside 09 · group 09
 - keys CompleteLayout: interface → Required<Layout>; KeysPartsDeps = { defaultLayout, kit: KeysKitDeps, log }; createKeysKit(deps, scope, rollback); HelpView gains layoutsChanged(); mountHelpView and mountWhichKeyView drop platform · why: open fields and redraw on a layout change · consumers: keys only · group 12
 - SessionsView: setLayouts, showPreview → also isPreviewShown() and stepPreview(by); SessionsViewDeps gains kit deps; SidebarView and SessionTabsView gain redrawPane(); mountSidebarView(activate, parts) · why: page start steps the sample while the preview shows · consumers: none outside 10 · group 10
+- shell-chrome.ts also exports createShellKit(base): ShellKit; ShellKit.icon builds span.codicon.codicon-<name> · why: the kit's icon member had no home · consumers: none outside 13 · group 13
 ### Rulings
 - selectedRow returns stored selection without railRows lookup — selection is the identity rows are built from — a stale selection would come back as is · group 01 · group 01
 - showTarget checks only the target's task exists, not the item — no caller builds a missing-item target — would select a row with no item · group 01 · group 01
@@ -306,5 +308,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - pane hosts are app-owned divs with inline display:contents — sessions.css unchanged — a pane root sits in a box its parent cannot see if wrong · group 10 · group 10
 - rows and strip must be direct children of their pane root (requireElementIn), else fallback to default — Decisions line — deeper user markup falls back · group 10 · group 10
 - rows get ui-row--action and mousedown preventDefault plus click on the part's element; tabs get no ui-row--action — matches backlog — none · group 10 · group 10
+- the shell show does not self-refresh on shell.layout, so renderer.ts calls chromeLayouts.refresh() on every live.onChanged — the host queues a load only on a name change — none seen · group 13 · group 13
+- chrome areas carry data-layout=default and data-layout-owner=shell from first mount — frames carry their owner from first paint — a rule for a layout named default could match early · group 13 · group 13
 ### Review rounds
 ### Test gate

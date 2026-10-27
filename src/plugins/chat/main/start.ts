@@ -30,6 +30,7 @@ import { createFolderChoices } from './folder-choices';
 import { requireChatHarness } from './lookups';
 import { createOpenSessions } from './open-sessions';
 import { PERMISSION_TOOLS } from './permission-tool';
+import { createChatPreview } from './preview/chat-preview';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript } from './selftest-script';
 
@@ -166,8 +167,9 @@ export function addDriveActions(
 // `permission_prompt` tool, keeps the recent project folders and serves them
 // merged with the harness's, signs profiles in and out (cancelling a running
 // sign-in when the page loads again or the part is disposed), registers its
-// chat layouts, offers a drive run its fixtures, and exports a background
-// launch to other plugins.
+// chat layouts, opens the layout preview's sample session (held apart from
+// chat's sessions, with no process), offers a drive run its fixtures, and
+// exports a background launch to other plugins.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -211,10 +213,26 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       window: services.window,
       log: services.log,
     });
+    const preview = createChatPreview({
+      sessions,
+      send: (message, data) => api.channel.send(message, data),
+      log: services.log,
+    });
+    // The preview holds no process or history: a call there does nothing.
+    const ignoredInPreview = (method: string, sessionId: string) => {
+      const inPreview = preview.holds(sessionId);
+      if (inPreview) {
+        services.log('chat', `${method} in the chat preview ignored`);
+      }
+      return inPreview;
+    };
     // The page announces each load: a sign-in running then was started by a
     // page that is gone, and would refuse every later one.
     api.channel.handle('loaded', () => accounts.cancelRunning());
-    api.channel.handle('sessions', () => chat.sessions());
+    api.channel.handle('sessions', () => [
+      ...chat.sessions(),
+      ...preview.states(),
+    ]);
     api.channel.handle('start', (request) => chat.start(request));
     api.channel.handle('pastSessions', (projectDir, profile) =>
       chat.pastSessions(projectDir, profile),
@@ -224,29 +242,45 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     );
     api.channel.handle('resume', (request) => chat.resume(request));
     api.channel.handle('send', (sessionId, message) =>
-      chat.send(sessionId, message),
+      preview.holds(sessionId) ? preview.send() : chat.send(sessionId, message),
     );
-    api.channel.handle('loadHistory', (sessionId) =>
-      chat.loadHistory(sessionId),
-    );
+    api.channel.handle('loadHistory', async (sessionId) => {
+      if (!ignoredInPreview('loadHistory', sessionId)) {
+        await chat.loadHistory(sessionId);
+      }
+    });
     api.channel.handle('notice', (sessionId, text, tone) =>
-      chat.notice(sessionId, text, tone),
+      preview.holds(sessionId)
+        ? preview.notice(text, tone)
+        : chat.notice(sessionId, text, tone),
     );
     api.channel.handle('accountStatus', (profile) => accounts.status(profile));
     api.channel.handle('logIn', (id, profile) => accounts.logIn(id, profile));
     api.channel.handle('logInCode', (id, code) => accounts.sendCode(id, code));
     api.channel.handle('cancelLogIn', (id) => accounts.cancel(id));
     api.channel.handle('logOut', (profile) => accounts.logOut(profile));
-    api.channel.handle('interrupt', (sessionId) => chat.interrupt(sessionId));
+    api.channel.handle('interrupt', (sessionId) => {
+      if (!ignoredInPreview('interrupt', sessionId)) {
+        chat.interrupt(sessionId);
+      }
+    });
     api.channel.handle('setControl', (sessionId, controlId, value) =>
-      chat.setControl(sessionId, controlId, value),
+      preview.holds(sessionId)
+        ? preview.setControl()
+        : chat.setControl(sessionId, controlId, value),
     );
-    api.channel.handle('answerPermission', (sessionId, entryId, answer) =>
-      chat.answerPermission(sessionId, entryId, answer),
-    );
+    api.channel.handle('answerPermission', (sessionId, entryId, answer) => {
+      if (!ignoredInPreview('answerPermission', sessionId)) {
+        chat.answerPermission(sessionId, entryId, answer);
+      }
+    });
+    api.channel.handle('openPreview', () => preview.open());
     api.channel.handle('recentFolders', () => folderChoices.list());
     api.channel.handle('chooseFolder', () => services.window.chooseFolder());
-    api.events.on('sessions.closed', ({ sessionId }) => chat.closed(sessionId));
+    api.events.on('sessions.closed', ({ sessionId }) => {
+      chat.closed(sessionId);
+      preview.closed(sessionId);
+    });
     api.events.on('sessions.connected', (session) =>
       chat.sessionConnected(session),
     );

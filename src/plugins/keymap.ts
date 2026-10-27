@@ -645,6 +645,12 @@ export const defaultKeymap = {
       where: 'page',
     },
     {
+      keys: '<Leader>zlc',
+      scope: 'any',
+      command: 'chat.openPreview',
+      where: 'page',
+    },
+    {
       keys: '<Leader>zg',
       scope: 'any',
       command: 'gallery.showMode',

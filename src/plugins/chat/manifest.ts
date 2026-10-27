@@ -124,6 +124,11 @@ export const chatManifest = definePlugin({
       group: 'picker',
       runsIn: 'page',
     },
+    openPreview: {
+      label: 'open the chat layout preview',
+      group: 'debug',
+      runsIn: 'page',
+    },
   },
   scopes: {
     chat: 'In the chat',

@@ -126,6 +126,9 @@ export interface ChatChannel extends ChannelShape {
       entryId: string,
       answer: PermissionAnswer,
     ): void;
+    // Opens the layout preview's sample session and selects its row, or
+    // selects the row of the one already open.
+    openPreview(): void;
   };
   messages: {
     sessionStarted: ChatSessionState;
