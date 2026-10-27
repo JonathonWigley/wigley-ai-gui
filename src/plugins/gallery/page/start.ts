@@ -4,18 +4,23 @@ import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import type { KeysPageExports } from '../../keys/contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { Layout } from '../layouts/layout';
 import { galleryManifest } from '../manifest';
 import { createGalleryView } from './gallery-view';
+import { readGalleryLayout } from './layout/read-gallery-layout';
 import { testShellLayout } from './test-shell-layout';
 import { nextTransparency } from './transparency-toggle';
 
-// The gallery plugin has no main part, so its channel carries nothing.
+// The gallery's main part only registers its layouts, so its channel carries
+// nothing.
 type GalleryApi = PageApi<
   typeof galleryManifest,
   { invoke: Record<never, never>; messages: Record<never, never> }
 >;
 
-// Adds Gallery mode, which sets the `gallery` scope when it shows. `t` there
+// Adds Gallery mode, drawn through the `gallery.layout` layout, which sets the
+// `gallery` scope when it shows; each new layout set redraws it. `t` there
 // switches the page's transparency override between reduced and full, which
 // lasts until the page loads again and writes no settings; `g g` and `G`
 // scroll the gallery's sheet to its top and end, and the line and half-page
@@ -30,10 +35,21 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
     const view = createGalleryView({
       platform: api.platform,
       uiState: api.services.uiState,
-      anchor: (element, command, options) =>
-        keys.anchor(element, command, options),
+      markdown: api.services.markdown,
+      keys,
+      commands: {
+        exists: (id) => api.keys.command(id) !== undefined,
+        run: (id) => api.commands.run(id),
+      },
+      log,
     });
     view.showTransparency(api.transparency.overridden());
+    api.layouts.show<Layout>({
+      defaultLayout,
+      read: readGalleryLayout,
+      userLayout: () => api.settings().layout,
+      setLayouts: (shown) => view.setLayouts(shown),
+    });
     const mode = api.modes.add({
       id: 'gallery',
       title: 'Gallery',

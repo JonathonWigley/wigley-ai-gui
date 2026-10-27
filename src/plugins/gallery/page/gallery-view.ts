@@ -1,9 +1,10 @@
 import './gallery.css';
 import type { Platform } from '../../../contracts/platform';
+import type { ShownLayouts } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
-import type { KeysPageExports } from '../../keys/contract';
 import { capitalised } from '../../../shared/capitalised';
 import { element } from '../../../shared/page/dom';
+import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { card, createCollapsibleCard } from '../../../shared/page/ui/card';
 import { chip } from '../../../shared/page/ui/chip';
@@ -29,109 +30,154 @@ import { type DotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import { tab, tabStrip } from '../../../shared/page/ui/tabs';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
 import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
-import { qualify } from '../../../shared/plugin-manifests';
-import { galleryManifest } from '../manifest';
+import defaultLayout from '../layouts/default/layout.js';
+import type { GalleryPart, Layout } from '../layouts/layout';
+import {
+  createGalleryParts,
+  type GalleryPartsDeps,
+  type SampleCell,
+} from './layout/gallery-parts';
 
-export interface GalleryViewDeps {
-  platform: Platform;
+// What the view reads: the sample primitives' platform and the split
+// sample's saved width, and what the gallery's layout parts read.
+export interface GalleryViewDeps extends GalleryPartsDeps {
   uiState: UiState;
-  anchor: KeysPageExports['anchor'];
 }
 
-// `element` is the mode's root: the transparency status line, ending in the
-// `t transparency` hint anchored through `anchor`, a one-tab strip and
-// `sheet`, the scrolling sheet holding a section per primitive with each of
-// its states. `showTransparency` shows the override in force on the status
-// line, null for none.
+// `element` is the mode's root: the transparency status line (the layout's
+// `head`), a one-tab strip and `sheet`, the scrolling sheet holding a section
+// per primitive with each of its states. `showTransparency` draws the head
+// again with the override in force, null for none. `setLayouts` draws the head
+// and every section again in the new layouts, with fresh samples, at the same
+// scroll position.
 export interface GalleryView {
   element: HTMLElement;
   sheet: HTMLElement;
   showTransparency(overridden: 'full' | 'reduced' | null): void;
+  setLayouts(shown: ShownLayouts<Layout>): void;
 }
+
+// A primitive's block: its name, and either rows of state cells or one
+// framed sample, built fresh on each draw.
+type SectionSpec =
+  | { kind: 'section'; name: string; cells(): SampleCell[][] }
+  | { kind: 'framed'; name: string; isDialog: boolean; sample(): HTMLElement };
+
+const DEFAULT_LAYOUT = 'default';
 
 // A live sample takes clicks and does nothing with them.
 const ignore = () => {};
 
 export function createGalleryView(deps: GalleryViewDeps): GalleryView {
-  const { platform } = deps;
+  const parts = createGalleryParts(deps);
   const root = element('div', 'gallery');
-
-  const status = element('div', 'gallery-status');
-  const statusText = element('span', 'gallery-status-text');
-  const transparencyHint = element('span');
-  status.append(statusText, transparencyHint);
-  deps.anchor(
-    transparencyHint,
-    qualify(galleryManifest.id, 'toggleTransparency'),
-    {
-      scope: qualify(galleryManifest.id, 'gallery'),
-      label: 'transparency',
-    },
-  );
+  // The head's slot draws no box, so the head lays out as the root's child.
+  const headSlot = element('div');
+  headSlot.style.display = 'contents';
 
   const strip = tabStrip([tab('Gallery', ignore)]);
   strip.firstElementChild?.classList.add('is-active');
 
   const gallerySheet = sheet();
   const sections = element('div', 'gallery-sections');
-  sections.append(
-    materialsSection(),
-    kbdSection(platform),
-    keyPromptSection(platform),
-    keyAnchorsSection(platform),
-    buttonSection(platform),
-    iconButtonSection(),
-    chipSection(),
-    tagSection(),
-    toggleMarkSection(),
-    statusDotSection(),
-    inputFrameSection(),
-    listRowSection(),
-    treeRowSection(),
-    tabsSection(),
-    splitSection(deps.uiState),
-    cardSection(),
-    collapsibleSection(),
-    floatingPanelSection(platform),
-    dialogSection(),
-    emptyStateSection(platform),
-    sectionHeaderSection(platform),
-  );
   gallerySheet.append(sections);
-  root.append(status, strip, gallerySheet);
+  root.append(headSlot, strip, gallerySheet);
+
+  const specs = sectionSpecs(deps.platform, deps.uiState);
+  let shown: ShownLayouts<Layout> = {
+    layouts: new Map([[DEFAULT_LAYOUT, defaultLayout]]),
+    user: DEFAULT_LAYOUT,
+  };
+  let transparency: 'full' | 'reduced' | null = null;
+  let head: DrawnPart<GalleryPart> | null = null;
+  let drawnSections: DrawnPart<GalleryPart>[] = [];
+
+  const drawHead = () => {
+    if (head !== null) {
+      dropPart(head);
+    }
+    head = parts.drawHead(headSlot, { transparency }, shown);
+  };
+  const drawSections = () => {
+    for (const part of drawnSections) {
+      dropPart(part);
+    }
+    drawnSections = specs.map((spec) =>
+      spec.kind === 'section'
+        ? parts.drawSection(sections, spec.name, spec.cells(), shown)
+        : parts.drawFramedSection(
+            sections,
+            { name: spec.name, isDialog: spec.isDialog },
+            spec.sample(),
+            shown,
+          ),
+    );
+  };
+  drawHead();
+  drawSections();
 
   return {
     element: root,
     sheet: gallerySheet,
     showTransparency(overridden) {
-      statusText.textContent = `Transparency: ${overridden ?? 'from settings'}`;
+      transparency = overridden;
+      drawHead();
+    },
+    setLayouts(next) {
+      shown = next;
+      const scrollTop = gallerySheet.scrollTop;
+      drawHead();
+      drawSections();
+      gallerySheet.scrollTop = scrollTop;
     },
   };
 }
 
-// A primitive's section: its name over each row of state cells.
-function section(name: string, ...rows: HTMLElement[][]): HTMLElement {
-  const node = element('section', 'gallery-section');
-  node.append(sectionHeader(name));
-  for (const cells of rows) {
-    const states = element('div', 'gallery-states');
-    states.append(...cells);
-    node.append(states);
-  }
-  return node;
+// Releases a drawn part's anchors and removes its root.
+function dropPart(part: DrawnPart<GalleryPart>): void {
+  part.dispose();
+  part.built.element.remove();
 }
 
-// A section spanning the whole grid row, its name over `frame`.
-function framedSection(name: string, frame: HTMLElement): HTMLElement {
-  const node = element('section', 'gallery-section gallery-section--framed');
-  node.append(sectionHeader(name), frame);
-  return node;
+// Every primitive's block, in the order the sheet shows them.
+function sectionSpecs(platform: Platform, uiState: UiState): SectionSpec[] {
+  return [
+    section('Materials', materialsCells),
+    section('Kbd', () => kbdCells(platform)),
+    section('KeyPrompt', () => keyPromptCells(platform)),
+    section('Key anchors', () => keyAnchorsCells(platform)),
+    section('Button', () => buttonCells(platform)),
+    section('IconButton', iconButtonCells),
+    section('Chip', chipCells),
+    section('Tag', tagCells),
+    section('ToggleMark', toggleMarkCells),
+    section('StatusDot', statusDotCells),
+    section('InputFrame', inputFrameCells),
+    section('Row, list', listRowCells),
+    section('Row, tree', treeRowCells),
+    section('Tabs', tabsCells),
+    framed('Split', () => splitSample(uiState)),
+    section('Card', cardCells),
+    section('Collapsible card', collapsibleCells),
+    framed('FloatingPanel', () => floatingPanelSample(platform)),
+    framed('Dialog', dialogSample, true),
+    section('EmptyState', () => emptyStateCells(platform)),
+    section('SectionHeader', () => sectionHeaderCells(platform)),
+  ];
 }
 
-function frame(...children: HTMLElement[]): HTMLElement {
-  const node = element('div', 'gallery-frame');
-  node.append(...children);
-  return node;
+// A primitive's block of state cells.
+function section(name: string, cells: () => SampleCell[][]): SectionSpec {
+  return { kind: 'section', name, cells };
+}
+
+// A block spanning the whole grid row, its name over one framed sample.
+function framed(
+  name: string,
+  sample: () => HTMLElement,
+  isDialog = false,
+): SectionSpec {
+  return { kind: 'framed', name, isDialog, sample };
 }
 
 // One state: the sample over its caption. A wide cell gives a sample that
@@ -140,13 +186,8 @@ function cell(
   sample: HTMLElement,
   caption: string,
   isWide = false,
-): HTMLElement {
-  const node = element(
-    'figure',
-    isWide ? 'gallery-cell gallery-cell--wide' : 'gallery-cell',
-  );
-  node.append(sample, element('figcaption', 'gallery-caption', caption));
-  return node;
+): SampleCell {
+  return { sample, caption, isWide };
 }
 
 function withClass<T extends HTMLElement>(node: T, ...classNames: string[]): T {
@@ -159,26 +200,25 @@ function disabled<T extends HTMLButtonElement>(node: T): T {
   return node;
 }
 
-function materialsSection(): HTMLElement {
+function materialsCells(): SampleCell[][] {
   const sample = (className: string, text: string) =>
     element('div', `gallery-material ${className}`, text);
-  return section('Materials', [
-    cell(sample('material-chrome', 'Chrome'), 'Chrome', true),
-    cell(
-      sample('material-chrome material-chrome--dense', 'Chrome, dense'),
-      'Chrome, dense',
-      true,
-    ),
-    cell(sample('material-floating', 'Floating'), 'Floating', true),
-  ]);
+  return [
+    [
+      cell(sample('material-chrome', 'Chrome'), 'Chrome', true),
+      cell(
+        sample('material-chrome material-chrome--dense', 'Chrome, dense'),
+        'Chrome, dense',
+        true,
+      ),
+      cell(sample('material-floating', 'Floating'), 'Floating', true),
+    ],
+  ];
 }
 
-function kbdSection(platform: Platform): HTMLElement {
+function kbdCells(platform: Platform): SampleCell[][] {
   const hints = ['Space z g', '<A-o>', '<D-Enter>', 'j / k', '1–9'];
-  return section(
-    'Kbd',
-    hints.map((keys) => cell(kbd(keys, platform), keys)),
-  );
+  return [hints.map((keys) => cell(kbd(keys, platform), keys))];
 }
 
 // `sample` between two words, so its kept or dropped space shows.
@@ -188,20 +228,22 @@ function between(sample: HTMLElement): HTMLElement {
   return node;
 }
 
-function keyPromptSection(platform: Platform): HTMLElement {
-  return section('KeyPrompt', [
-    cell(keyPrompt('<A-o>', platform), 'Keys'),
-    cell(keyPrompt('s', platform, 'star'), 'Keys and label'),
-    cell(
-      between(withClass(keyPrompt('s', platform, 'star'), 'is-hint-hidden')),
-      'Hidden, keeps its space',
-    ),
-  ]);
+function keyPromptCells(platform: Platform): SampleCell[][] {
+  return [
+    [
+      cell(keyPrompt('<A-o>', platform), 'Keys'),
+      cell(keyPrompt('s', platform, 'star'), 'Keys and label'),
+      cell(
+        between(withClass(keyPrompt('s', platform, 'star'), 'is-hint-hidden')),
+        'Hidden, keeps its space',
+      ),
+    ],
+  ];
 }
 
 // The parts views build around anchors. Each sample anchor is a span holding
 // a KeyPrompt, as the keys plugin draws it; an unbound one is empty.
-function keyAnchorsSection(platform: Platform): HTMLElement {
+function keyAnchorsCells(platform: Platform): SampleCell[][] {
   const shown = (keys: string, label?: string) => {
     const node = element('span', 'ui-key-anchor');
     node.append(keyPrompt(keys, platform, label));
@@ -223,8 +265,7 @@ function keyAnchorsSection(platform: Platform): HTMLElement {
     node.append(element('span', 'gallery-placeholder', 'Type a note'), hint);
     return node;
   };
-  return section(
-    'Key anchors',
+  return [
     [
       cell(keyEdge('', [keyChevron('‹ tree'), shown('<A-h>')]), 'Chevron'),
       cell(
@@ -267,16 +308,16 @@ function keyAnchorsSection(platform: Platform): HTMLElement {
       ),
       cell(between(keyStack('', [unbound(), unbound()])), 'Unbound, no space'),
     ],
-  );
+  ];
 }
 
-function buttonSection(platform: Platform): HTMLElement {
+function buttonCells(platform: Platform): SampleCell[][] {
   const variantRow = (
     variant: ButtonVariant,
     name: string,
     label: string,
     hasSelected: boolean,
-  ): HTMLElement[] => {
+  ): SampleCell[] => {
     const make = () =>
       textButton(label, ignore, {
         variant,
@@ -292,16 +333,15 @@ function buttonSection(platform: Platform): HTMLElement {
       cell(disabled(make()), `${name}, disabled`),
     ];
   };
-  return section(
-    'Button',
+  return [
     variantRow('primary', 'Primary', 'Submit', false),
     variantRow('secondary', 'Secondary', 'Cancel round', true),
     variantRow('ghost', 'Ghost', 'Close', true),
     variantRow('danger', 'Danger', 'Cancel the round', false),
-  );
+  ];
 }
 
-function iconButtonSection(): HTMLElement {
+function iconButtonCells(): SampleCell[][] {
   const states = (make: () => HTMLButtonElement, name: string) => [
     cell(make(), `${name}, live`),
     cell(withClass(make(), 'is-hover'), `${name}, hover`),
@@ -309,25 +349,26 @@ function iconButtonSection(): HTMLElement {
     cell(withClass(make(), 'is-active'), `${name}, active`),
     cell(disabled(make()), `${name}, disabled`),
   ];
-  return section(
-    'IconButton',
+  return [
     states(() => iconButton('send', 'Send', ignore), 'Send'),
     states(() => iconButton('close', 'Close', ignore, 'sm'), 'Close, small'),
-  );
+  ];
 }
 
-function chipSection(): HTMLElement {
+function chipCells(): SampleCell[][] {
   const make = () => chip('Mode', 'default', ignore) as HTMLButtonElement;
-  return section('Chip', [
-    cell(make(), 'Live'),
-    cell(withClass(make(), 'is-hover'), 'Hover'),
-    cell(withClass(make(), 'is-active'), 'Active'),
-    cell(disabled(make()), 'Disabled'),
-    cell(chip('Effort', 'high', null), 'Static'),
-  ]);
+  return [
+    [
+      cell(make(), 'Live'),
+      cell(withClass(make(), 'is-hover'), 'Hover'),
+      cell(withClass(make(), 'is-active'), 'Active'),
+      cell(disabled(make()), 'Disabled'),
+      cell(chip('Effort', 'high', null), 'Static'),
+    ],
+  ];
 }
 
-function tagSection(): HTMLElement {
+function tagCells(): SampleCell[][] {
   const tags: [string, TagTone][] = [
     ['Nit', 'neutral'],
     ['Recommended', 'accent'],
@@ -337,13 +378,10 @@ function tagSection(): HTMLElement {
     ['Needs you', 'attention'],
     ['Critical', 'error'],
   ];
-  return section(
-    'Tag',
-    tags.map(([text, tone]) => cell(tag(text, tone), capitalised(tone))),
-  );
+  return [tags.map(([text, tone]) => cell(tag(text, tone), capitalised(tone)))];
 }
 
-function toggleMarkSection(): HTMLElement {
+function toggleMarkCells(): SampleCell[][] {
   const make = (isOn: boolean) =>
     toggleMark({ isOn, label: 'Include the item', onToggle: ignore });
   let isLiveOn = false;
@@ -355,8 +393,7 @@ function toggleMarkSection(): HTMLElement {
       setToggleMark(live, isLiveOn);
     },
   });
-  return section(
-    'ToggleMark',
+  return [
     [
       cell(make(false), 'Off'),
       cell(make(true), 'On'),
@@ -378,10 +415,10 @@ function toggleMarkSection(): HTMLElement {
         true,
       ),
     ],
-  );
+  ];
 }
 
-function statusDotSection(): HTMLElement {
+function statusDotCells(): SampleCell[][] {
   const statuses: DotStatus[] = [
     'idle',
     'running',
@@ -390,27 +427,28 @@ function statusDotSection(): HTMLElement {
     'attention',
     'error',
   ];
-  return section(
-    'StatusDot',
+  return [
     statuses.map((status) => cell(statusDot(status), capitalised(status))),
-  );
+  ];
 }
 
 // The frame holds no editor, so no box takes the gallery's keys.
-function inputFrameSection(): HTMLElement {
+function inputFrameCells(): SampleCell[][] {
   const make = () => {
     const node = inputFrame();
     node.append(element('span', 'gallery-placeholder', 'Type a message'));
     return node;
   };
-  return section('InputFrame', [
-    cell(make(), 'Default', true),
-    cell(withClass(make(), 'is-hover'), 'Hover', true),
-    cell(withClass(make(), 'is-cursor'), 'Focus', true),
-  ]);
+  return [
+    [
+      cell(make(), 'Default', true),
+      cell(withClass(make(), 'is-hover'), 'Hover', true),
+      cell(withClass(make(), 'is-cursor'), 'Focus', true),
+    ],
+  ];
 }
 
-function listRowSection(): HTMLElement {
+function listRowCells(): SampleCell[][] {
   const make = () =>
     row({
       density: 'list',
@@ -420,21 +458,23 @@ function listRowSection(): HTMLElement {
       trailing: tag('claude'),
       onClick: ignore,
     });
-  return section('Row, list', [
-    cell(make(), 'Live', true),
-    cell(withClass(make(), 'is-hover'), 'Hover', true),
-    cell(withClass(make(), 'is-selected'), 'Selected', true),
-    cell(withClass(make(), 'is-cursor'), 'Cursor', true),
-    cell(
-      withClass(make(), 'is-selected', 'is-cursor'),
-      'Selected and cursor',
-      true,
-    ),
-    cell(withClass(make(), 'is-disabled'), 'Disabled', true),
-  ]);
+  return [
+    [
+      cell(make(), 'Live', true),
+      cell(withClass(make(), 'is-hover'), 'Hover', true),
+      cell(withClass(make(), 'is-selected'), 'Selected', true),
+      cell(withClass(make(), 'is-cursor'), 'Cursor', true),
+      cell(
+        withClass(make(), 'is-selected', 'is-cursor'),
+        'Selected and cursor',
+        true,
+      ),
+      cell(withClass(make(), 'is-disabled'), 'Disabled', true),
+    ],
+  ];
 }
 
-function treeRowSection(): HTMLElement {
+function treeRowCells(): SampleCell[][] {
   const tree = element('div', 'gallery-stack');
   const labels = ['Instructions', 'CLAUDE.md', 'style.md'];
   labels.forEach((label, depth) => {
@@ -447,13 +487,11 @@ function treeRowSection(): HTMLElement {
     node.classList.toggle('is-selected', depth === 1);
     tree.append(node);
   });
-  return section('Row, tree', [
-    cell(tree, 'Depths 0 to 2, depth 1 selected', true),
-  ]);
+  return [[cell(tree, 'Depths 0 to 2, depth 1 selected', true)]];
 }
 
 // A click on a tab moves `is-active` to it and shows its name on the sheet.
-function tabsSection(): HTMLElement {
+function tabsCells(): SampleCell[][] {
   const content = element('p', 'gallery-tab-content', 'Form');
   const tabs: HTMLButtonElement[] = [];
   for (const label of ['Form', 'Chat', 'Docs']) {
@@ -471,12 +509,12 @@ function tabsSection(): HTMLElement {
   tabSheet.append(content);
   const sample = element('div', 'gallery-tabs');
   sample.append(tabStrip(tabs), tabSheet);
-  return section('Tabs', [
-    cell(sample, 'Form active, Chat hover; a click moves active', true),
-  ]);
+  return [
+    [cell(sample, 'Form active, Chat hover; a click moves active', true)],
+  ];
 }
 
-function splitSection(uiState: UiState): HTMLElement {
+function splitSample(uiState: UiState): HTMLElement {
   const split = createSplit({
     uiState,
     stateKey: 'split',
@@ -494,10 +532,10 @@ function splitSection(uiState: UiState): HTMLElement {
       'Drag the line to resize; the width is kept.',
     ),
   );
-  return framedSection('Split', frame(split.element));
+  return split.element;
 }
 
-function cardSection(): HTMLElement {
+function cardCells(): SampleCell[][] {
   const attention = card('attention');
   const actions = element('div', 'gallery-actions');
   actions.append(
@@ -509,61 +547,65 @@ function cardSection(): HTMLElement {
     node.append(element('p', 'gallery-card-text', text));
     return node;
   };
-  return section('Card', [
-    cell(withText(card(), 'A card on the sheet.'), 'Default', true),
-    cell(
-      withText(withClass(card(), 'is-cursor'), 'A card on the sheet.'),
-      'Cursor',
-      true,
-    ),
-    cell(attention, 'Attention', true),
-    cell(withText(card('error'), 'The agent stopped.'), 'Error', true),
-  ]);
+  return [
+    [
+      cell(withText(card(), 'A card on the sheet.'), 'Default', true),
+      cell(
+        withText(withClass(card(), 'is-cursor'), 'A card on the sheet.'),
+        'Cursor',
+        true,
+      ),
+      cell(attention, 'Attention', true),
+      cell(withText(card('error'), 'The agent stopped.'), 'Error', true),
+    ],
+  ];
 }
 
-function collapsibleSection(): HTMLElement {
+function collapsibleCells(): SampleCell[][] {
   const body = () => element('p', 'gallery-card-text', 'Tests passed');
-  return section('Collapsible card', [
-    cell(
-      createCollapsibleCard({
-        summary: 'Bash  npm test',
-        mono: true,
-        leading: statusDot('running'),
-        body,
-      }).element,
-      'Closed, mono',
-      true,
-    ),
-    cell(
-      createCollapsibleCard({
-        summary: 'Bash  npm test',
-        mono: true,
-        leading: statusDot('success'),
-        open: true,
-        body,
-      }).element,
-      'Open',
-      true,
-    ),
-    cell(
-      createCollapsibleCard({ summary: 'Thinking', body }).element,
-      'Closed',
-      true,
-    ),
-  ]);
+  return [
+    [
+      cell(
+        createCollapsibleCard({
+          summary: 'Bash  npm test',
+          mono: true,
+          leading: statusDot('running'),
+          body,
+        }).element,
+        'Closed, mono',
+        true,
+      ),
+      cell(
+        createCollapsibleCard({
+          summary: 'Bash  npm test',
+          mono: true,
+          leading: statusDot('success'),
+          open: true,
+          body,
+        }).element,
+        'Open',
+        true,
+      ),
+      cell(
+        createCollapsibleCard({ summary: 'Thinking', body }).element,
+        'Closed',
+        true,
+      ),
+    ],
+  ];
 }
 
-function floatingPanelSection(platform: Platform): HTMLElement {
+function floatingPanelSample(platform: Platform): HTMLElement {
   const panel = floatingPanel();
   panel.append(
     sectionHeader('Space z'),
     row({ density: 'list', label: 'Gallery', trailing: kbd('g', platform) }),
     row({ density: 'list', label: 'Layouts', trailing: kbd('l', platform) }),
   );
-  return framedSection('FloatingPanel', frame(panel));
+  return panel;
 }
 
-function dialogSection(): HTMLElement {
+function dialogSample(): HTMLElement {
   const dialog = createDialog('Cancel the round?');
   dialog.body.append(element('p', '', 'The agent gets no answers.'));
   dialog.actions.append(
@@ -571,28 +613,32 @@ function dialogSection(): HTMLElement {
     textButton('Cancel the round', ignore, { variant: 'danger' }),
   );
   dialog.show();
-  return framedSection(
-    'Dialog',
-    withClass(frame(dialog.element), 'gallery-frame--dialog'),
-  );
+  return dialog.element;
 }
 
-function emptyStateSection(platform: Platform): HTMLElement {
-  return section('EmptyState', [
-    cell(
-      emptyState('No sessions yet. Start one with', kbd('Space k n', platform)),
-      'Default',
-    ),
-  ]);
+function emptyStateCells(platform: Platform): SampleCell[][] {
+  return [
+    [
+      cell(
+        emptyState(
+          'No sessions yet. Start one with',
+          kbd('Space k n', platform),
+        ),
+        'Default',
+      ),
+    ],
+  ];
 }
 
-function sectionHeaderSection(platform: Platform): HTMLElement {
-  return section('SectionHeader', [
-    cell(sectionHeader('Findings'), 'Plain', true),
-    cell(
-      sectionHeader('Keys', kbd('Space ?', platform)),
-      'With a trailing hint',
-      true,
-    ),
-  ]);
+function sectionHeaderCells(platform: Platform): SampleCell[][] {
+  return [
+    [
+      cell(sectionHeader('Findings'), 'Plain', true),
+      cell(
+        sectionHeader('Keys', kbd('Space ?', platform)),
+        'With a trailing hint',
+        true,
+      ),
+    ],
+  ];
 }

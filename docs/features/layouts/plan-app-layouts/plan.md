@@ -231,7 +231,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 
 ### Wave 3
 - [ ] [Sessions layout and preview](10-sessions-layout.md) — after 02, 05 (`keymap.ts`)
-- [ ] [Chat surfaces layout](14-chat-surfaces-layout.md) — after 04
+- [x] [Chat surfaces layout](14-chat-surfaces-layout.md) — after 04
 
 ### Wave 4
 - [ ] [Chat preview](15-chat-preview.md) — after 10 (`keymap.ts`), 14
@@ -255,6 +255,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - 05 · 860a80b · diff read: Produces present, zl group renamed, zlp bound; primer tests 181 pass; primer self-test incl. layout preview group passes, every key placed; check-layers/check-styles clean · concerns: AGENTS.md still names only Space z l o (task 16); task card box order duplicated in the kit since boxes.ts was out of scope; screenshots show a blank band under the selected rail row with card focus, Unclear 2/2 count wrapping, raw markdown link in pointer — same as before, compare in task 17
 - 08 · c70ec1e · diff read: Produces present; settings tests 66 pass; settings typecheck clean; layers and styles clean · concerns: 02's list picker drawRow rows lack ui-row--action and mousedown preventDefault (second report); FocusFakeElement in settings-view.test.ts duplicates docs' fake (shared home test-dom.ts); AGENTS.md settings/ source-tree line omits layouts/
 - 06 · ff4b9b1 · diff read: Produces present (amended below); docs tests 525 pass; lint, layers, styles clean; selftest all passed, every key placed; tree typecheck errors only in chat's in-flight files · concerns: 02's list picker drawRow rows lose the pointer cursor (third report); docs-page-fakes.ts test fake added outside Files; focus and scroll keep proved only in the fake DOM
+- 14 · 9456b81 · diff read: Produces present (amended below); chat + shared/page tests 496 pass; chat typecheck, layers, styles, oxlint clean; selftest deferred to the gate (blocked by in-flight gallery/sessions) · concerns: chat.css gained two rules (.chat-dialog-part > .ui-dialog-actions margin, image viewer frame display:contents); chat-kit.ts appended duplicates the new placed helper; AGENTS.md § A chat layout and agent-chat design § Layouts name only entry builders (task 16); list picker drawRow rows lose ui-row--action (fourth report)
 ### Contract changes
 - LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
 - LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
@@ -262,6 +263,9 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - BacklogView: gains dispose() beside setLayouts · why: release the shown layouts · consumers: none (PageStart has no dispose hook) · group 07
 - SettingsView gains dispose(); SettingsViewDeps gains markdown, keys, commands; createSectionsView deps take drawPane and drawRow · why: draw through the host · consumers: none outside 08 · group 08
 - createDocsKit(base, scope, anchor) → createDocsKit(base); DocsAnchor dropped; DocsViewDeps gains baseKit(scope, rollback); tree/doc/dialog deps gain parts; DocsDialogs gains pickerRow(title) and redraw(); AppPart gains prependIfLeftOut · why: the per-attempt rollback records the edge's anchor · consumers: none outside 06 · group 06
+- drawChatPart returns the host's DrawnPart<R>; chat-layouts.ts also exports DrawChatPartOptions, SurfaceKitDeps, surfaceBaseKit, partSlot, updateView, placed · why: shared by every surface kit · consumers: 15 may use them · group 14
+- ChatView.setLayout removed; start.ts setLayouts calls ChatLayouts.set(shown) and chat-view rebuilds on ChatLayouts.onChange · why: one shown-layouts source for every surface · consumers: 15 · group 14
+- listenForImages(tab, composer, root, deps) → listenForImages(tab, root, deps) returning { listenForPaste(composer) }; buildAttachmentStrip removed; DialogAction and dialogActions(actions, deps) move to dialog-kits.ts; DialogDeps, PickerDeps, ImageViewerDeps extend the surface kit deps, built once in start.ts as partDeps · why: composers are redrawn and dialogs place app-built actions · consumers: none · group 14
 ### Rulings
 - selectedRow returns stored selection without railRows lookup — selection is the identity rows are built from — a stale selection would come back as is · group 01 · group 01
 - showTarget checks only the target's task exists, not the item — no caller builds a missing-item target — would select a row with no item · group 01 · group 01
@@ -281,5 +285,9 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - default pane roots and the rowActions slot use display:contents — settings.css stays unchanged — inline layout rule where CSS would be cleaner · group 08 · group 08
 - sections-view adds ui-row--action, mousedown preventDefault and click to each section row root — sectionRow takes no onClick — none · group 08 · group 08
 - doc pane frame redraw waits until the editor closes — a redraw never recreates the editor — a layout change shows late while editing · group 06 · group 06
+- composer draws once per tab and on each layout change; a composer update runs on each bar change — task gave composer no update use — runs more often than an author expects · group 14 · group 14
+- attachments and bar slots are app-owned divs; parts draw div.chat-attachments / div.chat-composer-bar inside — keeps chat.css classes — user CSS must target the inner root · group 14 · group 14
+- only boxes and dialog actions are appended when a part leaves them out; a left-out attachments or bar slot stays detached — task names only boxes and actions — such a layout shows no bar hints · group 14 · group 14
+- each dialog part draws once at creation with blank input so its anchors are placed from page load — keeps today's anchor placement — one extra draw per dialog · group 14 · group 14
 ### Review rounds
 ### Test gate

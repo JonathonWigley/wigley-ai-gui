@@ -1,6 +1,6 @@
 # 14 — Chat surfaces draw through chat's layout
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 04 (and 02 through it)
 Plan: [plan.md](plan.md)
@@ -283,3 +283,4 @@ Commit: one commit for the group, naming each surface that now draws through the
 
 ## Proof
 
+Commit 9456b81 · proof: diff read: Produces present (amended below); chat + shared/page tests 496 pass; chat typecheck, layers, styles, oxlint clean; selftest deferred to the gate (blocked by in-flight gallery/sessions) · concerns: chat.css gained two rules (.chat-dialog-part > .ui-dialog-actions margin, image viewer frame display:contents); chat-kit.ts appended duplicates the new placed helper; AGENTS.md § A chat layout and agent-chat design § Layouts name only entry builders (task 16); list picker drawRow rows lose ui-row--action (fourth report)
