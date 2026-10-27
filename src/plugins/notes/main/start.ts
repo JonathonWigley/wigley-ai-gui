@@ -2,17 +2,21 @@ import type { MainApi, MainPart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type { BacklogMainExports } from '../../backlog/contract';
 import type { ChatMainExports } from '../../chat/contract';
+import type { SessionsMainExports } from '../../sessions/contract';
 import type { NotesChannel } from '../contract';
 import { notesManifest } from '../manifest';
+import { addDriveActions } from './drive-actions';
 import { createDraftStore } from './draft-store';
 import { noteHomes } from './note-homes';
 import { createNoteSender } from './note-sender';
+import { notesSelfTestScript } from './selftest-script';
 
 type NotesApi = MainApi<typeof notesManifest, NotesChannel>;
 
 // Keeps the note draft in notes' data folder and serves it to the page, with
 // the window capture, Backlog's homes and tags, and the two sends: a
-// follow-up through Backlog and a new session through chat.
+// follow-up through Backlog and a new session through chat. It hands the
+// self-test its script, and in a drive run it adds the drive actions.
 export const notesMainPart: MainPart<typeof notesManifest> = {
   manifest: notesManifest,
   start(api: NotesApi) {
@@ -55,9 +59,39 @@ export const notesMainPart: MainPart<typeof notesManifest> = {
     channel.handle('sendToFollowup', (request, flattened) =>
       sender.toFollowup(request, flattened),
     );
-    channel.handle('sendToSession', (projectDir, flattened) =>
-      sender.toSession(projectDir, flattened),
+    // Resolved, then emptied, at each send to a new session that is sent.
+    const sessionSendWaiters: (() => void)[] = [];
+    channel.handle('sendToSession', async (projectDir, flattened) => {
+      const result = await sender.toSession(projectDir, flattened);
+      if (result.type === 'sent') {
+        for (const resolve of sessionSendWaiters.splice(0)) {
+          resolve();
+        }
+      }
+      return result;
+    });
+    services.selfTest?.run(
+      notesSelfTestScript({
+        homeDir: services.homeDir,
+        files: services.files,
+        sessions: api.dependency<SessionsMainExports>('sessions'),
+        harnesses: services.agentHarnesses,
+        store,
+        nextSessionSend: () =>
+          new Promise<void>((resolve) => {
+            sessionSendWaiters.push(resolve);
+          }),
+      }),
     );
-    return { commands: {} };
+    const driveActions =
+      api.drive !== null
+        ? addDriveActions(api.drive, { store, data: api.data })
+        : null;
+    return {
+      commands: {},
+      dispose: () => {
+        driveActions?.dispose();
+      },
+    };
   },
 };
