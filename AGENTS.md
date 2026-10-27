@@ -118,6 +118,8 @@ src/renderer/    core page; renderer.ts is its composition root
   codemirror-vim/ editor (with fuzzy slash completion) and code-highlight adapters behind EditorHost and CodeHighlighter,
                  and the code colours
                  → the only codemirror, @codemirror, @lezer and @replit import
+  fabric/        markup adapter behind MarkupEditor: pen, text, arrow and box drawn over an image, undo and redo,
+                 flattened to a PNG                         → the only fabric import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds
                  every built-in default key, main.ts and page.ts the parts each root starts
   sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
@@ -136,7 +138,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  among them)
   backlog/       manifest.ts, contract.ts, main/ (the follow-up files, plans and features of every features home,
                  read through docs' index and written through its guard, file watching, each in-repo home's
-                 uncommitted state and its Commit), page/ (Backlog mode: repos and homes in the side bar, the
+                 uncommitted state and its Commit, each item's images under the home's `followups-images/`, the
+                 homes and follow-up write it exports to notes), page/ (Backlog mode: repos and homes in the side bar, the
                  follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
                  permission_prompt MCP tool, recent folders, archived sessions, resume, sign-in), page/ (the
@@ -149,6 +152,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  swap of the shell to a test layout); no main part
   settings/      manifest.ts, contract.ts, main/ (the userConfig reads and writes, `Cmd+,`), page/ (Settings mode:
                  a form over every setting and every command's binds, `docs/features/settings/design.md`)
+  notes/         manifest.ts, contract.ts, main/ (the kept draft in plugin data, window captures, sending a note
+                 to a follow-up through backlog's exports or to a new session through chat's), page/ (the note
+                 popup over any mode: fields, images, markup, target, session and follow-up pickers,
+                 `docs/features/notes/design.md`)
 ```
 
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in

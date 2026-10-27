@@ -67,6 +67,8 @@ plan is written from them. A decision here stands unless the user changes it.
   text by the item's title, rather than a whole-file conflict prompt. When the item is gone from the new text, the
   editor says so and keeps the user's draft.
 - Backlog watches the follow-up files it lists, so an agent's append mid-session shows live.
+- An item's images live in the home's `followups-images/<folder>/`, linked from its body
+  (`docs/features/notes/design.md`). Delete trashes each image folder the deleted item's body links.
 
 ## Tags
 
@@ -88,7 +90,7 @@ plan is written from them. A decision here stands unless the user changes it.
 ## Git
 
 - An edit to an in-repo home stays uncommitted, and the home shows an uncommitted chip. `C` commits that home's
-  follow-up files only, never anything else in the clone, with the message `Follow-ups edited in Backlog: added …;
+  follow-up files and the changed files under its `followups-images/`, never anything else in the clone, with the message `Follow-ups edited in Backlog: added …;
   edited …; removed …; tagged …`, built from the edits since the last commit. The user's press decides when a shared
   file is committed, so a peer agent's half-written entry is never swept in by an automatic commit.
 - `~/wigley-features/` homes are not in git and show no chip.
@@ -101,6 +103,8 @@ plan is written from them. A decision here stands unless the user changes it.
   part, and Backlog goes through them, so the changed-on-disk check stays in one place.
 - `src/shared/followups/` is the one writer of the follow-up shape in the app: Backlog and Docs' create dialog both
   call it.
+- Backlog's main part exports its homes and the follow-up write, with the item's images, to the `notes` plugin, so
+  every follow-up and image write in the app other than Docs' create dialog goes through Backlog.
 - The follow-up format has two readers in two languages: the shared module here, and `docs_index.py`'s parser for
   agents and other index readers. Each is tested against the format triage.md gives; a change to the format changes
   both in the same piece of work.
