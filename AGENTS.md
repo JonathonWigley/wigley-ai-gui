@@ -2,7 +2,7 @@
 
 **Contents**
 
-- **Intent** — what every change is judged by: everything a plugin, everything hot reloads, macOS and Windows now,
+- **Intent** — what every change is judged by: everything a plugin, everything drawn through a layout, everything hot reloads, macOS and Windows now,
   any agent harness or model later, one user and no backwards compatibility.
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the core and its plugins, the
   layers, the relay and agent sessions, and where a new plugin, shell area, mode, session tab, key, event, setting,
@@ -36,11 +36,15 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
   is something a plugin can hook into, extend or replace, and a built-in plugin has no more reach than one loaded
   from a user folder would. A closed list, switch or union that a new plugin would have to edit is an extension
   point waiting to become a registration.
+- **Everything draws through a layout.** Every surface — each plugin's views, the overlays and dialogs, the shell
+  chrome — draws through a user-editable layout, so any part of the app's look changes by editing a layout file,
+  without a rebuild. A new view or surface ships with its layout contract and its `default` layout
+  (`docs/features/layouts/design.md`).
 - **Everything hot reloads.** A changed plugin, layout, theme, keymap or setting applies to the running app without
   a restart and without losing the user's work. So every registration a plugin makes can be undone, and state that
-  must outlive a reload is kept where the reload does not reach it. Today settings, keymap, themes, and forms and
-  chat layouts hot reload and plugins are compiled in with no runtime loader; new code is written so the rest can land
-  without reworking it.
+  must outlive a reload is kept where the reload does not reach it. Today settings, keymap, themes and layouts hot
+  reload and plugins are compiled in with no runtime loader; new code is written so the rest can land without
+  reworking it.
 - **macOS and Windows, both working now.** A platform-specific need — key binds and their labels, paths, spawning
   processes, file watching, notifications, the relay's transport — is an adapter behind a contract, picked in the
   composition root, so adding one is a new adapter and features carry no `process.platform` checks.
@@ -69,7 +73,7 @@ src/config/      core commands and scopes, default settings, the core token regi
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
                  theme variables, `errorText`, the fake agent harness)
-  layouts/       the layout registry plugins' main parts share (forms and chat layouts)
+  layouts/       the layout registry behind the core LayoutService (main side)
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
                  its per-session open form, deadline, re-attach and hand-back, the saved-form folder and memory stores,
                  the channel and scripted presenters, the MCP tool session, and the drive actions that open a
@@ -80,7 +84,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  text, in the file's own shape (triage.md § The project's follow-ups in wigley-ai-marketplace) →
                  pure, no I/O; Backlog and Docs' create dialog both write follow-ups through it
   image-types.ts the image media types the app attaches and pastes (chat and notes share it)
-  page/          page-only DOM builders plugins share: the paste and drop helpers (`pasted-images.ts`), the layout loader, the reducer store, autosave, editor boxes,
+  page/          page-only DOM builders plugins share: the paste and drop helpers (`pasted-images.ts`), the layout host, the reducer store, autosave, editor boxes,
                  the confirm prompt, the session form tab helper, the session form status line, and the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue)
@@ -130,7 +134,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, layouts, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures),
-                 page/ (the Primer tab: the task rail, the task card and the review pane)
+                 page/ (the Primer tab: the rail of tasks and the selected task's items, the feature, task and item
+                 cards, and the review pane), layouts/ (the primer Layout contract and the built-in `default` layout)
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
                  the indexed folders only and never to a third-party doc, watching the open file, the git statuses
                  of marketplace clone plugin files), page/ (one docs view per source — tree under Starred, Mine and
@@ -242,8 +247,8 @@ round; primer: an open primer), since main, not the page, decides.
   unbound, Enter breaking the line), and startup fails on two binds in one mode with the same keys in overlapping
   scopes or on keys that begin another same-mode bind's longer keys in any scope. Esc while a sequence waits cancels
   it and runs nothing.
-- **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (forms' layout preview is
-  `Space z l o`, the gallery's `Space z g`, which shows Gallery mode, and its `Space z s`, which swaps the shell to a
+- **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (the layout previews under
+  `Space z l`, forms' on `Space z l o`, the gallery's `Space z g`, which shows Gallery mode, and its `Space z s`, which swaps the shell to a
   test layout and back).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
@@ -377,8 +382,8 @@ round; primer: an open primer), since main, not the page, decides.
   `settingInfo` beside its default (`src/config/settings.ts` or the manifest), which Settings mode draws as its row;
   the compiler fails on a setting with no declaration. The user overrides any of them in `settings.json` (plugin
   settings under the plugin id), by hand or from Settings mode.
-- **The user config folder** is `~/.config/wigley-ai-gui/` on both OSes: `settings.json`, `keymap.json` and
-  `themes/`, each holding only what the user changes. Main's ConfigStore watches it and serves every new config to
+- **The user config folder** is `~/.config/wigley-ai-gui/` on both OSes: `settings.json`, `keymap.json`,
+  `themes/` and `layouts/`, each holding only what the user changes, shared by the stable and dev apps. Main's ConfigStore watches it and serves every new config to
   the page over the Bridge, so everything hot reloads: plugins read `settings()` and `keys.keymap()` with
   `onChanged` rather than keeping a copy, and a setting read only when something is created (window size, the claude
   command) applies to the next one. A broken file keeps the last good config and shows the problem as a title bar
@@ -390,22 +395,27 @@ round; primer: an open primer), since main, not the page, decides.
   contract, and one changed line in the composition root. Reach for a maintained library behind an adapter, and the
   upstream tool's own behaviour (vim's for keys, neovim's pickers), before porting a subset or writing custom logic:
   the user picks the established behaviour every time.
-- **Plugin data** — files a plugin keeps for the user, such as forms layouts — lives in the plugin's own folder,
+- **Plugin data** — files a plugin keeps for the user — lives in the plugin's own folder,
   `plugins/<id>/` in the app instance's user data folder, so the stable and dev apps keep separate data (in the
   self-test, `plugin-data/` in the temp home; in a drive run, in the run's own home). Main reaches it through
   `api.data`, the files service scoped to that folder, which refuses a path outside it. The page loads a file from
   it by the URL `api.dataUrl(path, revision)` builds on the `wigley-data:` scheme, which the page's CSP allows for
   scripts and styles; `revision` sits in the URL's path, so a changed module and every relative import under it load
   fresh.
-- **A layout** is a plugin's user-editable look: the shared registry (`src/shared/layouts/`) and loader
-  (`src/shared/page/`) take the plugin's data folder, contract text, default layout and validator, and each plugin
-  keeps its own contract and built-in `default`. Forms' layouts draw the forms view and chat's build chat entries, a
-  chat entry's layout reading the entry's raw events for anything the entry does not name. The registry watches every
-  layout folder and announces the set of layouts, each with its own revision, so saving one reloads only that one;
-  the user's layout is a plugin setting (`forms.layout`, `chat.layout`, `default` when unset). The root of every
-  card and pane a layout draws carries `data-layout="<name>"`, and each loaded layout gets its own stylesheet link,
-  so a layout's CSS selects under its own name and restyles nothing another layout drew. A loaded layout stays
-  available while its revision is current, so a round naming one another round loaded draws with it at once.
+- **A layout** is an owner's user-editable look; the owner is a plugin or the shell. Layouts live in the user config
+  folder, `layouts/<owner>/<name>/layout.js` with an optional `layout.css`, shared by the stable and dev apps. Main's
+  core LayoutService watches that folder and announces each owner's set of layouts, each with its own revision, so
+  saving one reloads only that one. A plugin registers its contract text, its built-in `default` layout and its reader
+  with `api.layouts`; the shell registers with the core. Each app writes `layouts/<owner>/layout.d.ts` at start. The
+  page's layout host (`src/shared/page/`) picks the layout (the owner's setting — `<plugin>.layout`, or the core
+  `shell.layout` — and `default` when unset), checks it with the owner's reader, draws each part, rolls back a part
+  that throws and draws it with `default`, and redraws on a reload. A layout draws every pane and every repeated row,
+  card or entry; the app keeps selection, keys, scrolling, split widths, text boxes and editors. The root of every
+  part a layout draws carries `data-layout="<name>"`, and each loaded layout gets its own stylesheet link, so a
+  layout's CSS selects under its own name and restyles nothing another layout drew. A loaded layout stays available
+  while its revision is current, so a round naming one another round loaded draws with it at once. A view that needs
+  agent data to show anything has a preview sample under `Space z l` for iterating its layout in place.
+  `docs/features/layouts/design.md` lists every owner and its surfaces.
 - **A chat layout** builds each entry kind's element from the entry and a `ChatKit`
   (`src/plugins/chat/layouts/layout.d.ts`): `markdown`, `json`, `expander` (a collapsible card), `collapsibleCard`,
   `card`, `statusDot` with `setDotStatus`, `sectionHeader`, and `permissionActions` (Allow once / Deny with their
@@ -418,9 +428,8 @@ round; primer: an open primer), since main, not the page, decides.
   for any plugin's command), each of which keeps itself up to date. The app keeps which item is selected, the keys,
   scrolling, the split width, the rail header's open count and saved state, and the cancel dialog. The built-in `default` layout is
   `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract; it defines every card and
-  the rail and review panes, and draws the forms look. The user's layouts are folders in forms' plugin data,
-  `layouts/<name>/layout.js` and an optional `layout.css`, and the app writes `layouts/layout.d.ts` there at every
-  start; a user layout defines only the cards and panes it changes.
+  the rail and review panes, and draws the forms look. The user's forms layouts are folders in
+  `~/.config/wigley-ai-gui/layouts/forms/`; a user layout defines only the cards and panes it changes.
   - **Which layout draws what:** a card comes from the first layout defining its kind among the item's `layout`,
     the round's `layout`, the `forms.layout` setting and `default`; a pane the same way without the item. One page
     module resolves this, so round-view names no layout. An `ask_round` naming a layout missing from the folder

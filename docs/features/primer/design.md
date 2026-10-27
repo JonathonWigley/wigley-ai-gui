@@ -68,17 +68,23 @@ does.
 
 ## The Primer tab
 
-The tab is a fixed view built from the `DESIGN.md` primitives; the user does not edit its layout.
+The tab draws through the primer's layout (`src/plugins/primer/layouts/`, the `primer.layout` setting;
+`docs/features/layouts/design.md`): the layout draws the feature, task and item cards and the rail and review panes,
+and the app keeps the selection, keys, boxes, split and scrolling. `Space z l p` opens a sample primer for
+iterating a layout in place.
 
 - **Rail** (the start pane of a Split with its own `uiState` key): a Feature row first, then the tasks under
   SectionHeaders Primer, Every feature and Extra tasks. Each task row shows its need as a Tag (yes, no, unclear)
-  and its included items as a count (included of total).
-- **Card** for the selected row. The Feature row's card holds the name, slug, spec, summary and notes boxes. A
-  task's card holds its question, evidence, probes and pointer when not blank, its items as rows each with a ToggleMark
-  (included) and a comment box, an add-item box, and the task's own comment box. The add-item box's text becomes an
-  item when a key leaves the box or the review opens; a click or window switch that moves focus leaves the text in
-  the box. A task holding 20 items, the item limit, shows no add-item box. An extra task's card also holds its name
-  box.
+  and its included items as a count (included of total). The selected task expands: its items show as rows under
+  it, each with its include mark (a ToggleMark), its number and its text. Selecting another task collapses the first.
+- **Card** for the selected row, one at a time, as forms shows one card per rail row.
+  - The Feature row's card holds the name, slug, spec, summary and notes boxes.
+  - A task row's card holds its heading, tags and need; its question, evidence, probes and pointer when not blank;
+    an extra task's name box; the add-item box; and the task's own comment box. It lists no items: the rail does.
+    The add-item box's text becomes an item when a key leaves the box or the review opens; a click or window switch
+    that moves focus leaves the text in the box. A task holding 20 items, the item limit, shows no add-item box.
+  - An item row's card holds the header `⌃H ‹ 2 of 3 › ⌃L` (its place among its task's items), the item text as
+    heading, its include mark, an Added tag on an item the user added, and the item's comment box.
 - **Review pane** before send: every task's need, its items (the left-out ones tagged) and every comment, with the
   tallies; submit from there checks that the slug matches the slug rule and every extra task is named, and shows what
   failed.
@@ -94,16 +100,16 @@ Scopes `primer.rail`, `primer.card`, `primer.review`, `primer.confirm`. Every bi
 
 | Keys | Scope | Action |
 | --- | --- | --- |
-| `j` / `k`, `<C-l>` / `<C-h>` | rail | next / previous row |
-| `y` / `n` / `u` | rail | set the task's need to yes / no / unclear |
+| `j` / `k`, `<C-l>` / `<C-h>` | rail | next / previous row (task rows and the selected task's item rows) |
+| `y` / `n` / `u` | rail | set the selected task's need to yes / no / unclear, on its task row or an item row |
+| `x` | rail, card | toggle the selected item's include mark (an item row or an item card) |
 | `A` | rail | add an extra task |
 | `D` | rail | remove the selected extra task |
 | `<A-l>` / `<A-h>` | rail / card | focus the card / the rail |
-| `j` / `k` | card | next / previous item |
-| `x` | card | toggle the item's include mark |
-| `c` | card | edit the item's comment |
-| `C` | card | edit the task's comment |
-| `a` | card | add an item |
+| `<C-l>` / `<C-h>` | card | next / previous row, its card replacing this one |
+| `c` | card | edit the item's comment (item card) |
+| `C` | card | edit the task's comment (task card; from an item card, its task's card) |
+| `a` | card | add an item (task card; from an item card, its task's card) |
 | `i` | card | edit the first field (Feature card: name; extra task: its name) |
 | `<C-n>` / `<C-p>` | card, box | next / previous box |
 | `<Esc>` | box | leave the box |
@@ -125,6 +131,5 @@ ready".
 
 ## Out of scope
 
-- A user-editable primer layout (forms layouts stay forms-only).
 - Migrating old primer files.
 - The other copies of the key-hint helper in chat, sessions and keys, which stay with their tracked follow-up.

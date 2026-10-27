@@ -322,8 +322,9 @@ Conventions every primitive follows:
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.
 - **Primer:** the Primer tab is built like the Form tab: a rail of the feature row and the tasks, grouped under
   section headers (Primer, Every feature, Extra tasks), each task row carrying its need as a Tag and its included
-  items as a count; the selected task's card holds its items as rows with a ToggleMark and a comment box. A review
-  pane of every answer opens before it sends.
+  items as a count. The selected task expands in the rail, its items as rows with a ToggleMark; the card pane shows
+  one card for the selected row, a task card (context, add-item and task comment) or an item card (the item, its
+  ToggleMark and its comment box). A review pane of every answer opens before it sends.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
   the sheet. Tool calls are collapsible cards: a mono head with the tool and its summary, a status
   dot (running, success, error), built closed; a result changes only the dot. Permission prompts are cards with a
