@@ -143,6 +143,9 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
 - **Mode side bars.** A mode may hand a side bar element at registration; the core shows it in the
   side bar slot while the mode shows. `Space k s` / `Space k d` keep toggling it. Sessions puts its
   session list there; Docs mode puts its tree there.
+- **Chrome parts.** The title bar's context, dev tag and config-problem badge and the activity bar's items draw
+  through the shell's layout (the core setting `shell.layout`, `src/renderer/shell/shell-chrome.ts`); the areas and
+  their arrangement stay the `ShellLayout`'s.
 - **Splits** are resizable by drag; widths persist through `uiState`.
 
 ## Primitives and the gallery
@@ -156,8 +159,9 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
   Windows. The page learns its platform from the served config; the full Platform record stays a
   follow-up.
 - **Icon** draws Codicons; it is the one module naming the icon font.
-- **Forms and chat layout kits** gain the primitives, so user layouts build from them too.
-- **Gallery:** a `gallery` plugin (page only, no main part) adds a Gallery mode on `Space z g`
+- **Layout kits** gain the primitives, so user layouts build from them too: forms' and chat's first, then every
+  owner's, through the shared `BaseKit` (`docs/features/layouts/design.md`).
+- **Gallery:** a `gallery` plugin (a page part, and a main part that only registers its layouts) adds a Gallery mode on `Space z g`
   showing every primitive in every state, with raw `t` in its scope to switch transparency. The
   switch is a page-only override (`PageApi.transparency`) that holds until the page reloads and
   never writes `settings.json`. `Space z s` swaps the shell to a test layout and back.
@@ -227,7 +231,8 @@ Each stays its own entry in `docs/features/followups.md`:
 
 - Latte (light) theme and following the OS light/dark setting. The token model stays theme-neutral.
 - The command palette. Plan B builds the floating list it will sit on.
-- Layouts as a core service. The forms and chat layout kits gain the primitives instead.
+- Layouts as a core service. This rework gave the forms and chat layout kits the primitives instead; the core
+  LayoutService, `api.layouts` and the page host landed later (`docs/features/layouts/design.md`).
 - Native window vibrancy and mica, behind a window adapter.
 - Per-tool-call duration on chat tool cards.
 - The full `Platform` record, the runtime plugin loader, and unloading every registration.

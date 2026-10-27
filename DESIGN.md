@@ -242,7 +242,8 @@ The keyboard is first; the mouse works everywhere.
 
 The shared building blocks live in `src/shared/page/ui/`, one builder per primitive with its CSS
 beside it. Every surface is built from them and from tokens, so a change to a primitive restyles
-every screen at once, and forms and chat layout kits hand the same primitives to user layouts.
+every screen at once, and every owner's layout kit hands the same primitives to user layouts, through the
+shared `BaseKit`.
 
 - A primitive exists because a surface uses it. A new feature that needs one adds it to
   `src/shared/page/ui/`, to the gallery, and to this section.
@@ -300,6 +301,9 @@ Conventions every primitive follows:
 - A hint is an anchor element handed in, which the keys plugin fills.
 
 ## Surfaces
+
+Each surface below is the look of its owner's built-in `default` layout (`docs/features/layouts/design.md` lists
+each owner's parts); a user layout redraws any part, and a part keeps these rules.
 
 - **Title bar:** L1, `toolbar-height`, draggable; the shown mode's context centred; actions on the
   right as `icon-button` buttons when a feature contributes one: the Keys button with its
@@ -364,8 +368,11 @@ Conventions every primitive follows:
   (`forms-gallery-full-0` for the opening page, `forms-gallery-full-1` onward for each page press,
   `forms-gallery-reduced-0`, `forms-gallery-reduced-1` onward), Sessions (`forms-sessions-*`) and
   Docs (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and
-  session Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), and the shell layout
-  swap; the agent checks them against this file — density, the one accent, each surface on its layer
+  session Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), the shell layout
+  swap (`forms-shell-layout-*`) and the layout previews (`forms-preview-*`, `primer-preview*`,
+  `chat-chat-preview`). The gallery's and the keys plugin's main parts hand no self-test script, so forms' script
+  saves the gallery's pages and the shell swap, and no screenshot shows keys' overlays. The agent checks them against
+  this file — density, the one accent, each surface on its layer
   and material, sentence case — before handing a UI change to the user.
 - Text meets WCAG AA contrast against its opaque fallback background, in both transparency
   settings.

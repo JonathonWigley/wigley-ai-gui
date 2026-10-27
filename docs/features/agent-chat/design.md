@@ -267,6 +267,12 @@ interview on 2026-10-23; this file is the record of both.
   forms layout builds cards: each builder takes `(parent, entry, kit)` and appends its element to `parent`. User chat
   layouts are folders in `~/.config/wigley-ai-gui/layouts/chat/`, reloaded on save; an entry that throws is rolled
   back and drawn with the default layout. The `chat.layout` setting names the user's layout.
+- Besides the entries, a layout draws the Chat tab's other surfaces through parts that take `(parent, input, kit)`
+  and return a `PartView`: `composer`, `composerBar`, `attachments` (the strip of attached images), `pickerRow` (a row
+  of the start prompt and the pickers), `signIn`, `reasonBox` (the deny reason), `closeConfirm` (the end-session
+  confirm) and `imageViewer`. Each part's kit extends the base kit with the app parts it places (the editor frame, the
+  dialog actions). The app keeps the composer's box and its draft, the dialogs' frames and titles, the keys and the
+  focus; a part a user layout leaves out draws with `default`.
 
 ## Plans
 

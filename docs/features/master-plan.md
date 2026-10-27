@@ -29,7 +29,7 @@ after the steps it needs.
  Tier 2  harness / platform    9 Harness registry ── 10 Harness-neutral ── 11 Codex
               │                12 Platform seam ── 13 Packaging & native window
               │
- Tier 3  open the plugins      14 Plugin host & loader ── 15 Layouts service
+ Tier 3  open the plugins      14 Plugin host & loader ── 15 Layouts service (core landed)
               │                16 Forms kinds ── 17 Sessions decoupling ── 18 Chat/markdown hooks
               │
  Tier 4  features on top       19 Chat features   20 Themes   21 Docs features
@@ -125,8 +125,9 @@ Steps 1, the bug sweep, 2, drive reliability, and 3, the docs index seam, have l
 - `check-layers.mts` derives its rules from folders and manifests
 - Forms page state survives a reload
 
-**15. Layouts as a core service.** Builds on 4 and 14.
-- `api.layouts.define`, replacing the wiring copied in forms and chat
+**15. Layouts as a core service.** Builds on 4 and 14. The core service landed: `api.layouts.register` (main) and
+`api.layouts.show` (page) over the core LayoutService and one page host, with every surface drawing through a layout
+and each owner's `<owner>.layout` setting (`shell.layout` for the shell). Left:
 - Partial chat layouts that fall back per entry kind
 - A layout hot reload keeps the user's place (`TextEditor` snapshot/restore)
 

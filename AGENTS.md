@@ -74,6 +74,7 @@ src/config/      core commands and scopes, default settings, the core token regi
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
                  theme variables, `errorText`, the fake agent harness)
   layouts/       the layout registry behind the core LayoutService (main side)
+  layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
                  its per-session open form, deadline, re-attach and hand-back, the saved-form folder and memory stores,
                  the channel and scripted presenters, the MCP tool session, and the drive actions that open a
@@ -84,7 +85,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  text, in the file's own shape (triage.md § The project's follow-ups in wigley-ai-marketplace) →
                  pure, no I/O; Backlog and Docs' create dialog both write follow-ups through it
   image-types.ts the image media types the app attaches and pastes (chat and notes share it)
-  page/          page-only DOM builders plugins share: the paste and drop helpers (`pasted-images.ts`), the layout host, the reducer store, autosave, editor boxes,
+  page/          page-only DOM builders plugins share: the paste and drop helpers (`pasted-images.ts`), the layout host
+                 (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback and `BaseKit`, the kit every
+                 owner's kit extends), the reducer store, autosave, editor boxes,
                  the confirm prompt, the session form tab helper, the session form status line, and the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue)
@@ -111,12 +114,17 @@ src/main/        core main process; main.ts is its composition root
                  upstream and its blobs, fetch and last fetch, a file's text at HEAD, and a commit of named paths
                  only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
                  `config`, `add` and first commit, and its `git log` check, run through `services.processes`)
-  data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page
+  layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes
+                 `kit.d.ts` and each owner's `layout.d.ts` and sends each owner's set of layouts to the page
+  data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page, and the `wigley-layout:`
+                 scheme serving the layouts folder
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import
 src/preload/     the Bridge, exposed as window.wigley
 src/renderer/    core page; renderer.ts is its composition root
-  shell/         the shell registry, its areas and the default `ShellLayout`, and the modes
+  shell/         the shell registry, its areas and the default `ShellLayout`, and the modes; `shell-chrome.ts` draws the
+                 title bar's context, dev tag and config problems and the activity bar's items through the shell's
+                 layout (`layouts/`, the `shell.layout` setting)
   plugins/       the page-side plugin API
   markdown-it/   markdown adapter behind MarkdownRenderer   → the only markdown-it import
   fzf/           fuzzy matcher adapter behind FuzzyMatcher, which every `/` filter and the slash completion rank
@@ -130,8 +138,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  every built-in default key, main.ts and page.ts the parts each root starts
   sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
                  endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions mode: the
-                 sidebar and each session's tabs)
-  forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, layouts, the preview
+                 sidebar and each session's tabs, and the layout preview rows), layouts/ (the sessions Layout
+                 contract and the built-in `default` layout)
+  forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures),
                  page/ (the Primer tab: the rail of tasks and the selected task's items, the feature, task and item
@@ -142,12 +151,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  Third-party roots by the index's `owner`, rendered doc with its status chips, document editor —
                  shown as Docs mode over the machine's index, its tree in the side
                  bar, and as a split of tree and doc in each view `addView` hands out, each session's Docs tab
-                 among them)
+                 among them), layouts/ (the docs Layout contract and the built-in `default` layout)
   backlog/       manifest.ts, contract.ts, main/ (the follow-up files, plans and features of every features home,
                  read through docs' index and written through its guard, file watching, each in-repo home's
                  uncommitted state and its Commit, each item's images under the home's `followups-images/`, the
                  `load`, `tags` and `fileNote` it exports to notes), page/ (Backlog mode: repos and homes in the side bar, the
-                 follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`)
+                 follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`),
+                 layouts/ (the backlog Layout contract and the built-in `default` layout)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
                  permission_prompt MCP tool, recent folders, archived sessions, resume, sign-in), page/ (the
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
@@ -155,16 +165,20 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message), `profileNames` and
                  `profileOf` to notes
-  keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the title bar's Keys button, and the
-                 hint anchors and keys-for-command lookup it exports); no main part
-  gallery/       manifest.ts, page/ (Gallery mode: every primitive in every state, a transparency switch, and a
-                 swap of the shell to a test layout); no main part
+  keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
+                 the title bar's Keys button, and the hint anchors and keys-for-command lookup it exports), layouts/
+                 (the keys Layout contract and the built-in `default` layout)
+  gallery/       manifest.ts, main/ (registers the layouts only), page/ (Gallery mode: every primitive in every state,
+                 a transparency switch, and a swap of the shell to a test layout), layouts/ (the gallery Layout
+                 contract and the built-in `default` layout)
   settings/      manifest.ts, contract.ts, main/ (the userConfig reads and writes, `Cmd+,`), page/ (Settings mode:
-                 a form over every setting and every command's binds, `docs/features/settings/design.md`)
+                 a form over every setting and every command's binds, `docs/features/settings/design.md`), layouts/
+                 (the settings Layout contract and the built-in `default` layout)
   notes/         manifest.ts, contract.ts, main/ (the kept draft in plugin data, window captures through `services.window.capture`, sending a note
                  to a follow-up through backlog's exports or to a new session through chat's), page/ (the note
                  popup over any mode: fields, images, markup, target, session and follow-up pickers,
-                 `docs/features/notes/design.md`)
+                 `docs/features/notes/design.md`), layouts/ (the notes Layout contract and the built-in `default`
+                 layout)
 ```
 
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
@@ -194,8 +208,8 @@ round; primer: an open primer), since main, not the page, decides.
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
-  which types that plugin's exports and events. A dependency with no part in a process (`keys` in main, a
-  main-only plugin on the page) starts nowhere there, and its exports read as `undefined` in that process.
+  which types that plugin's exports and events. A dependency with no part in a process starts nowhere
+  there, and its exports read as `undefined` in that process.
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`activeChanged` in plugin
   `sessions` is `sessions.activeChanged`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`. Each process has its own bus, and nothing crosses processes on it: a plugin's own
@@ -248,7 +262,8 @@ round; primer: an open primer), since main, not the page, decides.
   scopes or on keys that begin another same-mode bind's longer keys in any scope. Esc while a sequence waits cancels
   it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (the layout previews under
-  `Space z l`, forms' on `Space z l o`, the gallery's `Space z g`, which shows Gallery mode, and its `Space z s`, which swaps the shell to a
+  `Space z l`: forms' on `Space z l o`, the primer's on `Space z l p`, sessions' on `Space z l s` and chat's on
+  `Space z l c`; the gallery's `Space z g`, which shows Gallery mode, and its `Space z s`, which swaps the shell to a
   test layout and back).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
@@ -281,7 +296,8 @@ round; primer: an open primer), since main, not the page, decides.
     built-in key ships with its place on screen. A target drawn only in some states (a ninth choice, a permission
     card, the Model and Controls chips) is placed by a self-test fixture state that builds it, shown or hidden; never
     by a stand-in element made only to satisfy the gate.
-  - A forms or chat layout's `keyHint` and `keysFor` kit calls keep their shape and route through anchors.
+  - Every layout's `keyHint` and `keysFor` kit calls (`BaseKit`) keep their shape and route through anchors; the shell's
+  kit anchors nothing, since the core cannot reach the keys plugin before the plugins start.
 
   Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
   which prints a chord for the platform the served config names: on macOS the modifiers and Return, Tab, Esc,
@@ -401,17 +417,19 @@ round; primer: an open primer), since main, not the page, decides.
   `api.data`, the files service scoped to that folder, which refuses a path outside it. The page loads a file from
   it by the URL `api.dataUrl(path, revision)` builds on the `wigley-data:` scheme, which the page's CSP allows for
   scripts and styles; `revision` sits in the URL's path, so a changed module and every relative import under it load
-  fresh.
+  fresh. The scheme serves plugin data only: layouts load on their own `wigley-layout:` scheme.
 - **A layout** is an owner's user-editable look; the owner is a plugin or the shell. Layouts live in the user config
   folder, `layouts/<owner>/<name>/layout.js` with an optional `layout.css`, shared by the stable and dev apps. Main's
   core LayoutService watches that folder and announces each owner's set of layouts, each with its own revision, so
-  saving one reloads only that one. A plugin registers its contract text, its built-in `default` layout and its reader
-  with `api.layouts`; the shell registers with the core. Each app writes `layouts/<owner>/layout.d.ts` at start. The
-  page's layout host (`src/shared/page/`) picks the layout (the owner's setting — `<plugin>.layout`, or the core
+  saving one reloads only that one. A plugin's main part registers its contract text with
+  `api.layouts.register` and its page part draws with `api.layouts.show`, handing over its built-in `default` layout,
+  its reader and its setting; the shell registers with the core (`layoutService.register('shell', …)` in `main.ts`) and
+  shows through the page host in `renderer.ts`. Each app writes `layouts/kit.d.ts` (the shared kit types) and
+  `layouts/<owner>/layout.d.ts` at start. The page's layout host (`src/shared/page/layout-host/`) picks the layout (the owner's setting — `<plugin>.layout`, or the core
   `shell.layout` — and `default` when unset), checks it with the owner's reader, draws each part, rolls back a part
   that throws and draws it with `default`, and redraws on a reload. A layout draws every pane and every repeated row,
   card or entry; the app keeps selection, keys, scrolling, split widths, text boxes and editors. The root of every
-  part a layout draws carries `data-layout="<name>"`, and each loaded layout gets its own stylesheet link, so a
+  part a layout draws carries `data-layout="<name>"` and `data-layout-owner="<owner>"`, and each loaded layout gets its own stylesheet link, so a
   layout's CSS selects under its own name and restyles nothing another layout drew. A loaded layout stays available
   while its revision is current, so a round naming one another round loaded draws with it at once. A view that needs
   agent data to show anything has a preview sample under `Space z l` for iterating its layout in place.
@@ -421,7 +439,10 @@ round; primer: an open primer), since main, not the page, decides.
   (`markdown`, `card`, `statusDot` with `setDotStatus`, `sectionHeader`, `keyHint` and the rest) with chat's parts:
   `json`, `expander` (a collapsible card), `collapsibleCard`, `edgeCard` (a card with a status edge),
   `permissionActions` (Allow once / Deny with their keys), and `images` (a user entry's thumbnails, which open the
-  image viewer). Every part takes its parent first.
+  image viewer). Every part takes its parent first. Beside the entries, the layout draws the other Chat tab surfaces
+  through parts that take `(parent, input, kit)` and return a `PartView`: `composer`, `composerBar`, `attachments`,
+  `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and `imageViewer`, each with a kit that extends the base kit.
+  A user layout defines only the parts it changes.
 - **A forms layout** draws the forms view: a card per item kind (`question`, `finding`, `notice`) and the `head`,
   `rail` and `review` panes. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
   pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, review row,
@@ -529,9 +550,10 @@ round; primer: an open primer), since main, not the page, decides.
   script's `settings` override plugin settings in the config main serves the page (forms' sets a short
   `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the ConfigStore's config, which
   under the self-test is the empty config folder in its temp home, so the defaults, with no script `settings` over
-  them. Each plugin hands at most one script, and the scripts run in plugin start order; the keys plugin has no main
-  part, so its steps live in forms' script, whose fixture gives them scopes full of binds and a box to type in. The
-  gallery has no main part either, so its steps live in forms' and docs' scripts. Chat's script runs its sessions
+  them. Each plugin hands at most one script, and the scripts run in plugin start order; the keys plugin's main part only
+  registers its layouts and hands no script, so its steps live in forms' script, whose fixture gives them scopes full
+  of binds and a box to type in. The gallery's main part hands none either, so its steps live in forms' and docs'
+  scripts. Chat's script runs its sessions
   over the fake agent harness, whose controls are Mode, Effort, Model and Verbosity so every chip and its pick key draws, its steps covering the resume list, archive and slash completion. Docs'
   (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture (`selftest-fixture.ts`) that writes docs, an
   index and a stand-in `docs_index.py` into the temp home at start when the home holds none yet, and again at each

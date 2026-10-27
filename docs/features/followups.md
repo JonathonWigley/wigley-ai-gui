@@ -9,7 +9,7 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
   redrawn composer), but a page reload starts the box empty. It needs the draft kept outside the page
   (`docs/features/layouts/design.md`).
 - A layout name picker in Settings mode: each `<owner>.layout` setting (and `shell.layout`) draws as a plain text
-  row; a picker listing the owner's layout names, as the theme row lists themes, would read `api.layouts.names()`.
+  row; a picker listing the owner's layout names, as the theme row lists themes, would read main's `api.layouts.names()`.
 - Packaging and installers for macOS and Windows.
 - A Latte (light) theme and OS light/dark following. The token model is theme-neutral (`colorScheme` per theme), so
   this is a theme file, its `DESIGN.md` light rules, and a light/dark choice.
@@ -101,7 +101,9 @@ now, any harness later). Each item names its sites.
   focuses the focused box again (`keepFocusedBox`), in insert mode at the text's end when it was inserting, and keeps
   the main column's scroll, but loses the cursor, a visual mode and undo. Add `snapshot`/`restore` to `TextEditor`,
   restore them in `keepFocusedBox`, and swap a CSS-only change without a rebuild. Redraw only the cards a changed
-  layout draws, reading `LayoutSet.changed` (kept unread for this, by the user's ruling).
+  layout draws, reading `LayoutSet.changed` (kept unread for this, by the user's ruling). Forms is the owner this
+  covers: chat's composer keeps its box and draft across a redraw, and docs' doc pane redraws its frame only after the
+  editor closes.
 
 ## Extensibility review: Hooks plugins don't have yet
 
@@ -115,11 +117,6 @@ now, any harness later). Each item names its sites.
   only `sessions` and the forms page emit; chat and docs emit nothing.
 - **Plugin editor remaps** — Plugins may add editor remaps (a manifest's `keys` has binds and groups, no remaps).
 - Commands take a count or argument, so `choose1..9` becomes one `forms.choose`.
-- **Layouts as a core service** — *agent-ready*: Layouts as a core service: `api.layouts.define(slot, { contractText, defaultSource, read })` in both processes,
-  owning the channel, the `layouts/<slot>/` folder, the CSS links, the toasts, the layout setting and the preview
-  command. Replaces the hand wiring duplicated in forms and chat (`main/start.ts`, `page/start.ts`, the channel
-  methods per contract, the `layout` setting per manifest), and gives any view (sessions sidebar row, docs, help,
-  status bar) a user look.
 - **EditorHost.defineEx** — *agent-ready*: `EditorHost.defineEx(name, prefix, handler)`, disposable: the document editor's write/quit become ex commands the
   docs plugin registers, replacing the closed `DOCUMENT_EX_COMMANDS` and the `switch` in `codemirror-vim-host.ts`.
 - **Markdown block and fence contributions** — *agent-ready*: `MarkdownRenderer.addBlock({ opener, render })` and `addFence(language, render)` in the contract's own terms; the

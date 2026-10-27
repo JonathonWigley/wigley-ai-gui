@@ -38,8 +38,9 @@ app and shown in the stable app with no copy.
   The registry and loader that forms and chat used over their own plugin data folders move behind this service.
 - **One page host.** Everything forms and chat each held a copy of — serving and showing layouts, the reader
   skeleton, the pick chain, rolling back a part that throws and drawing it with `default`, the command runner and the
-  head kit's generic half — is one module in `src/shared/page/`. An owner adds only its contract, its `default`
-  layout, its reader and its kit parts.
+  head kit's generic half — is one module, `src/shared/page/layout-host/`. An owner adds only its contract, its
+  `default` layout, its reader and its kit parts. Every owner's kit extends the host's `BaseKit` (`kit.d.ts`), whose
+  members every layout can use.
 - **The owner's contract** is its `layouts/layout.d.ts`; its built-in `default` is `layouts/default/layout.js`,
   plain JS under `// @ts-check`. A user layout defines only the parts it changes.
 
@@ -47,7 +48,8 @@ app and shown in the stable app with no copy.
 
 - Layouts live in `~/.config/wigley-ai-gui/layouts/<owner>/<name>/`, shared by the stable and dev apps. `<owner>` is
   a plugin id or `shell`. The self-test and a drive run use the config folder in their own temp home.
-- Each app writes `layouts/<owner>/layout.d.ts` at start; the app started last wins. A layout that breaks under the
+- Each app writes `layouts/kit.d.ts` (the shared kit types) and `layouts/<owner>/layout.d.ts` at start; the app
+  started last wins. A layout that breaks under the
   other app's contract falls back to `default` there, as any throwing part does.
 - Each owner has its own setting naming its layout: `<plugin>.layout` for a plugin, the core setting `shell.layout`
   for the shell, `default` when unset. Forms keeps its per-round and per-item `layout` fields over its setting.
@@ -72,14 +74,14 @@ them. The app-wide look of the primitives stays in themes.
 
 | Owner | Setting | Surfaces |
 | --- | --- | --- |
-| `shell` | `shell.layout` | title bar, activity bar, side bar frame, status bar |
+| `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the four chrome frames take the layout's CSS |
 | `forms` | `forms.layout` | question, finding and notice cards; head, rail and review panes |
-| `chat` | `chat.layout` | chat entries; the composer, the start prompt, the pickers, the sign-in, deny-reason and end-session dialogs, the image viewer |
+| `chat` | `chat.layout` | chat entries; the composer and its bar, the attachments, the picker rows (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer |
 | `primer` | `primer.layout` | feature, task and item cards; rail and review panes |
-| `docs` | `docs.layout` | the tree and its rows, the rendered doc and its status chips, the create dialog |
-| `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and rows, the editor pane, plans and features |
-| `settings` | `settings.layout` | the section list, the setting rows, the key rows |
-| `notes` | `notes.layout` | the note popup: fields, images, target and pickers |
+| `docs` | `docs.layout` | the tree and its rows, the rendered doc, its header, disk banner and editor frame, the box and confirm dialogs, the create dialog's completion and picker rows |
+| `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
+| `settings` | `settings.layout` | the section list, the setting, key, leader and advanced rows, the problem line, the picker rows |
+| `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
 | `sessions` | `sessions.layout` | the session rows in the side bar, each session's tab strip |
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
