@@ -298,6 +298,24 @@ describe('CRLF files', () => {
       '- **One** — a\r\n- **Two** — b\r\n',
     );
   });
+
+  it('writes an LF file with one stray CRLF line back in LF', () => {
+    const draft = { title: 'Three', oneLine: 'c', tags: [], body: '' };
+    const text = '- **One** — a\r\n- **Two** — b\n\nTail.\n';
+
+    expect(appliedText(text, { type: 'create', draft })).toBe(
+      '- **One** — a\n- **Two** — b\n- **Three** — c\n\nTail.\n',
+    );
+  });
+
+  it('writes a CRLF file with one stray LF line back in CRLF', () => {
+    const draft = { title: 'Three', oneLine: 'c', tags: [], body: '' };
+    const text = '- **One** — a\n- **Two** — b\r\n\r\nTail.\r\n';
+
+    expect(appliedText(text, { type: 'create', draft })).toBe(
+      '- **One** — a\r\n- **Two** — b\r\n- **Three** — c\r\n\r\nTail.\r\n',
+    );
+  });
 });
 
 describe('parseFollowups on a list file', () => {
@@ -828,6 +846,23 @@ describe('applyFollowupEdit delete', () => {
     });
   });
 
+  it('keeps a grouped list list-shaped after its last item goes, so a create adds a list item', () => {
+    const text = lines(
+      '# Follow-ups',
+      '',
+      '## Design issues',
+      '',
+      '- **One** — a',
+    );
+    const emptied = appliedText(text, { type: 'delete', title: 'One' });
+    const draft = { title: 'Two', oneLine: 'b', tags: [], body: '' };
+
+    expect(parseFollowups(emptied)).toEqual({ shape: 'list', items: [] });
+    expect(appliedText(emptied, { type: 'create', draft })).toBe(
+      lines('# Follow-ups', '', '## Design issues', '', '- **Two** — b'),
+    );
+  });
+
   it('removes a list item between blank lines with one of them', () => {
     const text = lines(
       '- **One** — a',
@@ -995,6 +1030,22 @@ describe('parseFollowups on texts the index reader shares', () => {
 
     expect(file.shape).toBe('list');
     expect(file.items.map((item) => item.title)).toEqual(['A', 'B']);
+  });
+
+  it('keeps ## headings with empty bodies list-shaped, with no items', () => {
+    const text = lines(
+      '# Follow-ups',
+      '',
+      'Intro.',
+      '',
+      '## Group',
+      '',
+      '## Other',
+    );
+    const file = parseFollowups(text);
+
+    expect(file.shape).toBe('list');
+    expect(file.items).toEqual([]);
   });
 
   it('reads tags and a title from a wrapped Contents line', () => {

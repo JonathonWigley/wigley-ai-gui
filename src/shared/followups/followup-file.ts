@@ -106,7 +106,8 @@ interface Splice {
   insert: string[];
 }
 
-// `lineEnding` is `\r\n` when the file uses CRLF, so an edit writes it back.
+// `lineEnding` is `\r\n` when most of the file's lines end in CRLF, so an edit
+// writes it back.
 interface SplitText {
   lines: string[];
   endsWithNewline: boolean;
@@ -210,8 +211,11 @@ export function newFollowupsFile(repo: string): string {
   ].join('\n');
 }
 
+// The line ending most lines use, LF on a tie.
 function splitText(text: string): SplitText {
-  const lineEnding = text.includes('\r\n') ? '\r\n' : '\n';
+  const crlfCount = text.split('\r\n').length - 1;
+  const lfCount = text.split('\n').length - 1 - crlfCount;
+  const lineEnding = crlfCount > lfCount ? '\r\n' : '\n';
   if (text === '') {
     return { lines: [], endsWithNewline: true, lineEnding };
   }
@@ -300,19 +304,19 @@ function linesOutsideFences(lines: string[]): number[] {
   return outside;
 }
 
-// Sectioned by a `**Contents**` line or a `### ` heading, or by `## ` headings
-// with no top-level list item; else a list file.
+// Sectioned by a `**Contents**` line or a `### ` heading, or by a `## `
+// section with body text and no top-level list item; else a list file.
 function readLayout(lines: string[]): Layout {
   const outside = linesOutsideFences(lines);
   const hasSectionMark = outside.some(
     (index) =>
       lines[index].trim() === CONTENTS_LINE || lines[index].startsWith('### '),
   );
-  const hasHeading = outside.some((index) => lines[index].startsWith('## '));
   const hasListItem = outside.some((index) =>
     TOP_LEVEL_ITEM.test(lines[index]),
   );
-  const isSectioned = hasSectionMark || (hasHeading && !hasListItem);
+  const isSectioned =
+    hasSectionMark || (hasSectionWithBody(lines, outside) && !hasListItem);
   if (!isSectioned) {
     return {
       shape: 'list',
@@ -326,6 +330,15 @@ function readLayout(lines: string[]): Layout {
     entries: readSectionEntries(lines, outside, contents),
     contents,
   };
+}
+
+// Whether a non-blank line sits between some `## ` heading and the next.
+function hasSectionWithBody(lines: string[], outside: number[]): boolean {
+  const headings = outside.filter((index) => lines[index].startsWith('## '));
+  return headings.some((start, position) => {
+    const bound = headings[position + 1] ?? lines.length;
+    return lastNonBlank(lines, start, bound) > start;
+  });
 }
 
 // The Contents list: every top-level list item outside fences after the
