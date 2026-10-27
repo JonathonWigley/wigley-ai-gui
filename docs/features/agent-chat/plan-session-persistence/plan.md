@@ -193,5 +193,6 @@ Review base: f676c293b1c5b8de5ce197b9ebf280691835f557
 - isLive also requires the event's processStart be current; ended removes its own process via a holder filled after harness.start — R1 finding 5 — a synchronous ended inside start stays in running (pre-existing gap) · lead (fix d29c0be)
 ### Review rounds
 - R1 implementation review · c4b411f · NEEDS FIXES (3 important, 4 minor, 1 pre-existing; 4 applied by lead in the next commit)
+- R2 re-review (correctness) · 18ee3f1 · NEEDS FIXES (1 minor repeat of R1#6 — pending history read on send; 1 minor missing test row); decided per the user's standing 'take the recommendation': resolve pending history at first show or first send
 ### Test gate
 - full vitest suite (npm test) — the range touches the chat contract both sides, sessions and keymap, and the whole suite runs in seconds, covering every planned test (open-sessions, session-list, chat-sessions, start, the four page files) · 237 files / 3619 tests pass; npm run selftest all passed at 0625058

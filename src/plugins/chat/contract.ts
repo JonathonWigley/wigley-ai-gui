@@ -95,8 +95,10 @@ export interface ChatChannel extends ChannelShape {
     // other row rejects.
     resume(request: ResumeRequest): Promise<string>;
     // Starts a resting session's process first; rejects, leaving it resting,
-    // when its profile is missing or the start fails.
-    send(sessionId: string, message: UserMessage): void;
+    // when its profile is missing or the start fails. A restored session's
+    // earlier conversation still pending is read first, arriving as
+    // `entries`.
+    send(sessionId: string, message: UserMessage): Promise<void>;
     // Reads a restored session's earlier conversation, arriving as `entries`.
     // While its profile is missing a call reads nothing and a later call
     // tries again; once read, or for a session with none pending, a call does

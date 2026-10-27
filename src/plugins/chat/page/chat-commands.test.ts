@@ -112,7 +112,7 @@ function box(text: string) {
 // `toasts` each toast. Every invoke
 // resolves, or rejects with `refusal` when one is given. With `visible`
 // false no Chat tab is the visible tab. `slashCommands` holds the app slash
-// commands send matches.
+// commands send matches. `close` removes the session from the tabs.
 function setUp(
   shown: ChatSession,
   refusal?: Error,
@@ -124,10 +124,11 @@ function setUp(
   const logs: string[] = [];
   const toasts: string[] = [];
   const viewed: { images: readonly ChatImage[]; index: number }[] = [];
+  let isOpen = true;
   const tabs = {
     visibleSessionId: () => (visible ? shown.sessionId : null),
     session: (sessionId: string) =>
-      sessionId === shown.sessionId ? shown : undefined,
+      isOpen && sessionId === shown.sessionId ? shown : undefined,
     sessionOfEditor: () => undefined,
   } as unknown as ChatTabs;
   const picker = {
@@ -166,6 +167,9 @@ function setUp(
     logs,
     toasts,
     viewed,
+    close: () => {
+      isOpen = false;
+    },
   };
 }
 
@@ -365,6 +369,7 @@ describe('chat commands', () => {
   it.each([
     {
       given: 'nothing new in the box',
+      closedSince: false,
       typedSince: '',
       attachedSince: [],
       text: 'hi',
@@ -372,14 +377,23 @@ describe('chat commands', () => {
     },
     {
       given: 'text and an image added since',
+      closedSince: false,
       typedSince: 'more',
       attachedSince: [jpeg],
       text: 'hi\nmore',
       images: [png, jpeg],
     },
+    {
+      given: 'the session closed since',
+      closedSince: true,
+      typedSince: 'more',
+      attachedSince: [jpeg],
+      text: 'more',
+      images: [jpeg],
+    },
   ])(
     'send_MainRejects_ToastsAndPutsTheMessageBack given $given',
-    async ({ typedSince, attachedSince, text, images }) => {
+    async ({ closedSince, typedSince, attachedSince, text, images }) => {
       const message = box('hi');
       const shown = Object.assign(session(false), { box: message });
       shown.attachments.add(png);
@@ -389,6 +403,9 @@ describe('chat commands', () => {
       message.held.text = typedSince;
       for (const image of attachedSince) {
         shown.attachments.add(image);
+      }
+      if (closedSince) {
+        run.close();
       }
       await flush();
 

@@ -1401,7 +1401,7 @@ describe('createChatSessions saved sessions', () => {
 
   it.each([{ sent: true }, { sent: false }])(
     'send_RestingRow_StartsProcessWithResumeFromSent (sent $sent)',
-    ({ sent }) => {
+    async ({ sent }) => {
       const test = setUp();
       const hostId = PAST_ONE.sessionId;
       test.chat.restore({
@@ -1410,7 +1410,7 @@ describe('createChatSessions saved sessions', () => {
       });
       expect(test.harness.processes).toEqual([]);
 
-      test.chat.send(ROW_ID, { text: 'hi', images: [] });
+      await test.chat.send(ROW_ID, { text: 'hi', images: [] });
 
       expect(test.harness.processes.map((process) => process.request)).toEqual([
         {
@@ -1505,16 +1505,16 @@ describe('createChatSessions saved sessions', () => {
     },
   ])(
     'send_RestingRowThatCannotStart_RejectsAndStaysResting given $given',
-    ({ saved, startFailure, error }) => {
+    async ({ saved, startFailure, error }) => {
       const test = setUp();
       test.chat.restore({ sessions: [saved], selectedHostSessionId: null });
       if (startFailure !== null) {
         test.harness.failNextStart(startFailure);
       }
 
-      expect(() => test.chat.send(ROW_ID, { text: 'hi', images: [] })).toThrow(
-        error,
-      );
+      await expect(
+        test.chat.send(ROW_ID, { text: 'hi', images: [] }),
+      ).rejects.toThrow(error);
       expect(test.harness.processes).toEqual([]);
       expect(test.chat.sessions()[0].running).toBe(false);
       expect(test.sent('sessionRested')).toEqual([]);
@@ -1687,6 +1687,57 @@ describe('createChatSessions saved sessions', () => {
       ],
     ]);
   });
+
+  it.each([
+    {
+      given: 'a read that succeeds',
+      historyFailure: null,
+      historyIds: [
+        `history:${PAST_ONE.sessionId}-user`,
+        `history:${PAST_ONE.sessionId}-assistant`,
+      ],
+    },
+    {
+      given: 'a read that fails',
+      historyFailure: 'disk gone',
+      historyIds: ['history:unread'],
+    },
+  ])(
+    'send_RowWithHistoryPending_ReadsItBeforeTheStart given $given',
+    async ({ historyFailure, historyIds }) => {
+      const test = setUp();
+      test.chat.restore({
+        sessions: [record(PAST_ONE.sessionId, { sent: true })],
+        selectedHostSessionId: null,
+      });
+      if (historyFailure !== null) {
+        test.harness.failNextHistory(historyFailure);
+      }
+      const historyCalls = () =>
+        test.harness.pastSessionCalls.filter(
+          (call) => call.method === 'history',
+        );
+
+      const sending = test.chat.send(ROW_ID, { text: 'hi', images: [] });
+      const startsDuringRead = test.harness.processes.length;
+      await sending;
+      await flush();
+      await test.chat.loadHistory(ROW_ID);
+
+      expect(startsDuringRead).toBe(0);
+      expect(test.harness.processes[0].calls).toEqual([
+        { method: 'send', text: 'hi', imageCount: 0 },
+      ]);
+      expect(historyCalls()).toHaveLength(1);
+      expect(test.chat.sessions()[0].entries.map((entry) => entry.id)).toEqual([
+        ...historyIds,
+        'user-1',
+        'assistant-1',
+        'result-1',
+      ]);
+      expect(test.sent('entries')).toHaveLength(1);
+    },
+  );
 
   it('loadHistory_RowClosedWhileReading_SendsNothing', async () => {
     const test = setUp();

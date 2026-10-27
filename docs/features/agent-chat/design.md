@@ -168,8 +168,9 @@ interview on 2026-10-23; this file is the record of both.
   instance, so the stable and dev apps, drive runs and the self-test each keep their own list. On start, chat opens a
   row for each record, in order and unselected, then selects the saved row: each row **rests**, holding no process.
   A record whose host id is already open, or whose open throws, is skipped and logged.
-  A restored row that was ever sent to has its earlier conversation read from its transcript the first time its Chat tab shows
-  while its profile is in the settings, so start reads no transcripts. The first message sent in a resting row starts its process (`--resume` when a message was ever
+  A restored row that was ever sent to has its earlier conversation read from its transcript once, on the first show of
+  its Chat tab or the first send, whichever comes first, while its profile is in the settings, so start reads no
+  transcripts; a send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting row starts its process (`--resume` when a message was ever
   sent, else `--session-id`); app slash commands run without one, and the controls and the agent's slash commands
   fill in once it runs. A session whose process exits while the app runs rests the same way, a notice in its chat
   giving the exit and its reason. A restored session whose turn was running at quit gets a notice that the app quit

@@ -97,9 +97,11 @@ export interface ChatSessions {
   // session chat holds a row for has that row activated instead; one open in
   // the app on any other row rejects.
   resume(request: ResumeRequest): Promise<string>;
-  // Starts a resting session's process first, throwing when its profile is
-  // missing or the start fails; the row then stays resting.
-  send(sessionId: string, message: UserMessage): void;
+  // Starts a resting session's process first, rejecting when its profile is
+  // missing or the start fails; the row then stays resting. A restored row
+  // whose earlier conversation is still pending has it read before the start,
+  // so the read holds none of this turn.
+  send(sessionId: string, message: UserMessage): Promise<void>;
   // Adds an app notice to the session's entries and sends it as harness
   // entries travel, so `sessions()` keeps it.
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
@@ -154,6 +156,8 @@ interface HeldSession {
   // A restored session ever sent to whose earlier conversation is not read
   // yet.
   historyPending: boolean;
+  // The read of the earlier conversation while it runs.
+  historyRead: Promise<void> | null;
   harnessActivity: ProcessActivity;
   pending: Map<string, PendingPermission>;
   permissionCount: number;
@@ -458,7 +462,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         send('commands', { sessionId, names: [...names] });
       },
       ended({ code, error }) {
-        session.exit = { code, error };
+        // A close drops the row before its process ends, so the exit is
+        // recorded for the row's latest process whether or not it is live.
+        if (session.processStarts === processStart) {
+          session.exit = { code, error };
+        }
         if (started.process !== null) {
           running.delete(started.process);
         }
@@ -534,6 +542,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       process: null,
       sent: opening.sent,
       historyPending: opening.historyPending,
+      historyRead: null,
       harnessActivity: 'idle',
       pending: new Map(),
       permissionCount: 0,
@@ -586,15 +595,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Opens the row for `hostId` and starts its process; a start that throws
-  // drops the session, then ends the owned session. Returns the row's
-  // sessionId.
+  // drops the session, then ends the owned session.
   function openAndStart(
     harness: AgentHarness,
     profile: ChatProfile,
     projectDir: string,
     opening: { hostId: string; resume: boolean; entries: ChatEntry[] },
     options: OpenOptions,
-  ): string {
+  ): HeldSession {
     const session = openRow(
       projectDir,
       profile.name,
@@ -606,7 +614,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       },
       options,
     );
-    const { sessionId } = session.state;
     try {
       startProcess(session, harness, profile, opening.resume);
     } catch (error) {
@@ -615,11 +622,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       throw error;
     }
     save();
-    return sessionId;
+    return session;
   }
 
   // A new session in the folder, its row selected as `options` says.
-  function startNew(request: StartRequest, options: OpenOptions): string {
+  function startNew(request: StartRequest, options: OpenOptions): HeldSession {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
     return openAndStart(
@@ -631,7 +638,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
-  function sendMessage(sessionId: string, message: UserMessage) {
+  async function sendMessage(sessionId: string, message: UserMessage) {
     const session = held.get(sessionId);
     if (session === undefined) {
       log('chat', `send for unknown session ${sessionId} ignored`);
@@ -639,8 +646,26 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
     if (!session.state.running) {
       const profile = profileNamed(session.state.profile);
-      startProcess(session, requireHarness(), profile, session.sent);
+      const harness = requireHarness();
+      const reading = historyReadOf(session, profile, harness);
+      if (reading !== null) {
+        await reading;
+        if (held.get(sessionId) !== session) {
+          log(
+            'chat',
+            `send for session ${sessionId} closed while reading ignored`,
+          );
+          return;
+        }
+      }
+      if (!session.state.running) {
+        startProcess(session, harness, profile, session.sent);
+      }
     }
+    deliver(session, message);
+  }
+
+  function deliver(session: HeldSession, message: UserMessage) {
     session.process?.send(message);
     if (!session.sent) {
       session.sent = true;
@@ -655,8 +680,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         throw new Error(refusal);
       }
     }
-    const sessionId = startNew(request, { select: false });
-    sendMessage(sessionId, request.message);
+    const session = startNew(request, { select: false });
+    deliver(session, request.message);
+    const { sessionId } = session.state;
     log('chat', `launched session ${sessionId} in ${request.projectDir}`);
     return sessionId;
   }
@@ -757,6 +783,43 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
   }
 
+  // Starts reading the session's pending earlier conversation, which then
+  // pends no more; returns the read while it runs, or null when none does.
+  function historyReadOf(
+    session: HeldSession,
+    profile: ChatProfile,
+    harness: AgentHarness,
+  ): Promise<void> | null {
+    if (session.historyPending) {
+      session.historyPending = false;
+      session.historyRead = prependHistory(session, profile, harness).finally(
+        () => {
+          session.historyRead = null;
+        },
+      );
+    }
+    return session.historyRead;
+  }
+
+  async function prependHistory(
+    session: HeldSession,
+    profile: ChatProfile,
+    harness: AgentHarness,
+  ) {
+    const { sessionId } = session.state;
+    const history = await readHistory(
+      harness,
+      session.hostId,
+      session.state.projectDir,
+      profileDirOf(profile),
+    );
+    if (held.get(sessionId) !== session) {
+      return;
+    }
+    session.state.entries = [...history, ...session.state.entries];
+    send('entries', { sessionId, entries: [...session.state.entries] });
+  }
+
   async function loadHistory(sessionId: string): Promise<void> {
     const session = held.get(sessionId);
     if (session === undefined || !session.historyPending) {
@@ -770,19 +833,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (profile === undefined) {
       return;
     }
-    const harness = requireHarness();
-    session.historyPending = false;
-    const history = await readHistory(
-      harness,
-      session.hostId,
-      session.state.projectDir,
-      profileDirOf(profile),
-    );
-    if (held.get(sessionId) !== session) {
-      return;
-    }
-    session.state.entries = [...history, ...session.state.entries];
-    send('entries', { sessionId, entries: [...session.state.entries] });
+    await historyReadOf(session, profile, requireHarness());
   }
 
   // A file that cannot be read marks no row archived, so every saved session
@@ -840,7 +891,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       projectDir,
       { hostId: hostSessionId, resume: true, entries },
       { select: true },
-    );
+    ).state.sessionId;
   }
 
   function askPermission(
@@ -886,7 +937,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   return {
     sessions: () =>
       [...held.values()].map((session) => copyState(session.state)),
-    start: (request) => startNew(request, { select: true }),
+    start: (request) => startNew(request, { select: true }).state.sessionId,
     launch,
     restore,
     loadHistory,
