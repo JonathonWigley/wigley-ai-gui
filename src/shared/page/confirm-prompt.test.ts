@@ -41,7 +41,6 @@ function promptSetup(hasOnBaseChanged = true) {
       },
     },
     run,
-    platform: 'macos',
     pushScope: () => {
       calls.push('push');
       return {

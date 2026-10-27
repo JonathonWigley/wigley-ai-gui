@@ -8,8 +8,8 @@ export interface TextButtonOptions {
   hint?: HTMLElement | null;
 }
 
-// A labelled button that never takes focus, the hint (a `kbd`) after its
-// label; a toggle shows on with `is-selected`.
+// A labelled button that never takes focus, the hint (an element, such as a
+// key prompt's anchor) after its label; a toggle shows on with `is-selected`.
 export function textButton(
   label: string,
   onClick: () => void,

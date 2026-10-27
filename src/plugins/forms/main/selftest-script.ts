@@ -846,7 +846,8 @@ function fixtureRound(run: number) {
   };
 }
 
-// The round the second session holds; the run never answers it.
+// The round the second session holds; the run never answers it. Its nine
+// choices draw every pick key's prompt.
 function secondRound(run: number) {
   const waiting = {
     context: `Run ${run}: waits here.`,
@@ -862,6 +863,21 @@ function secondRound(run: number) {
     questions: [
       { title: 'Waits', ...waiting },
       { title: 'Also waits', ...waiting },
+      {
+        title: 'Nine choices',
+        ...waiting,
+        choices: [
+          'One',
+          'Two',
+          'Three',
+          'Four',
+          'Five',
+          'Six',
+          'Seven',
+          'Eight',
+          'Nine',
+        ],
+      },
     ],
   };
 }

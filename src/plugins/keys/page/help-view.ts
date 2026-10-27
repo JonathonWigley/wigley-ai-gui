@@ -16,24 +16,24 @@ export interface HelpView {
 }
 
 // The help dialog, contributed to `overlay` and hidden while closed, its keys
-// printed for `platform`. `close` runs on its Close button, which shows
-// `closeHint`, read again on each `setSections` so a rebind reaches it.
+// printed for `platform`. `close` runs on its Close button, which holds
+// `closeHint`, the anchor that draws the close key.
 export function mountHelpView(
   overlay: Area,
   sections: HelpSection[],
   close: () => void,
   platform: Platform,
-  closeHint: () => HTMLElement | null,
+  closeHint: HTMLElement,
 ): HelpView {
   const dialog = createDialog('Keys');
   const grid = element('div', 'keys-help-sections');
   dialog.body.append(grid);
+  dialog.actions.append(
+    textButton('Close', close, { variant: 'secondary', hint: closeHint }),
+  );
   const setSections = (next: HelpSection[]) => {
     grid.replaceChildren(
       ...next.map((section) => renderSection(section, platform)),
-    );
-    dialog.actions.replaceChildren(
-      textButton('Close', close, { variant: 'secondary', hint: closeHint() }),
     );
   };
   setSections(sections);

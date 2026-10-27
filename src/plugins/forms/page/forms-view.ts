@@ -109,7 +109,6 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     scope: formsScope('confirm'),
     keys: deps.keys,
     run: (command) => deps.run(command),
-    platform: deps.platform,
     pushScope: () => deps.pushConfirmScope(),
     isAsked: () => store.get().view === 'confirm',
     isSending: () => (activeForm(store.get())?.sending ?? null) !== null,

@@ -25,14 +25,18 @@ vi.mock('./drive/page-driver', async (importOriginal) => ({
   waitForNewLogLine,
 }));
 // The window's navigation count, which a test moves to stand in for a new
-// navigation.
+// navigation, and the page log (newest first) its `#log li` read answers; any
+// other script the window runs answers nothing.
 const navigation = vi.hoisted(() => ({ count: 1 }));
+const pageLog = vi.hoisted(() => ({ lines: [] as string[] }));
 vi.mock('./electron-driven-window', () => ({
   electronDrivenWindow: () => ({
     focus: () => {},
     emulateFocus: async () => {},
     contentSize: () => ({ width: 800, height: 600 }),
     navigationCount: () => navigation.count,
+    run: async (script: string) =>
+      script.includes('#log li') ? [...pageLog.lines] : undefined,
   }),
 }));
 
@@ -233,6 +237,7 @@ describe('startSelfTest', () => {
     exit.mockClear();
     press.mockClear();
     navigation.count = 1;
+    pageLog.lines = [];
     screenshotFolder = mkdtempSync(path.join(tmpdir(), 'selftest-test-'));
     lines = [];
     vi.spyOn(console, 'log').mockImplementation((line: string) => {
@@ -335,5 +340,58 @@ describe('startSelfTest', () => {
       '[selftest] page load 1 starts its run',
       '[selftest] page load 2 starts its run',
     ]);
+  });
+
+  it('startSelfTest fails the run on an unplaced line logged before the first script', async () => {
+    vi.resetModules();
+    const { startSelfTest } = await import('./selftest');
+    pageLog.lines = ['[keys] unplaced x a.trash in a.s'];
+    waitForNewLogLine.mockResolvedValueOnce(true);
+    const { window, loaded } = windowFiringLoads();
+    const driver = startSelfTest(
+      window,
+      {} as Files,
+      async () => {},
+      screenshotFolder,
+    );
+    driver.hostFor('plugin').run({
+      pageBinds: [],
+      settings: {},
+      open: () => ({ shownLine: '[plugin] shown', result: Promise.resolve() }),
+      groups: [],
+      scrollsItself: [],
+      problems: () => [],
+    });
+    driver.closeHandover();
+
+    loaded[0]();
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
+
+    expect(lines).toContain('[selftest] FAIL [keys] unplaced x a.trash in a.s');
+  });
+});
+
+describe('unplacedLines', () => {
+  it("unplacedLines keeps only the keys plugin's unplaced lines, in order", async () => {
+    const { unplacedLines } = await import('./selftest-runner');
+
+    expect(
+      unplacedLines([
+        '[keys] unplaced x a.trash in a.s',
+        '[t] done',
+        '[keys] unplaced y a.copy in a.t',
+      ]),
+    ).toEqual([
+      '[keys] unplaced x a.trash in a.s',
+      '[keys] unplaced y a.copy in a.t',
+    ]);
+  });
+});
+
+describe('PLACEMENT_CHECK_EVENT', () => {
+  it("PLACEMENT_CHECK_EVENT is the keys plugin's event name", async () => {
+    const { PLACEMENT_CHECK_EVENT } = await import('./selftest-runner');
+
+    expect(PLACEMENT_CHECK_EVENT).toBe('keys-check-placement');
   });
 });

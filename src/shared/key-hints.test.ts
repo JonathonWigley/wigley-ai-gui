@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandId } from '../contracts/commands';
-import type { Keymap, PageBind } from '../contracts/keymap';
+import type { Keymap } from '../contracts/keymap';
 import {
   type CommandLabel,
   chordName,
@@ -10,7 +10,6 @@ import {
   formatKeys,
   formatVimKeys,
   formatVimToken,
-  pageHints,
   vimTokens,
 } from './key-hints';
 
@@ -20,17 +19,10 @@ const LABELS: Partial<Record<CommandId, string>> = {
   'forms.choose1': CHOICE_LABEL,
   'forms.choose2': CHOICE_LABEL,
   'forms.choose3': CHOICE_LABEL,
-  'test.back': 'back to the form',
 };
 
 // Unlabelled commands read as their ids, as the page API's lookup does.
 const label: CommandLabel = (id) => LABELS[id] ?? id;
-
-const choiceBinds: PageBind[] = ['1', '2', '3'].map((digit): PageBind => ({
-  keys: [digit],
-  scope: 'forms.forms',
-  command: `forms.choose${digit}`,
-}));
 
 const keymap: Keymap = {
   editor: {
@@ -43,15 +35,7 @@ const keymap: Keymap = {
       { keys: '<Leader>3', scope: 'any', command: 'forms.choose3' },
     ],
   },
-  page: [
-    { keys: ['j'], scope: 'forms.forms', command: 'test.down' },
-    ...choiceBinds,
-    { keys: [' ', ' '], scope: 'forms.forms', command: 'test.review' },
-    { keys: ['Escape'], scope: 'forms.review', command: 'test.back' },
-    { keys: ['?'], scope: 'forms.help', command: 'test.close' },
-    { keys: ['Escape'], scope: 'forms.help', command: 'test.close' },
-    { keys: ['F1'], scope: 'any', command: 'test.anywhere' },
-  ],
+  page: [],
   app: [],
   intercept: [{ key: 'Tab', control: true, command: 'test.intercept' }],
   global: [{ accelerator: 'Control+Alt+Command+W', command: 'test.summon' }],
@@ -114,37 +98,6 @@ describe('formatKeys', () => {
 
   it('prints a chord for the platform', () => {
     expect(formatKeys([' ', '<A-o>'], 'macos')).toBe('Space ⌥O');
-  });
-});
-
-describe('pageHints', () => {
-  it("lists the view's binds and the any-scope binds, in keymap order", () => {
-    expect(
-      pageHints(keymap.page, 'forms.forms', label, 'macos').map(
-        (hint) => hint.keys,
-      ),
-    ).toEqual(['j', '1–3', 'Space Space', 'F1']);
-  });
-
-  it('lists the review binds with their labels, leaving out other views', () => {
-    expect(pageHints(keymap.page, 'forms.review', label, 'macos')).toEqual([
-      { keys: '⎋', label: 'back to the form' },
-      { keys: 'F1', label: 'test.anywhere' },
-    ]);
-  });
-
-  it('merges a run of digits with one label into a range', () => {
-    expect(pageHints(keymap.page, 'forms.forms', label, 'macos')[1]).toEqual({
-      keys: '1–3',
-      label: CHOICE_LABEL,
-    });
-  });
-
-  it('joins other neighbours with one label', () => {
-    expect(pageHints(keymap.page, 'forms.help', label, 'macos')[0]).toEqual({
-      keys: '? / ⎋',
-      label: 'test.close',
-    });
   });
 });
 

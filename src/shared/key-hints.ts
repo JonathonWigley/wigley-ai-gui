@@ -1,5 +1,5 @@
 // Key hints as the user reads them: the formatting which-key, help and the
-// status bar's key list share.
+// key prompts share.
 
 import type { CommandId } from '../contracts/commands';
 import type {
@@ -7,8 +7,6 @@ import type {
   EditorKeymap,
   EditorMode,
   InterceptBind,
-  PageBind,
-  ViewScope,
 } from '../contracts/keymap';
 import type { Platform } from '../contracts/platform';
 import { type Chord, parseChord } from './chord-notation';
@@ -238,25 +236,6 @@ export function vimTokens(keys: string, leader: string): string[] {
 // The vim mode an editor bind fires in; normal when the bind names none.
 export function editorBindMode(bind: EditorBind): EditorMode {
   return bind.mode ?? 'normal';
-}
-
-// The page keys that fire in the qualified `scope`, `any` binds included,
-// chords printed for `platform`.
-export function pageHints(
-  binds: PageBind[],
-  scope: ViewScope,
-  label: CommandLabel,
-  platform: Platform,
-): KeyHint[] {
-  return mergeHints(
-    binds
-      .filter((bind) => bind.scope === scope || bind.scope === 'any')
-      .map((bind) => ({
-        keys: formatKeys(bind.keys, platform),
-        command: bind.command,
-      })),
-    label,
-  );
 }
 
 // The binds inside a text box, `<Leader>` spelled as the leader key and

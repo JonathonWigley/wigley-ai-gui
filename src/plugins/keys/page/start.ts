@@ -1,16 +1,15 @@
 import './keys.css';
 import type { PageApi, PagePart, PushedScope } from '../../../contracts/plugin';
-import { kbd } from '../../../shared/page/ui/kbd';
+import { element } from '../../../shared/page/dom';
+import { iconButton } from '../../../shared/page/ui/icon-button';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../contract';
 import { keysManifest } from '../manifest';
 import { createAnchors } from './anchors';
 import { helpSections } from './help-sections';
 import { mountHelpView } from './help-view';
-import { barHints } from './key-bar';
-import { mountKeyBarView } from './key-bar-view';
 import { keysFor, promptKeysFor } from './keys-for';
-import { startUnplacedLog } from './unplaced-log';
+import { PLACEMENT_CHECK_EVENT, startUnplacedLog } from './unplaced-log';
 import { whichKeyModel } from './which-key';
 import { startWhichKey } from './which-key-controller';
 import { mountWhichKeyView } from './which-key-view';
@@ -23,13 +22,13 @@ type KeysApi = PageApi<
 
 // Shows which-key over every pending key sequence, on the page and in a box;
 // the help overlay over the `help` scope while it is open, closing when the
-// scope under it changes; and the keys that fire now, leader sequences aside,
-// in the status bar. Each reads the keymap and settings as they are now, and
-// help, the key bar and every anchor redraw when the keymap changes. Exports
-// the keys bound to a command, and when they change, and `anchor`, which
-// draws a command's keys into a view's element, shown while its scope is in
-// force and the `showHints` setting is on. Records each scope in force and
-// every anchor named, for the unplaced log's check.
+// scope under it changes; and the Keys button at the title bar's end, which
+// opens help. Each reads the keymap and settings as they are now, and help and
+// every anchor redraw when the keymap changes. Exports the keys bound to a
+// command, and when they change, and `anchor`, which draws a command's keys
+// into a view's element, shown while its scope is in force and the
+// `showHints` setting is on. Records each scope in force and every anchor
+// named, and checks them for unplaced binds on `PLACEMENT_CHECK_EVENT`.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
@@ -56,21 +55,25 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
     const currentHelpSections = () =>
       helpSections(keys.keymap(), keys.scopes, keys.label, platform);
     const closeHelpCommand = qualify(keysManifest.id, 'closeHelp');
-    const closeHelpHint = () => {
-      const closeKeys = keysFor(
-        keys.keymap(),
-        closeHelpCommand,
-        qualify(keysManifest.id, 'help'),
-        platform,
-      );
-      return closeKeys === null ? null : kbd(closeKeys, platform);
-    };
+    const toggleHelpCommand = qualify(keysManifest.id, 'toggleHelp');
+    const anchors = createAnchors({
+      keysFor: (command, scope, where) =>
+        promptKeysFor(keys.keymap(), command, scope, platform, where),
+      label: keys.label,
+      scope: () => keys.scope(),
+      showHints: () => api.settings().showHints,
+      platform,
+    });
+    const closeHint = element('span', 'keys-close-hint');
+    anchors.anchor(closeHint, closeHelpCommand, {
+      scope: qualify(keysManifest.id, 'help'),
+    });
     const help = mountHelpView(
       api.areas.overlay,
       currentHelpSections(),
       () => api.commands.run(closeHelpCommand),
       platform,
-      closeHelpHint,
+      closeHint,
     );
     // The pushed `help` scope while help is open, `null` while it is closed.
     let helpScope: PushedScope | null = null;
@@ -90,36 +93,36 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       }
     };
 
-    const keyBar = mountKeyBarView(api.areas.statusBar, {
-      hints: (isInBox) =>
-        barHints(keys.keymap(), keys.scope(), isInBox, keys.label, platform),
-      isInBox: (element) => services.editor.contains(element),
-      onScopeChanged: (listener) => keys.onScopeChanged(listener),
-      openHelp: () => api.commands.run(qualify(keysManifest.id, 'toggleHelp')),
-      platform,
-    });
-    const anchors = createAnchors({
-      keysFor: (command, scope, where) =>
-        promptKeysFor(keys.keymap(), command, scope, platform, where),
-      label: keys.label,
-      scope: () => keys.scope(),
-      showHints: () => api.settings().showHints,
-      platform,
-    });
+    const keysItem = element('span', 'keys-title-bar-item');
+    const keysHint = element('span', 'keys-title-bar-hint');
+    keysItem.append(
+      iconButton(
+        'record-keys',
+        'Keys',
+        () => api.commands.run(toggleHelpCommand),
+        'sm',
+      ),
+      keysHint,
+    );
+    anchors.anchor(keysHint, toggleHelpCommand);
+    api.areas.titleBar.contribute(keysItem, { align: 'end' });
+
     keys.onKeymapChanged(() => {
       help.setSections(currentHelpSections());
-      keyBar.render();
       anchors.redraw();
     });
     keys.onScopeChanged(() => anchors.applyVisibility());
     api.onSettingsChanged(() => anchors.applyVisibility());
-    startUnplacedLog({
+    const unplacedLog = startUnplacedLog({
       keymap: () => keys.keymap(),
       scope: () => keys.scope(),
       placedIn: anchors.placedIn,
       onScopeChanged: (listener) => keys.onScopeChanged(listener),
       log: services.log,
     });
+    document.addEventListener(PLACEMENT_CHECK_EVENT, () =>
+      unplacedLog.checkSeen(),
+    );
 
     const exports: KeysPageExports = {
       keysFor: (command, scope, where) =>

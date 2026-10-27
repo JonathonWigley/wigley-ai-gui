@@ -20,7 +20,7 @@ function firesIn(
 
 // The first bind in `keymap` that runs `command` in `scope`, `any` binds
 // included, or in any scope when `scope` is undefined, formatted as help and
-// the key bar show it on `platform`; null when none is bound. `where` picks
+// the anchors show it on `platform`; null when none is bound. `where` picks
 // the page's binds or the binds inside a text box.
 export function keysFor(
   keymap: Keymap,

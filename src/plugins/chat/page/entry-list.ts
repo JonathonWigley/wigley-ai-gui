@@ -222,8 +222,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   };
 }
 
-// Calls `followBottom` each time the list's border box resizes: the key bar,
-// the window, or its tab showing again. A height of 0 is the tab hidden.
+// Calls `followBottom` each time the list's border box resizes: the window, or
+// its tab showing again. A height of 0 is the tab hidden.
 function followListSize(
   list: HTMLElement,
   followBottom: () => void,

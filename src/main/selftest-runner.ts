@@ -10,6 +10,7 @@ import {
   type LogMark,
   markLog,
   press,
+  readLog,
   resizeContentWidth,
   STEP_TIMEOUT_MS,
   waitForAnyNewLogLine,
@@ -39,6 +40,36 @@ export function isOnLoad(
   hasExited: () => boolean,
 ): () => boolean {
   return () => window.navigationCount() === load && !hasExited();
+}
+
+// The keys plugin's page event that logs the unplaced binds of every scope in
+// force during the page load (`src/plugins/keys/page/unplaced-log.ts`).
+export const PLACEMENT_CHECK_EVENT = 'keys-check-placement';
+
+// How the keys plugin's unplaced line starts in the page log.
+export const UNPLACED_PREFIX = '[keys] unplaced ';
+
+// The lines of `lines` the keys plugin logged as unplaced binds, in the order
+// given.
+export function unplacedLines(lines: readonly string[]): string[] {
+  return lines.filter((line) => line.startsWith(UNPLACED_PREFIX));
+}
+
+// Asks the page to log the unplaced binds of every scope it has had in force,
+// then fails on each unplaced line the page load logged, oldest first, or
+// passes once when there is none. Returns how many there are.
+export async function checkPlacement(window: DrivenWindow): Promise<number> {
+  await window.run(
+    `document.dispatchEvent(new Event(${JSON.stringify(PLACEMENT_CHECK_EVENT)}))`,
+  );
+  const unplaced = unplacedLines((await readLog(window)).reverse());
+  for (const line of unplaced) {
+    report(false, line);
+  }
+  if (unplaced.length === 0) {
+    report(true, 'every key placed');
+  }
+  return unplaced.length;
 }
 
 // Prints one self-test check line.

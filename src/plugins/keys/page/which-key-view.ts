@@ -11,9 +11,10 @@ import { sectionHeader } from '../../../shared/page/ui/section-header';
 import type { WhichKeyView } from './which-key-controller';
 import type { WhichKeyModel } from './which-key';
 
-// The which-key panel, docked above the status bar in `overlay`: a row per
-// next key, its keys printed for `platform` at the row's end. Display-only,
-// and hidden while closed.
+// The which-key panel in `overlay`, docked above the status bar while it
+// shows and at the window's bottom edge otherwise: a row per next key, its
+// keys printed for `platform` at the row's end. Display-only, and hidden
+// while closed.
 export function mountWhichKeyView(
   overlay: Area,
   platform: Platform,

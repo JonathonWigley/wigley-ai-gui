@@ -2,7 +2,6 @@ import type { CommandId } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type { ViewScope } from '../../contracts/keymap';
 import type { Log } from '../../contracts/log';
-import type { Platform } from '../../contracts/platform';
 import type { PushedScope } from '../../contracts/plugin';
 import { element } from './dom';
 import { type ButtonVariant, textButton } from './ui/button';
@@ -33,7 +32,6 @@ export interface ConfirmPromptDeps {
   scope: ViewScope;
   keys: ConfirmKeys;
   run(command: CommandId): void;
-  platform: Platform;
   // Lays the prompt's scope over the caller's base scope.
   pushScope(): PushedScope;
   // Whether the caller's state asks for the prompt now.

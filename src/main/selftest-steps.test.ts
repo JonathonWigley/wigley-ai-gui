@@ -6,21 +6,27 @@ import type { Files } from '../contracts/files';
 import type { SelfTestGroup, SelfTestStep } from '../contracts/plugin';
 import { type DrivenWindow, PageNavigatedError } from './drive/driven-window';
 import { fakeDrivenWindow } from './drive/fake-driven-window';
-import { isOnLoad, runScript } from './selftest-runner';
+import { checkPlacement, isOnLoad, runScript } from './selftest-runner';
 
 const START_WIDTH = 800;
 
 // A page over the fake window: its log (newest first) answers `#log li`, its
 // width is the window's content width, every redraw lands at once, and each
-// key pressed runs `onKey`, which may log lines and navigate the page.
+// key pressed runs `onKey`, which may log lines and navigate the page. The
+// keys plugin's placement check logs `placementLines`, oldest first.
 // `widthsAtKeys` holds the content width at each key press.
 function page(
   onKey: (key: string, log: string[], navigate: () => void) => void,
+  placementLines: readonly string[] = [],
 ) {
   const log: string[] = [];
   const widthsAtKeys: number[] = [];
   const fake = fakeDrivenWindow([
     ['#log li', () => [...log]],
+    [
+      'keys-check-placement',
+      () => log.unshift(...[...placementLines].reverse()),
+    ],
     ['innerWidth', () => fake.window.contentSize().width],
     ['redrawFrames', () => 3],
   ]);
@@ -377,5 +383,50 @@ describe('runScript', () => {
         '[selftest]   step why: the last page is reachable',
       ],
     );
+  });
+});
+
+describe('checkPlacement', () => {
+  let lines: string[];
+
+  beforeEach(() => {
+    lines = [];
+    vi.spyOn(console, 'log').mockImplementation((line: string) => {
+      lines.push(line);
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('checkPlacement fails once for each unplaced line, printing the line', async () => {
+    const { window, log } = page(echo);
+    log.unshift('[t] done', '[keys] unplaced x a.trash in a.s');
+
+    const failures = await checkPlacement(window);
+
+    expect(failures).toBe(1);
+    expect(lines).toContain('[selftest] FAIL [keys] unplaced x a.trash in a.s');
+  });
+
+  it('checkPlacement counts the lines the check event logs', async () => {
+    const { window, log } = page(echo, ['[keys] unplaced y a.copy in a.t']);
+    log.unshift('[t] done');
+
+    const failures = await checkPlacement(window);
+
+    expect(failures).toBe(1);
+    expect(lines).toContain('[selftest] FAIL [keys] unplaced y a.copy in a.t');
+  });
+
+  it('checkPlacement passes when no unplaced line is logged', async () => {
+    const { window, log } = page(echo);
+    log.unshift('[t] done');
+
+    const failures = await checkPlacement(window);
+
+    expect(failures).toBe(0);
+    expect(lines).toContain('[selftest] PASS every key placed');
   });
 });

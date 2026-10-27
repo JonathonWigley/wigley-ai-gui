@@ -18,7 +18,6 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
   `wigley:feature` in that repo.
 - A theme editor in Settings mode (`docs/features/settings/design.md`): the user's `themes/*.json` token sheets are
   hand-edited today, and the userConfig service writes only `settings.json` and `keymap.json`.
-- **Key hint on/off setting** — *agent-ready*: A setting that turns every key hint on or off (the conflict prompt, the trash y/n, chat's and forms' hints). Hints already come from `keysFor`, so one setting can blank them in one place. Builds on the user config folder.
 - Editor key replay (a broken key sequence replayed into a box through `EditorHost.typeInto`) has three limits only a custom keymap reaches: focus moving mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on named keys.
 - A notification click focusing its round is untested live: an unsigned dev build gets no macOS notification (the alerts adapter falls back to Dock bounce and badge), so check it on the first signed build from the packaging follow-up.
 - Fuzzy finders: `Space f f` finds a file, `Space f s` searches text, ranked by the `FuzzyMatcher` page service (the fzf adapter, `src/renderer/fzf/`). Deferred from the docs browser (`docs-browser/design.md`).
@@ -35,8 +34,6 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - Keyboard link hints (vimium style) in rendered docs, if Tab between links is not enough.
 - Images in rendered docs: loading local image files into the page needs a safe file protocol of its own; today they show their alt text.
 - **Info tone for the on-demand tag** — *agent-ready*: The `on-demand` load-state tag uses the accent tone (`CHIP_TONES`, `src/plugins/docs/page/doc-view.ts`), against DESIGN.md's rule that colour at rest means a status; it was `status-info` before plan C, and `listed` now reads the same as `not-loaded`. Needs an info tone on the Tag primitive (`src/shared/page/ui/`).
-- Docs prints keys as plain text inside three sentences — the conflict prompt (`conflictText`, `src/plugins/docs/page/docs-state.ts`), the trash question and the no-place text (`src/plugins/docs/page/docs-dialogs.ts`) — where AGENTS.md and DESIGN.md say every hint is drawn by Kbd. Draw them through `kbd`, or carve out keys inside a sentence in both docs.
-- One `keyHint` helper in place of four copies of "read `keysFor`, then nothing or a Kbd": chat's `keyHint(keys, platform, command, scope)` (`src/plugins/chat/page/key-hint.ts`), the shared `keyHint` / `appendKeyHint`, which also redraws on keymap change (`src/shared/page/key-hint.ts`; forms and primer use it), sessions' `noSelectionHint` (`src/plugins/sessions/page/start.ts`) and keys' `closeHelpHint` (`src/plugins/keys/page/start.ts`). Chat redraws on each draw and forms on `onChanged`; one helper settles one way.
 - A Codex harness adapter behind `AgentHarness`, declaring Codex's own session controls (`agent-chat/design.md`).
 - A wigley-harness adapter behind `AgentHarness`, so the app drives the C# harness as it drives Claude Code.
 - A read-only Chat tab for sessions started in a terminal, following the session's transcript file.
@@ -231,8 +228,6 @@ now, any harness later). Each item names its sites.
   the scheme check inside, deleting the per-plugin channel pass-throughs in chat and docs.
 - **Shared helpers for copies** — *agent-ready*: Shared helpers in place of copies: `readIfPresent` (docs `script-locator.ts`, chat `recent-folders.ts`, theme
   loader), `upsertById` (chat main and page), one `orList` and `capitalised` (`round.ts`, `finding-text.ts`).
-- **One vim-mode status item** — *agent-ready*: One status item for the focused editor's vim mode, fed by `EditorHost`; forms contributes only its save state while
-  its Form tab shows. Today forms' status line shows forms' mode over Docs and Chat, and chat builds its own readout.
 - **Timers service** — *agent-ready*: `timers` joins `MainServices`, taken by `FormsService` (and its 32-bit overflow clamp moves into the adapter) and the
   layout registry, replacing global `setTimeout`.
 - **Plugin-scoped logs** — *agent-ready*: Each plugin gets a log already scoped to its id from `createPageApi`, retiring the hand-typed `logSource` strings.
@@ -295,7 +290,7 @@ now, any harness later). Each item names its sites.
 - **form-service test over the memory store** — *agent-ready*: `form-service.test.ts` (`src/shared/agent-forms/`) runs its logic over `createMemoryFormStore`, leaving disk behaviour to `form-store.test.ts`.
 - **form-state test builders** — *agent-ready*: `form-state.test.ts` uses the shared `test-rounds.ts` builders.
 - **One test naming style** — *agent-ready*: One test naming style: sentences. `Name_Case_Result` names remain in `main-api.test.ts`, `layout-loader.test.ts`,
-  `layout-registry.test.ts`, `card-input.test.ts`, `which-key.test.ts`, `key-bar.test.ts`, `help-sections.test.ts`.
+  `layout-registry.test.ts`, `card-input.test.ts`, `which-key.test.ts`, `help-sections.test.ts`.
 - **Shell layout swap failure tests** — *agent-ready*: Shell layout swap failure paths are untested: `mountShell`'s rollback when a layout throws or misses an area, and the generation-guarded restore after a later `setLayout` (`src/renderer/shell/shell.ts`). Plan B's gallery `Space z s` covers only a good swap and its restore; a throwing test layout and a second swap would cover the rest.
 - `titleBarOverlayProblem` blames the file at the end of a colour alias chain (`src/main/title-bar-overlay.ts`). Colour tokens accept only hex, `transparent` or an alias today, so it is right; if the colour kind widens (`rgb()`, `color-mix()`), a user alias onto a built-in token would be blamed on the built-in theme and fail start.
 - **Nested settings element checks** — *agent-ready*: settings.json array elements are checked for the default element's top-level keys only (`checkElements`, `src/main/config/user-settings.ts`); a nested object inside an element would pass with keys missing. No setting has that shape yet.

@@ -86,6 +86,24 @@ describe('createFakeAgentHarness', () => {
             ],
             value: 'medium',
           },
+          {
+            id: 'model',
+            label: 'Model',
+            choices: [
+              { value: 'fake-small', label: 'Small' },
+              { value: 'fake-large', label: 'Large' },
+            ],
+            value: 'fake-small',
+          },
+          {
+            id: 'verbosity',
+            label: 'Verbosity',
+            choices: [
+              { value: 'brief', label: 'Brief' },
+              { value: 'full', label: 'Full' },
+            ],
+            value: 'brief',
+          },
         ],
       ],
       ['commands', ['fake-command']],
@@ -294,6 +312,8 @@ describe('createFakeAgentHarness', () => {
         [
           expect.objectContaining({ id: 'mode', value: 'auto' }),
           expect.objectContaining({ id: 'effort', value: 'high' }),
+          expect.objectContaining({ id: 'model', value: 'fake-small' }),
+          expect.objectContaining({ id: 'verbosity', value: 'brief' }),
         ],
       ],
     ]);

@@ -14,7 +14,7 @@ import {
   type SelfTestConfig,
   screenshotFiles,
 } from './selftest-config';
-import { isOnLoad, report, runScript } from './selftest-runner';
+import { checkPlacement, isOnLoad, report, runScript } from './selftest-runner';
 
 // Runs the plugins' self-test scripts on every page load, one after another,
 // each through `runScript`, which drives its keys into the page through
@@ -64,7 +64,8 @@ let startedLoad = 0;
 
 // Waits for the page to be ready for keys and focuses it, acting as the
 // focused window as a drive run's page does, then runs every handed script in
-// hand-over order; a failing script does not stop the next.
+// hand-over order; a failing script does not stop the next. After the last
+// script it fails the run on each bind the page load left unplaced.
 async function runAllScripts(
   window: DrivenWindow,
   homeFiles: Files,
@@ -117,6 +118,10 @@ async function runAllScripts(
       return;
     }
     failures += scriptFailures;
+  }
+  failures += await checkPlacement(window);
+  if (!isCurrent()) {
+    return;
   }
   console.log(
     `[selftest] ${failures === 0 ? 'all passed' : `${failures} failed`}`,

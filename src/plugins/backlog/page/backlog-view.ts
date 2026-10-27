@@ -252,7 +252,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     scope: qualify(PLUGIN_ID, 'confirm'),
     keys: deps.keys,
     run: deps.run,
-    platform: deps.platform,
     pushScope: () => deps.pushScope('confirm'),
     isSending: () => false,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),

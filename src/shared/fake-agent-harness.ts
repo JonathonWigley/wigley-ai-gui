@@ -117,6 +117,7 @@ export const markRun = (harnesses: readonly AgentHarness[]): RunMark[] =>
     pastSessionCalls: harness.pastSessionCalls.length,
   }));
 
+// One control for each pick key, and one no pick key reaches.
 function startingControls(): SessionControl[] {
   return [
     {
@@ -137,6 +138,24 @@ function startingControls(): SessionControl[] {
         { value: 'high', label: 'High' },
       ],
       value: 'medium',
+    },
+    {
+      id: 'model',
+      label: 'Model',
+      choices: [
+        { value: 'fake-small', label: 'Small' },
+        { value: 'fake-large', label: 'Large' },
+      ],
+      value: 'fake-small',
+    },
+    {
+      id: 'verbosity',
+      label: 'Verbosity',
+      choices: [
+        { value: 'brief', label: 'Brief' },
+        { value: 'full', label: 'Full' },
+      ],
+      value: 'brief',
     },
   ];
 }

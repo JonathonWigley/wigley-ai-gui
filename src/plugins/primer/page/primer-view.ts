@@ -75,8 +75,8 @@ import type { PrimerStore } from './primer-store';
 // key scope to `scopeOf` the state while a Primer tab is the visible tab;
 // `pushConfirmScope` lays the cancel prompt's scope over it. `keys` anchors
 // each key hint the view draws. `run` runs a button's command. `platform` is
-// the OS the cancel prompt's hints are drawn for; `uiState` keeps the rail's
-// dragged width, which every primer's rail opens at.
+// the OS the app runs on; `uiState` keeps the rail's dragged width, which
+// every primer's rail opens at.
 export interface PrimerViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
@@ -169,7 +169,6 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     scope: primerScope('confirm'),
     keys: deps.keys,
     run: (command) => deps.run(command),
-    platform: deps.platform,
     pushScope: () => deps.pushConfirmScope(),
     isAsked: () => store.get().view === 'confirm',
     isSending: () => (activeForm(store.get())?.sending ?? null) !== null,
