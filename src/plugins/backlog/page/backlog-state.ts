@@ -52,6 +52,9 @@ export interface BacklogState {
   homeCursor: number;
   openRoot: string | null;
   selectedKey: string | null;
+  // The title of a follow-up to select once a load holds it: a save's reload
+  // can land after the save asks for its row.
+  pendingSelect: string | null;
   // The plan and feature paths whose task rows show.
   expanded: readonly string[];
   filter: string;
@@ -102,6 +105,7 @@ export function initialBacklogState(): BacklogState {
     homeCursor: 0,
     openRoot: null,
     selectedKey: null,
+    pendingSelect: null,
     expanded: [],
     filter: '',
     isDoneShown: false,
@@ -145,6 +149,20 @@ export function selectedFollowup(
 ): Extract<BacklogRow, { kind: 'followup' }> | null {
   const row = selectedRow(state);
   return row?.kind === 'followup' ? row : null;
+}
+
+// The row the row keys act on: the selected row while focus is off the side
+// bar.
+export function actedRow(state: BacklogState): BacklogRow | null {
+  return state.focus === 'homes' ? null : selectedRow(state);
+}
+
+// The follow-up the follow-up keys act on: the selected follow-up while focus
+// is off the side bar.
+export function actedFollowup(
+  state: BacklogState,
+): Extract<BacklogRow, { kind: 'followup' }> | null {
+  return state.focus === 'homes' ? null : selectedFollowup(state);
 }
 
 export function rowTitle(row: BacklogRow): string {
@@ -276,12 +294,8 @@ export function backlogReducer(
       return openHomeAt(state, action.root);
     case 'select':
       return { ...state, selectedKey: action.key };
-    case 'selectFollowup': {
-      const found = visibleRows(state).find(
-        (row) => row.kind === 'followup' && row.item.title === action.title,
-      );
-      return found === undefined ? state : { ...state, selectedKey: found.key };
-    }
+    case 'selectFollowup':
+      return selectPending({ ...state, pendingSelect: action.title });
     case 'setFilter':
       return reselect(state, { ...state, filter: action.text });
     case 'toggleDone':
@@ -310,7 +324,7 @@ export function backlogReducer(
         ? state
         : { ...state, editor: null, confirm: null, focus: 'items' };
     case 'askDelete': {
-      const row = selectedFollowup(state);
+      const row = actedFollowup(state);
       const home = openHome(state);
       if (row === null || home === null || state.editor !== null) {
         return state;
@@ -370,8 +384,20 @@ function reselect(previous: BacklogState, next: BacklogState): BacklogState {
   return { ...next, selectedKey: rows[index]?.key ?? null };
 }
 
+// Selects the visible follow-up titled `pendingSelect` and clears it; with
+// none showing, `pendingSelect` waits for the next load.
+function selectPending(state: BacklogState): BacklogState {
+  const found = visibleRows(state).find(
+    (row) => row.kind === 'followup' && row.item.title === state.pendingSelect,
+  );
+  return found === undefined
+    ? state
+    : { ...state, selectedKey: found.key, pendingSelect: null };
+}
+
 // The open home stays open while the read still holds it; the side bar's
-// cursor stays on its home, else on its place, clamped.
+// cursor stays on its home, else on its place, clamped. A pending follow-up
+// is selected when the read holds it, and is cleared either way.
 function loaded(state: BacklogState, read: BacklogRead): BacklogState {
   const cursorRoot = orderedHomes(state)[state.homeCursor]?.root ?? null;
   const next: BacklogState = {
@@ -392,10 +418,15 @@ function loaded(state: BacklogState, read: BacklogRead): BacklogState {
       ...next,
       openRoot: null,
       selectedKey: null,
+      pendingSelect: null,
       focus: state.editor === null ? 'homes' : state.focus,
     };
   }
-  return reselect(state, next);
+  const reselected = reselect(state, next);
+  if (state.pendingSelect === null) {
+    return reselected;
+  }
+  return { ...selectPending(reselected), pendingSelect: null };
 }
 
 function move(
@@ -571,7 +602,7 @@ function openCreate(state: BacklogState): BacklogState {
 }
 
 function openEdit(state: BacklogState): BacklogState {
-  const row = selectedFollowup(state);
+  const row = actedFollowup(state);
   const home = openHome(state);
   if (row === null || home === null || state.editor !== null) {
     return state;

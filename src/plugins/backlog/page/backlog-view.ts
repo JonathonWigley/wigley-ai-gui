@@ -39,7 +39,9 @@ import type { BacklogChannel, BacklogHome } from '../contract';
 import type { backlogManifest } from '../manifest';
 import {
   AGENT_READY,
+  actedFollowup,
   actedHome,
+  actedRow,
   type BacklogRow,
   type BacklogState,
   backlogReducer,
@@ -49,7 +51,6 @@ import {
   openHome,
   orderedHomes,
   rowTitle,
-  selectedFollowup,
   selectedRow,
   tagsOf,
   visibleRows,
@@ -580,16 +581,17 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     log(`loaded ${String(result.homes.length)} homes`);
   };
 
-  const readQuietly = (method: 'load' | 'rescan') => {
+  // Logs and toasts a failed read in place of throwing it.
+  const readQuietly = (method: 'load' | 'rescan'): Promise<void> =>
     read(method).catch((error) => {
       log(`not loaded: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
     });
-  };
 
   // Sends `edit`, logs and toasts its result, and reloads on `applied`.
   // `isDraftKept`: an open editor keeps the user's draft when the write
-  // does not apply. Resolves to whether it applied.
+  // does not apply. Resolves to whether it applied, a failed reload after
+  // an applied write included.
   const write = async (
     homeRoot: string,
     path: string | null,
@@ -600,7 +602,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     log(`wrote ${path ?? tilde(homeRoot)} ${result.type}`);
     switch (result.type) {
       case 'applied':
-        await read('load');
+        await readQuietly('load');
         return true;
       case 'missing':
         deps.toast(
@@ -634,7 +636,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   const setTags = (tags: string[]) => {
-    const shown = selectedFollowup(store.get());
+    const shown = actedFollowup(store.get());
     const home = openHome(store.get());
     if (shown === null || home === null) {
       return;
@@ -690,7 +692,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       deps.toast(errorText(error), 'error');
       return;
     }
-    await read('load');
+    await readQuietly('load');
   };
 
   // ── Filter, picker and scroll ──────────────────────────────────────────
@@ -728,12 +730,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
 
   const pickTag = () => {
     const state = store.get();
-    const shown = selectedFollowup(state);
+    const shown = actedFollowup(state);
     const { editor } = state;
     let current: string[];
     if (editor !== null) {
       current = tagsOf(editor.draft.tags);
-    } else if (shown !== null && state.focus !== 'homes') {
+    } else if (shown !== null) {
       current = shown.item.tags;
     } else {
       return;
@@ -770,9 +772,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   const openInDocs = () => {
-    const state = store.get();
-    const shown = selectedRow(state);
-    if (shown === null || state.focus === 'homes') {
+    const shown = actedRow(store.get());
+    if (shown === null) {
       return;
     }
     if (shown.kind === 'followup') {
@@ -813,19 +814,11 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     filter: openFilter,
     rescan: () => readQuietly('rescan'),
     create: () => dispatch({ type: 'openCreate' }),
-    edit() {
-      if (store.get().focus !== 'homes') {
-        dispatch({ type: 'openEdit' });
-      }
-    },
-    delete() {
-      if (store.get().focus !== 'homes') {
-        dispatch({ type: 'askDelete' });
-      }
-    },
+    edit: () => dispatch({ type: 'openEdit' }),
+    delete: () => dispatch({ type: 'askDelete' }),
     toggleAgentReady() {
-      const shown = selectedFollowup(store.get());
-      if (shown !== null && store.get().focus !== 'homes') {
+      const shown = actedFollowup(store.get());
+      if (shown !== null) {
         setTags(withTagToggled(shown.item.tags, AGENT_READY));
       }
     },

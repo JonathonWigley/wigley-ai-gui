@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FollowupItem } from '../../../shared/followups/followup-file';
 import type { BacklogHome, BacklogPlan, BacklogRead } from '../contract';
 import {
+  actedFollowup,
   type BacklogAction,
   type BacklogState,
   backlogReducer,
@@ -170,6 +171,105 @@ describe('backlogReducer', () => {
     });
 
     expect(selectedTitle(after)).toBe('Two');
+  });
+
+  it('backlogReducer_SelectFollowupBeforeItsLoad_SelectsItWhenTheLoadLands', () => {
+    const before = run(opened(home(ROOT, [item('One')])), {
+      type: 'selectFollowup',
+      title: 'Created',
+    });
+
+    const after = run(before, {
+      type: 'loaded',
+      read: read(home(ROOT, [item('One'), item('Created')])),
+    });
+
+    expect(selectedTitle(before)).toBe('One');
+    expect(selectedTitle(after)).toBe('Created');
+    expect(after.pendingSelect).toBeNull();
+  });
+
+  it('backlogReducer_LoadWithoutPendingFollowup_ClearsIt', () => {
+    const after = run(
+      opened(home(ROOT, [item('One')])),
+      { type: 'selectFollowup', title: 'Created' },
+      { type: 'loaded', read: read(home(ROOT, [item('One')])) },
+      {
+        type: 'loaded',
+        read: read(home(ROOT, [item('One'), item('Created')])),
+      },
+    );
+
+    expect(selectedTitle(after)).toBe('One');
+  });
+
+  it('backlogReducer_ReloadWithEditorOpen_KeepsEditorAndDraft', () => {
+    const editing = run(
+      opened(home(ROOT, [item('One')])),
+      { type: 'openEdit' },
+      { type: 'draftChanged', field: 'body', text: 'typed' },
+    );
+
+    const after = run(editing, {
+      type: 'loaded',
+      read: read(home(ROOT, [item('One'), item('Two')])),
+    });
+
+    expect(after.editor).toEqual(editing.editor);
+    expect(after.editor?.draft.body).toBe('typed');
+  });
+
+  it('backlogReducer_OpenHomeGone_ClosesItAndFocusesHomes', () => {
+    const other = '/home/other/docs/features';
+
+    const after = run(opened(home(ROOT, [item('One')])), {
+      type: 'loaded',
+      read: read(home(other, [item('Two')])),
+    });
+
+    expect(after).toMatchObject({
+      openRoot: null,
+      selectedKey: null,
+      focus: 'homes',
+    });
+  });
+
+  it('backlogReducer_OpenHomeGoneWithEditorOpen_KeepsEditorAndFocus', () => {
+    const other = '/home/other/docs/features';
+    const editing = run(opened(home(ROOT, [item('One')])), {
+      type: 'openEdit',
+    });
+
+    const after = run(editing, {
+      type: 'loaded',
+      read: read(home(other, [item('Two')])),
+    });
+
+    expect(after).toMatchObject({
+      openRoot: null,
+      selectedKey: null,
+      focus: 'detail',
+    });
+    expect(after.editor).toEqual(editing.editor);
+  });
+
+  it('backlogReducer_FollowupKeysWithFocusOnHomes_ActOnNothing', () => {
+    const onHomes = run(opened(home(ROOT, [item('One')])), { type: 'back' });
+
+    const afterEdit = run(onHomes, { type: 'openEdit' });
+    const afterDelete = run(onHomes, { type: 'askDelete' });
+
+    expect(selectedTitle(onHomes)).toBe('One');
+    expect(actedFollowup(onHomes)).toBeNull();
+    expect(afterEdit.editor).toBeNull();
+    expect(afterDelete.confirm).toBeNull();
+  });
+
+  it('backlogReducer_FollowupKeysWithFocusOnItems_ActOnSelectedFollowup', () => {
+    const state = opened(home(ROOT, [item('One')]));
+
+    expect(actedFollowup(state)?.item.title).toBe('One');
+    expect(run(state, { type: 'openEdit' }).editor?.originalTitle).toBe('One');
   });
 
   it('backlogReducer_OpenHomeThenBack_MovesFocusBetweenHomesAndItems', () => {
