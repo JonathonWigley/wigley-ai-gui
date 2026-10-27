@@ -255,12 +255,12 @@ export interface StatusLine { element: HTMLElement; update(isShown: boolean, con
 - [x] [Status bar collapse, config badge, save-state line](02-shell-chrome.md)
 
 ### Wave 2
-- [ ] [Sessions: list and tab strip prompts](03-sessions.md) — after 01
-- [ ] [Form tab and review](04-forms.md) — after 01, 02
+- [x] [Sessions: list and tab strip prompts](03-sessions.md) — after 01
+- [x] [Form tab and review](04-forms.md) — after 01, 02
 - [x] [Primer](05-primer.md) — after 01, 02
 - [x] [Chat](06-chat.md) — after 01
 - [x] [Docs](07-docs.md) — after 01
-- [ ] [Settings and Gallery](08-settings-gallery.md) — after 01
+- [x] [Settings and Gallery](08-settings-gallery.md) — after 01
 - [x] [Backlog and Notes](09-backlog-notes.md) — after 01
 
 ### Wave 3
@@ -283,9 +283,13 @@ Review base: 268c38a4a1b8e0a49c34ff796705ec6c21417894
 - 07 · 504589a · diff read, Produces present; typecheck clean in docs files · concerns: tree pane grid auto-placement: hidden children drop out, so the rows list may miss its minmax(0,1fr) track (pre-existing)
 - 05 · 50be002 · diff read, Produces present; typecheck clean in primer files · concerns: textButton doc comment in shared button.ts still says the hint is a kbd (left for 10/11); selected row label may be cut short by the prompt in the 240px rail (task 12 visual)
 - 09 · 01e08a9 · diff read, Produces present; typecheck clean in backlog and notes; notes bind table below · concerns: backlog cursor prompt is detached while the detail has focus (no is-cursor row) instead of hidden-keeping-space as the spec's scenario says; Add follow-up ⌘↩ anchor has no scope so it shows while a notes picker is open
+- 03 · 51ea834 · diff read, Produces present (hasOtherSession, hasOtherTab); typecheck clean in sessions files · concerns: check-styles not run by the worker (lint stopped on task 08's in-flight gallery layer error); the gate's lint covers it
+- 04 · eff5f37 · diff read, Produces present; whole-tree typecheck clean; forms tests 628 pass (worker run) · concerns: .box-keys on the frame's bottom edge is a guess for task 12; a layout card or pane that throws and falls back to default keeps its anchors until the next rebuild
+- 08 · aeac5ad · diff read, Produces present; whole-tree typecheck and lint clean after wave 2 · concerns: scripts/check-layers.mts edited (gallery page layer gains keys/contract.ts), outside the Files list; settings rows gain one line for the cursor prompt (task 12 visual)
 ### Contract changes
 - start.ts keeps the UnplacedLog: `const unplacedLog = startUnplacedLog(...)` → `startUnplacedLog(...)` unbound · why: oxlint no-unused-vars warns on an unread binding; scope recording still runs · consumers: 10 (binds it back when it wires checkSeen) · group 01
 - PrimerViewDeps.keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'> → Pick<KeysPageExports, 'anchor'> · why: the view reads no keys itself now · consumers: none · group 05
+- forms internals: buildChoiceList deps drop platform (keep markdown); buildField gains optional labelKeys; card-parts.ts gains PartAnchor, appendBoxKeys(field, anchor), appendPickKeys · why: anchors replace kbd hints · consumers: none outside 04 · group 04
 ### Rulings
 - keys-for.ts: firesIn becomes a module-level predicate shared by keysFor and promptKeysFor — one copy of the scope rule — none, keysFor tests unchanged · group 01 · group 01
 - anchors.placedIn returns a fresh Set per call — cold path, checkSeen only — allocations if a later caller polls it · group 01 · group 01
@@ -302,5 +306,11 @@ Review base: 268c38a4a1b8e0a49c34ff796705ec6c21417894
 - notes title box hint reads ⌃P ⇥, not ⌃P ⌃N — keymap order gives <CR>, <Tab>, <C-n> and the prompt takes the first non-vim bind — per the plan's prompt rule · group 09 · group 09
 - notes ⌘↩ (sendFollowup) anchored with no scope — it fires in both notes.popup and notes.title — hint shows while a picker is open · group 09 · group 09
 - leader-only buttons (Discard, Append, Start session) keep their key inside the button — none · group 09 · group 09
+- session edge pair hidden before main's first state arrives — none · group 03 · group 03
+- the tab bar's 1fr gap is a grid column, not a spacer element; the bar takes over the strip's margin; is-no-target scoped to sessions selectors — visual check task 12 · group 03 · group 03
+- the head's anchor list lives in each build's parts, so a rebuild disposes the old head's anchors — none · group 04 · group 04
+- Clear click focuses the item then dispatches clearChoice directly, as Accept does, so no log line — a reviewer may want the log · group 04 · group 04
+- settings cursor prompt is one fixed element (edit, add, remove, reset, unused ones hidden), the li's last child on its own line; stays on the cursor row and hides by scope while sections have focus — hidden-keeps-space decision — row is a line taller even hidden · group 08 · group 08
+- sections pane end edge ⌥L rows › at the pane's bottom-end corner — keeps the list from moving — visual check task 12 · group 08 · group 08
 ### Review rounds
 ### Test gate

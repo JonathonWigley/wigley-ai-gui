@@ -1,6 +1,6 @@
 # 08 — Settings and Gallery
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -157,3 +157,4 @@ Commit:    one commit for the group: "Settings and Gallery name key anchors on t
 
 ## Proof
 
+Commit aeac5ad · proof: diff read, Produces present; whole-tree typecheck and lint clean after wave 2 · concerns: scripts/check-layers.mts edited (gallery page layer gains keys/contract.ts), outside the Files list; settings rows gain one line for the cursor prompt (task 12 visual)

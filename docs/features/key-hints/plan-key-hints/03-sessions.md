@@ -1,6 +1,6 @@
 # 03 — Sessions: list and tab strip prompts
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -87,3 +87,5 @@ Done when: compiles; lint passes; the test gate runs the tests above;
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 51ea834 · proof: diff read, Produces present (hasOtherSession, hasOtherTab); typecheck clean in sessions files · concerns: check-styles not run by the worker (lint stopped on task 08's in-flight gallery layer error); the gate's lint covers it

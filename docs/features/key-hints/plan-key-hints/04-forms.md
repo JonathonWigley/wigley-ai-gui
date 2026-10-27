@@ -1,6 +1,6 @@
 # 04 — Form tab and review
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -179,3 +179,5 @@ Done when: compiles; lint passes; the test gate runs the tests above;
 Commit:    one commit for the group
 
 ## Proof
+
+Commit eff5f37 · proof: diff read, Produces present; whole-tree typecheck clean; forms tests 628 pass (worker run) · concerns: .box-keys on the frame's bottom edge is a guess for task 12; a layout card or pane that throws and falls back to default keeps its anchors until the next rebuild
