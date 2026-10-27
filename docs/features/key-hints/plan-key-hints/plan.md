@@ -317,5 +317,6 @@ Review base: 268c38a4a1b8e0a49c34ff796705ec6c21417894
 - Space ? prompt beside the Keys button hides under 640px via keys.css — the title bar's end track is 53px at the 420px minimum width and the item needs 75px; the alternative was a shell.css track change outside the files — the prompt is absent on narrow windows; check in task 12 · group 10 · group 10
 - fake agent gains model and verbosity controls so the Model (o) and Controls (c) chips draw in the self-test — fixture state per the placement rule — none · group 10 · group 10
 ### Review rounds
+- 1 · d209821 · NEEDS FIXES — 22 findings; determined 1-5, 7, 8, 22 dispatched; 6 contradiction and 9-21 open to triage
 ### Test gate
 - whole vitest suite (the range touches every page plugin, the keys plugin, shared page code and the self-test runner; the suite runs in 5s) · 235 files, 3685 tests pass; npm run selftest (task 10's placement gate and every plugin script reach the changed views) · 683 PASS, 0 FAIL, every key placed, all passed; typecheck and lint clean
