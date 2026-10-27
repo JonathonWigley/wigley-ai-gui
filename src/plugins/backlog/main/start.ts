@@ -35,6 +35,7 @@ import type {
   BacklogWriteResult,
   NoteTarget,
 } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { backlogManifest } from '../manifest';
 import { commitMessage } from './commit-message';
 import { readFollowupText, writeFollowupEdit } from './followup-writes';
@@ -863,9 +864,9 @@ async function startFixture(
   }
 }
 
-// Serves the page every features home on the machine, from the docs machine
-// index, Docs' guarded follow-up writes and the home's follow-up commit, and
-// exports the load, the tag list and note filing to dependent plugins;
+// Registers backlog's layouts, and serves the page every features home on the
+// machine, from the docs machine index, Docs' guarded follow-up writes and the
+// home's follow-up commit, and exports the load, the tag list and note filing to dependent plugins;
 // watches each listed follow-up file and hears the machine index reload, each
 // sending `changed`. Outside a live run it writes the self-test's fixture repo
 // at start, before Docs' self-test counts the files the index lists.
@@ -913,6 +914,14 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
         reload: () => channel.send('changed', { homeRoot: null }),
       }),
     );
-    return { commands: {}, exports, dispose: backlog.dispose };
+    const layouts = api.layouts.register({ layoutTypes });
+    return {
+      commands: {},
+      exports,
+      dispose() {
+        layouts.dispose();
+        backlog.dispose();
+      },
+    };
   },
 };

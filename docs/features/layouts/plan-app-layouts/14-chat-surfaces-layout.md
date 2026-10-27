@@ -1,6 +1,6 @@
 # 14 — Chat surfaces draw through chat's layout
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 04 (and 02 through it)
 Plan: [plan.md](plan.md)

@@ -1,71 +1,56 @@
 import type { EditorHost, FocusOptions } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
-import { element } from '../../../shared/page/dom';
-import { createEditorBoxes, stepBox } from '../../../shared/page/editor-boxes';
-import { inputFrame } from '../../../shared/page/ui/input-frame';
 import {
-  type DraftTexts,
-  EDITOR_FIELDS,
-  type EditorField,
-} from './backlog-state';
+  createEditorBoxes,
+  type EditorBoxes,
+  stepBox,
+} from '../../../shared/page/editor-boxes';
+import { EDITOR_FIELDS, type EditorField } from './backlog-state';
 
-const FIELD_LABELS: Record<EditorField, string> = {
+export const EDITOR_FIELD_LABELS: Record<EditorField, string> = {
   title: 'Title',
   oneLine: 'One line',
   tags: 'Tags (comma-separated)',
   body: 'Body',
 };
 
-const FORM_ID = 'followup';
+// The form id every follow-up editor box carries.
+export const FOLLOWUP_FORM_ID = 'followup';
 
 export interface FollowupEditorDeps {
   editor: EditorHost;
   log: Log;
   changed(field: EditorField, text: string): void;
-  // The editor's footer content, appended once.
-  hints: HTMLElement;
+  // The `div.backlog-editor` slot the editor pane is drawn into; `leave`
+  // focuses it.
+  element: HTMLElement;
   // The box hint the editor moves into the frame of each box it activates.
   fieldHint: HTMLElement;
 }
 
-// The follow-up editor: a vim box per field, drawn into `element` while open,
-// over the footer `hints`; the active box's frame holds `fieldHint`.
-// `open` mounts the boxes with `texts`, `close` destroys them. `step` moves
-// focus to the next or previous box from the focused one; from the page it
-// focuses the box focused last. `setText` replaces one box's text, reporting
-// no change.
+// The follow-up editor's vim boxes, one per field, mounted into the frames the
+// editor pane places; it builds no DOM. `step` moves focus to the next or
+// previous box from the focused one; from the page it focuses the box focused
+// last. `setText` replaces one box's text, reporting no change.
 export interface FollowupEditor {
-  element: HTMLElement;
-  open(heading: string, texts: DraftTexts): void;
-  close(): void;
-  isOpen(): boolean;
+  // Mounts `field`'s box into `frame` with `text`; the box's frame takes the
+  // field hint when the box activates.
+  mount(field: EditorField, frame: HTMLElement, text: string): void;
+  isMounted(field: EditorField): boolean;
+  // Destroys every mounted box.
+  destroy(): void;
   focus(field: EditorField, options?: FocusOptions): void;
   step(by: 1 | -1): void;
-  // Blurs the focused box, if any.
+  // Blurs the focused box and focuses the `div.backlog-editor` slot.
   leave(): void;
   hasFocusedBox(): boolean;
+  // Remounts `field`'s box in its current frame with `text`.
   setText(field: EditorField, text: string): void;
+  boxes: EditorBoxes<EditorField>;
 }
 
 export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
-  const form = element('div', 'backlog-editor');
-  form.tabIndex = -1;
-  form.hidden = true;
-  const heading = element('h2', 'backlog-editor-heading');
-  const fields = element('div', 'backlog-editor-fields');
-  const footer = element('div', 'backlog-editor-hints');
-  footer.append(deps.hints);
-  form.append(heading, fields, footer);
-
   const frames = new Map<EditorField, HTMLElement>();
-  for (const field of EDITOR_FIELDS) {
-    const label = element('label', 'backlog-editor-label', FIELD_LABELS[field]);
-    const frame = inputFrame();
-    frame.classList.add('backlog-editor-box', `backlog-editor-box--${field}`);
-    frames.set(field, frame);
-    fields.append(label, frame);
-  }
-
   const frameOf = (field: EditorField): HTMLElement => {
     const frame = frames.get(field);
     if (frame === undefined) {
@@ -74,7 +59,6 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
     return frame;
   };
 
-  let isOpen = false;
   let lastField: EditorField = 'title';
   const boxes = createEditorBoxes<EditorField>(
     deps.editor,
@@ -87,36 +71,23 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
     },
     deps.log,
     {
-      formIdOf: () => FORM_ID,
+      formIdOf: () => FOLLOWUP_FORM_ID,
       keyOf: (field) => field,
-      describe: (field) => `${FIELD_LABELS[field]} box`,
+      describe: (field) => `${EDITOR_FIELD_LABELS[field]} box`,
       logSource: 'backlog',
     },
   );
 
   return {
-    element: form,
-    open(title, texts) {
-      if (isOpen) {
-        return;
-      }
-      isOpen = true;
-      heading.textContent = title;
-      for (const field of EDITOR_FIELDS) {
-        boxes.mount(frameOf(field), field, texts[field]);
-      }
-      form.hidden = false;
-      lastField = 'title';
+    mount(field, frame, text) {
+      boxes.mount(frame, field, text);
+      frames.set(field, frame);
     },
-    close() {
-      if (!isOpen) {
-        return;
-      }
-      isOpen = false;
-      boxes.destroyForm(FORM_ID);
-      form.hidden = true;
+    isMounted: (field) => boxes.isMounted(field),
+    destroy() {
+      boxes.destroyForm(FOLLOWUP_FORM_ID);
+      frames.clear();
     },
-    isOpen: () => isOpen,
     focus(field, options) {
       boxes.focus(field, options);
     },
@@ -133,12 +104,14 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
     },
     leave() {
       boxes.leave();
-      form.focus();
+      deps.element.focus();
     },
     hasFocusedBox: () => boxes.active() !== null,
     setText(field, text) {
+      const frame = frameOf(field);
       boxes.destroyBox(field);
-      boxes.mount(frameOf(field), field, text);
+      boxes.mount(frame, field, text);
     },
+    boxes,
   };
 }

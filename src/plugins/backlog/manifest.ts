@@ -3,6 +3,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // Backlog mode: every features home's follow-ups (create, edit, delete, tags),
 // plans and primed features (read-only), grouped by repo. `tags` is the list
 // the tag picker offers; a tag a file holds that the list lacks still shows.
+// `layout` names the layout Backlog draws with.
 export const backlogManifest = definePlugin({
   id: 'backlog',
   dependsOn: ['docs', 'keys'],
@@ -94,11 +95,19 @@ export const backlogManifest = definePlugin({
     confirm: 'In a backlog confirmation',
     picker: 'In a backlog list picker',
   },
-  settings: { tags: ['agent-ready', 'needs a feature plan'] },
+  settings: {
+    tags: ['agent-ready', 'needs a feature plan'],
+    layout: 'default',
+  },
   settingInfo: {
     tags: {
       label: 'Tags',
       description: "The tags Backlog's tag picker offers.",
+    },
+    layout: {
+      label: 'Layout',
+      description:
+        "The Backlog layout: a folder name in backlog's layouts folder, or default.",
     },
   },
   themeTokens: {},

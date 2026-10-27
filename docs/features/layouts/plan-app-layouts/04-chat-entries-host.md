@@ -1,6 +1,6 @@
 # 04 — Chat entries onto the host
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -128,3 +128,5 @@ src/plugins/chat/page/*.ts` prints nothing. The live checks go to task 17 (Final
 Commit: one commit for the group.
 
 ## Proof
+
+Commit ab26664 · proof: diff read: Produces present (entries (parent,input,kit), ChatKit extends BaseKit with edgeCard, DotStatus re-export, chatCommandNamed); chat tests 308 pass; chat typecheck/lint clean · concerns: layout.test.ts keeps its own fake element (layer check bars chat/layouts from test-dom); chat-kit.ts copies base-kit's private appended helper

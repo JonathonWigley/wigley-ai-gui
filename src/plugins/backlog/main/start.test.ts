@@ -231,7 +231,8 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
         logged.push(`[${source}] ${message}`),
     },
     dependency: () => docs,
-    settings: () => ({ tags: ['agent-ready'] }),
+    settings: () => ({ tags: ['agent-ready'], layout: 'default' }),
+    layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof backlogMainPart.start>[0];
   const part = backlogMainPart.start(api);
   const invoke = async <T>(name: string, ...args: unknown[]): Promise<T> => {

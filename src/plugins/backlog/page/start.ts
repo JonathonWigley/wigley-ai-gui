@@ -4,18 +4,21 @@ import type { PageApi, PagePart } from '../../../contracts/plugin';
 import type { DocsPageExports } from '../../docs/contract';
 import type { KeysPageExports } from '../../keys/contract';
 import type { BacklogChannel } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { BacklogLayout } from '../layouts/layout';
 import { backlogManifest } from '../manifest';
 import { createBacklogView } from './backlog-view';
+import { readBacklogLayout } from './layout/read-layout';
 
 type BacklogApi = PageApi<typeof backlogManifest, BacklogChannel>;
 
 const TITLE = 'Backlog';
 
 // Backlog mode: the repos and their features homes in the side bar, the open
-// home's follow-ups, plans and features beside a detail pane in the sheet.
-// `showMode` shows the mode, or toggles its side bar while it shows. Each
-// `changed` message reads the homes again, keeping the selection and any
-// open editor's draft.
+// home's follow-ups, plans and features beside a detail pane in the sheet,
+// drawn with the layout the `layout` setting names. `showMode` shows the mode,
+// or toggles its side bar while it shows. Each `changed` message reads the
+// homes again, keeping the selection and any open editor's draft.
 export const backlogPagePart: PagePart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {
@@ -33,6 +36,11 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       log: services.log,
       toast: services.toast,
       keys,
+      platform: api.platform,
+      commands: {
+        exists: (id) => api.keys.command(id) !== undefined,
+        run: (id) => api.commands.run(id),
+      },
       tags: () => api.settings().tags,
       openDoc: (path, line) => docs.openDoc(path, line),
       setScope: (scope) => api.keys.setScope(scope),
@@ -75,6 +83,13 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       },
       sideBarHidden: () => view.sideBarHidden(),
       sideBarOpenedOver: () => view.sideBarOpenedOver(),
+    });
+
+    api.layouts.show<BacklogLayout>({
+      defaultLayout,
+      read: readBacklogLayout,
+      userLayout: () => api.settings().layout,
+      setLayouts: (shown) => view.setLayouts(shown),
     });
 
     api.channel.on('changed', () => view.reload());
