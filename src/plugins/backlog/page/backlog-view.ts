@@ -698,7 +698,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     log(`filter ${store.get().filter}`);
     filterScope?.pop();
     filterScope = null;
-    render();
+    render(true);
   };
 
   const openFilter = () => {

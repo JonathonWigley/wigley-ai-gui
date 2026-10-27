@@ -145,6 +145,11 @@ function fixturePaths(home: string, paths: Paths) {
     vendorRoot,
     vendorSkill: paths.join(vendorRoot, 'skills/vendored/SKILL.md'),
     featuresHome: paths.join(home, 'wigley-features', 'selftest-repo'),
+    backlogHome: paths.join(home, 'dev/backlog-repo/docs/features'),
+    backlogPlanFolder: paths.join(
+      home,
+      'dev/backlog-repo/docs/features/backlog-x/plan-x',
+    ),
     followups: paths.join(home, 'wigley-features/selftest-repo/followups.md'),
     wigleyInstall: paths.join(
       claudeDir,
@@ -191,6 +196,54 @@ function state(
   codex?: LoadStateRecord,
 ): Partial<Record<'claude' | 'codex', LoadStateRecord>> {
   return codex === undefined ? { claude } : { claude, codex };
+}
+
+// The Backlog self-test's git repo (written by Backlog's fixture): its
+// follow-ups by their `##` heading lines, its plan and the plan's two tasks.
+function backlogEntries(fixture: FixturePaths, paths: Paths): IndexEntry[] {
+  const homeOwned = { repo: 'backlog-repo', root: fixture.backlogHome };
+  const followups = paths.join(fixture.backlogHome, 'followups.md');
+  const followup = (
+    line: number,
+    title: string,
+    gist: string,
+    status: 'open' | 'done',
+    tags: string[],
+  ) =>
+    entry({
+      id: `${followups}#L${String(line)}`,
+      kind: 'followup',
+      source: 'features',
+      ...homeOwned,
+      path: followups,
+      line,
+      title,
+      meta: { status, gist, section: null, tags },
+    });
+  const task = (file: string, title: string, status: string) =>
+    entry({
+      kind: 'task',
+      source: 'features',
+      ...homeOwned,
+      path: paths.join(fixture.backlogPlanFolder, file),
+      title,
+      meta: { plan: 'x', status },
+    });
+  return [
+    followup(9, 'Ready item', 'waits for an agent', 'open', ['agent-ready']),
+    followup(13, 'Plain item', 'needs a look', 'open', []),
+    followup(17, 'Shipped item', 'landed', 'done', []),
+    entry({
+      kind: 'plan',
+      source: 'features',
+      ...homeOwned,
+      path: paths.join(fixture.backlogPlanFolder, 'plan.md'),
+      title: 'Backlog X',
+      meta: { feature: 'backlog-x', checked: 1, total: 2 },
+    }),
+    task('01-first.md', 'First task', 'done'),
+    task('02-second.md', 'Second task', 'not started'),
+  ];
 }
 
 // The `LOAD_STATE_DOCS` docs `options` asks for, each with its path and title.
@@ -306,6 +359,7 @@ function indexDocument(
       title: 'vendored',
       meta: { name: 'vendored', description: 'A third-party plugin skill.' },
     }),
+    ...backlogEntries(fixture, paths),
     ...loadStates.map((doc) =>
       entry({
         kind: 'instructions',

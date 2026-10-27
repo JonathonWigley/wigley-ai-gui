@@ -132,6 +132,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     services: {
       git,
       paths: posixPaths,
+      runMode: 'live',
       log: (source: string, message: string) =>
         logged.push(`[${source}] ${message}`),
     },

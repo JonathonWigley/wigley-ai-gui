@@ -7,6 +7,7 @@ import type {
   MainApi,
   MainChannel,
   MainPart,
+  MainServices,
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
@@ -37,6 +38,8 @@ import {
   markCreateTargets,
   type PlanShape,
 } from './homes';
+import { hasBacklogFixture, writeBacklogFixture } from './selftest-fixture';
+import { backlogSelfTestScript } from './selftest-script';
 
 type BacklogApi = MainApi<
   typeof backlogManifest,
@@ -381,15 +384,37 @@ function createBacklogMain(deps: BacklogDeps) {
   };
 }
 
+// Writes the fixture repo into a self-test or drive run's home that has none
+// yet; a drive run's restart keeps the home, and its repo.
+async function startFixture(
+  services: Pick<
+    MainServices,
+    'files' | 'processes' | 'paths' | 'homeDir' | 'runMode'
+  >,
+): Promise<void> {
+  if (services.runMode === 'live') {
+    return;
+  }
+  const homeDir = await services.files.realPath(services.homeDir);
+  if (!(await hasBacklogFixture(services, homeDir))) {
+    await writeBacklogFixture(services, homeDir);
+  }
+}
+
 // Serves the page every features home on the machine, from the docs machine
 // index, Docs' guarded follow-up writes and the home's follow-up commit;
 // watches each listed follow-up file and hears the machine index reload, each
-// sending `changed`.
+// sending `changed`. Outside a live run it writes the self-test's fixture repo
+// at start, before Docs' self-test counts the files the index lists.
 export const backlogMainPart: MainPart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {
     const { services, channel } = api;
     const docs = api.dependency<DocsMainExports>('docs');
+    const fixture = startFixture(services);
+    fixture.catch((error: unknown) =>
+      services.log('backlog', `fixture not written: ${errorText(error)}`),
+    );
     const backlog = createBacklogMain({
       docs,
       git: services.git,
@@ -407,6 +432,17 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
         channel.send('changed', { homeRoot: null });
       }
     });
+    services.selfTest?.run(
+      backlogSelfTestScript({
+        files: services.files,
+        processes: services.processes,
+        git: services.git,
+        paths: services.paths,
+        homeDir: services.homeDir,
+        started: fixture,
+        reload: () => channel.send('changed', { homeRoot: null }),
+      }),
+    );
     return { commands: {}, dispose: backlog.dispose };
   },
 };
