@@ -128,7 +128,7 @@
 }
 
 /* The composer: the attached images' strip, then the message box over its
-   bar (mode, type hint, running indicator, control chips, send). */
+   bar (mode, type hint, control chips, running indicator, send). */
 .ui-floating.chat-composer {
   border-radius: var(--wg-radius-xl);
   bottom: var(--wg-space-3);
@@ -190,10 +190,6 @@
   font-weight: var(--wg-weight-semibold);
 }
 
-.chat-send {
-  margin-left: auto;
-}
-
 /* `i` and `a` are vim's inside the box, so the type hint hides, keeping its
    space, while the box has focus. */
 .chat-type-hint {
@@ -205,15 +201,17 @@
   visibility: hidden;
 }
 
-/* `display` would override `hidden`, so the idle indicator is hidden here. */
+/* The running indicator sits at the bar's end before send, and keeps its
+   space while idle, so a turn starting or ending moves no chip. */
 .chat-running {
   align-items: center;
   display: inline-flex;
   gap: var(--wg-space-1);
+  margin-left: auto;
 }
 
-.chat-running[hidden] {
-  display: none;
+.chat-running.is-idle {
+  visibility: hidden;
 }
 
 /* A chip's keys after its value. */

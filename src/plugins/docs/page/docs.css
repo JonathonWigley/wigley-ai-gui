@@ -25,11 +25,28 @@
   margin-inline-start: auto;
 }
 
-/* The cursor prompt at a selected leaf's end. */
+/* A selected leaf's row: its label and end at their natural width, then the
+   cursor prompt, which takes a line of its own under the label when the row
+   has no room for it. */
+.docs-row--prompted {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+.docs-row--prompted > .ui-row-trailing {
+  flex: none;
+}
+
 .docs-row-actions {
   align-items: baseline;
   display: inline-flex;
   gap: var(--wg-space-2);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.ui-row-trailing + .docs-row-actions {
+  margin-left: 0;
 }
 
 .docs-status {
@@ -132,6 +149,7 @@
   align-items: center;
   display: inline-flex;
   gap: var(--wg-space-1_5);
+  white-space: nowrap;
 }
 
 .docs-row-time {

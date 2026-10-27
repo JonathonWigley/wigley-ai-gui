@@ -256,8 +256,8 @@ round; primer: an open primer), since main, not the page, decides.
   - **An anchor** is an element a view names, with the command it runs and the scope it fires in, through the `keys`
     page export `anchor`, which returns a Disposable. The keys plugin draws the KeyPrompt primitive into it, redraws
     it on each keymap change, draws nothing when the command is unbound, and hides it, keeping its space, while its
-    scope is not the one in force (an anchor with no scope always shows) or the `keys.showHints` setting is off. A
-    plugin draws no key hint of its own.
+    scope is not the one in force (an anchor with no scope always shows) or the keys plugin's `showHints` setting
+    (`"keys": { "showHints": false }` in `settings.json`) is off. A plugin draws no key hint of its own.
   - **The view places and styles each anchor** by one of four placement kinds (`DESIGN.md` § Keys and focus): an edge
     prompt, a cursor prompt, a control hint or a box hint. The parts around anchors — chevrons, edge prompts, box
     hints, stacks of one command's anchors, and recording and disposing anchors — come from
@@ -265,7 +265,8 @@ round; primer: an open primer), since main, not the page, decides.
   - **Vim's own keys** — the key sequences listed in the keys plugin (`j`, `k`, `gg`, Enter, Esc, the `<C-j>` scroll
     keys and the like), in any spelling of them (`<esc>`, `<Return>`, `<c-j>`) — need no anchor and show in help
     only; a view may still anchor one, as Accept does with Enter. An anchor prints the command's first bind that is
-    not one of vim's own keys, or its first bind when every bind is. Leader sequences show in which-key.
+    not one of vim's own keys, or its first bind when every bind is; the user's binds come before the defaults. Leader
+    sequences show in which-key.
   - **Every other bind has an anchor.** At the end of a self-test run (the `keys-check-placement` page event, named
     with the line's prefix in `src/shared/placement-check.ts`, which the runner and the plugin share) the
     plugin logs `[keys] unplaced <keys> <command> in <scope>`, once per scope and bind, for each bind firing in a

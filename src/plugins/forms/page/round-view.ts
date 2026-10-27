@@ -164,6 +164,7 @@ export function createRoundView(
     initial: 240,
     min: 160,
     max: 400,
+    endMin: 224,
     uiState: deps.uiState,
     stateKey: 'rail-width',
   });

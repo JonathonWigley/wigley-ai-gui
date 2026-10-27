@@ -159,8 +159,9 @@ function textNode(text: string): FakeElement {
   return node;
 }
 
-// Stubs the globals through `stubGlobal`, as `vi.stubGlobal`, so the test's
-// `vi.unstubAllGlobals` removes them.
+// Stubs the DOM globals, a ResizeObserver that never reports included, through
+// `stubGlobal`, as `vi.stubGlobal`, so the test's `vi.unstubAllGlobals`
+// removes them.
 export function installFakeDom(
   stubGlobal: (name: string, value: unknown) => void,
 ) {
@@ -168,6 +169,13 @@ export function installFakeDom(
   stubGlobal('document', {
     createElement: (tag: string) => new FakeElement(tag),
   });
+  stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
 }
 
 export function asHtml(node: FakeElement): HTMLElement {

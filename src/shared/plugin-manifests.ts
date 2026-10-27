@@ -253,6 +253,25 @@ function keymapLayerOver(
   };
 }
 
+// `binds` with each bind of `layer` moved ahead of the other binds of its
+// command, into the first place one of them held; the rest keep their order.
+function layerBindsFirst<B extends { command: CommandId }>(
+  binds: readonly B[],
+  layer: readonly B[],
+): B[] {
+  const isLayerBind = new Set(layer);
+  const byCommand = new Map<CommandId, B[]>();
+  for (const bind of binds) {
+    const own = byCommand.get(bind.command) ?? [];
+    own.push(bind);
+    byCommand.set(bind.command, own);
+  }
+  for (const own of byCommand.values()) {
+    own.sort((a, b) => Number(isLayerBind.has(b)) - Number(isLayerBind.has(a)));
+  }
+  return binds.map((bind) => byCommand.get(bind.command)!.shift()!);
+}
+
 // `layers`' group names in order, a later layer's name replacing an earlier
 // one on the same keys with `leader` spelled, in the earlier one's place.
 function mergeGroups(layers: readonly KeyGroups[], leader: string): KeyGroups {
@@ -436,8 +455,10 @@ export function defaultBindLines(
 // accelerator is spelled, for app and global binds, the same key and modifiers
 // for intercepts), taking its place; any other appends. The user layer first
 // removes each bind its `unbind` names from the default and plugin layers, and
-// its `leader` replaces the default's, on the page and in a box. Group names
-// layer the same way, by their keys.
+// its `leader` replaces the default's, on the page and in a box, and each of
+// its page and editor binds moves ahead of the other binds of its command, so
+// a command's first bind is the user's. Group names layer the same way, by
+// their keys.
 export function mergeKeymap(
   defaults: DefaultKeymap,
   manifests: readonly PluginManifest[],
@@ -458,9 +479,15 @@ export function mergeKeymap(
     merged = keymapLayerOver(merged, keymapLayer(keys, leader), same);
   }
   merged = withoutUnbound(merged, user.unbind ?? [], leader, same);
-  merged = keymapLayerOver(merged, keymapLayer(user, leader), same);
+  const userLayer = keymapLayer(user, leader);
+  merged = keymapLayerOver(merged, userLayer, same);
   return {
     ...merged,
+    editor: {
+      ...merged.editor,
+      binds: layerBindsFirst(merged.editor.binds, userLayer.editor.binds),
+    },
+    page: layerBindsFirst(merged.page, userLayer.page),
     groups: mergeGroups(
       [...layers.map((keys) => keys.groups ?? {}), user.groups ?? {}],
       leader,

@@ -518,9 +518,10 @@ function followComposerHeight(
 }
 
 // The bar's parts, built once per tab: the box's vim mode (PAGE while it has no
-// focus), the type hint (`i` and `a`, hidden while the box has focus), the
-// running indicator (shown while a turn is in progress on a live session), a
-// chip per control opening that control's picker, and send. The chips and send
+// focus), the type hint (`i` and `a`, hidden while the box has focus), a chip
+// per control opening that control's picker, then at the end the running
+// indicator (shown while a turn is in progress on a live session, its space
+// kept while it hides) and send. The chips and send
 // are disabled once the session has ended. The type hint and send keys are
 // anchored in the tab's scope; the interrupt and chip keys in `chat.chat`. Each
 // chip command's keys sit in the first chip that runs it; a command no chip
@@ -543,7 +544,6 @@ function buildComposerBar(
     variant: 'ghost',
     hint: sendKey,
   });
-  send.classList.add('chat-send');
 
   const liveScope = { scope: chatScope('chat') };
   const fixedAnchors = [
@@ -584,7 +584,10 @@ function buildComposerBar(
     draw(tab) {
       mode.textContent = modeLabel(tab.isBoxFocused ? tab.boxMode : null);
       typeHint.classList.toggle('is-box-focused', tab.isBoxFocused);
-      running.hidden = tab.ended || tab.state.activity === 'idle';
+      running.classList.toggle(
+        'is-idle',
+        tab.ended || tab.state.activity === 'idle',
+      );
       const placed = new Set<ChatCommandName>();
       const chips = tab.state.controls.map((control) => {
         const command = controlCommand(control.id);
@@ -600,7 +603,7 @@ function buildComposerBar(
         return controlChip;
       });
       send.disabled = tab.ended;
-      bar.replaceChildren(mode, typeHint, running, ...chips, send);
+      bar.replaceChildren(mode, typeHint, ...chips, running, send);
     },
     setScope(next) {
       disposeAnchors(scopedAnchors);

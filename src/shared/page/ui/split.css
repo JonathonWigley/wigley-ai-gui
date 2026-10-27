@@ -1,6 +1,10 @@
+/* The start pane takes its width while the end pane keeps
+   `--ui-split-end-min`, and gives way below that. */
 .ui-split {
   display: grid;
-  grid-template-columns: calc(var(--ui-split-start) * 1px) var(--wg-space-1) 1fr;
+  grid-template-columns:
+    minmax(0, calc(var(--ui-split-start) * 1px)) var(--wg-space-1)
+    minmax(var(--ui-split-end-min, 0), 1fr);
   min-width: 0;
   min-height: 0;
 }
@@ -41,6 +45,26 @@
 .ui-split.is-start-hidden > .ui-split-start,
 .ui-split.is-start-hidden > .ui-split-handle {
   display: none;
+}
+
+/* At 640px and narrower, and in a split too narrow for its panes
+   (`is-stacked`), the panes stack. */
+.ui-split.is-stacked {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+}
+
+.ui-split.is-stacked > .ui-split-handle {
+  display: none;
+}
+
+.ui-split.is-stacked > .ui-split-start {
+  max-height: 40%;
+  border-bottom: 1px solid var(--wg-border-default);
+}
+
+.ui-split.is-stacked.is-start-hidden {
+  grid-template-rows: 1fr;
 }
 
 @media (max-width: 640px) {

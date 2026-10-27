@@ -175,7 +175,9 @@ means something.
 - **Separation:** gutters between sheets, hairlines on L1 edges, and shadows only on L3. A shadow on
   content makes it float when it should sit.
 - **Breakpoints** (raw in `@media`): `800px` tightens content padding; `680px` lays the side bar
-  over the sheet instead of beside it; `640px` stacks a sheet's split panes.
+  over the sheet instead of beside it; `640px` stacks a sheet's split panes. A split whose end
+  pane has a least width (the Form tab's card column) gives up its start pane's width down to its
+  minimum first, then stacks at any window width.
 
 ## Motion
 
@@ -228,7 +230,8 @@ The keyboard is first; the mouse works everywhere.
     the pane's header (`/ filter`, `a new`).
 - **Hints show for the scope in force:** a hint whose scope is not the one keys fire in hides and
   keeps its space, so moving between panes never shifts the layout; a hint for a bind in every
-  scope (tabs, sessions) always shows. The `keys.showHints` setting hides them all.
+  scope (tabs, sessions) always shows. The keys plugin's `showHints` setting hides them all
+  (`"keys": { "showHints": false }` in `settings.json`).
 - **Vim's own keys show in help only:** `j`/`k`, `gg`/`G`, `h`/`l` on a tree, Enter on a row, Esc,
   and the `⌃J`/`⌃K` scroll keys work the same on every list and pane, so a hint for them is
   noise. Leader sequences show in which-key.
@@ -300,7 +303,7 @@ Conventions every primitive follows:
 
 - **Title bar:** L1, `toolbar-height`, draggable; the shown mode's context centred; actions on the
   right as `icon-button` buttons when a feature contributes one: the Keys button with its
-  `Space ?` prompt (hidden at 640px window width and narrower, where the bar's end track is too
+  `Space ?` prompt inside it (hidden at 640px window width and narrower, where the bar's end track is too
   narrow for it), and while a config file is broken an error-tone Tag badge naming it; in the dev
   app, a neutral Dev tag at the start. The OS window buttons stay native.
 - **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.

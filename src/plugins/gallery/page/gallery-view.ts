@@ -181,12 +181,19 @@ function kbdSection(platform: Platform): HTMLElement {
   );
 }
 
+// `sample` between two words, so its kept or dropped space shows.
+function between(sample: HTMLElement): HTMLElement {
+  const node = element('span', 'gallery-hint-line');
+  node.append('before', sample, 'after');
+  return node;
+}
+
 function keyPromptSection(platform: Platform): HTMLElement {
   return section('KeyPrompt', [
     cell(keyPrompt('<A-o>', platform), 'Keys'),
     cell(keyPrompt('s', platform, 'star'), 'Keys and label'),
     cell(
-      frame(withClass(keyPrompt('s', platform, 'star'), 'is-hint-hidden')),
+      between(withClass(keyPrompt('s', platform, 'star'), 'is-hint-hidden')),
       'Hidden, keeps its space',
     ),
   ]);
@@ -203,12 +210,6 @@ function keyAnchorsSection(platform: Platform): HTMLElement {
   const hidden = (keys: string, label?: string) =>
     withClass(shown(keys, label), 'is-hint-hidden');
   const unbound = () => element('span', 'ui-key-anchor');
-  // `sample` between two words, so its kept or dropped space shows.
-  const between = (sample: HTMLElement) => {
-    const node = element('span', 'gallery-hint-line');
-    node.append('before', sample, 'after');
-    return node;
-  };
   const sessionPair = () =>
     keyEdge('', [
       shown('<A-S-i>'),

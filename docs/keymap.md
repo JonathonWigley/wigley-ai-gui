@@ -21,7 +21,8 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
   manifest `keys` is for a plugin from outside the repo.
 - The user's `~/.config/wigley-ai-gui/keymap.json` takes the same entries and lays them over the
   defaults and any plugin's keys, so a line copies across unchanged. A user bind replaces a bind on
-  the same keys in the same scope; `unbind` entries remove a default.
+  the same keys in the same scope; `unbind` entries remove a default. A command's user binds come
+  before its default binds, so a key prompt shows the user's key.
 - A bind is one entry in vim notation (`<Leader>ks`, `gg`, `<A-o>`, `<Esc>`), written once. A
   leader bind fires on the page and, as a vim normal-mode map, in a text box in normal mode; in
   insert mode the leader key types itself (Space types a space). Any other bind fires on the page,

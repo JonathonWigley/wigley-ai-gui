@@ -230,3 +230,35 @@ describe('createSplit reloadWidth', () => {
     expect(split.width()).toBe(300);
   });
 });
+
+describe('createSplit endMin', () => {
+  it('stacks while narrower than min plus endMin, side by side at it', () => {
+    let resized: (entries: { contentRect: { width: number } }[]) => void = () =>
+      undefined;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: typeof resized) {
+          resized = callback;
+        }
+        observe() {}
+      },
+    );
+    const split = createSplit({
+      ...limits,
+      endMin: 200,
+      uiState: stateOver(new Map()),
+      stateKey: 'side',
+    });
+    const root = asFakeElement(split.element);
+
+    resized([{ contentRect: { width: 359 } }]);
+    expect(root.classes.has('is-stacked')).toBe(true);
+    resized([{ contentRect: { width: 360 } }]);
+    expect(root.classes.has('is-stacked')).toBe(false);
+  });
+});
+
+function asFakeElement(node: HTMLElement): FakeElement {
+  return node as unknown as FakeElement;
+}

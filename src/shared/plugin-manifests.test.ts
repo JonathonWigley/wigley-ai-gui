@@ -263,6 +263,35 @@ describe('mergeKeymap', () => {
     ]);
   });
 
+  it('mergeKeymap_UserBindOfADefaultCommand_ComesBeforeItsDefaultBinds', () => {
+    const merged = mergeKeymap(
+      bindsOnly(
+        { keys: 'q', scope: 'any', command: 'other' },
+        { keys: '<A-o>', scope: 'any', command: 'next' },
+        { keys: '<Leader>n', scope: 'any', command: 'next' },
+      ),
+      [],
+      {
+        binds: [
+          { keys: '<A-u>', scope: 'any', command: 'next' },
+          { keys: '<Leader>u', scope: 'any', command: 'next' },
+        ],
+      },
+    );
+
+    expect(merged.page).toEqual([
+      { keys: ['q'], scope: 'any', command: 'other' },
+      { keys: ['<A-u>'], scope: 'any', command: 'next' },
+      { keys: [' ', 'u'], scope: 'any', command: 'next' },
+      { keys: ['<A-o>'], scope: 'any', command: 'next' },
+      { keys: [' ', 'n'], scope: 'any', command: 'next' },
+    ]);
+    expect(merged.editor.binds).toEqual([
+      { keys: '<Leader>u', scope: 'any', command: 'next' },
+      { keys: '<Leader>n', scope: 'any', command: 'next' },
+    ]);
+  });
+
   it('mergeKeymap_Unbind_RemovesBothHalves', () => {
     const merged = mergeKeymap(
       bindsOnly({ keys: '<Leader>ks', scope: 'any', command: 'c' }),

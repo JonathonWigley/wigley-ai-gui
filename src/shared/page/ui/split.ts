@@ -10,6 +10,10 @@ import {
 export interface SplitOptions extends SplitLimits {
   uiState: UiState;
   stateKey: string;
+  // The end pane's least width in CSS pixels, 0 when absent: the start pane
+  // gives up its width down to `min` first, and below `min` plus this the
+  // panes stack.
+  endMin?: number;
 }
 
 export interface Split {
@@ -23,9 +27,10 @@ export interface Split {
   setStartHidden(hidden: boolean): void;
 }
 
-// Two panes side by side with a drag handle between them. The start pane's
-// width opens from `uiState` under `stateKey` and is written back once per
-// drag, when the drag changed it; `reloadWidth` reads it again.
+// Two panes side by side with a drag handle between them, stacked
+// (`is-stacked`) while the split is narrower than `min` plus `endMin`. The
+// start pane's width opens from `uiState` under `stateKey` and is written back
+// once per drag, when the drag changed it; `reloadWidth` reads it again.
 export function createSplit(options: SplitOptions): Split {
   if (options.min > options.max) {
     throw new Error(
@@ -37,6 +42,14 @@ export function createSplit(options: SplitOptions): Split {
   const handle = element('div', 'ui-split-handle');
   const end = element('div', 'ui-split-end');
   root.append(start, handle, end);
+  const endMin = options.endMin ?? 0;
+  if (endMin > 0) {
+    root.style.setProperty('--ui-split-end-min', `${endMin}px`);
+    new ResizeObserver(([observed]) => {
+      const isNarrow = observed.contentRect.width < options.min + endMin;
+      root.classList.toggle('is-stacked', isNarrow);
+    }).observe(root);
+  }
 
   let width = storedSplitWidth(options.uiState, options.stateKey, options);
   let widthAtDragStart = width;

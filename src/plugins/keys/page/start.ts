@@ -23,12 +23,12 @@ type KeysApi = PageApi<
 
 // Shows which-key over every pending key sequence, on the page and in a box;
 // the help overlay over the `help` scope while it is open, closing when the
-// scope under it changes; and the Keys button at the title bar's end, which
-// opens help. Each reads the keymap and settings as they are now, and help and
-// every anchor redraw when the keymap changes. Exports the keys bound to a
-// command, and when they change, and `anchor`, which draws a command's keys
-// into a view's element, shown while its scope is in force and the
-// `showHints` setting is on. Records each scope in force and every anchor
+// scope under it changes; and the Keys button at the title bar's end, its key
+// prompt inside it, which opens help. Each reads the keymap and settings as
+// they are now, and help and every anchor redraw when the keymap changes.
+// Exports the keys bound to a command, and when they change, and `anchor`,
+// which draws a command's keys into a view's element, shown while its scope is
+// in force and the `showHints` setting is on. Records each scope in force and every anchor
 // named, and checks them for unplaced binds on `PLACEMENT_CHECK_EVENT`.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
@@ -94,19 +94,17 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       }
     };
 
-    const keysItem = element('span', 'keys-title-bar-item');
-    const keysHint = element('span', 'keys-title-bar-hint');
-    keysItem.append(
-      iconButton(
-        'record-keys',
-        'Keys',
-        () => api.commands.run(toggleHelpCommand),
-        'sm',
-      ),
-      keysHint,
+    const keysButton = iconButton(
+      'record-keys',
+      'Keys',
+      () => api.commands.run(toggleHelpCommand),
+      'sm',
     );
+    keysButton.classList.add('keys-title-bar-button');
+    const keysHint = element('span', 'keys-title-bar-hint');
+    keysButton.append(keysHint);
     anchors.anchor(keysHint, toggleHelpCommand);
-    api.areas.titleBar.contribute(keysItem, { align: 'end' });
+    api.areas.titleBar.contribute(keysButton, { align: 'end' });
 
     keys.onKeymapChanged(() => {
       help.setSections(currentHelpSections());

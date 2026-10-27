@@ -162,27 +162,21 @@ function lineElement(
   return above;
 }
 
-// A leaf's row end: its time, its status dot, then `actions`, the cursor
-// prompt; the dot alone with neither of the others.
+// A leaf's row end: its time, then its status dot; the dot alone with no
+// time.
 function rowEnd(
   time: LeafMarks['time'],
   markDot: HTMLElement | null,
-  actions: HTMLElement | null,
 ): HTMLElement | null {
-  if (time === null && actions === null) {
+  if (time === null) {
     return markDot;
   }
   const end = element('span', 'docs-row-end');
-  if (time !== null) {
-    const shown = element('span', 'docs-row-time', time.text);
-    shown.title = time.title;
-    end.append(shown);
-  }
+  const shown = element('span', 'docs-row-time', time.text);
+  shown.title = time.title;
+  end.append(shown);
   if (markDot !== null) {
     end.append(markDot);
-  }
-  if (actions !== null) {
-    end.append(actions);
   }
   return end;
 }
@@ -230,7 +224,7 @@ function headerElement(anchors: Disposable[], anchor: DocsAnchor): HTMLElement {
   return header;
 }
 
-// The cursor prompt a selected leaf row ends in.
+// The cursor prompt a selected leaf row ends in, after its end.
 function rowActionsElement(
   anchors: Disposable[],
   anchor: DocsAnchor,
@@ -330,17 +324,17 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       detail,
       depth: row.depth,
       leading: caret,
-      trailing: rowEnd(
-        marks?.time ?? null,
-        markDot,
-        isSelectedLeaf ? rowActions : null,
-      ),
+      trailing: rowEnd(marks?.time ?? null, markDot),
       onClick: () => {
         state = { ...state, selectedId: row.node.id };
         pane.focus();
         view.open();
       },
     });
+    if (isSelectedLeaf) {
+      item.classList.add('docs-row--prompted');
+      item.append(rowActions);
+    }
     item.classList.toggle('is-selected', isSelected);
     item.classList.toggle('is-cursor', isSelected && hasFocus);
     return item;
