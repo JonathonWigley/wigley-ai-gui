@@ -1,10 +1,64 @@
-/* Settings mode's side bar: one list row per section. */
+/* Settings mode's side bar: one list row per section, then the edge prompt
+   at its end edge. */
 .settings-sections {
+  display: flex;
+  flex-direction: column;
   height: 100%;
   min-height: 0;
   outline: none;
   overflow-y: auto;
   padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+.settings-section-rows {
+  flex: 1 0 auto;
+}
+
+/* An edge prompt: a focus move's keys beside the chevron toward the pane it
+   moves to. */
+.settings-edge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--wg-space-1);
+  flex: none;
+  white-space: nowrap;
+}
+
+.settings-edge--end {
+  align-self: flex-end;
+  padding: var(--wg-space-1) 0;
+}
+
+.settings-edge--start {
+  font-weight: var(--wg-weight-regular);
+}
+
+/* The rows' section header: the start edge, the title, then the filter key
+   at the end. */
+.settings-head {
+  justify-content: flex-start;
+  gap: var(--wg-space-3);
+}
+
+/* The two `/ filter` anchors, one per scope, stacked in one cell so the one
+   shown never moves. */
+.settings-filter-hint {
+  display: grid;
+  justify-items: end;
+  margin-left: auto;
+  font-weight: var(--wg-weight-regular);
+}
+
+.settings-filter-hint > * {
+  grid-area: 1 / 1;
+}
+
+/* The cursor row's action keys, at the row's end. */
+.settings-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--wg-space-3);
+  margin-top: var(--wg-space-1);
 }
 
 .settings-section-rows,

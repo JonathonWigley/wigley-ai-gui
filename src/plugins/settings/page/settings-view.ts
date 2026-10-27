@@ -24,10 +24,12 @@ import { textBoxInput } from '../../../shared/page/text-box';
 import { card } from '../../../shared/page/ui/card';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
+import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { sheet } from '../../../shared/page/ui/sheet';
 import type { SettingsChannel } from '../contract';
 import { keymapSection } from './keymap-view';
 import { type BoxRequest, createRowBox, type RowBox } from './row-box';
+import { type PromptAction, rowPromptActions } from './row-prompt';
 import { createSectionsView } from './sections-view';
 import { settingSection } from './setting-rows-view';
 
@@ -115,9 +117,14 @@ export interface SettingsViewDeps {
   setScope(scope: 'sections' | 'rows'): void;
   pushScope(scope: 'box' | 'picker'): PushedScope;
   addOverlay(element: HTMLElement): Disposable;
-  // The keys of `settings.clearFilter` in the rows, null when unbound.
-  clearFilterKeys(): string | null;
-  kbd(keys: string): HTMLElement;
+  // Keeps the keys of the settings `command` drawn in `element`, shown while
+  // `scope` is in force, followed by `label` (true: the command's label).
+  anchor(
+    element: HTMLElement,
+    command: SettingsCommand,
+    scope: 'sections' | 'rows',
+    label?: boolean | string,
+  ): Disposable;
   // The open section's title, for the title bar.
   sectionShown(title: string): void;
   // Hears each section the user opens from the side bar, by click or Enter.
@@ -151,7 +158,9 @@ export type SettingsCommand =
 // both files; `reread` reads the files again and redraws (the channel's
 // `changed`); `shown` runs as the mode shows: the first time it opens the
 // first section with focus on the side bar, and each time it sets the scope
-// where focus was left.
+// where focus was left. The keys show where they act: the focus moves at the
+// split edge, the filter in the rows' section header, and the row actions at
+// the cursor row's end.
 export interface SettingsView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -162,8 +171,20 @@ export interface SettingsView {
   sideBarHidden(): void;
   // The side bar opened over the rows: focus moves to it.
   sideBarOpenedOver(): void;
-  keysChanged(): void;
   commands: Record<SettingsCommand, () => void>;
+}
+
+// The cursor prompt's label for each action it shows.
+const PROMPT_LABELS: Record<PromptAction, string> = {
+  edit: 'edit',
+  addBind: 'add',
+  removeBind: 'remove',
+  reset: 'reset',
+};
+
+// A `span.ui-key-chevron` reading `text`, placed beside an anchor element.
+function chevron(text: string): HTMLElement {
+  return element('span', 'ui-key-chevron', text);
 }
 
 interface OpenBox {
@@ -175,7 +196,21 @@ interface OpenBox {
 export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const { channel } = deps;
   const log = (message: string) => deps.log('settings', message);
+  const anchored = (
+    command: SettingsCommand,
+    scope: 'sections' | 'rows',
+    label?: boolean | string,
+  ): HTMLElement => {
+    const hint = element('span');
+    deps.anchor(hint, command, scope, label);
+    return hint;
+  };
+
+  // `⌥L rows ›` at the side bar's end edge.
+  const endEdge = element('span', 'settings-edge settings-edge--end');
+  endEdge.append(anchored('focusRows', 'sections', 'rows'), chevron('›'));
   const sections = createSectionsView({
+    edge: endEdge,
     clicked: (index) => {
       sectionsCursor = index;
       focusSections();
@@ -186,6 +221,42 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const rowsSheet = sheet();
   rowsSheet.classList.add('settings-sheet');
   rowsSheet.tabIndex = -1;
+
+  // The section header: `‹ sections ⌥H`, the open section's title, then
+  // `/ filter`, whose two anchors share one cell so that the one shown in
+  // the scope in force never moves.
+  const startEdge = element('span', 'settings-edge settings-edge--start');
+  startEdge.append(chevron('‹ sections'), anchored('focusSections', 'rows'));
+  const filterHint = element('span', 'settings-filter-hint');
+  filterHint.append(
+    anchored('filter', 'sections', 'filter'),
+    anchored('filter', 'rows', 'filter'),
+  );
+  const sectionHead = (title: string) => {
+    const head = sectionHeader(title, filterHint);
+    head.classList.add('settings-head');
+    head.prepend(startEdge);
+    return head;
+  };
+  let head = sectionHead('');
+
+  // The cursor row's action keys; `markCursor` moves the prompt to the
+  // cursor row and shows the keys of the actions that row has.
+  const rowPrompt = element('span', 'settings-row-actions');
+  const promptHints: Record<PromptAction, HTMLElement> = {
+    edit: anchored('edit', 'rows', PROMPT_LABELS.edit),
+    addBind: anchored('addBind', 'rows', PROMPT_LABELS.addBind),
+    removeBind: anchored('removeBind', 'rows', PROMPT_LABELS.removeBind),
+    reset: anchored('reset', 'rows', PROMPT_LABELS.reset),
+  };
+  rowPrompt.append(
+    promptHints.edit,
+    promptHints.addBind,
+    promptHints.removeBind,
+    promptHints.reset,
+  );
+  const clearFilterHint = anchored('clearFilter', 'rows');
+
   const filterFrame = inputFrame();
   filterFrame.classList.add('settings-filter');
   filterFrame.hidden = true;
@@ -193,7 +264,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   filterFrame.append(filterBox);
   const brokenSlot = element('div', 'settings-broken');
   const list = element('ol', 'settings-rows');
-  rowsSheet.append(filterFrame, brokenSlot, list);
+  rowsSheet.append(head, filterFrame, brokenSlot, list);
 
   const picker: ListPicker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
@@ -242,10 +313,27 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
   };
 
+  // Puts the cursor prompt at the end of the cursor row, before an open box,
+  // showing the keys of the actions that row has; with no cursor row it
+  // leaves the rows.
+  const placeRowPrompt = (row: SettingsRow | undefined) => {
+    if (row === undefined) {
+      rowPrompt.remove();
+      return;
+    }
+    const shown = rowPromptActions(row.actions);
+    for (const action of Object.keys(promptHints) as PromptAction[]) {
+      promptHints[action].hidden = !shown.includes(action);
+    }
+    const boxElement = openBox?.box.element ?? null;
+    const isBoxInRow = boxElement?.parentElement === row.element;
+    row.element.insertBefore(rowPrompt, isBoxInRow ? boxElement : null);
+  };
+
   // Marks the cursor row selected, and draws its focus ring while the keys
   // act on the rows: an open box or filter draws its own ring instead. The
   // pane without focus is marked inactive, so its selected row takes the
-  // inactive selection fill.
+  // inactive selection fill. The cursor prompt moves to the cursor row.
   const markCursor = () => {
     const isRowsFocused =
       focus === 'rows' && openBox === null && filterScope === null;
@@ -262,9 +350,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       openSectionId,
       focus === 'sections',
     );
-    rows
-      .find((row) => row.key === cursorKey)
-      ?.element.scrollIntoView({ block: 'nearest' });
+    const cursorRow = rows.find((row) => row.key === cursorKey);
+    placeRowPrompt(cursorRow);
+    cursorRow?.element.scrollIntoView({ block: 'nearest' });
   };
 
   const brokenCard = (file: ConfigFile, problem: string) => {
@@ -305,13 +393,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     const items = [...drawing.items];
     const isEmpty = query !== '' && rows.length === 0;
     if (isEmpty) {
-      const keys = deps.clearFilterKeys();
-      items.push(
-        emptyState(
-          `No rows match "${query}".`,
-          keys === null ? null : deps.kbd(keys),
-        ),
-      );
+      items.push(emptyState(`No rows match "${query}".`, clearFilterHint));
     }
     list.replaceChildren(...items);
     markCursor();
@@ -606,6 +688,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     filterBox.value = '';
     filterFrame.hidden = true;
     log(`section ${section.id}`);
+    const nextHead = sectionHead(section.title);
+    head.replaceWith(nextHead);
+    head = nextHead;
     deps.sectionShown(section.title);
     cursorKey = null;
     draw();
@@ -808,7 +893,6 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       }
     },
     sideBarOpenedOver: focusSections,
-    keysChanged: draw,
     commands,
   };
 }

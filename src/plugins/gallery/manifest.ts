@@ -3,10 +3,10 @@ import { definePlugin } from '../../shared/define-plugin';
 // Gallery mode, a debug view of every design primitive in every state, with a
 // switch between full and reduced transparency that holds for the page load
 // only and a swap of the shell to a test layout and back. Page-only, and names
-// no other plugin.
+// only `keys`, for its key hint.
 export const galleryManifest = definePlugin({
   id: 'gallery',
-  dependsOn: [],
+  dependsOn: ['keys'],
   commands: {
     showMode: { label: 'gallery', group: 'modes', runsIn: 'page' },
     toggleTransparency: {

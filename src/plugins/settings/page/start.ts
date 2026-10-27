@@ -1,7 +1,7 @@
 import './settings.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import { kbd } from '../../../shared/page/ui/kbd';
+import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SettingsChannel } from '../contract';
 import { settingsManifest } from '../manifest';
@@ -30,14 +30,15 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       setScope: (scope) => api.keys.setScope(scope),
       pushScope: (scope) => api.keys.pushScope(scope),
       addOverlay: (element) => api.areas.overlay.contribute(element),
-      clearFilterKeys: () =>
-        keys.keysFor('settings.clearFilter', 'settings.rows'),
-      kbd: (shown) => kbd(shown, api.platform),
+      anchor: (element, command, scope, label) =>
+        keys.anchor(element, qualify(settingsManifest.id, command), {
+          scope: qualify(settingsManifest.id, scope),
+          label,
+        }),
       sectionShown: (title) => mode.setContext({ title: TITLE, detail: title }),
       // A section opened from the side bar closes its overlay.
       sectionPicked: () => mode.picked(),
     });
-    keys.onChanged(() => view.keysChanged());
 
     // `sectionShown` and `sectionPicked` read `mode` only once the mode
     // shows, after `add`: Settings mode is never the first mode added. Focus

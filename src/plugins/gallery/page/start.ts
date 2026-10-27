@@ -3,6 +3,7 @@ import type { ScrollStep } from '../../../contracts/editor';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { textLineHeightPx } from '../../../shared/page/text-line';
+import type { KeysPageExports } from '../../keys/contract';
 import { galleryManifest } from '../manifest';
 import { createGalleryView } from './gallery-view';
 import { testShellLayout } from './test-shell-layout';
@@ -25,9 +26,12 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
   manifest: galleryManifest,
   start(api: GalleryApi) {
     const { log } = api.services;
+    const keys = api.dependency<KeysPageExports>('keys');
     const view = createGalleryView({
       platform: api.platform,
       uiState: api.services.uiState,
+      anchor: (element, command, options) =>
+        keys.anchor(element, command, options),
     });
     view.showTransparency(api.transparency.overridden());
     const mode = api.modes.add({

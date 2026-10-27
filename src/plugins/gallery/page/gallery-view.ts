@@ -1,6 +1,7 @@
 import './gallery.css';
 import type { Platform } from '../../../contracts/platform';
 import type { UiState } from '../../../contracts/ui-state';
+import type { KeysPageExports } from '../../keys/contract';
 import { capitalised } from '../../../shared/capitalised';
 import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
@@ -26,11 +27,13 @@ import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
 export interface GalleryViewDeps {
   platform: Platform;
   uiState: UiState;
+  anchor: KeysPageExports['anchor'];
 }
 
-// `element` is the mode's root: the transparency status line, a one-tab strip
-// and `sheet`, the scrolling sheet holding a section per primitive with each
-// of its states. `showTransparency` shows the override in force on the status
+// `element` is the mode's root: the transparency status line, ending in the
+// `t transparency` hint anchored through `anchor`, a one-tab strip and
+// `sheet`, the scrolling sheet holding a section per primitive with each of
+// its states. `showTransparency` shows the override in force on the status
 // line, null for none.
 export interface GalleryView {
   element: HTMLElement;
@@ -47,11 +50,12 @@ export function createGalleryView(deps: GalleryViewDeps): GalleryView {
 
   const status = element('div', 'gallery-status');
   const statusText = element('span', 'gallery-status-text');
-  status.append(
-    statusText,
-    kbd('t', platform),
-    element('span', '', 'switches'),
-  );
+  const transparencyHint = element('span');
+  status.append(statusText, transparencyHint);
+  deps.anchor(transparencyHint, 'gallery.toggleTransparency', {
+    scope: 'gallery.gallery',
+    label: 'transparency',
+  });
 
   const strip = tabStrip([tab('Gallery', ignore)]);
   strip.firstElementChild?.classList.add('is-active');
