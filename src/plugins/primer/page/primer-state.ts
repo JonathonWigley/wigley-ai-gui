@@ -20,7 +20,7 @@ import {
   type PrimerNeed,
   PRIMER_SLUG_PATTERN,
 } from '../contract';
-import type { PrimerScopeName } from './ids';
+import type { PrimerScopeName } from '../ids';
 
 export type PrimerPane = 'rail' | 'card';
 

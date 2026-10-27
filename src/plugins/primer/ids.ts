@@ -1,7 +1,7 @@
-import type { CommandId } from '../../../contracts/commands';
-import type { ViewScope } from '../../../contracts/keymap';
-import { qualify } from '../../../shared/plugin-manifests';
-import { primerManifest } from '../manifest';
+import type { CommandId } from '../../contracts/commands';
+import type { ViewScope } from '../../contracts/keymap';
+import { qualify } from '../../shared/plugin-manifests';
+import { primerManifest } from './manifest';
 
 export type PrimerCommandName = keyof typeof primerManifest.commands;
 export type PrimerScopeName = keyof typeof primerManifest.scopes & string;

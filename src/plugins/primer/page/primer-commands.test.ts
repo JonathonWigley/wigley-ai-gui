@@ -428,6 +428,28 @@ describe('primerCommandHandlers', () => {
     ]);
   });
 
+  it('opens the review and adds nothing from an add-item box on a task holding 20 items', () => {
+    const full = primerEntry('1', 'primer', {
+      items: Array.from({ length: 20 }, (_, i) => primerItem(`Item ${i}`)),
+    });
+    const { run, store, primer, logs } = setup({ entries: [full] });
+    store.dispatch({
+      type: 'setText',
+      formId: 'p1',
+      target: newItem1.target,
+      value: 'Test the store',
+    });
+
+    run('openReview', { editor: editorOf(newItem1) });
+
+    expect(store.get().view).toBe('review');
+    expect(primer().entries[0].items).toHaveLength(20);
+    expect(logs).toEqual([
+      'no item added: task 1 holds 20 items',
+      'review opened',
+    ]);
+  });
+
   it('adds nothing for blank add-item text', () => {
     const { run, primer, logs } = setup();
 
@@ -651,9 +673,9 @@ describe('guardClose', () => {
 describe('startNewItemCommits', () => {
   // Commits over boxes whose focused box the test moves; `move` reports each
   // move as the editor boxes' onChange does.
-  function commitSetup() {
+  function commitSetup(entries: PrimerEntry[] = primerEntries()) {
     const store = createPrimerStore(
-      initialState([presentedPrimer('p1')], 'p1-session'),
+      initialState([presentedPrimer('p1', { entries })], 'p1-session'),
     );
     const logs: string[] = [];
     let active: PrimerBox | null = null;
@@ -707,6 +729,20 @@ describe('startNewItemCommits', () => {
     move({ primerId: 'p1', target: { field: 'taskComment', entryId: '1' } });
 
     expect(items()).toHaveLength(3);
+  });
+
+  it('adds nothing when focus leaves the box of a task holding 20 items', () => {
+    const full = primerEntry('1', 'primer', {
+      items: Array.from({ length: 20 }, (_, i) => primerItem(`Item ${i}`)),
+    });
+    const { move, type, items, logs } = commitSetup([full]);
+    move(newItem1);
+    type('Test the store');
+
+    move(null);
+
+    expect(items()).toHaveLength(20);
+    expect(logs).toEqual(['no item added: task 1 holds 20 items']);
   });
 
   it('adds nothing while focus stays in the box', () => {

@@ -44,7 +44,7 @@ import {
   primerCommand,
   primerScope,
   type PrimerScopeName,
-} from './ids';
+} from '../ids';
 import { boxKey, boxText, type PrimerBox, shownBoxes } from './boxes';
 import { needTag, renderReview, taskName } from './primer-review';
 import {

@@ -7,7 +7,7 @@ import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
 import type { PrimerEntry, PrimerItem, PrimerNeed } from '../contract';
 import type { KeysPageExports } from '../../keys/contract';
-import { type PrimerCommandName, primerCommand, primerScope } from './ids';
+import { type PrimerCommandName, primerCommand, primerScope } from '../ids';
 import {
   FEATURE_FIELDS,
   type OpenPrimer,

@@ -22,7 +22,7 @@ function selfTestPrimer(run: number) {
 
 // From the Feature row: entry 1 needs no, entry 2 yes, entry 3 unclear; back
 // on entry 2 (Screen), its second item is excluded and `Polish` added; then
-// the review opens and submits.
+// focus returns to the rail.
 const PRIMER_STEPS: SelfTestStep[] = [
   {
     keys: ['j'],
@@ -49,13 +49,47 @@ const PRIMER_STEPS: SelfTestStep[] = [
     expect: '[primer] left the box',
   },
   { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusRail' },
+];
+
+// An extra task added from the rail and removed again, so the submitted
+// payload holds only the sent tasks.
+const EXTRA_TASK_STEPS: SelfTestStep[] = [
+  {
+    keys: ['A'],
+    expect: '[primer] added extra task extra-1',
+    checksFit: true,
+  },
+  { keys: ['Escape', 'Escape'], expect: '[primer] left the box' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusRail' },
+  { keys: ['D'], expect: '[primer] removed extra task extra-1' },
+];
+
+// The review opens, closes and opens again; the cancel prompt opens from the
+// review's cancel key and from closing the session, and is dismissed each
+// time; the review submits, and the session, holding no primer now, closes.
+const REVIEW_STEPS: SelfTestStep[] = [
   {
     keys: [' ', ' '],
     expect: '[primer] review opened',
     checksFit: true,
     screenshot: 'review',
   },
+  { keys: ['Escape'], expect: '[primer] review closed' },
+  { keys: [' ', ' '], expect: '[primer] review opened' },
+  { keys: ['C'], expect: '[page] C ran primer.askCancel', checksFit: true },
+  { keys: ['n'], expect: '[page] n ran primer.dismissConfirm' },
+  {
+    keys: ['<D-w>'],
+    expect:
+      '[primer] closing the session asks to cancel primer-selftest · Self-test primer',
+  },
+  { keys: ['Escape'], expect: '[page] Escape ran primer.dismissConfirm' },
   { keys: ['<D-Enter>'], expect: '[primer] submitted' },
+  {
+    keys: ['<D-w>'],
+    expect: '[sessions] activated Layout preview',
+    why: "Closing selects the session's left neighbour, the Layout preview session forms' script reopened last.",
+  },
 ];
 
 const EXPECTED_NEEDS = ['no', 'yes', 'unclear', 'yes'];
@@ -134,8 +168,18 @@ export function primerSelfTestScript(
     groups: [
       {
         name: 'primer',
-        why: 'The Primer tab sets needs from the rail, toggles and adds items on the card, and submits from the review; the agent gets every change back.',
+        why: 'The Primer tab sets needs from the rail and toggles and adds items on the card; the agent gets every change back once the review submits.',
         steps: PRIMER_STEPS,
+      },
+      {
+        name: 'extra task',
+        why: 'A on the rail adds an extra task and focuses its name box; D on the rail removes it.',
+        steps: EXTRA_TASK_STEPS,
+      },
+      {
+        name: 'review and cancel',
+        why: 'Esc closes the review; C in the review and closing the session each ask to cancel the primer, and n or Esc keeps it; once the primer is sent, its session closes with no prompt.',
+        steps: REVIEW_STEPS,
       },
     ],
     problems: (result) => {

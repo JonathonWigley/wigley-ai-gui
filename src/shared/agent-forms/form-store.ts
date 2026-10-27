@@ -29,7 +29,8 @@ export type AgentFormOwnerRef = Pick<
   'sessionId' | 'projectDir'
 >;
 
-// One form's file. The field names are the saved-round format retro reads.
+// One form's file, for every agent form type. The field names are the saved
+// form format retro reads.
 export interface SavedAgentForm {
   id: string;
   fingerprint: string;

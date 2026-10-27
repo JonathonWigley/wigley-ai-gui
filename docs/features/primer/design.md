@@ -75,10 +75,11 @@ The tab is a fixed view built from the `DESIGN.md` primitives; the user does not
   and its included items as a count (included of total).
 - **Card** for the selected row. The Feature row's card holds the name, slug, spec, summary and notes boxes. A
   task's card holds its question, evidence, probes and pointer when not blank, its items as rows each with a ToggleMark
-  (included) and a comment box, an add-item box, and the task's own comment box. An extra task's card also holds its
-  name box. - **Review pane** before send: every task's need, its items (the left-out ones tagged) and every comment,
-  with the tallies; submit from there checks that the slug matches the slug rule and every extra task is named, and
-  shows what failed.
+  (included) and a comment box, an add-item box, and the task's own comment box. The add-item box's text becomes an
+  item when focus leaves the box or the review opens. An extra task's card also holds its name box.
+- **Review pane** before send: every task's need, its items (the left-out ones tagged) and every comment, with the
+  tallies; submit from there checks that the slug matches the slug rule and every extra task is named, and shows what
+  failed.
 - Autosave sends a draft `autosaveDelayMs` (manifest setting, default 400) after the last edit; the deadline
   (`deadlineSeconds`, default 240) is the forms default.
 - **Page events:** `primerShown`, `needChanged`, `primerFinished`. **Page export:** `activePrimer`.

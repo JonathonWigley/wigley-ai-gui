@@ -243,13 +243,6 @@ export interface FormsChannel extends ChannelShape {
   messages: AgentFormMessages<Round, FormBody> & { layoutChanged: LayoutSet };
 }
 
-// A round that left the window. `byFinish` is true when the page's `finish`
-// for the round closed it, false when main closed it on its own.
-export interface RoundClosed {
-  roundId: string;
-  byFinish: boolean;
-}
-
 // The page part's exports and events.
 
 // What the forms page shows: a round's cards, its review, the cancel prompt
