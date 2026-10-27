@@ -112,8 +112,8 @@ export interface PluginManifest<
   S extends string = string,
   T extends object = object,
 > {
-  // Lowercase letters, digits and `-`: the `wigley-data:` URL host carries the
-  // id, and Chromium lowercases a URL's host.
+  // Lowercase letters, digits and `-`: the `wigley-data:` and `wigley-layout:`
+  // URL hosts carry the id, and Chromium lowercases a URL's host.
   id: string;
   dependsOn: readonly string[];
   commands: Record<C, CommandDecl>;
@@ -349,6 +349,38 @@ export interface ShellLayout {
 
 export type ToastTone = 'success' | 'info' | 'error';
 
+// What an owner hands `show`. The host supplies log, logSource (the owner) and
+// toast, so they are not options.
+export interface ShowLayoutOptions<L> {
+  defaultLayout: L;
+  // The owner's reader: the layout a user's `layout.js` module holds, or a
+  // throw naming the first part it gets wrong.
+  read(module: unknown, name: string): L;
+  // The setting's layout name, read again on each set and each `refresh()`.
+  userLayout(): string;
+  // The names the owner's content names beside the user's, read again on each
+  // set and each `refresh()`. Left out: no names (`[]`).
+  namesInUse?(): readonly string[];
+  setLayouts(shown: ShownLayouts<L>): void;
+}
+
+// The layouts a page draws with, by name, `default` always included, and the
+// name of the user's layout: the setting's when `layouts` holds it, else
+// `default`.
+export interface ShownLayouts<L> {
+  layouts: ReadonlyMap<string, L>;
+  user: string;
+}
+
+export interface LayoutShow {
+  // Reads the setting and the names in use again, after either may have
+  // changed.
+  refresh(): void;
+  // Stops the show hearing sets, removes its stylesheet links, and calls
+  // `setLayouts` no more.
+  dispose(): void;
+}
+
 // `editor` is the text box a key fired in.
 export interface PageCommandContext {
   editor?: TextEditor;
@@ -419,7 +451,10 @@ export interface PageTransparency {
 // `PluginEvents` takes them; a part that declares no `Heard` hears nothing.
 // `dataUrl` is the `wigley-data:` URL of `path` in the plugin's data folder;
 // a new `revision` makes the file and every relative import under it load
-// fresh.
+// fresh. `layouts.show` shows the plugin's own layouts, loading each set main
+// announces for the plugin and handing `options.setLayouts` the result, and
+// refreshes the show on each change of the plugin's settings until the
+// show's `dispose`.
 export interface PageApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
@@ -453,6 +488,7 @@ export interface PageApi<
   services: PageServices;
   dependency<E>(pluginId: string): E;
   dataUrl(path: string, revision: number): string;
+  layouts: { show<L>(options: ShowLayoutOptions<L>): LayoutShow };
 }
 
 // `exports` reaches the plugins that depend on this one.
@@ -610,6 +646,11 @@ export interface MainServices {
 // reads the plugin's settings as the user config now sets them;
 // `onSettingsChanged` hears them each time they change, until its `dispose`.
 // `drive` is the plugin's own drive host, null outside a drive run.
+// `layouts.register` writes the plugin's layout contract `layoutTypes` to its
+// layouts folder and watches that folder, until the returned `Disposable`'s
+// `dispose`; it throws for a second registration. `layouts.names` lists the
+// plugin's layouts, `default` first; only `default` before the folder has been
+// listed or while unregistered.
 export interface MainApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
@@ -624,6 +665,10 @@ export interface MainApi<
   dependency<E>(pluginId: string): E;
   data: Files;
   drive: DriveHost | null;
+  layouts: {
+    register(options: { layoutTypes: string }): Disposable;
+    names(): string[];
+  };
 }
 
 // `exports` reaches the plugins that depend on this one; `dispose` runs when

@@ -10,6 +10,7 @@ import type {
 } from '../../contracts/plugin';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { scopedFiles } from '../../shared/scoped-files';
+import type { LayoutService } from '../layouts/layout-service';
 import type { PluginChannels } from './plugin-channel';
 
 // `pluginSettings` reads every plugin's settings, by plugin id, as the user
@@ -19,7 +20,8 @@ import type { PluginChannels } from './plugin-channel';
 // self-test; `driveFor` gives each plugin its own drive host, null outside a
 // drive run; `dependency` is the host's; `bus` is shared by every main part;
 // `dataRoot` is the absolute folder that holds a folder per plugin, named by
-// its id.
+// its id; `layouts` is the core layouts service, which each plugin reaches
+// under its id.
 export interface MainApiDeps {
   channels: PluginChannels;
   pluginSettings(): Record<string, object>;
@@ -32,6 +34,7 @@ export interface MainApiDeps {
   dependency<E>(pluginId: string): E;
   bus: EventBus;
   dataRoot: string;
+  layouts: LayoutService;
 }
 
 // `onSettingsChanged` calls its listener only when the JSON of this plugin's
@@ -64,5 +67,10 @@ export function createMainApi(
       deps.services.paths,
     ),
     drive: deps.driveFor(manifest.id),
+    layouts: {
+      register: (options) =>
+        deps.layouts.register(manifest.id, options.layoutTypes),
+      names: () => deps.layouts.names(manifest.id),
+    },
   };
 }

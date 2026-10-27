@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
+import type { LayoutSet } from '../contracts/layouts';
 import type { AppConfig } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
 
@@ -22,6 +23,13 @@ const bridge: Bridge = {
     ipcRenderer.on(
       BRIDGE_CHANNELS.log,
       (_event, source: string, message: string) => listener(source, message),
+    );
+  },
+  layouts: (owner) => ipcRenderer.invoke(BRIDGE_CHANNELS.layoutsRead, owner),
+  onLayouts: (listener) => {
+    ipcRenderer.on(
+      BRIDGE_CHANNELS.layoutsChanged,
+      (_event, owner: string, set: LayoutSet) => listener(owner, set),
     );
   },
   uiState: () => ipcRenderer.invoke(BRIDGE_CHANNELS.uiStateRead),

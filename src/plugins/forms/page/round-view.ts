@@ -16,7 +16,7 @@ import {
   type EditorBoxes,
   keepFocusedBox,
 } from '../../../shared/page/editor-boxes';
-import type { ShownLayouts } from '../../../shared/page/layout-loader';
+import type { ShownLayouts } from '../../../contracts/plugin';
 import { createStatusLine } from '../../../shared/page/status-line';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { textButton } from '../../../shared/page/ui/button';

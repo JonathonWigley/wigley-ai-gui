@@ -3,11 +3,14 @@ import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Platform } from '../../../contracts/platform';
-import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
+import type {
+  PluginAreas,
+  PushedScope,
+  ShownLayouts,
+} from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
 import type { EditorBoxes } from '../../../shared/page/editor-boxes';
-import type { ShownLayouts } from '../../../shared/page/layout-loader';
 import {
   createSessionFormTabs,
   type SessionFormTabs,

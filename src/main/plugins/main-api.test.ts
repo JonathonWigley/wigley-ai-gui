@@ -10,7 +10,8 @@ import type {
 import { createEventBus } from '../../shared/event-bus';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
-import { createMainApi } from './main-api';
+import type { LayoutService } from '../layouts/layout-service';
+import { createMainApi, type MainApiDeps } from './main-api';
 
 const manifest: PluginManifest = {
   id: 'p',
@@ -50,8 +51,11 @@ function liveSettings(initial: Record<string, object>) {
   };
 }
 
-function apiOver(settings: ReturnType<typeof liveSettings>) {
-  return createMainApi(manifest, {
+function apiOver(
+  settings: ReturnType<typeof liveSettings>,
+  layouts = {} as LayoutService,
+) {
+  const deps: MainApiDeps = {
     channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
     ...settings.deps,
     services: { paths: posixPaths } as MainServices,
@@ -60,7 +64,9 @@ function apiOver(settings: ReturnType<typeof liveSettings>) {
     dependency: <E>() => undefined as E,
     bus: createEventBus(),
     dataRoot: '/d',
-  });
+    layouts,
+  };
+  return createMainApi(manifest, deps);
 }
 
 describe('createMainApi', () => {
@@ -97,6 +103,7 @@ describe('createMainApi', () => {
       dependency: <E>() => undefined as E,
       bus,
       dataRoot: '/d',
+      layouts: {} as LayoutService,
     });
 
     api.events.emit('x', 3);
@@ -117,6 +124,7 @@ describe('createMainApi', () => {
         dependency: <E>() => undefined as E,
         bus: createEventBus(),
         dataRoot: '/d',
+        layouts: {} as LayoutService,
       },
     );
 
@@ -146,6 +154,7 @@ describe('createMainApi', () => {
         dependency: <E>() => undefined as E,
         bus: createEventBus(),
         dataRoot: '/d',
+        layouts: {} as LayoutService,
       },
     );
 
@@ -169,9 +178,34 @@ describe('createMainApi', () => {
         dependency: <E>() => undefined as E,
         bus: createEventBus(),
         dataRoot: '/d',
+        layouts: {} as LayoutService,
       },
     );
 
     expect(api.drive).toBe(formsHost);
+  });
+
+  it('createMainApi_Layouts_RunUnderThePluginId', () => {
+    const calls: unknown[][] = [];
+    const layouts = {
+      register: (owner: string, layoutTypes: string) => {
+        calls.push(['register', owner, layoutTypes]);
+        return { dispose: () => undefined };
+      },
+      names: (owner: string) => {
+        calls.push(['names', owner]);
+        return ['default', 'mine'];
+      },
+    } as LayoutService;
+    const api = apiOver(liveSettings({ p: {} }), layouts);
+
+    api.layouts.register({ layoutTypes: 'types' });
+    const names = api.layouts.names();
+
+    expect(calls).toEqual([
+      ['register', 'p', 'types'],
+      ['names', 'p'],
+    ]);
+    expect(names).toEqual(['default', 'mine']);
   });
 });

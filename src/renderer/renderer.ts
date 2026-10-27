@@ -17,6 +17,7 @@ import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { editorBindMode } from '../shared/key-hints';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
+import { createPageLayouts } from '../shared/page/layout-host/show-layouts';
 import { startPlugins } from '../shared/plugin-host';
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
@@ -176,6 +177,13 @@ async function start() {
   const run = (id: CommandId, context: PageCommandContext = {}) =>
     commands.run(id, context);
   const bus = createEventBus();
+  const layouts = createPageLayouts({
+    bridge,
+    importModule: (url) => import(/* @vite-ignore */ url),
+    head: document.head,
+    log,
+    toast: (text, tone) => toasts.show(text, tone),
+  });
   startPlugins(
     pageParts,
     (part, dependency) => {
@@ -196,6 +204,7 @@ async function start() {
           run,
           dependency,
           bus,
+          layouts,
         }),
       );
       const handlers: Record<string, (context: PageCommandContext) => void> =

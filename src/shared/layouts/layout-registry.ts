@@ -3,8 +3,8 @@ import type { LayoutEntry, LayoutSet } from '../../contracts/layouts';
 import type { Log } from '../../contracts/log';
 import { errorText } from '../error-text';
 
-// The layouts in a plugin's data folder, each at the revision the page loads
-// it at. A save of a code, style, data, image or font file in any layout's
+// The layouts in an owner's layouts folder, each at the revision the page
+// loads it at. A save of a code, style, data, image or font file in any layout's
 // folder lists the layouts again and sends the new set, naming that layout as
 // changed; so does renaming, moving or deleting a layout's whole folder. A
 // watch failure is logged, and saves then go unseen until the next
@@ -16,18 +16,25 @@ export interface LayoutRegistry {
 }
 
 export interface LayoutRegistryDeps {
-  // Scoped to the plugin's data folder.
-  data: Files;
+  // Scoped to the owner's layouts folder, `layouts/<owner>/`.
+  folder: Files;
   send(set: LayoutSet): void;
   log: Log;
-  // The source name every log line carries.
+  // The source name every log line carries: the owner's id, which the line
+  // about a `default` folder names too.
   logSource: string;
-  // The text of `layout.d.ts`, written to `layouts/layout.d.ts` at start.
+  // The text of the owner's `layout.d.ts`, written to the folder's root at
+  // start with its repo kit specifier rewritten to `'../kit'`.
   layoutTypes: string;
 }
 
-const LAYOUTS = 'layouts';
+// The folder's root, as its scoped `Files` names it.
+const ROOT = '';
 const DEFAULT_NAME = 'default';
+// How an owner's repo `layout.d.ts` names the shared kit types, and how its
+// copy in the user's folder names them, beside `layouts/kit.d.ts`.
+const REPO_KIT_SPECIFIER = "'../../../shared/page/layout-host/kit'";
+const USER_KIT_SPECIFIER = "'../kit'";
 // The files a layout can load: code, style, data, images and fonts. Saves of
 // any other file, such as an editor's swap or backup file, change nothing.
 const LAYOUT_FILE =
@@ -41,7 +48,7 @@ interface ListedLayout {
 export async function startLayoutRegistry(
   deps: LayoutRegistryDeps,
 ): Promise<LayoutRegistry> {
-  const { data, send, log, logSource } = deps;
+  const { folder, send, log, logSource } = deps;
   let defaultSkipLogged = false;
   // Each user layout's revision, kept for the life of the process so a layout
   // that goes and comes back never reuses a revision.
@@ -49,7 +56,7 @@ export async function startLayoutRegistry(
   let queue: Promise<unknown> = Promise.resolve();
 
   const listLayouts = async (): Promise<ListedLayout[]> => {
-    const entries = await data.list(LAYOUTS, { recursive: true });
+    const entries = await folder.list(ROOT, { recursive: true });
     const files = new Set(
       entries
         .filter((entry) => entry.kind === 'file')
@@ -63,7 +70,7 @@ export async function startLayoutRegistry(
       defaultSkipLogged = true;
       log(
         logSource,
-        'layouts/default is ignored; the built-in default layout wins',
+        `layouts/${logSource}/default is ignored; the built-in default layout wins`,
       );
     }
     const users = userNames
@@ -83,7 +90,10 @@ export async function startLayoutRegistry(
     return layouts;
   };
 
-  await data.write(`${LAYOUTS}/layout.d.ts`, deps.layoutTypes);
+  await folder.write(
+    'layout.d.ts',
+    deps.layoutTypes.replaceAll(REPO_KIT_SPECIFIER, USER_KIT_SPECIFIER),
+  );
   let listed = holdListing(await listLayouts());
 
   const entry = (layout: ListedLayout): LayoutEntry => {
@@ -109,29 +119,29 @@ export async function startLayoutRegistry(
     return run;
   };
 
-  // Lists again after a change in `folder` and announces it when `folder` is
-  // a layout now or was one before; a folder that never held a layout sends
-  // nothing.
-  const relist = async (folder: string): Promise<void> => {
+  // Lists again after a change in the layout folder `name` and announces it
+  // when `name` is a layout now or was one before; a folder that never held a
+  // layout sends nothing.
+  const relist = async (name: string): Promise<void> => {
     const layouts = await listLayouts();
-    const wasListed = listed.some((layout) => layout.name === folder);
-    const isListed = layouts.some((layout) => layout.name === folder);
+    const wasListed = listed.some((layout) => layout.name === name);
+    const isListed = layouts.some((layout) => layout.name === name);
     if (!wasListed && !isListed) {
       return;
     }
-    const seen = revisions.get(folder);
-    revisions.set(folder, seen === undefined ? 1 : seen + 1);
+    const seen = revisions.get(name);
+    revisions.set(name, seen === undefined ? 1 : seen + 1);
     listed = holdListing(layouts);
-    send(setOf(folder));
+    send(setOf(name));
   };
 
-  const relistInTurn = (folder: string) => {
-    serially(() => relist(folder)).catch((error: unknown) =>
-      log(logSource, `layout ${folder} not reloaded: ${errorText(error)}`),
+  const relistInTurn = (name: string) => {
+    serially(() => relist(name)).catch((error: unknown) =>
+      log(logSource, `layout ${name} not reloaded: ${errorText(error)}`),
     );
   };
 
-  // A path with no slash names a whole entry in `layouts`, as a watch reports
+  // A path with no slash names a whole entry in the folder, as a watch reports
   // a folder renamed, moved or deleted; `relist` sends nothing for a name that
   // never was a layout, `layout.d.ts` included.
   const onChange = (changed: string) => {
@@ -142,17 +152,17 @@ export async function startLayoutRegistry(
       }
       return;
     }
-    const folder = changed.slice(0, slash);
+    const name = changed.slice(0, slash);
     const fileName = changed.slice(changed.lastIndexOf('/') + 1);
     const isLayoutFile =
       LAYOUT_FILE.test(fileName) && !fileName.startsWith('.');
-    if (folder === DEFAULT_NAME || !isLayoutFile) {
+    if (name === DEFAULT_NAME || !isLayoutFile) {
       return;
     }
-    relistInTurn(folder);
+    relistInTurn(name);
   };
 
-  const watch = data.watch(LAYOUTS, onChange, {
+  const watch = folder.watch(ROOT, onChange, {
     onError: (error) =>
       log(logSource, `layouts watch failed: ${errorText(error)}`),
   });

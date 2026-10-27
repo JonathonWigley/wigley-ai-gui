@@ -26,7 +26,21 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['node:'],
   },
   'src/shared/page': {
-    layers: ['src/contracts', 'src/shared', 'src/shared/page/ui'],
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page/ui',
+      'src/shared/page/layout-host',
+    ],
+    packages: [],
+  },
+  'src/shared/page/layout-host': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page',
+      'src/shared/page/ui',
+    ],
     packages: [],
   },
   'src/shared/page/ui': {
@@ -80,8 +94,17 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared'],
     packages: ['electron', 'node:'],
   },
-  'src/main/plugins': {
+  'src/main/layouts': {
     layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
+    packages: [],
+  },
+  'src/main/plugins': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/main/layouts',
+    ],
     packages: [],
   },
   'src/main/drive': {
@@ -109,6 +132,9 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/main.ts',
       'src/plugins/manifests.ts',
       'src/plugins/keymap.ts',
+      'src/main/layouts',
+      'src/shared/page/layout-host',
+      'src/renderer/shell/layouts',
     ],
     packages: ['electron', 'node:'],
   },
@@ -182,7 +208,10 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['node:'],
   },
   'src/plugins/chat/contract.ts': { layers: ['src/contracts'], packages: [] },
-  'src/plugins/chat/layouts': { layers: [], packages: [] },
+  'src/plugins/chat/layouts': {
+    layers: ['src/shared/page/layout-host'],
+    packages: [],
+  },
   'src/plugins/chat/page': {
     layers: [
       'src/contracts',
@@ -196,6 +225,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/chat/layouts',
       'src/plugins/keys/contract.ts',
       'src/plugins/sessions/contract.ts',
+      'src/shared/page/layout-host',
     ],
     packages: [],
   },
@@ -223,8 +253,13 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/docs',
       'src/plugins/docs/contract.ts',
       'src/plugins/sessions/contract.ts',
+      'src/plugins/docs/layouts',
     ],
     packages: ['node:'],
+  },
+  'src/plugins/docs/layouts': {
+    layers: ['src/shared/page/layout-host'],
+    packages: [],
   },
   'src/plugins/docs/page': {
     layers: [
@@ -238,6 +273,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/docs/contract.ts',
       'src/plugins/keys/contract.ts',
       'src/plugins/sessions/contract.ts',
+      'src/plugins/docs/layouts',
+      'src/shared/page/layout-host',
     ],
     packages: [],
   },
@@ -258,7 +295,12 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/backlog',
       'src/plugins/backlog/contract.ts',
       'src/plugins/docs/contract.ts',
+      'src/plugins/backlog/layouts',
     ],
+    packages: [],
+  },
+  'src/plugins/backlog/layouts': {
+    layers: ['src/shared/page/layout-host'],
     packages: [],
   },
   'src/plugins/backlog/page': {
@@ -273,6 +315,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/backlog/contract.ts',
       'src/plugins/docs/contract.ts',
       'src/plugins/keys/contract.ts',
+      'src/plugins/backlog/layouts',
+      'src/shared/page/layout-host',
     ],
     packages: [],
   },
@@ -301,8 +345,13 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/backlog/contract.ts',
       'src/plugins/chat/contract.ts',
       'src/plugins/sessions/contract.ts',
+      'src/plugins/notes/layouts',
     ],
     packages: ['node:'],
+  },
+  'src/plugins/notes/layouts': {
+    layers: ['src/shared/page/layout-host'],
+    packages: [],
   },
   'src/plugins/notes/page': {
     layers: [
@@ -315,6 +364,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/notes/contract.ts',
       'src/plugins/keys/contract.ts',
       'src/plugins/sessions/contract.ts',
+      'src/plugins/notes/layouts',
+      'src/shared/page/layout-host',
     ],
     packages: [],
   },
@@ -339,8 +390,13 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared/paths',
       'src/plugins/settings',
       'src/plugins/settings/contract.ts',
+      'src/plugins/settings/layouts',
     ],
     packages: ['node:'],
+  },
+  'src/plugins/settings/layouts': {
+    layers: ['src/shared/page/layout-host'],
+    packages: [],
   },
   'src/plugins/settings/page': {
     layers: [
@@ -353,6 +409,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/settings',
       'src/plugins/settings/contract.ts',
       'src/plugins/keys/contract.ts',
+      'src/plugins/settings/layouts',
+      'src/shared/page/layout-host',
     ],
     packages: [],
   },
@@ -373,7 +431,10 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: ['node:'],
   },
-  'src/plugins/forms/layouts': { layers: [], packages: [] },
+  'src/plugins/forms/layouts': {
+    layers: ['src/shared/page/layout-host'],
+    packages: [],
+  },
   'src/plugins/forms/page': {
     layers: [
       'src/contracts',
@@ -385,6 +446,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/forms/layouts',
       'src/plugins/keys/contract.ts',
       'src/plugins/sessions/contract.ts',
+      'src/shared/page/layout-host',
     ],
     packages: [],
   },
@@ -401,8 +463,13 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared/agent-forms',
       'src/plugins/primer',
       'src/plugins/sessions/contract.ts',
+      'src/plugins/primer/layouts',
     ],
     packages: ['node:'],
+  },
+  'src/plugins/primer/layouts': {
+    layers: ['src/shared/page/layout-host'],
+    packages: [],
   },
   'src/plugins/primer/page': {
     layers: [
@@ -414,11 +481,26 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/primer',
       'src/plugins/keys/contract.ts',
       'src/plugins/sessions/contract.ts',
+      'src/plugins/primer/layouts',
+      'src/shared/page/layout-host',
     ],
     packages: [],
   },
   'src/plugins/gallery': {
     layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
+  'src/plugins/gallery/layouts': {
+    layers: ['src/shared/page/layout-host'],
+    packages: [],
+  },
+  'src/plugins/gallery/main': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/gallery',
+      'src/plugins/gallery/layouts',
+    ],
     packages: [],
   },
   'src/plugins/gallery/page': {
@@ -430,12 +512,27 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared/page/ui',
       'src/plugins/gallery',
       'src/plugins/keys/contract.ts',
+      'src/plugins/gallery/layouts',
+      'src/shared/page/layout-host',
     ],
     packages: [],
   },
   'src/plugins/keys': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/plugins/keys/contract.ts': {
     layers: ['src/contracts'],
+    packages: [],
+  },
+  'src/plugins/keys/layouts': {
+    layers: ['src/shared/page/layout-host'],
+    packages: [],
+  },
+  'src/plugins/keys/main': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/keys',
+      'src/plugins/keys/layouts',
+    ],
     packages: [],
   },
   'src/plugins/keys/page': {
@@ -447,6 +544,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared/page/ui',
       'src/plugins/keys',
       'src/plugins/keys/contract.ts',
+      'src/plugins/keys/layouts',
+      'src/shared/page/layout-host',
     ],
     packages: [],
   },
@@ -467,6 +566,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/sessions/contract.ts',
       'src/plugins/sessions/main/relay',
       'src/plugins/sessions/main/mcp',
+      'src/plugins/sessions/layouts',
     ],
     packages: ['node:'],
   },
@@ -478,6 +578,10 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/plugins/sessions/contract.ts'],
     packages: ['@modelcontextprotocol/server', 'node:'],
   },
+  'src/plugins/sessions/layouts': {
+    layers: ['src/shared/page/layout-host'],
+    packages: [],
+  },
   'src/plugins/sessions/page': {
     layers: [
       'src/contracts',
@@ -488,6 +592,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/sessions',
       'src/plugins/sessions/contract.ts',
       'src/plugins/keys/contract.ts',
+      'src/plugins/sessions/layouts',
+      'src/shared/page/layout-host',
     ],
     packages: [],
   },
@@ -511,6 +617,10 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/sessions/main',
       'src/plugins/settings',
       'src/plugins/settings/main',
+      'src/plugins/gallery',
+      'src/plugins/gallery/main',
+      'src/plugins/keys',
+      'src/plugins/keys/main',
     ],
     packages: [],
   },
@@ -565,7 +675,13 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared',
       'src/shared/page',
       'src/shared/page/ui',
+      'src/shared/page/layout-host',
+      'src/renderer/shell/layouts',
     ],
+    packages: [],
+  },
+  'src/renderer/shell/layouts': {
+    layers: ['src/shared/page/layout-host'],
     packages: [],
   },
   'src/renderer/codemirror-vim': {
@@ -602,6 +718,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/page.ts',
       'src/plugins/manifests.ts',
       'src/shared/page/ui',
+      'src/shared/page/layout-host',
+      'src/renderer/shell/layouts',
     ],
     packages: ['@fontsource/jetbrains-mono'],
   },

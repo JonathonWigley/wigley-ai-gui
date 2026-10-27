@@ -20,6 +20,7 @@ import type { AppConfig } from '../../contracts/settings';
 import type { UiState } from '../../contracts/ui-state';
 import { dataUrl } from '../../shared/data-url';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
+import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { qualify } from '../../shared/plugin-manifests';
 import type { ScopeStack } from '../key-scope';
 import type { LiveConfig } from '../live-config';
@@ -34,7 +35,7 @@ import type { PendingKeysHub } from '../pending-keys';
 // `setLayout` replaces the shell's layout. `transparency` is the page's one
 // transparency override, handed to every plugin as it is. `services` are the
 // ones every plugin shares; `uiState` gives each plugin its own scope of the
-// ui state.
+// ui state. `layouts` shows each owner's layouts.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
@@ -49,6 +50,7 @@ export interface PageApiDeps {
   run(id: CommandId, context?: PageCommandContext): void;
   dependency<E>(pluginId: string): E;
   bus: EventBus;
+  layouts: PageLayouts;
 }
 
 // One plugin's page API: its channel and its events run under the manifest's
@@ -56,7 +58,8 @@ export interface PageApiDeps {
 // it. Its areas leave out `main`, which only the mode registry fills, and the
 // activity bar and side bar, which the core draws from the modes. Its
 // settings are its own entry in the config's plugin settings, and its ui state
-// is scoped to its id.
+// is scoped to its id. Its layout shows run under its id and refresh on each
+// change of its settings, until their dispose.
 export function createPageApi(
   manifest: PluginManifest,
   deps: PageApiDeps,
@@ -100,6 +103,21 @@ export function createPageApi(
     services: { ...deps.services, uiState: deps.uiState.scoped(manifest.id) },
     dependency: deps.dependency,
     dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
+    layouts: {
+      show(options) {
+        const show = deps.layouts.show(manifest.id, options);
+        const onSettings = onChangedPart(config, settingsOf, () =>
+          show.refresh(),
+        );
+        return {
+          refresh: () => show.refresh(),
+          dispose() {
+            onSettings.dispose();
+            show.dispose();
+          },
+        };
+      },
+    },
   };
 }
 

@@ -5,10 +5,6 @@ import type {
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
-import {
-  createLayoutLoader,
-  showLayouts,
-} from '../../../shared/page/layout-loader';
 import { errorText } from '../../../shared/error-text';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -143,31 +139,16 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       log: services.log,
       toast: services.toast,
     });
-    const layoutShow = showLayouts<ChatLayout>({
-      channel: {
-        onLayoutChanged: (listener) =>
-          api.channel.on('layoutChanged', listener),
-        readLayout: () => api.channel.invoke('layout'),
-      },
-      loader: createLayoutLoader<ChatLayout>({
-        importModule: (url) => import(/* @vite-ignore */ url),
-        dataUrl: (path, revision) => api.dataUrl(path, revision),
-        defaultLayout,
-        head: document.head,
-        read: readChatLayout,
-      }),
+    api.layouts.show<ChatLayout>({
+      defaultLayout,
+      read: readChatLayout,
       userLayout: () => api.settings().layout,
-      namesInUse: () => [],
       setLayouts: (shown) =>
         view.setLayout(
           shown.layouts.get(shown.user) ?? defaultLayout,
           shown.user,
         ),
-      log: services.log,
-      logSource: 'chat',
-      toast: services.toast,
     });
-    api.onSettingsChanged(() => layoutShow.refresh());
     const startPrompt = createStartPrompt({
       picker,
       signIn,

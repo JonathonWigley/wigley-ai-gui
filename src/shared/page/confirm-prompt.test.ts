@@ -1,17 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommandId } from '../../contracts/commands';
 import type { ViewScope } from '../../contracts/keymap';
-import { createConfirmPrompt } from './confirm-prompt';
-import { asFake, type FakeElement, findAll, installFakeDom } from './test-dom';
+import { type ConfirmPromptDeps, createConfirmPrompt } from './confirm-prompt';
+import {
+  asFake,
+  asHtml,
+  FakeElement,
+  findAll,
+  installFakeDom,
+} from './test-dom';
 
 const DISMISSED = 'cancel prompt dismissed: the view moved on';
 
 // A prompt over a caller whose state is `asked` and `sending`, as the test
 // sets them; `dismiss` drops the prompt unless the form is sending, as the
 // forms and primer reducers do. `calls` records the scope work in order, and
-// `anchors` each anchor named. Without `hasOnBaseChanged` the deps leave out
-// `onBaseChanged`.
-function promptSetup(hasOnBaseChanged = true) {
+// `anchors` each anchor named, `disposed` each anchor's dispose. Without
+// `hasOnBaseChanged` the deps leave out `onBaseChanged`; `drawBody` is handed
+// on when given.
+function promptSetup(
+  hasOnBaseChanged = true,
+  drawBody?: ConfirmPromptDeps['drawBody'],
+) {
   const caller = { asked: false, sending: false };
   const calls: string[] = [];
   const baseListeners: ((base: ViewScope) => void)[] = [];
@@ -20,6 +30,7 @@ function promptSetup(hasOnBaseChanged = true) {
     'test.confirm': 'y',
   };
   const anchors: [CommandId, { scope?: ViewScope } | undefined][] = [];
+  const disposed: CommandId[] = [];
   const run = vi.fn();
   const log = vi.fn();
   const dismiss = vi.fn(() => {
@@ -37,7 +48,7 @@ function promptSetup(hasOnBaseChanged = true) {
       anchor: (element, command, options) => {
         anchors.push([command, options]);
         element.textContent = keys[command];
-        return { dispose: () => undefined };
+        return { dispose: () => disposed.push(command) };
       },
     },
     run,
@@ -56,12 +67,14 @@ function promptSetup(hasOnBaseChanged = true) {
       : {}),
     log,
     logSource: 'test',
+    ...(drawBody === undefined ? {} : { drawBody }),
   });
   const scrim = asFake(prompt.element);
   return {
     caller,
     calls,
     anchors,
+    disposed,
     prompt,
     scrim,
     run,
@@ -202,5 +215,42 @@ describe('confirm prompt', () => {
     expect(prompt.settleOwedDismiss()).toBe(true);
     expect(dismiss).toHaveBeenCalledOnce();
     expect(log).not.toHaveBeenCalled();
+  });
+
+  it('drawBody_ButtonLeftOut_AppendedToActions', () => {
+    const { scrim, anchors } = promptSetup(true, (parent, parts) => {
+      const own = new FakeElement('section');
+      own.className = 'own-body';
+      own.append(parts.body);
+      parent.append(asHtml(own));
+      parts.keepButton(asHtml(own));
+    });
+
+    const [own] = findAll(scrim, 'own-body');
+    const [actions] = findAll(scrim, 'ui-dialog-actions');
+    expect(own.textContent).toBe('The agent is told.Keepn');
+    expect(buttons(own).map((button) => button.textContent)).toEqual(['Keepn']);
+    expect(buttons(actions).map((button) => button.textContent)).toEqual([
+      'Cancel formy',
+    ]);
+    expect(anchors.map(([command]) => command)).toEqual([
+      'test.keep',
+      'test.confirm',
+    ]);
+  });
+
+  it('redraw_DisposesTheEarlierButtonsAnchors', () => {
+    const { prompt, scrim, anchors, disposed } = promptSetup();
+
+    prompt.redraw();
+
+    expect(disposed).toEqual(['test.keep', 'test.confirm']);
+    expect(anchors.map(([command]) => command)).toEqual([
+      'test.keep',
+      'test.confirm',
+      'test.keep',
+      'test.confirm',
+    ]);
+    expect(buttons(scrim)).toHaveLength(2);
   });
 });

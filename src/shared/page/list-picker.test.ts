@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { EditorEvents, EditorHost } from '../../contracts/editor';
 import { createListPicker, type ListPickerRequest } from './list-picker';
 import {
   asFake,
@@ -17,6 +18,61 @@ function pickerSetup() {
     logSource: 'test',
   });
   return { picker, layer: asFake(picker.element) };
+}
+
+// A picker over a filter editor whose `type` sets the filter text as typing
+// it would.
+function filteredPickerSetup() {
+  let events: EditorEvents | null = null;
+  const filterEditor = {
+    create: (_parent: HTMLElement, _doc: string, heard: EditorEvents) => {
+      events = heard;
+      return {
+        text: () => '',
+        setText: () => undefined,
+        focus: () => undefined,
+        blur: () => undefined,
+        destroy: () => undefined,
+      };
+    },
+  } as unknown as EditorHost;
+  const picker = createListPicker({
+    pushScope: () => ({ pop: () => undefined, onBaseChanged: () => undefined }),
+    log: vi.fn(),
+    logSource: 'test',
+    filterEditor,
+  });
+  return {
+    picker,
+    layer: asFake(picker.element),
+    type: (text: string) => events?.changed(text),
+  };
+}
+
+// A `drawRow` drawing each item as `li.owned-row` holding its label and
+// trailing, recording one anchor per row, named `<item>#<n>` for the n-th
+// anchor made; `made` lists every anchor made and `disposed` each dispose.
+function owningRows() {
+  const made: string[] = [];
+  const disposed: string[] = [];
+  const drawRow: ListPickerRequest<string>['drawRow'] = (
+    parent,
+    item,
+    input,
+  ) => {
+    const owned = new FakeElement('li');
+    owned.className = 'owned-row';
+    owned.append(input.label);
+    if (input.trailing !== null) {
+      owned.append(asFake(input.trailing));
+    }
+    parent.append(asHtml(owned));
+    const name = `${item}#${made.length + 1}`;
+    made.push(name);
+    input.recordAnchor({ dispose: () => disposed.push(name) });
+    return asHtml(owned);
+  };
+  return { drawRow, made, disposed };
 }
 
 function request(
@@ -87,5 +143,51 @@ describe('list picker', () => {
     picker.open(request({ cursorEnd: () => null }));
 
     expect(findAll(rows(layer)[0], 'ui-row-trailing')).toHaveLength(0);
+  });
+
+  it('drawRow_DrawsEachVisibleItemAndKeepsCursorAndClick', () => {
+    const { picker, layer } = pickerSetup();
+    const end = new FakeElement('span');
+    const chosen = vi.fn();
+    const { drawRow } = owningRows();
+
+    picker.open(
+      request({ drawRow, cursorEnd: () => asHtml(end), selected: 1, chosen }),
+    );
+
+    const drawn = findAll(layer, 'owned-row');
+    expect(rows(layer)).toEqual([]);
+    expect(drawn.map((row) => row.textContent)).toEqual([
+      'one',
+      'two',
+      'three',
+    ]);
+    expect(drawn.map((row) => row.classList.contains('is-cursor'))).toEqual([
+      false,
+      true,
+      false,
+    ]);
+    expect(drawn[1].childNodes.at(-1)).toBe(end);
+    drawn[2].click();
+    expect(chosen).toHaveBeenCalledWith('three');
+  });
+
+  it('drawRow_AnchorsRecordedInARowDraw_DisposedOnNextDrawAndOnClose', () => {
+    const { picker, type } = filteredPickerSetup();
+    const { drawRow, made, disposed } = owningRows();
+    picker.open(request({ drawRow }));
+    expect(disposed).toEqual([]);
+
+    type('t');
+    expect(disposed).toEqual(['one#1', 'two#2', 'three#3']);
+    expect(made.slice(3)).toEqual(['two#4', 'three#5']);
+
+    picker.redraw();
+    expect(disposed.slice(3)).toEqual(['two#4', 'three#5']);
+
+    picker.close();
+    picker.redraw();
+    expect(disposed.slice(5)).toEqual(['two#6', 'three#7']);
+    expect(made).toHaveLength(7);
   });
 });

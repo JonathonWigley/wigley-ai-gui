@@ -57,6 +57,7 @@ import {
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
 import { scopedFiles } from '../shared/scoped-files';
+import kitTypes from '../shared/page/layout-host/kit.d.ts?raw';
 import { createElectronAlerts } from './alerts/electron-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import { appInstanceOf } from './app-instance';
@@ -68,8 +69,9 @@ import {
 } from './config/config-store';
 import { createUserConfig } from './config/user-config';
 import {
-  registerDataScheme,
+  registerFileSchemes,
   serveDataScheme,
+  serveLayoutScheme,
 } from './data-protocol/data-protocol';
 import { type DriveRun, startDriveRun } from './drive/drive-run';
 import { electronDrivenWindow } from './electron-driven-window';
@@ -85,6 +87,10 @@ import {
   readLoginShellPath,
   shouldReadLoginShellPath,
 } from './login-shell-path';
+import {
+  createLayoutService,
+  type LayoutService,
+} from './layouts/layout-service';
 import { createMainApi } from './plugins/main-api';
 import { createPageLog } from './page-log';
 import { createPluginChannels } from './plugins/plugin-channel';
@@ -136,7 +142,7 @@ const appInstance = appInstanceOf(app.isPackaged);
 const driveRunDir =
   runEnvironment.mode === 'drive' ? runEnvironment.runDir : null;
 
-registerDataScheme();
+registerFileSchemes();
 
 // Read while the app gets ready, and applied before any plugin starts. A
 // terminal start, the self-test and a drive run keep the PATH of the shell
@@ -474,13 +480,23 @@ async function readStartInputs(): Promise<StartInputs> {
   };
 }
 
+// The user config folder in `homeDir`, shared by the stable and dev apps.
+function configFolder(homeDir: string): string {
+  return path.join(homeDir, '.config', 'wigley-ai-gui');
+}
+
+// The layouts folder in the user config folder in `homeDir`.
+function layoutsFolder(homeDir: string): string {
+  return path.join(configFolder(homeDir), 'layouts');
+}
+
 // What the ConfigStore over the user config folder in `homeDir` reads,
 // logging to the page and serving the real path of `homeDir`, since index
 // entries and session folders are real paths.
 async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
   return {
     files,
-    folder: path.join(homeDir, '.config', 'wigley-ai-gui'),
+    folder: configFolder(homeDir),
     defaults: defaultSettings,
     optionalSettings,
     settingChoices,
@@ -551,17 +567,40 @@ function serveUiState(filePath: string, log: Log) {
   onSelfTestExit('the ui-state file', async () => (await load()).close());
 }
 
+// The core layouts service over the layouts folder in `homeDir`, sending each
+// owner's set to the window's page and answering the page's reads.
+function serveLayouts(
+  window: BrowserWindow,
+  homeDir: string,
+  log: Log,
+): LayoutService {
+  const service = createLayoutService({
+    files,
+    paths,
+    folder: layoutsFolder(homeDir),
+    kitTypes,
+    send: (owner, set) =>
+      livePage(window)?.send(BRIDGE_CHANNELS.layoutsChanged, owner, set),
+    log,
+  });
+  ipcMain.handle(BRIDGE_CHANNELS.layoutsRead, (_event, owner: string) =>
+    service.read(owner),
+  );
+  return service;
+}
+
 // Starts every plugin's main part, each with its own API over one plugin
 // channel router to the window's page, the settings `store` serves with no
 // self-test layer, one event bus, the shared `services`, its own host from
 // `selfTest` (null outside the self-test), its own host from `driveRun` (null
-// outside a drive run), and its data folder under `dataRoot`. `onStarted` sees
-// each part, with its plugin id, as it starts, so a part is known even when a
-// later start throws.
+// outside a drive run), its data folder under `dataRoot`, and its layouts in
+// `layouts`. `onStarted` sees each part, with its plugin id, as it starts, so
+// a part is known even when a later start throws.
 function startMainParts(
   window: BrowserWindow,
   store: ConfigStore,
   dataRoot: string,
+  layouts: LayoutService,
   services: Omit<MainServices, 'selfTest'>,
   selfTest: SelfTestDriver | null,
   driveRun: DriveRun | null,
@@ -584,6 +623,7 @@ function startMainParts(
           dependency,
           bus,
           dataRoot,
+          layouts,
         }),
       );
       onStarted(part.manifest.id, started);
@@ -688,10 +728,12 @@ function createWindow(
     onQuit(() => driveRun.dispose());
     driveRun.listening.catch(failStart);
   }
+  const layouts = serveLayouts(window, inputs.homeDir, log);
   const started = startMainParts(
     window,
     store,
     inputs.dataRoot,
+    layouts,
     {
       files,
       processes,
@@ -720,6 +762,9 @@ function createWindow(
       onSelfTestExit(`plugin ${pluginId}`, () => part.dispose?.());
     },
   );
+  // After the parts' dispose, which disposes their registrations.
+  onQuit(() => layouts.dispose());
+  onSelfTestExit('the layouts service', () => layouts.dispose());
   // The config needs the page binds and settings of the scripts the plugins
   // handed the self-test.
   const selfTestConfig = selfTest?.closeHandover() ?? {
@@ -849,6 +894,7 @@ function startApp() {
       const { store, userConfig } = await loadConfig(inputs.homeDir);
       onSelfTestExit('the config store', () => store.dispose());
       serveDataScheme(inputs.dataRoot, paths);
+      serveLayoutScheme(layoutsFolder(inputs.homeDir), paths);
       createWindow(inputs, store, userConfig);
       // After createWindow's quit tasks, so the parts dispose before it.
       onQuit(() => store.dispose());

@@ -14,10 +14,6 @@ import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-s
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
 import { errorText } from '../../../shared/error-text';
 import {
-  type LayoutRegistry,
-  startLayoutRegistry,
-} from '../../../shared/layouts/layout-registry';
-import {
   DRIVE_SESSION_DEFAULTS,
   type Harness,
   type SessionsMainEvents,
@@ -29,7 +25,11 @@ import { formsManifest } from '../manifest';
 import { createLayoutPreview } from './preview/layout-preview';
 import { PREVIEW_ROUND_ARGS } from './preview/preview-round';
 import { roundType, withKnownLayouts } from './round-type';
-import { formsSelfTestScript, SELFTEST_LAYOUTS } from './selftest-script';
+import {
+  FORMS_LAYOUTS_FOLDER,
+  formsSelfTestScript,
+  SELFTEST_LAYOUTS,
+} from './selftest-script';
 import { FORMS_TOOLS } from './tool-definitions';
 
 type FormsApi = MainApi<
@@ -103,28 +103,28 @@ function createForms(
   return { forms, preview };
 }
 
-// Starts the layout registry once `written` settles and serves it to the
-// page; a handler called before the registry is ready answers once it is, and
-// every handler rejects with the start's error when it failed.
-function serveLayouts(
+// Registers forms' layouts once `written` settles; null when `isDisposed`
+// by then.
+async function registerLayouts(
   api: FormsApi,
   written: Promise<void>,
-): Promise<LayoutRegistry> {
-  const { log } = api.services;
-  const layouts = written.then(() =>
-    startLayoutRegistry({
-      data: api.data,
-      send: (set) => api.channel.send('layoutChanged', set),
-      log,
-      logSource: 'forms',
-      layoutTypes,
-    }),
+  isDisposed: () => boolean,
+): Promise<Disposable | null> {
+  await written;
+  return isDisposed() ? null : api.layouts.register({ layoutTypes });
+}
+
+// Writes the self-test layouts into forms' layouts folder under the home.
+async function writeSelfTestLayouts(api: FormsApi): Promise<void> {
+  const { files, paths, homeDir } = api.services;
+  await Promise.all(
+    SELFTEST_LAYOUTS.map((layout) =>
+      files.write(
+        paths.join(homeDir, FORMS_LAYOUTS_FOLDER, layout.path),
+        layout.text,
+      ),
+    ),
   );
-  layouts.catch((error: unknown) =>
-    log('forms', `layouts not started: ${errorText(error)}`),
-  );
-  api.channel.handle('layout', async () => (await layouts).current());
-  return layouts;
 }
 
 // Opens rounds in a drive run's sessions and reads their answers:
@@ -155,39 +155,30 @@ export function addDriveActions(
 }
 
 // Serves its two tools to every agent session, shows each session's rounds on
-// the page, serves the page its layouts and opens the layout preview on the
+// the page, registers its layouts and opens the layout preview on the
 // page's ask; in the self-test it writes the fixture layouts and hands the
 // driver its script, and in a drive run it adds the drive actions.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
     const sessions = api.dependency<SessionsMainExports>('sessions');
-    // Set once the registry starts; until then, or when it failed to start,
-    // only `default` is known, which is all the page can draw then.
-    let registry: LayoutRegistry | null = null;
-    const layoutNames = () => registry?.names() ?? ['default'];
+    const layoutNames = () => api.layouts.names();
     const { forms, preview } = createForms(api, sessions, layoutNames);
     api.channel.handle('openPreview', () => preview.open());
     sessions.contributeTools(FORMS_TOOLS, (session) =>
       createAgentFormToolSession(forms.startSession(session), roundType),
     );
     const { selfTest } = api.services;
-    // Written before the registry starts, so the registry lists every
-    // self-test layout.
+    // Written before forms registers, so its first set lists every self-test
+    // layout.
     const fixtureWritten =
       api.services.runMode === 'selfTest'
-        ? Promise.all(
-            SELFTEST_LAYOUTS.map((layout) =>
-              api.data.write(layout.path, layout.text),
-            ),
-          ).then(() => undefined)
+        ? writeSelfTestLayouts(api)
         : Promise.resolve();
-    const layouts = serveLayouts(api, fixtureWritten);
-    layouts.then(
-      (started) => {
-        registry = started;
-      },
-      () => undefined,
+    let isDisposed = false;
+    const registration = registerLayouts(api, fixtureWritten, () => isDisposed);
+    registration.catch((error: unknown) =>
+      api.services.log('forms', `layouts not registered: ${errorText(error)}`),
     );
     selfTest?.run(formsSelfTestScript(sessions, api.services.userConfig));
     const driveActions =
@@ -202,8 +193,9 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       commands: {},
       dispose: () => {
         driveActions?.dispose();
-        return layouts.then(
-          (registry) => registry.dispose(),
+        isDisposed = true;
+        return registration.then(
+          (registered) => registered?.dispose(),
           () => undefined,
         );
       },

@@ -214,7 +214,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Primer nested rail and item cards](01-primer-item-cards.md)
+- [x] [Primer nested rail and item cards](01-primer-item-cards.md)
 - [ ] [Core layout service and page host](02-layout-core.md)
 
 ### Wave 2
@@ -247,7 +247,11 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 
 ### Groups
+- 01 · a218909 · diff read: every Produces present; primer tests and 25 new self-test steps pass; typecheck clean in primer (remaining errors in 02's in-flight files) · concerns: check-styles not run (lint stopped at 02's layer check); i on a non-extra task card now focuses add-item box
 ### Contract changes
 ### Rulings
+- selectedRow returns stored selection without railRows lookup — selection is the identity rows are built from — a stale selection would come back as is · group 01 · group 01
+- showTarget checks only the target's task exists, not the item — no caller builds a missing-item target — would select a row with no item · group 01 · group 01
+- i on a non-extra task card focuses the add-item box, first box shown — follows shownBoxes order — was item 1's comment before · group 01 · group 01
 ### Review rounds
 ### Test gate

@@ -1,5 +1,4 @@
 import type { Disposable } from '../../contracts/disposable';
-import type { LayoutSet } from '../../contracts/layouts';
 import type {
   AgentFormEnd,
   AgentFormInvoke,
@@ -228,19 +227,13 @@ export interface PresentedRound {
 
 export type RoundEnd = AgentFormEnd<FormBody>;
 
-// The layouts the Form tab builds cards with.
-export type { LayoutEntry, LayoutSet } from '../../contracts/layouts';
-
-// The agent form channel's rounds, plus: the forms page part invokes `layout`
-// on load and `openPreview` from the preview key; main sends the set of
-// layouts after each change in a layout's folder. `layout` rejects when the
-// layouts failed to start.
+// The agent form channel's rounds, plus: the forms page part invokes
+// `openPreview` from the preview key.
 export interface FormsChannel extends ChannelShape {
   invoke: AgentFormInvoke<Round, FormBody> & {
-    layout(): Promise<LayoutSet>;
     openPreview(): void;
   };
-  messages: AgentFormMessages<Round, FormBody> & { layoutChanged: LayoutSet };
+  messages: AgentFormMessages<Round, FormBody>;
 }
 
 // The page part's exports and events.

@@ -30,6 +30,8 @@ const SETTINGS = { keys: { whichKeyTimeoutMs: 1000 } };
 // The user keymap and settings files, under the self-test's temp home.
 const USER_KEYMAP_FILE = '.config/wigley-ai-gui/keymap.json';
 const USER_SETTINGS_FILE = '.config/wigley-ai-gui/settings.json';
+// Forms' layouts folder, relative to the home.
+export const FORMS_LAYOUTS_FOLDER = '.config/wigley-ai-gui/layouts/forms';
 
 // A user keymap binding `Q`, which nothing else binds, to `command` everywhere.
 function userKeymap(command: string): string {
@@ -63,7 +65,7 @@ const LONG_WORD = 'unbroken'.repeat(14);
 // default card can mount that box only once the host has destroyed it, and
 // whose notice card mounts a notes box, which a notice lacks.
 const SELFTEST_LAYOUT = {
-  path: 'layouts/selftest/layout.js',
+  path: 'selftest/layout.js',
   text: `export default {
   cards: {
     question(parent, input, kit) {
@@ -96,7 +98,7 @@ const SELFTEST_LAYOUT = {
 
 // A layout defining only a question card, which throws once it has drawn.
 const SELFTEST_PARTIAL_LAYOUT = {
-  path: 'layouts/selftest-partial/layout.js',
+  path: 'selftest-partial/layout.js',
   text: `export default {
   cards: {
     question(parent, input, kit) {
@@ -111,7 +113,7 @@ const SELFTEST_PARTIAL_LAYOUT = {
 // A layout defining only a notice card, which throws once it has drawn; the
 // steps name it in the forms.layout setting.
 const SELFTEST_USER_LAYOUT = {
-  path: 'layouts/selftest-user/layout.js',
+  path: 'selftest-user/layout.js',
   text: `export default {
   cards: {
     notice(parent, input, kit) {
@@ -123,24 +125,23 @@ const SELFTEST_USER_LAYOUT = {
 `,
 };
 
-// The layouts forms' main writes into its data folder in the self-test only,
-// each path relative to that folder, so the registry lists them beside
-// `default`.
+// The layouts forms' main writes into its layouts folder in the self-test
+// only, each path relative to that folder (`FORMS_LAYOUTS_FOLDER` under the
+// home), so the registry lists them beside `default`.
 export const SELFTEST_LAYOUTS: readonly { path: string; text: string }[] = [
   SELFTEST_LAYOUT,
   SELFTEST_PARTIAL_LAYOUT,
   SELFTEST_USER_LAYOUT,
 ];
 
-// A step's write saving `layout` again under the temp home, where forms' data
-// folder is `plugin-data/forms`; the `save` line makes each save change the
-// file.
+// A step's write saving `layout` again under the temp home, in forms' layouts
+// folder; the `save` line makes each save change the file.
 function layoutSave(
   layout: { path: string; text: string },
   save: number,
 ): { path: string; text: string } {
   return {
-    path: `plugin-data/forms/${layout.path}`,
+    path: `${FORMS_LAYOUTS_FOLDER}/${layout.path}`,
     text: `${layout.text}// save ${save}\n`,
   };
 }

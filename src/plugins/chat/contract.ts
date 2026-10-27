@@ -6,7 +6,6 @@ import type {
   UserMessage,
 } from '../../contracts/agent';
 import type { Disposable } from '../../contracts/disposable';
-import type { LayoutSet } from '../../contracts/layouts';
 import type { ChannelShape } from '../../contracts/plugin';
 
 export interface ChatProfile {
@@ -127,7 +126,6 @@ export interface ChatChannel extends ChannelShape {
       entryId: string,
       answer: PermissionAnswer,
     ): void;
-    layout(): Promise<LayoutSet>;
   };
   messages: {
     sessionStarted: ChatSessionState;
@@ -142,7 +140,6 @@ export interface ChatChannel extends ChannelShape {
     sessionRunning: { sessionId: string };
     // A started process exited, and its row rests until the user closes it.
     sessionRested: { sessionId: string; error: string | null };
-    layoutChanged: LayoutSet;
     // The page the user opens to finish sign-in `id`.
     logInLink: { id: number; profile: string; url: string };
     // `status` is null when the status could not be read; `error` is null

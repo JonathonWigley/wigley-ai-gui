@@ -11,10 +11,6 @@ import {
   type EditorBoxes,
 } from '../../../shared/page/editor-boxes';
 import { activeForm, formById } from '../../../shared/page/session-forms';
-import {
-  createLayoutLoader,
-  showLayouts,
-} from '../../../shared/page/layout-loader';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import type {
   SessionsPageEvents,
@@ -185,28 +181,14 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       api.events.emit(event.name, event.data);
     });
     listenForRounds(api, store, sessions);
-    const layoutShow = showLayouts<Layout>({
-      channel: {
-        onLayoutChanged: (listener) =>
-          api.channel.on('layoutChanged', listener),
-        readLayout: () => api.channel.invoke('layout'),
-      },
-      loader: createLayoutLoader<Layout>({
-        importModule: (url) => import(/* @vite-ignore */ url),
-        dataUrl: (path, revision) => api.dataUrl(path, revision),
-        defaultLayout,
-        head: document.head,
-        read: readLayout,
-      }),
+    const layoutShow = api.layouts.show<Layout>({
+      defaultLayout,
+      read: readLayout,
       userLayout: () => api.settings().layout,
       namesInUse: () =>
         store.get().forms.flatMap((round) => roundLayoutNames(round.round)),
       setLayouts: (shown) => view.setLayouts(shown),
-      log: services.log,
-      logSource: 'forms',
-      toast: services.toast,
     });
-    api.onSettingsChanged(() => layoutShow.refresh());
     store.subscribe(() => layoutShow.refresh());
     const exports: FormsPageExports = {
       activeRound() {

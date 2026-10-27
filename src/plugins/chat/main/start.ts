@@ -14,10 +14,6 @@ import {
   requiredString,
 } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
-import {
-  type LayoutRegistry,
-  startLayoutRegistry,
-} from '../../../shared/layouts/layout-registry';
 import type {
   SessionsMainEvents,
   SessionsMainExports,
@@ -43,25 +39,6 @@ type ChatApi = MainApi<
   Record<never, never>,
   QualifiedEvents<'sessions', SessionsMainEvents>
 >;
-
-// Starts the layout registry and serves it to the page; a handler called
-// before the registry is ready answers once it is, and every handler rejects
-// with the start's error when it failed.
-function serveLayouts(api: ChatApi): Promise<LayoutRegistry> {
-  const { log } = api.services;
-  const layouts = startLayoutRegistry({
-    data: api.data,
-    send: (set) => api.channel.send('layoutChanged', set),
-    log,
-    logSource: 'chat',
-    layoutTypes,
-  });
-  layouts.catch((error: unknown) =>
-    log('chat', `layouts not started: ${errorText(error)}`),
-  );
-  api.channel.handle('layout', async () => (await layouts).current());
-  return layouts;
-}
 
 // The folder `chat.start` opens when the agent names none, under the run's
 // home.
@@ -188,8 +165,8 @@ export function addDriveActions(
 // the saved ones, answers their permission prompts through the
 // `permission_prompt` tool, keeps the recent project folders and serves them
 // merged with the harness's, signs profiles in and out (cancelling a running
-// sign-in when the page loads again or the part is disposed), serves the page
-// its chat layouts, offers a drive run its fixtures, and exports a background
+// sign-in when the page loads again or the part is disposed), registers its
+// chat layouts, offers a drive run its fixtures, and exports a background
 // launch to other plugins.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
@@ -310,7 +287,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         }),
       );
     }
-    const layouts = serveLayouts(api);
+    const layouts = api.layouts.register({ layoutTypes });
     const exports: ChatMainExports = {
       launch: async (request) => chat.launch(request),
       profileNames,
@@ -327,10 +304,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         for (const action of driveActions) {
           action.dispose();
         }
-        return layouts.then(
-          (registry) => registry.dispose(),
-          () => undefined,
-        );
+        layouts.dispose();
       },
     };
   },

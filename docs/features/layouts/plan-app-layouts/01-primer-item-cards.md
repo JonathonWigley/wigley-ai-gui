@@ -1,6 +1,6 @@
 # 01 — Primer nested rail and item cards
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -293,4 +293,4 @@ Commit:    one commit for the group: "Primer rail expands the selected task's it
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit a218909 · proof: diff read: every Produces present; primer tests and 25 new self-test steps pass; typecheck clean in primer (remaining errors in 02's in-flight files) · concerns: check-styles not run (lint stopped at 02's layer check); i on a non-extra task card now focuses add-item box

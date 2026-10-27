@@ -1,7 +1,10 @@
-// One layout in a plugin's layouts folder. `revision` grows on every change in
+// The owner of a layouts folder: a plugin id, or 'shell'.
+export type LayoutOwner = string;
+
+// One layout in an owner's layouts folder. `revision` grows on every change in
 // the layout's folder and never resets, so a URL holding it loads fresh
 // modules; `builtIn` marks the `default` layout, which has no files in the
-// plugin's data folder.
+// layouts folder.
 export interface LayoutEntry {
   name: string;
   revision: number;
@@ -9,7 +12,7 @@ export interface LayoutEntry {
   builtIn: boolean;
 }
 
-// Every layout in a plugin's layouts folder, `default` first. `changed` names
+// Every layout in an owner's layouts folder, `default` first. `changed` names
 // the layout whose folder change this set announces, null for a set read
 // rather than announced.
 export interface LayoutSet {

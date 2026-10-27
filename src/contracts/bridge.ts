@@ -1,9 +1,12 @@
+import type { LayoutOwner, LayoutSet } from './layouts';
 import type { Log } from './log';
 import type { AppConfig } from './settings';
 
 export const BRIDGE_CHANNELS = {
   config: 'bridge:config',
   configChanged: 'bridge:config-changed',
+  layoutsRead: 'bridge:layouts-read',
+  layoutsChanged: 'bridge:layouts-changed',
   log: 'bridge:log',
   pluginInvoke: 'plugin:invoke',
   pluginMessage: 'plugin:message',
@@ -18,6 +21,12 @@ export interface Bridge {
   // changes.
   onConfig(listener: (config: AppConfig) => void): void;
   onLog(listener: Log): void;
+  // The layouts `owner` holds now; null until the owner's registry has listed
+  // them, or for an owner that never registered.
+  layouts(owner: LayoutOwner): Promise<LayoutSet | null>;
+  // Calls `listener` with each owner's set main sends: its first once its
+  // registry has listed, then one after each change in a layout's folder.
+  onLayouts(listener: (owner: LayoutOwner, set: LayoutSet) => void): void;
   // Every saved ui-state key, qualified by its plugin id (`forms.rail`), and
   // its value.
   uiState(): Promise<Record<string, unknown>>;

@@ -1,3 +1,4 @@
+import type { Disposable } from '../../contracts/disposable';
 import type { EditorHost } from '../../contracts/editor';
 import type { Log } from '../../contracts/log';
 import type { PushedScope } from '../../contracts/plugin';
@@ -32,6 +33,22 @@ export interface ListPickerRequest<T> {
   headerEnd?: HTMLElement | null;
   // Drawn at the trailing end of the cursor row, on each draw.
   cursorEnd?(item: T): HTMLElement | null;
+  // Draws the row for `item` into `parent` (the picker's list) and returns
+  // it, appended to `parent`; the picker draws its built-in row when left
+  // out. The picker sets `is-cursor` on the returned row, and a layout styles
+  // the cursor row through that class. The owner hands each key anchor its row
+  // part names to `recordAnchor`. The picker owns their lifetime: it disposes
+  // every recorded anchor before each row draw pass (a filter change, a cursor
+  // move, `redraw()`) and when it closes.
+  drawRow?(
+    parent: HTMLElement,
+    item: T,
+    input: {
+      label: string;
+      trailing: HTMLElement | null;
+      recordAnchor(anchor: Disposable): void;
+    },
+  ): HTMLElement;
 }
 
 // One floating list, holding one request at a time: `open` replaces the open
@@ -44,7 +61,8 @@ export interface ListPickerRequest<T> {
 // on each draw.
 // With a filter editor, `focusFilter` types into the filter box above the
 // list and `leaveFilter` leaves it with the filter kept; without one both do
-// nothing.
+// nothing. A request's `drawRow` draws each row; the picker sets the row's
+// title, `is-selected` and `is-cursor`, and the click that chooses its item.
 export interface ListPicker {
   // The transparent layer holding the panel, filling the positioned box the
   // caller places it in.
@@ -61,6 +79,9 @@ export interface ListPicker {
   close(): void;
   focusFilter(): void;
   leaveFilter(): void;
+  // Draws the open request's rows again, as after a new layout; nothing when
+  // closed.
+  redraw(): void;
 }
 
 export interface ListPickerDeps {
@@ -79,6 +100,17 @@ interface OpenRequest {
   chooseAt(index: number): void;
   cancelled: (() => void) | null;
   cursorEndAt(index: number): HTMLElement | null;
+  // The request's own row for the item at `index`, appended to `parent`;
+  // null when the request draws none.
+  drawRowAt(
+    parent: HTMLElement,
+    index: number,
+    input: {
+      label: string;
+      trailing: HTMLElement | null;
+      recordAnchor(anchor: Disposable): void;
+    },
+  ): HTMLElement | null;
 }
 
 export function createListPicker(deps: ListPickerDeps): ListPicker {
@@ -106,27 +138,46 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
   let state: PickerState = openPicker([], 0);
   let pushed: PushedScope | null = null;
 
+  // The anchors the request's rows recorded in the last draw pass.
+  let rowAnchors: Disposable[] = [];
+  const disposeRowAnchors = () => {
+    const anchors = rowAnchors;
+    rowAnchors = [];
+    for (const anchor of anchors) {
+      anchor.dispose();
+    }
+  };
+
   const draw = () => {
-    const items = visibleIndexes(state).map((index) => {
+    disposeRowAnchors();
+    list.replaceChildren();
+    for (const index of visibleIndexes(state)) {
       const label = state.labels[index];
       const atCursor = index === state.cursor;
-      const item = row({
-        density: 'list',
-        label,
-        trailing: atCursor ? (request?.cursorEndAt(index) ?? null) : null,
-        tag: 'li',
-        onClick: () => {
-          state = { ...state, cursor: index };
-          picker.choose();
-        },
-      });
+      const trailing = atCursor ? (request?.cursorEndAt(index) ?? null) : null;
+      const choose = () => {
+        state = { ...state, cursor: index };
+        picker.choose();
+      };
+      const drawn =
+        request?.drawRowAt(list, index, {
+          label,
+          trailing,
+          recordAnchor: (anchor) => rowAnchors.push(anchor),
+        }) ?? null;
+      const item =
+        drawn ??
+        row({ density: 'list', label, trailing, tag: 'li', onClick: choose });
+      if (drawn === null) {
+        list.append(item);
+      } else {
+        drawn.addEventListener('click', choose);
+      }
       // The row ends in an ellipsis; the tooltip shows the whole label.
       item.title = label;
       item.classList.toggle('is-selected', atCursor);
       item.classList.toggle('is-cursor', atCursor);
-      return item;
-    });
-    list.replaceChildren(...items);
+    }
     list.querySelector('.is-cursor')?.scrollIntoView({ block: 'nearest' });
   };
 
@@ -154,6 +205,7 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       return null;
     }
     request = null;
+    disposeRowAnchors();
     if (filter !== null && filterBox.contains(document.activeElement)) {
       filter.blur();
     }
@@ -180,6 +232,8 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
         chooseAt: (index) => next.chosen(next.items[index]),
         cancelled: next.cancelled ?? null,
         cursorEndAt: (index) => next.cursorEnd?.(next.items[index]) ?? null,
+        drawRowAt: (parent, index, input) =>
+          next.drawRow?.(parent, next.items[index], input) ?? null,
       };
       state = openPicker(next.items.map(next.label), next.selected ?? 0);
       title.textContent = next.title;
@@ -222,6 +276,11 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     },
     leaveFilter() {
       filter?.blur();
+    },
+    redraw() {
+      if (request !== null) {
+        draw();
+      }
     },
   };
   return picker;

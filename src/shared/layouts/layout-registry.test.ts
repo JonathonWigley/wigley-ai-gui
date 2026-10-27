@@ -16,19 +16,22 @@ beforeEach(() => {
   logLines = [];
 });
 
-function start(data: Files = files): Promise<LayoutRegistry> {
+function start(
+  folder: Files = files,
+  layoutTypes = LAYOUT_TYPES,
+): Promise<LayoutRegistry> {
   return startLayoutRegistry({
-    data,
+    folder,
     send: (set) => sent.push(set),
     log: (source, message) => logLines.push(`[${source}] ${message}`),
     logSource: 'demo',
-    layoutTypes: LAYOUT_TYPES,
+    layoutTypes,
   });
 }
 
 async function writeLayouts(...names: string[]): Promise<void> {
   for (const name of names) {
-    await files.write(`layouts/${name}/layout.js`, `// ${name}`);
+    await files.write(`${name}/layout.js`, `// ${name}`);
   }
 }
 
@@ -38,12 +41,12 @@ function entryIn(set: LayoutSet, name: string): LayoutEntry | undefined {
 
 // `files` whose watch hands its options' `onError` to `fail`.
 function withFailingWatch(inner: Files): {
-  data: Files;
+  folder: Files;
   fail(error: unknown): void;
 } {
   let onWatchError: ((error: unknown) => void) | undefined;
   return {
-    data: {
+    folder: {
       ...inner,
       watch: (folder, onChange, options) => {
         onWatchError = options?.onError;
@@ -68,7 +71,19 @@ describe('start', () => {
   it('start_WritesLayoutTypes', async () => {
     await start();
 
-    expect(await files.read('layouts/layout.d.ts')).toBe(LAYOUT_TYPES);
+    expect(await files.read('layout.d.ts')).toBe(LAYOUT_TYPES);
+  });
+
+  it('start_LayoutTypes_KitSpecifierRewritten', async () => {
+    const repo = "'../../../shared/page/layout-host/kit'";
+    await start(
+      files,
+      `import type { BaseKit } from ${repo};\nimport type { DotStatus } from ${repo};\n`,
+    );
+
+    expect(await files.read('layout.d.ts')).toBe(
+      "import type { BaseKit } from '../kit';\nimport type { DotStatus } from '../kit';\n",
+    );
   });
 
   it('start_ListsDefaultFirstThenUsersByName', async () => {
@@ -93,12 +108,12 @@ describe('start', () => {
 
     expect(registry.names()).toEqual(['default', 'alpha']);
     expect(logLines).toContainEqual(
-      expect.stringMatching(/^\[demo\] .*layouts\/default/),
+      expect.stringMatching(/^\[demo\] layouts\/demo\/default is ignored/),
     );
   });
 
   it('start_FolderWithoutLayoutJs_IsNotListed', async () => {
-    await files.write('layouts/notes/readme.json', '{}');
+    await files.write('notes/readme.json', '{}');
 
     const registry = await start();
 
@@ -111,7 +126,7 @@ describe('watch', () => {
     await writeLayouts('alpha', 'beta');
     await start();
 
-    await files.write('layouts/beta/layout.js', '// saved');
+    await files.write('beta/layout.js', '// saved');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0].changed).toBe('beta');
@@ -123,7 +138,7 @@ describe('watch', () => {
     await writeLayouts('alpha');
     const registry = await start();
 
-    files.remove('layouts/alpha/layout.js');
+    files.remove('alpha/layout.js');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0].changed).toBe('alpha');
@@ -135,7 +150,7 @@ describe('watch', () => {
     await writeLayouts('alpha');
     await start();
 
-    files.remove('layouts/alpha/layout.js');
+    files.remove('alpha/layout.js');
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     await writeLayouts('alpha');
 
@@ -157,8 +172,8 @@ describe('watch', () => {
     await writeLayouts('alpha');
     await start();
 
-    await files.write('layouts/notes/readme.json', '{}');
-    await files.write('layouts/alpha/layout.js', '// saved');
+    await files.write('notes/readme.json', '{}');
+    await files.write('alpha/layout.js', '// saved');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0].changed).toBe('alpha');
@@ -168,8 +183,8 @@ describe('watch', () => {
     await writeLayouts('alpha');
     await start();
 
-    await files.write('layouts/default/layout.js', '// mine');
-    await files.write('layouts/alpha/layout.js', '// saved');
+    await files.write('default/layout.js', '// mine');
+    await files.write('alpha/layout.js', '// saved');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0].changed).toBe('alpha');
@@ -184,8 +199,8 @@ describe('watch', () => {
     await writeLayouts('alpha');
     await start();
 
-    await files.write(`layouts/${sideFile}`, 'scratch');
-    await files.write('layouts/alpha/layout.js', '// saved');
+    await files.write(`${sideFile}`, 'scratch');
+    await files.write('alpha/layout.js', '// saved');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     expect(entryIn(sent[0], 'alpha')?.revision).toBe(2);
@@ -199,7 +214,7 @@ describe('watch', () => {
     await writeLayouts('alpha');
     await start();
 
-    await files.write(`layouts/${saved}`, '// saved');
+    await files.write(`${saved}`, '// saved');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0].changed).toBe('alpha');
@@ -209,7 +224,7 @@ describe('watch', () => {
     await writeLayouts('alpha', 'beta');
     const registry = await start(withFolderNameWatch(files));
 
-    await files.rename('layouts/alpha', 'layouts/gamma');
+    await files.rename('alpha', 'gamma');
 
     await vi.waitFor(() => expect(sent).toHaveLength(2));
     expect(sent.map((set) => set.changed)).toEqual(['alpha', 'gamma']);
@@ -224,8 +239,8 @@ describe('watch', () => {
       await writeLayouts('alpha', 'default');
       await start(withFolderNameWatch(files));
 
-      await files.write(`layouts/${saved}`, '// saved');
-      await files.write('layouts/alpha/layout.js', '// saved');
+      await files.write(`${saved}`, '// saved');
+      await files.write('alpha/layout.js', '// saved');
 
       await vi.waitFor(() => expect(sent).toHaveLength(1));
       expect(sent[0].changed).toBe('alpha');
@@ -234,7 +249,7 @@ describe('watch', () => {
 
   it('watch_Fails_LogsIt', async () => {
     const failing = withFailingWatch(files);
-    await start(failing.data);
+    await start(failing.folder);
 
     failing.fail(new Error('EMFILE'));
 
@@ -248,7 +263,7 @@ describe('watch', () => {
     const registry = await start();
     expect(entryIn(registry.current(), 'alpha')?.hasCss).toBe(false);
 
-    await files.write('layouts/alpha/layout.css', 'body {}');
+    await files.write('alpha/layout.css', 'body {}');
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     expect(entryIn(sent[0], 'alpha')?.hasCss).toBe(true);

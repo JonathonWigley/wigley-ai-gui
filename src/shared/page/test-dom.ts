@@ -109,6 +109,15 @@ export class FakeElement {
     }
   }
 
+  // True for this element and each element under it.
+  contains(node: unknown): boolean {
+    let current = node instanceof FakeElement ? node : null;
+    while (current !== null && current !== this) {
+      current = current.parentNode;
+    }
+    return current === this;
+  }
+
   setAttribute(name: string, value: string) {
     this.attributes.set(name, value);
   }

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Paths } from '../../contracts/paths';
 import { DATA_SCHEME, dataFilePath } from '../../shared/data-url';
+import { LAYOUT_SCHEME, layoutFilePath } from '../../shared/layout-url';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.js': 'text/javascript',
@@ -23,19 +24,24 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 const OTHER_CONTENT_TYPE = 'text/plain; charset=utf-8';
 
-// Electron takes scheme privileges only before the app is ready.
-export function registerDataScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: DATA_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        corsEnabled: true,
-      },
-    },
-  ]);
+// The privileges both file schemes take: a standard, secure origin the page
+// may fetch from and import modules from across origins.
+const FILE_SCHEME_PRIVILEGES = {
+  standard: true,
+  secure: true,
+  supportFetchAPI: true,
+  corsEnabled: true,
+};
+
+// Registers `wigley-data:` and `wigley-layout:`. Electron takes scheme
+// privileges once, before the app is ready, so both go in this one call.
+export function registerFileSchemes(): void {
+  protocol.registerSchemesAsPrivileged(
+    [DATA_SCHEME, LAYOUT_SCHEME].map((scheme) => ({
+      scheme,
+      privileges: FILE_SCHEME_PRIVILEGES,
+    })),
+  );
 }
 
 // Serves each plugin's data folder under `dataRoot`, joined by `paths`, on
@@ -43,8 +49,25 @@ export function registerDataScheme(): void {
 // in dev and packaged alike. A URL outside a plugin's folder, or naming
 // anything but a file, answers 404.
 export function serveDataScheme(dataRoot: string, paths: Paths): void {
-  protocol.handle(DATA_SCHEME, async (request) => {
-    const file = dataFilePath(request.url, dataRoot, paths);
+  serveFiles(DATA_SCHEME, (url) => dataFilePath(url, dataRoot, paths));
+}
+
+// Serves each owner's layouts under `layoutsRoot` as `serveDataScheme` serves
+// plugin data: a URL outside a layout's folder, or naming anything but a
+// file, answers 404.
+export function serveLayoutScheme(layoutsRoot: string, paths: Paths): void {
+  serveFiles(LAYOUT_SCHEME, (url) => layoutFilePath(url, layoutsRoot, paths));
+}
+
+// Serves `scheme` on the default session, open to any origin: the file
+// `fileOf` names for a request's URL, typed by its extension, or 404 when it
+// names none or no readable file.
+function serveFiles(
+  scheme: string,
+  fileOf: (url: string) => string | null,
+): void {
+  protocol.handle(scheme, async (request) => {
+    const file = fileOf(request.url);
     if (file === null) {
       return notFound();
     }

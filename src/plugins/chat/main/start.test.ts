@@ -142,6 +142,7 @@ function startChatPart() {
     },
     dependency: () => ({ contributeTools: () => undefined }),
     data: { list: () => Promise.reject(new Error('no data folder')) },
+    layouts: { register: () => ({ dispose: () => undefined }) },
     drive: null,
   } as unknown as Parameters<typeof chatMainPart.start>[0];
   const part = chatMainPart.start(api);

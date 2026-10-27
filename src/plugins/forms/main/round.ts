@@ -143,8 +143,8 @@ function requireKnownLayout(
   if (name !== null && !layoutNames.includes(name)) {
     throw new RoundError(
       `${where}layout '${name}' is not in the layouts folder, which holds ` +
-        `${quotedList(layoutNames)}. Write layouts/${name}/layout.js there ` +
-        `first, or leave layout out.`,
+        `${quotedList(layoutNames)}. Write ${name}/layout.js there first, or ` +
+        `leave layout out.`,
     );
   }
 }

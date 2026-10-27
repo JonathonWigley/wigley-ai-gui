@@ -44,6 +44,18 @@ export interface ConfirmPromptDeps {
   onBaseChanged?(): void;
   log: Log;
   logSource: string;
+  // Draws the body into `parent` (the dialog's body), placing the buttons
+  // through `parts`; the prompt draws its own body when left out.
+  drawBody?(parent: HTMLElement, parts: ConfirmBodyParts): void;
+}
+
+// What a `drawBody` draws with: the body text and the prompt's two buttons.
+export interface ConfirmBodyParts {
+  body: string;
+  // Each appends the prompt's own button (label, variant, key anchor in the
+  // prompt's scope) to `parent`.
+  keepButton(parent: HTMLElement): HTMLButtonElement;
+  confirmButton(parent: HTMLElement): HTMLButtonElement;
 }
 
 export interface ConfirmPrompt {
@@ -56,6 +68,8 @@ export interface ConfirmPrompt {
   // once it is not asked, so the caller's own base change never reaches its listener, and shows and pushes its
   // scope after once it is asked, over the new base.
   setBaseScope(setBase: () => void): void;
+  // Empties the body and actions and draws them again, as after a new layout.
+  redraw(): void;
 }
 
 const DISMISSED_LINE = 'cancel prompt dismissed: the view moved on';
@@ -65,23 +79,54 @@ const DISMISSED_LINE = 'cancel prompt dismissed: the view moved on';
 // scope. While the caller's form sends, that dismiss waits: a failed send
 // dismisses the prompt, and a sent form closes it with the form. Each
 // button's hint is an anchor for its command in the prompt's pushed scope,
-// for as long as the page lives, as the prompt does.
+// held until the next draw; the page keeps the last draw's for as long as it
+// lives, as the prompt does. A `drawBody` places the body and buttons; a
+// button it leaves out is appended to the actions, so both commands always
+// hold an anchor.
 export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
   const dialog = createDialog(deps.title);
+  // The anchors of the buttons the last draw made.
+  let anchors: Disposable[] = [];
   const choiceButton = (choice: ConfirmChoice, variant: ButtonVariant) => {
     const hint = element('span', 'ui-confirm-hint');
     const control = textButton(choice.label, () => deps.run(choice.command), {
       variant,
       hint,
     });
-    deps.keys.anchor(hint, choice.command, { scope: deps.scope });
+    anchors.push(deps.keys.anchor(hint, choice.command, { scope: deps.scope }));
     return control;
   };
-  dialog.body.append(element('p', '', deps.body));
-  dialog.actions.append(
-    choiceButton(deps.keep, 'secondary'),
-    choiceButton(deps.confirm, 'danger'),
-  );
+  const keepButton = () => choiceButton(deps.keep, 'secondary');
+  const confirmButton = () => choiceButton(deps.confirm, 'danger');
+  const draw = () => {
+    const drawn = anchors;
+    anchors = [];
+    for (const anchor of drawn) {
+      anchor.dispose();
+    }
+    dialog.body.replaceChildren();
+    dialog.actions.replaceChildren();
+    if (deps.drawBody === undefined) {
+      dialog.body.append(element('p', '', deps.body));
+      dialog.actions.append(keepButton(), confirmButton());
+      return;
+    }
+    let keep: HTMLButtonElement | null = null;
+    let confirm: HTMLButtonElement | null = null;
+    deps.drawBody(dialog.body, {
+      body: deps.body,
+      keepButton: (parent) => appended(parent, (keep ??= keepButton())),
+      confirmButton: (parent) =>
+        appended(parent, (confirm ??= confirmButton())),
+    });
+    if (keep === null) {
+      dialog.actions.append(keepButton());
+    }
+    if (confirm === null) {
+      dialog.actions.append(confirmButton());
+    }
+  };
+  draw();
   // The prompt's pushed scope while the prompt shows, else null.
   let pushedScope: PushedScope | null = null;
   // Whether the base scope changed while the caller's form was sending, so
@@ -129,5 +174,11 @@ export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
         pushScope();
       }
     },
+    redraw: draw,
   };
+}
+
+function appended<E extends HTMLElement>(parent: HTMLElement, node: E): E {
+  parent.append(node);
+  return node;
 }

@@ -11,6 +11,7 @@ import type {
   PluginManifest,
 } from '../../contracts/plugin';
 import type { AppConfig } from '../../contracts/settings';
+import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { createEventBus } from '../../shared/event-bus';
 import { createScopeStack } from '../key-scope';
 import { createLiveConfig } from '../live-config';
@@ -104,6 +105,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
     run: () => {},
     dependency: <E>() => undefined as E,
     bus: createEventBus(),
+    layouts: {} as PageLayouts,
     ...overrides,
   };
 }
@@ -335,5 +337,39 @@ describe('createPageApi', () => {
     api.services.uiState.set('rail', 300);
 
     expect(writes).toEqual([['forms.rail', 300]]);
+  });
+
+  it('createPageApi_LayoutsShow_RunsUnderThePluginIdAndRefreshesOnItsSettings', () => {
+    const config = liveConfig();
+    const calls: string[] = [];
+    const layouts: PageLayouts = {
+      show: (owner) => {
+        calls.push(`show ${owner}`);
+        return {
+          refresh: () => calls.push('refresh'),
+          dispose: () => calls.push('dispose'),
+        };
+      },
+    };
+    const api = createPageApi(manifest, deps({ config, layouts }));
+
+    const show = api.layouts.show({
+      defaultLayout: {},
+      read: () => ({}),
+      userLayout: () => 'default',
+      setLayouts: () => undefined,
+    });
+    config.replace(
+      appConfig({ pluginSettings: { p: { delayMs: 1 }, q: { delayMs: 9 } } }),
+    );
+    config.replace(
+      appConfig({ pluginSettings: { p: { delayMs: 2 }, q: { delayMs: 9 } } }),
+    );
+    show.dispose();
+    config.replace(
+      appConfig({ pluginSettings: { p: { delayMs: 3 }, q: { delayMs: 9 } } }),
+    );
+
+    expect(calls).toEqual(['show p', 'refresh', 'dispose']);
   });
 });
