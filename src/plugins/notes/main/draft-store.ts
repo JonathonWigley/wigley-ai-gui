@@ -4,6 +4,7 @@ import { errorText } from '../../../shared/error-text';
 import type { NoteDraft, NoteFields, NoteImage } from '../contract';
 import {
   emptyDraft,
+  imageOf,
   parseDraft,
   withFields,
   withImageAdded,
@@ -22,7 +23,8 @@ export interface DraftStore {
   // The saved draft; a fresh one when `draft.json` is missing or unreadable.
   draft(): Promise<NoteDraft>;
   saveFields(fields: NoteFields): Promise<void>;
-  // Each of these throws `No image <id> in the draft` for an id it lacks.
+  // `image`, `markup`, `saveMarkup` and `removeImage` each throw `No image
+  // <id> in the draft` for an id the draft lacks.
   image(id: number): Promise<Uint8Array>;
   // The image's markup JSON; null when it has none.
   markup(id: number): Promise<string | null>;
@@ -41,14 +43,6 @@ function imagePath(id: number): string {
 
 function markupPath(id: number): string {
   return `images/${String(id)}.markup.json`;
-}
-
-function imageOf(draft: NoteDraft, id: number): NoteImage {
-  const image = draft.images.find((candidate) => candidate.id === id);
-  if (image === undefined) {
-    throw new Error(`No image ${String(id)} in the draft`);
-  }
-  return image;
 }
 
 async function readDraft(files: Files, log: Log): Promise<NoteDraft> {
@@ -136,9 +130,7 @@ export function createDraftStore(files: Files, log: Log): DraftStore {
       }),
     removeImage: (id) =>
       queued(async () => {
-        const draft = await current();
-        const image = imageOf(draft, id);
-        const next = withImageRemoved(draft, id);
+        const { draft: next, image } = withImageRemoved(await current(), id);
         await writeDraft(files, next);
         kept = next;
         await trashImage(files, log, image);

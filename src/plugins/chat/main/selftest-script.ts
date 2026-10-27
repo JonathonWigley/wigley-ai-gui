@@ -14,9 +14,9 @@ import {
   FAKE_SIGN_IN_CODE,
   FAKE_TOOL_TEXT,
   type FakeAgentCall,
-  type FakeAgentHarness,
   type FakeAgentProcessRecord,
-  isFakeAgentHarness,
+  markRun,
+  type RunMark,
 } from '../../../shared/fake-agent-harness';
 import type {
   ConnectedSession,
@@ -511,22 +511,6 @@ const toolCallContext = (): ToolCallContext => ({
   toolUseId: null,
   signal: new AbortController().signal,
 });
-
-// Each fake harness with how many records it held when this run opened: a
-// fake keeps its records for the app's whole life, and the scripts run again
-// on every page load, so a run reads only the records past its mark.
-interface RunMark {
-  harness: FakeAgentHarness;
-  processes: number;
-  pastSessionCalls: number;
-}
-
-const markRun = (harnesses: readonly AgentHarness[]): RunMark[] =>
-  harnesses.filter(isFakeAgentHarness).map((harness) => ({
-    harness,
-    processes: harness.processes.length,
-    pastSessionCalls: harness.pastSessionCalls.length,
-  }));
 
 // The last fake process this run started for the self-test's project, resumed
 // or new.

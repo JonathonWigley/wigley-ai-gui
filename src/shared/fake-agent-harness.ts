@@ -101,6 +101,22 @@ export function isFakeAgentHarness(
   return fakeHarnesses.has(harness);
 }
 
+// Each fake harness with how many records it held when this run opened: a
+// fake keeps its records for the app's whole life, and the self-test scripts
+// run again on every page load, so a run reads only the records past its mark.
+export interface RunMark {
+  harness: FakeAgentHarness;
+  processes: number;
+  pastSessionCalls: number;
+}
+
+export const markRun = (harnesses: readonly AgentHarness[]): RunMark[] =>
+  harnesses.filter(isFakeAgentHarness).map((harness) => ({
+    harness,
+    processes: harness.processes.length,
+    pastSessionCalls: harness.pastSessionCalls.length,
+  }));
+
 function startingControls(): SessionControl[] {
   return [
     {

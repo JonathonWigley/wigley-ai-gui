@@ -148,25 +148,35 @@ export function withImageAdded(draft: NoteDraft): {
   };
 }
 
-function requireImage(draft: NoteDraft, id: number) {
-  if (!draft.images.some((image) => image.id === id)) {
-    throw new Error(`No image ${id} in the draft`);
+// The draft's image `id`. Throws when the draft holds no image `id`.
+export function imageOf(draft: NoteDraft, id: number): NoteImage {
+  const image = draft.images.find((candidate) => candidate.id === id);
+  if (image === undefined) {
+    throw new Error(`No image ${String(id)} in the draft`);
   }
+  return image;
 }
 
-// Throws when the draft holds no image `id`.
-export function withImageRemoved(draft: NoteDraft, id: number): NoteDraft {
-  requireImage(draft, id);
+// `draft` without image `id`, and that image. Throws when the draft holds no
+// image `id`.
+export function withImageRemoved(
+  draft: NoteDraft,
+  id: number,
+): { draft: NoteDraft; image: NoteImage } {
+  const image = imageOf(draft, id);
   return {
-    ...draft,
-    images: draft.images.filter((image) => image.id !== id),
+    draft: {
+      ...draft,
+      images: draft.images.filter((kept) => kept !== image),
+    },
+    image,
   };
 }
 
 // `draft` with image `id` marked as having markup. Throws when the draft
 // holds no image `id`.
 export function withMarkup(draft: NoteDraft, id: number): NoteDraft {
-  requireImage(draft, id);
+  imageOf(draft, id);
   return {
     ...draft,
     images: draft.images.map((image) =>

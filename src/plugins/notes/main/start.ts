@@ -74,6 +74,7 @@ export const notesMainPart: MainPart<typeof notesManifest> = {
       notesSelfTestScript({
         homeDir: services.homeDir,
         files: services.files,
+        paths: services.paths,
         sessions: api.dependency<SessionsMainExports>('sessions'),
         harnesses: services.agentHarnesses,
         store,

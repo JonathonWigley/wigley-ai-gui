@@ -1,11 +1,12 @@
 import path from 'node:path';
 import type { AgentHarness } from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
+import type { Paths } from '../../../contracts/paths';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
 import {
-  type FakeAgentHarness,
   type FakeAgentProcessRecord,
-  isFakeAgentHarness,
+  markRun,
+  type RunMark,
 } from '../../../shared/fake-agent-harness';
 import type {
   ConnectedSession,
@@ -17,6 +18,7 @@ export interface NotesSelfTestDeps {
   // `services.homeDir`, the self-test's temp home.
   homeDir: string;
   files: Pick<Files, 'read' | 'realPath' | 'makeFolder'>;
+  paths: Paths;
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
   harnesses: readonly AgentHarness[];
   store: Pick<DraftStore, 'clear'>;
@@ -37,7 +39,10 @@ interface NotesSelfTestResult {
 const SESSION_ID = 'notes-selftest';
 // Docs' fixture repo and the features home its index lists for it.
 const REPO = 'selftest-repo';
-const TITLE = 'Notes selftest nit';
+// A word no other follow-up holds, so the append picker's filter ranks the
+// note's follow-up first.
+const TITLE_TOKEN = 'qxnotesnit';
+const TITLE = `Notes selftest ${TITLE_TOKEN}`;
 const SESSION_LINE = `Source session: Claude Code ${SESSION_ID} in ~/dev/${REPO}`;
 const LAUNCH_BRIEF =
   'A nitpick to fix, noted while working. Make the change, then report.';
@@ -113,14 +118,14 @@ const GROUPS: SelfTestGroup[] = [
         expect: '[notes] picker shown: Follow-up',
       },
       {
-        keys: ['/', ...'Notes selftest', 'Enter'],
+        keys: ['/', ...TITLE_TOKEN, 'Enter'],
         expect: `[notes] sent: Added to ${TITLE}`,
       },
     ],
   },
   {
     name: 'new session',
-    why: "Space n s starts a background session in the target's folder, its first message the brief, the note and the session line, and leaves the selected row as it was.",
+    why: "Space n s starts a background session in the target's folder, its first message the brief, the note and the session line.",
     steps: [
       { keys: OPEN, expect: FRESH_LINE },
       {
@@ -144,28 +149,15 @@ const GROUPS: SelfTestGroup[] = [
   },
 ];
 
-// Each fake harness with how many processes it held when this run connected:
-// a fake keeps its records for the app's whole life, and the scripts run
-// again on every page load, so a run reads only the records past its mark.
-interface RunMark {
-  harness: FakeAgentHarness;
-  processes: number;
-}
-
-const markRun = (harnesses: readonly AgentHarness[]): RunMark[] =>
-  harnesses.filter(isFakeAgentHarness).map((harness) => ({
-    harness,
-    processes: harness.processes.length,
-  }));
-
 // The first message of the first fake process this run started in `folder`.
 function launchedSend(
   marks: readonly RunMark[],
   folder: string,
+  paths: Paths,
 ): NotesSelfTestResult['send'] {
   const launched: FakeAgentProcessRecord | undefined = marks
     .flatMap((mark) => mark.harness.processes.slice(mark.processes))
-    .find((record) => record.request.projectDir === folder);
+    .find((record) => paths.samePath(record.request.projectDir, folder));
   const send = launched?.calls.find((call) => call.method === 'send');
   return send === undefined
     ? null
@@ -193,12 +185,16 @@ function followupProblems(followups: string): string[] {
   }
   const imageLink = followups.indexOf('followups-images/');
   const appended = followups.indexOf('Also the border.');
-  const imageBeforeAppend = imageLink !== -1 && imageLink < appended;
-  if (!imageBeforeAppend) {
-    problems.push('image link missing or after the appended text');
+  if (imageLink === -1) {
+    problems.push('image link missing');
   }
   if (appended === -1) {
     problems.push('appended text missing');
+  }
+  const isImageAfterAppend =
+    imageLink !== -1 && appended !== -1 && imageLink > appended;
+  if (isImageAfterAppend) {
+    problems.push('image link after the appended text');
   }
   return problems;
 }
@@ -227,7 +223,7 @@ function sendProblems({ folder, send }: NotesSelfTestResult): string[] {
 // session, then reads the fixture home's follow-ups and that session's first
 // message.
 export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
-  const { homeDir, files, sessions, harnesses, store } = deps;
+  const { homeDir, files, paths, sessions, harnesses, store } = deps;
   let previous: ConnectedSession | null = null;
 
   async function run(sent: Promise<void>): Promise<NotesSelfTestResult> {
@@ -248,13 +244,13 @@ export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
     const followups = await files.read(
       path.join(home, 'wigley-features', REPO, 'followups.md'),
     );
-    return { folder, followups, send: launchedSend(marks, folder) };
+    return { folder, followups, send: launchedSend(marks, folder, paths) };
   }
 
   return {
     pageBinds: [],
     settings: {},
-    scrollsItself: [],
+    scrollsItself: ['.notes-target', '.notes-session'],
     open() {
       previous?.end();
       previous = null;

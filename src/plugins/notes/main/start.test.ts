@@ -1,9 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { BacklogMainExports, BacklogRead } from '../../backlog/contract';
-import type { NoteDraft } from '../contract';
+import type { ChatMainExports } from '../../chat/contract';
+import { emptyDraft, fieldsOf } from '../draft';
+import type { NoteDraft, NoteSendResult } from '../contract';
+import type { NotesSelfTestDeps } from './selftest-script';
 import { notesMainPart } from './start';
+
+// The deps start last handed the self-test script.
+const selfTest = vi.hoisted(() => ({
+  deps: null as NotesSelfTestDeps | null,
+}));
+vi.mock('./selftest-script', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./selftest-script')>();
+  return {
+    ...original,
+    notesSelfTestScript: (deps: NotesSelfTestDeps) => {
+      selfTest.deps = deps;
+      return original.notesSelfTestScript(deps);
+    },
+  };
+});
 
 const CAPTURED = new Uint8Array([137, 80, 78, 71, 42]);
 
@@ -23,8 +41,15 @@ const READ: BacklogRead = {
   message: 'index stale',
 };
 
+const chat: Pick<ChatMainExports, 'launch' | 'profileNames' | 'profileOf'> = {
+  launch: () => Promise.resolve('row-1'),
+  profileNames: () => ['default'],
+  profileOf: () => null,
+};
+
 // Notes' main part started over a fake `MainApi` whose window capture
-// resolves `CAPTURED`; `invoke` calls the channel handler for `name`.
+// resolves `CAPTURED` and whose chat launches every session; `invoke` calls
+// the channel handler for `name`.
 function startNotesPart() {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const data = createMemoryFiles();
@@ -46,8 +71,10 @@ function startNotesPart() {
       homeDir: '/home/me',
       paths: posixPaths,
       window: { capture: () => Promise.resolve(CAPTURED) },
+      selfTest: { run: () => undefined },
     },
-    dependency: (pluginId: string) => (pluginId === 'backlog' ? backlog : {}),
+    dependency: (pluginId: string) =>
+      pluginId === 'backlog' ? backlog : pluginId === 'chat' ? chat : {},
     data,
     drive: null,
   } as unknown as Parameters<typeof notesMainPart.start>[0];
@@ -92,5 +119,35 @@ describe('notes main part', () => {
     const notes = startNotesPart();
 
     expect(notes.invoke('tags')).toEqual(['ui', 'bug']);
+  });
+
+  it('nextSessionSend_ResolvesOnSentNotOnRefused', async () => {
+    const notes = startNotesPart();
+    let resolved = false;
+    void selfTest.deps?.nextSessionSend().then(() => {
+      resolved = true;
+    });
+
+    const refused = (await notes.invoke(
+      'sendToSession',
+      '/home/me/repo',
+      [],
+    )) as NoteSendResult;
+    await new Promise((settle) => setImmediate(settle));
+    expect(refused.type).toBe('refused');
+    expect(resolved).toBe(false);
+
+    await notes.invoke('saveDraft', {
+      ...fieldsOf(emptyDraft(1)),
+      target: '/home/me/repo/docs/features',
+    });
+    const sent = (await notes.invoke(
+      'sendToSession',
+      '/home/me/repo',
+      [],
+    )) as NoteSendResult;
+    await new Promise((settle) => setImmediate(settle));
+    expect(sent.type).toBe('sent');
+    expect(resolved).toBe(true);
   });
 });

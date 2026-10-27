@@ -122,10 +122,11 @@ describe('images', () => {
     expect(second.draft.nextImageId).toBe(6);
   });
 
-  it('withImageRemoved_KnownId_DropsIt', () => {
-    expect(withImageRemoved(FULL, 3).images).toEqual([
-      { id: 5, hasMarkup: false },
-    ]);
+  it('withImageRemoved_KnownId_DropsItAndGivesIt', () => {
+    const { draft, image } = withImageRemoved(FULL, 3);
+
+    expect(draft.images).toEqual([{ id: 5, hasMarkup: false }]);
+    expect(image).toEqual({ id: 3, hasMarkup: true });
   });
 
   it('withImageRemoved_UnknownId_Throws', () => {

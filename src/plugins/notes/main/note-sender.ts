@@ -123,9 +123,12 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
         draft,
         request.type === 'create' ? 'followup' : 'append',
       );
-      // sendRefusal refuses a draft with no target.
-      if (refusal !== null || draft.target === null) {
-        return refused(refusal ?? 'Pick a target first');
+      if (refusal !== null) {
+        return refused(refusal);
+      }
+      const home = draft.target;
+      if (home === null) {
+        throw new Error('sendRefusal passed a draft with no target');
       }
       const images = await imagesToSend(store, draft, flattened);
       const line = await lineOf(draft);
@@ -133,7 +136,7 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
       let result: BacklogWriteResult;
       try {
         result = await backlog.fileNote(
-          draft.target,
+          home,
           target,
           followupText(draft, line, request.type),
           images,

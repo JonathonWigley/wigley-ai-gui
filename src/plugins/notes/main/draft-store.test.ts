@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Files } from '../../../contracts/files';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type { NoteFields } from '../contract';
 import { emptyDraft, fieldsOf, parseDraft } from '../draft';
@@ -6,13 +7,27 @@ import { createDraftStore } from './draft-store';
 
 const PNG = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
 
+// `failing.write` and `failing.trash` make the store's next writes or trashes
+// reject with `disk full`.
 function setUp() {
   const files = createMemoryFiles();
+  const failing = { write: false, trash: false };
+  const storeFiles: Files = {
+    ...files,
+    write: (path, text) =>
+      failing.write
+        ? Promise.reject(new Error('disk full'))
+        : files.write(path, text),
+    trash: (path) =>
+      failing.trash
+        ? Promise.reject(new Error('disk full'))
+        : files.trash(path),
+  };
   const logged: string[] = [];
-  const store = createDraftStore(files, (source, message) =>
+  const store = createDraftStore(storeFiles, (source, message) =>
     logged.push(`[${source}] ${message}`),
   );
-  return { files, logged, store };
+  return { files, failing, logged, store };
 }
 
 function fieldsTitled(title: string): NoteFields {
@@ -61,6 +76,18 @@ describe('createDraftStore', () => {
     expect(await files.stat('images/1.png')).toBeNull();
   });
 
+  it('removeImage_TrashFails_LogsAndStillDropsIt', async () => {
+    const { files, failing, logged, store } = setUp();
+    await store.addImage(PNG);
+    failing.trash = true;
+
+    const draft = await store.removeImage(1);
+
+    expect(draft.images).toEqual([]);
+    expect((await savedDraft(files))?.images).toEqual([]);
+    expect(logged).toEqual(['[notes] images/1.png not removed: disk full']);
+  });
+
   it('saveMarkup_WritesJsonVerbatimAndSetsHasMarkup', async () => {
     const { files, store } = setUp();
     await store.addImage(PNG);
@@ -101,6 +128,19 @@ describe('createDraftStore', () => {
     expect(cleared).toEqual(emptyDraft(3));
     expect(await savedDraft(files)).toEqual(emptyDraft(3));
     expect(await files.list('images')).toEqual([]);
+  });
+
+  it('clear_DraftWriteFails_LogsAndGivesFreshDraftKeepingImages', async () => {
+    const { files, failing, logged, store } = setUp();
+    await store.addImage(PNG);
+    failing.write = true;
+
+    const cleared = await store.clear();
+
+    expect(cleared).toEqual(emptyDraft(2));
+    expect(await store.draft()).toEqual(emptyDraft(2));
+    expect(logged).toEqual(['[notes] draft not cleared: disk full']);
+    expect(files.bytesOf('images/1.png')).toEqual(PNG);
   });
 
   it('saveFields_TwoAtOnce_LeavesTheSecond', async () => {
