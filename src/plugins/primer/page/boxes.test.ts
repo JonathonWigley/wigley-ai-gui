@@ -16,7 +16,8 @@ import {
   primerItem,
 } from './test-primers';
 
-// Rows: the feature (0), then `extra-1` with two items (1).
+// Rows: the feature (0), then `extra-1` with two items (1); selecting
+// `extra-1` draws its items as rows 2 and 3.
 function setup() {
   return initialState(
     [
@@ -47,15 +48,24 @@ describe('primer boxes', () => {
     ]);
   });
 
-  it("shows an extra task's name, item comments, add-item and comment boxes", () => {
+  it("shows an extra task's name, add-item and comment boxes on its task row", () => {
     const state = apply(setup(), { type: 'nextRow' });
 
     expect(shownBoxes(state).map(boxKey)).toEqual([
       'p1/task/extra-1/name',
-      'p1/task/extra-1/item/1/comment',
-      'p1/task/extra-1/item/2/comment',
       'p1/task/extra-1/new-item',
       'p1/task/extra-1/comment',
+    ]);
+  });
+
+  it("shows the item's comment box only on an item row", () => {
+    const state = apply(apply(setup(), { type: 'nextRow' }), {
+      type: 'selectRow',
+      row: 3,
+    });
+
+    expect(shownBoxes(state).map(boxKey)).toEqual([
+      'p1/task/extra-1/item/2/comment',
     ]);
   });
 

@@ -1,6 +1,6 @@
 # 02 — Core layout service and page host
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

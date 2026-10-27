@@ -7,12 +7,16 @@ import {
   type OpenPrimer,
   type PrimerAction,
   type PrimerState,
+  type RailRow,
   railRows,
+  type RowPrompt,
   rowPrompt,
   scopeOf,
   selectedEntry,
+  selectedRow,
   sessionTitle,
   submitProblems,
+  type TextTarget,
 } from './primer-state';
 import {
   presentedPrimer,
@@ -22,8 +26,9 @@ import {
   primerItem,
 } from './test-primers';
 
-// One primer, `p1`, active in view 'primer'; rows: the feature (0), `1`
-// (1), `s1` (2), `extra-1` (3) unless `entries` says otherwise.
+// One primer, `p1`, active in view 'primer'; with the Feature row selected,
+// rows: the feature (0), `1` (1), `s1` (2), `extra-1` (3) unless `entries`
+// says otherwise. Selecting `1` draws its two items as rows 2 and 3.
 function stateWith(entries: PrimerEntry[] = primerEntries()): PrimerState {
   return initialState([presentedPrimer('p1', { entries })], 'p1-session');
 }
@@ -40,9 +45,14 @@ function applyAll(state: PrimerState, actions: PrimerAction[]): PrimerState {
   return actions.reduce(apply, state);
 }
 
-// Selects row `row` of the active primer.
+// Selects row `row` of the active primer, a position in the rows drawn now.
 function onRow(state: PrimerState, row: number): PrimerState {
   return apply(state, { type: 'selectRow', row });
+}
+
+// Selects item `item` of task `1`: its task row, then its item row.
+function onItemOf1(state: PrimerState, item: number): PrimerState {
+  return onRow(onRow(state, 1), 1 + item);
 }
 
 function setNewItemText(
@@ -71,6 +81,7 @@ describe('primer state', () => {
     expect(primer.feature).toEqual(draftFeature);
     expect(primer.entries).toEqual(draftEntries);
     expect(primer.primer).toEqual(presented.form);
+    expect(primer.selected).toEqual({ kind: 'feature' });
     expect(state.view).toBe('primer');
     expect(apply(state, { type: 'formShown', form: presented })).toBe(state);
   });
@@ -86,44 +97,75 @@ describe('primer state', () => {
   it('orders the rail rows feature, primer, standing, extra', () => {
     const state = stateWith([
       primerEntry('x', 'extra'),
-      primerEntry('s', 'standing'),
-      primerEntry('p', 'primer'),
+      primerEntry('s1', 'standing', { items: [primerItem('Standing')] }),
+      primerEntry('1', 'primer', {
+        items: [primerItem('Read'), primerItem('Write')],
+      }),
     ]);
 
-    expect(railRows(primerOf(state))).toEqual([
+    expect(railRows(primerOf(onRow(state, 1)))).toEqual([
       { kind: 'feature' },
-      { kind: 'task', entryId: 'p' },
-      { kind: 'task', entryId: 's' },
+      { kind: 'task', entryId: '1' },
+      { kind: 'item', entryId: '1', item: 1 },
+      { kind: 'item', entryId: '1', item: 2 },
+      { kind: 'task', entryId: 's1' },
       { kind: 'task', entryId: 'x' },
     ]);
   });
 
-  it('rowPrompt is none on the Feature row, task on a Primer task, and extra on an extra task', () => {
-    const state = stateWith();
+  it.each<[string, (state: PrimerState) => PrimerState, RowPrompt | null]>([
+    ['the Feature row', (state) => state, null],
+    [
+      'a task row',
+      (state) => onRow(state, 1),
+      { need: true, include: false, remove: false },
+    ],
+    [
+      'an extra task row',
+      (state) => onRow(state, 3),
+      { need: true, include: false, remove: true },
+    ],
+    [
+      'an item row of task 1',
+      (state) => onItemOf1(state, 1),
+      { need: true, include: true, remove: false },
+    ],
+    [
+      "an extra task's item row",
+      (state) => onRow(onRow(state, 3), 4),
+      { need: true, include: true, remove: true },
+    ],
+  ])('gives the row prompt on %s', (_name, select, expected) => {
+    const entries = [
+      ...primerEntries().slice(0, 2),
+      primerEntry('extra-1', 'extra', { items: [primerItem('Extra item')] }),
+    ];
 
-    expect(rowPrompt(primerOf(state))).toBe('none');
-    expect(rowPrompt(primerOf(onRow(state, 1)))).toBe('task');
-    expect(rowPrompt(primerOf(onRow(state, 3)))).toBe('extra');
+    expect(rowPrompt(primerOf(select(stateWith(entries))))).toEqual(expected);
   });
 
-  it('clamps nextRow and prevRow at both ends and resets the item cursor', () => {
-    let state = applyAll(stateWith(), [
-      { type: 'nextRow' },
-      { type: 'nextItem' },
-    ]);
-    expect(primerOf(state).itemCursor).toBe(1);
+  it('walks the rail rows and expands only the selected task', () => {
+    const selected = (state: PrimerState) => selectedRow(primerOf(state));
+    let state = stateWith();
+    const walked: RailRow[] = [];
+    for (let i = 0; i < 4; i++) {
+      state = apply(state, { type: 'nextRow' });
+      walked.push(selected(state));
+    }
 
-    state = apply(state, { type: 'nextRow' });
-    expect(primerOf(state)).toMatchObject({ railCursor: 2, itemCursor: 0 });
-    state = applyAll(state, [{ type: 'nextRow' }]);
-    expect(apply(state, { type: 'nextRow' })).toBe(state);
-    state = applyAll(state, [
-      { type: 'prevRow' },
-      { type: 'prevRow' },
-      { type: 'prevRow' },
+    expect(walked).toEqual([
+      { kind: 'task', entryId: '1' },
+      { kind: 'item', entryId: '1', item: 1 },
+      { kind: 'item', entryId: '1', item: 2 },
+      { kind: 'task', entryId: 's1' },
     ]);
-    expect(primerOf(state).railCursor).toBe(0);
-    expect(apply(state, { type: 'prevRow' })).toBe(state);
+    expect(railRows(primerOf(state))).toHaveLength(4);
+    state = apply(state, { type: 'prevRow' });
+    expect(selected(state)).toEqual({ kind: 'task', entryId: '1' });
+    const first = stateWith();
+    expect(apply(first, { type: 'prevRow' })).toBe(first);
+    const last = onRow(first, 3);
+    expect(apply(last, { type: 'nextRow' })).toBe(last);
   });
 
   it('changes nothing when setNeed applies on the Feature row', () => {
@@ -132,14 +174,20 @@ describe('primer state', () => {
     expect(apply(state, { type: 'setNeed', need: 'yes' })).toBe(state);
   });
 
-  it('sets the need on the selected task and grows the revision by one', () => {
-    const state = onRow(stateWith(), 1);
+  it.each([
+    ['its task row', (state: PrimerState) => onRow(state, 1)],
+    ['an item row', (state: PrimerState) => onItemOf1(state, 2)],
+  ])(
+    'sets the need on the selected task from %s and grows the revision by one',
+    (_name, select) => {
+      const state = select(stateWith());
 
-    const next = apply(state, { type: 'setNeed', need: 'yes' });
+      const next = apply(state, { type: 'setNeed', need: 'yes' });
 
-    expect(selectedEntry(primerOf(next))?.need).toBe('yes');
-    expect(primerOf(next).revision).toBe(primerOf(state).revision + 1);
-  });
+      expect(primerOf(next).entries[0].need).toBe('yes');
+      expect(primerOf(next).revision).toBe(primerOf(state).revision + 1);
+    },
+  );
 
   it('adds the trimmed add-item text as an item and clears the text', () => {
     const state = setNewItemText(
@@ -162,7 +210,7 @@ describe('primer state', () => {
       added: true,
     });
     expect(primer.newItemTexts['1']).toBe('');
-    expect(primer.itemCursor).toBe(2);
+    expect(primer.selected).toEqual({ kind: 'task', entryId: '1' });
     expect(primer.revision).toBe(primerOf(state).revision + 1);
   });
 
@@ -224,15 +272,41 @@ describe('primer state', () => {
     expect(apply(state, { type: 'removeExtraTask' })).toBe(state);
   });
 
-  it('removes the last extra task and clamps the cursor to the last row', () => {
-    const state = onRow(setNewItemText(stateWith(), 'extra-1', 'draft'), 3);
+  it.each([
+    ['its task row', (state: PrimerState) => onRow(state, 3)],
+    ['an item row', (state: PrimerState) => onRow(onRow(state, 3), 5)],
+  ])(
+    'removes the last extra task from %s and clamps the selection to the last row',
+    (_name, select) => {
+      const entries = [
+        primerEntry('s1', 'standing', {
+          items: [primerItem('One'), primerItem('Two')],
+        }),
+        primerEntry('extra-1', 'extra', {
+          items: [primerItem('Three'), primerItem('Four')],
+        }),
+        primerEntry('extra-2', 'extra', {
+          items: [primerItem('Five'), primerItem('Six')],
+        }),
+      ];
+      // Rows: the feature (0), `s1` (1), `extra-1` (2), `extra-2` (3); on
+      // `extra-2`, its items at 4 and 5, so a selection kept at an item row's
+      // position, or one counting the removed task's item rows, lands past
+      // the last row.
+      const state = select(
+        setNewItemText(stateWith(entries), 'extra-2', 'draft'),
+      );
 
-    const primer = primerOf(apply(state, { type: 'removeExtraTask' }));
+      const primer = primerOf(apply(state, { type: 'removeExtraTask' }));
 
-    expect(primer.entries.map((entry) => entry.id)).toEqual(['1', 's1']);
-    expect(primer.railCursor).toBe(2);
-    expect(primer.newItemTexts).toEqual({});
-  });
+      expect(primer.entries.map((entry) => entry.id)).toEqual([
+        's1',
+        'extra-1',
+      ]);
+      expect(primer.selected).toEqual({ kind: 'task', entryId: 'extra-1' });
+      expect(primer.newItemTexts).toEqual({});
+    },
+  );
 
   it('changes nothing when toggleInclude applies on the Feature row', () => {
     const state = stateWith();
@@ -240,11 +314,9 @@ describe('primer state', () => {
     expect(apply(state, { type: 'toggleInclude' })).toBe(state);
   });
 
-  it('toggles the include mark on the item at the cursor', () => {
-    const state = applyAll(stateWith(), [
-      { type: 'nextRow' },
-      { type: 'nextItem' },
-    ]);
+  it('toggles the include mark on the selected item row only', () => {
+    const state = onItemOf1(stateWith(), 2);
+    const onTask = onRow(stateWith(), 1);
 
     const primer = primerOf(apply(state, { type: 'toggleInclude' }));
 
@@ -252,6 +324,7 @@ describe('primer state', () => {
       true,
       false,
     ]);
+    expect(apply(onTask, { type: 'toggleInclude' })).toBe(onTask);
   });
 
   it('leaves the revision when setText changes add-item text', () => {
@@ -277,23 +350,38 @@ describe('primer state', () => {
     expect(primerOf(next).revision).toBe(primerOf(state).revision + 1);
   });
 
-  it('shows a target by selecting its row and item and focusing the card', () => {
-    const state = stateWith();
+  it.each<[TextTarget, RailRow]>([
+    [
+      { field: 'itemComment', entryId: '1', item: 2 },
+      { kind: 'item', entryId: '1', item: 2 },
+    ],
+    [
+      { field: 'newItem', entryId: '1' },
+      { kind: 'task', entryId: '1' },
+    ],
+    [
+      { field: 'taskComment', entryId: '1' },
+      { kind: 'task', entryId: '1' },
+    ],
+    [
+      { field: 'taskName', entryId: 'extra-1' },
+      { kind: 'task', entryId: 'extra-1' },
+    ],
+    [{ field: 'feature', name: 'slug' }, { kind: 'feature' }],
+  ])(
+    'shows the %o target by selecting its row and focusing the card',
+    (target, row) => {
+      // From item 1 of `1`, so every target moves the selection or the pane.
+      const state = onItemOf1(stateWith(), 1);
 
-    const primer = primerOf(
-      apply(state, {
-        type: 'showTarget',
-        formId: 'p1',
-        target: { field: 'itemComment', entryId: '1', item: 2 },
-      }),
-    );
+      const primer = primerOf(
+        apply(state, { type: 'showTarget', formId: 'p1', target }),
+      );
 
-    expect(primer).toMatchObject({
-      railCursor: 1,
-      itemCursor: 1,
-      pane: 'card',
-    });
-  });
+      expect(primer.selected).toEqual(row);
+      expect(primer.pane).toBe('card');
+    },
+  );
 
   it('applies only the sending actions while the active primer sends', () => {
     const sending = applyAll(onRow(stateWith(), 1), [

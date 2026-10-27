@@ -22,8 +22,6 @@ export const primerManifest = definePlugin({
     },
     focusCard: { label: 'focus the card', group: 'panes', runsIn: 'page' },
     focusRail: { label: 'focus the rail', group: 'panes', runsIn: 'page' },
-    nextItem: { label: 'next item', group: 'items', runsIn: 'page' },
-    prevItem: { label: 'previous item', group: 'items', runsIn: 'page' },
     toggleInclude: {
       label: 'include the item',
       group: 'items',

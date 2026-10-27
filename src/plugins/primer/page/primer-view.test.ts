@@ -192,6 +192,70 @@ describe('primer tab under the cancel prompt', () => {
   });
 });
 
+describe('primer item card', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Task `1` with an added second item, on item 2's card.
+  function onAddedItem(added: boolean) {
+    const setup = primerTabSetup({
+      entries: [
+        primerEntry('1', 'primer', {
+          items: [
+            primerItem('Read the store'),
+            primerItem('Write the store', { added, include: false }),
+          ],
+        }),
+      ],
+    });
+    setup.store.dispatch({ type: 'selectRow', row: 1 });
+    setup.store.dispatch({ type: 'selectRow', row: 3 });
+    return setup;
+  }
+
+  it.each([true, false])(
+    'holds the place, the item, its mark and its comment box (added %s)',
+    (added) => {
+      const { tab, boxes } = onAddedItem(added);
+      const card = pane(tab, 'primer-card');
+
+      expect(pane(card, 'primer-item-step').textContent).toContain('2 of 2');
+      expect(pane(card, 'primer-card-heading').textContent).toBe(
+        'Write the store',
+      );
+      const [mark] = findAll(card, 'ui-toggle-mark');
+      expect(mark.classList.contains('is-selected')).toBe(false);
+      expect(card.textContent.includes('Added')).toBe(added);
+      const itemComment: PrimerBox = {
+        primerId: 'p1',
+        target: { field: 'itemComment', entryId: '1', item: 2 },
+      };
+      expect(boxes.isMounted(itemComment)).toBe(true);
+      expect(findAll(card, 'primer-box')).toHaveLength(1);
+    },
+  );
+
+  it('flips its mark on toggleInclude with no rebuild', () => {
+    const { tab, boxes, run } = onAddedItem(false);
+    const card = pane(tab, 'primer-card');
+    const [mark] = findAll(card, 'ui-toggle-mark');
+    const [frame] = findAll(card, 'primer-box');
+
+    run('toggleInclude');
+
+    expect(mark.classList.contains('is-selected')).toBe(true);
+    expect(findAll(card, 'primer-box')).toEqual([frame]);
+    expect(
+      boxes.isMounted({
+        primerId: 'p1',
+        target: { field: 'itemComment', entryId: '1', item: 2 },
+      }),
+    ).toBe(true);
+  });
+});
+
 const newItem1: PrimerBox = {
   primerId: 'p1',
   target: { field: 'newItem', entryId: '1' },
@@ -294,16 +358,15 @@ describe('primer add-item box', () => {
     expect(active === null ? null : boxKey(active)).toBe('p1/task/1/comment');
   });
 
-  it("focuses the new item's comment box on prevBox from the box the 20th item filled", () => {
+  it('focuses the task comment box on prevBox from the box the 20th item filled', () => {
     const setup = primerTabSetup({ entries: taskWithItems(19) });
     typeNewItem(setup, 'Test the store');
 
     setup.run('prevBox');
 
+    expect(itemCount(setup)).toBe(20);
     const active = setup.boxes.active();
-    expect(active === null ? null : boxKey(active)).toBe(
-      'p1/task/1/item/20/comment',
-    );
+    expect(active === null ? null : boxKey(active)).toBe('p1/task/1/comment');
   });
 
   it('shows no add-item box on a task holding 20 items, and the add-item key refuses once', () => {
@@ -350,25 +413,56 @@ describe('primer anchors', () => {
     expect(adds[0].options).toEqual({ scope: 'primer.rail', label: 'add' });
   });
 
-  it('moves the row prompt to the selected task and shows remove only on an extra task', () => {
-    // Rows: the feature (0), `1` (1), `s1` (2), `extra-1` (3).
+  it('moves the row prompt to the selected row and shows include only on an item row and remove only on an extra task', () => {
+    // Rows: the feature (0), `1` (1), `s1` (2), `extra-1` (3); on `1`, its
+    // items at 2 and 3.
     const { store, tab, anchors } = primerTabSetup();
     const [remove] = anchorsOf(anchors, 'primer.removeExtraTask');
+    const [include] = anchorsOf(anchors, 'primer.toggleInclude').filter(
+      (anchor) => anchor.options?.scope === 'primer.rail',
+    );
+    const selectedRowNode = () => {
+      const [prompt] = findAll(tab, 'primer-row-prompt');
+      const [selected] = findAll(tab, 'is-selected').filter((node) =>
+        node.classList.contains('ui-row'),
+      );
+      expect(prompt.parentNode).toBe(selected);
+      return selected;
+    };
     expect(findAll(tab, 'primer-row-prompt')).toHaveLength(0);
 
     store.dispatch({ type: 'selectRow', row: 3 });
-    const [extraPrompt] = findAll(tab, 'primer-row-prompt');
-    const [extraRow] = findAll(tab, 'is-selected');
-    expect(extraPrompt.parentNode).toBe(extraRow);
-    expect(extraRow.textContent).toContain('extra-1 task');
+    expect(selectedRowNode().textContent).toContain('extra-1 task');
     expect(remove.element.hidden).toBe(false);
+    expect(include.element.hidden).toBe(true);
 
     store.dispatch({ type: 'selectRow', row: 1 });
-    const [taskPrompt] = findAll(tab, 'primer-row-prompt');
-    const [taskRow] = findAll(tab, 'is-selected');
-    expect(taskPrompt.parentNode).toBe(taskRow);
-    expect(taskRow.textContent).toContain('1 task');
+    expect(selectedRowNode().textContent).toContain('1 task');
     expect(remove.element.hidden).toBe(true);
+    expect(include.element.hidden).toBe(true);
+
+    store.dispatch({ type: 'selectRow', row: 3 });
+    expect(selectedRowNode().textContent).toContain('Write the store');
+    expect(include.element.hidden).toBe(false);
+    expect(remove.element.hidden).toBe(true);
+  });
+
+  it("draws the selected task's items as rail rows and toggles one by its mark", () => {
+    const { store, tab } = primerTabSetup();
+    store.dispatch({ type: 'selectRow', row: 1 });
+    const rail = pane(tab, 'primer-rail');
+    expect(findAll(rail, 'primer-rail-item-lead')).toHaveLength(2);
+
+    const [, secondLead] = findAll(rail, 'primer-rail-item-lead');
+    const [mark] = findAll(secondLead, 'ui-toggle-mark');
+    mark.click();
+
+    const primer = store.get().forms[0];
+    expect(primer.selected).toEqual({ kind: 'item', entryId: '1', item: 2 });
+    expect(primer.entries[0].items.map((item) => item.include)).toEqual([
+      true,
+      false,
+    ]);
   });
 
   it("disposes the old card's anchors on a card rebuild", () => {

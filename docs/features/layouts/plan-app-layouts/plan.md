@@ -244,7 +244,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 
 ### Groups
 ### Contract changes

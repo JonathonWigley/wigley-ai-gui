@@ -41,6 +41,7 @@ import {
   type PrimerState,
   rowName,
   selectedEntry,
+  selectedItem,
   selectedRow,
   submitProblems,
   type TextTarget,
@@ -77,7 +78,7 @@ const PRIMER_WORDS: SessionFormWords = {
 const APPEND: FocusOptions = { insertAtEnd: true };
 
 // Every primer command's handler, by short id. A command fired in a box first
-// shows that box's row and item, so it acts where the user is typing.
+// shows that box's row, so it acts where the user is typing.
 export function primerCommandHandlers(
   deps: PrimerCommandDeps,
 ): PageStart<typeof primerManifest>['commands'] {
@@ -93,8 +94,8 @@ export function primerCommandHandlers(
     handler(() => store.dispatch(action));
 
   return {
-    nextRow: handler(() => moveRow(deps, { type: 'nextRow' })),
-    prevRow: handler(() => moveRow(deps, { type: 'prevRow' })),
+    nextRow: handler((box) => moveRow(deps, box, { type: 'nextRow' })),
+    prevRow: handler((box) => moveRow(deps, box, { type: 'prevRow' })),
     needYes: handler(() => setNeed(deps, 'yes')),
     needNo: handler(() => setNeed(deps, 'no')),
     needUnclear: handler(() => setNeed(deps, 'unclear')),
@@ -106,8 +107,6 @@ export function primerCommandHandlers(
       boxes.leave();
       focusPane(deps, 'rail', 'focused the rail');
     }),
-    nextItem: handler(() => moveItem(deps, { type: 'nextItem' })),
-    prevItem: handler(() => moveItem(deps, { type: 'prevItem' })),
     toggleInclude: handler(() => toggleInclude(deps)),
     addItem: handler(() => focusAddItem(deps)),
     editItemComment: handler(() => focusItemComment(deps)),
@@ -174,20 +173,33 @@ function shownPrimer(state: PrimerState): OpenPrimer | null {
   return state.view === 'primer' ? activeForm(state) : null;
 }
 
+// Shows the card the target's box sits on, which mounts the box, then
+// focuses it.
 function focusTarget(
   deps: PrimerCommandDeps,
   primer: OpenPrimer,
   target: TextTarget,
 ) {
+  deps.store.dispatch({ type: 'showTarget', formId: primer.formId, target });
   deps.boxes.focus({ primerId: primer.formId, target }, APPEND);
 }
 
-function moveRow(deps: PrimerCommandDeps, action: PrimerAction) {
-  const before = activeForm(deps.store.get())?.railCursor;
+// Adds an add-item box's text first, since the move leaves the box.
+function moveRow(
+  deps: PrimerCommandDeps,
+  box: PrimerBox | undefined,
+  action: PrimerAction,
+) {
+  commitNewItem(deps, box);
+  const selectedName = (state: PrimerState) => {
+    const primer = activeForm(state);
+    return primer === null ? null : rowName(selectedRow(primer));
+  };
+  const before = selectedName(deps.store.get());
   deps.store.dispatch(action);
-  const primer = activeForm(deps.store.get());
-  if (primer !== null && primer.railCursor !== before) {
-    deps.log(SOURCE, `selected ${rowName(selectedRow(primer))}`);
+  const after = selectedName(deps.store.get());
+  if (after !== null && after !== before) {
+    deps.log(SOURCE, `selected ${after}`);
   }
 }
 
@@ -260,48 +272,16 @@ function focusPane(deps: PrimerCommandDeps, pane: PrimerPane, line: string) {
   }
 }
 
-function moveItem(deps: PrimerCommandDeps, action: PrimerAction) {
-  const before = activeForm(deps.store.get())?.itemCursor;
-  deps.store.dispatch(action);
-  const primer = activeForm(deps.store.get());
-  if (primer === null || primer.itemCursor === before) {
-    return;
-  }
-  const entry = selectedEntry(primer);
-  if (entry !== null) {
-    deps.log(
-      SOURCE,
-      `selected item ${primer.itemCursor + 1} on task ${entry.id}`,
-    );
-  }
-}
-
-// The item at the shown primer's cursor, with its primer and task; null when
-// no item is selected.
-interface CursorItem {
-  primer: OpenPrimer;
-  entryId: string;
-  // 1-based.
-  item: number;
-  include: boolean;
-}
-
-function cursorItem(state: PrimerState): CursorItem | null {
+// The shown primer's selected item row and its item; null when no item row
+// is selected.
+function cursorItem(state: PrimerState) {
   const primer = shownPrimer(state);
   if (primer === null) {
     return null;
   }
-  const entry = selectedEntry(primer);
-  const item = entry?.items[primer.itemCursor];
-  if (entry === null || item === undefined) {
-    return null;
-  }
-  return {
-    primer,
-    entryId: entry.id,
-    item: primer.itemCursor + 1,
-    include: item.include,
-  };
+  const row = selectedRow(primer);
+  const item = selectedItem(primer);
+  return row.kind === 'item' && item !== null ? { primer, row, item } : null;
 }
 
 function toggleInclude(deps: PrimerCommandDeps) {
@@ -319,10 +299,10 @@ function toggleInclude(deps: PrimerCommandDeps) {
   if (deps.store.get() === before || after === null) {
     return;
   }
-  const { entryId, item, include } = after;
+  const { row, item } = after;
   deps.log(
     SOURCE,
-    `${include ? 'included' : 'left out'} item ${item} on task ${entryId}`,
+    `${item.include ? 'included' : 'left out'} item ${row.item} on task ${row.entryId}`,
   );
 }
 
@@ -336,8 +316,12 @@ function focusItemComment(deps: PrimerCommandDeps) {
     deps.log(SOURCE, 'no item selected');
     return;
   }
-  const { primer, entryId, item } = cursor;
-  focusTarget(deps, primer, { field: 'itemComment', entryId, item });
+  const { primer, row } = cursor;
+  focusTarget(deps, primer, {
+    field: 'itemComment',
+    entryId: row.entryId,
+    item: row.item,
+  });
 }
 
 function focusTaskComment(deps: PrimerCommandDeps) {

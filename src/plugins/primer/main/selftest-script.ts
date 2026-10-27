@@ -20,9 +20,13 @@ function selfTestPrimer(run: number) {
   };
 }
 
-// From the Feature row: entry 1 needs no, entry 2 yes, entry 3 unclear; back
-// on entry 2 (Screen), its second item is excluded and `Polish` added; then
-// focus returns to the rail.
+// From the Feature row: task 1 needs no; the rail walks task 1's items into
+// task 2, whose need is set to yes from its first item row and whose second
+// item is left out from the rail; task 3 is unclear. On task 2's card, ⌃L
+// steps to its item cards, the second item is toggled back and forth, and its
+// comment and its task's comment boxes are reached; `a` from an item card adds
+// `Polish` on the task card, and ⌃H steps to task 1 before focus returns to
+// the rail.
 const PRIMER_STEPS: SelfTestStep[] = [
   {
     keys: ['j'],
@@ -31,22 +35,57 @@ const PRIMER_STEPS: SelfTestStep[] = [
     screenshot: 'rail',
   },
   { keys: ['n'], expect: '[page] n ran primer.needNo' },
-  { keys: ['j'], expect: '[page] j ran primer.nextRow' },
-  { keys: ['y'], expect: '[page] y ran primer.needYes' },
-  { keys: ['j'], expect: '[page] j ran primer.nextRow' },
+  { keys: ['j'], expect: '[primer] selected item 1 on task 1' },
+  { keys: ['j'], expect: '[primer] selected item 2 on task 1' },
+  { keys: ['j'], expect: '[primer] selected task 2' },
+  {
+    keys: ['j'],
+    expect: '[primer] selected item 1 on task 2',
+    screenshot: 'rail-item',
+  },
+  {
+    keys: ['y'],
+    expect: '[primer] need yes on task 2',
+    why: "A need key on an item row sets its task's need.",
+  },
+  { keys: ['j'], expect: '[primer] selected item 2 on task 2' },
+  { keys: ['x'], expect: '[primer] left out item 2 on task 2' },
+  { keys: ['j'], expect: '[primer] selected task 3' },
   { keys: ['u'], expect: '[page] u ran primer.needUnclear' },
-  { keys: ['k'], expect: '[page] k ran primer.prevRow' },
+  { keys: ['k'], expect: '[primer] selected task 2' },
   {
     keys: ['<A-l>'],
     expect: '[page] <A-l> ran primer.focusCard',
     checksFit: true,
-    screenshot: 'card',
+    screenshot: 'task-card',
   },
-  { keys: ['j'], expect: '[page] j ran primer.nextItem' },
-  { keys: ['x'], expect: '[page] x ran primer.toggleInclude' },
+  {
+    keys: ['<C-l>'],
+    expect: '[primer] selected item 1 on task 2',
+    checksFit: true,
+    screenshot: 'item-card',
+  },
+  { keys: ['<C-l>'], expect: '[primer] selected item 2 on task 2' },
+  { keys: ['x'], expect: '[primer] included item 2 on task 2' },
+  { keys: ['x'], expect: '[primer] left out item 2 on task 2' },
+  { keys: ['c'], expect: '[primer] focused comment on item 2 of task 2' },
+  { keys: ['Escape', 'Escape'], expect: '[primer] left the box' },
+  {
+    keys: ['C'],
+    expect: '[primer] focused comment on task 2',
+    why: "C on an item card shows its task's card and focuses the task's comment box.",
+  },
+  { keys: ['Escape', 'Escape'], expect: '[primer] left the box' },
+  { keys: ['<C-l>'], expect: '[primer] selected item 1 on task 2' },
   {
     keys: ['a', 'P', 'o', 'l', 'i', 's', 'h', 'Escape', 'Escape'],
-    expect: '[primer] left the box',
+    expect: '[primer] added item 3 on task 2',
+    why: "a on an item card shows its task's card and focuses the add-item box; leaving the box adds the item.",
+  },
+  {
+    keys: ['<C-h>'],
+    expect: '[primer] selected task 1',
+    why: "From task 2's card, ⌃H steps to the row drawn above it, task 1's row.",
   },
   { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusRail' },
 ];
@@ -168,7 +207,7 @@ export function primerSelfTestScript(
     groups: [
       {
         name: 'primer',
-        why: 'The Primer tab sets needs from the rail and toggles and adds items on the card; the agent gets every change back once the review submits.',
+        why: "The Primer tab expands the selected task's items in the rail, sets needs and toggles items from task and item rows, steps rows on the card with ⌃L and ⌃H, and reaches the task's boxes from an item card; the agent gets every change back once the review submits.",
         steps: PRIMER_STEPS,
       },
       {

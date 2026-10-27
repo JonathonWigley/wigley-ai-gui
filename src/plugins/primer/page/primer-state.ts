@@ -34,7 +34,11 @@ export type TextTarget =
   | { field: 'newItem'; entryId: string }
   | { field: 'taskComment'; entryId: string };
 
-export type RailRow = { kind: 'feature' } | { kind: 'task'; entryId: string };
+// `item` is 1-based within the task's items, as in TextTarget.
+export type RailRow =
+  | { kind: 'feature' }
+  | { kind: 'task'; entryId: string }
+  | { kind: 'item'; entryId: string; item: number };
 
 // `formId` is the primer's id.
 export interface OpenPrimer extends SessionForm {
@@ -44,10 +48,9 @@ export interface OpenPrimer extends SessionForm {
   // in the order added.
   feature: PrimerFeature;
   entries: PrimerEntry[];
-  // A position in railRows(primer).
-  railCursor: number;
-  // A position in the selected task's items.
-  itemCursor: number;
+  // The selected rail row, by identity: the rows drawn depend on it, since
+  // its task is the one that shows its items.
+  selected: RailRow;
   pane: PrimerPane;
   // Each add-item box's text, by entry id; not part of the body until the
   // box commits it as an item.
@@ -62,20 +65,16 @@ export type PrimerState = SessionFormsState<OpenPrimer, 'primer'>;
 type PrimerOwnAction =
   | { type: 'nextRow' }
   | { type: 'prevRow' }
-  // `row` is a rail position.
+  // `row` is a position in railRows(primer) as drawn now.
   | { type: 'selectRow'; row: number }
   | { type: 'setNeed'; need: PrimerNeed }
   | { type: 'addExtraTask' }
   | { type: 'removeExtraTask' }
   | { type: 'focusPane'; pane: PrimerPane }
-  | { type: 'nextItem' }
-  | { type: 'prevItem' }
-  // `item` is a position in the selected task's items.
-  | { type: 'selectItem'; item: number }
   | { type: 'toggleInclude' }
   // Adds the task's add-item text as an item.
   | { type: 'addItem'; formId: string; entryId: string }
-  // Selects the row and item a text box edits, and focuses the card.
+  // Selects the row a text box sits on, and focuses the card.
   | { type: 'showTarget'; formId: string; target: TextTarget }
   | { type: 'setText'; formId: string; target: TextTarget; value: string }
   // Commits each task's add-item text as an item, then opens the review.
@@ -113,9 +112,6 @@ const PRIMER_VIEW_ACTIONS: ReadonlySet<PrimerOwnAction['type']> = new Set([
   'addExtraTask',
   'removeExtraTask',
   'focusPane',
-  'nextItem',
-  'prevItem',
-  'selectItem',
   'toggleInclude',
   'showTarget',
   'openReview',
@@ -131,8 +127,8 @@ export function initialState(
   );
 }
 
-// Returns `state` itself when the action changes nothing. Row, pane, item and
-// target actions and `openReview` apply only in view 'primer'. While the
+// Returns `state` itself when the action changes nothing. Row, pane, include
+// and target actions and `openReview` apply only in view 'primer'. While the
 // active primer is sending, only the lifecycle's sending actions and the
 // boxes' text apply.
 export const apply = createSessionFormsReducer<
@@ -173,14 +169,6 @@ function applyOwn(state: PrimerState, action: PrimerOwnAction): PrimerState {
       return updateForm(state, active, (primer) =>
         primer.pane === action.pane ? primer : { ...primer, pane: action.pane },
       );
-    case 'nextItem':
-      return updateForm(state, active, (primer) => moveItem(primer, 1));
-    case 'prevItem':
-      return updateForm(state, active, (primer) => moveItem(primer, -1));
-    case 'selectItem':
-      return updateForm(state, active, (primer) =>
-        selectItemAt(primer, action.item),
-      );
     case 'toggleInclude':
       return updateForm(state, active, toggleInclude);
     case 'addItem':
@@ -205,38 +193,60 @@ function applyOwn(state: PrimerState, action: PrimerOwnAction): PrimerState {
 }
 
 // The Feature row, then the tasks of each group in RAIL_GROUPS order, each
-// group in `entries` order.
+// group in `entries` order; the selected row's task has its item rows right
+// after its task row.
 export function railRows(primer: OpenPrimer): RailRow[] {
-  return [
-    FEATURE_ROW,
-    ...RAIL_GROUPS.flatMap(([group]) =>
-      primer.entries
-        .filter((entry) => entry.group === group)
-        .map((entry): RailRow => ({ kind: 'task', entryId: entry.id })),
-    ),
-  ];
+  const selected = primer.selected;
+  return rowsExpanding(
+    primer,
+    selected.kind === 'feature' ? null : selected.entryId,
+  );
+}
+
+// The selected row's position in railRows(primer).
+export function railPosition(primer: OpenPrimer): number {
+  return rowPositionIn(railRows(primer), primer.selected);
 }
 
 export function selectedRow(primer: OpenPrimer): RailRow {
-  return railRows(primer)[primer.railCursor];
+  return primer.selected;
 }
 
 // The selected row's task, null on the Feature row.
 export function selectedEntry(primer: OpenPrimer): PrimerEntry | null {
-  const row = selectedRow(primer);
+  const row = primer.selected;
   return row.kind === 'feature' ? null : entryOf(primer, row.entryId);
 }
 
-// Which need keys the selected row's prompt shows: none on the Feature row,
-// whose need keys do nothing; `remove` too on an extra task.
-export type RowPrompt = 'none' | 'task' | 'extra';
+// The selected item row's item, null on the Feature row and a task row.
+export function selectedItem(primer: OpenPrimer): PrimerItem | null {
+  const row = primer.selected;
+  if (row.kind !== 'item') {
+    return null;
+  }
+  return entryOf(primer, row.entryId)?.items[row.item - 1] ?? null;
+}
 
-export function rowPrompt(primer: OpenPrimer): RowPrompt {
+// Which keys the selected row's prompt shows: the need keys on a task or
+// item row, the include key on an item row, and the remove key on an extra
+// task's rows.
+export interface RowPrompt {
+  need: boolean;
+  include: boolean;
+  remove: boolean;
+}
+
+// Null on the Feature row, whose need keys do nothing.
+export function rowPrompt(primer: OpenPrimer): RowPrompt | null {
   const entry = selectedEntry(primer);
   if (entry === null) {
-    return 'none';
+    return null;
   }
-  return entry.group === 'extra' ? 'extra' : 'task';
+  return {
+    need: true,
+    include: primer.selected.kind === 'item',
+    remove: entry.group === 'extra',
+  };
 }
 
 export function includedCount(entry: PrimerEntry): number {
@@ -279,9 +289,53 @@ export function scopeOf(state: PrimerState): PrimerScopeName {
   return state.view;
 }
 
-// How the log names a rail row: `the feature` or `task <entryId>`.
+// How the view and the log name a rail row: `the feature`, `task <entryId>`
+// or `item <item> on task <entryId>`.
 export function rowName(row: RailRow): string {
-  return row.kind === 'feature' ? 'the feature' : `task ${row.entryId}`;
+  switch (row.kind) {
+    case 'feature':
+      return 'the feature';
+    case 'task':
+      return `task ${row.entryId}`;
+    case 'item':
+      return `item ${row.item} on task ${row.entryId}`;
+  }
+}
+
+// The rail rows with the task `expanded` showing its items, none when null.
+function rowsExpanding(primer: OpenPrimer, expanded: string | null): RailRow[] {
+  return [
+    FEATURE_ROW,
+    ...RAIL_GROUPS.flatMap(([group]) =>
+      primer.entries
+        .filter((entry) => entry.group === group)
+        .flatMap((entry): RailRow[] => [
+          { kind: 'task', entryId: entry.id },
+          ...(entry.id === expanded ? itemRows(entry) : []),
+        ]),
+    ),
+  ];
+}
+
+function itemRows(entry: PrimerEntry): RailRow[] {
+  return entry.items.map((_, i) => ({
+    kind: 'item',
+    entryId: entry.id,
+    item: i + 1,
+  }));
+}
+
+function isSameRow(a: RailRow, b: RailRow): boolean {
+  const aEntry = a.kind === 'feature' ? null : a.entryId;
+  const bEntry = b.kind === 'feature' ? null : b.entryId;
+  const aItem = a.kind === 'item' ? a.item : null;
+  const bItem = b.kind === 'item' ? b.item : null;
+  return a.kind === b.kind && aEntry === bEntry && aItem === bItem;
+}
+
+// `row`'s position in `rows`, -1 when absent.
+function rowPositionIn(rows: RailRow[], row: RailRow): number {
+  return rows.findIndex((candidate) => isSameRow(candidate, row));
 }
 
 // The task with id `entryId`, or null when the primer holds none.
@@ -299,8 +353,7 @@ function restorePrimer(presented: PresentedPrimer): OpenPrimer {
     primer: form,
     feature: edited.feature,
     entries: edited.entries,
-    railCursor: 0,
-    itemCursor: 0,
+    selected: FEATURE_ROW,
     pane: 'rail',
     newItemTexts: {},
     revision: 0,
@@ -316,21 +369,24 @@ function edited(primer: OpenPrimer, change: Partial<OpenPrimer>): OpenPrimer {
   return { ...primer, ...change, revision: primer.revision + 1 };
 }
 
+// Selects the row `step` away in the rows drawn now, clamped at both ends;
+// the new selection then expands its own task.
 function moveRow(primer: OpenPrimer, step: number): OpenPrimer {
   const lastRow = railRows(primer).length - 1;
   return selectRowAt(
     primer,
-    Math.min(Math.max(primer.railCursor + step, 0), lastRow),
+    Math.min(Math.max(railPosition(primer) + step, 0), lastRow),
   );
 }
 
-// A row change starts the item cursor at the row's first item.
+// `row` is a position in the rows drawn now.
 function selectRowAt(primer: OpenPrimer, row: number): OpenPrimer {
-  const isRailPosition = row >= 0 && row < railRows(primer).length;
-  if (!isRailPosition || row === primer.railCursor) {
+  const rows = railRows(primer);
+  const isRailPosition = row >= 0 && row < rows.length;
+  if (!isRailPosition || row === railPosition(primer)) {
     return primer;
   }
-  return { ...primer, railCursor: row, itemCursor: 0 };
+  return { ...primer, selected: rows[row] };
 }
 
 function setNeed(primer: OpenPrimer, need: PrimerNeed): OpenPrimer {
@@ -381,64 +437,47 @@ function addExtraTask(primer: OpenPrimer): OpenPrimer {
   const added = edited(primer, { entries: [...primer.entries, entry] });
   return {
     ...added,
-    railCursor: railRows(added).findIndex(
-      (row) => row.kind === 'task' && row.entryId === entry.id,
-    ),
-    itemCursor: 0,
+    selected: { kind: 'task', entryId: entry.id },
     pane: 'card',
   };
 }
 
-// Removes the selected task when it is an extra one; the cursor keeps its
-// position, clamped to the last row.
+// Removes the selected row's task, from its task row or an item row, when it
+// is an extra one. The selection takes the removed task row's position in the
+// rows with no task expanded, clamped to the last row.
 function removeExtraTask(primer: OpenPrimer): OpenPrimer {
   const entry = selectedEntry(primer);
   if (entry === null || entry.group !== 'extra') {
     return primer;
   }
+  const position = rowPositionIn(railRows(primer), {
+    kind: 'task',
+    entryId: entry.id,
+  });
   const { [entry.id]: _dropped, ...newItemTexts } = primer.newItemTexts;
   const removed = edited(primer, {
     entries: primer.entries.filter((current) => current.id !== entry.id),
     newItemTexts,
   });
+  const rows = rowsExpanding(removed, null);
   return {
     ...removed,
-    railCursor: Math.min(removed.railCursor, railRows(removed).length - 1),
-    itemCursor: 0,
+    selected: rows[Math.min(position, rows.length - 1)],
   };
 }
 
-// A no-op on the Feature row.
-function moveItem(primer: OpenPrimer, step: number): OpenPrimer {
-  const entry = selectedEntry(primer);
-  if (entry === null) {
-    return primer;
-  }
-  const lastItem = Math.max(entry.items.length - 1, 0);
-  const item = Math.min(Math.max(primer.itemCursor + step, 0), lastItem);
-  return item === primer.itemCursor ? primer : { ...primer, itemCursor: item };
-}
-
-// A no-op on the Feature row or past the task's items.
-function selectItemAt(primer: OpenPrimer, item: number): OpenPrimer {
-  const entry = selectedEntry(primer);
-  const isItem = entry !== null && item >= 0 && item < entry.items.length;
-  return isItem && item !== primer.itemCursor
-    ? { ...primer, itemCursor: item }
-    : primer;
-}
-
-// A no-op on the Feature row or a task with no items.
+// A no-op on the Feature row and a task row.
 function toggleInclude(primer: OpenPrimer): OpenPrimer {
+  const row = primer.selected;
   const entry = selectedEntry(primer);
-  const item = entry?.items[primer.itemCursor];
-  if (entry === null || item === undefined) {
+  const item = selectedItem(primer);
+  if (row.kind !== 'item' || entry === null || item === null) {
     return primer;
   }
   return withEntry(primer, {
     ...entry,
     items: entry.items.map((current, i) =>
-      i === primer.itemCursor ? { ...item, include: !item.include } : current,
+      i === row.item - 1 ? { ...item, include: !item.include } : current,
     ),
   });
 }
@@ -453,6 +492,7 @@ function addNewItems(primer: OpenPrimer): OpenPrimer {
 }
 
 // A no-op for blank text or a task already holding MAX_PRIMER_ITEMS items.
+// The selection stays where it is.
 function addItem(primer: OpenPrimer, entryId: string): OpenPrimer {
   const entry = entryOf(primer, entryId);
   const text = (primer.newItemTexts[entryId] ?? '').trim();
@@ -463,38 +503,35 @@ function addItem(primer: OpenPrimer, entryId: string): OpenPrimer {
   }
   const item: PrimerItem = { text, include: true, comment: '', added: true };
   const added = withEntry(primer, { ...entry, items: [...entry.items, item] });
-  const isSelected = selectedEntry(primer)?.id === entryId;
   return {
     ...added,
     newItemTexts: { ...primer.newItemTexts, [entryId]: '' },
-    itemCursor: isSelected ? entry.items.length : primer.itemCursor,
   };
 }
 
-// The rail position of the row a target's box sits on, or -1 when the primer
-// has no such task.
-function targetRow(primer: OpenPrimer, target: TextTarget): number {
-  if (target.field === 'feature') {
-    return 0;
+// The row a target's box sits on: an item comment's item row, another task
+// box's task row, a feature box's Feature row.
+function targetRow(target: TextTarget): RailRow {
+  switch (target.field) {
+    case 'feature':
+      return FEATURE_ROW;
+    case 'itemComment':
+      return { kind: 'item', entryId: target.entryId, item: target.item };
+    default:
+      return { kind: 'task', entryId: target.entryId };
   }
-  return railRows(primer).findIndex(
-    (row) => row.kind === 'task' && row.entryId === target.entryId,
-  );
 }
 
+// A no-op for a target on a task the primer does not hold.
 function showTarget(primer: OpenPrimer, target: TextTarget): OpenPrimer {
-  const row = targetRow(primer, target);
-  if (row < 0) {
+  const row = targetRow(target);
+  const isHeldTask =
+    target.field === 'feature' || entryOf(primer, target.entryId) !== null;
+  const isUnchanged = isSameRow(row, primer.selected) && primer.pane === 'card';
+  if (!isHeldTask || isUnchanged) {
     return primer;
   }
-  const onRow = selectRowAt(primer, row);
-  const itemCursor =
-    target.field === 'itemComment' ? target.item - 1 : onRow.itemCursor;
-  const isUnchanged =
-    onRow === primer &&
-    itemCursor === primer.itemCursor &&
-    primer.pane === 'card';
-  return isUnchanged ? primer : { ...onRow, itemCursor, pane: 'card' };
+  return { ...primer, selected: row, pane: 'card' };
 }
 
 // `newItem` text is not part of the body, so it leaves the revision.

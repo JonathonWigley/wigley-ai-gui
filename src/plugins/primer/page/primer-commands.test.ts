@@ -15,7 +15,13 @@ import {
   guardClose,
   primerCommandHandlers,
 } from './primer-commands';
-import { buildBody, initialState, selectedEntry } from './primer-state';
+import {
+  buildBody,
+  initialState,
+  rowName,
+  selectedEntry,
+  selectedRow,
+} from './primer-state';
 import { createPrimerStore } from './primer-store';
 import {
   presentedPrimer,
@@ -42,8 +48,9 @@ function editorOf(box: PrimerBox): TextEditor {
   return editor;
 }
 
-// Primer `p1`, active; rows: the feature (0), `1` with two items (1), `s1`
-// (2), `extra-1` (3) unless `entries` says otherwise.
+// Primer `p1`, active; with the Feature row selected, rows: the feature (0),
+// `1` with two items (1), `s1` (2), `extra-1` (3) unless `entries` says
+// otherwise. `focusedRows` holds the selected row's name at each focus.
 function setup(
   parts: { entries?: PrimerEntry[]; feature?: PrimerFeature } = {},
 ) {
@@ -59,6 +66,7 @@ function setup(
     ),
   );
   const focused: PrimerBox[] = [];
+  const focusedRows: string[] = [];
   const focusOptions: (FocusOptions | undefined)[] = [];
   let active: PrimerBox | null = null;
   let leaves = 0;
@@ -81,6 +89,8 @@ function setup(
     boxes: {
       focus: (box, options) => {
         focused.push(box);
+        const shown = activeForm(store.get());
+        focusedRows.push(shown === null ? '' : rowName(selectedRow(shown)));
         focusOptions.push(options);
         active = box;
       },
@@ -122,6 +132,7 @@ function setup(
     run,
     primer,
     focused,
+    focusedRows,
     focusOptions,
     finished,
     toasts,
@@ -175,8 +186,9 @@ describe('primerCommandHandlers', () => {
 
     run('prevRow');
     run('nextRow');
+    run('nextRow');
 
-    expect(logs).toEqual([expect.stringContaining('task 1')]);
+    expect(logs).toEqual(['selected task 1', 'selected item 1 on task 1']);
   });
 
   it('says no task is selected when a need key fires on the Feature row', () => {
@@ -232,11 +244,8 @@ describe('primerCommandHandlers', () => {
   });
 
   it('removes an extra task and logs it', () => {
-    const { run, primer, logs } = setup();
-    run('nextRow');
-    run('nextRow');
-    run('nextRow');
-    logs.length = 0;
+    const { run, store, primer, logs } = setup();
+    store.dispatch({ type: 'selectRow', row: 3 });
 
     run('removeExtraTask');
 
@@ -266,19 +275,27 @@ describe('primerCommandHandlers', () => {
     expect(leaves()).toBe(1);
   });
 
-  it('logs the selected item, and nothing at the last item', () => {
-    const { run, logs } = setup();
-    run('nextRow');
-    logs.length = 0;
+  it('steps rows from a box, committing add-item text first', () => {
+    const { run, store, primer, logs } = setup();
+    store.dispatch({
+      type: 'setText',
+      formId: 'p1',
+      target: newItem1.target,
+      value: 'Test the store',
+    });
 
-    run('nextItem');
-    run('nextItem');
+    run('nextRow', { editor: editorOf(newItem1) });
 
-    expect(logs).toEqual([expect.stringContaining('item 2 on task 1')]);
+    expect(primer().entries[0].items.at(-1)?.text).toBe('Test the store');
+    expect(logs).toEqual([
+      'added item 3 on task 1',
+      'selected item 1 on task 1',
+    ]);
   });
 
   it('toggles the include mark and logs each way', () => {
     const { run, logs } = setup();
+    run('nextRow');
     run('nextRow');
     logs.length = 0;
 
@@ -286,37 +303,44 @@ describe('primerCommandHandlers', () => {
     run('toggleInclude');
 
     expect(logs).toEqual([
-      expect.stringContaining('item 1 on task 1'),
-      expect.stringContaining('item 1 on task 1'),
+      'left out item 1 on task 1',
+      'included item 1 on task 1',
     ]);
   });
 
-  it('says no item is selected for the item keys on a task with no items', () => {
+  it('says no item is selected for the item keys on a task row', () => {
     const { run, logs, focused } = setup();
-    run('nextRow');
     run('nextRow');
     logs.length = 0;
 
     run('toggleInclude');
     run('editItemComment');
 
-    expect(logs).toHaveLength(2);
+    expect(logs).toEqual(['no item selected', 'no item selected']);
     expect(focused).toEqual([]);
   });
 
-  it("focuses the item's comment box and the task's comment box at the end", () => {
-    const { run, focused, focusOptions } = setup();
-    run('nextRow');
-    run('nextItem');
+  it("focuses the item's comment box, and from its item card the task's boxes once the task card shows", () => {
+    const { run, store, focused, focusedRows, focusOptions } = setup();
+    const onItem2 = () => {
+      store.dispatch({ type: 'selectRow', row: 1 });
+      store.dispatch({ type: 'selectRow', row: 3 });
+    };
+    onItem2();
 
     run('editItemComment');
     run('editTaskComment');
+    onItem2();
+    run('addItem');
 
     expect(focused.map(boxKey)).toEqual([
       'p1/task/1/item/2/comment',
       'p1/task/1/comment',
+      'p1/task/1/new-item',
     ]);
+    expect(focusedRows).toEqual(['item 2 on task 1', 'task 1', 'task 1']);
     expect(focusOptions).toEqual([
+      { insertAtEnd: true },
       { insertAtEnd: true },
       { insertAtEnd: true },
     ]);

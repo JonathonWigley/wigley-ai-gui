@@ -46,7 +46,7 @@ import { tag } from '../../../shared/page/ui/tag';
 import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
 import type { AnchorOptions, KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
-import type { PrimerEntry, PrimerView } from '../contract';
+import type { PrimerEntry, PrimerItem, PrimerView } from '../contract';
 import {
   type PrimerCommandName,
   primerCommand,
@@ -68,7 +68,9 @@ import {
   type PrimerAction,
   type PrimerState,
   RAIL_GROUPS,
+  railPosition,
   railRows,
+  rowName,
   rowPrompt,
   scopeOf,
   selectedEntry,
@@ -135,12 +137,15 @@ type CardDeps = Pick<PrimerViewDeps, 'boxes' | 'markdown' | 'keys'> & {
 
 // The parts of the rail a primer view builds once: the header's save state
 // and row pair, the body `drawRail` fills, the row prompt `drawRail` moves to
-// the selected row with its remove key, and the Extra tasks header's prompt.
+// the selected row with its need, include and remove keys, and the Extra
+// tasks header's prompt.
 interface RailParts {
   statusLine: StatusLine;
   edge: HTMLElement;
   body: HTMLElement;
   rowPrompt: HTMLElement;
+  needKeys: HTMLElement[];
+  includeKey: HTMLElement;
   removeKey: HTMLElement;
   addPrompt: HTMLElement;
 }
@@ -311,8 +316,7 @@ function destroyPrimerView(
 // strip over the card and the review, each scrolling on its own. The rail is
 // a header, a scrolling body and a foot; its body redraws whenever the primer
 // changes. The card is rebuilt, its boxes destroyed and mounted again and its
-// anchors disposed, only when the selected row or its item count changes; the
-// review body is drawn again while it shows, when the primer changed, over a
+// anchors disposed, only when `cardKeyOf` changes; the review body is drawn again while it shows, when the primer changed, over a
 // footer built once. `attach` places the root in the page once, before any
 // editor mounts.
 function createPrimerFormView(
@@ -353,8 +357,8 @@ function createPrimerFormView(
   let cardKey = cardKeyOf(primer);
   let card = buildCard(cardPane, primer, cardDeps);
   let railPrimer: OpenPrimer | null = null;
-  let railCursor = -1;
-  let itemCursor = -1;
+  // The rowName of the selected row last drawn.
+  let drawnRow: string | null = null;
   let reviewPrimer: OpenPrimer | null = null;
 
   const rebuildCard = (current: OpenPrimer) => {
@@ -374,7 +378,8 @@ function createPrimerFormView(
       split.start.classList.toggle('is-pane-inactive', current.pane === 'card');
       rail.statusLine.update(true, saveStatus(current));
       rail.edge.classList.toggle('is-no-target', railRows(current).length < 2);
-      const isRowChanged = current.railCursor !== railCursor;
+      const shownRow = rowName(selectedRow(current));
+      const isRowChanged = shownRow !== drawnRow;
       if (current !== railPrimer) {
         railPrimer = current;
         drawRail(rail, current, dispatch, isRowChanged);
@@ -383,21 +388,12 @@ function createPrimerFormView(
       if (nextCardKey !== cardKey) {
         cardKey = nextCardKey;
         rebuildCard(current);
-        if (isRowChanged) {
-          cardPane.scrollTop = 0;
-        }
-        itemCursor = -1;
+      }
+      if (isRowChanged) {
+        cardPane.scrollTop = 0;
       }
       card.update(current);
-      if (current.itemCursor !== itemCursor) {
-        itemCursor = current.itemCursor;
-        if (current.pane === 'card') {
-          cardPane
-            .querySelector('.primer-item.is-cursor')
-            ?.scrollIntoView({ block: 'nearest' });
-        }
-      }
-      railCursor = current.railCursor;
+      drawnRow = shownRow;
       const isReview = viewName === 'review';
       cardEdge.hidden = isReview;
       cardPane.hidden = viewName !== 'primer';
@@ -458,20 +454,24 @@ function mountRail(
     keyChevron('›'),
   );
   const body = element('div', 'primer-rail-body');
-  const removeKey = anchoredSpan(keys, 'primer-row-key', 'removeExtraTask', {
-    scope,
-    label: 'remove',
-  });
-  const prompt = element('span', 'primer-row-prompt');
-  prompt.append(
+  const needKeys = [
     anchoredSpan(keys, 'primer-row-key', 'needYes', { scope, label: 'yes' }),
     anchoredSpan(keys, 'primer-row-key', 'needNo', { scope, label: 'no' }),
     anchoredSpan(keys, 'primer-row-key', 'needUnclear', {
       scope,
       label: 'unclear',
     }),
-    removeKey,
-  );
+  ];
+  const includeKey = anchoredSpan(keys, 'primer-row-key', 'toggleInclude', {
+    scope,
+    label: 'include',
+  });
+  const removeKey = anchoredSpan(keys, 'primer-row-key', 'removeExtraTask', {
+    scope,
+    label: 'remove',
+  });
+  const prompt = element('span', 'primer-row-prompt');
+  prompt.append(...needKeys, includeKey, removeKey);
   const addPrompt = anchoredSpan(keys, 'primer-add-prompt', 'addExtraTask', {
     scope,
     label: 'add',
@@ -495,6 +495,8 @@ function mountRail(
     edge,
     body,
     rowPrompt: prompt,
+    needKeys,
+    includeKey,
     removeKey,
     addPrompt,
   };
@@ -524,22 +526,31 @@ function saveStatus(primer: OpenPrimer): StatusLineContent {
   };
 }
 
-// What a card is built for: the selected row and its item count.
+// What a card is built for: the Feature row; a task row and whether its card
+// holds the add-item box; or an item row.
 function cardKeyOf(primer: OpenPrimer): string {
   const selected = selectedRow(primer);
-  if (selected.kind === 'feature') {
-    return 'feature';
+  switch (selected.kind) {
+    case 'feature':
+      return 'feature';
+    case 'item':
+      return `item ${selected.entryId} ${selected.item}`;
+    case 'task': {
+      const entry = selectedEntry(primer);
+      const isOpen = entry !== null && hasAddItemBox(entry);
+      return `task ${selected.entryId} ${isOpen ? 'open' : 'full'}`;
+    }
   }
-  const items = selectedEntry(primer)?.items.length ?? 0;
-  return `task ${selected.entryId} ${items}`;
 }
 
 // The rail body: the Feature row, then each group's tasks under its header,
 // the Primer and Every feature headers only over tasks and Extra tasks always,
-// holding the add prompt, with a line saying so while it holds none. The row
-// prompt sits under the selected task row's label and leaves the Feature row,
-// showing its remove key on an extra task only. Each row's click selects it;
-// the selected row scrolls into view when `isRowChanged`.
+// holding the add prompt, with a line saying so while it holds none. The
+// selected row's task has its items as rows under its task row. The row
+// prompt sits under the selected task or item row's label and leaves the
+// Feature row, showing the include key on an item row and the remove key on
+// an extra task's rows. Each row's click selects it; the selected row scrolls
+// into view when `isRowChanged`.
 function drawRail(
   rail: RailParts,
   primer: OpenPrimer,
@@ -548,32 +559,39 @@ function drawRail(
 ) {
   const list = element('div', 'primer-rail-list');
   const rows = railRows(primer);
+  const selectedPosition = railPosition(primer);
   const prompt = rowPrompt(primer);
-  const railRow = (
-    position: number,
-    label: string,
-    detail: string | null,
-    trailing: HTMLElement | null,
-  ) => {
-    const node = row({
-      density: 'list',
-      label,
-      detail,
-      trailing,
-      onClick: () => dispatch({ type: 'selectRow', row: position }),
-    });
-    const isSelected = position === primer.railCursor;
+  const select = (position: number) => () =>
+    dispatch({ type: 'selectRow', row: position });
+  // The row drawn at `position`, selected and holding the prompt when it is
+  // the selected row.
+  const placed = (position: number, node: HTMLElement) => {
+    const isSelected = position === selectedPosition;
     node.classList.toggle('is-selected', isSelected);
-    if (isSelected && prompt !== 'none') {
+    if (isSelected && prompt !== null) {
       node.append(rail.rowPrompt);
     }
     return node;
   };
-  if (prompt === 'none') {
+  if (prompt === null) {
     rail.rowPrompt.remove();
   }
-  rail.removeKey.hidden = prompt !== 'extra';
-  list.append(railRow(0, 'Feature', primer.feature.name, null));
+  for (const needKey of rail.needKeys) {
+    needKey.hidden = prompt?.need !== true;
+  }
+  rail.includeKey.hidden = prompt?.include !== true;
+  rail.removeKey.hidden = prompt?.remove !== true;
+  list.append(
+    placed(
+      0,
+      row({
+        density: 'list',
+        label: 'Feature',
+        detail: primer.feature.name,
+        onClick: select(0),
+      }),
+    ),
+  );
   for (const [group, header] of RAIL_GROUPS) {
     const entries = primer.entries.filter((entry) => entry.group === group);
     const isExtra = group === 'extra';
@@ -587,8 +605,31 @@ function drawRail(
           candidate.kind === 'task' && candidate.entryId === entry.id,
       );
       list.append(
-        railRow(position, taskName(entry), null, railTrailing(entry)),
+        placed(
+          position,
+          row({
+            density: 'list',
+            label: taskName(entry),
+            trailing: railTrailing(entry),
+            onClick: select(position),
+          }),
+        ),
       );
+      const isExpanded = rows[position + 1]?.kind === 'item';
+      if (isExpanded) {
+        entry.items.forEach((item, i) => {
+          const itemPosition = position + 1 + i;
+          list.append(
+            placed(
+              itemPosition,
+              railItemRow(item, i + 1, select(itemPosition), () => {
+                select(itemPosition)();
+                dispatch({ type: 'toggleInclude' });
+              }),
+            ),
+          );
+        });
+      }
     }
     if (entries.length === 0) {
       list.append(emptyState('No extra tasks.'));
@@ -616,8 +657,30 @@ function railTrailing(entry: PrimerEntry): HTMLElement {
   return trailing;
 }
 
-// The selected row's card, the Feature card or the selected task's, its
-// anchors kept for its `dispose`.
+// An item row: its include mark and its number leading the item text.
+// `onToggle` runs on a click on the mark.
+function railItemRow(
+  item: PrimerItem,
+  number: number,
+  onSelect: () => void,
+  onToggle: () => void,
+): HTMLElement {
+  const lead = element('span', 'primer-rail-item-lead');
+  lead.append(
+    toggleMark({ isOn: item.include, label: 'Include the item', onToggle }),
+    element('span', 'primer-item-number', String(number)),
+  );
+  return row({
+    density: 'list',
+    depth: 1,
+    label: item.text,
+    leading: lead,
+    onClick: onSelect,
+  });
+}
+
+// The selected row's card, the Feature card, the task card or the item card,
+// its anchors kept for its `dispose`.
 function buildCard(
   parent: HTMLElement,
   primer: OpenPrimer,
@@ -628,11 +691,16 @@ function buildCard(
     ...deps,
     keys: { anchor: recordingAnchor(deps.keys.anchor, anchors) },
   };
+  const selected = selectedRow(primer);
   const entry = selectedEntry(primer);
-  const update =
-    entry === null
-      ? buildFeatureCard(parent, primer, cardDeps)
-      : buildTaskCard(parent, primer, entry, cardDeps);
+  let update: (primer: OpenPrimer) => void;
+  if (entry === null) {
+    update = buildFeatureCard(parent, primer, cardDeps);
+  } else if (selected.kind === 'item') {
+    update = buildItemCard(parent, primer, entry, selected.item, cardDeps);
+  } else {
+    update = buildTaskCard(parent, primer, entry, cardDeps);
+  }
   return { update, dispose: () => disposeAnchors(anchors) };
 }
 
@@ -657,9 +725,9 @@ function buildFeatureCard(
 }
 
 // The task as heading, its tags, an extra task's name box, its markdown
-// sections, its items each with an include mark and its key and a comment
-// box, the add-item box unless the task is full, and the task's comment box.
-// Returns the redraw of what changes without a rebuild.
+// sections, the add-item box unless the task is full, and the task's comment
+// box; its items are rows in the rail, each with a card of its own. Returns
+// the redraw of what changes without a rebuild.
 function buildTaskCard(
   parent: HTMLElement,
   primer: OpenPrimer,
@@ -709,46 +777,6 @@ function buildTaskCard(
       parent.append(section);
     }
   }
-  const itemsSection = element('section', 'primer-card-section');
-  itemsSection.append(sectionHeader('Items'));
-  const items = entry.items.map((item, position) => {
-    const block = element('div', 'primer-item');
-    const mark = toggleMark({
-      isOn: item.include,
-      label: 'Include the item',
-      onToggle: () => {
-        deps.dispatch({ type: 'selectItem', item: position });
-        deps.dispatch({ type: 'toggleInclude' });
-      },
-    });
-    const lead = element('span', 'primer-item-lead');
-    lead.append(
-      mark,
-      anchoredSpan(deps.keys, 'primer-include-key', 'toggleInclude', {
-        scope: primerScope('card'),
-      }),
-    );
-    block.append(
-      row({
-        density: 'list',
-        label: item.text,
-        leading: lead,
-        trailing: item.added ? tag('Added') : null,
-      }),
-    );
-    const comment = element('div', 'primer-item-comment');
-    block.append(comment);
-    mountBox(
-      comment,
-      { field: 'itemComment', entryId, item: position + 1 },
-      'editItemComment',
-      primer,
-      deps,
-    );
-    itemsSection.append(block);
-    return { block, mark };
-  });
-  parent.append(itemsSection);
   if (hasAddItemBox(entry)) {
     appendField(
       parent,
@@ -781,18 +809,76 @@ function buildTaskCard(
       need.replaceWith(next);
       need = next;
     }
-    const isCardPane = current.pane === 'card';
-    items.forEach(({ block, mark }, position) => {
-      const item = shownEntry.items[position];
-      if (item !== undefined) {
-        setToggleMark(mark, item.include);
-      }
-      block.classList.toggle(
-        'is-cursor',
-        isCardPane && position === current.itemCursor,
-      );
-    });
   };
+}
+
+// The item card: the `⌃H ‹ n of m › ⌃L` header, the item text as heading,
+// its include mark with its key, an Added tag on an item the user added, and
+// the item's comment box. `number` is the item's 1-based number. Returns the
+// redraw of the mark and the header's place.
+function buildItemCard(
+  parent: HTMLElement,
+  primer: OpenPrimer,
+  entry: PrimerEntry,
+  number: number,
+  deps: CardDeps,
+): (primer: OpenPrimer) => void {
+  const entryId = entry.id;
+  const item = entry.items[number - 1];
+  if (item === undefined) {
+    throw new Error(`task ${entryId} has no item ${number}`);
+  }
+  const scope = primerScope('card');
+  const place = element('span', 'primer-item-place', placeText(number, entry));
+  const step = element('div', 'primer-item-step');
+  step.append(
+    anchoredSpan(deps.keys, 'primer-item-step-key', 'prevRow', { scope }),
+    keyChevron('‹'),
+    place,
+    keyChevron('›'),
+    anchoredSpan(deps.keys, 'primer-item-step-key', 'nextRow', { scope }),
+  );
+  const mark = toggleMark({
+    isOn: item.include,
+    label: 'Include the item',
+    onToggle: () => deps.dispatch({ type: 'toggleInclude' }),
+  });
+  const include = element('div', 'primer-item-include');
+  include.append(
+    mark,
+    element('span', '', 'Include'),
+    anchoredSpan(deps.keys, 'primer-field-hint', 'toggleInclude', { scope }),
+  );
+  parent.append(step, element('h2', 'primer-card-heading', item.text), include);
+  if (item.added) {
+    const tags = element('div', 'primer-card-tags');
+    tags.append(tag('Added'));
+    parent.append(tags);
+  }
+  appendField(
+    parent,
+    'Comment',
+    { field: 'itemComment', entryId, item: number },
+    'editItemComment',
+    primer,
+    deps,
+  );
+  return (current) => {
+    const shownEntry = current.entries.find(
+      (candidate) => candidate.id === entryId,
+    );
+    const shownItem = shownEntry?.items[number - 1];
+    if (shownEntry === undefined || shownItem === undefined) {
+      return;
+    }
+    setToggleMark(mark, shownItem.include);
+    place.textContent = placeText(number, shownEntry);
+  };
+}
+
+// An item's place among its task's items: `<n> of <m>`.
+function placeText(number: number, entry: PrimerEntry): string {
+  return `${number} of ${entry.items.length}`;
 }
 
 // A labelled box: its label over its input frame, an anchor for `command` in
@@ -815,23 +901,6 @@ function appendField(
   field.append(sectionHeader(label, hint));
   parent.append(field);
   mountFrame(field, target, primer, deps);
-}
-
-// A box with no label: its input frame, then an anchor for `command` in the
-// card scope.
-function mountBox(
-  parent: HTMLElement,
-  target: TextTarget,
-  command: PrimerCommandName,
-  primer: OpenPrimer,
-  deps: CardDeps,
-) {
-  mountFrame(parent, target, primer, deps);
-  parent.append(
-    anchoredSpan(deps.keys, 'primer-field-hint', command, {
-      scope: primerScope('card'),
-    }),
-  );
 }
 
 // The box's input frame, then its `⌃P ⌃N` keys, which show on the frame's

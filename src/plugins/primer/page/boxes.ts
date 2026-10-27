@@ -7,6 +7,7 @@ import {
   type PrimerAction,
   type PrimerState,
   selectedEntry,
+  selectedRow,
   type TextTarget,
 } from './primer-state';
 
@@ -59,15 +60,20 @@ export const PRIMER_BOX_IDENTITY: BoxIdentity<PrimerBox> = {
   logSource: 'primer',
 };
 
-// The boxes the user can reach now, in Ctrl+n order: the selected row's card
-// in view 'primer', none in any other view.
+// The boxes the user can reach now, in Ctrl+n order: the boxes of the card
+// the selected row shows in view 'primer', none in any other view.
 export function shownBoxes(state: PrimerState): PrimerBox[] {
   const primer = activeForm(state);
   if (primer === null || state.view !== 'primer') {
     return [];
   }
   const primerId = primer.formId;
+  const row = selectedRow(primer);
   const entry = selectedEntry(primer);
+  if (row.kind === 'item') {
+    const { entryId, item } = row;
+    return [{ primerId, target: { field: 'itemComment', entryId, item } }];
+  }
   if (entry === null) {
     return FEATURE_FIELDS.map(([name]) => ({
       primerId,
@@ -77,8 +83,8 @@ export function shownBoxes(state: PrimerState): PrimerBox[] {
   return taskTargets(entry).map((target) => ({ primerId, target }));
 }
 
-// A task card's boxes: an extra task's name, each item's comment, the
-// add-item box unless the task is full, then the task's comment.
+// A task card's boxes: an extra task's name, the add-item box unless the
+// task is full, then the task's comment.
 function taskTargets(entry: PrimerEntry): TextTarget[] {
   const entryId = entry.id;
   const name: TextTarget[] =
@@ -86,16 +92,7 @@ function taskTargets(entry: PrimerEntry): TextTarget[] {
   const newItem: TextTarget[] = hasAddItemBox(entry)
     ? [{ field: 'newItem', entryId }]
     : [];
-  return [
-    ...name,
-    ...entry.items.map((_, i): TextTarget => ({
-      field: 'itemComment',
-      entryId,
-      item: i + 1,
-    })),
-    ...newItem,
-    { field: 'taskComment', entryId },
-  ];
+  return [...name, ...newItem, { field: 'taskComment', entryId }];
 }
 
 // A task holding MAX_PRIMER_ITEMS items takes no more.
@@ -135,7 +132,7 @@ export function boxText(primer: OpenPrimer, target: TextTarget): string {
   }
 }
 
-// Shows the box's row and item in the active primer; null for a box of
+// Shows the box's row in the active primer; null for a box of
 // another primer or outside view 'primer'.
 export function focusActionFor(
   state: PrimerState,
