@@ -1,6 +1,6 @@
 # 15 — Chat layout preview on Space z l c
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 14, 10 (`src/plugins/keymap.ts`); 05 also edits `keymap.ts` in an earlier wave
 Plan: [plan.md](plan.md)

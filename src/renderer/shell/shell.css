@@ -60,8 +60,16 @@
   min-width: 0;
 }
 
-.shell-track > * {
+.shell-track > *,
+.shell-part-slot > * {
   min-width: 0;
+}
+
+/* The app's place for a part the shell layout draws: it keeps the part's
+   place in the track across redraws and lays the part out as the track's own
+   child. */
+.shell-part-slot {
+  display: contents;
 }
 
 .shell-title-bar > .shell-track-center {

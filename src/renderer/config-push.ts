@@ -2,12 +2,10 @@ import type { CommandId } from '../contracts/commands';
 import type { EditorHost } from '../contracts/editor';
 import type { Keymap } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
-import type { Area } from '../contracts/plugin';
 import type { AppConfig, ConfigProblem } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
 import { isSameJson } from '../shared/json';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
-import { tag } from '../shared/page/ui/tag';
 import { type AppliedKeys, installedConfig } from './installed-config';
 import type { ThemeApplier } from './theme';
 
@@ -25,28 +23,6 @@ export interface PushTargets {
 
 function problemText(problem: ConfigProblem): string {
   return `${problem.file}: ${problem.message}`;
-}
-
-// A title bar badge over the config problems, at the end, hidden while there
-// is none: one problem reads as itself, more as their count, each listed on its
-// own line in the tooltip. `show` redraws it for a new list.
-export function contributeConfigProblems(titleBar: Area): {
-  show(problems: readonly ConfigProblem[]): void;
-} {
-  const item = tag('', 'error');
-  item.classList.add('config-problem-badge');
-  item.hidden = true;
-  titleBar.contribute(item, { align: 'end' });
-  return {
-    show(problems) {
-      item.hidden = problems.length === 0;
-      item.textContent =
-        problems.length === 1
-          ? problemText(problems[0])
-          : `${problems.length} config problems`;
-      item.title = problems.map(problemText).join('\n');
-    },
-  };
 }
 
 // Toasts and logs each problem in `problems` that `shown` does not hold, by

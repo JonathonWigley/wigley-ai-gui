@@ -86,12 +86,23 @@ export function nextInTrack<Entry extends { placement: Placement }>(
 // mounted with, which does nothing once another `setLayout` replaced `layout`;
 // a layout that throws or misses an area leaves the previous one mounted and
 // rethrows. `layOutSideBar` shows or hides the side bar area and sets its
-// `data-side-bar`.
+// `data-side-bar`. `setChromeLayout` names the user's shell layout on the four
+// chrome areas' elements (`data-layout`, with `data-layout-owner="shell"`),
+// kept across every later mount, so the layout's CSS restyles their frames.
 export interface Shell {
   areas: Record<AreaName, Area>;
   setLayout(layout: ShellLayout): Disposable;
   layOutSideBar(layout: SideBarLayout): void;
+  setChromeLayout(name: string): void;
 }
+
+// The areas whose frames a user shell layout restyles.
+const CHROME_AREAS: readonly AreaName[] = [
+  'titleBar',
+  'activityBar',
+  'sideBar',
+  'statusBar',
+];
 
 interface Contribution {
   element: HTMLElement;
@@ -180,6 +191,7 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
   let generation = 0;
   let mounted = mountLayout(root, layout);
   let sideBarLayout: SideBarLayout = 'hidden';
+  let chromeLayout = 'default';
   const contributions = {} as Record<AreaName, Contribution[]>;
   const statusBarHeight = createStatusBarHeight();
 
@@ -195,6 +207,14 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
     applyHidden('sideBar');
   };
 
+  const applyChromeLayout = () => {
+    for (const name of CHROME_AREAS) {
+      const { dataset } = mounted[name].element;
+      dataset.layout = chromeLayout;
+      dataset.layoutOwner = 'shell';
+    }
+  };
+
   const fillElements = () => {
     for (const name of AREA_NAMES) {
       for (const contribution of contributions[name]) {
@@ -205,6 +225,7 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
       applyHidden(name);
     }
     applySideBar();
+    applyChromeLayout();
     statusBarHeight.observe(mounted.statusBar.element);
   };
 
@@ -281,6 +302,10 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
     layOutSideBar(next) {
       sideBarLayout = next;
       applySideBar();
+    },
+    setChromeLayout(name) {
+      chromeLayout = name;
+      applyChromeLayout();
     },
   };
 }

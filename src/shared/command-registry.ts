@@ -12,6 +12,10 @@ export class CommandRegistry<Context> {
     this.handlers.set(id, handler);
   }
 
+  has(id: CommandId): boolean {
+    return this.handlers.has(id);
+  }
+
   run(id: CommandId, context: Context) {
     const handler = this.handlers.get(id);
     if (!handler) {

@@ -1,6 +1,6 @@
 # 10 — Sessions layout and preview
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 05 (`src/plugins/keymap.ts`)
 Plan: [plan.md](plan.md)
@@ -189,3 +189,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 4d9178a · proof: diff read: Produces present (SessionsView amended); typecheck and lint clean; full npm test 3860 pass · concerns: sessions-view-fakes.ts added outside Files; AGENTS.md sessions/ entry names no layouts/ or preview (task 16); a second preview press restores real rows but leaves the mode and side bar shown

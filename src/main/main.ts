@@ -58,6 +58,7 @@ import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
 import { scopedFiles } from '../shared/scoped-files';
 import kitTypes from '../shared/page/layout-host/kit.d.ts?raw';
+import shellLayoutTypes from '../renderer/shell/layouts/layout.d.ts?raw';
 import { createElectronAlerts } from './alerts/electron-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import { appInstanceOf } from './app-instance';
@@ -729,6 +730,8 @@ function createWindow(
     driveRun.listening.catch(failStart);
   }
   const layouts = serveLayouts(window, inputs.homeDir, log);
+  // The service's dispose on quit ends the registration.
+  layouts.register('shell', shellLayoutTypes);
   const started = startMainParts(
     window,
     store,

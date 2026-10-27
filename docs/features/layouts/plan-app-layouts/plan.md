@@ -230,7 +230,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 - [ ] [Shell layout](13-shell-layout.md) — after 02
 
 ### Wave 3
-- [ ] [Sessions layout and preview](10-sessions-layout.md) — after 02, 05 (`keymap.ts`)
+- [x] [Sessions layout and preview](10-sessions-layout.md) — after 02, 05 (`keymap.ts`)
 - [x] [Chat surfaces layout](14-chat-surfaces-layout.md) — after 04
 
 ### Wave 4
@@ -259,6 +259,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - 11 · d9421e4 · diff read: Produces present (GalleryViewDeps amended); gallery tests 15 pass; typecheck clean; layers, styles, oxlint clean · concerns: AGENTS.md lines 161 and 534 say gallery has no main part (task 16); a dropped Split sample's ResizeObserver is never disconnected (createSplit has no dispose); relayout scroll test is weak in the fake DOM; head draws twice at start
 - 09 · c0bde46 · diff read: Produces present; notes tests 126 pass; typecheck clean; styles, oxlint, notes layers clean · concerns: notes.css .notes-row-value > .ui-tag no longer matches inside a display:contents root; the default sets overflow-wrap and white-space inline on each tag instead
 - 12 · 56e242c · diff read: Produces present (amended below); keys tests 81 pass; keys typecheck clean; layers, styles, oxlint clean; selftest all passed, every key placed · concerns: read-keys-layout.ts is the fourth copy of the reader skeleton (forms, docs, settings) that belongs in the layout host; AGENTS.md ~159 and ~532 say keys has no main part (task 16); setLayouts tests exercise the views' redraw, not start.ts's wiring
+- 10 · 4d9178a · diff read: Produces present (SessionsView amended); typecheck and lint clean; full npm test 3860 pass · concerns: sessions-view-fakes.ts added outside Files; AGENTS.md sessions/ entry names no layouts/ or preview (task 16); a second preview press restores real rows but leaves the mode and side bar shown
 ### Contract changes
 - LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
 - LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
@@ -272,6 +273,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - GalleryViewDeps: anchor dep → extends GalleryPartsDeps (markdown, keys anchor/keysFor, commands, platform, log) plus uiState · why: the base kit needs keysFor, commands and log · consumers: none outside 11 · group 11
 - NotePopupDeps.run → commands: KitCommands plus platform, keys adds keysFor; MarkupViewDeps keys and run → parts: NotesPartsDeps · why: base kit deps · consumers: none outside 09 · group 09
 - keys CompleteLayout: interface → Required<Layout>; KeysPartsDeps = { defaultLayout, kit: KeysKitDeps, log }; createKeysKit(deps, scope, rollback); HelpView gains layoutsChanged(); mountHelpView and mountWhichKeyView drop platform · why: open fields and redraw on a layout change · consumers: keys only · group 12
+- SessionsView: setLayouts, showPreview → also isPreviewShown() and stepPreview(by); SessionsViewDeps gains kit deps; SidebarView and SessionTabsView gain redrawPane(); mountSidebarView(activate, parts) · why: page start steps the sample while the preview shows · consumers: none outside 10 · group 10
 ### Rulings
 - selectedRow returns stored selection without railRows lookup — selection is the identity rows are built from — a stale selection would come back as is · group 01 · group 01
 - showTarget checks only the target's task exists, not the item — no caller builds a missing-item target — would select a row with no item · group 01 · group 01
@@ -301,5 +303,8 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - the confirm part draws into the dialog body and the app hides confirm.actions — part owns the buttons — none · group 09 · group 09
 - parts.setLayouts only stores the set; start.ts redraws the Keys button and calls help.layoutsChanged() — keeps the button in the title-bar slot — the wiring is untested · group 12 · group 12
 - nested parts record their draw through the outer draw's recordAnchor so an outer rollback disposes them — one dispose path — none · group 12 · group 12
+- pane hosts are app-owned divs with inline display:contents — sessions.css unchanged — a pane root sits in a box its parent cannot see if wrong · group 10 · group 10
+- rows and strip must be direct children of their pane root (requireElementIn), else fallback to default — Decisions line — deeper user markup falls back · group 10 · group 10
+- rows get ui-row--action and mousedown preventDefault plus click on the part's element; tabs get no ui-row--action — matches backlog — none · group 10 · group 10
 ### Review rounds
 ### Test gate

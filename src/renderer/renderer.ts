@@ -17,17 +17,14 @@ import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { editorBindMode } from '../shared/key-hints';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
+import { createBaseKit } from '../shared/page/layout-host/base-kit';
 import { createPageLayouts } from '../shared/page/layout-host/show-layouts';
 import { startPlugins } from '../shared/plugin-host';
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
 import { qualify } from '../shared/plugin-manifests';
 import { mountCodeColours } from './codemirror-vim/code-colours';
-import {
-  announceNewProblems,
-  contributeConfigProblems,
-  createConfigPush,
-} from './config-push';
+import { announceNewProblems, createConfigPush } from './config-push';
 import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
 import { editorBindInForce } from './editor-binds';
@@ -39,11 +36,13 @@ import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
 import { createPendingKeys } from './pending-keys';
 import { createPageApi } from './plugins/page-api';
-import { createActivityBar } from './shell/activity-bar';
+import defaultChromeLayout from './shell/layouts/default/layout.js';
+import type { Layout as ChromeLayout } from './shell/layouts/layout';
 import { createModes, SIDE_BAR_OVER_QUERY } from './shell/modes';
+import { readShellLayout } from './shell/read-shell-layout';
 import { mountShell } from './shell/shell';
+import { createShellKit, mountShellChrome } from './shell/shell-chrome';
 import { defaultShellLayout } from './shell/shell-layout';
-import { mountDevTag, mountTitleBarContext } from './shell/title-bar';
 import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
 import { overrideTransparency } from './transparency-override';
@@ -105,9 +104,33 @@ async function start() {
     defaultShellLayout,
   );
   const { areas } = shell;
-  const activityBar = createActivityBar(areas.activityBar, log);
-  const titleContext = mountTitleBarContext(areas.titleBar);
-  mountDevTag(areas.titleBar, config.appInstance);
+  const commands = new CommandRegistry<PageCommandContext>();
+  const markdown = createMarkdownItRenderer(createCodeMirrorHighlighter());
+  // The core binds no page key and cannot reach the keys plugin's exports
+  // before the plugins start, so the chrome's anchors draw nothing.
+  const chromeKit = createShellKit(
+    createBaseKit({
+      markdown,
+      platform: config.platform,
+      scope: null,
+      commands: {
+        exists: (id) => commands.has(id),
+        run: (id) => commands.run(id, {}),
+      },
+      commandNamed: () => null,
+      keys: {
+        anchor: () => ({ dispose: () => undefined }),
+        keysFor: () => null,
+      },
+    }),
+  );
+  const chrome = mountShellChrome({
+    areas,
+    defaultLayout: defaultChromeLayout,
+    kit: chromeKit,
+    instance: config.appInstance,
+    log,
+  });
   const narrow = window.matchMedia(SIDE_BAR_OVER_QUERY);
   const modes = createModes({
     place(mode, handle) {
@@ -115,11 +138,11 @@ async function start() {
       if (mode.sideBar !== undefined) {
         areas.sideBar.contribute(mode.sideBar);
       }
-      activityBar.add(mode, handle);
+      chrome.addMode(mode, handle);
     },
-    marked: (modeId) => activityBar.mark(modeId),
+    marked: (modeId) => chrome.markMode(modeId),
     layOutSideBar: (layout) => shell.layOutSideBar(layout),
-    showContext: (context) => titleContext.show(context),
+    showContext: (context) => chrome.showContext(context),
     isNarrow: narrow.matches,
     log,
   });
@@ -130,10 +153,8 @@ async function start() {
   toastLayer.className = 'toasts';
   areas.overlay.contribute(toastLayer);
   const toasts = createToasts(toastLayer, timers);
-  const problems = contributeConfigProblems(areas.titleBar);
-  problems.show(config.problems);
+  chrome.showProblems(config.problems);
 
-  const commands = new CommandRegistry<PageCommandContext>();
   const scopeStack = createScopeStack(INITIAL_SCOPE);
   // Rejects editor binds vim could not tell apart, before any is mapped.
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
@@ -158,7 +179,7 @@ async function start() {
   mountCodeColours(document);
   const services: Omit<PageServices, 'uiState'> = {
     editor,
-    markdown: createMarkdownItRenderer(createCodeMirrorHighlighter()),
+    markdown,
     markup: createFabricMarkupEditor(),
     toast: (text, tone) => toasts.show(text, tone),
     log,
@@ -184,6 +205,18 @@ async function start() {
     log,
     toast: (text, tone) => toasts.show(text, tone),
   });
+  // The shell show has no plugin settings wrapper, so it refreshes on every
+  // config change itself.
+  const chromeLayouts = layouts.show<ChromeLayout>('shell', {
+    defaultLayout: defaultChromeLayout,
+    read: readShellLayout,
+    userLayout: () => live.current().settings.shell.layout,
+    setLayouts(shown) {
+      chrome.setLayouts(shown);
+      shell.setChromeLayout(shown.user);
+    },
+  });
+  live.onChanged(() => chromeLayouts.refresh());
   startPlugins(
     pageParts,
     (part, dependency) => {
@@ -245,7 +278,7 @@ async function start() {
       editor,
       commands,
       pageKeys: installed,
-      problems,
+      problems: { show: (next) => chrome.showProblems(next) },
       toasts,
       log,
     },

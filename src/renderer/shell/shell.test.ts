@@ -1,11 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  asHtml,
+  FakeElement,
+  installFakeDom,
+} from '../../shared/page/test-dom';
 import {
   comparePlacements,
   insertionIndex,
+  mountShell,
   nextInTrack,
   type Placement,
   placementOf,
 } from './shell';
+import { defaultShellLayout } from './shell-layout';
 
 function sequencesSorted(placements: Placement[]): number[] {
   return [...placements]
@@ -102,5 +109,45 @@ describe('nextInTrack', () => {
       undefined,
     );
     expect(nextInTrack(sorted, 3, startOrEnd)).toBe(undefined);
+  });
+});
+
+describe('mountShell', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // The `data-layout` and `data-layout-owner` of the four chrome areas
+  // mounted in `root`.
+  function chromeLayouts(root: FakeElement): string[][] {
+    const classes = [
+      'shell-title-bar',
+      'shell-activity-bar',
+      'shell-side-bar',
+      'shell-status-bar',
+    ];
+    return classes.map((className) => {
+      const area = root.querySelector(`.${className}`);
+      return [area?.dataset.layout ?? '', area?.dataset.layoutOwner ?? ''];
+    });
+  }
+
+  it('mountShell_SetLayoutThenDispose_KeepsChromeLayoutName', () => {
+    installFakeDom((name, value) => vi.stubGlobal(name, value));
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => new FakeElement(tag),
+      documentElement: { style: { setProperty: () => undefined } },
+    });
+    const root = new FakeElement('div');
+    const shell = mountShell(asHtml(root), defaultShellLayout);
+    shell.setChromeLayout('mine');
+    const mine = Array(4).fill(['mine', 'shell']);
+
+    const swap = shell.setLayout(defaultShellLayout);
+    const swapped = chromeLayouts(root);
+    swap.dispose();
+
+    expect(swapped).toEqual(mine);
+    expect(chromeLayouts(root)).toEqual(mine);
   });
 });

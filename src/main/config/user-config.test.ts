@@ -19,6 +19,7 @@ const DEFAULTS: Settings = {
   fonts: {},
   keySequenceTimeoutMs: 1000,
   claude: { command: 'claude' },
+  shell: { layout: 'default' },
 };
 
 const DEFAULT_KEYMAP: DefaultKeymap = {

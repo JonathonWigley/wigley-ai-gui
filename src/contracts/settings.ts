@@ -30,6 +30,9 @@ export interface Settings {
   // leading `~/` (or `~\` on Windows), means the home folder, since an app
   // started from the Dock has no shell `PATH`.
   claude: { command: string };
+  // The layout the shell chrome draws with: a folder in `layouts/shell/`, or
+  // `default`.
+  shell: { layout: string };
 }
 
 // A config file that could not be applied, and why.

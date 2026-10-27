@@ -108,6 +108,7 @@ describe('applySelfTestConfig', () => {
         fonts: {},
         keySequenceTimeoutMs: 1,
         claude: { command: 'claude' },
+        shell: { layout: 'default' },
       },
       keymap: {
         editor: { leader: ' ', remaps: [], binds: [] },

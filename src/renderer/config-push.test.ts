@@ -1,13 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { Keymap } from '../contracts/keymap';
-import type { Area, ContributeOptions } from '../contracts/plugin';
 import type { AppConfig, ConfigProblem } from '../contracts/settings';
-import { asFake, installFakeDom } from '../shared/page/test-dom';
-import {
-  contributeConfigProblems,
-  createConfigPush,
-  type PushTargets,
-} from './config-push';
+import { createConfigPush, type PushTargets } from './config-push';
 
 const REGISTERED = new Set(['known', 'other']);
 
@@ -189,69 +183,5 @@ describe('createConfigPush', () => {
 
     expect(calls).toEqual(['page 700', 'theme']);
     expect(current().problems).toEqual([]);
-  });
-});
-
-describe('contributeConfigProblems', () => {
-  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  // A title bar area that records each contribution.
-  function titleBar() {
-    const contributed: [HTMLElement, ContributeOptions | undefined][] = [];
-    const area: Area = {
-      contribute(element, options) {
-        contributed.push([element, options]);
-        return { dispose: () => undefined };
-      },
-    };
-    return { area, contributed };
-  }
-
-  it('contributeConfigProblems_Contributes_HiddenUntilAProblem', () => {
-    const { area, contributed } = titleBar();
-
-    contributeConfigProblems(area);
-
-    expect(contributed).toHaveLength(1);
-    expect(contributed[0][0].hidden).toBe(true);
-  });
-
-  it('contributeConfigProblems_OneProblem_ShowsIt', () => {
-    const { area, contributed } = titleBar();
-    const problems = contributeConfigProblems(area);
-
-    problems.show([{ file: 'settings.json', message: 'bad value' }]);
-
-    const badge = asFake(contributed[0][0]);
-    expect(badge.hidden).toBe(false);
-    expect(badge.textContent).toContain('bad value');
-    expect(badge.title).toContain('bad value');
-  });
-
-  it('contributeConfigProblems_TwoProblems_ShowsTheCount', () => {
-    const { area, contributed } = titleBar();
-    const problems = contributeConfigProblems(area);
-
-    problems.show([
-      { file: 'a.json', message: 'x' },
-      { file: 'b.json', message: 'y' },
-    ]);
-
-    const badge = asFake(contributed[0][0]);
-    expect(badge.textContent).toContain('2');
-    expect(badge.title).toMatch(/a\.json[\s\S]*b\.json/);
-  });
-
-  it('contributeConfigProblems_NoProblem_Hides', () => {
-    const { area, contributed } = titleBar();
-    const problems = contributeConfigProblems(area);
-    problems.show([{ file: 'settings.json', message: 'bad value' }]);
-
-    problems.show([]);
-
-    expect(contributed[0][0].hidden).toBe(true);
   });
 });

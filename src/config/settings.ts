@@ -8,6 +8,7 @@ export const defaultSettings: Settings = {
   fonts: {},
   keySequenceTimeoutMs: 1000,
   claude: { command: '~/.local/bin/claude' },
+  shell: { layout: 'default' },
 };
 
 // The JSON kind of each core setting `defaultSettings` leaves unset, by its
@@ -83,5 +84,10 @@ export const settingInfo: SettingInfos<Settings> = {
     label: 'Claude command',
     description:
       'The `claude` program sessions run; `~` is the home folder. Applies to the next session.',
+  },
+  'shell.layout': {
+    label: 'Shell layout',
+    description:
+      'The layout that draws the title bar, activity bar, side bar and status bar: a folder in the layouts/shell folder, or default.',
   },
 };
