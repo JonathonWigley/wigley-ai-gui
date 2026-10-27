@@ -98,14 +98,14 @@ export interface DocViewDeps {
   openChanged(path: string | null): void;
 }
 
-// The doc pane: the `‹ tree ⌥H` edge prompt at its top start corner; an empty
-// state ending in the focus-tree key while no doc is open; then the header
-// with its chips (load states, then plugin-source statuses, then the
-// last-loaded line) and the `i edit` hint at its end while the doc may be
-// edited and no editor is open, the read-only line, the changed-on-disk
-// prompt with its keys, the frontmatter table and the rendered body (a
-// detail's field table), swapped for the document editor on `edit`; the
-// editor's `:q` returns to them.
+// The doc pane: a top row holding the `‹ tree ⌥H` edge prompt while a doc is
+// open, above the scroller. The scroller holds an empty state ending in the
+// focus-tree key while no doc is open; then the header with its chips (load
+// states, then plugin-source statuses, then the last-loaded line) and the
+// `i edit` hint at its end while the doc may be edited and no editor is open,
+// the read-only line, the changed-on-disk prompt with its keys, the
+// frontmatter table and the rendered body (a detail's field table), swapped
+// for the document editor on `edit`; the editor's `:q` returns to them.
 // Opening another doc is refused while the editor holds unsaved edits.
 // `open` resolves to whether the doc opened.
 export interface DocView {
@@ -266,10 +266,13 @@ export function createDocView(deps: DocViewDeps): DocView {
     anchors.push(deps.anchor(node, command, options));
     return node;
   };
-  const edge = keyEdge('docs-edge docs-edge--start', [
-    keyChevron('‹ tree'),
-    anchored('focusTree', { scope: 'doc' }),
-  ]);
+  const top = element('div', 'docs-doc-top');
+  top.append(
+    keyEdge('docs-edge docs-edge--start', [
+      keyChevron('‹ tree'),
+      anchored('focusTree', { scope: 'doc' }),
+    ]),
+  );
   const empty = emptyState(EMPTY_TEXT, anchored('focusTree', { scope: 'doc' }));
   const header = element('div', 'docs-header');
   const title = element('h1', 'docs-title');
@@ -290,21 +293,14 @@ export function createDocView(deps: DocViewDeps): DocView {
   let frontmatter = frontmatterTable([]);
   let body = markdownElement('div', 'md docs-body', '');
   // The empty state names the tree's key, so the edge shows only with a doc.
-  edge.hidden = true;
+  top.hidden = true;
   header.hidden = true;
   readOnlyLine.hidden = true;
   banner.hidden = true;
   prompt.hidden = true;
-  pane.append(
-    edge,
-    empty,
-    header,
-    readOnlyLine,
-    banner,
-    prompt,
-    frontmatter,
-    body,
-  );
+  pane.append(empty, header, readOnlyLine, banner, prompt, frontmatter, body);
+  const root = element('div', 'docs-doc-pane');
+  root.append(top, pane);
 
   let shown: ShownDoc | null = null;
   let editor: DocumentEditor | null = null;
@@ -619,7 +615,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   };
 
   const view: DocView = {
-    element: pane,
+    element: root,
     async open(target) {
       if (view.refuseWithUnsavedEdits()) {
         return false;
@@ -661,7 +657,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       };
       deps.openChanged(target.path);
       empty.hidden = true;
-      edge.hidden = false;
+      top.hidden = false;
       drawHeader(target);
       drawChips();
       drawBody(rendered);
@@ -702,7 +698,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       shown = null;
       deps.openChanged(null);
       empty.hidden = false;
-      edge.hidden = true;
+      top.hidden = true;
       header.hidden = true;
       readOnlyLine.hidden = true;
       drawChips();

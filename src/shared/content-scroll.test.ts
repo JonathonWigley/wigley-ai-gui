@@ -24,14 +24,48 @@ function scroller(scrollTop: number, scrollHeight = 1000, clientHeight = 400) {
   };
 }
 
+// A scroller that also rounds `scrollTop` to whole pixels, as an element does
+// at a device pixel ratio of 1.
+function roundingScroller(
+  scrollTop: number,
+  scrollHeight: number,
+  clientHeight: number,
+) {
+  const box = scroller(scrollTop, scrollHeight, clientHeight);
+  return {
+    scrollHeight,
+    clientHeight,
+    get scrollTop() {
+      return box.scrollTop;
+    },
+    set scrollTop(value: number) {
+      box.scrollTop = Math.round(value);
+    },
+  };
+}
+
 describe('scrollContent', () => {
-  it('scrolls a line by the line height it is given', () => {
+  it('scrolls a line by the line height it is given, in whole pixels', () => {
     const box = scroller(100);
 
     const scroll = scrollContent(box, 'line', 1, LINE_PX);
 
-    expect(box.scrollTop).toBe(100 + LINE_PX);
+    expect(box.scrollTop).toBe(122);
     expect(scroll).toEqual({ moved: true, atEnd: false });
+  });
+
+  it('returns to the top after scrolling down and back up a line and half an odd page', () => {
+    const box = roundingScroller(0, 2673, 617);
+
+    for (let round = 0; round < 3; round++) {
+      scrollContent(box, 'line', 1, LINE_PX);
+      scrollContent(box, 'halfPage', 1, LINE_PX);
+      scrollContent(box, 'halfPage', -1, LINE_PX);
+      const scroll = scrollContent(box, 'line', -1, LINE_PX);
+
+      expect(box.scrollTop).toBe(0);
+      expect(scroll).toEqual({ moved: true, atEnd: true });
+    }
   });
 
   it('scrolls half a page by half the visible height', () => {

@@ -17,7 +17,7 @@ export function scrollStepPx(
   return step === 'line' ? lineHeightPx : scroller.clientHeight / 2;
 }
 
-// Scrolls `scroller` by `step`, down for 1 and up for -1.
+// Scrolls `scroller` by `step`, down for 1 and up for -1, in whole pixels.
 export function scrollContent(
   scroller: Scroller,
   step: ScrollStep,
@@ -25,7 +25,10 @@ export function scrollContent(
   lineHeightPx: number,
 ): ContentScroll {
   const before = scroller.scrollTop;
-  scroller.scrollTop += direction * scrollStepPx(scroller, step, lineHeightPx);
+  // An element rounds the `scrollTop` it is set to, so a fractional step
+  // drifts across a down and an up.
+  const stepPx = Math.round(scrollStepPx(scroller, step, lineHeightPx));
+  scroller.scrollTop += direction * stepPx;
   return {
     moved: scroller.scrollTop !== before,
     atEnd: isScrolledToEnd(scroller, direction),

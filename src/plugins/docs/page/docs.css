@@ -25,17 +25,6 @@
   margin-inline-start: auto;
 }
 
-/* The doc pane's `‹ tree ⌥H`, above the header, pinned to the pane's top
-   edge while the doc scrolls under it. */
-.docs-edge--start {
-  background: var(--wg-sheet-background);
-  display: flex;
-  inset-block-start: 0;
-  position: sticky;
-  width: fit-content;
-  z-index: 1;
-}
-
 /* The cursor prompt at a selected leaf's end. */
 .docs-row-actions {
   align-items: baseline;
@@ -164,8 +153,20 @@
 }
 
 .docs-split,
-.docs-doc {
+.docs-doc-pane {
   height: 100%;
+}
+
+/* The doc pane: its `‹ tree ⌥H` row above the scroller. */
+.docs-doc-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.docs-doc-top {
+  padding: var(--wg-space-3) var(--wg-space-6) 0;
 }
 
 /* Stacked, a session Docs tab's tree takes a fixed 40% of the height and the
@@ -180,9 +181,10 @@
   }
 }
 
-/* The doc pane scrolls; it is the blocks' offset parent, so a block's
+/* The doc pane's scroller; it is the blocks' offset parent, so a block's
    `offsetTop` compares with its `scrollTop`. */
 .docs-doc {
+  flex: 1;
   min-height: 0;
   min-width: 0;
   outline: none;
@@ -341,6 +343,10 @@
 }
 
 @media (max-width: 800px) {
+  .docs-doc-top {
+    padding: var(--wg-space-2) var(--wg-space-3) 0;
+  }
+
   .docs-doc {
     padding: var(--wg-space-2) var(--wg-space-3) var(--wg-space-4);
   }

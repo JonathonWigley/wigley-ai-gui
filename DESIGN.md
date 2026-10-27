@@ -218,8 +218,10 @@ The keyboard is first; the mouse works everywhere.
     toward its direction: `⌥I ‹` and `› ⌥O` at the tab strip's ends, `⌥⇧I ▲ ▼ ⌥⇧O` on the session
     list's header, `⌃H ‹ F1 of 6 › ⌃L` on a card's header, `⌥L doc ›` at a split's edge. A pair
     hides when there is nothing else to move to.
-  - **Cursor prompt:** an action on the selected row, with its label, on the cursor row's
-    trailing end only (`s star  r rename  d trash`).
+  - **Cursor prompt:** an action on the selected row, with its label, on the cursor row only
+    (`s star  r rename  d trash`): at the row's end in Docs, and in Settings and Backlog, where it
+    wraps when the row has no room; on a line of its own under the label in Primer; in a column of
+    its own in Notes. Out of scope it hides in place, keeping its space.
   - **Control hint:** the key inside the button, toggle or box label it presses (Accept ↩,
     Not applicable x, Notes a).
   - **Box hint:** a key that acts on a box or a pane, on the focused box's frame (`⌃P ⌃N`) or in
