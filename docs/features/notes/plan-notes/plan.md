@@ -218,10 +218,10 @@ Boundary rules:
 - [x] [Notes self-test](09-notes-selftest.md) — after 08
 
 ### Wave 6
-- [ ] [Doc re-read](10-doc-reread.md) — after every code task
+- [x] [Doc re-read](10-doc-reread.md) — after every code task
 
 ### Wave 7
-- [ ] [Final verification](11-final-verification.md) — after 10
+- [x] [Final verification](11-final-verification.md) — after 10
 
 ## Run log
 
@@ -237,6 +237,8 @@ Review base: 62cb6e9ed048d1e6aebf6629e8870abd37df98b8
 - 07 · dd55351 · diff read: notesManifest, notesMainPart, DraftStore/createDraftStore, NoteSender/createNoteSender present; appended last in manifests.ts and main.ts; typecheck clean; worker reports full lint clean · concerns: draft-store imageOf copies draft.ts private requireImage; note-sender repeats Pick a target first to narrow target; note-sender is the only non-test Buffer use under src/plugins
 - 08 · 66955ed · diff read: notesPagePart appended in page.ts, paste helpers moved unchanged with chat importing them, keymap gains group n; typecheck and full lint clean; worker reports 187 tests pass · concerns: png-image.ts pngDataUrl copies src/renderer/fabric/png-data-url.ts; picker stacking over the dialog is a live check; an in-flight autosave is not awaited before send/discard/close, relying on main handling invokes in order; picker closed logs only on cancel
 - 09 · 43fbe28 · diff read: notesSelfTestScript, addDriveActions present; start.ts hands the script to selfTest.run, adds drive actions in drive runs and disposes them, send waiters resolve on sent; typecheck clean · concerns: send signal in start.ts has no unit test; group 5 picks the follow-up by fuzzy filter Notes selftest, which a higher-ranked open follow-up from docs or Backlog steps could beat; local markRun copy of chat script helper
+- 10 · 8fee070 · diff read: three gui docs trued and oxfmt clean; marketplace triage.md trued in f163f83, riding the unpushed 1.12.0 bump · concerns: notes/design.md line that the target is the launched session folder left as written though launchFolder takes a session folder when the home sits outside its clone; title-required and pick-another-row lines not checked against sendRefusal
+- 11 · 3baf363 · lint, typecheck, 3604 unit tests, selftest all passed after the fit fix 3baf363; drive run passed popup over modes and restart, capture, markup, new follow-up with flattened PNG at image size, append reusing the folder, background launch keeping the selection; Backlog delete first FAILED because the drive run reseeded the fixture mid-run, re-check passed (other item kept, image folder trashed) · concerns: Space n c inside the body box in insert mode types " nc" instead of capturing; closing from insert mode takes three Escs; Discard breaks mid-word at 900px in the shared dialog actions row; picker over the dialog shows two outlines and covers the Target row; a fresh note right after a send opened with no target or session (after a restart removed the row); Docs-mode popup shown line not echoed in the drive output
 ### Contract changes
 - commitMessage (Backlog landed): `(changes): string | null` as task 05 assumed → landed returns `string`, the plain subject `Follow-ups edited in Backlog` when nothing changed; task 05 adds `imageFolders: readonly string[]` and keeps `string`, so `commitMessage([], [])` returns the plain subject, not null · why: landed Backlog code · consumers: 05 · group lead (preflight for 05)
 - writeFollowupEdit (Backlog landed): takes `edit: BacklogEdit`, whose `edit` variant carries `baseline: FollowupDraft`; an item on disk that differs from `baseline` returns `{ type: 'changed'; title; item }` and writes nothing → task 05 append passes the step-2 item (title, oneLine, tags, body) as `baseline`; a `changed` result trashes the images like any non-applied result and passes through · why: Backlog b804dd6 · consumers: 05, 07 · group lead (preflight for 05)
@@ -274,5 +276,7 @@ Review base: 62cb6e9ed048d1e6aebf6629e8870abd37df98b8
 - every expect line in the task doc matches the landed page, so the doc is used as written · group 09 · group 09
 - paths joined with node path as chat script does, since the deps hold no Paths · group 09 · group 09
 - scrollsItself stays empty until a fit check flags the strip · group 09 · group 09
+- drive data loss was the run itself: docs.connectSession rewrites the fixture follow-ups file (documented in the drive skill); no product change · lead · group 11
 ### Review rounds
 ### Test gate
+- npm run lint, npm run typecheck, npm test (all 228 files: the plan names the full suite, and it runs in 4s), npm run selftest (task 11; runs every notes key path) · lint and typecheck clean, 3604 tests pass; selftest first run 1 FAIL (notes popup overflow at minimum width), fixed in 3baf363, re-run all passed

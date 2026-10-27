@@ -1,6 +1,6 @@
 # 11 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 7 · Depends on: 10
 Plan: [plan.md](plan.md)
@@ -48,3 +48,5 @@ Done when: every check in "Checks the agent runs" passes, and the wrap-up lists 
 Commit:    none, unless a fix lands (its own commit).
 
 ## Proof
+
+Commit 3baf363 · proof: lint, typecheck, 3604 unit tests, selftest all passed after the fit fix 3baf363; drive run passed popup over modes and restart, capture, markup, new follow-up with flattened PNG at image size, append reusing the folder, background launch keeping the selection; Backlog delete first FAILED because the drive run reseeded the fixture mid-run, re-check passed (other item kept, image folder trashed) · concerns: Space n c inside the body box in insert mode types " nc" instead of capturing; closing from insert mode takes three Escs; Discard breaks mid-word at 900px in the shared dialog actions row; picker over the dialog shows two outlines and covers the Target row; a fresh note right after a send opened with no target or session (after a restart removed the row); Docs-mode popup shown line not echoed in the drive output

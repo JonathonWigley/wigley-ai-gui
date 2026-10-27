@@ -1,6 +1,6 @@
 # 10 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 6 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09
 Plan: [plan.md](plan.md)
@@ -35,3 +35,5 @@ Commit:    one commit per repo that changed, `Notes docs trued to the landed cod
            plugin change: fold it into the unpushed version bump when one is waiting, else bump the patch version.
 
 ## Proof
+
+Commit 8fee070 · proof: diff read: three gui docs trued and oxfmt clean; marketplace triage.md trued in f163f83, riding the unpushed 1.12.0 bump · concerns: notes/design.md line that the target is the launched session folder left as written though launchFolder takes a session folder when the home sits outside its clone; title-required and pick-another-row lines not checked against sendRefusal
