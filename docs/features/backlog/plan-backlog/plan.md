@@ -188,5 +188,6 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - Editor chords carry no where (<D-Enter>, <C-n>, <C-p>): expandBind rejects a chord with where both, and a chord's page bind fires in boxes · group 09 · group 09
 - Log lines for a create's wrote, and committed/commit failed, use the ~-shown home root · group 09 · group 09
 - Empty-state text is a status line atop the side bar, as the docs tree does · group 09 · group 09
+- Notes lead ai-dev-6b runs its Wave 1 and task 02 in this tree now (window.ts, plugin.ts, docs contract/start, chat, sessions, notes, check-layers, fabric); agreed: no shared edits, failures traced to its files are its own, review fixes into shared files are agreed first, and Backlog tells it when the plan folder is deleted — lead
 ### Review rounds
 ### Test gate
