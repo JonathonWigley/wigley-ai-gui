@@ -1,6 +1,6 @@
 # 08 — Backlog main part
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 04
 Plan: [plan.md](plan.md)
@@ -126,3 +126,5 @@ Done when: `npm test -- src/plugins/backlog` passes; `npm run lint` and `npm run
 Commit:    one commit for the group
 
 ## Proof
+
+Commit d4855da · proof: diff read; backlog tests 44 pass; typecheck clean · concerns: homes.ts copies docs' small metaString helper (backlog main may import only docs' contract); a symlinked clone could read as not uncommitted

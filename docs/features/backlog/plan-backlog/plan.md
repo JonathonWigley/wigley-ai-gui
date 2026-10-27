@@ -135,7 +135,7 @@ docs only through `DocsMainExports` and `DocsPageExports`, typed by `src/plugins
 - [x] [Marketplace version bump](07-version-bump.md) — after 03
 
 ### Wave 3
-- [ ] [Backlog main part](08-backlog-main.md) — after 01, 02, 04
+- [x] [Backlog main part](08-backlog-main.md) — after 01, 02, 04
 
 ### Wave 4
 - [ ] [Backlog page part](09-backlog-page.md) — after 08
@@ -161,9 +161,11 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - 01 · 475e866 · diff read; followups tests 38 pass; typecheck and lint clean · concerns: no strict null checks in tsconfig; CRLF files not handled; deleting a numbered item does not renumber
 - 06 · a613926 · diff read; kinds tests pass; worker ran typecheck and lint clean · concerns: an in-repo home's new file is titled 'Follow-ups — features' (folder base name, as the plan said); a list-shaped create writes '- **name**' with no trailing dash
 - 02 · dc3d5e0 · diff read; typecheck clean; git and plugin-status tests pass · concerns: fileAtHead rejects on an unborn HEAD; the fake Git lives in plugin-status.test.ts
+- 08 · d4855da · diff read; backlog tests 44 pass; typecheck clean · concerns: homes.ts copies docs' small metaString helper (backlog main may import only docs' contract); a symlinked clone could read as not uncommitted
 ### Contract changes
 - KindRule.contents (module-private): (name, existing) → (name, existing, place, paths) · why: the new-file title needs the place's folder · consumers: none · group 06
 - Git doc comments: unpushedPaths is files HEAD changed since the merge base with upstream; methods but fetch/lastFetch reject when git cannot start; commitPaths rejects on empty paths · why: state the error modes · consumers: 08 · group 02
+- HomeShape: a type alias over BacklogHome with PlanShape; writeFollowupEdit deps typed FollowupWriteDeps = Pick<DocsMainExports,'readDoc'|'writeDoc'>, plus readFollowupText · why: concrete types · consumers: none outside 08 · group 08
 ### Rulings
 - Two repos: the gui review base is 0f512f5; the marketplace review base is a139b88 — the plan targets both repos' main — lead
 - A peer session (ai-dev-76) is on this machine, so every commit is pathspec-scoped and the review range is an explicit commit list — lead
@@ -178,5 +180,8 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - fileAtHead uses ls-tree then cat-file so a missing path is told apart without parsing stderr · group 02 · group 02
 - process-git.test.ts has its own check-layers entry to reuse the real ProcessRunner in a temp clone with global git config disabled · group 02 · group 02
 - Task 06's proof ran only kinds and page tests and missed doc-files.test.ts create_Followup_AppendsToExistingFile (expects line 2, gets 3); fixed by its own dispatch — lead
+- With newFileRepo null, a create on a missing file writes the bare item with no header — a listed file deleted mid-edit comes back headerless · group 08 · group 08
+- Every writeDoc rejection becomes refused with its text; applyEdit sends no changed (the watch reports it) · group 08 · group 08
+- commit commits each follow-up file whose disk text differs from HEAD; fileAtHead rejection reads as empty · group 08 · group 08
 ### Review rounds
 ### Test gate
