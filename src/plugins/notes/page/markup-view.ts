@@ -61,16 +61,18 @@ export interface MarkupViewDeps {
 
 // One image under markup: a toolbar of the tools and colours, and the host
 // the markup editor draws in. `open` pushes the `markup` scope and shows the
-// image's saved markup with the pen and the first colour; `close` saves the
-// markup when it changed since `open`, then pops the scope and tells
-// `closed`. The tool, colour, undo and redo calls do nothing until the editor
-// has opened.
+// image's saved markup with the pen and the first colour; `close` ends a text
+// still being edited, pops the scope, tells `closed`, then saves the markup
+// when it changed since `open`. The tool, colour, undo and redo calls do
+// nothing until the editor has opened.
 export interface MarkupView {
   element: HTMLElement;
   isShown(): boolean;
   // `pos` is the image's 1-based place in the strip, which the log names.
   open(id: number, pos: number): void;
   close(): void;
+  // Resolves once every save `close` started has answered.
+  savesSettled(): Promise<void>;
   setTool(tool: MarkupTool): void;
   stepColour(step: 1 | -1): void;
   undo(): void;
@@ -110,6 +112,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
   let shown: Shown | null = null;
   let tool: MarkupTool = 'pen';
   let colourIndex = 0;
+  let saves: Promise<void> = Promise.resolve();
 
   const hint = (command: string) =>
     keyHint(deps.keys.keysFor(`notes.${command}`, SCOPE), deps.platform);
@@ -250,6 +253,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
       if (entry === null) {
         return;
       }
+      entry.session?.finishEdit();
       const json =
         entry.changed && entry.session !== null ? entry.session.toJson() : null;
       hide();
@@ -257,8 +261,10 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
         deps.log('notes', `markup closed for image ${entry.pos}`);
         return;
       }
-      void saveMarkup(entry, json);
+      const save = saveMarkup(entry, json);
+      saves = Promise.all([saves, save]).then(() => undefined);
     },
+    savesSettled: () => saves,
     setTool(next) {
       const session = sessionNow();
       if (session === null) {

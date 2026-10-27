@@ -28,6 +28,11 @@
 
 .ui-dialog-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--wg-space-2);
+}
+
+.ui-dialog-actions > .ui-button {
+  white-space: nowrap;
 }

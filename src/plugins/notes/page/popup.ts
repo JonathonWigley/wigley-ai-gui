@@ -24,6 +24,7 @@ import { icon } from '../../../shared/page/ui/icon';
 import { iconButton } from '../../../shared/page/ui/icon-button';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { tag } from '../../../shared/page/ui/tag';
+import { pngDataUrl } from '../../../shared/png-data-url';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
   FollowupRequest,
@@ -42,7 +43,7 @@ import type { notesManifest } from '../manifest';
 import { launchFolder } from '../note-targets';
 import { sessionChipText } from '../session-ref';
 import { createMarkupView } from './markup-view';
-import { pngDataUrl, toPngBytes } from './png-image';
+import { toPngBytes } from './png-image';
 import {
   applyPopupAction,
   attachSession,
@@ -148,7 +149,11 @@ export function createNotePopup(
   let focusedBox: 'title' | 'body' | null = null;
   let homes: NoteHome[] = [];
   let isSending = false;
+  let isDiscarding = false;
   let isCapturing = false;
+  // While a send or a discard is in flight the draft takes no edit, image or
+  // autosave: main's clear would land before them.
+  const isLocked = () => isSending || isDiscarding;
   // Each image's bytes and thumbnail URL, by id.
   const images = new Map<number, { bytes: Uint8Array; url: string }>();
 
@@ -174,6 +179,10 @@ export function createNotePopup(
   slot('title').append(titleFrame);
   titleInput.addEventListener('input', () => edit({ title: titleInput.value }));
   titleInput.addEventListener('focus', () => {
+    if (isLocked()) {
+      titleInput.blur();
+      return;
+    }
     titleScope ??= deps.pushScope('title');
     boxFocused('title');
   });
@@ -188,7 +197,13 @@ export function createNotePopup(
   slot('body').append(bodyFrame);
   const body: TextEditor = editorHost.create(bodyFrame, '', {
     changed: (text) => edit({ body: text }),
-    focused: () => boxFocused('body'),
+    focused: () => {
+      if (isLocked()) {
+        body.blur();
+        return;
+      }
+      boxFocused('body');
+    },
     blurred: () => boxBlurred(),
     modeChanged: () => undefined,
   });
@@ -214,6 +229,7 @@ export function createNotePopup(
     closed: () => {
       showFields(true);
       dispatch({ type: 'fieldMoved', field: 'images' });
+      render();
     },
     saved: (draft) =>
       dispatch({
@@ -339,8 +355,9 @@ export function createNotePopup(
       drawSession(state.fields.session);
     }
     drawn = { state, homes };
+    const keysOnRows = focusedBox === null && !othersHoldKeys();
     for (const [field, node] of rows) {
-      const isCursor = focusedBox === null && field === state.field;
+      const isCursor = keysOnRows && field === state.field;
       node.classList.toggle('is-cursor', isCursor);
     }
   };
@@ -372,7 +389,7 @@ export function createNotePopup(
 
   startAutosave({
     subscribe: (listener) => store.subscribe(listener),
-    drafts: () => [store.get()],
+    drafts: () => (isLocked() ? [] : [store.get()]),
     idOf: () => 'note',
     bodyOf: (state) => state.fields,
     saveStarted: (_id, revision) => dispatch({ type: 'saveStarted', revision }),
@@ -470,7 +487,7 @@ export function createNotePopup(
 
   const removeImageAt = async (index: number) => {
     const image = store.get().images[index];
-    if (image === undefined) {
+    if (image === undefined || isLocked()) {
       return;
     }
     try {
@@ -511,9 +528,16 @@ export function createNotePopup(
       items,
       label,
       selected,
-      chosen,
-      cancelled: () => log('notes', `picker closed: ${title}`),
+      chosen: (item) => {
+        render();
+        chosen(item);
+      },
+      cancelled: () => {
+        render();
+        log('notes', `picker closed: ${title}`);
+      },
     });
+    render();
   };
 
   // ── The discard confirmation ──────────────────────────────────────────────
@@ -537,6 +561,7 @@ export function createNotePopup(
     confirmScope = null;
     confirm.hide();
     scope.pop();
+    render();
     return true;
   };
 
@@ -584,12 +609,27 @@ export function createNotePopup(
     body.setText(draft.body);
   };
 
+  // Whether the markup view, a picker or the discard confirmation holds the
+  // keys in place of the rows.
+  const othersHoldKeys = () =>
+    markupView.isShown() || picker.isOpen() || confirmScope !== null;
+
   const fieldsShown = () =>
-    phase === 'open' &&
-    dialog.isShown() &&
-    !markupView.isShown() &&
-    !picker.isOpen() &&
-    confirmScope === null;
+    phase === 'open' && dialog.isShown() && !othersHoldKeys();
+
+  // Whether the user may change the draft now.
+  const mayEdit = () => fieldsShown() && !isCapturing && !isLocked();
+
+  // Puts a draft main answered into the open popup: a fresh one takes the
+  // selected session and its default target, saved at once.
+  const showDraft = (draft: NoteDraft) => {
+    loadDraft(draft);
+    if (draft.fresh) {
+      const fields = openFields(draft, deps.selectedSession(), homes, paths);
+      dispatch({ type: 'edited', fields });
+      void saveNow().catch(() => undefined);
+    }
+  };
 
   // ── Opening and closing ───────────────────────────────────────────────────
   const open = async () => {
@@ -601,12 +641,7 @@ export function createNotePopup(
       ]);
       homes = found.homes;
       await cacheImages(draft);
-      loadDraft(draft);
-      if (draft.fresh) {
-        const fields = openFields(draft, deps.selectedSession(), homes, paths);
-        dispatch({ type: 'edited', fields });
-        void saveNow().catch(() => undefined);
-      }
+      showDraft(draft);
     } catch (error) {
       phase = 'closed';
       toast(`Note not opened: ${errorText(error)}`, 'error');
@@ -691,6 +726,10 @@ export function createNotePopup(
       log('notes', 'send in flight');
       return false;
     }
+    if (isDiscarding) {
+      log('notes', 'discard in flight');
+      return false;
+    }
     const refusal = sendRefusal(store.get().fields, kind);
     if (refusal !== null) {
       refuse(refusal);
@@ -717,7 +756,7 @@ export function createNotePopup(
       channel.invoke('markup', id),
     ]);
     const host = element('div', 'notes-flatten-host');
-    dialog.element.append(host);
+    document.body.append(host);
     try {
       const session = await services.markup.open(host, bytes, saved);
       try {
@@ -753,12 +792,14 @@ export function createNotePopup(
   // null when it refused the send itself.
   const runSend = async (prepare: () => Promise<Deliver | null>) => {
     isSending = true;
+    blurBoxes();
     try {
       const deliver = await prepare();
       if (deliver === null) {
         return;
       }
       await saveNow();
+      await markupView.savesSettled();
       finishSend(await deliver(await flattenImages()));
     } catch (error) {
       refuse(errorText(error));
@@ -910,6 +951,9 @@ export function createNotePopup(
   };
 
   const removeSession = () => {
+    if (isLocked()) {
+      return;
+    }
     dispatch({ type: 'edited', fields: detachSession(store.get().fields) });
     log('notes', 'session none');
   };
@@ -924,6 +968,7 @@ export function createNotePopup(
     blurBoxes();
     showFields(false);
     markupView.open(image.id, imageIndex + 1);
+    render();
   };
 
   const act = () => {
@@ -970,6 +1015,7 @@ export function createNotePopup(
     });
     confirmScope = scope;
     confirm.show();
+    render();
     log('notes', 'discard asked');
   };
 
@@ -977,16 +1023,20 @@ export function createNotePopup(
     if (!hideConfirm()) {
       return;
     }
+    isDiscarding = true;
     try {
+      await markupView.savesSettled();
       const draft = await channel.invoke('discard');
       await cacheImages(draft);
-      loadDraft(draft);
+      showDraft(draft);
       dispatch({ type: 'fieldMoved', field: 'body' });
       log('notes', 'draft discarded');
     } catch (error) {
       const message = `Draft not discarded: ${errorText(error)}`;
       toast(message, 'error');
       log('notes', message);
+    } finally {
+      isDiscarding = false;
     }
   };
 
@@ -994,7 +1044,7 @@ export function createNotePopup(
   document.addEventListener(
     'paste',
     (event) => {
-      if (!fieldsShown()) {
+      if (!mayEdit()) {
         return;
       }
       const files = filesOf(event.clipboardData);
@@ -1017,7 +1067,7 @@ export function createNotePopup(
       return;
     }
     event.preventDefault();
-    if (fieldsShown()) {
+    if (mayEdit()) {
       void attachFiles(files, 'dropped');
     }
   });
@@ -1027,6 +1077,11 @@ export function createNotePopup(
   // ── Commands ──────────────────────────────────────────────────────────────
   const whileFieldsShow = (run: () => void) => () => {
     if (fieldsShown() && !isCapturing) {
+      run();
+    }
+  };
+  const whileEditable = (run: () => void) => () => {
+    if (mayEdit()) {
       run();
     }
   };
@@ -1042,8 +1097,8 @@ export function createNotePopup(
     close,
     nextField: whileFieldsShow(() => moveTo(moveField(store.get().field, 1))),
     prevField: whileFieldsShow(() => moveTo(moveField(store.get().field, -1))),
-    act: whileFieldsShow(act),
-    editBox: whileFieldsShow(() => {
+    act: whileEditable(act),
+    editBox: whileEditable(() => {
       const field = store.get().field;
       if (field === 'title' || field === 'body') {
         focusBox(field);
@@ -1051,10 +1106,10 @@ export function createNotePopup(
         log('notes', `no box on ${field}`);
       }
     }),
-    nextBox: whileFieldsShow(() =>
+    nextBox: whileEditable(() =>
       focusBox(focusedBox === null ? 'title' : 'body'),
     ),
-    prevBox: whileFieldsShow(() =>
+    prevBox: whileEditable(() =>
       focusBox(focusedBox === null ? 'body' : 'title'),
     ),
     leaveBox() {
@@ -1065,19 +1120,19 @@ export function createNotePopup(
       blurBoxes();
       moveTo(box);
     },
-    pickTarget: whileFieldsShow(() => void pickTarget()),
-    pickTags: whileFieldsShow(() => void pickTags()),
-    pickSession: whileFieldsShow(pickSession),
+    pickTarget: whileEditable(() => void pickTarget()),
+    pickTags: whileEditable(() => void pickTags()),
+    pickSession: whileEditable(pickSession),
     nextImage: whileFieldsShow(() => dispatch({ type: 'imageMoved', step: 1 })),
     prevImage: whileFieldsShow(() =>
       dispatch({ type: 'imageMoved', step: -1 }),
     ),
-    remove: whileFieldsShow(remove),
-    capture: whileFieldsShow(() => void capture()),
+    remove: whileEditable(remove),
+    capture: whileEditable(() => void capture()),
     sendFollowup: whileFieldsShow(sendFollowup),
     appendFollowup: whileFieldsShow(appendFollowup),
     sendSession: whileFieldsShow(sendSession),
-    discard: whileFieldsShow(discard),
+    discard: whileEditable(discard),
     toolSelect: () => markupView.setTool('select'),
     toolPen: () => markupView.setTool('pen'),
     toolText: () => markupView.setTool('text'),
