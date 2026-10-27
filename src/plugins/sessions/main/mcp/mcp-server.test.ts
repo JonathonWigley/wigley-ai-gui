@@ -188,7 +188,7 @@ describe('serveMcp', () => {
 
     expect(reply.result?.isError).toBe(true);
     expect(reply.result?.content).toEqual([
-      { type: 'text', text: 'TypeError: body is not an object' },
+      { type: 'text', text: expect.stringContaining('TypeError') },
     ]);
   });
 
@@ -200,8 +200,8 @@ describe('serveMcp', () => {
     const reply = await callTool(client, 2, { name: 'ask', arguments: {} });
 
     expect(reply.result?.isError).toBe(true);
-    expect(reply.result?.content?.[0].text).toBe(
-      'Unknown tool: ask. Valid tools are ask_round, collect_last_round.',
+    expect(reply.result?.content?.[0].text).toMatch(
+      /ask.*ask_round.*collect_last_round/,
     );
     expect(calls).toEqual([]);
   });

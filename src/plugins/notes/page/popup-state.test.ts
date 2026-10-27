@@ -47,31 +47,26 @@ function fields(overrides: Partial<NoteFields>): NoteFields {
 }
 
 describe('moveField', () => {
-  it('moveField_Down_NextRow', () => {
-    expect(moveField('title', 1)).toBe('body');
-  });
-
-  it('moveField_UpFromTarget_StaysOnTarget', () => {
-    expect(moveField('target', -1)).toBe('target');
-  });
-
-  it('moveField_DownFromSession_StaysOnSession', () => {
-    expect(moveField('session', 1)).toBe('session');
+  it.each([
+    { field: 'title', step: 1, expected: 'body' },
+    { field: 'target', step: -1, expected: 'target' },
+    { field: 'session', step: 1, expected: 'session' },
+  ] as const)('$field by $step is $expected', ({ field, step, expected }) => {
+    expect(moveField(field, step)).toBe(expected);
   });
 });
 
 describe('imageCursorAfterRemove', () => {
-  it('imageCursorAfterRemove_MiddleImage_SameIndex', () => {
-    expect(imageCursorAfterRemove(2, 1)).toBe(1);
-  });
-
-  it('imageCursorAfterRemove_LastImage_NewLast', () => {
-    expect(imageCursorAfterRemove(2, 2)).toBe(1);
-  });
-
-  it('imageCursorAfterRemove_NoneLeft_MinusOne', () => {
-    expect(imageCursorAfterRemove(0, 0)).toBe(-1);
-  });
+  it.each([
+    { case: 'a middle image', count: 3, removedIndex: 1, expected: 1 },
+    { case: 'the last image', count: 2, removedIndex: 2, expected: 1 },
+    { case: 'the only image', count: 0, removedIndex: 0, expected: -1 },
+  ])(
+    'is $expected after removing $case',
+    ({ count, removedIndex, expected }) => {
+      expect(imageCursorAfterRemove(count, removedIndex)).toBe(expected);
+    },
+  );
 });
 
 describe('openFields', () => {
@@ -142,12 +137,11 @@ describe('detachSession', () => {
 });
 
 describe('toggleTag', () => {
-  it('toggleTag_Chosen_Removed', () => {
-    expect(toggleTag(['ui', 'bug'], 'ui')).toEqual(['bug']);
-  });
-
-  it('toggleTag_NotChosen_Appended', () => {
-    expect(toggleTag(['ui'], 'bug')).toEqual(['ui', 'bug']);
+  it.each([
+    { tags: ['ui', 'bug'], tag: 'ui', expected: ['bug'] },
+    { tags: ['ui'], tag: 'bug', expected: ['ui', 'bug'] },
+  ])('toggles $tag in $tags', ({ tags, tag, expected }) => {
+    expect(toggleTag(tags, tag)).toEqual(expected);
   });
 });
 

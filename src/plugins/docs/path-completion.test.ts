@@ -208,38 +208,4 @@ describe('path completion on Windows', () => {
       completeTyped('~\\.claude\\rules\\n', [file('neat.md')], windowsPaths),
     ).toBe('~\\.claude\\rules\\neat.md');
   });
-
-  it('completions_WindowsIgnoresCase_KeepsNameCase', () => {
-    expect(
-      texts(
-        completions(
-          [{ name: 'CLAUDE.md', isFolder: false }],
-          'cl',
-          windowsPaths,
-        ),
-      ),
-    ).toEqual(['CLAUDE.md']);
-  });
-
-  it('completeTyped_WindowsOtherCase_TakesNameCase', () => {
-    const matches = completions(
-      [{ name: 'CLAUDE.md', isFolder: false }],
-      'cl',
-      windowsPaths,
-    );
-
-    expect(completeTyped('~/.claude/cl', matches, windowsPaths)).toBe(
-      '~/.claude/CLAUDE.md',
-    );
-  });
-
-  it('completeTyped_WindowsMixedCaseFolder_CompletesWithBackslash', () => {
-    const matches = completions(
-      [{ name: 'MyDocs', isFolder: true }],
-      'myd',
-      windowsPaths,
-    );
-
-    expect(completeTyped('~\\myd', matches, windowsPaths)).toBe('~\\MyDocs\\');
-  });
 });

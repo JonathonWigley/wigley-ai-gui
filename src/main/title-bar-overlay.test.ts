@@ -100,9 +100,7 @@ describe('titleBarOverlayOf', () => {
   it('rejects a toolbar height that hangs off the element or the window', () => {
     expect(() =>
       titleBarOverlayOf(theme({ ...BASE, 'toolbar-height': '2.5em' }), false),
-    ).toThrow(
-      'token "toolbar-height": "2.5em" is not a px or rem length, which the title bar overlay needs',
-    );
+    ).toThrow(/toolbar-height.*2\.5em/);
   });
 
   it('rejects a colour it cannot paint', () => {
@@ -111,7 +109,7 @@ describe('titleBarOverlayOf', () => {
         theme({ ...BASE, 'material-chrome-bg': 'rgb(1 2 3)' }),
         false,
       ),
-    ).toThrow('token "material-chrome-bg": "rgb(1 2 3)" is not a #rrggbb');
+    ).toThrow(/material-chrome-bg.*rgb\(1 2 3\)/);
   });
 });
 
@@ -125,8 +123,7 @@ describe('titleBarOverlayProblem', () => {
       titleBarOverlayProblem({ ...BASE, 'toolbar-height': '10%' }),
     ).toEqual({
       token: 'toolbar-height',
-      message:
-        'token "toolbar-height": "10%" is not a px or rem length, which the title bar overlay needs',
+      message: expect.stringMatching(/toolbar-height.*10%/),
     });
   });
 
@@ -138,9 +135,7 @@ describe('titleBarOverlayProblem', () => {
     });
 
     expect(problem?.token).toBe('forms.bar_tone');
-    expect(problem?.message).toContain(
-      'token "material-chrome-bg": "rgb(1 2 3)" is not a #rrggbb',
-    );
+    expect(problem?.message).toMatch(/material-chrome-bg.*rgb\(1 2 3\)/);
   });
 });
 

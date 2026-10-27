@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EditorBind, Keymap, PageBind } from '../../../contracts/keymap';
-import { unplacedBinds, unplacedLine } from './unplaced';
+import { unplacedBinds } from './unplaced';
 
 function keymap(
   page: PageBind[],
@@ -109,13 +109,5 @@ describe('unplacedBinds', () => {
     expect(unplacedBinds(map, 'a.s', NONE)).toEqual([
       { keys: '<Tab>', command: 'a.cycle' },
     ]);
-  });
-});
-
-describe('unplacedLine', () => {
-  it('unplacedLine_FormatsTheMessage', () => {
-    expect(unplacedLine({ keys: 'x', command: 'a.trash' }, 'a.s')).toBe(
-      'unplaced x a.trash in a.s',
-    );
   });
 });

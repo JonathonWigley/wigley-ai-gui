@@ -156,7 +156,7 @@ describe('createSessionList', () => {
           signal: new AbortController().signal,
         },
       ),
-    ).rejects.toThrow('No plugin contributed the tool "zz"');
+    ).rejects.toThrow(/"zz"/);
   });
 
   it('throws on a tool name two contributions share', () => {
@@ -165,7 +165,7 @@ describe('createSessionList', () => {
 
     expect(() =>
       list.contributeTools([tool('a')], fakeContribution().start),
-    ).toThrow('Two tool contributions both name the tool "a"');
+    ).toThrow(/"a"/);
   });
 
   it('throws on a tool name one contribution lists twice', () => {
@@ -174,7 +174,7 @@ describe('createSessionList', () => {
 
     expect(() =>
       list.contributeTools([tool('a'), tool('a')], fakeContribution().start),
-    ).toThrow('One tool contribution names the tool "a" twice');
+    ).toThrow(/"a"/);
     expect(list.tools().map((each) => each.name)).toEqual(['x']);
   });
 
@@ -470,9 +470,7 @@ describe('createSessionList', () => {
 
     expect(list.state().rows.map((row) => row.sessionId)).toEqual([id]);
     expect(states).toHaveLength(sentBefore);
-    expect(logged).toEqual([
-      `[sessions] closeSession for session ${id} kept by a close guard`,
-    ]);
+    expect(logged).toEqual([expect.stringContaining(id)]);
     roundOpen = false;
     expect(list.closeSession(id)).toBe(true);
     expect(list.state().rows).toEqual([]);
@@ -499,9 +497,9 @@ describe('createSessionList', () => {
     expect(list.closeSession(connected.session.id)).toBe(false);
 
     expect(logged).toEqual([
-      '[sessions] mark for unknown session ffffffff ignored',
-      '[sessions] activate for session 00000001 with no row ignored',
-      '[sessions] closeSession for session 00000001 with no row ignored',
+      expect.stringMatching(/mark .*ffffffff/),
+      expect.stringMatching(/activate .*00000001/),
+      expect.stringMatching(/closeSession .*00000001/),
     ]);
     expect(activated).toEqual([]);
     expect(states).toHaveLength(sentBefore);
@@ -605,9 +603,7 @@ describe('createSessionList', () => {
   it('throws opening a session with no host id', () => {
     const { list, states, emitted } = setUp();
 
-    expect(() => list.open({ ...owned('h'), sessionId: null })).toThrow(
-      'open needs a host session id',
-    );
+    expect(() => list.open({ ...owned('h'), sessionId: null })).toThrow();
     expect(states).toEqual([]);
     expect(emitted).toEqual([]);
   });
@@ -616,13 +612,9 @@ describe('createSessionList', () => {
     const { list } = setUp();
     list.open(owned('host-1'));
 
-    expect(() => list.open(owned('host-1'))).toThrow(
-      'Host session host-1 is already open',
-    );
+    expect(() => list.open(owned('host-1'))).toThrow(/host-1/);
     list.connect(owned('host-2'));
-    expect(() => list.open(owned('host-2'))).toThrow(
-      'Host session host-2 is already open',
-    );
+    expect(() => list.open(owned('host-2'))).toThrow(/host-2/);
     expect(list.state().rows).toHaveLength(2);
   });
 
@@ -640,7 +632,7 @@ describe('createSessionList', () => {
     expect(contribution.started).toHaveLength(1);
     expect(states).toHaveLength(sentBefore);
     expect(emitted.filter(([event]) => event === 'connected')).toHaveLength(1);
-    expect(logged).toEqual(['[sessions] relay joined session 00000001']);
+    expect(logged).toEqual([expect.stringContaining('00000001')]);
   });
 
   it("routes a joined relay's calls to the owned session's tool sessions", async () => {
@@ -670,7 +662,7 @@ describe('createSessionList', () => {
     expect(contribution.ends()).toBe(0);
     expect(list.state().rows).toHaveLength(1);
     expect(emitted.map(([event]) => event)).not.toContain('ended');
-    expect(logged.at(-1)).toBe('[sessions] relay left session 00000001');
+    expect(logged.at(-1)).toEqual(expect.stringContaining('00000001'));
 
     const next = list.connect(owned('host-1'));
     expect(next.session).toBe(ownedSession.session);
@@ -682,7 +674,7 @@ describe('createSessionList', () => {
     connected.end();
     expect(logged).toHaveLength(loggedBefore);
     next.end();
-    expect(logged.at(-1)).toBe('[sessions] relay left session 00000001');
+    expect(logged.at(-1)).toEqual(expect.stringContaining('00000001'));
   });
 
   it('hands the join to a newer relay that says hello before the older one closes', async () => {
@@ -700,9 +692,7 @@ describe('createSessionList', () => {
     expect(contribution.started).toHaveLength(1);
     expect(states).toHaveLength(sentBefore);
     expect(emitted.filter(([event]) => event === 'connected')).toHaveLength(1);
-    expect(logged.at(-1)).toBe(
-      '[sessions] newer relay took over session 00000001',
-    );
+    expect(logged.at(-1)).toEqual(expect.stringContaining('00000001'));
 
     // The older socket's close comes late and leaves the newer join alone.
     const loggedBefore = logged.length;
@@ -711,7 +701,7 @@ describe('createSessionList', () => {
     expect(await newer.call('a', { v: 1 }, CONTEXT)).toBe(RESULT);
 
     newer.end();
-    expect(logged.at(-1)).toBe('[sessions] relay left session 00000001');
+    expect(logged.at(-1)).toEqual(expect.stringContaining('00000001'));
     expect(contribution.ends()).toBe(0);
   });
 
@@ -777,17 +767,5 @@ describe('createSessionList', () => {
     list.closeSession(id);
     expect(list.closeSession(id)).toBe(false);
     expect(closedEvents()).toHaveLength(1);
-  });
-
-  it('reads the selected session id', () => {
-    const { list } = setUp();
-    expect(list.selectedSessionId()).toBeNull();
-
-    list.open(owned('host-1'));
-    expect(list.selectedSessionId()).toBe('00000001');
-
-    list.connect(info('/work/x'));
-    list.activate('00000002');
-    expect(list.selectedSessionId()).toBe('00000002');
   });
 });

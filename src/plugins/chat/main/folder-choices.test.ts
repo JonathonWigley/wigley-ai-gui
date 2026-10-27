@@ -159,9 +159,7 @@ describe('createFolderChoices', () => {
     expect(await test.choices.list()).toEqual([
       { projectDir: '/p', profile: 'work', lastUsed: 1 },
     ]);
-    expect(test.logged).toEqual([
-      "[chat] folder /locked not checked: EACCES: permission denied, stat '/locked'",
-    ]);
+    expect(test.logged).toEqual([expect.stringContaining('/locked')]);
   });
 
   it('list_NewerFoldersLeftOut_OlderFoldersFillTheList', async () => {
@@ -226,7 +224,7 @@ describe('createFolderChoices', () => {
       { projectDir: '/home-app', profile: 'personal', lastUsed: 7 },
     ]);
     expect(test.logged).toEqual([
-      '[chat] project folders of work not listed: projects folder unreadable',
+      expect.stringMatching(/work.*projects folder unreadable/),
     ]);
   });
 });

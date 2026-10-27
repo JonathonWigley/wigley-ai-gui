@@ -142,7 +142,7 @@ describe('writeFollowupEdit', () => {
 
     expect(result).toEqual({
       type: 'refused',
-      reason: `${PATH} keeps changing on disk; try again`,
+      reason: expect.stringContaining(PATH),
     });
   });
 

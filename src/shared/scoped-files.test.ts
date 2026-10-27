@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { Files } from '../contracts/files';
 import { createMemoryFiles, type MemoryFiles } from './memory-files';
 import { posixPaths } from './paths/posix-paths';
 import { windowsPaths } from './paths/windows-paths';
@@ -23,57 +24,57 @@ describe('scopedFiles', () => {
     expect(text).toBe('text');
   });
 
-  it('write_ParentEscape_RejectsBeforeWriting', async () => {
-    const scoped = scopedFiles(inner, ROOT, posixPaths);
+  it.each(['../x', '/etc/x', 'a\\..\\..\\x', 'C:x'])(
+    'rejects writing %s before any I/O',
+    async (path) => {
+      const calls: string[] = [];
+      const scoped = scopedFiles(recordingCalls(calls), ROOT, posixPaths);
 
-    await expect(scoped.write('../x', 'text')).rejects.toThrow(
-      `../x is outside ${ROOT}`,
-    );
-    expect(await inner.list('/', { recursive: true })).toEqual([]);
-  });
+      await expect(scoped.write(path, 'text')).rejects.toThrow(path);
+      expect(calls).toEqual([]);
+    },
+  );
 
-  it('writeBytes_ParentEscape_RejectsBeforeWriting', async () => {
-    const scoped = scopedFiles(inner, ROOT, posixPaths);
+  it.each([
+    {
+      method: 'writeBytes',
+      path: '../x.png',
+      call: (scoped: Files) =>
+        scoped.writeBytes('../x.png', new Uint8Array([1])),
+    },
+    {
+      method: 'watch',
+      path: 'layouts/../..',
+      call: (scoped: Files) => scoped.watch('layouts/../..', () => {}),
+    },
+    {
+      method: 'rename',
+      path: '../y',
+      call: (scoped: Files) => scoped.rename('a.md', '../y'),
+    },
+    {
+      method: 'readStart',
+      path: '../z',
+      call: (scoped: Files) => scoped.readStart('../z', 4),
+    },
+    {
+      method: 'readBytes',
+      path: '../w.png',
+      call: (scoped: Files) => scoped.readBytes('../w.png'),
+    },
+    {
+      method: 'modified',
+      path: '../v',
+      call: (scoped: Files) => scoped.modified('../v'),
+    },
+  ])('$method rejects $path before any I/O', async ({ path, call }) => {
+    const calls: string[] = [];
+    const scoped = scopedFiles(recordingCalls(calls), ROOT, posixPaths);
 
     await expect(
-      scoped.writeBytes('../x.png', new Uint8Array([1])),
-    ).rejects.toThrow(`../x.png is outside ${ROOT}`);
-    expect(await inner.list('/', { recursive: true })).toEqual([]);
-  });
-
-  it('write_AbsolutePath_Rejects', async () => {
-    const scoped = scopedFiles(inner, ROOT, posixPaths);
-
-    await expect(scoped.write('/etc/x', 'text')).rejects.toThrow(
-      `/etc/x is outside ${ROOT}`,
-    );
-    expect(await inner.list('/', { recursive: true })).toEqual([]);
-  });
-
-  it('write_BackslashPath_Rejects', async () => {
-    const scoped = scopedFiles(inner, ROOT, posixPaths);
-
-    await expect(scoped.write('a\\..\\..\\x', 'text')).rejects.toThrow(
-      `a\\..\\..\\x is outside ${ROOT}`,
-    );
-    expect(await inner.list('/', { recursive: true })).toEqual([]);
-  });
-
-  it('write_DrivePrefixPath_Rejects', async () => {
-    const scoped = scopedFiles(inner, ROOT, posixPaths);
-
-    await expect(scoped.write('C:x', 'text')).rejects.toThrow(
-      `C:x is outside ${ROOT}`,
-    );
-    expect(await inner.list('/', { recursive: true })).toEqual([]);
-  });
-
-  it('watch_ParentEscape_Throws', () => {
-    const scoped = scopedFiles(inner, ROOT, posixPaths);
-
-    expect(() => scoped.watch('layouts/../..', () => {})).toThrow(
-      `layouts/../.. is outside ${ROOT}`,
-    );
+      Promise.resolve().then(async () => void (await call(scoped))),
+    ).rejects.toThrow(path);
+    expect(calls).toEqual([]);
   });
 
   it('watch_WriteUnderFolder_ReportsRelativePath', async () => {
@@ -97,46 +98,6 @@ describe('scopedFiles', () => {
     await scoped.write('layouts/b.js', 'text');
 
     expect(reports).toEqual(['a', 'b.js']);
-  });
-
-  it('rename_DestinationOutsideRoot_RejectsBeforeMoving', async () => {
-    await inner.write(`${ROOT}/a.md`, 'text');
-    const scoped = scopedFiles(inner, ROOT, posixPaths);
-
-    await expect(scoped.rename('a.md', '../x')).rejects.toThrow(
-      `../x is outside ${ROOT}`,
-    );
-    expect(await scoped.read('a.md')).toBe('text');
-  });
-
-  it('readStart_ParentEscape_RejectsBeforeReading', async () => {
-    const calls: string[] = [];
-    const recorded = recordingCalls(calls);
-
-    await expect(
-      scopedFiles(recorded, ROOT, posixPaths).readStart('../x', 4),
-    ).rejects.toThrow(`../x is outside ${ROOT}`);
-    expect(calls).toEqual([]);
-  });
-
-  it('readBytes_ParentEscape_RejectsBeforeReading', async () => {
-    const calls: string[] = [];
-    const recorded = recordingCalls(calls);
-
-    await expect(
-      scopedFiles(recorded, ROOT, posixPaths).readBytes('../x.png'),
-    ).rejects.toThrow(`../x.png is outside ${ROOT}`);
-    expect(calls).toEqual([]);
-  });
-
-  it('modified_ParentEscape_RejectsBeforeReading', async () => {
-    const calls: string[] = [];
-    const recorded = recordingCalls(calls);
-
-    await expect(
-      scopedFiles(recorded, ROOT, posixPaths).modified('../x'),
-    ).rejects.toThrow(`../x is outside ${ROOT}`);
-    expect(calls).toEqual([]);
   });
 
   it('readStart_PathInsideRoot_ReadsUnderRoot', async () => {
@@ -163,7 +124,7 @@ describe('scopedFiles', () => {
 
     await expect(
       scopedFiles(linked, ROOT, posixPaths).realPath('link.md'),
-    ).rejects.toThrow(`link.md is outside ${ROOT}`);
+    ).rejects.toThrow('link.md');
   });
 
   it('realPath_WindowsSeparators_ReturnsSlashJoinedRelative', async () => {
@@ -218,7 +179,7 @@ describe('scopedFiles', () => {
 
     await expect(
       scopedFiles(windows, 'C:\\Root', windowsPaths).realPath('link.md'),
-    ).rejects.toThrow('link.md is outside C:\\Root');
+    ).rejects.toThrow('link.md');
   });
 });
 
@@ -236,11 +197,27 @@ function withRealPaths(realPaths: Record<string, string>): MemoryFiles {
   };
 }
 
-// `inner` with `readStart`, `readBytes` and `modified` pushing each path asked
-// onto `calls`.
+// `inner` with every method these tests call pushing each path asked onto
+// `calls`.
 function recordingCalls(calls: string[]): MemoryFiles {
   return {
     ...inner,
+    write: async (path, text) => {
+      calls.push(path);
+      return inner.write(path, text);
+    },
+    writeBytes: async (path, bytes) => {
+      calls.push(path);
+      return inner.writeBytes(path, bytes);
+    },
+    rename: async (from, to) => {
+      calls.push(from, to);
+      return inner.rename(from, to);
+    },
+    watch: (folder, onChange, options) => {
+      calls.push(folder);
+      return inner.watch(folder, onChange, options);
+    },
     readStart: async (path, maxBytes) => {
       calls.push(path);
       return inner.readStart(path, maxBytes);

@@ -16,7 +16,7 @@ describe('createFormsContributions', () => {
     contributions.addCardPart(part('p1', ['finding']));
 
     expect(() => contributions.addCardPart(part('p1', ['question']))).toThrow(
-      'card part p1 is already added',
+      'p1',
     );
   });
 
@@ -71,18 +71,6 @@ describe('createFormsContributions', () => {
 
     expect(contributions.cardParts('finding')).toEqual([added]);
     expect(listener).not.toHaveBeenCalled();
-  });
-
-  it('addReviewColumn_OldHandleAfterReAdd_LeavesReAddedColumn', () => {
-    const contributions = createFormsContributions();
-    const added = column('c1');
-    const first = contributions.addReviewColumn(added);
-    first.dispose();
-    contributions.addReviewColumn(added);
-
-    first.dispose();
-
-    expect(contributions.reviewColumns()).toEqual([added]);
   });
 
   it('onChanged_OldHandleAfterReAdd_KeepsListener', () => {

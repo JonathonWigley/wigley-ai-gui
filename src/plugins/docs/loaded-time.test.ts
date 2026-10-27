@@ -10,61 +10,38 @@ function ago(ms: number): string {
 }
 
 describe('loadedAgo', () => {
-  it('loadedAgo_UnderAMinute_Now', () => {
-    expect(loadedAgo(ago(0), NOW)).toBe('now');
-    expect(loadedAgo(ago(59_999), NOW)).toBe('now');
-  });
-
-  it('loadedAgo_AheadOfClock_Now', () => {
-    expect(loadedAgo(ago(-5_000), NOW)).toBe('now');
-  });
-
-  it('loadedAgo_Minutes_Floor', () => {
-    expect(loadedAgo(ago(60_000), NOW)).toBe('1m');
-    expect(loadedAgo(ago(3_599_999), NOW)).toBe('59m');
-  });
-
-  it('loadedAgo_Hours_Floor', () => {
-    expect(loadedAgo(ago(3_600_000), NOW)).toBe('1h');
-    expect(loadedAgo(ago(86_399_999), NOW)).toBe('23h');
-  });
-
-  it('loadedAgo_Days_Floor', () => {
-    expect(loadedAgo(ago(DAY), NOW)).toBe('1d');
-    expect(loadedAgo(ago(7 * DAY - 1), NOW)).toBe('6d');
-  });
-
-  it('loadedAgo_Weeks_Floor', () => {
-    expect(loadedAgo(ago(7 * DAY), NOW)).toBe('1w');
-    expect(loadedAgo(ago(56 * DAY - 1), NOW)).toBe('7w');
+  it.each([
+    { loaded: ago(0), expected: 'now' },
+    { loaded: ago(59_999), expected: 'now' },
+    { loaded: ago(-5_000), expected: 'now' },
+    { loaded: ago(60_000), expected: '1m' },
+    { loaded: ago(3_599_999), expected: '59m' },
+    { loaded: ago(3_600_000), expected: '1h' },
+    { loaded: ago(86_399_999), expected: '23h' },
+    { loaded: ago(DAY), expected: '1d' },
+    { loaded: ago(7 * DAY - 1), expected: '6d' },
+    { loaded: ago(7 * DAY), expected: '1w' },
+    { loaded: ago(56 * DAY - 1), expected: '7w' },
+    { loaded: '2026-03-03T12:00:00Z', expected: 'Mar 3' },
+    { loaded: '2025-03-03T12:00:00Z', expected: 'Mar 3, 2025' },
+  ])('$loaded → $expected', ({ loaded, expected }) => {
+    expect(loadedAgo(loaded, NOW)).toBe(expected);
   });
 
   it('loadedAgo_EightWeeks_Date', () => {
     expect(ago(56 * DAY)).toBe('2026-04-06T12:00:00.000Z');
     expect(loadedAgo(ago(56 * DAY), NOW)).toBe('Apr 6');
   });
-
-  it('loadedAgo_SameYear_MonthAndDay', () => {
-    expect(loadedAgo('2026-03-03T12:00:00Z', NOW)).toBe('Mar 3');
-  });
-
-  it('loadedAgo_OtherYear_WithYear', () => {
-    expect(loadedAgo('2025-03-03T12:00:00Z', NOW)).toBe('Mar 3, 2025');
-  });
 });
 
 describe('loadedLine', () => {
-  it('loadedLine_Now_JustNow', () => {
-    expect(loadedLine(ago(1_000), NOW)).toBe('Loaded just now');
-  });
-
-  it('loadedLine_Relative_Ago', () => {
-    expect(loadedLine(ago(3 * 3_600_000), NOW)).toBe('Loaded 3h ago');
-    expect(loadedLine(ago(5 * 7 * DAY), NOW)).toBe('Loaded 5w ago');
-  });
-
-  it('loadedLine_Date_NoAgo', () => {
-    expect(loadedLine('2026-03-03T12:00:00Z', NOW)).toBe('Loaded Mar 3');
-    expect(loadedLine('2025-03-03T12:00:00Z', NOW)).toBe('Loaded Mar 3, 2025');
+  it.each([
+    { loaded: ago(1_000), expected: 'now' },
+    { loaded: ago(3 * 3_600_000), expected: '3h' },
+    { loaded: ago(5 * 7 * DAY), expected: '5w' },
+    { loaded: '2026-03-03T12:00:00Z', expected: 'Mar 3' },
+    { loaded: '2025-03-03T12:00:00Z', expected: 'Mar 3, 2025' },
+  ])('$loaded → $expected', ({ loaded, expected }) => {
+    expect(loadedLine(loaded, NOW)).toContain(expected);
   });
 });

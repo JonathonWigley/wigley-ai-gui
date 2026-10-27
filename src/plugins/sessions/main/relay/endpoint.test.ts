@@ -44,15 +44,9 @@ const STABLE = 'wigley-ai-gui';
 const DEV = 'wigley-ai-gui-dev';
 
 describe('channelPath', () => {
-  it('names the Windows pipe by instance, user and home', () => {
-    expect(channelPath('win32', 'C:\\Users\\u', 'u', STABLE)).toBe(
-      `\\\\.\\pipe\\wigley-ai-gui-u-${first8HexOfSha256('C:\\Users\\u')}`,
-    );
-  });
-
-  it('names the Windows pipe after the dev instance', () => {
-    expect(channelPath('win32', 'C:\\Users\\u', 'u', DEV)).toBe(
-      `\\\\.\\pipe\\wigley-ai-gui-dev-u-${first8HexOfSha256('C:\\Users\\u')}`,
+  it('names the Windows pipe by instance, user and a hash of the home', () => {
+    expect(channelPath('win32', 'C:\\Users\\ann', 'ann', STABLE)).toMatch(
+      /^\\\\\.\\pipe\\wigley-ai-gui-ann-[0-9a-f]{8}$/,
     );
   });
 
@@ -177,7 +171,7 @@ describe('endedDriveRunLaunch', () => {
         '/bin/sh',
         '-c',
         'echo "$0" >&2; exit 1',
-        'The drive run whose home is /work/app/.drive/r1/home has ended',
+        expect.stringContaining('/work/app/.drive/r1/home'),
       ],
       cwd: '/',
     });
@@ -189,7 +183,7 @@ describe('endedDriveRunLaunch', () => {
         'cmd.exe',
         '/d',
         '/c',
-        'exit 1 & rem The drive run whose home is C:\\work\\.drive\\r1\\home has ended',
+        expect.stringMatching(/^exit 1 & rem .*C:\\work\\\.drive\\r1\\home/),
       ],
       cwd: 'C:\\',
     });

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { EditorBind, Keymap, PageBind } from '../../../contracts/keymap';
-import { formatVimKeys } from '../../../shared/key-hints';
 import { keysFor, promptKeysFor } from './keys-for';
 
 function keymap(page: PageBind[], box: EditorBind[] = []): Keymap {
@@ -138,9 +137,7 @@ describe('promptKeysFor', () => {
       ],
     );
 
-    expect(promptKeysFor(map, 'a.leave', 'a.s', 'macos', 'box')).toBe(
-      formatVimKeys('<C-c>', '<Space>', 'macos'),
-    );
+    expect(promptKeysFor(map, 'a.leave', 'a.s', 'macos', 'box')).toBe('⌃C');
   });
 
   it('promptKeysFor_Unbound_Null', () => {

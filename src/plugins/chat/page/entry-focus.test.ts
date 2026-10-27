@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type EntryFocus,
   focusAfterChange,
   focusAfterScroll,
   focusFirst,
@@ -8,113 +9,81 @@ import {
 } from './entry-focus';
 
 const ids = ['a', 'b', 'c'];
+const onA: EntryFocus = { entryId: 'a', following: false };
+const onB: EntryFocus = { entryId: 'b', following: false };
+const onC: EntryFocus = { entryId: 'c', following: true };
 
 describe('entry focus', () => {
-  it('moveFocus_FromNothing_Latest', () => {
-    expect(moveFocus(START_FOCUS, ids, -1)).toEqual({
-      entryId: 'c',
-      following: true,
-    });
+  it.each([
+    { given: 'nothing', focus: START_FOCUS, by: -1, expected: onC },
+    {
+      given: 'the last',
+      focus: onC,
+      by: -1,
+      expected: { entryId: 'b', following: false },
+    },
+    { given: 'the first', focus: onA, by: -1, expected: onA },
+    { given: 'the last', focus: onC, by: 1, expected: onC },
+    { given: 'a middle entry', focus: onB, by: 1, expected: onC },
+  ] as const)(
+    'moveFocus from $given by $by → $expected',
+    ({ focus, by, expected }) => {
+      expect(moveFocus(focus, ids, by)).toEqual(expected);
+    },
+  );
+
+  it.each([
+    {
+      given: 'following',
+      focus: onC,
+      next: ['a', 'b', 'c', 'd'],
+      expected: { entryId: 'd', following: true },
+    },
+    {
+      given: 'not following',
+      focus: onB,
+      next: ['a', 'b', 'c', 'd'],
+      expected: onB,
+    },
+    {
+      given: 'a gone entry',
+      focus: { entryId: 'x', following: false },
+      next: ['a', 'b', 'c', 'd'],
+      expected: { entryId: 'd', following: true },
+    },
+    { given: 'no entries left', focus: onB, next: [], expected: START_FOCUS },
+  ])('focusAfterChange on $given → $expected', ({ focus, next, expected }) => {
+    expect(focusAfterChange(focus, next)).toEqual(expected);
   });
 
-  it('moveFocus_UpLeavesFollowing', () => {
-    const onC = { entryId: 'c', following: true };
-
-    expect(moveFocus(onC, ids, -1)).toEqual({ entryId: 'b', following: false });
+  it.each([
+    { entries: ['a', 'b', 'c'], expected: { entryId: 'a', following: false } },
+    { entries: ['a'], expected: { entryId: 'a', following: true } },
+    { entries: [], expected: START_FOCUS },
+  ])('focusFirst of $entries → $expected', ({ entries, expected }) => {
+    expect(focusFirst(entries)).toEqual(expected);
   });
 
-  it('moveFocus_ClampsAtBothEnds', () => {
-    const onA = { entryId: 'a', following: false };
-    const onC = { entryId: 'c', following: true };
-
-    expect(moveFocus(onA, ids, -1)).toEqual({ entryId: 'a', following: false });
-    expect(moveFocus(onC, ids, 1)).toEqual({ entryId: 'c', following: true });
-  });
-
-  it('moveFocus_DownOntoLast_Follows', () => {
-    const onB = { entryId: 'b', following: false };
-
-    expect(moveFocus(onB, ids, 1)).toEqual({ entryId: 'c', following: true });
-  });
-
-  it('focusAfterChange_FollowingMovesToNewLast', () => {
-    const onC = { entryId: 'c', following: true };
-
-    expect(focusAfterChange(onC, ['a', 'b', 'c', 'd'])).toEqual({
-      entryId: 'd',
-      following: true,
-    });
-  });
-
-  it('focusAfterChange_NotFollowing_Stays', () => {
-    const onB = { entryId: 'b', following: false };
-
-    expect(focusAfterChange(onB, ['a', 'b', 'c', 'd'])).toEqual(onB);
-  });
-
-  it('focusAfterChange_GoneId_Latest', () => {
-    const onX = { entryId: 'x', following: false };
-
-    expect(focusAfterChange(onX, ['a', 'b', 'c', 'd'])).toEqual({
-      entryId: 'd',
-      following: true,
-    });
-  });
-
-  it('focusAfterChange_NoIds_Start', () => {
-    const onB = { entryId: 'b', following: false };
-
-    expect(focusAfterChange(onB, [])).toEqual(START_FOCUS);
-  });
-
-  it('focusFirst_FirstOfMany_NotFollowing', () => {
-    expect(focusFirst(['a', 'b', 'c'])).toEqual({
-      entryId: 'a',
-      following: false,
-    });
-  });
-
-  it('focusFirst_OnlyEntry_Follows', () => {
-    expect(focusFirst(['a'])).toEqual({ entryId: 'a', following: true });
-  });
-
-  it('focusFirst_NoIds_Start', () => {
-    expect(focusFirst([])).toEqual(START_FOCUS);
-  });
-
-  it('focusAfterScroll_UpOffTheBottom_StopsFollowingOnSameEntry', () => {
-    const onC = { entryId: 'c', following: true };
-
-    expect(focusAfterScroll(onC, -1, false)).toEqual({
-      entryId: 'c',
-      following: false,
-    });
-  });
-
-  it('focusAfterScroll_UpStillAtBottom_KeepsFollowing', () => {
-    const onC = { entryId: 'c', following: true };
-
-    expect(focusAfterScroll(onC, -1, true)).toEqual(onC);
-  });
-
-  it('focusAfterScroll_DownOntoTheBottom_FollowsOnSameEntry', () => {
-    const onB = { entryId: 'b', following: false };
-
-    expect(focusAfterScroll(onB, 1, true)).toEqual({
-      entryId: 'b',
-      following: true,
-    });
-  });
-
-  it('focusAfterScroll_DownShortOfTheBottom_StaysNotFollowing', () => {
-    const onB = { entryId: 'b', following: false };
-
-    expect(focusAfterScroll(onB, 1, false)).toEqual(onB);
-  });
-
-  it('focusAfterScroll_UpOntoTheBottom_StaysNotFollowing', () => {
-    const onB = { entryId: 'b', following: false };
-
-    expect(focusAfterScroll(onB, -1, true)).toEqual(onB);
-  });
+  it.each([
+    {
+      focus: onC,
+      direction: -1,
+      atEnd: false,
+      expected: { entryId: 'c', following: false },
+    },
+    { focus: onC, direction: -1, atEnd: true, expected: onC },
+    {
+      focus: onB,
+      direction: 1,
+      atEnd: true,
+      expected: { entryId: 'b', following: true },
+    },
+    { focus: onB, direction: 1, atEnd: false, expected: onB },
+    { focus: onB, direction: -1, atEnd: true, expected: onB },
+  ] as const)(
+    'focusAfterScroll from $focus by $direction, at the end $atEnd → $expected',
+    ({ focus, direction, atEnd, expected }) => {
+      expect(focusAfterScroll(focus, direction, atEnd)).toEqual(expected);
+    },
+  );
 });

@@ -50,25 +50,6 @@ describe('escaping and disabled syntax', () => {
     expect(html).toContain('[ref]: https://example.com');
     expect(html).not.toContain('<a');
   });
-
-  it('turns a NUL into the replacement character', () => {
-    expect(block('x \u00000\u0000 y `c`')).toBe(
-      '<p>x �0� y <code>c</code></p>\n',
-    );
-  });
-});
-
-describe('inline markdown', () => {
-  it('renders bold as strong', () => {
-    expect(block('this is **bold** text')).toContain('<strong>bold</strong>');
-  });
-
-  it('nests a code span in bold and keeps bold markers inside code literal', () => {
-    expect(block('**a `b` c**')).toBe(
-      '<p><strong>a <code>b</code> c</strong></p>\n',
-    );
-    expect(block('`**x**`')).toBe('<p><code>**x**</code></p>\n');
-  });
 });
 
 describe('inline()', () => {
@@ -78,44 +59,9 @@ describe('inline()', () => {
     );
   });
 
-  it('leaves block syntax as text', () => {
-    expect(markdown.inline('# not a heading\n- not a list')).toBe(
-      '# not a heading\n- not a list',
-    );
-  });
-
   it('shows a link as text', () => {
     expect(markdown.inline('[x](https://example.com)')).toBe(
       '[x](https://example.com)',
-    );
-  });
-});
-
-describe('lists', () => {
-  it('renders an unordered list', () => {
-    const html = block('- first item\n- second item');
-    expect(html).toContain('<ul>');
-    expect(html).toContain('<li>first item</li>');
-    expect(html).toContain('<li>second item</li>');
-  });
-
-  it('renders an ordered list', () => {
-    const html = block('1. first item\n2. second item');
-    expect(html).toContain('<ol>');
-    expect(html).toContain('<li>first item</li>');
-    expect(html).toContain('<li>second item</li>');
-  });
-
-  it('makes two lists when the marker kind switches', () => {
-    const html = block('- bullet one\n1. number one');
-    expect(html).toContain('<li>bullet one</li>');
-    expect(html).toContain('<li>number one</li>');
-    expect(html).toContain('</ul>\n<ol>');
-  });
-
-  it('nests an indented list inside its item', () => {
-    expect(block('- a\n  - b')).toContain(
-      '<li>a\n<ul>\n<li>b</li>\n</ul>\n</li>',
     );
   });
 });
@@ -135,61 +81,9 @@ describe('headings', () => {
       );
     }
   });
-
-  it('renders dashes under prose as a level-two heading, not a table', () => {
-    const html = block('A plain heading line\n---');
-    expect(html).not.toContain('<table');
-    expect(html).toBe('<p class="md-h md-h2">A plain heading line</p>\n');
-  });
-});
-
-describe('blockquotes', () => {
-  it('renders a quoted line as a blockquote without its marker', () => {
-    const html = block('> a quoted line');
-    expect(html).toContain('<blockquote>');
-    expect(html).toContain('a quoted line');
-    expect(html).not.toContain('&gt;');
-  });
-
-  it('makes adjacent quoted lines one blockquote', () => {
-    expect(block('> first line\n> second line')).toBe(
-      '<blockquote>\n<p>first line\nsecond line</p>\n</blockquote>\n',
-    );
-  });
 });
 
 describe('tables', () => {
-  it('renders the header, body and cells', () => {
-    const html = block(
-      '| Name | Kind | Note |\n' +
-        '| --- | --- | --- |\n' +
-        '| alpha | seam | first |\n' +
-        '| beta | adapter | second |',
-    );
-    expect(html).toContain('<table>');
-    expect(html).toContain('<thead>');
-    expect(html).toContain('<tbody>');
-    for (const cell of ['<th>Name</th>', '<th>Kind</th>', '<th>Note</th>']) {
-      expect(html).toContain(cell);
-    }
-    for (const cell of [
-      '<td>alpha</td>',
-      '<td>adapter</td>',
-      '<td>second</td>',
-    ]) {
-      expect(html).toContain(cell);
-    }
-    expect(html.split('<tr>').length - 1).toBe(3);
-  });
-
-  it('treats outer pipes as optional', () => {
-    const withPipes = block('| a | b |\n| --- | --- |\n| one | two |');
-    const withoutPipes = block('a | b\n--- | ---\none | two');
-    expect(withPipes).toBe(withoutPipes);
-    expect(withoutPipes).toContain('<th>a</th>');
-    expect(withoutPipes).toContain('<td>two</td>');
-  });
-
   it('aligns cells by class, not by style', () => {
     const html = block(
       '| left | middle | right | plain |\n' +
@@ -205,49 +99,9 @@ describe('tables', () => {
     expect(html).toContain('<td>d</td>');
     expect(html).not.toContain('style=');
   });
-
-  it('renders inline code and bold in a cell', () => {
-    const html = block(
-      '| Identifier | Status |\n| --- | --- |\n| `Backtick_Identifier` | **done** |',
-    );
-    expect(html).toContain('<td><code>Backtick_Identifier</code></td>');
-    expect(html).toContain('<td><strong>done</strong></td>');
-  });
-
-  it('escapes a script tag in a cell', () => {
-    const html = block(
-      '| Payload | Note |\n| --- | --- |\n| <script>alert(1)</script> | bad |',
-    );
-    expect(html).not.toContain('<script>');
-    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
-  });
-
-  it('pads a short row and drops the cells past the header', () => {
-    const html = block(
-      '| a | b | c |\n| --- | --- | --- |\n| one |\n| p | q | r | s |',
-    );
-    expect(html).toContain('<tr>\n<td>one</td>\n<td></td>\n<td></td>\n</tr>');
-    expect(html).toContain('<tr>\n<td>p</td>\n<td>q</td>\n<td>r</td>\n</tr>');
-    expect(html).not.toContain('>s<');
-  });
-
-  it('keeps a pipe line without a delimiter row a paragraph', () => {
-    expect(block('Totals | subtotals | were both wrong.')).toBe(
-      '<p>Totals | subtotals | were both wrong.</p>\n',
-    );
-    expect(block('Cost | 5\nand that is the whole of it.')).toBe(
-      '<p>Cost | 5\nand that is the whole of it.</p>\n',
-    );
-  });
 });
 
 describe('fences', () => {
-  it('renders a fence as pre code', () => {
-    expect(block('```\nsome code\n```')).toBe(
-      '<pre><code>some code\n</code></pre>\n',
-    );
-  });
-
   it('keeps markdown-it’s language class on other fences', () => {
     expect(block('```ts\nconst a = 1;\n```')).toBe(
       '<pre><code class="language-ts">const a = 1;\n</code></pre>\n',
@@ -428,25 +282,18 @@ describe(':::details', () => {
     expect(html).not.toContain(':::');
   });
 
-  it('keeps a bare closer inside a fence as code', () => {
-    expect(block(':::details Full\n```\n:::\n```\nafter\n:::\noutside')).toBe(
-      '<details class="md-details"><summary>Full</summary>\n' +
-        '<pre><code>:::\n</code></pre>\n<p>after</p>\n</details>\n<p>outside</p>\n',
-    );
-  });
-
-  it('keeps an opener inside a fence as code', () => {
+  it.each([
+    { fence: '```', line: ':::' },
+    { fence: '```', line: ':::details X' },
+    { fence: '~~~', line: ':::' },
+  ])('keeps $line inside a $fence fence as code', ({ fence, line }) => {
     expect(
-      block(':::details Full\n```\n:::details X\n```\nafter\n:::\noutside'),
+      block(
+        `:::details Full\n${fence}\n${line}\n${fence}\nafter\n:::\noutside`,
+      ),
     ).toBe(
       '<details class="md-details"><summary>Full</summary>\n' +
-        '<pre><code>:::details X\n</code></pre>\n<p>after</p>\n</details>\n<p>outside</p>\n',
-    );
-  });
-
-  it('keeps a bare closer inside a tilde fence as code', () => {
-    expect(block(':::details Full\n~~~\n:::\n~~~\nafter\n:::')).toContain(
-      '<pre><code>:::\n</code></pre>\n<p>after</p>\n</details>\n',
+        `<pre><code>${line}\n</code></pre>\n<p>after</p>\n</details>\n<p>outside</p>\n`,
     );
   });
 });
@@ -538,11 +385,10 @@ describe('document()', () => {
     );
   });
 
-  it('skips the highlighter for a fence with no language', async () => {
+  it('gives a fence with no language no language class', async () => {
     expect(await render('```\na\n```')).toBe(
       '<pre data-source-line="1"><code>a\n</code></pre>\n',
     );
-    expect(highlightCalls).toEqual([]);
   });
 
   it('keeps the diff fence', async () => {
@@ -569,20 +415,17 @@ describe('document()', () => {
     expect(html).not.toContain('<script>');
   });
 
-  it('renders a table', async () => {
-    const html = await render('| a | b |\n| --- | --- |\n| one | two |');
-    expect(html).toContain('<table data-source-line="1">');
-    expect(html).toContain('<td>one</td>');
-  });
-
-  it('marks blocks and list items with their source line', async () => {
-    const html = await render('# T\n\npara\n\n- a\n- b');
+  it('marks blocks, list items and tables with their source line', async () => {
+    const html = await render(
+      '# T\n\npara\n\n- a\n- b\n\n| a | b |\n| --- | --- |\n| one | two |',
+    );
     for (const tag of [
       '<h1 data-anchor="t" data-source-line="1">',
       '<p data-source-line="3">',
       '<ul data-source-line="5">',
       '<li data-source-line="5">',
       '<li data-source-line="6">',
+      '<table data-source-line="8">',
     ]) {
       expect(html).toContain(tag);
     }

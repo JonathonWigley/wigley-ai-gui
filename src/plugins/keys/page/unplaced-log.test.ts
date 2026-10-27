@@ -16,7 +16,7 @@ function keymap(page: PageBind[]): Keymap {
   };
 }
 
-const S_LINE = 'unplaced x a.trash in a.s';
+const S_LINE = expect.stringMatching(/\bx\b.*a\.trash.*a\.s/);
 const T_LINE = 'unplaced y a.copy in a.t';
 
 // A log over a mutable keymap, scope and placed set; `setScope` sets the
@@ -119,7 +119,10 @@ describe('startUnplacedLog', () => {
     );
     unplaced.checkSeen();
 
-    expect(log).toHaveBeenCalledWith('keys', 'unplaced z a.trash in a.s');
+    expect(log).toHaveBeenCalledWith(
+      'keys',
+      expect.stringMatching(/\bz\b.*a\.trash.*a\.s/),
+    );
   });
 });
 

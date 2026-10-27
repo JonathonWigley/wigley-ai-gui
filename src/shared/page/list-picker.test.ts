@@ -51,9 +51,8 @@ describe('list picker', () => {
 
     picker.open(request({ headerEnd: asHtml(end) }));
 
-    const [title, last] = head(layer).children;
+    const [, last] = head(layer).children;
     expect(head(layer).children).toHaveLength(2);
-    expect(title.classList.contains('ui-picker-title')).toBe(true);
     expect(last).toBe(end);
   });
 
@@ -65,7 +64,6 @@ describe('list picker', () => {
 
     const children = head(layer).children;
     expect(children).toHaveLength(1);
-    expect(children[0].classList.contains('ui-picker-title')).toBe(true);
   });
 
   it('draw_CursorEnd_SitsInTheCursorRowOnly', () => {

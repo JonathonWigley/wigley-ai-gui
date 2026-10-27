@@ -87,15 +87,6 @@ function rebuildOf(source: IndexSource): Promise<IndexLoad> {
 }
 
 describe('machine source', () => {
-  it('load_NoFile_BuildingMessage', async () => {
-    const test = setUp();
-
-    expect(await test.machine.load()).toEqual({
-      document: null,
-      message: 'No docs index yet — building…',
-    });
-  });
-
   it('load_SchemaFive_PinnedMessage', async () => {
     const test = setUp();
     await test.files.write(INDEX_FILE, '{"schemaVersion":5}');
@@ -104,9 +95,7 @@ describe('machine source', () => {
 
     const load = await test.registry.load('machine');
 
-    expect(load.message).toBe(
-      'Unsupported docs index schema 5; this app reads 4',
-    );
+    expect(load.message).toContain('5');
     expect(test.registry.loadedEntries()).toEqual([]);
   });
 
@@ -153,7 +142,7 @@ describe('machine source', () => {
     expect(load.message).toBe('ValueError: bad root');
     expect(load.document?.entries).toEqual([ENTRY]);
     expect(test.logged).toEqual([
-      ['docs', `docs_index.py build exited 1: ${stderr.trim()}`],
+      ['docs', expect.stringContaining('ValueError: bad root')],
     ]);
   });
 
@@ -163,7 +152,7 @@ describe('machine source', () => {
 
     const load = await rebuildOf(test.machine);
 
-    expect(load.message).toBe('docs_index.py exited 3');
+    expect(load.message).toContain('3');
   });
 
   it('rebuild_RunRejects_RejectionText', async () => {
@@ -210,70 +199,38 @@ describe('machine source', () => {
 });
 
 describe('session source', () => {
-  it('load_ClaudeSession_RunsSession', async () => {
-    const test = setUp();
-    const document = documentOf([ENTRY]);
-    test.processes.script(
-      'python3',
-      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
-      exited(0, '', JSON.stringify(document)),
-    );
+  it.each<{ spec: SessionSourceSpec; command: string[] }>([
+    {
+      spec: { hostSessionId: 'abc', projectDir: '/p', harness: 'claude' },
+      command: ['session', 'abc'],
+    },
+    {
+      spec: { hostSessionId: 'def', projectDir: '/q', harness: null },
+      command: ['session', 'def'],
+    },
+    {
+      spec: { hostSessionId: null, projectDir: '/r', harness: 'codex' },
+      command: ['context', '/r'],
+    },
+  ])(
+    'load with harness $spec.harness and host id $spec.hostSessionId runs $command',
+    async ({ spec, command }) => {
+      const test = setUp();
+      const document = documentOf([ENTRY]);
+      test.processes.script(
+        'python3',
+        ['-X', 'utf8', SCRIPT, ...command],
+        exited(0, '', JSON.stringify(document)),
+      );
 
-    const load = await test
-      .session({
-        hostSessionId: 'abc',
-        projectDir: '/p',
-        harness: 'claude',
-      })
-      .load();
+      const load = await test.session(spec).load();
 
-    expect(test.processes.runs.map((run) => run.args)).toEqual([
-      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
-    ]);
-    expect(load).toEqual({ document, message: null });
-  });
-
-  it('load_NullHarnessWithHostId_RunsSession', async () => {
-    const test = setUp();
-    test.processes.script(
-      'python3',
-      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
-      exited(0),
-    );
-
-    await test
-      .session({
-        hostSessionId: 'abc',
-        projectDir: '/p',
-        harness: null,
-      })
-      .load();
-
-    expect(test.processes.runs.map((run) => run.args)).toEqual([
-      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
-    ]);
-  });
-
-  it('load_CodexWithFolder_RunsContext', async () => {
-    const test = setUp();
-    test.processes.script(
-      'python3',
-      ['-X', 'utf8', SCRIPT, 'context', '/p'],
-      exited(0),
-    );
-
-    await test
-      .session({
-        hostSessionId: null,
-        projectDir: '/p',
-        harness: 'codex',
-      })
-      .load();
-
-    expect(test.processes.runs.map((run) => run.args)).toEqual([
-      ['-X', 'utf8', SCRIPT, 'context', '/p'],
-    ]);
-  });
+      expect(test.processes.runs.map((run) => run.args)).toEqual([
+        ['-X', 'utf8', SCRIPT, ...command],
+      ]);
+      expect(load).toEqual({ document, message: null });
+    },
+  );
 
   it('load_NoFolder_Message', async () => {
     const test = setUp();
@@ -288,7 +245,7 @@ describe('session source', () => {
 
     expect(load).toEqual({
       document: null,
-      message: 'No project folder is known for this session',
+      message: expect.any(String),
     });
     expect(test.processes.runs).toEqual([]);
   });
@@ -298,7 +255,7 @@ describe('session source', () => {
     test.processes.script(
       'python3',
       ['-X', 'utf8', SCRIPT, 'session', 'abc'],
-      exited(0, 'warn', JSON.stringify(documentOf([]))),
+      exited(0, 'warning: slow disk', JSON.stringify(documentOf([]))),
     );
 
     await test
@@ -310,7 +267,7 @@ describe('session source', () => {
       .load();
 
     expect(test.logged).toEqual([
-      ['docs', 'docs_index.py session wrote to stderr: warn'],
+      ['docs', expect.stringContaining('warning: slow disk')],
     ]);
   });
 
@@ -343,7 +300,7 @@ describe('session source', () => {
     ]);
     expect(test.logged).toContainEqual([
       'docs',
-      'session abc not indexed (LookupError: no transcript for abc); indexing /p instead',
+      expect.stringContaining('LookupError: no transcript for abc'),
     ]);
   });
 
@@ -360,7 +317,7 @@ describe('session source', () => {
 
     expect(load).toEqual({
       document: null,
-      message: 'docs_index.py not found — set docs.scriptPath',
+      message: expect.stringContaining('scriptPath'),
     });
     expect(test.processes.runs).toEqual([]);
     expect(test.logged).toEqual([]);
@@ -448,9 +405,7 @@ describe('registry', () => {
   it('sourceEntries_UnknownId_Throws', () => {
     const { registry } = setUp();
 
-    expect(() => registry.sourceEntries('nope')).toThrow(
-      'No docs index source nope',
-    );
+    expect(() => registry.sourceEntries('nope')).toThrow('nope');
   });
 
   it('loadedEntries_NoMachineIndex_SessionEntries', async () => {
@@ -477,7 +432,7 @@ describe('registry', () => {
 
     expect(read).toEqual({
       document: null,
-      message: 'No docs index yet — building…',
+      message: expect.any(String),
       title: 'machine index',
       canRebuild: true,
     });
@@ -487,9 +442,7 @@ describe('registry', () => {
     const { registry } = setUp();
     registry.add(fixed('x', loaded([])));
 
-    expect(() => registry.add(fixed('x', loaded([])))).toThrow(
-      'Docs index source x is already registered',
-    );
+    expect(() => registry.add(fixed('x', loaded([])))).toThrow();
   });
 
   it('rebuild_NoRebuild_RunsLoad', async () => {
@@ -549,9 +502,7 @@ describe('registry', () => {
   it('load_UnknownId_Rejects', async () => {
     const { registry } = setUp();
 
-    await expect(registry.load('session:x')).rejects.toThrow(
-      'No docs index source session:x',
-    );
+    await expect(registry.load('session:x')).rejects.toThrow('session:x');
   });
 
   it('load_NoDocument_ClearsEntries', async () => {

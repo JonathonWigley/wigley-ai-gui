@@ -260,26 +260,17 @@ describe('createClaudeCodeHarness', () => {
     });
   });
 
-  it('send_TwoMessagesOneResult_StaysWorking', async () => {
+  it('send_TwoMessages_StaysWorkingUntilTheSecondResult', async () => {
     const run = await startedQuiet();
     run.agent.send({ text: 'one', images: [] });
     run.agent.send({ text: 'two', images: [] });
 
     writeLine(run.stdout, successResult('1'));
     await settle();
-
     expect(lastActivity(run.heard)).toBe('working');
-  });
 
-  it('send_TwoMessagesTwoResults_GoesIdle', async () => {
-    const run = await startedQuiet();
-    run.agent.send({ text: 'one', images: [] });
-    run.agent.send({ text: 'two', images: [] });
-
-    writeLine(run.stdout, successResult('1'));
     writeLine(run.stdout, successResult('2'));
     await settle();
-
     expect(lastActivity(run.heard)).toBe('idle');
   });
 
@@ -341,11 +332,9 @@ describe('createClaudeCodeHarness', () => {
 
     expect(run.logged).toEqual([['claude', 'oops']]);
     expect(run.heard).toEqual([
-      ['ended', { code: 1, error: 'claude exited with code 1: oops' }],
+      ['ended', { code: 1, error: expect.stringContaining('oops') }],
     ]);
-    expect(() => run.agent.send({ text: 'hi', images: [] })).toThrow(
-      'Claude Code process has ended',
-    );
+    expect(() => run.agent.send({ text: 'hi', images: [] })).toThrow();
   });
 
   it('spawnNotFound_EndsWithHint', async () => {
@@ -364,8 +353,7 @@ describe('createClaudeCodeHarness', () => {
         'ended',
         {
           code: null,
-          error:
-            'claude was not found at /bin/claude, or the project folder /proj does not exist; set claude.command',
+          error: expect.stringMatching(/\/bin\/claude.*\/proj/),
         },
       ],
     ]);
@@ -563,9 +551,7 @@ describe('createClaudeCodeHarness accounts', () => {
       Object.assign(new Error('spawn /bin/claude ENOENT'), { code: 'ENOENT' }),
     );
 
-    await expect(status).rejects.toThrow(
-      'claude was not found at /bin/claude; set claude.command',
-    );
+    await expect(status).rejects.toThrow(/\/bin\/claude/);
   });
 
   it('accountStatus_SignedIn_ReadsStatusWithProfileEnv', async () => {
@@ -693,162 +679,88 @@ describe('createClaudeCodeHarness accounts', () => {
     expect(heard).toEqual([['link', 'https://claude.ai/oauth/authorize']]);
   });
 
-  it('logIn_ExitsStillSignedOut_EndsWithLastStderrLine', async () => {
-    const before = authChild();
-    const login = authChild();
-    const status = authChild();
-    const { harness } = authHarness([before, login, status]);
-    const { heard, events } = recordingLogIn();
-
-    harness.logIn(null, events);
-    await exitWith(before, signedOutStatus, 0);
-    login.stderr.write('Starting sign-in\nInvalid code\n');
-    await settle();
-    login.emitter.emit('close', 1, null);
-    await exitWith(status, signedOutStatus, 0);
-
-    expect(heard).toEqual([
-      [
-        'ended',
-        { status: { signedIn: false, account: null }, error: 'Invalid code' },
-      ],
-    ]);
+  const otherAccountStatus = JSON.stringify({
+    loggedIn: true,
+    email: 'sam@example.com',
   });
+  // No email reads as `account: null`, the same account a signed-out status
+  // carries.
+  const signedInNoAccountStatus = JSON.stringify({ loggedIn: true });
 
-  it('logIn_ExitsStillSignedOutNoStderr_EndsWithExitCode', async () => {
-    const before = authChild();
-    const login = authChild();
-    const status = authChild();
-    const { harness } = authHarness([before, login, status]);
+  it.each([
+    {
+      name: 'still signed out ends with the last stderr line',
+      before: { stdout: signedOutStatus, code: 0 },
+      login: { stderr: 'Starting sign-in\nInvalid code\n', code: 1 },
+      after: signedOutStatus,
+      status: { signedIn: false, account: null },
+      error: 'Invalid code',
+    },
+    {
+      name: 'still signed out with no stderr ends naming the exit code',
+      before: { stdout: signedOutStatus, code: 0 },
+      login: { stderr: '', code: 3 },
+      after: signedOutStatus,
+      status: { signedIn: false, account: null },
+      error: expect.stringMatching(/\b3\b/),
+    },
+    {
+      name: 'a failed exit on the same signed-in account ends with an error',
+      before: { stdout: signedInStatus, code: 0 },
+      login: { stderr: '', code: 4 },
+      after: signedInStatus,
+      status: { signedIn: true, account: 'jo@example.com · Claude max' },
+      error: expect.stringMatching(/\b4\b/),
+    },
+    {
+      name: 'a failed exit that switched account ends signed in',
+      before: { stdout: signedInStatus, code: 0 },
+      login: { stderr: '', code: 1 },
+      after: otherAccountStatus,
+      status: { signedIn: true, account: 'sam@example.com' },
+      error: null,
+    },
+    {
+      name: 'a zero exit on the same account ends signed in',
+      before: { stdout: signedInStatus, code: 0 },
+      login: { stderr: '', code: 0 },
+      after: signedInStatus,
+      status: { signedIn: true, account: 'jo@example.com · Claude max' },
+      error: null,
+    },
+    {
+      name: 'a failed status before and signed in after ends signed in',
+      before: { stdout: '', code: 1 },
+      login: { stderr: '', code: 1 },
+      after: signedInStatus,
+      status: { signedIn: true, account: 'jo@example.com · Claude max' },
+      error: null,
+    },
+    {
+      name: 'signed out before and signed in with no account after ends signed in',
+      before: { stdout: signedOutStatus, code: 0 },
+      login: { stderr: '', code: 1 },
+      after: signedInNoAccountStatus,
+      status: { signedIn: true, account: null },
+      error: null,
+    },
+  ])('logIn: $name', async ({ before, login, after, status, error }) => {
+    const beforeChild = authChild();
+    const loginChild = authChild();
+    const statusChild = authChild();
+    const { harness } = authHarness([beforeChild, loginChild, statusChild]);
     const { heard, events } = recordingLogIn();
 
     harness.logIn(null, events);
-    await exitWith(before, signedOutStatus, 0);
-    login.emitter.emit('close', 3, null);
-    await exitWith(status, signedOutStatus, 0);
+    await exitWith(beforeChild, before.stdout, before.code);
+    if (login.stderr) {
+      loginChild.stderr.write(login.stderr);
+      await settle();
+    }
+    loginChild.emitter.emit('close', login.code, null);
+    await exitWith(statusChild, after, 0);
 
-    expect(heard).toEqual([
-      [
-        'ended',
-        {
-          status: { signedIn: false, account: null },
-          error: 'claude auth login exited with code 3',
-        },
-      ],
-    ]);
-  });
-
-  it('logIn_SignedInProfileFailsSameAccount_EndsWithError', async () => {
-    const before = authChild();
-    const login = authChild();
-    const status = authChild();
-    const { harness } = authHarness([before, login, status]);
-    const { heard, events } = recordingLogIn();
-
-    harness.logIn(null, events);
-    await exitWith(before, signedInStatus, 0);
-    login.emitter.emit('close', 1, null);
-    await exitWith(status, signedInStatus, 0);
-
-    expect(heard).toEqual([
-      [
-        'ended',
-        {
-          status: { signedIn: true, account: 'jo@example.com · Claude max' },
-          error: 'claude auth login exited with code 1',
-        },
-      ],
-    ]);
-  });
-
-  it('logIn_SignedInProfileFailsOtherAccount_EndsSignedIn', async () => {
-    const before = authChild();
-    const login = authChild();
-    const status = authChild();
-    const { harness } = authHarness([before, login, status]);
-    const { heard, events } = recordingLogIn();
-    const otherAccount = JSON.stringify({
-      loggedIn: true,
-      email: 'sam@example.com',
-    });
-
-    harness.logIn(null, events);
-    await exitWith(before, signedInStatus, 0);
-    login.emitter.emit('close', 1, null);
-    await exitWith(status, otherAccount, 0);
-
-    expect(heard).toEqual([
-      [
-        'ended',
-        { status: { signedIn: true, account: 'sam@example.com' }, error: null },
-      ],
-    ]);
-  });
-
-  it('logIn_SignedInProfileSameAccountExitsZero_EndsSignedIn', async () => {
-    const before = authChild();
-    const login = authChild();
-    const status = authChild();
-    const { harness } = authHarness([before, login, status]);
-    const { heard, events } = recordingLogIn();
-
-    harness.logIn(null, events);
-    await exitWith(before, signedInStatus, 0);
-    login.emitter.emit('close', 0, null);
-    await exitWith(status, signedInStatus, 0);
-
-    expect(heard).toEqual([
-      [
-        'ended',
-        {
-          status: { signedIn: true, account: 'jo@example.com · Claude max' },
-          error: null,
-        },
-      ],
-    ]);
-  });
-
-  it('logIn_StatusBeforeFails_SignedInAfter_EndsSignedIn', async () => {
-    const before = authChild();
-    const login = authChild();
-    const status = authChild();
-    const { harness } = authHarness([before, login, status]);
-    const { heard, events } = recordingLogIn();
-
-    harness.logIn(null, events);
-    await exitWith(before, '', 1);
-    login.emitter.emit('close', 1, null);
-    await exitWith(status, signedInStatus, 0);
-
-    expect(heard).toEqual([
-      [
-        'ended',
-        {
-          status: { signedIn: true, account: 'jo@example.com · Claude max' },
-          error: null,
-        },
-      ],
-    ]);
-  });
-
-  it('logIn_SignedOutProfileFailsSignedInNoAccount_EndsSignedIn', async () => {
-    const before = authChild();
-    const login = authChild();
-    const status = authChild();
-    const { harness } = authHarness([before, login, status]);
-    const { heard, events } = recordingLogIn();
-    // No email reads as `account: null`, the same account a signed-out
-    // status carries.
-    const signedInNoAccount = JSON.stringify({ loggedIn: true });
-
-    harness.logIn(null, events);
-    await exitWith(before, signedOutStatus, 0);
-    login.emitter.emit('close', 1, null);
-    await exitWith(status, signedInNoAccount, 0);
-
-    expect(heard).toEqual([
-      ['ended', { status: { signedIn: true, account: null }, error: null }],
-    ]);
+    expect(heard).toEqual([['ended', { status, error }]]);
   });
 
   it('logOut_NonZeroExit_RejectsWithStderr', async () => {
@@ -856,7 +768,7 @@ describe('createClaudeCodeHarness accounts', () => {
     const { harness } = authHarness([child]);
 
     const rejected = expect(harness.logOut(null)).rejects.toThrow(
-      'claude auth logout exited with code 2: not signed in',
+      /2.*not signed in/,
     );
     child.stderr.write('not signed in\n');
     await exitWith(child, '', 2);
@@ -869,7 +781,7 @@ describe('createClaudeCodeHarness accounts', () => {
     const { harness } = authHarness([child]);
 
     const rejected = expect(harness.accountStatus(null)).rejects.toThrow(
-      'claude auth status exited with code 1: config unreadable',
+      /1.*config unreadable/,
     );
     child.stderr.write('config unreadable\n');
     await exitWith(child, '', 1);

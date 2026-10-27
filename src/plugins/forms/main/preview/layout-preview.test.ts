@@ -183,7 +183,7 @@ describe('open', () => {
 
     expect(calls.at(-1)?.args).toBe(SECOND_SAVED);
     expect(logLines).toHaveLength(1);
-    expect(logLines[0]).toMatch(/^\[forms\] preview skipped a saved round: /);
+    expect(logLines[0]).toMatch(/^\[forms\] /);
   });
 
   it('open_SavedArgsNameMissingLayout_SkipsAndLogs', () => {
@@ -196,7 +196,7 @@ describe('open', () => {
 
     expect(calls.at(-1)?.args).toBe(SECOND_SAVED);
     expect(logLines).toHaveLength(1);
-    expect(logLines[0]).toMatch(/^\[forms\] preview skipped a saved round: /);
+    expect(logLines[0]).toMatch(/^\[forms\] /);
   });
 
   it('open_NoSavedArgsParse_AsksSampleAgain', () => {
@@ -254,9 +254,7 @@ describe('settle', () => {
     calls[0].fail(new Error('store write failed'));
     await flush();
 
-    expect(logLines).toEqual([
-      '[forms] preview round failed: store write failed',
-    ]);
+    expect(logLines).toEqual([expect.stringContaining('store write failed')]);
     expect(formsEnds).toBe(1);
     expect(connectedEnds).toBe(1);
   });

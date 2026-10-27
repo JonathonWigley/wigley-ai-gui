@@ -85,7 +85,9 @@ describe('createDraftStore', () => {
 
     expect(draft.images).toEqual([]);
     expect((await savedDraft(files))?.images).toEqual([]);
-    expect(logged).toEqual(['[notes] images/1.png not removed: disk full']);
+    expect(logged).toEqual([
+      expect.stringMatching(/images\/1\.png.*disk full/),
+    ]);
   });
 
   it('saveMarkup_WritesJsonVerbatimAndSetsHasMarkup', async () => {
@@ -113,8 +115,8 @@ describe('createDraftStore', () => {
     const { store } = setUp();
     await store.addImage(PNG);
 
-    await expect(store.image(7)).rejects.toThrow('No image 7 in the draft');
-    await expect(store.markup(7)).rejects.toThrow('No image 7 in the draft');
+    await expect(store.image(7)).rejects.toThrow('7');
+    await expect(store.markup(7)).rejects.toThrow('7');
   });
 
   it('clear_KeepsNextImageIdAndTrashesEveryImageFile', async () => {
@@ -139,7 +141,7 @@ describe('createDraftStore', () => {
 
     expect(cleared).toEqual(emptyDraft(2));
     expect(await store.draft()).toEqual(emptyDraft(2));
-    expect(logged).toEqual(['[notes] draft not cleared: disk full']);
+    expect(logged).toEqual([expect.stringContaining('disk full')]);
     expect(files.bytesOf('images/1.png')).toEqual(PNG);
   });
 

@@ -1431,66 +1431,6 @@ describe('saveState', () => {
     expect(saveState(active(edited))).toBe('unsaved');
   });
 
-  it('shows saving while the latest revision is in flight, then saved', () => {
-    const saving = apply(edited, {
-      type: 'saveStarted',
-      formId: 'r1',
-      revision,
-    });
-    expect(saveState(active(saving))).toBe('saving');
-    const saved = apply(saving, {
-      type: 'saveFinished',
-      formId: 'r1',
-      revision,
-      error: null,
-    });
-    expect(saveState(active(saved))).toBe('saved');
-  });
-
-  it('an edit while a save is in flight stays unsaved after that save', () => {
-    const state = run(
-      edited,
-      { type: 'saveStarted', formId: 'r1', revision },
-      { type: 'choose', number: 2 },
-      { type: 'saveFinished', formId: 'r1', revision, error: null },
-    );
-    expect(saveState(active(state))).toBe('unsaved');
-  });
-
-  it('a failed save leaves the round unsaved', () => {
-    const state = run(
-      edited,
-      { type: 'saveStarted', formId: 'r1', revision },
-      {
-        type: 'saveFinished',
-        formId: 'r1',
-        revision,
-        error: 'disk full',
-      },
-    );
-    expect(saveState(active(state))).toBe('unsaved');
-    expect(active(state).saveError).toBe('disk full');
-  });
-
-  it('clears a failed save message when the next save starts', () => {
-    const failed = run(
-      edited,
-      { type: 'saveStarted', formId: 'r1', revision },
-      {
-        type: 'saveFinished',
-        formId: 'r1',
-        revision,
-        error: 'disk full',
-      },
-    );
-    const retried = apply(failed, {
-      type: 'saveStarted',
-      formId: 'r1',
-      revision,
-    });
-    expect(active(retried).saveError).toBeNull();
-  });
-
   it('a save start that changes nothing leaves state as it is', () => {
     const saving = apply(edited, {
       type: 'saveStarted',

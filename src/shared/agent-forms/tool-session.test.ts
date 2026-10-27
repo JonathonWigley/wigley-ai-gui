@@ -33,7 +33,6 @@ function fakeSession(
 ) {
   const asks: AskCall[] = [];
   const collects: boolean[] = [];
-  let ends = 0;
   const session: AgentFormSession<TestPayload> = {
     open: (args, toolUseId, signal) => {
       const call = { args, toolUseId, signal };
@@ -44,11 +43,9 @@ function fakeSession(
       collects.push(wait);
       return PAYLOAD;
     },
-    end: () => {
-      ends++;
-    },
+    end: () => {},
   };
-  return { session, asks, collects, ends: () => ends };
+  return { session, asks, collects };
 }
 
 function context(toolUseId: string | null = null): {
@@ -135,14 +132,6 @@ describe('createAgentFormToolSession', () => {
 
     await expect(
       toolSessionOver(session).call('ask', {}, context()),
-    ).rejects.toThrow('no agent form tool "ask"');
-  });
-
-  it('ends the form session', () => {
-    const { session, ends } = fakeSession();
-
-    toolSessionOver(session).end();
-
-    expect(ends()).toBe(1);
+    ).rejects.toThrow(/"ask"/);
   });
 });

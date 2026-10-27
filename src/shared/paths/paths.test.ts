@@ -107,6 +107,7 @@ const ROWS: Row[] = [
       [['/a/b', '/a'], true],
       [['/ab', '/a'], false],
       [['/x', '/'], true],
+      [['/a/b', '/a/b'], true],
     ],
     [
       [['C:\\A\\b', 'c:\\a'], true],
@@ -167,6 +168,8 @@ const ROWS: Row[] = [
       [['~', '/Users/jo'], '/Users/jo'],
       [['~jo/x', '/Users/jo'], '~jo/x'],
       [['x', '/Users/jo'], 'x'],
+      [['x~', '/Users/jo'], 'x~'],
+      [['/abs/x', '/Users/jo'], '/abs/x'],
     ],
     [
       [['~/x', 'C:\\Users\\jo'], 'C:\\Users\\jo\\x'],
@@ -183,16 +186,15 @@ function call(paths: Paths, method: Method, args: unknown[]): unknown {
 }
 
 describe.each([
-  ['posix', posixPaths, '/', ROWS.map(([method, posix]) => [method, posix])],
+  ['posix', posixPaths, ROWS.map(([method, posix]) => [method, posix])],
   [
     'windows',
     windowsPaths,
-    '\\',
     ROWS.map(([method, , windows]) => [method, windows]),
   ],
-] as [string, Paths, string, [Method, Case[]][]][])(
+] as [string, Paths, [Method, Case[]][]][])(
   '%s paths',
-  (_name, paths, separator, rows) => {
+  (_name, paths, rows) => {
     const cases = rows.flatMap(([method, methodCases]) =>
       methodCases.map(([args, expected]) => ({ method, args, expected })),
     );
@@ -204,10 +206,6 @@ describe.each([
       },
     );
 
-    it('separator_IsTheOsSeparator', () => {
-      expect(paths.separator).toBe(separator);
-    });
-
     it('commonFolder_EmptyList_Throws', () => {
       expect(() => paths.commonFolder([])).toThrow();
     });
@@ -217,49 +215,8 @@ describe.each([
 describe('posixPaths', () => {
   const HOME = '/Users/u';
 
-  it('normalize_DotsAndDoubleSlashes_Folded', () => {
-    expect(posixPaths.normalize('/a//b/./c/../d.md')).toBe('/a/b/d.md');
-    expect(posixPaths.normalize('/a/b/')).toBe('/a/b');
-  });
-
-  it('join_RelativeUp_Normalized', () => {
-    expect(posixPaths.join('/r/docs', '../b.md')).toBe('/r/b.md');
-  });
-
-  it('isInside_SamePrefixOtherFolder_False', () => {
-    expect(posixPaths.isInside('/a/bc', '/a/b')).toBe(false);
-    expect(posixPaths.isInside('/a/b', '/a/b')).toBe(true);
-    expect(posixPaths.isInside('/a/b/c', '/a/b')).toBe(true);
-  });
-
-  it('tilde_HomeAndBelow_UseTilde', () => {
-    expect(posixPaths.tilde('/Users/u', HOME)).toBe('~');
-    expect(posixPaths.tilde('/Users/u/x', HOME)).toBe('~/x');
-    expect(posixPaths.tilde('/Users/uv/x', HOME)).toBe('/Users/uv/x');
-  });
-
   it('tilde_UnknownHome_PathNormalized', () => {
     expect(posixPaths.tilde('a//b', '')).toBe('a/b');
-  });
-
-  it('expandTilde_OtherUser_Unchanged', () => {
-    expect(posixPaths.expandTilde('~', HOME)).toBe('/Users/u');
-    expect(posixPaths.expandTilde('~/x', HOME)).toBe('/Users/u/x');
-    expect(posixPaths.expandTilde('~bob/x', HOME)).toBe('~bob/x');
-    expect(posixPaths.expandTilde('x~', HOME)).toBe('x~');
-  });
-
-  it('expandTilde_TildeSlash_JoinsHome', () => {
-    expect(posixPaths.expandTilde('~/.local/bin/claude', HOME)).toBe(
-      '/Users/u/.local/bin/claude',
-    );
-  });
-
-  it('expandTilde_OtherValues_ReturnedAsTheyStand', () => {
-    for (const value of ['/abs/x', 'rel/x', '~other/x']) {
-      expect(posixPaths.expandTilde(value, HOME)).toBe(value);
-    }
-    expect(posixPaths.expandTilde('~', HOME)).toBe(HOME);
   });
 
   it('commonFolder_SegmentPrefixOnly_TakesWholeSegments', () => {

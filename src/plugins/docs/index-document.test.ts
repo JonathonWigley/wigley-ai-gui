@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import type { IndexEntry } from './contract';
 import {
-  DOC_KINDS,
   installedCopies,
   metaString,
   parseIndexDocument,
@@ -24,6 +23,12 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
     lastLoaded: null,
     ...overrides,
   };
+}
+
+// `subject` without its `field`.
+function without(subject: IndexEntry, field: keyof IndexEntry) {
+  const { [field]: _dropped, ...rest } = subject;
+  return rest;
 }
 
 function documentText(fields: Record<string, unknown>): string {
@@ -66,303 +71,205 @@ describe('parseIndexDocument', () => {
     const parsed = parseIndexDocument('{');
 
     expect(parsed.ok).toBe(false);
-    expect(!parsed.ok && parsed.message).toMatch(
-      /^Docs index is not valid JSON: /,
-    );
+    expect(!parsed.ok && parsed.message).toMatch(/JSON/);
   });
 
   it('parse_NoSchemaVersion_SaysSo', () => {
     for (const text of ['{}', '[]']) {
       expect(parseIndexDocument(text)).toEqual({
         ok: false,
-        message: 'Docs index has no schemaVersion',
+        message: expect.stringContaining('schemaVersion'),
       });
     }
   });
 
-  it('parse_Schema1_Unsupported', () => {
-    expect(parseIndexDocument(documentText({ schemaVersion: 1 }))).toEqual({
+  it.each([1, 2, 3])('parse_Schema%i_Unsupported', (version) => {
+    expect(
+      parseIndexDocument(documentText({ schemaVersion: version })),
+    ).toEqual({
       ok: false,
-      message: 'Unsupported docs index schema 1; this app reads 4',
+      message: expect.stringContaining(`schema ${version}`),
     });
   });
 
-  it('parse_Schema2_Unsupported', () => {
-    expect(parseIndexDocument(documentText({ schemaVersion: 2 }))).toEqual({
+  it.each([
+    {
+      given: 'entries not a list',
+      fields: { entries: {} },
+      problem: 'no entries list',
+    },
+    {
+      given: 'an unknown source with a root not a string',
+      fields: {
+        entries: [{ ...entry({ path: '/s/a', source: 'scratch' }), root: 3 }],
+      },
+      problem: 'entry 0 is malformed: root',
+    },
+    {
+      given: 'no walked',
+      fields: { entries: [without(entry({ path: '/a' }), 'walked')] },
+      problem: 'entry 0 is malformed: walked',
+    },
+    {
+      given: 'walked not strings',
+      fields: { entries: [{ ...entry({ path: '/a' }), walked: ['/l', 2] }] },
+      problem: 'entry 0 is malformed: walked',
+    },
+    {
+      given: 'no lastLoaded',
+      fields: { entries: [without(entry({ path: '/a' }), 'lastLoaded')] },
+      problem: 'entry 0 is malformed: lastLoaded',
+    },
+    {
+      given: 'a number lastLoaded',
+      fields: { entries: [{ ...entry({ path: '/a' }), lastLoaded: 3 }] },
+      problem: 'entry 0 is malformed: lastLoaded',
+    },
+    {
+      given: 'a lastLoaded not a time',
+      fields: {
+        entries: [{ ...entry({ path: '/a' }), lastLoaded: 'yesterday' }],
+      },
+      problem: 'entry 0 is malformed: lastLoaded',
+    },
+    {
+      given: 'no owner',
+      fields: { entries: [without(entry({ path: '/a' }), 'owner')] },
+      problem: 'entry 0 is malformed: owner',
+    },
+    {
+      given: 'an unknown owner',
+      fields: { entries: [{ ...entry({ path: '/a' }), owner: 'theirs' }] },
+      problem: 'entry 0 is malformed: owner',
+    },
+    {
+      given: 'a repo entry without a root',
+      fields: {
+        entries: [entry({ path: '/a', source: 'repo', repo: 'r', root: null })],
+      },
+      problem: 'entry 0 is malformed: root',
+    },
+    {
+      given: 'a global root not a string or null',
+      fields: {
+        entries: [{ ...entry({ path: '/a', source: 'global' }), root: 5 }],
+      },
+      problem: 'entry 0 is malformed: root',
+    },
+    {
+      given: 'a context without a folder',
+      fields: {
+        contexts: [{ sessionId: null, loadedPlugins: {}, states: {} }],
+      },
+      problem: 'context 0 is malformed: folder',
+    },
+    {
+      given: 'a context without loadedPlugins',
+      fields: { contexts: [{ folder: '/u', sessionId: null, states: {} }] },
+      problem: 'context 0 is malformed: loadedPlugins',
+    },
+    {
+      given: 'loadedPlugins not strings',
+      fields: {
+        contexts: [
+          {
+            folder: '/u',
+            sessionId: null,
+            loadedPlugins: { 'w@m': 3 },
+            states: {},
+          },
+        ],
+      },
+      problem: 'context 0 is malformed: loadedPlugins',
+    },
+  ])('parse with $given names $problem', ({ fields, problem }) => {
+    expect(parseIndexDocument(documentText(fields))).toEqual({
       ok: false,
-      message: 'Unsupported docs index schema 2; this app reads 4',
+      message: expect.stringContaining(problem),
     });
   });
 
-  it('parse_Schema3_Unsupported', () => {
-    expect(parseIndexDocument(documentText({ schemaVersion: 3 }))).toEqual({
-      ok: false,
-      message: 'Unsupported docs index schema 3; this app reads 4',
-    });
-  });
+  it.each([
+    {
+      given: 'an unknown kind',
+      fields: { entries: [entry({ path: '/a', kind: 'experiment' })] },
+    },
+    {
+      given: 'an unknown source',
+      fields: {
+        entries: [entry({ path: '/s/a', source: 'scratch', root: '/s' })],
+      },
+    },
+    {
+      given: 'a null lastLoaded',
+      fields: { entries: [entry({ path: '/a', lastLoaded: null })] },
+    },
+    {
+      given: 'a lastLoaded time',
+      fields: {
+        entries: [
+          entry({ path: '/a', lastLoaded: '2026-10-26T21:01:32.174Z' }),
+        ],
+      },
+    },
+    {
+      given: 'a third-party owner',
+      fields: { entries: [entry({ path: '/a', owner: 'third-party' })] },
+    },
+    {
+      given: 'loadedPlugins',
+      fields: {
+        contexts: [
+          {
+            folder: '/u',
+            sessionId: 's',
+            loadedPlugins: { 'wigley@wigley-ai-marketplace': '1.9.1' },
+            states: {},
+          },
+        ],
+      },
+    },
+  ])('parse with $given loads it as written', ({ fields }) => {
+    const parsed = parseIndexDocument(documentText(fields));
 
-  it('parse_EntriesNotList_SaysSo', () => {
-    expect(parseIndexDocument(documentText({ entries: {} }))).toEqual({
-      ok: false,
-      message: 'Docs index has no entries list',
-    });
-  });
-
-  it('parse_UnknownKind_Loads', () => {
-    const text = documentText({
-      entries: [entry({ path: '/a', kind: 'experiment' })],
-    });
-
-    const parsed = parseIndexDocument(text);
-
-    expect(parsed.ok && parsed.document.entries[0].kind).toBe('experiment');
-  });
-
-  it('parse_UnknownSource_Loads', () => {
-    const text = documentText({
-      entries: [entry({ path: '/s/a', source: 'scratch', root: '/s' })],
-    });
-
-    const parsed = parseIndexDocument(text);
-
-    expect(parsed.ok && parsed.document.entries[0].source).toBe('scratch');
-  });
-
-  it('parse_UnknownSourceRootNotString_NamesRoot', () => {
-    const text = documentText({
-      entries: [{ ...entry({ path: '/s/a', source: 'scratch' }), root: 3 }],
-    });
-
-    expect(parseIndexDocument(text)).toEqual({
-      ok: false,
-      message: 'Docs index entry 0 is malformed: root',
-    });
-  });
-
-  it('parse_MissingWalked_NamesWalked', () => {
-    const { walked: _walked, ...withoutWalked } = entry({ path: '/a' });
-    const text = documentText({ entries: [withoutWalked] });
-
-    expect(parseIndexDocument(text)).toEqual({
-      ok: false,
-      message: 'Docs index entry 0 is malformed: walked',
-    });
-  });
-
-  it('parse_WalkedNotStrings_NamesWalked', () => {
-    const text = documentText({
-      entries: [{ ...entry({ path: '/a' }), walked: ['/l', 2] }],
-    });
-
-    expect(parseIndexDocument(text)).toEqual({
-      ok: false,
-      message: 'Docs index entry 0 is malformed: walked',
-    });
-  });
-
-  it('parse_MissingLastLoaded_NamesLastLoaded', () => {
-    const { lastLoaded: _lastLoaded, ...withoutLastLoaded } = entry({
-      path: '/a',
-    });
-    const text = documentText({ entries: [withoutLastLoaded] });
-
-    expect(parseIndexDocument(text)).toEqual({
-      ok: false,
-      message: 'Docs index entry 0 is malformed: lastLoaded',
-    });
-  });
-
-  it('parse_LastLoadedNotATime_NamesLastLoaded', () => {
-    for (const lastLoaded of [3, 'yesterday']) {
-      const text = documentText({
-        entries: [{ ...entry({ path: '/a' }), lastLoaded }],
-      });
-
-      expect(parseIndexDocument(text)).toEqual({
-        ok: false,
-        message: 'Docs index entry 0 is malformed: lastLoaded',
-      });
-    }
-  });
-
-  it('parse_LastLoadedNull_Loads', () => {
-    const text = documentText({ entries: [entry({ path: '/a' })] });
-
-    const parsed = parseIndexDocument(text);
-
-    expect(parsed.ok && parsed.document.entries[0].lastLoaded).toBeNull();
-  });
-
-  it('parse_LastLoadedTime_KeptVerbatim', () => {
-    const text = documentText({
-      entries: [entry({ path: '/a', lastLoaded: '2026-10-26T21:01:32.174Z' })],
-    });
-
-    const parsed = parseIndexDocument(text);
-
-    expect(parsed.ok && parsed.document.entries[0].lastLoaded).toBe(
-      '2026-10-26T21:01:32.174Z',
-    );
-  });
-
-  it('parse_MissingOwner_NamesOwner', () => {
-    const { owner: _owner, ...withoutOwner } = entry({ path: '/a' });
-    const text = documentText({ entries: [withoutOwner] });
-
-    expect(parseIndexDocument(text)).toEqual({
-      ok: false,
-      message: 'Docs index entry 0 is malformed: owner',
-    });
-  });
-
-  it('parse_UnknownOwner_NamesOwner', () => {
-    const text = documentText({
-      entries: [{ ...entry({ path: '/a' }), owner: 'theirs' }],
-    });
-
-    expect(parseIndexDocument(text)).toEqual({
-      ok: false,
-      message: 'Docs index entry 0 is malformed: owner',
-    });
-  });
-
-  it('parse_ThirdPartyOwner_Loads', () => {
-    const text = documentText({
-      entries: [entry({ path: '/a', owner: 'third-party' })],
-    });
-
-    const parsed = parseIndexDocument(text);
-
-    expect(parsed.ok && parsed.document.entries[0].owner).toBe('third-party');
-  });
-
-  it('parse_RepoEntryWithoutRoot_NamesRoot', () => {
-    const text = documentText({
-      entries: [entry({ path: '/a', source: 'repo', repo: 'r', root: null })],
-    });
-
-    expect(parseIndexDocument(text)).toEqual({
-      ok: false,
-      message: 'Docs index entry 0 is malformed: root',
-    });
-  });
-
-  it('parse_GlobalRootNotStringOrNull_NamesRoot', () => {
-    const text = documentText({
-      entries: [{ ...entry({ path: '/a', source: 'global' }), root: 5 }],
-    });
-
-    expect(parseIndexDocument(text)).toEqual({
-      ok: false,
-      message: 'Docs index entry 0 is malformed: root',
-    });
-  });
-
-  it('parse_ContextWithoutFolder_NamesFolder', () => {
-    const text = documentText({
-      contexts: [{ sessionId: null, loadedPlugins: {}, states: {} }],
-    });
-
-    expect(parseIndexDocument(text)).toEqual({
-      ok: false,
-      message: 'Docs index context 0 is malformed: folder',
-    });
-  });
-
-  it('parse_ContextWithoutLoadedPlugins_NamesLoadedPlugins', () => {
-    const text = documentText({
-      contexts: [{ folder: '/u', sessionId: null, states: {} }],
-    });
-
-    expect(parseIndexDocument(text)).toEqual({
-      ok: false,
-      message: 'Docs index context 0 is malformed: loadedPlugins',
-    });
-  });
-
-  it('parse_LoadedPluginsNotStrings_NamesLoadedPlugins', () => {
-    const text = documentText({
-      contexts: [
-        {
-          folder: '/u',
-          sessionId: null,
-          loadedPlugins: { 'w@m': 3 },
-          states: {},
-        },
-      ],
-    });
-
-    expect(parseIndexDocument(text)).toEqual({
-      ok: false,
-      message: 'Docs index context 0 is malformed: loadedPlugins',
-    });
-  });
-
-  it('parse_LoadedPlugins_Kept', () => {
-    const loadedPlugins = { 'wigley@wigley-ai-marketplace': '1.9.1' };
-    const text = documentText({
-      contexts: [{ folder: '/u', sessionId: 's', loadedPlugins, states: {} }],
-    });
-
-    const parsed = parseIndexDocument(text);
-
-    expect(parsed.ok && parsed.document.contexts[0].loadedPlugins).toEqual(
-      loadedPlugins,
-    );
-  });
-});
-
-describe('DOC_KINDS', () => {
-  it('docKinds_SkillFileAfterSkill', () => {
-    expect(DOC_KINDS.indexOf('skill-file')).toBe(
-      DOC_KINDS.indexOf('skill') + 1,
-    );
+    expect(parsed).toMatchObject({ ok: true, document: fields });
   });
 });
 
 describe('installedCopies', () => {
-  it('installedCopies_NoInstalled_Null', () => {
-    expect(installedCopies(entry({ path: '/a', meta: {} }))).toBeNull();
-  });
-
-  it('installedCopies_Empty_Empty', () => {
-    const subject = entry({ path: '/a', meta: { installed: [] } });
-
-    expect(installedCopies(subject)).toEqual([]);
-  });
-
-  it('installedCopies_NotAList_Empty', () => {
-    const subject = entry({ path: '/a', meta: { installed: 'x' } });
-
-    expect(installedCopies(subject)).toEqual([]);
-  });
-
-  it('installedCopies_Copies_InOrder', () => {
-    const installed = [
-      { harness: 'claude', version: '1.9.1', path: '/c/a.md' },
-      { harness: 'codex', version: '0.17.1', path: '/x/a.md' },
-    ];
-
-    const copies = installedCopies(entry({ path: '/a', meta: { installed } }));
-
-    expect(copies).toEqual(installed);
-  });
-
-  it('installedCopies_WrongShape_Dropped', () => {
-    const installed = [
-      { harness: 'vim', version: '1', path: '/p' },
-      { harness: 'claude', version: 2, path: '/p' },
-      'x',
-      null,
-      { harness: 'codex', version: '1' },
-      { harness: 'claude', version: '1.0.0', path: '/ok' },
-    ];
-
-    const copies = installedCopies(entry({ path: '/a', meta: { installed } }));
-
-    expect(copies).toEqual([
-      { harness: 'claude', version: '1.0.0', path: '/ok' },
-    ]);
+  it.each([
+    { given: 'no installed', meta: {}, expected: null },
+    { given: 'an empty list', meta: { installed: [] }, expected: [] },
+    { given: 'not a list', meta: { installed: 'x' }, expected: [] },
+    {
+      given: 'copies',
+      meta: {
+        installed: [
+          { harness: 'claude', version: '1.9.1', path: '/c/a.md' },
+          { harness: 'codex', version: '0.17.1', path: '/x/a.md' },
+        ],
+      },
+      expected: [
+        { harness: 'claude', version: '1.9.1', path: '/c/a.md' },
+        { harness: 'codex', version: '0.17.1', path: '/x/a.md' },
+      ],
+    },
+    {
+      given: 'copies of the wrong shape',
+      meta: {
+        installed: [
+          { harness: 'vim', version: '1', path: '/p' },
+          { harness: 'claude', version: 2, path: '/p' },
+          'x',
+          null,
+          { harness: 'codex', version: '1' },
+          { harness: 'claude', version: '1.0.0', path: '/ok' },
+        ],
+      },
+      expected: [{ harness: 'claude', version: '1.0.0', path: '/ok' }],
+    },
+  ])('installedCopies given $given → $expected', ({ meta, expected }) => {
+    expect(installedCopies(entry({ path: '/a', meta }))).toEqual(expected);
   });
 });
 

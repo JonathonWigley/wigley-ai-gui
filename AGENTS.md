@@ -487,7 +487,11 @@ round; primer: an open primer), since main, not the page, decides.
 - Node is pinned in `.nvmrc`. A shell that started on another version runs commands as
   `source ~/.nvm/nvm.sh && nvm use && npm run …`.
 - `npm test` runs the Vitest suite: every module whose correctness follows from inputs and outputs — round
-  logic, saved rounds, answer state, markdown, theme loading, the keymap — is tested there, without Electron.
+  logic, saved rounds, answer state, markdown, theme loading, the keymap — is tested there, without Electron. It also
+  type-checks the type tests, `*.test-d.ts` files holding the claims that misuse fails to compile, through `tsc`
+  (`typecheck` in `vitest.config.mts`), and runs them once more at run time. Two adapters of one contract run one
+  suite of shared cases, kept in a `*.test-support.ts` module (the Files contract in
+  `src/shared/files-contract.test-support.ts`).
 - `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. It renders the window
   offscreen as an accessory app, so it never takes the user's foreground; the core's driver (`src/main/selftest.ts`,
   its step runner in `src/main/selftest-runner.ts`) runs the script a plugin hands it — the forms plugin's opens

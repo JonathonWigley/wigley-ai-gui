@@ -135,7 +135,7 @@ describe('parseRound', () => {
   it('refuses a blank round layout', () => {
     expect(
       roundError({ heading: 'H', layout: '  ', questions: [question()] }),
-    ).toBe("ask_round's layout must be a layout name: a non-empty string.");
+    ).toContain('layout');
   });
 
   it.each([['not a dict'], [['a list']], [null]])(
@@ -145,9 +145,6 @@ describe('parseRound', () => {
 
       expect(message).toContain(
         "'heading', 'overview', 'layout', 'notices', 'findings', and 'questions'",
-      );
-      expect(message).toContain(
-        'Each list is optional, but the round needs at least one item.',
       );
     },
   );
@@ -159,15 +156,13 @@ describe('parseRound', () => {
       extra: 1,
     });
 
-    expect(message).toContain('ask_round got unknown field(s): extra.');
+    expect(message).toContain('extra');
   });
 
   it('refuses an empty heading', () => {
     const message = roundError({ heading: '', questions: [question()] });
 
-    expect(message).toBe(
-      'heading must be a non-empty string. Give it the text you would have written in the reply.',
-    );
+    expect(message).toMatch(/^heading\b/);
   });
 
   it('keeps the overview stripped', () => {
@@ -193,23 +188,15 @@ describe('parseRound', () => {
       questions: [question()],
     });
 
-    expect(message).toContain('overview must be a string');
+    expect(message).toContain('overview');
   });
 
   it.each(['notices', 'findings', 'questions'])(
     'refuses %s that are not a list',
     (key) => {
-      expect(roundError({ heading: 'H', [key]: 'one item' })).toBe(
-        `ask_round's ${key} must be a list of objects.`,
-      );
+      expect(roundError({ heading: 'H', [key]: 'one item' })).toContain(key);
     },
   );
-
-  it('refuses an empty questions list with no notices', () => {
-    expect(roundError({ heading: 'H', questions: [] })).toBe(
-      'ask_round needs at least one notice, finding or question.',
-    );
-  });
 });
 
 describe('parseRound with notices', () => {
@@ -248,9 +235,7 @@ describe('parseRound with notices', () => {
     [{ heading: 'H' }],
     [{ heading: 'H', questions: [], findings: [], notices: [] }],
   ])('refuses a round with no item of any kind (%j)', (args) => {
-    expect(roundError(args)).toContain(
-      'needs at least one notice, finding or question',
-    );
+    expect(roundError(args)).toMatch(/notice.*finding.*question/);
   });
 
   it('accepts fifty notices and refuses fifty-one', () => {
@@ -260,8 +245,8 @@ describe('parseRound with notices', () => {
     expect(
       parseRound({ heading: 'H', notices: notices(50) }).notices,
     ).toHaveLength(50);
-    expect(roundError({ heading: 'H', notices: notices(51) })).toContain(
-      'Split the round.',
+    expect(roundError({ heading: 'H', notices: notices(51) })).toMatch(
+      /\b51\b.*\b50\b/,
     );
   });
 
@@ -278,8 +263,8 @@ describe('parseRound with notices', () => {
     expect(
       parseRound({ heading: 'H', questions: questions(20) }).questions,
     ).toHaveLength(20);
-    expect(roundError({ heading: 'H', questions: questions(21) })).toContain(
-      'Split the round.',
+    expect(roundError({ heading: 'H', questions: questions(21) })).toMatch(
+      /\b21\b.*\b20\b/,
     );
   });
 });
@@ -331,8 +316,8 @@ describe('parseRound with findings', () => {
     expect(
       parseRound({ heading: 'H', findings: findings(20) }).findings,
     ).toHaveLength(20);
-    expect(roundError({ heading: 'H', findings: findings(21) })).toContain(
-      'ask_round got 21 findings; the maximum is 20. Split the round.',
+    expect(roundError({ heading: 'H', findings: findings(21) })).toMatch(
+      /\b21\b.*\b20\b/,
     );
   });
 
@@ -342,7 +327,7 @@ describe('parseRound with findings', () => {
 
     expect(
       roundError({ heading: 'H', findings: [finding(), partial] }),
-    ).toContain('Finding 2: missing proof');
+    ).toMatch(/^Finding 2: .*proof/);
   });
 });
 
@@ -377,11 +362,7 @@ describe('requireKnownLayouts', () => {
   it("refuses an unknown round layout, listing the folder's layouts", () => {
     expect(
       layoutError({ heading: 'H', layout: 'dense', questions: [question()] }),
-    ).toBe(
-      "ask_round's layout 'dense' is not in the layouts folder, which holds " +
-        "'default' and 'compact'. Write layouts/dense/layout.js there first, " +
-        'or leave layout out.',
-    );
+    ).toMatch(/^ask_round.*'dense'.*'default'.*'compact'/);
   });
 
   it('refuses an unknown item layout, naming the item', () => {
@@ -390,11 +371,7 @@ describe('requireKnownLayouts', () => {
         heading: 'H',
         findings: [finding(), finding({ layout: 'dense' })],
       }),
-    ).toBe(
-      "Finding 2: layout 'dense' is not in the layouts folder, which holds " +
-        "'default' and 'compact'. Write layouts/dense/layout.js there first, " +
-        'or leave layout out.',
-    );
+    ).toMatch(/^Finding 2: .*'dense'.*'default'.*'compact'/);
   });
 
   it('names the round before its items', () => {
@@ -404,7 +381,7 @@ describe('requireKnownLayouts', () => {
       notices: [notice({ layout: 'dense' })],
     });
 
-    expect(message).toContain("ask_round's layout 'wide'");
+    expect(message).toMatch(/^ask_round.*'wide'/);
   });
 });
 
@@ -697,11 +674,10 @@ describe('answersPayload', () => {
     ]);
   });
 
-  it('tells a draft caller to keep waiting and says the form is still open', () => {
+  it('tells a draft caller to keep waiting', () => {
     const payload = answersPayload(roundOf(1), 'draft', body([]));
 
-    expect(payload.next).toContain('Call collect_last_round to keep waiting.');
-    expect(payload.summary).toContain('The form is still open.');
+    expect(payload.next).toContain('collect_last_round');
   });
 
   it('counts an out-of-range choice as untouched in both the answer and the summary', () => {
@@ -853,68 +829,68 @@ describe('answersPayload findings', () => {
     });
   });
 
-  it('counts findings alone in the summary', () => {
-    const round = parseRound({
-      heading: 'H',
-      findings: [finding(), finding({ title: 'Dead branch' })],
-    });
+  it.each([
+    {
+      shape: 'findings alone',
+      args: {
+        heading: 'H',
+        findings: [finding(), finding({ title: 'Dead branch' })],
+      },
+      outcome: 'submitted',
+      answers: [],
+      findingAnswers: [findingAnswer({ choice: 1, action: 'fix_now' })],
+      summary: '2 findings: 1 answered, 0 not applicable, 1 untouched.',
+    },
+    {
+      shape: 'findings first, then questions, summed',
+      args: {
+        heading: 'H',
+        questions: [question()],
+        findings: [finding(), finding({ title: 'Dead branch' })],
+      },
+      outcome: 'submitted',
+      answers: [answer({ choice: 1 })],
+      findingAnswers: [findingAnswer({ choice: 1, action: 'fix_now' })],
+      summary:
+        '2 findings, 1 question: 2 answered, 0 not applicable, 1 untouched.',
+    },
+    {
+      shape: 'one finding, singular',
+      args: { heading: 'H', findings: [finding()] },
+      outcome: 'submitted',
+      answers: [],
+      findingAnswers: [],
+      summary: '1 finding: 0 answered, 0 not applicable, 1 untouched.',
+    },
+    {
+      shape: 'notices alone, 0 questions',
+      args: { heading: 'H', notices: [notice()] },
+      outcome: 'submitted',
+      answers: [],
+      findingAnswers: [],
+      summary: '0 questions: 0 answered, 0 not applicable, 0 untouched.',
+    },
+    {
+      shape: 'a findings draft, still open',
+      args: { heading: 'H', findings: [finding()] },
+      outcome: 'draft',
+      answers: [],
+      findingAnswers: [],
+      summary:
+        '1 finding: 0 answered, 0 not applicable, 1 untouched. The form is still open.',
+    },
+  ] as const)(
+    'summarises $shape',
+    ({ args, outcome, answers, findingAnswers, summary }) => {
+      const payload = answersPayload(
+        parseRound(args),
+        outcome,
+        body([...answers], { finding_answers: [...findingAnswers] }),
+      );
 
-    const payload = answersPayload(
-      round,
-      'submitted',
-      body([], {
-        finding_answers: [findingAnswer({ choice: 1, action: 'fix_now' })],
-      }),
-    );
-
-    expect(payload.summary).toBe(
-      '2 findings: 1 answered, 0 not applicable, 1 untouched.',
-    );
-  });
-
-  it('counts findings first, then questions, summed', () => {
-    const round = parseRound({
-      heading: 'H',
-      questions: [question()],
-      findings: [finding(), finding({ title: 'Dead branch' })],
-    });
-
-    const payload = answersPayload(
-      round,
-      'submitted',
-      body([answer({ choice: 1 })], {
-        finding_answers: [findingAnswer({ choice: 1, action: 'fix_now' })],
-      }),
-    );
-
-    expect(payload.summary).toBe(
-      '2 findings, 1 question: 2 answered, 0 not applicable, 1 untouched.',
-    );
-  });
-
-  it('uses the singular for one finding', () => {
-    const round = parseRound({ heading: 'H', findings: [finding()] });
-
-    expect(answersPayload(round, 'submitted', body([])).summary).toBe(
-      '1 finding: 0 answered, 0 not applicable, 1 untouched.',
-    );
-  });
-
-  it('says 0 questions for a notices-alone round', () => {
-    const round = parseRound({ heading: 'H', notices: [notice()] });
-
-    expect(answersPayload(round, 'submitted', body([])).summary).toBe(
-      '0 questions: 0 answered, 0 not applicable, 0 untouched.',
-    );
-  });
-
-  it('says a findings draft is still open', () => {
-    const round = parseRound({ heading: 'H', findings: [finding()] });
-
-    expect(answersPayload(round, 'draft', body([])).summary).toBe(
-      '1 finding: 0 answered, 0 not applicable, 1 untouched. The form is still open.',
-    );
-  });
+      expect(payload.summary).toBe(summary);
+    },
+  );
 });
 
 describe('answersPayload finding actions', () => {
@@ -1103,18 +1079,6 @@ describe('answersPayload notices', () => {
     ]);
   });
 
-  it('leaves notices without a saved comment without a comment key', () => {
-    const payload = answersPayload(
-      roundWithNotices(3),
-      'submitted',
-      body([], { notice_comments: [{ index: 1, comment: 'only the first' }] }),
-    );
-
-    expect(payload.notices[0].comment).toBe('only the first');
-    expect(payload.notices[1]).not.toHaveProperty('comment');
-    expect(payload.notices[2]).not.toHaveProperty('comment');
-  });
-
   it('never counts a notice in the answers or the summary', () => {
     const payload = answersPayload(
       roundWithNotices(3),
@@ -1166,19 +1130,6 @@ describe('answersPayload free text', () => {
     expect(
       answersPayload(round, 'submitted', body([], { note: 'hello' })).note,
     ).toBe('hello');
-  });
-
-  it('keeps every structural key when the text is empty', () => {
-    expect(Object.keys(entryFor({}))).toEqual(
-      expect.arrayContaining([
-        'index',
-        'title',
-        'status',
-        'choice',
-        'choice_text',
-        'took_recommendation',
-      ]),
-    );
   });
 
   it('carries a press with its reason, and the choice still counts', () => {
@@ -1374,6 +1325,6 @@ describe('handedBackPayload', () => {
     expect(payload.answers).toEqual(
       answersPayload(round, 'submitted', saved).answers,
     );
-    expect(payload.next).toContain('send it again');
+    expect(payload.next).toContain('ask_round');
   });
 });

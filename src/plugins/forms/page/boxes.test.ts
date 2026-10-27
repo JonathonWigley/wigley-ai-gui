@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { stepBox } from '../../../shared/page/editor-boxes';
 import {
   type BoxRef,
-  boxDescription,
   boxKey,
   focusActionFor,
   isBoxShown,
@@ -153,7 +152,7 @@ describe('focusActionFor', () => {
   });
 });
 
-describe('boxKey and boxDescription', () => {
+describe('boxKey', () => {
   it('keys boxes by round, field, kind and item', () => {
     expect(boxKey(notes1)).toBe(boxKey({ ...notes1 }));
     expect(boxKey(notes1)).not.toBe(boxKey(findingNotes));
@@ -161,12 +160,5 @@ describe('boxKey and boxDescription', () => {
     expect(boxKey(notes1)).not.toBe(
       boxKey({ roundId: 'r2', target: notes1.target }),
     );
-  });
-
-  it('names the box the way the log reads', () => {
-    expect(boxDescription(findingNotes)).toBe('notes on finding 1');
-    expect(boxDescription(reason1)).toBe('dontAskReason on question 1');
-    expect(boxDescription(comment)).toBe('comment on notice 1');
-    expect(boxDescription(note)).toBe('note on the round');
   });
 });

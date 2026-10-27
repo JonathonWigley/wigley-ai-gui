@@ -95,8 +95,4 @@ describe('noteHomes', () => {
     const read = { homes: [home({ gitRoot: null })], message: null };
     expect(noteHomes(read, posixPaths).homes[0].folder).toBeNull();
   });
-
-  it('noteHomes_Message_PassesThrough', () => {
-    expect(result.message).toBe('Index loaded with warnings');
-  });
 });

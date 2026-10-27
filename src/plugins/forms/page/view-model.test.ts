@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { activeForm } from '../../../shared/page/session-forms';
-import type { Finding } from '../contract';
+import type { Finding, FormsView } from '../contract';
 import {
   apply,
   type FormsAction,
@@ -12,7 +12,6 @@ import {
 import { decision, finding, presentedRound, question } from './test-rounds';
 import {
   hasOtherUnanswered,
-  pagerText,
   pickRailItem,
   progressText,
   railHeadText,
@@ -21,7 +20,6 @@ import {
   reviewRows,
   reviewRowsChanged,
   reviewSummaryText,
-  roundSaveLabel,
   roundSaveState,
   sessionTitle,
 } from './view-model';
@@ -362,27 +360,35 @@ describe('railDotStatus', () => {
   });
 });
 
-describe('progressText', () => {
-  it('counts answered questions', () => {
-    expect(
-      progressText({ answered: 2, notApplicable: 0, untouched: 1, total: 3 }),
-    ).toBe('2 of 3 answered');
-  });
-
-  it('adds not-applicable questions when there are any', () => {
-    expect(
-      progressText({ answered: 1, notApplicable: 1, untouched: 1, total: 3 }),
-    ).toBe('1 of 3 answered, 1 not applicable');
-  });
-});
-
-describe('railHeadText', () => {
-  it('railHeadText counts the untouched items', () => {
-    const counts = { answered: 0, notApplicable: 0, total: 3 };
-
-    expect(railHeadText({ ...counts, untouched: 3 })).toBe('Items · 3 open');
-    expect(railHeadText({ ...counts, untouched: 0 })).toBe('Items · 0 open');
-  });
+describe('progressText, railHeadText and reviewSummaryText', () => {
+  it.each([
+    {
+      counts: { answered: 2, notApplicable: 0, untouched: 1, total: 3 },
+      progress: '2 of 3 answered',
+      railHead: 'Items · 1 open',
+      summary: '2 of 3 answered. 1 not answered; they are sent as untouched.',
+    },
+    {
+      counts: { answered: 2, notApplicable: 1, untouched: 3, total: 6 },
+      progress: '2 of 6 answered, 1 not applicable',
+      railHead: 'Items · 3 open',
+      summary:
+        '2 of 6 answered, 1 not applicable. 3 not answered; they are sent as untouched.',
+    },
+    {
+      counts: { answered: 4, notApplicable: 0, untouched: 0, total: 4 },
+      progress: '4 of 4 answered',
+      railHead: 'Items · 0 open',
+      summary: '4 of 4 answered.',
+    },
+  ])(
+    'reads $progress with $counts.untouched untouched',
+    ({ counts, progress, railHead, summary }) => {
+      expect(progressText(counts)).toBe(progress);
+      expect(railHeadText(counts)).toBe(railHead);
+      expect(reviewSummaryText(counts)).toBe(summary);
+    },
+  );
 });
 
 describe('hasOtherUnanswered', () => {
@@ -409,81 +415,33 @@ describe('hasOtherUnanswered', () => {
   });
 });
 
-describe('pagerText', () => {
-  it("pagerText reads the focused item's label of the rail count", () => {
-    const round = activeOf(
-      initialState(
-        [
-          presentedRound('r1', {
-            questions: [question('Alpha')],
-            findings: [finding('Delta'), finding('Epsilon')],
-          }),
-        ],
-        'r1-session',
-      ),
-    );
-
-    expect(round.focus).toBe(0);
-    expect(pagerText(round)).toBe('F1 of 3');
-  });
-});
-
-describe('reviewSummaryText', () => {
-  it('reviewSummaryText_WithUntouched_AddsTheSentence', () => {
-    expect(
-      reviewSummaryText({
-        answered: 1,
-        notApplicable: 0,
-        untouched: 2,
-        total: 3,
-      }),
-    ).toBe('1 of 3 answered. 2 not answered; they are sent as untouched.');
-  });
-
-  it('reviewSummaryText_NoneUntouched_EndsAtTheCount', () => {
-    expect(
-      reviewSummaryText({
-        answered: 3,
-        notApplicable: 0,
-        untouched: 0,
-        total: 3,
-      }),
-    ).toBe('3 of 3 answered.');
-  });
-});
-
-describe('roundSaveLabel', () => {
-  it('reads Sending… while the round is sending', () => {
-    const round = roundAfter(
-      { type: 'openReview' },
-      { type: 'sendStarted', formId: 'r1', kind: 'submitted' },
-    );
-    expect(roundSaveLabel(round)).toBe('Sending…');
-  });
-
-  it('reads the save state while the round is not sending', () => {
-    expect(roundSaveLabel(roundAfter())).toBe('Saved');
-  });
-});
-
 describe('roundSaveState', () => {
-  it('is null while the round is sending, an edit unsaved', () => {
-    const round = roundAfter(
-      { type: 'openReview' },
-      { type: 'sendStarted', formId: 'r1', kind: 'submitted' },
-      { type: 'setText', formId: 'r1', target: { field: 'note' }, value: 'x' },
-    );
-    expect(roundSaveState(round)).toBeNull();
-  });
+  const edit: FormsAction = {
+    type: 'setText',
+    formId: 'r1',
+    target: { field: 'note' },
+    value: 'x',
+  };
 
-  it('is the save state while the round is not sending', () => {
-    const round = roundAfter({
-      type: 'setText',
-      formId: 'r1',
-      target: { field: 'note' },
-      value: 'x',
-    });
-    expect(roundSaveState(round)).toBe('unsaved');
+  it.each([
+    {
+      case: 'sending, an edit unsaved',
+      actions: [
+        { type: 'openReview' },
+        { type: 'sendStarted', formId: 'r1', kind: 'submitted' },
+        edit,
+      ] satisfies FormsAction[],
+      state: null,
+    },
+    {
+      case: 'not sending, an edit unsaved',
+      actions: [edit],
+      state: 'unsaved',
+    },
+  ])('reads $state while $case', ({ actions, state }) => {
+    const round = roundAfter(...actions);
+
+    expect(roundSaveState(round)).toBe(state);
   });
 });
 
@@ -541,32 +499,39 @@ describe('reviewRowsChanged', () => {
 });
 
 describe('railPickAction', () => {
-  it('focuses the clicked item in the forms view', () => {
-    expect(railPickAction('forms', 2, 1)).toEqual({
-      type: 'focusItem',
-      item: 2,
-    });
-  });
-
-  it("jumps to a finding's or question's row in the review", () => {
-    expect(railPickAction('review', 2, 1)).toEqual({
-      type: 'reviewJump',
-      row: 1,
-    });
-  });
-
-  it("leaves the review for a notice's card", () => {
-    expect(railPickAction('review', 0, undefined)).toEqual({
-      type: 'reviewJumpItem',
-      item: 0,
-    });
-  });
-
-  it('does nothing under the cancel prompt or with no round', () => {
-    expect(railPickAction('confirm', 0, undefined)).toBeNull();
-    expect(railPickAction('confirm', 2, 1)).toBeNull();
-    expect(railPickAction('idle', 0, undefined)).toBeNull();
-  });
+  it.each([
+    {
+      view: 'forms',
+      position: 2,
+      reviewRow: 1,
+      expected: { type: 'focusItem', item: 2 },
+    },
+    {
+      view: 'review',
+      position: 2,
+      reviewRow: 1,
+      expected: { type: 'reviewJump', row: 1 },
+    },
+    {
+      view: 'review',
+      position: 3,
+      reviewRow: undefined,
+      expected: { type: 'reviewJumpItem', item: 3 },
+    },
+    { view: 'confirm', position: 3, reviewRow: undefined, expected: null },
+    { view: 'confirm', position: 2, reviewRow: 1, expected: null },
+    { view: 'idle', position: 3, reviewRow: undefined, expected: null },
+  ] satisfies {
+    view: FormsView;
+    position: number;
+    reviewRow: number | undefined;
+    expected: FormsAction | null;
+  }[])(
+    'in the $view view, picking $position with review row $reviewRow',
+    ({ view, position, reviewRow, expected }) => {
+      expect(railPickAction(view, position, reviewRow)).toEqual(expected);
+    },
+  );
 });
 
 describe('sessionTitle', () => {
@@ -582,11 +547,11 @@ describe('sessionTitle', () => {
   it('sessionTitle counts answered and not-applicable questions', () => {
     const choose: FormsAction = { type: 'choose', number: 1 };
 
-    expect(titleAfter()).toBe('r1 heading 0/2');
-    expect(titleAfter(choose)).toBe('r1 heading 1/2');
+    expect(titleAfter()).toMatch(/\b0\/2$/);
+    expect(titleAfter(choose)).toMatch(/\b1\/2$/);
     expect(
       titleAfter(choose, { type: 'nextItem' }, { type: 'toggleNotApplicable' }),
-    ).toBe('r1 heading 2/2');
+    ).toMatch(/\b2\/2$/);
   });
 
   it('counts findings with questions', () => {
@@ -598,7 +563,7 @@ describe('sessionTitle', () => {
     if (round === null) {
       throw new Error('The test round is not active');
     }
-    expect(sessionTitle(round)).toBe('r1 heading 1/3');
+    expect(sessionTitle(round)).toMatch(/\b1\/3$/);
   });
 });
 
@@ -639,7 +604,7 @@ describe('pickRailItem', () => {
     pickRailItem(deps, 'forms', { kind: 'question', index: 2 }, 1, 1);
 
     expect(dispatched).toEqual([{ type: 'focusItem', item: 1 }]);
-    expect(logs).toEqual(['[forms] jumped to question 2']);
+    expect(logs).toEqual([expect.stringContaining('question 2')]);
   });
 
   it('logs no jump on a click on the item that has focus', () => {

@@ -16,24 +16,15 @@ describe('pageKeysFor', () => {
     expect(pageKeysFor(vimToken, '<Space>')).toEqual([pageKey]);
   });
 
-  it('converts <Enter> as <CR>', () => {
-    expect(pageKeysFor('<Enter>', '<Space>')).toEqual(['Enter']);
-  });
-
-  it('converts <Return> as <CR>', () => {
-    expect(pageKeysFor('<Return>', '<Space>')).toEqual(['Enter']);
-  });
-
-  it('converts <Bar> to |', () => {
-    expect(pageKeysFor('<Bar>', '<Space>')).toEqual(['|']);
-  });
-
-  it('converts a named key in any case, <cr> as <CR>', () => {
-    expect(pageKeysFor('<cr>', '<Space>')).toEqual(['Enter']);
-  });
-
-  it('converts <return> as <Return>', () => {
-    expect(pageKeysFor('<return>', '<Space>')).toEqual(['Enter']);
+  // Spellings the page reads but never writes back, so they sit outside NAMED_KEYS.
+  it.each([
+    ['<Enter>', 'Enter'],
+    ['<Return>', 'Enter'],
+    ['<Bar>', '|'],
+    ['<cr>', 'Enter'],
+    ['<return>', 'Enter'],
+  ])('converts the spelling %s to %s', (vimToken, pageKey) => {
+    expect(pageKeysFor(vimToken, '<Space>')).toEqual([pageKey]);
   });
 
   it('keeps chords and single characters as written', () => {

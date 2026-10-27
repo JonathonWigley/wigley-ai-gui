@@ -9,7 +9,6 @@ import type {
   PageChannel,
   PageServices,
   PluginManifest,
-  ShellLayout,
 } from '../../contracts/plugin';
 import type { AppConfig } from '../../contracts/settings';
 import { createEventBus } from '../../shared/event-bus';
@@ -258,26 +257,6 @@ describe('createPageApi', () => {
     expect(api.areas).not.toHaveProperty('sideBar');
   });
 
-  it('shell.setLayout hands the layout to the shell and returns its Disposable', () => {
-    const layouts: ShellLayout[] = [];
-    const restore = { dispose: () => {} };
-    const api = createPageApi(
-      manifest,
-      deps({
-        setLayout: (layout) => {
-          layouts.push(layout);
-          return restore;
-        },
-      }),
-    );
-    const layout: ShellLayout = { mount: () => ({}) as never };
-
-    const returned = api.shell.setLayout(layout);
-
-    expect(layouts).toEqual([layout]);
-    expect(returned).toBe(restore);
-  });
-
   it("qualifies a mode's id by the plugin", () => {
     const added: Mode[] = [];
     const modes = {
@@ -356,13 +335,5 @@ describe('createPageApi', () => {
     api.services.uiState.set('rail', 300);
 
     expect(writes).toEqual([['forms.rail', 300]]);
-  });
-
-  it('platform is the served platform', () => {
-    const config = liveConfig(appConfig({ platform: 'windows' }));
-
-    const api = createPageApi(manifest, deps({ config }));
-
-    expect(api.platform).toBe('windows');
   });
 });

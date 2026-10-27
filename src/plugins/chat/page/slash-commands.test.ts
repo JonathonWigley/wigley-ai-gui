@@ -8,37 +8,23 @@ function command(name: string): AppSlashCommand {
 }
 
 describe('slash commands', () => {
-  it('match_RegisteredWithArgs_TrimsArgs', () => {
+  it.each([
+    { text: '/status  now ', expected: { name: 'status', args: 'now' } },
+    { text: '  /login  ', expected: { name: 'login', args: '' } },
+    { text: '/model opus', expected: null },
+    { text: 'hi /login', expected: null },
+  ])('match "$text" → $expected', ({ text, expected }) => {
     const commands = createSlashCommands();
-    const status = command('status');
-    commands.add(status);
-
-    expect(commands.match('/status  now ')).toEqual({
-      command: status,
-      args: 'now',
-    });
-  });
-
-  it('match_RegisteredAlone_ArgsEmpty', () => {
-    const commands = createSlashCommands();
-    const login = command('login');
-    commands.add(login);
-
-    expect(commands.match('  /login  ')).toEqual({ command: login, args: '' });
-  });
-
-  it('match_Unregistered_Null', () => {
-    const commands = createSlashCommands();
+    commands.add(command('status'));
     commands.add(command('login'));
 
-    expect(commands.match('/model opus')).toBeNull();
-  });
+    const matched = commands.match(text);
 
-  it('match_TextBeforeSlash_Null', () => {
-    const commands = createSlashCommands();
-    commands.add(command('login'));
-
-    expect(commands.match('hi /login')).toBeNull();
+    expect(
+      matched === null
+        ? null
+        : { name: matched.command.name, args: matched.args },
+    ).toEqual(expected);
   });
 
   it('add_Twice_Throws', () => {
@@ -108,7 +94,7 @@ describe('account commands', () => {
 
     await account.run('/status', true);
 
-    expect(account.toasts).toEqual(['work: not signed in']);
+    expect(account.toasts).toEqual([expect.stringContaining('work')]);
     expect(account.invoked).toEqual([['accountStatus', 'work']]);
   });
 

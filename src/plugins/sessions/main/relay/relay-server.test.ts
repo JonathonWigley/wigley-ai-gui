@@ -145,32 +145,6 @@ describe('startRelayServer', () => {
     ]);
   });
 
-  it('starts a session with null fields from a hello that has none', async () => {
-    const { connect, started } = fakeSessions();
-    const channel = start(echoServe().serve, connect);
-    const { socket, nextLine } = await open(channel);
-
-    socket.write(
-      helloLine({
-        protocol: RELAY_PROTOCOL,
-        session_id: null,
-        project_dir: null,
-        deadline_seconds: null,
-        harness: null,
-      }),
-    );
-    await nextLine();
-
-    expect(started).toEqual([
-      {
-        sessionId: null,
-        projectDir: null,
-        deadlineSeconds: null,
-        harness: null,
-      },
-    ]);
-  });
-
   it('refuses a hello of another protocol, naming both versions', async () => {
     const { connect, started } = fakeSessions();
     const channel = start(echoServe().serve, connect);
@@ -269,45 +243,62 @@ describe('startRelayServer', () => {
     expect(served).toBe(0);
   });
 
-  it('starts a session with null fields from a hello that omits them', async () => {
-    const { connect, started } = fakeSessions();
-    const channel = start(echoServe().serve, connect);
-    const { socket, nextLine } = await open(channel);
-
-    socket.write(helloLine({ protocol: RELAY_PROTOCOL }));
-
-    expect(JSON.parse(await nextLine())).toEqual({ ok: true });
-    expect(started).toEqual([
-      {
+  it.each([
+    {
+      hello: {
+        protocol: RELAY_PROTOCOL,
+        session_id: null,
+        project_dir: null,
+        deadline_seconds: null,
+        harness: null,
+      },
+      expected: {
         sessionId: null,
         projectDir: null,
         deadlineSeconds: null,
         harness: null,
       },
-    ]);
-  });
+    },
+    {
+      hello: { protocol: RELAY_PROTOCOL },
+      expected: {
+        sessionId: null,
+        projectDir: null,
+        deadlineSeconds: null,
+        harness: null,
+      },
+    },
+    {
+      hello: { ...HELLO, harness: 'codex' },
+      expected: {
+        sessionId: 'session-1',
+        projectDir: '/work/project',
+        deadlineSeconds: 300,
+        harness: 'codex',
+      },
+    },
+    {
+      hello: { ...HELLO, harness: 'gemini' },
+      expected: {
+        sessionId: 'session-1',
+        projectDir: '/work/project',
+        deadlineSeconds: 300,
+        harness: null,
+      },
+    },
+  ])(
+    'starts a session from hello $hello as $expected',
+    async ({ hello, expected }) => {
+      const { connect, started } = fakeSessions();
+      const channel = start(echoServe().serve, connect);
+      const { socket, nextLine } = await open(channel);
 
-  it('starts a codex session from a hello naming the codex harness', async () => {
-    const { connect, started } = fakeSessions();
-    const channel = start(echoServe().serve, connect);
-    const { socket, nextLine } = await open(channel);
+      socket.write(helloLine(hello));
 
-    socket.write(helloLine({ ...HELLO, harness: 'codex' }));
-
-    expect(JSON.parse(await nextLine())).toEqual({ ok: true });
-    expect(started.map((info) => info.harness)).toEqual(['codex']);
-  });
-
-  it('reads a harness it does not know as none', async () => {
-    const { connect, started } = fakeSessions();
-    const channel = start(echoServe().serve, connect);
-    const { socket, nextLine } = await open(channel);
-
-    socket.write(helloLine({ ...HELLO, harness: 'gemini' }));
-
-    expect(JSON.parse(await nextLine())).toEqual({ ok: true });
-    expect(started.map((info) => info.harness)).toEqual([null]);
-  });
+      expect(JSON.parse(await nextLine())).toEqual({ ok: true });
+      expect(started).toEqual([expected]);
+    },
+  );
 
   it('ends the session and its server when the relay disconnects', async () => {
     const fake = fakeSessions();

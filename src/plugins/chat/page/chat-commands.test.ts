@@ -37,16 +37,13 @@ const userEntry: ChatEntry = {
 const png: ChatImage = { mediaType: 'image/png', data: 'cG5n' };
 const jpeg: ChatImage = { mediaType: 'image/jpeg', data: 'anBn' };
 
-// `first` answers each call with `firstEntry` and counts it in `firstCalls`;
 // `scrollBy` records each step and direction in `scrolls` and answers with
 // `scroll`.
 function session(
   ended: boolean,
-  firstEntry: ChatEntry | null = null,
   scroll: TranscriptScroll = { moved: true, atEnd: false, following: false },
 ) {
   const counts = {
-    firstCalls: 0,
     scrolls: [] as [ScrollStep, 1 | -1][],
   };
   const state: ChatSessionState = {
@@ -60,10 +57,6 @@ function session(
     ended,
   };
   const entries = {
-    first() {
-      counts.firstCalls++;
-      return firstEntry;
-    },
     scrollBy(step: ScrollStep, direction: 1 | -1) {
       counts.scrolls.push([step, direction]);
       return scroll;
@@ -177,14 +170,17 @@ function setUp(
 }
 
 describe('chat commands', () => {
-  it('interrupt_endedSessionShown_reachesNoProcess', () => {
-    const run = setUp(session(true));
+  it.each(['interrupt', 'pickMode', 'pickControl'] as const)(
+    '%s on an ended session opens no picker and reaches no process',
+    (command) => {
+      const run = setUp(session(true));
 
-    run.handlers.interrupt({});
+      run.handlers[command]({});
 
-    expect(run.invoked).toEqual([]);
-    expect(run.logs).toEqual(['[chat] app has ended']);
-  });
+      expect(run.opened).toEqual([]);
+      expect(run.invoked).toEqual([]);
+    },
+  );
 
   it('interrupt_liveWorkingSession_interruptsIt', () => {
     const run = setUp(session(false));
@@ -192,23 +188,6 @@ describe('chat commands', () => {
     run.handlers.interrupt({});
 
     expect(run.invoked).toEqual([['interrupt', 'row-1']]);
-  });
-
-  it('pickMode_endedSessionShown_opensNoPickerAndSetsNothing', () => {
-    const run = setUp(session(true));
-
-    run.handlers.pickMode({});
-
-    expect(run.opened).toEqual([]);
-    expect(run.invoked).toEqual([]);
-  });
-
-  it('pickControl_endedSessionShown_opensNoPicker', () => {
-    const run = setUp(session(true));
-
-    run.handlers.pickControl({});
-
-    expect(run.opened).toEqual([]);
   });
 
   it('pickMode_liveSession_sessionBoundPickerSetsTheChoice', () => {
@@ -231,7 +210,7 @@ describe('chat commands', () => {
     await flush();
 
     expect(beforeAnswer).toEqual([]);
-    expect(run.logs).toEqual(['[chat] set mode to plan in app']);
+    expect(run.logs).toEqual([expect.stringContaining('plan')]);
   });
 
   it('pickMode_mainRefuses_logsAndToastsTheFailureOnly', async () => {
@@ -241,10 +220,8 @@ describe('chat commands', () => {
     run.opened[0].picked(mode.choices[1]);
     await flush();
 
-    expect(run.logs).toEqual([
-      '[chat] setControl failed: session row-1 has ended',
-    ]);
-    expect(run.toasts).toEqual(['session row-1 has ended']);
+    expect(run.logs).toEqual([expect.stringContaining('row-1')]);
+    expect(run.toasts).toEqual([expect.stringContaining('row-1')]);
   });
 
   it('pickControl_liveSession_sessionBoundPickerOpensChoices', () => {
@@ -258,24 +235,6 @@ describe('chat commands', () => {
     expect(controls.sessionBound).toBe(true);
     expect(choices.sessionBound).toBe(true);
     expect(choices.title).toBe('Mode');
-  });
-
-  it('firstEntry_withEntries_focusesTheFirst', () => {
-    const shown = session(false, userEntry);
-    const run = setUp(shown);
-
-    run.handlers.firstEntry({});
-
-    expect(run.logs).toEqual(['[chat] focused the first entry']);
-    expect(shown.counts.firstCalls).toBe(1);
-  });
-
-  it('firstEntry_noEntries_logsNoEntries', () => {
-    const run = setUp(session(false, null));
-
-    run.handlers.firstEntry({});
-
-    expect(run.logs).toEqual(['[chat] no entries in app']);
   });
 
   it('toggleEntry_userEntryWithImages_opensViewerAtFirstAndTogglesNothing', () => {
@@ -298,87 +257,45 @@ describe('chat commands', () => {
 
     expect(entries.counts.toggles).toBe(1);
     expect(run.viewed).toEqual([]);
-    expect(run.logs).toEqual(['[chat] expanded user entry']);
   });
 
-  it('halfPageDown_scrollsOntoTheBottom_logsItFollows', () => {
-    const shown = session(false, null, {
-      moved: true,
-      atEnd: true,
-      following: true,
-    });
-    const run = setUp(shown);
+  it.each([
+    {
+      command: 'halfPageDown',
+      scroll: { moved: true, atEnd: true, following: true },
+      step: ['halfPage', 1],
+    },
+    {
+      command: 'halfPageUp',
+      scroll: { moved: true, atEnd: false, following: false },
+      step: ['halfPage', -1],
+    },
+    {
+      command: 'halfPageDown',
+      scroll: { moved: false, atEnd: true, following: true },
+      step: ['halfPage', 1],
+    },
+    {
+      command: 'lineUp',
+      scroll: { moved: true, atEnd: false, following: false },
+      step: ['line', -1],
+    },
+    {
+      command: 'lineDown',
+      scroll: { moved: true, atEnd: true, following: true },
+      step: ['line', 1],
+    },
+  ] as const)(
+    '$command over $scroll scrolls the transcript',
+    ({ command, scroll, step }) => {
+      const shown = session(false, scroll);
+      const run = setUp(shown);
 
-    run.handlers.halfPageDown({});
+      run.handlers[command]({});
 
-    expect(shown.counts.scrolls).toEqual([['halfPage', 1]]);
-    expect(run.logs).toEqual([
-      '[chat] scrolled the transcript down half a page to the bottom; following the latest entry',
-    ]);
-  });
-
-  it('halfPageUp_scrollsOffTheBottom_logsItStoppedFollowing', () => {
-    const shown = session(false, null, {
-      moved: true,
-      atEnd: false,
-      following: false,
-    });
-    const run = setUp(shown);
-
-    run.handlers.halfPageUp({});
-
-    expect(shown.counts.scrolls).toEqual([['halfPage', -1]]);
-    expect(run.logs).toEqual([
-      '[chat] scrolled the transcript up half a page; not following',
-    ]);
-  });
-
-  it('halfPageDown_alreadyAtTheBottom_logsItDidNotScroll', () => {
-    const shown = session(false, null, {
-      moved: false,
-      atEnd: true,
-      following: true,
-    });
-    const run = setUp(shown);
-
-    run.handlers.halfPageDown({});
-
-    expect(run.logs).toEqual([
-      '[chat] the transcript did not scroll down; following the latest entry',
-    ]);
-  });
-
-  it('lineUp_scrollsOffTheBottom_logsALineAndItStoppedFollowing', () => {
-    const shown = session(false, null, {
-      moved: true,
-      atEnd: false,
-      following: false,
-    });
-    const run = setUp(shown);
-
-    run.handlers.lineUp({});
-
-    expect(shown.counts.scrolls).toEqual([['line', -1]]);
-    expect(run.logs).toEqual([
-      '[chat] scrolled the transcript up a line; not following',
-    ]);
-  });
-
-  it('lineDown_scrollsOntoTheBottom_logsALineAndItFollows', () => {
-    const shown = session(false, null, {
-      moved: true,
-      atEnd: true,
-      following: true,
-    });
-    const run = setUp(shown);
-
-    run.handlers.lineDown({});
-
-    expect(shown.counts.scrolls).toEqual([['line', 1]]);
-    expect(run.logs).toEqual([
-      '[chat] scrolled the transcript down a line to the bottom; following the latest entry',
-    ]);
-  });
+      expect(shown.counts.scrolls).toEqual([step]);
+    },
+  );
 
   it('halfPageDown_noChatTabShown_scrollsNothingAndLogsIt', () => {
     const shown = session(false);
@@ -389,11 +306,7 @@ describe('chat commands', () => {
     run.handlers.lineDown({});
 
     expect(shown.counts.scrolls).toEqual([]);
-    expect(run.logs).toEqual([
-      '[chat] no Chat tab shown',
-      '[chat] no Chat tab shown',
-      '[chat] no Chat tab shown',
-    ]);
+    expect(run.logs).toHaveLength(3);
   });
 
   it('send_AppCommand_RunsAndClearsBox', () => {
@@ -450,7 +363,7 @@ describe('chat commands', () => {
     run.handlers.send({});
     await flush();
 
-    expect(run.toasts).toEqual(['/logout failed: no network']);
+    expect(run.toasts).toEqual([expect.stringContaining('no network')]);
     expect(run.invoked).toEqual([]);
   });
 

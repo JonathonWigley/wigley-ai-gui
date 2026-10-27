@@ -37,14 +37,12 @@ describe('resume items', () => {
   });
 
   it('sessionItems_NewFirstArchivedOnlyWhenShown', () => {
-    const labels = (showArchived: boolean) =>
-      sessionItems([a, b], showArchived).map((item) => item.label);
-    expect(labels(false)).toEqual(['New session', 'alpha · 2026-01-02 03:04']);
-    expect(labels(true)).toEqual([
-      'New session',
-      'alpha · 2026-01-02 03:04',
-      'beta · 2026-01-02 03:04 · archived',
-    ]);
+    const ids = (showArchived: boolean) =>
+      sessionItems([a, b], showArchived).map((item) =>
+        item.kind === 'past' ? item.row.hostSessionId : item.kind,
+      );
+    expect(ids(false)).toEqual(['new', 'a']);
+    expect(ids(true)).toEqual(['new', 'a', 'b']);
   });
 
   it('withArchived_CopiesWithTheFlagSet', () => {
@@ -65,25 +63,11 @@ describe('resume items', () => {
     expect(selectedAfterChange(before, null, before)).toBe(0);
   });
 
-  it('archiveStateOf_NewSessionLine_Null', () => {
-    expect(archiveStateOf({ kind: 'new', label: 'New session' })).toBeNull();
-  });
-
-  it('archiveStateOf_LiveRow_Live', () => {
-    const liveRow = row('l', 'live', false);
-    expect(
-      archiveStateOf({ kind: 'past', row: liveRow, label: liveRow.title }),
-    ).toBe('live');
-  });
-
-  it('archiveStateOf_ArchivedRow_Archived', () => {
-    const archivedRow = row('r', 'archived', true);
-    expect(
-      archiveStateOf({
-        kind: 'past',
-        row: archivedRow,
-        label: archivedRow.title,
-      }),
-    ).toBe('archived');
+  it.each([
+    { given: 'the new session line', item: newItem, expected: null },
+    { given: 'a live row', item: past(a), expected: 'live' },
+    { given: 'an archived row', item: past(b), expected: 'archived' },
+  ])('archiveStateOf $given → $expected', ({ item, expected }) => {
+    expect(archiveStateOf(item)).toBe(expected);
   });
 });

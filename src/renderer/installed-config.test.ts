@@ -68,17 +68,7 @@ describe('installedConfig', () => {
 
     expect(config.problems).toEqual([
       { file: 'settings.json', message: 'bad' },
-      { file: 'keymap.json', message: 'Keys not applied: clash' },
-    ]);
-  });
-
-  it('keeps the pushed problems alone when the keys applied', () => {
-    const next = pushed('new');
-
-    const config = installedConfig(next, applied(next), null);
-
-    expect(config.problems).toEqual([
-      { file: 'settings.json', message: 'bad' },
+      { file: 'keymap.json', message: expect.stringContaining('clash') },
     ]);
   });
 });

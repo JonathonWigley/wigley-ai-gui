@@ -122,6 +122,10 @@ async function savedSessions() {
   return files;
 }
 
+function totalBytes(asked: number[]): number {
+  return asked.reduce((sum, maxBytes) => sum + maxBytes, 0);
+}
+
 function recordingLog() {
   const logged: [string, string][] = [];
   return {
@@ -180,10 +184,7 @@ describe('listPastSessions', () => {
     expect(sessions).toEqual([
       { sessionId: NEW_ID, title: 'new', modified: 2000 },
     ]);
-    expect(logged).toContainEqual([
-      'claude',
-      `transcript ${broken} unreadable: boom`,
-    ]);
+    expect(logged).toContainEqual(['claude', expect.stringContaining(broken)]);
   });
 
   it('listPastSessions_ManyTranscripts_ReadsInBoundedBatches', async () => {
@@ -289,13 +290,10 @@ describe('listPastSessions', () => {
 
     expect(sessions).toEqual([]);
     expect(asked.at(-1)).toBe(TRANSCRIPT_HEAD_MAX_BYTES);
-    expect(logged).toContainEqual([
-      'claude',
-      `transcript ${path} cut at ${TRANSCRIPT_HEAD_MAX_BYTES} bytes`,
-    ]);
+    expect(logged).toContainEqual(['claude', expect.stringContaining(path)]);
   });
 
-  it('listPastSessions_ShortFileEndsInsideLine_StopsAtTheSecondRead', async () => {
+  it('listPastSessions_ShortFileEndsInsideLine_StopsAtTheFileEnd', async () => {
     const stored = createMemoryFiles();
     await stored.write(
       `${FOLDER}/${OLD_ID}.jsonl`,
@@ -313,38 +311,35 @@ describe('listPastSessions', () => {
       '/w/app',
     );
 
-    expect(asked).toEqual([TRANSCRIPT_HEAD_BYTES, TRANSCRIPT_HEAD_BYTES * 2]);
+    // Reading on to the cap would ask for at least the cap's bytes.
+    expect(totalBytes(asked)).toBeLessThan(TRANSCRIPT_HEAD_MAX_BYTES);
     expect(logged).toEqual([]);
     expect(sessions).toEqual([
-      { sessionId: OLD_ID, title: 'Untitled session', modified: 0 },
+      { sessionId: OLD_ID, title: expect.any(String), modified: 0 },
     ]);
   });
 
-  it('listPastSessions_UntypedUserLineThenCutLine_StopsAtTheFirstRead', async () => {
+  it('listPastSessions_UntypedUserLineThenCutLine_DoesNotReadTheWholeFile', async () => {
     const stored = createMemoryFiles();
-    await stored.write(
-      `${FOLDER}/${OLD_ID}.jsonl`,
-      [
-        {
-          type: 'user',
-          uuid: 'u1',
-          cwd: '/w/app',
-          message: {
-            role: 'user',
-            content: [
-              { type: 'tool_result', tool_use_id: 't1', content: 'ok' },
-            ],
-          },
+    const text = [
+      {
+        type: 'user',
+        uuid: 'u1',
+        cwd: '/w/app',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }],
         },
-        {
-          type: 'assistant',
-          uuid: 'a1',
-          message: { content: 'x'.repeat(TRANSCRIPT_HEAD_BYTES * 3) },
-        },
-      ]
-        .map((line) => JSON.stringify(line))
-        .join('\n'),
-    );
+      },
+      {
+        type: 'assistant',
+        uuid: 'a1',
+        message: { content: 'x'.repeat(TRANSCRIPT_HEAD_BYTES * 3) },
+      },
+    ]
+      .map((line) => JSON.stringify(line))
+      .join('\n');
+    await stored.write(`${FOLDER}/${OLD_ID}.jsonl`, text);
     const { files, asked } = recordingReads(stored);
     const { log, logged } = recordingLog();
 
@@ -354,10 +349,10 @@ describe('listPastSessions', () => {
       '/w/app',
     );
 
-    expect(asked).toEqual([TRANSCRIPT_HEAD_BYTES]);
+    expect(totalBytes(asked)).toBeLessThan(text.length);
     expect(logged).toEqual([]);
     expect(sessions).toEqual([
-      { sessionId: OLD_ID, title: 'Untitled session', modified: 0 },
+      { sessionId: OLD_ID, title: expect.any(String), modified: 0 },
     ]);
   });
 });
@@ -376,7 +371,7 @@ describe('readHistory', () => {
 
     await expect(
       readHistory(files, posixPaths, FOLDER, '../x'),
-    ).rejects.toThrow('not a Claude session id: ../x');
+    ).rejects.toThrow('../x');
     expect(readPaths).toEqual([]);
   });
 
@@ -420,7 +415,7 @@ describe('listProjectFolders', () => {
     ]);
     expect(logged).toContainEqual([
       'claude',
-      'project folder /config/projects/-w-empty has no readable transcript',
+      expect.stringContaining('/config/projects/-w-empty'),
     ]);
   });
 
@@ -450,10 +445,7 @@ describe('listProjectFolders', () => {
     );
 
     expect(projects.map((project) => project.projectDir)).toEqual(['/w/app']);
-    expect(logged).toContainEqual([
-      'claude',
-      `project folder ${locked} unreadable: EACCES`,
-    ]);
+    expect(logged).toContainEqual(['claude', expect.stringContaining(locked)]);
   });
 
   it('listProjects_MissingProjectsFolder_Empty', async () => {

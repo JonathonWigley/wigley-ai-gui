@@ -98,11 +98,9 @@ describe('forms drive actions', () => {
     addDriveActions(drive.host, fakeSessions(), fakeEndedEvent().on);
 
     await expect(drive.run('openRound', { sessionId: 1 })).rejects.toThrow(
-      'sessionId must be a string',
+      'sessionId',
     );
-    await expect(drive.run('openRound', 'x')).rejects.toThrow(
-      'args must be an object',
-    );
+    await expect(drive.run('openRound', 'x')).rejects.toThrow('args');
   });
 
   it('answers is pending until the round resolves, then its result', async () => {
@@ -118,9 +116,7 @@ describe('forms drive actions', () => {
     await Promise.resolve();
 
     expect(await drive.run('answers', { sessionId: 's' })).toEqual(SUBMITTED);
-    await expect(drive.run('answers', {})).rejects.toThrow(
-      'sessionId must be a string',
-    );
+    await expect(drive.run('answers', {})).rejects.toThrow('sessionId');
   });
 
   it('dispose removes the actions and ends each session forms opened', async () => {

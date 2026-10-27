@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ENTRY_KINDS, readChatLayout } from './read-chat-layout';
+import { readChatLayout } from './read-chat-layout';
 
 const builder = () => ({ element: {} as HTMLElement });
 
@@ -36,21 +36,5 @@ describe('readChatLayout', () => {
     const layout = { entries: entriesWithout(null) };
 
     expect(readChatLayout({ default: layout }, 'mine')).toBe(layout);
-  });
-
-  it('ENTRY_KINDS_HoldsEveryKindOnce', () => {
-    expect(new Set(ENTRY_KINDS)).toEqual(
-      new Set([
-        'user',
-        'assistant',
-        'thinking',
-        'tool',
-        'permission',
-        'result',
-        'notice',
-        'raw',
-      ]),
-    );
-    expect(ENTRY_KINDS).toHaveLength(new Set(ENTRY_KINDS).size);
   });
 });

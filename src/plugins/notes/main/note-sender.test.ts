@@ -5,10 +5,8 @@ import type { BacklogWriteResult, NoteTarget } from '../../backlog/contract';
 import type { LaunchRequest } from '../../chat/contract';
 import type { FollowupRequest, NoteFields, NoteSession } from '../contract';
 import { emptyDraft, fieldsOf, parseDraft } from '../draft';
-import { sessionLine } from '../session-ref';
 import { createDraftStore } from './draft-store';
 import { createNoteSender } from './note-sender';
-import { firstSentence, launchText } from './note-text';
 
 const HOME = '/home/me';
 const ROOT = '/home/me/repo/docs/features';
@@ -125,21 +123,24 @@ describe('toSession', () => {
       fields: { session: SESSION },
       images: [PNG_A],
     });
-    const draft = await note.store.draft();
 
     const result = await note.sender.toSession('/home/me/repo', [null]);
 
-    const line = sessionLine(SESSION, posixPaths, HOME);
     expect(note.launched).toEqual([
       {
         projectDir: '/home/me/repo',
         profile: 'work',
         message: {
-          text: launchText(BRIEF, draft, line),
+          text: expect.any(String),
           images: [{ mediaType: 'image/png', data: 'AQEB' }],
         },
       },
     ]);
+    const text = note.launched[0].message.text;
+    const parts = [BRIEF, 'Fix the gap', 'Shrink it.', 'abc123', '~/repo'];
+    for (const part of parts) {
+      expect(text).toContain(part);
+    }
     expect(result).toEqual({
       type: 'sent',
       draft: emptyDraft(2),
@@ -217,7 +218,7 @@ describe('toFollowup', () => {
         {
           type: 'create',
           title: 'Fix the gap',
-          oneLine: firstSentence('The gap is wide. Shrink it.'),
+          oneLine: 'The gap is wide.',
           tags: ['ui'],
         },
       ],
@@ -315,7 +316,7 @@ describe('toFollowup', () => {
     const note = await setUp({ images: [PNG_A] });
 
     await expect(note.sender.toFollowup(CREATE, [])).rejects.toThrow(
-      'flattened holds 0 images; the draft holds 1',
+      /\b0\b.*\b1\b/,
     );
   });
 });

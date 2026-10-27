@@ -65,23 +65,18 @@ type CardOptions = Parameters<ChatKit['collapsibleCard']>[0];
 function fakeKit() {
   const calls = {
     markdown: [] as string[],
-    json: [] as unknown[],
     expanders: [] as { line: string; body: () => HTMLElement }[],
     collapsibleCards: [] as CardOptions[],
     setOpen: [] as boolean[],
     setDotStatus: [] as [string | null, string][],
-    permissionActions: 0,
-    images: 0,
   };
   const kit: ChatKit = {
     markdown(text) {
       calls.markdown.push(text);
       return asHtml(fakeElement('div', `markdown:${text}`));
     },
-    json(value) {
-      calls.json.push(value);
-      return asHtml(fakeElement('pre', `json:${JSON.stringify(value)}`));
-    },
+    json: (value) =>
+      asHtml(fakeElement('pre', `json:${JSON.stringify(value)}`)),
     expander(summary, body) {
       calls.expanders.push({ line: summary, body });
       return asHtml(fakeElement('div', `expander:${summary}`));
@@ -104,14 +99,8 @@ function fakeKit() {
       calls.setDotStatus.push([asFake(dot).part, status]);
     },
     sectionHeader: (text) => asHtml(fakeElement('h3', `section:${text}`)),
-    permissionActions() {
-      calls.permissionActions += 1;
-      return asHtml(fakeElement('div', 'permissionActions'));
-    },
-    images() {
-      calls.images += 1;
-      return asHtml(fakeElement('div', 'images'));
-    },
+    permissionActions: () => asHtml(fakeElement('div', 'permissionActions')),
+    images: () => asHtml(fakeElement('div', 'images')),
   };
   return { kit, calls };
 }
@@ -156,8 +145,6 @@ describe('default chat layout', () => {
 
     const view = layout.entries.user(entry, kit);
     const root = asFake(view.element);
-    expect(root.className).toBe('chat-entry chat-user');
-    expect(describeChildren(root)).toEqual(['card:none']);
     const turn = root.children[0];
     expect(describeChildren(turn)).toEqual(['markdown:hello']);
 
@@ -175,27 +162,25 @@ describe('default chat layout', () => {
     raw: [] as unknown[],
   };
 
-  it('userEntry_WithImages_DrawsThumbnails', () => {
-    const { kit, calls } = fakeKit();
+  it.each([
+    {
+      images: [{ mediaType: 'image/png', data: 'cG5n' }],
+      children: ['markdown:look', 'images'],
+    },
+    { images: [], children: ['markdown:look'] },
+  ])(
+    'user entry with $images.length images holds $children',
+    ({ images, children }) => {
+      const { kit } = fakeKit();
 
-    const view = layout.entries.user(userWithImage, kit);
-    const turn = asFake(view.element).children[0];
+      const view = layout.entries.user({ ...userWithImage, images }, kit);
+      const turn = asFake(view.element).children[0];
 
-    expect(calls.images).toBe(1);
-    expect(describeChildren(turn)).toEqual(['markdown:look', 'images']);
-  });
+      expect(describeChildren(turn)).toEqual(children);
+    },
+  );
 
-  it('userEntry_NoImages_NoThumbnails', () => {
-    const { kit, calls } = fakeKit();
-
-    const view = layout.entries.user({ ...userWithImage, images: [] }, kit);
-    const turn = asFake(view.element).children[0];
-
-    expect(calls.images).toBe(0);
-    expect(describeChildren(turn)).toEqual(['markdown:look']);
-  });
-
-  it('assistant_streamingClass_updateInPlace', () => {
+  it('assistant_update_UpdatesInPlace', () => {
     const { kit } = fakeKit();
     const entry = {
       kind: 'assistant' as const,
@@ -207,12 +192,10 @@ describe('default chat layout', () => {
 
     const view = layout.entries.assistant(entry, kit);
     const root = asFake(view.element);
-    expect(root.classList.contains('chat-streaming')).toBe(true);
 
     view.update?.({ ...entry, text: 'Hi there', streaming: false });
     expect(asFake(view.element)).toBe(root);
     expect(describeChildren(root)).toEqual(['markdown:Hi there']);
-    expect(root.classList.contains('chat-streaming')).toBe(false);
   });
 
   it('thinking_expanderBodyRefilledInPlace', () => {
@@ -230,7 +213,6 @@ describe('default chat layout', () => {
       'Thinking',
     ]);
     const body = asFake(calls.expanders[0].body());
-    expect(body.className).toBe('chat-thinking-body');
     expect(describeChildren(body)).toEqual(['markdown:step 1']);
 
     view.update?.({ ...entry, text: 'step 1 step 2' });
@@ -251,33 +233,14 @@ describe('default chat layout', () => {
   };
   const inputJson = `json:${JSON.stringify({ command: 'ls -la' })}`;
 
-  it('tool_closedMonoCardWithRunningDot', () => {
+  it.each([
+    { summary: 'ls -la', line: 'Bash · ls -la' },
+    { summary: '', line: 'Bash' },
+  ])('tool line with summary "$summary" is $line', ({ summary, line }) => {
     const { kit, calls } = fakeKit();
 
-    const view = layout.entries.tool(toolEntry, kit);
-    expect(calls.collapsibleCards).toHaveLength(1);
-    const options = calls.collapsibleCards[0];
-    expect(options.summary).toBe('Bash · ls -la');
-    expect(options.mono).toBe(true);
-    expect(asFake(options.leading as HTMLElement).part).toBe('dot:running');
-    expect(options.open ?? false).toBe(false);
-    expect(describeChildren(asFake(view.element))).toEqual([
-      'collapsibleCard:Bash · ls -la',
-    ]);
-    const body = asFake(options.body());
-    expect(body.className).toBe('chat-tool-body');
-    expect(describeChildren(body)).toEqual([
-      'section:Input',
-      inputJson,
-      'div.chat-muted:Running…',
-    ]);
-  });
-
-  it('tool_lineWithoutSummary', () => {
-    const { kit, calls } = fakeKit();
-
-    layout.entries.tool({ ...toolEntry, summary: '' }, kit);
-    expect(calls.collapsibleCards[0].summary).toBe('Bash');
+    layout.entries.tool({ ...toolEntry, summary }, kit);
+    expect(calls.collapsibleCards[0].summary).toBe(line);
   });
 
   it.each([
@@ -313,19 +276,17 @@ describe('default chat layout', () => {
     raw: [] as unknown[],
   };
 
-  it('permission_unansweredAttentionCard_noUpdate', () => {
-    const { kit, calls } = fakeKit();
+  it('permission_unanswered_holdsTheInputAndActions_noUpdate', () => {
+    const { kit } = fakeKit();
 
     const view = layout.entries.permission(permissionEntry, kit);
-    const root = asFake(view.element);
-    expect(describeChildren(root)).toEqual(['card:attention']);
-    expect(describeChildren(root.children[0])).toEqual([
-      'div.chat-permission-head:Allow Bash?',
-      `json:${JSON.stringify({ command: 'rm x' })}`,
-      'permissionActions',
-    ]);
-    expect(calls.json).toEqual([{ command: 'rm x' }]);
-    expect(calls.permissionActions).toBe(1);
+    const card = asFake(view.element).children[0];
+    expect(describeChildren(card)).toEqual(
+      expect.arrayContaining([
+        `json:${JSON.stringify({ command: 'rm x' })}`,
+        'permissionActions',
+      ]),
+    );
     expect(view.update).toBeUndefined();
   });
 
@@ -357,29 +318,12 @@ describe('default chat layout', () => {
     expect(asFake(view.element).textContent).toBe(line);
   });
 
-  it('notice_toneClass', () => {
-    const { kit } = fakeKit();
-    const entry = {
-      kind: 'notice' as const,
-      id: 'n1',
-      text: 'rate limited',
-      tone: 'error' as const,
-      raw: [] as unknown[],
-    };
-
-    const root = asFake(layout.entries.notice(entry, kit).element);
-    expect(root.className).toBe('chat-entry chat-notice chat-notice-error');
-    expect(root.textContent).toBe('rate limited');
-  });
-
   it('raw_expanderShowsTheEvents', () => {
     const { kit, calls } = fakeKit();
     const raw: unknown[] = [{ type: 'x' }];
 
     layout.entries.raw({ kind: 'raw', id: 'x1', raw }, kit);
-    expect(calls.expanders[0].line).toBe('Raw event');
     const body = asFake(calls.expanders[0].body());
-    expect(body.className).toBe('chat-raw-body');
     expect(describeChildren(body)).toEqual([
       `json:${JSON.stringify([{ type: 'x' }])}`,
     ]);

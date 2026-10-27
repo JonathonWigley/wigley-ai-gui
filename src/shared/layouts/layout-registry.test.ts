@@ -92,8 +92,8 @@ describe('start', () => {
     const registry = await start();
 
     expect(registry.names()).toEqual(['default', 'alpha']);
-    expect(logLines).toContain(
-      '[demo] layouts/default is ignored; the built-in default layout wins',
+    expect(logLines).toContainEqual(
+      expect.stringMatching(/^\[demo\] .*layouts\/default/),
     );
   });
 
@@ -238,7 +238,9 @@ describe('watch', () => {
 
     failing.fail(new Error('EMFILE'));
 
-    expect(logLines).toContain('[demo] layouts watch failed: EMFILE');
+    expect(logLines).toContainEqual(
+      expect.stringMatching(/^\[demo\] .*watch.*EMFILE/),
+    );
   });
 
   it('hasCss_TrueWhenLayoutCssPresent', async () => {

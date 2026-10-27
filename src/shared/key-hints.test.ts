@@ -176,99 +176,58 @@ describe('normalVimKeys', () => {
 });
 
 describe('formatVimToken', () => {
-  it('formatVimToken_NamesSpaceEscAndEnter', () => {
-    expect(formatVimToken('<Space>', 'macos')).toBe('Space');
-    expect(formatVimToken('<Esc>', 'macos')).toBe('⎋');
-    expect(formatVimToken('<CR>', 'macos')).toBe('↩');
-    expect(formatVimToken('a', 'macos')).toBe('a');
-    expect(formatVimToken('<Space>', 'windows')).toBe('Space');
-    expect(formatVimToken('<Esc>', 'windows')).toBe('Esc');
-    expect(formatVimToken('<CR>', 'windows')).toBe('Enter');
+  it.each([
+    { token: '<Space>', expected: 'Space' },
+    { token: '<Esc>', expected: '⎋' },
+    { token: '<CR>', expected: '↩' },
+    { token: '<Return>', expected: '↩' },
+    { token: '<cr>', expected: '↩' },
+    { token: 'a', expected: 'a' },
+    { token: '<A-o>', expected: '⌥O' },
+    { token: '<M-x>', expected: '⌘X' },
+    { token: '<D-y>', expected: '⌘Y' },
+    { token: '<S-C-a>', expected: '⌃⇧A' },
+    { token: '<A-O>', expected: '⌥⇧O' },
+    { token: '<C-CR>', expected: '⌃↩' },
+    { token: '<D-CR>', expected: '⌘↩' },
+    { token: '<S-Tab>', expected: '⇧⇥' },
+    { token: '<C-Esc>', expected: '⌃⎋' },
+    { token: '<A-BS>', expected: '⌥⌫' },
+    { token: '<C-Space>', expected: '⌃Space' },
+    { token: '<lt>', expected: '<' },
+    { token: '<Bslash>', expected: '\\' },
+    { token: '<Tab>', expected: '⇥' },
+    { token: '<BS>', expected: '⌫' },
+    { token: '<Del>', expected: '⌦' },
+    { token: '<Up>', expected: '↑' },
+    { token: '<Left>', expected: '←' },
+    { token: '<F5>', expected: 'F5' },
+    { token: '<X-a>', expected: '<X-a>' },
+  ])('prints $token on macOS as $expected', ({ token, expected }) => {
+    expect(formatVimToken(token, 'macos')).toBe(expected);
   });
 
-  it('formatVimToken_Chord_PrintsForPlatform', () => {
-    expect(formatVimToken('<A-o>', 'windows')).toBe('Alt+O');
-    expect(formatVimToken('<A-o>', 'macos')).toBe('⌥O');
-  });
-
-  it('formatVimToken_MetaChord_PrintsCommandOrWin', () => {
-    expect(formatVimToken('<M-x>', 'macos')).toBe('⌘X');
-    expect(formatVimToken('<M-x>', 'windows')).toBe('Win+X');
-    expect(formatVimToken('<D-x>', 'macos')).toBe('⌘X');
-  });
-
-  it('formatVimToken_ModifiersInAnyOrderOrCase_PrintInPlatformOrder', () => {
-    expect(formatVimToken('<S-C-a>', 'macos')).toBe('⌃⇧A');
-    expect(formatVimToken('<S-C-a>', 'windows')).toBe('Ctrl+Shift+A');
-    expect(formatVimToken('<m-a-k>', 'windows')).toBe('Alt+Win+K');
-  });
-
-  it('formatVimToken_CapitalLetter_HoldsShift', () => {
-    expect(formatVimToken('<A-O>', 'macos')).toBe('⌥⇧O');
-    expect(formatVimToken('<A-O>', 'windows')).toBe('Alt+Shift+O');
-    expect(formatVimToken('<A-o>', 'macos')).not.toBe(
-      formatVimToken('<A-O>', 'macos'),
-    );
-  });
-
-  it('formatVimToken_NamedKeyChord_PrintsItsName', () => {
-    expect(formatVimToken('<C-CR>', 'macos')).toBe('⌃↩');
-    expect(formatVimToken('<C-cr>', 'windows')).toBe('Ctrl+Enter');
-    expect(formatVimToken('<S-Tab>', 'windows')).toBe('Shift+Tab');
-  });
-
-  it('formatVimToken_ReturnChord_PrintsAsThePageChordDoes', () => {
-    expect(formatVimToken('<D-CR>', 'macos')).toBe(
-      formatChord('<D-Enter>', 'macos'),
-    );
-    expect(formatVimToken('<D-CR>', 'macos')).toBe('⌘↩');
-  });
-
-  it('formatVimToken_BareReturn_PrintsAsThePageKeyDoes', () => {
-    expect(formatVimToken('<CR>', 'macos')).toBe(
-      formatKeys(['Enter'], 'macos'),
-    );
-    expect(formatVimToken('<Return>', 'macos')).toBe('↩');
-    expect(formatVimToken('<CR>', 'windows')).toBe(
-      formatKeys(['Enter'], 'windows'),
-    );
-  });
-
-  it('formatVimToken_NamedKeyChordOnMac_PrintsItsGlyph', () => {
-    expect(formatVimToken('<S-Tab>', 'macos')).toBe('⇧⇥');
-    expect(formatVimToken('<C-Esc>', 'macos')).toBe('⌃⎋');
-    expect(formatVimToken('<A-BS>', 'macos')).toBe('⌥⌫');
-    expect(formatVimToken('<C-Space>', 'macos')).toBe('⌃Space');
-  });
-
-  it('formatVimToken_SpecialCharacterName_PrintsTheCharacter', () => {
-    expect(formatVimToken('<lt>', 'macos')).toBe('<');
-    expect(formatVimToken('<Bar>', 'windows')).toBe('|');
-    expect(formatVimToken('<Bslash>', 'macos')).toBe('\\');
-  });
-
-  it('formatVimToken_NamedKeyOnMac_PrintsItsGlyph', () => {
-    expect(formatVimToken('<Tab>', 'macos')).toBe('⇥');
-    expect(formatVimToken('<BS>', 'macos')).toBe('⌫');
-    expect(formatVimToken('<Del>', 'macos')).toBe('⌦');
-    expect(formatVimToken('<cr>', 'macos')).toBe('↩');
-    expect(formatVimToken('<Up>', 'macos')).toBe('↑');
-    expect(formatVimToken('<Left>', 'macos')).toBe('←');
-  });
-
-  it('formatVimToken_NamedKeyOffMac_PrintsItsName', () => {
-    expect(formatVimToken('<Tab>', 'windows')).toBe('Tab');
-    expect(formatVimToken('<BS>', 'windows')).toBe('Backspace');
-    expect(formatVimToken('<Up>', 'linux')).toBe('Up');
-  });
-
-  it('formatVimToken_UnnamedKey_PrintsBareName', () => {
-    expect(formatVimToken('<F5>', 'macos')).toBe('F5');
-  });
-
-  it('formatVimToken_UnknownModifier_ReturnsAsIs', () => {
-    expect(formatVimToken('<X-a>', 'macos')).toBe('<X-a>');
-  });
+  it.each([
+    { token: '<Space>', platform: 'windows', expected: 'Space' },
+    { token: '<Esc>', platform: 'windows', expected: 'Esc' },
+    { token: '<CR>', platform: 'windows', expected: 'Enter' },
+    { token: '<A-o>', platform: 'windows', expected: 'Alt+O' },
+    { token: '<M-x>', platform: 'windows', expected: 'Win+X' },
+    { token: '<S-C-a>', platform: 'windows', expected: 'Ctrl+Shift+A' },
+    { token: '<m-a-k>', platform: 'windows', expected: 'Alt+Win+K' },
+    { token: '<A-O>', platform: 'windows', expected: 'Alt+Shift+O' },
+    { token: '<C-cr>', platform: 'windows', expected: 'Ctrl+Enter' },
+    { token: '<S-Tab>', platform: 'windows', expected: 'Shift+Tab' },
+    { token: '<Bar>', platform: 'windows', expected: '|' },
+    { token: '<Tab>', platform: 'windows', expected: 'Tab' },
+    { token: '<BS>', platform: 'windows', expected: 'Backspace' },
+    { token: '<Up>', platform: 'linux', expected: 'Up' },
+  ] as const)(
+    'prints $token on $platform as $expected',
+    ({ token, platform, expected }) => {
+      expect(formatVimToken(token, platform)).toBe(expected);
+    },
+  );
 });
 
 describe('formatVimKeys', () => {

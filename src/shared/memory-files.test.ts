@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { isMissingFile } from '../contracts/files';
+import { describeFilesContract } from './files-contract.test-support';
 import { createMemoryFiles, type MemoryFiles } from './memory-files';
 
 let files: MemoryFiles;
@@ -13,6 +13,8 @@ beforeEach(() => {
 });
 
 describe('createMemoryFiles', () => {
+  describeFilesContract(() => ({ files, at: (relative) => `/h/${relative}` }));
+
   it('modified_StampsTheClockAtEachWrite', async () => {
     const clock = { now: () => 5000 };
     const stamped = createMemoryFiles(clock);
@@ -25,28 +27,10 @@ describe('createMemoryFiles', () => {
     expect(await stamped.modified('/h/a.md')).toBe(7000);
   });
 
-  it('writeBytes_BinaryBytes_HoldsTheSameBytes', async () => {
-    await files.writeBytes('/h/shot.png', new Uint8Array([0, 255, 137]));
-
-    expect([...files.bytesOf('/h/shot.png')]).toEqual([0, 255, 137]);
-  });
-
-  it('readBytes_MissingFile_RejectsAsMissingFile', async () => {
-    const error = await files
-      .readBytes('/h/none.png')
-      .catch((caught: unknown) => caught);
-
-    expect(isMissingFile(error)).toBe(true);
-  });
-
   it('modified_NoClock_IsZero', async () => {
     await files.write('/h/a.md', 'one');
 
     expect(await files.modified('/h/a.md')).toBe(0);
-  });
-
-  it('modified_MissingFile_Rejects', async () => {
-    await expect(files.modified('/nope')).rejects.toThrow('no file at /nope');
   });
 
   it('modified_Rename_CarriesTheStampToTheNewPath', async () => {
@@ -61,27 +45,7 @@ describe('createMemoryFiles', () => {
 
     expect(await stamped.modified('/h/c.md')).toBe(5000);
     expect(await stamped.modified('/h/t/b.md')).toBe(5000);
-    await expect(stamped.modified('/h/a.md')).rejects.toThrow(
-      'no file at /h/a.md',
-    );
-  });
-
-  it('readStart_CutInsideACharacter_LeavesItOut', async () => {
-    await files.write('/h/a.md', 'aé');
-
-    expect(await files.readStart('/h/a.md', 2)).toBe('a');
-  });
-
-  it('rename_DestinationExists_RejectsAndKeepsBoth', async () => {
-    await files.write('/h/a.md', 'one');
-    await files.write('/h/b.md', 'two');
-
-    await expect(files.rename('/h/a.md', '/h/b.md')).rejects.toThrow(
-      '/h/b.md already exists',
-    );
-
-    expect(await files.read('/h/a.md')).toBe('one');
-    expect(await files.read('/h/b.md')).toBe('two');
+    await expect(stamped.modified('/h/a.md')).rejects.toThrow('/h/a.md');
   });
 
   it('rename_Folder_MovesSubtreeAndReports', async () => {
@@ -142,29 +106,6 @@ describe('createMemoryFiles', () => {
     expect(reports).toEqual(['a.md']);
   });
 
-  it('rename_SourceMissing_RejectsAsMissingFile', async () => {
-    await files.makeFolder('/h');
-
-    const error = await files
-      .rename('/h/none.md', '/h/b.md')
-      .catch((caught: unknown) => caught);
-
-    expect(isMissingFile(error)).toBe(true);
-    expect(await files.stat('/h/b.md')).toBeNull();
-  });
-
-  it('rename_DestinationParentMissing_RejectsAsMissingFileAndKeepsSource', async () => {
-    await files.write('/h/a.md', 'one');
-
-    const error = await files
-      .rename('/h/a.md', '/h/none/b.md')
-      .catch((caught: unknown) => caught);
-
-    expect(isMissingFile(error)).toBe(true);
-    expect(await files.read('/h/a.md')).toBe('one');
-    expect(await files.stat('/h/none')).toBeNull();
-  });
-
   it('rename_FolderIntoItself_RejectsAndMovesNothing', async () => {
     await files.write('/h/s/ref.md', 'ref');
 
@@ -172,29 +113,6 @@ describe('createMemoryFiles', () => {
 
     expect(await files.read('/h/s/ref.md')).toBe('ref');
     expect(await files.stat('/h/s/t')).toBeNull();
-  });
-
-  it('makeFolder_ExistingFolder_Resolves', async () => {
-    await files.write('/h/e/a.md', 'a');
-
-    await expect(files.makeFolder('/h/e')).resolves.toBeUndefined();
-  });
-
-  it('makeFolder_ExistingFile_RejectsWithEexist', async () => {
-    await files.write('/h/a.md', 'one');
-
-    await expect(files.makeFolder('/h/a.md')).rejects.toMatchObject({
-      code: 'EEXIST',
-    });
-    expect(await files.read('/h/a.md')).toBe('one');
-  });
-
-  it('realPath_MissingPath_RejectsAsMissingFile', async () => {
-    const error = await files
-      .realPath('/h/none.md')
-      .catch((caught: unknown) => caught);
-
-    expect(isMissingFile(error)).toBe(true);
   });
 
   it('trash_Folder_RemovesItsFiles', async () => {
@@ -210,39 +128,12 @@ describe('createMemoryFiles', () => {
     await expect(files.trash('/h/none')).rejects.toThrow('/h/none');
   });
 
-  it('makeFolder_EmptyFolder_StatsAndLists', async () => {
-    await files.makeFolder('/h/e');
-
-    expect(await files.stat('/h/e')).toEqual({ isFolder: true, isLink: false });
-    expect(await files.list('/h')).toEqual([{ path: 'e', kind: 'folder' }]);
-  });
-
-  it('rename_LastFileInFolder_KeepsTheFolder', async () => {
-    await files.write('/h/s/a.md', 'one');
-
-    await files.rename('/h/s/a.md', '/h/b.md');
-
-    expect(await files.stat('/h/s')).toEqual({ isFolder: true, isLink: false });
-    expect(await files.list('/h/s')).toEqual([]);
-  });
-
   it('trash_LastFileInFolder_KeepsTheFolder', async () => {
     await files.write('/h/s/a.md', 'one');
 
     await files.trash('/h/s/a.md');
 
     expect(await files.stat('/h/s')).toEqual({ isFolder: true, isLink: false });
-  });
-
-  it('makeFolder_UnderAFile_RejectsWithEnotdir', async () => {
-    await files.write('/h/f', 'file');
-
-    const error = await files
-      .makeFolder('/h/f/x')
-      .catch((caught: unknown) => caught);
-
-    expect(errorCode(error)).toBe('ENOTDIR');
-    expect(await files.read('/h/f')).toBe('file');
   });
 
   it('write_OntoAFolder_RejectsWithEisdir', async () => {
@@ -257,38 +148,5 @@ describe('createMemoryFiles', () => {
       isFolder: true,
       isLink: false,
     });
-  });
-
-  it('write_ParentIsAFile_RejectsWithEexist', async () => {
-    await files.write('/h/f', 'file');
-
-    const error = await files
-      .write('/h/f/x.md', 'text')
-      .catch((caught: unknown) => caught);
-
-    expect(errorCode(error)).toBe('EEXIST');
-    expect(await files.read('/h/f')).toBe('file');
-  });
-
-  it('write_AncestorAboveParentIsAFile_RejectsWithEnotdir', async () => {
-    await files.write('/h/f', 'file');
-
-    const error = await files
-      .write('/h/f/x/y.md', 'text')
-      .catch((caught: unknown) => caught);
-
-    expect(errorCode(error)).toBe('ENOTDIR');
-  });
-
-  it('rename_DestinationParentIsFile_RejectsWithEnotdir', async () => {
-    await files.write('/h/a.md', 'one');
-    await files.write('/h/f', 'file');
-
-    const error = await files
-      .rename('/h/a.md', '/h/f/b.md')
-      .catch((caught: unknown) => caught);
-
-    expect(errorCode(error)).toBe('ENOTDIR');
-    expect(await files.read('/h/a.md')).toBe('one');
   });
 });

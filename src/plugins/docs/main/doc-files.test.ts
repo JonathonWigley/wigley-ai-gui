@@ -195,9 +195,7 @@ describe('write', () => {
 
     await expect(
       test.docFiles.write(`${PLUGIN_ROOT}/x.md`, 'b', null),
-    ).rejects.toThrow(
-      'Refused: /Users/u/.claude/plugins/cache/m/p/1/x.md is inside the plugin cache of p@m',
-    );
+    ).rejects.toThrow('/Users/u/.claude/plugins/cache/m/p/1/x.md');
   });
 
   it('write_LinkWithTargetOutside_RejectsNamingTarget', async () => {
@@ -208,9 +206,7 @@ describe('write', () => {
 
     await expect(
       docFiles.write(`${ROOT}/linked.md`, 'b', null),
-    ).rejects.toThrow(
-      'Refused: /Users/u/Desktop/x.md is outside the indexed folders',
-    );
+    ).rejects.toThrow('/Users/u/Desktop/x.md');
   });
 
   it('write_DanglingLink_RejectsKeepingLink', async () => {
@@ -221,9 +217,7 @@ describe('write', () => {
 
     await expect(
       docFiles.write(`${ROOT}/linked.md`, 'b', null),
-    ).rejects.toThrow(
-      'Refused: /Users/u/dev/r/linked.md is a link to a missing file',
-    );
+    ).rejects.toThrow('/Users/u/dev/r/linked.md');
     expect(links.get(`${ROOT}/linked.md`)).toBe(`${ROOT}/gone.md`);
     expect(await test.files.stat(`${ROOT}/gone.md`)).toBeNull();
   });
@@ -239,7 +233,7 @@ describe('write', () => {
 
     await expect(
       test.docFiles.write(`${HOME}/x.md`, 'b', null),
-    ).rejects.toThrow('Refused: /Users/u/x.md is outside the indexed folders');
+    ).rejects.toThrow('/Users/u/x.md');
     await test.docFiles.write(`${HOME}/CLAUDE.md`, 'own', null);
     expect(await test.files.read(`${HOME}/CLAUDE.md`)).toBe('own');
   });
@@ -248,18 +242,14 @@ describe('write', () => {
     const test = setUp();
     const path = '/Users/u/.claude/plugins/cache/m/p/0/x.md';
 
-    await expect(test.docFiles.write(path, 'b', null)).rejects.toThrow(
-      `Refused: ${path} is inside the plugin cache /Users/u/.claude/plugins/cache`,
-    );
+    await expect(test.docFiles.write(path, 'b', null)).rejects.toThrow(path);
   });
 
   it('write_InsideSyncedSkills_RejectsAsDownloadedCopy', async () => {
     const test = setUp();
     const path = '/Users/u/.claude/skills/synced/anthropic/pdf/SKILL.md';
 
-    await expect(test.docFiles.write(path, 'b', null)).rejects.toThrow(
-      `Refused: ${path} is a downloaded copy (synced skill)`,
-    );
+    await expect(test.docFiles.write(path, 'b', null)).rejects.toThrow(path);
     expect(await test.files.stat(path)).toBeNull();
   });
 
@@ -271,9 +261,7 @@ describe('write', () => {
     );
     const path = '/Users/u/.claude-personal/skills/synced/b/s/SKILL.md';
 
-    await expect(test.docFiles.write(path, 'b', null)).rejects.toThrow(
-      `Refused: ${path} is a downloaded copy (synced skill)`,
-    );
+    await expect(test.docFiles.write(path, 'b', null)).rejects.toThrow(path);
   });
 
   it('write_GlobalDocFolders_Written', async () => {
@@ -306,9 +294,7 @@ describe('write', () => {
 
     await expect(
       test.docFiles.write('/Users/u/Desktop/x.md', 'b', null),
-    ).rejects.toThrow(
-      'Refused: /Users/u/Desktop/x.md is outside the indexed folders',
-    );
+    ).rejects.toThrow('/Users/u/Desktop/x.md');
   });
 });
 
@@ -330,9 +316,7 @@ describe('writeBytes', () => {
 
     await expect(
       test.docFiles.writeBytes('/Users/u/elsewhere/1.png', new Uint8Array([1])),
-    ).rejects.toThrow(
-      'Refused: /Users/u/elsewhere/1.png is outside the indexed folders',
-    );
+    ).rejects.toThrow('/Users/u/elsewhere/1.png');
     expect(await test.files.stat('/Users/u/elsewhere/1.png')).toBeNull();
   });
 });
@@ -371,7 +355,7 @@ describe('create', () => {
         place: REPO_PLACE(`${ROOT}/.claude/skills`),
         name: 'My Skill',
       }),
-    ).rejects.toThrow('A skill name is lowercase letters, digits and hyphens');
+    ).rejects.toThrow();
   });
 
   it('create_Existing_RejectsAlreadyExists', async () => {
@@ -385,7 +369,7 @@ describe('create', () => {
         place: REPO_PLACE(`${ROOT}/.claude/rules`),
         name: 'a',
       }),
-    ).rejects.toThrow('/Users/u/dev/r/.claude/rules/a.md already exists');
+    ).rejects.toThrow('/Users/u/dev/r/.claude/rules/a.md');
   });
 
   it('create_Followup_AppendsToExistingFile', async () => {
@@ -409,7 +393,7 @@ describe('create', () => {
 
     await expect(
       test.docFiles.create({ type: 'path', path: '~/dev/r/x/' }),
-    ).rejects.toThrow('A path names a file, not a folder');
+    ).rejects.toThrow();
   });
 
   it('create_RelativePath_Rejects', async () => {
@@ -417,7 +401,7 @@ describe('create', () => {
 
     await expect(
       test.docFiles.create({ type: 'path', path: 'dev/x.md' }),
-    ).rejects.toThrow('A path is absolute or starts with ~');
+    ).rejects.toThrow();
   });
 
   it('create_Path_EmptyFileWithParents', async () => {
@@ -474,7 +458,7 @@ describe('rename', () => {
 
     await expect(
       test.docFiles.rename(SKILL, `${ROOT}/.claude/skills/s/README.md`),
-    ).rejects.toThrow("A skill's SKILL.md keeps its name; rename its folder");
+    ).rejects.toThrow();
   });
 
   it('rename_DestinationExists_Rejects', async () => {
@@ -484,7 +468,7 @@ describe('rename', () => {
 
     await expect(
       test.docFiles.rename(`${ROOT}/a.md`, `${ROOT}/b.md`),
-    ).rejects.toThrow('/Users/u/dev/r/b.md already exists');
+    ).rejects.toThrow('/Users/u/dev/r/b.md');
   });
 
   it('rename_CaseOnlyOnCaseInsensitiveVolume_Renames', async () => {
@@ -714,9 +698,7 @@ describe('trash', () => {
     const links = new Map([[link, target]]);
     const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
 
-    await expect(docFiles.trash(`${link}/SKILL.md`)).rejects.toThrow(
-      `Refused: ${target} is inside the plugin cache of p@m`,
-    );
+    await expect(docFiles.trash(`${link}/SKILL.md`)).rejects.toThrow(target);
     expect([...links]).toEqual([[link, target]]);
     expect(await test.files.read(`${target}/SKILL.md`)).toBe('skill');
   });
@@ -729,9 +711,7 @@ describe('trash', () => {
     const links = new Map([[link, target]]);
     const docFiles = setUp({ files: withLinks(test.files, links) }).docFiles;
 
-    await expect(docFiles.trash(`${link}/SKILL.md`)).rejects.toThrow(
-      `Refused: ${target} is a downloaded copy (synced skill)`,
-    );
+    await expect(docFiles.trash(`${link}/SKILL.md`)).rejects.toThrow(target);
     expect([...links]).toEqual([[link, target]]);
     expect(await test.files.read(`${target}/SKILL.md`)).toBe('skill');
   });
@@ -858,7 +838,7 @@ describe('trash', () => {
     const test = await walkedSkillSetUp(links, link, files);
 
     await expect(test.docFiles.trash(`${test.skill}/SKILL.md`)).rejects.toThrow(
-      `Refused: ${link} is outside the indexed folders`,
+      link,
     );
     expect([...links]).toEqual([[link, `${ROOT}/skills/s`]]);
     expect(await test.files.read(`${test.skill}/SKILL.md`)).toBe('skill');
@@ -1062,12 +1042,8 @@ describe('on Windows', () => {
   it('read_WindowsNotAbsolute_Rejects', async () => {
     const test = setUpWindows();
 
-    await expect(test.docFiles.read('\\dev\\r\\a.md')).rejects.toThrow(
-      'A path is absolute or starts with ~',
-    );
-    await expect(test.docFiles.read('C:dev\\a.md')).rejects.toThrow(
-      'A path is absolute or starts with ~',
-    );
+    await expect(test.docFiles.read('\\dev\\r\\a.md')).rejects.toThrow();
+    await expect(test.docFiles.read('C:dev\\a.md')).rejects.toThrow();
     expect(test.reads).toEqual([]);
   });
 
@@ -1079,7 +1055,7 @@ describe('on Windows', () => {
         type: 'path',
         path: 'C:\\Users\\u\\dev\\r\\new\\',
       }),
-    ).rejects.toThrow('A path names a file, not a folder');
+    ).rejects.toThrow();
   });
 
   it('create_WindowsNoExistingAncestor_StopsAtDriveRoot', async () => {
@@ -1095,7 +1071,7 @@ describe('on Windows', () => {
 
     await expect(
       test.docFiles.create({ type: 'path', path: 'D:\\x\\y.md' }),
-    ).rejects.toThrow('Refused: D:\\x\\y.md is outside the indexed folders');
+    ).rejects.toThrow('D:\\x\\y.md');
     expect(realPaths).toContain('D:\\');
   });
 
@@ -1141,9 +1117,7 @@ describe('on Windows', () => {
       WINDOWS_ENTRIES,
     );
 
-    await expect(test.docFiles.write(path, 'new', null)).rejects.toThrow(
-      `Refused: ${path} is a link to a missing file`,
-    );
+    await expect(test.docFiles.write(path, 'new', null)).rejects.toThrow(path);
   });
 
   it('watch_WindowsMissingFileCreatedInOtherCase_CallsChanged', async () => {

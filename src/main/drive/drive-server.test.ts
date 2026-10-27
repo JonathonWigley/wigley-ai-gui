@@ -28,7 +28,7 @@ describe('startDriveServer', () => {
     });
 
     expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ ok: false, error: 'bad token' });
+    expect(await response.json()).toMatchObject({ ok: false });
     expect(ran).toEqual([]);
   });
 

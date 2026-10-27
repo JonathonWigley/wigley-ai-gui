@@ -6,161 +6,58 @@ import { resolveLink } from './links';
 const HOME = '/Users/u';
 const FROM = '/r/docs/a.md';
 
-function resolve(href: string) {
-  return resolveLink(href, FROM, HOME, posixPaths);
+function file(path: string, line: number | null, fragment: string | null) {
+  return { type: 'file', path, line, fragment };
+}
+
+function unsupported(href: string) {
+  return { type: 'unsupported', href };
 }
 
 describe('resolveLink', () => {
-  it('resolve_Http_External', () => {
-    expect(resolve('https://x.dev/a')).toEqual({
-      type: 'external',
-      url: 'https://x.dev/a',
-    });
-    expect(resolve('HTTP://x.dev')).toEqual({
-      type: 'external',
-      url: 'HTTP://x.dev',
-    });
-  });
-
-  it('resolve_OtherScheme_Unsupported', () => {
-    expect(resolve('vscode://x')).toEqual({
-      type: 'unsupported',
-      href: 'vscode://x',
-    });
-    expect(resolve('mailto:a@b.c')).toEqual({
-      type: 'unsupported',
-      href: 'mailto:a@b.c',
-    });
-  });
-
-  it('resolve_Hash_Heading', () => {
-    expect(resolve('#core-services')).toEqual({
-      type: 'heading',
-      fragment: 'core-services',
-    });
-    expect(resolve('#a%20b')).toEqual({ type: 'heading', fragment: 'a b' });
-  });
-
-  it('resolve_HashLine_SameFileLine', () => {
-    expect(resolve('#L7')).toEqual({
-      type: 'file',
-      path: '/r/docs/a.md',
-      line: 7,
-      fragment: null,
-    });
-  });
-
-  it('resolve_RelativeWithLine_Resolved', () => {
-    expect(resolve('../b.md#L4')).toEqual({
-      type: 'file',
-      path: '/r/b.md',
-      line: 4,
-      fragment: null,
-    });
-  });
-
-  it('resolve_ColonLine_Resolved', () => {
-    expect(resolve('b.md:12')).toEqual({
-      type: 'file',
-      path: '/r/docs/b.md',
-      line: 12,
-      fragment: null,
-    });
-  });
-
-  it('resolve_FileFragment_Kept', () => {
-    expect(resolve('b.md#setup')).toEqual({
-      type: 'file',
-      path: '/r/docs/b.md',
-      line: null,
-      fragment: 'setup',
-    });
-  });
-
-  it('resolve_TildeAndEncoded_Expanded', () => {
-    expect(resolve('~/x/my%20doc.md')).toEqual({
-      type: 'file',
-      path: '/Users/u/x/my doc.md',
-      line: null,
-      fragment: null,
-    });
-  });
-
-  it('resolve_FileUrl_AsAbsolute', () => {
-    expect(resolve('file:///r/c.md')).toEqual({
-      type: 'file',
-      path: '/r/c.md',
-      line: null,
-      fragment: null,
-    });
-  });
-
-  it('resolve_FileUrlLocalhost_AsAbsolute', () => {
-    expect(resolve('file://localhost/r/c.md')).toEqual({
-      type: 'file',
-      path: '/r/c.md',
-      line: null,
-      fragment: null,
-    });
-  });
-
-  it('resolve_FileUrlWithHost_Unsupported', () => {
-    expect(resolve('file://server/share/c.md')).toEqual({
-      type: 'unsupported',
+  it.each([
+    {
+      href: 'https://x.dev/a',
+      expected: { type: 'external', url: 'https://x.dev/a' },
+    },
+    {
+      href: 'HTTP://x.dev',
+      expected: { type: 'external', url: 'HTTP://x.dev' },
+    },
+    { href: 'vscode://x', expected: unsupported('vscode://x') },
+    { href: 'mailto:a@b.c', expected: unsupported('mailto:a@b.c') },
+    {
+      href: '#core-services',
+      expected: { type: 'heading', fragment: 'core-services' },
+    },
+    { href: '#a%20b', expected: { type: 'heading', fragment: 'a b' } },
+    { href: '#L7', expected: file('/r/docs/a.md', 7, null) },
+    { href: '../b.md#L4', expected: file('/r/b.md', 4, null) },
+    { href: 'b.md:12', expected: file('/r/docs/b.md', 12, null) },
+    { href: 'b.md#setup', expected: file('/r/docs/b.md', null, 'setup') },
+    {
+      href: '~/x/my%20doc.md',
+      expected: file('/Users/u/x/my doc.md', null, null),
+    },
+    { href: 'file:///r/c.md', expected: file('/r/c.md', null, null) },
+    { href: 'file://localhost/r/c.md', expected: file('/r/c.md', null, null) },
+    {
       href: 'file://server/share/c.md',
-    });
-  });
-
-  it('resolve_HostPortAndTel_Unsupported', () => {
-    expect(resolve('localhost:3000')).toEqual({
-      type: 'unsupported',
-      href: 'localhost:3000',
-    });
-    expect(resolve('tel:555')).toEqual({
-      type: 'unsupported',
-      href: 'tel:555',
-    });
-  });
-
-  it('resolve_DotSlashColonLine_Resolved', () => {
-    expect(resolve('./a/b:3')).toEqual({
-      type: 'file',
-      path: '/r/docs/a/b',
-      line: 3,
-      fragment: null,
-    });
-  });
-
-  it('resolve_Empty_Unsupported', () => {
-    expect(resolve('')).toEqual({ type: 'unsupported', href: '' });
-    expect(resolve('file://')).toEqual({
-      type: 'unsupported',
-      href: 'file://',
-    });
-  });
-
-  it('resolve_HashAlone_DocTop', () => {
-    expect(resolve('#')).toEqual({
-      type: 'file',
-      path: '/r/docs/a.md',
-      line: 1,
-      fragment: null,
-    });
-  });
-
-  it('resolve_QueryOnly_SameDoc', () => {
-    expect(resolve('?')).toEqual({
-      type: 'file',
-      path: '/r/docs/a.md',
-      line: null,
-      fragment: null,
-    });
-    expect(resolve('?v=2#setup')).toEqual({
-      type: 'file',
-      path: '/r/docs/a.md',
-      line: null,
-      fragment: 'setup',
-    });
+      expected: unsupported('file://server/share/c.md'),
+    },
+    { href: 'localhost:3000', expected: unsupported('localhost:3000') },
+    { href: 'tel:555', expected: unsupported('tel:555') },
+    { href: './a/b:3', expected: file('/r/docs/a/b', 3, null) },
+    { href: '', expected: unsupported('') },
+    { href: 'file://', expected: unsupported('file://') },
+    { href: '#', expected: file('/r/docs/a.md', 1, null) },
+    { href: '?', expected: file('/r/docs/a.md', null, null) },
+    { href: '?v=2#setup', expected: file('/r/docs/a.md', null, 'setup') },
+    { href: '/x.md', expected: file('/x.md', null, null) },
+    { href: 'C:/r/y.md', expected: unsupported('C:/r/y.md') },
+    { href: 'file://C:/r/y.md', expected: unsupported('file://C:/r/y.md') },
+  ])('"$href" → $expected.type', ({ href, expected }) => {
+    expect(resolveLink(href, FROM, HOME, posixPaths)).toEqual(expected);
   });
 });
 
@@ -168,115 +65,80 @@ describe('resolveLink on Windows', () => {
   const WINDOWS_HOME = 'C:\\Users\\u';
   const WINDOWS_FROM = 'C:\\r\\docs\\a.md';
 
-  function resolveOnWindows(href: string) {
-    return resolveLink(href, WINDOWS_FROM, WINDOWS_HOME, windowsPaths);
-  }
-
-  it('resolve_WindowsRelativeParent_Resolved', () => {
-    expect(resolveOnWindows('../x.md')).toEqual({
-      type: 'file',
-      path: 'C:\\r\\x.md',
-      line: null,
-      fragment: null,
-    });
-  });
-
-  it('resolve_WindowsRootRelative_LinkingDocsDrive', () => {
-    for (const href of ['/x.md', '\\x.md', '/sub/../x.md#L3']) {
-      expect(resolveOnWindows(href)).toMatchObject({
-        type: 'file',
-        path: 'C:\\x.md',
-      });
-    }
-    expect(
-      resolveLink('\\x.md', 'D:\\r\\a.md', WINDOWS_HOME, windowsPaths),
-    ).toMatchObject({ type: 'file', path: 'D:\\x.md' });
-    expect(
-      resolveLink(
-        '/x.md',
-        '\\\\srv\\share\\r\\a.md',
-        WINDOWS_HOME,
-        windowsPaths,
-      ),
-    ).toMatchObject({ type: 'file', path: '\\\\srv\\share\\x.md' });
-  });
-
-  it('resolve_PosixRootPath_Absolute', () => {
-    expect(resolve('/x.md')).toEqual({
-      type: 'file',
-      path: '/x.md',
-      line: null,
-      fragment: null,
-    });
-  });
-
-  it('resolve_WindowsTildeWithLine_Expanded', () => {
-    expect(resolveOnWindows('~/notes/b.md:4')).toEqual({
-      type: 'file',
-      path: 'C:\\Users\\u\\notes\\b.md',
-      line: 4,
-      fragment: null,
-    });
-  });
-
-  it('resolve_WindowsDrivePath_File', () => {
-    expect(resolveOnWindows('C:/r/y.md')).toEqual({
-      type: 'file',
-      path: 'C:\\r\\y.md',
-      line: null,
-      fragment: null,
-    });
-    expect(resolve('C:/r/y.md')).toEqual({
-      type: 'unsupported',
+  it.each([
+    {
+      href: '../x.md',
+      from: WINDOWS_FROM,
+      expected: file('C:\\r\\x.md', null, null),
+    },
+    {
+      href: '/x.md',
+      from: WINDOWS_FROM,
+      expected: file('C:\\x.md', null, null),
+    },
+    {
+      href: '\\x.md',
+      from: WINDOWS_FROM,
+      expected: file('C:\\x.md', null, null),
+    },
+    {
+      href: '/sub/../x.md#L3',
+      from: WINDOWS_FROM,
+      expected: file('C:\\x.md', 3, null),
+    },
+    {
+      href: '\\x.md',
+      from: 'D:\\r\\a.md',
+      expected: file('D:\\x.md', null, null),
+    },
+    {
+      href: '/x.md',
+      from: '\\\\srv\\share\\r\\a.md',
+      expected: file('\\\\srv\\share\\x.md', null, null),
+    },
+    {
+      href: '~/notes/b.md:4',
+      from: WINDOWS_FROM,
+      expected: file('C:\\Users\\u\\notes\\b.md', 4, null),
+    },
+    {
       href: 'C:/r/y.md',
-    });
-  });
-
-  it('resolve_WindowsFileUrl_DropsSlashBeforeDrive', () => {
-    expect(resolveOnWindows('file:///C:/r/y.md')).toEqual({
-      type: 'file',
-      path: 'C:\\r\\y.md',
-      line: null,
-      fragment: null,
-    });
-    expect(resolveOnWindows('file://localhost/C:/r/y.md')).toEqual({
-      type: 'file',
-      path: 'C:\\r\\y.md',
-      line: null,
-      fragment: null,
-    });
-  });
-
-  it('resolve_FileUrlDriveAsHost_DrivePath', () => {
-    expect(resolveOnWindows('file://C:/r/y.md')).toEqual({
-      type: 'file',
-      path: 'C:\\r\\y.md',
-      line: null,
-      fragment: null,
-    });
-    expect(resolve('file://C:/r/y.md')).toEqual({
-      type: 'unsupported',
+      from: WINDOWS_FROM,
+      expected: file('C:\\r\\y.md', null, null),
+    },
+    {
+      href: 'file:///C:/r/y.md',
+      from: WINDOWS_FROM,
+      expected: file('C:\\r\\y.md', null, null),
+    },
+    {
+      href: 'file://localhost/C:/r/y.md',
+      from: WINDOWS_FROM,
+      expected: file('C:\\r\\y.md', null, null),
+    },
+    {
       href: 'file://C:/r/y.md',
-    });
-  });
-
-  it('resolve_WindowsFileUrlWithHost_UncPath', () => {
-    expect(resolveOnWindows('file://server/share/x.md#L2')).toEqual({
-      type: 'file',
-      path: '\\\\server\\share\\x.md',
-      line: 2,
-      fragment: null,
-    });
-  });
-
-  it('resolve_WindowsFileUrlNoDrive_Unsupported', () => {
-    expect(resolveOnWindows('file:///r/y.md')).toEqual({
-      type: 'unsupported',
+      from: WINDOWS_FROM,
+      expected: file('C:\\r\\y.md', null, null),
+    },
+    {
+      href: 'file://server/share/x.md#L2',
+      from: WINDOWS_FROM,
+      expected: file('\\\\server\\share\\x.md', 2, null),
+    },
+    {
       href: 'file:///r/y.md',
-    });
-    expect(resolveOnWindows('file://server')).toEqual({
-      type: 'unsupported',
+      from: WINDOWS_FROM,
+      expected: unsupported('file:///r/y.md'),
+    },
+    {
       href: 'file://server',
-    });
+      from: WINDOWS_FROM,
+      expected: unsupported('file://server'),
+    },
+  ])('"$href" from $from → $expected.type', ({ href, from, expected }) => {
+    expect(resolveLink(href, from, WINDOWS_HOME, windowsPaths)).toEqual(
+      expected,
+    );
   });
 });

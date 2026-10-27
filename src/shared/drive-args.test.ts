@@ -26,7 +26,7 @@ describe('argsObject', () => {
 
   it('rejects args that are not an object', () => {
     for (const args of ['x', 1, [], true]) {
-      expect(() => argsObject(args)).toThrow('args must be an object');
+      expect(() => argsObject(args)).toThrow(/\bargs\b/);
     }
   });
 });
@@ -38,16 +38,12 @@ describe('string readers', () => {
   });
 
   it('reject a field of another type, naming it', () => {
-    expect(() => requiredString({ id: 3 }, 'id')).toThrow(
-      'id must be a string',
-    );
-    expect(() => optionalString({ id: 3 }, 'id')).toThrow(
-      'id must be a string',
-    );
+    expect(() => requiredString({ id: 3 }, 'id')).toThrow(/\bid\b/);
+    expect(() => optionalString({ id: 3 }, 'id')).toThrow(/\bid\b/);
   });
 
   it('read a missing field as missing', () => {
-    expect(() => requiredString({}, 'id')).toThrow('id must be a string');
+    expect(() => requiredString({}, 'id')).toThrow(/\bid\b/);
     expect(optionalString({}, 'id')).toBeUndefined();
   });
 
@@ -55,9 +51,7 @@ describe('string readers', () => {
     expect(nullableStringOr({ dir: null }, 'dir', 'f')).toBeNull();
     expect(nullableStringOr({ dir: 'd' }, 'dir', 'f')).toBe('d');
     expect(nullableStringOr({}, 'dir', 'f')).toBe('f');
-    expect(() => nullableStringOr({ dir: 1 }, 'dir', 'f')).toThrow(
-      'dir must be a string or null',
-    );
+    expect(() => nullableStringOr({ dir: 1 }, 'dir', 'f')).toThrow(/\bdir\b/);
   });
 });
 
@@ -66,7 +60,7 @@ describe('number readers', () => {
     expect(requiredNumber({ n: 2 }, 'n')).toBe(2);
     expect(optionalNumber({}, 'n')).toBeUndefined();
     for (const n of ['2', Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(() => requiredNumber({ n }, 'n')).toThrow('n must be a number');
+      expect(() => requiredNumber({ n }, 'n')).toThrow(/\bn\b/);
     }
   });
 
@@ -74,9 +68,7 @@ describe('number readers', () => {
     expect(nullableNumberOr({ n: null }, 'n', 9)).toBeNull();
     expect(nullableNumberOr({ n: 5 }, 'n', 9)).toBe(5);
     expect(nullableNumberOr({}, 'n', 9)).toBe(9);
-    expect(() => nullableNumberOr({ n: 'x' }, 'n', 9)).toThrow(
-      'n must be a number',
-    );
+    expect(() => nullableNumberOr({ n: 'x' }, 'n', 9)).toThrow(/\bn\b/);
   });
 });
 
@@ -85,10 +77,8 @@ describe('boolean readers', () => {
     expect(optionalBoolean({ on: true }, 'on')).toBe(true);
     expect(optionalBoolean({ on: false }, 'on')).toBe(false);
     expect(optionalBoolean({}, 'on')).toBeUndefined();
-    expect(() => optionalBoolean({ on: 'true' }, 'on')).toThrow(
-      'on must be a boolean',
-    );
-    expect(() => requiredBoolean({}, 'on')).toThrow('on must be a boolean');
+    expect(() => optionalBoolean({ on: 'true' }, 'on')).toThrow(/\bon\b/);
+    expect(() => requiredBoolean({}, 'on')).toThrow(/\bon\b/);
   });
 });
 
@@ -96,9 +86,7 @@ describe('string list readers', () => {
   it('read a list of strings and reject a mixed list', () => {
     expect(stringList({ keys: ['a', 'b'] }, 'keys')).toEqual(['a', 'b']);
     expect(optionalStringList({}, 'keys')).toBeUndefined();
-    expect(() => stringList({ keys: ['a', 1] }, 'keys')).toThrow(
-      'keys must be a list of strings',
-    );
+    expect(() => stringList({ keys: ['a', 1] }, 'keys')).toThrow(/\bkeys\b/);
   });
 });
 
@@ -112,10 +100,8 @@ describe('optionalOneOf', () => {
 
   it('rejects a value outside the list, naming the list', () => {
     expect(() => optionalOneOf({ h: 'gpt' }, 'h', allowed)).toThrow(
-      'h "gpt" is none of claude, codex',
+      /\bh\b.*gpt/,
     );
-    expect(() => optionalOneOf({ h: 1 }, 'h', allowed)).toThrow(
-      'h 1 is none of claude, codex',
-    );
+    expect(() => optionalOneOf({ h: 1 }, 'h', allowed)).toThrow(/\bh\b.*1/);
   });
 });

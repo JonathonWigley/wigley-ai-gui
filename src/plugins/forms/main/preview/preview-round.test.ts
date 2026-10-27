@@ -3,18 +3,9 @@ import { parseRound } from '../round';
 import { PREVIEW_ROUND_ARGS } from './preview-round';
 
 describe('PREVIEW_ROUND_ARGS', () => {
-  it('previewRoundArgs_Parse_HoldEveryCardKind', () => {
+  it('parses, and holds every card kind, grouped choices and action reasons', () => {
     const round = parseRound(PREVIEW_ROUND_ARGS);
-
-    expect(round.notices.map((notice) => notice.badge)).toContain('Decided');
-    expect(round.findings.map((finding) => finding.origin)).toEqual(
-      expect.arrayContaining(['caused', 'design', 'nit']),
-    );
-    expect(round.questions.length).toBeGreaterThan(0);
-  });
-
-  it('previewRoundArgs_Parse_HoldGroupedChoicesAndReasons', () => {
-    const { findings } = parseRound(PREVIEW_ROUND_ARGS);
+    const { findings } = round;
 
     const groupsAChoiceOutsideFixNow = findings.some((finding) =>
       finding.choices.some((choice) => choice.action !== 'fix_now'),
@@ -27,6 +18,11 @@ describe('PREVIEW_ROUND_ARGS', () => {
         finding.actionReasons.leave_it !== undefined &&
         finding.recommend === null,
     );
+    expect(round.notices.map((notice) => notice.badge)).toContain('Decided');
+    expect(findings.map((finding) => finding.origin)).toEqual(
+      expect.arrayContaining(['caused', 'design', 'nit']),
+    );
+    expect(round.questions.length).toBeGreaterThan(0);
     expect(groupsAChoiceOutsideFixNow).toBe(true);
     expect(showsAFollowUpReason).toBe(true);
     expect(recommendsABareLeaveIt).toBe(true);

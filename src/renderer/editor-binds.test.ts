@@ -26,14 +26,14 @@ describe('editorBindInForce', () => {
     });
   });
 
-  it('editorBindInForce names the keys and scope when no bind is in force', () => {
+  it('editorBindInForce reports none, naming the keys, when no bind is in force', () => {
     const binds = [
       bind('<Leader>x', 'forms.forms', 'forms.toggleNotApplicable'),
     ];
 
     expect(editorBindInForce(binds, 'keys.help')).toEqual({
       kind: 'none',
-      message: '<Leader>x has no bind in keys.help',
+      message: expect.stringContaining('<Leader>x'),
     });
   });
 });

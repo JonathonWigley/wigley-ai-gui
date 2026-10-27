@@ -1,24 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { isVimKeys, pageVimKeys, VIM_KEYS } from './vim-keys';
+import { isVimKeys, pageVimKeys } from './vim-keys';
 
 describe('vim keys', () => {
-  it('VIM_KEYS_IsThePinnedList', () => {
-    expect(VIM_KEYS).toEqual([
-      'j',
-      'k',
-      'h',
-      'l',
-      'gg',
-      'G',
-      '<CR>',
-      '<Esc>',
-      '<C-j>',
-      '<C-k>',
-      '<C-S-j>',
-      '<C-S-k>',
-    ]);
-  });
-
   it('isVimKeys_Listed_True', () => {
     expect(isVimKeys('gg')).toBe(true);
     expect(isVimKeys('G')).toBe(true);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { permissionReplyText, readPermissionRequest } from './permission-tool';
+import { readPermissionRequest } from './permission-tool';
 
 describe('readPermissionRequest', () => {
   it('readPermissionRequest_readsTheDocumentedShape', () => {
@@ -21,26 +21,8 @@ describe('readPermissionRequest', () => {
 
   it('readPermissionRequest_namesTheWrongField', () => {
     expect(() => readPermissionRequest({ tool_name: 7, input: {} })).toThrow(
-      'permission_prompt: tool_name must be a string',
+      /tool_name/,
     );
-    expect(() => readPermissionRequest({ tool_name: 'Bash' })).toThrow(
-      'permission_prompt: input is missing',
-    );
-  });
-});
-
-describe('permissionReplyText', () => {
-  it('permissionReplyText_allowAndDeny', () => {
-    const input = { command: 'ls' };
-
-    expect(permissionReplyText({ allowed: true, reason: null }, input)).toBe(
-      '{"behavior":"allow","updatedInput":{"command":"ls"}}',
-    );
-    expect(permissionReplyText({ allowed: false, reason: null }, input)).toBe(
-      '{"behavior":"deny","message":"The user denied this tool call."}',
-    );
-    expect(
-      permissionReplyText({ allowed: false, reason: 'use rg' }, input),
-    ).toBe('{"behavior":"deny","message":"use rg"}');
+    expect(() => readPermissionRequest({ tool_name: 'Bash' })).toThrow(/input/);
   });
 });

@@ -4,7 +4,6 @@ import {
   createLayoutLoader,
   type LayoutLoad,
   type LayoutLoader,
-  layoutUrls,
   type ShownLayouts,
   showLayouts,
 } from './layout-loader';
@@ -33,40 +32,9 @@ function setOf(...users: LayoutEntry[]): LayoutSet {
   return { layouts: [DEFAULT_ENTRY, ...users], changed: null };
 }
 
-function recordingDataUrl() {
-  const calls: [string, number][] = [];
-  const dataUrl = (path: string, revision: number) => {
-    calls.push([path, revision]);
-    return `url:${path}@${revision}`;
-  };
-  return { calls, dataUrl };
+function dataUrl(path: string, revision: number): string {
+  return `url:${path}@${revision}`;
 }
-
-describe('layoutUrls', () => {
-  it('layoutUrls_WithCss_BuildsBothWithRevision', () => {
-    const { calls, dataUrl } = recordingDataUrl();
-
-    const urls = layoutUrls(entry('mine', 4, true), dataUrl);
-
-    expect(calls).toEqual([
-      ['layouts/mine/layout.js', 4],
-      ['layouts/mine/layout.css', 4],
-    ]);
-    expect(urls).toEqual({
-      script: 'url:layouts/mine/layout.js@4',
-      style: 'url:layouts/mine/layout.css@4',
-    });
-  });
-
-  it('layoutUrls_WithoutCss_StyleNull', () => {
-    const { dataUrl } = recordingDataUrl();
-
-    expect(layoutUrls(entry('mine', 4), dataUrl)).toEqual({
-      script: 'url:layouts/mine/layout.js@4',
-      style: null,
-    });
-  });
-});
 
 interface FakeLink {
   rel: string;
@@ -113,7 +81,7 @@ function loaderWith(
       imports.push(url);
       return importModule(url);
     },
-    dataUrl: (path, revision) => `url:${path}@${revision}`,
+    dataUrl,
     defaultLayout: BUILT_IN,
     head,
     read,
@@ -144,6 +112,15 @@ describe('createLayoutLoader', () => {
       'stylesheet',
       'stylesheet',
     ]);
+  });
+
+  it('load_WithoutCss_ImportsScriptAndAddsNoStylesheet', async () => {
+    const { loader, appended, imports } = loaderWith();
+
+    await loader.load(setOf(entry('mine', 4)), ['mine']);
+
+    expect(imports).toEqual(['url:layouts/mine/layout.js@4']);
+    expect(appended).toEqual([]);
   });
 
   it('load_WithCss_AddsStylesheetOnlyAfterScriptLoads', async () => {
@@ -446,22 +423,6 @@ describe('showLayouts', () => {
     expect(recorder.calls).toHaveLength(1);
   });
 
-  it('showLayouts_Loaded_LogsShownWithRevision', async () => {
-    const recorder = recordingLoader();
-    recorder.respond = (set, names) => ({
-      layouts: recorder.answer(set, names),
-      loaded: [entry('mine', 3)],
-      failed: [],
-    });
-    const page = showing(recorder.loader, 'mine');
-
-    page.answer.resolve(setOf(entry('mine', 3)));
-
-    await vi.waitFor(() =>
-      expect(page.logLines).toEqual(['[demo] layout mine shown (revision 3)']),
-    );
-  });
-
   it('showLayouts_ChangeHeardBeforeAnswer_DropsAnswer', async () => {
     const recorder = recordingLoader();
     const page = showing(recorder.loader, 'mine');
@@ -487,9 +448,13 @@ describe('showLayouts', () => {
     page.change(setOf(entry('mine', 2)));
 
     await vi.waitFor(() =>
-      expect(page.logLines).toEqual(['[demo] layout mine failed: broken']),
+      expect(page.logLines).toEqual([
+        expect.stringMatching(/^\[demo\] .*mine.*broken/),
+      ]),
     );
-    expect(page.toasts).toEqual(['error: Layout mine failed: broken']);
+    expect(page.toasts).toEqual([
+      expect.stringMatching(/^error: .*mine.*broken/),
+    ]);
     expect(page.shown[0].user).toBe('default');
   });
 
@@ -548,8 +513,8 @@ describe('showLayouts', () => {
 
     page.change(setOf(entry('mine', 2)));
     await vi.waitFor(() =>
-      expect(page.logLines).toContain(
-        '[demo] layouts not shown: rebuild failed',
+      expect(page.logLines).toContainEqual(
+        expect.stringMatching(/^\[demo\] .*rebuild failed/),
       ),
     );
     page.change(setOf(entry('mine', 3)));
@@ -581,7 +546,9 @@ describe('showLayouts', () => {
     page.answer.reject(new Error('not started'));
 
     await vi.waitFor(() =>
-      expect(page.logLines).toEqual(['[demo] layout not read: not started']),
+      expect(page.logLines).toEqual([
+        expect.stringMatching(/^\[demo\] .*not started/),
+      ]),
     );
   });
 });

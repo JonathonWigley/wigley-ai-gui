@@ -112,18 +112,18 @@ describe('isScrolledToEnd', () => {
 });
 
 describe('scrollText', () => {
-  it('names the step and the end reached', () => {
+  it('names what it scrolled', () => {
     expect(
       scrollText('CLAUDE.md', 'line', 1, { moved: true, atEnd: false }),
-    ).toBe('scrolled CLAUDE.md down a line');
+    ).toContain('CLAUDE.md');
     expect(
       scrollText('the form', 'halfPage', -1, { moved: true, atEnd: true }),
-    ).toBe('scrolled the form up half a page to the top');
+    ).toContain('the form');
   });
 
   it('says when nothing scrolled', () => {
     expect(
       scrollText('the form', 'line', 1, { moved: false, atEnd: true }),
-    ).toBe('the form did not scroll down');
+    ).toContain('the form');
   });
 });

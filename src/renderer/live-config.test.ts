@@ -41,7 +41,7 @@ describe('createLiveConfig', () => {
     live.replace(config());
 
     expect(isLaterRun).toBe(true);
-    expect(logs).toEqual(['[config] listener failed: boom']);
+    expect(logs).toEqual([expect.stringContaining('boom')]);
   });
 
   it('stops calling a disposed listener', () => {

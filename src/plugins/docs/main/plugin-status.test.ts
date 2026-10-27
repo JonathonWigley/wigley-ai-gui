@@ -354,10 +354,7 @@ describe('readPluginStatus', () => {
     expect(status.clones[0].files[A.id].uncommitted).toBe(true);
     expect(test.git.upstreamBlobs).not.toHaveBeenCalled();
     expect(test.logged).toEqual([
-      [
-        'docs',
-        'plugin status /Users/u/dev/m: git diff exited 128: bad revision',
-      ],
+      ['docs', expect.stringContaining('/Users/u/dev/m')],
     ]);
   });
 

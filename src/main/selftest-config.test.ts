@@ -84,9 +84,7 @@ describe('mergeSelfTestConfigs', () => {
         handed('chat', [], { keys: { whichKeyTimeoutMs: 2000 } }),
       ]);
 
-    expect(merge).toThrow(
-      'Self-test scripts of forms and chat set keys.whichKeyTimeoutMs to different values',
-    );
+    expect(merge).toThrow(/forms.*chat.*keys\.whichKeyTimeoutMs/);
   });
 
   it('mergeSelfTestConfigs_NoScripts_IsEmpty', () => {
@@ -164,31 +162,17 @@ describe('screenshotFiles', () => {
     expect(files.size).toBe(0);
   });
 
-  it('screenshotFiles_NameWithCapitalsAndSpace_Throws', () => {
-    const name = () =>
-      screenshotFiles([
-        handed('forms', [], {}, [
-          { keys: ['j'], expect: 'x', screenshot: 'Gallery full' },
-        ]),
-      ]);
+  it.each(['Gallery full', 'gallery-'])(
+    'screenshotFiles throws on the screenshot name "%s"',
+    (screenshot) => {
+      const name = () =>
+        screenshotFiles([
+          handed('forms', [], {}, [{ keys: ['j'], expect: 'x', screenshot }]),
+        ]);
 
-    expect(name).toThrow(
-      'Self-test step of forms names screenshot "Gallery full": a screenshot name is lowercase letters and digits in words joined by -',
-    );
-  });
-
-  it('screenshotFiles_NameEndingInDash_Throws', () => {
-    const name = () =>
-      screenshotFiles([
-        handed('forms', [], {}, [
-          { keys: ['j'], expect: 'x', screenshot: 'gallery-' },
-        ]),
-      ]);
-
-    expect(name).toThrow(
-      'Self-test step of forms names screenshot "gallery-": a screenshot name is lowercase letters and digits in words joined by -',
-    );
-  });
+      expect(name).toThrow(`forms names screenshot "${screenshot}"`);
+    },
+  );
 
   it('screenshotFiles_SameNameTwiceInOneScript_Throws', () => {
     const name = () =>
@@ -199,7 +183,7 @@ describe('screenshotFiles', () => {
         ]),
       ]);
 
-    expect(name).toThrow('Two self-test steps save forms-round.png');
+    expect(name).toThrow('forms-round.png');
   });
 
   it('screenshotFiles_DifferentPluginsSameFile_Throws', () => {
@@ -209,7 +193,7 @@ describe('screenshotFiles', () => {
         handed('a-b', [], {}, [{ keys: ['k'], expect: 'y', screenshot: 'c' }]),
       ]);
 
-    expect(name).toThrow('Two self-test steps save a-b-c.png');
+    expect(name).toThrow('a-b-c.png');
   });
 
   it('names a repeating step one file per press, each checked against the others', () => {
@@ -234,7 +218,7 @@ describe('screenshotFiles', () => {
       'forms-pages-2.png',
       'forms-pages-3.png',
     ]);
-    expect(clash).toThrow('Two self-test steps save forms-pages-2.png');
+    expect(clash).toThrow('forms-pages-2.png');
   });
 
   it('walks every group of a script', () => {
@@ -285,9 +269,7 @@ describe('checkGroups', () => {
         ]),
       ]);
 
-    expect(check).toThrow(
-      'Self-test group forms: rounds is named twice in its script',
-    );
+    expect(check).toThrow(/forms.*rounds/);
   });
 
   it('lets two scripts each have a group of one name', () => {
@@ -308,8 +290,8 @@ describe('checkGroups', () => {
         withGroups('forms', [{ name: 'rounds', why: ' ', steps: [] }]),
       ]);
 
-    expect(noName).toThrow('A self-test group of forms has no name');
-    expect(noWhy).toThrow('Self-test group forms: rounds has no why');
+    expect(noName).toThrow('forms');
+    expect(noWhy).toThrow(/forms.*rounds/);
   });
 
   it.each(['', '  '])('throws on a step whose why is "%s"', (why) => {
@@ -320,9 +302,7 @@ describe('checkGroups', () => {
         ]),
       ]);
 
-    expect(check).toThrow(
-      'Self-test group forms: rounds has a step (x) with no why',
-    );
+    expect(check).toThrow(/forms.*rounds.*\(x\)/);
   });
 
   it.each([1, 2.5])('throws on a repeat with max %s', (max) => {
@@ -337,9 +317,7 @@ describe('checkGroups', () => {
         ]),
       ]);
 
-    expect(check).toThrow(
-      `Self-test group forms: pages has a step (x) repeating with max ${max}: a repeat's max is a whole number of at least 2`,
-    );
+    expect(check).toThrow(new RegExp(`forms.*pages.*\\(x\\).*max ${max}`));
   });
 
   it('throws on a repeat with no until line', () => {
@@ -354,9 +332,7 @@ describe('checkGroups', () => {
         ]),
       ]);
 
-    expect(noUntil).toThrow(
-      'Self-test group forms: pages has a step (x) repeating with no until line',
-    );
+    expect(noUntil).toThrow(/forms.*pages.*\(x\)/);
   });
 
   it.each([0, -600, 600.5])('throws on a width of %s', (width) => {
@@ -367,8 +343,6 @@ describe('checkGroups', () => {
         ]),
       ]);
 
-    expect(check).toThrow(
-      `Self-test group forms: narrow has a step (x) with width ${width}: a width is 'start' or a positive whole number`,
-    );
+    expect(check).toThrow(new RegExp(`forms.*narrow.*\\(x\\).*width ${width}`));
   });
 });

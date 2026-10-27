@@ -1,55 +1,42 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatImage } from '../../../contracts/agent';
-import { refusalOf } from '../image-rules';
+import { MAX_IMAGE_BASE64, refusalOf } from '../image-rules';
 import {
   createAttachments,
   listenForImages,
   refusalOfFile,
 } from './attachments';
 
-const FIVE_MB = 5 * 1024 * 1024;
+const TYPE_REFUSED = 'Only PNG, JPEG, GIF and WebP images can be attached';
+const SIZE_REFUSED = 'Images over 5 MB cannot be attached';
 
 const png: ChatImage = { mediaType: 'image/png', data: 'cG5n' };
 const gif: ChatImage = { mediaType: 'image/gif', data: 'Z2lm' };
 
 describe('refusalOf', () => {
-  it('refusalOf_Pdf_RefusesType', () => {
-    expect(refusalOf('application/pdf', 10)).toBe(
-      'Only PNG, JPEG, GIF and WebP images can be attached',
-    );
-  });
-
-  it('refusalOf_OverLimit_RefusesSize', () => {
-    expect(refusalOf('image/png', 6 * 1024 * 1024)).toBe(
-      'Images over 5 MB cannot be attached',
-    );
-  });
-
-  it('refusalOf_PngAtLimit_Accepts', () => {
-    expect(refusalOf('image/png', FIVE_MB)).toBeNull();
+  it.each([
+    { type: 'application/pdf', length: 10, refusal: TYPE_REFUSED },
+    { type: 'image/jpeg', length: MAX_IMAGE_BASE64 + 1, refusal: SIZE_REFUSED },
+    { type: 'image/webp', length: MAX_IMAGE_BASE64, refusal: null },
+  ])('$type of length $length → $refusal', ({ type, length, refusal }) => {
+    expect(refusalOf(type, length)).toBe(refusal);
   });
 });
 
-// The largest byte count whose base64 text is at most 5 MB.
-const LARGEST_ACCEPTED_BYTES = (FIVE_MB / 4) * 3;
+// The largest byte count whose base64 text is at most the cap.
+const LARGEST_ACCEPTED_BYTES = (MAX_IMAGE_BASE64 / 4) * 3;
 
 describe('refusalOfFile', () => {
-  it('refusalOfFile_LargestAcceptedSize_Accepts', () => {
-    expect(
-      refusalOfFile({ type: 'image/png', size: LARGEST_ACCEPTED_BYTES }),
-    ).toBeNull();
-  });
-
-  it('refusalOfFile_OneByteOver_RefusesSize', () => {
-    expect(
-      refusalOfFile({ type: 'image/png', size: LARGEST_ACCEPTED_BYTES + 1 }),
-    ).toBe('Images over 5 MB cannot be attached');
-  });
-
-  it('refusalOfFile_LargeVideo_RefusesType', () => {
-    expect(refusalOfFile({ type: 'video/mp4', size: 500 * 1024 * 1024 })).toBe(
-      'Only PNG, JPEG, GIF and WebP images can be attached',
-    );
+  it.each([
+    { type: 'image/png', size: LARGEST_ACCEPTED_BYTES, refusal: null },
+    {
+      type: 'image/png',
+      size: LARGEST_ACCEPTED_BYTES + 1,
+      refusal: SIZE_REFUSED,
+    },
+    { type: 'video/mp4', size: 500 * 1024 * 1024, refusal: TYPE_REFUSED },
+  ])('$type of $size bytes → $refusal', ({ type, size, refusal }) => {
+    expect(refusalOfFile({ type, size })).toBe(refusal);
   });
 });
 
@@ -78,7 +65,11 @@ describe('attachments', () => {
 describe('listenForImages paste', () => {
   // A PNG over the size limit: attaching it is refused, which toasts, so a
   // toast shows the paste was taken without reading the file.
-  const oversizePng = { type: 'image/png', size: FIVE_MB * 2, name: 'a.png' };
+  const oversizePng = {
+    type: 'image/png',
+    size: MAX_IMAGE_BASE64 * 2,
+    name: 'a.png',
+  };
 
   function pasteWith(text: string) {
     let onPaste: (event: Event) => void = () => {};
@@ -110,52 +101,21 @@ describe('listenForImages paste', () => {
     return { toasts, prevented };
   }
 
-  it('paste_FileAndText_LeftToEditor', () => {
-    const { toasts, prevented } = pasteWith('a1\tb1');
+  it.each([
+    { text: 'a1\tb1', attached: false },
+    { text: '', attached: true },
+    { text: ` ${oversizePng.name}\n`, attached: true },
+    { text: 'https://example.com/a.png', attached: true },
+    { text: '  \n\t ', attached: true },
+    { text: `${oversizePng.name} was here`, attached: false },
+    { text: 'see https://example.com', attached: false },
+  ])(
+    'a file pasted with text $text is attached: $attached',
+    ({ text, attached }) => {
+      const { toasts, prevented } = pasteWith(text);
 
-    expect(prevented).toBe(false);
-    expect(toasts).toEqual([]);
-  });
-
-  it('paste_FileAndNoText_Attached', () => {
-    const { toasts, prevented } = pasteWith('');
-
-    expect(prevented).toBe(true);
-    expect(toasts).toHaveLength(1);
-  });
-
-  it('paste_TextIsFileName_Attached', () => {
-    const { toasts, prevented } = pasteWith(` ${oversizePng.name}\n`);
-
-    expect(prevented).toBe(true);
-    expect(toasts).toHaveLength(1);
-  });
-
-  it('paste_TextIsHttpsUrl_Attached', () => {
-    const { toasts, prevented } = pasteWith('https://example.com/a.png');
-
-    expect(prevented).toBe(true);
-    expect(toasts).toHaveLength(1);
-  });
-
-  it('paste_TextIsWhitespaceOnly_Attached', () => {
-    const { toasts, prevented } = pasteWith('  \n\t ');
-
-    expect(prevented).toBe(true);
-    expect(toasts).toHaveLength(1);
-  });
-
-  it('paste_TextIsFileNameAndMoreWords_LeftToEditor', () => {
-    const { toasts, prevented } = pasteWith(`${oversizePng.name} was here`);
-
-    expect(prevented).toBe(false);
-    expect(toasts).toEqual([]);
-  });
-
-  it('paste_TextIsUrlAndMoreWords_LeftToEditor', () => {
-    const { toasts, prevented } = pasteWith('see https://example.com');
-
-    expect(prevented).toBe(false);
-    expect(toasts).toEqual([]);
-  });
+      expect(prevented).toBe(attached);
+      expect(toasts).toHaveLength(attached ? 1 : 0);
+    },
+  );
 });

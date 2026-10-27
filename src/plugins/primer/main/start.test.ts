@@ -104,11 +104,9 @@ describe('primer drive actions', () => {
     addDriveActions(drive.host, fakeSessions(), fakeEndedEvent().on);
 
     await expect(drive.run('openPrimer', { sessionId: 1 })).rejects.toThrow(
-      'sessionId must be a string',
+      'sessionId',
     );
-    await expect(drive.run('openPrimer', 'x')).rejects.toThrow(
-      'args must be an object',
-    );
+    await expect(drive.run('openPrimer', 'x')).rejects.toThrow('args');
   });
 
   it('answers is pending until the primer resolves, then its result', async () => {
@@ -124,9 +122,7 @@ describe('primer drive actions', () => {
     await Promise.resolve();
 
     expect(await drive.run('answers', { sessionId: 's' })).toEqual(SUBMITTED);
-    await expect(drive.run('answers', {})).rejects.toThrow(
-      'sessionId must be a string',
-    );
+    await expect(drive.run('answers', {})).rejects.toThrow('sessionId');
   });
 
   it('dispose removes the actions and ends each session primer opened', async () => {

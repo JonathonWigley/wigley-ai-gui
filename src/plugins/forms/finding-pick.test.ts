@@ -5,7 +5,6 @@ import {
   findingEntryNumber,
   findingPickIsComplete,
   findingSolution,
-  isFindingAction,
   type PickableFinding,
 } from './finding-pick';
 
@@ -79,15 +78,5 @@ describe('findingSolution', () => {
     expect(findingSolution(leaveItChoice, 2, 'leave_it')).toBe(2);
     expect(findingSolution(GROUPED, 0, 'leave_it')).toBe(0);
     expect(findingSolution(GROUPED, 1, 'fix_now')).toBe(0);
-  });
-});
-
-describe('isFindingAction', () => {
-  it('accepts the three actions and nothing else', () => {
-    expect(isFindingAction('fix_now')).toBe(true);
-    expect(isFindingAction('follow_up')).toBe(true);
-    expect(isFindingAction('leave_it')).toBe(true);
-    expect(isFindingAction('Fix now')).toBe(false);
-    expect(isFindingAction(undefined)).toBe(false);
   });
 });

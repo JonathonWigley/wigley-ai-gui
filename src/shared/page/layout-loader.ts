@@ -30,7 +30,7 @@ export interface LayoutLoader<L> {
 const DEFAULT_NAME = 'default';
 
 // The URLs of a user layout's files in the plugin's data folder, at its revision.
-export function layoutUrls(
+function layoutUrls(
   entry: LayoutEntry,
   dataUrl: (path: string, revision: number) => string,
 ): { script: string; style: string | null } {

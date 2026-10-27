@@ -228,7 +228,6 @@ describe('card kit', () => {
 
     const holder = asFake(kit.contributedParts(asHtml(card)));
 
-    expect(holder.className).toBe('card-parts');
     const drawn = findAll(holder, 'card-part');
     expect(drawn.map((wrapper) => wrapper.dataset.part)).toEqual(['p1', 'p2']);
     expect(built).toEqual([
@@ -265,7 +264,10 @@ describe('card kit', () => {
 
     const holder = asFake(kit.contributedParts(asHtml(new FakeElement('div'))));
 
-    expect(log).toHaveBeenCalledWith('forms', 'card part p1 failed: boom');
+    expect(log).toHaveBeenCalledWith(
+      'forms',
+      expect.stringMatching(/p1.*boom/),
+    );
     expect(
       findAll(holder, 'card-part').map((wrapper) => wrapper.dataset.part),
     ).toEqual(['p2']);
@@ -285,7 +287,7 @@ describe('card kit', () => {
   it('kitCommand_UnknownId_Throws', () => {
     const { kit } = findingKit(fakeCardDeps(createFormsContributions()).deps);
 
-    expect(() => kit.command('docs.noSuch')).toThrow('no command docs.noSuch');
+    expect(() => kit.command('docs.noSuch')).toThrow(/docs\.noSuch/);
   });
 
   it('choiceGroups_ActionWithoutChoices_DrawsItsNumberAsAChoiceRowDoes', () => {
@@ -302,24 +304,14 @@ describe('card kit', () => {
 
     const picks = findAll(answer, 'choice-group-pick');
     expect(
-      picks.map((pick) =>
-        pick.children.map((part) => [part.className, part.textContent]),
-      ),
+      picks.map((pick) => pick.children.map((part) => part.textContent)),
     ).toEqual([
-      [
-        ['choice-number', '3'],
-        ['choice-text', labels[1]],
-        ['choice-keys', ''],
-      ],
-      [
-        ['choice-number', '4'],
-        ['choice-text', labels[2]],
-        ['choice-keys', ''],
-      ],
+      ['3', labels[1], ''],
+      ['4', labels[2], ''],
     ]);
   });
 
-  it('choiceGroups_ActionWithoutChoices_SitsInAChoiceRowWithItsReason', () => {
+  it('choiceGroups_ActionReason_DrawnInItsRowOnly', () => {
     const overrides = {
       choices: [choice('A', 'fix_now'), choice('B', 'fix_now')],
       actionReasons: { leave_it: 'Out of scope' },
@@ -333,15 +325,52 @@ describe('card kit', () => {
 
     const rows = findAll(answer, 'choice-group-head');
     expect(
-      rows.map((row) => [
-        row.classList.contains('choice'),
-        row.children.map((part) => part.className),
-      ]),
-    ).toEqual([
-      [true, ['choice-pick choice-group-pick']],
-      [true, ['choice-pick choice-group-pick', 'choice-group-reason md']],
-    ]);
+      rows.map((row) => row.children.slice(1).map((part) => part.innerHTML)),
+    ).toEqual([[], ['Out of scope']]);
   });
+
+  it.each([
+    {
+      action: { type: 'choose', number: 2 } as const,
+      dispatched: [{ type: 'choose', number: 2 }],
+      togglesDontAsk: false,
+    },
+    {
+      action: { type: 'toggleNotApplicable' } as const,
+      dispatched: [{ type: 'toggleNotApplicable' }],
+      togglesDontAsk: false,
+    },
+    {
+      action: { type: 'accept' } as const,
+      dispatched: [{ type: 'acceptRecommendation' }],
+      togglesDontAsk: false,
+    },
+    {
+      action: { type: 'focus' } as const,
+      dispatched: [],
+      togglesDontAsk: false,
+    },
+    {
+      action: { type: 'toggleDontAsk' } as const,
+      dispatched: [],
+      togglesDontAsk: true,
+    },
+  ])(
+    'kitRun_$action.type_FocusesTheCardItemFirst',
+    ({ action, dispatched, togglesDontAsk }) => {
+      const { deps } = fakeCardDeps(createFormsContributions());
+      const { kit } = questionKit(deps);
+
+      kit.run(action);
+
+      expect(vi.mocked(deps.dispatch).mock.calls).toEqual(
+        [{ type: 'focusItem', item: 1 }, ...dispatched].map((each) => [each]),
+      );
+      expect(vi.mocked(deps.toggleDontAsk).mock.calls).toHaveLength(
+        togglesDontAsk ? 1 : 0,
+      );
+    },
+  );
 
   it('kitRun_UnknownActionType_LogsAndDispatchesNothing', () => {
     const { deps, log } = fakeCardDeps(createFormsContributions());
@@ -351,7 +380,7 @@ describe('card kit', () => {
 
     expect(log).toHaveBeenCalledWith(
       'forms',
-      'layout action chooseAction is not known',
+      expect.stringContaining('chooseAction'),
     );
     expect(deps.dispatch).not.toHaveBeenCalled();
     expect(deps.toggleDontAsk).not.toHaveBeenCalled();

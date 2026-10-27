@@ -13,10 +13,11 @@ describe('readAccountStatus', () => {
       configDirectory: '/Users/jo/.claude',
     });
 
-    expect(readAccountStatus(`${stdout}\n`)).toEqual({
-      signedIn: true,
-      account: 'jo@example.com · Claude max',
-    });
+    const status = readAccountStatus(`${stdout}\n`);
+
+    expect(status.signedIn).toBe(true);
+    expect(status.account).toContain('jo@example.com');
+    expect(status.account).toContain('max');
   });
 
   it('readAccountStatus_SignedInNoPlan_LabelsEmail', () => {
@@ -43,9 +44,7 @@ describe('readAccountStatus', () => {
   });
 
   it('readAccountStatus_NotJson_Throws', () => {
-    expect(() => readAccountStatus('oops')).toThrow(
-      'claude auth status printed no status: oops',
-    );
+    expect(() => readAccountStatus('oops')).toThrow(/oops/);
   });
 });
 

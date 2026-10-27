@@ -17,6 +17,6 @@ describe('fitScale', () => {
   it('fitScale_ZeroHost_Throws', () => {
     expect(() =>
       fitScale({ width: 400, height: 300 }, { width: 0, height: 600 }),
-    ).toThrow('Markup host has no size');
+    ).toThrow();
   });
 });

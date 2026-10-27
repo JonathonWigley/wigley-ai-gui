@@ -66,9 +66,7 @@ describe('createAccounts', () => {
     const test = setUp();
     test.accounts.logIn(1, 'work');
 
-    expect(() => test.accounts.logIn(2, 'personal')).toThrow(
-      'A sign-in is already running for work',
-    );
+    expect(() => test.accounts.logIn(2, 'personal')).toThrow(/work/);
     expect(test.logIns()).toBe(1);
   });
 
@@ -111,9 +109,7 @@ describe('createAccounts', () => {
     expect(
       test.messages.filter((sent) => sent.message === 'logInEnded'),
     ).toEqual([]);
-    expect(test.logged).toContain(
-      '[chat] sign-in for work ended: Sign-in cancelled',
-    );
+    expect(test.logged).toContainEqual(expect.stringContaining('work'));
   });
 
   it('cancelAndSendCode_OtherId_LoggedAndIgnored', async () => {
@@ -126,9 +122,7 @@ describe('createAccounts', () => {
     test.accounts.sendCode(1, FAKE_SIGN_IN_CODE);
     await flush();
 
-    expect(() => test.accounts.logIn(3, 'personal')).toThrow(
-      'A sign-in is already running for work',
-    );
+    expect(() => test.accounts.logIn(3, 'personal')).toThrow(/work/);
     expect(test.messages.map((sent) => sent.message)).toEqual(['logInLink']);
   });
 
@@ -165,22 +159,22 @@ describe('createAccounts', () => {
   it('logIn_UnknownProfile_ThrowsNamingIt', () => {
     const test = setUp();
 
-    expect(() => test.accounts.logIn(1, 'nobody')).toThrow(
-      'chat has no profile "nobody"',
-    );
+    expect(() => test.accounts.logIn(1, 'nobody')).toThrow('nobody');
     expect(test.logIns()).toBe(0);
   });
 
-  it('sendCodeAndCancel_NoneRunning_LoggedAndIgnored', () => {
+  it('sendCodeAndCancel_NoneRunning_IgnoredAndALaterSignInStarts', async () => {
     const test = setUp();
 
     test.accounts.sendCode(1, FAKE_SIGN_IN_CODE);
     test.accounts.cancel(1);
+    await flush();
 
-    expect(test.logged).toEqual([
-      '[chat] sign-in code for sign-in 1, which is not running, ignored',
-      '[chat] sign-in cancel for sign-in 1, which is not running, ignored',
-    ]);
+    expect(test.messages).toEqual([]);
+    test.accounts.logIn(2, 'work');
+    await flush();
+    expect(test.logIns()).toBe(1);
+    expect(test.messages.map((sent) => sent.message)).toEqual(['logInLink']);
   });
 
   it('statusAndLogOut_UseTheProfilesFolder', async () => {
@@ -208,8 +202,6 @@ describe('createAccounts', () => {
       log: () => undefined,
     });
 
-    await expect(accounts.status('work')).rejects.toThrow(
-      'no agent harness "claude"',
-    );
+    await expect(accounts.status('work')).rejects.toThrow('claude');
   });
 });

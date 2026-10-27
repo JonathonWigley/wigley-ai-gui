@@ -79,16 +79,14 @@ const ADDED_BIND = {
   command: 'keys.toggleHelp',
 } as const;
 
-async function isSettled(result: Promise<unknown>): Promise<boolean> {
-  const pending = Symbol('pending');
-  const settled = await Promise.race([
-    result.then(
-      () => true,
-      () => true,
-    ),
-    new Promise((resolve) => setTimeout(() => resolve(pending), 20)),
-  ]);
-  return settled !== pending;
+// Whether `result` has settled, read after the test has let pending work land.
+function settledFlag(result: Promise<unknown>): () => boolean {
+  let isSettled = false;
+  const settle = () => {
+    isSettled = true;
+  };
+  result.then(settle, settle);
+  return () => isSettled;
 }
 
 describe('settingsSelfTestScript', () => {
@@ -116,14 +114,14 @@ describe('settingsSelfTestScript', () => {
       show,
     });
     const { result } = script.open(1);
+    const isSettled = settledFlag(result);
     await vi.waitFor(() => expect(show).toHaveBeenCalled());
 
     await fake.change({ settings: {} });
-    expect(await isSettled(result)).toBe(false);
+    expect(isSettled()).toBe(false);
     await fake.change({ settings: { keySequenceTimeoutMs: 900 } });
-    // The keymap add and remove land too close together to be published.
     await fake.change({ keymap: {} });
-    expect(await isSettled(result)).toBe(false);
+    expect(isSettled()).toBe(false);
     await fake.change({ settings: {} });
 
     expect(script.problems(await result)).toEqual([]);
@@ -153,10 +151,6 @@ describe('settingsSelfTestScript', () => {
     const firstWriteReleased = new Promise<void>((resolve) => {
       releaseFirstWrite = resolve;
     });
-    let releaseSecondRead = () => {};
-    const secondReadReleased = new Promise<void>((resolve) => {
-      releaseSecondRead = resolve;
-    });
     fake.userConfig.writeSettings.mockImplementationOnce(
       async (layer, expectedText) => {
         await firstWriteReleased;
@@ -173,21 +167,13 @@ describe('settingsSelfTestScript', () => {
     await vi.waitFor(() =>
       expect(fake.userConfig.writeSettings).toHaveBeenCalledTimes(1),
     );
-    // The second open's read sees the files as they are when it is called,
-    // and returns once the first open's write has landed.
-    const read = fake.userConfig.read.getMockImplementation();
-    fake.userConfig.read.mockImplementationOnce(async () => {
-      const files = await read!();
-      await secondReadReleased;
-      return files;
-    });
     const { result } = script.open(2);
-    releaseFirstWrite();
+    const isSettled = settledFlag(result);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    releaseSecondRead();
+    releaseFirstWrite();
 
     await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(1));
-    expect(await isSettled(result)).toBe(false);
+    expect(isSettled()).toBe(false);
     expect(await fake.userConfig.read()).toMatchObject({
       settings: { layer: {} },
     });
@@ -225,11 +211,12 @@ describe('settingsSelfTestScript', () => {
 
     const first = script.open(1);
     const second = script.open(2);
+    const isSettledSecond = settledFlag(second.result);
 
     await expect(first.result).rejects.toThrow('changedOnDisk');
     await vi.waitFor(() => expect(show).toHaveBeenCalled());
     expect(show).toHaveBeenCalledTimes(1);
-    expect(await isSettled(second.result)).toBe(false);
+    expect(isSettledSecond()).toBe(false);
     expect(await fake.userConfig.read()).toMatchObject({
       settings: { layer: {} },
       keymap: { layer: {} },

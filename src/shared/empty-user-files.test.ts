@@ -72,12 +72,10 @@ describe('emptyUserFiles', () => {
     await vi.waitFor(() =>
       expect(fake.userConfig.writeSettings).toHaveBeenCalledTimes(1),
     );
-    expect(fake.userConfig.read).toHaveBeenCalledTimes(1);
     releaseFirstWrite();
 
     await expect(first).resolves.toBeUndefined();
     await expect(second).resolves.toBeUndefined();
-    expect(fake.userConfig.read).toHaveBeenCalledTimes(2);
     expect(await fake.userConfig.read()).toMatchObject({
       settings: { layer: {} },
       keymap: { layer: {} },

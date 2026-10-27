@@ -228,7 +228,7 @@ function actionReasonOf(
 // rail `position`, then the action itself. Don't ask has none of its own: the
 // kit runs its command, which also focuses the reason box. Null for an action
 // type the contract does not name, as an older layout may still send.
-export function layoutActions(
+function layoutActions(
   action: LayoutAction,
   position: number,
 ): FormsAction[] | null {

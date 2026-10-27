@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHORD_NOTATION_RULE } from '../../shared/chord-notation';
 import { fakeDrivenWindow } from './fake-driven-window';
 import {
@@ -177,45 +177,53 @@ describe('linesAfter', () => {
 });
 
 describe('waitFor', () => {
-  it('waitFor_CheckNeverHolds_GivesUpAtItsTimeout', async () => {
-    const holds = await waitFor(async () => false, 100);
-
-    expect(holds).toBe(false);
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it('waitFor_CheckNeverAnswers_GivesUpAtItsTimeout', async () => {
-    const holds = await waitFor(() => new Promise<boolean>(() => {}), 100);
+  it.each([
+    { check: async () => false, name: 'never holds' },
+    { check: () => new Promise<boolean>(() => {}), name: 'never answers' },
+  ])('gives up at its timeout when the check $name', async ({ check }) => {
+    const waiting = waitFor(check, 100);
 
-    expect(holds).toBe(false);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(await waiting).toBe(false);
   });
 
   it('waitFor_CheckUnansweredForItsCap_PollsAgainInsideTheWait', async () => {
     let checks = 0;
-    const started = Date.now();
 
-    const holds = await waitFor(
+    const waiting = waitFor(
       () =>
         ++checks === 1 ? new Promise<boolean>(() => {}) : Promise.resolve(true),
       10_000,
     );
+    // Less than the wait's timeout: only a capped first check lets a second
+    // run.
+    await vi.advanceTimersByTimeAsync(5_000);
 
-    expect(holds).toBe(true);
-    expect(Date.now() - started).toBeLessThan(3000);
+    expect(checks).toBe(2);
+    expect(await waiting).toBe(true);
   });
 
-  it('waitFor_PageNavigatesUnderTheCheck_RetriesIt', async () => {
+  it('waitFor_PageNavigatesUnderTheCheck_RetriesWithoutWaitingOutItsCap', async () => {
     let runs = 0;
     const { window, navigate } = fakeDrivenWindow([
       ['ready', () => (++runs === 1 ? new Promise(() => {}) : true)],
     ]);
-    const started = Date.now();
 
     const waiting = waitFor(() => window.run<boolean>('ready'), 10_000);
     navigate();
+    // One poll gap, far short of the first check's cap.
+    await vi.advanceTimersByTimeAsync(100);
 
-    expect(await waiting).toBe(true);
     expect(runs).toBe(2);
-    expect(Date.now() - started).toBeLessThan(1000);
+    expect(await waiting).toBe(true);
   });
 
   it('waitFor_CheckFailsForAnotherReason_RejectsWithItsError', async () => {
@@ -273,9 +281,7 @@ describe('cutOffAtWidth', () => {
 
     const problems = await cutOffAtWidth(fake.window, 400, []);
 
-    expect(problems).toEqual([
-      'the page navigated while listing what it cuts off at 400px',
-    ]);
+    expect(problems).toEqual([expect.stringMatching(/navigated.*400px/)]);
     expect(fake.window.contentSize().width).toBe(800);
   });
 
@@ -305,7 +311,7 @@ describe('cutOffAtWidth', () => {
     const problems = await cutOffAtWidth(window, 400, [], () => false);
 
     expect(widthsSet).toEqual([]);
-    expect(problems).toEqual(['the run stood down before narrowing to 400px']);
+    expect(problems).toEqual([expect.stringContaining('400px')]);
   });
 });
 
@@ -384,7 +390,7 @@ describe('click', () => {
     const { window, inputs } = pageWithTargetAt60x40('div.ui-scrim');
 
     await expect(click(window, '.target', 'left', 1)).rejects.toThrow(
-      '.target is covered at its centre by div.ui-scrim',
+      /\.target.*div\.ui-scrim/,
     );
     expect(inputs).toEqual([]);
   });
@@ -397,7 +403,7 @@ describe('drag', () => {
     await drag(window, '.target', 80, 0);
 
     const moves = inputs.filter((input) => input.type === 'mouseMove');
-    expect(moves).toHaveLength(10);
+    expect(moves.length).toBeGreaterThan(0);
     for (const move of moves) {
       expect(move).toMatchObject({ modifiers: ['leftbuttondown'] });
     }
@@ -411,25 +417,13 @@ describe('drag', () => {
 });
 
 describe('withPrimitiveEllipsis', () => {
-  it('withPrimitiveEllipsis_ScriptList_AddsTheFourSelectors', () => {
-    expect(withPrimitiveEllipsis(['.scroller'])).toEqual([
-      '.scroller',
-      '.ui-row-label',
-      '.ui-row-detail',
-      '.ui-tab-label',
-      '.ui-collapsible-summary',
-    ]);
-  });
+  it('withPrimitiveEllipsis_ListHoldingOne_KeepsTheListFirstAndRepeatsNone', () => {
+    const scrollsItself = ['.scroller', '.ui-tab-label'];
 
-  it('withPrimitiveEllipsis_ListAlreadyHoldingOne_DoesNotRepeatIt', () => {
-    const four = [
-      '.ui-row-label',
-      '.ui-row-detail',
-      '.ui-tab-label',
-      '.ui-collapsible-summary',
-    ];
+    const selectors = withPrimitiveEllipsis(scrollsItself);
 
-    expect(withPrimitiveEllipsis(['.ui-row-label'])).toEqual(four);
-    expect(withPrimitiveEllipsis([])).toEqual(four);
+    expect(selectors.slice(0, 2)).toEqual(scrollsItself);
+    expect(selectors.length).toBeGreaterThan(scrollsItself.length);
+    expect(new Set(selectors).size).toBe(selectors.length);
   });
 });

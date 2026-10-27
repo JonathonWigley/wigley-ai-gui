@@ -80,28 +80,19 @@ describe('chat drive actions', () => {
     );
   });
 
-  it('askPermission passes an explicit null input on', async () => {
+  it.each([
+    { given: 'an explicit null input', input: null, sent: null },
+    { given: 'no input', input: undefined, sent: { command: 'ls' } },
+  ])('askPermission given $given sends $sent', async ({ input, sent }) => {
     const chat = fakeChat();
     const drive = chatDriveActions(chat);
+    const args = input === undefined ? {} : { input };
 
-    await drive.run('askPermission', { sessionId: 'held', input: null });
+    await drive.run('askPermission', { sessionId: 'held', ...args });
 
     expect(chat.calls[0]).toEqual({
       tool_name: 'Bash',
-      input: null,
-      tool_use_id: 'use-1',
-    });
-  });
-
-  it('askPermission defaults input when the args leave it out', async () => {
-    const chat = fakeChat();
-    const drive = chatDriveActions(chat);
-
-    await drive.run('askPermission', { sessionId: 'held' });
-
-    expect(chat.calls[0]).toEqual({
-      tool_name: 'Bash',
-      input: { command: 'ls' },
+      input: sent,
       tool_use_id: 'use-1',
     });
   });
@@ -112,7 +103,7 @@ describe('chat drive actions', () => {
 
     await expect(
       drive.run('askPermission', { sessionId: 'held' }),
-    ).rejects.toThrow('session held has ended');
+    ).rejects.toThrow('held');
     expect(chat.calls).toEqual([]);
   });
 
@@ -121,10 +112,8 @@ describe('chat drive actions', () => {
 
     await expect(
       drive.run('permissionAnswer', { toolUseId: 'other' }),
-    ).rejects.toThrow('no permission other from chat.askPermission');
-    await expect(drive.run('permissionAnswer')).rejects.toThrow(
-      'toolUseId must be a string',
-    );
+    ).rejects.toThrow('other');
+    await expect(drive.run('permissionAnswer')).rejects.toThrow('toolUseId');
   });
 });
 

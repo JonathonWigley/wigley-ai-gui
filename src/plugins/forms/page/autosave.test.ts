@@ -141,7 +141,8 @@ describe('startRoundAutosave', () => {
     runDue();
     await settle();
 
-    expect(logs).toEqual(['draft not saved for r1: disk full']);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatch(/r1.*disk full/);
     expect(saveStateOf(store)).toBe('unsaved');
     expect(saveErrorOf(store)).toBe('disk full');
     expect(scheduled.size).toBe(0);

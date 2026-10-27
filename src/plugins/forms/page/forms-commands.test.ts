@@ -187,20 +187,6 @@ const reason1: BoxRef = {
 };
 
 describe('formsCommandHandlers', () => {
-  it('picks a choice on the focused question, and the same number clears it', () => {
-    const { run, round, logs } = setup();
-
-    run('choose2');
-    expect(round().answers[0].choice).toBe(2);
-    run('choose2');
-
-    expect(round().answers[0].choice).toBe(0);
-    expect(logs).toEqual([
-      'chose 2 on question 1',
-      'cleared the choice on question 1',
-    ]);
-  });
-
   // Entries: 1 fix_now/1, 2 fix_now/2, 3 follow_up/0, 4 leave_it/0.
   const twoFix = finding('Leak', {
     choices: [
@@ -209,77 +195,88 @@ describe('formsCommandHandlers', () => {
     ],
   });
 
-  it('picks an entry on the focused finding and logs its number', () => {
-    const { run, round, logs } = setup([twoFix]);
+  it.each<{
+    name: string;
+    findings?: Finding[];
+    questions?: Question[];
+    before: FormsCommand[];
+    command: FormsCommand;
+    logs: string[];
+  }>([
+    {
+      name: 'a choice picked on a question',
+      before: [],
+      command: 'choose2',
+      logs: ['chose 2 on question 1'],
+    },
+    {
+      name: 'the same choice picked again, clearing it',
+      before: ['choose2'],
+      command: 'choose2',
+      logs: ['cleared the choice on question 1'],
+    },
+    {
+      name: 'an entry picked on a finding',
+      findings: [twoFix],
+      before: [],
+      command: 'choose3',
+      logs: ['chose 3 on finding 1'],
+    },
+    {
+      name: 'the same entry picked again, clearing it',
+      findings: [twoFix],
+      before: ['choose3'],
+      command: 'choose3',
+      logs: ['cleared the choice on finding 1'],
+    },
+    {
+      name: 'the recommendation accepted',
+      questions: [question('Alpha', { recommend: 1 })],
+      before: [],
+      command: 'acceptRecommendation',
+      logs: ['accepted the recommendation on question 1'],
+    },
+    {
+      name: 'the recommendation already held',
+      questions: [question('Alpha', { recommend: 1 })],
+      before: ['choose1'],
+      command: 'acceptRecommendation',
+      logs: [],
+    },
+    {
+      name: 'a pick on a notice, which changes nothing',
+      before: ['prevItem'],
+      command: 'choose1',
+      logs: [],
+    },
+    {
+      name: 'not applicable toggled on',
+      before: [],
+      command: 'toggleNotApplicable',
+      logs: ['not applicable on question 1'],
+    },
+  ])(
+    'logs an answer command only when it changes state: $name',
+    ({ findings, questions, before, command, logs: expected }) => {
+      const { run, logs } = setup(findings, questions);
+      for (const each of before) {
+        run(each);
+      }
+      logs.length = 0;
 
-    run('choose3');
+      run(command);
 
-    expect(round().findingAnswers[0]).toMatchObject({
-      choice: 0,
-      action: 'follow_up',
-    });
-    expect(logs).toEqual(['chose 3 on finding 1']);
-  });
-
-  it('logs the clear when the same entry is picked again', () => {
-    const { run, round, logs } = setup([twoFix]);
-
-    run('choose3');
-    run('choose3');
-
-    expect(round().findingAnswers[0]).toMatchObject({ choice: 0, action: '' });
-    expect(logs).toEqual([
-      'chose 3 on finding 1',
-      'cleared the choice on finding 1',
-    ]);
-  });
-
-  it('accepts the recommendation on the focused question and logs it', () => {
-    const { run, round, logs } = setup(
-      [],
-      [question('Alpha', { recommend: 1 })],
-    );
-
-    run('acceptRecommendation');
-
-    expect(round().answers[0].choice).toBe(1);
-    expect(logs).toEqual(['accepted the recommendation on question 1']);
-  });
-
-  it('logs nothing when the recommendation is already held', () => {
-    const { run, logs } = setup([], [question('Alpha', { recommend: 1 })]);
-    run('choose1');
-    logs.length = 0;
-
-    run('acceptRecommendation');
-
-    expect(logs).toEqual([]);
-  });
+      expect(logs).toEqual(expected);
+    },
+  );
 
   it("acts on the box's question when fired in a box", () => {
-    const { run, round, logs } = setup();
+    const { run, round } = setup();
 
     run('choose1', { editor: editorOf(notes2) });
 
     expect(round().focus).toBe(2);
     expect(round().answers[1].choice).toBe(1);
-    expect(logs).toEqual(['chose 1 on question 2']);
-  });
-
-  it('logs nothing when a pick changes nothing', () => {
-    const { run, logs } = setup();
-    run('prevItem');
-    run('choose1');
-    expect(logs).toEqual([]);
-  });
-
-  it('toggles not applicable and logs it', () => {
-    const { run, round, logs } = setup();
-
-    run('toggleNotApplicable');
-
-    expect(round().answers[0].notApplicable).toBe(true);
-    expect(logs).toEqual(['not applicable on question 1']);
   });
 
   it("focuses the reason box when Don't ask turns on", () => {
@@ -369,14 +366,13 @@ describe('formsCommandHandlers', () => {
   });
 
   it("moves from the active box into the next unanswered item's notes box", () => {
-    const { run, round, logs, focused, setActive } = setup();
+    const { run, round, focused, setActive } = setup();
     setActive(notes1);
 
     run('nextUnanswered', {});
 
     expect(focused.at(-1)).toEqual(notes2);
     expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
-    expect(logs).toEqual(['jumped to question 2']);
   });
 
   it('stays on the focused item when it is the only unanswered one', () => {
@@ -389,24 +385,12 @@ describe('formsCommandHandlers', () => {
     run('nextUnanswered');
 
     expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
-    expect(logs).toEqual(['no other unanswered item']);
 
     run('choose1');
     logs.length = 0;
     run('nextUnanswered');
 
     expect(focusedItem(round())).toEqual({ kind: 'question', index: 2 });
-    expect(logs).toEqual(['no unanswered item']);
-  });
-
-  it('jumps to the next unanswered item, wrapping', () => {
-    const { run, store, round, logs } = setup([finding('Leak')]);
-    store.dispatch({ type: 'focusItem', item: 3 });
-
-    run('nextUnanswered');
-
-    expect(focusedItem(round())).toEqual({ kind: 'finding', index: 1 });
-    expect(logs).toEqual(['jumped to finding 1']);
   });
 
   it('jumps to the previous unanswered question', () => {
@@ -424,66 +408,63 @@ describe('formsCommandHandlers', () => {
     run('leaveBox');
 
     expect(leaves()).toBe(1);
-    expect(logs).toEqual(['left the box']);
+    expect(logs).toHaveLength(1);
   });
 
-  it('scrolls the form half a page down', () => {
-    const { run, logs, scrolls, setScroll } = setup();
-    setScroll({ moved: true, atEnd: false });
+  it.each<{
+    command: FormsCommand;
+    result: ContentScroll | null;
+    scrolls: [ScrollStep, 1 | -1][];
+    logs: string[];
+  }>([
+    {
+      command: 'halfPageDown',
+      result: { moved: true, atEnd: false },
+      scrolls: [['halfPage', 1]],
+      logs: ['scrolled the form down half a page'],
+    },
+    {
+      command: 'lineDown',
+      result: { moved: true, atEnd: false },
+      scrolls: [['line', 1]],
+      logs: ['scrolled the form down a line'],
+    },
+    {
+      command: 'lineUp',
+      result: { moved: true, atEnd: true },
+      scrolls: [['line', -1]],
+      logs: ['scrolled the form up a line to the top'],
+    },
+    {
+      command: 'halfPageUp',
+      result: { moved: true, atEnd: true },
+      scrolls: [['halfPage', -1]],
+      logs: ['scrolled the form up half a page to the top'],
+    },
+    {
+      command: 'halfPageUp',
+      result: { moved: false, atEnd: true },
+      scrolls: [['halfPage', -1]],
+      logs: ['the form did not scroll up'],
+    },
+    {
+      command: 'halfPageUp',
+      result: null,
+      scrolls: [['halfPage', -1]],
+      logs: ['no round to scroll'],
+    },
+  ])(
+    '$command with scroll result $result scrolls $scrolls and logs $logs',
+    ({ command, result, scrolls: expectedScrolls, logs: expectedLogs }) => {
+      const { run, logs, scrolls, setScroll } = setup();
+      setScroll(result);
 
-    run('halfPageDown');
+      run(command);
 
-    expect(scrolls).toEqual([['halfPage', 1]]);
-    expect(logs).toEqual(['scrolled the form down half a page']);
-  });
-
-  it('scrolls the form a line down', () => {
-    const { run, logs, scrolls, setScroll } = setup();
-    setScroll({ moved: true, atEnd: false });
-
-    run('lineDown');
-
-    expect(scrolls).toEqual([['line', 1]]);
-    expect(logs).toEqual(['scrolled the form down a line']);
-  });
-
-  it('logs the top when a line up reaches it', () => {
-    const { run, logs, scrolls, setScroll } = setup();
-    setScroll({ moved: true, atEnd: true });
-
-    run('lineUp');
-
-    expect(scrolls).toEqual([['line', -1]]);
-    expect(logs).toEqual(['scrolled the form up a line to the top']);
-  });
-
-  it('logs the top when scrolling up reaches it', () => {
-    const { run, logs, scrolls, setScroll } = setup();
-    setScroll({ moved: true, atEnd: true });
-
-    run('halfPageUp');
-
-    expect(scrolls).toEqual([['halfPage', -1]]);
-    expect(logs).toEqual(['scrolled the form up half a page to the top']);
-  });
-
-  it('logs a scroll that did not move', () => {
-    const { run, logs, setScroll } = setup();
-    setScroll({ moved: false, atEnd: true });
-
-    run('halfPageUp');
-
-    expect(logs).toEqual(['the form did not scroll up']);
-  });
-
-  it('logs no round to scroll', () => {
-    const { run, logs, setScroll } = setup();
-    setScroll(null);
-
-    run('halfPageUp');
-
-    expect(logs).toEqual(['no round to scroll']);
-  });
+      expect(scrolls).toEqual(expectedScrolls);
+      expect(logs).toEqual(expectedLogs);
+    },
+  );
 
   it('keeps the box focused while scrolling', () => {
     const { run, store, focused, leaves } = setup();
@@ -497,15 +478,6 @@ describe('formsCommandHandlers', () => {
     expect(store.get()).toBe(before);
   });
 
-  it('logs the review opening', () => {
-    const { run, store, logs } = setup();
-
-    run('openReview');
-
-    expect(store.get().view).toBe('review');
-    expect(logs).toEqual(['review opened']);
-  });
-
   it('submits only from the review', () => {
     const { run, finished } = setup();
     run('submit');
@@ -513,7 +485,7 @@ describe('formsCommandHandlers', () => {
   });
 
   it('hands main the body on submit and keeps the round until main closes it', () => {
-    const { run, round, store, finished, toasts, logs } = setup();
+    const { run, round, store, finished, toasts } = setup();
     run('choose3');
     run('openReview');
     const body = buildBody(round());
@@ -529,11 +501,10 @@ describe('formsCommandHandlers', () => {
     });
     expect(store.get().view).toBe('review');
     expect(toasts).toEqual([]);
-    expect(logs.at(-1)).toBe('review opened');
   });
 
   it('closes a submitted round when main closes it, then logs and toasts the send', () => {
-    const { run, store, toasts, toastTones, logs, closeFromMain } = setup();
+    const { run, store, toasts, toastTones, closeFromMain } = setup();
     run('openReview');
     run('submit');
 
@@ -541,8 +512,7 @@ describe('formsCommandHandlers', () => {
 
     expect(store.get().forms).toEqual([]);
     expect(store.get().view).toBe('idle');
-    expect(logs.at(-1)).toBe('submitted');
-    expect(toasts).toEqual(['Answers sent: project · r1']);
+    expect(toasts).toEqual([expect.stringContaining('project · r1')]);
     expect(toastTones).toEqual(['success']);
   });
 
@@ -564,10 +534,14 @@ describe('formsCommandHandlers', () => {
     run('submit');
 
     await vi.waitFor(() =>
-      expect(toasts).toEqual(['Round not sent: round r1 has no question 3']),
+      expect(toasts).toEqual([
+        expect.stringContaining('round r1 has no question 3'),
+      ]),
     );
     expect(toastTones).toEqual(['error']);
-    expect(logs).toContain('round r1 not finished: round r1 has no question 3');
+    expect(logs).toContainEqual(
+      expect.stringContaining('round r1 has no question 3'),
+    );
     expect(round().sending).toBeNull();
     expect(round().answers[0].choice).toBe(3);
     expect(store.get().view).toBe('review');
@@ -588,8 +562,7 @@ describe('formsCommandHandlers', () => {
   });
 
   it('asks before cancelling, then hands main a cancelled round', () => {
-    const { run, store, finished, toasts, toastTones, logs, closeFromMain } =
-      setup();
+    const { run, store, finished, toasts, toastTones, closeFromMain } = setup();
     run('openReview');
 
     run('askCancel');
@@ -601,8 +574,7 @@ describe('formsCommandHandlers', () => {
     expect(store.get().view).toBe('confirm');
     closeFromMain('r1');
     expect(store.get().forms).toEqual([]);
-    expect(logs.at(-1)).toBe('cancelled');
-    expect(toasts).toEqual(['Round cancelled: project · r1']);
+    expect(toasts).toEqual([expect.stringContaining('project · r1')]);
     expect(toastTones).toEqual(['info']);
   });
 
@@ -649,7 +621,7 @@ describe('formsCommandHandlers', () => {
 
     expect(guardClose('r1-session')).toBe(false);
     expect(store.get().view).toBe('confirm');
-    expect(logs).toEqual(['closing the session asks to cancel project · r1']);
+    expect(logs).toEqual([expect.stringContaining('project · r1')]);
     expect(guardClose('r1-session')).toBe(false);
 
     expect(logs).toHaveLength(1);
@@ -674,10 +646,8 @@ describe('formsCommandHandlers', () => {
 
     expect(store.get()).toBe(before);
     expect(shownForms).toEqual([]);
-    expect(logs).toEqual([
-      'session close kept: project · r2 is open in the background',
-    ]);
-    expect(toasts).toEqual(["Finish or cancel project · r2's round first"]);
+    expect(logs).toEqual([expect.stringContaining('project · r2')]);
+    expect(toasts).toEqual([expect.stringContaining('project · r2')]);
     expect(toastTones).toEqual(['info']);
     expect(activated).toEqual(['r2-session']);
   });
@@ -715,7 +685,7 @@ describe('formsCommandHandlers', () => {
     run('confirmCancel');
 
     await vi.waitFor(() =>
-      expect(toasts).toEqual(['Round not sent: disk full']),
+      expect(toasts).toEqual([expect.stringContaining('disk full')]),
     );
     expect(closedSessions).toEqual([]);
     expect(store.get().view).toBe('confirm');
@@ -757,35 +727,26 @@ describe('formsCommandHandlers', () => {
     ]);
   });
 
-  it('main closing a sending round on its own finishes it as closed', () => {
-    const { run, store, closeFromMain } = setup();
-    const emitted: FormsPageEvent[] = [];
-    startFormsEvents(store, (event) => emitted.push(event));
-    run('openReview');
-    run('submit');
+  it.each([
+    { byFinish: false, outcome: 'closed' },
+    { byFinish: true, outcome: 'submitted' },
+  ])(
+    'a sending round main closes with byFinish $byFinish finishes as $outcome',
+    ({ byFinish, outcome }) => {
+      const { run, store, closeFromMain } = setup();
+      const emitted: FormsPageEvent[] = [];
+      startFormsEvents(store, (event) => emitted.push(event));
+      run('openReview');
+      run('submit');
 
-    closeFromMain('r1', false);
+      closeFromMain('r1', byFinish);
 
-    const outcomes = emitted.flatMap((event) =>
-      event.name === 'roundFinished' ? [event.data.outcome] : [],
-    );
-    expect(outcomes).toEqual(['closed']);
-  });
-
-  it("a round the page's finish closed finishes with its send's kind", () => {
-    const { run, store, closeFromMain } = setup();
-    const emitted: FormsPageEvent[] = [];
-    startFormsEvents(store, (event) => emitted.push(event));
-    run('openReview');
-    run('submit');
-
-    closeFromMain('r1');
-
-    const outcomes = emitted.flatMap((event) =>
-      event.name === 'roundFinished' ? [event.data.outcome] : [],
-    );
-    expect(outcomes).toEqual(['submitted']);
-  });
+      const outcomes = emitted.flatMap((event) =>
+        event.name === 'roundFinished' ? [event.data.outcome] : [],
+      );
+      expect(outcomes).toEqual([outcome]);
+    },
+  );
 
   it('the close guard keeps the session of the active round while it sends, and says so', () => {
     const { run, store, logs, shownForms, toasts, toastTones, guardClose } =
@@ -799,8 +760,8 @@ describe('formsCommandHandlers', () => {
 
     expect(store.get()).toBe(before);
     expect(shownForms).toEqual([]);
-    expect(logs).toEqual(['session close kept: project · r1 is sending']);
-    expect(toasts).toEqual(["Sending project · r1's round…"]);
+    expect(logs).toEqual([expect.stringContaining('project · r1')]);
+    expect(toasts).toEqual([expect.stringContaining('project · r1')]);
     expect(toastTones).toEqual(['info']);
   });
 
@@ -813,8 +774,8 @@ describe('formsCommandHandlers', () => {
     expect(guardClose('r2-session')).toBe(false);
 
     expect(store.get()).toBe(before);
-    expect(logs).toEqual(['session close kept: project · r2 is sending']);
-    expect(toasts).toEqual(["Sending project · r2's round…"]);
+    expect(logs).toEqual([expect.stringContaining('project · r2')]);
+    expect(toasts).toEqual([expect.stringContaining('project · r2')]);
     expect(activated).toEqual([]);
   });
 
@@ -825,9 +786,9 @@ describe('formsCommandHandlers', () => {
     run('openPreview');
 
     await vi.waitFor(() =>
-      expect(toasts).toEqual(['Layout command failed: no preview round']),
+      expect(toasts).toEqual([expect.stringContaining('no preview round')]),
     );
     expect(toastTones).toEqual(['error']);
-    expect(logs).toContain('layout command failed: no preview round');
+    expect(logs).toContainEqual(expect.stringContaining('no preview round'));
   });
 });

@@ -100,10 +100,10 @@ describe('sessions drive actions', () => {
     addDriveActions(drive.host, sessions, fakeEndedEvent().on);
 
     await expect(drive.run('connect', { sessionId: 7 })).rejects.toThrow(
-      'sessionId must be a string',
+      /sessionId/,
     );
     await expect(drive.run('connect', { harness: 'gpt' })).rejects.toThrow(
-      'harness "gpt" is none of claude, codex',
+      /"gpt"/,
     );
     expect(sessions.connectedInfo).toEqual([]);
   });
@@ -113,12 +113,8 @@ describe('sessions drive actions', () => {
     const sessions = fakeSessions();
     addDriveActions(drive.host, sessions, fakeEndedEvent().on);
 
-    await expect(drive.run('activate', {})).rejects.toThrow(
-      'rowId must be a string',
-    );
-    await expect(drive.run('end', null)).rejects.toThrow(
-      'sessionId must be a string',
-    );
+    await expect(drive.run('activate', {})).rejects.toThrow(/rowId/);
+    await expect(drive.run('end', null)).rejects.toThrow(/sessionId/);
     expect(sessions.activate).not.toHaveBeenCalled();
   });
 

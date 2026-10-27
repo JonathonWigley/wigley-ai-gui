@@ -48,7 +48,7 @@ export function isOnLoad(
 
 // The lines of `lines` the keys plugin logged as unplaced binds, in the order
 // given.
-export function unplacedLines(lines: readonly string[]): string[] {
+function unplacedLines(lines: readonly string[]): string[] {
   return lines.filter((line) => line.startsWith(UNPLACED_PREFIX));
 }
 
@@ -99,7 +99,7 @@ async function saveScreenshot(
 
 // What `result` resolves to, or `timedOut` when it has not settled within
 // `timeoutMs`; a rejection rejects. The result is left running.
-export async function settleWithin<T>(
+async function settleWithin<T>(
   result: Promise<T>,
   timeoutMs: number,
 ): Promise<{ timedOut: false; value: T } | { timedOut: true }> {

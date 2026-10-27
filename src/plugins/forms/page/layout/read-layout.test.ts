@@ -4,92 +4,61 @@ import { readLayout } from './read-layout';
 const card = () => ({ element: {} as HTMLElement });
 
 describe('readLayout', () => {
-  it('readLayout_OnlyFindingCard_ReturnsIt', () => {
-    const layout = { cards: { finding: card } };
-
+  it.each([
+    { case: 'an empty layout', layout: {} },
+    { case: 'only a finding card', layout: { cards: { finding: card } } },
+    { case: 'only a rail', layout: { rail: card } },
+    {
+      case: 'every card kind and a head',
+      layout: {
+        cards: { question: card, finding: card, notice: card },
+        head: () => undefined,
+      },
+    },
+  ])('returns the default export of $case', ({ layout }) => {
     expect(readLayout({ default: layout }, 'mine')).toBe(layout);
   });
 
-  it('readLayout_EmptyLayout_ReturnsIt', () => {
-    const layout = {};
-
-    expect(readLayout({ default: layout }, 'mine')).toBe(layout);
-  });
-
-  it('readLayout_CardNotFunction_Throws', () => {
-    const module = { default: { cards: { finding: card, notice: 'plain' } } };
-
+  it.each([
+    { case: 'no default export', module: {}, names: 'the default export' },
+    {
+      case: 'a part that is no layout part',
+      module: { default: { rails: () => undefined } },
+      names: 'rails',
+    },
+    {
+      case: 'cards that are not an object',
+      module: { default: { cards: 'all' } },
+      names: 'cards',
+    },
+    {
+      case: 'a card kind that is no card kind',
+      module: { default: { cards: { findng: card } } },
+      names: 'cards.findng',
+    },
+    {
+      case: 'a card that is not a function',
+      module: { default: { cards: { finding: card, notice: 'plain' } } },
+      names: 'cards.notice',
+    },
+    {
+      case: 'a head that is not a function',
+      module: { default: { cards: { question: card }, head: 'banner' } },
+      names: 'head',
+    },
+    {
+      case: 'a rail that is not a function',
+      module: { default: { rail: 'left' } },
+      names: 'rail',
+    },
+    {
+      case: 'a review that is not a function',
+      module: { default: { review: {} } },
+      names: 'review',
+    },
+  ])('throws naming $names for $case', ({ module, names }) => {
     expect(() => readLayout(module, 'mine')).toThrow(
-      'layout mine: cards.notice is not a function',
+      new RegExp(`mine.*${names}`),
     );
-  });
-
-  it('readLayout_UnknownCardKind_Throws', () => {
-    const module = { default: { cards: { findng: card } } };
-
-    expect(() => readLayout(module, 'mine')).toThrow(
-      'layout mine: cards.findng is not a card kind',
-    );
-  });
-
-  it('readLayout_UnknownPart_Throws', () => {
-    const module = { default: { rails: () => undefined } };
-
-    expect(() => readLayout(module, 'mine')).toThrow(
-      'layout mine: rails is not a layout part',
-    );
-  });
-
-  it('readLayout_CardsNotObject_Throws', () => {
-    const module = { default: { cards: 'all' } };
-
-    expect(() => readLayout(module, 'mine')).toThrow(
-      'layout mine: cards is not an object',
-    );
-  });
-
-  it('readLayout_NoDefaultExport_Throws', () => {
-    expect(() => readLayout({}, 'mine')).toThrow(
-      'layout mine: the default export is missing or not an object',
-    );
-  });
-
-  it('readLayout_HeadNotFunction_Throws', () => {
-    const module = { default: { cards: { question: card }, head: 'banner' } };
-
-    expect(() => readLayout(module, 'mine')).toThrow(
-      'layout mine: head is not a function',
-    );
-  });
-
-  it('readLayout_OnlyRail_ReturnsIt', () => {
-    const layout = { rail: () => ({ element: {} as HTMLElement }) };
-
-    expect(readLayout({ default: layout }, 'mine')).toBe(layout);
-  });
-
-  it('readLayout_RailNotFunction_Throws', () => {
-    const module = { default: { rail: 'left' } };
-
-    expect(() => readLayout(module, 'mine')).toThrow(
-      'layout mine: rail is not a function',
-    );
-  });
-
-  it('readLayout_ReviewNotFunction_Throws', () => {
-    const module = { default: { review: {} } };
-
-    expect(() => readLayout(module, 'mine')).toThrow(
-      'layout mine: review is not a function',
-    );
-  });
-
-  it('readLayout_ValidModule_ReturnsItsDefault', () => {
-    const layout = {
-      cards: { question: card, finding: card, notice: card },
-      head: () => undefined,
-    };
-
-    expect(readLayout({ default: layout }, 'mine')).toBe(layout);
   });
 });

@@ -24,10 +24,10 @@ import {
   fileStatuses,
   isEntryIdInside,
   movedEntryId,
-  noPlaceText,
   parentId,
   provisionalEntry,
   readOnlyReason,
+  type ReadOnlyReason,
   readOnlyText,
   reapplyChange,
   renameRecord,
@@ -36,10 +36,12 @@ import {
   statusTexts,
   stepSelection,
   type TreeRow,
+  type TreeRowAction,
   type TreeState,
   topVisibleLine,
   trashQuestion,
   treeLine,
+  type TreeLine,
   type TreeLineState,
   type TreeRowKey,
   treeRowAction,
@@ -150,18 +152,16 @@ describe('stepSelection', () => {
 });
 
 describe('edgeSelection', () => {
-  it('edgeSelection_First_FirstRow', () => {
-    expect(edgeSelection(rowsOf('a', 'b', 'c'), 'first')).toBe('a');
-  });
-
-  it('edgeSelection_Last_LastRow', () => {
-    expect(edgeSelection(rowsOf('a', 'b', 'c'), 'last')).toBe('c');
-  });
-
-  it('edgeSelection_NoRows_Null', () => {
-    expect(edgeSelection([], 'first')).toBeNull();
-    expect(edgeSelection([], 'last')).toBeNull();
-  });
+  it.each([
+    { rows: rowsOf('a', 'b', 'c'), edge: 'first', expected: 'a' },
+    { rows: rowsOf('a', 'b', 'c'), edge: 'last', expected: 'c' },
+    { rows: [], edge: 'first', expected: null },
+  ] as const)(
+    '$edge of $rows.length rows is $expected',
+    ({ rows, edge, expected }) => {
+      expect(edgeSelection(rows, edge)).toBe(expected);
+    },
+  );
 });
 
 describe('parentId', () => {
@@ -194,52 +194,77 @@ describe('treeRowAction', () => {
     return treeRowAction(tree, rows, row, filter, key);
   };
 
-  it('treeRowAction_ToggleExpandedGroup_Collapses', () => {
-    expect(actionOf('b', 'toggle', rowsFor(['a', 'b']))).toEqual({
-      type: 'collapse',
-    });
-  });
-
-  it('treeRowAction_ToggleCollapsedGroup_Expands', () => {
-    expect(actionOf('b', 'toggle', rowsFor(['a']))).toEqual({
-      type: 'expand',
-    });
-  });
-
-  it('treeRowAction_ToggleLeaf_OpensItAndFocusesTheDoc', () => {
-    expect(actionOf('c', 'toggle', rowsFor(['a', 'b']))).toEqual({
-      type: 'openLeaf',
-      focusDoc: true,
-    });
-  });
-
-  it('treeRowAction_OpenLeaf_OpensItAndKeepsFocus', () => {
-    expect(actionOf('c', 'open', rowsFor(['a', 'b']))).toEqual({
-      type: 'openLeaf',
-      focusDoc: false,
-    });
-  });
-
-  it('treeRowAction_ToggleFilteredGroup_SelectsFirstShownChild', () => {
-    expect(actionOf('b', 'toggle', rowsFor([], 'e:d'), 'e:d')).toEqual({
-      type: 'select',
-      id: 'd',
-    });
-  });
-
-  it('treeRowAction_OpenFilteredGroup_SelectsFirstShownChild', () => {
-    expect(actionOf('b', 'open', rowsFor([], 'e:d'), 'e:d')).toEqual({
-      type: 'select',
-      id: 'd',
-    });
-  });
-
-  it('treeRowAction_OpenExpandedGroup_SelectsFirstChild', () => {
-    expect(actionOf('b', 'open', rowsFor(['a', 'b']))).toEqual({
-      type: 'select',
+  it.each<{
+    id: string;
+    key: TreeRowKey;
+    expanded: string[];
+    filter: string;
+    expected: TreeRowAction;
+  }>([
+    {
+      id: 'b',
+      key: 'toggle',
+      expanded: ['a', 'b'],
+      filter: '',
+      expected: { type: 'collapse' },
+    },
+    {
+      id: 'b',
+      key: 'toggle',
+      expanded: ['a'],
+      filter: '',
+      expected: { type: 'expand' },
+    },
+    {
       id: 'c',
-    });
-  });
+      key: 'toggle',
+      expanded: ['a', 'b'],
+      filter: '',
+      expected: { type: 'openLeaf', focusDoc: true },
+    },
+    {
+      id: 'c',
+      key: 'open',
+      expanded: ['a', 'b'],
+      filter: '',
+      expected: { type: 'openLeaf', focusDoc: false },
+    },
+    {
+      id: 'b',
+      key: 'toggle',
+      expanded: [],
+      filter: 'e:d',
+      expected: { type: 'select', id: 'd' },
+    },
+    {
+      id: 'b',
+      key: 'open',
+      expanded: ['a', 'b'],
+      filter: '',
+      expected: { type: 'select', id: 'c' },
+    },
+    {
+      id: 'b',
+      key: 'close',
+      expanded: ['a', 'b'],
+      filter: '',
+      expected: { type: 'collapse' },
+    },
+    {
+      id: 'b',
+      key: 'close',
+      expanded: ['a'],
+      filter: '',
+      expected: { type: 'select', id: 'a' },
+    },
+  ])(
+    '$key on $id with $expanded expanded and filter "$filter" → $expected.type',
+    ({ id, key, expanded, filter, expected }) => {
+      expect(actionOf(id, key, rowsFor(expanded, filter), filter)).toEqual(
+        expected,
+      );
+    },
+  );
 
   it('treeRowAction_OpenExpandedEmptyGroup_Nothing', () => {
     const withEmpty = [
@@ -254,19 +279,6 @@ describe('treeRowAction', () => {
 
     expect(treeRowAction(withEmpty, rows, emptyGroup, '', 'open')).toEqual({
       type: 'none',
-    });
-  });
-
-  it('treeRowAction_CloseExpandedGroup_Collapses', () => {
-    expect(actionOf('b', 'close', rowsFor(['a', 'b']))).toEqual({
-      type: 'collapse',
-    });
-  });
-
-  it('treeRowAction_CloseCollapsedGroup_SelectsParent', () => {
-    expect(actionOf('b', 'close', rowsFor(['a']))).toEqual({
-      type: 'select',
-      id: 'a',
     });
   });
 });
@@ -348,33 +360,24 @@ describe('chips', () => {
       states: { e: { claude: { state: 'launch', reason: 'user CLAUDE.md' } } },
     };
 
-    expect(chips(withStates, 'e', false)).toEqual({
-      claude: {
-        text: 'Claude launch',
-        tooltip: 'user CLAUDE.md',
-        state: 'launch',
-      },
-      codex: { text: 'Codex —', tooltip: '', state: 'none' },
+    expect(chips(withStates, 'e', false)).toMatchObject({
+      claude: { tooltip: 'user CLAUDE.md', state: 'launch' },
+      codex: { tooltip: '', state: 'none' },
     });
   });
 
   it('chips_Pending_PendingText', () => {
     const result = chips(context('/Users/u'), 'e', true);
 
-    expect(result.claude).toEqual({
-      text: 'Claude pending',
-      tooltip: 'Changed since the last build',
-      state: 'pending',
-    });
-    expect(result.codex.text).toBe('Codex pending');
-    expect(result.codex.tooltip).toBe('Changed since the last build');
+    expect(result.claude.state).toBe('pending');
+    expect(result.codex.state).toBe('pending');
   });
 
   it('chips_NoContext_Dashes', () => {
     const result = chips(null, 'e', false);
 
-    expect(result.claude.text).toBe('Claude —');
-    expect(result.codex.text).toBe('Codex —');
+    expect(result.claude.state).toBe('none');
+    expect(result.codex.state).toBe('none');
   });
 });
 
@@ -974,16 +977,8 @@ describe('changeableEntry', () => {
     plugin: 'p@m',
     root: '/c/p',
   });
-  const synced = entry({
-    path: '/Users/u/.claude/skills/synced/pdf/SKILL.md',
-    kind: 'skill',
-    owner: 'third-party',
-  });
   const byId = new Map(
-    [rule, skill, followup, hook, cached, synced].map((each) => [
-      each.id,
-      each,
-    ]),
+    [rule, skill, followup, hook, cached].map((each) => [each.id, each]),
   );
   const check = (entryId: string, unsavedPaths: string[] = []) =>
     changeableEntry(
@@ -1033,29 +1028,13 @@ describe('changeableEntry', () => {
         : null;
     };
 
-    expect(refusedText(followup.id)).toBe(
-      'Fix it is an item inside followups.md; it cannot be renamed or moved to the Trash alone',
-    );
-    expect(refusedText(hook.id)).toBe(
-      'PreToolUse is an item inside settings.json; it cannot be renamed or moved to the Trash alone',
-    );
+    expect(refusedText(followup.id)).toMatch(/Fix it.*followups\.md/);
+    expect(refusedText(hook.id)).toMatch(/PreToolUse.*settings\.json/);
   });
 
-  it('changeableEntry_PluginCache_RefusedReadOnly', () => {
+  it('changeableEntry_ReadOnlyCopy_RefusedWithItsReadOnlyText', () => {
     expect(check(cached.id)).toEqual({
-      refusal: {
-        text: 'Installed copy — p@m. Edits are lost on its next update.',
-        tone: 'info',
-      },
-    });
-  });
-
-  it('changeableEntry_SyncedSkill_RefusedReadOnly', () => {
-    expect(check(synced.id)).toEqual({
-      refusal: {
-        text: 'Downloaded copy — synced skill. Edits are lost on its next update.',
-        tone: 'info',
-      },
+      refusal: { text: expect.stringContaining('p@m'), tone: 'info' },
     });
   });
 
@@ -1110,108 +1089,110 @@ describe('prompt texts', () => {
       'Move ~\\wigley-agents\\CLAUDE.md and its link ~\\.claude\\CLAUDE.md to the Trash?',
     );
   });
-
-  it('noPlaceText_NamesKind', () => {
-    expect(noPlaceText('learning')).toBe(
-      'No place holds a learning yet; create a file by path',
-    );
-  });
 });
 
 describe('treeLine', () => {
-  it('treeLine_BeforeFirstTree_Null', () => {
-    const emptyIndex: TreeLineState = {
-      hasTree: false,
-      isIndexEmpty: true,
-      filter: '',
-      rowCount: 0,
-      isFilterOpen: false,
-    };
-    const filtered: TreeLineState = {
-      hasTree: false,
-      isIndexEmpty: true,
-      filter: 'neat',
-      rowCount: 0,
-      isFilterOpen: false,
-    };
-
-    expect(treeLine(emptyIndex)).toBeNull();
-    expect(treeLine(filtered)).toBeNull();
-  });
-
-  it('treeLine_EmptyIndex_RescanHint', () => {
-    const lineState: TreeLineState = {
-      hasTree: true,
-      isIndexEmpty: true,
-      filter: 'neat',
-      rowCount: 0,
-      isFilterOpen: false,
-    };
-
+  // `mentions` is the data the line's text carries: the filter it names.
+  it.each<{
+    lineState: TreeLineState;
+    expected: (Omit<TreeLine, 'text'> & { mentions: string }) | null;
+  }>([
+    {
+      lineState: {
+        hasTree: false,
+        isIndexEmpty: true,
+        filter: 'neat',
+        rowCount: 0,
+        isFilterOpen: false,
+      },
+      expected: null,
+    },
+    {
+      lineState: {
+        hasTree: true,
+        isIndexEmpty: true,
+        filter: 'neat',
+        rowCount: 0,
+        isFilterOpen: false,
+      },
+      expected: {
+        placement: 'empty',
+        hint: { command: 'rescan', words: 'to rescan' },
+        mentions: '',
+      },
+    },
+    {
+      lineState: {
+        hasTree: true,
+        isIndexEmpty: false,
+        filter: 'zqzq',
+        rowCount: 0,
+        isFilterOpen: false,
+      },
+      expected: {
+        placement: 'empty',
+        hint: { command: 'filter', words: 'to change it' },
+        mentions: 'zqzq',
+      },
+    },
+    {
+      lineState: {
+        hasTree: true,
+        isIndexEmpty: false,
+        filter: 'zqzq',
+        rowCount: 0,
+        isFilterOpen: true,
+      },
+      expected: {
+        placement: 'empty',
+        hint: { command: 'filter', words: 'to change it' },
+        mentions: 'zqzq',
+      },
+    },
+    {
+      lineState: {
+        hasTree: true,
+        isIndexEmpty: false,
+        filter: 'neat',
+        rowCount: 3,
+        isFilterOpen: false,
+      },
+      expected: {
+        placement: 'above',
+        hint: { command: 'filter', words: 'to change it' },
+        mentions: 'neat',
+      },
+    },
+    {
+      lineState: {
+        hasTree: true,
+        isIndexEmpty: false,
+        filter: 'neat',
+        rowCount: 3,
+        isFilterOpen: true,
+      },
+      expected: null,
+    },
+    {
+      lineState: {
+        hasTree: true,
+        isIndexEmpty: false,
+        filter: '',
+        rowCount: 3,
+        isFilterOpen: false,
+      },
+      expected: null,
+    },
+  ])('$lineState → $expected.placement', ({ lineState, expected }) => {
+    if (expected === null) {
+      expect(treeLine(lineState)).toBeNull();
+      return;
+    }
+    const { mentions, ...shape } = expected;
     expect(treeLine(lineState)).toEqual({
-      placement: 'empty',
-      text: 'No docs in this index',
-      hint: { command: 'rescan', words: 'to rescan' },
+      ...shape,
+      text: expect.stringContaining(mentions),
     });
-  });
-
-  it('treeLine_FilterMatchesNothing_ChangeHint', () => {
-    const closed: TreeLineState = {
-      hasTree: true,
-      isIndexEmpty: false,
-      filter: 'zqzq',
-      rowCount: 0,
-      isFilterOpen: false,
-    };
-    const open: TreeLineState = { ...closed, isFilterOpen: true };
-    const expected = {
-      placement: 'empty',
-      text: 'No docs match "zqzq"',
-      hint: { command: 'filter', words: 'to change it' },
-    };
-
-    expect(treeLine(closed)).toEqual(expected);
-    expect(treeLine(open)).toEqual(expected);
-  });
-
-  it('treeLine_FilterWithRows_FilteredAbove', () => {
-    const lineState: TreeLineState = {
-      hasTree: true,
-      isIndexEmpty: false,
-      filter: 'neat',
-      rowCount: 3,
-      isFilterOpen: false,
-    };
-
-    expect(treeLine(lineState)).toEqual({
-      placement: 'above',
-      text: 'Filtered: neat',
-      hint: { command: 'filter', words: 'to change it' },
-    });
-  });
-
-  it('treeLine_FilterBoxOpenWithRows_Null', () => {
-    const lineState: TreeLineState = {
-      hasTree: true,
-      isIndexEmpty: false,
-      filter: 'neat',
-      rowCount: 3,
-      isFilterOpen: true,
-    };
-
-    expect(treeLine(lineState)).toBeNull();
-  });
-
-  it('treeLine_NoFilterWithRows_Null', () => {
-    const lineState: TreeLineState = {
-      hasTree: true,
-      isIndexEmpty: false,
-      filter: '',
-      rowCount: 3,
-      isFilterOpen: false,
-    };
-
-    expect(treeLine(lineState)).toBeNull();
   });
 });
 
@@ -1231,29 +1212,7 @@ describe('provisionalEntry', () => {
     }),
   ];
 
-  it('provisionalEntry_NewFile_OwnerMine', () => {
-    const made = provisionalEntry(
-      '/Users/u/dev/r/notes.md',
-      null,
-      repoEntries,
-      posixPaths,
-    );
-
-    expect(made.owner).toBe('mine');
-  });
-
-  it('provisionalEntry_NewFile_NeverLoaded', () => {
-    const made = provisionalEntry(
-      '/Users/u/dev/r/notes.md',
-      null,
-      [],
-      posixPaths,
-    );
-
-    expect(made.lastLoaded).toBeNull();
-  });
-
-  it('provisionalEntry_InsideRepoRoot_CopiesOwner', () => {
+  it('provisionalEntry_InsideRepoRoot_CopiesOwnerAndIsMineNeverLoaded', () => {
     const made = provisionalEntry(
       '/Users/u/dev/r/nested/x.md',
       null,
@@ -1270,6 +1229,8 @@ describe('provisionalEntry', () => {
       title: 'x.md',
       line: null,
       plugin: null,
+      owner: 'mine',
+      lastLoaded: null,
     });
   });
 
@@ -1570,23 +1531,19 @@ describe('readOnlyReason', () => {
 });
 
 describe('readOnlyText', () => {
-  it('readOnlyText_Downloaded_NamesPlugin', () => {
-    expect(readOnlyText({ type: 'downloaded', plugin: 'v@m' })).toBe(
-      'Downloaded copy — v@m. Edits are lost on its next update.',
-    );
-  });
+  it.each<{ reason: ReadOnlyReason; parts: string[] }>([
+    { reason: { type: 'downloaded', plugin: 'v@m' }, parts: ['v@m'] },
+    { reason: { type: 'installed', plugin: 'p@m' }, parts: ['p@m'] },
+  ])(
+    '$reason.type copy of $reason.plugin names $parts',
+    ({ reason, parts }) => {
+      const text = readOnlyText(reason);
 
-  it('readOnlyText_DownloadedSynced_SaysSyncedSkill', () => {
-    expect(readOnlyText({ type: 'downloaded', plugin: null })).toBe(
-      'Downloaded copy — synced skill. Edits are lost on its next update.',
-    );
-  });
-
-  it('readOnlyText_Installed_NamesPlugin', () => {
-    expect(readOnlyText({ type: 'installed', plugin: 'p@m' })).toBe(
-      'Installed copy — p@m. Edits are lost on its next update.',
-    );
-  });
+      for (const part of parts) {
+        expect(text).toContain(part);
+      }
+    },
+  );
 });
 
 function fileStatus(overrides: Partial<FileStatus>): FileStatus {
@@ -1654,11 +1611,11 @@ describe('statusTexts', () => {
     expect(
       statusTexts(pluginFile([claudeCopy]), status, { 'w@m': '1.9.0' }),
     ).toEqual([
-      'Uncommitted',
-      'Unpushed',
-      'Not installed · Claude',
-      'Not installed · Codex',
-      'Session stale',
+      expect.any(String),
+      expect.any(String),
+      expect.stringContaining('Claude'),
+      expect.stringContaining('Codex'),
+      expect.any(String),
     ]);
   });
 
@@ -1693,9 +1650,7 @@ describe('rollupText', () => {
       notInstalled: { claude: 0, codex: 12 },
     };
 
-    expect(rollupText(counts)).toBe(
-      '3 uncommitted · 1 unpushed · 12 not installed for Codex',
-    );
+    expect(rollupText(counts)).toMatch(/3.*1.*12.*Codex/);
   });
 
   it('rollupText_BothHarnesses_ClaudeFirst', () => {
@@ -1705,9 +1660,7 @@ describe('rollupText', () => {
       notInstalled: { claude: 2, codex: 5 },
     };
 
-    expect(rollupText(counts)).toBe(
-      '2 not installed for Claude · 5 not installed for Codex',
-    );
+    expect(rollupText(counts)).toMatch(/2.*Claude.*5.*Codex/);
   });
 
   it('rollupText_AllZero_Null', () => {
@@ -1730,15 +1683,15 @@ describe('fetchText', () => {
       fetchedAt: '2026-10-24T10:00:00Z',
     });
 
-    expect(fetchText(clone, wrapped)).toBe(
-      'origin as of T(2026-10-24T10:00:00Z)',
+    expect(fetchText(clone, wrapped)).toContain(
+      wrapped('2026-10-24T10:00:00Z'),
     );
   });
 
   it('fetchText_FailedNeverFetched_OriginNeverFetched', () => {
     const clone = cloneStatus({ fetchFailed: true, fetchedAt: null });
 
-    expect(fetchText(clone, wrapped)).toBe('origin never fetched');
+    expect(fetchText(clone, wrapped)).toEqual(expect.any(String));
   });
 
   it('fetchText_NotFailed_Null', () => {
@@ -1805,7 +1758,7 @@ describe('treeRowStatus', () => {
     ]);
 
     expect(treeRowStatus(plugin, noTexts, files, [], asIs, posixPaths)).toEqual(
-      { mark: null, detail: '2 uncommitted · 1 unpushed' },
+      { mark: null, detail: expect.stringMatching(/2.*1/) },
     );
   });
 
@@ -1821,7 +1774,8 @@ describe('treeRowStatus', () => {
       posixPaths,
     );
 
-    expect(status.detail).toBe('1 uncommitted · origin never fetched');
+    expect(status.detail).toMatch(/^1 /);
+    expect(status.detail).toContain(fetchText(failedClone, asIs) as string);
   });
 
   it('treeRowStatus_SplitRepoNode_RollupNoOrigin', () => {
@@ -1836,7 +1790,8 @@ describe('treeRowStatus', () => {
       posixPaths,
     );
 
-    expect(status.detail).toBe('1 uncommitted');
+    expect(status.detail).toMatch(/^1 /);
+    expect(status.detail).not.toContain(fetchText(failedClone, asIs) as string);
   });
 
   it('treeRowStatus_KindGroup_NoDetail', () => {

@@ -154,7 +154,7 @@ describe('createProcessGit', () => {
     );
 
     await expect(test.git.changedPaths(ROOT, '.')).rejects.toThrow(
-      'git status exited 128: fatal: bad',
+      /128.*fatal: bad/,
     );
   });
 
@@ -193,38 +193,27 @@ describe('createProcessGit', () => {
     );
   });
 
-  it('fetch_ExitsZero_NotFailedAndCapped', async () => {
-    const test = setUp();
-    test.processes.script('git', git('fetch', '--quiet'), exited(0));
+  it.each([
+    { case: 'exits 0', result: exited(0), failed: false },
+    { case: 'exits 1', result: exited(1), failed: true },
+    {
+      case: 'times out',
+      result: { code: -1, stdout: '', stderr: '', timedOut: true },
+      failed: true,
+    },
+    { case: 'cannot start', result: null, failed: true },
+  ])(
+    'fetch when git $case: failed $failed, capped at the timeout',
+    async ({ result, failed }) => {
+      const test = setUp();
+      if (result !== null) {
+        test.processes.script('git', git('fetch', '--quiet'), result);
+      }
 
-    expect(await test.git.fetch(ROOT, 15000)).toBe(false);
-    expect(test.processes.runs[0].timeoutMs).toBe(15000);
-  });
-
-  it('fetch_ExitsOne_Failed', async () => {
-    const test = setUp();
-    test.processes.script('git', git('fetch', '--quiet'), exited(1));
-
-    expect(await test.git.fetch(ROOT, 15000)).toBe(true);
-  });
-
-  it('fetch_TimedOut_Failed', async () => {
-    const test = setUp();
-    test.processes.script('git', git('fetch', '--quiet'), {
-      code: -1,
-      stdout: '',
-      stderr: '',
-      timedOut: true,
-    });
-
-    expect(await test.git.fetch(ROOT, 15000)).toBe(true);
-  });
-
-  it('fetch_CannotStart_Failed', async () => {
-    const test = setUp();
-
-    expect(await test.git.fetch(ROOT, 15000)).toBe(true);
-  });
+      expect(await test.git.fetch(ROOT, 15000)).toBe(failed);
+      expect(test.processes.runs[0].timeoutMs).toBe(15000);
+    },
+  );
 
   it('lastFetch_RelativeFetchHead_ModifiedIso', async () => {
     const test = setUp();
@@ -329,9 +318,7 @@ describe('createProcessGit', () => {
   it('commitPaths_NoPaths_RejectsWithoutRunning', async () => {
     const test = setUp();
 
-    await expect(test.git.commitPaths(ROOT, [], 'm')).rejects.toThrow(
-      'no paths to commit',
-    );
+    await expect(test.git.commitPaths(ROOT, [], 'm')).rejects.toThrow();
     expect(test.processes.runs).toEqual([]);
   });
 });

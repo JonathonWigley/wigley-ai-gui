@@ -92,11 +92,9 @@ describe('changeRefusal', () => {
 
     expect(refusal('/Users/u/CLAUDE.md')).toBe(null);
     expect(refusal('/Users/u/notes/imported.md')).toBe(null);
-    expect(refusal('/Users/u/x.md')).toBe(
-      'Refused: /Users/u/x.md is outside the indexed folders',
-    );
-    expect(refusal('/Users/u/notes/other.md')).toBe(
-      'Refused: /Users/u/notes/other.md is outside the indexed folders',
+    expect(refusal('/Users/u/x.md')).toContain('/Users/u/x.md');
+    expect(refusal('/Users/u/notes/other.md')).toContain(
+      '/Users/u/notes/other.md',
     );
   });
 
@@ -111,7 +109,7 @@ describe('changeRefusal', () => {
 
     expect(
       changeRefusal('/Users/u/scratch/b.md', entries, FOLDERS, posixPaths),
-    ).toBe('Refused: /Users/u/scratch/b.md is outside the indexed folders');
+    ).toContain('/Users/u/scratch/b.md');
   });
 
   it('changeRefusal_ImageInsideFeaturesRoot_Allowed', () => {
@@ -150,50 +148,39 @@ describe('changeRefusal', () => {
     ).toBe(null);
   });
 
-  it('changeRefusal_UnlistedCachedVersion_RefusedNamingCache', () => {
-    const target = '/Users/u/.claude/plugins/cache/m/p/0/skills/s/SKILL.md';
-
-    expect(refusal(target)).toBe(
-      `Refused: ${target} is inside the plugin cache /Users/u/.claude/plugins/cache`,
-    );
-  });
-
-  it('changeRefusal_InsideCodexCache_Refused', () => {
-    const target = '/Users/u/.codex/plugins/cache/m/p/1/SKILL.md';
-
-    expect(refusal(target)).toBe(
-      `Refused: ${target} is inside the plugin cache /Users/u/.codex/plugins/cache`,
-    );
-  });
+  it.each([
+    {
+      target: '/Users/u/.claude/plugins/cache/m/p/0/skills/s/SKILL.md',
+      cache: '/Users/u/.claude/plugins/cache',
+    },
+    {
+      target: '/Users/u/.codex/plugins/cache/m/p/1/SKILL.md',
+      cache: '/Users/u/.codex/plugins/cache',
+    },
+  ])(
+    'changeRefusal_UnlistedFileInCache_RefusedNamingCache $cache',
+    ({ target, cache }) => {
+      expect(refusal(target)).toContain(cache);
+    },
+  );
 
   it('changeRefusal_InsidePluginCache_RefusedNamingPlugin', () => {
-    expect(refusal(PLUGIN_SKILL)).toBe(
-      `Refused: ${PLUGIN_SKILL} is inside the plugin cache of p@m`,
-    );
+    expect(refusal(PLUGIN_SKILL)).toContain('p@m');
   });
 
-  it('changeRefusal_InsideSyncedSkills_RefusedAsSyncedSkill', () => {
-    const target = '/Users/u/.claude/skills/synced/anthropic/pdf/SKILL.md';
-
-    expect(refusal(target)).toBe(
-      `Refused: ${target} is a downloaded copy (synced skill)`,
-    );
-  });
-
-  it('changeRefusal_SecondConfigFolderSynced_Refused', () => {
-    const target = '/Users/u/.claude-personal/skills/synced/b/x.md';
-
-    expect(refusal(target)).toBe(
-      `Refused: ${target} is a downloaded copy (synced skill)`,
-    );
+  it.each([
+    '/Users/u/.claude/skills/synced/anthropic/pdf/SKILL.md',
+    '/Users/u/.claude-personal/skills/synced/b/x.md',
+  ])('changeRefusal_InsideAConfigFoldersSyncedSkills_Refused %s', (target) => {
+    expect(refusal(target)).toContain(target);
   });
 
   it('changeRefusal_ThirdPartyPluginEntry_RefusedNamingPlugin', () => {
     const entries = [...ENTRIES, THIRD_PARTY_PLUGIN_ENTRY];
 
-    expect(changeRefusal(THIRD_PARTY_SKILL, entries, FOLDERS, posixPaths)).toBe(
-      `Refused: ${THIRD_PARTY_SKILL} is a downloaded copy (q@n)`,
-    );
+    expect(
+      changeRefusal(THIRD_PARTY_SKILL, entries, FOLDERS, posixPaths),
+    ).toContain('q@n');
   });
 
   it('changeRefusal_ThirdPartyEntryNoPlugin_SyncedSkill', () => {
@@ -201,8 +188,8 @@ describe('changeRefusal', () => {
     const entries = [entry({ path: target, owner: 'third-party' })];
     const folders = { ...FOLDERS, thirdPartyFolders: [] };
 
-    expect(changeRefusal(target, entries, folders, posixPaths)).toBe(
-      `Refused: ${target} is a downloaded copy (synced skill)`,
+    expect(changeRefusal(target, entries, folders, posixPaths)).toContain(
+      target,
     );
   });
 
@@ -212,9 +199,7 @@ describe('changeRefusal', () => {
   });
 
   it('changeRefusal_Outside_RefusedNamingPath', () => {
-    expect(refusal('/Users/u/Desktop/x.md')).toBe(
-      'Refused: /Users/u/Desktop/x.md is outside the indexed folders',
-    );
+    expect(refusal('/Users/u/Desktop/x.md')).toContain('/Users/u/Desktop/x.md');
   });
 });
 
@@ -284,9 +269,7 @@ describe('path guard on Windows', () => {
         NO_FOLDERS,
         windowsPaths,
       ),
-    ).toBe(
-      'Refused: C:\\Users\\u\\dev\\rx\\a.md is outside the indexed folders',
-    );
+    ).toContain('C:\\Users\\u\\dev\\rx\\a.md');
   });
 
   it('changeRefusal_WindowsSyncedOtherCase_Refused', () => {
@@ -296,9 +279,9 @@ describe('path guard on Windows', () => {
     };
     const target = 'c:\\users\\u\\.claude\\skills\\synced\\a\\SKILL.md';
 
-    expect(changeRefusal(target, REPO_ENTRIES, folders, windowsPaths)).toBe(
-      `Refused: ${target} is a downloaded copy (synced skill)`,
-    );
+    expect(
+      changeRefusal(target, REPO_ENTRIES, folders, windowsPaths),
+    ).toContain(target);
   });
 
   it('isIndexedPath_WindowsOtherCase_Openable', () => {

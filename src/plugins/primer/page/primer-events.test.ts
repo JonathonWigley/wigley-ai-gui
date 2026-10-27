@@ -151,7 +151,7 @@ describe('startPrimerEvents', () => {
 });
 
 describe('createPrimerEventLog', () => {
-  it('primerEventLog_EachEvent_LogsItsLine', () => {
+  it('primerEventLog_EachEvent_LogsOneLineNamingItsData', () => {
     const log = vi.fn();
     const logEvent = createPrimerEventLog(log);
 
@@ -165,10 +165,23 @@ describe('createPrimerEventLog', () => {
       data: { primerId: 'p1', outcome: 'cancelled' },
     });
 
-    expect(log.mock.calls).toEqual([
-      ['primer', 'event primerShown p1'],
-      ['primer', 'event needChanged p1 3 yes'],
-      ['primer', 'event primerFinished p1 cancelled'],
+    const lines = log.mock.calls.map(([source, line]) => ({
+      source,
+      words: String(line).split(' '),
+    }));
+    expect(lines).toEqual([
+      {
+        source: 'primer',
+        words: expect.arrayContaining(['primerShown', 'p1']),
+      },
+      {
+        source: 'primer',
+        words: expect.arrayContaining(['needChanged', 'p1', '3', 'yes']),
+      },
+      {
+        source: 'primer',
+        words: expect.arrayContaining(['primerFinished', 'p1', 'cancelled']),
+      },
     ]);
   });
 });

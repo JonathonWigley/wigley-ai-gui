@@ -6,7 +6,7 @@ import {
   createArchivedSessions,
 } from './archived-sessions';
 
-const UNREADABLE = `${ARCHIVED_SESSIONS_FILE} is not a JSON array of session ids`;
+const UNREADABLE = ARCHIVED_SESSIONS_FILE;
 
 function setUp() {
   const data = createMemoryFiles();

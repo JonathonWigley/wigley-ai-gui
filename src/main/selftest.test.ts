@@ -80,47 +80,28 @@ describe('failSelfTest', () => {
     expect(errors).toEqual([]);
   });
 
-  it('exits with its code and reports a cleanup that throws', async () => {
-    const failSelfTest = await loadFailSelfTest();
+  it.each([
+    {
+      cleanup: 'throws',
+      cleanUp: () => {
+        throw new Error('home still held');
+      },
+    },
+    {
+      cleanup: 'rejects',
+      cleanUp: () => Promise.reject(new Error('home still held')),
+    },
+  ])(
+    'exits with its code and reports a cleanup that $cleanup',
+    async ({ cleanUp }) => {
+      const failSelfTest = await loadFailSelfTest();
 
-    failSelfTest('a step', new Error('boom'), () => {
-      throw new Error('home still held');
-    });
+      failSelfTest('a step', new Error('boom'), cleanUp);
 
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
-    expect(errors).toEqual(['[selftest] cleanup failed: home still held']);
-  });
-
-  it('exits with its code and reports a cleanup that rejects', async () => {
-    const failSelfTest = await loadFailSelfTest();
-
-    failSelfTest('a step', new Error('boom'), () =>
-      Promise.reject(new Error('home still held')),
-    );
-
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
-    expect(errors).toEqual(['[selftest] cleanup failed: home still held']);
-  });
-
-  it('exits with its code once the teardown cap cuts off a hung teardown', async () => {
-    vi.useFakeTimers();
-    const failSelfTest = await loadFailSelfTest();
-    const { createSelfTestTeardown } = await import('./selftest-teardown');
-    const removeHome = vi.fn(async () => {});
-    const teardown = createSelfTestTeardown(removeHome, 1000);
-    teardown.add('a hung part', () => new Promise<void>(() => {}));
-
-    failSelfTest('a step', new Error('boom'), () => teardown.run());
-    await vi.advanceTimersByTimeAsync(999);
-    expect(exit).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-
-    expect(removeHome).toHaveBeenCalledTimes(1);
-    expect(exit).toHaveBeenCalledWith(1);
-    expect(errors).toEqual([
-      '[selftest] teardown of a hung part did not settle within 1000 ms',
-    ]);
-  });
+      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
+      expect(errors).toEqual(['[selftest] cleanup failed: home still held']);
+    },
+  );
 
   it('does nothing on a second exit', async () => {
     const failSelfTest = await loadFailSelfTest();
@@ -137,45 +118,12 @@ describe('failSelfTest', () => {
   });
 });
 
-describe('settleWithin', () => {
+describe('runScript', () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
-  it('returns the value of a result that settles in time', async () => {
-    const { settleWithin } = await import('./selftest-runner');
-
-    expect(await settleWithin(Promise.resolve('done'), 1000)).toEqual({
-      timedOut: false,
-      value: 'done',
-    });
-  });
-
-  it('times out on a result that never settles', async () => {
-    vi.useFakeTimers();
-    const { settleWithin } = await import('./selftest-runner');
-    let outcome: unknown = null;
-
-    void settleWithin(new Promise(() => {}), 1000).then((settled) => {
-      outcome = settled;
-    });
-    await vi.advanceTimersByTimeAsync(999);
-    expect(outcome).toBeNull();
-    await vi.advanceTimersByTimeAsync(1);
-
-    expect(outcome).toEqual({ timedOut: true });
-  });
-
-  it('rejects with a result that rejects', async () => {
-    const { settleWithin } = await import('./selftest-runner');
-
-    await expect(
-      settleWithin(Promise.reject(new Error('boom')), 1000),
-    ).rejects.toThrow('boom');
-  });
-});
-
-describe('runScript', () => {
   it('stops the steps and rejects once the result rejects early', async () => {
     const { runScript } = await import('./selftest-runner');
     const script: SelfTestScript = {
@@ -210,6 +158,47 @@ describe('runScript', () => {
       ),
     ).rejects.toThrow('fixture failed');
     expect(press).not.toHaveBeenCalled();
+  });
+
+  it('fails the run once a result that never settles reaches the step timeout', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { runScript } = await import('./selftest-runner');
+    waitForNewLogLine.mockResolvedValueOnce(true);
+    let failures: number | null | undefined;
+
+    void runScript(
+      {
+        contentSize: () => ({ width: 800, height: 600 }),
+      } as unknown as DrivenWindow,
+      {} as Files,
+      {
+        pluginId: 'plugin',
+        script: {
+          pageBinds: [],
+          settings: {},
+          open: () => ({
+            shownLine: '[plugin] shown',
+            result: new Promise(() => {}),
+          }),
+          groups: [],
+          scrollsItself: [],
+          problems: () => [],
+        },
+      },
+      new Map(),
+      800,
+      1,
+      () => true,
+      1000,
+    ).then((settled) => {
+      failures = settled;
+    });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(failures).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(failures).toBe(1);
   });
 });
 
@@ -368,22 +357,5 @@ describe('startSelfTest', () => {
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
 
     expect(lines).toContain('[selftest] FAIL [keys] unplaced x a.trash in a.s');
-  });
-});
-
-describe('unplacedLines', () => {
-  it("unplacedLines keeps only the keys plugin's unplaced lines, in order", async () => {
-    const { unplacedLines } = await import('./selftest-runner');
-
-    expect(
-      unplacedLines([
-        '[keys] unplaced x a.trash in a.s',
-        '[t] done',
-        '[keys] unplaced y a.copy in a.t',
-      ]),
-    ).toEqual([
-      '[keys] unplaced x a.trash in a.s',
-      '[keys] unplaced y a.copy in a.t',
-    ]);
   });
 });

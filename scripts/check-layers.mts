@@ -1,7 +1,8 @@
 // Fails when a source file (`.ts` or `.js`) imports across a layer boundary
 // LAYERS does not allow. A file belongs to the layer with the longest matching
-// path; imports inside a file's own layer are always allowed, and a `.test.ts`
-// file may also import the test packages. An import is allowed when the
+// path; imports inside a file's own layer are always allowed, and a test file
+// (`.test.ts`, a `.test-d.ts` type test or a `.test-support.ts` module of
+// shared test cases) may also import the test packages. An import is allowed when the
 // imported file's own layer is listed exactly: allowing `src/shared` does not
 // admit `src/shared/page`.
 import { readdirSync, readFileSync } from 'node:fs';
@@ -56,6 +57,11 @@ const LAYERS: Record<string, LayerRule> = {
   },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
+  // Runs the Files contract suite, which the memory adapter runs too.
+  'src/main/files/node-files.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/main/files'],
+    packages: ['node:'],
+  },
   'src/main/processes': { layers: ['src/contracts'], packages: ['node:'] },
   'src/main/git': { layers: ['src/contracts'], packages: ['node:'] },
   // Over the shared fakes, and a commit in a real temporary clone through the
@@ -602,6 +608,7 @@ const LAYERS: Record<string, LayerRule> = {
 };
 
 const TEST_PACKAGES = ['vitest'];
+const TEST_FILE_SUFFIXES = ['.test.ts', '.test-d.ts', '.test-support.ts'];
 
 function layerOf(file: string): string | undefined {
   return Object.keys(LAYERS)
@@ -629,7 +636,7 @@ function importViolations(file: string): string[] {
     return [`${file}: no layer in LAYERS covers this file`];
   }
   const rule = LAYERS[layer];
-  const isTestFile = file.endsWith('.test.ts');
+  const isTestFile = TEST_FILE_SUFFIXES.some((suffix) => file.endsWith(suffix));
   const violations: string[] = [];
   const imports = ts.preProcessFile(readFileSync(file, 'utf8'), true, true);
   for (const { fileName } of imports.importedFiles) {

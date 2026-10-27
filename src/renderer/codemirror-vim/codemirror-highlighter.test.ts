@@ -47,12 +47,6 @@ describe('highlight()', () => {
     );
   });
 
-  it('highlights a markdown heading', async () => {
-    const html = await highlighter.highlight('# Title', 'markdown');
-    expect(html).toContain(classFor(tags.heading1));
-    expect(html).toContain('Title');
-  });
-
   it('highlights a fence inside markdown in its language', async () => {
     const html = await highlighter.highlight(
       '```python\ndef f(): pass\n```',

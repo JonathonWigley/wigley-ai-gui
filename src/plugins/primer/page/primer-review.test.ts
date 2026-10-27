@@ -4,7 +4,7 @@ import type { AnchorOptions } from '../../keys/contract';
 import { activeForm } from '../../../shared/page/session-forms';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import type { PrimerEntry } from '../contract';
-import { reviewFooter, reviewTallies, talliesText } from './primer-review';
+import { reviewFooter, reviewTallies } from './primer-review';
 import { initialState, type OpenPrimer } from './primer-state';
 import { presentedPrimer, primerEntry, primerItem } from './test-primers';
 
@@ -26,7 +26,7 @@ function items(count: number, included: number) {
 }
 
 describe('review tallies', () => {
-  it('talliesText_FourTasksTwelveItemsNineIncluded_CountsEveryNeedAndItem', () => {
+  it('reviewTallies_FourTasksTwelveItemsNineIncluded_CountsEveryNeedAndItem', () => {
     const primer = primerWith([
       primerEntry('1', 'primer', { need: 'yes', items: items(4, 3) }),
       primerEntry('2', 'primer', { need: 'yes', items: items(3, 3) }),
@@ -34,9 +34,13 @@ describe('review tallies', () => {
       primerEntry('extra-1', 'extra', { need: 'unclear', items: items(2, 2) }),
     ]);
 
-    expect(talliesText(reviewTallies(primer))).toBe(
-      '2 needed, 1 not needed, 1 unclear. 9 of 12 items included.',
-    );
+    expect(reviewTallies(primer)).toEqual({
+      yes: 2,
+      no: 1,
+      unclear: 1,
+      included: 9,
+      items: 12,
+    });
   });
 
   it('reviewTallies_NoItems_CountsZeroItems', () => {

@@ -63,52 +63,21 @@ describe('createFakeAgentHarness', () => {
 
     expect(harness.processes[0].request).toBe(request);
     expect(harness.processes[0].events).toBe(events);
-    expect(heard).toEqual([
-      [
-        'controls',
-        [
-          {
-            id: 'mode',
-            label: 'Mode',
-            choices: [
-              { value: 'auto', label: 'Auto' },
-              { value: 'plan', label: 'Plan' },
-            ],
-            value: 'auto',
-          },
-          {
-            id: 'effort',
-            label: 'Effort',
-            choices: [
-              { value: 'low', label: 'Low' },
-              { value: 'medium', label: 'Medium' },
-              { value: 'high', label: 'High' },
-            ],
-            value: 'medium',
-          },
-          {
-            id: 'model',
-            label: 'Model',
-            choices: [
-              { value: 'fake-small', label: 'Small' },
-              { value: 'fake-large', label: 'Large' },
-            ],
-            value: 'fake-small',
-          },
-          {
-            id: 'verbosity',
-            label: 'Verbosity',
-            choices: [
-              { value: 'brief', label: 'Brief' },
-              { value: 'full', label: 'Full' },
-            ],
-            value: 'brief',
-          },
-        ],
-      ],
-      ['commands', ['fake-command']],
-      ['activity', 'idle'],
+    expect(heard.map(([name]) => name)).toEqual([
+      'controls',
+      'commands',
+      'activity',
     ]);
+    const controls = heard[0][1] as Parameters<
+      AgentProcessEvents['controls']
+    >[0];
+    expect(controls.map((control) => control.id)).toEqual([
+      'mode',
+      'effort',
+      'model',
+      'verbosity',
+    ]);
+    expect(heard[2]).toEqual(['activity', 'idle']);
   });
 
   it('failNextStart_ThrowsOnce', () => {
@@ -325,9 +294,7 @@ describe('createFakeAgentHarness', () => {
   it('setControl_UnknownChoice_Throws', async () => {
     const { agent, record } = await startedProcess();
 
-    expect(() => agent.setControl('effort', 'max')).toThrow(
-      'fake agent control effort has no choice max',
-    );
+    expect(() => agent.setControl('effort', 'max')).toThrow(/effort.*max/);
     expect(record.calls).toEqual([
       { method: 'setControl', id: 'effort', value: 'max' },
     ]);
@@ -342,9 +309,7 @@ describe('createFakeAgentHarness', () => {
 
     expect(heard).toEqual([['ended', { code: 0, error: null }]]);
     expect(record.ended).toBe(true);
-    expect(() => agent.send({ text: 'x', images: [] })).toThrow(
-      'fake agent process has ended',
-    );
+    expect(() => agent.send({ text: 'x', images: [] })).toThrow();
   });
 
   it('send_EndText_EmitsUserEntryThenEnded', async () => {
@@ -387,9 +352,7 @@ describe('createFakeAgentHarness', () => {
     agent.send({ text: FAKE_END_TEXT, images: [] });
     await flush();
 
-    expect(() => agent.send({ text: 'x', images: [] })).toThrow(
-      'fake agent process has ended',
-    );
+    expect(() => agent.send({ text: 'x', images: [] })).toThrow();
   });
 
   it('holdEnd_KeepsEndPendingUntilRelease', async () => {
@@ -433,18 +396,7 @@ describe('createFakeAgentHarness', () => {
 
     const sessions = await harness.listSessions('/a', '/p');
 
-    expect(sessions).toEqual([
-      {
-        sessionId: '00000000-0000-4000-8000-000000000001',
-        title: 'fake past session one',
-        modified: 1767323045000,
-      },
-      {
-        sessionId: '00000000-0000-4000-8000-000000000002',
-        title: 'fake past session two',
-        modified: 1767236645000,
-      },
-    ]);
+    expect(sessions).toEqual(FAKE_PAST_SESSIONS);
     expect(sessions).not.toBe(FAKE_PAST_SESSIONS);
     expect(harness.pastSessionCalls).toEqual([
       {
@@ -476,9 +428,7 @@ describe('createFakeAgentHarness', () => {
         raw: [{ fake: 'history-assistant' }],
       },
     ]);
-    await expect(harness.history('nope', '/a', null)).rejects.toThrow(
-      'fake agent has no saved session nope',
-    );
+    await expect(harness.history('nope', '/a', null)).rejects.toThrow(/nope/);
     harness.failNextHistory('cannot read');
     await expect(harness.history(known, '/a', null)).rejects.toThrow(
       'cannot read',

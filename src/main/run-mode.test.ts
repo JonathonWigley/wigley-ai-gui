@@ -20,7 +20,7 @@ describe('runEnvironmentOf', () => {
   it('throws when both are set', () => {
     expect(() =>
       runEnvironmentOf({ PROOF_SELFTEST: '1', WIGLEY_DRIVE_DIR: runDir }),
-    ).toThrow('Set PROOF_SELFTEST or WIGLEY_DRIVE_DIR, not both');
+    ).toThrow(/PROOF_SELFTEST.*WIGLEY_DRIVE_DIR/);
   });
 
   it('a drive run in WIGLEY_DRIVE_DIR over the fake harness by default', () => {
@@ -42,7 +42,7 @@ describe('runEnvironmentOf', () => {
 
   it('throws on a relative WIGLEY_DRIVE_DIR', () => {
     expect(() => runEnvironmentOf({ WIGLEY_DRIVE_DIR: 'runs/one' })).toThrow(
-      'WIGLEY_DRIVE_DIR must be an absolute path',
+      'WIGLEY_DRIVE_DIR',
     );
   });
 
@@ -52,6 +52,6 @@ describe('runEnvironmentOf', () => {
         WIGLEY_DRIVE_DIR: runDir,
         WIGLEY_DRIVE_HARNESS: 'codex',
       }),
-    ).toThrow('WIGLEY_DRIVE_HARNESS is "codex"; set it to fake or claude');
+    ).toThrow(/WIGLEY_DRIVE_HARNESS.*codex/);
   });
 });

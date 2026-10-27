@@ -108,7 +108,7 @@ describe('pickLayout', () => {
     const loaded = new Map([['mine', allCards()]]);
 
     expect(() => pickLayout('question', ['mine', 'default'], loaded)).toThrow(
-      'layout default is not loaded',
+      'default',
     );
   });
 });

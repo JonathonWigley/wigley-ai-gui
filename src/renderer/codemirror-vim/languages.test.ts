@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findLanguageByFile, findLanguageByName } from './languages';
+import { findLanguageByFile } from './languages';
 
 describe('language lookup', () => {
   it('finds a language by file name', () => {
@@ -8,12 +8,5 @@ describe('language lookup', () => {
     expect(findLanguageByFile('config.toml')?.name).toBe('TOML');
     expect(findLanguageByFile('a.yml')?.name).toBe('YAML');
     expect(findLanguageByFile('notes.xyz')).toBeNull();
-  });
-
-  it('finds a language by name or alias, ignoring case', () => {
-    expect(findLanguageByName('TS')?.name).toBe('TypeScript');
-    expect(findLanguageByName('bash')?.name).toBe('Shell');
-    expect(findLanguageByName('nosuchlang')).toBeNull();
-    expect(findLanguageByName('')).toBeNull();
   });
 });

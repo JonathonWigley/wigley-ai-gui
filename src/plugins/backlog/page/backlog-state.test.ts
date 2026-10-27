@@ -6,7 +6,6 @@ import {
   type BacklogAction,
   type BacklogState,
   backlogReducer,
-  cursorCommands,
   draftOf,
   editorEdit,
   emptyReason,
@@ -459,50 +458,50 @@ describe('backlogReducer', () => {
 });
 
 describe('emptyReason', () => {
-  it('emptyReason_RowShowing_Null', () => {
-    expect(emptyReason(opened(home(ROOT, [item('One')])))).toBeNull();
-  });
-
-  it('emptyReason_AgentReadyOnlyNoneTagged_AgentReadyNone', () => {
-    const state = run(opened(home(ROOT, [item('One')])), {
-      type: 'toggleAgentReadyOnly',
-    });
-
-    expect(emptyReason(state)).toBe('agentReadyNone');
-  });
-
-  it('emptyReason_EveryFollowupDoneAndHidden_AllDone', () => {
-    const state = opened(home(ROOT, [item('Shipped', { done: true })]));
-
-    expect(emptyReason(state)).toBe('allDone');
-  });
-
-  it('emptyReason_EveryFollowupDoneWithAgentReadyOnly_AllDone', () => {
-    const state = run(
-      opened(
-        home(ROOT, [item('Shipped', { done: true, tags: ['agent-ready'] })]),
+  it.each([
+    {
+      state: 'a row showing',
+      given: opened(home(ROOT, [item('One')])),
+      reason: null,
+    },
+    {
+      state: 'agent-ready only with none tagged',
+      given: run(opened(home(ROOT, [item('One')])), {
+        type: 'toggleAgentReadyOnly',
+      }),
+      reason: 'agentReadyNone',
+    },
+    {
+      state: 'every follow-up done and hidden',
+      given: opened(home(ROOT, [item('Shipped', { done: true })])),
+      reason: 'allDone',
+    },
+    {
+      state: 'every follow-up done with agent-ready only',
+      given: run(
+        opened(
+          home(ROOT, [item('Shipped', { done: true, tags: ['agent-ready'] })]),
+        ),
+        { type: 'toggleAgentReadyOnly' },
       ),
-      { type: 'toggleAgentReadyOnly' },
-    );
-
-    expect(emptyReason(state)).toBe('allDone');
-  });
-
-  it('emptyReason_FilterMatchesNothing_Filter', () => {
-    const state = run(opened(home(ROOT, [item('One')])), {
-      type: 'setFilter',
-      text: 'zzz',
-    });
-
-    expect(emptyReason(state)).toBe('filter');
-  });
-
-  it('emptyReason_NoFollowupsOrPlans_Nothing', () => {
-    expect(emptyReason(opened(home(ROOT, [])))).toBe('nothing');
-  });
-
-  it('emptyReason_NoHomeOpen_NoHome', () => {
-    expect(emptyReason(initialBacklogState())).toBe('noHome');
+      reason: 'allDone',
+    },
+    {
+      state: 'a filter matching nothing',
+      given: run(opened(home(ROOT, [item('One')])), {
+        type: 'setFilter',
+        text: 'zzz',
+      }),
+      reason: 'filter',
+    },
+    {
+      state: 'no follow-ups or plans',
+      given: opened(home(ROOT, [])),
+      reason: 'nothing',
+    },
+    { state: 'no home open', given: initialBacklogState(), reason: 'noHome' },
+  ])('is $reason with $state', ({ given, reason }) => {
+    expect(emptyReason(given)).toBe(reason);
   });
 });
 
@@ -534,45 +533,5 @@ describe('withTagToggled', () => {
 
   it('withTagToggled_Absent_AppendsIt', () => {
     expect(withTagToggled(['a'], 'agent-ready')).toEqual(['a', 'agent-ready']);
-  });
-});
-
-describe('cursorCommands', () => {
-  it('cursorCommands_Followup_EveryRowAction', () => {
-    const row = {
-      kind: 'followup' as const,
-      key: 'followup',
-      path: `${ROOT}/followups.md`,
-      item: item('Fix the bar'),
-    };
-
-    expect(cursorCommands(row)).toEqual([
-      'edit',
-      'delete',
-      'toggleAgentReady',
-      'pickTag',
-      'openInDocs',
-    ]);
-  });
-
-  it('cursorCommands_Plan_OpenInDocsOnly', () => {
-    const row = {
-      kind: 'plan' as const,
-      key: 'plan',
-      plan: plan('bar', ['01-bar']),
-      isExpanded: false,
-    };
-
-    expect(cursorCommands(row)).toEqual(['openInDocs']);
-  });
-
-  it('cursorCommands_Task_OpenInDocsOnly', () => {
-    const row = {
-      kind: 'task' as const,
-      key: 'task',
-      task: { path: `${ROOT}/feature/01-bar.md`, title: 'Bar', status: null },
-    };
-
-    expect(cursorCommands(row)).toEqual(['openInDocs']);
   });
 });

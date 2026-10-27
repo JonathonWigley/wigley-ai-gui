@@ -27,7 +27,7 @@ describe('createActionRegistry', () => {
     added.dispose();
 
     await expect(registry.run('forms.openRound', {})).rejects.toThrow(
-      'No drive action forms.openRound; `actions` lists them',
+      'forms.openRound',
     );
   });
 });

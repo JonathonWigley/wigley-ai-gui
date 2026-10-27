@@ -299,31 +299,28 @@ describe('CRLF files', () => {
     );
   });
 
-  it('writes an LF file with one stray CRLF line back in LF', () => {
+  // Most lines' ending wins, LF on a tie.
+  it.each([
+    {
+      file: 'an LF file with one stray CRLF line',
+      text: '- **One** — a\r\n- **Two** — b\n\nTail.\n',
+      expected: '- **One** — a\n- **Two** — b\n- **Three** — c\n\nTail.\n',
+    },
+    {
+      file: 'a CRLF file with one stray LF line',
+      text: '- **One** — a\n- **Two** — b\r\n\r\nTail.\r\n',
+      expected:
+        '- **One** — a\r\n- **Two** — b\r\n- **Three** — c\r\n\r\nTail.\r\n',
+    },
+    {
+      file: 'a file with one CRLF line and one LF line',
+      text: '- **One** — a\r\n- **Two** — b\n',
+      expected: '- **One** — a\n- **Two** — b\n- **Three** — c\n',
+    },
+  ])('writes $file back in the ending most lines use', ({ text, expected }) => {
     const draft = { title: 'Three', oneLine: 'c', tags: [], body: '' };
-    const text = '- **One** — a\r\n- **Two** — b\n\nTail.\n';
 
-    expect(appliedText(text, { type: 'create', draft })).toBe(
-      '- **One** — a\n- **Two** — b\n- **Three** — c\n\nTail.\n',
-    );
-  });
-
-  it('writes a CRLF file with one stray LF line back in CRLF', () => {
-    const draft = { title: 'Three', oneLine: 'c', tags: [], body: '' };
-    const text = '- **One** — a\n- **Two** — b\r\n\r\nTail.\r\n';
-
-    expect(appliedText(text, { type: 'create', draft })).toBe(
-      '- **One** — a\r\n- **Two** — b\r\n- **Three** — c\r\n\r\nTail.\r\n',
-    );
-  });
-
-  it('writes a file with one CRLF line and one LF line back in LF', () => {
-    const draft = { title: 'Three', oneLine: 'c', tags: [], body: '' };
-    const text = '- **One** — a\r\n- **Two** — b\n';
-
-    expect(appliedText(text, { type: 'create', draft })).toBe(
-      '- **One** — a\n- **Two** — b\n- **Three** — c\n',
-    );
+    expect(appliedText(text, { type: 'create', draft })).toBe(expected);
   });
 });
 
@@ -498,18 +495,8 @@ describe('applyFollowupEdit create', () => {
 
     expect(result).toEqual({
       type: 'applied',
-      text: lines(
-        '# Follow-ups — game',
-        '',
-        '**Contents**',
-        '',
-        '- **First** — gist',
-        '',
-        'Deferred work for the game repo. Each entry is one `##` section and stands on its own as a task brief.',
-        '',
-        '## First',
-        '',
-        'Body.',
+      text: expect.stringMatching(
+        /^# Follow-ups — game\n\n\*\*Contents\*\*\n\n- \*\*First\*\* — gist\n\n[^\n]+\n\n## First\n\nBody\.\n$/,
       ),
       line: 9,
     });
@@ -662,17 +649,6 @@ describe('applyFollowupEdit edit', () => {
       }),
     ).toEqual({ type: 'titleTaken', title: 'Reward popup' });
   });
-
-  it('reports a missing title', () => {
-    const draft = { title: 'Gone', oneLine: '', tags: [], body: '' };
-
-    expect(
-      applyFollowupEdit(SECTIONED, { type: 'edit', title: 'Gone', draft }),
-    ).toEqual({
-      type: 'missing',
-      title: 'Gone',
-    });
-  });
 });
 
 describe('applyFollowupEdit on a wrapped Contents line', () => {
@@ -783,19 +759,6 @@ describe('applyFollowupEdit setTags', () => {
       appliedText(text, { type: 'setTags', title: 'Title', tags: ['t'] }),
     ).toBe(lines('- **Title** — *t*: gist'));
   });
-
-  it('reports a missing title', () => {
-    expect(
-      applyFollowupEdit(SECTIONED, {
-        type: 'setTags',
-        title: 'Gone',
-        tags: [],
-      }),
-    ).toEqual({
-      type: 'missing',
-      title: 'Gone',
-    });
-  });
 });
 
 describe('applyFollowupEdit delete', () => {
@@ -895,13 +858,21 @@ describe('applyFollowupEdit delete', () => {
       line: 1,
     });
   });
+});
 
-  it('reports a missing title', () => {
-    expect(
-      applyFollowupEdit(SECTIONED, { type: 'delete', title: 'Gone' }),
-    ).toEqual({
-      type: 'missing',
+describe('applyFollowupEdit on a title no item has', () => {
+  it.each<Exclude<FollowupEdit, { type: 'create' }>>([
+    {
+      type: 'edit',
       title: 'Gone',
+      draft: { title: 'Renamed', oneLine: '', tags: [], body: '' },
+    },
+    { type: 'setTags', title: 'Lost', tags: [] },
+    { type: 'delete', title: 'Absent' },
+  ])('$type reports $title missing', (edit) => {
+    expect(applyFollowupEdit(SECTIONED, edit)).toEqual({
+      type: 'missing',
+      title: edit.title,
     });
   });
 });
@@ -951,24 +922,6 @@ describe('applyFollowupEdit on a sections file with no Contents list', () => {
         'Beta body',
       ),
       line: 15,
-    });
-  });
-});
-
-describe('newFollowupsFile', () => {
-  it('writes the canonical empty file', () => {
-    expect(newFollowupsFile('game')).toBe(
-      lines(
-        '# Follow-ups — game',
-        '',
-        '**Contents**',
-        '',
-        'Deferred work for the game repo. Each entry is one `##` section and stands on its own as a task brief.',
-      ),
-    );
-    expect(parseFollowups(newFollowupsFile('game'))).toEqual({
-      shape: 'sections',
-      items: [],
     });
   });
 });
@@ -1174,22 +1127,24 @@ describe('applyFollowupEdit create with openOneLine', () => {
 });
 
 describe('followupTitleProblem', () => {
-  it('names each title that would not read back', () => {
-    expect(
-      [' ', 'a\nb', 'a\rb', ' a', 'a ', '~~a~~ b', 'a **b** c', 'a*', 'a:'].map(
-        followupTitleProblem,
-      ),
-    ).toEqual([
-      'A follow-up title is required',
-      'A follow-up title is one line',
-      'A follow-up title is one line',
-      'A follow-up title does not start or end with a space',
-      'A follow-up title does not start or end with a space',
-      'A follow-up title does not start with ~~',
-      'A follow-up title holds no ** and does not end with *',
-      'A follow-up title holds no ** and does not end with *',
-      'A follow-up title does not end with :',
+  it('names one problem per rule a title breaks', () => {
+    const titlesByRule = [
+      [' '],
+      ['a\nb', 'a\rb'],
+      [' a', 'a '],
+      ['~~a~~ b'],
+      ['a **b** c', 'a*'],
+      ['a:'],
+    ];
+
+    const problemsByRule = titlesByRule.map((titles) => [
+      ...new Set(titles.map(followupTitleProblem)),
     ]);
+
+    expect(problemsByRule).toEqual(
+      titlesByRule.map(() => [expect.any(String)]),
+    );
+    expect(new Set(problemsByRule.flat()).size).toBe(titlesByRule.length);
   });
 
   it('passes a title that reads back in both shapes', () => {

@@ -202,33 +202,27 @@ function featureHomeEntries(designLoaded: string | null = null): IndexEntry[] {
 }
 
 describe('buildTree', () => {
-  it('buildTree_BothOwners_MineThenThirdParty', () => {
-    const entries = [
-      entry({ path: '/Users/u/.claude/rules/a.md' }),
-      thirdPartyPluginSkill('v@m'),
-    ];
-
-    const roots = buildTree(entries, HOME, posixPaths, NO_STARS);
-
-    expect(titles(roots)).toEqual(['Mine', 'Third-party']);
-    expect(ids(roots)).toEqual(['owner:mine', 'owner:third-party']);
-  });
-
-  it('buildTree_NoThirdParty_OnlyMine', () => {
-    const entries = [entry({ path: '/Users/u/.claude/rules/a.md' })];
-
-    expect(titles(buildTree(entries, HOME, posixPaths, NO_STARS))).toEqual([
-      'Mine',
-    ]);
-  });
-
-  it('buildTree_OnlyThirdParty_OnlyThirdPartyRoot', () => {
-    const entries = [thirdPartyPluginSkill('v@m')];
-
-    expect(titles(buildTree(entries, HOME, posixPaths, NO_STARS))).toEqual([
-      'Third-party',
-    ]);
-  });
+  it.each([
+    {
+      entries: [
+        entry({ path: '/Users/u/.claude/rules/a.md' }),
+        thirdPartyPluginSkill('v@m'),
+      ],
+      roots: ['owner:mine', 'owner:third-party'],
+    },
+    {
+      entries: [entry({ path: '/Users/u/.claude/rules/b.md' })],
+      roots: ['owner:mine'],
+    },
+    { entries: [thirdPartyPluginSkill('w@n')], roots: ['owner:third-party'] },
+  ])(
+    'buildTree_OwnerRoots_OnlyOwnersWithEntries $roots',
+    ({ entries, roots }) => {
+      expect(ids(buildTree(entries, HOME, posixPaths, NO_STARS))).toEqual(
+        roots,
+      );
+    },
+  );
 
   it('buildTree_MineChildren_GlobalPluginsReposUnknownSources', () => {
     const entries = [
@@ -280,6 +274,9 @@ describe('buildTree', () => {
     expect(plugins.id).toBe('owner:mine/plugins');
     expect(ids(plugins.children)).toEqual(['owner:mine/plugins/p@m']);
     expect(titles(plugins.children)).toEqual(['p@m']);
+    const scratch = child(mine, 'Scratch');
+    expect(scratch.id).toBe('source:scratch');
+    expect(titles(scratch.children)).toEqual(['Rules']);
   });
 
   it('buildTree_MarketplaceClone_PluginNodeBetweenKindsAndFeatures', () => {
@@ -479,22 +476,6 @@ describe('buildTree', () => {
     expect(flattenedIds(secondStarred)).toEqual(flattenedIds(firstStarred));
   });
 
-  it('buildTree_SelfTestGlobalKinds_InstructionsRulesHooksLast', () => {
-    const entries = [
-      entry({ path: '/Users/u/.claude/CLAUDE.md', kind: 'instructions' }),
-      entry({ path: '/Users/u/.claude/rules/style.md', kind: 'rule' }),
-      entry({
-        path: '/Users/u/.claude/settings.json',
-        id: '/Users/u/.claude/settings.json#hook:PreToolUse:0',
-        kind: 'hook',
-      }),
-    ];
-
-    const global = child(mineChildren(entries), 'Global');
-
-    expect(titles(global.children)).toEqual(['Instructions', 'Rules', 'Hooks']);
-  });
-
   it('buildTree_NoGlobalEntries_LeavesGlobalOut', () => {
     const entries = [
       entry({
@@ -540,35 +521,6 @@ describe('buildTree', () => {
       'Experiment',
     ]);
     expect(global.children[2].id).toBe('global/kind:experiment');
-  });
-
-  it('buildTree_UnknownSource_RootAfterRepos', () => {
-    const entries = [
-      entry({
-        path: '/Users/u/scratch/a.md',
-        source: 'scratch',
-        root: '/Users/u/scratch',
-      }),
-      entry({
-        path: '/Users/u/notes/b.md',
-        source: 'my_notes',
-        root: '/Users/u/notes',
-      }),
-      entry({
-        path: '/Users/u/dev/r/AGENTS.md',
-        kind: 'instructions',
-        source: 'repo',
-        repo: 'r',
-        root: '/Users/u/dev/r',
-      }),
-    ];
-
-    const roots = mineChildren(entries);
-
-    expect(titles(roots)).toEqual(['r', 'My notes', 'Scratch']);
-    const scratch = child(roots, 'Scratch');
-    expect(scratch.id).toBe('source:scratch');
-    expect(titles(scratch.children)).toEqual(['Rules']);
   });
 
   it('buildTree_UnknownKindNamedFeatures_IdUnique', () => {
@@ -795,6 +747,7 @@ describe('buildTree', () => {
     expect(titles(roots)).toEqual(['Starred', 'Mine']);
     expect(ids(roots)).toEqual(['owner:starred', 'owner:mine']);
     const starred = child(roots, 'Starred');
+    expect(starred.role).toEqual({ type: 'other' });
     expect(ids(starred.children)).toEqual([
       'owner:starred/entry:/Users/u/.claude/rules/a.md',
     ]);
@@ -856,19 +809,6 @@ describe('buildTree', () => {
     const roots = buildTree(entries, HOME, posixPaths, new Set([skill.id]));
 
     expect(titles(roots)).toEqual(['Starred', 'Mine', 'Third-party']);
-  });
-
-  it('buildTree_StarredRoot_RoleOther', () => {
-    const rule = '/Users/u/.claude/rules/a.md';
-
-    const roots = buildTree(
-      [entry({ path: rule })],
-      HOME,
-      posixPaths,
-      new Set([rule]),
-    );
-
-    expect(child(roots, 'Starred').role).toEqual({ type: 'other' });
   });
 
   it('buildTree_Starred_NewestLoadedFirstThenByTitle', () => {

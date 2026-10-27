@@ -1,0 +1,98 @@
+// Type tests, checked under `vitest --typecheck`: the line after each
+// `@ts-expect-error` must fail to compile.
+import { assertType, describe, it } from 'vitest';
+import type { PageStart, SettingInfos } from '../contracts/plugin';
+import { definePlugin } from './define-plugin';
+
+const manifest = definePlugin({
+  id: 'p',
+  dependsOn: [],
+  commands: {
+    go: { label: 'Go', group: 'Moves', runsIn: 'page' },
+    quit: { label: 'Quit', group: 'App', runsIn: 'main' },
+  },
+  scopes: { view: 'In the view' },
+  keys: {
+    binds: [{ keys: 'g', scope: 'view', command: 'go' }],
+    app: [{ accelerator: 'CommandOrControl+Q', command: 'quit' }],
+  },
+  settings: { delayMs: 400 },
+  settingInfo: { delayMs: { label: 'Delay', description: 'The delay.' } },
+  themeTokens: {},
+});
+
+describe('definePlugin', () => {
+  it('types its manifest so misuse fails to compile', () => {
+    // A page start needs a handler for every page command and no main one.
+    assertType<PageStart<typeof manifest>>({ commands: { go: () => {} } });
+    // @ts-expect-error -- `go` runs in the page and has no handler
+    assertType<PageStart<typeof manifest>>({ commands: {} });
+
+    definePlugin({
+      ...manifest,
+      keys: {
+        // @ts-expect-error -- `goo` is not a declared command
+        binds: [{ keys: 'g', scope: 'view', command: 'goo' }],
+      },
+    });
+    definePlugin({
+      ...manifest,
+      keys: {
+        // @ts-expect-error -- `veiw` is not a declared scope
+        binds: [{ keys: 'g', scope: 'veiw', command: 'go' }],
+      },
+    });
+    definePlugin({
+      ...manifest,
+      keys: {
+        // @ts-expect-error -- `quit` runs in main, not the page
+        binds: [{ keys: 'q', scope: 'view', command: 'quit' }],
+      },
+    });
+    definePlugin({
+      ...manifest,
+      keys: {
+        // @ts-expect-error -- `go` runs in the page, not main
+        app: [{ accelerator: 'CommandOrControl+G', command: 'go' }],
+      },
+    });
+
+    // The id keeps its literal type, and settings their plain types rather
+    // than their literal defaults.
+    assertType<'p'>(manifest.id);
+    assertType<(typeof manifest)['settings']>({ delayMs: 5 });
+
+    definePlugin({
+      ...manifest,
+      // @ts-expect-error -- `delayMs` has no declaration
+      settingInfo: {},
+    });
+    definePlugin({
+      ...manifest,
+      settingInfo: {
+        delayMs: { label: 'Delay', description: 'The delay.' },
+        // @ts-expect-error -- `delay` is no setting
+        delay: { label: 'Delay', description: 'The delay.' },
+      },
+    });
+    definePlugin({
+      ...manifest,
+      settings: {},
+      settingInfo: {
+        // @ts-expect-error -- the plugin has no settings to declare
+        delayMs: { label: 'Delay', description: 'The delay.' },
+      },
+    });
+
+    // A nested setting and an array setting are declared by their leaf
+    // paths exactly: a missing path fails, and so does an extra one.
+    const info = { label: 'L', description: 'D.' };
+    assertType<
+      SettingInfos<{
+        window: { width: number };
+        fonts: { ui?: string };
+        list: { x: number }[];
+      }>
+    >({ 'window.width': info, 'fonts.ui': info, list: info });
+  });
+});

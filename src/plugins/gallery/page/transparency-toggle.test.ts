@@ -2,15 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { nextTransparency } from './transparency-toggle';
 
 describe('nextTransparency', () => {
-  it('goes to reduced from no override', () => {
-    expect(nextTransparency(null)).toBe('reduced');
-  });
-
-  it('goes to full from reduced', () => {
-    expect(nextTransparency('reduced')).toBe('full');
-  });
-
-  it('goes to reduced from full', () => {
-    expect(nextTransparency('full')).toBe('reduced');
-  });
+  it.each([
+    { overridden: null, expected: 'reduced' },
+    { overridden: 'reduced', expected: 'full' },
+    { overridden: 'full', expected: 'reduced' },
+  ] as const)(
+    'goes to $expected from $overridden',
+    ({ overridden, expected }) => {
+      expect(nextTransparency(overridden)).toBe(expected);
+    },
+  );
 });

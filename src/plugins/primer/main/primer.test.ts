@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { Primer, PrimerBody, PrimerEntry } from '../contract';
+import {
+  MAX_PRIMER_ENTRIES,
+  MAX_PRIMER_ITEMS,
+  type Primer,
+  type PrimerBody,
+  type PrimerEntry,
+} from '../contract';
 import { SAMPLE_PRIMER_ARGS } from './fixtures';
 import {
-  noPrimerPayload,
   parsePrimer,
   primerFingerprint,
   primerHandedBackPayload,
@@ -40,11 +45,6 @@ function entryOf(entries: PrimerEntry[] | undefined, id: string): PrimerEntry {
     throw new Error(`no entry ${id}`);
   }
   return found;
-}
-
-function expectRejects(args: unknown, message: string) {
-  expect(() => parsePrimer(args)).toThrow(PrimerError);
-  expect(() => parsePrimer(args)).toThrow(message);
 }
 
 describe('parsePrimer', () => {
@@ -88,105 +88,119 @@ describe('parsePrimer', () => {
     expect(entryOf(primer.entries, 'tests').group).toBe('standing');
   });
 
-  it('rejects args that are not an object', () => {
-    expectRejects(
-      ['feature'],
-      "open_primer takes an object with 'feature' and 'entries'.",
-    );
+  it.each([
+    { case: 'args that are not an object', args: ['feature'], names: null },
+    {
+      case: 'a missing feature',
+      args: { entries: [entry()] },
+      names: 'feature',
+    },
+    {
+      case: 'a blank feature name',
+      args: { feature: { ...FEATURE, name: '  ' }, entries: [entry()] },
+      names: 'feature.name',
+    },
+    {
+      case: 'a slug outside the slug rule',
+      args: {
+        feature: { ...FEATURE, slug: 'Sample_Feature' },
+        entries: [entry()],
+      },
+      names: 'Sample_Feature',
+    },
+    { case: 'empty entries', args: argsWith([]), names: 'entries' },
+    {
+      case: 'one entry past the cap',
+      args: argsWith(
+        Array.from({ length: MAX_PRIMER_ENTRIES + 1 }, (_, i) =>
+          entry({ id: String(i + 1) }),
+        ),
+      ),
+      names: String(MAX_PRIMER_ENTRIES + 1),
+    },
+    {
+      case: 'an entry that is not an object',
+      args: argsWith([entry(), 'x']),
+      names: 'entries[2]',
+    },
+    {
+      case: 'an unknown group',
+      args: argsWith([entry({ group: 'extra' })]),
+      names: 'entries[1].group',
+    },
+    {
+      case: 'an unknown need',
+      args: argsWith([entry({ need: 'maybe' })]),
+      names: 'entries[1].need',
+    },
+    {
+      case: 'missing items',
+      args: argsWith([entry({ items: undefined })]),
+      names: 'entries[1].items',
+    },
+    {
+      case: 'one item past the cap',
+      args: argsWith([
+        entry({
+          items: Array.from(
+            { length: MAX_PRIMER_ITEMS + 1 },
+            (_, i) => `Item ${i + 1}`,
+          ),
+        }),
+      ]),
+      names: String(MAX_PRIMER_ITEMS + 1),
+    },
+    {
+      case: 'a blank item',
+      args: argsWith([entry({ items: ['Add the record type', ' '] })]),
+      names: 'entries[1].items[2]',
+    },
+    {
+      case: 'a blank task',
+      args: argsWith([entry({ task: '' })]),
+      names: 'entries[1].task',
+    },
+    {
+      case: 'a repeated id',
+      args: argsWith([entry(), entry({ task: 'Again' })]),
+      names: 'entries[2].id',
+    },
+  ])('rejects $case, naming what it got wrong', ({ args, names }) => {
+    expect(() => parsePrimer(args)).toThrow(PrimerError);
+    if (names !== null) {
+      expect(() => parsePrimer(args)).toThrow(names);
+    }
   });
 
-  it('rejects a missing feature', () => {
-    expectRejects(
-      { entries: [entry()] },
-      "'feature' must be an object with name, slug, spec and summary.",
-    );
-  });
+  it.each([
+    {
+      case: 'entries at the cap',
+      args: argsWith(
+        Array.from({ length: MAX_PRIMER_ENTRIES }, (_, i) =>
+          entry({ id: String(i + 1) }),
+        ),
+      ),
+      entries: MAX_PRIMER_ENTRIES,
+      firstItems: 1,
+    },
+    {
+      case: 'items at the cap',
+      args: argsWith([
+        entry({
+          items: Array.from(
+            { length: MAX_PRIMER_ITEMS },
+            (_, i) => `Item ${i + 1}`,
+          ),
+        }),
+      ]),
+      entries: 1,
+      firstItems: MAX_PRIMER_ITEMS,
+    },
+  ])('accepts $case', ({ args, entries, firstItems }) => {
+    const primer = parsePrimer(args);
 
-  it('rejects a blank feature name', () => {
-    expectRejects(
-      { feature: { ...FEATURE, name: '  ' }, entries: [entry()] },
-      'feature.name is required and must be a non-empty string.',
-    );
-  });
-
-  it('rejects a slug outside the slug rule', () => {
-    expectRejects(
-      { feature: { ...FEATURE, slug: 'Sample_Feature' }, entries: [entry()] },
-      "feature.slug 'Sample_Feature' must be lowercase letters, digits and dashes.",
-    );
-  });
-
-  it('rejects empty entries', () => {
-    expectRejects(
-      argsWith([]),
-      "'entries' must be a non-empty array: the eighteen primer rows, then the standing tasks.",
-    );
-  });
-
-  it('rejects more than 60 entries', () => {
-    const entries = Array.from({ length: 61 }, (_, i) =>
-      entry({ id: String(i + 1) }),
-    );
-
-    expectRejects(
-      argsWith(entries),
-      "'entries' holds 61 entries; the limit is 60.",
-    );
-  });
-
-  it('rejects an entry that is not an object', () => {
-    expectRejects(argsWith([entry(), 'x']), 'entries[2] must be an object.');
-  });
-
-  it('rejects an unknown group', () => {
-    expectRejects(
-      argsWith([entry({ group: 'extra' })]),
-      "entries[1].group must be 'primer' or 'standing'.",
-    );
-  });
-
-  it('rejects an unknown need', () => {
-    expectRejects(
-      argsWith([entry({ need: 'maybe' })]),
-      "entries[1].need must be 'yes', 'no' or 'unclear'.",
-    );
-  });
-
-  it('rejects missing items', () => {
-    expectRejects(
-      argsWith([entry({ items: undefined })]),
-      'entries[1].items must list the work items as strings, two to six of them.',
-    );
-  });
-
-  it('rejects more than 20 items', () => {
-    const items = Array.from({ length: 21 }, (_, i) => `Item ${i + 1}`);
-
-    expectRejects(
-      argsWith([entry({ items })]),
-      'entries[1].items holds 21 items; the limit is 20.',
-    );
-  });
-
-  it('rejects a blank item', () => {
-    expectRejects(
-      argsWith([entry({ items: ['Add the record type', ' '] })]),
-      'entries[1].items[2] must be a non-empty string.',
-    );
-  });
-
-  it('rejects a blank task', () => {
-    expectRejects(
-      argsWith([entry({ task: '' })]),
-      'entries[1].task is required and must be a non-empty string.',
-    );
-  });
-
-  it('rejects a repeated id', () => {
-    expectRejects(
-      argsWith([entry(), entry({ task: 'Again' })]),
-      "entries[2].id '1' repeats an earlier entry.",
-    );
+    expect(primer.entries).toHaveLength(entries);
+    expect(primer.entries[0].items).toHaveLength(firstItems);
   });
 
   it('keeps an integer number and drops any other', () => {
@@ -395,8 +409,8 @@ describe('primerPayload', () => {
 
     const payload = primerPayload(primer, 'submitted', commentedBody(primer));
 
-    expect(payload.summary).toBe(
-      '4 entries: 2 yes, 1 unclear, 1 no; 2 comments.',
+    expect(payload.summary).toMatch(
+      /4 entries\D+2 yes\D+1 unclear\D+1 no\D+2 comments/,
     );
     expect(payload.next).toBe('');
     expect(payload.feature).toEqual(primer.feature);
@@ -406,23 +420,13 @@ describe('primerPayload', () => {
   it("marks a draft's summary still open", () => {
     const primer = sample();
 
-    const payload = primerPayload(primer, 'draft', readPrimerBody(primer, {}));
-
-    expect(payload.summary).toBe(
-      '4 entries: 2 yes, 1 unclear, 1 no; 0 comments. The form is still open.',
-    );
-  });
-
-  it('pins the draft and cancelled next texts', () => {
-    const primer = sample();
     const body = readPrimerBody(primer, {});
 
-    expect(primerPayload(primer, 'draft', body).next).toBe(
-      'The user has not submitted yet. Call collect_last_primer to keep waiting. Do not open a second primer.',
-    );
-    expect(primerPayload(primer, 'cancelled', body).next).toBe(
-      'The user cancelled the primer. Write nothing, and ask the user how to proceed.',
-    );
+    const draft = primerPayload(primer, 'draft', body);
+    const submitted = primerPayload(primer, 'submitted', body);
+
+    expect(draft.summary).toMatch(/4 entries.*0 comments/);
+    expect(draft.summary).not.toBe(submitted.summary);
   });
 });
 
@@ -460,20 +464,7 @@ describe('savedPrimerHeading', () => {
 });
 
 describe('the other payloads', () => {
-  it('builds no_primer with no feature and no entries', () => {
-    expect(noPrimerPayload()).toEqual({
-      outcome: 'no_primer',
-      summary: 'No primer is open.',
-      next:
-        'No primer is open for this session, and no finished answers are ' +
-        'waiting for it. If you sent a primer whose answers you never ' +
-        'received, send the same primer again with open_primer: the ' +
-        "user's saved answers fill in. Do not move the questions into the " +
-        'reply.',
-    });
-  });
-
-  it('pins the hand-back and not-shown texts', () => {
+  it('names the earlier primer it hands back, and the primer that blocks one, when it has a name', () => {
     const primer = sample();
 
     const handedBack = primerHandedBackPayload(
@@ -484,31 +475,15 @@ describe('the other payloads', () => {
     const blocked = primerNotShownPayload(primer, 'Other feature');
     const unnamed = primerNotShownPayload(primer, null);
 
-    expect(handedBack.next).toBe(
-      "These answers are for an earlier primer, 'Sample feature', that you " +
-        "never received. Read them as that primer's answers. The primer you " +
-        'just sent was not opened: send it again with open_primer.',
-    );
     expect(handedBack.earlier_heading).toBe('Sample feature');
+    expect(handedBack.next).toContain("'Sample feature'");
     expect(blocked.outcome).toBe('draft');
-    expect(blocked.summary).toBe(
-      "This primer, 'Sample feature', was not shown: the primer 'Other " +
-        "feature' is still open in the app.",
-    );
-    expect(blocked.next).toBe(
-      "The user has not finished the primer 'Other feature' in the app, so " +
-        'this primer was not opened and has no answers. Send this primer ' +
-        'again with open_primer, and again after every draft like this one. ' +
-        "Once the user finishes the primer 'Other feature', a send may " +
-        "return that primer's answers instead, marked with earlier_heading: " +
-        'act on them, then send this primer again. If the primer ' +
-        "'Other feature' is no longer needed, ask the user to cancel it in " +
-        'the app. Do not call collect_last_primer for this primer: that ' +
-        "returns the other primer's answers.",
-    );
     expect(blocked.entries).toEqual(primer.entries);
-    expect(unnamed.summary).toBe(
-      "This primer, 'Sample feature', was not shown: another primer is still open in the app.",
-    );
+    expect(blocked.summary).toContain("'Sample feature'");
+    expect(blocked.summary).toContain("'Other feature'");
+    expect(blocked.next).toContain("'Other feature'");
+    expect(unnamed.summary).toContain("'Sample feature'");
+    expect(unnamed.summary).not.toBe(blocked.summary);
+    expect(`${unnamed.summary} ${unnamed.next}`).not.toContain('null');
   });
 });

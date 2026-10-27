@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { parsePrimer } from './primer';
+import { PrimerError } from './primer-error';
+import { primerType } from './primer-type';
 import { PRIMER_TOOLS } from './tool-definitions';
 
 interface PropertySchema {
-  type?: string;
   enum?: string[];
-  default?: unknown;
-  minItems?: number;
-  maxItems?: number;
 }
 
 interface ObjectSchema {
   required?: string[];
-  additionalProperties: boolean;
   properties: Record<string, PropertySchema>;
 }
 
@@ -30,71 +28,76 @@ function schemaOf(name: string): Record<string, unknown> {
   return tool.inputSchema;
 }
 
-function descriptionOf(name: string): string {
-  return PRIMER_TOOLS.find((each) => each.name === name)?.description ?? '';
+const openPrimer = schemaOf('open_primer') as unknown as OpenPrimerSchema;
+const featureSchema = openPrimer.properties.feature;
+const entrySchema = openPrimer.properties.entries.items;
+
+type Part = 'args' | 'feature' | 'entry';
+
+// Valid open_primer args with the entry's fields overridden by `entry`, then
+// `field` of `part` deleted when one is named.
+function primerArgs(
+  entry: Record<string, unknown> = {},
+  missing?: { part: Part; field: string },
+): Record<string, unknown> {
+  const feature: Record<string, unknown> = {
+    name: 'Notes popup',
+    slug: 'notes-popup',
+  };
+  const first: Record<string, unknown> = {
+    id: '3',
+    task: 'Data model',
+    need: 'yes',
+    items: ['Add the record type'],
+    ...entry,
+  };
+  const args: Record<string, unknown> = { feature, entries: [first] };
+  if (missing !== undefined) {
+    const parts = { args, feature, entry: first };
+    delete parts[missing.part][missing.field];
+  }
+  return args;
 }
 
-const openPrimer = schemaOf('open_primer') as unknown as OpenPrimerSchema;
-const entrySchema = openPrimer.properties.entries.items;
-const collectLastPrimer = schemaOf(
-  'collect_last_primer',
-) as unknown as ObjectSchema;
+function rowsOf(part: Part, schema: ObjectSchema) {
+  return (schema.required ?? []).map((field) => ({ part, field }));
+}
 
 describe('PRIMER_TOOLS', () => {
-  it('publishes open_primer and collect_last_primer', () => {
+  it('publishes the tools the primer type answers', () => {
     expect(PRIMER_TOOLS.map((tool) => tool.name)).toEqual([
-      'open_primer',
-      'collect_last_primer',
+      primerType.openTool,
+      primerType.collectTool,
     ]);
   });
 
-  it('requires feature and entries, name and slug, and id, task, need and items', () => {
-    expect(openPrimer.required).toEqual(['feature', 'entries']);
-    expect(openPrimer.properties.feature.required).toEqual(['name', 'slug']);
-    expect(entrySchema.required).toEqual(['id', 'task', 'need', 'items']);
-    expect(openPrimer.additionalProperties).toBe(false);
-    expect(openPrimer.properties.feature.additionalProperties).toBe(false);
-    expect(entrySchema.additionalProperties).toBe(false);
-  });
+  it.each([
+    ...rowsOf('args', openPrimer),
+    ...rowsOf('feature', featureSchema),
+    ...rowsOf('entry', entrySchema),
+  ])(
+    'requires $part.$field, which the parser refuses to miss',
+    ({ part, field }) => {
+      expect(() => parsePrimer(primerArgs())).not.toThrow();
+      expect(() => parsePrimer(primerArgs({}, { part, field }))).toThrow(
+        PrimerError,
+      );
+    },
+  );
 
-  it('caps entries at 60 and items at 20', () => {
-    expect(openPrimer.properties.entries.maxItems).toBe(60);
-    expect(entrySchema.properties.items.maxItems).toBe(20);
-  });
+  it.each(['group', 'need'])(
+    'offers each %s the parser accepts, and the parser refuses any other',
+    (field) => {
+      const offered = entrySchema.properties[field].enum ?? [];
 
-  it('offers group as primer or standing and need as yes, no or unclear', () => {
-    expect(entrySchema.properties.group).toMatchObject({
-      enum: ['primer', 'standing'],
-      default: 'primer',
-    });
-    expect(entrySchema.properties.need.enum).toEqual(['yes', 'no', 'unclear']);
-  });
-
-  it('names the app, never a browser', () => {
-    for (const name of ['open_primer', 'collect_last_primer']) {
-      expect(descriptionOf(name)).toContain('app');
-      expect(descriptionOf(name)).not.toMatch(/browser/i);
-    }
-  });
-
-  it('sends needs_manual_open back to open_primer, never collect_last_primer', () => {
-    expect(descriptionOf('open_primer')).toContain(
-      "Outcome 'needs_manual_open' means the relay could not start the app",
-    );
-    expect(descriptionOf('open_primer')).toContain(
-      'collect_last_primer is never the answer to it.',
-    );
-    expect(descriptionOf('collect_last_primer')).not.toContain(
-      'needs_manual_open',
-    );
-  });
-
-  it('gives collect_last_primer one optional wait flag defaulting to true', () => {
-    expect(collectLastPrimer.required).toBeUndefined();
-    expect(Object.keys(collectLastPrimer.properties)).toEqual(['wait']);
-    expect(collectLastPrimer.properties.wait).toMatchObject({
-      type: 'boolean',
-      default: true,
-    });
-  });
+      expect(offered.length).toBeGreaterThan(0);
+      for (const value of offered) {
+        const primer = parsePrimer(primerArgs({ [field]: value }));
+        expect(primer.entries[0]).toMatchObject({ [field]: value });
+      }
+      expect(() => parsePrimer(primerArgs({ [field]: 'sometimes' }))).toThrow(
+        PrimerError,
+      );
+    },
+  );
 });

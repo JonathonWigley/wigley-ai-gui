@@ -7,7 +7,6 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
-  statSync,
   symlinkSync,
   utimesSync,
   writeFileSync,
@@ -15,7 +14,8 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type FileEntry, isMissingFile } from '../../contracts/files';
+import { isMissingFile } from '../../contracts/files';
+import { describeFilesContract } from '../../shared/files-contract.test-support';
 import { createNodeFiles } from './node-files';
 
 // The real `watch`, keeping each watcher it opens so a test can make one fail.
@@ -47,12 +47,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 const QUIET_MS = 100;
 
-// Every path `trash` hands to `trashItem`.
-const trashed: string[] = [];
 const files = createNodeFiles({
-  trashItem: async (file) => {
-    trashed.push(file);
-  },
+  trashItem: () => Promise.reject(new Error('no test here trashes a path')),
 });
 let root: string;
 
@@ -60,13 +56,8 @@ function waitMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function byPath(entries: FileEntry[]): FileEntry[] {
-  return [...entries].sort((a, b) => a.path.localeCompare(b.path));
-}
-
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), 'wigley-node-files-'));
-  trashed.length = 0;
   linkStandIn.current = null;
 });
 
@@ -109,24 +100,10 @@ afterEach(() => {
 });
 
 describe('createNodeFiles', () => {
-  it('write_MissingParents_CreatesThemAndWritesText', async () => {
-    const file = path.join(root, 'x', 'y', 'z.txt');
-
-    await files.write(file, 'hello');
-
-    expect(await files.read(file)).toBe('hello');
-  });
-
-  it('writeBytes_BinaryBytes_ReadBackTheSameBytes', async () => {
-    const file = path.join(root, 'x', 'shot.png');
-
-    await files.writeBytes(file, new Uint8Array([0, 255, 137]));
-
-    expect([...readFileSync(file)]).toEqual([0, 255, 137]);
-    expect(await files.list(path.join(root, 'x'))).toEqual([
-      { path: 'shot.png', kind: 'file' },
-    ]);
-  });
+  describeFilesContract(() => ({
+    files,
+    at: (relative) => path.join(root, ...relative.split('/')),
+  }));
 
   it('write_ExistingFile_LeavesNoTempFileBehind', async () => {
     const file = path.join(root, 'z.txt');
@@ -138,77 +115,11 @@ describe('createNodeFiles', () => {
     expect(await files.read(file)).toBe('second');
   });
 
-  it('list_MissingFolder_ReturnsEmpty', async () => {
-    expect(await files.list(path.join(root, 'missing'))).toEqual([]);
-  });
-
-  it('list_Recursive_ReturnsRelativeSlashPaths', async () => {
-    await files.write(path.join(root, 'a.txt'), 'a');
-    await files.write(path.join(root, 'sub', 'b.txt'), 'b');
-
-    const entries = await files.list(root, { recursive: true });
-
-    expect(byPath(entries)).toEqual([
-      { path: 'a.txt', kind: 'file' },
-      { path: 'sub', kind: 'folder' },
-      { path: 'sub/b.txt', kind: 'file' },
-    ]);
-  });
-
-  it('read_MissingFile_RejectsNamingThePath', async () => {
-    const file = path.join(root, 'missing.txt');
-
-    await expect(files.read(file)).rejects.toThrow(file);
-  });
-
-  it('read_MissingFile_IsMissingFile', async () => {
-    const error = await files
-      .read(path.join(root, 'missing.txt'))
-      .catch((caught: unknown) => caught);
-
-    expect(isMissingFile(error)).toBe(true);
-  });
-
-  it('readBytes_BinaryFile_ReturnsTheSameBytes', async () => {
+  it('readBytes_FileWrittenToDisk_ReturnsTheSameBytes', async () => {
     const file = path.join(root, 'shot.png');
     writeFileSync(file, Buffer.from([0, 255, 137]));
 
     expect([...(await files.readBytes(file))]).toEqual([0, 255, 137]);
-  });
-
-  it('readBytes_MissingFile_IsMissingFile', async () => {
-    const error = await files
-      .readBytes(path.join(root, 'missing.png'))
-      .catch((caught: unknown) => caught);
-
-    expect(isMissingFile(error)).toBe(true);
-  });
-
-  it('readStart_ShorterLimit_ReturnsTheFirstBytes', async () => {
-    const file = path.join(root, 'a.txt');
-    writeFileSync(file, 'hello');
-
-    expect(await files.readStart(file, 3)).toBe('hel');
-  });
-
-  it('readStart_LongerLimit_ReturnsTheWholeFile', async () => {
-    const file = path.join(root, 'a.txt');
-    writeFileSync(file, 'hello');
-
-    expect(await files.readStart(file, 100)).toBe('hello');
-  });
-
-  it('readStart_CutInsideACharacter_LeavesItOut', async () => {
-    const file = path.join(root, 'a.txt');
-    writeFileSync(file, Buffer.from([0x61, 0xc3, 0xa9]));
-
-    expect(await files.readStart(file, 2)).toBe('a');
-  });
-
-  it('readStart_MissingFile_RejectsNamingThePath', async () => {
-    const file = path.join(root, 'missing.txt');
-
-    await expect(files.readStart(file, 10)).rejects.toThrow(file);
   });
 
   it('modified_ReturnsTheMtimeInMilliseconds', async () => {
@@ -218,12 +129,6 @@ describe('createNodeFiles', () => {
     utimesSync(file, mtime, mtime);
 
     expect(await files.modified(file)).toBe(1767323045000);
-  });
-
-  it('modified_MissingFile_RejectsNamingThePath', async () => {
-    const file = path.join(root, 'missing.txt');
-
-    await expect(files.modified(file)).rejects.toThrow(file);
   });
 
   it('read_Folder_IsNotMissingFile', async () => {
@@ -306,13 +211,6 @@ describe('createNodeFiles', () => {
     expect(reports).toEqual([]);
   });
 
-  it('stat_MissingPath_Null', async () => {
-    writeFileSync(path.join(root, 'a'), 'text');
-
-    expect(await files.stat(path.join(root, 'none'))).toBeNull();
-    expect(await files.stat(path.join(root, 'a', 'b'))).toBeNull();
-  });
-
   it.skipIf(!canSymlink)(
     'stat_FileFolderAndLink_IsFolderAndIsLink',
     async () => {
@@ -356,45 +254,6 @@ describe('createNodeFiles', () => {
     expect(isMissingFile(error)).toBe(true);
   });
 
-  it('makeFolder_MissingParents_MakesThem', async () => {
-    const folder = path.join(root, 'x', 'y', 'z');
-
-    await files.makeFolder(folder);
-
-    expect(statSync(folder).isDirectory()).toBe(true);
-    await expect(files.makeFolder(folder)).resolves.toBeUndefined();
-  });
-
-  it('rename_File_Moves', async () => {
-    writeFileSync(path.join(root, 'a.md'), 'one');
-
-    await files.rename(path.join(root, 'a.md'), path.join(root, 'b.md'));
-
-    expect(readFileSync(path.join(root, 'b.md'), 'utf8')).toBe('one');
-    expect(await files.stat(path.join(root, 'a.md'))).toBeNull();
-  });
-
-  it('rename_Folder_MovesItsFiles', async () => {
-    mkdirSync(path.join(root, 's'));
-    writeFileSync(path.join(root, 's', 'ref.md'), 'ref');
-
-    await files.rename(path.join(root, 's'), path.join(root, 't'));
-
-    expect(readFileSync(path.join(root, 't', 'ref.md'), 'utf8')).toBe('ref');
-  });
-
-  it('rename_DestinationExists_RejectsAndKeepsBoth', async () => {
-    writeFileSync(path.join(root, 'a.md'), 'one');
-    writeFileSync(path.join(root, 'b.md'), 'two');
-
-    await expect(
-      files.rename(path.join(root, 'a.md'), path.join(root, 'b.md')),
-    ).rejects.toThrow(`${path.join(root, 'b.md')} already exists`);
-
-    expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
-    expect(readFileSync(path.join(root, 'b.md'), 'utf8')).toBe('two');
-  });
-
   it.skipIf(!canSymlink)(
     'rename_DestinationIsBrokenSymlink_RejectsAndKeepsBoth',
     async () => {
@@ -403,7 +262,7 @@ describe('createNodeFiles', () => {
 
       await expect(
         files.rename(path.join(root, 'a.md'), path.join(root, 'b.md')),
-      ).rejects.toThrow(`${path.join(root, 'b.md')} already exists`);
+      ).rejects.toThrow(path.join(root, 'b.md'));
 
       expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
       expect(lstatSync(path.join(root, 'b.md')).isSymbolicLink()).toBe(true);
@@ -440,7 +299,7 @@ describe('createNodeFiles', () => {
 
     await expect(
       files.rename(path.join(root, 'a.md'), path.join(root, 'b.md')),
-    ).rejects.toThrow(`${path.join(root, 'b.md')} already exists`);
+    ).rejects.toThrow(path.join(root, 'b.md'));
 
     expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
     expect(readFileSync(path.join(root, 'b.md'), 'utf8')).toBe('two');
@@ -466,95 +325,5 @@ describe('createNodeFiles', () => {
 
     expect(lstatSync(path.join(root, 'b.md')).isSymbolicLink()).toBe(true);
     expect(await files.stat(path.join(root, 'a.md'))).toBeNull();
-  });
-
-  it('rename_SourceMissing_RejectsAsMissingFile', async () => {
-    const error = await files
-      .rename(path.join(root, 'none.md'), path.join(root, 'b.md'))
-      .catch((caught: unknown) => caught);
-
-    expect(isMissingFile(error)).toBe(true);
-  });
-
-  it('rename_DestinationParentMissing_RejectsAsMissingFile', async () => {
-    writeFileSync(path.join(root, 'a.md'), 'one');
-
-    const error = await files
-      .rename(path.join(root, 'a.md'), path.join(root, 'none', 'b.md'))
-      .catch((caught: unknown) => caught);
-
-    expect(isMissingFile(error)).toBe(true);
-    expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
-  });
-
-  it('rename_DestinationParentIsFile_RejectsAndKeepsSource', async () => {
-    writeFileSync(path.join(root, 'a.md'), 'one');
-    writeFileSync(path.join(root, 'f'), 'file');
-
-    await expect(
-      files.rename(path.join(root, 'a.md'), path.join(root, 'f', 'b.md')),
-    ).rejects.toThrow();
-
-    expect(readFileSync(path.join(root, 'a.md'), 'utf8')).toBe('one');
-    expect(readFileSync(path.join(root, 'f'), 'utf8')).toBe('file');
-  });
-
-  it('makeFolder_UnderAFile_RejectsWithEnotdir', async () => {
-    writeFileSync(path.join(root, 'f'), 'file');
-
-    const error = await files
-      .makeFolder(path.join(root, 'f', 'x'))
-      .catch((caught: unknown) => caught);
-
-    expect(errorCode(error)).toBe('ENOTDIR');
-  });
-
-  it('write_OntoAFolder_RejectsAndKeepsFolder', async () => {
-    mkdirSync(path.join(root, 'folder'));
-
-    await expect(
-      files.write(path.join(root, 'folder'), 'text'),
-    ).rejects.toThrow();
-
-    expect(statSync(path.join(root, 'folder')).isDirectory()).toBe(true);
-    expect(await files.list(root)).toEqual([
-      { path: 'folder', kind: 'folder' },
-    ]);
-  });
-
-  it('write_ParentIsAFile_RejectsWithEexist', async () => {
-    writeFileSync(path.join(root, 'f'), 'file');
-
-    const error = await files
-      .write(path.join(root, 'f', 'x.md'), 'text')
-      .catch((caught: unknown) => caught);
-
-    expect(errorCode(error)).toBe('EEXIST');
-  });
-
-  it('write_AncestorAboveParentIsAFile_RejectsWithEnotdir', async () => {
-    writeFileSync(path.join(root, 'f'), 'file');
-
-    const error = await files
-      .write(path.join(root, 'f', 'x', 'y.md'), 'text')
-      .catch((caught: unknown) => caught);
-
-    expect(errorCode(error)).toBe('ENOTDIR');
-  });
-
-  it('makeFolder_ExistingFile_RejectsWithEexist', async () => {
-    writeFileSync(path.join(root, 'f'), 'file');
-
-    const error = await files
-      .makeFolder(path.join(root, 'f'))
-      .catch((caught: unknown) => caught);
-
-    expect(errorCode(error)).toBe('EEXIST');
-  });
-
-  it('trash_Path_HandsItToTrashItem', async () => {
-    await files.trash(path.join(root, 'a.md'));
-
-    expect(trashed).toEqual([path.join(root, 'a.md')]);
   });
 });

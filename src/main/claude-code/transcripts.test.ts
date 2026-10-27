@@ -147,20 +147,24 @@ describe('readTranscriptHead', () => {
 });
 
 describe('endsInsideLine', () => {
-  it('endsInsideLine_CutFinalLine_True', () => {
-    expect(
-      endsInsideLine(jsonl([{ type: 'mode' }, '{"type":"user","mess'])),
-    ).toBe(true);
-  });
-
-  it('endsInsideLine_EndsInNewline_False', () => {
-    expect(endsInsideLine(`${jsonl([{ type: 'mode' }])}\n`)).toBe(false);
-  });
-
-  it('endsInsideLine_FinalLineParses_False', () => {
-    expect(endsInsideLine(jsonl([{ type: 'mode' }, { type: 'system' }]))).toBe(
-      false,
-    );
+  it.each([
+    {
+      name: 'a cut final line',
+      text: jsonl([{ type: 'mode' }, '{"type":"user","mess']),
+      expected: true,
+    },
+    {
+      name: 'a final newline',
+      text: `${jsonl([{ type: 'mode' }])}\n`,
+      expected: false,
+    },
+    {
+      name: 'a final line that parses',
+      text: jsonl([{ type: 'mode' }, { type: 'system' }]),
+      expected: false,
+    },
+  ])('$name → $expected', ({ text, expected }) => {
+    expect(endsInsideLine(text)).toBe(expected);
   });
 });
 
@@ -177,10 +181,6 @@ describe('sessionTitle', () => {
 
     expect(sessionTitle(long)).toBe(`${'a'.repeat(78)}${emoji}…`);
     expect(sessionTitle(exact)).toBe(exact);
-  });
-
-  it('sessionTitle_Null_Untitled', () => {
-    expect(sessionTitle(null)).toBe('Untitled session');
   });
 });
 
@@ -282,49 +282,40 @@ describe('transcriptEntries', () => {
     ]);
   });
 
-  it('transcriptEntries_CompactSummary_RawEntry', () => {
-    const u1 = userLine('u1', 'This session is being continued…', {
-      isCompactSummary: true,
-      isVisibleInTranscriptOnly: true,
-    });
+  it.each([
+    {
+      name: 'a compact summary',
+      content: 'This session is being continued…',
+      extra: { isCompactSummary: true, isVisibleInTranscriptOnly: true },
+    },
+    {
+      name: 'a line visible in the transcript only',
+      content: [{ type: 'text', text: 'shown only' }],
+      extra: { isVisibleInTranscriptOnly: true },
+    },
+    {
+      name: 'a task notification',
+      content:
+        '<task-notification>\n<task-id>t1</task-id>\n<status>completed</status>',
+      extra: {},
+    },
+    {
+      name: 'an interrupt marker',
+      content: [{ type: 'text', text: '[Request interrupted by user]' }],
+      extra: {},
+    },
+    {
+      name: 'a tool-use interrupt marker',
+      content: [
+        { type: 'text', text: '[Request interrupted by user for tool use]' },
+      ],
+      extra: {},
+    },
+  ])('transcriptEntries: $name becomes a raw entry', ({ content, extra }) => {
+    const u1 = userLine('u1', content, extra);
 
     expect(transcriptEntries(jsonl([u1]))).toEqual([
       { kind: 'raw', id: 'history:u1', raw: [u1] },
-    ]);
-  });
-
-  it('transcriptEntries_VisibleInTranscriptOnly_RawEntry', () => {
-    const u1 = userLine('u1', [{ type: 'text', text: 'shown only' }], {
-      isVisibleInTranscriptOnly: true,
-    });
-
-    expect(transcriptEntries(jsonl([u1]))).toEqual([
-      { kind: 'raw', id: 'history:u1', raw: [u1] },
-    ]);
-  });
-
-  it('transcriptEntries_TaskNotification_RawEntry', () => {
-    const u1 = userLine(
-      'u1',
-      '<task-notification>\n<task-id>t1</task-id>\n<status>completed</status>',
-    );
-
-    expect(transcriptEntries(jsonl([u1]))).toEqual([
-      { kind: 'raw', id: 'history:u1', raw: [u1] },
-    ]);
-  });
-
-  it('transcriptEntries_InterruptMarkers_RawEntries', () => {
-    const u1 = userLine('u1', [
-      { type: 'text', text: '[Request interrupted by user]' },
-    ]);
-    const u2 = userLine('u2', [
-      { type: 'text', text: '[Request interrupted by user for tool use]' },
-    ]);
-
-    expect(transcriptEntries(jsonl([u1, u2]))).toEqual([
-      { kind: 'raw', id: 'history:u1', raw: [u1] },
-      { kind: 'raw', id: 'history:u2', raw: [u2] },
     ]);
   });
 

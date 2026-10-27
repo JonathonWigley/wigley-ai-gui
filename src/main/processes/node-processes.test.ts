@@ -85,8 +85,6 @@ describe('createNodeProcesses', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'wigley-node-processes-'));
     rmSync(dir, { recursive: true, force: true });
 
-    await expect(runScript('', { cwd: dir })).rejects.toThrow(
-      `the folder ${dir} does not exist`,
-    );
+    await expect(runScript('', { cwd: dir })).rejects.toThrow(dir);
   });
 });

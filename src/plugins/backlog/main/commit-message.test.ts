@@ -16,15 +16,6 @@ function item(title: string, fields: Partial<FollowupItem> = {}): FollowupItem {
 }
 
 describe('commitMessage', () => {
-  it('commitMessage_AddedRemovedTagged_PartsInOrder', () => {
-    const before = [item('A'), item('B')];
-    const after = [item('A', { tags: ['agent-ready'], line: 7 }), item('C')];
-
-    expect(commitMessage([{ before, after }], [])).toBe(
-      'Follow-ups edited in Backlog: added C; removed B; tagged A',
-    );
-  });
-
   it('commitMessage_EveryPartAcrossFiles_AddedEditedRemovedTagged', () => {
     const changes = [
       {

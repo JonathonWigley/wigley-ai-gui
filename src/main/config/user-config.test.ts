@@ -5,11 +5,7 @@ import type { UserConfig } from '../../contracts/user-config';
 import { definePlugin } from '../../shared/define-plugin';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
 import { resolveTheme } from '../themes/theme-loader';
-import {
-  type ConfigCheckDeps,
-  checkKeymapText,
-  configSchema,
-} from './config-checks';
+import type { ConfigCheckDeps } from './config-checks';
 import { loadConfigStore } from './config-store';
 import { createUserConfig } from './user-config';
 
@@ -213,78 +209,80 @@ describe('createUserConfig', () => {
     expect(await files.read(`${FOLDER}/settings.json`)).toBe('{}');
   });
 
-  it('refuses a theme name no theme has', async () => {
-    const userConfig = await create(createMemoryFiles());
+  it.each([
+    {
+      name: 'a name no theme has',
+      themeFiles: {},
+      theme: 'nope',
+      outcome: 'refused',
+    },
+    {
+      name: 'a built-in name over a broken user theme file',
+      themeFiles: { 'themes/bad.json': '{ not json' },
+      theme: 'dusk',
+      outcome: 'written',
+    },
+    {
+      name: 'the name of a user theme whose file does not parse',
+      themeFiles: { 'themes/dawn.json': '{ "name": ' },
+      theme: 'dawn',
+      outcome: 'written',
+    },
+    {
+      name: 'a name no theme has while every user file parses to a name',
+      themeFiles: {
+        'themes/half.json': JSON.stringify({
+          name: 'half',
+          extends: 'mocha',
+          tokens: 'oops',
+        }),
+      },
+      theme: 'gone',
+      outcome: 'refused',
+    },
+    {
+      name: 'a name no theme has while a user file has no name',
+      themeFiles: { 'themes/nameless.json': '{"tokens": {}}' },
+      theme: 'lost',
+      outcome: 'written',
+    },
+    {
+      name: 'the name of a user theme whose file parses but is broken',
+      themeFiles: {
+        'themes/half.json': JSON.stringify({
+          name: 'half',
+          extends: 'mocha',
+          tokens: 'oops',
+        }),
+      },
+      theme: 'half',
+      outcome: 'written',
+    },
+  ])(
+    'writeSettings of $name is $outcome',
+    async ({ themeFiles, theme, outcome }) => {
+      const files = createMemoryFiles();
+      for (const [file, text] of Object.entries(themeFiles)) {
+        await files.write(`${FOLDER}/${file}`, text);
+      }
+      const userConfig = await create(files);
 
-    const result = await userConfig.writeSettings({ theme: 'nope' }, null);
+      const result = await userConfig.writeSettings({ theme }, null);
 
-    expect(result).toEqual({
-      type: 'refused',
-      problem: '"theme" names "nope", which no theme has',
-    });
-  });
-
-  it("writes over a broken user theme file, which is that file's problem", async () => {
-    const { files, userConfig } = await createWithFile(
-      'themes/bad.json',
-      '{ not json',
-    );
-
-    const result = await userConfig.writeSettings({ theme: 'dusk' }, null);
-
-    expect(result).toEqual({ type: 'written' });
-    expect(await files.read(`${FOLDER}/settings.json`)).toContain('"dusk"');
-  });
-
-  it('writes the name of a user theme whose file does not parse, which may be the one meant', async () => {
-    const { files, userConfig } = await createWithFile(
-      'themes/dawn.json',
-      '{ "name": ',
-    );
-
-    const result = await userConfig.writeSettings({ theme: 'dawn' }, null);
-
-    expect(result).toEqual({ type: 'written' });
-    expect(await files.read(`${FOLDER}/settings.json`)).toContain('"dawn"');
-  });
-
-  it('refuses a theme name no theme has while every user theme file parses to a name, one of them broken', async () => {
-    const { files, userConfig } = await createWithFile(
-      'themes/half.json',
-      JSON.stringify({ name: 'half', extends: 'mocha', tokens: 'oops' }),
-    );
-
-    const result = await userConfig.writeSettings({ theme: 'nope' }, null);
-
-    expect(result).toEqual({
-      type: 'refused',
-      problem: '"theme" names "nope", which no theme has',
-    });
-    expect(await files.stat(`${FOLDER}/settings.json`)).toBeNull();
-  });
-
-  it('writes a theme name no theme has while a user theme file has no name, which may be the one meant', async () => {
-    const { userConfig } = await createWithFile(
-      'themes/nameless.json',
-      '{"tokens": {}}',
-    );
-
-    const result = await userConfig.writeSettings({ theme: 'nope' }, null);
-
-    expect(result).toEqual({ type: 'written' });
-  });
-
-  it('writes the name of a user theme whose file parses but is broken', async () => {
-    const { files, userConfig } = await createWithFile(
-      'themes/half.json',
-      JSON.stringify({ name: 'half', extends: 'mocha', tokens: 'oops' }),
-    );
-
-    const result = await userConfig.writeSettings({ theme: 'half' }, null);
-
-    expect(result).toEqual({ type: 'written' });
-    expect(await files.read(`${FOLDER}/settings.json`)).toContain('"half"');
-  });
+      if (outcome === 'written') {
+        expect(result).toEqual({ type: 'written' });
+        expect(await files.read(`${FOLDER}/settings.json`)).toContain(
+          `"${theme}"`,
+        );
+      } else {
+        expect(result).toEqual({
+          type: 'refused',
+          problem: expect.stringContaining(theme),
+        });
+        expect(await files.stat(`${FOLDER}/settings.json`)).toBeNull();
+      }
+    },
+  );
 
   it('finds the file changed on disk for an overlapping write expecting the same text', async () => {
     const { files, userConfig } = await createWithFile('settings.json', '{}');
@@ -339,30 +337,19 @@ describe('createUserConfig', () => {
     expect(await files.read(`${FOLDER}/settings.json`)).toBe('{}');
   });
 
-  it('refuses a keymap with the same keys twice in one scope', async () => {
+  it('refuses a keymap that fails its check and leaves the file unwritten', async () => {
     const files = createMemoryFiles();
     const userConfig = await create(files);
-
     const layer = {
-      binds: [
-        { keys: 'x', scope: 'p.list', command: 'p.down' },
-        { keys: 'x', scope: 'p.list', command: 'p.up' },
-      ],
+      binds: [{ keys: 'x', scope: 'p.list', command: 'p.nope' }],
     };
-    const text = `${JSON.stringify(layer, null, 2)}\n`;
-    const thrown = (() => {
-      try {
-        checkKeymapText(text, CHECK_DEPS, configSchema(CHECK_DEPS));
-        return null;
-      } catch (error) {
-        return (error as Error).message;
-      }
-    })();
 
     const result = await userConfig.writeKeymap(layer, null);
 
-    expect(thrown).not.toBeNull();
-    expect(result).toEqual({ type: 'refused', problem: thrown });
+    expect(result).toEqual({
+      type: 'refused',
+      problem: expect.stringContaining('p.nope'),
+    });
     expect(await files.stat(`${FOLDER}/keymap.json`)).toBeNull();
   });
 
@@ -384,61 +371,70 @@ describe('createUserConfig', () => {
     });
   });
 
-  it('reads a settings file that fails its check as broken, with its text', async () => {
-    const { userConfig } = await createWithFile('settings.json', '{"nope": 1}');
-
-    const read = await userConfig.read();
-
-    expect(read.settings).toEqual({
-      state: 'broken',
-      problem: '"nope" is not a setting.',
-      text: '{"nope": 1}',
-    });
-  });
-
-  it('reads a settings file naming no theme as broken', async () => {
-    const { userConfig } = await createWithFile(
-      'settings.json',
-      '{"theme": "nope"}',
-    );
-
-    const read = await userConfig.read();
-
-    expect(read.settings).toEqual({
-      state: 'broken',
-      problem: '"theme" names "nope", which no theme has',
-      text: '{"theme": "nope"}',
-    });
-  });
-
-  it('reads a settings file naming the theme of a user file that does not parse as ok', async () => {
+  it.each([
+    {
+      name: 'a settings file that fails its check is broken',
+      files: { 'settings.json': '{"nope": 1}' },
+      slice: 'settings',
+      expected: {
+        state: 'broken',
+        problem: expect.stringContaining('nope'),
+        text: '{"nope": 1}',
+      },
+    },
+    {
+      name: 'a settings file naming no theme is broken',
+      files: { 'settings.json': '{"theme": "gone"}' },
+      slice: 'settings',
+      expected: {
+        state: 'broken',
+        problem: expect.stringContaining('gone'),
+        text: '{"theme": "gone"}',
+      },
+    },
+    {
+      name: 'a settings file naming the theme of a user file that does not parse is ok',
+      files: {
+        'settings.json': '{"theme": "dawn"}',
+        'themes/dawn.json': '{ "name": ',
+      },
+      slice: 'settings',
+      expected: {
+        state: 'ok',
+        layer: { theme: 'dawn' },
+        text: '{"theme": "dawn"}',
+      },
+    },
+    {
+      name: 'a passing settings file is its parsed layer',
+      files: { 'settings.json': '{"p": {"timeout": 5}}' },
+      slice: 'settings',
+      expected: {
+        state: 'ok',
+        layer: { p: { timeout: 5 } },
+        text: '{"p": {"timeout": 5}}',
+      },
+    },
+    {
+      name: 'a keymap file that fails its check is broken',
+      files: { 'keymap.json': '{"chords": []}' },
+      slice: 'keymap',
+      expected: {
+        state: 'broken',
+        problem: expect.stringContaining('chords'),
+        text: '{"chords": []}',
+      },
+    },
+  ] as const)('read: $name', async ({ files: written, slice, expected }) => {
     const files = createMemoryFiles();
-    await files.write(`${FOLDER}/settings.json`, '{"theme": "dawn"}');
-    await files.write(`${FOLDER}/themes/dawn.json`, '{ "name": ');
+    for (const [file, text] of Object.entries(written)) {
+      await files.write(`${FOLDER}/${file}`, text);
+    }
     const userConfig = await create(files);
 
     const read = await userConfig.read();
 
-    expect(read.settings).toEqual({
-      state: 'ok',
-      layer: { theme: 'dawn' },
-      text: '{"theme": "dawn"}',
-    });
-  });
-
-  it('reads a passing settings file as its parsed layer', async () => {
-    const { userConfig } = await createWithFile(
-      'settings.json',
-      '{"p": {"timeout": 5}}',
-    );
-
-    const read = await userConfig.read();
-
-    expect(read.settings).toEqual({
-      state: 'ok',
-      layer: { p: { timeout: 5 } },
-      text: '{"p": {"timeout": 5}}',
-    });
+    expect(read[slice]).toEqual(expected);
   });
 
   it('gives each leaf the control and fallback its default and kind call for', async () => {
@@ -535,18 +531,6 @@ describe('createUserConfig', () => {
       problem: 'Could not read the file: permission denied',
     });
     expect(await files.read(`${FOLDER}/settings.json`)).toBe('{}');
-  });
-
-  it('reads a keymap file that fails its check as broken, with its text', async () => {
-    const { userConfig } = await createWithFile('keymap.json', '{"nope": []}');
-
-    const read = await userConfig.read();
-
-    expect(read.keymap).toEqual({
-      state: 'broken',
-      problem: '"nope" is not a keymap section.',
-      text: '{"nope": []}',
-    });
   });
 
   it('gives a boolean control to a boolean default and a boolean kind', async () => {
@@ -688,7 +672,7 @@ describe('createUserConfig', () => {
         store,
         settingInfo: CORE_INFO,
       }),
-    ).toThrow('Plugin "p" setting "list" has no declaration in settingInfo');
+    ).toThrow(/"p".*"list"/);
   });
 
   it('tells its listener when a hand edit changes the served config', async () => {

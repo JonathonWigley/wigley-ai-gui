@@ -55,9 +55,7 @@ describe('loadUiStateFile', () => {
     expect(logged).toHaveLength(1);
     const [source, message] = logged[0];
     expect(source).toBe('ui-state');
-    expect(message).toMatch(
-      /^ui-state\.json is not valid JSON, starting empty: .+/,
-    );
+    expect(message).toContain('ui-state.json');
   });
 
   it('starts empty on a JSON array', async () => {

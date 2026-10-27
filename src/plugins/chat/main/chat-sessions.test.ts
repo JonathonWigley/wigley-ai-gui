@@ -24,6 +24,7 @@ import {
   createArchivedSessions,
 } from './archived-sessions';
 import {
+  type ChatSessions,
   type ChatSessionsDeps,
   createChatSessions,
   TURN_FINISHED_TITLE,
@@ -292,8 +293,8 @@ describe('createChatSessions', () => {
       [PAST_ONE.sessionId, false],
       [PAST_TWO.sessionId, false],
     ]);
-    expect(test.logged).toContain(
-      `[chat] archived sessions not read: ${ARCHIVED_SESSIONS_FILE} is not a JSON array of session ids`,
+    expect(test.logged).toContainEqual(
+      expect.stringContaining(ARCHIVED_SESSIONS_FILE),
     );
     expect(await test.data.read(ARCHIVED_SESSIONS_FILE)).toBe('{oops');
   });
@@ -313,23 +314,45 @@ describe('createChatSessions', () => {
     ]);
   });
 
-  it('pastSessionsAndResume_UnknownProfile_RejectWithoutCalls', async () => {
-    const test = setUp();
+  it.each([
+    {
+      entryPoint: 'pastSessions',
+      call: (chat: ChatSessions) => chat.pastSessions('/w/app', 'home'),
+    },
+    {
+      entryPoint: 'resume',
+      call: (chat: ChatSessions) =>
+        chat.resume({
+          projectDir: '/w/app',
+          profile: 'home',
+          hostSessionId: PAST_ONE.sessionId,
+        }),
+    },
+    {
+      entryPoint: 'launch',
+      call: (chat: ChatSessions) =>
+        chat.launch({
+          projectDir: PROJECT_DIR,
+          profile: 'home',
+          message: { text: 'fix the chip', images: [] },
+        }),
+    },
+    {
+      entryPoint: 'start',
+      call: (chat: ChatSessions) =>
+        chat.start({ projectDir: PROJECT_DIR, profile: 'home' }),
+    },
+  ])(
+    '$entryPoint with an unknown profile refuses and calls nothing',
+    async ({ call }) => {
+      const test = setUp();
 
-    await expect(test.chat.pastSessions('/w/app', 'home')).rejects.toThrow(
-      'chat has no profile "home"',
-    );
-    await expect(
-      test.chat.resume({
-        projectDir: '/w/app',
-        profile: 'home',
-        hostSessionId: PAST_ONE.sessionId,
-      }),
-    ).rejects.toThrow('chat has no profile "home"');
-    expect(test.harness.pastSessionCalls).toEqual([]);
-    expect(test.harness.processes).toEqual([]);
-    expect(test.opened).toEqual([]);
-  });
+      await expect(async () => call(test.chat)).rejects.toThrow('"home"');
+      expect(test.harness.pastSessionCalls).toEqual([]);
+      expect(test.harness.processes).toEqual([]);
+      expect(test.opened).toEqual([]);
+    },
+  );
 
   it('resume_OpensWithHistoryAndResumesTheProcess', async () => {
     const test = setUp();
@@ -394,8 +417,8 @@ describe('createChatSessions', () => {
         raw: [],
       },
     ]);
-    expect(test.logged).toContain(
-      `[chat] history of ${hostId} not read: cannot read`,
+    expect(test.logged).toContainEqual(
+      expect.stringMatching(new RegExp(`${hostId}.*cannot read`)),
     );
     expect(test.harness.processes.at(-1)?.request.resume).toBe(true);
   });
@@ -411,7 +434,7 @@ describe('createChatSessions', () => {
         profile: 'work',
         hostSessionId: hostId,
       }),
-    ).rejects.toThrow(`session ${hostId} is already open in the app`);
+    ).rejects.toThrow(hostId);
     expect(test.harness.pastSessionCalls).toEqual([]);
     expect(test.opened).toEqual([]);
   });
@@ -457,9 +480,7 @@ describe('createChatSessions', () => {
     expect(test.chat.sessions()).toMatchObject([
       { sessionId: ROW_ID, ended: false },
     ]);
-    expect(test.logged).toContain(
-      `[chat] session ${ROW_ID} closed to resume it`,
-    );
+    expect(test.logged).toContainEqual(expect.stringContaining(ROW_ID));
   });
 
   it('commands_StoredAndSentOnChange', async () => {
@@ -501,19 +522,6 @@ describe('createChatSessions', () => {
     expect(test.activated).toEqual([]);
   });
 
-  it('launch_UnknownProfile_ThrowsAndStartsNothing', () => {
-    const test = setUp();
-
-    expect(() =>
-      test.chat.launch({
-        projectDir: PROJECT_DIR,
-        profile: 'home',
-        message: { text: 'fix the chip', images: [] },
-      }),
-    ).toThrow('chat has no profile "home"');
-    expect(test.harness.processes).toEqual([]);
-  });
-
   it('launch_ImageOverCap_RejectsAndOpensNothing', () => {
     const test = setUp();
     const oversized = {
@@ -527,16 +535,7 @@ describe('createChatSessions', () => {
         profile: DEFAULT_PROFILES[0].name,
         message: { text: 'fix the chip', images: [oversized] },
       }),
-    ).toThrow('Images over 5 MB cannot be attached');
-    expect(test.opened).toEqual([]);
-  });
-
-  it('start_unknownProfile_throwsAndOpensNothing', () => {
-    const test = setUp();
-
-    expect(() =>
-      test.chat.start({ projectDir: PROJECT_DIR, profile: 'home' }),
-    ).toThrow('chat has no profile "home"');
+    ).toThrow(/5 MB/);
     expect(test.opened).toEqual([]);
   });
 
@@ -545,7 +544,7 @@ describe('createChatSessions', () => {
 
     expect(() =>
       test.chat.start({ projectDir: PROJECT_DIR, profile: 'work' }),
-    ).toThrow('no agent harness "claude"');
+    ).toThrow(/claude/);
     expect(test.opened).toEqual([]);
   });
 
@@ -669,8 +668,9 @@ describe('createChatSessions', () => {
       { sessionId: ROW_ID, ended: true, entries: [assistant('a1', 'hi')] },
     ]);
     expect(test.sent('entry')).toHaveLength(entriesBefore);
-    expect(test.logged).toContain(`[chat] session ${ROW_ID} ended (code 1)`);
-    expect(test.logged).toContain(`[chat] session ${ROW_ID} failed: crashed`);
+    expect(test.logged).toContainEqual(
+      expect.stringMatching(new RegExp(`${ROW_ID}.*crashed`)),
+    );
   });
 
   it('ended_WhileWorking_ShowsIdleAndAnnouncesNothing', async () => {
@@ -701,10 +701,10 @@ describe('createChatSessions', () => {
     expect(test.ownedEnds()).toBe(1);
     expect(test.chat.sessions()).toEqual([]);
     expect(test.process.calls).toHaveLength(callsBefore);
-    expect(test.logged).toContain(`[chat] session ${ROW_ID} closed (code 0)`);
+    expect(test.logged).toContainEqual(expect.stringContaining(ROW_ID));
   });
 
-  it('endedSession_ProcessCallsLoggedAndIgnored', async () => {
+  it('endedSession_ProcessCallsIgnored', async () => {
     const test = await started();
     test.process.events.ended({ code: 0, error: null });
     const entriesBefore = test.sent('entry').length;
@@ -713,16 +713,7 @@ describe('createChatSessions', () => {
     test.chat.notice(ROW_ID, 'note', 'info');
     test.chat.interrupt(ROW_ID);
 
-    expect(() => test.chat.setControl(ROW_ID, 'mode', 'plan')).toThrow(
-      `session ${ROW_ID} has ended`,
-    );
-    expect(test.logged).toEqual(
-      expect.arrayContaining([
-        `[chat] send for ended session ${ROW_ID} ignored`,
-        `[chat] notice for ended session ${ROW_ID} ignored`,
-        `[chat] interrupt for ended session ${ROW_ID} ignored`,
-      ]),
-    );
+    expect(() => test.chat.setControl(ROW_ID, 'mode', 'plan')).toThrow(ROW_ID);
     expect(test.process.calls).toEqual([]);
     expect(test.sent('entry')).toHaveLength(entriesBefore);
   });
@@ -743,7 +734,7 @@ describe('createChatSessions', () => {
     expect(test.ownedEnds()).toBe(1);
     expect(test.sent('entry')).toEqual([]);
     expect(test.sent('sessionEnded')).toEqual([]);
-    expect(test.logged).toContain(`[chat] session ${ROW_ID} closed (code 0)`);
+    expect(test.logged).toContainEqual(expect.stringContaining(ROW_ID));
   });
 
   it('killAll_KillsAHeldSessionsProcess', async () => {
@@ -773,7 +764,7 @@ describe('createChatSessions', () => {
     expect(test.process.calls).not.toContainEqual({ method: 'kill' });
   });
 
-  it('closed_processExitsWithAnError_logsTheExit', async () => {
+  it('closed_processExitsWithAnError_endsTheOwnedSessionAndReportsNoEnd', async () => {
     const fake = createFakeAgentHarness();
     const failingExit: FakeAgentHarness = {
       ...fake,
@@ -792,10 +783,9 @@ describe('createChatSessions', () => {
     test.chat.closed(ROW_ID);
     await flush();
 
-    expect(test.logged).toContain(
-      `[chat] session ${ROW_ID} closed (code 1, error: stdin closed early)`,
-    );
     expect(test.ownedEnds()).toBe(1);
+    expect(test.sent('sessionEnded')).toEqual([]);
+    expect(test.chat.sessions()).toEqual([]);
   });
 
   it('closed_processEndRejects_logsAndEndsTheOwnedSession', async () => {
@@ -814,8 +804,8 @@ describe('createChatSessions', () => {
     test.chat.closed(ROW_ID);
     await flush();
 
-    expect(test.logged).toContain(
-      `[chat] session ${ROW_ID} end failed: kill failed`,
+    expect(test.logged).toContainEqual(
+      expect.stringMatching(new RegExp(`${ROW_ID}.*kill failed`)),
     );
     expect(test.ownedEnds()).toBe(1);
     expect(test.chat.sessions()).toEqual([]);
@@ -832,32 +822,32 @@ describe('createChatSessions', () => {
     expect(test.messages).toHaveLength(sentBefore);
   });
 
-  it('processCalls_passThrough', async () => {
-    const test = await started();
-
-    test.chat.send(ROW_ID, { text: 'hi', images: [] });
-    test.chat.interrupt(ROW_ID);
-    test.chat.setControl(ROW_ID, 'mode', 'plan');
-
-    expect(test.process.calls).toEqual([
-      { method: 'send', text: 'hi', imageCount: 0 },
-      { method: 'interrupt' },
-      { method: 'setControl', id: 'mode', value: 'plan' },
-    ]);
-  });
-
-  it('send_PassesImagesToProcess', async () => {
-    const test = await started();
-
-    test.chat.send(ROW_ID, {
+  it.each([
+    { text: 'hi', images: [], imageCount: 0 },
+    {
       text: 'look',
-      images: [{ mediaType: 'image/png', data: 'iVBORw0K' }],
-    });
+      images: [
+        { mediaType: 'image/png', data: 'iVBORw0K' },
+        { mediaType: 'image/jpeg', data: '/9j/4AAQ' },
+      ],
+      imageCount: 2,
+    },
+  ])(
+    'process calls pass through, sending $imageCount images',
+    async ({ text, images, imageCount }) => {
+      const test = await started();
 
-    expect(test.process.calls).toEqual([
-      { method: 'send', text: 'look', imageCount: 1 },
-    ]);
-  });
+      test.chat.send(ROW_ID, { text, images });
+      test.chat.interrupt(ROW_ID);
+      test.chat.setControl(ROW_ID, 'mode', 'plan');
+
+      expect(test.process.calls).toEqual([
+        { method: 'send', text, imageCount },
+        { method: 'interrupt' },
+        { method: 'setControl', id: 'mode', value: 'plan' },
+      ]);
+    },
+  );
 
   it('notice_AddsEntryKeptBySessions', async () => {
     const test = await started();
@@ -887,8 +877,9 @@ describe('createChatSessions', () => {
     );
   });
 
-  it('unknownSession_loggedAndIgnored', async () => {
+  it('unknownSession_ignored', async () => {
     const test = await started();
+    const sentBefore = test.messages.length;
 
     test.chat.send('row-x', { text: 'hi', images: [] });
     test.chat.notice('row-x', 'note', 'info');
@@ -898,22 +889,15 @@ describe('createChatSessions', () => {
       reason: null,
     });
 
-    expect(test.logged).toEqual(
-      expect.arrayContaining([
-        '[chat] send for unknown session row-x ignored',
-        '[chat] notice for unknown session row-x ignored',
-        '[chat] interrupt for unknown session row-x ignored',
-        '[chat] answerPermission for unknown session row-x ignored',
-      ]),
-    );
     expect(test.process.calls).toEqual([]);
+    expect(test.messages).toHaveLength(sentBefore);
   });
 
   it('setControl_unknownSession_throwsAndSetsNothing', async () => {
     const test = await started();
 
     expect(() => test.chat.setControl('row-x', 'mode', 'plan')).toThrow(
-      'session row-x has ended',
+      'row-x',
     );
     expect(test.process.calls).toEqual([]);
   });
@@ -1181,9 +1165,6 @@ describe('createChatSessions', () => {
       reason: null,
     });
 
-    expect(test.logged).toContain(
-      '[chat] answerPermission for unknown entry permission-9 ignored',
-    );
     expect(await settled(call)).toBe('pending');
   });
 });

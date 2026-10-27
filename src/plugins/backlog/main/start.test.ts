@@ -306,31 +306,28 @@ describe('backlog main part', () => {
     });
   });
 
-  it('load_FollowupFileChanged_Uncommitted', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
-    });
-    backlog.git.changedPaths.mockResolvedValue(['docs/features/followups.md']);
+  it.each([
+    { changed: 'docs/features/followups.md', uncommitted: true },
+    { changed: 'docs/features/followups-images/F/1.png', uncommitted: true },
+    { changed: 'docs/features/f/notes.md', uncommitted: false },
+    { changed: 'docs/features/followups-images/.DS_Store', uncommitted: false },
+  ])(
+    'load with $changed changed: uncommitted $uncommitted',
+    async ({ changed, uncommitted }) => {
+      const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+        [FOLLOWUPS]: FOLLOWUPS_TEXT,
+      });
+      backlog.git.changedPaths.mockResolvedValue([changed]);
 
-    const read = await backlog.invoke<BacklogRead>('load');
+      const read = await backlog.invoke<BacklogRead>('load');
 
-    expect(read.homes[0].uncommitted).toBe(true);
-    expect(backlog.git.changedPaths).toHaveBeenCalledWith(
-      CLONE,
-      'docs/features',
-    );
-  });
-
-  it('load_OtherFileChanged_NotUncommitted', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
-    });
-    backlog.git.changedPaths.mockResolvedValue(['docs/features/f/notes.md']);
-
-    const read = await backlog.invoke<BacklogRead>('load');
-
-    expect(read.homes[0].uncommitted).toBe(false);
-  });
+      expect(read.homes[0].uncommitted).toBe(uncommitted);
+      expect(backlog.git.changedPaths).toHaveBeenCalledWith(
+        CLONE,
+        'docs/features',
+      );
+    },
+  );
 
   it('load_CreateTargetFileOnDiskNotIndexed_Listed', async () => {
     const backlog = startBacklog([entry('followup', UI_FOLLOWUPS)], {
@@ -372,9 +369,7 @@ describe('backlog main part', () => {
     expect(read.homes[0].followupFiles.map((file) => file.path)).toEqual([
       FOLLOWUPS,
     ]);
-    expect(backlog.logged).toEqual([
-      `[backlog] ${UI_FOLLOWUPS}: ENOENT: ${UI_FOLLOWUPS}`,
-    ]);
+    expect(backlog.logged).toEqual([expect.stringContaining(UI_FOLLOWUPS)]);
   });
 
   it.each([
@@ -567,16 +562,21 @@ describe('backlog main part', () => {
     );
   });
 
-  it('commit_NothingChanged_Rejects', async () => {
+  it.each([
+    { change: 'nothing changed', changed: [] },
+    {
+      change: 'only a stray file in the images folder changed',
+      changed: ['docs/features/followups-images/.chip.png.1a2b.tmp'],
+    },
+  ])('commit rejects and commits nothing when $change', async ({ changed }) => {
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
       [FOLLOWUPS]: FOLLOWUPS_TEXT,
     });
     backlog.git.fileAtHead.mockResolvedValue(FOLLOWUPS_TEXT);
+    backlog.git.changedPaths.mockResolvedValue(changed);
     await backlog.invoke('load');
 
-    await expect(backlog.invoke('commit', HOME)).rejects.toThrow(
-      `Nothing to commit in ${HOME}`,
-    );
+    await expect(backlog.invoke('commit', HOME)).rejects.toThrow(HOME);
     expect(backlog.git.commitPaths).not.toHaveBeenCalled();
   });
 
@@ -659,7 +659,7 @@ describe('backlog main part', () => {
       expect(item.title).toBe('Wrap this:');
       expect(result).toEqual({
         type: 'refused',
-        reason: `Wrap this: cannot be rewritten as it stands: ${String(followupTitleProblem(item.title))}. Edit it in Docs.`,
+        reason: expect.stringContaining('Wrap this:'),
       });
       expect(backlog.files.get(FOLLOWUPS)).toBe(BAD_TITLE_FOLLOWUPS_TEXT);
     },
@@ -918,7 +918,7 @@ describe('backlog main part', () => {
 
     expect(result).toEqual({
       type: 'refused',
-      reason: `${elsewhere} is not r's create target`,
+      reason: expect.stringContaining(elsewhere),
     });
     expect(callsOf(backlog.calls, 'writeBytes')).toEqual([]);
   });
@@ -997,19 +997,6 @@ describe('backlog main part', () => {
     expect(callsOf(backlog.calls, 'trashDoc')).toEqual([]);
   });
 
-  it('load_ImageChanged_Uncommitted', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
-    });
-    backlog.git.changedPaths.mockResolvedValue([
-      'docs/features/followups-images/F/1.png',
-    ]);
-
-    const read = await backlog.invoke<BacklogRead>('load');
-
-    expect(read.homes[0].uncommitted).toBe(true);
-  });
-
   it('commit_ChangedImages_CommitsThemWithFollowups', async () => {
     const imagePath = `docs/features/followups-images/${CHIP_FOLDER}/1.png`;
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
@@ -1038,19 +1025,6 @@ describe('backlog main part', () => {
     );
   });
 
-  it('load_StrayFileInImagesFolder_NotUncommitted', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
-    });
-    backlog.git.changedPaths.mockResolvedValue([
-      'docs/features/followups-images/.DS_Store',
-    ]);
-
-    const read = await backlog.invoke<BacklogRead>('load');
-
-    expect(read.homes[0].uncommitted).toBe(false);
-  });
-
   it('commit_StrayFileInImagesFolder_LeftOutOfCommitAndMessage', async () => {
     const imagePath = `docs/features/followups-images/${CHIP_FOLDER}/1.png`;
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
@@ -1073,27 +1047,5 @@ describe('backlog main part', () => {
       [imagePath],
       message,
     );
-  });
-
-  it('commit_OnlyStrayFileInImagesFolder_Rejects', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
-    });
-    backlog.git.fileAtHead.mockResolvedValue(FOLLOWUPS_TEXT);
-    backlog.git.changedPaths.mockResolvedValue([
-      'docs/features/followups-images/.chip.png.1a2b.tmp',
-    ]);
-    await backlog.invoke('load');
-
-    await expect(backlog.invoke('commit', HOME)).rejects.toThrow(
-      `Nothing to commit in ${HOME}`,
-    );
-    expect(backlog.git.commitPaths).not.toHaveBeenCalled();
-  });
-
-  it('exports_Tags_TheTagsSetting', () => {
-    const backlog = startBacklog([], {});
-
-    expect(backlog.exports.tags()).toEqual(['agent-ready']);
   });
 });

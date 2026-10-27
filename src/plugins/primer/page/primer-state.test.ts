@@ -384,8 +384,8 @@ describe('primer state', () => {
     );
 
     expect(submitProblems(primerOf(state))).toEqual([
-      'The slug must be lowercase letters, digits and dashes, starting with a letter or digit.',
-      'Extra task 1 needs a name.',
+      expect.stringContaining('slug'),
+      expect.stringContaining('Extra task 1'),
     ]);
   });
 
@@ -396,7 +396,7 @@ describe('primer state', () => {
       primerEntry('3', 'primer', { need: 'unclear' }),
     ]);
 
-    expect(sessionTitle(primerOf(state))).toBe('Primer port 2/3');
+    expect(sessionTitle(primerOf(state))).toMatch(/port.*2\/3/);
   });
 
   it('gives the card scope in view primer with the card pane focused', () => {

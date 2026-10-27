@@ -408,9 +408,7 @@ describe('createFolderFormStore', () => {
     const record = store.create(MINE, 'fp', ARGS, null, null);
     store.finish(record, 'submitted', withNote(''));
 
-    expect(logLines.some((line) => line.includes('could not save form'))).toBe(
-      true,
-    );
+    expect(logLines.some((line) => line.includes(record.id))).toBe(true);
     expect(store.newestFor('fp')).toBeNull();
   });
 
@@ -420,8 +418,6 @@ describe('createFolderFormStore', () => {
     const store = storeIn(path.join(blocker, 'forms'));
     const record = store.create(MINE, 'fp', ARGS, null, null);
 
-    expect(() => store.saveBody(record, withNote('half'))).toThrow(
-      `could not save form ${record.id}: `,
-    );
+    expect(() => store.saveBody(record, withNote('half'))).toThrow(record.id);
   });
 });

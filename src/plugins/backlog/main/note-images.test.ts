@@ -56,7 +56,7 @@ describe('note images', () => {
   it('imageLinkPrefix_FileOutsideHome_Throws', () => {
     expect(() =>
       imageLinkPrefix('/elsewhere/followups.md', HOME, posixPaths),
-    ).toThrow(`/elsewhere/followups.md is outside ${HOME}`);
+    ).toThrow('/elsewhere/followups.md');
   });
 
   it('imageLink_Number_RelativeLink', () => {

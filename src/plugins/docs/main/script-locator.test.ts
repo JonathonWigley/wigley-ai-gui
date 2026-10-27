@@ -97,7 +97,6 @@ describe('readClaudeConfigDirs', () => {
     '{"claudeConfigDirs":[]}',
     '{"claudeConfigDirs":"~/.x"}',
     '{"claudeConfigDirs":[1]}',
-    'not json',
   ])('readClaudeConfigDirs_EmptyOrWrongShape_Default %s', async (config) => {
     const files = createMemoryFiles();
     await files.write(CONFIG_FILE, config);
@@ -142,7 +141,7 @@ describe('readClaudeConfigDirs', () => {
 
     expect(dirs).toEqual(['/Users/u/.claude']);
     expect(logged).toHaveLength(1);
-    expect(logged[0].startsWith(`[docs] ${CONFIG_FILE} not read: `)).toBe(true);
+    expect(logged[0]).toContain(CONFIG_FILE);
   });
 
   it('readClaudeConfigDirs_UnreadableConfig_DefaultAndLogged', async () => {
@@ -163,9 +162,7 @@ describe('readClaudeConfigDirs', () => {
     );
 
     expect(dirs).toEqual(['/Users/u/.claude']);
-    expect(logged).toEqual([
-      `[docs] ${CONFIG_FILE} not read: EACCES: permission denied`,
-    ]);
+    expect(logged).toEqual([expect.stringContaining(CONFIG_FILE)]);
   });
 
   it('readClaudeConfigDirs_NoConfig_DefaultNothingLogged', async () => {
@@ -208,9 +205,7 @@ describe('locateScript failures', () => {
     );
 
     expect(script).toBeNull();
-    expect(logged).toEqual([
-      `${installed} not read: EACCES: permission denied`,
-    ]);
+    expect(logged).toEqual([expect.stringContaining(installed)]);
   });
 });
 

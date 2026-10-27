@@ -21,15 +21,12 @@ export interface SideBarState {
   isOverlayOpen: boolean;
 }
 
-export const SIDE_BAR_START: SideBarState = {
+const SIDE_BAR_START: SideBarState = {
   isHiddenWide: false,
   isOverlayOpen: false,
 };
 
-export function sideBarLayout(
-  state: SideBarState,
-  isNarrow: boolean,
-): SideBarLayout {
+function sideBarLayout(state: SideBarState, isNarrow: boolean): SideBarLayout {
   if (isNarrow) {
     return state.isOverlayOpen ? 'over' : 'hidden';
   }
@@ -38,10 +35,7 @@ export function sideBarLayout(
 
 // The toggle key flips the hidden choice while wide and the overlay while
 // narrow; the other field stays.
-export function toggledSideBar(
-  state: SideBarState,
-  isNarrow: boolean,
-): SideBarState {
+function toggledSideBar(state: SideBarState, isNarrow: boolean): SideBarState {
   return isNarrow
     ? { ...state, isOverlayOpen: !state.isOverlayOpen }
     : { ...state, isHiddenWide: !state.isHiddenWide };
@@ -49,7 +43,7 @@ export function toggledSideBar(
 
 // The window widening ends the overlay; the user's hidden choice always
 // stays.
-export function sideBarAfterResize(
+function sideBarAfterResize(
   state: SideBarState,
   isNarrow: boolean,
 ): SideBarState {
@@ -58,7 +52,7 @@ export function sideBarAfterResize(
 
 // A pick in the side bar ends the overlay; the user's hidden choice always
 // stays.
-export function sideBarAfterPick(state: SideBarState): SideBarState {
+function sideBarAfterPick(state: SideBarState): SideBarState {
   return { ...state, isOverlayOpen: false };
 }
 

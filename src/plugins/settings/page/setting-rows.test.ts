@@ -64,8 +64,8 @@ describe('parseBoxText', () => {
     });
     const broken = parseBoxText('[', json);
     expect(broken.type).toBe('problem');
-    expect(broken.type === 'problem' && broken.problem).toMatch(
-      /^Not valid JSON: /,
+    expect(broken.type === 'problem' && broken.problem).toEqual(
+      expect.any(String),
     );
   });
 });

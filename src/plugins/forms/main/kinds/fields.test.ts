@@ -24,11 +24,9 @@ describe('parseLayoutField', () => {
 
   it('refuses a blank layout or one that is not a string', () => {
     for (const layout of ['', '  ', 3]) {
-      expect(() => parseLayoutField({ layout }, 'Question 1: ')).toThrow(
-        new RoundError(
-          'Question 1: layout must be a layout name: a non-empty string.',
-        ),
-      );
+      const parse = () => parseLayoutField({ layout }, 'Question 1: ');
+      expect(parse).toThrow(RoundError);
+      expect(parse).toThrow(/^Question 1: .*layout/);
     }
   });
 });

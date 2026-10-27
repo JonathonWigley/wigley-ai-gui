@@ -33,7 +33,7 @@ describe('parseUserKeymap', () => {
   it('rejects an unbind naming a scope no plugin declares', () => {
     expect(() =>
       parse({ unbind: [{ keys: 'x', scope: 'test.nowhere' }] }),
-    ).toThrow('"unbind[0].scope" names no scope "test.nowhere".');
+    ).toThrow(/unbind\[0\]\.scope.*test\.nowhere/);
   });
 
   it('keeps an unbind in a declared scope, the any scope included', () => {
@@ -65,9 +65,7 @@ describe('parseUserKeymap', () => {
       },
     ];
 
-    expect(() => parse({ binds })).toThrow(
-      '"binds[0].keys" is "<C-a>"; an insert bind takes <CR>.',
-    );
+    expect(() => parse({ binds })).toThrow(/binds\[0\]\.keys.*<C-a>/);
   });
 
   it('keeps an insert bind on <CR>', () => {
@@ -83,13 +81,16 @@ describe('parseUserKeymap', () => {
     expect(parse({ binds }).binds).toEqual(binds);
   });
 
-  it('parseUserKeymap_OldPageSection_NamesTheNewSection', () => {
-    expect(() =>
-      parse({ page: [{ keys: ['x'], scope: 'any', command: 'test.pick' }] }),
-    ).toThrow(
-      '"page" is an old keymap section: write its binds under "binds" in vim notation.',
-    );
-  });
+  it.each(['page', 'editor'])(
+    'parseUserKeymap_OldSection_NamesItAsOld (%s)',
+    (section) => {
+      expect(() =>
+        parse({
+          [section]: [{ keys: ['x'], scope: 'any', command: 'test.pick' }],
+        }),
+      ).toThrow(`"${section}"`);
+    },
+  );
 
   it('parseUserKeymap_ModeWithWherePage_Throws', () => {
     const binds = [
@@ -108,42 +109,24 @@ describe('parseUserKeymap', () => {
   it('parseUserKeymap_UnbindModeWithWherePage_Throws', () => {
     const unbind = [{ keys: 'x', scope: 'any', mode: 'normal', where: 'page' }];
 
-    expect(() => parse({ unbind })).toThrow(
-      '"unbind[0]": x has a mode, so it fires in a box only; it takes no where "page".',
-    );
-  });
-
-  it('parseUserKeymap_OldEditorSection_NamesTheNewSection', () => {
-    expect(() =>
-      parse({ editor: [{ keys: ['x'], scope: 'any', command: 'test.pick' }] }),
-    ).toThrow(
-      '"editor" is an old keymap section: write its binds under "binds" in vim notation.',
-    );
+    expect(() => parse({ unbind })).toThrow(/unbind\[0\].*where "page"/);
   });
 
   it('parseUserKeymap_OldSectionAfterUnknownSection_NamesTheOldSection', () => {
-    expect(() => parse({ foo: 1, page: [] })).toThrow(
-      '"page" is an old keymap section: write its binds under "binds" in vim notation.',
-    );
+    expect(() => parse({ foo: 1, page: [] })).toThrow('"page"');
   });
 
-  it('parseUserKeymap_OldPageUnbind_NamesTheKeysField', () => {
-    const unbind = [{ page: ['j'], scope: 'test.list' }];
-
-    expect(() => parse({ unbind })).toThrow(
-      '"unbind[0]" is an old unbind: name its keys in vim notation under "keys".',
-    );
-  });
-
-  it('parseUserKeymap_OldEditorUnbind_NamesTheKeysField', () => {
-    const unbind = [
-      { keys: 'x', scope: 'any' },
-      { editor: 'x', scope: 'any' },
-    ];
-
-    expect(() => parse({ unbind })).toThrow(
-      '"unbind[1]" is an old unbind: name its keys in vim notation under "keys".',
-    );
+  it.each([
+    { unbind: [{ page: ['j'], scope: 'test.list' }], path: 'unbind[0]' },
+    {
+      unbind: [
+        { keys: 'x', scope: 'any' },
+        { editor: 'x', scope: 'any' },
+      ],
+      path: 'unbind[1]',
+    },
+  ])('parseUserKeymap_OldUnbind_NamesItsPath ($path)', ({ unbind, path }) => {
+    expect(() => parse({ unbind })).toThrow(`"${path}"`);
   });
 
   it('parseUserKeymap_UnknownWhere_Throws', () => {
@@ -151,45 +134,25 @@ describe('parseUserKeymap', () => {
       { keys: 'x', scope: 'any', command: 'test.pick', where: 'nowhere' },
     ];
 
-    expect(() => parse({ binds })).toThrow(
-      '"binds[0].where" must be one of page, box, both, not "nowhere".',
-    );
+    expect(() => parse({ binds })).toThrow(/binds\[0\]\.where.*nowhere/);
   });
 
   it('parseUserKeymap_GroupKeyWithoutLeader_Throws', () => {
-    expect(() => parse({ groups: { k: 'windows' } })).toThrow(
-      '"groups.k" must start with <Leader>.',
-    );
+    expect(() => parse({ groups: { k: 'windows' } })).toThrow('"groups.k"');
   });
 
   it('parseUserKeymap_UnknownToken_NamesEntryPath', () => {
     const binds = [{ keys: '<F5>', scope: 'any', command: 'test.pick' }];
 
-    expect(() => parse({ binds })).toThrow(
-      '"binds[0]": <F5> is not a key the page can bind.',
-    );
+    expect(() => parse({ binds })).toThrow(/binds\[0\].*<F5>/);
   });
 
-  it('parseUserKeymap_ChordLeader_Throws', () => {
-    expect(() => parse({ leader: '<A-o>' })).toThrow(
-      '"leader" must be one key, such as "<Space>" or ",".',
-    );
-  });
-
-  it.each(['<', '<lt>'])(
-    'parseUserKeymap_LessThanLeader_Throws (%s)',
+  it.each(['<A-o>', '<', '<lt>', 'ab'])(
+    'parseUserKeymap_LeaderNotOneKey_Throws (%s)',
     (written) => {
-      expect(() => parse({ leader: written })).toThrow(
-        '"leader" must be one key, such as "<Space>" or ",".',
-      );
+      expect(() => parse({ leader: written })).toThrow('"leader"');
     },
   );
-
-  it('parseUserKeymap_TwoKeyLeader_Throws', () => {
-    expect(() => parse({ leader: 'ab' })).toThrow(
-      '"leader" must be one key, such as "<Space>" or ",".',
-    );
-  });
 
   it('keeps a leader of one key and groups under the leader', () => {
     const keymap = { leader: ',', groups: { '<Leader>k': 'panes' } };
@@ -197,17 +160,14 @@ describe('parseUserKeymap', () => {
     expect(parse(keymap)).toEqual(keymap);
   });
 
-  it('parseUserKeymap_LowercaseNamedLeader_SpellsItAsVimReportsIt', () => {
-    expect(parse({ leader: '<space>' }).leader).toBe('<Space>');
-  });
-
   it.each([
+    ['<space>', '<Space>'],
     ['<Bslash>', '\\'],
     ['\\', '\\'],
     ['<Bar>', '|'],
     ['|', '|'],
   ])(
-    'parseUserKeymap_LeaderTypingOneCharacter_StoresTheCharacter (%s)',
+    'parseUserKeymap_Leader_StoredAsVimSpellsIt (%s → %s)',
     (written, stored) => {
       expect(parse({ leader: written }).leader).toBe(stored);
     },
@@ -219,9 +179,7 @@ describe('parseUserKeymap', () => {
       { accelerator: 'shift+command+k', command: 'test.open' },
     ];
 
-    expect(() => parse({ app })).toThrow(
-      '"app[1]" binds shift+command+k, the same chord as "app[0]" (Cmd+Shift+K).',
-    );
+    expect(() => parse({ app })).toThrow(/app\[1\].*app\[0\]/);
   });
 
   it('keeps global binds on CommandOrControl and Command apart', () => {

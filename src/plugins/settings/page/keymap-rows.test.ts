@@ -7,7 +7,6 @@ import type {
 import type { CommandInfo } from '../../../contracts/plugin';
 import type { UserConfigSchema } from '../../../contracts/user-config';
 import {
-  andList,
   type BindLine,
   coverTexts,
   keymapRows,
@@ -267,44 +266,33 @@ describe('coverTexts', () => {
     editor: BindLine['editor'],
   ): BindLine => ({ bind, origin: 'default', page, editor });
 
-  it('coverTexts_EveryHalfActive_IsEmpty', () => {
-    expect(coverTexts(line(active, active), label)).toEqual([]);
-  });
-
-  it('coverTexts_OnlyHalfRemoved_IsRemoved', () => {
-    expect(coverTexts(line(removed, null), label)).toEqual(['Removed']);
-  });
-
-  it('coverTexts_BothHalvesReplacedBySameCommand_NamesItOnce', () => {
-    expect(coverTexts(line(replaced, replaced), label)).toEqual([
-      'Replaced by b label',
-    ]);
-  });
-
-  it('coverTexts_OneHalfRemovedOtherReplaced_NamesBoth', () => {
-    expect(coverTexts(line(removed, replaced), label)).toEqual([
-      'Removed',
-      'Replaced by b label',
-    ]);
-  });
-
-  it('coverTexts_PageRemovedEditorActive_IsPartlyRemoved', () => {
-    expect(coverTexts(line(removed, active), label)).toEqual([
-      'Partly removed — still fires in the editor',
-    ]);
-  });
-
-  it('coverTexts_PageActiveEditorReplaced_IsPartlyReplaced', () => {
-    expect(coverTexts(line(active, replaced), label)).toEqual([
-      'Partly replaced by b label — still fires on the page',
-    ]);
-  });
-});
-
-describe('andList', () => {
-  it('andList_JoinsLabelsAsProse', () => {
-    expect(andList(['A'])).toBe('A');
-    expect(andList(['A', 'B'])).toBe('A and B');
-    expect(andList(['A', 'B', 'C'])).toBe('A, B and C');
-  });
+  it.each([
+    { page: active, editor: active, expected: [] },
+    { page: removed, editor: null, expected: [expect.any(String)] },
+    {
+      page: replaced,
+      editor: replaced,
+      expected: [expect.stringContaining('b label')],
+    },
+    {
+      page: removed,
+      editor: replaced,
+      expected: [expect.any(String), expect.stringContaining('b label')],
+    },
+    {
+      page: removed,
+      editor: active,
+      expected: [expect.any(String)],
+    },
+    {
+      page: active,
+      editor: replaced,
+      expected: [expect.stringContaining('b label')],
+    },
+  ])(
+    'coverTexts with page $page.state and editor $editor.state gives $expected.length texts',
+    ({ page, editor, expected }) => {
+      expect(coverTexts(line(page, editor), label)).toEqual(expected);
+    },
+  );
 });

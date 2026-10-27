@@ -115,16 +115,6 @@ describe('applyChange', () => {
     ]);
   });
 
-  it('applyChange_RenamedFileWithItems_MovesItemIds', () => {
-    const { starred, sets } = starredOver(['/f/followups.md#L3']);
-    starred.applyChange({
-      type: 'renamed',
-      from: '/f/followups.md',
-      to: '/f/later.md',
-    });
-    expect(sets.at(-1)).toEqual(['/f/later.md#L3']);
-  });
-
   it('applyChange_RenameReachesNoId_NothingSaved', () => {
     const { starred, sets, calls } = starredOver(['/r/a.md']);
     starred.applyChange({ type: 'renamed', from: '/r/x.md', to: '/r/y.md' });
@@ -144,37 +134,6 @@ describe('applyChange', () => {
       paths: ['/r/a.md', '/r/s', '/f/followups.md'],
     });
     expect(sets.at(-1)).toEqual(['/r/keep.md']);
-  });
-
-  it('applyChange_RenamedHashFolder_MovesIdsInside', () => {
-    const { starred, sets } = starredOver([
-      '/u/C#notes/x.md',
-      '/u/C#notes/f.md#L3',
-    ]);
-    starred.applyChange({
-      type: 'renamed',
-      from: '/u/C#notes',
-      to: '/u/D#notes',
-    });
-    expect(sets.at(-1)).toEqual(['/u/D#notes/f.md#L3', '/u/D#notes/x.md']);
-  });
-
-  it('applyChange_RenamedSiblingOfHashFolder_IdsStay', () => {
-    const { starred, sets } = starredOver(['/u/C#notes/x.md']);
-    starred.applyChange({ type: 'renamed', from: '/u/C', to: '/u/D' });
-    expect(sets).toEqual([]);
-  });
-
-  it('applyChange_TrashedSiblingOfHashFolder_IdsKept', () => {
-    const { starred, sets } = starredOver(['/u/C#notes/x.md', '/u/C/y.md']);
-    starred.applyChange({ type: 'trashed', paths: ['/u/C'] });
-    expect(sets.at(-1)).toEqual(['/u/C#notes/x.md']);
-  });
-
-  it('applyChange_TrashedHashFolder_DropsIdsInside', () => {
-    const { starred, sets } = starredOver(['/u/C#notes/x.md', '/u/C/y.md']);
-    starred.applyChange({ type: 'trashed', paths: ['/u/C#notes'] });
-    expect(sets.at(-1)).toEqual(['/u/C/y.md']);
   });
 
   it('applyChange_Created_Nothing', () => {

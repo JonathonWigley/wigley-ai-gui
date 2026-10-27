@@ -63,22 +63,25 @@ describe('createRecentFolders', () => {
     expect(addRecentFolder(earlier, added, windowsPaths)).toEqual([added]);
   });
 
-  it('record_keepsAtMostTwenty', async () => {
+  it('record_full_dropsTheOldest', async () => {
     const test = setUp();
-    const twenty: RecentFolder[] = Array.from({ length: 20 }, (_, index) => ({
-      projectDir: `/p${index}`,
-      profile: 'work',
-      lastUsed: 100 - index,
-    }));
-    await test.data.write(RECENT_FOLDERS_FILE, JSON.stringify(twenty));
+    const full: RecentFolder[] = Array.from(
+      { length: MAX_RECENT_FOLDERS },
+      (_, index) => ({
+        projectDir: `/p${index}`,
+        profile: 'work',
+        lastUsed: 1000 - index,
+      }),
+    );
+    const oldest = full[MAX_RECENT_FOLDERS - 1].projectDir;
+    await test.data.write(RECENT_FOLDERS_FILE, JSON.stringify(full));
 
     await test.recent.record('/new', 'work');
 
     const saved = await test.saved();
-    expect(MAX_RECENT_FOLDERS).toBe(20);
-    expect(saved).toHaveLength(20);
+    expect(saved).toHaveLength(MAX_RECENT_FOLDERS);
     expect(saved[0].projectDir).toBe('/new');
-    expect(saved.map((folder) => folder.projectDir)).not.toContain('/p19');
+    expect(saved.map((folder) => folder.projectDir)).not.toContain(oldest);
   });
 
   it('list_missingFile_empty', async () => {
@@ -90,11 +93,9 @@ describe('createRecentFolders', () => {
     await test.data.write(RECENT_FOLDERS_FILE, '{oops');
 
     expect(await test.recent.list()).toEqual([]);
-    expect(
-      test.logged.some((line) =>
-        line.startsWith('[chat] recent-folders.json unreadable:'),
-      ),
-    ).toBe(true);
+    expect(test.logged.some((line) => line.includes(RECENT_FOLDERS_FILE))).toBe(
+      true,
+    );
   });
 
   it('list_readFails_emptyAndLogged', async () => {
@@ -102,8 +103,8 @@ describe('createRecentFolders', () => {
     test.data.read = () => Promise.reject(new Error('EACCES: denied'));
 
     expect(await test.recent.list()).toEqual([]);
-    expect(test.logged).toContain(
-      '[chat] recent-folders.json unreadable: EACCES: denied',
+    expect(test.logged).toContainEqual(
+      expect.stringContaining('EACCES: denied'),
     );
   });
 

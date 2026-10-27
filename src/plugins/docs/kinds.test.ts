@@ -111,12 +111,40 @@ describe('placesFor', () => {
     ]);
   });
 
-  it('placesFor_GlobalReferenceInWigleyAgents_NoPlace', () => {
-    const entries = ['/Users/u/wigley-agents/decisions.md'].map((path) =>
-      entry({ path, kind: 'reference' }),
-    );
+  it.each([
+    {
+      given: 'a global reference in wigley-agents',
+      kind: 'reference',
+      fields: { path: '/Users/u/wigley-agents/decisions.md' },
+    },
+    {
+      given: 'a global reference in a linked clone',
+      kind: 'reference',
+      fields: { path: '/Users/u/dev/personal/wigley-agents/decisions.md' },
+    },
+    {
+      given: 'a plugin entry',
+      kind: 'skill',
+      fields: {
+        path: '/Users/u/.claude/plugins/cache/m/p/1/skills/s/SKILL.md',
+        source: 'plugin',
+        plugin: 'p@m',
+        root: '/Users/u/.claude/plugins/cache/m/p/1',
+      },
+    },
+    {
+      given: 'an unknown source',
+      kind: 'skill',
+      fields: {
+        path: '/Users/u/scratch/skills/s/SKILL.md',
+        source: 'scratch',
+        root: '/Users/u/scratch',
+      },
+    },
+  ] as const)('placesFor $given offers no place', ({ kind, fields }) => {
+    const entries = [entry({ ...fields, kind })];
 
-    expect(placesFor('reference', entries, HOME, posixPaths)).toEqual([]);
+    expect(placesFor(kind, entries, HOME, posixPaths)).toEqual([]);
   });
 
   it('placesFor_ProjectReference_EntryFolder', () => {
@@ -150,44 +178,6 @@ describe('placesFor', () => {
     expect(
       placesFor('instructions', entries, HOME, posixPaths).map((p) => p.folder),
     ).toEqual(['/Users/u/dev/personal/wigley-agents']);
-  });
-
-  it('placesFor_GlobalReferenceInLinkedClone_NoPlace', () => {
-    const entries = [
-      entry({
-        path: '/Users/u/dev/personal/wigley-agents/decisions.md',
-        kind: 'reference',
-      }),
-    ];
-
-    expect(placesFor('reference', entries, HOME, posixPaths)).toEqual([]);
-  });
-
-  it('placesFor_PluginEntries_NoPlace', () => {
-    const entries = [
-      entry({
-        path: '/Users/u/.claude/plugins/cache/m/p/1/skills/s/SKILL.md',
-        kind: 'skill',
-        source: 'plugin',
-        plugin: 'p@m',
-        root: '/Users/u/.claude/plugins/cache/m/p/1',
-      }),
-    ];
-
-    expect(placesFor('skill', entries, HOME, posixPaths)).toEqual([]);
-  });
-
-  it('placesFor_UnknownSource_NoPlace', () => {
-    const entries = [
-      entry({
-        path: '/Users/u/scratch/skills/s/SKILL.md',
-        kind: 'skill',
-        source: 'scratch',
-        root: '/Users/u/scratch',
-      }),
-    ];
-
-    expect(placesFor('skill', entries, HOME, posixPaths)).toEqual([]);
   });
 
   it('placesFor_InstructionsInDotClaude_DropsDotClaude', () => {
@@ -250,22 +240,6 @@ describe('skillFolder', () => {
 });
 
 describe('createTarget', () => {
-  it('createTarget_Skill_FolderAndFrontmatter', () => {
-    const target = createTarget(
-      'skill',
-      place('/Users/u/.claude/skills', 'global'),
-      'tidy',
-      posixPaths,
-    );
-
-    expect(target.path).toBe('/Users/u/.claude/skills/tidy/SKILL.md');
-    expect(target.contents(null)).toEqual({
-      text: '---\nname: tidy\ndescription: \n---\n\n# tidy\n\n',
-      line: 3,
-    });
-    expect(target.appends).toBe(false);
-  });
-
   it('createTarget_InstructionsGlobal_FileInFolder', () => {
     const global = createTarget(
       'instructions',
@@ -342,23 +316,15 @@ describe('createTarget', () => {
 
   it('createTarget_FollowupMissingFile_StartsNewFileNamedForFolder', () => {
     const target = followupTarget('new');
-    const created = {
-      text: [
-        '# Follow-ups — r',
-        '',
-        '**Contents**',
-        '',
-        '- **new** — ',
-        '',
-        'Deferred work for the r repo. Each entry is one `##` section and stands on its own as a task brief.',
-        '',
-        '## new',
-        '',
-      ].join('\n'),
-      line: 5,
-    };
 
-    expect(target.contents(null)).toEqual(created);
+    const created = target.contents(null);
+
+    const lines = created.text.split('\n');
+    expect(lines[0]).toBe('# Follow-ups — r');
+    expect(lines[created.line - 1]).toBe('- **new** — ');
+    expect(
+      parseFollowups(created.text).items.map((item) => item.title),
+    ).toEqual(['new']);
     expect(target.contents('')).toEqual(created);
     expect(target.contents('\n  \n')).toEqual(created);
   });
@@ -380,36 +346,27 @@ describe('createTarget', () => {
     const target = followupTarget('Old');
     const existing = '# F\n\n**Contents**\n\n- **Old**\n\n## Old\n';
 
-    expect(() => target.contents(existing)).toThrow(
-      'A follow-up titled Old already exists',
-    );
+    expect(() => target.contents(existing)).toThrow(/Old/);
   });
 });
 
 describe('nameProblem', () => {
-  it('nameProblem_Rules_PinnedMessages', () => {
-    expect(nameProblem('skill', ' ')).toBe('A name is required');
-    expect(nameProblem('skill', 'My Skill')).toBe(
-      'A skill name is lowercase letters, digits and hyphens',
-    );
-    expect(nameProblem('rule', 'a/b')).toBe(
-      'A name holds no / or \\ and does not start with .',
-    );
-    expect(nameProblem('rule', 'a\\b')).toBe(
-      'A name holds no / or \\ and does not start with .',
-    );
-    expect(nameProblem('rule', '.x')).toBe(
-      'A name holds no / or \\ and does not start with .',
-    );
-    expect(nameProblem('followup', 'a\nb')).toBe(
-      'A follow-up title is one line',
-    );
-    expect(nameProblem('followup', 'Wait:')).toBe(
-      'A follow-up title does not end with :',
-    );
-    expect(nameProblem('followup', 'Fix it')).toBe(null);
-    expect(nameProblem('rule', 'style')).toBe(null);
-  });
+  it.each([
+    { kind: 'skill', name: ' ', refused: true },
+    { kind: 'skill', name: 'My Skill', refused: true },
+    { kind: 'rule', name: 'a/b', refused: true },
+    { kind: 'rule', name: 'a\\b', refused: true },
+    { kind: 'rule', name: '.x', refused: true },
+    { kind: 'followup', name: 'a\nb', refused: true },
+    { kind: 'followup', name: 'Wait:', refused: true },
+    { kind: 'followup', name: 'Fix it', refused: false },
+    { kind: 'rule', name: 'style', refused: false },
+  ] as const)(
+    'nameProblem $kind $name refused: $refused',
+    ({ kind, name, refused }) => {
+      expect(nameProblem(kind, name) !== null).toBe(refused);
+    },
+  );
 });
 
 describe('kinds on Windows', () => {

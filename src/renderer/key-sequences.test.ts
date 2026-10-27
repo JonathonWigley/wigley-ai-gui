@@ -335,7 +335,7 @@ describe('createChordMatcher', () => {
         createChordMatcher([
           { keys: [token], scope: 'forms', command: 'test.x' },
         ]),
-      ).toThrow(`Page bind for test.x has a malformed chord ${token}`);
+      ).toThrow(/test\.x/);
     },
   );
 

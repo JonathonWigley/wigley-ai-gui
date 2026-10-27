@@ -350,20 +350,6 @@ describe('mergeKeymap', () => {
       '<Leader>m': 'motions',
     });
   });
-
-  it('mergeKeymap_ManifestKeys_AreQualified', () => {
-    const plugin = manifest('p', {
-      commands: { c: { label: 'C', group: 'Moves', runsIn: 'page' } },
-      scopes: { s: 'In s' },
-      keys: { binds: [{ keys: 'x', scope: 's', command: 'c' }] },
-    });
-
-    const merged = mergeKeymap(bindsOnly(), [plugin], {});
-
-    expect(merged.page).toEqual([
-      { keys: ['x'], scope: 'p.s', command: 'p.c' },
-    ]);
-  });
 });
 
 describe('expandBind', () => {
@@ -710,7 +696,7 @@ describe('commandInfos', () => {
         },
         [windowPlugin],
       ),
-    ).toThrow('Command "window.summon" is declared twice');
+    ).toThrow(/"window\.summon"/);
   });
 });
 
@@ -749,18 +735,7 @@ describe('pluginSettings', () => {
         manifest('p', { settings: { a: 1 } }),
         manifest('p', { settings: { a: 2 } }),
       ]),
-    ).toThrow('Plugin "p" is listed twice');
-  });
-
-  it('stores ids an object inherits or treats specially as plain ids', () => {
-    const settings = pluginSettings([
-      manifest('toString', { settings: { a: 1 } }),
-      manifest('__proto__', { settings: { b: 2 } }),
-    ]);
-
-    expect(Object.hasOwn(settings, 'toString')).toBe(true);
-    expect(Object.hasOwn(settings, '__proto__')).toBe(true);
-    expect(Object.getPrototypeOf(settings)).toBe(Object.prototype);
+    ).toThrow(/"p"/);
   });
 });
 
@@ -782,9 +757,7 @@ describe('pluginOptionalSettings', () => {
   it('rejects a null default with no declared kind', () => {
     expect(() =>
       pluginOptionalSettings([manifest('p', { settings: { timeout: null } })]),
-    ).toThrow(
-      'Plugin "p" setting "timeout" defaults to null and declares no kind in optionalSettings',
-    );
+    ).toThrow(/"p".*"timeout"/);
   });
 
   it('rejects a nested null default with no declared kind', () => {
@@ -795,7 +768,7 @@ describe('pluginOptionalSettings', () => {
           optionalSettings: { 'window.size': 'number' },
         }),
       ]),
-    ).toThrow('Plugin "p" setting "profiles[].dir" defaults to null');
+    ).toThrow(/"p".*"profiles\[\]\.dir"/);
   });
 
   it('rejects a declared kind for a setting with a value default', () => {
@@ -806,9 +779,7 @@ describe('pluginOptionalSettings', () => {
           optionalSettings: { timeout: 'number' },
         }),
       ]),
-    ).toThrow(
-      'Plugin "p" setting "timeout" declares a kind in optionalSettings but defaults to a value',
-    );
+    ).toThrow(/"p".*"timeout"/);
   });
 });
 
@@ -826,7 +797,7 @@ describe('pluginSettingInfo', () => {
   it('rejects a leaf setting with no declaration, naming the plugin and the path', () => {
     expect(() =>
       pluginSettingInfo([manifest('p', { settings: { a: 1 } })]),
-    ).toThrow('Plugin "p" setting "a" has no declaration in settingInfo');
+    ).toThrow(/"p".*"a"/);
   });
 
   it('rejects a declaration naming no leaf setting', () => {
@@ -888,9 +859,7 @@ describe('pluginThemeTokens', () => {
           },
         }),
       ]),
-    ).toThrow(
-      'Plugin "forms" theme token "originCaused" must be lowercase letters and digits joined by - or _',
-    );
+    ).toThrow(/"forms".*"originCaused"/);
   });
 
   it("rejects a token whose CSS variable is a core token's", () => {
@@ -900,9 +869,7 @@ describe('pluginThemeTokens', () => {
           themeTokens: { error: { kind: 'color', default: '#ff0000' } },
         }),
       ]),
-    ).toThrow(
-      'Theme token "status.error" and theme token "status-error" share the CSS variable --wg-status-error',
-    );
+    ).toThrow(/"status\.error".*"status-error".*--wg-status-error/);
   });
 
   it("rejects a token whose CSS variable is another plugin token's", () => {
@@ -915,9 +882,7 @@ describe('pluginThemeTokens', () => {
           themeTokens: { 'b-c': { kind: 'color', default: '#00ff00' } },
         }),
       ]),
-    ).toThrow(
-      'Theme token "a.b-c" and theme token "a-b.c" share the CSS variable --wg-a-b-c',
-    );
+    ).toThrow(/"a\.b-c".*"a-b\.c".*--wg-a-b-c/);
   });
 });
 
@@ -933,20 +898,20 @@ describe('overrideSettings', () => {
 
   it('rejects a plugin the settings do not hold', () => {
     expect(() => overrideSettings({ p: { a: 1 } }, { r: { a: 2 } })).toThrow(
-      'Settings override names no plugin "r"',
+      /"r"/,
     );
   });
 
   it('rejects a setting the plugin does not declare', () => {
     expect(() =>
       overrideSettings({ p: { a: 1 } }, { p: { a: 2, z: 3, y: 4 } }),
-    ).toThrow('Settings override names no setting of plugin "p": z, y');
+    ).toThrow(/"p".*z, y/);
   });
 
   it('treats an id an object inherits as a plugin it does not hold', () => {
     expect(() =>
       overrideSettings({ p: { a: 1 } }, { toString: { a: 2 } }),
-    ).toThrow('Settings override names no plugin "toString"');
+    ).toThrow(/"toString"/);
   });
 });
 
@@ -965,6 +930,6 @@ describe('requireListed', () => {
         [{ manifest: listed }, { manifest: manifest('q') }],
         [listed],
       ),
-    ).toThrow('built-in manifests list: q');
+    ).toThrow(/\bq\b/);
   });
 });

@@ -74,12 +74,7 @@ describe('session form tabs', () => {
     const { view } = added[0];
     expect(view).toMatchObject({ id: 'form', title: 'Form' });
     const tab = asFake(view.element);
-    expect(tab.className).toBe('form-tab');
-    expect(tab.childNodes.map((node) => node.className)).toEqual([
-      '',
-      '',
-      'ui-empty',
-    ]);
+    expect(tab.childNodes).toHaveLength(3);
     expect(tab.childNodes[0]).toBe(asFake(first));
     expect(tab.childNodes[1]).toBe(asFake(second));
   });

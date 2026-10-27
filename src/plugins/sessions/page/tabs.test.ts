@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionsState } from '../contract';
 import {
-  harnessText,
-  hasOtherSession,
   hasOtherTab,
   isRoundToast,
   isSameVisibleTab,
@@ -67,48 +65,33 @@ describe('tabs', () => {
     expect(stepTab(['form'], 'form', 1)).toBeNull();
   });
 
-  it('hasOtherSession is false with no rows or one selected row, and true with one unselected row or two rows', () => {
-    expect(hasOtherSession({ rows: [], selectedSessionId: null })).toBe(false);
-    expect(hasOtherSession(stateOf(['a'], 'a'))).toBe(false);
-    expect(hasOtherSession(stateOf(['a'], null))).toBe(true);
-    expect(hasOtherSession(stateOf(['a', 'b'], 'a'))).toBe(true);
-  });
-
   it('hasOtherTab is false under two tabs and true from two', () => {
     expect(hasOtherTab([], null)).toBe(false);
     expect(hasOtherTab(['t1'], 't1')).toBe(false);
     expect(hasOtherTab(['t1', 't2'], 't1')).toBe(true);
   });
 
-  it('tabsAfterAdd selects the first tab added and keeps the selection after', () => {
-    const first = tabsAfterAdd(NO_TABS, 's', 'form');
-    const second = tabsAfterAdd(first, 's', 'docs');
-
-    expect(first).toEqual({
-      tabIds: ['form'],
-      selectedTabId: 'form',
-      selections: 0,
-    });
-    expect(second).toEqual({
-      tabIds: ['form', 'docs'],
-      selectedTabId: 'form',
-      selections: 0,
-    });
-  });
-
-  it('tabsAfterAdd keeps the selections count', () => {
-    const tabs: TabsState = {
-      tabIds: ['form'],
-      selectedTabId: 'form',
-      selections: 2,
-    };
-
-    expect(tabsAfterAdd(tabs, 's', 'docs')).toEqual({
-      tabIds: ['form', 'docs'],
-      selectedTabId: 'form',
-      selections: 2,
-    });
-  });
+  it.each([
+    {
+      tabs: NO_TABS,
+      tabId: 'form',
+      expected: { tabIds: ['form'], selectedTabId: 'form', selections: 0 },
+    },
+    {
+      tabs: { tabIds: ['form'], selectedTabId: 'form', selections: 2 },
+      tabId: 'docs',
+      expected: {
+        tabIds: ['form', 'docs'],
+        selectedTabId: 'form',
+        selections: 2,
+      },
+    },
+  ])(
+    'tabsAfterAdd of $tabId to $tabs.tabIds gives $expected',
+    ({ tabs, tabId, expected }) => {
+      expect(tabsAfterAdd(tabs, 's', tabId)).toEqual(expected);
+    },
+  );
 
   it('tabsAfterAdd throws on a duplicate id', () => {
     const tabs: TabsState = {
@@ -122,57 +105,33 @@ describe('tabs', () => {
     );
   });
 
-  it('tabsAfterRemove passes the selection of a middle tab to its right neighbour', () => {
-    const tabs: TabsState = {
-      tabIds: ['a', 'b', 'c'],
-      selectedTabId: 'b',
-      selections: 2,
-    };
-
-    expect(tabsAfterRemove(tabs, 'b')).toEqual({
-      tabIds: ['a', 'c'],
-      selectedTabId: 'c',
-      selections: 2,
-    });
-  });
-
-  it('tabsAfterRemove passes the selection of the last tab to its left neighbour', () => {
-    const tabs: TabsState = {
-      tabIds: ['a', 'b', 'c'],
-      selectedTabId: 'c',
-      selections: 0,
-    };
-
-    expect(tabsAfterRemove(tabs, 'c')).toEqual({
-      tabIds: ['a', 'b'],
-      selectedTabId: 'b',
-      selections: 0,
-    });
-  });
-
-  it('tabsAfterRemove of the only tab leaves none selected', () => {
-    const tabs: TabsState = {
-      tabIds: ['a'],
-      selectedTabId: 'a',
-      selections: 0,
-    };
-
-    expect(tabsAfterRemove(tabs, 'a')).toEqual(NO_TABS);
-  });
-
-  it('tabsAfterRemove of an unselected tab keeps the selection', () => {
-    const tabs: TabsState = {
-      tabIds: ['a', 'b', 'c'],
-      selectedTabId: 'c',
-      selections: 0,
-    };
-
-    expect(tabsAfterRemove(tabs, 'a')).toEqual({
-      tabIds: ['b', 'c'],
-      selectedTabId: 'c',
-      selections: 0,
-    });
-  });
+  it.each([
+    {
+      tabs: { tabIds: ['a', 'b', 'c'], selectedTabId: 'b', selections: 2 },
+      tabId: 'b',
+      expected: { tabIds: ['a', 'c'], selectedTabId: 'c', selections: 2 },
+    },
+    {
+      tabs: { tabIds: ['a', 'b', 'c'], selectedTabId: 'c', selections: 1 },
+      tabId: 'c',
+      expected: { tabIds: ['a', 'b'], selectedTabId: 'b', selections: 1 },
+    },
+    {
+      tabs: { tabIds: ['a'], selectedTabId: 'a', selections: 0 },
+      tabId: 'a',
+      expected: NO_TABS,
+    },
+    {
+      tabs: { tabIds: ['a', 'b', 'c'], selectedTabId: 'c', selections: 3 },
+      tabId: 'a',
+      expected: { tabIds: ['b', 'c'], selectedTabId: 'c', selections: 3 },
+    },
+  ])(
+    'tabsAfterRemove of $tabId from $tabs gives $expected',
+    ({ tabs, tabId, expected }) => {
+      expect(tabsAfterRemove(tabs, tabId)).toEqual(expected);
+    },
+  );
 
   it('tabsAfterSelect selects a present tab, counting it, and returns the same value for an absent one', () => {
     const tabs: TabsState = {
@@ -378,17 +337,9 @@ describe('tabs', () => {
     expect(rowStatus(['', ''])).toBeNull();
   });
 
-  it('harnessText names each harness and nothing for none', () => {
-    expect(harnessText('claude')).toBe('Claude');
-    expect(harnessText('codex')).toBe('Codex');
-    expect(harnessText(null)).toBe('');
-  });
-
   it('roundToastText names the keys, or only the session with none bound', () => {
-    expect(roundToastText('x', 'Space k s')).toBe(
-      'Round from x — Space k s to answer',
-    );
-    expect(roundToastText('x', null)).toBe('Round from x');
+    expect(roundToastText('x', 'Space k s')).toMatch(/x.*Space k s/);
+    expect(roundToastText('x', null)).toContain('x');
   });
 
   it('rowChanges lists added rows in their order and removed ids', () => {

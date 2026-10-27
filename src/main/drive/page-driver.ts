@@ -1,4 +1,3 @@
-import { setTimeout as wait } from 'node:timers/promises';
 import {
   type Chord,
   CHORD_NOTATION_RULE,
@@ -23,9 +22,16 @@ const KEY_CODES: Record<string, string> = { ' ': 'Space' };
 export const STEP_TIMEOUT_MS = 5000;
 // The longest `waitFor` waits on one check before polling again.
 const CHECK_TIMEOUT_MS = 2000;
+// The gap between `waitFor`'s checks.
+const POLL_GAP_MS = 50;
 // The gap between typed keys, and between a drag's moves.
 const KEY_GAP_MS = 30;
 const DRAG_MOVES = 10;
+
+// Resolves after `ms` on the global timer, which a test's fake timers drive.
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // A chord sends no `char`: its modifiers make it a command, not typed text.
 function pressChord(window: DrivenWindow, chord: Chord) {
@@ -296,7 +302,7 @@ function cutOffScript(scrollsItself: string[]): string {
 })()`;
 }
 
-// Polls `check` every 50 ms; true once it holds, false when it has not within
+// Polls `check` every `POLL_GAP_MS`; true once it holds, false when it has not within
 // `timeoutMs`, a check still unanswered at that point included. A check
 // unanswered after `CHECK_TIMEOUT_MS`, or rejected with `PageNavigatedError`,
 // counts as not holding and the next poll runs; any other rejection rejects
@@ -311,7 +317,11 @@ export async function waitFor(
     if (await holdsBefore(check(), checkDeadline)) {
       return true;
     }
-    await wait(50);
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      return false;
+    }
+    await wait(Math.min(POLL_GAP_MS, remainingMs));
   }
   return false;
 }

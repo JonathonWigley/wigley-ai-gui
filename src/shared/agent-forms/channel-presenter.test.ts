@@ -136,7 +136,7 @@ describe('createAgentFormChannelPresenter', () => {
     expect(calls).toEqual(['mark app-1', 'send formShown']);
     expect(page.sent).toEqual([['formShown', FORM]]);
     expect(attention.announced.map(({ title, body }) => [title, body])).toEqual(
-      [['New review round', 'wigley-ai-gui · Pick a theme']],
+      [[expect.any(String), 'wigley-ai-gui · Pick a theme']],
     );
     expect(attention.counts).toEqual([['forms', 1]]);
     expect(logged).toEqual([

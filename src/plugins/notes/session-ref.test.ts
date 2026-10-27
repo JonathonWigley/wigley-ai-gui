@@ -35,9 +35,10 @@ describe('sessionLine', () => {
 
 describe('sessionChipText', () => {
   it('sessionChipText_FullSession_LabelShortIdAndTildeFolder', () => {
-    expect(sessionChipText(SESSION, posixPaths, HOME)).toBe(
-      'Claude Code · a1b2c3d4 · ~/Documents/ai-dev/wigley-ai-gui',
-    );
+    const chip = sessionChipText(SESSION, posixPaths, HOME);
+
+    expect(chip).toContain('a1b2c3d4');
+    expect(chip).toContain('~/Documents/ai-dev/wigley-ai-gui');
   });
 
   it('sessionChipText_NoHarnessNoFolder_ShortIdAlone', () => {

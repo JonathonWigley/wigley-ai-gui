@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createModes,
-  SIDE_BAR_START,
-  sideBarAfterPick,
-  sideBarAfterResize,
-  sideBarLayout,
-  toggledSideBar,
-} from './modes';
+import { createModes } from './modes';
 
 // The test environment has no DOM, so each mode's element and side bar are
 // plain objects holding `hidden`; `calls` records the deps the registry drives,
@@ -55,11 +48,9 @@ describe('createModes', () => {
     expect(two.element.hidden).toBe(true);
     expect(modes.shown()).toBe('a.one');
     expect(logs).toEqual(['[page] showed One mode']);
-    expect(calls).toEqual([
+    expect(calls).toContain('marked a.one');
+    expect(calls.filter((call) => /^(place|shown) /.test(call))).toEqual([
       'place a.one',
-      'marked a.one',
-      'side bar hidden',
-      'context null',
       'shown a.one',
       'place b.two',
     ]);
@@ -69,26 +60,17 @@ describe('createModes', () => {
     const { modes, logs, calls, add } = setup();
     const one = add('a.one', 'One');
     const two = add('b.two', 'Two');
+    calls.length = 0;
 
     two.handle.show();
 
     expect(one.element.hidden).toBe(true);
     expect(two.element.hidden).toBe(false);
     expect(modes.shown()).toBe('b.two');
-    expect(calls).toEqual([
-      'place a.one',
-      'marked a.one',
-      'side bar hidden',
-      'context null',
-      'shown a.one',
-      'place b.two',
-      'hidden a.one',
-      'marked b.two',
-      'side bar hidden',
-      'context null',
-      'shown b.two',
-      'changed b.two',
-    ]);
+    expect(calls).toContain('marked b.two');
+    expect(
+      calls.filter((call) => /^(hidden|shown|changed) /.test(call)),
+    ).toEqual(['hidden a.one', 'shown b.two', 'changed b.two']);
     expect(logs.at(-1)).toBe('[page] showed Two mode');
     expect(two.handle.isShown()).toBe(true);
     expect(one.handle.isShown()).toBe(false);
@@ -110,13 +92,13 @@ describe('createModes', () => {
     const { add } = setup();
     add('a.one', 'One');
 
-    expect(() => add('a.one', 'One')).toThrow('Mode "a.one" is added twice');
+    expect(() => add('a.one', 'One')).toThrow(/a\.one/);
   });
 
   it('has no shown mode before the first is added', () => {
     const { modes } = setup();
 
-    expect(() => modes.shown()).toThrow('No mode is added yet');
+    expect(() => modes.shown()).toThrow(Error);
   });
 
   it("hides other modes' side bars and lays out the shown one's", () => {
@@ -156,7 +138,7 @@ describe('createModes', () => {
   });
 
   it('toggleSideBar opens the side bar over the content while narrow', () => {
-    const { logs, calls, add } = setup(true);
+    const { calls, add } = setup(true);
     const one = add('a.one', 'One', true);
 
     expect(calls).toContain('side bar hidden');
@@ -165,7 +147,6 @@ describe('createModes', () => {
     one.handle.toggleSideBar();
 
     expect(calls).toEqual(['side bar over']);
-    expect(logs.at(-1)).toBe('[page] side bar shown over the content');
     expect(one.handle.sideBarShown()).toBe(true);
   });
 
@@ -223,9 +204,7 @@ describe('createModes', () => {
     const { add } = setup();
     const one = add('a.one', 'One');
 
-    expect(() => one.handle.toggleSideBar()).toThrow(
-      'Mode "a.one" has no side bar',
-    );
+    expect(() => one.handle.toggleSideBar()).toThrow(/a\.one/);
   });
 
   it('picked closes the overlay while narrow, logging it', () => {
@@ -284,6 +263,20 @@ describe('createModes', () => {
     expect(calls).toContain('side bar hidden');
     expect(calls).not.toContain('side bar over');
     expect(two.handle.sideBarShown()).toBe(false);
+  });
+
+  it("picked closes the overlay and keeps the user's hidden choice for widening", () => {
+    const { modes, add } = setup();
+    const one = add('a.one', 'One', true);
+    one.handle.toggleSideBar();
+    modes.narrowChanged(true);
+    one.handle.toggleSideBar();
+
+    one.handle.picked();
+    expect(one.handle.sideBarShown()).toBe(false);
+
+    modes.narrowChanged(false);
+    expect(one.handle.sideBarShown()).toBe(false);
   });
 
   it('picked on a mode with no side bar does nothing', () => {
@@ -454,53 +447,5 @@ describe('side bar callbacks', () => {
       'side bar hidden a.one',
       'shown b.two',
     ]);
-  });
-});
-
-describe('side bar layout', () => {
-  it('sideBarLayout draws beside or hidden while wide, over or hidden while narrow', () => {
-    expect(sideBarLayout(SIDE_BAR_START, false)).toBe('beside');
-    expect(
-      sideBarLayout({ isHiddenWide: true, isOverlayOpen: false }, false),
-    ).toBe('hidden');
-    expect(sideBarLayout(SIDE_BAR_START, true)).toBe('hidden');
-    expect(
-      sideBarLayout({ isHiddenWide: false, isOverlayOpen: true }, true),
-    ).toBe('over');
-    expect(
-      sideBarLayout({ isHiddenWide: true, isOverlayOpen: true }, true),
-    ).toBe('over');
-  });
-
-  it('toggledSideBar flips the hidden flag while wide and the overlay while narrow', () => {
-    expect(toggledSideBar(SIDE_BAR_START, false)).toEqual({
-      isHiddenWide: true,
-      isOverlayOpen: false,
-    });
-    expect(toggledSideBar(SIDE_BAR_START, true)).toEqual({
-      isHiddenWide: false,
-      isOverlayOpen: true,
-    });
-    expect(
-      toggledSideBar({ isHiddenWide: true, isOverlayOpen: true }, true),
-    ).toEqual({ isHiddenWide: true, isOverlayOpen: false });
-  });
-
-  it("sideBarAfterResize closes the overlay when the window widens and keeps the user's hidden choice", () => {
-    expect(
-      sideBarAfterResize({ isHiddenWide: true, isOverlayOpen: true }, false),
-    ).toEqual({ isHiddenWide: true, isOverlayOpen: false });
-    expect(
-      sideBarAfterResize({ isHiddenWide: false, isOverlayOpen: true }, true),
-    ).toEqual({ isHiddenWide: false, isOverlayOpen: true });
-  });
-
-  it("sideBarAfterPick closes the overlay and keeps the user's hidden choice", () => {
-    expect(
-      sideBarAfterPick({ isHiddenWide: true, isOverlayOpen: true }),
-    ).toEqual({ isHiddenWide: true, isOverlayOpen: false });
-    expect(
-      sideBarAfterPick({ isHiddenWide: false, isOverlayOpen: false }),
-    ).toEqual({ isHiddenWide: false, isOverlayOpen: false });
   });
 });

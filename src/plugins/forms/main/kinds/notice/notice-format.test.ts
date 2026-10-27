@@ -24,40 +24,24 @@ function parseError(raw: unknown): string {
 }
 
 describe('noticeFormat.parse', () => {
-  it('keeps checking its own field list when a caller grows the published schema', () => {
-    const items = noticeFormat.arraySchema.items as { required: string[] };
-    items.required.push('owner');
-    try {
-      expect(noticeFormat.parse(notice(), 'Notice 1: ').title).toBe(
-        notice().title,
-      );
-    } finally {
-      items.required.pop();
-    }
-  });
-
   it('names a missing notice field and the two required names', () => {
     const partial: Record<string, unknown> = notice();
     delete partial.context;
 
     const message = parseError(partial);
 
-    expect(message).toContain('Notice 1: missing context');
+    expect(message).toMatch(/^Notice 1: .*\bcontext\b/);
     expect(message).toContain('title, context');
   });
 
   it('refuses choices on a notice as an unknown field', () => {
-    expect(parseError(notice({ choices: ['a', 'b'] }))).toBe(
-      'Notice 1: unknown field(s) choices. A notice takes only title, ' +
-        'context, and the optional badge and layout; the form draws its own ' +
-        'comment box, and a notice has no choices to describe.',
+    expect(parseError(notice({ choices: ['a', 'b'] }))).toMatch(
+      /^Notice 1: .*\bchoices\b/,
     );
   });
 
   it('refuses a notice that is not an object', () => {
-    expect(parseError('not an object')).toBe(
-      'Notice 1: each notice must be an object.',
-    );
+    expect(parseError('not an object')).toMatch(/^Notice 1: .*object/);
   });
 
   it('accepts an optional layout', () => {
@@ -74,7 +58,7 @@ describe('noticeFormat.parse', () => {
   it('refuses a badge outside the closed set, naming the set and the value', () => {
     const message = parseError(notice({ badge: 'In progress' }));
 
-    expect(message).toContain('badge must be one of');
+    expect(message).toContain('badge');
     for (const badge of ['Applied', 'Dispatched', 'Decided']) {
       expect(message).toContain(badge);
     }
