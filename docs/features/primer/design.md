@@ -48,8 +48,9 @@ The tool contract, the payload and the outcomes are stated once, in wigley-ai-ma
   its own open form. A second `open_primer` while one is open waits behind it, as a second round does, rather than
   closing the first.
 - **The primer plugin** (`src/plugins/primer/`) holds the port of the old `primer.py` rules (parse, read the body back,
-  the summary and next texts), its two tool definitions, fixtures, its drive actions and its self-test script, and its
-  page. Its main part wires the shared tool session to those two tools. It reaches sessions only through the sessions
+  the summary and next texts), its two tool definitions, fixtures, the words its drive actions take and its self-test
+  script, and its page. Its main part wires the shared tool session and the shared drive actions
+  (`src/shared/agent-forms/drive-actions.ts`) to its form type. It reaches sessions only through the sessions
   contract, as forms does.
 - **The old server retires.** wigley-ai-marketplace deletes `scripts/primer/` and `scripts/dashboard/` and the
   `wigley-primer` server entries; the relay's built-in tool list gains the two primer tools so the agent sees them

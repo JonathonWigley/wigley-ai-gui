@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
-import type { ConnectedSession, SessionInfo } from '../contract';
+import type { ConnectedSession, OwnedSession, SessionInfo } from '../contract';
 import { addDriveActions } from './start';
 
 function fakeSessions() {
   const connectedInfo: SessionInfo[] = [];
+  const openedInfo: SessionInfo[] = [];
   const ended: string[] = [];
   return {
     connectedInfo,
+    openedInfo,
     ended,
     activate: vi.fn<(sessionId: string) => void>(),
     connect(info: SessionInfo): ConnectedSession {
@@ -18,6 +20,11 @@ function fakeSessions() {
         call: () => Promise.reject(new Error('no tools')),
         end: () => ended.push(id),
       };
+    },
+    open(info: SessionInfo): OwnedSession {
+      openedInfo.push(info);
+      const id = `owned-${String(info.sessionId)}`;
+      return { session: { id, info }, end: () => ended.push(id) };
     },
   };
 }
@@ -52,6 +59,29 @@ describe('sessions drive actions', () => {
         deadlineSeconds: null,
       },
     ]);
+  });
+
+  it('open opens an owned session with the fixture defaults, which end ends', async () => {
+    const drive = fakeDriveHost();
+    const sessions = fakeSessions();
+    addDriveActions(drive.host, sessions, fakeEndedEvent().on);
+
+    expect(await drive.run('open', { sessionId: 's' })).toEqual({
+      sessionId: 's',
+      rowId: 'owned-s',
+    });
+    await drive.run('end', { sessionId: 's' });
+
+    expect(sessions.openedInfo).toEqual([
+      {
+        sessionId: 's',
+        projectDir: 'drive',
+        harness: 'claude',
+        deadlineSeconds: null,
+      },
+    ]);
+    expect(sessions.connectedInfo).toEqual([]);
+    expect(sessions.ended).toEqual(['owned-s']);
   });
 
   it('connect keeps an explicit null projectDir', async () => {

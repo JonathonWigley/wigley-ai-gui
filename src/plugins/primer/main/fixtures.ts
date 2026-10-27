@@ -1,9 +1,6 @@
-import type {
-  ConnectedSession,
-  Harness,
-  SessionsMainExports,
-  ToolResult,
-} from '../../sessions/contract';
+import { openFixtureForm } from '../../../shared/agent-forms/drive-actions';
+import type { ConnectedSession, ToolResult } from '../../sessions/contract';
+import { primerType } from './primer-type';
 
 // A valid open_primer call: four entries, needs yes, unclear, no and yes.
 export const SAMPLE_PRIMER_ARGS: {
@@ -51,33 +48,11 @@ export const SAMPLE_PRIMER_ARGS: {
   ],
 };
 
-// Connects a fixture session as a relay would, its row added through
-// `sessions`; the self-test script and the drive actions share it.
-export function connectFixtureSession(
-  sessions: Pick<SessionsMainExports, 'connect'>,
-  spec: {
-    sessionId: string;
-    projectDir: string | null;
-    harness: Harness;
-    deadlineSeconds: number | null;
-  },
-): ConnectedSession {
-  return sessions.connect({
-    sessionId: spec.sessionId,
-    projectDir: spec.projectDir,
-    deadlineSeconds: spec.deadlineSeconds,
-    harness: spec.harness,
-  });
-}
-
 // Calls open_primer in the session as an agent would, with no tool use id and
 // a signal nothing aborts.
 export function openFixturePrimer(
   session: ConnectedSession,
   args: unknown,
 ): Promise<ToolResult> {
-  return session.call('open_primer', args, {
-    toolUseId: null,
-    signal: new AbortController().signal,
-  });
+  return openFixtureForm(session, primerType.openTool, args);
 }

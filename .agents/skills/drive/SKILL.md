@@ -33,9 +33,10 @@ or touches their data, so start one whenever a check needs it.
    `npm run drive -- do <plugin>.<action> '<json>'` runs one (a session, a round, a chat, docs).
    `chat.start` uses the first profile in chat's `profiles` setting, and only a profile logged in
    to Claude reaches it under `--harness claude`; `{"profile":"<name>"}` picks another.
-   `forms.openRound` opens its round in the live session forms itself opened under that
-   `sessionId` (a fresh one once that session has ended), so a round for a session row comes
-   from `forms.openRound` alone, never from a `sessions.connect` row.
+   `forms.openRound` and `primer.openPrimer` open their form in the live session their own
+   plugin opened under that `sessionId`, else in the owned session holding it, else in a new
+   row; a `sessions.connect` row is never reused. To put a round and a primer on one row, run
+   `sessions.open '{"sessionId":"s"}'` first, then both open actions with `"sessionId":"s"`.
 3. Act with `key`, `type`, `click`, `drag`, `resize` and `setting`. Each returns once the page has
    redrawn: `resize` with the size the window took, the others with the log lines they caused
    (`setting` also says whether the config applied). The page holds document focus as the visible app's does,

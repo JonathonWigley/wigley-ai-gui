@@ -4,7 +4,7 @@ import type {
   AgentFormToolSession,
 } from '../../contracts/agent-forms';
 import {
-  TEST_FORM_ERROR_NAME,
+  TEST_FORM_TYPE,
   type TestPayload,
   testFormError,
 } from './test-form-type';
@@ -16,12 +16,10 @@ const PAYLOAD: TestPayload = {
   note: 'dark',
 };
 
-const TOOLS = { open: 'open_form', collect: 'collect_last_form' };
-
 function toolSessionOver(
   session: AgentFormSession<TestPayload>,
 ): AgentFormToolSession {
-  return createAgentFormToolSession(session, TOOLS, TEST_FORM_ERROR_NAME);
+  return createAgentFormToolSession(session, TEST_FORM_TYPE);
 }
 
 interface AskCall {

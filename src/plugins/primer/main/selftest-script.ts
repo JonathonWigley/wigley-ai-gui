@@ -5,11 +5,7 @@ import type {
   ToolResult,
 } from '../../sessions/contract';
 import type { PrimerItem, PrimerPayload } from '../contract';
-import {
-  connectFixtureSession,
-  openFixturePrimer,
-  SAMPLE_PRIMER_ARGS,
-} from './fixtures';
+import { openFixturePrimer, SAMPLE_PRIMER_ARGS } from './fixtures';
 
 // The sample primer under its self-test name; the run number in the summary
 // changes its fingerprint, so a later run does not pre-fill from this one.
@@ -118,7 +114,7 @@ export function primerSelfTestScript(
     scrollsItself: [],
     open(run) {
       connected?.end();
-      const session = connectFixtureSession(sessions, {
+      const session = sessions.connect({
         sessionId: `primer-selftest-${run}`,
         projectDir: 'primer-selftest',
         harness: 'claude',

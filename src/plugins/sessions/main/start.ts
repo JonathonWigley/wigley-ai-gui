@@ -15,12 +15,13 @@ import {
   optionalString,
   requiredString,
 } from '../../../shared/drive-args';
+import type { JsonObject } from '../../../shared/json';
 import {
-  type ConnectedSession,
   DRIVE_SESSION_DEFAULTS,
-  HARNESSES,
+  type OwnedSession,
   RELAY_PROTOCOL,
   type RelayEndpoint,
+  type SessionInfo,
   type SessionsChannel,
   type SessionsMainEvents,
   type SessionsMainExports,
@@ -91,71 +92,94 @@ function openRelay(api: SessionsApi, list: SessionList) {
   return { relay, endpoint };
 }
 
-// Connects a drive run's sessions as a relay would, each with no round, and
-// ends or selects them. A session's id is `drive-session-<n>` unless the
-// caller names one; `rowId` is the app's own id, which `activate` takes. A
-// session that ends leaves the map, so its id connects again.
-// `onSessionEnded` hears each session that ends, by its row id. Disposing
-// removes the actions and ends every session still connected.
+// A drive action's session info: the args' fields, each the fixture default
+// when left out, under `sessionId`.
+function driveSessionInfo(args: JsonObject, sessionId: string): SessionInfo {
+  return {
+    sessionId,
+    projectDir: nullableStringOr(
+      args,
+      'projectDir',
+      DRIVE_SESSION_DEFAULTS.projectDir,
+    ),
+    deadlineSeconds: nullableNumberOr(
+      args,
+      'deadlineSeconds',
+      DRIVE_SESSION_DEFAULTS.deadlineSeconds,
+    ),
+    harness:
+      optionalOneOf(args, 'harness', DRIVE_SESSION_DEFAULTS.harnesses) ??
+      DRIVE_SESSION_DEFAULTS.harness,
+  };
+}
+
+// Starts a drive run's sessions, each with no form, and ends or selects them:
+// `connect` connects one as a relay would, unselected; `open` opens an owned
+// one, selected, which forms' and the primer's open actions join when they
+// name its id, so a round and a primer share its row. A session's id is
+// `drive-session-<n>` unless the caller names one; `rowId` is the app's own
+// id, which `activate` takes. A session that ends leaves the map, so its id
+// starts again. `onSessionEnded` hears each session that ends, by its row id.
+// Disposing removes the actions and ends every session still started.
 export function addDriveActions(
   host: DriveHost,
-  sessions: Pick<SessionsMainExports, 'connect' | 'activate'>,
+  sessions: Pick<SessionsMainExports, 'connect' | 'open' | 'activate'>,
   onSessionEnded: (listener: (rowId: string) => void) => void,
 ): Disposable {
-  const connected = new Map<string, ConnectedSession>();
+  const started = new Map<string, OwnedSession>();
   let defaultIds = 0;
   onSessionEnded((rowId) => {
-    for (const [sessionId, session] of connected) {
+    for (const [sessionId, session] of started) {
       if (session.session.id === rowId) {
-        connected.delete(sessionId);
+        started.delete(sessionId);
       }
     }
   });
+  const sessionArgs =
+    '{ sessionId?: string, projectDir?: string | null, harness?: "claude" | "codex", deadlineSeconds?: number | null }';
+  // Reads the args, then starts the session `start` makes from them.
+  const startSession = (
+    rawArgs: unknown,
+    start: (info: SessionInfo) => OwnedSession,
+  ) => {
+    const args = argsObject(rawArgs);
+    const sessionId =
+      optionalString(args, 'sessionId') ?? `drive-session-${++defaultIds}`;
+    const info = driveSessionInfo(args, sessionId);
+    if (started.has(sessionId)) {
+      throw new Error(`session ${sessionId} is already connected`);
+    }
+    const session = start(info);
+    started.set(sessionId, session);
+    return { sessionId, rowId: session.session.id };
+  };
   const actions = [
     host.add('connect', {
       description:
-        'Connects an agent session with no round, as a relay would, and adds its row.',
-      args: '{ sessionId?: string, projectDir?: string | null, harness?: "claude" | "codex", deadlineSeconds?: number | null }',
-      async run(rawArgs) {
-        const args = argsObject(rawArgs);
-        const sessionId =
-          optionalString(args, 'sessionId') ?? `drive-session-${++defaultIds}`;
-        const projectDir = nullableStringOr(
-          args,
-          'projectDir',
-          DRIVE_SESSION_DEFAULTS.projectDir,
-        );
-        const harness =
-          optionalOneOf(args, 'harness', HARNESSES) ??
-          DRIVE_SESSION_DEFAULTS.harness;
-        const deadlineSeconds = nullableNumberOr(
-          args,
-          'deadlineSeconds',
-          DRIVE_SESSION_DEFAULTS.deadlineSeconds,
-        );
-        if (connected.has(sessionId)) {
-          throw new Error(`session ${sessionId} is already connected`);
-        }
-        const session = sessions.connect({
-          sessionId,
-          projectDir,
-          deadlineSeconds,
-          harness,
-        });
-        connected.set(sessionId, session);
-        return { sessionId, rowId: session.session.id };
-      },
+        'Connects an agent session with no form, as a relay would, and adds its row.',
+      args: sessionArgs,
+      run: async (rawArgs) =>
+        startSession(rawArgs, (info) => sessions.connect(info)),
+    }),
+    host.add('open', {
+      description:
+        'Opens an owned agent session with no form and selects its row; forms.openRound and primer.openPrimer join it under its sessionId, so a round and a primer share the row.',
+      args: sessionArgs,
+      run: async (rawArgs) =>
+        startSession(rawArgs, (info) => sessions.open(info)),
     }),
     host.add('end', {
-      description: 'Ends a session sessions.connect connected.',
+      description: 'Ends a session sessions.connect or sessions.open started.',
       args: '{ sessionId: string }',
       async run(rawArgs) {
         const sessionId = requiredString(argsObject(rawArgs), 'sessionId');
-        const session = connected.get(sessionId);
+        const session = started.get(sessionId);
         if (session === undefined) {
-          throw new Error(`no session ${sessionId} from sessions.connect`);
+          throw new Error(
+            `no session ${sessionId} from sessions.connect or sessions.open`,
+          );
         }
-        connected.delete(sessionId);
+        started.delete(sessionId);
         session.end();
         return { sessionId };
       },
@@ -175,10 +199,10 @@ export function addDriveActions(
       for (const action of actions) {
         action.dispose();
       }
-      for (const session of connected.values()) {
+      for (const session of started.values()) {
         session.end();
       }
-      connected.clear();
+      started.clear();
     },
   };
 }

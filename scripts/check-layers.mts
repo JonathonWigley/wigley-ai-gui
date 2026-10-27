@@ -123,6 +123,19 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/plugins/manifests.ts'],
     packages: [],
   },
+  // Opens a round and a primer on one owned session through the three
+  // plugins' drive actions over the real session list.
+  'src/plugins/agent-form-drive.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/forms/main',
+      'src/plugins/primer/main',
+      'src/plugins/sessions/contract.ts',
+      'src/plugins/sessions/main',
+    ],
+    packages: [],
+  },
   'src/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/plugins/chat': {
     layers: [

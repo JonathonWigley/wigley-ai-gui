@@ -114,7 +114,7 @@ export interface AgentFormService<Payload> {
 
 // What one kind of agent form supplies to the shared service.
 export interface AgentFormType<Form, Body, Payload> {
-  // The tool names the service's texts name.
+  // The tool names the tool session serves and the service's texts name.
   openTool: string;
   collectTool: string;
   // The word for one form in texts and logs: 'round', 'primer'.

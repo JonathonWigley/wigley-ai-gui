@@ -8,12 +8,14 @@ export const HARNESSES = ['claude', 'codex'] as const;
 export type Harness = (typeof HARNESSES)[number];
 
 // What a drive action connects a fixture session with when its caller leaves
-// a field out.
+// a field out, and the harnesses its caller may name.
 export const DRIVE_SESSION_DEFAULTS = {
+  harnesses: HARNESSES,
   projectDir: 'drive',
   harness: 'claude',
   deadlineSeconds: null,
 } as const satisfies {
+  harnesses: readonly Harness[];
   projectDir: string;
   harness: Harness;
   deadlineSeconds: null;

@@ -10,7 +10,7 @@ import type {
 } from '../../sessions/contract';
 import type { AnswersPayload } from '../contract';
 import { formsCommand, formsScope } from '../ids';
-import { askFixtureRound, connectFixtureSession } from './fixtures';
+import { askFixtureRound } from './fixtures';
 
 // Exists only for the self-test, which adds it to the keymap main serves; it
 // is never in the user's keymap. No step completes it: `q a x` then `b` breaks
@@ -1071,7 +1071,7 @@ export function formsSelfTestScript(
     projectDir: string | null,
     harness: Harness,
   ) =>
-    connectFixtureSession(sessions, {
+    sessions.connect({
       sessionId,
       projectDir,
       harness,
