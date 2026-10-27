@@ -271,7 +271,11 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       keys: [':', 'q', 'Enter'],
       expect: '[docs] closed the editor on tidy.md',
     },
-    { keys: ['<A-h>'], expect: '[docs] tree focused' },
+    {
+      keys: ['Escape'],
+      expect: '[docs] tree focused',
+      why: 'Esc on the rendered doc returns focus to the tree.',
+    },
     {
       keys: ['r'],
       expect: '[docs] rename: type the new path',

@@ -382,6 +382,7 @@ export const defaultKeymap = {
     { keys: '<C-S-j>', scope: 'docs.tree', command: 'docs.halfPageDown' },
     { keys: '<C-S-k>', scope: 'docs.tree', command: 'docs.halfPageUp' },
     { keys: '<A-h>', scope: 'docs.doc', command: 'docs.focusTree' },
+    { keys: '<Esc>', scope: 'docs.doc', command: 'docs.focusTree' },
     { keys: 'j', scope: 'docs.doc', command: 'docs.scrollDown' },
     { keys: 'k', scope: 'docs.doc', command: 'docs.scrollUp' },
     { keys: '<C-j>', scope: 'docs.doc', command: 'docs.lineDown' },

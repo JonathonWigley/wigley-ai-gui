@@ -36,8 +36,8 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
 hjkl is the direction in every layer; the modifier picks the verb.
 
 - **Raw key** acts on the focused scope: `j`/`k` move, `Enter` acts (on a docs tree row it opens
-  the doc and focuses it), `Esc` backs out or closes (in a box's normal mode it leaves the box, and
-  in the doc editor it closes the editor as `:q` does), `/` filters, `gg`/`G` first and last,
+  the doc and focuses it), `Esc` backs out or closes (in a box's normal mode it leaves the box, on a
+  doc it focuses the docs tree, and in the doc editor it closes the editor as `:q` does), `/` filters, `gg`/`G` first and last,
   `y`/`n` confirm, `i`/`a` enter the box. Letters are mnemonic verbs.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `R` rescan.

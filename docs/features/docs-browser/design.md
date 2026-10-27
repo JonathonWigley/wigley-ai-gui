@@ -162,7 +162,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   `c` pick the load-state folder, `s` star or unstar the selected doc; `Alt+l` / `Alt+h` move focus between tree and doc; `Ctrl+j`/`Ctrl+k` and
   `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll the doc beside the tree.
   Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll the doc a line and `Ctrl+Shift+j`/`Ctrl+Shift+k` half a page, the
-  editor too while editing, `i` edit; Esc in the editor's normal mode closes it as `:q` does.
+  editor too while editing, `i` edit, Esc focuses the tree as `Alt+h` does; Esc in the editor's normal mode closes
+  the editor as `:q` does.
   Conflict prompt `r` reload, `o` overwrite, Esc keep editing. Picker `j`/`k` move, Enter or `l` choose, Esc cancel. Text box Tab
   completes the path, Enter accepts, Esc cancels. Trash confirm `y` yes, `n` or Esc keep.
 - **Packages** (the user's yes): `@codemirror/lang-markdown`, `@codemirror/language-data`; `@lezer/highlight`,
