@@ -583,7 +583,7 @@ describe('answerStatus', () => {
     expect(answerStatus(active(state), f1)).toBe('answered');
   });
 
-  it('answers a finding with notes alone', () => {
+  it('counts a finding with notes alone as responded', () => {
     const state = apply(onF1, {
       type: 'setText',
       formId: 'r1',

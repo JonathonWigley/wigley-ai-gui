@@ -16,6 +16,7 @@ import type {
   RoundEnd,
 } from '../contract';
 import { completeFindingPick, isFindingAction } from '../finding-pick';
+import { isAnswered } from '../item-response';
 import {
   fieldsOutside,
   parseLayoutField,
@@ -249,7 +250,10 @@ function answerResult(
 ): AnswerResult {
   const choiceIsInRange =
     entry.choice >= 1 && entry.choice <= subject.choiceTexts.length;
-  const answered = !entry.not_applicable && choiceIsInRange;
+  const answered = isAnswered({
+    notApplicable: entry.not_applicable,
+    pickIsComplete: choiceIsInRange,
+  });
   let status: AnswerStatus = 'untouched';
   if (entry.not_applicable) {
     status = 'not_applicable';
@@ -268,23 +272,26 @@ function answerResult(
   return result;
 }
 
-// A finding is answered once its entry holds one of the card's numbered
-// picks (`findingEntries`): a choice with the action it sits under, or the
-// header of an action with no choices, whose `choice` is 0. The
-// recommendation is taken whole when the pick is the recommended choice, or
-// the recommended header, under recommend_action.
+// A finding is answered (`isAnswered`) once its entry holds one of the card's
+// numbered picks (`findingEntries`): a choice with the action it sits under,
+// or the header of an action with no choices, whose `choice` is 0; notes alone
+// leave it untouched. The recommendation is taken whole when the pick is the
+// recommended choice, or the recommended header, under recommend_action.
 function findingResult(
   finding: Finding,
   entry: FindingAnswerEntry,
 ): FindingResult {
   const subject = FORMATS.finding.answerSubject(finding);
-  const pick = entry.not_applicable
-    ? null
-    : completeFindingPick(finding, entry.choice, entry.action);
+  const completePick = completeFindingPick(finding, entry.choice, entry.action);
+  const answered = isAnswered({
+    notApplicable: entry.not_applicable,
+    pickIsComplete: completePick !== null,
+  });
+  const pick = answered ? completePick : null;
   let status: AnswerStatus = 'untouched';
   if (entry.not_applicable) {
     status = 'not_applicable';
-  } else if (pick !== null) {
+  } else if (answered) {
     status = 'answered';
   }
   const choice = pick?.choice ?? 0;

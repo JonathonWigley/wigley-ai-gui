@@ -723,6 +723,41 @@ describe('answersPayload', () => {
     );
   });
 
+  it('sends notes with no pick as untouched, carrying the notes', () => {
+    const round = parseRound({ heading: 'H', findings: [finding()] });
+
+    const payload = answersPayload(
+      round,
+      'submitted',
+      body([], {
+        finding_answers: [findingAnswer({ notes: 'my own fix' })],
+      }),
+    );
+
+    expect(payload.findings[0]).toMatchObject({
+      status: 'untouched',
+      choice: 0,
+      notes: 'my own fix',
+    });
+    expect(payload.summary).toBe(
+      '1 finding: 0 answered, 0 not applicable, 1 untouched.',
+    );
+  });
+
+  it('sends a question with notes and no choice as untouched, carrying the notes', () => {
+    const payload = answersPayload(
+      roundOf(1),
+      'submitted',
+      body([answer({ notes: 'neither name' })]),
+    );
+
+    expect(payload.answers[0]).toMatchObject({
+      status: 'untouched',
+      choice: 0,
+      notes: 'neither name',
+    });
+  });
+
   it('carries no earlier_heading on an ordinary payload', () => {
     expect(
       answersPayload(roundOf(1), 'submitted', body([])),

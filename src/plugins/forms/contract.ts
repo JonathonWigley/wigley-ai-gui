@@ -278,10 +278,12 @@ export type RoundFinishOutcome = 'submitted' | 'cancelled' | 'closed';
 // page load included; a restored draft emits no `answerChanged`.
 // `answerChanged` fires on each change to a question's or finding's answer,
 // its notes and reason text included, never for a notice comment or the round
-// note. `roundFinished` fires once when a round leaves the page, for every
-// reason, with the answers it left with. `viewChanged` fires when the view or
-// the active round changes. In one store change they fire in that order, and
-// a change a listener makes fires its events after the change it interrupted.
+// note; its `status` is the page's, `answered` once the item is responded
+// (`isResponded`), notes alone included. `roundFinished` fires once when a
+// round leaves the page, for every reason, with the answers it left with.
+// `viewChanged` fires when the view or the active round changes. In one store
+// change they fire in that order, and a change a listener makes fires its
+// events after the change it interrupted.
 export interface FormsPageEvents extends EventShape {
   roundShown: OpenRound;
   answerChanged: { roundId: string; item: FormsItemRef; status: AnswerStatus };

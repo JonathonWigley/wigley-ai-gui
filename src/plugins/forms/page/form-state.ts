@@ -27,6 +27,7 @@ import {
   findingPickIsComplete,
   isFindingAction,
 } from '../finding-pick';
+import { isResponded } from '../item-response';
 
 // `index` is 1-based within its kind, as the forms contract numbers items.
 export type RailItem = { kind: ItemKind; index: number };
@@ -71,6 +72,7 @@ export interface RoundState extends SessionForm {
 export type FormsState = SessionFormsState<RoundState, 'forms'>;
 
 export interface Progress {
+  // Responded items (`answerStatus`), notes-only ones included.
   answered: number;
   notApplicable: number;
   untouched: number;
@@ -317,8 +319,9 @@ export function pickNumber(round: RoundState, item: AnswerableItem): number {
   return findingEntryNumber(finding, answer.choice, answer.action);
 }
 
-// The item's picks, or written notes, answer it. Throws when the round has no
-// such item.
+// The item's status as the page counts it: `answered` once the item is
+// responded (`isResponded`), its pick complete or its notes written, where the
+// payload counts the pick alone. Throws when the round has no such item.
 export function answerStatus(
   round: RoundState,
   item: AnswerableItem,
@@ -327,13 +330,17 @@ export function answerStatus(
   if (answer.notApplicable) {
     return 'not_applicable';
   }
-  const hasText = answer.notes.trim() !== '';
-  return pickIsComplete(round, item) || hasText ? 'answered' : 'untouched';
+  const responded = isResponded({
+    notApplicable: answer.notApplicable,
+    pickIsComplete: pickIsComplete(round, item),
+    notes: answer.notes,
+  });
+  return responded ? 'answered' : 'untouched';
 }
 
 // The next answerable item after the focused one, by `step` and wrapping,
 // whose status is untouched; the focused item is checked last. Null when
-// every item is answered or not applicable.
+// every item is responded or not applicable.
 export function unansweredItem(
   round: RoundState,
   step: 1 | -1,

@@ -1,6 +1,6 @@
 import type { Log } from '../../../contracts/log';
 import { formById, startFormEvents } from '../../../shared/page/session-forms';
-import type { FormsPageEvents, OpenRound } from '../contract';
+import type { AnswerStatus, FormsPageEvents, OpenRound } from '../contract';
 import {
   type AnswerableItem,
   answerableItems,
@@ -68,7 +68,8 @@ export function startFormsEvents(
 }
 
 // Logs each event's line, source `forms`: `event roundShown <roundId>`,
-// `event answerChanged <roundId> <kind> <index> <status>`,
+// `event answerChanged <roundId> <kind> <index> <status>` with `answered`
+// written `responded` (`answerStatus`),
 // `event roundFinished <roundId> <outcome>`, `event viewChanged <view>
 // <roundId or none>`. An `answerChanged` logs only when the item's status or
 // pick, read from `getState` as the event fires, differs from what its round
@@ -105,7 +106,7 @@ export function createFormsEventLog(
         shown.set(key, now);
         log(
           'forms',
-          `event answerChanged ${roundId} ${item.kind} ${item.index} ${event.data.status}`,
+          `event answerChanged ${roundId} ${item.kind} ${item.index} ${loggedStatus(event.data.status)}`,
         );
         return;
       }
@@ -186,6 +187,12 @@ function finishOf(round: RoundState): FormsPageEvents['roundFinished'] {
     outcome: round.sending?.kind ?? 'closed',
     body: buildBody(round),
   };
+}
+
+// The page's `answered` counts notes alone, which the payload sends as
+// untouched, so the log names it `responded`.
+function loggedStatus(status: AnswerStatus): string {
+  return status === 'answered' ? 'responded' : status;
 }
 
 function itemKey(roundId: string, item: AnswerableItem): string {

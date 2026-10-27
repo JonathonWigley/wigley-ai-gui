@@ -228,7 +228,7 @@ describe('createFormsEventLog', () => {
     expect(log.mock.calls.map(([, line]) => line)).toEqual([
       'event roundShown r1',
       'event viewChanged forms r1',
-      'event answerChanged r1 question 1 answered',
+      'event answerChanged r1 question 1 responded',
     ]);
   });
 });
