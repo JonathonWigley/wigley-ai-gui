@@ -103,7 +103,8 @@ src/main/        core main process; main.ts is its composition root
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
                  ProcessRunner
   git/           git adapter behind Git, over ProcessRunner: a clone's file statuses, upstream, last fetch, fetch
-                 and a commit of named paths only → the only place the app runs `git`
+                 and a commit of named paths only → the only place the app runs `git`, except the Backlog
+                 self-test's fixture repo (its `init`, first commit and `git log` check)
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import
