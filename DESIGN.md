@@ -56,7 +56,7 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
 │ │    │              │ │        │ composer, picker    │   │ │ │
 │ │    │              │ └────────┴─────────────────────┴───┘ │ │
 │ └────┴──────────────┴──────────────────────────────────────┘ │
-│ L1 status bar (glass)                                        │
+│ L1 status bar (glass; only while a plugin contributes to it) │
 └──────────────────────────────────────────────────────────────┘
   L0 backdrop: crust with two faint washes, seen only through L1
 ```
@@ -211,6 +211,25 @@ The keyboard is first; the mouse works everywhere.
   platform. On macOS the modifiers and Return, Tab, Esc, Backspace, Delete and the arrows print
   as glyphs (⌃ ⌥ ⇧ ⌘, ↩ ⇥ ⎋ ⌫ ⌦ ← ↑ → ↓), and every other named key by name, Space included, as
   macOS menus write it; elsewhere they print as words (`Ctrl+`, `Enter`, `Esc`). A view draws a hint only when its command has a bind.
+- **A key shows where it acts,** the way a game puts a button prompt beside the thing it moves:
+  the app has no bottom key list. Each hint is a KeyPrompt the keys plugin draws into an anchor
+  the view places (AGENTS.md § Architecture, Key hints), in one of four placement kinds:
+  - **Edge prompt:** a navigation chord at the edges of what it moves through, with a chevron
+    toward its direction: `⌥I ‹` and `› ⌥O` at the tab strip's ends, `⌥⇧I ▲ ▼ ⌥⇧O` on the session
+    list's header, `⌃H ‹ F1 of 6 › ⌃L` on a card's header, `⌥L doc ›` at a split's edge. A pair
+    hides when there is nothing else to move to.
+  - **Cursor prompt:** an action on the selected row, with its label, on the cursor row's
+    trailing end only (`s star  r rename  d trash`).
+  - **Control hint:** the key inside the button, toggle or box label it presses (Accept ↩,
+    Not applicable x, Notes a).
+  - **Box hint:** a key that acts on a box or a pane, on the focused box's frame (`⌃P ⌃N`) or in
+    the pane's header (`/ filter`, `a new`).
+- **Hints show for the scope in force:** a hint whose scope is not the one keys fire in hides and
+  keeps its space, so moving between panes never shifts the layout; a hint for a bind in every
+  scope (tabs, sessions) always shows. The `keys.showHints` setting hides them all.
+- **Vim's own keys show in help only:** `j`/`k`, `gg`/`G`, `h`/`l` on a tree, Enter on a row, Esc,
+  and the `⌃J`/`⌃K` scroll keys work the same on every list and pane, so a hint for them is
+  noise. Leader sequences show in which-key.
 - **Every new bind** is checked against this rule, against `docs/keymap.md` (which modifier and
   which leader group it takes), and against every bind in its scope.
 
@@ -230,6 +249,8 @@ every screen at once, and forms and chat layout kits hand the same primitives to
 The primitives, each a builder in `src/shared/page/ui/`:
 
 - **Kbd** (`kbd`): a key hint, chords in `font-mono`.
+- **KeyPrompt** (`keyPrompt`): a Kbd with an optional label after it in `fg-tertiary`; the one
+  thing the keys plugin draws into an anchor.
 - **Button** (`textButton`): a labelled button, variants primary, secondary, ghost, danger.
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.
@@ -269,8 +290,9 @@ Conventions every primitive follows:
 ## Surfaces
 
 - **Title bar:** L1, `toolbar-height`, draggable; the shown mode's context centred; actions on the
-  right as `icon-button` buttons when a feature contributes one; in the dev app, a neutral Dev
-  tag at the start. The OS window buttons stay native.
+  right as `icon-button` buttons when a feature contributes one: the Keys button with its `␣?`
+  prompt, and while a config file is broken a `status-error` badge naming it; in the dev app, a
+  neutral Dev tag at the start. The OS window buttons stay native.
 - **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
 - **Side bar:** L1 dense glass. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
@@ -279,8 +301,11 @@ Conventions every primitive follows:
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
 - **Tabs:** sit on the top edge of their sheet. The active tab is solid sheet colour with a 2px
   accent top mark; others are transparent in `fg-secondary`.
-- **Status bar:** L1, `statusbar-height`, `text-12`. Status colours only on status items.
-- **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Cards are `card-background` with
+- **Status bar:** L1, `statusbar-height`, `text-12`, shown only while a plugin contributes to it;
+  no built-in plugin does. Status colours only on status items. A status belongs on the surface it
+  describes: a form's saved state on its rail header, a config problem on the title bar.
+- **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Its header holds the
+  open count, the saved state and the `⌥P ◂ ▸ ⌥N` edge prompt. Cards are `card-background` with
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.
 - **Primer:** the Primer tab is built like the Form tab: a rail of the feature row and the tasks, grouped under
   section headers (Primer, Every feature, Extra tasks), each task row carrying its need as a Tag and its included

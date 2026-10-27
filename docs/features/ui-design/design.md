@@ -120,7 +120,7 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
   processes, in place of start-time snapshots. On a change the page re-applies the theme, re-installs
   page keys, remaps vim (`EditorHost.setKeymap`), and the keys plugin rebuilds help; main re-installs
   the menu, intercepts and global shortcuts.
-- **Broken config** keeps the last good config and shows one status-bar item and a toast naming the
+- **Broken config** keeps the last good config and shows one title bar badge and a toast naming the
   file and the problem, the way a broken theme did. Fixing the file applies it.
 - **Split widths** are app-written state, not config: a `uiState` page service backed by a
   main-owned file in Electron's per-user data folder.
@@ -180,7 +180,7 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
 | Docs mode tree | L1, side bar slot | the docs view hands back its tree and doc as two parts |
 | Docs tab tree (in a session) | L2 | the left pane of a split |
 | Which-key, help, pickers, dialogs, toasts | L3 | floating glass |
-| Key bar | L1, status bar | each hint a Kbd, the label in the UI font |
+| Key hints | where each key acts (`docs/features/key-hints/design.md`) | each a KeyPrompt: a Kbd, the label in the UI font |
 
 - Tool-call cards show a status dot and no duration: the harness reports duration per turn result
   only. Per-tool timing is a follow-up.

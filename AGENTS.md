@@ -146,8 +146,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout)
-  keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the status bar's key list, and the
-                 keys-for-command lookup it exports); no main part
+  keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the title bar's Keys button, and the
+                 hint anchors and keys-for-command lookup it exports); no main part
   gallery/       manifest.ts, page/ (Gallery mode: every primitive in every state, a transparency switch, and a
                  swap of the shell to a test layout); no main part
   settings/      manifest.ts, contract.ts, main/ (the userConfig reads and writes, `Cmd+,`), page/ (Settings mode:
@@ -246,12 +246,25 @@ round; primer: an open primer), since main, not the page, decides.
   modal view never fights the plugin under it for the scope. The pushed scope's `onBaseChanged` hears the set scope
   change under it, so a modal view can close when the view beneath it moves on (help closes on it).
 - **Key hints** belong to the `keys` plugin, which reads the merged keymap: which-key after a pending prefix, help on
-  `Space ?` (`<Leader>?` in a box), and the status bar's keys that don't start with the leader. A plugin declares
-  its labels and scope titles (its keys sit in the default keymap), and draws no key hints of its own: a view
-  that shows a key beside its
-  control (every forms or chat button whose command has a page bind) depends on `keys` and reads it from that plugin's `keysFor`
-  export, again on each of its `onChanged`, so a rebind reaches the control, and draws no hint when the command is
-  unbound. Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
+  `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), and every hint drawn in place. The app has no
+  bottom key list: a key shows where it acts, as a game puts a button prompt beside the thing it moves
+  (`docs/features/key-hints/design.md`).
+  - **An anchor** is an element a view names, with the command it runs and the scope it fires in, through the `keys`
+    page export `anchor`, which returns a Disposable. The keys plugin draws the KeyPrompt primitive into it, redraws
+    it on each keymap change, draws nothing when the command is unbound, and hides it, keeping its space, while its
+    scope is not the one in force (an anchor with no scope always shows) or the `keys.showHints` setting is off. A
+    plugin draws no key hint of its own.
+  - **The view places and styles each anchor** by one of four placement kinds (`DESIGN.md` § Keys and focus): an edge
+    prompt, a cursor prompt, a control hint or a box hint.
+  - **Vim's own keys** — the key sequences listed in the keys plugin (`j`, `k`, `gg`, Enter, Esc, the `<C-j>` scroll
+    keys and the like) — need no anchor and show in help only; a view may still anchor one, as Accept does with
+    Enter. Leader sequences show in which-key.
+  - **Every other bind has an anchor.** When a scope comes into force, the plugin logs
+    `[keys] unplaced <keys> <command> in <scope>` for each bind firing there with no anchor, and the self-test
+    fails on that line, so a new built-in key ships with its place on screen.
+  - A forms or chat layout's `keyHint` and `keysFor` kit calls keep their shape and route through anchors.
+
+  Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
   which prints a chord for the platform the served config names: on macOS the modifiers and Return, Tab, Esc,
   Backspace, Delete and the arrows as glyphs (⌃ ⌥ ⇧ ⌘, ↩ ⇥ ⎋ ⌫ ⌦ ← ↑ → ↓) and every other named key, Space
   included, by name; elsewhere as words. Help prints intercepted chords (`chordName`) and accelerators
@@ -353,8 +366,8 @@ round; primer: an open primer), since main, not the page, decides.
   `themes/`, each holding only what the user changes. Main's ConfigStore watches it and serves every new config to
   the page over the Bridge, so everything hot reloads: plugins read `settings()` and `keys.keymap()` with
   `onChanged` rather than keeping a copy, and a setting read only when something is created (window size, the claude
-  command) applies to the next one. A broken file keeps the last good config and shows the problem in the status
-  bar. Code that writes `settings.json` or `keymap.json` goes through the `userConfig` main service, which runs the
+  command) applies to the next one. A broken file keeps the last good config and shows the problem as a title bar
+  badge and a toast. Code that writes `settings.json` or `keymap.json` goes through the `userConfig` main service, which runs the
   ConfigStore's check on the new layer and refuses one that fails, so a write never leaves a broken file; themes
   are written by hand. App-written state, such as split widths, goes to the `uiState` service, never to the user's config.
 - **A third-party tool** gets a contract in `src/contracts/` and an adapter folder of its own; the core hands
@@ -388,7 +401,7 @@ round; primer: an open primer), since main, not the page, decides.
   round note, send and cancel buttons, other plugins' card parts (`contributedParts`), the plain parts `card`, `tag`,
   `kbd`, `button` — variant and `keys` — and `sectionHeader`, and `command(qualifiedId)` and `keysFor(qualifiedId)`
   for any plugin's command), each of which keeps itself up to date. The app keeps which item is selected, the keys,
-  scrolling, the split width, the status bar line and the cancel dialog. The built-in `default` layout is
+  scrolling, the split width, the rail header's open count and saved state, and the cancel dialog. The built-in `default` layout is
   `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract; it defines every card and
   the rail and review panes, and draws the forms look. The user's layouts are folders in forms' plugin data,
   `layouts/<name>/layout.js` and an optional `layout.css`, and the app writes `layouts/layout.d.ts` there at every
