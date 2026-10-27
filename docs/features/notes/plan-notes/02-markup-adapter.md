@@ -1,6 +1,6 @@
 # 02 — Markup contract and Fabric adapter
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 06
 Plan: [plan.md](plan.md)
@@ -166,3 +166,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 47e4908 · proof: diff read: markup.ts verbatim, PageServices.markup, createFabricMarkupEditor in renderer.ts, history/fit-scale/png-data-url exports present, fabric layer only in src/renderer/fabric; typecheck clean · concerns: Fabric IText already stops Escape/Tab/arrows itself, so only typed characters needed the stop; hidden textarea lives in document.body; clearing a filled text on exit still adds one history step via object:modified; dispose removes the restored <canvas> rather than the wrapper; hiddenTextarea cast in the editing-entered handler

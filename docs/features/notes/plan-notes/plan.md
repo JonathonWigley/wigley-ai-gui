@@ -199,13 +199,13 @@ Boundary rules:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Window capture](01-window-capture.md)
-- [ ] [Docs binary write and trash exports](03-docs-bytes.md)
-- [ ] [Chat launch export](04-chat-launch.md)
-- [ ] [Notes contract and pure modules](06-notes-core.md)
+- [x] [Window capture](01-window-capture.md)
+- [x] [Docs binary write and trash exports](03-docs-bytes.md)
+- [x] [Chat launch export](04-chat-launch.md)
+- [x] [Notes contract and pure modules](06-notes-core.md)
 
 ### Wave 2
-- [ ] [Markup contract and Fabric adapter](02-markup-adapter.md) — after 01 (shares `src/contracts/plugin.ts`), 06 (shares `scripts/check-layers.mts`)
+- [x] [Markup contract and Fabric adapter](02-markup-adapter.md) — after 01 (shares `src/contracts/plugin.ts`), 06 (shares `scripts/check-layers.mts`)
 - [ ] [Backlog note filing](05-backlog-notes.md) — after 03
 
 ### Wave 3
@@ -225,10 +225,25 @@ Boundary rules:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 62cb6e9ed048d1e6aebf6629e8870abd37df98b8
 
 ### Groups
+- 01 · b406450 · diff read: capture in MainServices.window and windowService; typecheck clean in its files (only failure is backlog start.test.ts DocsMainExports fake, from task 03 in flight) · concerns: none beyond the doc comment naming device pixels
+- 04 · 009088b · diff read: ChatMainExports, LaunchRequest, OpenOptions and open(info, options?) present; moved names have no stale importers; typecheck clean in its files · concerns: AGENTS.md chat/ line does not name the new exports or image-rules.ts (for task 10 doc re-read); session-list.ts header comment line runs past the wrap width
+- 06 · d2012f7 · diff read: every Produces export present in the named file; LAYERS entries as the task names; typecheck clean in notes · concerns: NotesChannel.invoke.tags() is the one sync signature in an IPC channel; PageChannel returns it as a Promise, so tasks 07/08 treat it as async
+- 03 · c39ba2b · diff read: writeBytes and trashDoc in DocsMainExports and start.ts exports, DocFiles.writeBytes takes the write guard; typecheck clean except the backlog start.test.ts fake, fixed by the Backlog lead stub commit · concerns: task 03 Files missed src/plugins/backlog/main/start.test.ts, whose DocsMainExports fake needed the two members; the Backlog lead added the stubs by agreement
+- 02 · 47e4908 · diff read: markup.ts verbatim, PageServices.markup, createFabricMarkupEditor in renderer.ts, history/fit-scale/png-data-url exports present, fabric layer only in src/renderer/fabric; typecheck clean · concerns: Fabric IText already stops Escape/Tab/arrows itself, so only typed characters needed the stop; hidden textarea lives in document.body; clearing a filled text on exit still adds one history step via object:modified; dispose removes the restored <canvas> rather than the wrapper; hiddenTextarea cast in the editing-entered handler
 ### Contract changes
 ### Rulings
+- window.capture doc comment names device pixels beside "as the user sees it", so a consumer sizing the image knows — drop the clause if unwanted · group 01 · group 01
+- ChatSessions.launch throws synchronously; the async export turns it into the rejection, so the reject tests use toThrow on ChatSessions.launch · group 04 · group 04
+- launch checks images before the profile and harness lookups, so an over-cap image is refused even with an unknown profile; nothing opens either way · group 04 · group 04
+- defaultTarget rule 2 ties on folder length go to the first home in order · group 06 · group 06
+- firstSentence treats a line holding only whitespace, \r included, as blank, so CRLF bodies split the same as LF · group 06 · group 06
+- test fixtures index the features home as a followup entry at <home>/followups.md, as a home follow-ups file is indexed · group 03 · group 03
+- starting colour before the first setColour is the host computed color · group 02 · group 02
+- text tool adds the IText on press and enters editing on release, since the press focus change would blur the textarea · group 02 · group 02
+- while editing text every key without Ctrl/Alt/Cmd stops at the textarea, Tab and Enter included (unlike textBoxInput), since Enter types a newline in an IText · group 02 · group 02
+- undo/redo move the history step at call time and queue only the load; a failed load rejects unhandled and later queued loads do not run · group 02 · group 02
 ### Review rounds
 ### Test gate

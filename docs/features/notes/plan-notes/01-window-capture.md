@@ -1,6 +1,6 @@
 # 01 — Window capture
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -55,3 +55,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit b406450 · proof: diff read: capture in MainServices.window and windowService; typecheck clean in its files (only failure is backlog start.test.ts DocsMainExports fake, from task 03 in flight) · concerns: none beyond the doc comment naming device pixels

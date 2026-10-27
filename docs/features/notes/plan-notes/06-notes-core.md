@@ -1,6 +1,6 @@
 # 06 — Notes contract and pure modules
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -296,4 +296,4 @@ yet passes the check.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit d2012f7 · proof: diff read: every Produces export present in the named file; LAYERS entries as the task names; typecheck clean in notes · concerns: NotesChannel.invoke.tags() is the one sync signature in an IPC channel; PageChannel returns it as a Promise, so tasks 07/08 treat it as async

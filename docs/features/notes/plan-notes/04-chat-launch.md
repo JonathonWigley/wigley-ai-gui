@@ -1,6 +1,6 @@
 # 04 — Chat launch export
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -114,3 +114,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 009088b · proof: diff read: ChatMainExports, LaunchRequest, OpenOptions and open(info, options?) present; moved names have no stale importers; typecheck clean in its files · concerns: AGENTS.md chat/ line does not name the new exports or image-rules.ts (for task 10 doc re-read); session-list.ts header comment line runs past the wrap width
