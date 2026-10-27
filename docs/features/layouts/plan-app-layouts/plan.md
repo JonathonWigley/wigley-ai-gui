@@ -215,7 +215,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 
 ### Wave 1
 - [x] [Primer nested rail and item cards](01-primer-item-cards.md)
-- [ ] [Core layout service and page host](02-layout-core.md)
+- [x] [Core layout service and page host](02-layout-core.md)
 
 ### Wave 2
 - [ ] [Forms onto the host](03-forms-host.md) — after 02
@@ -248,10 +248,17 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 
 ### Groups
 - 01 · a218909 · diff read: every Produces present; primer tests and 25 new self-test steps pass; typecheck clean in primer (remaining errors in 02's in-flight files) · concerns: check-styles not run (lint stopped at 02's layer check); i on a non-extra task card now focuses add-item box
+- 02 · ba033b8 · diff read: every Produces present; typecheck, lint, npm test (3728) and selftest pass · concerns: check-layers gained src/main/plugins→src/main/layouts and src/main/layouts→src/shared/paths; test-dom FakeElement.contains added; AGENTS.md lines 159/161/532 still say keys and gallery have no main part (for task 16)
 ### Contract changes
+- LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
+- LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
 ### Rulings
 - selectedRow returns stored selection without railRows lookup — selection is the identity rows are built from — a stale selection would come back as is · group 01 · group 01
 - showTarget checks only the target's task exists, not the item — no caller builds a missing-item target — would select a row with no item · group 01 · group 01
 - i on a non-extra task card focuses the add-item box, first box shown — follows shownBoxes order — was item 1's comment before · group 01 · group 01
+- drawPart treats a pick named default as the default attempt — no double build or log — a user layout named default is already ignored by the registry · group 02 · group 02
+- list picker disposes row anchors on every draw pass, cursor moves included — redraw rebuilds rows — extra anchor churn on j/k · group 02 · group 02
+- page api's layouts.show wraps the host's LayoutShow so dispose also stops the settings refresh — owners never call refresh — none seen · group 02 · group 02
+- forms register failure logs [forms] layouts not registered; core logs start failures as [<owner>] layouts not started — split by who throws — a reworded log line · group 02 · group 02
 ### Review rounds
 ### Test gate

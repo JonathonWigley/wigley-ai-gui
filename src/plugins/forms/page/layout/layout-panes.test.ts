@@ -251,67 +251,29 @@ function throwingReview(): Layout {
   };
 }
 
-describe('pane host', () => {
+describe('panes', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('hostPane_ReviewThrows_FallsBackToDefault', () => {
-    const { pane, parent, log } = drawPane(buildReviewPane, throwingReview());
-
-    expect(log).toHaveBeenCalledWith('forms', expect.stringContaining('boom'));
-    expect(pane.element.dataset.layout).toBe('default');
-    expect(parent.children).toHaveLength(1);
-  });
-
-  it('hostPane_ReviewThrows_DestroysTheBoxesItMounted', () => {
+  it('reviewPane_Throws_DestroysTheBoxesItMounted', () => {
     const { deps } = drawPane(buildReviewPane, throwingReview());
 
     expect(deps.destroyBox).toHaveBeenCalledTimes(1);
     expect(deps.destroyBox).toHaveBeenCalledWith({ field: 'note' });
   });
 
-  it('hostPane_RailThrows_FallsBackToDefault', () => {
-    const { pane, parent, log } = drawPane(buildRailPane, {
-      rail(parent, _input, kit) {
-        kit.el(parent, 'div', 'stray');
-        throw new Error('boom');
-      },
+  it('railPane_PickedDraws_MarksItWithItsLayout', () => {
+    const { pane, log } = drawPane(buildRailPane, {
+      rail: (parent, _input, kit) => ({
+        element: kit.el(parent, 'nav', 'rail'),
+      }),
     });
-
-    expect(log).toHaveBeenCalledWith('forms', expect.stringContaining('boom'));
-    expect(pane.element.dataset.layout).toBe('default');
-    expect(parent.children).toHaveLength(1);
-  });
-
-  it('hostPane_RailElementNotInParent_FallsBackToDefault', () => {
-    const { pane, parent, log } = drawPane(buildRailPane, {
-      rail: () => ({ element: asHtml(new FakeElement('nav')) }),
-    });
-
-    expect(log).toHaveBeenCalledWith('forms', expect.stringContaining('test'));
-    expect(pane.element.dataset.layout).toBe('default');
-    expect(parent.children).toEqual([asFake(pane.element)]);
-  });
-
-  it('hostPane_ReviewElementNotInParent_FallsBackToDefault', () => {
-    const { pane, log } = drawPane(buildReviewPane, {
-      review(parent, _input, kit) {
-        kit.el(parent, 'div', 'stray');
-        return { element: asHtml(new FakeElement('div')) };
-      },
-    });
-
-    expect(log).toHaveBeenCalledWith('forms', expect.stringContaining('test'));
-    expect(pane.element.dataset.layout).toBe('default');
-  });
-
-  it('hostPane_PickedPaneDraws_MarksItWithItsLayout', () => {
-    const { pane, log } = drawPane(buildReviewPane, oneRowReview());
 
     expect(log).not.toHaveBeenCalled();
     expect(pane.element.dataset.layout).toBe('test');
+    expect(pane.element.dataset.layoutOwner).toBe('forms');
   });
 
   it('reviewPane_NoteLeftOut_AppendsItToThePane', () => {

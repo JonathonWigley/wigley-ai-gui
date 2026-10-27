@@ -1,3 +1,7 @@
+import {
+  isRecord,
+  readLayoutModule,
+} from '../../../../shared/page/layout-host/read-layout-module';
 import type { Layout, LayoutCards } from '../../layouts/layout';
 
 // Every key a layout may define, and every key its `cards` may.
@@ -20,15 +24,11 @@ const CARD_KINDS: Record<keyof LayoutCards, true> = {
 };
 
 // The layout a user's `layout.js` module exports as its default. A layout
-// defines only the parts it changes; throws naming the first key that is no
-// part, or the first part that is not a function.
+// defines only the parts it changes; throws as readLayoutModule does, or
+// naming the first key that is no part, or the first part that is not a
+// function.
 export function readLayout(module: unknown, name: string): Layout {
-  const layout = isRecord(module) ? module.default : undefined;
-  if (!isRecord(layout)) {
-    throw new Error(
-      `layout ${name}: the default export is missing or not an object`,
-    );
-  }
+  const layout = readLayoutModule(module, name);
   for (const key of Object.keys(layout)) {
     if (!Object.hasOwn(LAYOUT_PARTS, key)) {
       throw new Error(`layout ${name}: ${key} is not a layout part`);
@@ -66,8 +66,4 @@ function requireCards(cards: unknown, name: string): void {
       throw new Error(`layout ${name}: cards.${kind} is not a function`);
     }
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }

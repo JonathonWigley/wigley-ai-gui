@@ -39,19 +39,6 @@ describe('layoutChain', () => {
 });
 
 describe('pickLayout', () => {
-  it('pickLayout_ItemLayoutDefinesKind_PicksIt', () => {
-    const mine: Layout = { cards: { finding: card } };
-    const loaded = new Map([
-      ['mine', mine],
-      ['default', allCards()],
-    ]);
-
-    expect(pickLayout('finding', ['mine', 'default'], loaded)).toEqual({
-      name: 'mine',
-      layout: mine,
-    });
-  });
-
   it('pickLayout_PartialLayout_FallsToNextInChain', () => {
     const theirs: Layout = { cards: { question: card } };
     const loaded = new Map<string, Layout>([
@@ -64,52 +51,6 @@ describe('pickLayout', () => {
 
     expect(pick.name).toBe('theirs');
     expect(pick.layout).toBe(theirs);
-  });
-
-  it('pickLayout_NameNotLoaded_Skipped', () => {
-    const fallback = allCards();
-    const loaded = new Map([['default', fallback]]);
-
-    expect(pickLayout('notice', ['missing', 'default'], loaded)).toEqual({
-      name: 'default',
-      layout: fallback,
-    });
-  });
-
-  it('pickLayout_NoLayoutDefinesHead_PicksDefault', () => {
-    const loaded = new Map([
-      ['mine', allCards()],
-      ['default', allCards()],
-    ]);
-
-    expect(pickLayout('head', ['mine', 'default'], loaded).name).toBe(
-      'default',
-    );
-  });
-
-  it('pickLayout_Rail_PicksFirstDefiningIt', () => {
-    const theirs: Layout = { rail: pane };
-    const loaded = new Map([
-      ['mine', allCards()],
-      ['theirs', theirs],
-      ['default', allCards()],
-    ]);
-
-    expect(pickLayout('rail', ['mine', 'theirs', 'default'], loaded)).toEqual({
-      name: 'theirs',
-      layout: theirs,
-    });
-    expect(
-      pickLayout('review', ['mine', 'theirs', 'default'], loaded).name,
-    ).toBe('default');
-  });
-
-  it('pickLayout_DefaultNotLoaded_Throws', () => {
-    const loaded = new Map([['mine', allCards()]]);
-
-    expect(() => pickLayout('question', ['mine', 'default'], loaded)).toThrow(
-      'default',
-    );
   });
 });
 

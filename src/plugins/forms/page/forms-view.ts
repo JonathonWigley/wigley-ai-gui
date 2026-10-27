@@ -33,7 +33,7 @@ import {
   type FormsStore,
   type RoundState,
 } from './form-state';
-import type { KitCommands } from './layout/kit-commands';
+import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { createRoundView, type RoundView } from './round-view';
 import { sessionTitle } from './view-model';
 

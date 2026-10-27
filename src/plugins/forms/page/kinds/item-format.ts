@@ -6,7 +6,7 @@ import type { AnswerableKind, ItemKind, Round } from '../../contract';
 import type { LayoutCards } from '../../layouts/layout';
 import type { FormsContributions } from '../contributions';
 import type { FormsAction, RoundState, TextTarget } from '../form-state';
-import type { KitCommands } from '../layout/kit-commands';
+import type { KitCommands } from '../../../../shared/page/layout-host/base-kit';
 
 // One item's pane, built once; `update` shows the round's current answers.
 export interface ItemCard {

@@ -1,15 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { KeysPageExports } from '../../../keys/contract';
 import type { FormsCardPart } from '../../contract';
 import type { Layout } from '../../layouts/layout';
 import {
   createFormsContributions,
   type FormsContributions,
 } from '../contributions';
-import { apply, initialState, type RoundState } from '../form-state';
+import {
+  apply,
+  initialState,
+  type RoundState,
+  type TextTarget,
+} from '../form-state';
 import type { CardDeps } from '../kinds/item-format';
 import { finding, presentedRound } from '../test-rounds';
-import { buildLayoutCard, drawRollingBack } from './layout-cards';
+import { buildLayoutCard } from './layout-cards';
 import {
   asFake,
   asHtml,
@@ -122,40 +126,71 @@ describe('hostCard', () => {
   });
 });
 
-describe('drawRollingBack', () => {
+describe('buildLayoutCard', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  // Deps whose every anchor's dispose is the one `dispose` spy.
-  function rollbackDeps(dispose: () => void) {
-    const anchor: KeysPageExports['anchor'] = () => ({ dispose });
-    return { mountBox: vi.fn(), destroyBox: vi.fn(), keys: { anchor } };
-  }
+  it('buildLayoutCard_CardThrowsAfterMountingABox_DestroysItAndDrawsDefault', () => {
+    // Boxes mounted and not yet destroyed; a second mount of one throws, as
+    // the editor boxes do.
+    const mounted = new Set<string>();
+    const mounts: string[] = [];
+    const anchors: { disposed: boolean }[] = [];
+    let anchorsAtThrow = 0;
+    const deps: CardDeps = {
+      ...fakeCardDeps(createFormsContributions()),
+      mountBox(_parent, target: TextTarget) {
+        const key = JSON.stringify(target);
+        if (mounted.has(key)) {
+          throw new Error(`${key} mounted twice`);
+        }
+        mounted.add(key);
+        mounts.push(key);
+      },
+      destroyBox: (target) => mounted.delete(JSON.stringify(target)),
+      keys: {
+        keysFor: () => null,
+        anchor() {
+          const anchor = { disposed: false };
+          anchors.push(anchor);
+          return { dispose: () => (anchor.disposed = true) };
+        },
+      },
+    };
+    const fancy: Layout = {
+      cards: {
+        finding(parent, _input, kit) {
+          kit.textBox(kit.card(parent), 'notes');
+          anchorsAtThrow = anchors.length;
+          throw new Error('fancy failed');
+        },
+      },
+    };
+    const parent = new FakeElement('div');
 
-  it('drawRollingBack_DrawThrows_DisposesTheAnchorsItNamed', () => {
-    const dispose = vi.fn();
-    const parent = asHtml(new FakeElement('div'));
-
-    expect(() =>
-      drawRollingBack(parent, rollbackDeps(dispose), (deps) => {
-        deps.keys.anchor(parent, 'forms.nextItem');
-        throw new Error('card failed');
-      }),
-    ).toThrow('card failed');
-
-    expect(dispose).toHaveBeenCalledOnce();
-  });
-
-  it('drawRollingBack_DrawReturns_KeepsTheAnchorsItNamed', () => {
-    const dispose = vi.fn();
-    const parent = asHtml(new FakeElement('div'));
-
-    drawRollingBack(parent, rollbackDeps(dispose), (deps) =>
-      deps.keys.anchor(parent, 'forms.nextItem'),
+    const card = buildLayoutCard(
+      { name: 'fancy', layout: fancy },
+      asHtml(parent),
+      findingRound(),
+      { kind: 'finding', index: 1 },
+      0,
+      deps,
     );
 
-    expect(dispose).not.toHaveBeenCalled();
+    const notesMounts = mounts.filter((key) => key.includes('"notes"'));
+    expect(notesMounts).toHaveLength(2);
+    expect(mounted.has(notesMounts[0])).toBe(true);
+    expect(anchorsAtThrow).toBeGreaterThan(0);
+    expect(
+      anchors.slice(0, anchorsAtThrow).every((anchor) => anchor.disposed),
+    ).toBe(true);
+    expect(deps.log).toHaveBeenCalledWith(
+      'forms',
+      'layout fancy finding card failed: fancy failed',
+    );
+    expect(parent.children).toEqual([asFake(card.element)]);
+    expect(card.element.dataset.layout).toBe('default');
   });
 });

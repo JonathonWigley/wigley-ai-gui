@@ -1,3 +1,8 @@
+import type { BaseKit, TagTone } from '../../../shared/page/layout-host/kit';
+
+// The tag tone, for a layout's JSDoc to import from here.
+export type { TagTone };
+
 export interface RoundInfo {
   heading: string;
   overview: string;
@@ -74,73 +79,7 @@ export type LayoutAction =
   | { type: 'accept' }
   | { type: 'focus' };
 
-// The tones a kit tag takes and the variants a kit button takes.
-export type TagTone =
-  | 'neutral'
-  | 'accent'
-  | 'running'
-  | 'success'
-  | 'warning'
-  | 'attention'
-  | 'error';
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
-export interface KitButtonOptions {
-  variant?: ButtonVariant;
-  keys?: string | null;
-}
-
-// Every part appends itself to `parent` and returns what it appended, except where its comment says otherwise.
-export interface HeadKit {
-  el(
-    parent: HTMLElement,
-    tag: string,
-    className?: string,
-    text?: string,
-  ): HTMLElement;
-  markdown(parent: HTMLElement, text: string, className?: string): HTMLElement;
-  inlineMarkdown(
-    parent: HTMLElement,
-    text: string,
-    className?: string,
-  ): HTMLElement;
-  section(parent: HTMLElement, label: string, text: string): HTMLElement | null;
-  // The keys bound to a forms command (its short name, as `choose1`) in the scope of the part drawing, as `keysFor`
-  // reads it; null when unbound or unknown. It reads the keymap once, when called, so text a card draws from it keeps
-  // the keys of the card's build after a rebind; draw a hint with `keyHint` for one that follows the keymap.
-  keys(command: string): string | null;
-  // `span` (with `className`): an anchor for `command` in the scope of the part drawing; it shows while that scope is
-  // in force and the hints setting is on, and follows keymap changes. Empty while unbound or for a name no forms
-  // command has.
-  keyHint(
-    parent: HTMLElement,
-    command: string,
-    className?: string,
-  ): HTMLElement;
-  // A runner for any plugin's command by its qualified id (as `docs.openDoc`): each call runs the command, and getting
-  // it runs nothing. It checks the id when called, so call it while the card or pane builds: an id no plugin registers
-  // throws `no command <id>`, and the card or pane falls back to `default` like any that throws.
-  command(qualifiedId: string): () => void;
-  // The keys bound to any plugin's command by its qualified id, in the scope of the part drawing: the forms view for
-  // cards, the head and the rail, the review for the review pane; null when unbound. `keys` and `keyHint` read the
-  // same scope. It reads the keymap once, when called, as `keys` does.
-  keysFor(qualifiedId: string): string | null;
-  // `div.ui-card` with `className` added: the card every built-in card draws on.
-  card(parent: HTMLElement, className?: string): HTMLElement;
-  // `span.ui-tag`; tone `neutral` when left out.
-  tag(parent: HTMLElement, text: string, tone?: TagTone): HTMLElement;
-  // A key hint for `keys` as `keys(command)` returns it, drawn for the platform.
-  kbd(parent: HTMLElement, keys: string): HTMLElement;
-  // `button.ui-button`, variant `secondary` when left out; never takes focus. `keys` draws its hint after the label.
-  button(
-    parent: HTMLElement,
-    label: string,
-    onClick: () => void,
-    options?: KitButtonOptions,
-  ): HTMLButtonElement;
-  // `h3.ui-section-header`: a sentence-case label over a part of the card.
-  sectionHeader(parent: HTMLElement, text: string): HTMLElement;
-}
-export interface Kit extends HeadKit {
+export interface Kit extends BaseKit {
   // `header.item-head` holding the kind tag and the status label, which updates itself; returns the header.
   // A card that leaves it out still gets `data-status` on its element.
   itemHead(parent: HTMLElement, kind: string): HTMLElement;
@@ -197,8 +136,9 @@ export interface LayoutCard {
   update?(answer: CardAnswer): void;
 }
 
-// A card builder per item kind. The app sets `data-layout="<name>"` on each card's element, `<name>` being the layout
-// that drew it, so `[data-layout="<name>"] …` in a layout's CSS selects only its own cards.
+// A card builder per item kind. The app sets `data-layout-owner="forms"` and `data-layout="<name>"` on each card's
+// element, `<name>` being the layout that drew it, so `[data-layout-owner="forms"][data-layout="<name>"] …` in a
+// layout's CSS selects only its own cards.
 export interface LayoutCards {
   question(
     parent: HTMLElement,
@@ -235,13 +175,14 @@ export interface ReviewInput {
 }
 
 // `element` is the pane's own node, appended to `parent` before the pane mounts any text box. The app shows and hides
-// that node and sets `data-layout="<name>"` on it, `<name>` being the layout that drew it.
+// that node and sets `data-layout-owner="forms"` and `data-layout="<name>"` on it, `<name>` being the layout that drew
+// it.
 export interface LayoutPane {
   element: HTMLElement;
 }
 
 // The rail's parts, each keeping itself up to date while the round shows.
-export interface RailKit extends HeadKit {
+export interface RailKit extends BaseKit {
   // `li.rail-entry` for the item at rail `position`: a list row leading with the item's status dot and rail number,
   // its title as label and tooltip. It carries `data-status`, marks the focused item `is-selected` and an untouched
   // item `is-flagged` while the review or the cancel prompt shows, and a click jumps to its item. The app scrolls the
@@ -249,8 +190,9 @@ export interface RailKit extends HeadKit {
   entry(parent: HTMLElement, position: number): HTMLElement;
 }
 
-// The review's parts, each keeping itself up to date while the review shows.
-export interface ReviewKit extends HeadKit {
+// The review's parts, each keeping itself up to date while the review shows. Its `row` draws a review row in place of
+// the base kit's list row.
+export interface ReviewKit extends Omit<BaseKit, 'row'> {
   // `li.review-row` for review row `row`: the item's label and title, then its pick (action word, entry number and
   // choice text, the Recommended tag) or its status, the jump keys on the cursor row, the Notes and Don't ask lines,
   // and last one `span.review-cell` (`data-column="<id>"`) per column other plugins added, holding its text, with the
@@ -275,8 +217,8 @@ export interface ReviewKit extends HeadKit {
 export interface Layout {
   cards?: Partial<LayoutCards>;
   // Drawn above the cards in the forms view, once per round and again after each keymap change, into a slot carrying
-  // `data-layout="<name>"`.
-  head?(parent: HTMLElement, round: RoundInfo, kit: HeadKit): void;
+  // `data-layout-owner="forms"` and `data-layout="<name>"`.
+  head?(parent: HTMLElement, round: RoundInfo, kit: BaseKit): void;
   // The rail beside the cards, under the app's rail header and over its Review button, built once per round.
   rail?(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
   // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round.

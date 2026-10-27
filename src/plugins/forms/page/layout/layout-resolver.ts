@@ -1,3 +1,5 @@
+import type { PartPick } from '../../../../shared/page/layout-host/draw-part';
+import { pickLayout as pickHostLayout } from '../../../../shared/page/layout-host/pick';
 import type { Round } from '../../contract';
 import type { Layout } from '../../layouts/layout';
 import { type RailItem, railItems, ROUND_ITEMS } from '../form-state';
@@ -12,10 +14,7 @@ export type LayoutPart =
   | 'review';
 
 // The layout that draws a part, and its name.
-export interface LayoutPick {
-  name: string;
-  layout: Layout;
-}
+export type LayoutPick = PartPick<Layout>;
 
 type LayoutPane = 'head' | 'rail' | 'review';
 
@@ -50,31 +49,19 @@ export function layoutChain(
   return [...new Set(names.filter((name) => name !== null))];
 }
 
-// The first layout in `chain` that `loaded` holds and that defines `part`;
-// `default` ends the chain whatever it defines, so a part `default` lacks
-// resolves to it and draws nothing. A name `loaded` lacks is skipped. Throws
-// when `loaded` lacks `default`.
+// The host's pick of the first layout in `chain` that defines `part`, its
+// read being a function; a part `default` lacks resolves to it and draws
+// nothing.
 export function pickLayout(
   part: LayoutPart,
   chain: readonly string[],
   loaded: ReadonlyMap<string, Layout>,
 ): LayoutPick {
-  const fallback = loaded.get(DEFAULT_NAME);
-  if (fallback === undefined) {
-    throw new Error(`layout ${DEFAULT_NAME} is not loaded`);
-  }
-  for (const name of chain) {
-    if (name === DEFAULT_NAME) {
-      break;
-    }
-    const layout = loaded.get(name);
-    const definesPart =
-      layout !== undefined && typeof PART_READS[part](layout) === 'function';
-    if (definesPart) {
-      return { name, layout };
-    }
-  }
-  return { name: DEFAULT_NAME, layout: fallback };
+  return pickHostLayout(
+    chain,
+    loaded,
+    (layout) => typeof PART_READS[part](layout) === 'function',
+  );
 }
 
 // The layout the item itself names; null for none.

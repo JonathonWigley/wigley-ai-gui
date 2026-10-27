@@ -17,6 +17,11 @@ import {
   keepFocusedBox,
 } from '../../../shared/page/editor-boxes';
 import type { ShownLayouts } from '../../../contracts/plugin';
+import {
+  type BaseKitDeps,
+  createBaseKit,
+  type KitCommands,
+} from '../../../shared/page/layout-host/base-kit';
 import { createStatusLine } from '../../../shared/page/status-line';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { textButton } from '../../../shared/page/ui/button';
@@ -39,12 +44,7 @@ import {
 } from './form-state';
 import { roundInfo } from './kinds/card-parts';
 import type { CardDeps, ItemCard } from './kinds/item-format';
-import {
-  createHeadKit,
-  type HeadKitDeps,
-  headKitDepsFor,
-} from './layout/card-kit';
-import type { KitCommands } from './layout/kit-commands';
+import { headKitDepsFor } from './layout/card-kit';
 import { buildLayoutCard } from './layout/layout-cards';
 import {
   buildRailPane,
@@ -453,10 +453,11 @@ function buildItemPager(parent: HTMLElement, keys: AnchorKeys): ItemPager {
 }
 
 // The head kit's deps over the forms view's keys, and the log.
-type HeadDeps = HeadKitDeps & Pick<CardDeps, 'log'>;
+type HeadDeps = BaseKitDeps & Pick<CardDeps, 'log'>;
 
 // The slot above the cards the picked layout's head draws into, carrying
-// `data-layout` naming that layout; null for a layout with no head.
+// `data-layout` naming that layout and `data-layout-owner="forms"`; null for a
+// layout with no head.
 // `anchors` holds the anchors `deps` names.
 function buildLayoutHead(
   parent: HTMLElement,
@@ -470,6 +471,7 @@ function buildLayoutHead(
   }
   const slot = element('div', 'layout-head');
   slot.dataset.layout = pick.name;
+  slot.dataset.layoutOwner = 'forms';
   parent.append(slot);
   drawLayoutHead(slot, round, pick, deps, anchors);
   return slot;
@@ -488,7 +490,7 @@ function drawLayoutHead(
 ) {
   slot.replaceChildren();
   try {
-    pick.layout.head?.(slot, roundInfo(round.round), createHeadKit(deps));
+    pick.layout.head?.(slot, roundInfo(round.round), createBaseKit(deps));
   } catch (error) {
     disposeAnchors(anchors);
     slot.replaceChildren();

@@ -273,23 +273,6 @@ describe('card kit', () => {
     ).toEqual(['p2']);
   });
 
-  it('kitCommand_KnownId_RunsOnlyWhenCalled', () => {
-    const { deps, run } = fakeCardDeps(createFormsContributions());
-    const { kit } = findingKit(deps);
-
-    const runner = kit.command('demo.run');
-    expect(run).not.toHaveBeenCalled();
-    runner();
-
-    expect(run.mock.calls).toEqual([['demo.run']]);
-  });
-
-  it('kitCommand_UnknownId_Throws', () => {
-    const { kit } = findingKit(fakeCardDeps(createFormsContributions()).deps);
-
-    expect(() => kit.command('docs.noSuch')).toThrow(/docs\.noSuch/);
-  });
-
   it('choiceGroups_ActionWithoutChoices_DrawsItsNumberAsAChoiceRowDoes', () => {
     const overrides = {
       choices: [choice('A', 'fix_now'), choice('B', 'fix_now')],
@@ -407,18 +390,6 @@ describe('card kit', () => {
     expect(anchor).toHaveBeenCalledWith(span, 'forms.toggleDontAsk', {
       scope: 'forms.forms',
     });
-  });
-
-  it('kitKeyHint_UnknownName_AnchorsNothing', () => {
-    const { deps, anchor } = fakeCardDeps(createFormsContributions());
-    const { kit } = findingKit(deps);
-
-    const span = asFake(
-      kit.keyHint(asHtml(new FakeElement('div')), 'noSuchCommand'),
-    );
-
-    expect(anchor).not.toHaveBeenCalled();
-    expect(span.childNodes).toEqual([]);
   });
 
   it('answerControls_AnchorsNotApplicableAndDontAsk', () => {

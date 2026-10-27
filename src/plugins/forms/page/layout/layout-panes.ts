@@ -5,6 +5,14 @@ import type { Platform } from '../../../../contracts/platform';
 import { errorText } from '../../../../shared/error-text';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
 import {
+  createBaseKit,
+  type KitCommands,
+} from '../../../../shared/page/layout-host/base-kit';
+import {
+  drawPart,
+  requireElementIn,
+} from '../../../../shared/page/layout-host/draw-part';
+import {
   type ButtonVariant,
   textButton,
 } from '../../../../shared/page/ui/button';
@@ -17,6 +25,7 @@ import { type FormsCommandName, formsCommand, formsScope } from '../../ids';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
   CompleteLayout,
+  LayoutPane,
   RailInput,
   RailKit,
   ReviewInput,
@@ -51,9 +60,8 @@ import {
   reviewSummaryText,
 } from '../view-model';
 import type { FormsContributions } from '../contributions';
-import { createHeadKit, type HeadKitDeps, headKitDepsFor } from './card-kit';
-import type { KitCommands } from './kit-commands';
-import { drawRollingBack, requireElementIn } from './layout-cards';
+import { headKitDepsFor, type ScopedAnchor, scopedAnchor } from './card-kit';
+import { recordingDeps } from './layout-cards';
 import type { LayoutPick } from './layout-resolver';
 
 // What a pane reaches outside itself: the markdown renderer, the platform key
@@ -94,79 +102,52 @@ export interface ReviewPane {
   update(round: RoundState, isNewlyShown: boolean): void;
 }
 
-type PanePart = 'rail' | 'review';
 type Updater = (round: RoundState) => void;
 
-const DEFAULT_NAME = 'default';
-
-// The round's rail, built into `parent` by the picked layout's `rail`; see
-// hostPane for the fallback.
+// The round's rail, drawn into `parent` by drawPart with the picked layout's
+// `rail`, or with `default`'s when the pick lacks it or its rail throws. The
+// boxes the rail mounts and the anchors it names are recorded for drawPart's
+// rollback.
 export function buildRailPane(
   pick: LayoutPick,
   parent: HTMLElement,
   round: RoundState,
   deps: PaneDeps,
 ): RailPane {
-  return hostPane(
-    'rail',
-    pick,
-    pick.layout.rail,
-    defaultLayout.rail,
+  return drawPart({
+    owner: 'forms',
     parent,
-    deps,
-    (rail, paneDeps) => drawRail(rail, parent, round, paneDeps),
-  );
+    pick,
+    defaultLayout,
+    part: (layout) => layout.rail,
+    build: (rail, paneParent, rollback) =>
+      drawRail(rail, paneParent, round, recordingDeps(deps, rollback)),
+    log: deps.log,
+    logSource: 'forms',
+    partName: 'rail',
+  }).built;
 }
 
-// The round's review, built into `parent` by the picked layout's `review`;
-// see hostPane for the fallback.
+// The round's review, drawn into `parent` as buildRailPane draws the rail,
+// with the layout's `review`.
 export function buildReviewPane(
   pick: LayoutPick,
   parent: HTMLElement,
   round: RoundState,
   deps: PaneDeps,
 ): ReviewPane {
-  return hostPane(
-    'review',
-    pick,
-    pick.layout.review,
-    defaultLayout.review,
+  return drawPart({
+    owner: 'forms',
     parent,
-    deps,
-    (review, paneDeps) => drawReview(review, parent, round, paneDeps),
-  );
-}
-
-// Draws a pane through `picked`, or through `fallback` when the pick lacks
-// the part. When the pane throws, or returns no element appended to `parent`,
-// what it appended, the boxes it mounted and the anchors it named are
-// removed, the failure is logged, and `fallback` draws it in its place. The
-// pane's element carries `data-layout` naming the layout that drew it.
-function hostPane<F, P extends { element: HTMLElement }>(
-  part: PanePart,
-  pick: LayoutPick,
-  picked: F | undefined,
-  fallback: F,
-  parent: HTMLElement,
-  deps: PaneDeps,
-  draw: (pane: F, deps: PaneDeps) => P,
-): P {
-  const definesPart = typeof picked === 'function';
-  let name = definesPart ? pick.name : DEFAULT_NAME;
-  let built: P;
-  try {
-    built = drawRollingBack(parent, deps, (recording) =>
-      draw(definesPart ? picked : fallback, recording),
-    );
-  } catch (error) {
-    deps.log('forms', `layout ${name} ${part} failed: ${errorText(error)}`);
-    name = DEFAULT_NAME;
-    built = drawRollingBack(parent, deps, (recording) =>
-      draw(fallback, recording),
-    );
-  }
-  built.element.dataset.layout = name;
-  return built;
+    pick,
+    defaultLayout,
+    part: (layout) => layout.review,
+    build: (review, paneParent, rollback) =>
+      drawReview(review, paneParent, round, recordingDeps(deps, rollback)),
+    log: deps.log,
+    logSource: 'forms',
+    partName: 'review',
+  }).built;
 }
 
 // Throws `message` unless `index` is a whole number in [0, `length`).
@@ -189,7 +170,7 @@ function drawRail(
   const entries = new Map<number, HTMLElement>();
   let shownView: FormsView = 'forms';
   const kit: RailKit = {
-    ...createHeadKit(headKitDepsFor(deps, formsScope('forms'))),
+    ...createBaseKit(headKitDepsFor(deps, formsScope('forms'))),
     entry(entryParent, position) {
       requireIndexIn(
         position,
@@ -223,9 +204,9 @@ function drawRail(
     })),
   };
   const paneElement = requireElementIn(
-    rail(parent, input, kit),
-    'rail pane',
     parent,
+    (rail(parent, input, kit) as LayoutPane | undefined)?.element,
+    'rail',
   );
   return {
     element: paneElement,
@@ -310,10 +291,10 @@ function drawReview(
 ): ReviewPane {
   const updaters: Updater[] = [];
   const rowElements = new Map<number, HTMLElement>();
-  const headDeps = headKitDepsFor(deps, formsScope('review'));
+  const anchor = scopedAnchor(deps.keys, formsScope('review'));
   // The cursor row's prompt, which each draw of the rows moves to that row.
   const jumpPrompt = element('span', 'review-jump-prompt');
-  headDeps.anchor(jumpPrompt, formsCommand('reviewJump'), true);
+  anchor(jumpPrompt, formsCommand('reviewJump'), true);
   let drawn: RoundState | null = null;
   // The rows the latest update redraws; null when they were unchanged.
   let changedRows: ReviewRow[] | null = null;
@@ -328,7 +309,7 @@ function drawReview(
     })),
   };
   const kit: ReviewKit = {
-    ...createHeadKit(headDeps),
+    ...createBaseKit(headKitDepsFor(deps, formsScope('review'))),
     row(rowParent, row) {
       requireIndexIn(row, input.rows.length, `review has no row ${row}`);
       const entry = element('li', 'review-row');
@@ -368,10 +349,10 @@ function drawReview(
         'field-note',
         'Round note',
         'Optional. Anything about the round as a whole.',
-        { command: formsCommand('editNote'), anchor: headDeps.anchor },
+        { command: formsCommand('editNote'), anchor },
       );
       deps.mountBox(note.box, { field: 'note' }, round.note);
-      appendBoxKeys(note, headDeps.anchor);
+      appendBoxKeys(note, anchor);
       return note.element;
     },
     sendButton: (buttonParent) =>
@@ -381,7 +362,7 @@ function drawReview(
         'submit',
         'primary',
         deps,
-        headDeps,
+        anchor,
       ),
     cancelButton: (buttonParent) =>
       appendReviewButton(
@@ -390,13 +371,13 @@ function drawReview(
         'askCancel',
         'secondary',
         deps,
-        headDeps,
+        anchor,
       ),
   };
   const paneElement = requireElementIn(
-    review(parent, input, kit),
-    'review pane',
     parent,
+    (review(parent, input, kit) as LayoutPane | undefined)?.element,
+    'review',
   );
   if (!isNoteMounted) {
     kit.roundNote(paneElement);
@@ -428,14 +409,14 @@ function appendReviewButton(
   command: FormsCommandName,
   variant: ButtonVariant,
   deps: PaneDeps,
-  headDeps: HeadKitDeps,
+  anchor: ScopedAnchor,
 ): HTMLButtonElement {
   const control = textButton(label, () => deps.run(formsCommand(command)), {
     variant,
   });
   const keys = element('span');
   control.append(keys);
-  headDeps.anchor(keys, formsCommand(command));
+  anchor(keys, formsCommand(command));
   parent.append(control);
   return control;
 }

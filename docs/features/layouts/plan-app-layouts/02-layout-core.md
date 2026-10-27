@@ -1,6 +1,6 @@
 # 02 — Core layout service and page host
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -525,3 +525,5 @@ is gone. The live checks go to task 17 (Final verification).
 Commit: one commit for the group.
 
 ## Proof
+
+Commit ba033b8 · proof: diff read: every Produces present; typecheck, lint, npm test (3728) and selftest pass · concerns: check-layers gained src/main/plugins→src/main/layouts and src/main/layouts→src/shared/paths; test-dom FakeElement.contains added; AGENTS.md lines 159/161/532 still say keys and gallery have no main part (for task 16)

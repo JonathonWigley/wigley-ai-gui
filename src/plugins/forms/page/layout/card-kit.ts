@@ -1,12 +1,13 @@
 import type { CommandId } from '../../../../contracts/commands';
 import type { ViewScope } from '../../../../contracts/keymap';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import type { Platform } from '../../../../contracts/platform';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
 import { textButton } from '../../../../shared/page/ui/button';
-import { card as cardPart } from '../../../../shared/page/ui/card';
-import { kbd } from '../../../../shared/page/ui/kbd';
 import { errorText } from '../../../../shared/error-text';
+import {
+  type BaseKitDeps,
+  createBaseKit,
+} from '../../../../shared/page/layout-host/base-kit';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag as tagPart } from '../../../../shared/page/ui/tag';
 import type { ItemKind } from '../../contract';
@@ -21,7 +22,6 @@ import type {
   FindingAction,
   FindingCard,
   FindingKit,
-  HeadKit,
   Kit,
   LayoutAction,
   QuestionKit,
@@ -43,11 +43,10 @@ import {
   buildChoiceReason,
   buildField,
   buildItemHead,
-  buildSection,
   statusLabel,
 } from '../kinds/card-parts';
 import type { CardDeps, CardInputs, CardKits } from '../kinds/item-format';
-import { commandRunner, type KitCommands } from './kit-commands';
+import type { KeysPageExports } from '../../../keys/contract';
 
 type TextBoxField = Parameters<Kit['textBox']>[1];
 type ReasonsMode = Parameters<FindingKit['choiceGroups']>[1];
@@ -59,7 +58,8 @@ interface ItemTextBox {
 }
 
 // What every part of one card's kit shares: the item and its round, its
-// deps and the head kit's deps over the forms view's keys, its boxes, the
+// deps, the base kit's deps and the anchor over the forms view's keys, its
+// boxes, the
 // updaters the parts that show answer state register, and the contributed
 // parts once placed, null before.
 interface CardContext {
@@ -67,7 +67,8 @@ interface CardContext {
   item: RailItem;
   position: number;
   deps: CardDeps;
-  headDeps: HeadKitDeps;
+  kitDeps: BaseKitDeps;
+  anchor: ScopedAnchor;
   boxes: Map<TextBoxField, ItemTextBox>;
   mounted: Set<TextBoxField>;
   updaters: ((round: RoundState) => void)[];
@@ -253,126 +254,38 @@ export function answerableOf(item: RailItem): AnswerableItem | null {
   return item.kind === 'notice' ? null : { kind: item.kind, index: item.index };
 }
 
-// What the base kit of every card and pane reads: `keysFor` reads the keys
-// bound to a qualified command in the scope of the part drawing, null when
-// unbound, and `keys` and `keysFor` on the kit read through it; `anchor` names
-// the anchor for a qualified command in that scope on `element`, drawing the
-// command's label after the keys as `label` says, and the kit's `keyHint`
-// anchors through it.
-export interface HeadKitDeps {
-  markdown: MarkdownRenderer;
-  platform: Platform;
-  commands: KitCommands;
-  keysFor(command: CommandId): string | null;
-  anchor(
-    element: HTMLElement,
-    command: CommandId,
-    label?: boolean | string,
-  ): void;
-}
-
-// The head kit's deps over the keys bound in `scope`, the scope of the part
-// drawing.
+// The base kit's deps for a card or pane whose keys fire in `scope`, its short
+// command names being forms commands.
 export function headKitDepsFor(
   deps: Pick<CardDeps, 'markdown' | 'platform' | 'commands' | 'keys'>,
   scope: ViewScope,
-): HeadKitDeps {
+): BaseKitDeps {
   return {
     markdown: deps.markdown,
-    platform: deps.platform,
+    keys: deps.keys,
     commands: deps.commands,
-    keysFor: (command) => deps.keys.keysFor(command, scope),
-    anchor(element, command, label) {
-      deps.keys.anchor(element, command, { scope, label });
-    },
+    scope,
+    commandNamed: formsCommandNamed,
+    platform: deps.platform,
   };
 }
 
-// The parts a layout's head draws with, over the keys `deps.keysFor` reads and
-// the anchors `deps.anchor` names in the scope of the part drawing, each
-// static key hint drawn for the platform.
-export function createHeadKit(deps: HeadKitDeps): HeadKit {
-  return {
-    el(parent, tagName, className = '', text) {
-      const node = element(
-        tagName as keyof HTMLElementTagNameMap,
-        className,
-        text,
-      );
-      parent.append(node);
-      return node;
-    },
-    markdown(parent, text, className = '') {
-      const node = markdownElement('div', className, deps.markdown.block(text));
-      parent.append(node);
-      return node;
-    },
-    inlineMarkdown(parent, text, className = '') {
-      const node = markdownElement(
-        'span',
-        className,
-        deps.markdown.inline(text),
-      );
-      parent.append(node);
-      return node;
-    },
-    section: (parent, label, text) =>
-      buildSection(parent, label, text, deps.markdown),
-    keys: (command) => keysOfNamed(deps, command),
-    keyHint(parent, command, className = '') {
-      const node = element('span', className);
-      parent.append(node);
-      const id = formsCommandNamed(command);
-      if (id !== null) {
-        deps.anchor(node, id);
-      }
-      return node;
-    },
-    command: (qualifiedId) => commandRunner(qualifiedId, deps.commands),
-    keysFor: (qualifiedId) => deps.keysFor(qualifiedId),
-    card(parent, className = '') {
-      const node = cardPart();
-      if (className !== '') {
-        node.className = `${node.className} ${className}`;
-      }
-      parent.append(node);
-      return node;
-    },
-    tag(parent, text, tone) {
-      const node = tagPart(text, tone);
-      parent.append(node);
-      return node;
-    },
-    kbd(parent, keys) {
-      const node = kbd(keys, deps.platform);
-      parent.append(node);
-      return node;
-    },
-    button(parent, label, onClick, options = {}) {
-      const keys = options.keys ?? null;
-      const node = textButton(label, onClick, {
-        variant: options.variant,
-        hint: keys === null ? null : kbd(keys, deps.platform),
-      });
-      parent.append(node);
-      return node;
-    },
-    sectionHeader(parent, text) {
-      const node = sectionHeader(text);
-      parent.append(node);
-      return node;
-    },
-  };
-}
+// Names the anchor for a qualified command on `element`, drawing the
+// command's label after the keys as `label` says.
+export type ScopedAnchor = (
+  element: HTMLElement,
+  command: CommandId,
+  label?: boolean | string,
+) => void;
 
-// The keys `deps.keysFor` reads for the forms command short-named `command`;
-// null when unbound or no forms command has that name.
-function keysOfNamed(
-  deps: Pick<HeadKitDeps, 'keysFor'>,
-  command: string,
-): string | null {
-  const id = formsCommandNamed(command);
-  return id === null ? null : deps.keysFor(id);
+// The anchor `keys` names in `scope`, the scope of the part drawing.
+export function scopedAnchor(
+  keys: Pick<KeysPageExports, 'anchor'>,
+  scope: ViewScope,
+): ScopedAnchor {
+  return (element, command, label) => {
+    keys.anchor(element, command, { scope, label });
+  };
 }
 
 // The kit for the card of `kind` item `index` at rail `position`, built
@@ -391,7 +304,8 @@ export function createCardKit<K extends ItemKind>(
     item,
     position,
     deps,
-    headDeps: headKitDepsFor(deps, formsScope('forms')),
+    kitDeps: headKitDepsFor(deps, formsScope('forms')),
+    anchor: scopedAnchor(deps.keys, formsScope('forms')),
     boxes: itemTextBoxes(round, item),
     mounted: new Set(),
     updaters: [],
@@ -527,7 +441,7 @@ function mountTextBox(
     throw new Error(`${card.item.kind} card mounted ${field} twice`);
   }
   const caption = FIELD_CAPTIONS[field];
-  const anchor = card.headDeps.anchor;
+  const { anchor } = card;
   const built = buildField(
     parent,
     caption.className,
@@ -557,7 +471,7 @@ function appendCardKeys(
 ) {
   const keys = element('span');
   control.append(keys);
-  card.headDeps.anchor(keys, command);
+  card.anchor(keys, command);
 }
 
 // Dispatches the action's FormsActions, then Don't ask's command for it; an
@@ -578,7 +492,7 @@ function runLayoutAction(card: CardContext, action: LayoutAction) {
 
 function buildBaseKit(card: CardContext): Kit {
   return {
-    ...createHeadKit(card.headDeps),
+    ...createBaseKit(card.kitDeps),
     itemHead(parent, kind) {
       const { header, status } = buildItemHead(parent, kind);
       const answerable = answerableOf(card.item);
@@ -652,7 +566,7 @@ function buildQuestionKit(
         choices,
         input.recommend,
         (number) => kit.run({ type: 'choose', number }),
-        card.headDeps,
+        { markdown: card.deps.markdown, anchor: card.anchor },
       );
       const recommended = entries[input.recommend - 1];
       if (reasons !== 'none' && recommended !== undefined) {
@@ -784,7 +698,7 @@ function appendGroupChoices(
     group.choices,
     recommended?.number ?? null,
     (number) => kit.run({ type: 'choose', number }),
-    card.headDeps,
+    { markdown: card.deps.markdown, anchor: card.anchor },
   );
   return group.choices.map((choice, i) => {
     const isReasonShown =
@@ -819,7 +733,7 @@ function appendGroupPick(
     head.classList.add('is-recommended');
     pick.append(tagPart('Recommended', 'accent'));
   }
-  appendPickKeys(pick, number, card.headDeps.anchor);
+  appendPickKeys(pick, number, card.anchor);
   head.append(pick);
   section.append(head);
   appendGroupReason(head, group.reason, card.deps.markdown);
