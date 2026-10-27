@@ -375,7 +375,7 @@ function fullTaskLine(entryId: string): string {
 }
 
 // Adds the add-item box's text as an item when `box` is an add-item box,
-// before a key that leaves it acts.
+// before a key that leaves it acts; a focus change alone adds nothing.
 function commitNewItem(
   deps: Pick<PrimerCommandDeps, 'store' | 'log'>,
   box: PrimerBox | undefined | null,
@@ -408,12 +408,34 @@ function stepFocus(
   step: 1 | -1,
 ) {
   commitNewItem(deps, box);
-  const next = stepBox(shownBoxes(deps.store.get()), boxKey, box ?? null, step);
+  const next = boxAfterStep(shownBoxes(deps.store.get()), box, step);
   if (next === null) {
     deps.log(SOURCE, 'no box to focus');
     return;
   }
   deps.boxes.focus(next);
+}
+
+// The box `step` places away from `box` in `shown`. An add-item box whose
+// commit filled its task is gone from `shown`; the step lands as from where
+// it stood, before the task's comment box.
+function boxAfterStep(
+  shown: PrimerBox[],
+  box: PrimerBox | undefined,
+  step: 1 | -1,
+): PrimerBox | null {
+  if (box === undefined || box.target.field !== 'newItem') {
+    return stepBox(shown, boxKey, box ?? null, step);
+  }
+  const key = boxKey(box);
+  if (shown.some((candidate) => boxKey(candidate) === key)) {
+    return stepBox(shown, boxKey, box, step);
+  }
+  const taskComment: PrimerBox = {
+    primerId: box.primerId,
+    target: { field: 'taskComment', entryId: box.target.entryId },
+  };
+  return stepBox(shown, boxKey, taskComment, step === 1 ? 0 : -1);
 }
 
 // Leaves focus where it is, so a box keeps focus and its vim mode.
@@ -457,25 +479,6 @@ function submit(deps: PrimerCommandDeps) {
     return;
   }
   finishActivePrimer(deps, 'review', 'submitted');
-}
-
-// Commits an add-item box's text as an item whenever focus leaves the box, by
-// a key, a click elsewhere or the box going away, so no typed item is lost.
-export function startNewItemCommits(
-  deps: Pick<PrimerCommandDeps, 'store' | 'log'> & {
-    boxes: Pick<EditorBoxes<PrimerBox>, 'active' | 'onChange'>;
-  },
-): void {
-  let focused = deps.boxes.active();
-  deps.boxes.onChange(() => {
-    const left = focused;
-    focused = deps.boxes.active();
-    const isSameBox =
-      left !== null && focused !== null && boxKey(left) === boxKey(focused);
-    if (!isSameBox) {
-      commitNewItem(deps, left);
-    }
-  });
 }
 
 // `showPrimer` selects the session's Primer tab; `activate` selects the

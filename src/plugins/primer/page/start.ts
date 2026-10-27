@@ -28,7 +28,6 @@ import {
   closePrimerFromMain,
   guardClose,
   primerCommandHandlers,
-  startNewItemCommits,
 } from './primer-commands';
 import {
   createPrimerEventLog,
@@ -129,7 +128,6 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       initialState([], sessions.selectedSessionId()),
     );
     const boxes = createBoxes(api, store);
-    startNewItemCommits({ store, boxes, log: services.log });
     const view = mountPrimerTab({
       areas: api.areas,
       sessions,

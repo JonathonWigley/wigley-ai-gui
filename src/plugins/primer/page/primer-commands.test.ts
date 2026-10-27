@@ -14,7 +14,6 @@ import {
   closePrimerFromMain,
   guardClose,
   primerCommandHandlers,
-  startNewItemCommits,
 } from './primer-commands';
 import { buildBody, initialState, selectedEntry } from './primer-state';
 import { createPrimerStore } from './primer-store';
@@ -667,91 +666,5 @@ describe('guardClose', () => {
     const { guardClose } = setup();
 
     expect(guardClose('other')).toBe(true);
-  });
-});
-
-describe('startNewItemCommits', () => {
-  // Commits over boxes whose focused box the test moves; `move` reports each
-  // move as the editor boxes' onChange does.
-  function commitSetup(entries: PrimerEntry[] = primerEntries()) {
-    const store = createPrimerStore(
-      initialState([presentedPrimer('p1', { entries })], 'p1-session'),
-    );
-    const logs: string[] = [];
-    let active: PrimerBox | null = null;
-    const listeners: (() => void)[] = [];
-    startNewItemCommits({
-      store,
-      boxes: {
-        active: () => active,
-        onChange: (listener) => listeners.push(listener),
-      },
-      log: (_source, message) => logs.push(message),
-    });
-    const move = (box: PrimerBox | null) => {
-      active = box;
-      listeners.forEach((listener) => listener());
-    };
-    const type = (value: string) =>
-      store.dispatch({
-        type: 'setText',
-        formId: 'p1',
-        target: newItem1.target,
-        value,
-      });
-    const items = () =>
-      (activeForm(store.get())?.entries[0].items ?? []).map(
-        (item) => item.text,
-      );
-    return { move, type, items, logs };
-  }
-
-  it('adds the add-item text when focus leaves the box', () => {
-    const { move, type, items, logs } = commitSetup();
-    move(newItem1);
-    type('Test the store');
-
-    move(null);
-
-    expect(items()).toEqual([
-      'Read the store',
-      'Write the store',
-      'Test the store',
-    ]);
-    expect(logs).toEqual(['added item 3 on task 1']);
-  });
-
-  it('adds the add-item text when focus moves to another box', () => {
-    const { move, type, items } = commitSetup();
-    move(newItem1);
-    type('Test the store');
-
-    move({ primerId: 'p1', target: { field: 'taskComment', entryId: '1' } });
-
-    expect(items()).toHaveLength(3);
-  });
-
-  it('adds nothing when focus leaves the box of a task holding 20 items', () => {
-    const full = primerEntry('1', 'primer', {
-      items: Array.from({ length: 20 }, (_, i) => primerItem(`Item ${i}`)),
-    });
-    const { move, type, items, logs } = commitSetup([full]);
-    move(newItem1);
-    type('Test the store');
-
-    move(null);
-
-    expect(items()).toHaveLength(20);
-    expect(logs).toEqual(['no item added: task 1 holds 20 items']);
-  });
-
-  it('adds nothing while focus stays in the box', () => {
-    const { move, type, items } = commitSetup();
-    move(newItem1);
-    type('Test the store');
-
-    move({ ...newItem1 });
-
-    expect(items()).toHaveLength(2);
   });
 });

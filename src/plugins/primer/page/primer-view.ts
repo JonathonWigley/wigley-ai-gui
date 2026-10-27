@@ -45,7 +45,13 @@ import {
   primerScope,
   type PrimerScopeName,
 } from '../ids';
-import { boxKey, boxText, type PrimerBox, shownBoxes } from './boxes';
+import {
+  boxKey,
+  boxText,
+  hasAddItemBox,
+  type PrimerBox,
+  shownBoxes,
+} from './boxes';
 import { needTag, renderReview, taskName } from './primer-review';
 import {
   FEATURE_FIELDS,
@@ -299,10 +305,10 @@ function destroyPrimerView(
 
 // A split with the rail in its start pane and the card and the review, each
 // scrolling on its own, in its end pane. The rail redraws whenever the primer
-// or the keymap changes; the card is rebuilt, its boxes destroyed and mounted again, only
-// when the selected row or its item count changes; the review is drawn again
-// while it shows, when the primer or the keymap changed. `attach` places the
-// root in the page once, before any editor mounts.
+// or the keymap changes; the card is rebuilt, its boxes destroyed and mounted
+// again, only when the selected row or its item count changes; the review is
+// drawn again while it shows, when the primer or the keymap changed. `attach`
+// places the root in the page once, before any editor mounts.
 function createPrimerFormView(
   attach: (root: HTMLElement) => void,
   primer: OpenPrimer,
@@ -415,7 +421,7 @@ function cardKeyOf(primer: OpenPrimer): string {
 
 // The Feature row, then each group's tasks under its header, the Primer and
 // Every feature headers only over tasks and Extra tasks always, with a line
-// and the rail scope's keys for adding one while it holds none. Each row's
+// naming the rail scope's keys for adding one while it holds none. Each row's
 // click selects it; the selected row scrolls into view when `isRowChanged`.
 function drawRail(
   rail: HTMLElement,
@@ -463,7 +469,14 @@ function drawRail(
         primerCommand('addExtraTask'),
         primerScope('rail'),
       );
-      list.append(emptyState('No extra tasks.', keyHint(keys, deps.platform)));
+      list.append(
+        keys === null
+          ? emptyState('No extra tasks.')
+          : emptyState(
+              'No extra tasks. Add one with',
+              keyHint(keys, deps.platform),
+            ),
+      );
     }
   }
   rail.replaceChildren(list);
@@ -529,7 +542,7 @@ function buildFeatureCard(
 
 // The task as heading, its tags, an extra task's name box, its markdown
 // sections, its items each with an include mark and a comment box, the
-// add-item box, and the task's comment box.
+// add-item box unless the task is full, and the task's comment box.
 function buildTaskCard(
   parent: HTMLElement,
   primer: OpenPrimer,
@@ -615,15 +628,17 @@ function buildTaskCard(
     return { block, mark };
   });
   parent.append(itemsSection);
-  appendField(
-    parent,
-    'New item',
-    { field: 'newItem', entryId },
-    'addItem',
-    primer,
-    deps,
-    redraws,
-  );
+  if (hasAddItemBox(entry)) {
+    appendField(
+      parent,
+      'New item',
+      { field: 'newItem', entryId },
+      'addItem',
+      primer,
+      deps,
+      redraws,
+    );
+  }
   appendField(
     parent,
     'Comment',

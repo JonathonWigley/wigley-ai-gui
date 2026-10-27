@@ -1,6 +1,6 @@
 import type { BoxIdentity } from '../../../shared/page/editor-boxes';
 import { activeForm } from '../../../shared/page/session-forms';
-import type { PrimerEntry } from '../contract';
+import { MAX_PRIMER_ITEMS, type PrimerEntry } from '../contract';
 import {
   FEATURE_FIELDS,
   type OpenPrimer,
@@ -78,11 +78,14 @@ export function shownBoxes(state: PrimerState): PrimerBox[] {
 }
 
 // A task card's boxes: an extra task's name, each item's comment, the
-// add-item box, then the task's comment.
+// add-item box unless the task is full, then the task's comment.
 function taskTargets(entry: PrimerEntry): TextTarget[] {
   const entryId = entry.id;
   const name: TextTarget[] =
     entry.group === 'extra' ? [{ field: 'taskName', entryId }] : [];
+  const newItem: TextTarget[] = hasAddItemBox(entry)
+    ? [{ field: 'newItem', entryId }]
+    : [];
   return [
     ...name,
     ...entry.items.map((_, i): TextTarget => ({
@@ -90,9 +93,14 @@ function taskTargets(entry: PrimerEntry): TextTarget[] {
       entryId,
       item: i + 1,
     })),
-    { field: 'newItem', entryId },
+    ...newItem,
     { field: 'taskComment', entryId },
   ];
+}
+
+// A task holding MAX_PRIMER_ITEMS items takes no more.
+export function hasAddItemBox(entry: PrimerEntry): boolean {
+  return entry.items.length < MAX_PRIMER_ITEMS;
 }
 
 // The text a box mounts with. Throws when the primer has no such task or

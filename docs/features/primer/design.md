@@ -76,7 +76,9 @@ The tab is a fixed view built from the `DESIGN.md` primitives; the user does not
 - **Card** for the selected row. The Feature row's card holds the name, slug, spec, summary and notes boxes. A
   task's card holds its question, evidence, probes and pointer when not blank, its items as rows each with a ToggleMark
   (included) and a comment box, an add-item box, and the task's own comment box. The add-item box's text becomes an
-  item when focus leaves the box or the review opens. An extra task's card also holds its name box.
+  item when a key leaves the box or the review opens; a click or window switch that moves focus leaves the text in
+  the box. A task holding 20 items, the item limit, shows no add-item box. An extra task's card also holds its name
+  box.
 - **Review pane** before send: every task's need, its items (the left-out ones tagged) and every comment, with the
   tallies; submit from there checks that the slug matches the slug rule and every extra task is named, and shows what
   failed.
