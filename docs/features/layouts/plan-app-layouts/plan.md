@@ -234,10 +234,10 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 - [x] [Chat surfaces layout](14-chat-surfaces-layout.md) — after 04
 
 ### Wave 4
-- [ ] [Chat preview](15-chat-preview.md) — after 10 (`keymap.ts`), 14
+- [x] [Chat preview](15-chat-preview.md) — after 10 (`keymap.ts`), 14
 
 ### Wave 5
-- [ ] [Doc re-read](16-doc-re-read.md)
+- [x] [Doc re-read](16-doc-re-read.md)
 
 ### Wave 6
 - [ ] [Final verification](17-final-verification.md)
@@ -261,6 +261,8 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - 12 · 56e242c · diff read: Produces present (amended below); keys tests 81 pass; keys typecheck clean; layers, styles, oxlint clean; selftest all passed, every key placed · concerns: read-keys-layout.ts is the fourth copy of the reader skeleton (forms, docs, settings) that belongs in the layout host; AGENTS.md ~159 and ~532 say keys has no main part (task 16); setLayouts tests exercise the views' redraw, not start.ts's wiring
 - 10 · 4d9178a · diff read: Produces present (SessionsView amended); typecheck and lint clean; full npm test 3860 pass · concerns: sessions-view-fakes.ts added outside Files; AGENTS.md sessions/ entry names no layouts/ or preview (task 16); a second preview press restores real rows but leaves the mode and side bar shown
 - 13 · 49878e5 · diff read: Produces present; typecheck, layers, styles, oxlint clean; renderer/main/config/settings/shared tests 1276 pass; selftest all passed · concerns: read-shell-layout.ts is the fifth copy of the reader loop; title-bar.ts and activity-bar.ts deleted (folded into shell-chrome.ts); no doc names shell.layout yet (task 16); focus across redraw proved only in the fake DOM
+- 15 · 2809b26 · diff read: Produces present; typecheck and lint clean; chat tests 342 pass; selftest passes incl. every chat group, layout preview group, every key placed · concerns: chat main's dispose does not end an open preview row; AGENTS.md debug keys name only zlo (task 16)
+- 16 · 03740cc · docs only; every listed file read in full; fixes in AGENTS.md, DESIGN.md, layouts, agent-chat, ui-design designs, followups, master-plan; primer design and keymap.md no change; marketplace README fixed in its own commit 61e467c · concerns: marketplace tree holds a peer's uncommitted 1.13.0 version bump and an untracked skills/feature-spec/, left out of this run's commit
 ### Contract changes
 - LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
 - LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
@@ -310,5 +312,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - rows get ui-row--action and mousedown preventDefault plus click on the part's element; tabs get no ui-row--action — matches backlog — none · group 10 · group 10
 - the shell show does not self-refresh on shell.layout, so renderer.ts calls chromeLayouts.refresh() on every live.onChanged — the host queues a load only on a name change — none seen · group 13 · group 13
 - chrome areas carry data-layout=default and data-layout-owner=shell from first mount — frames carry their owner from first paint — a rule for a layout named default could match early · group 13 · group 13
+- preview snapshots are a shallow { ...state }, not chat-sessions' private copyState — chat-sessions.ts outside Files — a nested mutation could leak between snapshots · group 15 · group 15
+- followups hot-reload entry narrowed to forms, not removed — forms rebuild still remounts every box and LayoutSet.changed is unread — none · group 16 · group 16
 ### Review rounds
 ### Test gate

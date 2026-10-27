@@ -1,6 +1,6 @@
 # 15 — Chat layout preview on Space z l c
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 14, 10 (`src/plugins/keymap.ts`); 05 also edits `keymap.ts` in an earlier wave
 Plan: [plan.md](plan.md)
@@ -166,3 +166,4 @@ Commit: one commit for the group: the chat layout preview on `Space z l c`, its 
 
 ## Proof
 
+Commit 2809b26 · proof: diff read: Produces present; typecheck and lint clean; chat tests 342 pass; selftest passes incl. every chat group, layout preview group, every key placed · concerns: chat main's dispose does not end an open preview row; AGENTS.md debug keys name only zlo (task 16)

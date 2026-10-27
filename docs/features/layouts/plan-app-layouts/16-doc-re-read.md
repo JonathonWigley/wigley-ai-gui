@@ -1,6 +1,6 @@
 # 16 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 01–15
 Plan: [plan.md](plan.md)
@@ -64,7 +64,11 @@ Fix these. Then read the rest of each file for lines the run made untrue.
 
 None. This task changes docs only.
 
-## Proof
+## Proof criteria
 
 - `git diff` shows only doc files.
 - Each file in the list above was read in full. The report names each file and the lines it fixed, or "no change".
+
+## Proof
+
+Commit 03740cc · proof: docs only; every listed file read in full; fixes in AGENTS.md, DESIGN.md, layouts, agent-chat, ui-design designs, followups, master-plan; primer design and keymap.md no change; marketplace README fixed in its own commit 61e467c · concerns: marketplace tree holds a peer's uncommitted 1.13.0 version bump and an untracked skills/feature-spec/, left out of this run's commit

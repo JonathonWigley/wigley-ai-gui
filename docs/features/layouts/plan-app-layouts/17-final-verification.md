@@ -1,6 +1,6 @@
 # 17 — Final verification
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 6 · Depends on: 01–16
 Plan: [plan.md](plan.md)
@@ -129,7 +129,11 @@ For each, save the owner's test layout while the state is in place, then check t
 
 None added. This task runs the checks above.
 
-## Proof
+## Proof criteria
 
 The report lists each check with pass or fail and the capture it read. A failed check is fixed in the task that owns
 the code, and the check runs again.
+
+## Proof
+
+<written by wigley:make>
