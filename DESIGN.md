@@ -290,8 +290,8 @@ Conventions every primitive follows:
 ## Surfaces
 
 - **Title bar:** L1, `toolbar-height`, draggable; the shown mode's context centred; actions on the
-  right as `icon-button` buttons when a feature contributes one: the Keys button with its `␣?`
-  prompt, and while a config file is broken a `status-error` badge naming it; in the dev app, a
+  right as `icon-button` buttons when a feature contributes one: the Keys button with its
+  `Space ?` prompt, and while a config file is broken a `status-error` badge naming it; in the dev app, a
   neutral Dev tag at the start. The OS window buttons stay native.
 - **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
 - **Side bar:** L1 dense glass. Rows are `row-tree` or `row-list`; hover fills with

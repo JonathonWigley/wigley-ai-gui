@@ -259,10 +259,13 @@ round; primer: an open primer), since main, not the page, decides.
     prompt, a cursor prompt, a control hint or a box hint.
   - **Vim's own keys** — the key sequences listed in the keys plugin (`j`, `k`, `gg`, Enter, Esc, the `<C-j>` scroll
     keys and the like) — need no anchor and show in help only; a view may still anchor one, as Accept does with
-    Enter. Leader sequences show in which-key.
-  - **Every other bind has an anchor.** When a scope comes into force, the plugin logs
-    `[keys] unplaced <keys> <command> in <scope>` for each bind firing there with no anchor, and the self-test
-    fails on that line, so a new built-in key ships with its place on screen.
+    Enter. An anchor prints the command's first bind that is not one of vim's own keys, or its first bind when
+    every bind is. Leader sequences show in which-key.
+  - **Every other bind has an anchor.** At the end of a self-test run the plugin logs
+    `[keys] unplaced <keys> <command> in <scope>` for each bind firing in a scope that was in force during the page
+    load and never had an anchor there, and the self-test fails on that line, so a new built-in key ships with its
+    place on screen. A target drawn only in some states (a ninth choice, a permission card) is placed by a self-test
+    fixture that builds it, shown or hidden; never by a stand-in element made only to satisfy the gate.
   - A forms or chat layout's `keyHint` and `keysFor` kit calls keep their shape and route through anchors.
 
   Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
