@@ -105,11 +105,11 @@ now, any harness later). Each item names its sites.
   changed, page ready, each typed in `src/contracts`.
 - **Runtime command API** — *agent-ready*: Commands at runtime and around other plugins: `commands.register(id, decl, handler)`, `keys.bind(bind)`,
   `commands.intercept(id, (next, ctx) => …)`, `commands.onDidRun`, all disposable, and `MainApi.commands.run`.
-- **Hookable standing rule in the AGENTS.md Intent** — *agent-ready*: A standing rule in the AGENTS.md Intent, so new work stays hookable once these items land: every user action runs as
+- **Hookable standing rule in the AGENTS.md Intent** — A standing rule in the AGENTS.md Intent, so new work stays hookable once these items land: every user action runs as
   a command through the lifecycle above, and every state change a plugin owns is published as an event typed in its
   `contract.ts`. Today publishing is opt-in (AGENTS.md § Architecture says how to emit, not that a plugin must), and
   only `sessions` and the forms page emit; chat and docs emit nothing.
-- **Plugin editor remaps** — *agent-ready*: Plugins may add editor remaps (a manifest's `keys` has binds and groups, no remaps).
+- **Plugin editor remaps** — Plugins may add editor remaps (a manifest's `keys` has binds and groups, no remaps).
 - Commands take a count or argument, so `choose1..9` becomes one `forms.choose`.
 - **Layouts as a core service** — *agent-ready*: Layouts as a core service: `api.layouts.define(slot, { contractText, defaultSource, read })` in both processes,
   owning the channel, the `layouts/<slot>/` folder, the CSS links, the toasts, the layout setting and the preview
@@ -121,7 +121,7 @@ now, any harness later). Each item names its sites.
 - **Markdown block and fence contributions** — *agent-ready*: `MarkdownRenderer.addBlock({ opener, render })` and `addFence(language, render)` in the contract's own terms; the
   wigley `:::changes` / `:::tree` / `:::details` blocks move out of the core adapter into a contribution. One fence
   rule serves both `block` and `document` (the `diff` fence renders through two paths today).
-- **Per-source alert descriptions** — *agent-ready*: `Alerts.setOpenCount(source, count)` carries no per-source description: the core sums the counts, but the Windows
+- **Per-source alert descriptions** — `Alerts.setOpenCount(source, count)` carries no per-source description: the core sums the counts, but the Windows
   overlay names every source "open agent forms", so chat waiting on the user would read as a form.
 - **Window plugin** — *agent-ready*: Window commands (`window.summon`) move into a small `window` plugin.
 - Decide whether core services (`markdown`, `editor`, `alerts`) are replaceable by a plugin (a `provides` service
@@ -284,7 +284,7 @@ now, any harness later). Each item names its sites.
 - **Memory Files folder watch events** — *agent-ready*: The memory Files adapter reports nothing to a watch when it makes, removes or trashes an empty folder, where Node's
   `fs.watch` on the parent reports the folder's name (`src/shared/memory-files.ts` `makeFolder`, the `removeKey`
   callers). No caller depends on it yet.
-- **Tests that restate shipped text** — *agent-ready*: Drop or rewrite tests that restate shipped tables and authored text: `forms/manifest.test.ts` (every bind),
+- **Tests that restate shipped text** — Drop or rewrite tests that restate shipped tables and authored text: `forms/manifest.test.ts` (every bind),
   `finding-origins.test.ts` and `tool-definitions.test.ts` (action words, `maxItems`, description sentences; build a
   local origin table and assert the derived functions), `verdict.test.ts` chip text, `formats.test.ts` `F1`/`N2`,
   `view-model.test.ts` `Saving…`, sessions' `harnessText` and `roundToastText`, `languages.test.ts`'s
