@@ -1,6 +1,6 @@
 # 03 — Forms onto the host
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -125,3 +125,5 @@ src/plugins/forms/layouts/layout.d.ts` prints nothing. The live checks go to tas
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 99e38f4 · proof: diff read: Produces present; forms and host tests 618/618; forms typecheck and oxlint/oxfmt clean (full lint blocked by in-flight chat test) · concerns: buildSection in card-parts.ts has no caller now, left as out of scope; drawPart's dispose ignored, round view owns cleanup as before

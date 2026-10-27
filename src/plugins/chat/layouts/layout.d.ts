@@ -1,3 +1,8 @@
+import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
+
+// The status dot's states, for a layout's JSDoc to import from here.
+export type { DotStatus };
+
 export type EntryKind =
   | 'user'
   | 'assistant'
@@ -87,15 +92,6 @@ export interface EntryView<K extends EntryKind = EntryKind> {
   update?(input: EntryInput<K>): void;
 }
 
-// A status dot's state.
-export type DotStatus =
-  | 'idle'
-  | 'running'
-  | 'success'
-  | 'warning'
-  | 'attention'
-  | 'error';
-
 // A status edge on a card's leading side: `attention` for a prompt that needs the user, `error` for a failure.
 export type CardEdge = 'attention' | 'error';
 
@@ -115,32 +111,43 @@ export interface CollapsibleCard {
   setOpen(open: boolean): void;
 }
 
-export interface ChatKit {
-  markdown(text: string): HTMLElement; // rendered through the app's markdown renderer
-  json(value: unknown): HTMLElement; // pretty-printed, in a <pre>
+// Chat's parts over the shared base kit. Every part appends itself to `parent` and returns what it appended;
+// `markdown`, `card`, `statusDot`, `setDotStatus` and `sectionHeader` are the base kit's.
+export interface ChatKit extends BaseKit {
+  json(parent: HTMLElement, value: unknown): HTMLElement; // pretty-printed, in a <pre>
   // A collapsible card in the UI font that opens to `body()`, with no leading part; Enter on the focused entry
   // toggles the entry's expanders and collapsible cards. `body` runs on each open; return one element and keep it
   // to refill it in place.
-  expander(summary: string, body: () => HTMLElement): HTMLElement;
+  expander(
+    parent: HTMLElement,
+    summary: string,
+    body: () => HTMLElement,
+  ): HTMLElement;
   // A card whose head toggles its body, built closed unless `open`; Enter on the focused entry toggles it with the
-  // entry's expanders. Append its `element`.
-  collapsibleCard(options: CollapsibleCardOptions): CollapsibleCard;
-  card(edge?: CardEdge | null): HTMLElement; // a solid block, with a status edge when `edge` is given
-  statusDot(status: DotStatus): HTMLElement; // a static dot showing `status`
-  setDotStatus(dot: HTMLElement, status: DotStatus): void; // shows `status` on a dot `statusDot` made
-  sectionHeader(text: string): HTMLElement; // a section's heading line, in the caller's text
+  // entry's expanders. Its `element` is appended to `parent`; `leading` moves into its head.
+  collapsibleCard(
+    parent: HTMLElement,
+    options: CollapsibleCardOptions,
+  ): CollapsibleCard;
+  edgeCard(parent: HTMLElement, edge?: CardEdge | null): HTMLElement; // a solid block, with a status edge when `edge` is given
   // Allow once / Deny with their keys beside them (anchors the keys plugin draws); Deny opens the reason box. Draws the
   // answer instead once the entry carries one; the part keeps itself up to date as the entry's answer arrives.
-  permissionActions(): HTMLElement;
+  permissionActions(parent: HTMLElement): HTMLElement;
   // A user entry's images as thumbnails; clicking one opens the image viewer at it. Throws for any other entry kind.
   // Enter on a focused user entry with images opens the viewer at its first image, in place of toggling its expanders.
   // Call it again in `update` for the entry's later images.
-  images(): HTMLElement;
+  images(parent: HTMLElement): HTMLElement;
 }
 
+// The complete chat layout: a builder for every entry kind.
 export interface ChatLayout {
-  // Builds one entry's element from the entry and a kit made for that entry. The app appends the element; the builder appends it nowhere.
+  // Builds one entry into `parent` from the entry and a kit made for that entry: the builder appends its element to
+  // `parent` and returns it in `element`.
   entries: {
-    [K in EntryKind]: (input: EntryInput<K>, kit: ChatKit) => EntryView<K>;
+    [K in EntryKind]: (
+      parent: HTMLElement,
+      input: EntryInput<K>,
+      kit: ChatKit,
+    ) => EntryView<K>;
   };
 }

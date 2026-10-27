@@ -126,6 +126,11 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       markdown: services.markdown,
       keys,
       run,
+      commands: {
+        exists: (id) => api.keys.command(id) !== undefined,
+        run: (id) => api.commands.run(id),
+      },
+      platform: api.platform,
       permissions,
       confirm,
       viewer,

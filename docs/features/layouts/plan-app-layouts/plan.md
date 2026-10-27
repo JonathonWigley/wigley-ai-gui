@@ -218,7 +218,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 - [x] [Core layout service and page host](02-layout-core.md)
 
 ### Wave 2
-- [ ] [Forms onto the host](03-forms-host.md) — after 02
+- [x] [Forms onto the host](03-forms-host.md) — after 02
 - [ ] [Chat entries onto the host](04-chat-entries-host.md) — after 02
 - [ ] [Primer layout and preview](05-primer-layout.md) — after 01, 02
 - [ ] [Docs layout](06-docs-layout.md) — after 02
@@ -249,6 +249,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 ### Groups
 - 01 · a218909 · diff read: every Produces present; primer tests and 25 new self-test steps pass; typecheck clean in primer (remaining errors in 02's in-flight files) · concerns: check-styles not run (lint stopped at 02's layer check); i on a non-extra task card now focuses add-item box
 - 02 · ba033b8 · diff read: every Produces present; typecheck, lint, npm test (3728) and selftest pass · concerns: check-layers gained src/main/plugins→src/main/layouts and src/main/layouts→src/shared/paths; test-dom FakeElement.contains added; AGENTS.md lines 159/161/532 still say keys and gallery have no main part (for task 16)
+- 03 · 99e38f4 · diff read: Produces present; forms and host tests 618/618; forms typecheck and oxlint/oxfmt clean (full lint blocked by in-flight chat test) · concerns: buildSection in card-parts.ts has no caller now, left as out of scope; drawPart's dispose ignored, round view owns cleanup as before
 ### Contract changes
 - LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
 - LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
@@ -260,5 +261,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - list picker disposes row anchors on every draw pass, cursor moves included — redraw rebuilds rows — extra anchor churn on j/k · group 02 · group 02
 - page api's layouts.show wraps the host's LayoutShow so dispose also stops the settings refresh — owners never call refresh — none seen · group 02 · group 02
 - forms register failure logs [forms] layouts not registered; core logs start failures as [<owner>] layouts not started — split by who throws — a reworded log line · group 02 · group 02
+- cards and panes keep requireElementIn after drawPart — keeps the 'returned no element' message — pane error names now rail/review · group 03 · group 03
+- new scopedAnchor in card-kit.ts — BaseKitDeps gives no scope-bound anchor — a second anchor path beside the base kit · group 03 · group 03
 ### Review rounds
 ### Test gate

@@ -1,4 +1,8 @@
 import type { ChatEntry, ChatEntryKind } from '../../../contracts/agent';
+import {
+  isRecord,
+  readLayoutModule,
+} from '../../../shared/page/layout-host/read-layout-module';
 import type { ChatLayout, EntryInput, EntryKind } from '../layouts/layout';
 
 // A `Record` over every kind, so a kind left out fails to compile.
@@ -43,12 +47,7 @@ void [
 // The chat layout a user's `layout.js` module exports as its default; throws
 // naming the first entry builder it lacks.
 export function readChatLayout(module: unknown, name: string): ChatLayout {
-  const layout = isRecord(module) ? module.default : undefined;
-  if (!isRecord(layout)) {
-    throw new Error(
-      `layout ${name}: the default export is missing or not an object`,
-    );
-  }
+  const layout = readLayoutModule(module, name);
   const entries = isRecord(layout.entries) ? layout.entries : {};
   for (const kind of ENTRY_KINDS) {
     if (typeof entries[kind] !== 'function') {
@@ -58,8 +57,4 @@ export function readChatLayout(module: unknown, name: string): ChatLayout {
     }
   }
   return layout as unknown as ChatLayout;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }

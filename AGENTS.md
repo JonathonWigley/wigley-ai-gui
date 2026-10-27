@@ -416,10 +416,12 @@ round; primer: an open primer), since main, not the page, decides.
   while its revision is current, so a round naming one another round loaded draws with it at once. A view that needs
   agent data to show anything has a preview sample under `Space z l` for iterating its layout in place.
   `docs/features/layouts/design.md` lists every owner and its surfaces.
-- **A chat layout** builds each entry kind's element from the entry and a `ChatKit`
-  (`src/plugins/chat/layouts/layout.d.ts`): `markdown`, `json`, `expander` (a collapsible card), `collapsibleCard`,
-  `card`, `statusDot` with `setDotStatus`, `sectionHeader`, and `permissionActions` (Allow once / Deny with their
-  keys), and `images` (a user entry's thumbnails, which open the image viewer).
+- **A chat layout** draws each entry kind through a builder that takes `(parent, entry, kit)`, appends its element
+  to `parent` and returns it (`src/plugins/chat/layouts/layout.d.ts`). `ChatKit` extends the shared base kit
+  (`markdown`, `card`, `statusDot` with `setDotStatus`, `sectionHeader`, `keyHint` and the rest) with chat's parts:
+  `json`, `expander` (a collapsible card), `collapsibleCard`, `edgeCard` (a card with a status edge),
+  `permissionActions` (Allow once / Deny with their keys), and `images` (a user entry's thumbnails, which open the
+  image viewer). Every part takes its parent first.
 - **A forms layout** draws the forms view: a card per item kind (`question`, `finding`, `notice`) and the `head`,
   `rail` and `review` panes. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
   pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, review row,

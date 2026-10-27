@@ -8,7 +8,7 @@
 - **Agent harness seam** — the contract, the Claude adapter, the fake, chat entries, controls, images, accounts.
 - **Sessions and tabs** — owned sessions, joining the relay, take over and give back, the attention mark.
 - **Chat plugin** — the Chat tab, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys.
-- **Layouts** — the shared layout machinery and chat layouts.
+- **Layouts** — chat layouts on the core layout service and the page host.
 - **Plans** — what plans A, B and C each land.
 - **Out of scope** — follow-ups.
 
@@ -224,7 +224,7 @@ interview on 2026-10-23; this file is the record of both.
   thumbnails above the message box, each with a remove button; `<Leader>cx` removes the last one. Send sends the
   text with the images, or the images alone. A sent user entry shows its images as thumbnails under its text;
   clicking one, or Enter on the focused entry, opens the image viewer over the `chat.image` scope: the image fitted
-  to the window, `h` / `l` the entry's previous and next image, Esc closes. The chat layout kit's `images()` part
+  to the window, `h` / `l` the entry's previous and next image, Esc closes. The chat layout kit's `images(parent)` part
   draws the thumbnails, so a user layout gets the viewer too.
 - **Completion popup**: the editor adapter draws CodeMirror's popups on the page body, so the composer's scroll box
   does not clip the slash completion list.
@@ -261,12 +261,12 @@ interview on 2026-10-23; this file is the record of both.
 
 ## Layouts
 
-- The forms layout machinery moves to the shared layer: the registry (list, watch, the `.d.ts` copy) and the loader
-  take a plugin's data folder, contract text, default layout and validator as inputs. Forms and chat each keep their
-  own contract and `default` layout.
+- Chat's layouts draw through the core layout service and the page host (`src/shared/page/layout-host/`), as every
+  owner's do. Chat keeps its own contract, `default` layout, reader and kit parts.
 - A **chat layout** builds each chat entry's element from the entry (with its raw events) and a kit of parts, like a
-  forms layout builds cards. User chat layouts are folders in chat's plugin data, reloaded on save; an entry that
-  throws falls back to the default layout. The `chat.layout` setting names the user's layout.
+  forms layout builds cards: each builder takes `(parent, entry, kit)` and appends its element to `parent`. User chat
+  layouts are folders in `~/.config/wigley-ai-gui/layouts/chat/`, reloaded on save; an entry that throws is rolled
+  back and drawn with the default layout. The `chat.layout` setting names the user's layout.
 
 ## Plans
 

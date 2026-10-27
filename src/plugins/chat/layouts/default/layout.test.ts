@@ -1,108 +1,55 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  ChatKit,
+  ChatLayout,
+  CollapsibleCardOptions,
+  EntryInput,
+  EntryKind,
+  EntryView,
+} from '../layout';
 import layout from './layout.js';
 
-type ChatKit = Parameters<typeof layout.entries.user>[1];
-
-// The DOM surface the default layout uses: `part` tags an element a fake kit
-// part returned, with that part's argument (`markdown:hello`).
-interface FakeElement {
+// The DOM surface the default layout uses. This layer may not import the
+// page's shared fake DOM.
+class FakeElement {
   tagName: string;
-  part: string | null;
-  className: string;
-  classList: {
-    toggle(name: string, force?: boolean): boolean;
-    contains(name: string): boolean;
-  };
-  textContent: string;
-  children: FakeElement[];
-  append(...nodes: FakeElement[]): void;
-  replaceChildren(...nodes: FakeElement[]): void;
-}
+  className = '';
+  textContent = '';
+  dataset: Record<string, string> = {};
+  parentNode: FakeElement | null = null;
+  children: FakeElement[] = [];
 
-function fakeElement(tagName: string, part: string | null = null): FakeElement {
-  const classes = new Set<string>();
-  const element: FakeElement = {
-    tagName: tagName.toUpperCase(),
-    part,
-    get className() {
-      return [...classes].join(' ');
-    },
-    set className(value: string) {
-      classes.clear();
-      for (const name of value.split(' ').filter((name) => name !== '')) {
-        classes.add(name);
-      }
-    },
-    classList: {
-      toggle(name, force) {
-        const isOn = force ?? !classes.has(name);
-        if (isOn) {
-          classes.add(name);
-        } else {
-          classes.delete(name);
-        }
+  constructor(tagName: string) {
+    this.tagName = tagName.toUpperCase();
+  }
+
+  get classList() {
+    const names = () => this.className.split(' ').filter((name) => name !== '');
+    return {
+      toggle: (name: string, force?: boolean) => {
+        const isOn = force ?? !names().includes(name);
+        const rest = names().filter((held) => held !== name);
+        this.className = (isOn ? [...rest, name] : rest).join(' ');
         return isOn;
       },
-      contains: (name) => classes.has(name),
-    },
-    textContent: '',
-    children: [],
-    append(...nodes) {
-      element.children.push(...nodes);
-    },
-    replaceChildren(...nodes) {
-      element.children = [...nodes];
-    },
-  };
-  return element;
-}
+      contains: (name: string) => names().includes(name),
+    };
+  }
 
-type CardOptions = Parameters<ChatKit['collapsibleCard']>[0];
+  append(...nodes: FakeElement[]) {
+    for (const node of nodes) {
+      node.parentNode = this;
+      this.children.push(node);
+    }
+  }
 
-// A kit whose parts return tagged fake elements and record each call; each
-// expander keeps its line and `body`, and each collapsible card its options,
-// so a test opens it by calling `body()`.
-function fakeKit() {
-  const calls = {
-    markdown: [] as string[],
-    expanders: [] as { line: string; body: () => HTMLElement }[],
-    collapsibleCards: [] as CardOptions[],
-    setOpen: [] as boolean[],
-    setDotStatus: [] as [string | null, string][],
-  };
-  const kit: ChatKit = {
-    markdown(text) {
-      calls.markdown.push(text);
-      return asHtml(fakeElement('div', `markdown:${text}`));
-    },
-    json: (value) =>
-      asHtml(fakeElement('pre', `json:${JSON.stringify(value)}`)),
-    expander(summary, body) {
-      calls.expanders.push({ line: summary, body });
-      return asHtml(fakeElement('div', `expander:${summary}`));
-    },
-    collapsibleCard(options) {
-      calls.collapsibleCards.push(options);
-      return {
-        element: asHtml(
-          fakeElement('div', `collapsibleCard:${options.summary}`),
-        ),
-        isOpen: () => false,
-        setOpen(open) {
-          calls.setOpen.push(open);
-        },
-      };
-    },
-    card: (edge) => asHtml(fakeElement('div', `card:${edge ?? 'none'}`)),
-    statusDot: (status) => asHtml(fakeElement('span', `dot:${status}`)),
-    setDotStatus(dot, status) {
-      calls.setDotStatus.push([asFake(dot).part, status]);
-    },
-    sectionHeader: (text) => asHtml(fakeElement('h3', `section:${text}`)),
-    permissionActions: () => asHtml(fakeElement('div', 'permissionActions')),
-    images: () => asHtml(fakeElement('div', 'images')),
-  };
-  return { kit, calls };
+  replaceChildren(...nodes: FakeElement[]) {
+    for (const child of this.children) {
+      child.parentNode = null;
+    }
+    this.children = [];
+    this.append(...nodes);
+  }
 }
 
 function asHtml(element: FakeElement): HTMLElement {
@@ -113,18 +60,87 @@ function asFake(element: HTMLElement): FakeElement {
   return element as unknown as FakeElement;
 }
 
+// A fake kit part's element: tagged with the part and its argument
+// (`markdown:hello`) and appended to `parent`, as every kit part appends.
+function part(parent: HTMLElement, tag: string, name: string): HTMLElement {
+  const node = new FakeElement(tag);
+  node.dataset.part = name;
+  asFake(parent).append(node);
+  return asHtml(node);
+}
+
+// A kit whose parts append tagged fake elements and record each call; each
+// expander keeps its line and `body`, and each collapsible card its options,
+// so a test opens it by calling `body()`.
+function fakeKit() {
+  const calls = {
+    expanders: [] as { line: string; body: () => HTMLElement }[],
+    collapsibleCards: [] as CollapsibleCardOptions[],
+    setOpen: [] as boolean[],
+    setDotStatus: [] as [string | undefined, string][],
+  };
+  const parts: Partial<ChatKit> = {
+    markdown: (parent, text) => part(parent, 'div', `markdown:${text}`),
+    json: (parent, value) =>
+      part(parent, 'pre', `json:${JSON.stringify(value)}`),
+    expander(parent, summary, body) {
+      calls.expanders.push({ line: summary, body });
+      return part(parent, 'div', `expander:${summary}`);
+    },
+    collapsibleCard(parent, options) {
+      calls.collapsibleCards.push(options);
+      return {
+        element: part(parent, 'div', `collapsibleCard:${options.summary}`),
+        isOpen: () => false,
+        setOpen(open) {
+          calls.setOpen.push(open);
+        },
+      };
+    },
+    card: (parent) => part(parent, 'div', 'card:none'),
+    edgeCard: (parent, edge) => part(parent, 'div', `card:${edge ?? 'none'}`),
+    statusDot: (parent, status) => part(parent, 'span', `dot:${status}`),
+    setDotStatus(dot, status) {
+      calls.setDotStatus.push([dot.dataset.part, status]);
+    },
+    sectionHeader: (parent, text) => part(parent, 'h3', `section:${text}`),
+    permissionActions: (parent) => part(parent, 'div', 'permissionActions'),
+    images: (parent) => part(parent, 'div', 'images'),
+  };
+  return { kit: parts as ChatKit, calls };
+}
+
+type AnyBuilder = (
+  parent: HTMLElement,
+  input: EntryInput<EntryKind>,
+  kit: ChatKit,
+) => EntryView;
+
+// Draws `input` with its kind's default builder into a fresh parent, and
+// checks the element it returned is the parent's one child.
+function draw<K extends EntryKind>(
+  input: EntryInput<K>,
+  kit: ChatKit,
+): EntryView<K> {
+  const parent = new FakeElement('li');
+  const builder = (layout as ChatLayout).entries[input.kind] as AnyBuilder;
+  const view = builder(asHtml(parent), input, kit);
+  expect(parent.children).toEqual([asFake(view.element)]);
+  return view as EntryView<K>;
+}
+
 // Each child as its kit part, or as its classes and text when the layout made it.
 function describeChildren(element: FakeElement): string[] {
   return element.children.map(
     (child) =>
-      child.part ??
+      child.dataset.part ??
       `${child.tagName.toLowerCase()}.${child.className}:${child.textContent}`,
   );
 }
 
 beforeEach(() => {
   vi.stubGlobal('document', {
-    createElement: (tag: string) => fakeElement(tag),
+    createElement: (tag: string) => new FakeElement(tag),
   });
 });
 
@@ -143,7 +159,7 @@ describe('default chat layout', () => {
       raw: [] as unknown[],
     };
 
-    const view = layout.entries.user(entry, kit);
+    const view = draw(entry, kit);
     const root = asFake(view.element);
     const turn = root.children[0];
     expect(describeChildren(turn)).toEqual(['markdown:hello']);
@@ -173,7 +189,7 @@ describe('default chat layout', () => {
     ({ images, children }) => {
       const { kit } = fakeKit();
 
-      const view = layout.entries.user({ ...userWithImage, images }, kit);
+      const view = draw({ ...userWithImage, images }, kit);
       const turn = asFake(view.element).children[0];
 
       expect(describeChildren(turn)).toEqual(children);
@@ -190,7 +206,7 @@ describe('default chat layout', () => {
       raw: [] as unknown[],
     };
 
-    const view = layout.entries.assistant(entry, kit);
+    const view = draw(entry, kit);
     const root = asFake(view.element);
 
     view.update?.({ ...entry, text: 'Hi there', streaming: false });
@@ -208,7 +224,7 @@ describe('default chat layout', () => {
       raw: [] as unknown[],
     };
 
-    const view = layout.entries.thinking(entry, kit);
+    const view = draw(entry, kit);
     expect(calls.expanders.map((expander) => expander.line)).toEqual([
       'Thinking',
     ]);
@@ -239,7 +255,7 @@ describe('default chat layout', () => {
   ])('tool line with summary "$summary" is $line', ({ summary, line }) => {
     const { kit, calls } = fakeKit();
 
-    layout.entries.tool({ ...toolEntry, summary }, kit);
+    draw({ ...toolEntry, summary }, kit);
     expect(calls.collapsibleCards[0].summary).toBe(line);
   });
 
@@ -250,7 +266,7 @@ describe('default chat layout', () => {
     'tool_updateSetsTheDotAndRefillsTheBody (isError $isError)',
     ({ isError, label, status, text }) => {
       const { kit, calls } = fakeKit();
-      const view = layout.entries.tool(toolEntry, kit);
+      const view = draw(toolEntry, kit);
       const options = calls.collapsibleCards[0];
       const body = asFake(options.body());
 
@@ -279,7 +295,7 @@ describe('default chat layout', () => {
   it('permission_unanswered_holdsTheInputAndActions_noUpdate', () => {
     const { kit } = fakeKit();
 
-    const view = layout.entries.permission(permissionEntry, kit);
+    const view = draw(permissionEntry, kit);
     const card = asFake(view.element).children[0];
     expect(describeChildren(card)).toEqual(
       expect.arrayContaining([
@@ -293,7 +309,7 @@ describe('default chat layout', () => {
   it('permission_answeredPlainCard', () => {
     const { kit } = fakeKit();
 
-    const view = layout.entries.permission(
+    const view = draw(
       { ...permissionEntry, answer: { allowed: true, reason: null } },
       kit,
     );
@@ -314,7 +330,7 @@ describe('default chat layout', () => {
       raw: [] as unknown[],
     };
 
-    const view = layout.entries.result(entry, kit);
+    const view = draw(entry, kit);
     expect(asFake(view.element).textContent).toBe(line);
   });
 
@@ -322,7 +338,7 @@ describe('default chat layout', () => {
     const { kit, calls } = fakeKit();
     const raw: unknown[] = [{ type: 'x' }];
 
-    layout.entries.raw({ kind: 'raw', id: 'x1', raw }, kit);
+    draw({ kind: 'raw', id: 'x1', raw }, kit);
     const body = asFake(calls.expanders[0].body());
     expect(describeChildren(body)).toEqual([
       `json:${JSON.stringify([{ type: 'x' }])}`,

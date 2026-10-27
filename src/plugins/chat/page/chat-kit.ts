@@ -1,28 +1,43 @@
 import type { ChatEntry, ChatImage } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import { element, markdownElement } from '../../../shared/page/dom';
+import type { Platform } from '../../../contracts/platform';
+import {
+  createBaseKit,
+  type KitCommands,
+} from '../../../shared/page/layout-host/base-kit';
+import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import {
   type CollapsibleCard,
   card,
   createCollapsibleCard,
 } from '../../../shared/page/ui/card';
-import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
-import { sectionHeader } from '../../../shared/page/ui/section-header';
-import { setDotStatus, statusDot } from '../../../shared/page/ui/status-dot';
+import {
+  disposeAnchors,
+  recordingAnchor,
+} from '../../../shared/page/ui/key-anchors';
 import type { KeysPageExports } from '../../keys/contract';
-import { type ChatCommandName, chatCommand, chatScope } from '../ids';
+import {
+  type ChatCommandName,
+  chatCommand,
+  chatCommandNamed,
+  chatScope,
+} from '../ids';
 import type { ChatKit } from '../layouts/layout';
 import { imageUrl } from './attachments';
 import type { PermissionEntry } from './chat-state';
 
 // `allow` answers the permission entry allowed; `deny` opens the reason box
-// for it. `keys` anchors the permission actions' key hints. `openImages`
-// opens the image viewer on a user entry's images at `index`.
+// for it. `keys` anchors the permission actions' and the base kit's key hints
+// and reads the keys the base kit draws; `commands` and `platform` serve the
+// base kit. `openImages` opens the image viewer on a user entry's images at
+// `index`.
 export interface KitDeps {
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'anchor'>;
+  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
+  commands: KitCommands;
+  platform: Platform;
   allow(entry: PermissionEntry): void;
   deny(entry: PermissionEntry): void;
   openImages(images: readonly ChatImage[], index: number): void;
@@ -41,8 +56,8 @@ export interface Expanders {
 
 // One built entry's kit: the parts the layout drew from it, kept up to date by
 // `update` with each later version of the entry. `dispose` disposes the key
-// anchors a waiting permission entry's actions still hold; its owner calls it
-// when it drops the kit.
+// anchors the base kit's parts named and those a waiting permission entry's
+// actions still hold; its owner calls it when it drops the kit.
 export interface EntryKit {
   kit: ChatKit;
   update(entry: ChatEntry): void;
@@ -52,39 +67,51 @@ export interface EntryKit {
 
 type Expander = Pick<CollapsibleCard, 'isOpen' | 'setOpen'>;
 
+// The base kit, its key hints anchored in the Chat tab's scope, under chat's
+// own parts.
 export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
   let current = entry;
   const expanders: Expander[] = [];
   const permissionParts: PermissionPart[] = [];
+  const anchors: Disposable[] = [];
+  const base = createBaseKit({
+    markdown: deps.markdown,
+    keys: { ...deps.keys, anchor: recordingAnchor(deps.keys.anchor, anchors) },
+    commands: deps.commands,
+    platform: deps.platform,
+    scope: chatScope('chat'),
+    commandNamed: chatCommandNamed,
+  });
   const kit: ChatKit = {
-    markdown: (text) => markdownElement('div', 'md', deps.markdown.block(text)),
-    json: (value) =>
-      element('pre', 'chat-json', String(JSON.stringify(value, null, 2))),
-    expander(summary, body) {
-      return kit.collapsibleCard({ summary, body }).element;
+    ...base,
+    json: (parent, value) =>
+      appended(
+        parent,
+        element('pre', 'chat-json', String(JSON.stringify(value, null, 2))),
+      ),
+    expander(parent, summary, body) {
+      return kit.collapsibleCard(parent, { summary, body }).element;
     },
-    collapsibleCard(options) {
+    collapsibleCard(parent, options) {
       const built = createCollapsibleCard(options);
       expanders.push(built);
+      parent.append(built.element);
       return built;
     },
-    card,
-    statusDot,
-    setDotStatus,
-    sectionHeader: (text) => sectionHeader(text),
-    permissionActions() {
+    edgeCard: (parent, edge) => appended(parent, card(edge)),
+    permissionActions(parent) {
       if (current.kind !== 'permission') {
         throw new Error('permissionActions is only for a permission entry');
       }
       const part = createPermissionPart(current, deps);
       permissionParts.push(part);
-      return part.element;
+      return appended(parent, part.element);
     },
-    images() {
+    images(parent) {
       if (current.kind !== 'user') {
         throw new Error('images is only for a user entry');
       }
-      return imageThumbnails(current.images, deps);
+      return appended(parent, imageThumbnails(current.images, deps));
     },
   };
   return {
@@ -98,6 +125,7 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
       }
     },
     dispose() {
+      disposeAnchors(anchors);
       for (const part of permissionParts) {
         part.dispose();
       }
@@ -193,6 +221,11 @@ function imageThumbnails(
     }),
   );
   return strip;
+}
+
+function appended<E extends HTMLElement>(parent: HTMLElement, node: E): E {
+  parent.append(node);
+  return node;
 }
 
 function answerText(answer: NonNullable<PermissionEntry['answer']>): string {

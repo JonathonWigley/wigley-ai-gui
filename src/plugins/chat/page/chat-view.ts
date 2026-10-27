@@ -8,9 +8,11 @@ import type {
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Paths } from '../../../contracts/paths';
+import type { Platform } from '../../../contracts/platform';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
+import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { textButton } from '../../../shared/page/ui/button';
 import { chip } from '../../../shared/page/ui/chip';
 import { floatingPanel } from '../../../shared/page/ui/floating-panel';
@@ -104,7 +106,8 @@ export type ChatTabScope = 'chat';
 // `visibleSessionRested` runs when the visible Chat tab's process exits;
 // `onSessionRemoved` hears the sessions plugin drop a row's tabs. `run` runs
 // a command, as the composer's chips and send button do; `keys` anchors the
-// composer's key hints; `paths` names each tab by its project folder.
+// composer's key hints; `commands`, `platform` and `keys` serve each entry's
+// layout kit; `paths` names each tab by its project folder.
 // `slashCommandNames` reads the app slash commands registered now, which the
 // `/` completion offers ahead of the agent's. `viewer` opens a sent message's
 // images full size.
@@ -115,8 +118,10 @@ export interface ChatViewDeps {
   onSessionRemoved(listener: (sessionId: string) => void): void;
   editor: EditorHost;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'anchor'>;
+  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
   run(command: CommandId): void;
+  commands: KitCommands;
+  platform: Platform;
   permissions: PermissionActions;
   confirm: CloseConfirm;
   viewer: Pick<ImageViewer, 'open'>;
@@ -389,6 +394,8 @@ function createTab(
     kit: {
       markdown: deps.markdown,
       keys: deps.keys,
+      commands: deps.commands,
+      platform: deps.platform,
       allow: (entry) => deps.permissions.allow(ref, entry),
       deny: (entry) => deps.permissions.deny(ref, entry),
       openImages: (images, index) => deps.viewer.open(images, index),

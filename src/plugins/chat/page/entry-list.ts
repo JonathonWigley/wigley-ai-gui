@@ -4,6 +4,10 @@ import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
+import {
+  drawPart,
+  type PartPick,
+} from '../../../shared/page/layout-host/draw-part';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { isScrolledToEnd, scrollContent } from '../../../shared/content-scroll';
 import defaultLayout from '../layouts/default/layout.js';
@@ -88,27 +92,43 @@ export interface EntryList {
   dispose(): void;
 }
 
-// One drawn entry: its slot, the view the layout returned and the kit made
-// for it. `isDefaultView` holds while the view is the default layout's (or
-// the bare line); `drawsWithDefault` holds once the shown layout's update has
-// thrown, and the slot is drawn with the default layout from then on.
-interface Slot {
-  element: HTMLLIElement;
-  entry: ChatEntry;
+// One entry as drawn into its slot: the view the layout returned (null for
+// the bare line), the kit made for it, and the dispose of what the draw
+// recorded, which disposes the kit. `isDefaultView` holds while the view is
+// the default layout's (or the bare line).
+interface DrawnEntry {
   view: EntryView | null;
   kit: EntryKit;
   isDefaultView: boolean;
+  dispose(): void;
+}
+
+// One drawn entry and its slot. `drawsWithDefault` holds once the shown
+// layout's update has thrown, and the slot is drawn with the default layout
+// from then on.
+interface Slot extends DrawnEntry {
+  element: HTMLLIElement;
+  entry: ChatEntry;
   drawsWithDefault: boolean;
 }
 
+// What a builder's draw returns to `drawPart`.
 interface BuiltEntry {
   element: HTMLElement;
-  view: EntryView | null;
+  view: EntryView;
   kit: EntryKit;
-  isDefaultView: boolean;
 }
 
-type AnyBuilder = (input: EntryInput<EntryKind>, kit: ChatKit) => EntryView;
+type AnyBuilder = (
+  parent: HTMLElement,
+  input: EntryInput<EntryKind>,
+  kit: ChatKit,
+) => EntryView;
+
+const DEFAULT_PICK: PartPick<ChatLayout> = {
+  name: 'default',
+  layout: defaultLayout,
+};
 
 export function createEntryList(deps: EntryListDeps): EntryList {
   const list = element('ol', 'chat-entries');
@@ -160,7 +180,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       const openStates = new Map(
         [...slots].map(([id, slot]) => [id, slot.kit.expanders.openStates()]),
       );
-      disposeKits(slots);
+      disposeSlots(slots);
       slots.clear();
       list.replaceChildren();
       for (const entry of entries) {
@@ -217,7 +237,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     },
     dispose() {
       listSize.disconnect();
-      disposeKits(slots);
+      disposeSlots(slots);
     },
   };
 }
@@ -238,9 +258,9 @@ function followListSize(
   return observer;
 }
 
-function disposeKits(slots: Map<string, Slot>) {
+function disposeSlots(slots: Map<string, Slot>) {
   for (const slot of slots.values()) {
-    slot.kit.dispose();
+    slot.dispose();
   }
 }
 
@@ -255,23 +275,19 @@ function focusedEntry(
 
 function buildSlot(entry: ChatEntry, deps: EntryListDeps): Slot {
   const slot = element('li', 'chat-entry-slot');
-  const built = buildEntry(entry, deps);
-  slot.append(built.element);
   return {
     element: slot,
     entry,
-    view: built.view,
-    kit: built.kit,
-    isDefaultView: built.isDefaultView,
+    ...buildEntry(slot, entry, deps, false),
     drawsWithDefault: false,
   };
 }
 
 // A view with an update runs it after the kit's own parts updated; a view
-// with none is built again, its new expanders opening as the old ones were.
+// with none is drawn again, its new expanders opening as the old ones were.
 // A shown layout's update that throws is logged and toasted as a failed
-// build, and the slot is drawn with the default layout from then on; the
-// default layout's is logged and the entry built again.
+// draw, and the slot is drawn with the default layout from then on; the
+// default layout's is logged and the entry drawn again.
 function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
   slot.entry = entry;
   slot.kit.update(entry);
@@ -287,82 +303,99 @@ function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
           `default layout ${entry.kind} entry update failed: ${errorText(error)}`,
         );
       } else {
-        reportLayoutFailure(entry, deps, 'entry update failed', error);
+        deps.log(
+          'chat',
+          `layout ${deps.shown.name} ${entry.kind} entry update failed: ${errorText(error)}`,
+        );
+        toastDrawnWithDefault(entry.kind, deps);
         slot.drawsWithDefault = true;
       }
     }
   }
   const openStates = slot.kit.expanders.openStates();
-  const built = slot.drawsWithDefault
-    ? buildDefaultEntry(entry, deps)
-    : buildEntry(entry, deps);
-  built.kit.expanders.restore(openStates);
-  slot.kit.dispose();
-  slot.view = built.view;
-  slot.kit = built.kit;
-  slot.isDefaultView = built.isDefaultView;
-  slot.element.replaceChildren(built.element);
+  slot.dispose();
+  slot.element.replaceChildren();
+  const drawn = buildEntry(slot.element, entry, deps, slot.drawsWithDefault);
+  drawn.kit.expanders.restore(openStates);
+  slot.view = drawn.view;
+  slot.kit = drawn.kit;
+  slot.isDefaultView = drawn.isDefaultView;
+  slot.dispose = drawn.dispose;
 }
 
-// The entry built with the shown layout. A builder that throws or returns no
-// element is logged, the first failure per kind under the shown layout
-// toasted, and the entry built with the default layout.
-function buildEntry(entry: ChatEntry, deps: EntryListDeps): BuiltEntry {
+// The entry drawn into `slot` through the page host, with the shown layout
+// unless `drawsWithDefault`; the host logs a shown layout's failure and draws
+// with the default layout, and chat toasts the first such fallback per kind.
+// A default builder that fails leaves a bare line naming the kind; when the
+// shown layout failed first, its fallback is toasted, else the bare line is,
+// once per kind, when the default layout is the shown one.
+function buildEntry(
+  slot: HTMLElement,
+  entry: ChatEntry,
+  deps: EntryListDeps,
+  drawsWithDefault: boolean,
+): DrawnEntry {
   const { shown } = deps;
-  if (shown.layout !== defaultLayout) {
-    const kit = createEntryKit(entry, deps.kit);
-    try {
-      const view = buildView(shown.layout, entry, kit.kit);
-      return { element: view.element, view, kit, isDefaultView: false };
-    } catch (error) {
-      kit.dispose();
-      reportLayoutFailure(entry, deps, 'entry failed', error);
-    }
-  }
-  return buildDefaultEntry(entry, deps);
-}
-
-// The entry built with the default layout and a fresh kit; a default builder
-// that fails leaves a bare line naming the kind, toasted once per kind when
-// the default layout is the shown one (another shown layout toasted already).
-function buildDefaultEntry(entry: ChatEntry, deps: EntryListDeps): BuiltEntry {
-  const kit = createEntryKit(entry, deps.kit);
+  const pick = drawsWithDefault
+    ? DEFAULT_PICK
+    : { name: shown.name, layout: shown.layout };
   try {
-    const view = buildView(defaultLayout, entry, kit.kit);
-    return { element: view.element, view, kit, isDefaultView: true };
+    const drawn = drawPart<ChatLayout, AnyBuilder, BuiltEntry>({
+      owner: 'chat',
+      parent: slot,
+      pick,
+      defaultLayout,
+      part: (layout) => layout.entries[entry.kind] as AnyBuilder,
+      build(builder, parent, rollback) {
+        const kit = createEntryKit(entry, deps.kit);
+        rollback.recordBox(() => kit.dispose());
+        const view = builder(parent, entry, kit.kit);
+        return { element: view.element, view, kit };
+      },
+      log: deps.log,
+      logSource: 'chat',
+      partName: `${entry.kind} entry`,
+    });
+    const isDefaultView = drawn.layoutName === DEFAULT_PICK.name;
+    if (isDefaultView && pick.name !== DEFAULT_PICK.name) {
+      toastDrawnWithDefault(entry.kind, deps);
+    }
+    return {
+      view: drawn.built.view,
+      kit: drawn.built.kit,
+      isDefaultView,
+      dispose: drawn.dispose,
+    };
   } catch (error) {
     deps.log(
       'chat',
       `default layout ${entry.kind} entry failed: ${errorText(error)}`,
     );
-    if (deps.shown.layout === defaultLayout) {
+    if (pick.name !== DEFAULT_PICK.name) {
+      toastDrawnWithDefault(entry.kind, deps);
+    } else if (shown.name === DEFAULT_PICK.name) {
       toastKindOnce(
         entry.kind,
         deps,
         `Chat layout default: ${entry.kind} entries drawn as bare lines`,
       );
     }
-    const bare = element('div', 'chat-entry chat-raw', entry.kind);
-    return { element: bare, view: null, kit, isDefaultView: true };
+    slot.append(element('div', 'chat-entry chat-raw', entry.kind));
+    const kit = createEntryKit(entry, deps.kit);
+    return {
+      view: null,
+      kit,
+      isDefaultView: true,
+      dispose: () => kit.dispose(),
+    };
   }
 }
 
-// Logs the shown layout's failure on an entry and toasts the first per kind.
-function reportLayoutFailure(
-  entry: ChatEntry,
-  deps: EntryListDeps,
-  failure: string,
-  error: unknown,
-) {
-  const { name } = deps.shown;
-  deps.log(
-    'chat',
-    `layout ${name} ${entry.kind} ${failure}: ${errorText(error)}`,
-  );
+function toastDrawnWithDefault(kind: ChatEntryKind, deps: EntryListDeps) {
   toastKindOnce(
-    entry.kind,
+    kind,
     deps,
-    `Chat layout ${name}: ${entry.kind} entries drawn with default`,
+    `Chat layout ${deps.shown.name}: ${kind} entries drawn with default`,
   );
 }
 
@@ -371,18 +404,4 @@ function toastKindOnce(kind: ChatEntryKind, deps: EntryListDeps, text: string) {
     deps.shown.toastedKinds.add(kind);
     deps.toast(text, 'error');
   }
-}
-
-// Throws when the builder throws or hands back no element.
-function buildView(
-  layout: ChatLayout,
-  entry: ChatEntry,
-  kit: ChatKit,
-): EntryView {
-  const build = layout.entries[entry.kind] as AnyBuilder;
-  const view = build(entry, kit) as EntryView | undefined;
-  if (view === undefined || !(view.element instanceof HTMLElement)) {
-    throw new Error('the builder returned no HTMLElement in `element`');
-  }
-  return view;
 }
