@@ -36,7 +36,9 @@ or touches their data, so start one whenever a check needs it.
    `forms.openRound` and `primer.openPrimer` open their form in the live session their own
    plugin opened under that `sessionId`, else in the owned session holding it, else in a new
    row; a `sessions.connect` row is never reused. To put a round and a primer on one row, run
-   `sessions.open '{"sessionId":"s"}'` first, then both open actions with `"sessionId":"s"`.
+   `sessions.open '{"sessionId":"s"}'` first, then both open actions with `"sessionId":"s"`. The
+   second of the two opens logs `[sessions] newer relay took over session <id>`; that line is
+   expected there.
 3. Act with `key`, `type`, `click`, `drag`, `resize` and `setting`. Each returns once the page has
    redrawn: `resize` with the size the window took, the others with the log lines they caused
    (`setting` also says whether the config applied). The page holds document focus as the visible app's does,

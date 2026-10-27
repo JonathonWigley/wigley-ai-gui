@@ -101,6 +101,12 @@ function itemsPane(tab: FakeElement): FakeElement {
   return items;
 }
 
+// The round's review pane.
+function reviewPane(tab: FakeElement): FakeElement {
+  const [review] = findAll(tab, 'review-pane');
+  return review;
+}
+
 describe('form tab under the cancel prompt', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
@@ -124,5 +130,6 @@ describe('form tab under the cancel prompt', () => {
 
     expect(store.get().view).toBe('confirm');
     expect(itemsPane(tab).hidden).toBe(true);
+    expect(reviewPane(tab).hidden).toBe(false);
   });
 });

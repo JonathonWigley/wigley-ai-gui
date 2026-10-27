@@ -147,7 +147,7 @@ export function addDriveActions(
       optionalString(args, 'sessionId') ?? `drive-session-${++defaultIds}`;
     const info = driveSessionInfo(args, sessionId);
     if (started.has(sessionId)) {
-      throw new Error(`session ${sessionId} is already connected`);
+      throw new Error(`session ${sessionId} is already started`);
     }
     const session = start(info);
     started.set(sessionId, session);
