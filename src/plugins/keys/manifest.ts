@@ -1,11 +1,12 @@
 import { definePlugin } from '../../shared/define-plugin';
 
 // Key hints over the merged keymap: which-key while a sequence is pending,
-// the help overlay listing every key, and the status bar's key list. Page-only,
-// and names no other plugin. `whichKeyDelayMs` is how long a
-// pending sequence waits before the panel opens; `whichKeyTimeoutMs`, when
-// set, ends a sequence the panel has shown that long, and `null` lets it wait
-// for the next key or Esc.
+// the help overlay listing every key, the hints drawn in the anchors views
+// name, and the status bar's key list. Page-only, and names no other plugin.
+// `whichKeyDelayMs` is how long a pending sequence waits before the panel
+// opens; `whichKeyTimeoutMs`, when set, ends a sequence the panel has shown
+// that long, and `null` lets it wait for the next key or Esc. `showHints`
+// off hides every anchored hint.
 export const keysManifest = definePlugin({
   id: 'keys',
   dependsOn: [],
@@ -17,6 +18,7 @@ export const keysManifest = definePlugin({
   settings: {
     whichKeyDelayMs: 200,
     whichKeyTimeoutMs: null as number | null,
+    showHints: true,
   },
   optionalSettings: { whichKeyTimeoutMs: 'number' },
   settingInfo: {
@@ -29,6 +31,11 @@ export const keysManifest = definePlugin({
       label: 'Which-key timeout',
       description:
         'How long the which-key panel waits before ending the sequence, in milliseconds; empty waits for a key.',
+    },
+    showHints: {
+      label: 'Key hints',
+      description:
+        'Show each key beside the control or row it acts on. Which-key and the Keys dialog list every key either way.',
     },
   },
   themeTokens: {

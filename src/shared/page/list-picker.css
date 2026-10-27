@@ -18,9 +18,16 @@
   max-height: 100%;
 }
 
+.ui-picker-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--wg-space-2);
+  padding: var(--wg-space-1) var(--wg-space-2) 0;
+}
+
 .ui-picker-title {
   margin: 0;
-  padding: var(--wg-space-1) var(--wg-space-2) 0;
   font-size: var(--wg-text-12);
   font-weight: var(--wg-weight-semibold);
   color: var(--wg-fg-secondary);

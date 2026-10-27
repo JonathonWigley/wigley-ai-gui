@@ -8,16 +8,18 @@ const DISMISSED = 'cancel prompt dismissed: the view moved on';
 
 // A prompt over a caller whose state is `asked` and `sending`, as the test
 // sets them; `dismiss` drops the prompt unless the form is sending, as the
-// forms and primer reducers do. `calls` records the scope work in order.
-function promptSetup() {
+// forms and primer reducers do. `calls` records the scope work in order, and
+// `anchors` each anchor named. Without `hasOnBaseChanged` the deps leave out
+// `onBaseChanged`.
+function promptSetup(hasOnBaseChanged = true) {
   const caller = { asked: false, sending: false };
   const calls: string[] = [];
   const baseListeners: ((base: ViewScope) => void)[] = [];
-  let keys: Record<CommandId, string | null> = {
+  const keys: Record<CommandId, string> = {
     'test.keep': 'n',
     'test.confirm': 'y',
   };
-  const keyListeners: (() => void)[] = [];
+  const anchors: [CommandId, { scope?: ViewScope } | undefined][] = [];
   const run = vi.fn();
   const log = vi.fn();
   const dismiss = vi.fn(() => {
@@ -32,9 +34,9 @@ function promptSetup() {
     confirm: { label: 'Cancel form', command: 'test.confirm' },
     scope: 'test.confirm',
     keys: {
-      keysFor: (command) => keys[command] ?? null,
-      onChanged: (listener) => {
-        keyListeners.push(listener);
+      anchor: (element, command, options) => {
+        anchors.push([command, options]);
+        element.textContent = keys[command];
         return { dispose: () => undefined };
       },
     },
@@ -50,7 +52,9 @@ function promptSetup() {
     isAsked: () => caller.asked,
     isSending: () => caller.sending,
     dismiss,
-    onBaseChanged: () => calls.push('base changed'),
+    ...(hasOnBaseChanged
+      ? { onBaseChanged: () => calls.push('base changed') }
+      : {}),
     log,
     logSource: 'test',
   });
@@ -58,6 +62,7 @@ function promptSetup() {
   return {
     caller,
     calls,
+    anchors,
     prompt,
     scrim,
     run,
@@ -65,10 +70,6 @@ function promptSetup() {
     dismiss,
     // Another view sets the base scope under every scope pushed so far.
     changeBase: () => baseListeners.forEach((listener) => listener('other')),
-    setKeys: (next: Record<CommandId, string | null>) => {
-      keys = next;
-      keyListeners.forEach((listener) => listener());
-    },
     render: () =>
       prompt.settleOwedDismiss() &&
       prompt.setBaseScope(() => calls.push('set base')),
@@ -96,14 +97,13 @@ describe('confirm prompt', () => {
     expect(run.mock.calls).toEqual([['test.confirm'], ['test.keep']]);
   });
 
-  it('draws each hint again with the keys after a keymap change', () => {
-    const { scrim, setKeys } = promptSetup();
+  it('names an anchor for each choice in the prompt scope', () => {
+    const { anchors } = promptSetup();
 
-    setKeys({ 'test.keep': 'q', 'test.confirm': null });
-
-    const [keep, confirm] = buttons(scrim);
-    expect(keep.textContent).toBe('Keepq');
-    expect(confirm.textContent).toBe('Cancel form');
+    expect(anchors).toEqual([
+      ['test.keep', { scope: 'test.confirm' }],
+      ['test.confirm', { scope: 'test.confirm' }],
+    ]);
   });
 
   it('stays hidden and pushes nothing while not asked', () => {
@@ -148,6 +148,15 @@ describe('confirm prompt', () => {
     expect(calls.at(-1)).toBe('base changed');
     expect(dismiss).toHaveBeenCalledOnce();
     expect(log).toHaveBeenCalledWith('test', DISMISSED);
+  });
+
+  it('dismisses on a base change with no onBaseChanged given', () => {
+    const { caller, dismiss, render, changeBase } = promptSetup(false);
+    caller.asked = true;
+    render();
+
+    expect(() => changeBase()).not.toThrow();
+    expect(dismiss).toHaveBeenCalledOnce();
   });
 
   it('ignores a base change heard by a scope it already popped', () => {

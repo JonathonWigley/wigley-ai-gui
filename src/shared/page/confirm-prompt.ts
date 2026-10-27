@@ -5,7 +5,6 @@ import type { Log } from '../../contracts/log';
 import type { Platform } from '../../contracts/platform';
 import type { PushedScope } from '../../contracts/plugin';
 import { element } from './dom';
-import { appendKeyHint } from './key-hint';
 import { type ButtonVariant, textButton } from './ui/button';
 import { createDialog } from './ui/dialog';
 
@@ -14,10 +13,13 @@ export interface ConfirmChoice {
   command: CommandId;
 }
 
-// The keys a button's hint reads; the `keys` plugin's page exports fit.
+// Draws a button's hint as an anchor; the `keys` plugin's page exports fit.
 export interface ConfirmKeys {
-  keysFor(command: CommandId, scope?: ViewScope): string | null;
-  onChanged(listener: () => void): Disposable;
+  anchor(
+    element: HTMLElement,
+    command: CommandId,
+    options?: { scope?: ViewScope },
+  ): Disposable;
 }
 
 export interface ConfirmPromptDeps {
@@ -27,7 +29,7 @@ export interface ConfirmPromptDeps {
   keep: ConfirmChoice;
   // Drawn second as a danger button.
   confirm: ConfirmChoice;
-  // The pushed scope, qualified, whose keys each button's hint shows.
+  // The pushed scope, qualified, each button's hint is anchored in.
   scope: ViewScope;
   keys: ConfirmKeys;
   run(command: CommandId): void;
@@ -40,8 +42,8 @@ export interface ConfirmPromptDeps {
   isSending(): boolean;
   // Asks the caller's state to drop the prompt.
   dismiss(): void;
-  // Runs on each base scope change under the pushed scope.
-  onBaseChanged(): void;
+  // Runs on each base scope change under the pushed scope, when given.
+  onBaseChanged?(): void;
   log: Log;
   logSource: string;
 }
@@ -63,21 +65,18 @@ const DISMISSED_LINE = 'cancel prompt dismissed: the view moved on';
 // A confirm dialog, the safe choice first, that pushes its own scope over the
 // caller's while asked and is dismissed when another view sets the base
 // scope. While the caller's form sends, that dismiss waits: a failed send
-// dismisses the prompt, and a sent form closes it with the form. Each button
-// shows the pushed scope's keys for its command, and shows them again after
-// each keymap change, for as long as the page lives, as the prompt does.
+// dismisses the prompt, and a sent form closes it with the form. Each
+// button's hint is an anchor for its command in the prompt's pushed scope,
+// for as long as the page lives, as the prompt does.
 export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
   const dialog = createDialog(deps.title);
   const choiceButton = (choice: ConfirmChoice, variant: ButtonVariant) => {
+    const hint = element('span', 'ui-confirm-hint');
     const control = textButton(choice.label, () => deps.run(choice.command), {
       variant,
+      hint,
     });
-    const redrawKeys = appendKeyHint(
-      control,
-      () => deps.keys.keysFor(choice.command, deps.scope),
-      deps.platform,
-    );
-    deps.keys.onChanged(redrawKeys);
+    deps.keys.anchor(hint, choice.command, { scope: deps.scope });
     return control;
   };
   dialog.body.append(element('p', '', deps.body));
@@ -93,7 +92,7 @@ export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
   const pushScope = () => {
     const pushed = deps.pushScope();
     pushed.onBaseChanged(() => {
-      deps.onBaseChanged();
+      deps.onBaseChanged?.();
       if (pushedScope !== pushed) {
         return;
       }

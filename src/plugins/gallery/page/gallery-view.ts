@@ -13,6 +13,7 @@ import { icon } from '../../../shared/page/ui/icon';
 import { iconButton } from '../../../shared/page/ui/icon-button';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { kbd } from '../../../shared/page/ui/kbd';
+import { keyPrompt } from '../../../shared/page/ui/key-prompt';
 import { row } from '../../../shared/page/ui/row';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { sheet } from '../../../shared/page/ui/sheet';
@@ -60,6 +61,7 @@ export function createGalleryView(deps: GalleryViewDeps): GalleryView {
   sections.append(
     materialsSection(),
     kbdSection(platform),
+    keyPromptSection(platform),
     buttonSection(platform),
     iconButtonSection(),
     chipSection(),
@@ -160,6 +162,17 @@ function kbdSection(platform: Platform): HTMLElement {
     'Kbd',
     hints.map((keys) => cell(kbd(keys, platform), keys)),
   );
+}
+
+function keyPromptSection(platform: Platform): HTMLElement {
+  return section('KeyPrompt', [
+    cell(keyPrompt('<A-o>', platform), 'Keys'),
+    cell(keyPrompt('s', platform, 'star'), 'Keys and label'),
+    cell(
+      frame(withClass(keyPrompt('s', platform, 'star'), 'is-hint-hidden')),
+      'Hidden, keeps its space',
+    ),
+  ]);
 }
 
 function buttonSection(platform: Platform): HTMLElement {

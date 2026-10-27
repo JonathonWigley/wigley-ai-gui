@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { EditorBind, Keymap, PageBind } from '../../../contracts/keymap';
-import { keysFor } from './keys-for';
+import { formatVimKeys } from '../../../shared/key-hints';
+import { keysFor, promptKeysFor } from './keys-for';
 
 function keymap(page: PageBind[], box: EditorBind[] = []): Keymap {
   return {
@@ -87,5 +88,64 @@ describe('keysFor', () => {
 
     expect(keysFor(map, 'a.prev', 'a.s', 'macos')).toBeNull();
     expect(keysFor(map, 'a.next', 'a.other', 'macos')).toBeNull();
+  });
+});
+
+describe('promptKeysFor', () => {
+  it('promptKeysFor_VimBindFirst_ShowsTheFirstOtherBind', () => {
+    const map = keymap([
+      { keys: ['j'], scope: 'forms.forms', command: 'forms.nextItem' },
+      { keys: ['<C-l>'], scope: 'forms.forms', command: 'forms.nextItem' },
+    ]);
+
+    expect(
+      promptKeysFor(map, 'forms.nextItem', 'forms.forms', 'macos', 'page'),
+    ).toBe('⌃L');
+  });
+
+  it('promptKeysFor_OnlyVimBinds_ShowsTheFirst', () => {
+    const map = keymap([
+      {
+        keys: ['Enter'],
+        scope: 'forms.forms',
+        command: 'forms.acceptRecommendation',
+      },
+    ]);
+
+    expect(
+      promptKeysFor(
+        map,
+        'forms.acceptRecommendation',
+        'forms.forms',
+        'macos',
+        'page',
+      ),
+    ).toBe('↩');
+  });
+
+  it('promptKeysFor_AnyScopeBind_Counts', () => {
+    const map = keymap([{ keys: ['<A-o>'], scope: 'any', command: 'a.next' }]);
+
+    expect(promptKeysFor(map, 'a.next', 'a.s', 'macos', 'page')).toBe('⌥O');
+  });
+
+  it('promptKeysFor_BoxVimBindFirst_ShowsTheFirstOtherBind', () => {
+    const map = keymap(
+      [],
+      [
+        { keys: '<Esc>', scope: 'a.s', command: 'a.leave' },
+        { keys: '<C-c>', scope: 'a.s', command: 'a.leave' },
+      ],
+    );
+
+    expect(promptKeysFor(map, 'a.leave', 'a.s', 'macos', 'box')).toBe(
+      formatVimKeys('<C-c>', '<Space>', 'macos'),
+    );
+  });
+
+  it('promptKeysFor_Unbound_Null', () => {
+    const map = keymap([{ keys: ['x'], scope: 'a.s', command: 'a.other' }]);
+
+    expect(promptKeysFor(map, 'a.next', 'a.s', 'macos', 'page')).toBeNull();
   });
 });

@@ -28,6 +28,10 @@ export interface ListPickerRequest<T> {
   // Runs once the list has closed on `cancel`, or on the pushed scope's base
   // changing under it.
   cancelled?(): void;
+  // Drawn at the end of the title line while this request is open.
+  headerEnd?: HTMLElement | null;
+  // Drawn at the trailing end of the cursor row, on each draw.
+  cursorEnd?(item: T): HTMLElement | null;
 }
 
 // One floating list, holding one request at a time: `open` replaces the open
@@ -35,6 +39,9 @@ export interface ListPickerRequest<T> {
 // shows, and the base scope changing under it, or a click on the layer
 // outside the panel, cancels it. `choose` with nothing visible does nothing;
 // `close` hides it without hearing a cancel.
+// A request's `headerEnd` sits at the end of the title line while it is open,
+// and its `cursorEnd` at the trailing end of the cursor row only, moved there
+// on each draw.
 // With a filter editor, `focusFilter` types into the filter box above the
 // list and `leaveFilter` leaves it with the filter kept; without one both do
 // nothing.
@@ -71,6 +78,7 @@ export interface ListPickerDeps {
 interface OpenRequest {
   chooseAt(index: number): void;
   cancelled: (() => void) | null;
+  cursorEndAt(index: number): HTMLElement | null;
 }
 
 export function createListPicker(deps: ListPickerDeps): ListPicker {
@@ -78,6 +86,7 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
   const panel = floatingPanel();
   panel.classList.add('ui-picker');
   panel.setAttribute('role', 'dialog');
+  const head = element('div', 'ui-picker-head');
   const title = element('h2', 'ui-picker-title');
   const list = element('ol', 'ui-picker-list');
   layer.append(panel);
@@ -100,9 +109,11 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
   const draw = () => {
     const items = visibleIndexes(state).map((index) => {
       const label = state.labels[index];
+      const atCursor = index === state.cursor;
       const item = row({
         density: 'list',
         label,
+        trailing: atCursor ? (request?.cursorEndAt(index) ?? null) : null,
         tag: 'li',
         onClick: () => {
           state = { ...state, cursor: index };
@@ -111,7 +122,6 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       });
       // The row ends in an ellipsis; the tooltip shows the whole label.
       item.title = label;
-      const atCursor = index === state.cursor;
       item.classList.toggle('is-selected', atCursor);
       item.classList.toggle('is-cursor', atCursor);
       return item;
@@ -132,9 +142,9 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       modeChanged: () => undefined,
     }) ?? null;
   if (filter === null) {
-    panel.append(title, list);
+    panel.append(head, list);
   } else {
-    panel.append(title, filterBox, list);
+    panel.append(head, filterBox, list);
   }
 
   // Hides the layer and pops its scope; returns the request it held.
@@ -169,9 +179,13 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       request = {
         chooseAt: (index) => next.chosen(next.items[index]),
         cancelled: next.cancelled ?? null,
+        cursorEndAt: (index) => next.cursorEnd?.(next.items[index]) ?? null,
       };
       state = openPicker(next.items.map(next.label), next.selected ?? 0);
       title.textContent = next.title;
+      head.replaceChildren(
+        ...(next.headerEnd ? [title, next.headerEnd] : [title]),
+      );
       panel.setAttribute('aria-label', next.title);
       openFloatingPanel(panel, layer);
       draw();

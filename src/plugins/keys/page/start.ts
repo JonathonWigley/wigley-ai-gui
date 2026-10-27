@@ -4,11 +4,13 @@ import { kbd } from '../../../shared/page/ui/kbd';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../contract';
 import { keysManifest } from '../manifest';
+import { createAnchors } from './anchors';
 import { helpSections } from './help-sections';
 import { mountHelpView } from './help-view';
 import { barHints } from './key-bar';
 import { mountKeyBarView } from './key-bar-view';
-import { keysFor } from './keys-for';
+import { keysFor, promptKeysFor } from './keys-for';
+import { startUnplacedLog } from './unplaced-log';
 import { whichKeyModel } from './which-key';
 import { startWhichKey } from './which-key-controller';
 import { mountWhichKeyView } from './which-key-view';
@@ -23,9 +25,11 @@ type KeysApi = PageApi<
 // the help overlay over the `help` scope while it is open, closing when the
 // scope under it changes; and the keys that fire now, leader sequences aside,
 // in the status bar. Each reads the keymap and settings as they are now, and
-// help and the key bar redraw when the keymap changes. Exports the keys bound
-// to a command, and when they change, for a view that shows them beside its
-// control.
+// help, the key bar and every anchor redraw when the keymap changes. Exports
+// the keys bound to a command, and when they change, and `anchor`, which
+// draws a command's keys into a view's element, shown while its scope is in
+// force and the `showHints` setting is on. Records each scope in force and
+// every anchor named, for the unplaced log's check.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
@@ -94,15 +98,34 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       openHelp: () => api.commands.run(qualify(keysManifest.id, 'toggleHelp')),
       platform,
     });
+    const anchors = createAnchors({
+      keysFor: (command, scope, where) =>
+        promptKeysFor(keys.keymap(), command, scope, platform, where),
+      label: keys.label,
+      scope: () => keys.scope(),
+      showHints: () => api.settings().showHints,
+      platform,
+    });
     keys.onKeymapChanged(() => {
       help.setSections(currentHelpSections());
       keyBar.render();
+      anchors.redraw();
+    });
+    keys.onScopeChanged(() => anchors.applyVisibility());
+    api.onSettingsChanged(() => anchors.applyVisibility());
+    startUnplacedLog({
+      keymap: () => keys.keymap(),
+      scope: () => keys.scope(),
+      placedIn: anchors.placedIn,
+      onScopeChanged: (listener) => keys.onScopeChanged(listener),
+      log: services.log,
     });
 
     const exports: KeysPageExports = {
       keysFor: (command, scope, where) =>
         keysFor(keys.keymap(), command, scope, platform, where),
       onChanged: (listener) => keys.onKeymapChanged(() => listener()),
+      anchor: anchors.anchor,
     };
     return {
       exports,

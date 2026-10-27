@@ -1,0 +1,33 @@
+.ui-key-prompt {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--wg-space-1);
+  white-space: nowrap;
+}
+
+.ui-key-prompt-label {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+}
+
+/* An anchor whose hint is hidden keeps its space. */
+.is-hint-hidden {
+  visibility: hidden;
+}
+
+/* A view's chevron or arrow beside an anchor element. */
+.ui-key-chevron {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+}
+
+.ui-key-chevron:has(+ .is-hint-hidden),
+.is-hint-hidden + .ui-key-chevron {
+  visibility: hidden;
+}
+
+/* An anchor for an unbound command is empty. */
+.ui-key-chevron:has(+ :empty),
+:empty + .ui-key-chevron {
+  display: none;
+}
