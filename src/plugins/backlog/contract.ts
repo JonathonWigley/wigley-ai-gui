@@ -50,7 +50,8 @@ export interface BacklogFollowupFile {
 // folder the home is (compared on real paths); null for any other home, which
 // counts as not in git. A home that is a linked worktree's `docs/features`
 // folder is no home.
-// `uncommitted`: a follow-up file differs from HEAD.
+// `uncommitted`: a follow-up file, or a file in a folder of the home's
+// `followups-images/`, differs from HEAD.
 export interface BacklogHome {
   repo: string;
   root: string;
@@ -99,7 +100,11 @@ export interface BacklogMainExports {
   // 'create' adds an item to the home's create-target file with `text` as its
   // body; 'append' adds `text` to the end of that item's body. Each PNG in
   // `images` is saved under the home's followups-images/ and linked after
-  // `text`. A refused or failed follow-up write trashes the images it saved.
+  // `text`. A title that would not read back refuses before any image is
+  // saved; a refused or failed follow-up write trashes the images it saved.
+  // Rejects with `No Backlog home <homeRoot>` when `homeRoot` is not a home
+  // of the last load, and with the read error when an 'append' target's file
+  // cannot be read.
   fileNote(
     homeRoot: string,
     target: NoteTarget,

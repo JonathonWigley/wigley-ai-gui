@@ -113,6 +113,18 @@ function clonePath(
   return below === null ? null : `${FEATURES_FOLDER}/${below}`;
 }
 
+// The folder a clone-relative path lies in under the images folder, for a
+// path `followups-images/<folder>/…`; null for any other path, a file lying
+// directly in the images folder included.
+function imageFolderOf(path: string): string | null {
+  const prefix = `${IMAGES_PATHSPEC}/`;
+  if (!path.startsWith(prefix)) {
+    return null;
+  }
+  const below = path.slice(prefix.length).split('/');
+  return below.length >= 2 && below[0] !== '' ? below[0] : null;
+}
+
 // The real path; null when nothing is there.
 async function realPathOrNull(
   files: Pick<Files, 'realPath'>,
@@ -246,8 +258,8 @@ async function readPlan(
   }
 }
 
-// Whether git lists any of the home's follow-up files, or any file under its
-// images folder, as changed from HEAD.
+// Whether git lists any of the home's follow-up files, or any file in a
+// folder of its images folder, as changed from HEAD.
 async function isUncommitted(
   deps: BacklogDeps,
   home: MarkedHome,
@@ -264,8 +276,7 @@ async function isUncommitted(
       changedSet.has(clonePath(home.root, path, deps.paths) ?? ''),
     );
     return (
-      isFollowupChanged ||
-      changed.some((path) => path.startsWith(`${IMAGES_PATHSPEC}/`))
+      isFollowupChanged || changed.some((path) => imageFolderOf(path) !== null)
     );
   } catch (error) {
     logSkipped(deps.log, home.root, error);
@@ -731,6 +742,10 @@ function createBacklogMain(deps: BacklogDeps) {
     if (place.type === 'blocked') {
       return place.result;
     }
+    const problem = titleProblem(noteEdit(place, text));
+    if (problem !== null) {
+      return { type: 'refused', reason: problem };
+    }
     let links: string[] = [];
     let saved: SavedImages | null = null;
     if (images.length > 0) {
@@ -764,8 +779,8 @@ function createBacklogMain(deps: BacklogDeps) {
     return result;
   }
 
-  // Commits the home's changed follow-up files and every changed file under
-  // its images folder; resolves to the message.
+  // Commits the home's changed follow-up files and every changed file in a
+  // folder of its images folder; resolves to the message.
   async function commit(homeRoot: string): Promise<string> {
     const home = homeAt(homeRoot);
     const { gitRoot } = home;
@@ -784,14 +799,17 @@ function createBacklogMain(deps: BacklogDeps) {
       })),
     );
     const changed = texts.filter(({ before, after }) => before !== after);
-    const changedImages = await git.changedPaths(gitRoot, IMAGES_PATHSPEC);
+    const changedImages = (
+      await git.changedPaths(gitRoot, IMAGES_PATHSPEC)
+    ).flatMap((path) => {
+      const folder = imageFolderOf(path);
+      return folder === null ? [] : [{ path, folder }];
+    });
     if (changed.length === 0 && changedImages.length === 0) {
       throw new Error(`Nothing to commit in ${home.root}`);
     }
     const imageFolders = [
-      ...new Set(
-        changedImages.map((path) => path.split('/').slice(-2, -1).join('')),
-      ),
+      ...new Set(changedImages.map(({ folder }) => folder)),
     ].sort();
     const message = commitMessage(
       changed.map(({ before, after }) => ({
@@ -802,7 +820,10 @@ function createBacklogMain(deps: BacklogDeps) {
     );
     await git.commitPaths(
       gitRoot,
-      [...changed.map(({ relative }) => relative), ...changedImages],
+      [
+        ...changed.map(({ relative }) => relative),
+        ...changedImages.map(({ path }) => path),
+      ],
       message,
     );
     channel.send('changed', { homeRoot: home.root });

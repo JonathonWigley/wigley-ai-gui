@@ -858,6 +858,25 @@ describe('backlog main part', () => {
     ]);
   });
 
+  it('fileNote_CreateTitleWouldNotReadBack_RefusesWritingNoImage', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+
+    const result = await backlog.exports.fileNote(
+      HOME,
+      { type: 'create', title: ' ', oneLine: '', tags: [] },
+      'Text.',
+      [PNG_A],
+    );
+
+    expect(result).toEqual({
+      type: 'refused',
+      reason: followupTitleProblem(' '),
+    });
+    expect(backlog.calls.filter(([name]) => name !== 'readDoc')).toEqual([]);
+  });
+
   it('fileNote_AppendMissingItem_WritesNothing', async () => {
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
       [FOLLOWUPS]: FOLLOWUPS_TEXT,
@@ -1017,6 +1036,59 @@ describe('backlog main part', () => {
       ['docs/features/followups.md', imagePath],
       message,
     );
+  });
+
+  it('load_StrayFileInImagesFolder_NotUncommitted', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    backlog.git.changedPaths.mockResolvedValue([
+      'docs/features/followups-images/.DS_Store',
+    ]);
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(read.homes[0].uncommitted).toBe(false);
+  });
+
+  it('commit_StrayFileInImagesFolder_LeftOutOfCommitAndMessage', async () => {
+    const imagePath = `docs/features/followups-images/${CHIP_FOLDER}/1.png`;
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    backlog.git.fileAtHead.mockResolvedValue(FOLLOWUPS_TEXT);
+    backlog.git.changedPaths.mockImplementation(async (_root, pathspec) =>
+      pathspec === 'docs/features/followups-images'
+        ? ['docs/features/followups-images/.DS_Store', imagePath]
+        : [],
+    );
+    await backlog.invoke('load');
+
+    const message = await backlog.invoke('commit', HOME);
+
+    expect(message).not.toContain('followups-images');
+    expect(message).toContain(CHIP_FOLDER);
+    expect(backlog.git.commitPaths).toHaveBeenCalledWith(
+      CLONE,
+      [imagePath],
+      message,
+    );
+  });
+
+  it('commit_OnlyStrayFileInImagesFolder_Rejects', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    backlog.git.fileAtHead.mockResolvedValue(FOLLOWUPS_TEXT);
+    backlog.git.changedPaths.mockResolvedValue([
+      'docs/features/followups-images/.chip.png.1a2b.tmp',
+    ]);
+    await backlog.invoke('load');
+
+    await expect(backlog.invoke('commit', HOME)).rejects.toThrow(
+      `Nothing to commit in ${HOME}`,
+    );
+    expect(backlog.git.commitPaths).not.toHaveBeenCalled();
   });
 
   it('exports_Tags_TheTagsSetting', () => {
