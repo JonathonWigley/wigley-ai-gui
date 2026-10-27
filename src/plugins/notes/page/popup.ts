@@ -104,6 +104,14 @@ type Deliver = (
   flattened: readonly (Uint8Array | null)[],
 ) => Promise<NoteSendResult>;
 
+// An operation that changes the draft through main and holds it until done.
+type DraftOperation =
+  | 'send'
+  | 'discard'
+  | 'attach'
+  | 'image removal'
+  | 'capture';
+
 export interface NotePopupDeps {
   channel: PageChannel<NotesChannel>;
   services: PageServices;
@@ -148,14 +156,14 @@ export function createNotePopup(
   let titleScope: PushedScope | null = null;
   let focusedBox: 'title' | 'body' | null = null;
   let homes: NoteHome[] = [];
-  let isSending = false;
-  let isDiscarding = false;
-  let isCapturing = false;
-  let isAttaching = false;
-  // While a send, a discard or a paste or drop attach is in flight the draft
-  // takes no other edit, image or autosave: main's clear would land before
-  // them, or the attach after the send read the draft.
-  const isLocked = () => isSending || isDiscarding || isAttaching;
+  // The one operation changing the draft through main, named for log lines.
+  let inFlight: DraftOperation | null = null;
+  // An open() whose body focus waits for the operation in flight.
+  let focusBodyWhenFree = false;
+  // While a draft operation is in flight no send, discard, image change,
+  // picker or autosave starts, and no box takes focus; typing in a box already
+  // focused still lands.
+  const isLocked = () => inFlight !== null;
   // Each image's bytes and thumbnail URL, by id.
   const images = new Map<number, { bytes: Uint8Array; url: string }>();
 
@@ -427,6 +435,41 @@ export function createNotePopup(
     dispatch({ type: 'saveFinished', revision, error: null });
   };
 
+  // ── The draft operation in flight ─────────────────────────────────────────
+  // Runs `run` as the draft operation in flight, from before its first await
+  // to its end; logs and skips it when another holds the draft.
+  const runDraftOperation = async (
+    operation: DraftOperation,
+    run: () => Promise<void>,
+  ) => {
+    if (inFlight !== null) {
+      log('notes', `${operation} skipped: ${inFlight} in flight`);
+      return;
+    }
+    inFlight = operation;
+    try {
+      await run();
+    } finally {
+      inFlight = null;
+      draftFreed();
+    }
+  };
+
+  // Saves the edits typed during the operation, which autosave skipped, and
+  // focuses the body an open() during it could not.
+  const draftFreed = () => {
+    if (saveState(store.get()) === 'unsaved') {
+      void saveNow().catch(() => undefined);
+    }
+    if (!focusBodyWhenFree) {
+      return;
+    }
+    focusBodyWhenFree = false;
+    if (focusedBox === null && mayEdit()) {
+      body.focus({ insertAtEnd: true });
+    }
+  };
+
   // ── Images ────────────────────────────────────────────────────────────────
   const cacheImage = (id: number, bytes: Uint8Array) =>
     images.set(id, { bytes, url: pngDataUrl(bytes) });
@@ -468,17 +511,8 @@ export function createNotePopup(
     log('notes', `image ${pos} attached (${how})`);
   };
 
-  const attachFiles = async (
-    files: readonly File[],
-    how: 'pasted' | 'dropped',
-  ) => {
-    isAttaching = true;
-    try {
-      await attachEach(files, how);
-    } finally {
-      isAttaching = false;
-    }
-  };
+  const attachFiles = (files: readonly File[], how: 'pasted' | 'dropped') =>
+    runDraftOperation('attach', () => attachEach(files, how));
 
   const attachEach = async (
     files: readonly File[],
@@ -502,26 +536,27 @@ export function createNotePopup(
     }
   };
 
-  const removeImageAt = async (index: number) => {
-    const image = store.get().images[index];
-    if (image === undefined || isLocked()) {
-      return;
-    }
-    try {
-      const draft = await channel.invoke('removeImage', image.id);
-      await cacheImages(draft);
-      dispatch({
-        type: 'imagesChanged',
-        images: draft.images,
-        imageIndex: imageCursorAfterRemove(draft.images.length, index),
-      });
-      log('notes', `image ${index + 1} removed`);
-    } catch (error) {
-      const message = `Image not removed: ${errorText(error)}`;
-      toast(message, 'error');
-      log('notes', message);
-    }
-  };
+  const removeImageAt = (index: number) =>
+    runDraftOperation('image removal', async () => {
+      const image = store.get().images[index];
+      if (image === undefined) {
+        return;
+      }
+      try {
+        const draft = await channel.invoke('removeImage', image.id);
+        await cacheImages(draft);
+        dispatch({
+          type: 'imagesChanged',
+          images: draft.images,
+          imageIndex: imageCursorAfterRemove(draft.images.length, index),
+        });
+        log('notes', `image ${index + 1} removed`);
+      } catch (error) {
+        const message = `Image not removed: ${errorText(error)}`;
+        toast(message, 'error');
+        log('notes', message);
+      }
+    });
 
   // ── Pickers ───────────────────────────────────────────────────────────────
   const picker = createListPicker({
@@ -635,7 +670,7 @@ export function createNotePopup(
     phase === 'open' && dialog.isShown() && !othersHoldKeys();
 
   // Whether the user may change the draft now.
-  const mayEdit = () => fieldsShown() && !isCapturing && !isLocked();
+  const mayEdit = () => fieldsShown() && !isLocked();
 
   // Puts a draft main answered into the open popup: a fresh one takes the
   // selected session and its default target, saved at once.
@@ -677,7 +712,11 @@ export function createNotePopup(
     dialog.show();
     dispatch({ type: 'fieldMoved', field: 'body' });
     render();
-    body.focus({ insertAtEnd: true });
+    if (isLocked()) {
+      focusBodyWhenFree = true;
+    } else {
+      body.focus({ insertAtEnd: true });
+    }
     const { fields, images: held } = store.get();
     log(
       'notes',
@@ -699,6 +738,7 @@ export function createNotePopup(
     );
     blurBoxes();
     phase = 'closed';
+    focusBodyWhenFree = false;
     popupScope?.pop();
     popupScope = null;
     dialog.hide();
@@ -709,27 +749,26 @@ export function createNotePopup(
   const nextFrame = () =>
     new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-  const capture = async () => {
-    log('notes', 'capture started');
-    isCapturing = true;
-    blurBoxes();
-    dialog.hide();
-    try {
-      await nextFrame();
-      await nextFrame();
-      const draft = await channel.invoke('capture');
-      await imageAdded(draft, 'capture');
-    } catch (error) {
-      toast(`Capture failed: ${errorText(error)}`, 'error');
-      log('notes', `capture failed: ${errorText(error)}`);
-    } finally {
-      isCapturing = false;
-      if (phase === 'open') {
-        dialog.show();
-        dispatch({ type: 'fieldMoved', field: 'images' });
+  const capture = () =>
+    runDraftOperation('capture', async () => {
+      log('notes', 'capture started');
+      blurBoxes();
+      dialog.hide();
+      try {
+        await nextFrame();
+        await nextFrame();
+        const draft = await channel.invoke('capture');
+        await imageAdded(draft, 'capture');
+      } catch (error) {
+        toast(`Capture failed: ${errorText(error)}`, 'error');
+        log('notes', `capture failed: ${errorText(error)}`);
+      } finally {
+        if (phase === 'open') {
+          dialog.show();
+          dispatch({ type: 'fieldMoved', field: 'images' });
+        }
       }
-    }
-  };
+    });
 
   // ── Sending ───────────────────────────────────────────────────────────────
   const refuse = (text: string) => {
@@ -739,16 +778,8 @@ export function createNotePopup(
 
   // Whether a send of `kind` may start now; logs or toasts why not.
   const maySend = (kind: SendKind): boolean => {
-    if (isSending) {
-      log('notes', 'send in flight');
-      return false;
-    }
-    if (isDiscarding) {
-      log('notes', 'discard in flight');
-      return false;
-    }
-    if (isAttaching) {
-      log('notes', 'attach in flight');
+    if (inFlight !== null) {
+      log('notes', `${inFlight} in flight`);
       return false;
     }
     const refusal = sendRefusal(store.get().fields, kind);
@@ -813,24 +844,23 @@ export function createNotePopup(
   // null when it refused the send itself. A send that leaves the popup open
   // puts focus back in the box it started from.
   const runSend = async (prepare: () => Promise<Deliver | null>) => {
-    isSending = true;
     const startedIn = focusedBox;
-    blurBoxes();
-    try {
-      const deliver = await prepare();
-      if (deliver === null) {
-        return;
+    await runDraftOperation('send', async () => {
+      blurBoxes();
+      try {
+        const deliver = await prepare();
+        if (deliver === null) {
+          return;
+        }
+        await saveNow();
+        await markupView.savesSettled();
+        finishSend(await deliver(await flattenImages()));
+      } catch (error) {
+        refuse(errorText(error));
       }
-      await saveNow();
-      await markupView.savesSettled();
-      finishSend(await deliver(await flattenImages()));
-    } catch (error) {
-      refuse(errorText(error));
-    } finally {
-      isSending = false;
-      if (startedIn !== null && mayEdit()) {
-        focusBox(startedIn);
-      }
+    });
+    if (startedIn !== null && mayEdit()) {
+      focusBox(startedIn);
     }
   };
 
@@ -1049,21 +1079,20 @@ export function createNotePopup(
     if (!hideConfirm()) {
       return;
     }
-    isDiscarding = true;
-    try {
-      await markupView.savesSettled();
-      const draft = await channel.invoke('discard');
-      await cacheImages(draft);
-      showDraft(draft);
-      dispatch({ type: 'fieldMoved', field: 'body' });
-      log('notes', 'draft discarded');
-    } catch (error) {
-      const message = `Draft not discarded: ${errorText(error)}`;
-      toast(message, 'error');
-      log('notes', message);
-    } finally {
-      isDiscarding = false;
-    }
+    await runDraftOperation('discard', async () => {
+      try {
+        await markupView.savesSettled();
+        const draft = await channel.invoke('discard');
+        await cacheImages(draft);
+        showDraft(draft);
+        dispatch({ type: 'fieldMoved', field: 'body' });
+        log('notes', 'draft discarded');
+      } catch (error) {
+        const message = `Draft not discarded: ${errorText(error)}`;
+        toast(message, 'error');
+        log('notes', message);
+      }
+    });
   };
 
   // ── Paste and drop ────────────────────────────────────────────────────────
@@ -1102,7 +1131,7 @@ export function createNotePopup(
 
   // ── Commands ──────────────────────────────────────────────────────────────
   const whileFieldsShow = (run: () => void) => () => {
-    if (fieldsShown() && !isCapturing) {
+    if (fieldsShown() && inFlight !== 'capture') {
       run();
     }
   };

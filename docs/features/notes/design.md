@@ -33,7 +33,8 @@ session.
   with `No folder for <repo>; attach a session in that repo`.
 - The `Space n` actions work from the body box in its normal mode only; in insert mode `Space` types a space, so
   `Esc` comes first. `Cmd+Enter` still sends a new follow-up.
-- While a send or discard is in flight, the popup locks its fields, capture, paste and drop.
+- While a send, discard, capture, attach or image removal is in flight, no other of them starts and no picker,
+  autosave or box focus does; text typed in a box already focused still lands and is saved when it ends.
 - When a send or clear succeeds but writing the fresh `draft.json` fails, the popup shows a fresh note while disk
   keeps the sent draft, so after a restart the sent note comes back and could be sent twice. This is a deliberate
   trade (`draft-store.ts` `clear`).
