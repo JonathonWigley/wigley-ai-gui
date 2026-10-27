@@ -318,3 +318,4 @@ Review base: 268c38a4a1b8e0a49c34ff796705ec6c21417894
 - fake agent gains model and verbosity controls so the Model (o) and Controls (c) chips draw in the self-test — fixture state per the placement rule — none · group 10 · group 10
 ### Review rounds
 ### Test gate
+- whole vitest suite (the range touches every page plugin, the keys plugin, shared page code and the self-test runner; the suite runs in 5s) · 235 files, 3685 tests pass; npm run selftest (task 10's placement gate and every plugin script reach the changed views) · 683 PASS, 0 FAIL, every key placed, all passed; typecheck and lint clean
