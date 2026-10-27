@@ -114,10 +114,20 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
       if (paths.length === 0) {
         throw new Error(`commitPaths in ${root}: no paths to commit`);
       }
-      await gitOutput(processes, 'add', ['-C', root, 'add', '--', ...paths]);
+      // `--literal-pathspecs` keeps a `*`, `?`, `[` or leading `:` in a path
+      // from matching other files.
+      await gitOutput(processes, 'add', [
+        '-C',
+        root,
+        '--literal-pathspecs',
+        'add',
+        '--',
+        ...paths,
+      ]);
       await gitOutput(processes, 'commit', [
         '-C',
         root,
+        '--literal-pathspecs',
         'commit',
         '--only',
         '-m',

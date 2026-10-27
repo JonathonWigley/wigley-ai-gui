@@ -260,8 +260,17 @@ describe('createProcessGit', () => {
 
   it('commitPaths_Paths_AddThenCommitOnly', async () => {
     const test = setUp();
-    const add = git('add', '--', 'a.md', 'b.md');
-    const commit = git('commit', '--only', '-m', 'm', '--', 'a.md', 'b.md');
+    const add = git('--literal-pathspecs', 'add', '--', 'a.md', 'b.md');
+    const commit = git(
+      '--literal-pathspecs',
+      'commit',
+      '--only',
+      '-m',
+      'm',
+      '--',
+      'a.md',
+      'b.md',
+    );
     test.processes.script('git', add, exited(0));
     test.processes.script('git', commit, exited(0));
 
@@ -344,6 +353,28 @@ describe('createProcessGit over a real clone', () => {
         `Edit follow-ups\n\n${followups}\n`,
       );
       expect(await run('diff', '--cached', '--name-only')).toBe('other.txt\n');
+    },
+  );
+
+  it.skipIf(!gitOnPath)(
+    'commitPaths_PathWithGlobCharacter_CommitsOnlyThatFile',
+    async () => {
+      isolateGitConfig();
+      root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
+      await run('init', '--quiet');
+      writeFileSync(path.join(root, 'a*.md'), '');
+      writeFileSync(path.join(root, 'ab.md'), '');
+      await run('add', '--', 'a*.md', 'ab.md');
+      await run('commit', '--quiet', '-m', 'first');
+      writeFileSync(path.join(root, 'a*.md'), 'changed\n');
+      writeFileSync(path.join(root, 'ab.md'), 'changed\n');
+
+      await adapter.commitPaths(root, ['a*.md'], 'Edit glob file');
+
+      expect(await run('show', '--name-only', '--format=%s', 'HEAD')).toBe(
+        'Edit glob file\n\na*.md\n',
+      );
+      expect(await run('status', '--porcelain=v1')).toBe(' M ab.md\n');
     },
   );
 });
