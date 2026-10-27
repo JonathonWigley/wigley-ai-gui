@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseFollowups } from '../../shared/followups/followup-file';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
 import type { CreatePlace, IndexEntry } from './contract';
@@ -26,6 +27,11 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
 
 function place(folder: string, source: CreatePlace['source']): CreatePlace {
   return { title: folder, folder, source };
+}
+
+function itemFields(text: string, title: string) {
+  const item = parseFollowups(text).items.find((each) => each.title === title);
+  return { oneLine: item?.oneLine, tags: item?.tags };
 }
 
 function followupTarget(name: string) {
@@ -302,7 +308,7 @@ describe('createTarget', () => {
         '**Contents**',
         '',
         '- **Old** — one',
-        '- **Fix the badge**',
+        '- **Fix the badge** — ',
         '',
         '## Old',
         '',
@@ -311,7 +317,7 @@ describe('createTarget', () => {
         '## Fix the badge',
         '',
       ].join('\n'),
-      line: 12,
+      line: 6,
     });
     expect(target.appends).toBe(true);
   });
@@ -320,9 +326,18 @@ describe('createTarget', () => {
     const target = followupTarget('new');
 
     expect(target.contents('# F\n- **a** — x\n')).toEqual({
-      text: '# F\n- **a** — x\n- **new**\n',
+      text: '# F\n- **a** — x\n- **new** — \n',
       line: 3,
     });
+  });
+
+  it('createTarget_Followup_OpenDashReadsAnEmptyOneLine', () => {
+    const target = followupTarget('new');
+    const sectioned = target.contents(null).text;
+    const listed = target.contents('# F\n- **a** — x\n').text;
+
+    expect(itemFields(sectioned, 'new')).toEqual({ oneLine: '', tags: [] });
+    expect(itemFields(listed, 'new')).toEqual({ oneLine: '', tags: [] });
   });
 
   it('createTarget_FollowupMissingFile_StartsNewFileNamedForFolder', () => {
@@ -333,14 +348,14 @@ describe('createTarget', () => {
         '',
         '**Contents**',
         '',
-        '- **new**',
+        '- **new** — ',
         '',
         'Deferred work for the r repo. Each entry is one `##` section and stands on its own as a task brief.',
         '',
         '## new',
         '',
       ].join('\n'),
-      line: 9,
+      line: 5,
     };
 
     expect(target.contents(null)).toEqual(created);
@@ -389,6 +404,10 @@ describe('nameProblem', () => {
     expect(nameProblem('followup', 'a\nb')).toBe(
       'A follow-up title is one line',
     );
+    expect(nameProblem('followup', 'Wait:')).toBe(
+      'A follow-up title does not end with :',
+    );
+    expect(nameProblem('followup', 'Fix it')).toBe(null);
     expect(nameProblem('rule', 'style')).toBe(null);
   });
 });

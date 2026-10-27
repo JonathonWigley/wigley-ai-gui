@@ -31,15 +31,19 @@ export interface FollowupDraft {
   body: string;
 }
 
-// An edit names its item by title, compared exactly.
+// An edit names its item by title, compared exactly. A create with
+// `openOneLine` writes an empty one line and no tags as `**<title>** — `, so
+// the one line is typed after it.
 export type FollowupEdit =
-  | { type: 'create'; draft: FollowupDraft }
+  | { type: 'create'; draft: FollowupDraft; openOneLine?: boolean }
   | { type: 'edit'; title: string; draft: FollowupDraft }
   | { type: 'setTags'; title: string; tags: string[] }
   | { type: 'delete'; title: string };
 
-// `line` is the 1-based line of the created or edited item; for a delete, the
-// line where the removed item started, clamped to the file's last line.
+// `line` is the 1-based line of the created or edited item (for a create with
+// `openOneLine`, the line its one line is typed on: the list item or the
+// Contents line); for a delete, the line where the removed item started,
+// clamped to the file's last line.
 export type FollowupEditResult =
   | { type: 'applied'; text: string; line: number }
   | { type: 'missing'; title: string }
@@ -77,10 +81,13 @@ interface ContentsList {
 }
 
 // An item and where its text sits. `marker` is a list item's `- ` or `N. `;
-// `contents` is a section's Contents line.
+// `leadEnd` is the last line of a list item's first line, a bold title
+// wrapped onto its continuation included; `contents` is a section's Contents
+// line.
 interface Entry {
   item: FollowupItem;
   span: LineSpan;
+  leadEnd: number;
   struck: boolean;
   marker: string;
   contents: ContentsEntry | null;
@@ -104,6 +111,29 @@ interface SplitText {
   lines: string[];
   endsWithNewline: boolean;
   lineEnding: string;
+}
+
+// Why `title` would not read back as written as a follow-up's title, or null.
+export function followupTitleProblem(title: string): string | null {
+  if (title.trim() === '') {
+    return 'A follow-up title is required';
+  }
+  if (/[\r\n]/.test(title)) {
+    return 'A follow-up title is one line';
+  }
+  if (title !== title.trim()) {
+    return 'A follow-up title does not start or end with a space';
+  }
+  if (title.startsWith('~~')) {
+    return 'A follow-up title does not start with ~~';
+  }
+  if (title.includes('**') || title.endsWith('*')) {
+    return 'A follow-up title holds no ** and does not end with *';
+  }
+  if (title.endsWith(':')) {
+    return 'A follow-up title does not end with :';
+  }
+  return null;
 }
 
 export function parseFollowups(text: string): FollowupFile {
@@ -132,11 +162,15 @@ export function applyFollowupEdit(
     if (findEntry(layout, edit.draft.title) !== undefined) {
       return { type: 'titleTaken', title: edit.draft.title };
     }
+    const openOneLine = edit.openOneLine === true;
     const created = applySplices(
       lines,
-      createSplices(lines, layout, edit.draft),
+      createSplices(lines, layout, edit.draft, openOneLine),
     );
-    return applied(created, source, lineOf(created, edit.draft.title));
+    const line = openOneLine
+      ? oneLineLineOf(created, edit.draft.title)
+      : lineOf(created, edit.draft.title);
+    return applied(created, source, line);
   }
   const entry = findEntry(layout, edit.title);
   if (entry === undefined) {
@@ -266,12 +300,19 @@ function linesOutsideFences(lines: string[]): number[] {
   return outside;
 }
 
+// Sectioned by a `**Contents**` line or a `### ` heading, or by `## ` headings
+// with no top-level list item; else a list file.
 function readLayout(lines: string[]): Layout {
   const outside = linesOutsideFences(lines);
-  const isSectioned = outside.some(
+  const hasSectionMark = outside.some(
     (index) =>
       lines[index].trim() === CONTENTS_LINE || lines[index].startsWith('### '),
   );
+  const hasHeading = outside.some((index) => lines[index].startsWith('## '));
+  const hasListItem = outside.some((index) =>
+    TOP_LEVEL_ITEM.test(lines[index]),
+  );
+  const isSectioned = hasSectionMark || (hasHeading && !hasListItem);
   if (!isSectioned) {
     return {
       shape: 'list',
@@ -313,7 +354,7 @@ function readContents(lines: string[], outside: number[]): ContentsList | null {
     entries.push({
       span: { start: index, end },
       marker: match[1],
-      fields: readLineFields([match[2], ...wrapped].join(' ')),
+      fields: readLineFields([match[2].trim(), ...wrapped].join(' ')),
     });
   }
   return { heading, entries };
@@ -353,6 +394,7 @@ function readSectionEntries(
         done: heading.struck || startsWithShipped(firstBodyLine),
       },
       span: { start, end },
+      leadEnd: start,
       struck: heading.struck,
       marker: '',
       contents: contentsEntry,
@@ -401,8 +443,12 @@ function listEntry(
   bound: number,
 ): Entry {
   const end = lastNonBlank(lines, item.start, bound);
-  const fields = readLineFields(item.text);
-  const body = withoutLeadingBlanks(lines.slice(item.start + 1, end + 1))
+  const leadEnd = boldTitleEnd(lines, item.start, item.text);
+  const wrapped = lines
+    .slice(item.start + 1, leadEnd + 1)
+    .map((line) => line.trim());
+  const fields = readLineFields([item.text.trim(), ...wrapped].join(' '));
+  const body = withoutLeadingBlanks(lines.slice(leadEnd + 1, end + 1))
     .map((line) => line.replace(/^ {1,2}/, ''))
     .join('\n');
   return {
@@ -416,10 +462,32 @@ function listEntry(
       done: fields.struck || startsWithShipped(fields.oneLine),
     },
     span: { start: item.start, end },
+    leadEnd,
     struck: fields.struck,
     marker: item.marker,
     contents: null,
   };
+}
+
+// The line a bold title that opens `text`, the list item's first line on
+// `start`, closes on: the first of its indented continuation lines holding
+// `**` when the first line does not close it, else `start`.
+function boldTitleEnd(lines: string[], start: number, text: string): number {
+  const lead = text.trim().replace(/^~~/, '');
+  const opensUnclosedBold = lead.startsWith('**') && lead.indexOf('**', 2) < 0;
+  if (!opensUnclosedBold) {
+    return start;
+  }
+  for (
+    let index = start + 1;
+    index < lines.length && isIndentedText(lines[index]);
+    index++
+  ) {
+    if (lines[index].includes('**')) {
+      return index;
+    }
+  }
+  return start;
 }
 
 // A Contents line or list item's text after its marker:
@@ -472,11 +540,22 @@ function findEntry(layout: Layout, title: string): Entry | undefined {
 }
 
 function lineOf(lines: string[], title: string): number {
+  return writtenEntry(lines, title).item.line;
+}
+
+// The 1-based line `title`'s one line is typed on: its list item, or its
+// Contents line in a sections file.
+function oneLineLineOf(lines: string[], title: string): number {
+  const entry = writtenEntry(lines, title);
+  return (entry.contents?.span.start ?? entry.span.start) + 1;
+}
+
+function writtenEntry(lines: string[], title: string): Entry {
   const entry = findEntry(readLayout(lines), title);
   if (entry === undefined) {
     throw new Error(`The written follow-up "${title}" does not read back.`);
   }
-  return entry.item.line;
+  return entry;
 }
 
 // Applied from the highest index down, so each splice's index still holds;
@@ -492,17 +571,20 @@ function applySplices(lines: string[], splices: Splice[]): string[] {
   return result;
 }
 
+// `openOneLine` keeps the dash after a title with no tags or one line.
 function formatItemLine(
   marker: string,
   title: string,
   tags: string[],
   oneLine: string,
   struck: boolean,
+  openOneLine = false,
 ): string {
   const tagSpan = tags.length > 0 ? `*${tags.join(', ')}*:` : '';
   const tail = [tagSpan, oneLine].filter((part) => part !== '').join(' ');
   const lead = struck ? `~~**${title}**~~` : `**${title}**`;
-  return tail === '' ? `${marker}${lead}` : `${marker}${lead} — ${tail}`;
+  const hasNoDash = tail === '' && !openOneLine;
+  return hasNoDash ? `${marker}${lead}` : `${marker}${lead} — ${tail}`;
 }
 
 function bodyLines(body: string): string[] {
@@ -521,12 +603,20 @@ function listItemLines(
   marker: string,
   draft: FollowupDraft,
   struck: boolean,
+  openOneLine = false,
 ): string[] {
   const continuation = bodyLines(draft.body).map((line) =>
     isBlank(line) ? '' : `  ${line}`,
   );
   return [
-    formatItemLine(marker, draft.title, draft.tags, draft.oneLine, struck),
+    formatItemLine(
+      marker,
+      draft.title,
+      draft.tags,
+      draft.oneLine,
+      struck,
+      openOneLine,
+    ),
     ...continuation,
   ];
 }
@@ -631,6 +721,7 @@ function createSplices(
   lines: string[],
   layout: Layout,
   draft: FollowupDraft,
+  openOneLine: boolean,
 ): Splice[] {
   const separator = lines.length > 0 ? [''] : [];
   if (layout.shape === 'sections') {
@@ -640,6 +731,7 @@ function createSplices(
       draft.tags,
       draft.oneLine,
       false,
+      openOneLine,
     );
     return [
       contentsInsertSplice(lines, requireContents(layout), contentsLine),
@@ -656,7 +748,10 @@ function createSplices(
       {
         at: lines.length,
         remove: 0,
-        insert: [...separator, ...listItemLines('- ', draft, false)],
+        insert: [
+          ...separator,
+          ...listItemLines('- ', draft, false, openOneLine),
+        ],
       },
     ];
   }
@@ -664,7 +759,7 @@ function createSplices(
     {
       at: last.span.end + 1,
       remove: 0,
-      insert: listItemLines(nextMarker(last.marker), draft, false),
+      insert: listItemLines(nextMarker(last.marker), draft, false, openOneLine),
     },
   ];
 }
@@ -732,7 +827,7 @@ function setTagsSplices(
     return [
       {
         at: entry.span.start,
-        remove: 1,
+        remove: entry.leadEnd - entry.span.start + 1,
         insert: [
           formatItemLine(entry.marker, title, tags, oneLine, entry.struck),
         ],

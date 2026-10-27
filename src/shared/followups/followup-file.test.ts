@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyFollowupEdit,
+  followupTitleProblem,
   newFollowupsFile,
   parseFollowups,
   type FollowupDraft,
@@ -925,5 +926,225 @@ describe('newFollowupsFile', () => {
       shape: 'sections',
       items: [],
     });
+  });
+});
+
+// The same texts as docs-index's tests/test_markdown.py in wigley-ai-marketplace,
+// so the two readers agree on them.
+describe('parseFollowups on texts the index reader shares', () => {
+  const WRAPPED_TITLE = lines(
+    '1. **The read-only trait as an optional interface is a runtime type test, and `ITool` freezes once',
+    '   plugins compile against it** — *agent-ready*: callers find it by a type test.',
+    '   Fix: a required member.',
+    '2. **Next** — b',
+  );
+  const WRAPPED_TITLE_TEXT =
+    'The read-only trait as an optional interface is a runtime type test, and `ITool` freezes once plugins compile against it';
+
+  it('reads a bold title wrapped onto its continuation whole, the body after it', () => {
+    const items = parseFollowups(WRAPPED_TITLE).items;
+
+    expect(items.map((item) => [item.title, item.tags, item.oneLine])).toEqual([
+      [WRAPPED_TITLE_TEXT, ['agent-ready'], 'callers find it by a type test.'],
+      ['Next', [], 'b'],
+    ]);
+    expect(items[0]).toMatchObject({
+      body: ' Fix: a required member.',
+      line: 1,
+      endLine: 3,
+    });
+  });
+
+  it('keeps the first-sentence title of an unclosed bold with no close below', () => {
+    const text = lines('- **Open bold. Rest', '  no close here');
+
+    expect(parseFollowups(text).items.map((item) => item.title)).toEqual([
+      '**Open bold',
+    ]);
+  });
+
+  it('sections ## headings with no list item', () => {
+    const text = lines(
+      '# Follow-ups',
+      '',
+      '## One',
+      '',
+      'Body one.',
+      '',
+      '## Two',
+      '',
+      'Body two.',
+    );
+    const file = parseFollowups(text);
+
+    expect(file.shape).toBe('sections');
+    expect(file.items.map((item) => item.title)).toEqual(['One', 'Two']);
+  });
+
+  it('keeps a grouped list file list-shaped', () => {
+    const text = lines(
+      '## Group',
+      '',
+      '- **A** — a',
+      '',
+      '## Other',
+      '',
+      '- **B** — b',
+    );
+    const file = parseFollowups(text);
+
+    expect(file.shape).toBe('list');
+    expect(file.items.map((item) => item.title)).toEqual(['A', 'B']);
+  });
+
+  it('reads tags and a title from a wrapped Contents line', () => {
+    const text = lines(
+      '**Contents**',
+      '',
+      '- **One** —',
+      '  *agent-ready*: starts here',
+      '  and wraps on.',
+      '- **A long',
+      '  title** — *art*: wraps',
+      '',
+      '## One',
+      '',
+      'Body.',
+      '',
+      '## A long title',
+      '',
+      'Body two.',
+    );
+
+    expect(
+      parseFollowups(text).items.map((item) => [
+        item.title,
+        item.tags,
+        item.oneLine,
+      ]),
+    ).toEqual([
+      ['One', ['agent-ready'], 'starts here and wraps on.'],
+      ['A long title', ['art'], 'wraps'],
+    ]);
+  });
+
+  it('reads a dash with nothing after it as an empty one line', () => {
+    const text = '- **Fresh** — \n- **Next** — b\n';
+
+    expect(
+      parseFollowups(text).items.map((item) => [
+        item.title,
+        item.oneLine,
+        item.tags,
+      ]),
+    ).toEqual([
+      ['Fresh', '', []],
+      ['Next', 'b', []],
+    ]);
+  });
+
+  it('writes a wrapped title on one line through setTags and edit', () => {
+    const tagged = appliedText(WRAPPED_TITLE, {
+      type: 'setTags',
+      title: WRAPPED_TITLE_TEXT,
+      tags: ['art'],
+    });
+    const edited = appliedText(WRAPPED_TITLE, {
+      type: 'edit',
+      title: WRAPPED_TITLE_TEXT,
+      draft: {
+        title: WRAPPED_TITLE_TEXT,
+        oneLine: 'new',
+        tags: [],
+        body: 'Fix.',
+      },
+    });
+
+    expect(tagged).toBe(
+      lines(
+        `1. **${WRAPPED_TITLE_TEXT}** — *art*: callers find it by a type test.`,
+        '   Fix: a required member.',
+        '2. **Next** — b',
+      ),
+    );
+    expect(itemNamed(tagged, WRAPPED_TITLE_TEXT).tags).toEqual(['art']);
+    expect(edited).toBe(
+      lines(`1. **${WRAPPED_TITLE_TEXT}** — new`, '  Fix.', '2. **Next** — b'),
+    );
+  });
+});
+
+describe('applyFollowupEdit create with openOneLine', () => {
+  const draft = { title: 'Fresh', oneLine: '', tags: [], body: '' };
+
+  it('writes the list item with its dash, the line on it', () => {
+    expect(
+      applyFollowupEdit(lines('- **A** — a'), {
+        type: 'create',
+        draft,
+        openOneLine: true,
+      }),
+    ).toEqual({
+      type: 'applied',
+      text: lines('- **A** — a', '- **Fresh** — '),
+      line: 2,
+    });
+  });
+
+  it('writes the Contents line with its dash, the line on it', () => {
+    const result = applyFollowupEdit(SECTIONED, {
+      type: 'create',
+      draft,
+      openOneLine: true,
+    });
+
+    expect(result).toEqual({
+      type: 'applied',
+      text:
+        SECTIONED.replace(
+          '- **`Reward` popup** — fix the overlap\n',
+          '- **`Reward` popup** — fix the overlap\n- **Fresh** — \n',
+        ).trimEnd() + '\n\n## Fresh\n',
+      line: 7,
+    });
+    expect(itemNamed((result as { text: string }).text, 'Fresh').oneLine).toBe(
+      '',
+    );
+  });
+});
+
+describe('followupTitleProblem', () => {
+  it('names each title that would not read back', () => {
+    expect(
+      [' ', 'a\nb', 'a\rb', ' a', 'a ', '~~a~~ b', 'a **b** c', 'a*', 'a:'].map(
+        followupTitleProblem,
+      ),
+    ).toEqual([
+      'A follow-up title is required',
+      'A follow-up title is one line',
+      'A follow-up title is one line',
+      'A follow-up title does not start or end with a space',
+      'A follow-up title does not start or end with a space',
+      'A follow-up title does not start with ~~',
+      'A follow-up title holds no ** and does not end with *',
+      'A follow-up title holds no ** and does not end with *',
+      'A follow-up title does not end with :',
+    ]);
+  });
+
+  it('passes a title that reads back in both shapes', () => {
+    const title = '`Reward` popup: *the* bar ~~x~~ — 2.0.';
+    const draft = { title, oneLine: 'o', tags: [], body: '' };
+
+    expect(followupTitleProblem(title)).toBe(null);
+    expect(
+      itemNamed(appliedText(SECTIONED, { type: 'create', draft }), title).title,
+    ).toBe(title);
+    expect(
+      itemNamed(
+        appliedText(lines('- **A** — a'), { type: 'create', draft }),
+        title,
+      ).title,
+    ).toBe(title);
   });
 });

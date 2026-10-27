@@ -1,6 +1,7 @@
 import type { Paths } from '../../contracts/paths';
 import {
   applyFollowupEdit,
+  followupTitleProblem,
   newFollowupsFile,
 } from '../../shared/followups/followup-file';
 import type {
@@ -146,7 +147,7 @@ export function nameProblem(kind: CreateKind, name: string): string | null {
     return `A ${kind} name is lowercase letters, digits and hyphens`;
   }
   if (kind === 'followup') {
-    return /[\r\n]/.test(trimmed) ? 'A follow-up title is one line' : null;
+    return followupTitleProblem(trimmed);
   }
   const holdsSeparator = trimmed.includes('/') || trimmed.includes('\\');
   if (holdsSeparator || trimmed.startsWith('.')) {
@@ -230,7 +231,8 @@ function placeTitle(
 }
 
 // `existing` with a follow-up titled `name` created in the file's own shape,
-// the editor on its heading or list item. No file, or a blank one, starts as
+// its list item or Contents line written as `- **<name>** — ` and the editor
+// on that line. No file, or a blank one, starts as
 // a new follow-ups file named after the place's repo.
 function createdFollowup(
   name: string,
@@ -245,6 +247,7 @@ function createdFollowup(
   const result = applyFollowupEdit(text, {
     type: 'create',
     draft: { title: name, oneLine: '', tags: [], body: '' },
+    openOneLine: true,
   });
   if (result.type !== 'applied') {
     throw new Error(`A follow-up titled ${name} already exists`);
