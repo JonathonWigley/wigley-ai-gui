@@ -1,4 +1,5 @@
 import type { CommandId } from '../../../contracts/commands';
+import type { Disposable } from '../../../contracts/disposable';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
@@ -13,7 +14,6 @@ import {
   keepFocusedBox,
 } from '../../../shared/page/editor-boxes';
 import { saveLabel, saveState } from '../../../shared/page/autosave';
-import { appendKeyHint, keyHint } from '../../../shared/page/key-hint';
 import {
   createSessionFormTabs,
   type SessionFormTabs,
@@ -25,9 +25,11 @@ import {
 } from '../../../shared/page/session-forms';
 import {
   createStatusLine,
+  type StatusLine,
   type StatusLineContent,
 } from '../../../shared/page/status-line';
 import { textLineHeightPx } from '../../../shared/page/text-line';
+import { textButton } from '../../../shared/page/ui/button';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { row } from '../../../shared/page/ui/row';
@@ -35,7 +37,7 @@ import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { createSplit } from '../../../shared/page/ui/split';
 import { tag } from '../../../shared/page/ui/tag';
 import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
-import type { KeysPageExports } from '../../keys/contract';
+import type { AnchorOptions, KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
 import type { PrimerEntry, PrimerView } from '../contract';
 import {
@@ -51,7 +53,7 @@ import {
   type PrimerBox,
   shownBoxes,
 } from './boxes';
-import { needTag, renderReview, taskName } from './primer-review';
+import { needTag, renderReview, reviewFooter, taskName } from './primer-review';
 import {
   FEATURE_FIELDS,
   includedCount,
@@ -60,6 +62,7 @@ import {
   type PrimerState,
   RAIL_GROUPS,
   railRows,
+  rowPrompt,
   scopeOf,
   selectedEntry,
   selectedRow,
@@ -70,22 +73,20 @@ import type { PrimerStore } from './primer-store';
 
 // `beforeClose` answers whether a session may close now. `setScope` sets the
 // key scope to `scopeOf` the state while a Primer tab is the visible tab;
-// `pushConfirmScope` lays the cancel prompt's scope over it. `onViewChanged`
-// hears each change that can move the visible view off or onto a Primer tab:
-// a key scope or mode change. `run` runs a button's command. `platform` is the
-// OS key hints are drawn for; `uiState` keeps the rail's dragged width, which
-// every primer's rail opens at.
+// `pushConfirmScope` lays the cancel prompt's scope over it. `keys` anchors
+// each key hint the view draws. `run` runs a button's command. `platform` is
+// the OS the cancel prompt's hints are drawn for; `uiState` keeps the rail's
+// dragged width, which every primer's rail opens at.
 export interface PrimerViewDeps {
-  areas: Pick<PluginAreas, 'statusBar' | 'overlay'>;
+  areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
   beforeClose(sessionId: string): boolean;
   setScope(scope: PrimerScopeName): void;
-  onViewChanged(listener: () => void): void;
   pushConfirmScope(): PushedScope;
   store: PrimerStore;
   boxes: EditorBoxes<PrimerBox>;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'>;
+  keys: Pick<KeysPageExports, 'anchor'>;
   run(command: CommandId): void;
   platform: Platform;
   uiState: UiState;
@@ -106,8 +107,7 @@ export interface PrimerTab {
 
 // One open primer's DOM in its session's Primer tab. `update` draws it for
 // the primer and the view whose pane shows: under the cancel prompt, the view
-// keeping the primer returns to. `dispose` stops it following keymap
-// changes.
+// keeping the primer returns to. `dispose` disposes every anchor it named.
 interface PrimerFormView {
   element: HTMLElement;
   update(primer: OpenPrimer, view: PrimerView): void;
@@ -116,29 +116,38 @@ interface PrimerFormView {
 }
 
 // A built card: `update` redraws what changes without a rebuild, and
-// `redrawKeys` shows each box's keys as the keymap binds them now.
+// `dispose` disposes the anchors its build named.
 interface PrimerCard {
   update(primer: OpenPrimer): void;
-  redrawKeys(): void;
+  dispose(): void;
 }
 
-type CardDeps = Pick<
-  PrimerViewDeps,
-  'boxes' | 'markdown' | 'keys' | 'platform'
-> & {
+type AnchorKeys = Pick<KeysPageExports, 'anchor'>;
+
+type CardDeps = Pick<PrimerViewDeps, 'boxes' | 'markdown' | 'keys'> & {
   dispatch(action: PrimerAction): void;
 };
 
-// The whole primer UI: each primer in its session's Primer tab, the status
-// line in the status bar, the cancel prompt in the overlay layer, all serving
-// the active primer. Every store change renders it; a change a render's own
-// dispatch makes renders again once that render ends. While a Primer tab is
-// the visible tab the status line shows and the key scope follows the state;
-// the cancel prompt pushes its own scope over it and is dismissed when another
-// view sets the scope.
+// The parts of the rail a primer view builds once: the header's save state
+// and row pair, the body `drawRail` fills, the row prompt `drawRail` moves to
+// the selected row with its remove key, and the Extra tasks header's prompt.
+interface RailParts {
+  statusLine: StatusLine;
+  edge: HTMLElement;
+  body: HTMLElement;
+  rowPrompt: HTMLElement;
+  removeKey: HTMLElement;
+  addPrompt: HTMLElement;
+}
+
+// The whole primer UI: each primer in its session's Primer tab and the cancel
+// prompt in the overlay layer, serving the active primer. Every store change
+// renders it; a change a render's own dispatch makes renders again once that
+// render ends. While a Primer tab is the visible tab the key scope follows
+// the state; the cancel prompt pushes its own scope over it and is dismissed
+// when another view sets the scope.
 export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
   const { areas, store, boxes } = deps;
-  const status = createStatusLine();
   const tabs = createSessionFormTabs({
     addTab: (sessionId, tab) => deps.sessions.addTab(sessionId, tab),
     tabId: 'primer',
@@ -148,8 +157,6 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     beforeClose: (sessionId) => deps.beforeClose(sessionId),
     shown: () => deps.setScope(scopeOf(store.get())),
   });
-  const updateStatus = () =>
-    status.update(tabs.isShown(), statusContent(store.get()));
   const dispatch = (action: PrimerAction) => store.dispatch(action);
   const confirm = createConfirmPrompt({
     title: 'Cancel this primer?',
@@ -167,12 +174,9 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     isAsked: () => store.get().view === 'confirm',
     isSending: () => (activeForm(store.get())?.sending ?? null) !== null,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),
-    // Under the pushed scope a base change reaches no onViewChanged.
-    onBaseChanged: updateStatus,
     log: deps.log,
     logSource: 'primer',
   });
-  areas.statusBar.contribute(status.element);
   areas.overlay.contribute(confirm.element);
   const primerViews = new Map<string, PrimerFormView>();
 
@@ -199,7 +203,6 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
         deps.setScope(scopeOf(state));
       }
     });
-    status.update(tabs.isShown(), statusContent(state));
     const box = boxes.active();
     if (box !== null && !isBoxShown(state, box)) {
       boxes.leave();
@@ -224,8 +227,6 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     }
   };
   store.subscribe(render);
-  boxes.onChange(updateStatus);
-  deps.onViewChanged(updateStatus);
   render();
   return {
     forgetSession(sessionId) {
@@ -283,8 +284,8 @@ function syncPrimerViews(
   }
 }
 
-// Destroys the primer's editors, removes its view and stops it following
-// keymap changes, and releases its take over, giving its session back.
+// Destroys the primer's editors, removes its view and disposes its anchors,
+// and releases its take over, giving its session back.
 function destroyPrimerView(
   primerId: string,
   primerViews: Map<string, PrimerFormView>,
@@ -302,12 +303,14 @@ function destroyPrimerView(
   tabs.release(primerId);
 }
 
-// A split with the rail in its start pane and the card and the review, each
-// scrolling on its own, in its end pane. The rail redraws whenever the primer
-// or the keymap changes; the card is rebuilt, its boxes destroyed and mounted
-// again, only when the selected row or its item count changes; the review is
-// drawn again while it shows, when the primer or the keymap changed. `attach`
-// places the root in the page once, before any editor mounts.
+// A split with the rail in its start pane and, in its end pane, the card edge
+// strip over the card and the review, each scrolling on its own. The rail is
+// a header, a scrolling body and a foot; its body redraws whenever the primer
+// changes. The card is rebuilt, its boxes destroyed and mounted again and its
+// anchors disposed, only when the selected row or its item count changes; the
+// review body is drawn again while it shows, when the primer changed, over a
+// footer built once. `attach` places the root in the page once, before any
+// editor mounts.
 function createPrimerFormView(
   attach: (root: HTMLElement) => void,
   primer: OpenPrimer,
@@ -325,12 +328,23 @@ function createPrimerFormView(
   root.classList.add('primer-form');
   split.start.classList.add('primer-rail');
   split.end.classList.add('primer-main');
+  const anchors: Disposable[] = [];
+  const keys = collectingKeys(deps.keys, anchors);
+  const rail = mountRail(split.start, keys, deps.run);
+  const cardEdge = cardEdgeStrip(keys);
   const cardPane = element('div', 'primer-card');
   const reviewPane = element('div', 'primer-review-pane');
-  split.end.append(cardPane, reviewPane);
+  const reviewBody = element('div', 'primer-review-body');
+  reviewPane.append(reviewBody, reviewFooter({ keys, run: deps.run }));
+  split.end.append(cardEdge, cardPane, reviewPane);
   // Editors mount into attached elements, so they can measure themselves.
   attach(root);
-  const cardDeps: CardDeps = { ...deps, dispatch };
+  const cardDeps: CardDeps = {
+    boxes: deps.boxes,
+    markdown: deps.markdown,
+    keys: deps.keys,
+    dispatch,
+  };
   const primerId = primer.formId;
   let cardKey = cardKeyOf(primer);
   let card = buildCard(cardPane, primer, cardDeps);
@@ -338,29 +352,28 @@ function createPrimerFormView(
   let railCursor = -1;
   let itemCursor = -1;
   let reviewPrimer: OpenPrimer | null = null;
-  let shownPrimer: OpenPrimer | null = null;
-  let shownView: PrimerView = 'primer';
 
   const rebuildCard = (current: OpenPrimer) => {
     keepFocusedBox(deps.boxes, primerId, () => {
       deps.boxes.destroyForm(primerId);
+      card.dispose();
       cardPane.replaceChildren();
       card = buildCard(cardPane, current, cardDeps);
     });
   };
 
-  const view: PrimerFormView = {
+  return {
     element: root,
     update(current, viewName) {
       // Every primer's rail shares one stored width.
       split.reloadWidth();
-      shownPrimer = current;
-      shownView = viewName;
       split.start.classList.toggle('is-pane-inactive', current.pane === 'card');
+      rail.statusLine.update(true, saveStatus(current));
+      rail.edge.classList.toggle('is-no-target', railRows(current).length < 2);
       const isRowChanged = current.railCursor !== railCursor;
       if (current !== railPrimer) {
         railPrimer = current;
-        drawRail(split.start, current, deps, dispatch, isRowChanged);
+        drawRail(rail, current, dispatch, isRowChanged);
       }
       const nextCardKey = cardKeyOf(current);
       if (nextCardKey !== cardKey) {
@@ -382,11 +395,12 @@ function createPrimerFormView(
       }
       railCursor = current.railCursor;
       const isReview = viewName === 'review';
+      cardEdge.hidden = isReview;
       cardPane.hidden = viewName !== 'primer';
       reviewPane.hidden = !isReview;
       if (isReview && current !== reviewPrimer) {
         reviewPrimer = current;
-        reviewPane.replaceChildren(renderReview(current, deps));
+        reviewBody.replaceChildren(renderReview(current));
       }
     },
     scrollBy(step, direction) {
@@ -394,18 +408,141 @@ function createPrimerFormView(
       return scrollContent(pane, step, direction, textLineHeightPx(pane));
     },
     dispose() {
-      keysChange.dispose();
+      card.dispose();
+      disposeAll(anchors);
     },
   };
-  const keysChange = deps.keys.onChanged(() => {
-    card.redrawKeys();
-    railPrimer = null;
-    reviewPrimer = null;
-    if (shownPrimer !== null && !root.hidden) {
-      view.update(shownPrimer, shownView);
-    }
+}
+
+// A `keys` whose anchors each land on `anchors`, so their owner disposes
+// them together.
+function collectingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {
+  return {
+    anchor(node, command, options) {
+      const anchor = keys.anchor(node, command, options);
+      anchors.push(anchor);
+      return anchor;
+    },
+  };
+}
+
+function disposeAll(anchors: Disposable[]) {
+  for (const anchor of anchors) {
+    anchor.dispose();
+  }
+  anchors.length = 0;
+}
+
+// A `span` of `className` anchored to the primer `command`.
+function anchoredSpan(
+  keys: AnchorKeys,
+  className: string,
+  command: PrimerCommandName,
+  options: AnchorOptions,
+): HTMLElement {
+  const node = element('span', className);
+  keys.anchor(node, primerCommand(command), options);
+  return node;
+}
+
+function chevron(text: string): HTMLElement {
+  return element('span', 'ui-key-chevron', text);
+}
+
+// Fills `rail` with its header, its body and its foot, and builds the
+// prompts `drawRail` places. The header holds the save state, the row pair
+// `⌃H ▲ ▼ ⌃L` and `⌥L card ›` at the split's edge; the foot the Review
+// button, whose keys show in the rail and the card scope alike.
+function mountRail(
+  rail: HTMLElement,
+  keys: AnchorKeys,
+  run: (command: CommandId) => void,
+): RailParts {
+  const scope = primerScope('rail');
+  const statusLine = createStatusLine();
+  const edge = element('span', 'primer-rail-edge');
+  edge.append(
+    anchoredSpan(keys, 'primer-rail-key', 'prevRow', { scope }),
+    chevron('▲'),
+    chevron('▼'),
+    anchoredSpan(keys, 'primer-rail-key', 'nextRow', { scope }),
+  );
+  const head = element('header', 'primer-rail-head');
+  head.append(
+    statusLine.element,
+    edge,
+    anchoredSpan(keys, 'primer-rail-key', 'focusCard', {
+      scope,
+      label: 'card',
+    }),
+    chevron('›'),
+  );
+  const body = element('div', 'primer-rail-body');
+  const removeKey = anchoredSpan(keys, 'primer-row-key', 'removeExtraTask', {
+    scope,
+    label: 'remove',
   });
-  return view;
+  const prompt = element('span', 'primer-row-prompt');
+  prompt.append(
+    anchoredSpan(keys, 'primer-row-key', 'needYes', { scope, label: 'yes' }),
+    anchoredSpan(keys, 'primer-row-key', 'needNo', { scope, label: 'no' }),
+    anchoredSpan(keys, 'primer-row-key', 'needUnclear', {
+      scope,
+      label: 'unclear',
+    }),
+    removeKey,
+  );
+  const addPrompt = anchoredSpan(keys, 'primer-add-prompt', 'addExtraTask', {
+    scope,
+    label: 'add',
+  });
+  const reviewKeys = element('span', 'primer-review-keys');
+  reviewKeys.append(
+    anchoredSpan(keys, 'primer-review-key', 'openReview', { scope }),
+    anchoredSpan(keys, 'primer-review-key', 'openReview', {
+      scope: primerScope('card'),
+    }),
+  );
+  const foot = element('footer', 'primer-rail-foot');
+  foot.append(
+    textButton('Review', () => run(primerCommand('openReview')), {
+      variant: 'ghost',
+      hint: reviewKeys,
+    }),
+  );
+  rail.append(head, body, foot);
+  return {
+    statusLine,
+    edge,
+    body,
+    rowPrompt: prompt,
+    removeKey,
+    addPrompt,
+  };
+}
+
+// The strip over the card: `‹ rail ⌥H` at the split's edge.
+function cardEdgeStrip(keys: AnchorKeys): HTMLElement {
+  const strip = element('div', 'primer-card-edge');
+  strip.append(
+    chevron('‹ rail'),
+    anchoredSpan(keys, 'primer-card-edge-key', 'focusRail', {
+      scope: primerScope('card'),
+    }),
+  );
+  return strip;
+}
+
+// The save state the rail header shows: `Sending…` while the primer sends.
+function saveStatus(primer: OpenPrimer): StatusLineContent {
+  if (primer.sending !== null) {
+    return { save: 'Sending…', saveState: 'sending' };
+  }
+  const shownState = saveState(primer);
+  return {
+    save: saveLabel(shownState, primer.saveError),
+    saveState: shownState,
+  };
 }
 
 // What a card is built for: the selected row and its item count.
@@ -418,20 +555,21 @@ function cardKeyOf(primer: OpenPrimer): string {
   return `task ${selected.entryId} ${items}`;
 }
 
-// The Feature row, then each group's tasks under its header, the Primer and
-// Every feature headers only over tasks and Extra tasks always, with a line
-// saying so while it holds none, and the rail scope's keys for adding one when
-// bound. Each row's click selects it; the selected row scrolls into view when
-// `isRowChanged`.
+// The rail body: the Feature row, then each group's tasks under its header,
+// the Primer and Every feature headers only over tasks and Extra tasks always,
+// holding the add prompt, with a line saying so while it holds none. The row
+// prompt ends the selected task row and leaves the Feature row, showing its
+// remove key on an extra task only. Each row's click selects it; the selected
+// row scrolls into view when `isRowChanged`.
 function drawRail(
-  rail: HTMLElement,
+  rail: RailParts,
   primer: OpenPrimer,
-  deps: Pick<PrimerViewDeps, 'keys' | 'platform'>,
   dispatch: (action: PrimerAction) => void,
   isRowChanged: boolean,
 ) {
   const list = element('div', 'primer-rail-list');
   const rows = railRows(primer);
+  const prompt = rowPrompt(primer);
   const railRow = (
     position: number,
     label: string,
@@ -445,16 +583,25 @@ function drawRail(
       trailing,
       onClick: () => dispatch({ type: 'selectRow', row: position }),
     });
-    node.classList.toggle('is-selected', position === primer.railCursor);
+    const isSelected = position === primer.railCursor;
+    node.classList.toggle('is-selected', isSelected);
+    if (isSelected && prompt !== 'none') {
+      node.append(rail.rowPrompt);
+    }
     return node;
   };
+  if (prompt === 'none') {
+    rail.rowPrompt.remove();
+  }
+  rail.removeKey.hidden = prompt !== 'extra';
   list.append(railRow(0, 'Feature', primer.feature.name, null));
   for (const [group, header] of RAIL_GROUPS) {
     const entries = primer.entries.filter((entry) => entry.group === group);
-    if (entries.length === 0 && group !== 'extra') {
+    const isExtra = group === 'extra';
+    if (entries.length === 0 && !isExtra) {
       continue;
     }
-    list.append(sectionHeader(header));
+    list.append(sectionHeader(header, isExtra ? rail.addPrompt : null));
     for (const entry of entries) {
       const position = rows.findIndex(
         (candidate) =>
@@ -465,21 +612,10 @@ function drawRail(
       );
     }
     if (entries.length === 0) {
-      const keys = deps.keys.keysFor(
-        primerCommand('addExtraTask'),
-        primerScope('rail'),
-      );
-      list.append(
-        keys === null
-          ? emptyState('No extra tasks.')
-          : emptyState(
-              'No extra tasks. Add one with',
-              keyHint(keys, deps.platform),
-            ),
-      );
+      list.append(emptyState('No extra tasks.'));
     }
   }
-  rail.replaceChildren(list);
+  rail.body.replaceChildren(list);
   if (isRowChanged) {
     list
       .querySelector('.ui-row.is-selected')
@@ -501,27 +637,32 @@ function railTrailing(entry: PrimerEntry): HTMLElement {
   return trailing;
 }
 
-// The selected row's card: the Feature card or the selected task's.
+// The selected row's card, the Feature card or the selected task's, its
+// anchors kept for its `dispose`.
 function buildCard(
   parent: HTMLElement,
   primer: OpenPrimer,
   deps: CardDeps,
 ): PrimerCard {
+  const anchors: Disposable[] = [];
+  const cardDeps: CardDeps = {
+    ...deps,
+    keys: collectingKeys(deps.keys, anchors),
+  };
   const entry = selectedEntry(primer);
-  return entry === null
-    ? buildFeatureCard(parent, primer, deps)
-    : buildTaskCard(parent, primer, entry, deps);
+  const update =
+    entry === null
+      ? buildFeatureCard(parent, primer, cardDeps)
+      : buildTaskCard(parent, primer, entry, cardDeps);
+  return { update, dispose: () => disposeAll(anchors) };
 }
 
-// The redraws of the key hints one card build drew.
-type KeyRedraws = (() => void)[];
-
+// The Feature card's fields; it redraws nothing without a rebuild.
 function buildFeatureCard(
   parent: HTMLElement,
   primer: OpenPrimer,
   deps: CardDeps,
-): PrimerCard {
-  const redraws: KeyRedraws = [];
+): (primer: OpenPrimer) => void {
   parent.append(element('h2', 'primer-card-heading', 'Feature'));
   for (const [name, label] of FEATURE_FIELDS) {
     appendField(
@@ -531,25 +672,21 @@ function buildFeatureCard(
       name === 'name' ? 'editFirstField' : null,
       primer,
       deps,
-      redraws,
     );
   }
-  return {
-    update() {},
-    redrawKeys: () => redraws.forEach((redraw) => redraw()),
-  };
+  return () => undefined;
 }
 
 // The task as heading, its tags, an extra task's name box, its markdown
-// sections, its items each with an include mark and a comment box, the
-// add-item box unless the task is full, and the task's comment box.
+// sections, its items each with an include mark and its key and a comment
+// box, the add-item box unless the task is full, and the task's comment box.
+// Returns the redraw of what changes without a rebuild.
 function buildTaskCard(
   parent: HTMLElement,
   primer: OpenPrimer,
   entry: PrimerEntry,
   deps: CardDeps,
-): PrimerCard {
-  const redraws: KeyRedraws = [];
+): (primer: OpenPrimer) => void {
   const entryId = entry.id;
   const heading = element('h2', 'primer-card-heading', taskName(entry));
   const tags = element('div', 'primer-card-tags');
@@ -571,7 +708,6 @@ function buildTaskCard(
       'editFirstField',
       primer,
       deps,
-      redraws,
     );
   }
   const sections: [string, string][] = [
@@ -606,11 +742,18 @@ function buildTaskCard(
         deps.dispatch({ type: 'toggleInclude' });
       },
     });
+    const lead = element('span', 'primer-item-lead');
+    lead.append(
+      mark,
+      anchoredSpan(deps.keys, 'primer-include-key', 'toggleInclude', {
+        scope: primerScope('card'),
+      }),
+    );
     block.append(
       row({
         density: 'list',
         label: item.text,
-        leading: mark,
+        leading: lead,
         trailing: item.added ? tag('Added') : null,
       }),
     );
@@ -622,7 +765,6 @@ function buildTaskCard(
       'editItemComment',
       primer,
       deps,
-      redraws,
     );
     itemsSection.append(block);
     return { block, mark };
@@ -636,7 +778,6 @@ function buildTaskCard(
       'addItem',
       primer,
       deps,
-      redraws,
     );
   }
   appendField(
@@ -646,41 +787,37 @@ function buildTaskCard(
     'editTaskComment',
     primer,
     deps,
-    redraws,
   );
-  return {
-    update(current) {
-      const shownEntry = current.entries.find(
-        (candidate) => candidate.id === entryId,
+  return (current) => {
+    const shownEntry = current.entries.find(
+      (candidate) => candidate.id === entryId,
+    );
+    if (shownEntry === undefined) {
+      return;
+    }
+    heading.textContent = taskName(shownEntry);
+    if (shownEntry.need !== shownNeed) {
+      shownNeed = shownEntry.need;
+      const next = needTag(shownNeed);
+      need.replaceWith(next);
+      need = next;
+    }
+    const isCardPane = current.pane === 'card';
+    items.forEach(({ block, mark }, position) => {
+      const item = shownEntry.items[position];
+      if (item !== undefined) {
+        setToggleMark(mark, item.include);
+      }
+      block.classList.toggle(
+        'is-cursor',
+        isCardPane && position === current.itemCursor,
       );
-      if (shownEntry === undefined) {
-        return;
-      }
-      heading.textContent = taskName(shownEntry);
-      if (shownEntry.need !== shownNeed) {
-        shownNeed = shownEntry.need;
-        const next = needTag(shownNeed);
-        need.replaceWith(next);
-        need = next;
-      }
-      const isCardPane = current.pane === 'card';
-      items.forEach(({ block, mark }, position) => {
-        const item = shownEntry.items[position];
-        if (item !== undefined) {
-          setToggleMark(mark, item.include);
-        }
-        block.classList.toggle(
-          'is-cursor',
-          isCardPane && position === current.itemCursor,
-        );
-      });
-    },
-    redrawKeys: () => redraws.forEach((redraw) => redraw()),
+    });
   };
 }
 
-// A labelled box: its label over its input frame, the card scope's keys for
-// `command` beside the label.
+// A labelled box: its label over its input frame, an anchor for `command` in
+// the card scope beside the label.
 function appendField(
   parent: HTMLElement,
   label: string,
@@ -688,34 +825,38 @@ function appendField(
   command: PrimerCommandName | null,
   primer: OpenPrimer,
   deps: CardDeps,
-  redraws: KeyRedraws,
 ) {
   const field = element('div', 'primer-field');
-  const hint = element('span', 'primer-field-hint');
+  const hint =
+    command === null
+      ? null
+      : anchoredSpan(deps.keys, 'primer-field-hint', command, {
+          scope: primerScope('card'),
+        });
   field.append(sectionHeader(label, hint));
   parent.append(field);
   mountFrame(field, target, primer, deps);
-  if (command !== null) {
-    redraws.push(cardKeyHint(hint, command, deps));
-  }
 }
 
-// A box with no label: its input frame, then the card scope's keys for
-// `command`.
+// A box with no label: its input frame, then an anchor for `command` in the
+// card scope.
 function mountBox(
   parent: HTMLElement,
   target: TextTarget,
   command: PrimerCommandName,
   primer: OpenPrimer,
   deps: CardDeps,
-  redraws: KeyRedraws,
 ) {
   mountFrame(parent, target, primer, deps);
-  const hint = element('span', 'primer-field-hint');
-  parent.append(hint);
-  redraws.push(cardKeyHint(hint, command, deps));
+  parent.append(
+    anchoredSpan(deps.keys, 'primer-field-hint', command, {
+      scope: primerScope('card'),
+    }),
+  );
 }
 
+// The box's input frame, then its `⌃P ⌃N` keys, which show on the frame's
+// bottom edge while the box has focus.
 function mountFrame(
   parent: HTMLElement,
   target: TextTarget,
@@ -724,39 +865,16 @@ function mountFrame(
 ) {
   const frame = inputFrame();
   frame.classList.add('primer-box');
-  parent.append(frame);
+  const scope = primerScope('card');
+  const boxKeys = element('span', 'box-keys');
+  boxKeys.append(
+    anchoredSpan(deps.keys, 'primer-box-key', 'prevBox', { scope }),
+    anchoredSpan(deps.keys, 'primer-box-key', 'nextBox', { scope }),
+  );
+  parent.append(frame, boxKeys);
   deps.boxes.mount(
     frame,
     { primerId: primer.formId, target },
     boxText(primer, target),
   );
-}
-
-function cardKeyHint(
-  hint: HTMLElement,
-  command: PrimerCommandName,
-  deps: CardDeps,
-): () => void {
-  return appendKeyHint(
-    hint,
-    () => deps.keys.keysFor(primerCommand(command), primerScope('card')),
-    deps.platform,
-  );
-}
-
-// The status line's content: `Sending…` while the active primer sends, else
-// its save state.
-function statusContent(state: PrimerState): StatusLineContent {
-  const primer = activeForm(state);
-  if (primer === null) {
-    return { save: '', saveState: '' };
-  }
-  if (primer.sending !== null) {
-    return { save: 'Sending…', saveState: 'sending' };
-  }
-  const shownState = saveState(primer);
-  return {
-    save: saveLabel(shownState, primer.saveError),
-    saveState: shownState,
-  };
 }

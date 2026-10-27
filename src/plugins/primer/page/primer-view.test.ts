@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from 'vitest';
+import type { CommandId } from '../../../contracts/commands';
 import type { EditorHost } from '../../../contracts/editor';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
 import {
@@ -7,6 +16,7 @@ import {
   findAll,
   installFakeDom,
 } from '../../../shared/page/test-dom';
+import type { AnchorOptions } from '../../keys/contract';
 import type { PrimerEntry } from '../contract';
 import {
   boxKey,
@@ -40,16 +50,18 @@ const host: EditorHost = {
 
 type PrimerCommand = keyof ReturnType<typeof primerCommandHandlers>;
 
+// One `keys.anchor` call the view made, its `dispose` a spy.
+interface NamedAnchor {
+  element: FakeElement;
+  command: CommandId;
+  options: AnchorOptions | undefined;
+  dispose: Mock<() => void>;
+}
+
 // Primer p1, holding `entries`, open and active in its session's Primer tab,
-// the visible tab; `tab` is the tab's element. The boxes, the commands and
-// the keymap's `keysFor` are wired as the page wires them; `changeKeys` makes
-// `keysFor` answer anew and tells the view the keymap changed.
-function primerTabSetup(
-  parts: {
-    entries?: PrimerEntry[];
-    keysFor?: () => string | null;
-  } = {},
-) {
+// the visible tab; `tab` is the tab's element. The boxes and the commands are
+// wired as the page wires them; `anchors` holds every anchor the view named.
+function primerTabSetup(parts: { entries?: PrimerEntry[] } = {}) {
   const presented = presentedPrimer('p1', { entries: parts.entries });
   const store = createPrimerStore(
     initialState([presented], presented.sessionId),
@@ -76,12 +88,10 @@ function primerTabSetup(
     log,
     PRIMER_BOX_IDENTITY,
   );
-  let keysFor = parts.keysFor ?? (() => null);
-  const keysListeners: (() => void)[] = [];
+  const anchors: NamedAnchor[] = [];
   let tab: FakeElement | null = null;
   mountPrimerTab({
     areas: {
-      statusBar: { contribute: () => ({ dispose: () => undefined }) },
       overlay: { contribute: () => ({ dispose: () => undefined }) },
     },
     sessions: {
@@ -98,7 +108,6 @@ function primerTabSetup(
     },
     beforeClose: () => true,
     setScope: () => undefined,
-    onViewChanged: () => undefined,
     pushConfirmScope: () => ({
       pop: () => undefined,
       onBaseChanged: () => undefined,
@@ -111,12 +120,16 @@ function primerTabSetup(
       document: async (text) => text,
     },
     keys: {
-      keysFor: () => keysFor(),
-      onChanged: (listener) => {
-        keysListeners.push(listener);
-        return { dispose: () => undefined };
+      anchor: (element, command, options) => {
+        const anchor = {
+          element: asFake(element),
+          command,
+          options,
+          dispose: vi.fn<() => void>(),
+        };
+        anchors.push(anchor);
+        return anchor;
       },
-      anchor: () => ({ dispose: () => undefined }),
     },
     run: () => undefined,
     platform: 'macos',
@@ -139,14 +152,11 @@ function primerTabSetup(
     store,
     boxes,
     logs,
+    anchors,
     sessionId: presented.sessionId,
     tab: tab as FakeElement,
     // Fires `command` with no editor in its context, as a page key does.
     run: (command: PrimerCommand) => handlers[command]({}),
-    changeKeys: (next: () => string | null) => {
-      keysFor = next;
-      keysListeners.forEach((listener) => listener());
-    },
   };
 }
 
@@ -310,28 +320,84 @@ describe('primer rail with no extra tasks', () => {
     vi.unstubAllGlobals();
   });
 
-  // The Extra tasks group's empty line.
-  function emptyLine(tab: FakeElement): FakeElement {
-    const [line] = findAll(tab, 'ui-empty');
-    return line;
-  }
-
-  it('says how to add one with the bound key, and follows a keymap change', () => {
-    const { tab, changeKeys } = primerTabSetup({
-      entries: taskWithItems(0),
-      keysFor: () => 'a',
-    });
-
-    expect(emptyLine(tab).textContent).toBe('No extra tasks. Add one witha');
-    changeKeys(() => 'b');
-
-    expect(emptyLine(tab).textContent).toBe('No extra tasks. Add one withb');
-    expect(findAll(emptyLine(tab), 'ui-kbd')).toHaveLength(1);
-  });
-
-  it('says only that there are none while no key is bound', () => {
+  it('shows only that there are no extra tasks', () => {
     const { tab } = primerTabSetup({ entries: taskWithItems(0) });
 
-    expect(emptyLine(tab).textContent).toBe('No extra tasks.');
+    const [line] = findAll(tab, 'ui-empty');
+    expect(line.textContent).toBe('No extra tasks.');
+  });
+});
+
+// Whether `node` sits inside `root`, `root` itself included.
+function isInside(node: FakeElement, root: FakeElement): boolean {
+  for (let at: FakeElement | null = node; at !== null; at = at.parentNode) {
+    if (at === root) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function anchorsOf(anchors: NamedAnchor[], command: string): NamedAnchor[] {
+  return anchors.filter((anchor) => anchor.command === command);
+}
+
+describe('primer anchors', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('anchors adding a task in the Extra tasks header', () => {
+    const { tab, anchors } = primerTabSetup({ entries: taskWithItems(0) });
+
+    const adds = anchorsOf(anchors, 'primer.addExtraTask');
+    const header = findAll(tab, 'ui-section-header').find((node) =>
+      node.textContent.startsWith('Extra tasks'),
+    );
+    expect(adds).toHaveLength(1);
+    expect(header).toBeDefined();
+    expect(isInside(adds[0].element, header as FakeElement)).toBe(true);
+    expect(adds[0].options).toEqual({ scope: 'primer.rail', label: 'add' });
+  });
+
+  it('moves the row prompt to the selected task and shows remove only on an extra task', () => {
+    // Rows: the feature (0), `1` (1), `s1` (2), `extra-1` (3).
+    const { store, tab, anchors } = primerTabSetup();
+    const [remove] = anchorsOf(anchors, 'primer.removeExtraTask');
+    expect(findAll(tab, 'primer-row-prompt')).toHaveLength(0);
+
+    store.dispatch({ type: 'selectRow', row: 3 });
+    const [extraPrompt] = findAll(tab, 'primer-row-prompt');
+    const [extraRow] = findAll(tab, 'is-selected');
+    expect(extraPrompt.parentNode).toBe(extraRow);
+    expect(extraRow.textContent).toContain('extra-1 task');
+    expect(remove.element.hidden).toBe(false);
+
+    store.dispatch({ type: 'selectRow', row: 1 });
+    const [taskPrompt] = findAll(tab, 'primer-row-prompt');
+    const [taskRow] = findAll(tab, 'is-selected');
+    expect(taskPrompt.parentNode).toBe(taskRow);
+    expect(taskRow.textContent).toContain('1 task');
+    expect(remove.element.hidden).toBe(true);
+  });
+
+  it("disposes the old card's anchors on a card rebuild", () => {
+    const { store, tab, anchors } = primerTabSetup();
+    store.dispatch({ type: 'selectRow', row: 1 });
+    const cardPane = pane(tab, 'primer-card');
+    const firstCard = anchors.filter((anchor) =>
+      isInside(anchor.element, cardPane),
+    );
+    const [edge] = anchorsOf(anchors, 'primer.focusRail');
+    expect(firstCard.length).toBeGreaterThan(0);
+
+    store.dispatch({ type: 'selectRow', row: 2 });
+
+    for (const anchor of firstCard) {
+      expect(anchor.dispose).toHaveBeenCalledOnce();
+    }
+    expect(edge.dispose).not.toHaveBeenCalled();
+    expect(isInside(edge.element, tab)).toBe(true);
   });
 });

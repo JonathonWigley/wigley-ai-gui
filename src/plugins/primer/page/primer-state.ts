@@ -227,6 +227,18 @@ export function selectedEntry(primer: OpenPrimer): PrimerEntry | null {
   return row.kind === 'feature' ? null : entryOf(primer, row.entryId);
 }
 
+// Which need keys the selected row's prompt shows: none on the Feature row,
+// whose need keys do nothing; `remove` too on an extra task.
+export type RowPrompt = 'none' | 'task' | 'extra';
+
+export function rowPrompt(primer: OpenPrimer): RowPrompt {
+  const entry = selectedEntry(primer);
+  if (entry === null) {
+    return 'none';
+  }
+  return entry.group === 'extra' ? 'extra' : 'task';
+}
+
 export function includedCount(entry: PrimerEntry): number {
   return entry.items.filter((item) => item.include).length;
 }

@@ -8,6 +8,7 @@ import {
   type PrimerAction,
   type PrimerState,
   railRows,
+  rowPrompt,
   scopeOf,
   selectedEntry,
   sessionTitle,
@@ -95,6 +96,14 @@ describe('primer state', () => {
       { kind: 'task', entryId: 's' },
       { kind: 'task', entryId: 'x' },
     ]);
+  });
+
+  it('rowPrompt is none on the Feature row, task on a Primer task, and extra on an extra task', () => {
+    const state = stateWith();
+
+    expect(rowPrompt(primerOf(state))).toBe('none');
+    expect(rowPrompt(primerOf(onRow(state, 1)))).toBe('task');
+    expect(rowPrompt(primerOf(onRow(state, 3)))).toBe('extra');
   });
 
   it('clamps nextRow and prevRow at both ends and resets the item cursor', () => {

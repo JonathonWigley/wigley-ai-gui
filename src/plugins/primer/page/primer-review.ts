@@ -1,7 +1,5 @@
 import type { CommandId } from '../../../contracts/commands';
-import type { Platform } from '../../../contracts/platform';
 import { element } from '../../../shared/page/dom';
-import { appendKeyHint } from '../../../shared/page/key-hint';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
@@ -23,12 +21,11 @@ export interface ReviewTallies {
   items: number;
 }
 
-// `keys` reads the review scope's keys for each footer button; `run` runs a
+// `keys` anchors each footer button's keys in the review scope; `run` runs a
 // button's command.
 export interface ReviewDeps {
-  keys: Pick<KeysPageExports, 'keysFor'>;
+  keys: Pick<KeysPageExports, 'anchor'>;
   run(command: CommandId): void;
-  platform: Platform;
 }
 
 const NEED_TAGS: Record<PrimerNeed, [string, TagTone]> = {
@@ -79,13 +76,9 @@ export function talliesText(tallies: ReviewTallies): string {
   return `${yes} needed, ${no} not needed, ${unclear} unclear. ${included} of ${items} items included.`;
 }
 
-// The review pane: the tallies, what blocks a send, the feature's fields, one
-// block per task in rail order, and the Back, Cancel primer and Send buttons,
-// each with the review scope's keys for its command.
-export function renderReview(
-  primer: OpenPrimer,
-  deps: ReviewDeps,
-): HTMLElement {
+// The review body: the tallies, what blocks a send, the feature's fields and
+// one block per task in rail order.
+export function renderReview(primer: OpenPrimer): HTMLElement {
   const review = element('div', 'primer-review');
   review.append(
     element('p', 'primer-review-tallies', talliesText(reviewTallies(primer))),
@@ -102,7 +95,6 @@ export function renderReview(
       review.append(taskBlock(entry));
     }
   }
-  review.append(footer(deps));
   return review;
 }
 
@@ -170,17 +162,17 @@ function reviewItem(item: PrimerItem): HTMLElement {
   return node;
 }
 
-function footer(deps: ReviewDeps): HTMLElement {
+// The Back, Cancel primer and Send buttons, each holding an anchor for its
+// command in the review scope. The caller disposes the anchors.
+export function reviewFooter(deps: ReviewDeps): HTMLElement {
   const actions = element('div', 'primer-review-actions');
   for (const [command, label, variant] of FOOTER) {
     const qualified = primerCommand(command);
-    const control = textButton(label, () => deps.run(qualified), { variant });
-    appendKeyHint(
-      control,
-      () => deps.keys.keysFor(qualified, primerScope('review')),
-      deps.platform,
+    const hint = element('span', 'primer-review-key');
+    deps.keys.anchor(hint, qualified, { scope: primerScope('review') });
+    actions.append(
+      textButton(label, () => deps.run(qualified), { variant, hint }),
     );
-    actions.append(control);
   }
   return actions;
 }

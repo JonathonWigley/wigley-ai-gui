@@ -9,20 +9,32 @@
 }
 
 /* A primer fills its tab: the rail in the split's start pane, on the sheet
-   colour, and the card and the review in its end pane, each scrolling on its
-   own. */
+   colour, and in its end pane the card edge strip over the card and the
+   review, each scrolling on its own. */
 .primer-tab .primer-form {
   height: 100%;
 }
 
 .primer-tab .primer-main {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+}
+
+/* `‹ rail ⌥H` at the split's edge, over the card. */
+.primer-card-edge {
+  align-items: baseline;
+  display: flex;
+  flex: none;
+  gap: var(--wg-space-1);
+  padding: var(--wg-space-2) var(--wg-space-3) 0;
 }
 
 .primer-tab .primer-card,
 .primer-tab .primer-review-pane {
   box-sizing: border-box;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--wg-space-4) var(--wg-space-6) var(--wg-space-8);
 }
@@ -39,9 +51,65 @@
   }
 }
 
-/* Rail */
+/* Rail: a header, the body that scrolls, and a foot. */
+.primer-tab .primer-rail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.primer-rail-head {
+  align-items: baseline;
+  display: flex;
+  gap: var(--wg-space-1);
+  padding: var(--wg-space-2) var(--wg-space-3) 0;
+}
+
+.primer-rail-head > .ui-status-line {
+  margin-right: auto;
+}
+
+/* `⌃H ▲ ▼ ⌃L`, hidden while the rail holds one row. */
+.primer-rail-edge {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--wg-space-1);
+  margin-right: var(--wg-space-2);
+}
+
+.primer-rail-edge.is-no-target {
+  visibility: hidden;
+}
+
+.primer-rail-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .primer-rail-list {
   padding: var(--wg-space-2);
+}
+
+/* The need keys on the selected task row. */
+.primer-row-prompt {
+  display: inline-flex;
+  flex: none;
+  gap: var(--wg-space-2);
+}
+
+.primer-rail-foot {
+  border-top: 1px solid var(--wg-border-default);
+  padding: var(--wg-space-2);
+}
+
+/* The rail's and the card's Review keys share one cell, so the button keeps
+   its width as the pane changes. */
+.primer-review-keys {
+  display: inline-grid;
+}
+
+.primer-review-keys > .primer-review-key {
+  grid-area: 1 / 1;
 }
 
 .primer-rail-list > .ui-section-header {
@@ -92,23 +160,46 @@
   box-shadow: inset 0 0 0 1px var(--wg-focus-border);
 }
 
+.primer-item-lead {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-1);
+}
+
+/* Only the cursor item shows its include key; the others keep its space. */
+.primer-item:not(.is-cursor) .primer-include-key {
+  visibility: hidden;
+}
+
+/* The comment box, its box keys over its frame, and its key after it. */
 .primer-item-comment {
-  align-items: flex-start;
-  display: flex;
-  gap: var(--wg-space-2);
+  align-items: start;
+  column-gap: var(--wg-space-2);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   padding: 0 var(--wg-space-2);
 }
 
-.primer-item-comment > .primer-box {
-  flex: 1;
-  min-width: 0;
+.primer-item-comment > .primer-box,
+.primer-item-comment > .box-keys {
+  grid-area: 1 / 1;
+}
+
+.primer-item-comment > .primer-field-hint {
+  grid-area: 1 / 2;
 }
 
 /* Text boxes: the input frame owns background, border, radius and the focus
    ring; this sets the editor's height only. Editors grow with their text up
    to a cap, then scroll. */
 .primer-field {
+  display: grid;
   margin-top: var(--wg-space-3);
+}
+
+.primer-field > .primer-box,
+.primer-field > .box-keys {
+  grid-area: 2 / 1;
 }
 
 .primer-field > .ui-section-header {
@@ -124,6 +215,26 @@
 
 .primer-box {
   overflow: hidden;
+}
+
+/* `⌃P ⌃N` on the frame's bottom edge at its right end, while the box has
+   focus. */
+.primer-tab .box-keys {
+  align-self: end;
+  background: var(--wg-sheet-background);
+  display: inline-flex;
+  gap: var(--wg-space-1);
+  justify-self: end;
+  line-height: 1;
+  margin-right: var(--wg-space-2);
+  padding: 0 var(--wg-space-1);
+  transform: translateY(50%);
+  visibility: hidden;
+}
+
+.primer-field:focus-within > .box-keys,
+.primer-item-comment:focus-within > .box-keys {
+  visibility: visible;
 }
 
 .primer-box .cm-editor {
