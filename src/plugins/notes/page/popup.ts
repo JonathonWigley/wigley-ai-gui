@@ -78,9 +78,9 @@ interface ActionButton {
   label: string;
   variant: ButtonVariant;
   command: NotesPageCommand;
-  // Its hint shows in every scope, since its key fires in the title box as
-  // well as on the popup.
-  isHintInEveryScope?: boolean;
+  // The scopes its key fires in, when more than the list's own: one anchor
+  // each, stacked in one place.
+  hintScopes?: readonly NotesScope[];
 }
 
 const POPUP_ACTIONS: readonly ActionButton[] = [
@@ -95,7 +95,7 @@ const POPUP_ACTIONS: readonly ActionButton[] = [
     label: 'Add follow-up',
     variant: 'primary',
     command: 'sendFollowup',
-    isHintInEveryScope: true,
+    hintScopes: ['popup', 'title'],
   },
 ];
 
@@ -181,17 +181,16 @@ export function createNotePopup(
   const images = new Map<number, { bytes: Uint8Array; url: string }>();
 
   // A new element the keys plugin draws the keys of `command` into, then
-  // `label` when given, while `scope` is in force (every scope for null).
-  // Each is made once: the popup lives as long as the page, so it keeps no
-  // anchor to dispose.
+  // `label` when given, while `scope` is in force. Each is made once: the
+  // popup lives as long as the page, so it keeps no anchor to dispose.
   const anchored = (
     command: NotesPageCommand,
-    scope: NotesScope | null,
+    scope: NotesScope,
     label?: string,
   ): HTMLElement => {
     const node = element('span', 'notes-hint');
     deps.keys.anchor(node, `notes.${command}`, {
-      scope: scope === null ? undefined : `notes.${scope}`,
+      scope: `notes.${scope}`,
       label,
     });
     return node;
@@ -449,7 +448,22 @@ export function createNotePopup(
   };
   store.subscribe(render);
 
-  // Each action's button, its key drawn inside it while `scope` is in force.
+  // The action's keys, an anchor per scope it names, else one in `scope`.
+  const actionHint = (action: ActionButton, scope: NotesScope): HTMLElement => {
+    if (action.hintScopes === undefined) {
+      return anchored(action.command, scope);
+    }
+    const stack = element('span', 'notes-hint-stack');
+    stack.append(
+      ...action.hintScopes.map((hintScope) =>
+        anchored(action.command, hintScope),
+      ),
+    );
+    return stack;
+  };
+
+  // Each action's button, its key drawn inside it while a scope it fires in
+  // is in force.
   const actionButtons = (
     actions: readonly ActionButton[],
     scope: NotesScope,
@@ -457,10 +471,7 @@ export function createNotePopup(
     actions.map((action) =>
       textButton(action.label, () => deps.run(`notes.${action.command}`), {
         variant: action.variant,
-        hint: anchored(
-          action.command,
-          action.isHintInEveryScope === true ? null : scope,
-        ),
+        hint: actionHint(action, scope),
       }),
     );
   dialog.actions.append(...actionButtons(POPUP_ACTIONS, 'popup'));

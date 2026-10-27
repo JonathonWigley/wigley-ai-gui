@@ -23,6 +23,8 @@ import { type DotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import { tab, tabStrip } from '../../../shared/page/ui/tabs';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
 import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
+import { qualify } from '../../../shared/plugin-manifests';
+import { galleryManifest } from '../manifest';
 
 export interface GalleryViewDeps {
   platform: Platform;
@@ -52,10 +54,14 @@ export function createGalleryView(deps: GalleryViewDeps): GalleryView {
   const statusText = element('span', 'gallery-status-text');
   const transparencyHint = element('span');
   status.append(statusText, transparencyHint);
-  deps.anchor(transparencyHint, 'gallery.toggleTransparency', {
-    scope: 'gallery.gallery',
-    label: 'transparency',
-  });
+  deps.anchor(
+    transparencyHint,
+    qualify(galleryManifest.id, 'toggleTransparency'),
+    {
+      scope: qualify(galleryManifest.id, 'gallery'),
+      label: 'transparency',
+    },
+  );
 
   const strip = tabStrip([tab('Gallery', ignore)]);
   strip.firstElementChild?.classList.add('is-active');

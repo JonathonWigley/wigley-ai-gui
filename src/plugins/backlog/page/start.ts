@@ -32,7 +32,6 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       uiState: services.uiState,
       log: services.log,
       toast: services.toast,
-      platform: api.platform,
       keys,
       tags: () => api.settings().tags,
       openDoc: (path, line) => docs.openDoc(path, line),

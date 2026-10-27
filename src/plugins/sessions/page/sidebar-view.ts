@@ -55,13 +55,13 @@ export function mountSidebarView(
 }
 
 // `⌥⇧I ▲ ▼ ⌥⇧O`: the previous and next session anchors, each chevron on
-// its inner side.
+// its inner side, hidden until `render` hands it main's first state.
 function buildSessionPair(keys: Pick<KeysPageExports, 'anchor'>): HTMLElement {
   const previous = element('span');
   const next = element('span');
   keys.anchor(previous, qualify(sessionsManifest.id, 'prevSession'));
   keys.anchor(next, qualify(sessionsManifest.id, 'nextSession'));
-  const pair = element('span', 'session-edge');
+  const pair = element('span', 'session-edge is-no-target');
   pair.append(
     previous,
     element('span', 'ui-key-chevron', '▲'),

@@ -58,10 +58,10 @@ import type { LayoutPick } from './layout-resolver';
 
 // What a pane reaches outside itself: the markdown renderer, the platform key
 // hints are drawn for, the log, the keys bound in a forms scope and the
-// anchors that show them, the forms
-// state and its actions, a forms command, the round's text boxes, the forms
-// view now, which decides what a rail click does, the registered commands
-// `kit.command` checks and runs, and the review columns other plugins added.
+// anchors that show them, the forms state and its actions, a forms command,
+// the round's text boxes, the forms view now, which decides what a rail click
+// does, the registered commands `kit.command` checks and runs, and the review
+// columns other plugins added.
 export interface PaneDeps {
   markdown: MarkdownRenderer;
   platform: Platform;
@@ -139,9 +139,9 @@ export function buildReviewPane(
 
 // Draws a pane through `picked`, or through `fallback` when the pick lacks
 // the part. When the pane throws, or returns no element appended to `parent`,
-// what it appended and the boxes it mounted are removed, the failure is
-// logged, and `fallback` draws it in its place. The pane's element carries
-// `data-layout` naming the layout that drew it.
+// what it appended, the boxes it mounted and the anchors it named are
+// removed, the failure is logged, and `fallback` draws it in its place. The
+// pane's element carries `data-layout` naming the layout that drew it.
 function hostPane<F, P extends { element: HTMLElement }>(
   part: PanePart,
   pick: LayoutPick,

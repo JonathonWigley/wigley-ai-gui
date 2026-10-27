@@ -117,8 +117,8 @@ function isSameLine(a: TreeLine | null, b: TreeLine | null): boolean {
   return a.placement === b.placement && a.text === b.text && isSameHint;
 }
 
-// The line's hint, its command's keys anchored then its words; null for no
-// hint.
+// The line's hint, its command's keys anchored with its words as their
+// label; null for no hint.
 function hintElement(
   hint: TreeLine['hint'],
   anchors: Disposable[],
@@ -127,10 +127,10 @@ function hintElement(
   if (hint === null) {
     return null;
   }
-  const keys = element('span');
-  anchors.push(anchor(keys, hint.command, { scope: 'tree' }));
   const node = element('span', 'docs-hint');
-  node.append(keys, element('span', '', hint.words));
+  anchors.push(
+    anchor(node, hint.command, { scope: 'tree', label: hint.words }),
+  );
   return node;
 }
 

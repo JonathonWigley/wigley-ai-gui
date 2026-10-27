@@ -1,4 +1,6 @@
+import type { Disposable } from '../../../../contracts/disposable';
 import { errorText } from '../../../../shared/error-text';
+import type { KeysPageExports } from '../../../keys/contract';
 import type { ItemKind } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
 import type { CardAnswer, LayoutCard } from '../../layouts/layout';
@@ -70,9 +72,9 @@ export function cardAnswer(
 // The item's card at rail `position`, built into `parent` by the picked
 // layout, or by `default` when the pick lacks the item's kind. When the
 // picked card throws, or returns no element appended to `parent`, what it
-// appended and the boxes it mounted are removed, the failure is logged, and
-// the default layout's card is built in its place. The card's element carries
-// `data-layout` naming the layout that drew it.
+// appended, the boxes it mounted and the anchors it named are removed, the
+// failure is logged, and the default layout's card is built in its place.
+// The card's element carries `data-layout` naming the layout that drew it.
 export function buildLayoutCard(
   pick: LayoutPick,
   parent: HTMLElement,
@@ -125,25 +127,37 @@ function buildCard(
   );
 }
 
-// What a layout's card or pane mounts its text boxes through.
-interface BoxDeps {
+// What a layout's card or pane mounts its text boxes and anchors its keys
+// through.
+interface RollbackDeps {
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
   destroyBox(target: TextTarget): void;
+  keys: Pick<KeysPageExports, 'anchor'>;
 }
 
-// Runs `draw` with deps that record each box it mounts. On a throw, destroys
-// those boxes and removes what it appended to `parent` before rethrowing.
-export function drawRollingBack<D extends BoxDeps, R>(
+// Runs `draw` with deps that record each box it mounts and each anchor it
+// names. On a throw, destroys those boxes, disposes those anchors and removes
+// what it appended to `parent` before rethrowing.
+export function drawRollingBack<D extends RollbackDeps, R>(
   parent: HTMLElement,
   deps: D,
   draw: (deps: D) => R,
 ): R {
   const mounted: TextTarget[] = [];
+  const anchors: Disposable[] = [];
   const recordingDeps: D = {
     ...deps,
     mountBox(boxParent: HTMLElement, target: TextTarget, text: string) {
       deps.mountBox(boxParent, target, text);
       mounted.push(target);
+    },
+    keys: {
+      ...deps.keys,
+      anchor(element, command, options) {
+        const anchor = deps.keys.anchor(element, command, options);
+        anchors.push(anchor);
+        return anchor;
+      },
     },
   };
   const existing = new Set(parent.childNodes);
@@ -152,6 +166,9 @@ export function drawRollingBack<D extends BoxDeps, R>(
   } catch (error) {
     for (const target of mounted) {
       deps.destroyBox(target);
+    }
+    for (const anchor of anchors) {
+      anchor.dispose();
     }
     // childNodes is live, so the appended nodes are collected before removal.
     const appended = Array.from(parent.childNodes).filter(

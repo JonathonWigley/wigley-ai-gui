@@ -159,10 +159,9 @@ interface ComposerBar {
 const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 
 // One Chat tab per chat session main holds, each with its entries and its
-// composer (attached images, message box, mode, type hint, running
-// indicator, control chips, send), kept up
-// to date from chat main's messages. Each tab is selected in its session when
-// added.
+// composer (attached images, message box, mode, type hint, running indicator,
+// control chips, send), kept up to date from chat main's messages. Each tab is
+// selected in its session when added.
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
@@ -518,14 +517,14 @@ function followComposerHeight(
   return observer;
 }
 
-// The bar's parts, built once per tab: the box's vim mode (PAGE while it has
-// no focus), the type hint (`i` and `a`, hidden while the box has focus), the
-// running indicator (shown while Claude works on a live session), a chip per
-// control opening that control's picker, and send. The chips and send are
-// disabled once the session has ended. The type hint and send keys are
-// anchored in the tab's scope; the interrupt and chip keys in `chat.chat`.
-// Each chip command's keys sit in the first chip that runs it; a command no
-// chip runs keeps its anchor element detached until a later draw places it.
+// The bar's parts, built once per tab: the box's vim mode (PAGE while it has no
+// focus), the type hint (`i` and `a`, hidden while the box has focus), the
+// running indicator (shown while a turn is in progress on a live session), a
+// chip per control opening that control's picker, and send. The chips and send
+// are disabled once the session has ended. The type hint and send keys are
+// anchored in the tab's scope; the interrupt and chip keys in `chat.chat`. Each
+// chip command's keys sit in the first chip that runs it; a command no chip
+// runs keeps its anchor element detached until a later draw places it.
 function buildComposerBar(
   deps: Pick<ChatViewDeps, 'keys' | 'run'>,
   scope: ChatTabScope,

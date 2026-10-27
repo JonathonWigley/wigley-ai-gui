@@ -17,8 +17,9 @@ export interface ItemCard {
 // What a card reaches outside itself: the round's boxes, its actions, the
 // Don't-ask command, which also focuses the reason box, the keys bound in a
 // scope and the anchors that show them (a card reads and anchors in the forms
-// view's), the platform key hints are drawn for, the log, the registered commands `kit.command` checks and runs, and
-// the card parts other plugins added.
+// view's), the platform key hints are drawn for, the log, the registered
+// commands `kit.command` checks and runs, and the card parts other plugins
+// added.
 export interface CardDeps {
   markdown: MarkdownRenderer;
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;

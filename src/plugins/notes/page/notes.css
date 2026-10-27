@@ -15,8 +15,19 @@
   padding: var(--wg-space-1) var(--wg-space-2);
 }
 
+/* An action's keys in each scope its key fires in, one place for all; only
+   the anchor in force shows. */
+.notes-hint-stack {
+  display: inline-grid;
+}
+
+.notes-hint-stack > .notes-hint {
+  grid-area: 1 / 1;
+}
+
 /* A row's keys at its end: the key that picks its value, then the cursor
-   row's prompt. They hide, keeping their space, while a box holds the keys. */
+   row's prompt, which leaves the row while the keys are off the rows. The
+   pick key hides, keeping its space, while a box holds the keys. */
 .notes-row-keys {
   align-items: center;
   display: inline-flex;

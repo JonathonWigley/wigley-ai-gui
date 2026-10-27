@@ -421,8 +421,8 @@
 }
 
 /* A box's keys sit on its frame's bottom edge at the right end, shown while
-   the box has focus. The anchors inside set no visibility of their own, so a
-   hidden hint stays hidden. */
+   the box has focus. A hidden anchor inside sets its own visibility, so it
+   stays hidden while the box shows its keys. */
 :where(.form-tab) .field {
   position: relative;
 }

@@ -324,7 +324,13 @@ function buildRoundParts(
     log: deps.log,
   };
   const headPick = picks.panes.head;
-  const layoutHead = buildLayoutHead(main, round, headPick, headDeps);
+  const layoutHead = buildLayoutHead(
+    main,
+    round,
+    headPick,
+    headDeps,
+    headAnchors,
+  );
   const pager = buildItemPager(main, keys);
   const itemsPane = element('div', 'items');
   main.append(itemsPane);
@@ -357,7 +363,7 @@ function buildRoundParts(
     redrawLayoutHead() {
       if (layoutHead !== null) {
         disposeAll(headAnchors);
-        drawLayoutHead(layoutHead, round, headPick, headDeps);
+        drawLayoutHead(layoutHead, round, headPick, headDeps, headAnchors);
       }
     },
     railHead,
@@ -462,11 +468,13 @@ type HeadDeps = HeadKitDeps & Pick<CardDeps, 'log'>;
 
 // The slot above the cards the picked layout's head draws into, carrying
 // `data-layout` naming that layout; null for a layout with no head.
+// `anchors` holds the anchors `deps` names.
 function buildLayoutHead(
   parent: HTMLElement,
   round: RoundState,
   pick: LayoutPick,
   deps: HeadDeps,
+  anchors: Disposable[],
 ): HTMLElement | null {
   if (typeof pick.layout.head !== 'function') {
     return null;
@@ -474,23 +482,26 @@ function buildLayoutHead(
   const slot = element('div', 'layout-head');
   slot.dataset.layout = pick.name;
   parent.append(slot);
-  drawLayoutHead(slot, round, pick, deps);
+  drawLayoutHead(slot, round, pick, deps, anchors);
   return slot;
 }
 
 // Empties `slot` and draws the picked layout's head into it, with the keys
 // the keymap binds now. The head holds no text boxes, so a redraw loses no
-// answer. A head that throws is logged and leaves the slot empty.
+// answer. A head that throws is logged, disposes `anchors`, the anchors
+// `deps` names, and leaves the slot empty.
 function drawLayoutHead(
   slot: HTMLElement,
   round: RoundState,
   pick: LayoutPick,
   deps: HeadDeps,
+  anchors: Disposable[],
 ) {
   slot.replaceChildren();
   try {
     pick.layout.head?.(slot, roundInfo(round.round), createHeadKit(deps));
   } catch (error) {
+    disposeAll(anchors);
     slot.replaceChildren();
     deps.log('forms', `layout ${pick.name} head failed: ${errorText(error)}`);
   }

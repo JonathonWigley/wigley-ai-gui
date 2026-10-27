@@ -113,12 +113,11 @@ function listenForPrimers(
 }
 
 // Shows each agent primer in its session's Primer tab and sends the user's
-// edits back to main: drafts as the edits pause, the finish on send or
-// cancel. While a Primer tab is the visible tab, the key scope follows the
-// primer view. A session with an open primer closes
-// only through the cancel prompt. Every store change emits the primer page
-// events it makes, each logged as it goes; other plugins read the active
-// primer through the exports.
+// edits back to main: drafts as the edits pause, the finish on send or cancel.
+// While a Primer tab is the visible tab, the key scope follows the primer view.
+// A session with an open primer closes only through the cancel prompt. Every
+// store change emits the primer page events it makes, each logged as it goes;
+// other plugins read the active primer through the exports.
 export const primerPagePart: PagePart<typeof primerManifest> = {
   manifest: primerManifest,
   start(api: PrimerApi) {
@@ -149,7 +148,6 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       markdown: services.markdown,
       keys: api.dependency<KeysPageExports>('keys'),
       run: (command) => api.commands.run(command),
-      platform: api.platform,
       uiState: services.uiState,
       log: services.log,
     });

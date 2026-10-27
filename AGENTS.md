@@ -81,7 +81,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  pure, no I/O; Backlog and Docs' create dialog both write follow-ups through it
   image-types.ts the image media types the app attaches and pastes (chat and notes share it)
   page/          page-only DOM builders plugins share: the paste and drop helpers (`pasted-images.ts`), the layout loader, the reducer store, autosave, editor boxes,
-                 key hints, the confirm prompt, the session form tab helper, the session form status line, and the
+                 the confirm prompt, the session form tab helper, the session form status line, and the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue)
                  → imported only by src/renderer and plugins' page/ parts
@@ -267,7 +267,7 @@ round; primer: an open primer), since main, not the page, decides.
   - **Every other bind has an anchor.** At the end of a self-test run (the `keys-check-placement` page event) the
     plugin logs `[keys] unplaced <keys> <command> in <scope>`, once per scope and bind, for each bind firing in a
     scope that was in force during the page load whose command no anchor named during the page load, in that scope or
-    in none, covered. Leader sequences and vim's own keys are left out. The self-test fails on that line, so a new
+    with no scope. Leader sequences and vim's own keys are left out. The self-test fails on that line, so a new
     built-in key ships with its place on screen. A target drawn only in some states (a ninth choice, a permission
     card, the Model and Controls chips) is placed by a self-test fixture state that builds it, shown or hidden; never
     by a stand-in element made only to satisfy the gate.

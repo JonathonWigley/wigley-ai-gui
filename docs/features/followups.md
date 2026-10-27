@@ -133,7 +133,7 @@ now, any harness later). Each item names its sites.
   main and a page `tabShown` event; `SessionTabView.hidden()` beside `shown()`; row decorations a tab contributes
   (`handle.setBadge(key, text)`) or a sidebar row layout, since tabs' `setStatus` lines overwrite each other; one close
   mechanism (`beforeClose` on the page and `addCloseGuard` in main both carry forms' "open round" today).
-- **keysFor in the core keys API** — *agent-ready*: `keysFor` moves into the core keys API, so `sessions` no longer depends on `keys` just to spell its toast; it returns
+- **keysFor in the core keys API** — *agent-ready*: `keysFor` moves into the core keys API, so a plugin reads a command's keys without depending on `keys`; it returns
   unformatted hints (page and editor) with a keymap-changed subscription so drawn buttons follow a rebind. Box focus
   (`page` or `editor`) becomes a core `keys.onWhereChanged`, replacing keys' own `document.activeElement` reading.
 

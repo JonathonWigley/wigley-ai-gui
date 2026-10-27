@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { KeysPageExports } from '../../../keys/contract';
 import type { FormsCardPart } from '../../contract';
 import type { Layout } from '../../layouts/layout';
 import {
@@ -8,7 +9,7 @@ import {
 import { apply, initialState, type RoundState } from '../form-state';
 import type { CardDeps } from '../kinds/item-format';
 import { finding, presentedRound } from '../test-rounds';
-import { buildLayoutCard } from './layout-cards';
+import { buildLayoutCard, drawRollingBack } from './layout-cards';
 import {
   asFake,
   asHtml,
@@ -118,5 +119,43 @@ describe('hostCard', () => {
     card.update(round);
 
     expect(calls).toEqual(['card', 'p1', 'p2']);
+  });
+});
+
+describe('drawRollingBack', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Deps whose every anchor's dispose is the one `dispose` spy.
+  function rollbackDeps(dispose: () => void) {
+    const anchor: KeysPageExports['anchor'] = () => ({ dispose });
+    return { mountBox: vi.fn(), destroyBox: vi.fn(), keys: { anchor } };
+  }
+
+  it('drawRollingBack_DrawThrows_DisposesTheAnchorsItNamed', () => {
+    const dispose = vi.fn();
+    const parent = asHtml(new FakeElement('div'));
+
+    expect(() =>
+      drawRollingBack(parent, rollbackDeps(dispose), (deps) => {
+        deps.keys.anchor(parent, 'forms.nextItem');
+        throw new Error('card failed');
+      }),
+    ).toThrow('card failed');
+
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it('drawRollingBack_DrawReturns_KeepsTheAnchorsItNamed', () => {
+    const dispose = vi.fn();
+    const parent = asHtml(new FakeElement('div'));
+
+    drawRollingBack(parent, rollbackDeps(dispose), (deps) =>
+      deps.keys.anchor(parent, 'forms.nextItem'),
+    );
+
+    expect(dispose).not.toHaveBeenCalled();
   });
 });

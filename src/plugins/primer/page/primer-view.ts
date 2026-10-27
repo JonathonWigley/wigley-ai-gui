@@ -3,7 +3,6 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { Platform } from '../../../contracts/platform';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { scrollContent } from '../../../shared/content-scroll';
@@ -74,9 +73,8 @@ import type { PrimerStore } from './primer-store';
 // `beforeClose` answers whether a session may close now. `setScope` sets the
 // key scope to `scopeOf` the state while a Primer tab is the visible tab;
 // `pushConfirmScope` lays the cancel prompt's scope over it. `keys` anchors
-// each key hint the view draws. `run` runs a button's command. `platform` is
-// the OS the app runs on; `uiState` keeps the rail's dragged width, which
-// every primer's rail opens at.
+// each key hint the view draws. `run` runs a button's command. `uiState`
+// keeps the rail's dragged width, which every primer's rail opens at.
 export interface PrimerViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
@@ -88,7 +86,6 @@ export interface PrimerViewDeps {
   markdown: MarkdownRenderer;
   keys: Pick<KeysPageExports, 'anchor'>;
   run(command: CommandId): void;
-  platform: Platform;
   uiState: UiState;
   log: Log;
 }

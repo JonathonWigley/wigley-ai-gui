@@ -222,8 +222,9 @@ function destroySessionRoundViews(
   }
 }
 
-// Destroys the round's editors, removes its view and stops it following
-// keymap changes, and releases its take over, giving its session back.
+// Destroys the round's editors, removes its view, disposes its anchors and
+// stops it following keymap changes, and releases its take over, giving its
+// session back.
 function destroyRoundView(
   roundId: string,
   roundViews: Map<string, RoundView>,

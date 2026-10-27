@@ -4,7 +4,6 @@ import type { EditorHost, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Paths } from '../../../contracts/paths';
-import type { Platform } from '../../../contracts/platform';
 import type {
   CommandsRunIn,
   PageChannel,
@@ -93,7 +92,6 @@ export interface BacklogViewDeps {
   uiState: UiState;
   log: Log;
   toast(text: string, tone: ToastTone): void;
-  platform: Platform;
   keys: KeysPageExports;
   // The `tags` setting as the user config now sets it.
   tags(): readonly string[];
