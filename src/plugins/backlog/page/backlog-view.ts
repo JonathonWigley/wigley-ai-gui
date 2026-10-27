@@ -16,7 +16,6 @@ import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
 import { element, markdownElement } from '../../../shared/page/dom';
-import { keyHint } from '../../../shared/page/key-hint';
 import {
   createListPicker,
   type ListPicker,
@@ -44,6 +43,8 @@ import {
   type BacklogRow,
   type BacklogState,
   backlogReducer,
+  type CursorCommand,
+  cursorCommands,
   type EmptyReason,
   editorEdit,
   emptyReason,
@@ -126,7 +127,6 @@ export interface BacklogView {
   sideBarHidden(): void;
   // The side bar opened over the rows: focus moves to it.
   sideBarOpenedOver(): void;
-  keysChanged(): void;
   commands: Record<BacklogCommand, () => void>;
 }
 
@@ -134,10 +134,22 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const { channel, paths, homeDir } = deps;
   const log = (message: string) => deps.log(PLUGIN_ID, message);
   const tilde = (path: string) => paths.tilde(path, homeDir);
-  const keysFor = (command: BacklogCommand, scope: string) =>
-    deps.keys.keysFor(qualify(PLUGIN_ID, command), qualify(PLUGIN_ID, scope));
-  const hint = (command: BacklogCommand, scope: string) =>
-    keyHint(keysFor(command, scope), deps.platform);
+  // A new element, made once for the view's life, that the keys plugin draws
+  // the keys of `command` in `scope` into, then `label` when given. The view
+  // lives as long as the page, so it keeps no anchor to dispose.
+  const anchored = (
+    command: BacklogCommand,
+    scope: BacklogBaseScope,
+    label?: string,
+  ): HTMLElement => {
+    const target = element('span', 'backlog-hint');
+    deps.keys.anchor(target, qualify(PLUGIN_ID, command), {
+      scope: qualify(PLUGIN_ID, scope),
+      label,
+    });
+    return target;
+  };
+  const chevron = (text: string) => element('span', 'ui-key-chevron', text);
 
   const store = createReducerStore(initialBacklogState(), backlogReducer);
   const dispatch = store.dispatch;
@@ -158,18 +170,62 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const filterBox = textBoxInput('backlog-filter-input');
   filterFrame.append(filterBox);
   const rowsList = element('ol', 'backlog-rows');
-  listPane.append(filterFrame, rowsList);
+  // The keys that act on the open home, then the edge prompt to the detail.
+  const listHeader = element('div', 'backlog-list-header');
+  const listKeys = element('span', 'backlog-list-keys');
+  listKeys.append(
+    anchored('filter', 'list', 'filter'),
+    anchored('create', 'list', 'new'),
+    anchored('rescan', 'list', 'rescan'),
+    anchored('commit', 'list', 'commit'),
+  );
+  const toDetail = element('span', 'backlog-edge backlog-edge--end');
+  toDetail.append(anchored('focusDetail', 'list', 'detail'), chevron('›'));
+  listHeader.append(listKeys, toDetail);
+  listPane.append(listHeader, filterFrame, rowsList);
+
+  // The cursor row's prompt, moved to the end of the cursor row on each draw.
+  const cursorPrompt = element('span', 'backlog-row-actions');
+  const cursorHints = new Map<CursorCommand, HTMLElement>([
+    ['edit', anchored('edit', 'list', 'edit')],
+    ['delete', anchored('delete', 'list', 'delete')],
+    ['toggleAgentReady', anchored('toggleAgentReady', 'list', 'agent-ready')],
+    ['pickTag', anchored('pickTag', 'list', 'tag')],
+    ['openInDocs', anchored('openInDocs', 'list', 'docs')],
+  ]);
+  cursorPrompt.append(...cursorHints.values());
+
+  // The empty states' keys, keys only.
+  const noHomeHint = anchored('back', 'list');
+  const nothingHint = anchored('create', 'list');
 
   const detailPane = element('div', 'backlog-detail');
   detailPane.tabIndex = -1;
+  // The edge prompt back to the list, then the key that acts on the detail.
+  const detailHead = element('div', 'backlog-detail-head');
+  const toList = element('span', 'backlog-edge backlog-edge--start');
+  toList.append(chevron('‹ list'), anchored('focusList', 'detail'));
+  detailHead.append(toList, anchored('openInDocs', 'detail', 'docs'));
   const detailBody = element('div', 'backlog-detail-body');
+  const editorKeys = element('span', 'backlog-editor-keys');
+  editorKeys.append(
+    anchored('save', 'editor', 'save'),
+    anchored('cancelEdit', 'editor', 'cancel'),
+    anchored('pickTag', 'editor', 'tag'),
+  );
+  const fieldHint = element('span', 'backlog-field-hint');
+  fieldHint.append(
+    anchored('previousField', 'editor'),
+    anchored('nextField', 'editor'),
+  );
   const followupEditor = createFollowupEditor({
     editor: deps.editor,
     log: deps.log,
     changed: (field, text) => dispatch({ type: 'draftChanged', field, text }),
-    hints: () => editorHints(),
+    hints: editorKeys,
+    fieldHint,
   });
-  detailPane.append(detailBody, followupEditor.element);
+  detailPane.append(detailHead, detailBody, followupEditor.element);
 
   const split = createSplit({
     ...LIST_SPLIT,
@@ -200,7 +256,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     pushScope: () => deps.pushScope('confirm'),
     isSending: () => false,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),
-    onBaseChanged: () => undefined,
     log: deps.log,
     logSource: PLUGIN_ID,
   };
@@ -354,7 +409,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       case 'noHome':
         return emptyState(
           'Open a features home from the side bar.',
-          hint('back', 'list'),
+          noHomeHint,
         );
       case 'filter':
         return emptyState(`No rows match "${filter}".`);
@@ -363,14 +418,31 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       case 'agentReadyNone':
         return emptyState('No agent-ready follow-ups here.');
       case 'nothing':
-        return emptyState('Nothing is planned here.', hint('create', 'list'));
+        return emptyState('Nothing is planned here.', nothingHint);
     }
+  };
+
+  // Moves the cursor prompt to the end of the cursor row, showing only the
+  // commands that act on it; detached with no cursor row.
+  const placeCursorPrompt = (
+    cursorRow: { shown: BacklogRow; drawn: HTMLElement } | null,
+  ) => {
+    if (cursorRow === null) {
+      cursorPrompt.remove();
+      return;
+    }
+    const shownCommands = cursorCommands(cursorRow.shown);
+    for (const [command, hint] of cursorHints) {
+      hint.hidden = !shownCommands.includes(command);
+    }
+    cursorRow.drawn.append(cursorPrompt);
   };
 
   const drawRows = (state: BacklogState) => {
     const rows = visibleRows(state);
     const items: HTMLElement[] = [];
     let section: BacklogRow['kind'] | null = null;
+    let cursorRow: { shown: BacklogRow; drawn: HTMLElement } | null = null;
     for (const shown of rows) {
       if (shown.kind !== 'task' && shown.kind !== section) {
         section = shown.kind;
@@ -378,13 +450,16 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       }
       const drawn = rowElement(shown);
       const isSelected = shown.key === state.selectedKey;
+      const isCursor =
+        isSelected && state.focus === 'items' && filterScope === null;
       drawn.classList.toggle('is-selected', isSelected);
-      drawn.classList.toggle(
-        'is-cursor',
-        isSelected && state.focus === 'items' && filterScope === null,
-      );
+      drawn.classList.toggle('is-cursor', isCursor);
+      if (isCursor) {
+        cursorRow = { shown, drawn };
+      }
       items.push(drawn);
     }
+    placeCursorPrompt(cursorRow);
     const reason = emptyReason(state);
     if (reason !== null) {
       items.push(emptyRows(reason, state.filter));
@@ -481,22 +556,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       showDoc(docPathOf(shown));
     }
   };
-
-  const editorHints = (): HTMLElement[] =>
-    [
-      { command: 'save' as const, text: 'Save' },
-      { command: 'cancelEdit' as const, text: 'Cancel' },
-      { command: 'nextField' as const, text: 'Next field' },
-      { command: 'pickTag' as const, text: 'Pick a tag' },
-    ].flatMap(({ command, text }) => {
-      const keys = hint(command, 'editor');
-      if (keys === null) {
-        return [];
-      }
-      const part = element('span', 'backlog-editor-hint', text);
-      part.append(keys);
-      return [part];
-    });
 
   const syncEditor = (state: BacklogState) => {
     const { editor } = state;
@@ -932,10 +991,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       if (store.get().editor === null) {
         dispatch({ type: 'focus', focus: 'homes' });
       }
-    },
-    keysChanged() {
-      followupEditor.redrawHints();
-      render();
     },
     commands,
   };

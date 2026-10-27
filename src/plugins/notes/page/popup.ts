@@ -1,6 +1,5 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { TextEditor } from '../../../contracts/editor';
-import type { Platform } from '../../../contracts/platform';
 import type {
   CommandsRunIn,
   PageChannel,
@@ -12,7 +11,6 @@ import { errorText } from '../../../shared/error-text';
 import { IMAGE_TYPES } from '../../../shared/image-types';
 import { saveState, startAutosave } from '../../../shared/page/autosave';
 import { element } from '../../../shared/page/dom';
-import { keyHint } from '../../../shared/page/key-hint';
 import { createListPicker } from '../../../shared/page/list-picker';
 import { filesOf, holdsPastedText } from '../../../shared/page/pasted-images';
 import { createReducerStore } from '../../../shared/page/reducer-store';
@@ -80,6 +78,9 @@ interface ActionButton {
   label: string;
   variant: ButtonVariant;
   command: NotesPageCommand;
+  // Its hint shows in every scope, since its key fires in the title box as
+  // well as on the popup.
+  isHintInEveryScope?: boolean;
 }
 
 const POPUP_ACTIONS: readonly ActionButton[] = [
@@ -90,8 +91,21 @@ const POPUP_ACTIONS: readonly ActionButton[] = [
     command: 'appendFollowup',
   },
   { label: 'Start session', variant: 'secondary', command: 'sendSession' },
-  { label: 'Add follow-up', variant: 'primary', command: 'sendFollowup' },
+  {
+    label: 'Add follow-up',
+    variant: 'primary',
+    command: 'sendFollowup',
+    isHintInEveryScope: true,
+  },
 ];
+
+// The command each field row names at its end, acting on that field from
+// any row.
+const ROW_COMMANDS: Partial<Record<NoteField, NotesPageCommand>> = {
+  target: 'pickTarget',
+  tags: 'pickTags',
+  session: 'pickSession',
+};
 
 const CONFIRM_ACTIONS: readonly ActionButton[] = [
   { label: 'Keep', variant: 'secondary', command: 'confirmNo' },
@@ -115,8 +129,7 @@ type DraftOperation =
 export interface NotePopupDeps {
   channel: PageChannel<NotesChannel>;
   services: PageServices;
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
-  platform: Platform;
+  keys: Pick<KeysPageExports, 'anchor'>;
   overlay: PluginAreas['overlay'];
   run(command: CommandId): void;
   pushScope(scope: NotesScope): PushedScope;
@@ -167,25 +180,66 @@ export function createNotePopup(
   // Each image's bytes and thumbnail URL, by id.
   const images = new Map<number, { bytes: Uint8Array; url: string }>();
 
+  // A new element the keys plugin draws the keys of `command` into, then
+  // `label` when given, while `scope` is in force (every scope for null).
+  // Each is made once: the popup lives as long as the page, so it keeps no
+  // anchor to dispose.
+  const anchored = (
+    command: NotesPageCommand,
+    scope: NotesScope | null,
+    label?: string,
+  ): HTMLElement => {
+    const node = element('span', 'notes-hint');
+    deps.keys.anchor(node, `notes.${command}`, {
+      scope: scope === null ? undefined : `notes.${scope}`,
+      label,
+    });
+    return node;
+  };
+
+  // The box hint of the keys that move between the boxes, in `scope`.
+  const boxHint = (scope: NotesScope): HTMLElement => {
+    const node = element('span', 'notes-box-hint');
+    node.append(anchored('prevBox', scope), anchored('nextBox', scope));
+    return node;
+  };
+
   // ── Rows ──────────────────────────────────────────────────────────────────
   const fieldsView = element('div', 'notes-fields');
   const rows = new Map<NoteField, HTMLElement>();
   const slots = new Map<NoteField, HTMLElement>();
+  const rowKeys = new Map<NoteField, HTMLElement>();
   for (const field of NOTE_FIELDS) {
     const node = element('div', 'notes-row');
     const value = element('div', 'notes-row-value');
-    node.append(element('span', 'notes-row-label', FIELD_LABELS[field]), value);
+    const keys = element('span', 'notes-row-keys');
+    const command = ROW_COMMANDS[field];
+    if (command !== undefined) {
+      keys.append(anchored(command, 'popup', 'pick'));
+    }
+    node.append(
+      element('span', 'notes-row-label', FIELD_LABELS[field]),
+      value,
+      keys,
+    );
     rows.set(field, node);
     slots.set(field, value);
+    rowKeys.set(field, keys);
     fieldsView.append(node);
   }
+
+  // The cursor row's prompt, moved to the cursor row's end on each draw.
+  const cursorPrompt = element('span', 'notes-cursor-prompt');
+  const editHint = anchored('editBox', 'popup', 'edit');
+  const removeHint = anchored('remove', 'popup', 'remove');
+  cursorPrompt.append(editHint, removeHint);
   const slot = (field: NoteField) => slots.get(field) as HTMLElement;
   slot('session').classList.add('notes-row-value--one-line');
 
   const titleFrame = inputFrame();
   const titleInput = textBoxInput('notes-title');
   titleInput.placeholder = 'Title';
-  titleFrame.append(titleInput);
+  titleFrame.append(titleInput, boxHint('title'));
   slot('title').append(titleFrame);
   titleInput.addEventListener('input', () => edit({ title: titleInput.value }));
   titleInput.addEventListener('focus', () => {
@@ -217,6 +271,8 @@ export function createNotePopup(
     blurred: () => boxBlurred(),
     modeChanged: () => undefined,
   });
+  const bodyHint = boxHint('popup');
+  bodyFrame.append(bodyHint);
 
   const boxFocused = (box: 'title' | 'body') => {
     focusedBox = box;
@@ -232,7 +288,6 @@ export function createNotePopup(
     channel,
     markup: services.markup,
     keys: deps.keys,
-    platform: deps.platform,
     run: deps.run,
     pushScope: () => deps.pushScope('markup'),
     imageBytes: (id) => imageBytes(id),
@@ -373,26 +428,42 @@ export function createNotePopup(
       const isCursor = keysOnRows && field === state.field;
       node.classList.toggle('is-cursor', isCursor);
     }
+    fieldsView.classList.toggle('is-box-focused', focusedBox !== null);
+    bodyHint.hidden = focusedBox !== 'body';
+    placeCursorPrompt(state, keysOnRows);
+  };
+
+  // Moves the cursor prompt to the cursor row's end, showing the keys that
+  // act on that field; detached while the keys are off the rows.
+  const placeCursorPrompt = (state: PopupState, keysOnRows: boolean) => {
+    if (!keysOnRows) {
+      cursorPrompt.remove();
+      return;
+    }
+    const { field } = state;
+    const holdsImage = field === 'images' && state.images.length > 0;
+    const holdsSession = field === 'session' && state.fields.session !== null;
+    editHint.hidden = field !== 'title' && field !== 'body';
+    removeHint.hidden = !holdsImage && !holdsSession;
+    rowKeys.get(field)?.append(cursorPrompt);
   };
   store.subscribe(render);
 
-  const drawActions = (
-    target: HTMLElement,
+  // Each action's button, its key drawn inside it while `scope` is in force.
+  const actionButtons = (
     actions: readonly ActionButton[],
-    scope: string,
-  ) => {
-    target.replaceChildren(
-      ...actions.map((action) =>
-        textButton(action.label, () => deps.run(`notes.${action.command}`), {
-          variant: action.variant,
-          hint: keyHint(
-            deps.keys.keysFor(`notes.${action.command}`, scope),
-            deps.platform,
-          ),
-        }),
-      ),
+    scope: NotesScope,
+  ): HTMLElement[] =>
+    actions.map((action) =>
+      textButton(action.label, () => deps.run(`notes.${action.command}`), {
+        variant: action.variant,
+        hint: anchored(
+          action.command,
+          action.isHintInEveryScope === true ? null : scope,
+        ),
+      }),
     );
-  };
+  dialog.actions.append(...actionButtons(POPUP_ACTIONS, 'popup'));
 
   // ── Saving ────────────────────────────────────────────────────────────────
   const saveFields = async (fields: NoteFields) => {
@@ -566,6 +637,7 @@ export function createNotePopup(
     filterEditor: editorHost,
   });
   dialog.element.append(picker.element);
+  const pickerFilterHint = anchored('pickerFilter', 'picker', 'filter');
 
   const pick = <T>(
     title: string,
@@ -580,6 +652,7 @@ export function createNotePopup(
       items,
       label,
       selected,
+      headerEnd: pickerFilterHint,
       chosen: (item) => {
         render();
         chosen(item);
@@ -601,6 +674,7 @@ export function createNotePopup(
       'Its title, text and images are removed.',
     ),
   );
+  confirm.actions.append(...actionButtons(CONFIRM_ACTIONS, 'confirm'));
   deps.overlay.contribute(confirm.element);
   let confirmScope: PushedScope | null = null;
 
@@ -622,15 +696,6 @@ export function createNotePopup(
       log('notes', 'draft kept');
     }
   };
-
-  // Drawn again on each keymap change for as long as the page lives.
-  const drawAllActions = () => {
-    drawActions(dialog.actions, POPUP_ACTIONS, 'notes.popup');
-    drawActions(confirm.actions, CONFIRM_ACTIONS, 'notes.confirm');
-    markupView.redrawHints();
-  };
-  drawAllActions();
-  deps.keys.onChanged(drawAllActions);
 
   // ── Boxes and the field cursor ────────────────────────────────────────────
   const blurBoxes = () => {

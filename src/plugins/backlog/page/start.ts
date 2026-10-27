@@ -57,7 +57,6 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
               },
         ),
     });
-    keys.onChanged(() => view.keysChanged());
 
     // The view reads `mode` only once a key runs or a load lands, after
     // `add`: Backlog mode is never the first mode added. Focus leaves the

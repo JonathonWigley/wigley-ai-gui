@@ -176,6 +176,33 @@ export function actedFollowup(
   return state.focus === 'homes' ? null : selectedFollowup(state);
 }
 
+// A command the cursor row's prompt shows.
+export type CursorCommand =
+  | 'edit'
+  | 'delete'
+  | 'toggleAgentReady'
+  | 'pickTag'
+  | 'openInDocs';
+
+const FOLLOWUP_CURSOR_COMMANDS: readonly CursorCommand[] = [
+  'edit',
+  'delete',
+  'toggleAgentReady',
+  'pickTag',
+  'openInDocs',
+];
+
+const DOC_CURSOR_COMMANDS: readonly CursorCommand[] = ['openInDocs'];
+
+// The commands that act on `row` while it is the cursor row, in prompt
+// order: every row action on a follow-up, opening in Docs alone on a plan,
+// feature or task.
+export function cursorCommands(row: BacklogRow): readonly CursorCommand[] {
+  return row.kind === 'followup'
+    ? FOLLOWUP_CURSOR_COMMANDS
+    : DOC_CURSOR_COMMANDS;
+}
+
 export function rowTitle(row: BacklogRow): string {
   switch (row.kind) {
     case 'followup':

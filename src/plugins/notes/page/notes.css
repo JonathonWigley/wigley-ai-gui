@@ -11,8 +11,26 @@
   border-radius: var(--wg-radius-sm);
   display: grid;
   gap: var(--wg-space-3);
-  grid-template-columns: calc(var(--wg-space-8) * 2) minmax(0, 1fr);
+  grid-template-columns: calc(var(--wg-space-8) * 2) minmax(0, 1fr) auto;
   padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+/* A row's keys at its end: the key that picks its value, then the cursor
+   row's prompt. They hide, keeping their space, while a box holds the keys. */
+.notes-row-keys {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-2);
+  min-height: var(--wg-row-list);
+}
+
+.notes-fields.is-box-focused .notes-row-keys {
+  visibility: hidden;
+}
+
+.notes-cursor-prompt {
+  display: inline-flex;
+  gap: var(--wg-space-2);
 }
 
 /* The field the popup's keys act on, while no box holds focus. */
@@ -44,6 +62,23 @@
 .notes-row-value > .ui-input {
   flex: 1;
   min-width: 0;
+  position: relative;
+}
+
+/* The keys that move between the boxes, in the focused box's frame at its
+   top end. */
+.notes-box-hint {
+  display: inline-flex;
+  gap: var(--wg-space-1);
+  pointer-events: none;
+  position: absolute;
+  right: var(--wg-space-2);
+  top: var(--wg-space-1);
+  z-index: 1;
+}
+
+.notes-box-hint[hidden] {
+  display: none;
 }
 
 .notes-empty {

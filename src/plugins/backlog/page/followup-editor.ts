@@ -22,11 +22,14 @@ export interface FollowupEditorDeps {
   editor: EditorHost;
   log: Log;
   changed(field: EditorField, text: string): void;
-  // The editor's footer: its key hints, drawn again by `redrawHints`.
-  hints(): HTMLElement[];
+  // The editor's footer content, appended once.
+  hints: HTMLElement;
+  // The box hint the editor moves into the frame of each box it activates.
+  fieldHint: HTMLElement;
 }
 
-// The follow-up editor: a vim box per field, drawn into `element` while open.
+// The follow-up editor: a vim box per field, drawn into `element` while open,
+// over the footer `hints`; the active box's frame holds `fieldHint`.
 // `open` mounts the boxes with `texts`, `close` destroys them. `step` moves
 // focus to the next or previous box from the focused one; from the page it
 // focuses the box focused last. `setText` replaces one box's text, reporting
@@ -42,7 +45,6 @@ export interface FollowupEditor {
   leave(): void;
   hasFocusedBox(): boolean;
   setText(field: EditorField, text: string): void;
-  redrawHints(): void;
 }
 
 export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
@@ -52,6 +54,7 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
   const heading = element('h2', 'backlog-editor-heading');
   const fields = element('div', 'backlog-editor-fields');
   const footer = element('div', 'backlog-editor-hints');
+  footer.append(deps.hints);
   form.append(heading, fields, footer);
 
   const frames = new Map<EditorField, HTMLElement>();
@@ -79,6 +82,7 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
       changed: (field, text) => deps.changed(field, text),
       activated: (field) => {
         lastField = field;
+        frameOf(field).append(deps.fieldHint);
       },
     },
     deps.log,
@@ -101,7 +105,6 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
       for (const field of EDITOR_FIELDS) {
         boxes.mount(frameOf(field), field, texts[field]);
       }
-      footer.replaceChildren(...deps.hints());
       form.hidden = false;
       lastField = 'title';
     },
@@ -136,11 +139,6 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
     setText(field, text) {
       boxes.destroyBox(field);
       boxes.mount(frameOf(field), field, text);
-    },
-    redrawHints() {
-      if (isOpen) {
-        footer.replaceChildren(...deps.hints());
-      }
     },
   };
 }

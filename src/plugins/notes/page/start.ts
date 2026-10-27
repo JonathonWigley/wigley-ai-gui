@@ -46,7 +46,6 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       channel: api.channel,
       services,
       keys,
-      platform: api.platform,
       overlay: api.areas.overlay,
       run: (command) => api.commands.run(command),
       pushScope: (scope) => api.keys.pushScope(scope),

@@ -5,7 +5,6 @@ import type {
   MarkupSession,
   MarkupTool,
 } from '../../../contracts/markup';
-import type { Platform } from '../../../contracts/platform';
 import type {
   PageChannel,
   PushedScope,
@@ -13,7 +12,6 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
-import { keyHint } from '../../../shared/page/key-hint';
 import { textButton } from '../../../shared/page/ui/button';
 import type { KeysPageExports } from '../../keys/contract';
 import type { NoteDraft, NotesChannel } from '../contract';
@@ -44,8 +42,7 @@ const SCOPE = 'notes.markup';
 export interface MarkupViewDeps {
   channel: PageChannel<NotesChannel>;
   markup: MarkupEditor;
-  keys: Pick<KeysPageExports, 'keysFor'>;
-  platform: Platform;
+  keys: Pick<KeysPageExports, 'anchor'>;
   run(command: CommandId): void;
   // Pushes the `markup` scope.
   pushScope(): PushedScope;
@@ -77,8 +74,6 @@ export interface MarkupView {
   stepColour(step: 1 | -1): void;
   undo(): void;
   redo(): void;
-  // Draws the toolbar's key hints again from the keymap.
-  redrawHints(): void;
 }
 
 interface Shown {
@@ -114,8 +109,14 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
   let colourIndex = 0;
   let saves: Promise<void> = Promise.resolve();
 
-  const hint = (command: string) =>
-    keyHint(deps.keys.keysFor(`notes.${command}`, SCOPE), deps.platform);
+  // A new element the keys plugin draws the keys of `command` into while the
+  // markup scope is in force; made once, as the view lives as long as the
+  // page.
+  const hint = (command: string): HTMLElement => {
+    const node = element('span', 'notes-hint');
+    deps.keys.anchor(node, `notes.${command}`, { scope: SCOPE });
+    return node;
+  };
 
   const commandButton = (label: string, command: string) =>
     textButton(label, () => deps.run(`notes.${command}`), {
@@ -123,36 +124,38 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
       hint: hint(command),
     });
 
-  const drawToolbar = () => {
-    const tools = TOOLS.map((entry) => {
-      const node = commandButton(entry.label, entry.command);
-      node.classList.toggle('is-active', entry.tool === tool);
-      return node;
+  const tools = TOOLS.map((entry) => ({
+    tool: entry.tool,
+    node: commandButton(entry.label, entry.command),
+  }));
+  const swatches = COLOURS.map((colour, index) => {
+    const node = textButton(COLOUR_LABELS[colour], () => pickColour(index), {
+      variant: 'ghost',
     });
-    const swatches = COLOURS.map((colour, index) => {
-      const node = textButton(COLOUR_LABELS[colour], () => pickColour(index), {
-        variant: 'ghost',
-      });
-      node.classList.add('notes-colour');
-      node.classList.toggle('is-active', index === colourIndex);
-      node.prepend(element('span', `notes-swatch notes-swatch--${colour}`));
-      return node;
-    });
-    const colourKeys = element('span', 'notes-markup-keys');
-    for (const node of [hint('nextColour'), hint('prevColour')]) {
-      if (node !== null) {
-        colourKeys.append(node);
-      }
+    node.classList.add('notes-colour');
+    node.prepend(element('span', `notes-swatch notes-swatch--${colour}`));
+    return node;
+  });
+  const colourKeys = element('span', 'notes-markup-keys');
+  colourKeys.append(hint('nextColour'), hint('prevColour'));
+  toolbar.append(
+    group(tools.map((entry) => entry.node)),
+    group([...swatches, colourKeys]),
+    group([
+      commandButton('Undo', 'undo'),
+      commandButton('Redo', 'redo'),
+      commandButton('Done', 'closeMarkup'),
+    ]),
+  );
+
+  // Marks the tool and colour in use.
+  const markActive = () => {
+    for (const entry of tools) {
+      entry.node.classList.toggle('is-active', entry.tool === tool);
     }
-    toolbar.replaceChildren(
-      group(tools),
-      group([...swatches, colourKeys]),
-      group([
-        commandButton('Undo', 'undo'),
-        commandButton('Redo', 'redo'),
-        commandButton('Done', 'closeMarkup'),
-      ]),
-    );
+    swatches.forEach((node, index) => {
+      node.classList.toggle('is-active', index === colourIndex);
+    });
   };
 
   const sessionNow = (): MarkupSession | null => shown?.session ?? null;
@@ -165,7 +168,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
     colourIndex = index;
     const colour = COLOURS[index];
     session.setColour(readColour(colour));
-    drawToolbar();
+    markActive();
     deps.log('notes', `colour ${colour}`);
   };
 
@@ -227,7 +230,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
     }
   };
 
-  drawToolbar();
+  markActive();
   return {
     element: root,
     isShown: () => shown !== null,
@@ -237,7 +240,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
       }
       tool = 'pen';
       colourIndex = 0;
-      drawToolbar();
+      markActive();
       const entry: Shown = {
         id,
         pos,
@@ -272,7 +275,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
       }
       tool = next;
       session.setTool(next);
-      drawToolbar();
+      markActive();
       deps.log('notes', `tool ${next}`);
     },
     stepColour(step) {
@@ -292,6 +295,5 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
         deps.log('notes', 'redo');
       }
     },
-    redrawHints: drawToolbar,
   };
 }

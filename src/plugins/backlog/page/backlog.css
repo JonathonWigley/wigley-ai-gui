@@ -58,12 +58,55 @@
   }
 }
 
+/* The list: its header of keys, the filter, then the rows. */
 .backlog-list {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   outline: none;
+}
+
+/* The keys that act on the open home, then the edge prompt to the detail. */
+.backlog-list-header {
+  align-items: baseline;
+  display: flex;
+  gap: var(--wg-space-3);
+  padding: var(--wg-space-2) var(--wg-space-3) 0;
+}
+
+.backlog-list-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-3);
+}
+
+/* An edge prompt: an anchor and its chevron on a pane header's end. */
+.backlog-edge {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--wg-space-1);
+  white-space: nowrap;
+}
+
+.backlog-edge--start {
+  margin-right: auto;
+}
+
+.backlog-edge--end {
+  margin-left: auto;
+}
+
+/* The cursor row's actions, at its trailing end. */
+.backlog-row-actions {
+  display: inline-flex;
+  flex: none;
+  gap: var(--wg-space-2);
+  margin-left: auto;
+}
+
+.ui-row-trailing + .backlog-row-actions {
+  margin-left: 0;
 }
 
 .backlog-filter {
@@ -87,13 +130,28 @@
   gap: var(--wg-space-1);
 }
 
-/* The detail scrolls the selected row's text, or holds the editor. */
+/* The detail scrolls the selected row's text, or holds the editor, under a
+   header that stays at the top. */
 .backlog-detail {
   height: 100%;
   min-height: 0;
   outline: none;
   overflow-y: auto;
   padding: var(--wg-space-3) var(--wg-space-4);
+}
+
+/* The header covers the pane's top padding as well, so no text scrolls
+   above it. */
+.backlog-detail-head {
+  align-items: baseline;
+  background: var(--wg-sheet-background);
+  display: flex;
+  gap: var(--wg-space-3);
+  margin-top: calc(var(--wg-space-3) * -1);
+  padding: var(--wg-space-3) 0 var(--wg-space-2);
+  position: sticky;
+  top: calc(var(--wg-space-3) * -1);
+  z-index: 1;
 }
 
 .backlog-followup {
@@ -132,20 +190,28 @@
   margin-top: var(--wg-space-2);
 }
 
+/* The active box's frame holds the field keys at its top end. */
+.backlog-editor-box {
+  position: relative;
+}
+
+.backlog-field-hint {
+  display: inline-flex;
+  gap: var(--wg-space-1);
+  pointer-events: none;
+  position: absolute;
+  right: var(--wg-space-2);
+  top: var(--wg-space-1);
+  z-index: 1;
+}
+
 .backlog-editor-box--body {
   min-height: calc(var(--wg-row-list) * 8);
 }
 
-.backlog-editor-hints {
+/* The editor's footer of keys. */
+.backlog-editor-keys {
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-3);
-  color: var(--wg-fg-tertiary);
-  font-size: var(--wg-text-12);
-}
-
-.backlog-editor-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--wg-space-1);
 }

@@ -6,6 +6,7 @@ import {
   type BacklogAction,
   type BacklogState,
   backlogReducer,
+  cursorCommands,
   draftOf,
   editorEdit,
   emptyReason,
@@ -533,5 +534,45 @@ describe('withTagToggled', () => {
 
   it('withTagToggled_Absent_AppendsIt', () => {
     expect(withTagToggled(['a'], 'agent-ready')).toEqual(['a', 'agent-ready']);
+  });
+});
+
+describe('cursorCommands', () => {
+  it('cursorCommands_Followup_EveryRowAction', () => {
+    const row = {
+      kind: 'followup' as const,
+      key: 'followup',
+      path: `${ROOT}/followups.md`,
+      item: item('Fix the bar'),
+    };
+
+    expect(cursorCommands(row)).toEqual([
+      'edit',
+      'delete',
+      'toggleAgentReady',
+      'pickTag',
+      'openInDocs',
+    ]);
+  });
+
+  it('cursorCommands_Plan_OpenInDocsOnly', () => {
+    const row = {
+      kind: 'plan' as const,
+      key: 'plan',
+      plan: plan('bar', ['01-bar']),
+      isExpanded: false,
+    };
+
+    expect(cursorCommands(row)).toEqual(['openInDocs']);
+  });
+
+  it('cursorCommands_Task_OpenInDocsOnly', () => {
+    const row = {
+      kind: 'task' as const,
+      key: 'task',
+      task: { path: `${ROOT}/feature/01-bar.md`, title: 'Bar', status: null },
+    };
+
+    expect(cursorCommands(row)).toEqual(['openInDocs']);
   });
 });
