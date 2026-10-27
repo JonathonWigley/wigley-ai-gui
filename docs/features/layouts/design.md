@@ -63,21 +63,24 @@ A layout draws every pane, and every repeated row, card or entry of its owner's 
 - text boxes and editors, which a layout places through `kit.textBox`; the app appends any box a layout leaves out
 - dialogs' and prompts' lifecycle, the status lines and the saved state
 
-A layout's CSS restyles only under its own `data-layout` root. The app-wide look of the primitives stays in themes.
+A layout's CSS restyles only under its own root: every part root carries `data-layout="<name>"` and
+`data-layout-owner="<owner>"`, so two owners' layouts of one name never share selectors. The shell's frames are
+CSS-only: the four chrome areas carry the shell layout's attributes, and its JS parts draw only what the core puts in
+them. The app-wide look of the primitives stays in themes.
 
 ## Adopters
 
 | Owner | Setting | Surfaces |
 | --- | --- | --- |
-| `shell` | `shell.layout` | title bar, activity bar, side bar frame, status bar, the session tab strip |
+| `shell` | `shell.layout` | title bar, activity bar, side bar frame, status bar |
 | `forms` | `forms.layout` | question, finding and notice cards; head, rail and review panes |
-| `chat` | `chat.layout` | chat entries; the composer, the start prompt and the sign-in dialog |
+| `chat` | `chat.layout` | chat entries; the composer, the start prompt, the pickers, the sign-in, deny-reason and end-session dialogs, the image viewer |
 | `primer` | `primer.layout` | feature, task and item cards; rail and review panes |
 | `docs` | `docs.layout` | the tree and its rows, the rendered doc and its status chips, the create dialog |
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and rows, the editor pane, plans and features |
 | `settings` | `settings.layout` | the section list, the setting rows, the key rows |
 | `notes` | `notes.layout` | the note popup: fields, images, target and pickers |
-| `sessions` | `sessions.layout` | the session rows in the side bar |
+| `sessions` | `sessions.layout` | the session rows in the side bar, each session's tab strip |
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
 

@@ -5,6 +5,11 @@ file, settings and keymap hot reload (the ConfigStore), the layered keymap, the 
 tokens, the platform chord formatter, the active-line band, and the sessions and forms-layouts live checks.
 
 - Command palette.
+- A chat draft that survives a page reload: a layout reload keeps the draft and its images (the box moves into the
+  redrawn composer), but a page reload starts the box empty. It needs the draft kept outside the page
+  (`docs/features/layouts/design.md`).
+- A layout name picker in Settings mode: each `<owner>.layout` setting (and `shell.layout`) draws as a plain text
+  row; a picker listing the owner's layout names, as the theme row lists themes, would read `api.layouts.names()`.
 - Packaging and installers for macOS and Windows.
 - A Latte (light) theme and OS light/dark following. The token model is theme-neutral (`colorScheme` per theme), so
   this is a theme file, its `DESIGN.md` light rules, and a light/dark choice.
