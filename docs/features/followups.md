@@ -63,7 +63,7 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 From a review against the AGENTS.md Intent (everything a plugin and hookable, everything hot reloads, macOS and Windows
 now, any harness later). Each item names its sites.
 
-### Unloading and reload
+## Extensibility review: Unloading and reload
 
 - **Disposable registrations** — *agent-ready*: Every registration returns a `Disposable`: `EventBus.on` / `PluginEvents.on`, `PageChannel.on` and `Bridge.onMessage`
   (preload adds a fresh `ipcRenderer` listener per call), `MainChannel.handle`, `CommandRegistry.register`, `Modes.add`
@@ -99,7 +99,7 @@ now, any harness later). Each item names its sites.
   restore them in `keepFocusedBox`, and swap a CSS-only change without a rebuild. Redraw only the cards a changed
   layout draws, reading `LayoutSet.changed` (kept unread for this, by the user's ruling).
 
-### Hooks plugins don't have yet
+## Extensibility review: Hooks plugins don't have yet
 
 - **Core events on the bus** — *agent-ready*: The core emits its own events on the bus under `core`: mode and scope changes, window focus, theme applied, config
   changed, page ready, each typed in `src/contracts`.
@@ -138,7 +138,7 @@ now, any harness later). Each item names its sites.
   unformatted hints (page and editor) with a keymap-changed subscription so drawn buttons follow a rebind. Box focus
   (`page` or `editor`) becomes a core `keys.onWhereChanged`, replacing keys' own `document.activeElement` reading.
 
-### Closed lists that become registrations
+## Extensibility review: Closed lists that become registrations
 
 - **Forms item kinds as registrations** — *agent-ready*: Forms item kinds register as one unit (`registerKind`, main and page, disposable), each declaring its wire keys
   (`argsKey`, `bodyKey`, `resultKey`, `fingerprintJoinsWhenEmpty`) so saved rounds, retro and the Python fingerprint
@@ -161,7 +161,7 @@ now, any harness later). Each item names its sites.
 - **Derived layer rules** — *agent-ready*: `check-layers.mts` derives each plugin's rules from the folder convention and its manifest's `dependsOn`, and checks
   `src/plugins/{main,page,manifests}.ts` against the folders, rather than about five hand entries per plugin.
 
-### Platform: macOS and Windows
+## Extensibility review: Platform: macOS and Windows
 
 - **Platform record** — *agent-ready*: A `Platform` record chosen in the composition root (`createMacPlatform` / `createWindowsPlatform`), exposed read-only
   as `services.platform` on both sides: app lifecycle quirks, attention and badge (the alerts adapter splits into mac
@@ -183,7 +183,7 @@ now, any harness later). Each item names its sites.
 - **Relay contract test** — *agent-ready*: A relay contract test that runs `startRelayServer` on a temp channel for the current platform, since the self-test
   skips the relay and nothing proves the named pipe.
 
-### Harness and model seams
+## Extensibility review: Harness and model seams
 
 - **AgentHarnessRegistry** — *agent-ready*: An `AgentHarnessRegistry` service (`register`, `list`, `get`, `onChanged`), so a harness plugin registers its
   adapter instead of `main.ts` building a fixed array. Harness ids become open strings with a declared `label`;
@@ -218,7 +218,7 @@ now, any harness later). Each item names its sites.
   "relay" leave `round.ts`, `round-type.ts` and the format errors, and `needs_manual_open` leaves forms' `Outcome`
   for the relay's. Each `ItemFormat` splits its model-facing `describe()` schema text from parse and fingerprint.
 
-### Decoupling and shared services
+## Extensibility review: Decoupling and shared services
 
 - Sessions stops knowing forms: `mark(sessionId, { text })` lets the marking plugin word the toast (today "Round
   from…"), the empty-state text is generic or contributed, `SessionRow.marked` is documented generically, and
@@ -237,7 +237,7 @@ now, any harness later). Each item names its sites.
 - **Pending-keys hub without a nullable pageKeys** — *agent-ready*: The renderer root builds the pending-keys hub without the nullable `pageKeys` (`renderer.ts:111-117`), and the
   editor-bind miss policy moves into `editor-binds.ts`.
 
-### Bugs and code
+## Extensibility review: Bugs and code
 
 - **Selection lost on an outside rename or trash** — *agent-ready*: When another docs view renames or trashes a doc, a view whose selected row was that doc (its usual row or its
   Starred row) keeps a selection with no row, so `l` and `s` do nothing until the user moves. Star toggles already
@@ -279,7 +279,7 @@ now, any harness later). Each item names its sites.
   (`src/plugins/forms/page/kinds/card-parts.ts`), and the `p.round-progress` comment in
   `src/plugins/forms/layouts/layout.d.ts`. Decide whether the page says "responded" there.
 
-### Tests
+## Extensibility review: Tests
 
 - **Memory Files folder watch events** — *agent-ready*: The memory Files adapter reports nothing to a watch when it makes, removes or trashes an empty folder, where Node's
   `fs.watch` on the parent reports the folder's name (`src/shared/memory-files.ts` `makeFolder`, the `removeKey`

@@ -20,7 +20,8 @@ plan is written from them. A decision here stands unless the user changes it.
 - Wigley-written means a features home's files (`~/wigley-agents/AGENTS.md` § Features): `<home>/followups.md`,
   `<home>/followups/*.md`, `<home>/<slug>/plan-*/` and `<home>/<slug>/checklist.md`. A repo's own
   `docs/followups/*.md` is team-repo content and stays out, though the docs index lists it.
-- Converting an old file to the canonical follow-up shape is out of scope: each file keeps its shape.
+- Old files whose shape hid their items (the gui and harness follow-up files) were converted to the list shape. Backlog
+  and the docs index read each file in its own shape.
 
 ## The mode
 
