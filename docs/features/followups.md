@@ -302,3 +302,4 @@ now, any harness later). Each item names its sites.
   preview`. That line depends on forms' self-test running just before and leaving its preview row to the left, so a
   change in plugin start order breaks it. Fix: a close log line of its own in the sessions page, or activate a known
   session first.
+- **Concurrent resumes of one past session** — *agent-ready*: chat's `resume` (`src/plugins/chat/main/chat-sessions.ts`) checks whether a host session already has a row only before it awaits the history read, so two resumes of the same past session started together can each open a row for one host id. Re-check `holding` and `isOpenOnOtherRow` after the await, as `send` re-checks its row after its pending-history read, with a row in the resume tests. Source session: Claude Code aff23a69-78ce-4e15-af65-feac802dde92 in wigley-ai-gui.
