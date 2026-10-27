@@ -14,9 +14,10 @@ import type {
   MarkupSession,
   MarkupTool,
 } from '../../contracts/markup';
+import { dataUrlBytes, pngDataUrl } from '../../shared/png-data-url';
 import { fitScale } from './fit-scale';
+import { fullSizeExport } from './full-size-export';
 import { createMarkupHistory } from './markup-history';
-import { dataUrlBytes, pngDataUrl } from './png-data-url';
 
 // Sizes in screen pixels at open; marks store them in image pixels.
 const STROKE_WIDTH = 3;
@@ -64,7 +65,13 @@ export function createFabricMarkupEditor(): MarkupEditor {
       });
       canvas.setViewportTransform([scale, 0, 0, scale, 0, 0]);
       if (saved !== null) {
-        await canvas.loadFromJSON(saved);
+        try {
+          await canvas.loadFromJSON(saved);
+        } catch (error) {
+          void canvas.dispose();
+          element.remove();
+          throw error;
+        }
       }
       setBackground(canvas, background);
       const hostStyle = getComputedStyle(host);
@@ -150,6 +157,14 @@ function startSession(
         runningLoads -= 1;
       });
   };
+  // Exiting fires `text:editing:exited`, which records the text or removes a
+  // blank one.
+  const finishEdit = () => {
+    const active = canvas.getActiveObject();
+    if (active instanceof IText && active.isEditing) {
+      active.exitEditing();
+    }
+  };
   const applyTool = () => {
     const isSelect = tool === 'select';
     canvas.isDrawingMode = tool === 'pen';
@@ -178,7 +193,7 @@ function startSession(
   canvas.on('object:modified', record);
   canvas.on('text:editing:entered', ({ target }) => {
     // Editing has just made the text's hidden textarea.
-    keepTextKeysFromPage(target, target.hiddenTextarea as HTMLTextAreaElement);
+    keepTextKeysFromPage(target.hiddenTextarea as HTMLTextAreaElement);
   });
   canvas.on('text:editing:exited', ({ target }) => {
     if (target.text.trim() === '') {
@@ -246,12 +261,18 @@ function startSession(
     },
     undo: () => load(history.undo()),
     redo: () => load(history.redo()),
-    toJson: () => markupJson(canvas),
+    finishEdit,
+    toJson() {
+      finishEdit();
+      return markupJson(canvas);
+    },
     toPng() {
-      const url = canvas.toDataURL({
-        format: 'png',
-        multiplier: background.width / canvas.width,
-      });
+      finishEdit();
+      const { multiplier, ...area } = fullSizeExport(
+        background,
+        canvas.getZoom(),
+      );
+      const url = canvas.toDataURL({ format: 'png', multiplier, ...area });
       return Promise.resolve(dataUrlBytes(url));
     },
     onChange(listener): Disposable {
@@ -261,10 +282,8 @@ function startSession(
     dispose() {
       isDisposed = true;
       listeners.clear();
-      const active = canvas.getActiveObject();
-      if (active instanceof IText && active.isEditing) {
-        active.exitEditing();
-      }
+      // Disposed, the session records nothing: an unfinished edit is dropped.
+      finishEdit();
       void canvas.dispose();
       // Fabric's dispose puts the canvas element back in its wrapper's place.
       element.remove();
@@ -273,18 +292,12 @@ function startSession(
 }
 
 // Typed keys stay in the text being edited instead of reaching the page's
-// keys; chords still reach them. Escape ends the edit and goes no further, so
-// only a second Escape reaches the page.
-function keepTextKeysFromPage(text: IText, textarea: HTMLTextAreaElement) {
+// keys; chords still reach them. Fabric's own listener ends the edit on Escape
+// and stops it there, so only a second Escape reaches the page.
+function keepTextKeysFromPage(textarea: HTMLTextAreaElement) {
   textarea.addEventListener(
     'keydown',
     (event) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        event.preventDefault();
-        text.exitEditing();
-        return;
-      }
       const isChord = event.ctrlKey || event.altKey || event.metaKey;
       if (!isChord) {
         event.stopPropagation();

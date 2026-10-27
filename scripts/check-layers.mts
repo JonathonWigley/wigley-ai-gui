@@ -580,7 +580,7 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['markdown-it'],
   },
   'src/renderer/fabric': {
-    layers: ['src/contracts'],
+    layers: ['src/contracts', 'src/shared'],
     packages: ['fabric'],
   },
   'src/renderer/renderer.ts': {
