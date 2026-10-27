@@ -95,7 +95,13 @@ export type BacklogAction =
   | { type: 'openCreate' }
   | { type: 'openEdit' }
   | { type: 'draftChanged'; field: EditorField; text: string }
-  | { type: 'moveEditorBaseline'; baseline: FollowupDraft }
+  // Applies only to the open editor of the item at `path` titled `title`.
+  | {
+      type: 'moveEditorBaseline';
+      path: string | null;
+      title: string;
+      baseline: FollowupDraft;
+    }
   | { type: 'closeEditor' }
   | { type: 'askDelete' }
   | { type: 'askDiscard' }
@@ -376,13 +382,16 @@ export function backlogReducer(
               draft: { ...state.editor.draft, [action.field]: action.text },
             },
           };
-    case 'moveEditorBaseline':
-      return state.editor === null || state.editor.baseline === null
-        ? state
-        : {
-            ...state,
-            editor: { ...state.editor, baseline: action.baseline },
-          };
+    case 'moveEditorBaseline': {
+      const { editor } = state;
+      const isSavingEditor =
+        editor !== null &&
+        editor.path === action.path &&
+        editor.baseline?.title === action.title;
+      return isSavingEditor
+        ? { ...state, editor: { ...editor, baseline: action.baseline } }
+        : state;
+    }
     case 'closeEditor':
       return state.editor === null
         ? state

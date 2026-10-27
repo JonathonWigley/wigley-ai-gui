@@ -316,6 +316,15 @@ describe('CRLF files', () => {
       '- **One** — a\r\n- **Two** — b\r\n- **Three** — c\r\n\r\nTail.\r\n',
     );
   });
+
+  it('writes a file with one CRLF line and one LF line back in LF', () => {
+    const draft = { title: 'Three', oneLine: 'c', tags: [], body: '' };
+    const text = '- **One** — a\r\n- **Two** — b\n';
+
+    expect(appliedText(text, { type: 'create', draft })).toBe(
+      '- **One** — a\n- **Two** — b\n- **Three** — c\n',
+    );
+  });
 });
 
 describe('parseFollowups on a list file', () => {

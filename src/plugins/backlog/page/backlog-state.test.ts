@@ -206,30 +206,22 @@ describe('backlogReducer', () => {
   });
 
   it.each<BacklogAction>([
-    { type: 'setFilter', text: '' },
+    { type: 'setFilter', text: 'on' },
     { type: 'toggleDone' },
     { type: 'toggleAgentReadyOnly' },
   ])(
-    'backlogReducer_PendingFollowupThenFilterOrToggle_LaterLoadKeepsSelection %#',
+    'backlogReducer_PendingFollowupThenFilterOrToggle_ClearsPendingFollowup %#',
     (change) => {
-      const homeItems = [
-        item('One', { tags: ['agent-ready'] }),
-        item('Saved', { oneLine: 'hidden' }),
-      ];
-      const filtered = run(opened(home(ROOT, homeItems)), {
-        type: 'setFilter',
-        text: 'one',
-      });
-
-      const after = run(
-        filtered,
+      const pending = run(
+        opened(home(ROOT, [item('One'), item('Saved')])),
+        { type: 'setFilter', text: 'one' },
         { type: 'selectFollowup', title: 'Saved' },
-        change,
-        { type: 'setFilter', text: '' },
-        { type: 'loaded', read: read(home(ROOT, homeItems)) },
       );
 
-      expect(selectedTitle(after)).toBe('One');
+      const after = run(pending, change);
+
+      expect(pending.pendingSelect).toBe('Saved');
+      expect(after.pendingSelect).toBeNull();
     },
   );
 
@@ -245,7 +237,12 @@ describe('backlogReducer', () => {
       opened(home(ROOT, [item('One')])),
       { type: 'openEdit' },
       { type: 'draftChanged', field: 'body', text: 'typed' },
-      { type: 'moveEditorBaseline', baseline: onDisk },
+      {
+        type: 'moveEditorBaseline',
+        path: `${ROOT}/followups.md`,
+        title: 'One',
+        baseline: onDisk,
+      },
     );
     const { editor } = after;
     if (editor === null) {
@@ -265,11 +262,34 @@ describe('backlogReducer', () => {
 
     const after = run(creating, {
       type: 'moveEditorBaseline',
+      path: null,
+      title: 'X',
       baseline: { title: 'X', oneLine: '', tags: [], body: '' },
     });
 
     expect(after).toBe(creating);
   });
+
+  it.each([
+    { path: `${ROOT}/other.md`, title: 'One' },
+    { path: `${ROOT}/followups.md`, title: 'Two' },
+  ])(
+    'backlogReducer_MoveEditorBaselineForAnotherItem_Unchanged %#',
+    ({ path, title }) => {
+      const editing = run(opened(home(ROOT, [item('One'), item('Two')])), {
+        type: 'openEdit',
+      });
+
+      const after = run(editing, {
+        type: 'moveEditorBaseline',
+        path,
+        title,
+        baseline: { title, oneLine: 'moved on', tags: [], body: '' },
+      });
+
+      expect(after).toBe(editing);
+    },
+  );
 
   it('backlogReducer_ReloadWithEditorOpen_KeepsEditorAndDraft', () => {
     const editing = run(

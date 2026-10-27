@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Git } from '../../../contracts/git';
-import { followupTitleProblem } from '../../../shared/followups/followup-file';
+import {
+  type FollowupDraft,
+  followupTitleProblem,
+} from '../../../shared/followups/followup-file';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   DocsMainExports,
   IndexEntry,
   SourceRead,
 } from '../../docs/contract';
-import type { BacklogRead } from '../contract';
+import type { BacklogEdit, BacklogRead } from '../contract';
 import { backlogMainPart } from './start';
 
 const CLONE = '/dev/r';
@@ -29,6 +32,8 @@ const FOLLOWUPS_TEXT = [
 ].join('\n');
 
 const UI_TEXT = '# UI\n\n- **Button** — *agent-ready*: bigger button\n';
+
+const BAD_TITLE_FOLLOWUPS_TEXT = '# Follow-ups — r\n\n## Wrap this:\n\nBody.\n';
 
 function entry(
   kind: string,
@@ -86,6 +91,13 @@ function fakeGit() {
     fileAtHead: vi.fn<Git['fileAtHead']>(async () => null),
     commitPaths: vi.fn<Git['commitPaths']>(async () => undefined),
   } satisfies Git;
+}
+
+// The first home's first follow-up as an editor draft.
+function firstFollowupDraft(read: BacklogRead): FollowupDraft {
+  const { title, oneLine, tags, body } =
+    read.homes[0].followupFiles[0].items[0];
+  return { title, oneLine, tags, body };
 }
 
 // Backlog's main part over a fake docs export serving `disk` and an index of
@@ -538,27 +550,38 @@ describe('backlog main part', () => {
     expect(backlog.files.get(FOLLOWUPS)).toBe(FOLLOWUPS_TEXT);
   });
 
-  it('applyEdit_ExistingTitleWouldNotReadBack_RefusedPointingToDocs', async () => {
-    const text = '# Follow-ups — r\n\n## Wrap this:\n\nBody.\n';
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: text,
-    });
-    const read = await backlog.invoke<BacklogRead>('load');
-    const title = read.homes[0].followupFiles[0].items[0].title;
+  it.each<(item: FollowupDraft) => BacklogEdit>([
+    (item) => ({ type: 'setTags', title: item.title, tags: ['agent-ready'] }),
+    (item) => ({
+      type: 'edit',
+      title: item.title,
+      draft: { ...item, body: 'New body.' },
+      baseline: item,
+    }),
+  ])(
+    'applyEdit_ExistingTitleWouldNotReadBackAndKept_RefusedPointingToDocs %#',
+    async (editOf) => {
+      const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+        [FOLLOWUPS]: BAD_TITLE_FOLLOWUPS_TEXT,
+      });
+      const read = await backlog.invoke<BacklogRead>('load');
+      const item = firstFollowupDraft(read);
 
-    const result = await backlog.invoke('applyEdit', HOME, FOLLOWUPS, {
-      type: 'setTags',
-      title,
-      tags: ['agent-ready'],
-    });
+      const result = await backlog.invoke(
+        'applyEdit',
+        HOME,
+        FOLLOWUPS,
+        editOf(item),
+      );
 
-    expect(title).toBe('Wrap this:');
-    expect(result).toEqual({
-      type: 'refused',
-      reason: `Wrap this: cannot be rewritten as it stands: ${String(followupTitleProblem(title))}. Edit it in Docs.`,
-    });
-    expect(backlog.files.get(FOLLOWUPS)).toBe(text);
-  });
+      expect(item.title).toBe('Wrap this:');
+      expect(result).toEqual({
+        type: 'refused',
+        reason: `Wrap this: cannot be rewritten as it stands: ${String(followupTitleProblem(item.title))}. Edit it in Docs.`,
+      });
+      expect(backlog.files.get(FOLLOWUPS)).toBe(BAD_TITLE_FOLLOWUPS_TEXT);
+    },
+  );
 
   it('watch_FollowupFileChanged_SendsChangedWithHomeRoot', async () => {
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
