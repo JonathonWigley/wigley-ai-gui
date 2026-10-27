@@ -152,6 +152,13 @@ export const defaultKeymap = {
     { keys: '<Leader>kd', scope: 'any', command: 'docs.showMode' },
     { keys: '<Leader>vt', scope: 'any', command: 'docs.toggleTree' },
     { keys: '<Leader>k,', scope: 'any', command: 'settings.showMode' },
+    { keys: '<Leader>kb', scope: 'any', command: 'backlog.showMode' },
+    { keys: '<Leader>vd', scope: 'any', command: 'backlog.toggleDone' },
+    {
+      keys: '<Leader>va',
+      scope: 'any',
+      command: 'backlog.toggleAgentReadyOnly',
+    },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────
     { keys: '<A-S-o>', scope: 'any', command: 'sessions.nextSession' },
@@ -450,6 +457,76 @@ export const defaultKeymap = {
       scope: 'settings.picker',
       command: 'settings.pickerCancel',
     },
+
+    // ── Backlog ────────────────────────────────────────────────────────────
+    { keys: 'j', scope: 'backlog.list', command: 'backlog.listDown' },
+    { keys: 'k', scope: 'backlog.list', command: 'backlog.listUp' },
+    { keys: 'gg', scope: 'backlog.list', command: 'backlog.listTop' },
+    { keys: 'G', scope: 'backlog.list', command: 'backlog.listBottom' },
+    { keys: 'l', scope: 'backlog.list', command: 'backlog.open' },
+    { keys: '<CR>', scope: 'backlog.list', command: 'backlog.toggle' },
+    { keys: 'h', scope: 'backlog.list', command: 'backlog.back' },
+    { keys: '/', scope: 'backlog.list', command: 'backlog.filter' },
+    { keys: 'a', scope: 'backlog.list', command: 'backlog.create' },
+    { keys: 'i', scope: 'backlog.list', command: 'backlog.edit' },
+    { keys: 'd', scope: 'backlog.list', command: 'backlog.delete' },
+    { keys: 't', scope: 'backlog.list', command: 'backlog.toggleAgentReady' },
+    { keys: 'T', scope: 'backlog.list', command: 'backlog.pickTag' },
+    // Uppercase, so the one step out of the app is never a lowercase slip.
+    { keys: 'C', scope: 'backlog.list', command: 'backlog.commit' },
+    { keys: 'R', scope: 'backlog.list', command: 'backlog.rescan' },
+    { keys: 'o', scope: 'backlog.list', command: 'backlog.openInDocs' },
+    { keys: '<A-l>', scope: 'backlog.list', command: 'backlog.focusDetail' },
+    { keys: '<A-h>', scope: 'backlog.detail', command: 'backlog.focusList' },
+    // The list's scroll keys scroll the detail shown beside it.
+    ...(['backlog.list', 'backlog.detail'] as const).flatMap((scope) => [
+      { keys: '<C-j>', scope, command: 'backlog.lineDown' as const },
+      { keys: '<C-k>', scope, command: 'backlog.lineUp' as const },
+      { keys: '<C-S-j>', scope, command: 'backlog.halfPageDown' as const },
+      { keys: '<C-S-k>', scope, command: 'backlog.halfPageUp' as const },
+    ]),
+    { keys: 'j', scope: 'backlog.detail', command: 'backlog.lineDown' },
+    { keys: 'k', scope: 'backlog.detail', command: 'backlog.lineUp' },
+    { keys: 'o', scope: 'backlog.detail', command: 'backlog.openInDocs' },
+    // A chord fires inside a box as well, so the editor's chords need no
+    // `where`.
+    { keys: '<D-Enter>', scope: 'backlog.editor', command: 'backlog.save' },
+    { keys: '<C-n>', scope: 'backlog.editor', command: 'backlog.nextField' },
+    {
+      keys: '<C-p>',
+      scope: 'backlog.editor',
+      command: 'backlog.previousField',
+    },
+    // Esc in a box's normal mode leaves the box; on the page it cancels.
+    {
+      keys: '<Esc>',
+      scope: 'backlog.editor',
+      command: 'backlog.leaveBox',
+      where: 'box',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'backlog.editor',
+      command: 'backlog.cancelEdit',
+      where: 'page',
+    },
+    // Inside a box `T` stays vim's.
+    {
+      keys: 'T',
+      scope: 'backlog.editor',
+      command: 'backlog.pickTag',
+      where: 'page',
+    },
+    { keys: '<CR>', scope: 'backlog.box', command: 'backlog.boxAccept' },
+    { keys: '<Esc>', scope: 'backlog.box', command: 'backlog.boxCancel' },
+    { keys: 'y', scope: 'backlog.confirm', command: 'backlog.confirmYes' },
+    { keys: 'n', scope: 'backlog.confirm', command: 'backlog.confirmNo' },
+    { keys: '<Esc>', scope: 'backlog.confirm', command: 'backlog.confirmNo' },
+    { keys: 'j', scope: 'backlog.picker', command: 'backlog.pickerDown' },
+    { keys: 'k', scope: 'backlog.picker', command: 'backlog.pickerUp' },
+    { keys: '<CR>', scope: 'backlog.picker', command: 'backlog.pickerChoose' },
+    { keys: 'l', scope: 'backlog.picker', command: 'backlog.pickerChoose' },
+    { keys: '<Esc>', scope: 'backlog.picker', command: 'backlog.pickerCancel' },
 
     // ── Gallery ────────────────────────────────────────────────────────────
     {

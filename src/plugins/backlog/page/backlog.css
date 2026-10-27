@@ -1,0 +1,151 @@
+/* Backlog mode's side bar: the load's status line, then each repo's header
+   over its homes. */
+.backlog-homes {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  outline: none;
+}
+
+.backlog-status {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  overflow: hidden;
+  padding: var(--wg-space-1) var(--wg-space-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backlog-home-rows,
+.backlog-rows {
+  list-style: none;
+  margin: 0;
+  overflow-y: auto;
+  padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+.backlog-repo {
+  padding: var(--wg-space-2) var(--wg-space-2) 0;
+}
+
+/* The sheet holds the split of the list and the detail. The sheet is the
+   main cell's direct child: its margins lie outside the box, so it takes the
+   cell's height less its two gutters. */
+.backlog-sheet {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.shell-main > .backlog-sheet {
+  height: calc(100% - var(--wg-sheet-gutter) * 2);
+}
+
+.backlog-split {
+  height: 100%;
+}
+
+/* Stacked, the list takes a fixed share of the height and the detail the
+   rest. */
+@media (max-width: 640px) {
+  .backlog-split:not(.is-start-hidden) {
+    grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+  }
+
+  .backlog-split > .ui-split-start {
+    max-height: none;
+  }
+}
+
+.backlog-list {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  outline: none;
+}
+
+.backlog-filter {
+  margin: var(--wg-space-2) var(--wg-space-2) 0;
+}
+
+.backlog-filter-input {
+  background: transparent;
+  border: 0;
+  color: var(--wg-fg);
+  font: inherit;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+  width: 100%;
+}
+
+.backlog-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1);
+}
+
+/* The detail scrolls the selected row's text, or holds the editor. */
+.backlog-detail {
+  height: 100%;
+  min-height: 0;
+  outline: none;
+  overflow-y: auto;
+  padding: var(--wg-space-3) var(--wg-space-4);
+}
+
+.backlog-followup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+}
+
+.backlog-detail-title,
+.backlog-editor-heading {
+  font-size: var(--wg-text-16);
+  font-weight: var(--wg-weight-semibold);
+  margin: 0;
+}
+
+.backlog-detail-line {
+  color: var(--wg-fg-secondary);
+}
+
+.backlog-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-3);
+  outline: none;
+}
+
+.backlog-editor-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+}
+
+.backlog-editor-label {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+  margin-top: var(--wg-space-2);
+}
+
+.backlog-editor-box--body {
+  min-height: calc(var(--wg-row-list) * 8);
+}
+
+.backlog-editor-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-3);
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+}
+
+.backlog-editor-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wg-space-1);
+}

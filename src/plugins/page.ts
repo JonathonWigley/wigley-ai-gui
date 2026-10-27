@@ -1,4 +1,5 @@
 import type { PagePart } from '../contracts/plugin';
+import { backlogPagePart } from './backlog/page/start';
 import { chatPagePart } from './chat/page/start';
 import { docsPagePart } from './docs/page/start';
 import { formsPagePart } from './forms/page/start';
@@ -19,4 +20,5 @@ export const pageParts: readonly PagePart[] = [
   docsPagePart,
   galleryPagePart,
   settingsPagePart,
+  backlogPagePart,
 ];
