@@ -112,6 +112,8 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
       files.set(path, text);
       return { type: 'written' };
     },
+    writeBytes: async () => ({ type: 'written' }),
+    trashDoc: async () => ({ trashed: [], error: null }),
     watchDoc: async (path, changed) => {
       const watch = { path, changed };
       watched.push(watch);
