@@ -206,7 +206,7 @@ Boundary rules:
 
 ### Wave 2
 - [x] [Markup contract and Fabric adapter](02-markup-adapter.md) — after 01 (shares `src/contracts/plugin.ts`), 06 (shares `scripts/check-layers.mts`)
-- [ ] [Backlog note filing](05-backlog-notes.md) — after 03
+- [x] [Backlog note filing](05-backlog-notes.md) — after 03
 
 ### Wave 3
 - [ ] [Notes main part](07-notes-main.md) — after 01, 04, 05, 06
@@ -233,7 +233,12 @@ Review base: 62cb6e9ed048d1e6aebf6629e8870abd37df98b8
 - 06 · d2012f7 · diff read: every Produces export present in the named file; LAYERS entries as the task names; typecheck clean in notes · concerns: NotesChannel.invoke.tags() is the one sync signature in an IPC channel; PageChannel returns it as a Promise, so tasks 07/08 treat it as async
 - 03 · c39ba2b · diff read: writeBytes and trashDoc in DocsMainExports and start.ts exports, DocFiles.writeBytes takes the write guard; typecheck clean except the backlog start.test.ts fake, fixed by the Backlog lead stub commit · concerns: task 03 Files missed src/plugins/backlog/main/start.test.ts, whose DocsMainExports fake needed the two members; the Backlog lead added the stubs by agreement
 - 02 · 47e4908 · diff read: markup.ts verbatim, PageServices.markup, createFabricMarkupEditor in renderer.ts, history/fit-scale/png-data-url exports present, fabric layer only in src/renderer/fabric; typecheck clean · concerns: Fabric IText already stops Escape/Tab/arrows itself, so only typed characters needed the stop; hidden textarea lives in document.body; clearing a filled text on exit still adds one history step via object:modified; dispose removes the restored <canvas> rather than the wrapper; hiddenTextarea cast in the editing-entered handler
+- 05 · 50fbdaa · diff read: NoteTarget, BacklogMainExports and exports present, every note-images export present, commitMessage takes imageFolders; typecheck clean · concerns: commit_HomeThroughSymlink test mock narrowed to answer only for docs/features once commit also asks for the images pathspec; tests use the existing /dev/r root
 ### Contract changes
+- commitMessage (Backlog landed): `(changes): string | null` as task 05 assumed → landed returns `string`, the plain subject `Follow-ups edited in Backlog` when nothing changed; task 05 adds `imageFolders: readonly string[]` and keeps `string`, so `commitMessage([], [])` returns the plain subject, not null · why: landed Backlog code · consumers: 05 · group lead (preflight for 05)
+- writeFollowupEdit (Backlog landed): takes `edit: BacklogEdit`, whose `edit` variant carries `baseline: FollowupDraft`; an item on disk that differs from `baseline` returns `{ type: 'changed'; title; item }` and writes nothing → task 05 append passes the step-2 item (title, oneLine, tags, body) as `baseline`; a `changed` result trashes the images like any non-applied result and passes through · why: Backlog b804dd6 · consumers: 05, 07 · group lead (preflight for 05)
+- BacklogDeps.files (Backlog landed): `Pick<Files, 'realPath'>` → task 05 widens it to `Pick<Files, 'realPath' | 'list'>` · why: landed shape · consumers: 05 · group lead (preflight for 05)
+- LinkedImage: `{ folder; number }` → `{ folder; number; relative }`, `relative` the link target as written · why: delete and reuse resolve each link against the file's folder · consumers: none outside backlog · group 05
 ### Rulings
 - window.capture doc comment names device pixels beside "as the user sees it", so a consumer sizing the image knows — drop the clause if unwanted · group 01 · group 01
 - ChatSessions.launch throws synchronously; the async export turns it into the rejection, so the reject tests use toThrow on ChatSessions.launch · group 04 · group 04
@@ -245,5 +250,11 @@ Review base: 62cb6e9ed048d1e6aebf6629e8870abd37df98b8
 - text tool adds the IText on press and enters editing on release, since the press focus change would blur the textarea · group 02 · group 02
 - while editing text every key without Ctrl/Alt/Cmd stops at the textarea, Tab and Enter included (unlike textBoxInput), since Enter types a newline in an IText · group 02 · group 02
 - undo/redo move the history step at call time and queue only the load; a failed load rejects unhandled and later queued loads do not run · group 02 · group 02
+- fileNote writes its text through applyEdit, adding the title-reads-back check, so an append to a hand-written bad title is refused and its images trashed · group 05 · group 05
+- reuse and delete count only links resolving to a direct subfolder of <home>/followups-images/ · group 05 · group 05
+- trash-on-failure runs only when at least one image was written · group 05 · group 05
+- images pathspec is the fixed docs/features/followups-images, since landed Backlog makes an in-git home always docs/features · group 05 · group 05
+- an images-only commit goes through; Nothing to commit only when no follow-up file and no image changed · group 05 · group 05
+- toFollowup maps fileNote's landed `changed` result to refused `<request.title> changed on disk; send again`, keeping the draft — Backlog b804dd6 added the result after task 07 was written — the user re-sends once · lead
 ### Review rounds
 ### Test gate

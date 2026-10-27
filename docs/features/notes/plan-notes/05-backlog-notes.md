@@ -1,6 +1,6 @@
 # 05 — Backlog note filing
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -207,3 +207,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 50fbdaa · proof: diff read: NoteTarget, BacklogMainExports and exports present, every note-images export present, commitMessage takes imageFolders; typecheck clean · concerns: commit_HomeThroughSymlink test mock narrowed to answer only for docs/features once commit also asks for the images pathspec; tests use the existing /dev/r root

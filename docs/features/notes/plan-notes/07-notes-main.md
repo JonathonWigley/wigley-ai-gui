@@ -1,6 +1,6 @@
 # 07 — Notes main part
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01, 04, 05, 06
 Plan: [plan.md](plan.md)
