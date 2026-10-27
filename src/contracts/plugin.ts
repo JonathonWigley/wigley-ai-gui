@@ -18,6 +18,7 @@ import type {
 } from './keymap';
 import type { Log } from './log';
 import type { MarkdownRenderer } from './markdown';
+import type { MarkupEditor } from './markup';
 import type { Paths } from './paths';
 import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
@@ -356,6 +357,7 @@ export interface PageCommandContext {
 export interface PageServices {
   editor: EditorHost;
   markdown: MarkdownRenderer;
+  markup: MarkupEditor;
   toast(text: string, tone: ToastTone): void;
   log: Log;
   timers: Timers;

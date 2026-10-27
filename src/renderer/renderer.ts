@@ -30,6 +30,7 @@ import {
 import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
 import { editorBindInForce } from './editor-binds';
+import { createFabricMarkupEditor } from './fabric/fabric-markup-editor';
 import { createLiveConfig } from './live-config';
 import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
@@ -157,6 +158,7 @@ async function start() {
   const services: Omit<PageServices, 'uiState'> = {
     editor,
     markdown: createMarkdownItRenderer(createCodeMirrorHighlighter()),
+    markup: createFabricMarkupEditor(),
     toast: (text, tone) => toasts.show(text, tone),
     log,
     timers,
