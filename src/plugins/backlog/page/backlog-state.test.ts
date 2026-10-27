@@ -7,6 +7,8 @@ import {
   type BacklogState,
   backlogReducer,
   draftOf,
+  editorEdit,
+  emptyReason,
   initialBacklogState,
   rowTitle,
   visibleRows,
@@ -269,7 +271,52 @@ describe('backlogReducer', () => {
     const state = opened(home(ROOT, [item('One')]));
 
     expect(actedFollowup(state)?.item.title).toBe('One');
-    expect(run(state, { type: 'openEdit' }).editor?.originalTitle).toBe('One');
+    expect(run(state, { type: 'openEdit' }).editor?.baseline?.title).toBe(
+      'One',
+    );
+  });
+
+  it('editorEdit_EditOpenedThenTyped_EditOfOpenedItemWithItAsBaseline', () => {
+    const one = item('One', { tags: ['agent-ready'], body: 'Old body.' });
+    const editing = run(
+      opened(home(ROOT, [one])),
+      { type: 'openEdit' },
+      { type: 'draftChanged', field: 'title', text: 'Renamed' },
+    );
+    const { editor } = editing;
+    if (editor === null) {
+      throw new Error('no editor open');
+    }
+
+    expect(editorEdit(editor)).toEqual({
+      type: 'edit',
+      title: 'One',
+      draft: {
+        title: 'Renamed',
+        oneLine: 'One gist',
+        tags: ['agent-ready'],
+        body: 'Old body.',
+      },
+      baseline: {
+        title: 'One',
+        oneLine: 'One gist',
+        tags: ['agent-ready'],
+        body: 'Old body.',
+      },
+    });
+  });
+
+  it('editorEdit_Create_NoBaseline', () => {
+    const creating = run(opened(home(ROOT, [])), { type: 'openCreate' });
+    const { editor } = creating;
+    if (editor === null) {
+      throw new Error('no editor open');
+    }
+
+    expect(editorEdit(editor)).toEqual({
+      type: 'create',
+      draft: { title: '', oneLine: '', tags: [], body: '' },
+    });
   });
 
   it('backlogReducer_OpenHomeThenBack_MovesFocusBetweenHomesAndItems', () => {
@@ -321,6 +368,54 @@ describe('backlogReducer', () => {
     );
 
     expect(selectedTitle(state)).toBe('02-next');
+  });
+});
+
+describe('emptyReason', () => {
+  it('emptyReason_RowShowing_Null', () => {
+    expect(emptyReason(opened(home(ROOT, [item('One')])))).toBeNull();
+  });
+
+  it('emptyReason_AgentReadyOnlyNoneTagged_AgentReadyNone', () => {
+    const state = run(opened(home(ROOT, [item('One')])), {
+      type: 'toggleAgentReadyOnly',
+    });
+
+    expect(emptyReason(state)).toBe('agentReadyNone');
+  });
+
+  it('emptyReason_EveryFollowupDoneAndHidden_AllDone', () => {
+    const state = opened(home(ROOT, [item('Shipped', { done: true })]));
+
+    expect(emptyReason(state)).toBe('allDone');
+  });
+
+  it('emptyReason_EveryFollowupDoneWithAgentReadyOnly_AllDone', () => {
+    const state = run(
+      opened(
+        home(ROOT, [item('Shipped', { done: true, tags: ['agent-ready'] })]),
+      ),
+      { type: 'toggleAgentReadyOnly' },
+    );
+
+    expect(emptyReason(state)).toBe('allDone');
+  });
+
+  it('emptyReason_FilterMatchesNothing_Filter', () => {
+    const state = run(opened(home(ROOT, [item('One')])), {
+      type: 'setFilter',
+      text: 'zzz',
+    });
+
+    expect(emptyReason(state)).toBe('filter');
+  });
+
+  it('emptyReason_NoFollowupsOrPlans_Nothing', () => {
+    expect(emptyReason(opened(home(ROOT, [])))).toBe('nothing');
+  });
+
+  it('emptyReason_NoHomeOpen_NoHome', () => {
+    expect(emptyReason(initialBacklogState())).toBe('noHome');
   });
 });
 

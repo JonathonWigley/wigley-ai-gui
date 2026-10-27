@@ -72,6 +72,14 @@ const DRAFT: FollowupDraft = {
   body: 'Gamma body.',
 };
 
+// Alpha as FILE holds it.
+const ALPHA: FollowupDraft = {
+  title: 'Alpha',
+  oneLine: 'first thing',
+  tags: [],
+  body: 'Alpha body.',
+};
+
 function titles(text: string | undefined): string[] {
   return parseFollowups(text ?? '').items.map((item) => item.title);
 }
@@ -174,7 +182,7 @@ describe('writeFollowupEdit', () => {
   });
 
   it.each([
-    { type: 'edit' as const, title: 'Alpha', draft: DRAFT },
+    { type: 'edit' as const, title: 'Alpha', draft: DRAFT, baseline: DRAFT },
     { type: 'setTags' as const, title: 'Alpha', tags: [] },
     { type: 'delete' as const, title: 'Alpha' },
   ])('writeFollowupEdit_MissingFileNoRepo_$type_Missing', async (edit) => {
@@ -198,5 +206,73 @@ describe('writeFollowupEdit', () => {
 
     expect(result).toEqual({ type: 'titleTaken', title: 'Beta' });
     expect(docs.state.writes).toEqual([]);
+  });
+
+  it('writeFollowupEdit_EditMatchesBaseline_Applied', async () => {
+    const docs = fakeDocs(FILE);
+
+    const result = await writeFollowupEdit(
+      docs.deps,
+      PATH,
+      {
+        type: 'edit',
+        title: 'Alpha',
+        draft: { ...ALPHA, body: 'New body.' },
+        baseline: ALPHA,
+      },
+      null,
+    );
+
+    expect(result.type).toBe('applied');
+    expect(parseFollowups(docs.state.disk ?? '').items[0].body).toBe(
+      'New body.',
+    );
+  });
+
+  it('writeFollowupEdit_ItemChangedSinceBaseline_ChangedAndNotWritten', async () => {
+    const docs = fakeDocs(
+      FILE.replace('Alpha body.', 'Alpha body, by an agent.'),
+    );
+
+    const result = await writeFollowupEdit(
+      docs.deps,
+      PATH,
+      {
+        type: 'edit',
+        title: 'Alpha',
+        draft: { ...ALPHA, body: 'New body.' },
+        baseline: ALPHA,
+      },
+      null,
+    );
+
+    expect(result).toEqual({ type: 'changed', title: 'Alpha' });
+    expect(docs.state.writes).toEqual([]);
+  });
+
+  it('writeFollowupEdit_ItemChangedDuringWrite_Changed', async () => {
+    const docs = fakeDocs(FILE);
+    const agentText = FILE.replace(
+      '- **Alpha** — first thing',
+      '- **Alpha** — moved on',
+    );
+    docs.state.beforeWrite.push(() => {
+      docs.state.disk = agentText;
+    });
+
+    const result = await writeFollowupEdit(
+      docs.deps,
+      PATH,
+      {
+        type: 'edit',
+        title: 'Alpha',
+        draft: { ...ALPHA, body: 'New body.' },
+        baseline: ALPHA,
+      },
+      null,
+    );
+
+    expect(result).toEqual({ type: 'changed', title: 'Alpha' });
+    expect(docs.state.disk).toBe(agentText);
   });
 });

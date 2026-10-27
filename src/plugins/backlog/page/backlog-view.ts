@@ -14,7 +14,6 @@ import type {
 import type { UiState } from '../../../contracts/ui-state';
 import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
-import type { FollowupEdit } from '../../../shared/followups/followup-file';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
 import { element, markdownElement } from '../../../shared/page/dom';
 import { keyHint } from '../../../shared/page/key-hint';
@@ -35,7 +34,7 @@ import { createSplit } from '../../../shared/page/ui/split';
 import { tag } from '../../../shared/page/ui/tag';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
-import type { BacklogChannel, BacklogHome } from '../contract';
+import type { BacklogChannel, BacklogEdit, BacklogHome } from '../contract';
 import type { backlogManifest } from '../manifest';
 import {
   AGENT_READY,
@@ -45,7 +44,9 @@ import {
   type BacklogRow,
   type BacklogState,
   backlogReducer,
-  draftOf,
+  type EmptyReason,
+  editorEdit,
+  emptyReason,
   initialBacklogState,
   isDraftChanged,
   openHome,
@@ -348,17 +349,22 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
   };
 
-  const emptyRows = (state: BacklogState): HTMLElement => {
-    if (openHome(state) === null) {
-      return emptyState(
-        'Open a features home from the side bar.',
-        hint('back', 'list'),
-      );
+  const emptyRows = (reason: EmptyReason, filter: string): HTMLElement => {
+    switch (reason) {
+      case 'noHome':
+        return emptyState(
+          'Open a features home from the side bar.',
+          hint('back', 'list'),
+        );
+      case 'filter':
+        return emptyState(`No rows match "${filter}".`);
+      case 'allDone':
+        return emptyState('Every follow-up here is done.');
+      case 'agentReadyNone':
+        return emptyState('No agent-ready follow-ups here.');
+      case 'nothing':
+        return emptyState('Nothing is planned here.', hint('create', 'list'));
     }
-    if (state.filter !== '') {
-      return emptyState(`No rows match "${state.filter}".`);
-    }
-    return emptyState('Nothing is planned here.', hint('create', 'list'));
   };
 
   const drawRows = (state: BacklogState) => {
@@ -379,8 +385,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       );
       items.push(drawn);
     }
-    if (rows.length === 0) {
-      items.push(emptyRows(state));
+    const reason = emptyReason(state);
+    if (reason !== null) {
+      items.push(emptyRows(reason, state.filter));
     }
     rowsList.replaceChildren(...items);
     listPane.classList.toggle('is-pane-inactive', state.focus !== 'items');
@@ -595,7 +602,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const write = async (
     homeRoot: string,
     path: string | null,
-    edit: FollowupEdit,
+    edit: BacklogEdit,
     isDraftKept: boolean,
   ): Promise<boolean> => {
     const result = await channel.invoke('applyEdit', homeRoot, path, edit);
@@ -618,6 +625,14 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
           'error',
         );
         return false;
+      case 'changed':
+        deps.toast(
+          isDraftKept
+            ? `${result.title} changed on disk; your draft is kept`
+            : `${result.title} changed on disk`,
+          'error',
+        );
+        return false;
       case 'refused':
         deps.toast(result.reason, 'error');
         return false;
@@ -627,7 +642,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const writeQuietly = (
     homeRoot: string,
     path: string | null,
-    edit: FollowupEdit,
+    edit: BacklogEdit,
   ) => {
     write(homeRoot, path, edit, false).catch((error) => {
       log(`write failed: ${errorText(error)}`);
@@ -653,15 +668,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     if (editor === null || isSaving) {
       return;
     }
-    const draft = draftOf(editor.draft);
+    const edit = editorEdit(editor);
+    const { draft } = edit;
     if (draft.title === '') {
       deps.toast('Give the follow-up a title', 'error');
       return;
     }
-    const edit: FollowupEdit =
-      editor.originalTitle === null
-        ? { type: 'create', draft }
-        : { type: 'edit', title: editor.originalTitle, draft };
     isSaving = true;
     try {
       if (await write(editor.homeRoot, editor.path, edit, true)) {

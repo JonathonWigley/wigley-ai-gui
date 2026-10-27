@@ -1,5 +1,7 @@
 import type { FollowupItem } from '../../../shared/followups/followup-file';
 
+const SUBJECT = 'Follow-ups edited in Backlog';
+
 interface MessageParts {
   added: string[];
   edited: string[];
@@ -41,11 +43,11 @@ function addFileChanges(
 
 // The commit message for each follow-up file's items at HEAD (`before`) and
 // on disk (`after`), matched by title: `Follow-ups edited in Backlog: added …;
-// edited …; removed …; tagged …`, an empty part left out. Null when no item
-// changed.
+// edited …; removed …; tagged …`, an empty part left out; the plain subject
+// alone when no item changed (a header edit, a reorder, line endings).
 export function commitMessage(
   changes: { before: FollowupItem[]; after: FollowupItem[] }[],
-): string | null {
+): string {
   const parts: MessageParts = {
     added: [],
     edited: [],
@@ -58,7 +60,5 @@ export function commitMessage(
   const written = Object.entries(parts)
     .filter(([, titles]) => titles.length > 0)
     .map(([verb, titles]) => `${verb} ${titles.join(', ')}`);
-  return written.length > 0
-    ? `Follow-ups edited in Backlog: ${written.join('; ')}`
-    : null;
+  return written.length > 0 ? `${SUBJECT}: ${written.join('; ')}` : SUBJECT;
 }

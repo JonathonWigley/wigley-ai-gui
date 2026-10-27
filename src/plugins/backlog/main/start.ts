@@ -1,5 +1,5 @@
 import type { Disposable } from '../../../contracts/disposable';
-import { isMissingFile } from '../../../contracts/files';
+import { type Files, isMissingFile } from '../../../contracts/files';
 import type { Git } from '../../../contracts/git';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
@@ -12,7 +12,7 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
-  type FollowupEdit,
+  followupTitleProblem,
   parseFollowups,
 } from '../../../shared/followups/followup-file';
 import {
@@ -23,6 +23,7 @@ import {
 } from '../../docs/contract';
 import type {
   BacklogChannel,
+  BacklogEdit,
   BacklogFollowupFile,
   BacklogHome,
   BacklogPlan,
@@ -50,12 +51,15 @@ type BacklogApi = MainApi<
 
 // The file a home's new follow-ups go to.
 const CREATE_TARGET_FILE = 'followups.md';
+// The one folder of a clone that is a home in git.
+const FEATURES_FOLDER = 'docs/features';
 const PLAN_TITLE_SUFFIX = ' — plan';
 const PLAN_DATES_LINE = /^(Target|Written): /;
 
 interface BacklogDeps {
   docs: DocsMainExports;
   git: Git;
+  files: Pick<Files, 'realPath'>;
   paths: Paths;
   log: Log;
   channel: Pick<MainChannel<BacklogChannel>, 'send'>;
@@ -79,15 +83,58 @@ function logSkipped(log: Log, path: string, error: unknown): void {
   log('backlog', `${path}: ${errorText(error)}`);
 }
 
-async function gitRootOf(
-  deps: BacklogDeps,
-  root: string,
+// `path` below an in-git home at `homeRoot`, relative to its clone: an in-git
+// home is its clone's `docs/features` folder. Null when outside the home.
+function clonePath(
+  homeRoot: string,
+  path: string,
+  paths: Paths,
+): string | null {
+  const below = relativePath(path, homeRoot, paths);
+  return below === null ? null : `${FEATURES_FOLDER}/${below}`;
+}
+
+// The real path; null when nothing is there.
+async function realPathOrNull(
+  files: Pick<Files, 'realPath'>,
+  path: string,
 ): Promise<string | null> {
   try {
-    return await deps.git.topLevel(root);
+    return await files.realPath(path);
   } catch (error) {
-    logSkipped(deps.log, root, error);
-    return null;
+    if (isMissingFile(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+// The home with its `gitRoot`: the clone whose `docs/features` folder it is,
+// else null. Null in place of the home when its clone is a linked worktree.
+async function locateHome(
+  deps: BacklogDeps,
+  home: HomeShape,
+): Promise<(HomeShape & { gitRoot: string | null }) | null> {
+  try {
+    const topLevel = await deps.git.topLevel(home.root);
+    if (topLevel === null) {
+      return { ...home, gitRoot: null };
+    }
+    if (await deps.git.isLinkedWorktree(topLevel)) {
+      return null;
+    }
+    const [homeReal, featuresReal] = await Promise.all([
+      realPathOrNull(deps.files, home.root),
+      realPathOrNull(deps.files, deps.paths.join(topLevel, FEATURES_FOLDER)),
+    ]);
+    const isClonesFeaturesFolder =
+      homeReal !== null &&
+      featuresReal !== null &&
+      deps.paths.samePath(homeReal, featuresReal);
+    return { ...home, gitRoot: isClonesFeaturesFolder ? topLevel : null };
+  } catch (error) {
+    logSkipped(deps.log, home.root, error);
+    return { ...home, gitRoot: null };
   }
 }
 
@@ -186,11 +233,12 @@ async function isUncommitted(
   if (gitRoot === null) {
     return false;
   }
-  const scope = relativePath(home.root, gitRoot, deps.paths) || '.';
   try {
-    const changed = new Set(await deps.git.changedPaths(gitRoot, scope));
+    const changed = new Set(
+      await deps.git.changedPaths(gitRoot, FEATURES_FOLDER),
+    );
     return followupPaths.some((path) =>
-      changed.has(relativePath(path, gitRoot, deps.paths) ?? ''),
+      changed.has(clonePath(home.root, path, deps.paths) ?? ''),
     );
   } catch (error) {
     logSkipped(deps.log, home.root, error);
@@ -231,15 +279,26 @@ async function readHomes(
     return { homes: [], message: read.message };
   }
   const located = await Promise.all(
-    groupHomes(read.document.entries, deps.paths).map(async (home) => ({
-      ...home,
-      gitRoot: await gitRootOf(deps, home.root),
-    })),
+    groupHomes(read.document.entries, deps.paths).map((home) =>
+      locateHome(deps, home),
+    ),
   );
   const homes = await Promise.all(
-    markCreateTargets(located).map((home) => readHome(deps, home)),
+    markCreateTargets(located.filter((home) => home !== null)).map((home) =>
+      readHome(deps, home),
+    ),
   );
   return { homes, message: read.message };
+}
+
+// Why a create's title, or an edit's new title, would not read back from the
+// file; null when it would. An edit keeping its title keeps a title the file
+// already reads.
+function titleProblem(edit: BacklogEdit): string | null {
+  const isNewTitle =
+    edit.type === 'create' ||
+    (edit.type === 'edit' && edit.draft.title !== edit.title);
+  return isNewTitle ? followupTitleProblem(edit.draft.title) : null;
 }
 
 // The file's text at HEAD; '' when HEAD lacks it or has no commit yet.
@@ -318,12 +377,25 @@ function createBacklogMain(deps: BacklogDeps) {
   async function applyEdit(
     homeRoot: string,
     path: string | null,
-    edit: FollowupEdit,
+    edit: BacklogEdit,
   ): Promise<BacklogWriteResult> {
-    if (path !== null) {
-      return writeFollowupEdit(docs, path, edit, null);
+    const problem = titleProblem(edit);
+    if (problem !== null) {
+      return { type: 'refused', reason: problem };
     }
     const home = homeAt(homeRoot);
+    if (path !== null) {
+      const isHomeFile = home.followupFiles.some((file) =>
+        paths.samePath(file.path, path),
+      );
+      if (!isHomeFile) {
+        return {
+          type: 'refused',
+          reason: `${path} is not a follow-up file of ${home.root}`,
+        };
+      }
+      return writeFollowupEdit(docs, path, edit, null);
+    }
     if (!home.isCreateTarget) {
       return {
         type: 'refused',
@@ -340,26 +412,27 @@ function createBacklogMain(deps: BacklogDeps) {
     if (gitRoot === null) {
       throw new Error(`${home.root} is in no git clone`);
     }
+    const inHome = home.followupFiles.flatMap(({ path }) => {
+      const relative = clonePath(home.root, path, paths);
+      return relative === null ? [] : [{ path, relative }];
+    });
     const texts = await Promise.all(
-      home.followupFiles.map(async ({ path }) => {
-        const relative = relativePath(path, gitRoot, paths) ?? path;
-        return {
-          relative,
-          before: await headText(git, gitRoot, relative),
-          after: await readFollowupText(docs, path),
-        };
-      }),
+      inHome.map(async ({ path, relative }) => ({
+        relative,
+        before: await headText(git, gitRoot, relative),
+        after: await readFollowupText(docs, path),
+      })),
     );
     const changed = texts.filter(({ before, after }) => before !== after);
+    if (changed.length === 0) {
+      throw new Error(`Nothing to commit in ${home.root}`);
+    }
     const message = commitMessage(
       changed.map(({ before, after }) => ({
         before: parseFollowups(before).items,
         after: parseFollowups(after).items,
       })),
     );
-    if (message === null) {
-      throw new Error(`Nothing to commit in ${home.root}`);
-    }
     await git.commitPaths(
       gitRoot,
       changed.map(({ relative }) => relative),
@@ -418,6 +491,7 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     const backlog = createBacklogMain({
       docs,
       git: services.git,
+      files: services.files,
       paths: services.paths,
       log: services.log,
       channel,

@@ -53,6 +53,38 @@ describe('createProcessGit', () => {
     expect(await test.git.topLevel('/tmp/x')).toBeNull();
   });
 
+  it('isLinkedWorktree_GitDirIsNotCommonDir_True', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      git(
+        'rev-parse',
+        '--path-format=absolute',
+        '--git-dir',
+        '--git-common-dir',
+      ),
+      exited(0, '/Users/u/dev/main/.git/worktrees/m\n/Users/u/dev/main/.git\n'),
+    );
+
+    expect(await test.git.isLinkedWorktree(ROOT)).toBe(true);
+  });
+
+  it('isLinkedWorktree_GitDirIsCommonDir_False', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      git(
+        'rev-parse',
+        '--path-format=absolute',
+        '--git-dir',
+        '--git-common-dir',
+      ),
+      exited(0, `${ROOT}/.git\n${ROOT}/.git\n`),
+    );
+
+    expect(await test.git.isLinkedWorktree(ROOT)).toBe(false);
+  });
+
   it('hasUpstream_ExitCode_TrueOnlyOnZero', async () => {
     const test = setUp();
     const upstream = git(
@@ -233,7 +265,14 @@ describe('createProcessGit', () => {
     const test = setUp();
     test.processes.script(
       'git',
-      git('ls-tree', '-z', 'HEAD', '--', 'docs/followups.md'),
+      git(
+        '--literal-pathspecs',
+        'ls-tree',
+        '-z',
+        'HEAD',
+        '--',
+        'docs/followups.md',
+      ),
       exited(0, `100644 blob ${SHA_A}\tdocs/followups.md\0`),
     );
     test.processes.script(
@@ -251,7 +290,14 @@ describe('createProcessGit', () => {
     const test = setUp();
     test.processes.script(
       'git',
-      git('ls-tree', '-z', 'HEAD', '--', 'docs/followups.md'),
+      git(
+        '--literal-pathspecs',
+        'ls-tree',
+        '-z',
+        'HEAD',
+        '--',
+        'docs/followups.md',
+      ),
       exited(0),
     );
 
@@ -375,6 +421,25 @@ describe('createProcessGit over a real clone', () => {
         'Edit glob file\n\na*.md\n',
       );
       expect(await run('status', '--porcelain=v1')).toBe(' M ab.md\n');
+    },
+  );
+
+  it.skipIf(!gitOnPath)(
+    'isLinkedWorktree_MainCloneAndWorktreeAdded_OnlyTheWorktree',
+    async () => {
+      isolateGitConfig();
+      root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
+      const linked = path.join(root, 'linked');
+      const main = path.join(root, 'main');
+      mkdirSync(main);
+      await run('-C', main, 'init', '--quiet');
+      writeFileSync(path.join(main, 'a.md'), '');
+      await run('-C', main, 'add', '--', 'a.md');
+      await run('-C', main, 'commit', '--quiet', '-m', 'first');
+      await run('-C', main, 'worktree', 'add', '--quiet', linked);
+
+      expect(await adapter.isLinkedWorktree(main)).toBe(false);
+      expect(await adapter.isLinkedWorktree(linked)).toBe(true);
     },
   );
 });

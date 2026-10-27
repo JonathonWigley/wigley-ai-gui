@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Git } from '../../../contracts/git';
+import { followupTitleProblem } from '../../../shared/followups/followup-file';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   DocsMainExports,
@@ -33,6 +34,7 @@ function entry(
   kind: string,
   path: string,
   meta: Record<string, unknown> = {},
+  root = HOME,
 ): IndexEntry {
   return {
     id: path,
@@ -40,7 +42,7 @@ function entry(
     source: 'features',
     owner: 'mine',
     repo: 'r',
-    root: HOME,
+    root,
     plugin: null,
     path,
     line: null,
@@ -74,6 +76,7 @@ function missingFile(path: string): Error {
 function fakeGit() {
   return {
     topLevel: vi.fn<Git['topLevel']>(async () => CLONE),
+    isLinkedWorktree: vi.fn<Git['isLinkedWorktree']>(async () => false),
     hasUpstream: vi.fn<Git['hasUpstream']>(async () => true),
     changedPaths: vi.fn<Git['changedPaths']>(async () => []),
     unpushedPaths: vi.fn<Git['unpushedPaths']>(async () => []),
@@ -88,7 +91,9 @@ function fakeGit() {
 // Backlog's main part over a fake docs export serving `disk` and an index of
 // `entries`. `invoke` calls a channel handler; `sent` holds each message;
 // `watched` lists each live watch; `emit` fires a docs event at backlog.
+// `links` maps a symlinked path to its real path.
 function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
+  const links = new Map<string, string>();
   const files = new Map(Object.entries(disk));
   const watched: { path: string; changed: () => void }[] = [];
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -133,6 +138,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     },
     services: {
       git,
+      files: { realPath: async (path: string) => links.get(path) ?? path },
       paths: posixPaths,
       runMode: 'live',
       log: (source: string, message: string) =>
@@ -150,7 +156,18 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   };
   const emit = (name: string, payload: unknown) =>
     listeners.get(name)?.(payload);
-  return { part, files, watched, sent, logged, git, index, invoke, emit };
+  return {
+    part,
+    files,
+    links,
+    watched,
+    sent,
+    logged,
+    git,
+    index,
+    invoke,
+    emit,
+  };
 }
 
 describe('backlog main part', () => {
@@ -350,6 +367,97 @@ describe('backlog main part', () => {
     );
   });
 
+  it('load_HomeInLinkedWorktree_Dropped', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    backlog.git.isLinkedWorktree.mockResolvedValue(true);
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(read.homes).toEqual([]);
+    expect(backlog.git.isLinkedWorktree).toHaveBeenCalledWith(CLONE);
+  });
+
+  it('load_HomeNotItsClonesFeaturesFolder_NotInGit', async () => {
+    const elsewhere = '/dev/wigley-features/r';
+    const backlog = startBacklog(
+      [entry('followup', `${elsewhere}/followups.md`, {}, elsewhere)],
+      { [`${elsewhere}/followups.md`]: FOLLOWUPS_TEXT },
+    );
+    backlog.git.topLevel.mockResolvedValue('/dev');
+    backlog.git.changedPaths.mockResolvedValue(['docs/features/followups.md']);
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(read.homes[0]).toMatchObject({ gitRoot: null, uncommitted: false });
+    expect(backlog.git.changedPaths).not.toHaveBeenCalled();
+  });
+
+  it('load_InGitHomeSortsAfterOther_InGitHomeIsCreateTarget', async () => {
+    const elsewhere = '/a/features';
+    const backlog = startBacklog(
+      [
+        entry('followup', `${elsewhere}/followups.md`, {}, elsewhere),
+        entry('followup', FOLLOWUPS),
+      ],
+      {
+        [`${elsewhere}/followups.md`]: FOLLOWUPS_TEXT,
+        [FOLLOWUPS]: FOLLOWUPS_TEXT,
+      },
+    );
+    backlog.git.topLevel.mockImplementation(async (folder) =>
+      folder === elsewhere ? '/a' : CLONE,
+    );
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(
+      read.homes.map((home) => [home.root, home.gitRoot, home.isCreateTarget]),
+    ).toEqual([
+      [elsewhere, null, false],
+      [HOME, CLONE, true],
+    ]);
+  });
+
+  it('commit_HomeThroughSymlink_CommitsClonePaths', async () => {
+    const linked = '/link/features';
+    const linkedFollowups = `${linked}/followups.md`;
+    const backlog = startBacklog(
+      [entry('followup', linkedFollowups, {}, linked)],
+      { [linkedFollowups]: FOLLOWUPS_TEXT },
+    );
+    backlog.links.set(linked, HOME);
+    backlog.git.changedPaths.mockResolvedValue(['docs/features/followups.md']);
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    await backlog.invoke('commit', linked);
+
+    expect(read.homes[0]).toMatchObject({ gitRoot: CLONE, uncommitted: true });
+    expect(backlog.git.commitPaths).toHaveBeenCalledWith(
+      CLONE,
+      ['docs/features/followups.md'],
+      'Follow-ups edited in Backlog: added Alpha',
+    );
+  });
+
+  it('commit_OnlyHeaderChanged_PlainSubject', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT.replace('# Follow-ups — r', '# Follow-ups'),
+    });
+    backlog.git.fileAtHead.mockResolvedValue(FOLLOWUPS_TEXT);
+    await backlog.invoke('load');
+
+    expect(await backlog.invoke('commit', HOME)).toBe(
+      'Follow-ups edited in Backlog',
+    );
+    expect(backlog.git.commitPaths).toHaveBeenCalledWith(
+      CLONE,
+      ['docs/features/followups.md'],
+      'Follow-ups edited in Backlog',
+    );
+  });
+
   it('commit_NothingChanged_Rejects', async () => {
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
       [FOLLOWUPS]: FOLLOWUPS_TEXT,
@@ -377,6 +485,42 @@ describe('backlog main part', () => {
     expect(result).toMatchObject({ type: 'applied' });
     expect(backlog.files.get(FOLLOWUPS)).toContain('# Follow-ups — r');
     expect(backlog.files.get(FOLLOWUPS)).toContain('## New');
+  });
+
+  it('applyEdit_PathNotTheHomesFollowupFile_Refused', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    await backlog.invoke('load');
+    const other = `${HOME}/backlog/design.md`;
+
+    const result = await backlog.invoke('applyEdit', HOME, other, {
+      type: 'delete',
+      title: 'Alpha',
+    });
+
+    expect(result).toEqual({
+      type: 'refused',
+      reason: `${other} is not a follow-up file of ${HOME}`,
+    });
+  });
+
+  it('applyEdit_TitleWouldNotReadBack_RefusedWithTheProblem', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    await backlog.invoke('load');
+
+    const result = await backlog.invoke('applyEdit', HOME, null, {
+      type: 'create',
+      draft: { title: ' ', oneLine: '', tags: [], body: '' },
+    });
+
+    expect(result).toEqual({
+      type: 'refused',
+      reason: followupTitleProblem(' '),
+    });
+    expect(backlog.files.get(FOLLOWUPS)).toBe(FOLLOWUPS_TEXT);
   });
 
   it('watch_FollowupFileChanged_SendsChangedWithHomeRoot', async () => {

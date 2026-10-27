@@ -8,6 +8,9 @@ export interface Git {
   // The clone's top folder holding `folder`, a full path; null when `folder`
   // is in no clone.
   topLevel(folder: string): Promise<string | null>;
+  // True when the clone at `root` is a linked worktree (`git worktree add`),
+  // whose git folder sits inside another clone's.
+  isLinkedWorktree(root: string): Promise<boolean>;
   hasUpstream(root: string): Promise<boolean>;
   // Files changed from HEAD or untracked, under `pathspec`; a rename names
   // both its paths.

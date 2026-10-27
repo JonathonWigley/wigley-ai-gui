@@ -55,15 +55,11 @@ describe('commitMessage', () => {
     );
   });
 
-  it('commitMessage_OnlyLinesMoved_Null', () => {
+  it('commitMessage_OnlyLinesMoved_PlainSubject', () => {
     const changes = [
       { before: [item('A')], after: [item('A', { line: 4, endLine: 6 })] },
     ];
 
-    expect(commitMessage(changes)).toBeNull();
-  });
-
-  it('commitMessage_NoFiles_Null', () => {
-    expect(commitMessage([])).toBeNull();
+    expect(commitMessage(changes)).toBe('Follow-ups edited in Backlog');
   });
 });

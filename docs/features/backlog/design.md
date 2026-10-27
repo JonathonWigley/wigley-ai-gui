@@ -28,7 +28,8 @@ plan is written from them. A decision here stands unless the user changes it.
 - The `backlog` plugin, with a main part and a page part, depends on `docs` and adds Backlog mode.
 - The side bar lists repos, each with its features homes. A repo normally has one home; a stray second home (an
   in-repo `docs/features/` and a `~/wigley-features/<repo>/`) shows as its own group and edits, but is never a
-  create target.
+  create target while the repo has a home in git. A home inside a linked git worktree (`git worktree add`) is
+  not listed: it is a second checkout of a clone's own home.
 - The content sheet shows the selected home's follow-up list, plans and features, with a detail pane on the right.
 - Keys, all checked against Docs mode's keys and `docs/keymap.md`:
 
@@ -69,10 +70,16 @@ plan is written from them. A decision here stands unless the user changes it.
   write.
 - Delete removes the section, or list item, and its Contents line, after the shared y/n confirm prompt (`createConfirmPrompt`).
 - Done items (struck through, or one line starting `shipped`) are hidden until `Space v d` shows them. Delete is the
-  removal; there is no separate mark-done command.
+  removal; there is no separate mark-done command. An empty list says when a toggle hid every row: "Every follow-up
+  here is done." or "No agent-ready follow-ups here."
+- A create, or an edit that renames, whose title would not read back from the file is refused with the reason, and
+  a write names one of the home's own follow-up files or none.
 - A file changed on disk while the user edits an item: the edit is one item operation, so it re-applies to the new
-  text by the item's title, rather than a whole-file conflict prompt. When the item is gone from the new text, the
-  editor says so and keeps the user's draft. A second change on disk during that one retry refuses the write.
+  text by the item's title, rather than a whole-file conflict prompt. The save carries the item as the editor opened
+  it; when the item on disk no longer matches (an outside edit while the editor was open), nothing is written and
+  the editor stays open with the toast "<title> changed on disk; your draft is kept". When the item is gone from the
+  new text, the editor says so and keeps the user's draft. A second change on disk during that one retry refuses the
+  write.
 - Backlog watches the follow-up files it lists, so an agent's append mid-session shows live.
 - An item's images live in the home's `followups-images/<folder>/`, linked from its body
   (`docs/features/notes/design.md`). Delete trashes each image folder the deleted item's body links.
@@ -100,11 +107,14 @@ plan is written from them. A decision here stands unless the user changes it.
 - An edit to an in-repo home stays uncommitted, and the home shows an uncommitted chip. `C` commits that home's
   follow-up files and the changed files under its `followups-images/`, never anything else in the clone, with the message `Follow-ups edited in Backlog: added …;
   edited …; removed …; tagged …` (an empty part left out), built by matching each file's items by title between its
-  parse at HEAD and its parse on disk. `C` with no item changed commits nothing. The user's press decides when a shared
-  file is committed, so a peer agent's half-written entry is never swept in by an automatic commit.
-- `~/wigley-features/` homes are not in git and show no chip.
+  parse at HEAD and its parse on disk. A file that differs from HEAD with no item changed (a header edit, a reorder,
+  line endings) commits with the plain subject `Follow-ups edited in Backlog`; `C` with no file changed commits
+  nothing. The user's press decides when a shared file is committed, so a peer agent's half-written entry is never
+  swept in by an automatic commit.
+- A home is in git only when it is its clone's `docs/features` folder, compared on real paths. Every other home
+  (`~/wigley-features/` homes, even under an enclosing repo) is not in git and shows no chip.
 - Git runs behind a `Git` contract with one adapter over ProcessRunner (`src/main/git/`). Its methods are
-  `topLevel`, `hasUpstream`, `changedPaths`, `unpushedPaths`, `upstreamBlobs`, `fetch`, `lastFetch`, `fileAtHead`
+  `topLevel`, `isLinkedWorktree`, `hasUpstream`, `changedPaths`, `unpushedPaths`, `upstreamBlobs`, `fetch`, `lastFetch`, `fileAtHead`
   and `commitPaths`. Docs' plugin statuses move onto it, so the app runs `git` in one place, except the Backlog
   self-test's fixture repo, which runs git through `services.processes`.
 

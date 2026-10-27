@@ -4,6 +4,7 @@
 
 import type { ChannelShape } from '../../contracts/plugin';
 import type {
+  FollowupDraft,
   FollowupEdit,
   FollowupEditResult,
   FollowupItem,
@@ -45,7 +46,9 @@ export interface BacklogFollowupFile {
 }
 
 // One features home. `isCreateTarget`: the one home per repo a new follow-up
-// goes to. `gitRoot`: the clone holding the home, null when it is in none.
+// goes to, a home in git first. `gitRoot`: the clone whose `docs/features`
+// folder the home is (compared on real paths); null for any other home, which
+// counts as not in git. A home inside a linked worktree is no home.
 // `uncommitted`: a follow-up file differs from HEAD.
 export interface BacklogHome {
   repo: string;
@@ -64,11 +67,20 @@ export interface BacklogRead {
   message: string | null;
 }
 
-// `refused`: the docs guard refused the write, or the file kept changing on
-// disk.
+// A follow-up edit as the page sends it. An `edit` carries `baseline`, the
+// item as the editor opened it.
+export type BacklogEdit =
+  | Exclude<FollowupEdit, { type: 'edit' }>
+  | (Extract<FollowupEdit, { type: 'edit' }> & { baseline: FollowupDraft });
+
+// `refused`: the title would not read back, the path is not one of the home's
+// follow-up files, the docs guard refused the write, or the file kept
+// changing on disk. `changed`: the item on disk no longer matches an edit's
+// `baseline`; nothing was written.
 export type BacklogWriteResult =
   | FollowupEditResult
-  | { type: 'refused'; reason: string };
+  | { type: 'refused'; reason: string }
+  | { type: 'changed'; title: string };
 
 // Every method rejects with main's own error text when its handler throws.
 export interface BacklogChannel extends ChannelShape {
@@ -77,11 +89,12 @@ export interface BacklogChannel extends ChannelShape {
     // Rebuilds the machine index, then loads.
     rescan(): Promise<BacklogRead>;
     readDoc(path: string): Promise<string>;
-    // `path` null: the home's create target file, created when missing.
+    // `path` null: the home's create target file, created when missing; else
+    // one of the home's follow-up files.
     applyEdit(
       homeRoot: string,
       path: string | null,
-      edit: FollowupEdit,
+      edit: BacklogEdit,
     ): Promise<BacklogWriteResult>;
     // Rejects with the git error text; resolves to the commit message used.
     commit(homeRoot: string): Promise<string>;

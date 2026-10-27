@@ -3,6 +3,7 @@ import type {
   FollowupItem,
 } from '../../../shared/followups/followup-file';
 import type {
+  BacklogEdit,
   BacklogFeature,
   BacklogHome,
   BacklogPlan,
@@ -28,13 +29,14 @@ export const EDITOR_FIELDS: readonly EditorField[] = [
 // Each editor box's text; `tags` is comma-separated.
 export type DraftTexts = Record<EditorField, string>;
 
-// `path` and `originalTitle` are null for a create, which writes to
-// `homeRoot`'s create target. `initial` is the text the editor opened with.
+// `path` and `baseline` are null for a create, which writes to `homeRoot`'s
+// create target. `baseline` is the item as the editor opened it; `initial`
+// the text the editor opened with.
 export interface BacklogEditor {
   kind: 'create' | 'edit';
   homeRoot: string;
   path: string | null;
-  originalTitle: string | null;
+  baseline: FollowupDraft | null;
   initial: DraftTexts;
   draft: DraftTexts;
 }
@@ -265,6 +267,49 @@ export function draftOf(texts: DraftTexts): FollowupDraft {
     tags: tagsOf(oneLine(texts.tags)),
     body: texts.body.trim(),
   };
+}
+
+// The write the editor's save sends: a create, or an edit of the item it
+// opened carrying that item as its baseline.
+export function editorEdit(
+  editor: BacklogEditor,
+): Extract<BacklogEdit, { type: 'create' | 'edit' }> {
+  const draft = draftOf(editor.draft);
+  const { baseline } = editor;
+  return baseline === null
+    ? { type: 'create', draft }
+    : { type: 'edit', title: baseline.title, draft, baseline };
+}
+
+// Why the open home shows no rows, for the empty list's text.
+// `agentReadyNone`: the agent-ready toggle hides every row; `allDone`: every
+// follow-up is done and done ones are hidden.
+export type EmptyReason =
+  | 'noHome'
+  | 'filter'
+  | 'allDone'
+  | 'agentReadyNone'
+  | 'nothing';
+
+// Null while a row shows.
+export function emptyReason(state: BacklogState): EmptyReason | null {
+  const home = openHome(state);
+  if (home === null) {
+    return 'noHome';
+  }
+  if (visibleRows(state).length > 0) {
+    return null;
+  }
+  if (state.filter !== '') {
+    return 'filter';
+  }
+  const items = home.followupFiles.flatMap((file) => file.items);
+  const isEveryFollowupDone =
+    items.length > 0 && items.every((item) => item.done);
+  if (isEveryFollowupDone && !state.isDoneShown) {
+    return 'allDone';
+  }
+  return state.isAgentReadyOnly ? 'agentReadyNone' : 'nothing';
 }
 
 export function isDraftChanged(editor: BacklogEditor): boolean {
@@ -594,7 +639,7 @@ function openCreate(state: BacklogState): BacklogState {
       kind: 'create',
       homeRoot: target.root,
       path: null,
-      originalTitle: null,
+      baseline: null,
       initial: EMPTY_DRAFT,
       draft: EMPTY_DRAFT,
     },
@@ -607,12 +652,8 @@ function openEdit(state: BacklogState): BacklogState {
   if (row === null || home === null || state.editor !== null) {
     return state;
   }
-  const texts: DraftTexts = {
-    title: row.item.title,
-    oneLine: row.item.oneLine,
-    tags: row.item.tags.join(', '),
-    body: row.item.body,
-  };
+  const { title, oneLine, tags, body } = row.item;
+  const texts: DraftTexts = { title, oneLine, tags: tags.join(', '), body };
   return {
     ...state,
     focus: 'detail',
@@ -620,7 +661,7 @@ function openEdit(state: BacklogState): BacklogState {
       kind: 'edit',
       homeRoot: home.root,
       path: row.path,
-      originalTitle: row.item.title,
+      baseline: { title, oneLine, tags, body },
       initial: texts,
       draft: texts,
     },

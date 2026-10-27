@@ -10,7 +10,8 @@ interface ProcessGitDeps {
 }
 
 // `Git` over the `git` on the PATH, one run per call (two for `fileAtHead` and
-// `commitPaths`), each as `git -C <root> …`.
+// `commitPaths`), each as `git -C <root> …`. `isLinkedWorktree` needs git 2.31
+// or later, for `rev-parse --path-format`.
 export function createProcessGit(deps: ProcessGitDeps): Git {
   const { processes } = deps;
   return {
@@ -24,6 +25,18 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
       return result.code === 0
         ? deps.paths.normalize(result.stdout.trim())
         : null;
+    },
+    isLinkedWorktree: async (root) => {
+      const output = await gitOutput(processes, 'rev-parse', [
+        '-C',
+        root,
+        'rev-parse',
+        '--path-format=absolute',
+        '--git-dir',
+        '--git-common-dir',
+      ]);
+      const [gitDir, commonDir] = output.trim().split('\n');
+      return gitDir !== commonDir;
     },
     hasUpstream: async (root) => {
       const result = await processes.run('git', [
@@ -89,9 +102,12 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
     },
     lastFetch: (root) => lastFetch(root, deps),
     fileAtHead: async (root, path) => {
+      // `--literal-pathspecs` keeps a `*`, `?`, `[` or leading `:` in `path`
+      // from matching other files.
       const tree = await gitOutput(processes, 'ls-tree', [
         '-C',
         root,
+        '--literal-pathspecs',
         'ls-tree',
         '-z',
         'HEAD',
