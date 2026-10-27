@@ -42,6 +42,11 @@
   min-width: 0;
 }
 
+/* A row whose items stay on one line, its text wrapping instead. */
+.notes-row-value--one-line {
+  flex-wrap: nowrap;
+}
+
 .notes-row-value > .ui-input {
   flex: 1;
   min-width: 0;
@@ -51,11 +56,16 @@
   color: var(--wg-fg-tertiary);
 }
 
+/* A long value wraps anywhere, so a path never widens the popup. */
+.notes-target,
+.notes-session,
+.notes-row-value > .ui-tag {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .notes-target {
   color: var(--wg-fg);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .notes-title {

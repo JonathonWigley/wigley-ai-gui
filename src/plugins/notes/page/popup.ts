@@ -165,6 +165,7 @@ export function createNotePopup(
     fieldsView.append(node);
   }
   const slot = (field: NoteField) => slots.get(field) as HTMLElement;
+  slot('session').classList.add('notes-row-value--one-line');
 
   const titleFrame = inputFrame();
   const titleInput = textBoxInput('notes-title');
@@ -312,10 +313,9 @@ export function createNotePopup(
       () => removeSession(),
       'sm',
     );
-    slot('session').replaceChildren(
-      chip(text, '', () => deps.run('notes.pickSession')),
-      remove,
-    );
+    const shown = chip(text, '', () => deps.run('notes.pickSession'));
+    shown.classList.add('notes-session');
+    slot('session').replaceChildren(shown, remove);
   };
 
   // Redraws only the rows whose state changed since the last draw, so typing
