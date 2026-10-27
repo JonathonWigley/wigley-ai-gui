@@ -144,6 +144,7 @@ export const defaultKeymap = {
     '<Leader>zl': 'forms layouts',
     '<Leader>c': 'chat controls',
     '<Leader>a': 'answer',
+    '<Leader>n': 'notes',
   },
   binds: [
     // ── Windows and modes ──────────────────────────────────────────────────
@@ -527,6 +528,84 @@ export const defaultKeymap = {
     { keys: '<CR>', scope: 'backlog.picker', command: 'backlog.pickerChoose' },
     { keys: 'l', scope: 'backlog.picker', command: 'backlog.pickerChoose' },
     { keys: '<Esc>', scope: 'backlog.picker', command: 'backlog.pickerCancel' },
+
+    // ── Notes ──────────────────────────────────────────────────────────────
+    { keys: '<Leader>nn', scope: 'any', command: 'notes.open' },
+    { keys: 'j', scope: 'notes.popup', command: 'notes.nextField' },
+    { keys: 'k', scope: 'notes.popup', command: 'notes.prevField' },
+    { keys: '<CR>', scope: 'notes.popup', command: 'notes.act' },
+    { keys: 'i', scope: 'notes.popup', command: 'notes.editBox' },
+    { keys: 't', scope: 'notes.popup', command: 'notes.pickTarget' },
+    { keys: '#', scope: 'notes.popup', command: 'notes.pickTags' },
+    { keys: 's', scope: 'notes.popup', command: 'notes.pickSession' },
+    { keys: 'l', scope: 'notes.popup', command: 'notes.nextImage' },
+    { keys: 'h', scope: 'notes.popup', command: 'notes.prevImage' },
+    { keys: 'x', scope: 'notes.popup', command: 'notes.remove' },
+    // Esc in the body box's normal mode leaves the box; on the page it closes.
+    { keys: '<Esc>', scope: 'notes.popup', command: 'notes.close' },
+    {
+      keys: '<Esc>',
+      scope: 'notes.popup',
+      command: 'notes.leaveBox',
+      where: 'box',
+    },
+    // A chord fires inside the body box as well.
+    { keys: '<C-n>', scope: 'notes.popup', command: 'notes.nextBox' },
+    { keys: '<C-p>', scope: 'notes.popup', command: 'notes.prevBox' },
+    { keys: '<D-Enter>', scope: 'notes.popup', command: 'notes.sendFollowup' },
+    // Leader binds fire on the page and in the body box alike.
+    { keys: '<Leader>nf', scope: 'notes.popup', command: 'notes.sendFollowup' },
+    {
+      keys: '<Leader>na',
+      scope: 'notes.popup',
+      command: 'notes.appendFollowup',
+    },
+    { keys: '<Leader>ns', scope: 'notes.popup', command: 'notes.sendSession' },
+    { keys: '<Leader>nc', scope: 'notes.popup', command: 'notes.capture' },
+    { keys: '<Leader>nd', scope: 'notes.popup', command: 'notes.discard' },
+    { keys: '<Esc>', scope: 'notes.title', command: 'notes.leaveBox' },
+    { keys: '<CR>', scope: 'notes.title', command: 'notes.nextBox' },
+    { keys: '<Tab>', scope: 'notes.title', command: 'notes.nextBox' },
+    { keys: '<C-n>', scope: 'notes.title', command: 'notes.nextBox' },
+    { keys: '<C-p>', scope: 'notes.title', command: 'notes.prevBox' },
+    { keys: '<D-Enter>', scope: 'notes.title', command: 'notes.sendFollowup' },
+    { keys: 's', scope: 'notes.markup', command: 'notes.toolSelect' },
+    { keys: 'p', scope: 'notes.markup', command: 'notes.toolPen' },
+    { keys: 't', scope: 'notes.markup', command: 'notes.toolText' },
+    { keys: 'a', scope: 'notes.markup', command: 'notes.toolArrow' },
+    { keys: 'b', scope: 'notes.markup', command: 'notes.toolBox' },
+    { keys: 'c', scope: 'notes.markup', command: 'notes.nextColour' },
+    { keys: 'C', scope: 'notes.markup', command: 'notes.prevColour' },
+    { keys: 'u', scope: 'notes.markup', command: 'notes.undo' },
+    { keys: '<C-r>', scope: 'notes.markup', command: 'notes.redo' },
+    { keys: '<Esc>', scope: 'notes.markup', command: 'notes.closeMarkup' },
+    { keys: 'j', scope: 'notes.picker', command: 'notes.pickerDown' },
+    { keys: 'k', scope: 'notes.picker', command: 'notes.pickerUp' },
+    { keys: '<CR>', scope: 'notes.picker', command: 'notes.pickerChoose' },
+    { keys: '<Esc>', scope: 'notes.picker', command: 'notes.pickerCancel' },
+    { keys: '/', scope: 'notes.picker', command: 'notes.pickerFilter' },
+    // `<CR>` picks in insert mode too, so Enter in the filter box picks.
+    {
+      keys: '<CR>',
+      scope: 'notes.picker',
+      command: 'notes.pickerChoose',
+      where: 'box',
+    },
+    {
+      keys: '<CR>',
+      scope: 'notes.picker',
+      command: 'notes.pickerChoose',
+      mode: 'insert',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'notes.picker',
+      command: 'notes.pickerList',
+      where: 'box',
+    },
+    { keys: 'y', scope: 'notes.confirm', command: 'notes.confirmYes' },
+    { keys: 'n', scope: 'notes.confirm', command: 'notes.confirmNo' },
+    { keys: '<Esc>', scope: 'notes.confirm', command: 'notes.confirmNo' },
 
     // ── Gallery ────────────────────────────────────────────────────────────
     {

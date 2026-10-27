@@ -3,6 +3,7 @@ import type { Log } from '../../../contracts/log';
 import type { ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
+import { filesOf, holdsPastedText } from '../../../shared/page/pasted-images';
 import { iconButton } from '../../../shared/page/ui/icon-button';
 import { refusalOf } from '../image-rules';
 
@@ -209,25 +210,4 @@ export function listenForImages(
   root.addEventListener('drop', (event) =>
     take(event, filesOf(event.dataTransfer), 'dropped'),
   );
-}
-
-function holdsPastedText(
-  transfer: DataTransfer | null,
-  files: File[],
-): boolean {
-  return transfer !== null && isRealText(transfer.getData('text/plain'), files);
-}
-
-// Plain text beside pasted files stands for them, and is no text to paste,
-// when it is blank, the name of one of the files, or a single URL.
-function isRealText(text: string, files: File[]): boolean {
-  const trimmed = text.trim();
-  const isBlank = trimmed === '';
-  const isFileName = files.some((file) => file.name === trimmed);
-  const isSingleUrl = /^(https?:\/\/|file:\/\/|data:)\S*$/.test(trimmed);
-  return !isBlank && !isFileName && !isSingleUrl;
-}
-
-function filesOf(transfer: DataTransfer | null): File[] {
-  return transfer === null ? [] : [...transfer.files];
 }
