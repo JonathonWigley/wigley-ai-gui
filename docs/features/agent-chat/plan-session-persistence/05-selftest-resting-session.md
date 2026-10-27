@@ -1,6 +1,6 @@
 # 05 — Self-test: resting session
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03, 04
 Plan: [plan.md](plan.md)
@@ -34,3 +34,5 @@ Done when: `npm run selftest` passes
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 0625058 · proof: diff read: RESTING_SESSION_STEPS / 'resting session' group present; typecheck clean; npm run selftest all passed (lead re-run) · concerns: the fake's process for chat-second is unchecked (selftestProcess filters to the self-test project), as before

@@ -161,18 +161,22 @@ interview on 2026-10-23; this file is the record of both.
   runs.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
   `open-sessions.json` in chat's plugin data: its host session id, folder and profile, in row order, with the
-  selected row, whether a message was ever sent, and whether a turn was running. Only the user closing its row
-  removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it. Plugin data is per app
+  selected row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was
+  running. A new, resumed or launched session is saved only after its process starts, so a start that fails leaves no
+  record. Only the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it. Plugin data is per app
   instance, so the stable and dev apps, drive runs and the self-test each keep their own list. On start, chat opens a
   row for each record, in order and unselected, then selects the saved row: each row **rests**, holding no process.
+  A record whose host id is already open, or whose open throws, is skipped and logged.
   A resting row's earlier conversation is read from its transcript the first time its Chat tab shows, so start reads
   no transcripts. The first message sent in a resting row starts its process (`--resume` when a message was ever
   sent, else `--session-id`); app slash commands run without one, and the controls and the agent's slash commands
   fill in once it runs. A session whose process exits while the app runs rests the same way, a notice in its chat
   giving the exit and its reason. A restored session whose turn was running at quit gets a notice that the app quit
   during that turn; one whose profile is no longer in the settings gets a notice naming it, and a send there toasts
-  that the profile is missing instead of starting. A resting row looks like an idle one in the sidebar. A
-  file that cannot be read is logged, restores nothing and is never overwritten: it is the user's state. Closing a
+  that the message was not sent because the profile is missing, instead of starting. A resting row looks like an
+  idle one in the sidebar. A file that cannot be read is logged (`open sessions not read`) and restores nothing, and the
+  store refuses every save (logged `open sessions not saved: … unreadable`) so the file is never overwritten: it is
+  the user's state. A later clean load lifts the refusal. Closing a
   row asks the end-session confirmation only while Claude is working, as before; closing removes the row for good
   but touches no transcript, so the session stays in the start prompt's saved-session list, unarchived.
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
@@ -207,11 +211,11 @@ interview on 2026-10-23; this file is the record of both.
   leaves one running that refuses every later `/login`.
 - **App slash commands**: chat's page exports `addSlashCommand({ name, description, run })`, returning a
   `Disposable`. Sending a box whose trimmed text is `/name` or `/name <args>` with `name` registered runs
-  `run({ sessionId, profile, args, ended })` in place of sending, and clears the box; attached images stay. A registered
+  `run({ sessionId, profile, args })` in place of sending, and clears the box; attached images stay. A registered
   name wins over the agent's command of the same name. The `/` completion offers the registered commands and the
   agent's, without repeats (§ Slash completion). A handler reports through chat's `notice` channel call, which adds a notice entry
   main keeps, in a resting session too. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile
-  out; a notice says so) and `/status` (a notice: `<profile>: signed in as <account>` or `<profile>: not signed in`).
+  out) and `/status`, each reporting through a notice, never a toast (`/logout`: `Signed out of <profile>`; `/status`: `<profile>: signed in as <account>` or `<profile>: not signed in`).
 - **Images**: pasting an image file into the composer, or dropping one anywhere on the Chat tab, attaches it: PNG, JPEG, GIF and WebP whose base64 text is at most
   5 MB (the API's per-image limit, which counts that text); any other file is refused with a toast. Attached images show as a strip of
   thumbnails above the message box, each with a remove button; `<Leader>cx` removes the last one. Send sends the
