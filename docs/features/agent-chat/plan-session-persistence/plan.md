@@ -144,7 +144,7 @@ needs no new entry (the new file sits in an existing layer).
 - [x] [Chat main: resting and restored sessions](03-chat-main-resting-sessions.md) — after 01, 02
 
 ### Wave 3
-- [ ] [Chat page: resting tabs](04-chat-page-resting-tabs.md) — after 03
+- [x] [Chat page: resting tabs](04-chat-page-resting-tabs.md) — after 03
 
 ### Wave 4
 - [ ] [Self-test: resting session](05-selftest-resting-session.md) — after 03, 04
@@ -161,7 +161,9 @@ Review base: f676c293b1c5b8de5ce197b9ebf280691835f557
 - 01 · 54aff62 · diff read: every Produces present in open-sessions.ts; typecheck clean; open-sessions.test.ts 9 cases pass · concerns: load_FileShape_ReadsOrRejects split into two it.each tables (snapshot rows, reject rows)
 - 02 · 069fb20 · diff read: selected present in SessionsMainEvents with doc comment; typecheck clean; session-list.test.ts 50 pass · concerns: three existing tests gained the selected call in exact expectations; 'activate of a marked selected row' approximated, since a selected row cannot carry a mark
 - 03 · e04bc7f · diff read: every Produces present; typecheck errors only under src/plugins/chat/page/ (11); chat main tests 127 pass · concerns: selftest-script still expects chat.ended and an ended second session (task 05); old process controls/commands stay in state while resting (task 04 may hide); exit-with-error notice reads '(exit code 1): boom. Your next…' so test asserts contains '): boom'; fake sessions.open numbers rows row-<n>; send toast relies on sync throw, unverified end to end
+- 04 · 63d5732 · diff read: ChatTabScope 'chat' only, chat.ended gone from keymap/manifest, handlers for entries/sessionRunning/sessionRested and loadHistory present; typecheck clean; lint pass; page tests 138 pass · concerns: selftest-script still expects chat.ended (task 05); design.md:210 still documents ended in run({...}) (task 06); sessionRested for a failed new start finds no tab so the stopped toast may not show; a pickMode fixture text still says 'has ended'
 ### Contract changes
+- AccountCommandDeps.toast: present → removed · why: no path uses it once the toast branch is gone · consumers: none · group 04
 ### Rulings
 - the most recent load() decides the save block: a later clean load lifts it — lets a repaired file be written without restart — a save after a repaired file writes (harmless) · group 01 · group 01
 - save() does not re-read the file; the unreadable flag is set by load() alone — whole-snapshot writes — a file damaged after a clean load is overwritten · group 01 · group 01
@@ -175,5 +177,8 @@ Review base: f676c293b1c5b8de5ce197b9ebf280691835f557
 - a restore record whose sessions.open throws is logged and skipped — one bad record does not stop the rest — that record is lost from the next save · group 03 · group 03
 - restore notices go out as entry messages after sessionStarted — reuse notice path — page handles them as separate entries · group 03 · group 03
 - new/resume/launch save only after the start succeeds — a failed start never writes its record · group 03 · group 03
+- no resting rows in attachments/slash-commands tests: ImageTab and SlashCommandContext carry no running field, so resting equals running there; ended-only cases deleted, resting rows live in chat-commands.test.ts — cost: none · group 04 · group 04
+- entries logs '<n> entries read in <name>', sessionRunning logs '<name> running'; loadHistory rejection toast reuses the log text — spec named none — wording only · group 04 · group 04
+- composer anchors its keys once in chat.chat; send never disabled; running indicator hidden while resting — cost: none · group 04 · group 04
 ### Review rounds
 ### Test gate

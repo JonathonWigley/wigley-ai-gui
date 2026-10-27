@@ -127,21 +127,26 @@ const TWO_SESSIONS_STEPS: SelfTestStep[] = [
   },
 ];
 
-// The second session ends here and stays ended for the rest of the run; its
-// process's calls are not checked.
-const ENDED_SESSION_STEPS: SelfTestStep[] = [
+// The second session's process ends here, leaving its row resting until the
+// next message there starts it again; its processes' calls are not checked.
+const RESTING_SESSION_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
-  { keys: sendKeys(FAKE_END_TEXT), expect: '[chat] chat-second ended' },
+  { keys: sendKeys(FAKE_END_TEXT), expect: '[chat] chat-second rested' },
   {
     keys: [' ', 'c', 'e'],
-    expect: '[page] <Leader>ce has no bind in chat.ended',
-    why: "The ended tab's box holds no control picker.",
+    expect: '[chat] chat-second has no running process',
+    why: "The resting tab's box opens no control picker.",
   },
   { keys: ['Escape'], expect: '[chat] left the box' },
   {
     keys: ['j'],
-    expect: '[chat] focused user entry',
-    why: 'The ended transcript holds only the sent message.',
+    expect: '[chat] focused notice entry',
+    why: 'The exit notice follows the sent message.',
+  },
+  {
+    keys: sendKeys('again'),
+    expect: '[chat] assistant entry added in chat-second',
+    why: 'The send starts the process again in the same row.',
   },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
@@ -272,7 +277,11 @@ const INTERRUPT_AND_CLOSE_STEPS: SelfTestStep[] = [
 
 const RESUME_LIST_STEPS: SelfTestStep[] = [
   { keys: [' ', 'k', 'n'], expect: '[chat] picker shown: Folder' },
-  { keys: ['Enter'], expect: '[chat] picker shown: Profile' },
+  {
+    keys: ['/', ...SELFTEST_PROJECT_NAME, 'Enter'],
+    expect: '[chat] picker shown: Profile',
+    why: "The second session's restart made its folder the newest, so the filter picks the self-test's.",
+  },
   {
     keys: ['Enter'],
     expect: '[chat] picker shown: Session',
@@ -381,9 +390,9 @@ const GROUPS: SelfTestGroup[] = [
     steps: TWO_SESSIONS_STEPS,
   },
   {
-    name: 'ended session',
-    why: "fake: end ends the second session's process on its own: its Chat tab stays, ended, where the box's control keys have no bind, Esc still leaves the box and j still moves through the entries.",
-    steps: ENDED_SESSION_STEPS,
+    name: 'resting session',
+    why: "fake: end leaves the second session resting in its row, where the box's control keys log that no process runs, Esc still leaves the box, j still moves through the entries, and the next message starts the process again in place.",
+    steps: RESTING_SESSION_STEPS,
   },
   {
     name: 'sending',
@@ -417,7 +426,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'resume list',
-    why: "The start prompt's folder and profile steps lead to a session step listing the fake's saved sessions for the self-test's folder.",
+    why: "The start prompt's folder step, filtered to the self-test's folder, and profile step lead to a session step listing the fake's saved sessions for the self-test's folder.",
     steps: RESUME_LIST_STEPS,
   },
   {

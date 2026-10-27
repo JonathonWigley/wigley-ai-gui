@@ -1,6 +1,6 @@
 # 04 — Chat page: resting tabs
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -65,3 +65,5 @@ Done when: `npm run typecheck` and `npm run lint` pass; the test gate runs the t
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 63d5732 · proof: diff read: ChatTabScope 'chat' only, chat.ended gone from keymap/manifest, handlers for entries/sessionRunning/sessionRested and loadHistory present; typecheck clean; lint pass; page tests 138 pass · concerns: selftest-script still expects chat.ended (task 05); design.md:210 still documents ended in run({...}) (task 06); sessionRested for a failed new start finds no tab so the stopped toast may not show; a pickMode fixture text still says 'has ended'
