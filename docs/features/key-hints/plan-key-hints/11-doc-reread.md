@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 10
 Plan: [plan.md](plan.md)
@@ -48,3 +48,5 @@ Done when: every doc above agrees with the landed code, and step 3's search find
 Commit:    one commit, "Docs: re-read key hints docs against the landed code", or none when nothing was stale.
 
 ## Proof
+
+Commit a356269 · proof: diff read; step 3 grep finds no stale hit outside the plan folder · concerns: followups 'keysFor in the core keys API' reason (sessions depends on keys only for its toast) is weaker now views depend on keys for anchors; plugin-framework design's settled bar-split bullet rewritten as history
