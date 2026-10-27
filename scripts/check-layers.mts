@@ -19,6 +19,7 @@ const LAYERS: Record<string, LayerRule> = {
   'src/config': { layers: ['src/contracts'], packages: [] },
   'src/shared': { layers: ['src/contracts', 'src/shared/paths'], packages: [] },
   'src/shared/paths': { layers: ['src/contracts'], packages: [] },
+  'src/shared/followups': { layers: [], packages: [] },
   'src/shared/agent-forms': {
     layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
     packages: ['node:'],
@@ -150,6 +151,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/paths',
       'src/plugins/chat',
       'src/plugins/chat/layouts',
@@ -162,6 +164,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/paths',
       'src/shared/page',
       'src/shared/page/ui',
@@ -176,6 +179,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/paths',
       'src/plugins/docs/contract.ts',
       'src/plugins/sessions/contract.ts',
@@ -190,6 +194,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/paths',
       'src/plugins/docs',
       'src/plugins/docs/contract.ts',
@@ -201,6 +206,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/paths',
       'src/shared/page',
       'src/shared/page/ui',
@@ -228,6 +234,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/paths',
       'src/plugins/settings',
       'src/plugins/settings/contract.ts',
@@ -238,6 +245,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/paths',
       'src/shared/page',
       'src/shared/page/ui',
@@ -255,6 +263,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/agent-forms',
       'src/shared/paths',
       'src/plugins/forms',
@@ -268,6 +277,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/page',
       'src/shared/page/ui',
       'src/plugins/forms',
@@ -285,6 +295,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/paths',
       'src/shared/agent-forms',
       'src/plugins/primer',
@@ -296,6 +307,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/page',
       'src/shared/page/ui',
       'src/plugins/primer',
@@ -312,6 +324,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/page',
       'src/shared/page/ui',
       'src/plugins/gallery',
@@ -327,6 +340,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/page',
       'src/shared/page/ui',
       'src/plugins/keys',
@@ -346,6 +360,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/plugins/sessions',
       'src/plugins/sessions/contract.ts',
       'src/plugins/sessions/main/relay',
@@ -365,6 +380,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/shared/followups',
       'src/shared/page',
       'src/shared/page/ui',
       'src/plugins/sessions',
