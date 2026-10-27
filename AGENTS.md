@@ -79,7 +79,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  tags, body, line span, done) and turns a create, edit, tag change or delete into the file's new
                  text, in the file's own shape (triage.md § The project's follow-ups in wigley-ai-marketplace) →
                  pure, no I/O; Backlog and Docs' create dialog both write follow-ups through it
-  page/          page-only DOM builders plugins share: the layout loader, the reducer store, autosave, editor boxes,
+  image-types.ts the image media types the app attaches and pastes (chat and notes share it)
+  page/          page-only DOM builders plugins share: the paste and drop helpers (`pasted-images.ts`), the layout loader, the reducer store, autosave, editor boxes,
                  key hints, the confirm prompt, the session form tab helper, the session form status line, and the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue)
@@ -146,14 +147,16 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  permission_prompt MCP tool, recent folders, archived sessions, resume, sign-in), page/ (the
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
-                 and the built-in `default` chat layout)
+                 and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
+                 parts share; main exports `launch` (a background session with a first message), `profileNames` and
+                 `profileOf` to notes
   keys/          manifest.ts, contract.ts, page/ (which-key, the help overlay, the title bar's Keys button, and the
                  hint anchors and keys-for-command lookup it exports); no main part
   gallery/       manifest.ts, page/ (Gallery mode: every primitive in every state, a transparency switch, and a
                  swap of the shell to a test layout); no main part
   settings/      manifest.ts, contract.ts, main/ (the userConfig reads and writes, `Cmd+,`), page/ (Settings mode:
                  a form over every setting and every command's binds, `docs/features/settings/design.md`)
-  notes/         manifest.ts, contract.ts, main/ (the kept draft in plugin data, window captures, sending a note
+  notes/         manifest.ts, contract.ts, main/ (the kept draft in plugin data, window captures through `services.window.capture`, sending a note
                  to a follow-up through backlog's exports or to a new session through chat's), page/ (the note
                  popup over any mode: fields, images, markup, target, session and follow-up pickers,
                  `docs/features/notes/design.md`)

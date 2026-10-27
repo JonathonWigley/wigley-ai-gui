@@ -24,17 +24,20 @@ session.
   leader group `n` is notes. There is no global shortcut.
 - It holds one draft. Closing keeps the draft; sending or discarding it starts a fresh one. The draft, its images and
   their markup are kept in the plugin's data folder, so a reload or restart keeps them.
-- Fields: Target (a repo), Title, Body (a vim box) and Tags (from Backlog's tag setting). The follow-up's one line is
-  the body's first sentence. The title is required for a follow-up and optional for a launched session.
+- Rows, top to bottom: Target (a repo), Title, Body (a vim box), Tags (from Backlog's tag setting), the image strip
+  and the Session chip. The follow-up's one line is the body's first sentence. The title is required for a follow-up
+  and optional for a launched session.
 - Target defaults to the repo of the attached session's folder. A fuzzy picker lists every repo with a features home.
   The target is also the launched session's folder.
 
 ## Images
 
 - In: paste from the clipboard, drop a file, or capture the GUI. Capture hides the popup, grabs the window in main,
-  and reopens the popup with the image attached, so the capture shows the app as the user saw it.
-- Each image opens a markup editor inside the popup: pen, text, arrow, box, a few colours, undo and redo, each on a
-  key. The colours are plugin theme tokens. Markup stays editable until the note is sent; sending flattens each
+  and reopens the popup with the image attached, so the capture shows the app as the user saw it. Capture waits two
+  frames after the hide, so the popup is gone from the shot.
+- Each image opens a markup editor inside the popup: select and move, pen, text, arrow, box, four colours, undo and
+  redo, each on a key. The colours are plugin theme tokens. While a text is being typed, every key without Ctrl, Alt
+  or Cmd goes to the text, and Escape ends the edit before a second Escape leaves the markup. Markup stays editable until the note is sent; sending flattens each
   image to a PNG.
 - Fabric.js (MIT) draws the markup, behind a markup adapter that is the only `fabric` import.
 
@@ -43,29 +46,35 @@ session.
 - The selected session attaches as a removable chip: harness, host session id, folder. A key picks another open
   session row instead.
 - It writes one line into the follow-up or the launched message:
-  `Source session: Claude Code <session id> in <folder>`, so an agent can find the transcript by id.
+  `Source session: <harness> <session id> in <folder>`, so an agent can find the transcript by id. The harness is
+  `Claude Code` or `Codex`, the folder is shown with `~`, and a part the session lacks is left out.
 
 ## Destinations
 
 - **New follow-up** — one item in the target repo's create-target home, through Backlog. Images save as
   `followups-images/<folder>/<n>.png` in the home, where `<folder>` is fixed when the item first gets an image (its
-  write time and title slug), and the body links each image by its path relative to the follow-ups file.
-- **Append to a follow-up** — the fuzzy picker lists the target home's open follow-ups; the note's text, image links
-  and session line append to that item's body.
+  write time in UTC as `yyyyMMdd-HHmmss` and the title slug), and the body links each image after the text as
+  `![<n>](<path>)`, one per line, `<path>` relative to the follow-ups file.
+- **Append to a follow-up** — the fuzzy picker lists the target home's open follow-ups; the note's title, body and
+  session line, then its image links, append to that item's body. The append carries the item as it read it, so a hand edit
+  to the item meanwhile is refused (`<title> changed on disk; send again`) and the draft is kept.
 - **New session** — chat starts a session in the target folder, under the attached session's profile when chat owns
   that session, else chat's first profile. Its first message is the brief from the `notes.launchBrief` setting
-  (default `A nitpick to fix, noted while working. Make the change, then report.`), then the note's text and session
-  line, with the images attached under chat's 5 MB-per-image cap. The user stays where they were; the session runs
-  in the background and a toast names it.
+  (default `A nitpick to fix, noted while working. Make the change, then report.`), then the note's title, body and
+  session line, with the images attached under chat's per-image cap (5 MB of base64 text). The user stays where they were; the session runs
+  in the background and a toast reads `Session started in <folder>`.
 
 ## Seams
 
-- **Window capture** — a `capture` call on the existing `window` main service, returning the window's PNG; the
+- **Window capture** — a `capture` call on the existing `window` main service, returning the window's PNG at device pixels; the
   composition root fills it from Electron's `capturePage`, and tests hand the plugin a fake.
-- **Markup** — a page service behind a contract; the Fabric adapter sits in its own folder.
-- **Backlog** — owns every follow-up write and the `followups-images/` folder. Its main part exports its homes and
-  the follow-up write, and saves images with it. Its delete trashes the image folders the deleted item links, and
+- **Markup** — a page service behind a contract (`MarkupEditor`, `src/contracts/markup.ts`); the Fabric adapter sits
+  in `src/renderer/fabric/`.
+- **Backlog** — owns every follow-up write and the `followups-images/` folder. Its main part exports `load` (the
+  homes), `tags` and `fileNote`, which writes the follow-up and saves the images with it, and trashes them again when
+  the write is refused or fails. Its delete trashes the image folders the deleted item links, and
   its commit takes the changed images under `followups-images/` with the follow-up files.
-- **Docs** — its main exports gain a guarded binary write, so images pass the same write guard as text.
-- **Chat** — its main part exports a launch: start a session and send its first message, without selecting the
-  row.
+- **Docs** — its main exports gain `writeBytes` (a guarded binary write, so images pass the same write guard as
+  text) and `trashDoc`.
+- **Chat** — its main part exports `launch` (start a session and send its first message, without selecting the row),
+  `profileNames` and `profileOf` (the profile of a session chat owns).

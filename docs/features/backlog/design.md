@@ -85,7 +85,9 @@ plan is written from them. A decision here stands unless the user changes it.
   write.
 - Backlog watches the follow-up files it lists, so an agent's append mid-session shows live.
 - An item's images live in the home's `followups-images/<folder>/`, linked from its body
-  (`docs/features/notes/design.md`). Delete trashes each image folder the deleted item's body links.
+  as `![<n>](<path>)` (`docs/features/notes/design.md`). Only a link that resolves to a direct subfolder of
+  `<home>/followups-images/` counts. Delete trashes each image folder the deleted item's body links and no other
+  item in the file still links.
 
 ## Tags
 
@@ -109,9 +111,11 @@ plan is written from them. A decision here stands unless the user changes it.
 
 - An edit to an in-repo home stays uncommitted, and the home shows an uncommitted chip. `C` commits that home's
   follow-up files and the changed files under its `followups-images/`, never anything else in the clone, with the message `Follow-ups edited in Backlog: added …;
-  edited …; removed …; tagged …` (an empty part left out), built by matching each file's items by title between its
+  edited …; removed …; tagged …; images <folders>` (an empty part left out; the folders are the changed
+  image folders), built by matching each file's items by title between its
   parse at HEAD and its parse on disk. A file that differs from HEAD with no item changed (a header edit, a reorder,
-  line endings) commits with the plain subject `Follow-ups edited in Backlog`; `C` with no file changed commits
+  line endings) commits with the plain subject `Follow-ups edited in Backlog`; a change to images alone
+  gives `Follow-ups edited in Backlog: images <folders>`; `C` with no follow-up file and no image changed commits
   nothing. The user's press decides when a shared file is committed, so a peer agent's half-written entry is never
   swept in by an automatic commit.
 - A home is in git only when it is its clone's `docs/features` folder, compared on real paths. Every other home
@@ -128,8 +132,9 @@ plan is written from them. A decision here stands unless the user changes it.
   one place.
 - `src/shared/followups/` is the one writer of the follow-up shape in the app, and is pure (text in, text out, no
   I/O): Backlog and Docs' create dialog both call it.
-- Backlog's main part exports its homes and the follow-up write, with the item's images, to the `notes` plugin, so
-  every follow-up and image write in the app other than Docs' create dialog goes through Backlog.
+- Backlog's main part exports `load` (the homes), `tags` and `fileNote` (the follow-up write with the note's images)
+  to the `notes` plugin, so every follow-up and image write in the app other than Docs' create dialog goes through
+  Backlog.
 - The follow-up format has two readers in two languages: the shared module here, and `docs_index.py`'s parser for
   agents and other index readers. Each is tested against the format triage.md gives; a change to the format changes
   both in the same piece of work.
