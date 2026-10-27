@@ -42,11 +42,13 @@ function addFileChanges(
 }
 
 // The commit message for each follow-up file's items at HEAD (`before`) and
-// on disk (`after`), matched by title: `Follow-ups edited in Backlog: added …;
-// edited …; removed …; tagged …`, an empty part left out; the plain subject
-// alone when no item changed (a header edit, a reorder, line endings).
+// on disk (`after`), matched by title, and the changed image folders:
+// `Follow-ups edited in Backlog: added …; edited …; removed …; tagged …;
+// images …`, an empty part left out; the plain subject alone when no item
+// and no image changed (a header edit, a reorder, line endings).
 export function commitMessage(
   changes: { before: FollowupItem[]; after: FollowupItem[] }[],
+  imageFolders: readonly string[],
 ): string {
   const parts: MessageParts = {
     added: [],
@@ -60,5 +62,8 @@ export function commitMessage(
   const written = Object.entries(parts)
     .filter(([, titles]) => titles.length > 0)
     .map(([verb, titles]) => `${verb} ${titles.join(', ')}`);
+  if (imageFolders.length > 0) {
+    written.push(`images ${imageFolders.join(', ')}`);
+  }
   return written.length > 0 ? `${SUBJECT}: ${written.join('; ')}` : SUBJECT;
 }

@@ -84,6 +84,30 @@ export type BacklogWriteResult =
   | { type: 'refused'; reason: string }
   | { type: 'changed'; title: string; item: FollowupDraft };
 
+// Where `fileNote` puts a note: a new item, or the end of an existing item's
+// body in the follow-up file at `path`.
+export type NoteTarget =
+  | { type: 'create'; title: string; oneLine: string; tags: string[] }
+  | { type: 'append'; path: string; title: string };
+
+// Backlog main's exports to the plugins that depend on it.
+export interface BacklogMainExports {
+  load(): Promise<BacklogRead>;
+  // The tag list Backlog's tag picker offers: the backlog `tags` setting as
+  // the user config now sets it.
+  tags(): string[];
+  // 'create' adds an item to the home's create-target file with `text` as its
+  // body; 'append' adds `text` to the end of that item's body. Each PNG in
+  // `images` is saved under the home's followups-images/ and linked after
+  // `text`. A refused or failed follow-up write trashes the images it saved.
+  fileNote(
+    homeRoot: string,
+    target: NoteTarget,
+    text: string,
+    images: readonly Uint8Array[],
+  ): Promise<BacklogWriteResult>;
+}
+
 // Every method rejects with main's own error text when its handler throws.
 export interface BacklogChannel extends ChannelShape {
   invoke: {

@@ -20,7 +20,7 @@ describe('commitMessage', () => {
     const before = [item('A'), item('B')];
     const after = [item('A', { tags: ['agent-ready'], line: 7 }), item('C')];
 
-    expect(commitMessage([{ before, after }])).toBe(
+    expect(commitMessage([{ before, after }], [])).toBe(
       'Follow-ups edited in Backlog: added C; removed B; tagged A',
     );
   });
@@ -37,7 +37,7 @@ describe('commitMessage', () => {
       },
     ];
 
-    expect(commitMessage(changes)).toBe(
+    expect(commitMessage(changes, [])).toBe(
       'Follow-ups edited in Backlog: added New one, Another; edited Edit me; removed Drop me; tagged Tag me',
     );
   });
@@ -50,7 +50,7 @@ describe('commitMessage', () => {
   ])('commitMessage_%sChanged_Edited', (_, fields) => {
     const changes = [{ before: [item('A')], after: [item('A', fields)] }];
 
-    expect(commitMessage(changes)).toBe(
+    expect(commitMessage(changes, [])).toBe(
       'Follow-ups edited in Backlog: edited A',
     );
   });
@@ -60,6 +60,24 @@ describe('commitMessage', () => {
       { before: [item('A')], after: [item('A', { line: 4, endLine: 6 })] },
     ];
 
-    expect(commitMessage(changes)).toBe('Follow-ups edited in Backlog');
+    expect(commitMessage(changes, [])).toBe('Follow-ups edited in Backlog');
+  });
+
+  it('commitMessage_ImagesOnly_ImagesPart', () => {
+    expect(commitMessage([], ['F'])).toBe(
+      'Follow-ups edited in Backlog: images F',
+    );
+  });
+
+  it('commitMessage_ItemsAndImages_ImagesPartLast', () => {
+    const changes = [{ before: [], after: [item('A')] }];
+
+    expect(commitMessage(changes, ['F', 'G'])).toBe(
+      'Follow-ups edited in Backlog: added A; images F, G',
+    );
+  });
+
+  it('commitMessage_NothingChanged_PlainSubject', () => {
+    expect(commitMessage([], [])).toBe('Follow-ups edited in Backlog');
   });
 });

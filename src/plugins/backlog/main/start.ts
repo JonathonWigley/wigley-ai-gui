@@ -1,3 +1,4 @@
+import type { Clock } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import { type Files, isMissingFile } from '../../../contracts/files';
 import type { Git } from '../../../contracts/git';
@@ -12,6 +13,8 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
+  type FollowupDraft,
+  type FollowupItem,
   followupTitleProblem,
   parseFollowups,
 } from '../../../shared/followups/followup-file';
@@ -26,9 +29,11 @@ import type {
   BacklogEdit,
   BacklogFollowupFile,
   BacklogHome,
+  BacklogMainExports,
   BacklogPlan,
   BacklogRead,
   BacklogWriteResult,
+  NoteTarget,
 } from '../contract';
 import { backlogManifest } from '../manifest';
 import { commitMessage } from './commit-message';
@@ -39,6 +44,16 @@ import {
   markCreateTargets,
   type PlanShape,
 } from './homes';
+import {
+  appendedBody,
+  IMAGES_FOLDER,
+  imageFolderName,
+  imageLink,
+  imageLinkPrefix,
+  type LinkedImage,
+  linkedImages,
+  noteBody,
+} from './note-images';
 import { hasBacklogFixture, writeBacklogFixture } from './selftest-fixture';
 import { backlogSelfTestScript } from './selftest-script';
 
@@ -53,14 +68,18 @@ type BacklogApi = MainApi<
 const CREATE_TARGET_FILE = 'followups.md';
 // The one folder of a clone that is a home in git.
 const FEATURES_FOLDER = 'docs/features';
+// An in-git home's images folder, relative to its clone.
+const IMAGES_PATHSPEC = `${FEATURES_FOLDER}/${IMAGES_FOLDER}`;
+const IMAGE_FILE = /^(\d+)\.png$/;
 const PLAN_TITLE_SUFFIX = ' — plan';
 const PLAN_DATES_LINE = /^(Target|Written): /;
 
 interface BacklogDeps {
   docs: DocsMainExports;
   git: Git;
-  files: Pick<Files, 'realPath'>;
+  files: Pick<Files, 'realPath' | 'list'>;
   paths: Paths;
+  clock: Clock;
   log: Log;
   channel: Pick<MainChannel<BacklogChannel>, 'send'>;
 }
@@ -227,7 +246,8 @@ async function readPlan(
   }
 }
 
-// Whether git lists any of the home's follow-up files as changed from HEAD.
+// Whether git lists any of the home's follow-up files, or any file under its
+// images folder, as changed from HEAD.
 async function isUncommitted(
   deps: BacklogDeps,
   home: MarkedHome,
@@ -238,11 +258,14 @@ async function isUncommitted(
     return false;
   }
   try {
-    const changed = new Set(
-      await deps.git.changedPaths(gitRoot, FEATURES_FOLDER),
+    const changed = await deps.git.changedPaths(gitRoot, FEATURES_FOLDER);
+    const changedSet = new Set(changed);
+    const isFollowupChanged = followupPaths.some((path) =>
+      changedSet.has(clonePath(home.root, path, deps.paths) ?? ''),
     );
-    return followupPaths.some((path) =>
-      changed.has(clonePath(home.root, path, deps.paths) ?? ''),
+    return (
+      isFollowupChanged ||
+      changed.some((path) => path.startsWith(`${IMAGES_PATHSPEC}/`))
     );
   } catch (error) {
     logSkipped(deps.log, home.root, error);
@@ -334,10 +357,33 @@ async function headText(
   }
 }
 
-// Serves the channel: the last load's homes answer `applyEdit` and `commit`,
-// and its follow-up files are the ones watched.
+// Where a note goes: a new item in the create target file at `path`, or the
+// end of `item` in the follow-up file at `path`; `blocked` holds why it
+// cannot go there.
+type NotePlace =
+  | { type: 'blocked'; result: BacklogWriteResult }
+  | {
+      type: 'create';
+      path: string;
+      title: string;
+      oneLine: string;
+      tags: string[];
+    }
+  | { type: 'append'; path: string; title: string; item: FollowupItem };
+
+// The images one note wrote: `numbers` in `folder` under the home's images
+// folder, which the note made when `isNewFolder`.
+interface SavedImages {
+  folder: string;
+  isNewFolder: boolean;
+  numbers: number[];
+}
+
+// Serves the channel and the exports: the last load's homes answer
+// `applyEdit`, `fileNote` and `commit`, and its follow-up files are the ones
+// watched.
 function createBacklogMain(deps: BacklogDeps) {
-  const { docs, git, paths, log, channel } = deps;
+  const { docs, git, files, paths, clock, log, channel } = deps;
   let last: BacklogRead | null = null;
   let watches: Disposable[] = [];
   // Counts loads, and the dispose, so only the newest load keeps its watches.
@@ -394,6 +440,95 @@ function createBacklogMain(deps: BacklogDeps) {
     return read;
   }
 
+  const load = () => serve(() => docs.machineIndex());
+
+  function imagesRootOf(home: BacklogHome): string {
+    return paths.join(home.root, IMAGES_FOLDER);
+  }
+
+  // The images `body` in the follow-ups file `file` links that lie in a
+  // folder of the home's images folder, each with that folder's path; a
+  // hand-written link elsewhere is left out.
+  function homeImages(
+    home: BacklogHome,
+    file: string,
+    body: string,
+  ): (LinkedImage & { folderPath: string })[] {
+    const imagesRoot = imagesRootOf(home);
+    return linkedImages(body).flatMap((image) => {
+      const folderPath = paths.parent(
+        paths.join(paths.parent(file), image.relative),
+      );
+      const isImagesSubfolder =
+        paths.segmentsBelow(folderPath, imagesRoot)?.length === 1;
+      return isImagesSubfolder ? [{ ...image, folderPath }] : [];
+    });
+  }
+
+  // Trashes `path` through Docs; a failure is logged, not thrown.
+  async function trashLogged(path: string): Promise<void> {
+    try {
+      const { error } = await docs.trashDoc(path);
+      if (error !== null) {
+        log('backlog', `${path}: ${error}`);
+      }
+    } catch (error) {
+      logSkipped(log, path, error);
+    }
+  }
+
+  function notFollowupFileOf(
+    home: BacklogHome,
+    path: string,
+  ): BacklogWriteResult | null {
+    const isHomeFile = home.followupFiles.some((file) =>
+      paths.samePath(file.path, path),
+    );
+    return isHomeFile
+      ? null
+      : {
+          type: 'refused',
+          reason: `${path} is not a follow-up file of ${home.root}`,
+        };
+  }
+
+  function notCreateTarget(home: BacklogHome): BacklogWriteResult | null {
+    return home.isCreateTarget
+      ? null
+      : {
+          type: 'refused',
+          reason: `${home.root} is not ${home.repo}'s create target`,
+        };
+  }
+
+  // The image folders the item titled `title` in `file` links and no other
+  // item there does.
+  async function orphanedImageFolders(
+    home: BacklogHome,
+    file: string,
+    title: string,
+  ): Promise<string[]> {
+    const { items } = parseFollowups(await readFollowupText(docs, file));
+    const deleted = items.find((item) => item.title === title);
+    if (deleted === undefined) {
+      return [];
+    }
+    const stillLinked = items
+      .filter((item) => item !== deleted)
+      .flatMap((item) => homeImages(home, file, item.body))
+      .map((image) => image.folderPath);
+    const orphaned: string[] = [];
+    for (const { folderPath } of homeImages(home, file, deleted.body)) {
+      const isKept = [...stillLinked, ...orphaned].some((folder) =>
+        paths.samePath(folder, folderPath),
+      );
+      if (!isKept) {
+        orphaned.push(folderPath);
+      }
+    }
+    return orphaned;
+  }
+
   async function applyEdit(
     homeRoot: string,
     path: string | null,
@@ -404,28 +539,233 @@ function createBacklogMain(deps: BacklogDeps) {
       return { type: 'refused', reason: problem };
     }
     const home = homeAt(homeRoot);
-    if (path !== null) {
-      const isHomeFile = home.followupFiles.some((file) =>
-        paths.samePath(file.path, path),
-      );
-      if (!isHomeFile) {
-        return {
-          type: 'refused',
-          reason: `${path} is not a follow-up file of ${home.root}`,
-        };
+    const refusal =
+      path === null ? notCreateTarget(home) : notFollowupFileOf(home, path);
+    if (refusal !== null) {
+      return refusal;
+    }
+    const file = path ?? paths.join(home.root, CREATE_TARGET_FILE);
+    const orphaned =
+      edit.type === 'delete'
+        ? await orphanedImageFolders(home, file, edit.title)
+        : [];
+    const result = await writeFollowupEdit(
+      docs,
+      file,
+      edit,
+      path === null ? home.repo : null,
+    );
+    if (result.type === 'applied') {
+      for (const folder of orphaned) {
+        await trashLogged(folder);
       }
-      return writeFollowupEdit(docs, path, edit, null);
     }
-    if (!home.isCreateTarget) {
-      return {
-        type: 'refused',
-        reason: `${home.root} is not ${home.repo}'s create target`,
-      };
-    }
-    const createPath = paths.join(home.root, CREATE_TARGET_FILE);
-    return writeFollowupEdit(docs, createPath, edit, home.repo);
+    return result;
   }
 
+  async function notePlace(
+    home: BacklogHome,
+    target: NoteTarget,
+  ): Promise<NotePlace> {
+    if (target.type === 'create') {
+      const refusal = notCreateTarget(home);
+      if (refusal !== null) {
+        return { type: 'blocked', result: refusal };
+      }
+      const { title, oneLine, tags } = target;
+      return {
+        type: 'create',
+        path: paths.join(home.root, CREATE_TARGET_FILE),
+        title,
+        oneLine,
+        tags,
+      };
+    }
+    const refusal = notFollowupFileOf(home, target.path);
+    if (refusal !== null) {
+      return { type: 'blocked', result: refusal };
+    }
+    const { items } = parseFollowups(await readFollowupText(docs, target.path));
+    const item = items.find((candidate) => candidate.title === target.title);
+    if (item === undefined) {
+      return {
+        type: 'blocked',
+        result: { type: 'missing', title: target.title },
+      };
+    }
+    return { type: 'append', path: target.path, title: item.title, item };
+  }
+
+  // `name`, or `name-2`, `name-3`, … : the first with nothing listed under it.
+  async function freeFolderName(
+    imagesRoot: string,
+    name: string,
+  ): Promise<string> {
+    let candidate = name;
+    for (let suffix = 2; ; suffix += 1) {
+      const entries = await files.list(paths.join(imagesRoot, candidate));
+      if (entries.length === 0) {
+        return candidate;
+      }
+      candidate = `${name}-${suffix}`;
+    }
+  }
+
+  // One above the highest image number `folder` holds on disk or its links
+  // name.
+  async function nextImageNumber(
+    imagesRoot: string,
+    folder: string,
+    linked: readonly LinkedImage[],
+  ): Promise<number> {
+    const entries = await files.list(paths.join(imagesRoot, folder));
+    const onDisk = entries.flatMap((entry) => {
+      const match = entry.kind === 'file' ? IMAGE_FILE.exec(entry.path) : null;
+      return match === null ? [] : [Number(match[1])];
+    });
+    const numbers = linked
+      .filter((image) => image.folder === folder)
+      .map((image) => image.number);
+    return Math.max(0, ...numbers, ...onDisk) + 1;
+  }
+
+  // The folder a place's images go to: the item's first linked folder, else
+  // a new one named for now and the title.
+  async function imageFolderFor(
+    home: BacklogHome,
+    place: Exclude<NotePlace, { type: 'blocked' }>,
+  ): Promise<Omit<SavedImages, 'numbers'> & { first: number }> {
+    const imagesRoot = imagesRootOf(home);
+    const linked =
+      place.type === 'append'
+        ? homeImages(home, place.path, place.item.body)
+        : [];
+    if (linked.length === 0) {
+      const name = imageFolderName(clock.now(), place.title);
+      return {
+        folder: await freeFolderName(imagesRoot, name),
+        isNewFolder: true,
+        first: 1,
+      };
+    }
+    const { folder } = linked[0];
+    return {
+      folder,
+      isNewFolder: false,
+      first: await nextImageNumber(imagesRoot, folder, linked),
+    };
+  }
+
+  function imagePath(home: BacklogHome, folder: string, number: number) {
+    return paths.join(imagesRootOf(home), folder, `${number}.png`);
+  }
+
+  // A new folder goes whole; in a reused one, only the files this note wrote.
+  async function trashSaved(
+    home: BacklogHome,
+    saved: SavedImages,
+  ): Promise<void> {
+    if (saved.numbers.length === 0) {
+      return;
+    }
+    if (saved.isNewFolder) {
+      await trashLogged(paths.join(imagesRootOf(home), saved.folder));
+      return;
+    }
+    for (const number of saved.numbers) {
+      await trashLogged(imagePath(home, saved.folder, number));
+    }
+  }
+
+  // Writes each image in order; a write that rejects trashes the ones before
+  // it and refuses with its reason.
+  async function saveImages(
+    home: BacklogHome,
+    place: Exclude<NotePlace, { type: 'blocked' }>,
+    images: readonly Uint8Array[],
+  ): Promise<SavedImages | { type: 'refused'; reason: string }> {
+    const { first, ...folder } = await imageFolderFor(home, place);
+    const saved: SavedImages = { ...folder, numbers: [] };
+    for (const [index, bytes] of images.entries()) {
+      const number = first + index;
+      try {
+        await docs.writeBytes(imagePath(home, saved.folder, number), bytes);
+      } catch (error) {
+        await trashSaved(home, saved);
+        return { type: 'refused', reason: errorText(error) };
+      }
+      saved.numbers.push(number);
+    }
+    return saved;
+  }
+
+  function noteEdit(
+    place: Exclude<NotePlace, { type: 'blocked' }>,
+    text: string,
+  ): BacklogEdit {
+    if (place.type === 'create') {
+      const { title, oneLine, tags } = place;
+      return { type: 'create', draft: { title, oneLine, tags, body: text } };
+    }
+    const { title, oneLine, tags, body } = place.item;
+    const baseline: FollowupDraft = { title, oneLine, tags, body };
+    return {
+      type: 'edit',
+      title,
+      draft: { ...baseline, body: appendedBody(body, text) },
+      baseline,
+    };
+  }
+
+  async function fileNote(
+    homeRoot: string,
+    target: NoteTarget,
+    text: string,
+    images: readonly Uint8Array[],
+  ): Promise<BacklogWriteResult> {
+    if (last === null) {
+      await load();
+    }
+    const home = homeAt(homeRoot);
+    const place = await notePlace(home, target);
+    if (place.type === 'blocked') {
+      return place.result;
+    }
+    let links: string[] = [];
+    let saved: SavedImages | null = null;
+    if (images.length > 0) {
+      const written = await saveImages(home, place, images);
+      if ('type' in written) {
+        return written;
+      }
+      saved = written;
+      const prefix = imageLinkPrefix(place.path, home.root, paths);
+      links = written.numbers.map((number) =>
+        imageLink(prefix, written.folder, number),
+      );
+    }
+    let result: BacklogWriteResult;
+    try {
+      result = await applyEdit(
+        home.root,
+        place.type === 'create' ? null : place.path,
+        noteEdit(place, noteBody(text, links)),
+      );
+    } catch (error) {
+      result = { type: 'refused', reason: errorText(error) };
+    }
+    if (result.type !== 'applied') {
+      if (saved !== null) {
+        await trashSaved(home, saved);
+      }
+      return result;
+    }
+    channel.send('changed', { homeRoot: home.root });
+    return result;
+  }
+
+  // Commits the home's changed follow-up files and every changed file under
+  // its images folder; resolves to the message.
   async function commit(homeRoot: string): Promise<string> {
     const home = homeAt(homeRoot);
     const { gitRoot } = home;
@@ -444,18 +784,25 @@ function createBacklogMain(deps: BacklogDeps) {
       })),
     );
     const changed = texts.filter(({ before, after }) => before !== after);
-    if (changed.length === 0) {
+    const changedImages = await git.changedPaths(gitRoot, IMAGES_PATHSPEC);
+    if (changed.length === 0 && changedImages.length === 0) {
       throw new Error(`Nothing to commit in ${home.root}`);
     }
+    const imageFolders = [
+      ...new Set(
+        changedImages.map((path) => path.split('/').slice(-2, -1).join('')),
+      ),
+    ].sort();
     const message = commitMessage(
       changed.map(({ before, after }) => ({
         before: parseFollowups(before).items,
         after: parseFollowups(after).items,
       })),
+      imageFolders,
     );
     await git.commitPaths(
       gitRoot,
-      changed.map(({ relative }) => relative),
+      [...changed.map(({ relative }) => relative), ...changedImages],
       message,
     );
     channel.send('changed', { homeRoot: home.root });
@@ -463,9 +810,10 @@ function createBacklogMain(deps: BacklogDeps) {
   }
 
   return {
-    load: () => serve(() => docs.machineIndex()),
+    load,
     rescan: () => serve(() => docs.rebuildMachineIndex()),
     applyEdit,
+    fileNote,
     commit,
     dispose() {
       loads += 1;
@@ -495,7 +843,8 @@ async function startFixture(
 }
 
 // Serves the page every features home on the machine, from the docs machine
-// index, Docs' guarded follow-up writes and the home's follow-up commit;
+// index, Docs' guarded follow-up writes and the home's follow-up commit, and
+// exports the load, the tag list and note filing to dependent plugins;
 // watches each listed follow-up file and hears the machine index reload, each
 // sending `changed`. Outside a live run it writes the self-test's fixture repo
 // at start, before Docs' self-test counts the files the index lists.
@@ -513,9 +862,15 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       git: services.git,
       files: services.files,
       paths: services.paths,
+      clock: services.clock,
       log: services.log,
       channel,
     });
+    const exports: BacklogMainExports = {
+      load: backlog.load,
+      tags: () => api.settings().tags,
+      fileNote: backlog.fileNote,
+    };
     channel.handle('load', backlog.load);
     channel.handle('rescan', backlog.rescan);
     channel.handle('readDoc', (path) => docs.readDoc(path));
@@ -537,6 +892,6 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
         reload: () => channel.send('changed', { homeRoot: null }),
       }),
     );
-    return { commands: {}, dispose: backlog.dispose };
+    return { commands: {}, exports, dispose: backlog.dispose };
   },
 };

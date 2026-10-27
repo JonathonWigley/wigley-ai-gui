@@ -3,14 +3,21 @@ import type { Git } from '../../../contracts/git';
 import {
   type FollowupDraft,
   followupTitleProblem,
+  parseFollowups,
 } from '../../../shared/followups/followup-file';
+import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   DocsMainExports,
   IndexEntry,
   SourceRead,
 } from '../../docs/contract';
-import type { BacklogEdit, BacklogRead } from '../contract';
+import type {
+  BacklogEdit,
+  BacklogMainExports,
+  BacklogRead,
+  NoteTarget,
+} from '../contract';
 import { backlogMainPart } from './start';
 
 const CLONE = '/dev/r';
@@ -34,6 +41,42 @@ const FOLLOWUPS_TEXT = [
 const UI_TEXT = '# UI\n\n- **Button** — *agent-ready*: bigger button\n';
 
 const BAD_TITLE_FOLLOWUPS_TEXT = '# Follow-ups — r\n\n## Wrap this:\n\nBody.\n';
+
+// 2026-10-27T14:03:09Z
+const NOW = 1793109789000;
+const IMAGES = `${HOME}/followups-images`;
+const CHIP_TITLE = "Fix the chip's colour!";
+const CHIP_FOLDER = '20261027-140309-fix-the-chip-s-colour';
+const OLD_FOLDER = '20261020-090000-old';
+const OLD_BODY = `Old.\n\n![1](followups-images/${OLD_FOLDER}/1.png)`;
+const PNG_A = new Uint8Array([137, 80, 78, 71, 1]);
+const PNG_B = new Uint8Array([137, 80, 78, 71, 2]);
+
+const CHIP_TARGET: NoteTarget = {
+  type: 'create',
+  title: CHIP_TITLE,
+  oneLine: 'The chip is grey',
+  tags: ['agent-ready'],
+};
+
+// A `##`-section follow-ups file holding each item, its one line `<title>
+// gist`.
+function followupsFile(...items: { title: string; body: string }[]): string {
+  return [
+    '# Follow-ups — r',
+    '',
+    '**Contents**',
+    '',
+    ...items.map(({ title }) => `- **${title}** — ${title} gist`),
+    '',
+    ...items.flatMap(({ title, body }) => [`## ${title}`, '', body, '']),
+  ].join('\n');
+}
+
+function bodyOf(text: string | undefined, title: string): string | undefined {
+  return parseFollowups(text ?? '').items.find((item) => item.title === title)
+    ?.body;
+}
 
 function entry(
   kind: string,
@@ -93,6 +136,11 @@ function fakeGit() {
   } satisfies Git;
 }
 
+// Each docs call of `name`'s path, in order.
+function callsOf(calls: [string, string][], name: string): string[] {
+  return calls.filter(([called]) => called === name).map(([, path]) => path);
+}
+
 // The first home's first follow-up as an editor draft.
 function firstFollowupDraft(read: BacklogRead): FollowupDraft {
   const { title, oneLine, tags, body } =
@@ -101,12 +149,24 @@ function firstFollowupDraft(read: BacklogRead): FollowupDraft {
 }
 
 // Backlog's main part over a fake docs export serving `disk` and an index of
-// `entries`. `invoke` calls a channel handler; `sent` holds each message;
-// `watched` lists each live watch; `emit` fires a docs event at backlog.
-// `links` maps a symlinked path to its real path.
+// `entries`. `invoke` calls a channel handler; `exports` are the part's;
+// `sent` holds each message; `watched` lists each live watch; `emit` fires a
+// docs event at backlog. `links` maps a symlinked path to its real path.
+// `calls` lists each docs read, write and trash in order; a path in `refuse`
+// makes its `writeDoc` or `writeBytes` reject with that reason. `listed` is
+// what `Files.list` reads.
 function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   const links = new Map<string, string>();
   const files = new Map(Object.entries(disk));
+  const listed = createMemoryFiles();
+  const calls: [string, string][] = [];
+  const refuse = new Map<string, string>();
+  const refusing = (path: string) => {
+    const reason = refuse.get(path);
+    if (reason !== undefined) {
+      throw new Error(reason);
+    }
+  };
   const watched: { path: string; changed: () => void }[] = [];
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const listeners = new Map<string, (payload: unknown) => void>();
@@ -119,6 +179,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     machineIndex: async () => index.read,
     rebuildMachineIndex: async () => index.read,
     readDoc: async (path) => {
+      calls.push(['readDoc', path]);
       const text = files.get(path);
       if (text === undefined) {
         throw missingFile(path);
@@ -126,11 +187,20 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
       return text;
     },
     writeDoc: async (path, text) => {
+      calls.push(['writeDoc', path]);
+      refusing(path);
       files.set(path, text);
       return { type: 'written' };
     },
-    writeBytes: async () => ({ type: 'written' }),
-    trashDoc: async () => ({ trashed: [], error: null }),
+    writeBytes: async (path) => {
+      calls.push(['writeBytes', path]);
+      refusing(path);
+      return { type: 'written' };
+    },
+    trashDoc: async (path) => {
+      calls.push(['trashDoc', path]);
+      return { trashed: [path], error: null };
+    },
     watchDoc: async (path, changed) => {
       const watch = { path, changed };
       watched.push(watch);
@@ -150,13 +220,18 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     },
     services: {
       git,
-      files: { realPath: async (path: string) => links.get(path) ?? path },
+      files: {
+        realPath: async (path: string) => links.get(path) ?? path,
+        list: listed.list,
+      },
       paths: posixPaths,
+      clock: { now: () => NOW },
       runMode: 'live',
       log: (source: string, message: string) =>
         logged.push(`[${source}] ${message}`),
     },
     dependency: () => docs,
+    settings: () => ({ tags: ['agent-ready'] }),
   } as unknown as Parameters<typeof backlogMainPart.start>[0];
   const part = backlogMainPart.start(api);
   const invoke = async <T>(name: string, ...args: unknown[]): Promise<T> => {
@@ -170,6 +245,11 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     listeners.get(name)?.(payload);
   return {
     part,
+    exports: part.exports as BacklogMainExports,
+    docs,
+    calls,
+    refuse,
+    listed,
     files,
     links,
     watched,
@@ -455,7 +535,9 @@ describe('backlog main part', () => {
       { [linkedFollowups]: FOLLOWUPS_TEXT },
     );
     backlog.links.set(linked, HOME);
-    backlog.git.changedPaths.mockResolvedValue(['docs/features/followups.md']);
+    backlog.git.changedPaths.mockImplementation(async (_root, pathspec) =>
+      pathspec === 'docs/features' ? ['docs/features/followups.md'] : [],
+    );
     const read = await backlog.invoke<BacklogRead>('load');
 
     await backlog.invoke('commit', linked);
@@ -628,5 +710,318 @@ describe('backlog main part', () => {
     backlog.emit('docs.indexLoaded', { sourceId });
 
     expect(backlog.sent).toEqual(sent);
+  });
+
+  it('fileNote_Create_WritesImagesThenLinkedBody', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+
+    const result = await backlog.exports.fileNote(
+      HOME,
+      CHIP_TARGET,
+      'The chip is grey.',
+      [PNG_A, PNG_B],
+    );
+
+    expect(result).toMatchObject({ type: 'applied' });
+    expect(backlog.calls.filter(([name]) => name !== 'readDoc')).toEqual([
+      ['writeBytes', `${IMAGES}/${CHIP_FOLDER}/1.png`],
+      ['writeBytes', `${IMAGES}/${CHIP_FOLDER}/2.png`],
+      ['writeDoc', FOLLOWUPS],
+    ]);
+    expect(bodyOf(backlog.files.get(FOLLOWUPS), CHIP_TITLE)).toBe(
+      `The chip is grey.\n\n![1](followups-images/${CHIP_FOLDER}/1.png)\n![2](followups-images/${CHIP_FOLDER}/2.png)`,
+    );
+    expect(backlog.sent).toContainEqual(['changed', { homeRoot: HOME }]);
+  });
+
+  it('fileNote_NewFolderNameTaken_NextSuffix', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    await backlog.listed.writeBytes(`${IMAGES}/${CHIP_FOLDER}/1.png`, PNG_A);
+
+    await backlog.exports.fileNote(HOME, CHIP_TARGET, 'Text.', [PNG_A]);
+
+    expect(callsOf(backlog.calls, 'writeBytes')).toEqual([
+      `${IMAGES}/${CHIP_FOLDER}-2/1.png`,
+    ]);
+  });
+
+  it('fileNote_Append_ReusesFolderNumbersOn', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: followupsFile({ title: 'Old item', body: OLD_BODY }),
+    });
+    await backlog.listed.writeBytes(`${IMAGES}/${OLD_FOLDER}/1.png`, PNG_A);
+    await backlog.listed.writeBytes(`${IMAGES}/${OLD_FOLDER}/2.png`, PNG_B);
+
+    const result = await backlog.exports.fileNote(
+      HOME,
+      { type: 'append', path: FOLLOWUPS, title: 'Old item' },
+      'More.',
+      [PNG_A],
+    );
+
+    expect(result).toMatchObject({ type: 'applied' });
+    expect(callsOf(backlog.calls, 'writeBytes')).toEqual([
+      `${IMAGES}/${OLD_FOLDER}/3.png`,
+    ]);
+    expect(bodyOf(backlog.files.get(FOLLOWUPS), 'Old item')).toBe(
+      `${OLD_BODY}\n\nMore.\n\n![3](followups-images/${OLD_FOLDER}/3.png)`,
+    );
+  });
+
+  it('fileNote_TextRefused_TrashesNewFolder', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    backlog.refuse.set(FOLLOWUPS, 'Refused: x');
+
+    const result = await backlog.exports.fileNote(HOME, CHIP_TARGET, 'Text.', [
+      PNG_A,
+    ]);
+
+    expect(result).toEqual({ type: 'refused', reason: 'Refused: x' });
+    expect(callsOf(backlog.calls, 'trashDoc')).toEqual([
+      `${IMAGES}/${CHIP_FOLDER}`,
+    ]);
+    expect(backlog.sent).toEqual([]);
+  });
+
+  it('fileNote_TextRefusedOnReuse_TrashesWrittenFilesOnly', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: followupsFile({ title: 'Old item', body: OLD_BODY }),
+    });
+    await backlog.listed.writeBytes(`${IMAGES}/${OLD_FOLDER}/1.png`, PNG_A);
+    await backlog.listed.writeBytes(`${IMAGES}/${OLD_FOLDER}/2.png`, PNG_B);
+    backlog.refuse.set(FOLLOWUPS, 'Refused: x');
+
+    const result = await backlog.exports.fileNote(
+      HOME,
+      { type: 'append', path: FOLLOWUPS, title: 'Old item' },
+      'More.',
+      [PNG_A],
+    );
+
+    expect(result).toEqual({ type: 'refused', reason: 'Refused: x' });
+    expect(callsOf(backlog.calls, 'trashDoc')).toEqual([
+      `${IMAGES}/${OLD_FOLDER}/3.png`,
+    ]);
+  });
+
+  it('fileNote_AppendItemChangedOnDisk_TrashesImagesPassesChanged', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: followupsFile({ title: 'Old item', body: 'Old.' }),
+    });
+    const { writeBytes } = backlog.docs;
+    backlog.docs.writeBytes = async (path, bytes) => {
+      backlog.files.set(
+        FOLLOWUPS,
+        followupsFile({ title: 'Old item', body: 'Edited by hand.' }),
+      );
+      return writeBytes(path, bytes);
+    };
+
+    const result = await backlog.exports.fileNote(
+      HOME,
+      { type: 'append', path: FOLLOWUPS, title: 'Old item' },
+      'More.',
+      [PNG_A],
+    );
+
+    expect(result).toMatchObject({
+      type: 'changed',
+      title: 'Old item',
+      item: { body: 'Edited by hand.' },
+    });
+    expect(callsOf(backlog.calls, 'trashDoc')).toEqual([
+      `${IMAGES}/20261027-140309-old-item`,
+    ]);
+  });
+
+  it('fileNote_ImageWriteRejects_TrashesAndSkipsText', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    backlog.refuse.set(`${IMAGES}/${CHIP_FOLDER}/2.png`, 'Refused: y');
+
+    const result = await backlog.exports.fileNote(HOME, CHIP_TARGET, 'Text.', [
+      PNG_A,
+      PNG_B,
+    ]);
+
+    expect(result).toEqual({ type: 'refused', reason: 'Refused: y' });
+    expect(callsOf(backlog.calls, 'writeDoc')).toEqual([]);
+    expect(callsOf(backlog.calls, 'trashDoc')).toEqual([
+      `${IMAGES}/${CHIP_FOLDER}`,
+    ]);
+  });
+
+  it('fileNote_AppendMissingItem_WritesNothing', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+
+    const result = await backlog.exports.fileNote(
+      HOME,
+      { type: 'append', path: FOLLOWUPS, title: 'Gone' },
+      'More.',
+      [PNG_A],
+    );
+
+    expect(result).toEqual({ type: 'missing', title: 'Gone' });
+    expect(callsOf(backlog.calls, 'writeBytes')).toEqual([]);
+  });
+
+  it('fileNote_CreateOnNonTargetHome_WritesNothing', async () => {
+    const elsewhere = '/a/features';
+    const backlog = startBacklog(
+      [
+        entry('followup', `${elsewhere}/followups.md`, {}, elsewhere),
+        entry('followup', FOLLOWUPS),
+      ],
+      {
+        [`${elsewhere}/followups.md`]: FOLLOWUPS_TEXT,
+        [FOLLOWUPS]: FOLLOWUPS_TEXT,
+      },
+    );
+    backlog.git.topLevel.mockImplementation(async (folder) =>
+      folder === elsewhere ? '/a' : CLONE,
+    );
+
+    const result = await backlog.exports.fileNote(
+      elsewhere,
+      CHIP_TARGET,
+      'Text.',
+      [PNG_A],
+    );
+
+    expect(result).toEqual({
+      type: 'refused',
+      reason: `${elsewhere} is not r's create target`,
+    });
+    expect(callsOf(backlog.calls, 'writeBytes')).toEqual([]);
+  });
+
+  it('delete_ItemWithImages_TrashesFolderAfterWrite', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: followupsFile(
+        { title: 'A', body: 'See ![1](followups-images/F/1.png)' },
+        { title: 'B', body: 'Nothing linked.' },
+      ),
+    });
+    await backlog.invoke('load');
+
+    const result = await backlog.invoke('applyEdit', HOME, FOLLOWUPS, {
+      type: 'delete',
+      title: 'A',
+    });
+
+    expect(result).toMatchObject({ type: 'applied' });
+    expect(backlog.calls.filter(([name]) => name !== 'readDoc')).toEqual([
+      ['writeDoc', FOLLOWUPS],
+      ['trashDoc', `${IMAGES}/F`],
+    ]);
+  });
+
+  it('delete_FolderStillLinked_KeepsFolder', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: followupsFile(
+        { title: 'A', body: 'See ![1](followups-images/F/1.png)' },
+        { title: 'B', body: 'See ![2](followups-images/F/2.png)' },
+      ),
+    });
+    await backlog.invoke('load');
+
+    await backlog.invoke('applyEdit', HOME, FOLLOWUPS, {
+      type: 'delete',
+      title: 'A',
+    });
+
+    expect(callsOf(backlog.calls, 'trashDoc')).toEqual([]);
+  });
+
+  it('delete_LinkOutsideImagesFolder_KeepsIt', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: followupsFile({
+        title: 'A',
+        body: 'See ![1](../followups-images/F/1.png)',
+      }),
+    });
+    await backlog.invoke('load');
+
+    await backlog.invoke('applyEdit', HOME, FOLLOWUPS, {
+      type: 'delete',
+      title: 'A',
+    });
+
+    expect(callsOf(backlog.calls, 'trashDoc')).toEqual([]);
+  });
+
+  it('delete_WriteRefused_TrashesNothing', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: followupsFile({
+        title: 'A',
+        body: 'See ![1](followups-images/F/1.png)',
+      }),
+    });
+    await backlog.invoke('load');
+    backlog.refuse.set(FOLLOWUPS, 'Refused: x');
+
+    const result = await backlog.invoke('applyEdit', HOME, FOLLOWUPS, {
+      type: 'delete',
+      title: 'A',
+    });
+
+    expect(result).toEqual({ type: 'refused', reason: 'Refused: x' });
+    expect(callsOf(backlog.calls, 'trashDoc')).toEqual([]);
+  });
+
+  it('load_ImageChanged_Uncommitted', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    backlog.git.changedPaths.mockResolvedValue([
+      'docs/features/followups-images/F/1.png',
+    ]);
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(read.homes[0].uncommitted).toBe(true);
+  });
+
+  it('commit_ChangedImages_CommitsThemWithFollowups', async () => {
+    const imagePath = `docs/features/followups-images/${CHIP_FOLDER}/1.png`;
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: followupsFile(
+        { title: 'Alpha', body: 'Alpha body.' },
+        { title: CHIP_TITLE, body: 'The chip is grey.' },
+      ),
+    });
+    backlog.git.fileAtHead.mockResolvedValue(
+      followupsFile({ title: 'Alpha', body: 'Alpha body.' }),
+    );
+    backlog.git.changedPaths.mockImplementation(async (_root, pathspec) =>
+      pathspec === 'docs/features/followups-images' ? [imagePath] : [],
+    );
+    await backlog.invoke('load');
+
+    const message = await backlog.invoke('commit', HOME);
+
+    expect(message).toBe(
+      `Follow-ups edited in Backlog: added ${CHIP_TITLE}; images ${CHIP_FOLDER}`,
+    );
+    expect(backlog.git.commitPaths).toHaveBeenCalledWith(
+      CLONE,
+      ['docs/features/followups.md', imagePath],
+      message,
+    );
+  });
+
+  it('exports_Tags_TheTagsSetting', () => {
+    const backlog = startBacklog([], {});
+
+    expect(backlog.exports.tags()).toEqual(['agent-ready']);
   });
 });
