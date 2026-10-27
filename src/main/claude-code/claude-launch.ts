@@ -29,7 +29,8 @@ const NESTED_SESSION_ENV: readonly string[] = [
 
 // The environment every `claude` run for `profileDir` gets: a copy of `env`
 // without the nested-session variables, with `CLAUDE_CONFIG_DIR` set to
-// `profileDir` resolved against `homeDir` when one is given.
+// `profileDir` resolved against `homeDir` when one is given, and removed when
+// that folder is the default `<homeDir>/.claude`.
 export function claudeEnv(
   env: NodeJS.ProcessEnv,
   profileDir: string | null,
@@ -40,10 +41,22 @@ export function claudeEnv(
   for (const name of NESTED_SESSION_ENV) {
     delete launchEnv[name];
   }
-  if (profileDir !== null) {
-    launchEnv.CLAUDE_CONFIG_DIR = paths.expandTilde(profileDir, homeDir);
+  if (profileDir === null) {
+    return launchEnv;
+  }
+  const configDir = paths.expandTilde(profileDir, homeDir);
+  // macOS keeps the login for an unset CLAUDE_CONFIG_DIR under a different
+  // Keychain entry than for any set value, the default folder's included.
+  if (paths.samePath(configDir, defaultConfigFolder(homeDir, paths))) {
+    delete launchEnv.CLAUDE_CONFIG_DIR;
+  } else {
+    launchEnv.CLAUDE_CONFIG_DIR = configDir;
   }
   return launchEnv;
+}
+
+function defaultConfigFolder(homeDir: string, paths: Paths): string {
+  return paths.join(homeDir, '.claude');
 }
 
 // The arguments, folder and environment `claude` runs one session with:
@@ -81,9 +94,9 @@ export function claudeLaunch(
 }
 
 // The config folder a session launched with `claudeLaunch` uses: `profileDir`
-// resolved against `homeDir`, which the launch sets as `CLAUDE_CONFIG_DIR`,
-// else the non-empty `CLAUDE_CONFIG_DIR` the launch passes through, else
-// `<homeDir>/.claude`.
+// resolved against `homeDir`, which the launch sets as `CLAUDE_CONFIG_DIR`
+// (or leaves unset for the default folder), else the non-empty
+// `CLAUDE_CONFIG_DIR` the launch passes through, else `<homeDir>/.claude`.
 export function claudeConfigFolder(
   profileDir: string | null,
   env: NodeJS.ProcessEnv,
@@ -95,5 +108,5 @@ export function claudeConfigFolder(
   }
   const inherited = env.CLAUDE_CONFIG_DIR;
   const isInherited = inherited !== undefined && inherited !== '';
-  return isInherited ? inherited : paths.join(homeDir, '.claude');
+  return isInherited ? inherited : defaultConfigFolder(homeDir, paths);
 }

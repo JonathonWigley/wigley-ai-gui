@@ -348,6 +348,10 @@ Measured on 2.1.309, 2026-10-23. `claude auth` has `login`, `logout` and `status
 - The probe stopped there (12 s timeout, no sign-in finished): the exit code after a finished sign-in is not
   measured, so a reader confirms the result with `claude auth status --json` once the process ends.
 - **`claude auth logout`** was not run, so as not to sign a profile out.
+- **Keychain** (macOS, 2.1.311, 2026-10-27): the login for an unset `CLAUDE_CONFIG_DIR` is the Keychain item
+  `Claude Code-credentials`; any set value uses `Claude Code-credentials-<hash>`, even `$HOME/.claude`. A user signed
+  in from a plain terminal reads `loggedIn: false` with `CLAUDE_CONFIG_DIR=$HOME/.claude`, so the launch leaves the
+  variable unset for the default folder.
 
 ## Interrupt
 
