@@ -167,6 +167,8 @@ Review base: f676c293b1c5b8de5ce197b9ebf280691835f557
 - 07 · b3e9123 · drive runs r72/r73: checks 1,2,3,6 pass; 4 passes the close/no-return half, the saved-list half not settleable on the fake (fixed two-session list) and read from code (close touches no archive or transcript); 5 failed (entry-id clash on second process) and 6 showed the start-selected row not saved — both fixed in b3e9123, re-run chk072 passes A and B · concerns: a restored row never sent to reads history anyway and shows 'Earlier conversation not read' (error) on the fake; real Claude has no transcript for an unsent session either; isLive checks the row not the process, so a late ended from an old process could touch the new one
 ### Contract changes
 - AccountCommandDeps.toast: present → removed · why: no path uses it once the toast branch is gone · consumers: none · group 04
+- ChatViewDeps: + visibleSessionRested(): void; page/start.ts shares closeSessionDialogs between otherSessionShown and visibleSessionRested · why: R1 finding 3 · consumers: none outside chat page · fix 14ddad8
+- ChatChannel.messages.sessionRested: sent also for a failed new start → only when a started process exits · why: R1 pre-existing finding 8, user Fix now · consumers: page · fix 14ddad8
 ### Rulings
 - the most recent load() decides the save block: a later clean load lifts it — lets a repaired file be written without restart — a save after a repaired file writes (harmless) · group 01 · group 01
 - save() does not re-read the file; the unreadable flag is set by load() alone — whole-snapshot writes — a file damaged after a clean load is overwritten · group 01 · group 01
@@ -186,6 +188,9 @@ Review base: f676c293b1c5b8de5ce197b9ebf280691835f557
 - resume list group picks the folder by name (/chat-selftest Enter), since restarting chat-second records its folder newest — key path only — none · group 05 · group 05
 - missing-profile send described as a 'message not sent' toast naming the profile, not the exact error string — reworded errors don't stale the doc — none · group 06 · group 06
 - first process of a row keeps unprefixed entry ids; later processes get process-<n>: — smaller change — a consumer reading harness ids back would see the prefix · lead (fix b3e9123)
+- a refused send's message goes back ahead of anything typed since (joined by a newline), its images before newer ones; a closed tab gets nothing back — nothing overwritten — the user edits a joined message by hand · lead (fix 14ddad8)
+- historyPending clears only once profile and harness are found; the page asks loadHistory on every show — R1 finding 6 — one no-op IPC per show · lead (fix 14ddad8)
+- isLive also requires the event's processStart be current; ended removes its own process via a holder filled after harness.start — R1 finding 5 — a synchronous ended inside start stays in running (pre-existing gap) · lead (fix d29c0be)
 ### Review rounds
 - R1 implementation review · c4b411f · NEEDS FIXES (3 important, 4 minor, 1 pre-existing; 4 applied by lead in the next commit)
 ### Test gate
