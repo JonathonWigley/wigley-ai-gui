@@ -103,9 +103,9 @@ async function attempt(
 // A missing or empty file starts from `newFollowupsFile(newFileRepo)`; with
 // `newFileRepo` null, an edit, setTags or delete there is `missing`. An edit
 // whose item on disk differs from its `baseline` is `changed`, carrying the
-// item as it reads on disk. When the disk
-// changed since the read, the edit re-applies once to the new disk text; a
-// second change, or a write the guard refuses, is `refused`.
+// item as it reads on disk. When the disk changed since the read, the edit
+// re-applies once to the new disk text; a second change, or a write the guard
+// refuses, is `refused`.
 export async function writeFollowupEdit(
   deps: FollowupWriteDeps,
   path: string,
