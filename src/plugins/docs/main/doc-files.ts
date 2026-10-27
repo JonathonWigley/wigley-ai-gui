@@ -53,6 +53,8 @@ export interface DocFiles {
     text: string,
     expectedText: string | null,
   ): Promise<WriteResult>;
+  // `write` for bytes, with no changed-on-disk check.
+  writeBytes(path: string, bytes: Uint8Array): Promise<WriteResult>;
   create(request: CreateRequest): Promise<CreatedDoc>;
   // A skill's `SKILL.md` moves its whole folder. Resolves to the doc's new
   // path.
@@ -125,6 +127,15 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
       }
     }
     await files.write(target, text);
+    return { type: 'written' };
+  }
+
+  async function writeBytes(
+    path: string,
+    bytes: Uint8Array,
+  ): Promise<WriteResult> {
+    const target = await writeTarget(absolute(path));
+    await files.writeBytes(target, bytes);
     return { type: 'written' };
   }
 
@@ -317,6 +328,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
   return {
     read: async (path) => files.read(absolute(path)),
     write,
+    writeBytes,
     create,
     rename,
     trashTargets,

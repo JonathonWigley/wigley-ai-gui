@@ -293,6 +293,9 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       text: string,
       expectedText: string | null,
     ) => (await docs).docFiles.write(path, text, expectedText);
+    const writeBytes = async (path: string, bytes: Uint8Array) =>
+      (await docs).docFiles.writeBytes(path, bytes);
+    const trashDoc = async (path: string) => (await docs).docFiles.trash(path);
     channel.handle('loadIndex', async (sourceId) => {
       const read = await registry.load(sourceId);
       api.events.emit('indexLoaded', { sourceId });
@@ -314,9 +317,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     channel.handle('trashTargets', async (path) =>
       (await docs).docFiles.trashTargets(path),
     );
-    channel.handle('trashDoc', async (path) =>
-      (await docs).docFiles.trash(path),
-    );
+    channel.handle('trashDoc', trashDoc);
     channel.handle('listFolder', async (folder) =>
       (await docs).docFiles.list(folder),
     );
@@ -376,6 +377,8 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       rebuildMachineIndex: () => registry.rebuild(MACHINE_SOURCE_ID),
       readDoc,
       writeDoc,
+      writeBytes,
+      trashDoc,
       watchDoc: async (path, changed) => {
         const watch = await (await docs).docFiles.watch(path, changed);
         return { dispose: () => watch.close() };

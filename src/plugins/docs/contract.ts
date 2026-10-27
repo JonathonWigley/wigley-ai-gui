@@ -177,6 +177,10 @@ export interface DocsMainExports {
     text: string,
     expectedText: string | null,
   ): Promise<WriteResult>;
+  // Guarded as `writeDoc`, with no changed-on-disk check.
+  writeBytes(path: string, bytes: Uint8Array): Promise<WriteResult>;
+  // The channel's `trashDoc`.
+  trashDoc(path: string): Promise<TrashResult>;
   // Calls `changed` after the file at `path` changes or is replaced, until
   // `dispose`.
   watchDoc(path: string, changed: () => void): Promise<Disposable>;

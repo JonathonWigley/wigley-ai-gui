@@ -14,6 +14,8 @@ const HOME = '/Users/u';
 const ROOT = '/Users/u/dev/r';
 const SKILL = '/Users/u/dev/r/.claude/skills/s/SKILL.md';
 const PLUGIN_ROOT = '/Users/u/.claude/plugins/cache/m/p/1';
+const FEATURES_HOME = '/Users/u/wigley-features/r';
+const IMAGE_FOLDER = `${FEATURES_HOME}/followups-images/20261027-140309-fix-chip`;
 
 function entry(fields: Partial<IndexEntry> & Pick<IndexEntry, 'path'>) {
   return {
@@ -43,6 +45,15 @@ const ENTRIES: IndexEntry[] = [
     repo: null,
     root: PLUGIN_ROOT,
     plugin: 'p@m',
+  }),
+];
+
+const FEATURES_ENTRIES: IndexEntry[] = [
+  entry({
+    path: `${FEATURES_HOME}/followups.md`,
+    kind: 'followup',
+    source: 'features',
+    root: FEATURES_HOME,
   }),
 ];
 
@@ -301,6 +312,31 @@ describe('write', () => {
   });
 });
 
+describe('writeBytes', () => {
+  it('writeBytes_InsideFeaturesRoot_WritesBytesAndFolders', async () => {
+    const test = setUp({ entries: FEATURES_ENTRIES });
+
+    const result = await test.docFiles.writeBytes(
+      `${IMAGE_FOLDER}/1.png`,
+      new Uint8Array([1, 2, 3]),
+    );
+
+    expect(result).toEqual({ type: 'written' });
+    expect([...test.files.bytesOf(`${IMAGE_FOLDER}/1.png`)]).toEqual([1, 2, 3]);
+  });
+
+  it('writeBytes_Outside_RejectsNamingPath', async () => {
+    const test = setUp();
+
+    await expect(
+      test.docFiles.writeBytes('/Users/u/elsewhere/1.png', new Uint8Array([1])),
+    ).rejects.toThrow(
+      'Refused: /Users/u/elsewhere/1.png is outside the indexed folders',
+    );
+    expect(await test.files.stat('/Users/u/elsewhere/1.png')).toBeNull();
+  });
+});
+
 describe('create', () => {
   it('create_KindSkill_WritesTemplateAndFolder', async () => {
     const test = setUp();
@@ -517,6 +553,16 @@ describe('trash', () => {
     expect(trashed).toEqual({ trashed: [`${ROOT}/a.md`], error: null });
     expect(await test.files.stat(`${ROOT}/a.md`)).toBeNull();
     expect(await test.files.read(`${ROOT}/b.md`)).toBe('b');
+  });
+
+  it('trash_ImageFolderInsideFeaturesRoot_TrashesFolder', async () => {
+    const test = setUp({ entries: FEATURES_ENTRIES });
+    await test.files.writeBytes(`${IMAGE_FOLDER}/1.png`, new Uint8Array([1]));
+
+    const trashed = await test.docFiles.trash(IMAGE_FOLDER);
+
+    expect(trashed).toEqual({ trashed: [IMAGE_FOLDER], error: null });
+    expect(await test.files.stat(`${IMAGE_FOLDER}/1.png`)).toBeNull();
   });
 
   it('trash_LinkToFile_TrashesTargetThenLink', async () => {

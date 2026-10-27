@@ -114,6 +114,28 @@ describe('changeRefusal', () => {
     ).toBe('Refused: /Users/u/scratch/b.md is outside the indexed folders');
   });
 
+  it('changeRefusal_ImageInsideFeaturesRoot_Allowed', () => {
+    const home = '/Users/u/wigley-features/r';
+    const entries = [
+      entry({
+        path: `${home}/followups.md`,
+        kind: 'followup',
+        source: 'features',
+        repo: 'r',
+        root: home,
+      }),
+    ];
+
+    expect(
+      changeRefusal(
+        `${home}/followups-images/20261027-140309-fix-chip/1.png`,
+        entries,
+        FOLDERS,
+        posixPaths,
+      ),
+    ).toBe(null);
+  });
+
   it('changeRefusal_UnknownSourceEntryPath_Allowed', () => {
     const entries = [
       entry({
