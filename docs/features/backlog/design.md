@@ -45,17 +45,23 @@ plan is written from them. A decision here stands unless the user changes it.
   | `R` | rescan |
   | `Space v d` | show or hide done follow-ups |
   | `Space v a` | show only agent-ready follow-ups |
-  | `Cmd+Enter` / `Esc` | save / cancel the editor |
-  | `Ctrl+n` / `Ctrl+p` | next / previous editor field |
+  | `o` | open the selected row's file in Docs mode |
+  | `Ctrl+j` / `Ctrl+k` | scroll the detail a line (with `Shift`, half a page) |
   | `Alt+h` / `Alt+l` | list ↔ detail pane |
+  | `Cmd+Enter` | save the editor |
+  | `Esc` | in a box's normal mode, leave the box; on the editor page, cancel (a changed draft asks to discard first) |
+  | `Ctrl+n` / `Ctrl+p` | next / previous editor field |
+  | `T` | in the editor, pick a tag for the draft's Tags field |
 
-  `C` is uppercase so the one outward step is never a single lowercase slip.
+  `C` is uppercase so the one outward step is never a single lowercase slip. The editor's `Cmd+Enter`, `Ctrl+n`
+  and `Ctrl+p` carry no `where`, so they fire inside a box as well as on the page; `Esc` and `T` carry one.
 
 ## Follow-ups
 
 - Backlog parses each follow-up file itself through the shared module, so a save shows at once without waiting on an
   index rebuild. The index supplies which files exist and their repo and home.
-- The structured editor has a title, the one line, tags, and a vim box for the body. Saving rewrites the `##`
+- The structured editor has four vim boxes: title, one line, tags (comma-separated) and body. A line break typed
+  in the first three joins the lines with a space. Saving rewrites the `##`
   section and its Contents line together (or the list item, in a list-shaped file), which hand edits let drift.
 - Create writes to the repo's one features home. A home with no `followups.md` gets one in the canonical `##` +
   Contents shape. A file of `##` sections with no Contents list gains one, built from its headings, on its first
@@ -65,7 +71,7 @@ plan is written from them. A decision here stands unless the user changes it.
   removal; there is no separate mark-done command.
 - A file changed on disk while the user edits an item: the edit is one item operation, so it re-applies to the new
   text by the item's title, rather than a whole-file conflict prompt. When the item is gone from the new text, the
-  editor says so and keeps the user's draft.
+  editor says so and keeps the user's draft. A second change on disk during that one retry refuses the write.
 - Backlog watches the follow-up files it lists, so an agent's append mid-session shows live.
 - An item's images live in the home's `followups-images/<folder>/`, linked from its body
   (`docs/features/notes/design.md`). Delete trashes each image folder the deleted item's body links.
@@ -75,7 +81,8 @@ plan is written from them. A decision here stands unless the user changes it.
 - A tag lives in the follow-up's own line: one italic span after the dash, comma-separated, closed by a colon
   (`- **Title** — *agent-ready*: gist`). A single tag reads exactly like the older `*needs a feature plan*:` marker,
   so existing files parse unchanged. The shape and the criteria for `agent-ready` live in wigley-ai-marketplace's
-  `skills/review/triage.md` § The project's follow-ups; the docs index parses tags into `meta.tags`.
+  `skills/review/triage.md` § The project's follow-ups; the docs index parses tags into `meta.tags`. In a file of
+  `##` sections the span is read from the item's Contents line only, and `_a, b_:` reads like `*a, b*:`.
 - The tag list is a Backlog setting, defaulting to `agent-ready` and `needs a feature plan`. `T` picks from it, and a
   tag found in a file but missing from the list still shows.
 - Skills tag each follow-up they write. A one-time agent pass tagged the follow-ups written before this feature. The
@@ -91,18 +98,22 @@ plan is written from them. A decision here stands unless the user changes it.
 
 - An edit to an in-repo home stays uncommitted, and the home shows an uncommitted chip. `C` commits that home's
   follow-up files and the changed files under its `followups-images/`, never anything else in the clone, with the message `Follow-ups edited in Backlog: added …;
-  edited …; removed …; tagged …`, built from the edits since the last commit. The user's press decides when a shared
+  edited …; removed …; tagged …` (an empty part left out), built by matching each file's items by title between its
+  parse at HEAD and its parse on disk. `C` with no item changed commits nothing. The user's press decides when a shared
   file is committed, so a peer agent's half-written entry is never swept in by an automatic commit.
 - `~/wigley-features/` homes are not in git and show no chip.
-- Git runs behind a `Git` contract with one adapter over ProcessRunner (`src/main/git/`). Docs' plugin statuses move
-  onto it, so the app runs `git` in one place.
+- Git runs behind a `Git` contract with one adapter over ProcessRunner (`src/main/git/`). Its methods are
+  `topLevel`, `hasUpstream`, `changedPaths`, `unpushedPaths`, `upstreamBlobs`, `fetch`, `lastFetch`, `fileAtHead`
+  and `commitPaths`. Docs' plugin statuses move onto it, so the app runs `git` in one place, except the Backlog
+  self-test's fixture repo, which runs git through `services.processes`.
 
 ## Seams
 
-- Docs owns the index and the write guard. It exports the machine index read and its guarded write from its main
-  part, and Backlog goes through them, so the changed-on-disk check stays in one place.
-- `src/shared/followups/` is the one writer of the follow-up shape in the app: Backlog and Docs' create dialog both
-  call it.
+- Docs owns the index and the write guard. It exports the machine index read and rebuild, the doc read, the guarded
+  write and the file watch from its main part, and Backlog goes through them, so the changed-on-disk check stays in
+  one place.
+- `src/shared/followups/` is the one writer of the follow-up shape in the app, and is pure (text in, text out, no
+  I/O): Backlog and Docs' create dialog both call it.
 - Backlog's main part exports its homes and the follow-up write, with the item's images, to the `notes` plugin, so
   every follow-up and image write in the app other than Docs' create dialog goes through Backlog.
 - The follow-up format has two readers in two languages: the shared module here, and `docs_index.py`'s parser for

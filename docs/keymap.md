@@ -46,7 +46,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   (its prose's line height, the editor's own line in the editor), key repeat supplying the
   speed, and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll half a page, Shift being the bigger step. The
   views are the doc, its editor too while editing, the chat transcript, the form and its review,
-  the primer card and its review, and the gallery; the docs tree takes both pairs and scrolls the doc beside it.
+  the primer card and its review, the Backlog list and detail, and the gallery; the docs tree takes both pairs and scrolls the doc beside it.
   In the editor the line scroll keeps the cursor unless it would leave the view, as vim's
   `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
   `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor. Other list
@@ -58,7 +58,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   every vim mode (forms' notes, reason and comment boxes). Every view with more than one box
   takes them, so the keys that move between boxes are the same on every page. Inside a box they
   take the key from vim's insert-mode completion.
-- **Alt+hjkl** moves focus between panes (`Alt+h`/`Alt+l` between the docs tree and the doc).
+- **Alt+hjkl** moves focus between panes (`Alt+h`/`Alt+l` between the docs tree and the doc, and the Backlog list and detail).
   Reserved for when the app has them: `Alt+Shift+hjkl` resize, `Ctrl+Alt+hjkl` swap,
   `Alt+'` / `Alt+;` split, `Alt+w` close a pane.
 - **Alt+o / Alt+i** next and previous tab; **Alt+Shift+o / Alt+Shift+i** next and previous

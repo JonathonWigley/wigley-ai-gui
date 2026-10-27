@@ -102,9 +102,10 @@ src/main/        core main process; main.ts is its composition root
                  and watching, behind Files
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
                  ProcessRunner
-  git/           git adapter behind Git, over ProcessRunner: a clone's file statuses, upstream, last fetch, fetch
-                 and a commit of named paths only → the only place the app runs `git`, except the Backlog
-                 self-test's fixture repo (its `init`, first commit and `git log` check)
+  git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
+                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, and a commit of named paths
+                 only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
+                 `config`, `add` and first commit, and its `git log` check, run through `services.processes`)
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import
@@ -271,6 +272,7 @@ round; primer: an open primer), since main, not the page, decides.
   (`formatAccelerator`) the same way. The core and the editor
   host report a pending prefix through `api.keys`; the editor host reads it from vim's pending input, behind
   `EditorHost`.
+
 - **A theme** is a JSON file of a `palette`, `tokens`, a `reduced` block of overrides for reduced transparency, and
   a `colorScheme`; a user theme sets `extends` to a base theme and lists only the tokens it changes. Every token has
   a kind: colour, length, duration, number, shadow, filter or raw CSS. A core token is declared with its kind in the
