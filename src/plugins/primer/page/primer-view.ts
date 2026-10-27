@@ -421,8 +421,9 @@ function cardKeyOf(primer: OpenPrimer): string {
 
 // The Feature row, then each group's tasks under its header, the Primer and
 // Every feature headers only over tasks and Extra tasks always, with a line
-// naming the rail scope's keys for adding one while it holds none. Each row's
-// click selects it; the selected row scrolls into view when `isRowChanged`.
+// saying so while it holds none, and the rail scope's keys for adding one when
+// bound. Each row's click selects it; the selected row scrolls into view when
+// `isRowChanged`.
 function drawRail(
   rail: HTMLElement,
   primer: OpenPrimer,

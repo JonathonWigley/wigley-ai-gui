@@ -253,6 +253,17 @@ describe('primer add-item box', () => {
     expect(setup.boxes.active()).toBeNull();
   });
 
+  it('adds the item once on focusRail', () => {
+    const setup = primerTabSetup();
+    typeNewItem(setup, 'Test the store');
+
+    setup.run('focusRail');
+
+    expect(itemCount(setup)).toBe(3);
+    expect(addedLines(setup.logs)).toEqual(['added item 3 on task 1']);
+    expect(setup.boxes.active()).toBeNull();
+  });
+
   it('leaves the card once the 20th item lands, focusing the task comment box on nextBox', () => {
     const setup = primerTabSetup({ entries: taskWithItems(19) });
     typeNewItem(setup, 'Test the store');
