@@ -25,10 +25,18 @@ session.
 - It holds one draft. Closing keeps the draft; sending or discarding it starts a fresh one. The draft, its images and
   their markup are kept in the plugin's data folder, so a reload or restart keeps them.
 - Rows, top to bottom: Target (a repo), Title, Body (a vim box), Tags (from Backlog's tag setting), the image strip
-  and the Session chip. The follow-up's one line is the body's first sentence. The title is required for a follow-up
-  and optional for a launched session.
+  and the Session chip. The follow-up's one line is the body's first sentence. The title is required for a new follow-up
+  and optional for an append and for a launched session.
 - Target defaults to the repo of the attached session's folder. A fuzzy picker lists every repo with a features home.
-  The target is also the launched session's folder.
+  A launched session starts in the target home's clone. For a home outside its clone it starts in the attached
+  session's folder, else an open session row's folder, that maps to the target repo; with none, the send is refused
+  with `No folder for <repo>; attach a session in that repo`.
+- The `Space n` actions work from the body box in its normal mode only; in insert mode `Space` types a space, so
+  `Esc` comes first. `Cmd+Enter` still sends a new follow-up.
+- While a send or discard is in flight, the popup locks its fields, capture, paste and drop.
+- When a send or clear succeeds but writing the fresh `draft.json` fails, the popup shows a fresh note while disk
+  keeps the sent draft, so after a restart the sent note comes back and could be sent twice. This is a deliberate
+  trade (`draft-store.ts` `clear`).
 
 ## Images
 
@@ -58,7 +66,7 @@ session.
 - **Append to a follow-up** — the fuzzy picker lists the target home's open follow-ups; the note's title, body and
   session line, then its image links, append to that item's body. The append carries the item as it read it, so a hand edit
   to the item meanwhile is refused (`<title> changed on disk; send again`) and the draft is kept.
-- **New session** — chat starts a session in the target folder, under the attached session's profile when chat owns
+- **New session** — chat starts a session in the folder the target resolves to (see The popup), under the attached session's profile when chat owns
   that session, else chat's first profile. Its first message is the brief from the `notes.launchBrief` setting
   (default `A nitpick to fix, noted while working. Make the change, then report.`), then the note's title, body and
   session line, with the images attached under chat's per-image cap (5 MB of base64 text). The user stays where they were; the session runs

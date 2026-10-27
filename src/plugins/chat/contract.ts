@@ -143,7 +143,9 @@ export interface ChatChannel extends ChannelShape {
 // The main part's exports.
 export interface ChatMainExports {
   // Starts a session and sends `message` as its first message; leaves the
-  // selected row as it was. Resolves to the new row's sessionId.
+  // selected row as it was. Resolves to the new row's sessionId; rejects,
+  // opening nothing, on an image chat refuses (with the refusal text), an
+  // unknown profile, or no chat harness.
   launch(request: LaunchRequest): Promise<string>;
   // Chat's profile names, in settings order.
   profileNames(): string[];

@@ -160,7 +160,8 @@ export interface SourceRead extends IndexLoad {
 }
 
 // The docs main part's exports, each running the same code as the channel
-// method of its name. `addSource` throws on an id already registered; while
+// method of its name, except `writeBytes`, which has no channel method and is
+// guarded as `writeDoc`. `addSource` throws on an id already registered; while
 // the source is registered, the entries it last loaded allow changes to their
 // docs. None of them emits `indexLoaded`.
 export interface DocsMainExports {

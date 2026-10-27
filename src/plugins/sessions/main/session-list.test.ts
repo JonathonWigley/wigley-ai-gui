@@ -568,7 +568,7 @@ describe('createSessionList', () => {
     expect(state.rows.map((row) => row.marked)).toEqual([false, false]);
   });
 
-  it('open_SelectFalse_KeepsSelectedRow', () => {
+  it('open with select false keeps the selected row', () => {
     const { list, emitted } = setUp();
     const selected = list.connect(info('/work/x'));
     list.activate(selected.session.id);
@@ -584,7 +584,7 @@ describe('createSessionList', () => {
     expect(emitted.at(-1)).toEqual(['connected', opened.session]);
   });
 
-  it('open_SelectFalse_NoneSelected_StaysNone', () => {
+  it('open with select false and no selection stays unselected', () => {
     const { list } = setUp();
 
     list.open(owned('h'), { select: false });

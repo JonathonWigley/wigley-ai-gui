@@ -553,7 +553,7 @@ export const defaultKeymap = {
     { keys: '<C-n>', scope: 'notes.popup', command: 'notes.nextBox' },
     { keys: '<C-p>', scope: 'notes.popup', command: 'notes.prevBox' },
     { keys: '<D-Enter>', scope: 'notes.popup', command: 'notes.sendFollowup' },
-    // Leader binds fire on the page and in the body box alike.
+    // Leader binds fire on the page and in the body box in normal mode.
     { keys: '<Leader>nf', scope: 'notes.popup', command: 'notes.sendFollowup' },
     {
       keys: '<Leader>na',

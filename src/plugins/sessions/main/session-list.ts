@@ -140,14 +140,14 @@ function routeCall(
 
 // Connected and owned sessions and the sidebar rows main holds for them. A
 // connected session gets its row at connect, unselected; an owned session gets
-// its row at open, selected unless opened with `select` false, is joined by each relay carrying its host id
-// without a row of its own, a newer relay taking the join from an older one,
-// and ends only by its `end()`. Each session keeps
-// its label while it lasts; a closed row comes back at the end with the
-// session's next mark. `mark`, `activate` and `closeSession` send the whole
-// state only when it changed, and log and ignore a session they cannot act on;
-// `closeSession` logs and keeps a row a close guard refuses, returning false
-// for every row it leaves open, and emits `closed` for a row it closes.
+// its row at open, selected unless opened with `select` false, is joined by
+// each relay carrying its host id without a row of its own, a newer relay
+// taking the join from an older one, and ends only by its `end()`. Each
+// session keeps its label while it lasts; a closed row comes back at the end
+// with the session's next mark. `mark`, `activate` and `closeSession` send the
+// whole state only when it changed, and log and ignore a session they cannot
+// act on; `closeSession` logs and keeps a row a close guard refuses, returning
+// false for every row it leaves open, and emits `closed` for a row it closes.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   const closeGuards: ((sessionId: string) => boolean)[] = [];

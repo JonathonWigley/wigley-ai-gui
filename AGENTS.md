@@ -141,7 +141,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   backlog/       manifest.ts, contract.ts, main/ (the follow-up files, plans and features of every features home,
                  read through docs' index and written through its guard, file watching, each in-repo home's
                  uncommitted state and its Commit, each item's images under the home's `followups-images/`, the
-                 homes and follow-up write it exports to notes), page/ (Backlog mode: repos and homes in the side bar, the
+                 `load`, `tags` and `fileNote` it exports to notes), page/ (Backlog mode: repos and homes in the side bar, the
                  follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
                  permission_prompt MCP tool, recent folders, archived sessions, resume, sign-in), page/ (the
