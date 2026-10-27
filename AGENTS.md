@@ -75,6 +75,10 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  the channel and scripted presenters, the MCP tool session, and the drive actions that open a
                  form type's forms in a drive run's sessions → main-side only
   paths/         the POSIX and Windows adapters behind `Paths`, picked by each composition root
+  followups/     the follow-up file module: parses a features home's follow-ups file into items (title, one line,
+                 tags, body, line span, done) and turns a create, edit, tag change or delete into the file's new
+                 text, in the file's own shape (triage.md § The project's follow-ups in wigley-ai-marketplace) →
+                 pure, no I/O; Backlog and Docs' create dialog both write follow-ups through it
   page/          page-only DOM builders plugins share: the layout loader, the reducer store, autosave, editor boxes,
                  key hints, the confirm prompt, the session form tab helper, the session form status line, and the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
@@ -98,6 +102,8 @@ src/main/        core main process; main.ts is its composition root
                  and watching, behind Files
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
                  ProcessRunner
+  git/           git adapter behind Git, over ProcessRunner: a clone's file statuses, upstream, last fetch, fetch
+                 and a commit of named paths only → the only place the app runs `git`
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import
@@ -127,6 +133,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  shown as Docs mode over the machine's index, its tree in the side
                  bar, and as a split of tree and doc in each view `addView` hands out, each session's Docs tab
                  among them)
+  backlog/       manifest.ts, contract.ts, main/ (the follow-up files, plans and features of every features home,
+                 read through docs' index and written through its guard, file watching, each in-repo home's
+                 uncommitted state and its Commit), page/ (Backlog mode: repos and homes in the side bar, the
+                 follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
                  permission_prompt MCP tool, recent folders, archived sessions, resume, sign-in), page/ (the
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
@@ -314,7 +324,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool.
-- **An ambient service** — the clock, ids, the home folder, files (with watching), processes, opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
+- **An ambient service** — the clock, ids, the home folder, files (with watching), processes, git (main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. The page's home folder
   is the real path of main's, served in the config, so every view shows a folder under it as `~` through
   `services.homeDir`.

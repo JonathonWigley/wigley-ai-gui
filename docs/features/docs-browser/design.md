@@ -126,7 +126,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - **Create**: `a` new doc by kind, `A` new file by path. By kind covers instructions, rule, skill, subagent, command,
   learning, reference, feature doc and follow-up; each kind offers only the places the index finds it in, and writes
   at its standard path with a starter template (a skill gets `name`/`description` frontmatter); a follow-up is
-  appended as a `- **title** — …` item to the home's `followups.md`. The path box lists matching folders and files
+  appended to the home's `followups.md` through the shared follow-up file module (`src/shared/followups/`), in the
+  file's own shape, as Backlog mode writes it (`../backlog/design.md`). The path box lists matching folders and files
   under the chosen place as the user types, and Tab completes the shared part, as a shell does.
 - **Rename** (`r`) uses the same path box, so it also moves a file. **Delete** (`d`) moves the file to the Trash after
   a confirm prompt; a skill's whole folder goes with its SKILL.md. Every link the index walked to the file or
