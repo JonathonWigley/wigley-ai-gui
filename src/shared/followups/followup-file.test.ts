@@ -161,6 +161,144 @@ describe('parseFollowups on a sectioned file', () => {
   });
 });
 
+describe('parseFollowups Contents list', () => {
+  const LOOSE = lines(
+    '**Contents**',
+    '',
+    'One line per follow-up.',
+    '',
+    '- **One** — *art*: first',
+    '',
+    '- **Two** — second',
+    '',
+    '## One',
+    '',
+    'Body one.',
+    '',
+    '## Two',
+    '',
+    'Body two.',
+  );
+
+  it('reads every list item before the first ## heading, past blanks and prose', () => {
+    expect(
+      parseFollowups(LOOSE).items.map((item) => [
+        item.title,
+        item.tags,
+        item.oneLine,
+      ]),
+    ).toEqual([
+      ['One', ['art'], 'first'],
+      ['Two', [], 'second'],
+    ]);
+  });
+
+  it('reads a wrapped Contents line as one line', () => {
+    const text = lines(
+      '**Contents**',
+      '',
+      '- **One** — starts here',
+      '  and wraps on.',
+      '',
+      '## One',
+      '',
+      'Body.',
+    );
+
+    expect(itemNamed(text, 'One').oneLine).toBe('starts here and wraps on.');
+  });
+
+  it('adds a Contents line to a loose list after a blank line', () => {
+    const draft = { title: 'Three', oneLine: 'third', tags: [], body: '' };
+
+    expect(appliedText(LOOSE, { type: 'create', draft })).toBe(
+      LOOSE.replace(
+        '- **Two** — second\n',
+        '- **Two** — second\n\n- **Three** — third\n',
+      ) + '\n## Three\n\nthird\n',
+    );
+  });
+
+  it('deletes a loose Contents line with one of its blank lines', () => {
+    expect(appliedText(LOOSE, { type: 'delete', title: 'One' })).toBe(
+      lines(
+        '**Contents**',
+        '',
+        'One line per follow-up.',
+        '',
+        '- **Two** — second',
+        '',
+        '## Two',
+        '',
+        'Body two.',
+      ),
+    );
+  });
+
+  it('deletes the only Contents line of a new file without a double blank', () => {
+    const draft = { title: 'Only', oneLine: '', tags: [], body: '' };
+    const created = appliedText(newFollowupsFile('game'), {
+      type: 'create',
+      draft,
+    });
+
+    expect(appliedText(created, { type: 'delete', title: 'Only' })).toBe(
+      newFollowupsFile('game'),
+    );
+  });
+});
+
+describe('CRLF files', () => {
+  it('reads a sectioned file', () => {
+    const text = SECTIONED.replaceAll('\n', '\r\n');
+
+    expect(itemNamed(text, 'Fruit Blast coins')).toMatchObject({
+      tags: ['needs a feature plan'],
+      oneLine: 'replace the sink',
+      body: 'Coins sink too fast.\n\n### What\n\nReplace the sink.',
+    });
+  });
+
+  it('reads a list file', () => {
+    const text = lines('- **One** — *art*: a', '- Two. b').replaceAll(
+      '\n',
+      '\r\n',
+    );
+
+    expect(
+      parseFollowups(text).items.map((item) => [item.title, item.tags]),
+    ).toEqual([
+      ['One', ['art']],
+      ['Two', []],
+    ]);
+  });
+
+  it('writes an edit back in CRLF, the Contents line not duplicated', () => {
+    const text = SECTIONED.replaceAll('\n', '\r\n');
+
+    const tagged = appliedText(text, {
+      type: 'setTags',
+      title: 'Reward popup',
+      tags: ['art'],
+    });
+
+    expect(tagged).toBe(
+      SECTIONED.replace(
+        '- **`Reward` popup** — fix the overlap',
+        '- **`Reward` popup** — *art*: fix the overlap',
+      ).replaceAll('\n', '\r\n'),
+    );
+  });
+
+  it('writes a list item create back in CRLF', () => {
+    const draft = { title: 'Two', oneLine: 'b', tags: [], body: '' };
+
+    expect(appliedText('- **One** — a\r\n', { type: 'create', draft })).toBe(
+      '- **One** — a\r\n- **Two** — b\r\n',
+    );
+  });
+});
+
 describe('parseFollowups on a list file', () => {
   it('reads bold-lead tags and oneLine', () => {
     const text = lines(
@@ -200,6 +338,17 @@ describe('parseFollowups on a list file', () => {
     expect(items.map((item) => [item.title, item.oneLine])).toEqual([
       ['Command palette', 'Opens on Cmd+P.'],
       ['Vim marks', ''],
+    ]);
+  });
+
+  it('reads a tag span after a first-sentence title', () => {
+    const item = parseFollowups(lines('- Fix it. *agent-ready*: gist'))
+      .items[0];
+
+    expect([item.title, item.tags, item.oneLine]).toEqual([
+      'Fix it',
+      ['agent-ready'],
+      'gist',
     ]);
   });
 
@@ -263,6 +412,17 @@ describe('parseFollowups on a list file', () => {
     expect(parseFollowups(text).items.map((item) => item.title)).toEqual([
       'Real',
     ]);
+  });
+});
+
+describe('parseFollowups on a list file with a fence at column 0', () => {
+  it('ends the open item at the fence', () => {
+    const text = lines('- **Real** — gist', '```', 'code', '```');
+
+    expect(parseFollowups(text).items[0]).toMatchObject({
+      body: '',
+      endLine: 1,
+    });
   });
 });
 
@@ -487,6 +647,52 @@ describe('applyFollowupEdit edit', () => {
   });
 });
 
+describe('applyFollowupEdit on a wrapped Contents line', () => {
+  const WRAPPED = lines(
+    '**Contents**',
+    '',
+    '- **One** — starts here',
+    '  and wraps on.',
+    '',
+    '## One',
+    '',
+    'Body.',
+  );
+
+  it('keeps the wrapped text through an edit', () => {
+    const draft = itemNamed(WRAPPED, 'One');
+
+    expect(
+      appliedText(WRAPPED, {
+        type: 'edit',
+        title: 'One',
+        draft: {
+          title: draft.title,
+          oneLine: draft.oneLine,
+          tags: ['art'],
+          body: draft.body,
+        },
+      }),
+    ).toContain('- **One** — *art*: starts here and wraps on.\n\n## One');
+  });
+
+  it('keeps the wrapped text through a tag change, without a stray line', () => {
+    expect(
+      appliedText(WRAPPED, { type: 'setTags', title: 'One', tags: ['art'] }),
+    ).toBe(
+      lines(
+        '**Contents**',
+        '',
+        '- **One** — *art*: starts here and wraps on.',
+        '',
+        '## One',
+        '',
+        'Body.',
+      ),
+    );
+  });
+});
+
 describe('applyFollowupEdit setTags', () => {
   it('adds a tag by changing only the Contents line', () => {
     const result = applyFollowupEdit(SECTIONED, {
@@ -619,6 +825,20 @@ describe('applyFollowupEdit delete', () => {
       text: lines('- **Two** — b'),
       line: 1,
     });
+  });
+
+  it('removes a list item between blank lines with one of them', () => {
+    const text = lines(
+      '- **One** — a',
+      '',
+      '- **Two** — b',
+      '',
+      '- **Three** — c',
+    );
+
+    expect(appliedText(text, { type: 'delete', title: 'Two' })).toBe(
+      lines('- **One** — a', '', '- **Three** — c'),
+    );
   });
 
   it('clamps the line to the file end', () => {

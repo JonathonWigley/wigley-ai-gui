@@ -99,9 +99,11 @@ interface Splice {
   insert: string[];
 }
 
+// `lineEnding` is `\r\n` when the file uses CRLF, so an edit writes it back.
 interface SplitText {
   lines: string[];
   endsWithNewline: boolean;
+  lineEnding: string;
 }
 
 export function parseFollowups(text: string): FollowupFile {
@@ -175,19 +177,23 @@ export function newFollowupsFile(repo: string): string {
 }
 
 function splitText(text: string): SplitText {
+  const lineEnding = text.includes('\r\n') ? '\r\n' : '\n';
   if (text === '') {
-    return { lines: [], endsWithNewline: true };
+    return { lines: [], endsWithNewline: true, lineEnding };
   }
   const endsWithNewline = text.endsWith('\n');
-  const lines = (endsWithNewline ? text.slice(0, -1) : text).split('\n');
-  return { lines, endsWithNewline };
+  const lines = (endsWithNewline ? text.slice(0, -1) : text)
+    .split('\n')
+    .map((line) => line.replace(/\r$/, ''));
+  return { lines, endsWithNewline, lineEnding };
 }
 
-function joinText(lines: string[], endsWithNewline: boolean): string {
+function joinText(lines: string[], source: SplitText): string {
   if (lines.length === 0) {
     return '';
   }
-  return lines.join('\n') + (endsWithNewline ? '\n' : '');
+  const ending = source.endsWithNewline ? source.lineEnding : '';
+  return lines.join(source.lineEnding) + ending;
 }
 
 function applied(
@@ -197,7 +203,7 @@ function applied(
 ): FollowupEditResult {
   return {
     type: 'applied',
-    text: joinText(lines, source.endsWithNewline),
+    text: joinText(lines, source),
     line,
   };
 }
@@ -281,8 +287,9 @@ function readLayout(lines: string[]): Layout {
   };
 }
 
-// The Contents list: the top-level list items right after the `**Contents**`
-// line and its blank lines, each with its indented continuation.
+// The Contents list: every top-level list item outside fences after the
+// `**Contents**` line and before the first `## ` heading, each with its
+// indented continuation, which its fields read as part of its line.
 function readContents(lines: string[], outside: number[]): ContentsList | null {
   const heading = outside.find(
     (index) => lines[index].trim() === CONTENTS_LINE,
@@ -290,26 +297,24 @@ function readContents(lines: string[], outside: number[]): ContentsList | null {
   if (heading === undefined) {
     return null;
   }
+  const firstSection =
+    outside.find((index) => lines[index].startsWith('## ')) ?? lines.length;
   const entries: ContentsEntry[] = [];
-  let index = heading + 1;
-  while (index < lines.length && isBlank(lines[index])) {
-    index++;
-  }
-  for (
-    let match = TOP_LEVEL_ITEM.exec(lines[index] ?? '');
-    match !== null;
-    match = TOP_LEVEL_ITEM.exec(lines[index] ?? '')
-  ) {
+  for (const index of outside) {
+    const match = TOP_LEVEL_ITEM.exec(lines[index]);
+    if (index <= heading || index >= firstSection || match === null) {
+      continue;
+    }
     let end = index;
     while (end + 1 < lines.length && isIndentedText(lines[end + 1])) {
       end++;
     }
+    const wrapped = lines.slice(index + 1, end + 1).map((line) => line.trim());
     entries.push({
       span: { start: index, end },
       marker: match[1],
-      fields: readLineFields(match[2]),
+      fields: readLineFields([match[2], ...wrapped].join(' ')),
     });
-    index = end + 1;
   }
   return { heading, entries };
 }
@@ -364,14 +369,16 @@ function startsWithShipped(text: string): boolean {
   return text.toLowerCase().startsWith('shipped');
 }
 
-// One item per top-level list item at column 0; the blank and indented lines
-// after it are its continuation.
+// One item per top-level list item at column 0 outside fences; the blank and
+// indented lines after it are its continuation, and any other line, a fence
+// line at column 0 included, ends it.
 function readListEntries(lines: string[], outside: number[]): Entry[] {
+  const isOutside = new Set(outside);
   const entries: Entry[] = [];
   let current: { start: number; marker: string; text: string } | null = null;
-  for (const index of outside) {
+  for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
-    const match = TOP_LEVEL_ITEM.exec(line);
+    const match = isOutside.has(index) ? TOP_LEVEL_ITEM.exec(line) : null;
     const isContinuation =
       current !== null && (isBlank(line) || /^\s/.test(line));
     if (current !== null && (match !== null || !isContinuation)) {
@@ -419,20 +426,7 @@ function listEntry(
 // `**<title>** — *<tags>*: <oneLine>`, or a first sentence as the title.
 function readLineFields(raw: string): LineFields {
   const { text, struck } = unstrike(raw.trim());
-  const boldEnd = text.startsWith('**') ? text.indexOf('**', 2) : -1;
-  if (boldEnd < 0) {
-    const sentenceEnd = text.indexOf('. ');
-    const sentence = sentenceEnd < 0 ? text : text.slice(0, sentenceEnd);
-    const rest = sentenceEnd < 0 ? '' : text.slice(sentenceEnd + 2);
-    return {
-      title: sentence.replace(/\.$/, ''),
-      oneLine: withoutLead(rest),
-      tags: [],
-      struck,
-    };
-  }
-  const title = text.slice(2, boldEnd).trim().replace(/:+$/, '').trim();
-  const rest = withoutLead(text.slice(boldEnd + 2));
+  const { title, rest } = splitTitle(text);
   const span = TAG_SPAN.exec(rest);
   if (span === null) {
     return { title, oneLine: rest, tags: [], struck };
@@ -442,6 +436,22 @@ function readLineFields(raw: string): LineFields {
     .map((tag) => tag.trim())
     .filter((tag) => tag !== '');
   return { title, oneLine: span[3].trim(), tags, struck };
+}
+
+// The bold lead, or else the first sentence (a trailing `.` dropped), and the
+// text after it, its leading colon, dash and spaces removed.
+function splitTitle(text: string): { title: string; rest: string } {
+  const boldEnd = text.startsWith('**') ? text.indexOf('**', 2) : -1;
+  if (boldEnd >= 0) {
+    return {
+      title: text.slice(2, boldEnd).trim().replace(/:+$/, '').trim(),
+      rest: withoutLead(text.slice(boldEnd + 2)),
+    };
+  }
+  const sentenceEnd = text.indexOf('. ');
+  const sentence = sentenceEnd < 0 ? text : text.slice(0, sentenceEnd);
+  const rest = sentenceEnd < 0 ? '' : text.slice(sentenceEnd + 2);
+  return { title: sentence.replace(/\.$/, ''), rest: withoutLead(rest) };
 }
 
 function withoutLead(text: string): string {
@@ -521,7 +531,8 @@ function listItemLines(
   ];
 }
 
-// Inserts `line` after the last Contents line, or right after `**Contents**`
+// Inserts `line` after the last Contents line, a blank line before it when
+// the list's items are separated by blank lines; or right after `**Contents**`
 // and its blank line, with a blank line between it and what follows.
 function contentsInsertSplice(
   lines: string[],
@@ -530,7 +541,13 @@ function contentsInsertSplice(
 ): Splice {
   const last = contents.entries.at(-1);
   if (last !== undefined) {
-    return { at: last.span.end + 1, remove: 0, insert: [line] };
+    const isLoose = contents.entries.some(
+      (entry, position) =>
+        position > 0 &&
+        isBlank(lines[contents.entries[position - 1].span.end + 1]),
+    );
+    const leading = isLoose ? [''] : [];
+    return { at: last.span.end + 1, remove: 0, insert: [...leading, line] };
   }
   const afterHeading = contents.heading + 1;
   const hasBlankAfterHeading =
@@ -542,24 +559,19 @@ function contentsInsertSplice(
   return { at, remove: 0, insert: [...leading, line, ...trailing] };
 }
 
-// Writes the section's Contents line: its own when it has one, else a new
-// line in the list.
+// Writes the section's Contents line: over its own, wrapped lines included,
+// when it has one, else as a new line in the list.
 function contentsLineSplice(
   lines: string[],
   layout: Layout,
   entry: Entry,
   line: string,
-  wholeEntry: boolean,
 ): Splice {
   if (entry.contents === null) {
     return contentsInsertSplice(lines, requireContents(layout), line);
   }
   const { start, end } = entry.contents.span;
-  return {
-    at: start,
-    remove: wholeEntry ? end - start + 1 : 1,
-    insert: [line],
-  };
+  return { at: start, remove: end - start + 1, insert: [line] };
 }
 
 function requireContents(layout: Layout): ContentsList {
@@ -657,6 +669,20 @@ function createSplices(
   ];
 }
 
+// Removes `span`, and the blank line after it when it sits between two.
+function blankSeparatedRemoval(lines: string[], span: LineSpan): Splice {
+  const hasBlankAfter =
+    span.end + 1 < lines.length && isBlank(lines[span.end + 1]);
+  const hasBlankBefore = span.start > 0 && isBlank(lines[span.start - 1]);
+  const isBetweenBlanks = hasBlankAfter && hasBlankBefore;
+  const length = span.end - span.start + 1;
+  return {
+    at: span.start,
+    remove: length + (isBetweenBlanks ? 1 : 0),
+    insert: [],
+  };
+}
+
 function nextMarker(marker: string): string {
   const number = NUMBERED_MARKER.exec(marker);
   return number === null ? marker : `${Number(number[1]) + 1}. `;
@@ -686,7 +712,7 @@ function editSplices(
     entry.contents?.fields.struck ?? false,
   );
   return [
-    contentsLineSplice(lines, layout, entry, contentsLine, true),
+    contentsLineSplice(lines, layout, entry, contentsLine),
     {
       at: start,
       remove: end - start + 1,
@@ -730,11 +756,12 @@ function setTagsSplices(
           contents.fields.oneLine,
           contents.fields.struck,
         );
-  return [contentsLineSplice(lines, layout, entry, line, false)];
+  return [contentsLineSplice(lines, layout, entry, line)];
 }
 
 // Removes the section (and one blank line after it) with its Contents line, or
-// the list item with its continuation.
+// the list item with its continuation. A removed Contents line or list item
+// that sat between two blank lines takes one of them along.
 function deleteEntry(
   lines: string[],
   source: SplitText,
@@ -743,20 +770,22 @@ function deleteEntry(
 ): FollowupEditResult {
   const { start, end } = entry.span;
   const hasBlankAfter = end + 1 < lines.length && isBlank(lines[end + 1]);
-  const removesBlankAfter = shape === 'sections' && hasBlankAfter;
-  const removed = end - start + 1 + (removesBlankAfter ? 1 : 0);
-  const splices: Splice[] = [{ at: start, remove: removed, insert: [] }];
+  const sectionRemoval: Splice = {
+    at: start,
+    remove: end - start + 1 + (hasBlankAfter ? 1 : 0),
+    insert: [],
+  };
+  const splices: Splice[] = [
+    shape === 'sections'
+      ? sectionRemoval
+      : blankSeparatedRemoval(lines, entry.span),
+  ];
   let removedAbove = 0;
   if (entry.contents !== null) {
-    const contentsSpan = entry.contents.span;
-    const contentsLength = contentsSpan.end - contentsSpan.start + 1;
-    splices.push({
-      at: contentsSpan.start,
-      remove: contentsLength,
-      insert: [],
-    });
-    if (contentsSpan.end < start) {
-      removedAbove = contentsLength;
+    const contentsSplice = blankSeparatedRemoval(lines, entry.contents.span);
+    splices.push(contentsSplice);
+    if (entry.contents.span.end < start) {
+      removedAbove = contentsSplice.remove;
     }
   }
   const wasLastText = end === lastNonBlank(lines, -1, lines.length);

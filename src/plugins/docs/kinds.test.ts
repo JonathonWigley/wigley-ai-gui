@@ -345,6 +345,20 @@ describe('createTarget', () => {
 
     expect(target.contents(null)).toEqual(created);
     expect(target.contents('')).toEqual(created);
+    expect(target.contents('\n  \n')).toEqual(created);
+  });
+
+  it('createTarget_FollowupMissingInRepoFile_NamesFileForClone', () => {
+    const target = createTarget(
+      'followup',
+      place('/Users/u/dev/game/docs/features', 'features'),
+      'new',
+      posixPaths,
+    );
+
+    expect(target.contents(null).text.split('\n')[0]).toBe(
+      '# Follow-ups — game',
+    );
   });
 
   it('createTarget_FollowupTitleTaken_Throws', () => {

@@ -230,17 +230,17 @@ function placeTitle(
 }
 
 // `existing` with a follow-up titled `name` created in the file's own shape,
-// the editor on its heading or list item. No file, or an emptied one, starts
-// as a new follow-ups file named after the place's folder.
+// the editor on its heading or list item. No file, or a blank one, starts as
+// a new follow-ups file named after the place's repo.
 function createdFollowup(
   name: string,
   existing: string | null,
   place: CreatePlace,
   paths: Paths,
 ): CreateContents {
-  const isMissing = existing === null || existing === '';
+  const isMissing = existing === null || existing.trim() === '';
   const text = isMissing
-    ? newFollowupsFile(paths.base(place.folder))
+    ? newFollowupsFile(followupsRepoName(place.folder, paths))
     : existing;
   const result = applyFollowupEdit(text, {
     type: 'create',
@@ -250,4 +250,14 @@ function createdFollowup(
     throw new Error(`A follow-up titled ${name} already exists`);
   }
   return { text: result.text, line: result.line };
+}
+
+// The repo a features home belongs to: the clone's folder for an in-repo
+// `<clone>/docs/features`, else the home's own folder, as in
+// `~/wigley-features/<repo>`.
+function followupsRepoName(folder: string, paths: Paths): string {
+  const docs = paths.parent(folder);
+  const isInRepoHome =
+    paths.base(folder) === 'features' && paths.base(docs) === 'docs';
+  return paths.base(isInRepoHome ? paths.parent(docs) : folder);
 }
