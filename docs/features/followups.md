@@ -43,7 +43,7 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - Files other than images (PDFs, text files) pasted or dropped into the chat's message box; images land in agent-chat
   plan C.
 - Each dev drive run could build main and preload into its own `.drive/<run>/build` and launch Electron on it directly instead of through `electron-forge start`, so drive runs and the user's `npm start` stop sharing `.vite/build` (forge plugin-vite fixes that folder at `<project>/.vite`). The start lock in `scripts/` covers drive and self-test starts only. Do this if the user's `npm start` keeps getting hit.
-- **Window adapter misses page load 1** — *agent-ready*: The window adapter numbers page loads from 1 only because both `electronDrivenWindow` calls (`src/main/main.ts`
+- **Window adapter misses page load 1** — The window adapter numbers page loads from 1 only because both `electronDrivenWindow` calls (`src/main/main.ts`
   `createWindow`, `src/main/selftest.ts` `startSelfTest`) run in the same synchronous pass that starts the first load
   (`src/main/window.ts` `loadURL`); an `await` added between them shifts every load number down by one, so dev starts
   hold the start lock the full 10 s instead of releasing on the startup reload. Create the adapter before the first
@@ -55,7 +55,7 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
   permission-prompt tool path for it is undocumented, so it starts with a spike.
 - When the docs editor lands: an editor key sequence bound only in other scopes is taken from vim in every editor, so a normal-mode Esc in a docs box runs nothing and logs `<Esc> has no bind in docs.…` while forms binds `<Esc>`; a new round selects its session's Form tab, switching away from a Docs tab mid-edit; and a row removed while its round stays open rebuilds that round's Form tab in a hidden body nothing drops after the round closes.
 - A Codex process started from a shell Claude Code spawned inherits `CLAUDECODE=1`, so its row reads `Claude`.
-- **Probe messages that get no result** — *agent-ready*: The Claude harness counts one result per sent message (measured on 2.1.304, `agent-chat/claude-stream.md` § Queued messages); a message that gets no result would leave the session `working` and the turn alert unfired. Chosen: probe the cases that might give none (local slash commands, a rejected message) and record them in claude-stream.md before guarding.
+- **Probe messages that get no result** — The Claude harness counts one result per sent message (measured on 2.1.304, `agent-chat/claude-stream.md` § Queued messages); a message that gets no result would leave the session `working` and the turn alert unfired. Chosen: probe the cases that might give none (local slash commands, a rejected message) and record them in claude-stream.md before guarding.
 - Two tabs' take-overs released out of order give the session back to the first taker's tab even though its take-over has ended (pinned by `sessions/page/tabs.test.ts`); only forms takes over today, so it matters once a second plugin does.
 
 ## Extensibility review (2026-10-20)
@@ -301,7 +301,7 @@ now, any harness later). Each item names its sites.
   box on a task holding 20 items") mounts an add-item box on a full task. The page no longer reaches that state, since a
   full task shows no add-item box (`hasAddItemBox`, `src/plugins/primer/page/boxes.ts`). Retarget them at a stale box,
   or drop them.
-- **Primer self-test start-order dependence** — *agent-ready*: The primer self-test's last step (`src/plugins/primer/main/selftest-script.ts`) expects `[sessions] activated Layout
+- **Primer self-test start-order dependence** — The primer self-test's last step (`src/plugins/primer/main/selftest-script.ts`) expects `[sessions] activated Layout
   preview`. That line depends on forms' self-test running just before and leaving its preview row to the left, so a
   change in plugin start order breaks it. Fix: a close log line of its own in the sessions page, or activate a known
   session first.
