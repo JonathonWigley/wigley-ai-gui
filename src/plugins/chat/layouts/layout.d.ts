@@ -129,7 +129,7 @@ export interface ChatKit {
   statusDot(status: DotStatus): HTMLElement; // a static dot showing `status`
   setDotStatus(dot: HTMLElement, status: DotStatus): void; // shows `status` on a dot `statusDot` made
   sectionHeader(text: string): HTMLElement; // a section's heading line, in the caller's text
-  // Allow once / Deny with their keys beside them (from keys' `keysFor`); Deny opens the reason box. Draws the
+  // Allow once / Deny with their keys beside them (anchors the keys plugin draws); Deny opens the reason box. Draws the
   // answer instead once the entry carries one; the part keeps itself up to date as the entry's answer arrives.
   permissionActions(): HTMLElement;
   // A user entry's images as thumbnails; clicking one opens the image viewer at it. Throws for any other entry kind.

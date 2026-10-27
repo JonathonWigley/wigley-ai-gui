@@ -1,9 +1,8 @@
 import type { ChatEntry, ChatImage } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { Platform } from '../../../contracts/platform';
 import { element, markdownElement } from '../../../shared/page/dom';
-import { textButton } from '../../../shared/page/ui/button';
+import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import {
   type CollapsibleCard,
   card,
@@ -12,18 +11,17 @@ import {
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { setDotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import type { KeysPageExports } from '../../keys/contract';
+import { type ChatCommandName, chatCommand, chatScope } from '../ids';
 import type { ChatKit } from '../layouts/layout';
 import { imageUrl } from './attachments';
 import type { PermissionEntry } from './chat-state';
-import { keyHint } from './key-hint';
 
 // `allow` answers the permission entry allowed; `deny` opens the reason box
-// for it. `platform` prints the key hints. `openImages` opens the image
-// viewer on a user entry's images at `index`.
+// for it. `keys` anchors the permission actions' key hints. `openImages`
+// opens the image viewer on a user entry's images at `index`.
 export interface KitDeps {
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
-  platform: Platform;
+  keys: Pick<KeysPageExports, 'anchor'>;
   allow(entry: PermissionEntry): void;
   deny(entry: PermissionEntry): void;
   openImages(images: readonly ChatImage[], index: number): void;
@@ -41,9 +39,9 @@ export interface Expanders {
 }
 
 // One built entry's kit: the parts the layout drew from it, kept up to date by
-// `update` with each later version of the entry and, while a permission
-// entry waits for its answer, with each keymap change. `dispose` stops the
-// kit following keymap changes; its owner calls it when it drops the kit.
+// `update` with each later version of the entry. `dispose` disposes the key
+// anchors a waiting permission entry's actions still hold; its owner calls it
+// when it drops the kit.
 export interface EntryKit {
   kit: ChatKit;
   update(entry: ChatEntry): void;
@@ -56,24 +54,7 @@ type Expander = Pick<CollapsibleCard, 'isOpen' | 'setOpen'>;
 export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
   let current = entry;
   const expanders: Expander[] = [];
-  const permissionParts: HTMLElement[] = [];
-  // Set while an unanswered permission entry's actions show keys.
-  let keysChange: Disposable | null = null;
-  const drawPermissionParts = () => {
-    if (current.kind !== 'permission') {
-      return;
-    }
-    for (const part of permissionParts) {
-      drawPermissionActions(part, current, deps);
-    }
-    const isAnswered = current.answer !== null;
-    if (isAnswered) {
-      keysChange?.dispose();
-      keysChange = null;
-    } else {
-      keysChange ??= deps.keys.onChanged(drawPermissionParts);
-    }
-  };
+  const permissionParts: PermissionPart[] = [];
   const kit: ChatKit = {
     markdown: (text) => markdownElement('div', 'md', deps.markdown.block(text)),
     json: (value) =>
@@ -94,10 +75,9 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
       if (current.kind !== 'permission') {
         throw new Error('permissionActions is only for a permission entry');
       }
-      const part = element('div', 'chat-permission-actions');
+      const part = createPermissionPart(current, deps);
       permissionParts.push(part);
-      drawPermissionParts();
-      return part;
+      return part.element;
     },
     images() {
       if (current.kind !== 'user') {
@@ -110,11 +90,16 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
     kit,
     update(next) {
       current = next;
-      drawPermissionParts();
+      if (next.kind === 'permission') {
+        for (const part of permissionParts) {
+          part.draw(next);
+        }
+      }
     },
     dispose() {
-      keysChange?.dispose();
-      keysChange = null;
+      for (const part of permissionParts) {
+        part.dispose();
+      }
     },
     expanders: {
       count: () => expanders.length,
@@ -136,28 +121,65 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
   };
 }
 
-// Allow once and Deny with the keys bound to them now, or the answer once
-// the entry carries one.
-function drawPermissionActions(
-  part: HTMLElement,
+// One permission entry's actions. `draw` takes each later version of the
+// entry; `dispose` disposes the anchors still held.
+interface PermissionPart {
+  element: HTMLElement;
+  draw(entry: PermissionEntry): void;
+  dispose(): void;
+}
+
+// Allow once and Deny, built once, each with its keys anchored in the Chat
+// tab's scope; once the entry carries its answer, the answer text, the two
+// anchors disposed.
+function createPermissionPart(
   entry: PermissionEntry,
   deps: KitDeps,
-) {
-  if (entry.answer !== null) {
-    part.replaceChildren(
-      element('span', 'chat-permission-answer', answerText(entry.answer)),
+): PermissionPart {
+  const part = element('div', 'chat-permission-actions');
+  let current = entry;
+  let anchors: Disposable[] = [];
+  const actionButton = (
+    label: string,
+    variant: ButtonVariant,
+    command: ChatCommandName,
+    act: (answered: PermissionEntry) => void,
+  ) => {
+    const hint = element('span', 'chat-permission-key');
+    anchors.push(
+      deps.keys.anchor(hint, chatCommand(command), {
+        scope: chatScope('chat'),
+      }),
     );
-    return;
+    return textButton(label, () => act(current), { variant, hint });
+  };
+  const disposeAnchors = () => {
+    for (const anchor of anchors) {
+      anchor.dispose();
+    }
+    anchors = [];
+  };
+  const draw = (next: PermissionEntry) => {
+    current = next;
+    if (next.answer !== null) {
+      disposeAnchors();
+      part.replaceChildren(
+        element('span', 'chat-permission-answer', answerText(next.answer)),
+      );
+    }
+  };
+  if (entry.answer === null) {
+    part.append(
+      actionButton('Allow once', 'primary', 'allowPermission', (answered) =>
+        deps.allow(answered),
+      ),
+      actionButton('Deny', 'secondary', 'denyPermission', (answered) =>
+        deps.deny(answered),
+      ),
+    );
   }
-  const allow = textButton('Allow once', () => deps.allow(entry), {
-    variant: 'primary',
-    hint: keyHint(deps.keys, deps.platform, 'allowPermission', 'chat'),
-  });
-  const deny = textButton('Deny', () => deps.deny(entry), {
-    variant: 'secondary',
-    hint: keyHint(deps.keys, deps.platform, 'denyPermission', 'chat'),
-  });
-  part.replaceChildren(allow, deny);
+  draw(entry);
+  return { element: part, draw, dispose: disposeAnchors };
 }
 
 // One thumbnail per image, each opening the viewer at its own index.

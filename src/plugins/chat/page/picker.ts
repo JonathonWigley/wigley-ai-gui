@@ -1,9 +1,17 @@
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
+import { element } from '../../../shared/page/dom';
 import { createListPicker } from '../../../shared/page/list-picker';
-import type { ChatScopeName } from '../ids';
+import type { KeysPageExports } from '../../keys/contract';
+import {
+  type ChatCommandName,
+  type ChatScopeName,
+  chatCommand,
+  chatScope,
+} from '../ids';
 import { blurFocusedElement } from './chat-dialogs';
+import type { ArchiveState } from './resume-items';
 
 export interface PickerRequest<T> {
   // The dialog's heading and the name its log lines carry.
@@ -18,6 +26,9 @@ export interface PickerRequest<T> {
   sessionBound?: boolean;
   // The scope pushed while it is open; `picker` when left out.
   scope?: 'picker' | 'resume';
+  // The archive state of the item, which the `resume` scope's cursor row
+  // prompts to archive or restore; null for an item with none.
+  archiveState?(item: T): ArchiveState | null;
   // Runs once the picker has closed.
   picked(item: T): void;
 }
@@ -37,7 +48,9 @@ export interface PickerHandle {
 // `open` returns the request's handle, so its opener can tell whether its
 // own request is still the open one.
 // `focusFilter` types into the filter box, and `leaveFilter` leaves it with
-// the filter kept.
+// the filter kept. The header ends in the open scope's keys (`/ filter`, and
+// `. archived` in `resume`), and in `resume` the cursor row ends in
+// `x archive` or `x restore` by its item's archive state.
 export interface Picker {
   open<T>(request: PickerRequest<T>): PickerHandle;
   isOpen(): boolean;
@@ -58,8 +71,11 @@ export interface PickerDeps {
   editor: EditorHost;
   // Pushes the named chat scope.
   pushScope(scope: ChatScopeName): PushedScope;
+  keys: Pick<KeysPageExports, 'anchor'>;
   log: Log;
 }
+
+type PickerScope = NonNullable<PickerRequest<unknown>['scope']>;
 
 export function createPicker(deps: PickerDeps): Picker {
   // The scope of the request being opened, then of the open one.
@@ -71,6 +87,32 @@ export function createPicker(deps: PickerDeps): Picker {
     filterEditor: deps.editor,
   });
   deps.overlay.contribute(list.element);
+  // An empty span holding `command`'s keys in `scopeName`, then `label`.
+  const anchored = (
+    command: ChatCommandName,
+    scopeName: PickerScope,
+    label: string,
+  ) => {
+    const hint = element('span', 'chat-picker-key');
+    deps.keys.anchor(hint, chatCommand(command), {
+      scope: chatScope(scopeName),
+      label,
+    });
+    return hint;
+  };
+  const resumeHeader = element('span', 'chat-picker-keys');
+  resumeHeader.append(
+    anchored('pickerFilter', 'resume', 'filter'),
+    anchored('showArchived', 'resume', 'archived'),
+  );
+  const headers: Record<PickerScope, HTMLElement> = {
+    picker: anchored('pickerFilter', 'picker', 'filter'),
+    resume: resumeHeader,
+  };
+  const cursorPrompts: Record<ArchiveState, HTMLElement> = {
+    live: anchored('toggleArchive', 'resume', 'archive'),
+    archived: anchored('toggleArchive', 'resume', 'restore'),
+  };
 
   let isSessionBound = false;
   // The open request's handle; null once it is picked or closed.
@@ -94,6 +136,14 @@ export function createPicker(deps: PickerDeps): Picker {
         items: next.items,
         label: next.label,
         selected: next.selected,
+        headerEnd: headers[nextScope],
+        cursorEnd:
+          nextScope === 'resume'
+            ? (item) => {
+                const state = next.archiveState?.(item) ?? null;
+                return state === null ? null : cursorPrompts[state];
+              }
+            : undefined,
         chosen: (item) => {
           shown = null;
           next.picked(item);

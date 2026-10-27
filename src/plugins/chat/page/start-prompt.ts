@@ -10,6 +10,7 @@ import type {
 } from '../contract';
 import type { Picker, PickerHandle } from './picker';
 import {
+  archiveStateOf,
   type SessionItem,
   SESSION_STEP_TITLE,
   selectedAfterChange,
@@ -268,6 +269,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     opened.shown = deps.picker.open<SessionItem>({
       title: SESSION_STEP_TITLE,
       scope: 'resume',
+      archiveState: archiveStateOf,
       items: opened.items,
       label: (item) => item.label,
       selected,

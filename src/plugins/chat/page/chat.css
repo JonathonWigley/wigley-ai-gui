@@ -128,7 +128,7 @@
 }
 
 /* The composer: the attached images' strip, then the message box over its
-   bar (mode, control chips, send). */
+   bar (mode, type hint, running indicator, control chips, send). */
 .ui-floating.chat-composer {
   border-radius: var(--wg-radius-xl);
   bottom: var(--wg-space-3);
@@ -192,6 +192,44 @@
 
 .chat-send {
   margin-left: auto;
+}
+
+/* `i` and `a` are vim's inside the box, so the type hint hides, keeping its
+   space, while the box has focus. */
+.chat-type-hint {
+  display: inline-flex;
+  gap: var(--wg-space-3);
+}
+
+.chat-type-hint.is-box-focused {
+  visibility: hidden;
+}
+
+/* `display` would override `hidden`, so the idle indicator is hidden here. */
+.chat-running {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-1);
+}
+
+.chat-running[hidden] {
+  display: none;
+}
+
+/* A chip's keys after its value; an unbound command leaves no gap. */
+.chat-chip-key {
+  display: inline-flex;
+}
+
+.chat-chip-key:empty {
+  display: none;
+}
+
+/* The picker header's keys: `/ filter`, then `. archived` in the resume
+   list. */
+.chat-picker-keys {
+  display: inline-flex;
+  gap: var(--wg-space-3);
 }
 
 /* The dialogs' text and the deny reason box. */

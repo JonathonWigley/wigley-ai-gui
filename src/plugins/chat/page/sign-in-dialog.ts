@@ -5,13 +5,12 @@ import { textButton } from '../../../shared/page/ui/button';
 import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type { ChatChannel } from '../contract';
-import { chatCommand } from '../ids';
+import { chatCommand, chatScope } from '../ids';
 import {
   type DialogAction,
   type DialogDeps,
-  followKeymap,
+  drawDialogActions,
 } from './chat-dialogs';
-import { keyHint } from './key-hint';
 import { createSignInFlow } from './sign-in-flow';
 
 export interface SignInDialogDeps extends DialogDeps {
@@ -73,7 +72,7 @@ export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
     box,
   );
   deps.overlay.contribute(dialog.element);
-  followKeymap(dialog, SIGN_IN_ACTIONS, deps);
+  drawDialogActions(dialog, SIGN_IN_ACTIONS, deps);
   const editor = deps.editor.create(box, '', {
     changed: () => undefined,
     focused: () => undefined,
@@ -81,36 +80,24 @@ export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
     modeChanged: () => undefined,
   });
 
-  let hasLink = false;
   // The Copy button runs the copy command and shows its keys in the box, which
-  // holds focus while the dialog is open, drawn again on each keymap change.
-  const drawCopy = () => {
-    const drawn = textButton(
-      'Copy',
-      () => deps.run(chatCommand('copySignInLink')),
-      {
-        variant: 'ghost',
-        hint: keyHint(
-          deps.keys,
-          deps.platform,
-          'copySignInLink',
-          'signIn',
-          'box',
-        ),
-      },
-    );
-    drawn.disabled = !hasLink;
-    linkRow.replaceChildren(link, drawn);
-    return drawn;
-  };
-  let copy = drawCopy();
-  deps.keys.onChanged(() => {
-    copy = drawCopy();
+  // holds focus while the dialog is open; it is enabled once main reports a
+  // link.
+  const copyHint = element('span', 'chat-dialog-key');
+  deps.keys.anchor(copyHint, chatCommand('copySignInLink'), {
+    scope: chatScope('signIn'),
+    where: 'box',
   });
+  const copy = textButton(
+    'Copy',
+    () => deps.run(chatCommand('copySignInLink')),
+    { variant: 'ghost', hint: copyHint },
+  );
+  copy.disabled = true;
+  linkRow.append(link, copy);
   const showLink = (url: string | null) => {
     link.textContent = url ?? WAITING_TEXT;
-    hasLink = url !== null;
-    copy.disabled = !hasLink;
+    copy.disabled = url === null;
   };
 
   return createSignInFlow({

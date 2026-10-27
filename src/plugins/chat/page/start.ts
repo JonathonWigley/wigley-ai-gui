@@ -68,7 +68,6 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       overlay: api.areas.overlay,
       editor: services.editor,
       keys,
-      platform: api.platform,
       run,
       pushScope: () => api.keys.pushScope('reason'),
       log: services.log,
@@ -76,7 +75,6 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const confirm = createCloseConfirm({
       overlay: api.areas.overlay,
       keys,
-      platform: api.platform,
       run,
       pushScope: () => api.keys.pushScope('confirm'),
       log: services.log,
@@ -85,7 +83,6 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       overlay: api.areas.overlay,
       editor: services.editor,
       keys,
-      platform: api.platform,
       run,
       pushScope: () => api.keys.pushScope('signIn'),
       log: services.log,
@@ -103,6 +100,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       overlay: api.areas.overlay,
       editor: services.editor,
       pushScope: (scope) => api.keys.pushScope(scope),
+      keys,
       log: services.log,
     });
     const viewer = createImageViewer({
@@ -126,7 +124,6 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       editor: services.editor,
       markdown: services.markdown,
       keys,
-      platform: api.platform,
       run,
       permissions,
       confirm,

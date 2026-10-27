@@ -4,6 +4,9 @@ export type SessionItem =
   | { kind: 'new'; label: string }
   | { kind: 'past'; row: PastSessionRow; label: string };
 
+// Whether a past session's row is archived, as the archive key acts on it.
+export type ArchiveState = 'live' | 'archived';
+
 export const NEW_SESSION_LABEL = 'New session';
 export const SESSION_STEP_TITLE = 'Session';
 
@@ -25,6 +28,14 @@ export function sessionItems(
     .filter((row) => showArchived || !row.archived)
     .map((row) => ({ kind: 'past', row, label: pastLabel(row) }));
   return [{ kind: 'new', label: NEW_SESSION_LABEL }, ...pastItems];
+}
+
+// The archive state of a past session's line; null for the new-session line.
+export function archiveStateOf(item: SessionItem): ArchiveState | null {
+  if (item.kind === 'new') {
+    return null;
+  }
+  return item.row.archived ? 'archived' : 'live';
 }
 
 function pastLabel(row: PastSessionRow): string {

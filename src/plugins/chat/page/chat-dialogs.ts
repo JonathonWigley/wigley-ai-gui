@@ -1,15 +1,18 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
-import type { Platform } from '../../../contracts/platform';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { createDialog, type Dialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type { KeysPageExports } from '../../keys/contract';
-import { type ChatCommandName, type ChatScopeName, chatCommand } from '../ids';
-import { keyHint } from './key-hint';
+import {
+  type ChatCommandName,
+  type ChatScopeName,
+  chatCommand,
+  chatScope,
+} from '../ids';
 
 // Blurs whatever holds focus, a text box included, so page keys fire.
 export function blurFocusedElement() {
@@ -19,12 +22,10 @@ export function blurFocusedElement() {
   }
 }
 
-// `keys` and `platform` print the action buttons' key hints, redrawn on each
-// keymap change.
+// `keys` anchors the action buttons' key hints.
 export interface DialogDeps {
   overlay: PluginAreas['overlay'];
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
-  platform: Platform;
+  keys: Pick<KeysPageExports, 'anchor'>;
   run(command: CommandId): void;
   // Pushes the dialog's own scope.
   pushScope(): PushedScope;
@@ -104,7 +105,7 @@ export function createReasonBox(
     box,
   );
   deps.overlay.contribute(dialog.element);
-  followKeymap(dialog, REASON_ACTIONS, deps);
+  drawDialogActions(dialog, REASON_ACTIONS, deps);
   const editor = deps.editor.create(box, '', {
     changed: () => undefined,
     focused: () => undefined,
@@ -165,7 +166,7 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
     ),
   );
   deps.overlay.contribute(dialog.element);
-  followKeymap(dialog, CONFIRM_ACTIONS, deps);
+  drawDialogActions(dialog, CONFIRM_ACTIONS, deps);
 
   let open: { name: string; end(): void; scope: PushedScope } | null = null;
   const hide = () => {
@@ -204,30 +205,25 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
   return confirm;
 }
 
-// Draws the dialog's actions, and draws them again on each keymap change for
-// as long as the page lives, so a rebind reaches a dialog open or shut.
-export function followKeymap(
+// Fills the dialog's actions, once per dialog, with one button per action,
+// each running its command with its keys anchored in the action's scope for
+// as long as the page lives.
+export function drawDialogActions(
   dialog: Dialog,
   actions: readonly DialogAction[],
-  deps: Pick<DialogDeps, 'keys' | 'platform' | 'run'>,
-) {
-  drawActions(dialog, actions, deps);
-  deps.keys.onChanged(() => drawActions(dialog, actions, deps));
-}
-
-// Fills the dialog's actions with one button per action, each running its
-// command and showing the keys bound to it now.
-function drawActions(
-  dialog: Dialog,
-  actions: readonly DialogAction[],
-  deps: Pick<DialogDeps, 'keys' | 'platform' | 'run'>,
-) {
+  deps: Pick<DialogDeps, 'keys' | 'run'>,
+): void {
   dialog.actions.replaceChildren(
-    ...actions.map((action) =>
-      textButton(action.label, () => deps.run(chatCommand(action.command)), {
-        variant: action.variant,
-        hint: keyHint(deps.keys, deps.platform, action.command, action.scope),
-      }),
-    ),
+    ...actions.map((action) => {
+      const hint = element('span', 'chat-dialog-key');
+      deps.keys.anchor(hint, chatCommand(action.command), {
+        scope: chatScope(action.scope),
+      });
+      return textButton(
+        action.label,
+        () => deps.run(chatCommand(action.command)),
+        { variant: action.variant, hint },
+      );
+    }),
   );
 }

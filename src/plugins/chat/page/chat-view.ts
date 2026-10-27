@@ -9,7 +9,6 @@ import type {
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Paths } from '../../../contracts/paths';
-import type { Platform } from '../../../contracts/platform';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
@@ -17,6 +16,7 @@ import { textButton } from '../../../shared/page/ui/button';
 import { chip } from '../../../shared/page/ui/chip';
 import { floatingPanel } from '../../../shared/page/ui/floating-panel';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
+import { statusDot } from '../../../shared/page/ui/status-dot';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -24,7 +24,7 @@ import type {
   SessionTabHandle,
 } from '../../sessions/contract';
 import type { ChatChannel, ChatSessionState } from '../contract';
-import { chatCommand } from '../ids';
+import { type ChatCommandName, chatCommand, chatScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
 import {
@@ -49,7 +49,6 @@ import {
   type ShownLayout,
 } from './entry-list';
 import type { ImageViewer } from './image-viewer';
-import { keyHint } from './key-hint';
 import { completionWords } from './slash-commands';
 
 export interface ChatView {
@@ -104,8 +103,8 @@ export type ChatTabScope = 'chat' | 'ended';
 // `setScope` sets the base scope; `otherSessionShown` runs when the
 // Chat tab shown is another session's than the Chat tab shown before;
 // `onSessionRemoved` hears the sessions plugin drop a row's tabs. `run` runs
-// a command, as the composer's chips and send button do; `platform` prints
-// the key hints; `paths` names each tab by its project folder.
+// a command, as the composer's chips and send button do; `keys` anchors the
+// composer's key hints; `paths` names each tab by its project folder.
 // `slashCommandNames` reads the app slash commands registered now, which the
 // `/` completion offers ahead of the agent's. `viewer` opens a sent message's
 // images full size.
@@ -116,8 +115,7 @@ export interface ChatViewDeps {
   onSessionRemoved(listener: (sessionId: string) => void): void;
   editor: EditorHost;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
-  platform: Platform;
+  keys: Pick<KeysPageExports, 'anchor'>;
   run(command: CommandId): void;
   permissions: PermissionActions;
   confirm: CloseConfirm;
@@ -131,8 +129,7 @@ export interface ChatViewDeps {
 
 // A held session's Chat tab. `handle` is null until `addTab` returns, and
 // `box` until the editor mounts into the attached tab. `composerSize` follows
-// the composer's height, and `keysChange` redraws the bar on each keymap
-// change, for as long as the tab is held.
+// the composer's height for as long as the tab is held.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -148,18 +145,22 @@ interface HeldTab {
   attachments: Attachments;
   bar: ComposerBar;
   composerSize: ResizeObserver;
-  keysChange: Disposable;
 }
 
+// `draw` shows the tab's state; `setScope` names the type hint's and Send's
+// anchors again in the tab's new scope; `dispose` disposes every anchor.
 interface ComposerBar {
   element: HTMLElement;
   draw(tab: HeldTab): void;
+  setScope(scope: ChatTabScope): void;
+  dispose(): void;
 }
 
 const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 
 // One Chat tab per chat session main holds, each with its entries and its
-// composer (attached images, message box, mode, control chips, send), kept up
+// composer (attached images, message box, mode, type hint, running
+// indicator, control chips, send), kept up
 // to date from chat main's messages. Each tab is selected in its session when
 // added.
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
@@ -248,6 +249,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       tab.state = { ...tab.state, activity };
       log('chat', `${tab.name} is ${activity}`);
       sendStatus(tab, tab.ended ? '' : tabStatus(activity));
+      tab.bar.draw(tab);
     }
   });
   channel.on('commands', ({ sessionId, names }) => {
@@ -262,6 +264,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tab.ended = true;
+    tab.bar.setScope(tabScope(tab));
     if (tab.handle?.isVisible() === true) {
       deps.setScope(tabScope(tab));
     }
@@ -282,7 +285,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     tabs.delete(sessionId);
     tab.box?.destroy();
     tab.composerSize.disconnect();
-    tab.keysChange.dispose();
+    tab.bar.dispose();
     tab.entries.dispose();
     if (pendingReveal === sessionId) {
       pendingReveal = null;
@@ -368,7 +371,6 @@ function createTab(
     kit: {
       markdown: deps.markdown,
       keys: deps.keys,
-      platform: deps.platform,
       allow: (entry) => deps.permissions.allow(ref, entry),
       deny: (entry) => deps.permissions.deny(ref, entry),
       openImages: (images, index) => deps.viewer.open(images, index),
@@ -378,7 +380,7 @@ function createTab(
   });
   const boxElement = inputFrame();
   boxElement.classList.add('chat-box');
-  const bar = buildComposerBar(deps);
+  const bar = buildComposerBar(deps, tabScope(state));
   const attachments = createAttachments();
   const strip = buildAttachmentStrip(attachments);
   const composer = floatingPanel();
@@ -401,7 +403,6 @@ function createTab(
     attachments,
     bar,
     composerSize: followComposerHeight(composer, root, entries),
-    keysChange: deps.keys.onChanged(() => bar.draw(tab)),
   };
   entries.rebuild(state.entries);
   bar.draw(tab);
@@ -517,35 +518,103 @@ function followComposerHeight(
   return observer;
 }
 
-// The box's vim mode (PAGE while it has no focus), a chip per control opening
-// that control's picker, and send, with the keys bound when it is drawn; the
-// chips and send are disabled once the session has ended.
+// The bar's parts, built once per tab: the box's vim mode (PAGE while it has
+// no focus), the type hint (`i` and `a`, hidden while the box has focus), the
+// running indicator (shown while Claude works on a live session), a chip per
+// control opening that control's picker, and send. The chips and send are
+// disabled once the session has ended. The type hint and send keys are
+// anchored in the tab's scope; the interrupt and chip keys in `chat.chat`.
+// Each chip command's keys sit in the first chip that runs it; a command no
+// chip runs keeps its anchor element detached until a later draw places it.
 function buildComposerBar(
-  deps: Pick<ChatViewDeps, 'keys' | 'platform' | 'run'>,
+  deps: Pick<ChatViewDeps, 'keys' | 'run'>,
+  scope: ChatTabScope,
 ): ComposerBar {
   const bar = element('div', 'chat-composer-bar');
+  const mode = element('span', 'chat-box-mode');
+  const typeKey = element('span', 'chat-type-key');
+  const appendKey = element('span', 'chat-type-key');
+  const typeHint = element('span', 'chat-type-hint');
+  typeHint.append(typeKey, appendKey);
+  const interruptKey = element('span', 'chat-running-key');
+  const running = element('span', 'chat-running');
+  running.append(statusDot('running'), interruptKey);
+  const sendKey = element('span', 'chat-send-key');
+  const send = textButton('Send', () => deps.run(chatCommand('send')), {
+    variant: 'ghost',
+    hint: sendKey,
+  });
+  send.classList.add('chat-send');
+
+  const liveScope = { scope: chatScope('chat') };
+  const fixedAnchors = [
+    deps.keys.anchor(interruptKey, chatCommand('interrupt'), {
+      ...liveScope,
+      label: 'stop',
+    }),
+  ];
+  const chipKeys = new Map<ChatCommandName, HTMLElement>();
+  for (const command of [
+    'pickMode',
+    'pickEffort',
+    'pickModel',
+    'pickControl',
+  ] as const) {
+    const key = element('span', 'chat-chip-key');
+    chipKeys.set(command, key);
+    fixedAnchors.push(deps.keys.anchor(key, chatCommand(command), liveScope));
+  }
+  const nameScopedAnchors = (named: ChatTabScope) => {
+    const options = { scope: chatScope(named) };
+    return [
+      deps.keys.anchor(typeKey, chatCommand('focusBox'), {
+        ...options,
+        label: 'to type',
+      }),
+      deps.keys.anchor(appendKey, chatCommand('appendBox'), {
+        ...options,
+        label: 'to append',
+      }),
+      deps.keys.anchor(sendKey, chatCommand('send'), options),
+    ];
+  };
+  let scopedAnchors = nameScopedAnchors(scope);
+  const disposeAll = (anchors: readonly Disposable[]) => {
+    for (const anchor of anchors) {
+      anchor.dispose();
+    }
+  };
+
   return {
     element: bar,
     draw(tab) {
-      const mode = element(
-        'span',
-        'chat-box-mode',
-        modeLabel(tab.isBoxFocused ? tab.boxMode : null),
-      );
+      mode.textContent = modeLabel(tab.isBoxFocused ? tab.boxMode : null);
+      typeHint.classList.toggle('is-box-focused', tab.isBoxFocused);
+      running.hidden = tab.ended || tab.state.activity === 'idle';
+      const placed = new Set<ChatCommandName>();
       const chips = tab.state.controls.map((control) => {
+        const command = controlCommand(control.id);
         const controlChip = chip(control.label, valueLabel(control), () =>
-          deps.run(chatCommand(controlCommand(control.id))),
+          deps.run(chatCommand(command)),
         );
         controlChip.toggleAttribute('disabled', tab.ended);
+        const key = chipKeys.get(command);
+        if (key !== undefined && !placed.has(command)) {
+          controlChip.append(key);
+          placed.add(command);
+        }
         return controlChip;
       });
-      const send = textButton('Send', () => deps.run(chatCommand('send')), {
-        variant: 'ghost',
-        hint: keyHint(deps.keys, deps.platform, 'send', 'chat'),
-      });
-      send.classList.add('chat-send');
       send.disabled = tab.ended;
-      bar.replaceChildren(mode, ...chips, send);
+      bar.replaceChildren(mode, typeHint, running, ...chips, send);
+    },
+    setScope(next) {
+      disposeAll(scopedAnchors);
+      scopedAnchors = nameScopedAnchors(next);
+    },
+    dispose() {
+      disposeAll(scopedAnchors);
+      disposeAll(fixedAnchors);
     },
   };
 }
