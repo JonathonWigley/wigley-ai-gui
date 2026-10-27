@@ -270,7 +270,7 @@ export interface StatusLine { element: HTMLElement; update(isShown: boolean, con
 - [x] [Doc re-read](11-doc-reread.md) — after 10
 
 ### Wave 5
-- [ ] [Final verification](12-final-verification.md) — after 11
+- [x] [Final verification](12-final-verification.md) — after 11
 
 ## Run log
 
@@ -288,6 +288,7 @@ Review base: 268c38a4a1b8e0a49c34ff796705ec6c21417894
 - 08 · aeac5ad · diff read, Produces present; whole-tree typecheck and lint clean after wave 2 · concerns: scripts/check-layers.mts edited (gallery page layer gains keys/contract.ts), outside the Files list; settings rows gain one line for the cursor prompt (task 12 visual)
 - 10 · 7754ee3 · diff read, every Produces present; typecheck and lint clean; after-edit grep's one hit is a false positive (key-hints.ts:331 'key listed'); worker self-test 683 PASS 0 FAIL, every key placed · concerns: chat selftest-script o step edited (outside Files) to expect the Model picker; gate passed with and without the c/o fixture, so it is unproven whether it flags a detached anchor; primer and backlog views' platform dep now unread (kept per Decisions); agent-chat/design.md:161 still says key bar (task 11)
 - 11 · a356269 · diff read; step 3 grep finds no stale hit outside the plan folder · concerns: followups 'keysFor in the core keys API' reason (sessions depends on keys only for its toast) is weaker now views depend on keys for anchors; plugin-framework design's settled bar-split bullet rewritten as history
+- 12 · ad66140 · drive run checks 3.1-3.13 + E1-E5: 3.5, 3.13@680 and the docs screenshot failed, fixed in b0b0af2 and ad66140 and re-driven (fit 0 problems 640-900); final suite 3699 pass, selftest all passed · concerns: none
 ### Contract changes
 - start.ts keeps the UnplacedLog: `const unplacedLog = startUnplacedLog(...)` → `startUnplacedLog(...)` unbound · why: oxlint no-unused-vars warns on an unread binding; scope recording still runs · consumers: 10 (binds it back when it wires checkSeen) · group 01
 - PrimerViewDeps.keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'> → Pick<KeysPageExports, 'anchor'> · why: the view reads no keys itself now · consumers: none · group 05
@@ -316,6 +317,8 @@ Review base: 268c38a4a1b8e0a49c34ff796705ec6c21417894
 - sections pane end edge ⌥L rows › at the pane's bottom-end corner — keeps the list from moving — visual check task 12 · group 08 · group 08
 - Space ? prompt beside the Keys button hides under 640px via keys.css — the title bar's end track is 53px at the 420px minimum width and the item needs 75px; the alternative was a shell.css track change outside the files — the prompt is absent on narrow windows; check in task 12 · group 10 · group 10
 - fake agent gains model and verbosity controls so the Model (o) and Controls (c) chips draw in the self-test — fixture state per the placement rule — none · group 10 · group 10
+- Rebind check: user binds now precede default binds in mergeKeymap, so a rebind shows without unbinding the default · group 12
+- Forms split gains endMin and stacks when the end pane would drop below 224px · group 12
 ### Review rounds
 - 1 · d209821 · NEEDS FIXES — 22 findings; determined 1-5, 7, 8, 22 dispatched; 6 contradiction and 9-21 open to triage
 - 2 · 37e29b7 (re-review of round-1 fixes) · NEEDS FIXES — 2 minor (stacked-hint gap repeat → one shared rule; docs empty hint wrap); fixed in 563adf8

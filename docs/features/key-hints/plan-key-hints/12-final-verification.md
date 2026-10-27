@@ -1,6 +1,6 @@
 # 12 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -66,3 +66,5 @@ Done when: every check in "Checks the agent runs" passes, and the wrap-up lists 
 Commit:    none, unless a fix lands (its own commit).
 
 ## Proof
+
+Commit ad66140 · proof: drive run checks 3.1-3.13 + E1-E5: 3.5, 3.13@680 and the docs screenshot failed, fixed in b0b0af2 and ad66140 and re-driven (fit 0 problems 640-900); final suite 3699 pass, selftest all passed · concerns: none
