@@ -250,9 +250,12 @@ The primitives, each a builder in `src/shared/page/ui/`:
 
 - **Kbd** (`kbd`): a key hint, chords in `font-mono`.
 - **KeyPrompt** (`keyPrompt`): a Kbd with an optional label after it in `fg-tertiary`; the one
-  thing the keys plugin draws into an anchor. A view places a `ui-key-chevron` span (`‹ › ▲ ▼ ◂ ▸`)
+  thing the keys plugin draws into an anchor. A view places a chevron (`keyChevron`, `‹ › ▲ ▼ ◂ ▸`)
   beside the anchor element when the prompt points a direction; the chevron hides and shows with its
-  anchor.
+  anchor. The parts around anchors are builders in `key-anchors.ts`: an edge prompt (`keyEdge`),
+  which `is-no-target` hides keeping its space; a box hint (`boxHint`); and a stack of one
+  command's anchors in several scopes in one cell (`keyStack`). A box hint or a stack whose anchors
+  are all empty takes no space.
 - **Button** (`textButton`): a labelled button, variants primary, secondary, ghost, danger.
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.
@@ -283,9 +286,10 @@ Conventions every primitive follows:
   `ui-floating`, the collapsible card carries `ui-card`). Its overriding rules use the compound
   selector (`.ui-floating.ui-dialog`, `.ui-card.ui-collapsible`), which outranks either class
   alone, so they win whatever order the stylesheets load in.
-- States are classes `is-selected`, `is-active`, `is-cursor` and `is-disabled` (a button's
-  `disabled` attribute); an enumerated value is `data-<name>`; `is-hover` and `is-pressed` exist
-  only so the gallery can show those states.
+- States are classes `is-selected`, `is-active`, `is-cursor`, `is-disabled` (a button's
+  `disabled` attribute) and `is-no-target` (an edge prompt or anchor with nothing to act on); an
+  enumerated value is `data-<name>`; `is-hover` and `is-pressed` exist only so the gallery can show
+  those states.
 - Buttons never take focus.
 - A hint is an anchor element handed in, which the keys plugin fills.
 

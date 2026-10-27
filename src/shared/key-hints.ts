@@ -80,6 +80,8 @@ const VIM_MODIFIERS: Partial<Record<string, keyof Omit<Chord, 'key'>>> = {
   d: 'meta',
 };
 
+const NORMAL_MODIFIER_ORDER = ['ctrl', 'alt', 'shift', 'meta'] as const;
+
 const DIGIT_SUFFIX = /^(.*?)(\d)$/;
 
 // How each platform prints a key: a chord's modifier names in the order
@@ -231,6 +233,34 @@ export function formatVimKeys(
 // each, every `<Leader>` spelled as `leader`.
 export function vimTokens(keys: string, leader: string): string[] {
   return withLeader(keys, leader).match(VIM_TOKEN) ?? [];
+}
+
+// A vim-notation key string in one spelling, so two spellings of the same keys
+// compare equal: `<esc>` and `<Esc>` read alike, as do `<CR>`, `<Enter>` and
+// `<Return>`, and `<c-j>` and `<C-j>`. A `<…>` key with an unknown modifier
+// keeps its spelling.
+export function normalVimKeys(keys: string): string {
+  return (keys.match(VIM_TOKEN) ?? []).map(normalVimToken).join('');
+}
+
+function normalVimToken(token: string): string {
+  const chord = vimChord(token);
+  if (chord !== null) {
+    const held = NORMAL_MODIFIER_ORDER.filter((flag) => chord[flag])
+      .map((flag) => `${flag}-`)
+      .join('');
+    return `<${held}${chord.key}>`;
+  }
+  const parts = VIM_KEY.exec(token);
+  if (parts === null || parts[1] !== '') {
+    return token;
+  }
+  const name = parts[2].toLowerCase();
+  const key = VIM_KEY_NAMES[name];
+  if (key === undefined) {
+    return `<${name}>`;
+  }
+  return key.length === 1 ? key : `<${key}>`;
 }
 
 // The vim mode an editor bind fires in; normal when the bind names none.

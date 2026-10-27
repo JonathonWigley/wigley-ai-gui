@@ -1,5 +1,6 @@
 import { element } from '../../../shared/page/dom';
 import { emptyState } from '../../../shared/page/ui/empty-state';
+import { keyChevron, keyEdge } from '../../../shared/page/ui/key-anchors';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { tab as tabButton, tabStrip } from '../../../shared/page/ui/tabs';
 import { qualify } from '../../../shared/plugin-manifests';
@@ -321,10 +322,11 @@ function buildTabsBar(
   keys.anchor(close, qualify(sessionsManifest.id, 'closeSession'), {
     label: 'close',
   });
-  const previous = element('span', 'session-tabs-edge');
-  previous.append(previousKeys, element('span', 'ui-key-chevron', '‹'));
-  const next = element('span', 'session-tabs-edge');
-  next.append(element('span', 'ui-key-chevron', '›'), nextKeys);
+  const previous = keyEdge('session-tabs-edge', [
+    previousKeys,
+    keyChevron('‹'),
+  ]);
+  const next = keyEdge('session-tabs-edge', [keyChevron('›'), nextKeys]);
   const bar = element('div', 'session-tabs-bar');
   bar.append(previous, strip, next, close);
   return { element: bar, previous, next, close };

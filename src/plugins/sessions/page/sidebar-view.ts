@@ -1,4 +1,5 @@
 import { element } from '../../../shared/page/dom';
+import { keyChevron, keyEdge } from '../../../shared/page/ui/key-anchors';
 import { row } from '../../../shared/page/ui/row';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { statusDot } from '../../../shared/page/ui/status-dot';
@@ -61,13 +62,12 @@ function buildSessionPair(keys: Pick<KeysPageExports, 'anchor'>): HTMLElement {
   const next = element('span');
   keys.anchor(previous, qualify(sessionsManifest.id, 'prevSession'));
   keys.anchor(next, qualify(sessionsManifest.id, 'nextSession'));
-  const pair = element('span', 'session-edge is-no-target');
-  pair.append(
+  const pair = keyEdge('session-edge is-no-target', [
     previous,
-    element('span', 'ui-key-chevron', '▲'),
-    element('span', 'ui-key-chevron', '▼'),
+    keyChevron('▲'),
+    keyChevron('▼'),
     next,
-  );
+  ]);
   return pair;
 }
 

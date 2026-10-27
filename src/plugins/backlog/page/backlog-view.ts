@@ -25,6 +25,7 @@ import { textLineHeightPx } from '../../../shared/page/text-line';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { icon } from '../../../shared/page/ui/icon';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
+import { keyChevron, keyEdge } from '../../../shared/page/ui/key-anchors';
 import { row } from '../../../shared/page/ui/row';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { sheet } from '../../../shared/page/ui/sheet';
@@ -147,7 +148,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     });
     return target;
   };
-  const chevron = (text: string) => element('span', 'ui-key-chevron', text);
 
   const store = createReducerStore(initialBacklogState(), backlogReducer);
   const dispatch = store.dispatch;
@@ -177,8 +177,10 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     anchored('rescan', 'list', 'rescan'),
     anchored('commit', 'list', 'commit'),
   );
-  const toDetail = element('span', 'backlog-edge backlog-edge--end');
-  toDetail.append(anchored('focusDetail', 'list', 'detail'), chevron('›'));
+  const toDetail = keyEdge('backlog-edge backlog-edge--end', [
+    anchored('focusDetail', 'list', 'detail'),
+    keyChevron('›'),
+  ]);
   listHeader.append(listKeys, toDetail);
   listPane.append(listHeader, filterFrame, rowsList);
 
@@ -201,8 +203,10 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   detailPane.tabIndex = -1;
   // The edge prompt back to the list, then the key that acts on the detail.
   const detailHead = element('div', 'backlog-detail-head');
-  const toList = element('span', 'backlog-edge backlog-edge--start');
-  toList.append(chevron('‹ list'), anchored('focusList', 'detail'));
+  const toList = keyEdge('backlog-edge backlog-edge--start', [
+    keyChevron('‹ list'),
+    anchored('focusList', 'detail'),
+  ]);
   detailHead.append(toList, anchored('openInDocs', 'detail', 'docs'));
   const detailBody = element('div', 'backlog-detail-body');
   const editorKeys = element('span', 'backlog-editor-keys');

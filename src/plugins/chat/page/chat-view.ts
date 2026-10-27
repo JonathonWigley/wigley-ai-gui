@@ -1,6 +1,5 @@
 import type { ChatEntry, SessionControl } from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
-import type { Disposable } from '../../../contracts/disposable';
 import type {
   EditorHost,
   TextEditor,
@@ -16,6 +15,7 @@ import { textButton } from '../../../shared/page/ui/button';
 import { chip } from '../../../shared/page/ui/chip';
 import { floatingPanel } from '../../../shared/page/ui/floating-panel';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
+import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { statusDot } from '../../../shared/page/ui/status-dot';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
@@ -578,11 +578,6 @@ function buildComposerBar(
     ];
   };
   let scopedAnchors = nameScopedAnchors(scope);
-  const disposeAll = (anchors: readonly Disposable[]) => {
-    for (const anchor of anchors) {
-      anchor.dispose();
-    }
-  };
 
   return {
     element: bar,
@@ -608,12 +603,12 @@ function buildComposerBar(
       bar.replaceChildren(mode, typeHint, running, ...chips, send);
     },
     setScope(next) {
-      disposeAll(scopedAnchors);
+      disposeAnchors(scopedAnchors);
       scopedAnchors = nameScopedAnchors(next);
     },
     dispose() {
-      disposeAll(scopedAnchors);
-      disposeAll(fixedAnchors);
+      disposeAnchors(scopedAnchors);
+      disposeAnchors(fixedAnchors);
     },
   };
 }

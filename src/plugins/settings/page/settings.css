@@ -17,11 +17,7 @@
 /* An edge prompt: a focus move's keys beside the chevron toward the pane it
    moves to. */
 .settings-edge {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--wg-space-1);
   flex: none;
-  white-space: nowrap;
 }
 
 .settings-edge--end {
@@ -43,14 +39,9 @@
 /* The two `/ filter` anchors, one per scope, stacked in one cell so the one
    shown never moves. */
 .settings-filter-hint {
-  display: grid;
   justify-items: end;
   margin-left: auto;
   font-weight: var(--wg-weight-regular);
-}
-
-.settings-filter-hint > * {
-  grid-area: 1 / 1;
 }
 
 /* The cursor row's action keys, at the row's end. */

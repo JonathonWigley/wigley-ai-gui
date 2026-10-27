@@ -21,6 +21,7 @@ import { createDialog } from '../../../shared/page/ui/dialog';
 import { icon } from '../../../shared/page/ui/icon';
 import { iconButton } from '../../../shared/page/ui/icon-button';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
+import { boxHint, keyStack } from '../../../shared/page/ui/key-anchors';
 import { tag } from '../../../shared/page/ui/tag';
 import { pngDataUrl } from '../../../shared/png-data-url';
 import type { KeysPageExports } from '../../keys/contract';
@@ -197,11 +198,11 @@ export function createNotePopup(
   };
 
   // The box hint of the keys that move between the boxes, in `scope`.
-  const boxHint = (scope: NotesScope): HTMLElement => {
-    const node = element('span', 'notes-box-hint');
-    node.append(anchored('prevBox', scope), anchored('nextBox', scope));
-    return node;
-  };
+  const boxMoveHint = (scope: NotesScope): HTMLElement =>
+    boxHint('notes-box-hint', [
+      anchored('prevBox', scope),
+      anchored('nextBox', scope),
+    ]);
 
   // ── Rows ──────────────────────────────────────────────────────────────────
   const fieldsView = element('div', 'notes-fields');
@@ -238,7 +239,7 @@ export function createNotePopup(
   const titleFrame = inputFrame();
   const titleInput = textBoxInput('notes-title');
   titleInput.placeholder = 'Title';
-  titleFrame.append(titleInput, boxHint('title'));
+  titleFrame.append(titleInput, boxMoveHint('title'));
   slot('title').append(titleFrame);
   titleInput.addEventListener('input', () => edit({ title: titleInput.value }));
   titleInput.addEventListener('focus', () => {
@@ -270,7 +271,7 @@ export function createNotePopup(
     blurred: () => boxBlurred(),
     modeChanged: () => undefined,
   });
-  const bodyHint = boxHint('popup');
+  const bodyHint = boxMoveHint('popup');
   bodyFrame.append(bodyHint);
 
   const boxFocused = (box: 'title' | 'body') => {
@@ -453,13 +454,10 @@ export function createNotePopup(
     if (action.hintScopes === undefined) {
       return anchored(action.command, scope);
     }
-    const stack = element('span', 'notes-hint-stack');
-    stack.append(
-      ...action.hintScopes.map((hintScope) =>
-        anchored(action.command, hintScope),
-      ),
+    return keyStack(
+      'notes-hint-stack',
+      action.hintScopes.map((hintScope) => anchored(action.command, hintScope)),
     );
-    return stack;
   };
 
   // Each action's button, its key drawn inside it while a scope it fires in

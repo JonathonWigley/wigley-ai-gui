@@ -21,13 +21,6 @@
 }
 
 /* An edge prompt: an anchor and its chevron, kept together. */
-.docs-edge {
-  align-items: baseline;
-  display: inline-flex;
-  gap: var(--wg-space-1);
-  white-space: nowrap;
-}
-
 .docs-edge--end {
   margin-inline-start: auto;
 }

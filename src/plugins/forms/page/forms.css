@@ -44,11 +44,6 @@
   overflow: auto;
 }
 
-/* An edge prompt pair with nothing else to move to keeps its space. */
-:where(.form-tab) .is-no-target {
-  visibility: hidden;
-}
-
 :where(.form-tab) .rail-head {
   align-items: baseline;
   border-bottom: 1px solid var(--wg-border-default);
@@ -62,13 +57,6 @@
 
 :where(.form-tab) .rail-head-separator {
   color: var(--wg-fg-tertiary);
-}
-
-:where(.form-tab) .rail-edge,
-:where(.form-tab) .item-pager-edge {
-  align-items: baseline;
-  display: inline-flex;
-  gap: var(--wg-space-1);
 }
 
 :where(.form-tab) .rail-edge {
@@ -430,8 +418,6 @@
 :where(.form-tab) .box-keys {
   background: var(--wg-input-background);
   bottom: 0;
-  display: inline-flex;
-  gap: var(--wg-space-1);
   padding: 0 var(--wg-space-1);
   position: absolute;
   right: var(--wg-space-3);

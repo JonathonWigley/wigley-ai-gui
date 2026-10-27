@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
 import type { Keymap, PageBind, ViewScope } from '../../../contracts/keymap';
 import { unplacedLine } from './unplaced';
-import { PLACEMENT_CHECK_EVENT, startUnplacedLog } from './unplaced-log';
+import { UNPLACED_PREFIX } from '../../../shared/placement-check';
+import { startUnplacedLog } from './unplaced-log';
 
 function keymap(page: PageBind[]): Keymap {
   return {
@@ -123,13 +124,9 @@ describe('startUnplacedLog', () => {
 });
 
 describe('the runner contract', () => {
-  it("PLACEMENT_CHECK_EVENT is the runner's event name", () => {
-    expect(PLACEMENT_CHECK_EVENT).toBe('keys-check-placement');
-  });
-
   it("UNPLACED line starts with the runner's prefix", () => {
     const line = `[keys] ${unplacedLine({ keys: 'x', command: 'a.trash' }, 'a.s')}`;
 
-    expect(line.startsWith('[keys] unplaced ')).toBe(true);
+    expect(line.startsWith(UNPLACED_PREFIX)).toBe(true);
   });
 });

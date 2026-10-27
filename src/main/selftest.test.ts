@@ -387,11 +387,3 @@ describe('unplacedLines', () => {
     ]);
   });
 });
-
-describe('PLACEMENT_CHECK_EVENT', () => {
-  it("PLACEMENT_CHECK_EVENT is the keys plugin's event name", async () => {
-    const { PLACEMENT_CHECK_EVENT } = await import('./selftest-runner');
-
-    expect(PLACEMENT_CHECK_EVENT).toBe('keys-check-placement');
-  });
-});

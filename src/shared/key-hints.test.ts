@@ -10,6 +10,7 @@ import {
   formatKeys,
   formatVimKeys,
   formatVimToken,
+  normalVimKeys,
   vimTokens,
 } from './key-hints';
 
@@ -142,6 +143,35 @@ describe('vimTokens', () => {
       '<Space>',
     ]);
     expect(vimTokens('<Esc>', '<Space>')).toEqual(['<Esc>']);
+  });
+});
+
+describe('normalVimKeys', () => {
+  it('normalVimKeys_SpellingsOfOneKey_ReadAlike', () => {
+    for (const [a, b] of [
+      ['<esc>', '<Esc>'],
+      ['<CR>', '<Return>'],
+      ['<enter>', '<CR>'],
+      ['<c-j>', '<C-j>'],
+      ['<S-C-k>', '<C-S-k>'],
+      ['<C-K>', '<C-S-k>'],
+      ['<Space>', ' '],
+      ['g<ESC>', 'g<Esc>'],
+    ]) {
+      expect(normalVimKeys(a)).toBe(normalVimKeys(b));
+    }
+  });
+
+  it('normalVimKeys_DifferentKeys_ReadApart', () => {
+    for (const [a, b] of [
+      ['<C-j>', '<A-j>'],
+      ['<C-j>', '<C-S-j>'],
+      ['<Esc>', '<Tab>'],
+      ['gg', 'g'],
+      ['j', 'J'],
+    ]) {
+      expect(normalVimKeys(a)).not.toBe(normalVimKeys(b));
+    }
   });
 });
 

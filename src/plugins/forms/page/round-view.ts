@@ -20,6 +20,12 @@ import type { ShownLayouts } from '../../../shared/page/layout-loader';
 import { createStatusLine } from '../../../shared/page/status-line';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { textButton } from '../../../shared/page/ui/button';
+import {
+  disposeAnchors,
+  keyChevron,
+  keyEdge,
+  recordingAnchor,
+} from '../../../shared/page/ui/key-anchors';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import type { FormsContributions } from './contributions';
 import type { BoxRef } from './boxes';
@@ -253,27 +259,12 @@ export function createRoundView(
   return view;
 }
 
-// The anchor keys a build hands its parts: `anchor` names the anchor through
-// `keys` and keeps the Disposable it returns in `anchors`.
+// The anchor keys a build hands its parts.
 type AnchorKeys = Pick<KeysPageExports, 'keysFor' | 'anchor'>;
 
+// `keys`, keeping each anchor it names in `anchors`.
 function recordingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {
-  return {
-    keysFor: (command, scope, where) => keys.keysFor(command, scope, where),
-    anchor(element, command, options) {
-      const anchor = keys.anchor(element, command, options);
-      anchors.push(anchor);
-      return anchor;
-    },
-  };
-}
-
-// Disposes every Disposable in `disposables` and empties it.
-function disposeAll(disposables: Disposable[]) {
-  for (const disposable of disposables) {
-    disposable.dispose();
-  }
-  disposables.length = 0;
+  return { ...keys, anchor: recordingAnchor(keys.anchor, anchors) };
 }
 
 // Builds the split's start pane, the rail header, the rail pane and the rail
@@ -362,7 +353,7 @@ function buildRoundParts(
     layoutHead,
     redrawLayoutHead() {
       if (layoutHead !== null) {
-        disposeAll(headAnchors);
+        disposeAnchors(headAnchors);
         drawLayoutHead(layoutHead, round, headPick, headDeps, headAnchors);
       }
     },
@@ -373,8 +364,8 @@ function buildRoundParts(
     itemCards,
     review,
     dispose() {
-      disposeAll(anchors);
-      disposeAll(headAnchors);
+      disposeAnchors(anchors);
+      disposeAnchors(headAnchors);
     },
   };
 }
@@ -386,10 +377,14 @@ function buildRailHead(parent: HTMLElement, keys: AnchorKeys): RailHead {
   const head = element('header', 'rail-head');
   const text = element('span', 'rail-head-text');
   const statusLine = createStatusLine();
-  const edge = element('span', 'rail-edge');
   const previous = element('span');
   const next = element('span');
-  edge.append(previous, chevron('◂'), chevron('▸'), next);
+  const edge = keyEdge('rail-edge', [
+    previous,
+    keyChevron('◂'),
+    keyChevron('▸'),
+    next,
+  ]);
   head.append(
     text,
     element('span', 'rail-head-separator', '·'),
@@ -437,11 +432,9 @@ function buildItemPager(parent: HTMLElement, keys: AnchorKeys): ItemPager {
   const pager = element('div', 'item-pager');
   const previous = element('span');
   const next = element('span');
-  const start = element('span', 'item-pager-edge');
-  start.append(previous, chevron('‹'));
+  const start = keyEdge('item-pager-edge', [previous, keyChevron('‹')]);
   const text = element('span', 'item-pager-text');
-  const end = element('span', 'item-pager-edge');
-  end.append(chevron('›'), next);
+  const end = keyEdge('item-pager-edge', [keyChevron('›'), next]);
   pager.append(start, text, end);
   parent.append(pager);
   const scope = formsScope('forms');
@@ -456,11 +449,6 @@ function buildItemPager(parent: HTMLElement, keys: AnchorKeys): ItemPager {
       end.classList.toggle('is-no-target', hasNoOtherItem);
     },
   };
-}
-
-// A chevron beside an anchor, which hides with it.
-function chevron(text: string): HTMLElement {
-  return element('span', 'ui-key-chevron', text);
 }
 
 // The head kit's deps over the forms view's keys, and the log.
@@ -501,7 +489,7 @@ function drawLayoutHead(
   try {
     pick.layout.head?.(slot, roundInfo(round.round), createHeadKit(deps));
   } catch (error) {
-    disposeAll(anchors);
+    disposeAnchors(anchors);
     slot.replaceChildren();
     deps.log('forms', `layout ${pick.name} head failed: ${errorText(error)}`);
   }

@@ -71,14 +71,7 @@
 
 /* `⌃H ▲ ▼ ⌃L`, hidden while the rail holds one row. */
 .primer-rail-edge {
-  align-items: baseline;
-  display: inline-flex;
-  gap: var(--wg-space-1);
   margin-right: var(--wg-space-2);
-}
-
-.primer-rail-edge.is-no-target {
-  visibility: hidden;
 }
 
 .primer-rail-body {
@@ -100,16 +93,6 @@
 .primer-rail-foot {
   border-top: 1px solid var(--wg-border-default);
   padding: var(--wg-space-2);
-}
-
-/* The rail's and the card's Review keys share one cell, so the button keeps
-   its width as the pane changes. */
-.primer-review-keys {
-  display: inline-grid;
-}
-
-.primer-review-keys > .primer-review-key {
-  grid-area: 1 / 1;
 }
 
 .primer-rail-list > .ui-section-header {
@@ -222,8 +205,6 @@
 .primer-tab .box-keys {
   align-self: end;
   background: var(--wg-sheet-background);
-  display: inline-flex;
-  gap: var(--wg-space-1);
   justify-self: end;
   line-height: 1;
   margin-right: var(--wg-space-2);

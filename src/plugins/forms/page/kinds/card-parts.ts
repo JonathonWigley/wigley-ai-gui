@@ -2,6 +2,7 @@ import type { CommandId } from '../../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
 import { inputFrame } from '../../../../shared/page/ui/input-frame';
+import { boxHint } from '../../../../shared/page/ui/key-anchors';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag } from '../../../../shared/page/ui/tag';
 import type { AnswerStatus, Round } from '../../contract';
@@ -109,14 +110,12 @@ export function buildField(
   return { element: field, box };
 }
 
-// Appends `span.box-keys` after the field's input frame, holding the keys
-// that move to the previous and the next box.
+// Appends the box hint `span.box-keys` after the field's input frame, holding
+// the keys that move to the previous and the next box.
 export function appendBoxKeys(field: Field, anchor: PartAnchor) {
-  const keys = element('span', 'box-keys');
   const previous = element('span');
   const next = element('span');
-  keys.append(previous, next);
-  field.element.append(keys);
+  field.element.append(boxHint('box-keys', [previous, next]));
   anchor(previous, formsCommand('prevBox'));
   anchor(next, formsCommand('nextBox'));
 }

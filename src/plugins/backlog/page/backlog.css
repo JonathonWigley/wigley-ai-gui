@@ -82,13 +82,6 @@
 }
 
 /* An edge prompt: an anchor and its chevron on a pane header's end. */
-.backlog-edge {
-  align-items: baseline;
-  display: inline-flex;
-  gap: var(--wg-space-1);
-  white-space: nowrap;
-}
-
 .backlog-edge--start {
   margin-right: auto;
 }

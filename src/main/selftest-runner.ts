@@ -3,6 +3,10 @@ import { setTimeout as wait } from 'node:timers/promises';
 import type { Files } from '../contracts/files';
 import type { SelfTestGroup, SelfTestStep } from '../contracts/plugin';
 import { errorText } from '../shared/error-text';
+import {
+  PLACEMENT_CHECK_EVENT,
+  UNPLACED_PREFIX,
+} from '../shared/placement-check';
 import type { DrivenWindow } from './drive/driven-window';
 import {
   capturePng,
@@ -41,13 +45,6 @@ export function isOnLoad(
 ): () => boolean {
   return () => window.navigationCount() === load && !hasExited();
 }
-
-// The keys plugin's page event that logs the unplaced binds of every scope in
-// force during the page load (`src/plugins/keys/page/unplaced-log.ts`).
-export const PLACEMENT_CHECK_EVENT = 'keys-check-placement';
-
-// How the keys plugin's unplaced line starts in the page log.
-export const UNPLACED_PREFIX = '[keys] unplaced ';
 
 // The lines of `lines` the keys plugin logged as unplaced binds, in the order
 // given.

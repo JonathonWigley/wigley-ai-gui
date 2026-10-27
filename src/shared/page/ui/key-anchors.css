@@ -1,0 +1,48 @@
+/* A view's chevron or arrow beside an anchor element. */
+.ui-key-chevron {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+}
+
+.ui-key-chevron:has(+ .is-hint-hidden),
+.is-hint-hidden + .ui-key-chevron {
+  visibility: hidden;
+}
+
+/* An anchor for an unbound command is empty. */
+.ui-key-chevron:has(+ :empty),
+:empty + .ui-key-chevron {
+  display: none;
+}
+
+.ui-key-edge {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--wg-space-1);
+  white-space: nowrap;
+}
+
+/* An edge prompt, or an anchor, with nothing to act on keeps its space. */
+.is-no-target {
+  visibility: hidden;
+}
+
+.ui-box-hint {
+  display: inline-flex;
+  gap: var(--wg-space-1);
+}
+
+.ui-key-stack {
+  display: inline-grid;
+}
+
+.ui-key-stack > * {
+  grid-area: 1 / 1;
+}
+
+/* A box hint or a stack whose anchors are all empty, or a hidden box hint. */
+.ui-box-hint:not(:has(> :not(:empty))),
+.ui-key-stack:not(:has(> :not(:empty))),
+.ui-box-hint[hidden] {
+  display: none;
+}

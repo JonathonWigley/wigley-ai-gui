@@ -31,6 +31,14 @@ import { textLineHeightPx } from '../../../shared/page/text-line';
 import { textButton } from '../../../shared/page/ui/button';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
+import {
+  boxHint,
+  disposeAnchors,
+  keyChevron,
+  keyEdge,
+  keyStack,
+  recordingAnchor,
+} from '../../../shared/page/ui/key-anchors';
 import { row } from '../../../shared/page/ui/row';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { createSplit } from '../../../shared/page/ui/split';
@@ -325,7 +333,7 @@ function createPrimerFormView(
   split.start.classList.add('primer-rail');
   split.end.classList.add('primer-main');
   const anchors: Disposable[] = [];
-  const keys = collectingKeys(deps.keys, anchors);
+  const keys = { anchor: recordingAnchor(deps.keys.anchor, anchors) };
   const rail = mountRail(split.start, keys, deps.run);
   const cardEdge = cardEdgeStrip(keys);
   const cardPane = element('div', 'primer-card');
@@ -405,28 +413,9 @@ function createPrimerFormView(
     },
     dispose() {
       card.dispose();
-      disposeAll(anchors);
+      disposeAnchors(anchors);
     },
   };
-}
-
-// A `keys` whose anchors each land on `anchors`, so their owner disposes
-// them together.
-function collectingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {
-  return {
-    anchor(node, command, options) {
-      const anchor = keys.anchor(node, command, options);
-      anchors.push(anchor);
-      return anchor;
-    },
-  };
-}
-
-function disposeAll(anchors: Disposable[]) {
-  for (const anchor of anchors) {
-    anchor.dispose();
-  }
-  anchors.length = 0;
 }
 
 // A `span` of `className` anchored to the primer `command`.
@@ -441,10 +430,6 @@ function anchoredSpan(
   return node;
 }
 
-function chevron(text: string): HTMLElement {
-  return element('span', 'ui-key-chevron', text);
-}
-
 // Fills `rail` with its header, its body and its foot, and builds the
 // prompts `drawRail` places. The header holds the save state, the row pair
 // `⌃H ▲ ▼ ⌃L` and `⌥L card ›` at the split's edge; the foot the Review
@@ -456,13 +441,12 @@ function mountRail(
 ): RailParts {
   const scope = primerScope('rail');
   const statusLine = createStatusLine();
-  const edge = element('span', 'primer-rail-edge');
-  edge.append(
+  const edge = keyEdge('primer-rail-edge', [
     anchoredSpan(keys, 'primer-rail-key', 'prevRow', { scope }),
-    chevron('▲'),
-    chevron('▼'),
+    keyChevron('▲'),
+    keyChevron('▼'),
     anchoredSpan(keys, 'primer-rail-key', 'nextRow', { scope }),
-  );
+  ]);
   const head = element('header', 'primer-rail-head');
   head.append(
     statusLine.element,
@@ -471,7 +455,7 @@ function mountRail(
       scope,
       label: 'card',
     }),
-    chevron('›'),
+    keyChevron('›'),
   );
   const body = element('div', 'primer-rail-body');
   const removeKey = anchoredSpan(keys, 'primer-row-key', 'removeExtraTask', {
@@ -492,13 +476,12 @@ function mountRail(
     scope,
     label: 'add',
   });
-  const reviewKeys = element('span', 'primer-review-keys');
-  reviewKeys.append(
+  const reviewKeys = keyStack('primer-review-keys', [
     anchoredSpan(keys, 'primer-review-key', 'openReview', { scope }),
     anchoredSpan(keys, 'primer-review-key', 'openReview', {
       scope: primerScope('card'),
     }),
-  );
+  ]);
   const foot = element('footer', 'primer-rail-foot');
   foot.append(
     textButton('Review', () => run(primerCommand('openReview')), {
@@ -521,7 +504,7 @@ function mountRail(
 function cardEdgeStrip(keys: AnchorKeys): HTMLElement {
   const strip = element('div', 'primer-card-edge');
   strip.append(
-    chevron('‹ rail'),
+    keyChevron('‹ rail'),
     anchoredSpan(keys, 'primer-card-edge-key', 'focusRail', {
       scope: primerScope('card'),
     }),
@@ -643,14 +626,14 @@ function buildCard(
   const anchors: Disposable[] = [];
   const cardDeps: CardDeps = {
     ...deps,
-    keys: collectingKeys(deps.keys, anchors),
+    keys: { anchor: recordingAnchor(deps.keys.anchor, anchors) },
   };
   const entry = selectedEntry(primer);
   const update =
     entry === null
       ? buildFeatureCard(parent, primer, cardDeps)
       : buildTaskCard(parent, primer, entry, cardDeps);
-  return { update, dispose: () => disposeAll(anchors) };
+  return { update, dispose: () => disposeAnchors(anchors) };
 }
 
 // The Feature card's fields; it redraws nothing without a rebuild.
@@ -862,11 +845,10 @@ function mountFrame(
   const frame = inputFrame();
   frame.classList.add('primer-box');
   const scope = primerScope('card');
-  const boxKeys = element('span', 'box-keys');
-  boxKeys.append(
+  const boxKeys = boxHint('box-keys', [
     anchoredSpan(deps.keys, 'primer-box-key', 'prevBox', { scope }),
     anchoredSpan(deps.keys, 'primer-box-key', 'nextBox', { scope }),
-  );
+  ]);
   parent.append(frame, boxKeys);
   deps.boxes.mount(
     frame,

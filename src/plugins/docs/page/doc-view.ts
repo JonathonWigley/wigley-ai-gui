@@ -19,6 +19,11 @@ import { errorText } from '../../../shared/error-text';
 import { element, markdownElement } from '../../../shared/page/dom';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { emptyState } from '../../../shared/page/ui/empty-state';
+import {
+  disposeAnchors,
+  keyChevron,
+  keyEdge,
+} from '../../../shared/page/ui/key-anchors';
 import { type TagTone, tag } from '../../../shared/page/ui/tag';
 import type { DocsChannel } from '../contract';
 import { splitFrontmatter } from '../frontmatter';
@@ -261,11 +266,10 @@ export function createDocView(deps: DocViewDeps): DocView {
     anchors.push(deps.anchor(node, command, options));
     return node;
   };
-  const edge = element('div', 'docs-edge docs-edge--start');
-  edge.append(
-    element('span', 'ui-key-chevron', '‹ tree'),
+  const edge = keyEdge('docs-edge docs-edge--start', [
+    keyChevron('‹ tree'),
     anchored('focusTree', { scope: 'doc' }),
-  );
+  ]);
   const empty = emptyState(EMPTY_TEXT, anchored('focusTree', { scope: 'doc' }));
   const header = element('div', 'docs-header');
   const title = element('h1', 'docs-title');
@@ -821,9 +825,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       editor?.destroy();
       editor = null;
       watchFile(null, shown?.name ?? 'the doc');
-      for (const each of anchors) {
-        each.dispose();
-      }
+      disposeAnchors(anchors);
     },
   };
   return view;

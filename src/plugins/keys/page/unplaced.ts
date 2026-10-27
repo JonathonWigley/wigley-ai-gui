@@ -2,6 +2,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Keymap, ViewScope } from '../../../contracts/keymap';
 import { vimTokens } from '../../../shared/key-hints';
 import { pageKeysFor } from '../../../shared/key-notation';
+import { UNPLACED_MESSAGE_START } from '../../../shared/placement-check';
 import { isVimKeys, pageVimKeys } from './vim-keys';
 
 // A bind with no anchor: its keys in vim notation and the command they run.
@@ -47,5 +48,5 @@ export function unplacedBinds(
 
 // The log line, under `[keys]`, for a bind firing in `scope` with no anchor.
 export function unplacedLine(bind: UnplacedBind, scope: ViewScope): string {
-  return `unplaced ${bind.keys} ${bind.command} in ${scope}`;
+  return `${UNPLACED_MESSAGE_START}${bind.keys} ${bind.command} in ${scope}`;
 }

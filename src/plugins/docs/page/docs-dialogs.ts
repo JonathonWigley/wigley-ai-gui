@@ -15,6 +15,7 @@ import {
 import { textButton } from '../../../shared/page/ui/button';
 import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
+import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { row } from '../../../shared/page/ui/row';
 import type {
   CreateKind,
@@ -612,9 +613,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       confirm.close();
     },
     dispose() {
-      for (const each of anchors) {
-        each.dispose();
-      }
+      disposeAnchors(anchors);
     },
   };
   return dialogs;

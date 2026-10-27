@@ -1,5 +1,9 @@
 import type { Disposable } from '../../../../contracts/disposable';
 import { errorText } from '../../../../shared/error-text';
+import {
+  disposeAnchors,
+  recordingAnchor,
+} from '../../../../shared/page/ui/key-anchors';
 import type { KeysPageExports } from '../../../keys/contract';
 import type { ItemKind } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
@@ -151,14 +155,7 @@ export function drawRollingBack<D extends RollbackDeps, R>(
       deps.mountBox(boxParent, target, text);
       mounted.push(target);
     },
-    keys: {
-      ...deps.keys,
-      anchor(element, command, options) {
-        const anchor = deps.keys.anchor(element, command, options);
-        anchors.push(anchor);
-        return anchor;
-      },
-    },
+    keys: { ...deps.keys, anchor: recordingAnchor(deps.keys.anchor, anchors) },
   };
   const existing = new Set(parent.childNodes);
   try {
@@ -167,9 +164,7 @@ export function drawRollingBack<D extends RollbackDeps, R>(
     for (const target of mounted) {
       deps.destroyBox(target);
     }
-    for (const anchor of anchors) {
-      anchor.dispose();
-    }
+    disposeAnchors(anchors);
     // childNodes is live, so the appended nodes are collected before removal.
     const appended = Array.from(parent.childNodes).filter(
       (node) => !existing.has(node),

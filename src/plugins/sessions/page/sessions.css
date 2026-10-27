@@ -17,17 +17,7 @@
 
 /* `⌥⇧I ▲ ▼ ⌥⇧O` on the list's header. */
 .session-edge {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--wg-space-1);
   font-weight: var(--wg-weight-regular);
-}
-
-/* An edge prompt with nothing to move to, or the close prompt with no
-   session, keeps its space. */
-.session-edge.is-no-target,
-.session-tabs-bar > .is-no-target {
-  visibility: hidden;
 }
 
 .session-sidebar {
@@ -94,12 +84,6 @@
   align-items: center;
   column-gap: var(--wg-space-1);
   margin: var(--wg-sheet-gutter) var(--wg-sheet-gutter) 0;
-}
-
-.session-tabs-edge {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--wg-space-1);
 }
 
 .session-tabs-close {

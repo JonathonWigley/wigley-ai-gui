@@ -259,12 +259,15 @@ round; primer: an open primer), since main, not the page, decides.
     scope is not the one in force (an anchor with no scope always shows) or the `keys.showHints` setting is off. A
     plugin draws no key hint of its own.
   - **The view places and styles each anchor** by one of four placement kinds (`DESIGN.md` § Keys and focus): an edge
-    prompt, a cursor prompt, a control hint or a box hint.
+    prompt, a cursor prompt, a control hint or a box hint. The parts around anchors — chevrons, edge prompts, box
+    hints, stacks of one command's anchors, and recording and disposing anchors — come from
+    `src/shared/page/ui/key-anchors.ts`.
   - **Vim's own keys** — the key sequences listed in the keys plugin (`j`, `k`, `gg`, Enter, Esc, the `<C-j>` scroll
-    keys and the like) — need no anchor and show in help only; a view may still anchor one, as Accept does with
-    Enter. An anchor prints the command's first bind that is not one of vim's own keys, or its first bind when
-    every bind is. Leader sequences show in which-key.
-  - **Every other bind has an anchor.** At the end of a self-test run (the `keys-check-placement` page event) the
+    keys and the like), in any spelling of them (`<esc>`, `<Return>`, `<c-j>`) — need no anchor and show in help
+    only; a view may still anchor one, as Accept does with Enter. An anchor prints the command's first bind that is
+    not one of vim's own keys, or its first bind when every bind is. Leader sequences show in which-key.
+  - **Every other bind has an anchor.** At the end of a self-test run (the `keys-check-placement` page event, named
+    with the line's prefix in `src/shared/placement-check.ts`, which the runner and the plugin share) the
     plugin logs `[keys] unplaced <keys> <command> in <scope>`, once per scope and bind, for each bind firing in a
     scope that was in force during the page load whose command no anchor named during the page load, in that scope or
     with no scope. Leader sequences and vim's own keys are left out. The self-test fails on that line, so a new

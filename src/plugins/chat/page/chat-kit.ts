@@ -8,6 +8,7 @@ import {
   card,
   createCollapsibleCard,
 } from '../../../shared/page/ui/card';
+import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { setDotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import type { KeysPageExports } from '../../keys/contract';
@@ -138,7 +139,7 @@ function createPermissionPart(
 ): PermissionPart {
   const part = element('div', 'chat-permission-actions');
   let current = entry;
-  let anchors: Disposable[] = [];
+  const anchors: Disposable[] = [];
   const actionButton = (
     label: string,
     variant: ButtonVariant,
@@ -153,16 +154,10 @@ function createPermissionPart(
     );
     return textButton(label, () => act(current), { variant, hint });
   };
-  const disposeAnchors = () => {
-    for (const anchor of anchors) {
-      anchor.dispose();
-    }
-    anchors = [];
-  };
   const draw = (next: PermissionEntry) => {
     current = next;
     if (next.answer !== null) {
-      disposeAnchors();
+      disposeAnchors(anchors);
       part.replaceChildren(
         element('span', 'chat-permission-answer', answerText(next.answer)),
       );
@@ -179,7 +174,7 @@ function createPermissionPart(
     );
   }
   draw(entry);
-  return { element: part, draw, dispose: disposeAnchors };
+  return { element: part, draw, dispose: () => disposeAnchors(anchors) };
 }
 
 // One thumbnail per image, each opening the viewer at its own index.

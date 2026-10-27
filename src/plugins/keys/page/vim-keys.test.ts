@@ -25,8 +25,32 @@ describe('vim keys', () => {
     expect(isVimKeys('<C-S-k>')).toBe(true);
   });
 
+  it('isVimKeys_OtherSpelling_True', () => {
+    for (const keys of [
+      '<esc>',
+      '<ESC>',
+      '<Enter>',
+      '<Return>',
+      '<cr>',
+      '<c-j>',
+      '<S-C-k>',
+      '<C-K>',
+    ]) {
+      expect(isVimKeys(keys)).toBe(true);
+    }
+  });
+
   it('isVimKeys_NotListed_False', () => {
-    for (const keys of ['g', 'jj', 'x', '<C-l>', '<A-o>']) {
+    for (const keys of [
+      'g',
+      'jj',
+      'x',
+      '<C-l>',
+      '<A-o>',
+      '<A-j>',
+      '<Tab>',
+      '<X-j>',
+    ]) {
       expect(isVimKeys(keys)).toBe(false);
     }
   });

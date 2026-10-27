@@ -3,9 +3,6 @@ import type { Keymap, ViewScope } from '../../../contracts/keymap';
 import type { Log } from '../../../contracts/log';
 import { unplacedBinds, unplacedLine } from './unplaced';
 
-// The page event that runs `checkSeen`; the self-test runner dispatches it.
-export const PLACEMENT_CHECK_EVENT = 'keys-check-placement';
-
 export interface UnplacedLogDeps {
   keymap(): Keymap;
   scope(): ViewScope;

@@ -24,6 +24,11 @@ import { textBoxInput } from '../../../shared/page/text-box';
 import { card } from '../../../shared/page/ui/card';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
+import {
+  keyChevron,
+  keyEdge,
+  keyStack,
+} from '../../../shared/page/ui/key-anchors';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { sheet } from '../../../shared/page/ui/sheet';
 import type { SettingsChannel } from '../contract';
@@ -182,11 +187,6 @@ const PROMPT_LABELS: Record<PromptAction, string> = {
   reset: 'reset',
 };
 
-// A `span.ui-key-chevron` reading `text`, placed beside an anchor element.
-function chevron(text: string): HTMLElement {
-  return element('span', 'ui-key-chevron', text);
-}
-
 interface OpenBox {
   box: RowBox;
   file: ConfigFile;
@@ -207,8 +207,10 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   };
 
   // `⌥L rows ›` at the side bar's end edge.
-  const endEdge = element('span', 'settings-edge settings-edge--end');
-  endEdge.append(anchored('focusRows', 'sections', 'rows'), chevron('›'));
+  const endEdge = keyEdge('settings-edge settings-edge--end', [
+    anchored('focusRows', 'sections', 'rows'),
+    keyChevron('›'),
+  ]);
   const sections = createSectionsView({
     edge: endEdge,
     clicked: (index) => {
@@ -225,13 +227,14 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   // The section header: `‹ sections ⌥H`, the open section's title, then
   // `/ filter`, whose two anchors share one cell so that the one shown in
   // the scope in force never moves.
-  const startEdge = element('span', 'settings-edge settings-edge--start');
-  startEdge.append(chevron('‹ sections'), anchored('focusSections', 'rows'));
-  const filterHint = element('span', 'settings-filter-hint');
-  filterHint.append(
+  const startEdge = keyEdge('settings-edge settings-edge--start', [
+    keyChevron('‹ sections'),
+    anchored('focusSections', 'rows'),
+  ]);
+  const filterHint = keyStack('settings-filter-hint', [
     anchored('filter', 'sections', 'filter'),
     anchored('filter', 'rows', 'filter'),
-  );
+  ]);
   const sectionHead = (title: string) => {
     const head = sectionHeader(title, filterHint);
     head.classList.add('settings-head');

@@ -1,3 +1,4 @@
+import { normalVimKeys } from '../../../shared/key-hints';
 import { vimTokenForPageKey } from '../../../shared/key-notation';
 
 // Vim's own key sequences, in vim notation: they work the same on every list
@@ -17,9 +18,14 @@ export const VIM_KEYS: readonly string[] = [
   '<C-S-k>',
 ];
 
-// Whether `keys`, in vim notation, is one of vim's own key sequences.
+const NORMAL_VIM_KEYS: ReadonlySet<string> = new Set(
+  VIM_KEYS.map(normalVimKeys),
+);
+
+// Whether `keys`, in vim notation in any spelling, is one of vim's own key
+// sequences: `<esc>`, `<Enter>` and `<c-j>` are.
 export function isVimKeys(keys: string): boolean {
-  return VIM_KEYS.includes(keys);
+  return NORMAL_VIM_KEYS.has(normalVimKeys(keys));
 }
 
 // A page bind's keys in vim notation: `['g', 'g']` is `gg`, `['Escape']` is

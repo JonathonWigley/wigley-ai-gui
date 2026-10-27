@@ -3,6 +3,11 @@ import type { Log } from '../../../contracts/log';
 import type { PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
 import { emptyState } from '../../../shared/page/ui/empty-state';
+import {
+  disposeAnchors,
+  keyChevron,
+  keyEdge,
+} from '../../../shared/page/ui/key-anchors';
 import { icon } from '../../../shared/page/ui/icon';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { row as rowPart } from '../../../shared/page/ui/row';
@@ -217,11 +222,10 @@ function headerElement(anchors: Disposable[], anchor: DocsAnchor): HTMLElement {
   for (const [command, label] of HEADER_HINTS) {
     header.append(anchoredSpan(command, label, anchors, anchor));
   }
-  const edge = element('span', 'docs-edge docs-edge--end');
-  edge.append(
+  const edge = keyEdge('docs-edge docs-edge--end', [
     anchoredSpan('focusDoc', 'doc', anchors, anchor),
-    element('span', 'ui-key-chevron', '›'),
-  );
+    keyChevron('›'),
+  ]);
   header.append(edge);
   return header;
 }
@@ -236,12 +240,6 @@ function rowActionsElement(
     actions.append(anchoredSpan(command, label, anchors, anchor));
   }
   return actions;
-}
-
-function disposeAll(disposables: readonly Disposable[]): void {
-  for (const disposable of disposables) {
-    disposable.dispose();
-  }
 }
 
 export function createTreeView(deps: TreeViewDeps): TreeView {
@@ -261,7 +259,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   const list = element('ol', 'docs-rows');
   let shownLine: TreeLine | null = null;
   // The anchor the shown line's hint names, disposed as the line is replaced.
-  let lineAnchors: Disposable[] = [];
+  const lineAnchors: Disposable[] = [];
   let line = lineElement(shownLine, lineAnchors, deps.anchor);
   pane.append(header, status, filterFrame, line, list);
 
@@ -273,6 +271,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   let hasTree = false;
   let filterScope: PushedScope | null = null;
   let hasFocus = false;
+  let isDisposed = false;
 
   const draw = () => {
     pane.classList.toggle('is-pane-inactive', !hasFocus);
@@ -283,8 +282,12 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     showLine();
   };
 
-  // Replaces the line only when it changed, so a selection move leaves it.
+  // Replaces the line only when it changed, so a selection move leaves it; a
+  // disposed view names no new anchor.
   const showLine = () => {
+    if (isDisposed) {
+      return;
+    }
     const next = treeLine({
       hasTree,
       isIndexEmpty: tree.length === 0,
@@ -296,8 +299,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       return;
     }
     shownLine = next;
-    disposeAll(lineAnchors);
-    lineAnchors = [];
+    disposeAnchors(lineAnchors);
     const nextLine = lineElement(next, lineAnchors, deps.anchor);
     line.replaceWith(nextLine);
     line = nextLine;
@@ -504,8 +506,9 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     },
     statusesChanged: () => draw(),
     dispose() {
-      disposeAll(anchors);
-      disposeAll(lineAnchors);
+      isDisposed = true;
+      disposeAnchors(anchors);
+      disposeAnchors(lineAnchors);
     },
   };
 
