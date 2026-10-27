@@ -231,7 +231,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
         }
       },
       connect: (info) => list.connect(info),
-      open: (info) => list.open(info),
+      open: (info, options) => list.open(info, options),
       mark: (sessionId) => list.mark(sessionId),
       activate: (sessionId) => list.activate(sessionId),
       selectedSessionId: () => list.selectedSessionId(),

@@ -99,6 +99,12 @@ export interface OwnedSession {
   end(): void;
 }
 
+// `select` false opens a session in the background: its row is added unmarked
+// and the selected row stays as it was.
+export interface OpenOptions {
+  select: boolean;
+}
+
 export interface SessionsMainExports {
   // A contribution reaches only sessions that connect after it, so a plugin
   // contributes during its start. Throws on a tool name another contribution
@@ -112,9 +118,11 @@ export interface SessionsMainExports {
   // id takes the join from an older one still connected; the older handle's
   // `end` then leaves the join alone.
   connect(info: SessionInfo): ConnectedSession;
-  // Starts an owned session with its row selected. Throws when `info.sessionId`
-  // is null or any session already holds that host id.
-  open(info: SessionInfo): OwnedSession;
+  // Starts an owned session with its row selected, or, with `options.select`
+  // false, added unmarked and the selected row (or none) left as it was.
+  // Throws when `info.sessionId` is null or any session already holds that
+  // host id.
+  open(info: SessionInfo, options?: OpenOptions): OwnedSession;
   // Attention for the session: selects its row when none is selected, else
   // marks it; a row the user closed comes back at the end first.
   mark(sessionId: string): void;

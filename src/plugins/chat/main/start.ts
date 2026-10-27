@@ -23,7 +23,7 @@ import type {
   SessionsMainExports,
   ToolResult,
 } from '../../sessions/contract';
-import type { ChatChannel } from '../contract';
+import type { ChatChannel, ChatMainExports } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { chatManifest } from '../manifest';
 import { createAccounts } from './accounts';
@@ -187,7 +187,8 @@ export function addDriveActions(
 // `permission_prompt` tool, keeps the recent project folders and serves them
 // merged with the harness's, signs profiles in and out (cancelling a running
 // sign-in when the page loads again or the part is disposed), serves the page
-// its chat layouts, and offers a drive run its fixtures.
+// its chat layouts, offers a drive run its fixtures, and exports a background
+// launch to other plugins.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -201,6 +202,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     });
     const harness = () => requireChatHarness(services.agentHarnesses);
     const profiles = () => api.settings().profiles;
+    const profileNames = () => profiles().map((profile) => profile.name);
     const folderChoices = createFolderChoices({
       recent,
       harness,
@@ -284,16 +286,23 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       driveActions.push(
         ...addDriveActions(api.drive, {
           services,
-          profileNames: () =>
-            api.settings().profiles.map((profile) => profile.name),
+          profileNames,
           chat,
           sessions,
         }),
       );
     }
     const layouts = serveLayouts(api);
+    const exports: ChatMainExports = {
+      launch: async (request) => chat.launch(request),
+      profileNames,
+      profileOf: (sessionId) =>
+        chat.sessions().find((held) => held.sessionId === sessionId)?.profile ??
+        null,
+    };
     return {
       commands: {},
+      exports,
       dispose: () => {
         chat.killAll();
         accounts.cancelRunning();

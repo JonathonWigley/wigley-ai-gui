@@ -568,6 +568,30 @@ describe('createSessionList', () => {
     expect(state.rows.map((row) => row.marked)).toEqual([false, false]);
   });
 
+  it('open_SelectFalse_KeepsSelectedRow', () => {
+    const { list, emitted } = setUp();
+    const selected = list.connect(info('/work/x'));
+    list.activate(selected.session.id);
+
+    const opened = list.open(owned('h'), { select: false });
+
+    const state = list.state();
+    expect(state.selectedSessionId).toBe(selected.session.id);
+    expect(state.rows.map((row) => [row.sessionId, row.marked])).toEqual([
+      [selected.session.id, false],
+      [opened.session.id, false],
+    ]);
+    expect(emitted.at(-1)).toEqual(['connected', opened.session]);
+  });
+
+  it('open_SelectFalse_NoneSelected_StaysNone', () => {
+    const { list } = setUp();
+
+    list.open(owned('h'), { select: false });
+
+    expect(list.selectedSessionId()).toBeNull();
+  });
+
   it('starts the contributed tool sessions when an owned session opens', () => {
     const { list } = setUp();
     const contribution = fakeContribution();

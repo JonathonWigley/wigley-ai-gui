@@ -140,7 +140,7 @@ function routeCall(
 
 // Connected and owned sessions and the sidebar rows main holds for them. A
 // connected session gets its row at connect, unselected; an owned session gets
-// its row at open, selected, is joined by each relay carrying its host id
+// its row at open, selected unless opened with `select` false, is joined by each relay carrying its host id
 // without a row of its own, a newer relay taking the join from an older one,
 // and ends only by its `end()`. Each session keeps
 // its label while it lasts; a closed row comes back at the end with the
@@ -304,7 +304,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         end: () => end(entry),
       };
     },
-    open(info): OwnedSession {
+    open(info, options): OwnedSession {
       const hostId = info.sessionId;
       if (hostId === null) {
         throw new Error('open needs a host session id');
@@ -313,7 +313,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         throw new Error(`Host session ${hostId} is already open`);
       }
       const entry = addEntry(info, true);
-      select(rows.at(-1));
+      if (options?.select !== false) {
+        select(rows.at(-1));
+      }
       sendState();
       deps.emit('connected', entry.session);
       return { session: entry.session, end: () => end(entry) };

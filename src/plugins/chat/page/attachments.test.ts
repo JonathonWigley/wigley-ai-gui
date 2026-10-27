@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatImage } from '../../../contracts/agent';
+import { refusalOf } from '../image-rules';
 import {
   createAttachments,
   listenForImages,
-  refusalOf,
   refusalOfFile,
 } from './attachments';
 

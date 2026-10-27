@@ -25,6 +25,12 @@ export interface StartRequest {
   profile: string;
 }
 
+export interface LaunchRequest {
+  projectDir: string;
+  profile: string;
+  message: UserMessage;
+}
+
 // `hostSessionId` is the harness's id for the saved session.
 export interface PastSessionRow {
   hostSessionId: string;
@@ -132,6 +138,17 @@ export interface ChatChannel extends ChannelShape {
       error: string | null;
     };
   };
+}
+
+// The main part's exports.
+export interface ChatMainExports {
+  // Starts a session and sends `message` as its first message; leaves the
+  // selected row as it was. Resolves to the new row's sessionId.
+  launch(request: LaunchRequest): Promise<string>;
+  // Chat's profile names, in settings order.
+  profileNames(): string[];
+  // The profile of a session chat owns; null for any other session id.
+  profileOf(sessionId: string): string | null;
 }
 
 // The session an app slash command was sent in: `args` is the trimmed text

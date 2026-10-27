@@ -12,8 +12,10 @@ import type { RandomUuid } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
 import type { MainChannel } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { refusalOf } from '../image-rules';
 import type {
   AgentSession,
+  OpenOptions,
   OwnedSession,
   SessionsMainExports,
   ToolResult,
@@ -23,6 +25,7 @@ import type {
   ChatChannel,
   ChatProfile,
   ChatSessionState,
+  LaunchRequest,
   PastSessionRow,
   PermissionAnswer,
   ResumeRequest,
@@ -62,6 +65,10 @@ export interface ChatSessionsDeps {
 export interface ChatSessions {
   sessions(): ChatSessionState[];
   start(request: StartRequest): string;
+  // Starts a session with its row unselected and sends `message` as its first
+  // message; returns the row's sessionId. Throws before opening anything on
+  // an image chat would refuse to attach.
+  launch(request: LaunchRequest): string;
   // The folder's saved sessions under the profile, newest first, leaving out
   // every session open in the app but one held ended, which `resume` takes.
   // When the archived-sessions file cannot be read, every row lists as not
@@ -367,21 +374,26 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return profile.configDir;
   }
 
-  // Opens the row for `hostId`, stores its state with `entries`, starts its
-  // process and records the folder; returns the row's sessionId.
+  // Opens the row for `hostId` as `options` says, stores its state with
+  // `entries`, starts its process and records the folder; returns the row's
+  // sessionId.
   function openSession(
     harness: AgentHarness,
     profile: ChatProfile,
     projectDir: string,
     opening: { hostId: string; resume: boolean; entries: ChatEntry[] },
+    options: OpenOptions,
   ): string {
     const { hostId } = opening;
-    const owned = sessions.open({
-      sessionId: hostId,
-      projectDir,
-      deadlineSeconds: null,
-      harness: CHAT_HARNESS_ID,
-    });
+    const owned = sessions.open(
+      {
+        sessionId: hostId,
+        projectDir,
+        deadlineSeconds: null,
+        harness: CHAT_HARNESS_ID,
+      },
+      options,
+    );
     const sessionId = owned.session.id;
     const session: HeldSession = {
       state: {
@@ -429,14 +441,34 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return sessionId;
   }
 
-  function start(request: StartRequest): string {
+  // A new session in the folder, its row selected as `options` says.
+  function startNew(request: StartRequest, options: OpenOptions): string {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
-    return openSession(harness, profile, request.projectDir, {
-      hostId: deps.randomUuid(),
-      resume: false,
-      entries: [],
-    });
+    return openSession(
+      harness,
+      profile,
+      request.projectDir,
+      { hostId: deps.randomUuid(), resume: false, entries: [] },
+      options,
+    );
+  }
+
+  function sendMessage(sessionId: string, message: UserMessage) {
+    liveFor('send', sessionId)?.process?.send(message);
+  }
+
+  function launch(request: LaunchRequest): string {
+    for (const image of request.message.images) {
+      const refusal = refusalOf(image.mediaType, image.data.length);
+      if (refusal !== null) {
+        throw new Error(refusal);
+      }
+    }
+    const sessionId = startNew(request, { select: false });
+    sendMessage(sessionId, request.message);
+    log('chat', `launched session ${sessionId} in ${request.projectDir}`);
+    return sessionId;
   }
 
   // The session held ended on the row of `hostSessionId`, if any.
@@ -530,11 +562,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       projectDir,
       profileDirOf(profile),
     );
-    return openSession(harness, profile, projectDir, {
-      hostId: hostSessionId,
-      resume: true,
-      entries,
-    });
+    return openSession(
+      harness,
+      profile,
+      projectDir,
+      { hostId: hostSessionId, resume: true, entries },
+      { select: true },
+    );
   }
 
   function askPermission(
@@ -580,14 +614,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   return {
     sessions: () =>
       [...held.values()].map((session) => copyState(session.state)),
-    start,
+    start: (request) => startNew(request, { select: true }),
+    launch,
     pastSessions,
     setArchived: (hostSessionId, archived) =>
       deps.archived.set(hostSessionId, archived),
     resume,
-    send(sessionId, message) {
-      liveFor('send', sessionId)?.process?.send(message);
-    },
+    send: sendMessage,
     notice(sessionId, text, tone) {
       const session = liveFor('notice', sessionId);
       if (session === null) {

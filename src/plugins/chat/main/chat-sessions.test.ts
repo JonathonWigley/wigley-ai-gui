@@ -13,6 +13,7 @@ import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   AgentSession,
+  OpenOptions,
   SessionInfo,
   ToolResult,
 } from '../../sessions/contract';
@@ -71,6 +72,7 @@ function setUp(
   const log = (source: string, message: string) =>
     logged.push(`[${source}] ${message}`);
   const opened: SessionInfo[] = [];
+  const openOptions: (OpenOptions | undefined)[] = [];
   const marked: string[] = [];
   const activated: string[] = [];
   const announced: Announced[] = [];
@@ -82,8 +84,9 @@ function setUp(
   let uuidCalls = 0;
   const archived = createArchivedSessions(data);
   const sessions: ChatSessionsDeps['sessions'] = {
-    open: (info) => {
+    open: (info, options) => {
       opened.push(info);
+      openOptions.push(options);
       return {
         session: { id: ROW_ID, info },
         end: () => {
@@ -138,6 +141,7 @@ function setUp(
     data,
     logged,
     opened,
+    openOptions,
     marked,
     activated,
     announced,
@@ -469,6 +473,62 @@ describe('createChatSessions', () => {
       { sessionId: ROW_ID, names: ['compact', 'model'] },
     ]);
     expect(test.chat.sessions()[0].commands).toEqual(['compact', 'model']);
+  });
+
+  it('start_OpensSelected', () => {
+    const test = setUp();
+
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+
+    expect(test.openOptions).toEqual([{ select: true }]);
+  });
+
+  it('launch_OpensUnselectedAndSendsFirstMessage', async () => {
+    const test = setUp();
+
+    const sessionId = test.chat.launch({
+      projectDir: PROJECT_DIR,
+      profile: DEFAULT_PROFILES[0].name,
+      message: { text: 'fix the chip', images: [] },
+    });
+    await flush();
+
+    expect(sessionId).toBe(ROW_ID);
+    expect(test.openOptions).toEqual([{ select: false }]);
+    expect(test.harness.processes[0].calls).toEqual([
+      { method: 'send', text: 'fix the chip', imageCount: 0 },
+    ]);
+    expect(test.activated).toEqual([]);
+  });
+
+  it('launch_UnknownProfile_ThrowsAndStartsNothing', () => {
+    const test = setUp();
+
+    expect(() =>
+      test.chat.launch({
+        projectDir: PROJECT_DIR,
+        profile: 'home',
+        message: { text: 'fix the chip', images: [] },
+      }),
+    ).toThrow('chat has no profile "home"');
+    expect(test.harness.processes).toEqual([]);
+  });
+
+  it('launch_ImageOverCap_RejectsAndOpensNothing', () => {
+    const test = setUp();
+    const oversized = {
+      mediaType: 'image/png',
+      data: 'a'.repeat(6 * 1024 * 1024),
+    };
+
+    expect(() =>
+      test.chat.launch({
+        projectDir: PROJECT_DIR,
+        profile: DEFAULT_PROFILES[0].name,
+        message: { text: 'fix the chip', images: [oversized] },
+      }),
+    ).toThrow('Images over 5 MB cannot be attached');
+    expect(test.opened).toEqual([]);
   });
 
   it('start_unknownProfile_throwsAndOpensNothing', () => {
