@@ -1,13 +1,28 @@
 /* The tree pane: Docs mode's side bar, or a session Docs tab's split start
-   pane, whose container draws its edge. Its tracks: the header, the status,
-   the filter, the line between the filter and the rows, and the rows. */
+   pane, whose container draws its edge. It holds the layout's tree pane. */
 .docs-tree {
   display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   min-width: 0;
   outline: none;
+}
+
+/* The default tree pane's tracks: the header, the status, the filter, the
+   line between the filter and the rows, and the rows. */
+.docs-tree-pane {
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The slots the app draws a part into add no box of their own: the tree's
+   line slot, and the doc scroller's slot per doc part. */
+.docs-line-slot,
+.docs-slot {
+  display: contents;
 }
 
 /* The tree's box hints, wrapping in a narrow pane, then the `⌥L doc ›` edge
@@ -85,16 +100,16 @@
 
 /* The empty index and no-match lines wrap inside a narrow pane, a long
    filter breaking anywhere and the hint between its keys and words. */
-.docs-tree > .ui-empty {
+.docs-line-slot > .ui-empty {
   overflow-wrap: anywhere;
 }
 
-.docs-tree > .ui-empty .docs-hint {
+.docs-line-slot > .ui-empty .docs-hint {
   flex: 0 1 auto;
   min-width: 0;
 }
 
-.docs-tree > .ui-empty .docs-hint > .ui-key-prompt {
+.docs-line-slot > .ui-empty .docs-hint > .ui-key-prompt {
   flex-wrap: wrap;
   justify-content: center;
   min-width: 0;
@@ -175,12 +190,24 @@
   height: 100%;
 }
 
-/* The doc pane: its `‹ tree ⌥H` row above the scroller. */
-.docs-doc-pane {
+/* The doc pane holds the layout's doc pane; the default one is its
+   `‹ tree ⌥H` row above the scroller. */
+.docs-doc-pane,
+.docs-doc-frame {
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+}
+
+.docs-doc-frame {
+  flex: 1;
+}
+
+/* The edge to the tree shows only with a doc open: the empty state names the
+   tree's key. */
+[data-doc='none'] .docs-doc-top {
+  display: none;
 }
 
 .docs-doc-top {
@@ -199,8 +226,7 @@
   }
 }
 
-/* The doc pane's scroller; it is the blocks' offset parent, so a block's
-   `offsetTop` compares with its `scrollTop`. */
+/* The doc pane's scroller. */
 .docs-doc {
   flex: 1;
   min-height: 0;
@@ -212,7 +238,7 @@
 }
 
 /* The empty state sits centred in the pane while no doc is open. */
-.docs-doc > .ui-empty {
+.docs-doc > .docs-slot > .ui-empty {
   height: 100%;
   align-content: center;
 }
@@ -223,9 +249,12 @@
   overflow: hidden;
 }
 
-.docs-doc.is-editing > .docs-frontmatter-box,
-.docs-doc.is-editing > .docs-body {
-  display: none;
+/* The editor's frame fills the scroller's height while editing. */
+.docs-editor-frame {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .docs-editor {

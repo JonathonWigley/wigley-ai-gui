@@ -18,15 +18,10 @@ import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import { element, markdownElement } from '../../../shared/page/dom';
 import { textLineHeightPx } from '../../../shared/page/text-line';
-import { emptyState } from '../../../shared/page/ui/empty-state';
-import {
-  disposeAnchors,
-  keyChevron,
-  keyEdge,
-} from '../../../shared/page/ui/key-anchors';
-import { type TagTone, tag } from '../../../shared/page/ui/tag';
+import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import type { DocsChannel } from '../contract';
 import { splitFrontmatter } from '../frontmatter';
+import type { DocHeaderInput } from '../layouts/layout';
 import { resolveLink } from '../links';
 import {
   type Chip,
@@ -37,6 +32,13 @@ import {
   topVisibleLine,
   UNSAVED_TEXT,
 } from './docs-state';
+import {
+  type AppPart,
+  appPart,
+  type DocsParts,
+  type DrawnPart,
+  keepingFocusAndScroll,
+} from './layout/docs-parts';
 
 const BANNER_TEXT = 'Changed on disk since you opened it';
 const CONFLICT_TEXT = 'File changed on disk';
@@ -93,21 +95,25 @@ export interface DocViewDeps {
   // Pushes `docs.conflict` while the changed-on-disk prompt shows.
   pushConflictScope(): PushedScope;
   anchor: DocsAnchor;
+  // Draws the pane's parts through the docs layout.
+  parts: DocsParts;
   // Hears the open doc's path each time a doc opens or the open one moves,
   // and null once the pane is emptied.
   openChanged(path: string | null): void;
 }
 
-// The doc pane: a top row holding the `‹ tree ⌥H` edge prompt while a doc is
-// open, above the scroller. The scroller holds an empty state ending in the
-// focus-tree key while no doc is open; then the header with its chips (load
-// states, then plugin-source statuses, then the last-loaded line) and the
-// `i edit` hint at its end while the doc may be edited and no editor is open,
-// the read-only line, the changed-on-disk prompt with its keys, the
-// frontmatter table and the rendered body (a detail's field table), swapped
-// for the document editor on `edit`; the editor's `:q` returns to them.
-// Opening another doc is refused while the editor holds unsaved edits.
-// `open` resolves to whether the doc opened.
+// The doc pane, drawn by the layout's `docPane` around the app's scroller:
+// in `default`, a top row holding the `‹ tree ⌥H` edge prompt while a doc is
+// open, above the scroller. The scroller holds one slot per doc part, each
+// drawn by the layout: the empty state ending in the focus-tree key while no
+// doc is open; then the header with its chips (load states, then
+// plugin-source statuses, then the last-loaded line), the `i edit` hint while
+// the doc may be edited and no editor is open, and the read-only line; the
+// changed-on-disk banner; the changed-on-disk prompt with its keys; the
+// frontmatter table and the rendered body (a detail's field table), hidden
+// while the document editor's frame shows on `edit`; the editor's `:q`
+// returns to them. Opening another doc is refused while the editor holds
+// unsaved edits. `open` resolves to whether the doc opened.
 export interface DocView {
   element: HTMLElement;
   open(target: DocTarget): Promise<boolean>;
@@ -140,8 +146,13 @@ export interface DocView {
   conflictCancel(): void;
   // Ends the changed-on-disk prompt, if it shows, without moving focus.
   closeConflict(): void;
+  // Draws the pane's parts again when a layout pick changed for one of them,
+  // keeping the scroll and focus. While the editor is open the pane's frame
+  // and the editor's stay, and the pane's frame draws again once the editor
+  // closes.
+  redraw(): void;
   // Ends the prompt, destroys the editor, stops the watch and disposes the
-  // pane's anchors.
+  // pane's anchors and drawn parts.
   dispose(): void;
 }
 
@@ -197,35 +208,6 @@ function detailRendered(detail: DocDetail): Rendered {
   return { fields: detail.fields, html: '', bodyStartLine: 1 };
 }
 
-function frontmatterTable(fields: [string, string][]): HTMLElement {
-  const box = element('div', 'docs-frontmatter-box');
-  box.hidden = fields.length === 0;
-  const table = element('table', 'docs-frontmatter');
-  for (const [key, value] of fields) {
-    const row = element('tr');
-    row.append(element('th', '', key), element('td', '', value));
-    table.append(row);
-  }
-  box.append(table);
-  return box;
-}
-
-const CHIP_TONES: Record<Chip['state'], TagTone> = {
-  launch: 'success',
-  'on-demand': 'accent',
-  listed: 'neutral',
-  shadowed: 'warning',
-  pending: 'warning',
-  'not-loaded': 'neutral',
-  none: 'neutral',
-};
-
-function chipElement(chip: Chip): HTMLElement {
-  const node = tag(chip.text, CHIP_TONES[chip.state]);
-  node.title = chip.tooltip;
-  return node;
-}
-
 // The log text for an editor scroll: what `scrollText` says, the line at the
 // top of sight after a line scroll that moved, and whether the cursor moved.
 function editorScrollText(
@@ -243,73 +225,117 @@ function editorScrollText(
   return `${scrolled}${top}; the cursor ${cursor}`;
 }
 
-// The rendered blocks' source lines and tops, measured from the pane.
-function sourceBlocks(body: HTMLElement): { line: number; top: number }[] {
+// A block's top in the scroller's content, measured from the scroller, so a
+// positioned wrapper a layout draws around it does not change it.
+function topIn(scroller: HTMLElement, block: HTMLElement): number {
+  return (
+    block.getBoundingClientRect().top -
+    scroller.getBoundingClientRect().top +
+    scroller.scrollTop
+  );
+}
+
+// The rendered blocks' source lines and tops, measured from the scroller.
+function sourceBlocks(
+  body: HTMLElement,
+  scroller: HTMLElement,
+): { line: number; top: number }[] {
   return [...body.querySelectorAll<HTMLElement>('[data-source-line]')].map(
     (block) => ({
       line: Number(block.dataset.sourceLine),
-      top: block.offsetTop,
+      top: topIn(scroller, block),
     }),
   );
 }
 
+// A slot one doc part draws into; it adds no box of its own.
+function partSlot(): HTMLElement {
+  return element('div', 'docs-slot');
+}
+
 export function createDocView(deps: DocViewDeps): DocView {
+  const { parts } = deps;
+  const root = element('div', 'docs-doc-pane');
+  // The scroller: it holds the doc parts and the editor, scrolls, and takes
+  // focus.
   const pane = element('div', 'docs-doc');
   pane.tabIndex = -1;
-  // The anchors the pane names, for the view's life.
+  // The anchor the `i edit` hint names, for the view's life.
   const anchors: Disposable[] = [];
-  const anchored = (
-    command: Parameters<DocsAnchor>[1],
-    options: Parameters<DocsAnchor>[2],
-  ): HTMLElement => {
-    const node = element('span');
-    anchors.push(deps.anchor(node, command, options));
-    return node;
-  };
-  const top = element('div', 'docs-doc-top');
-  top.append(
-    keyEdge('docs-edge docs-edge--start', [
-      keyChevron('‹ tree'),
-      anchored('focusTree', { scope: 'doc' }),
-    ]),
+  const editHint = element('span');
+  anchors.push(deps.anchor(editHint, 'edit', { scope: 'doc', label: 'edit' }));
+  const emptySlot = partSlot();
+  const headerSlot = partSlot();
+  const bannerSlot = partSlot();
+  const promptSlot = partSlot();
+  const bodySlot = partSlot();
+  const editorSlot = partSlot();
+  pane.append(
+    emptySlot,
+    headerSlot,
+    bannerSlot,
+    promptSlot,
+    bodySlot,
+    editorSlot,
   );
-  const empty = emptyState(EMPTY_TEXT, anchored('focusTree', { scope: 'doc' }));
-  const header = element('div', 'docs-header');
-  const title = element('h1', 'docs-title');
-  const editHint = anchored('edit', { scope: 'doc', label: 'edit' });
-  const path = element('div', 'docs-path');
-  const chipRow = element('div', 'docs-chips');
-  header.append(title, editHint, path, chipRow);
-  const readOnlyLine = element('div', 'docs-readonly');
-  const banner = element('div', 'docs-banner', BANNER_TEXT);
-  const prompt = element('div', 'docs-prompt');
-  const conflictKeys = element('span', 'docs-prompt-keys');
-  conflictKeys.append(
-    anchored('conflictReload', { scope: 'conflict', label: 'reload' }),
-    anchored('conflictOverwrite', { scope: 'conflict', label: 'overwrite' }),
-    anchored('conflictCancel', { scope: 'conflict', label: 'cancel' }),
-  );
-  prompt.append(element('span', '', CONFLICT_TEXT), conflictKeys);
-  let frontmatter = frontmatterTable([]);
-  let body = markdownElement('div', 'md docs-body', '');
-  // The empty state names the tree's key, so the edge shows only with a doc.
-  top.hidden = true;
-  header.hidden = true;
-  readOnlyLine.hidden = true;
-  banner.hidden = true;
-  prompt.hidden = true;
-  pane.append(empty, header, readOnlyLine, banner, prompt, frontmatter, body);
-  const root = element('div', 'docs-doc-pane');
-  root.append(top, pane);
+  const body = markdownElement('div', 'md docs-body', '');
+  body.addEventListener('click', followLink);
+  const editorBox = element('div', 'docs-editor');
+
+  let drawnPane: DrawnPart | null = null;
+  let drawnEmpty: DrawnPart | null = null;
+  let drawnHeader: DrawnPart | null = null;
+  let drawnBanner: DrawnPart | null = null;
+  let drawnPrompt: DrawnPart | null = null;
+  let drawnBody: DrawnPart | null = null;
+  let drawnEditorFrame: DrawnPart | null = null;
+  // The fields the body part shows with the rendered body.
+  let bodyFields: [string, string][] = [];
+  // A layout reload while the editor was open left the pane's frame to draw
+  // once the editor closes.
+  let isPaneRedrawDeferred = false;
 
   let shown: ShownDoc | null = null;
   let editor: DocumentEditor | null = null;
-  let editorBox: HTMLElement | null = null;
   let conflict: Conflict | null = null;
   // The text a write in flight sends: the watch it fires is the view's own.
   let writingText: string | null = null;
   let openCount = 0;
   let isDisposed = false;
+
+  const drawPane = () => {
+    drawnPane?.dispose();
+    let placing: AppPart[] = [];
+    drawnPane = parts.draw('docPane', root, {}, (kit) => {
+      const scroller = appPart(pane, 'docPane', 'scroller');
+      placing = [scroller];
+      return { ...kit, scroller: scroller.place };
+    });
+    for (const part of placing) {
+      part.appendIfLeftOut(drawnPane.element);
+    }
+  };
+
+  const drawEmpty = () => {
+    drawnEmpty?.dispose();
+    drawnEmpty = parts.draw(
+      'emptyDoc',
+      emptySlot,
+      { text: EMPTY_TEXT },
+      (kit) => kit,
+    );
+  };
+
+  const removeEmpty = () => {
+    drawnEmpty?.dispose();
+    drawnEmpty = null;
+  };
+
+  // `data-doc` on the pane's root: no doc, a doc open, or its editor open.
+  const showDocState = () => {
+    root.dataset.doc =
+      shown === null ? 'none' : editor === null ? 'open' : 'editing';
+  };
 
   // `i` refuses on a read-only doc, and inside the editor `i` is vim's.
   const showEditHint = () => {
@@ -317,51 +343,130 @@ export function createDocView(deps: DocViewDeps): DocView {
       shown === null || shown.target.readOnly !== null || editor !== null;
   };
 
-  const drawChips = () => {
-    const target = shown?.target ?? null;
-    if (target?.entryId == null) {
-      chipRow.replaceChildren();
+  const headerInput = (target: DocTarget): DocHeaderInput => {
+    const { entryId } = target;
+    const isIndexed = entryId !== null;
+    const chips = isIndexed ? deps.chipsOf(entryId, target.path) : null;
+    return {
+      title: target.title,
+      path: deps.paths.tilde(target.path, deps.homeDir),
+      fullPath: target.path,
+      readOnly: target.readOnly === null ? null : readOnlyText(target.readOnly),
+      chips:
+        chips === null
+          ? []
+          : [
+              { harness: 'claude', ...chips.claude },
+              { harness: 'codex', ...chips.codex },
+            ],
+      statuses: isIndexed ? deps.statusesOf(entryId) : [],
+      loaded: isIndexed ? deps.loadedOf(entryId) : null,
+    };
+  };
+
+  // Draws the open doc's header, with its chips as they read now; nothing
+  // while no doc is open.
+  const drawHeader = () => {
+    drawnHeader?.dispose();
+    drawnHeader = null;
+    if (shown === null) {
       return;
     }
-    const { claude, codex } = deps.chipsOf(target.entryId, target.path);
-    const statuses = deps
-      .statusesOf(target.entryId)
-      .map((text) => tag(text, 'warning'));
-    const loaded = deps.loadedOf(target.entryId);
-    chipRow.replaceChildren(
-      chipElement(claude),
-      chipElement(codex),
-      ...statuses,
-      ...(loaded === null ? [] : [element('span', 'docs-loaded', loaded)]),
+    let placing: AppPart[] = [];
+    drawnHeader = parts.draw(
+      'docHeader',
+      headerSlot,
+      headerInput(shown.target),
+      (kit) => {
+        const hint = appPart(editHint, 'docHeader', 'editHint');
+        placing = [hint];
+        return { ...kit, editHint: hint.place };
+      },
+    );
+    for (const part of placing) {
+      part.appendIfLeftOut(drawnHeader.element);
+    }
+    showEditHint();
+  };
+
+  const drawBanner = () => {
+    drawnBanner?.dispose();
+    drawnBanner = parts.draw(
+      'diskBanner',
+      bannerSlot,
+      { text: BANNER_TEXT },
+      (kit) => kit,
     );
   };
 
-  const drawBody = (rendered: Rendered) => {
-    const nextFrontmatter = frontmatterTable(rendered.fields);
-    const nextBody = markdownElement('div', 'md docs-body', rendered.html);
-    nextBody.addEventListener('click', followLink);
-    frontmatter.replaceWith(nextFrontmatter);
-    body.replaceWith(nextBody);
-    frontmatter = nextFrontmatter;
-    body = nextBody;
+  const showBanner = (isShown: boolean) => {
+    if (isShown && drawnBanner === null) {
+      drawBanner();
+    } else if (!isShown) {
+      drawnBanner?.dispose();
+      drawnBanner = null;
+    }
   };
 
-  const drawHeader = (target: DocTarget) => {
-    header.hidden = false;
-    title.textContent = target.title;
-    path.textContent = deps.paths.tilde(target.path, deps.homeDir);
-    path.title = target.path;
-    readOnlyLine.hidden = target.readOnly === null;
-    readOnlyLine.textContent =
-      target.readOnly === null ? '' : readOnlyText(target.readOnly);
-    banner.hidden = true;
-    showEditHint();
+  const drawPrompt = () => {
+    drawnPrompt?.dispose();
+    drawnPrompt = parts.draw(
+      'conflictPrompt',
+      promptSlot,
+      { text: CONFLICT_TEXT },
+      (kit) => kit,
+    );
+  };
+
+  // Draws the body part around the rendered body, hidden while the editor
+  // is open.
+  const drawBodyPart = () => {
+    drawnBody?.dispose();
+    let placing: AppPart[] = [];
+    drawnBody = parts.draw(
+      'docBody',
+      bodySlot,
+      { fields: bodyFields },
+      (kit) => {
+        const placed = appPart(body, 'docBody', 'body');
+        placing = [placed];
+        return { ...kit, body: placed.place };
+      },
+    );
+    for (const part of placing) {
+      part.appendIfLeftOut(drawnBody.element);
+    }
+    drawnBody.element.hidden = editor !== null;
+  };
+
+  const drawBody = (rendered: Rendered) => {
+    bodyFields = rendered.fields;
+    body.innerHTML = rendered.html;
+    drawBodyPart();
+  };
+
+  const drawEditorFrame = (doc: ShownDoc) => {
+    drawnEditorFrame?.dispose();
+    let placing: AppPart[] = [];
+    drawnEditorFrame = parts.draw(
+      'editorFrame',
+      editorSlot,
+      { name: doc.name, path: doc.filePath },
+      (kit) => {
+        const placed = appPart(editorBox, 'editorFrame', 'editor');
+        placing = [placed];
+        return { ...kit, editor: placed.place };
+      },
+    );
+    for (const part of placing) {
+      part.appendIfLeftOut(drawnEditorFrame.element);
+    }
   };
 
   // Of the blocks at any depth, the one whose whole-file line is the
   // greatest at or before `line`.
   const scrollToLine = (line: number, bodyStartLine: number) => {
-    const blocks = sourceBlocks(body).filter(
+    const blocks = sourceBlocks(body, pane).filter(
       (block) => block.line + bodyStartLine - 1 <= line,
     );
     const target = blocks.reduce<{ line: number; top: number } | null>(
@@ -380,7 +485,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (heading === null) {
       return false;
     }
-    pane.scrollTop = heading.offsetTop;
+    pane.scrollTop = topIn(pane, heading);
     return true;
   };
 
@@ -423,7 +528,8 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
     conflict.scope.pop();
     conflict = null;
-    prompt.hidden = true;
+    drawnPrompt?.dispose();
+    drawnPrompt = null;
     if (refocus) {
       editor?.focus();
     }
@@ -439,7 +545,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       }
     });
     conflict = { diskText, after, scope };
-    prompt.hidden = false;
+    drawPrompt();
   };
 
   const watchFile = (path: string | null, name: string) => {
@@ -459,15 +565,26 @@ export function createDocView(deps: DocViewDeps): DocView {
     watchFile(null, doc.name);
   };
 
+  // Destroys the editor and removes its frame; a pane frame a reload left
+  // for later draws now.
   const dropEditor = () => {
     endConflict(false);
     editor?.destroy();
     editor = null;
-    editorBox?.remove();
-    editorBox = null;
+    editorBox.replaceChildren();
+    drawnEditorFrame?.dispose();
+    drawnEditorFrame = null;
     pane.classList.remove('is-editing');
-    banner.hidden = true;
+    if (drawnBody !== null) {
+      drawnBody.element.hidden = false;
+    }
+    showBanner(false);
     showEditHint();
+    showDocState();
+    if (isPaneRedrawDeferred) {
+      isPaneRedrawDeferred = false;
+      drawPane();
+    }
   };
 
   // Destroys the editor and shows the rendered doc from the text last read
@@ -510,7 +627,7 @@ export function createDocView(deps: DocViewDeps): DocView {
           return;
         }
         doc.text = text;
-        banner.hidden = true;
+        showBanner(false);
         deps.toast(`Wrote ${doc.name}`, 'success');
         deps.log('docs', `wrote ${doc.name}`);
         if (after === 'close') {
@@ -560,7 +677,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
     if (editor !== null) {
       if (diskText !== doc.text) {
-        banner.hidden = false;
+        showBanner(true);
         deps.log('docs', `changed on disk: ${doc.name}`);
       }
       return;
@@ -585,18 +702,22 @@ export function createDocView(deps: DocViewDeps): DocView {
     deps.log('docs', `reloaded ${doc.name}`);
   };
 
+  // The frame draws first, so the editor mounts into an attached host.
   const openEditor = (doc: ShownDoc, line: number) => {
     pane.classList.add('is-editing');
     pane.scrollTop = 0;
-    editorBox = element('div', 'docs-editor');
-    pane.append(editorBox);
+    drawEditorFrame(doc);
     editor = deps.editor.createDocument(
       editorBox,
       doc.text,
       { fileName: doc.name, readOnly: false, line },
       editorEvents,
     );
+    if (drawnBody !== null) {
+      drawnBody.element.hidden = true;
+    }
     showEditHint();
+    showDocState();
     editor.focus();
     deps.log('docs', `editing ${doc.name}`);
   };
@@ -612,6 +733,31 @@ export function createDocView(deps: DocViewDeps): DocView {
     doc.text = file.text;
     watchFile(file.path, doc.name);
     openEditor(doc, file.line);
+  };
+
+  // Every drawn part of the pane draws again; while the editor is open the
+  // pane's frame waits for it to close, and the editor's frame stays.
+  const redrawParts = () => {
+    if (editor === null) {
+      drawPane();
+    } else {
+      isPaneRedrawDeferred = true;
+    }
+    if (drawnEmpty !== null) {
+      drawEmpty();
+    }
+    if (drawnHeader !== null) {
+      drawHeader();
+    }
+    if (drawnBanner !== null) {
+      drawBanner();
+    }
+    if (drawnPrompt !== null) {
+      drawPrompt();
+    }
+    if (drawnBody !== null) {
+      drawBodyPart();
+    }
   };
 
   const view: DocView = {
@@ -656,10 +802,10 @@ export function createDocView(deps: DocViewDeps): DocView {
         bodyStartLine: rendered.bodyStartLine,
       };
       deps.openChanged(target.path);
-      empty.hidden = true;
-      top.hidden = false;
-      drawHeader(target);
-      drawChips();
+      removeEmpty();
+      showDocState();
+      showBanner(false);
+      drawHeader();
       drawBody(rendered);
       pane.scrollTop = 0;
       watchFile(target.detail === null ? target.path : null, name);
@@ -685,8 +831,8 @@ export function createDocView(deps: DocViewDeps): DocView {
         doc.name = deps.paths.base(target.path);
         watchFile(target.path, doc.name);
       }
-      drawChips();
-      drawHeader(target);
+      showBanner(false);
+      drawHeader();
     },
     clear() {
       if (shown === null) {
@@ -697,14 +843,12 @@ export function createDocView(deps: DocViewDeps): DocView {
       watchFile(null, shown.name);
       shown = null;
       deps.openChanged(null);
-      empty.hidden = false;
-      top.hidden = true;
-      header.hidden = true;
-      readOnlyLine.hidden = true;
-      drawChips();
+      showDocState();
+      drawEmpty();
+      drawHeader();
       drawBody({ fields: [], html: '', bodyStartLine: 1 });
     },
-    refreshChips: drawChips,
+    refreshChips: () => drawHeader(),
     diskChanged(changedPath) {
       const doc = shown;
       const isWatching =
@@ -745,7 +889,11 @@ export function createDocView(deps: DocViewDeps): DocView {
       openEditor(
         doc,
         line ??
-          topVisibleLine(sourceBlocks(body), pane.scrollTop, doc.bodyStartLine),
+          topVisibleLine(
+            sourceBlocks(body, pane),
+            pane.scrollTop,
+            doc.bodyStartLine,
+          ),
       );
     },
     quitEditor: () => quitEditor(false),
@@ -798,7 +946,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       endConflict(true);
       editor.setText(held.diskText);
       shown.text = held.diskText;
-      banner.hidden = true;
+      showBanner(false);
       deps.log('docs', `reloaded ${shown.name}`);
     },
     conflictOverwrite() {
@@ -819,6 +967,13 @@ export function createDocView(deps: DocViewDeps): DocView {
     closeConflict() {
       endConflict(false);
     },
+    redraw() {
+      if (isDisposed || !parts.picksChanged()) {
+        return;
+      }
+      parts.markDrawn();
+      keepingFocusAndScroll(root, [pane], redrawParts);
+    },
     dispose() {
       isDisposed = true;
       endConflict(false);
@@ -826,7 +981,23 @@ export function createDocView(deps: DocViewDeps): DocView {
       editor = null;
       watchFile(null, shown?.name ?? 'the doc');
       disposeAnchors(anchors);
+      const drawn = [
+        drawnPane,
+        drawnEmpty,
+        drawnHeader,
+        drawnBanner,
+        drawnBody,
+        drawnEditorFrame,
+      ];
+      for (const part of drawn) {
+        part?.dispose();
+      }
     },
   };
+
+  showDocState();
+  drawPane();
+  drawEmpty();
+  drawBody({ fields: [], html: '', bodyStartLine: 1 });
   return view;
 }

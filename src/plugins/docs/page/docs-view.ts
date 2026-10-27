@@ -6,9 +6,12 @@ import type { Paths } from '../../../contracts/paths';
 import type {
   PageChannel,
   PushedScope,
+  ShownLayouts,
   ToastTone,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
+import type { BaseKit } from '../../../shared/page/layout-host/kit';
 import {
   type DocsChannel,
   type IndexContext,
@@ -19,6 +22,8 @@ import {
   type SourceRead,
 } from '../contract';
 import { metaString } from '../index-document';
+import defaultLayout from '../layouts/default/layout.js';
+import type { Layout } from '../layouts/layout';
 import { loadedAgo, loadedAt, loadedLine } from '../loaded-time';
 import { isIndexedPath } from '../path-guard';
 import {
@@ -45,6 +50,7 @@ import {
   statusTexts,
   treeRowStatus,
 } from './docs-state';
+import { createDocsParts, type DocsScope } from './layout/docs-parts';
 import type { StarredDocs } from './starred-docs';
 import { createTreeView, type LeafMarks } from './tree-view';
 
@@ -134,6 +140,9 @@ export interface DocsView {
   hasUnsavedEdits(): boolean;
   // The open doc's path while its editor holds unsaved edits, else null.
   unsavedPath(): string | null;
+  // A new set of layouts is shown: each part whose pick changed draws again,
+  // keeping the open doc, the editor, scroll, selection, filter and focus.
+  layoutsChanged(): void;
   // Closes the overlays, takes the dialogs off the window, stops the view's
   // watch, its `docChanged` listener and its following of star changes,
   // disposes its anchors, and destroys its editor.
@@ -178,6 +187,11 @@ export interface DocsViewDeps {
   leafOpened(): void;
   // Places a dialog element over the window, until the handle's `dispose`.
   addOverlay(element: HTMLElement): Disposable;
+  // The layouts shown now, read at each part draw.
+  layouts(): ShownLayouts<Layout>;
+  // The base kit for one part draw whose keys fire in `scope`, its anchors
+  // recorded by `rollback`.
+  baseKit(scope: DocsScope, rollback: RollbackDeps): BaseKit;
 }
 
 const SESSION_CONTEXT_TEXT =
@@ -273,6 +287,18 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   let shownStatusRead = 0;
   // Status reads asking to fetch that have not settled.
   let runningFetchReads = 0;
+  // True while a layout reload redraws the panes: focus moves it makes
+  // change nothing.
+  let isRedrawing = false;
+
+  // Each pane and the dialogs track their own drawn parts.
+  const newParts = () =>
+    createDocsParts({
+      layouts: deps.layouts,
+      defaultLayout,
+      baseKit: deps.baseKit,
+      log,
+    });
 
   const applyScope = () => {
     if (deps.isActive()) {
@@ -369,6 +395,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   const tree = createTreeView({
     log,
+    parts: newParts(),
+    isMachine,
     openLeaf: (leaf: TreeLeaf, focusesDoc: boolean) => {
       const entry = entriesById.get(leaf.entryId);
       if (entry === undefined) {
@@ -450,6 +478,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     followFile: (path, line, fragment) => followFile(path, line, fragment),
     pushConflictScope: () => deps.pushScope('conflict'),
     anchor: deps.anchor,
+    parts: newParts(),
   });
 
   const isListed = (path: string): boolean =>
@@ -515,7 +544,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     paths: deps.paths,
     toast,
     log,
-    anchor: deps.anchor,
+    parts: newParts(),
     pushScope: (scope) => deps.pushScope(scope),
     entries: () => document?.entries ?? [],
     changed: (record, selectPath) => applyDocChange(record, selectPath),
@@ -530,6 +559,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     [doc.element, 'doc'],
   ] as const) {
     pane.addEventListener('focusin', () => {
+      if (isRedrawing) {
+        return;
+      }
       focused = scope;
       applyScope();
     });
@@ -777,10 +809,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (choices.length === 0) {
       return;
     }
+    const title = 'Load states for';
     picker.open({
-      title: 'Load states for',
+      title,
       items: choices,
       label: (choice) => deps.paths.tilde(choice.folder, homeDir),
+      drawRow: dialogs.pickerRow(title),
       selected: choices.findIndex((choice) => choice.folder === contextFolder),
       chosen: (choice) => {
         contextFolder = choice.folder;
@@ -947,6 +981,16 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     treeHidden: focusDoc,
     treeOpenedOver: focusTreePane,
     focusScope: () => focused,
+    layoutsChanged() {
+      isRedrawing = true;
+      try {
+        tree.redraw();
+        doc.redraw();
+        dialogs.redraw();
+      } finally {
+        isRedrawing = false;
+      }
+    },
     hasUnsavedEdits: () => doc.hasUnsavedEdits(),
     unsavedPath: () => (doc.hasUnsavedEdits() ? doc.openPath() : null),
     dispose() {

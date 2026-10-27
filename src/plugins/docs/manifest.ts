@@ -112,12 +112,17 @@ export const docsManifest = definePlugin({
     box: 'In a docs text box',
     confirm: 'In the Trash confirmation',
   },
-  settings: { scriptPath: '' },
+  settings: { scriptPath: '', layout: 'default' },
   settingInfo: {
     scriptPath: {
       label: 'Docs index script',
       description:
         "The path to `docs_index.py`; empty finds the installed wigley plugin's copy. `~` is the home folder.",
+    },
+    layout: {
+      label: 'Docs layout',
+      description:
+        'The layout the docs views draw with, a folder in ~/.config/wigley-ai-gui/layouts/docs/; default when unset.',
     },
   },
   themeTokens: {},

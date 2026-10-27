@@ -32,6 +32,7 @@ import {
   MACHINE_SOURCE_ID,
   sessionSourceId,
 } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { EXTERNAL_SCHEME } from '../links';
 import { docsManifest } from '../manifest';
 import { createDocFiles, type DocFiles } from './doc-files';
@@ -246,6 +247,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
     const { services, channel } = api;
+    const layouts = api.layouts.register({ layoutTypes });
     const registry = createIndexSourceRegistry();
     const docs = startDocs(
       services,
@@ -388,6 +390,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       commands: {},
       exports,
       dispose: () => {
+        layouts.dispose();
         watches.closeAll();
         driveActions?.dispose();
         for (const source of sessionSources.values()) {

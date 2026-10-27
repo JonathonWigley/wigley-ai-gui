@@ -2,16 +2,10 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
 import type { PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
-import { emptyState } from '../../../shared/page/ui/empty-state';
-import {
-  disposeAnchors,
-  keyChevron,
-  keyEdge,
-} from '../../../shared/page/ui/key-anchors';
-import { icon } from '../../../shared/page/ui/icon';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
-import { row as rowPart } from '../../../shared/page/ui/row';
-import { statusDot } from '../../../shared/page/ui/status-dot';
+import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
+import { textBoxInput } from '../../../shared/page/text-box';
+import type { TreeRowInput } from '../layouts/layout';
 import type { TreeLeaf, TreeNode } from '../tree';
 import {
   type DocsAnchor,
@@ -29,10 +23,20 @@ import {
   type TreeState,
   visibleRows,
 } from './docs-state';
-import { textBoxInput } from '../../../shared/page/text-box';
+import {
+  type AppPart,
+  appPart,
+  type DocsParts,
+  type DrawnPart,
+  keepingFocusAndScroll,
+} from './layout/docs-parts';
 
 export interface TreeViewDeps {
   log: Log;
+  // Draws the pane, the line and the rows through the docs layout.
+  parts: DocsParts;
+  // Whether the tree is Docs mode's, over the machine's index.
+  isMachine: boolean;
   // What `l` or Enter does on a leaf: open its doc, and for Enter
   // (`focusDoc`) move focus to it.
   openLeaf(leaf: TreeLeaf, focusDoc: boolean): void;
@@ -55,17 +59,19 @@ export interface LeafMarks {
   isStarred: boolean;
 }
 
-// The tree pane: a header of the tree's keys (`/ filter`, `a new`, `A file`,
-// `R rescan`, `c folder`) ending in the `⌥L doc ›` edge prompt, a status line,
-// the filter box, a line for an empty index, a filter matching nothing or a
-// filter on, and the rows. `setTree` keeps the
-// expanded ids, the selection and the filter; the first tree with rows expands
+// The tree pane, drawn by the layout's `treePane` around the app's status
+// line, filter box, line slot and rows: in `default`, a header of the tree's
+// keys (`/ filter`, `a new`, `A file`, `R rescan`, `c folder`) ending in the
+// `⌥L doc ›` edge prompt, then those four. The line slot holds the layout's
+// `treeLine` for an empty index, a filter matching nothing or a filter on;
+// the rows are the layout's `treeRow` parts. `setTree` keeps the expanded ids,
+// the selection and the filter; the first tree with rows expands
 // `defaultExpandedIds` and selects its first row; a later tree that first
-// shows the Starred group expands it. A row draws its status: a leaf's mark as
-// a warning StatusDot, a group's rollup as its detail. A leaf's star shows in
-// its caret slot, and its last-loaded time and status mark at its end. The
-// selected row draws as the keyboard cursor while focus is inside the pane, and
-// a selected leaf ends in the `s star  r rename  d trash` cursor prompt.
+// shows the Starred group expands it. A row gets its status: a leaf's mark
+// and a group's rollup as its detail, and a leaf's star and last-loaded time.
+// The selected row draws as the keyboard cursor while focus is inside the
+// pane, and a selected leaf ends in the `s star  r rename  d trash` cursor
+// prompt.
 export interface TreeView {
   element: HTMLElement;
   setStatus(text: string | null): void;
@@ -107,7 +113,10 @@ export interface TreeView {
   dismissFilter(): void;
   // Redraws the rows with the statuses `rowStatus` reads now.
   statusesChanged(): void;
-  // Disposes the tree's anchors.
+  // Draws the pane, the line and the rows again when a layout pick changed
+  // for one of them, keeping the rows' scroll, the filter's text and focus.
+  redraw(): void;
+  // Disposes the tree's anchors and drawn parts.
   dispose(): void;
 }
 
@@ -122,74 +131,6 @@ function isSameLine(a: TreeLine | null, b: TreeLine | null): boolean {
   return a.placement === b.placement && a.text === b.text && isSameHint;
 }
 
-// The line's hint, its command's keys anchored with its words as their
-// label; null for no hint.
-function hintElement(
-  hint: TreeLine['hint'],
-  anchors: Disposable[],
-  anchor: DocsAnchor,
-): HTMLElement | null {
-  if (hint === null) {
-    return null;
-  }
-  const node = element('span', 'docs-hint');
-  anchors.push(
-    anchor(node, hint.command, { scope: 'tree', label: hint.words }),
-  );
-  return node;
-}
-
-// The line's element; `anchors` receives the anchor its hint names.
-function lineElement(
-  line: TreeLine | null,
-  anchors: Disposable[],
-  anchor: DocsAnchor,
-): HTMLElement {
-  if (line === null) {
-    const slot = element('div');
-    slot.hidden = true;
-    return slot;
-  }
-  const hint = hintElement(line.hint, anchors, anchor);
-  if (line.placement === 'empty') {
-    return emptyState(line.text, hint);
-  }
-  const above = element('div', 'docs-filtered');
-  above.append(element('span', 'docs-filtered-text', line.text));
-  if (hint !== null) {
-    above.append(hint);
-  }
-  return above;
-}
-
-// A leaf's row end: its time, then its status dot; the dot alone with no
-// time.
-function rowEnd(
-  time: LeafMarks['time'],
-  markDot: HTMLElement | null,
-): HTMLElement | null {
-  if (time === null) {
-    return markDot;
-  }
-  const end = element('span', 'docs-row-end');
-  const shown = element('span', 'docs-row-time', time.text);
-  shown.title = time.title;
-  end.append(shown);
-  if (markDot !== null) {
-    end.append(markDot);
-  }
-  return end;
-}
-
-// The header's box hints, in the order they show.
-const HEADER_HINTS = [
-  ['filter', 'filter'],
-  ['createByKind', 'new'],
-  ['createByPath', 'file'],
-  ['rescan', 'rescan'],
-  ['pickContext', 'folder'],
-] as const;
-
 // The cursor prompt's actions, in the order they show.
 const ROW_ACTIONS = [
   ['toggleStar', 'star'],
@@ -197,51 +138,27 @@ const ROW_ACTIONS = [
   ['trash', 'trash'],
 ] as const;
 
-// A span anchoring the command's keys and label in the tree scope.
-function anchoredSpan(
-  command: Parameters<DocsAnchor>[1],
-  label: string,
-  anchors: Disposable[],
-  anchor: DocsAnchor,
-): HTMLElement {
-  const node = element('span');
-  anchors.push(anchor(node, command, { scope: 'tree', label }));
-  return node;
-}
-
-// The pane's header: the box hints, then the `⌥L doc ›` edge prompt at its
-// end.
-function headerElement(anchors: Disposable[], anchor: DocsAnchor): HTMLElement {
-  const header = element('div', 'docs-tree-header');
-  for (const [command, label] of HEADER_HINTS) {
-    header.append(anchoredSpan(command, label, anchors, anchor));
-  }
-  const edge = keyEdge('docs-edge docs-edge--end', [
-    anchoredSpan('focusDoc', 'doc', anchors, anchor),
-    keyChevron('›'),
-  ]);
-  header.append(edge);
-  return header;
-}
-
-// The cursor prompt a selected leaf row ends in, after its end.
+// The cursor prompt a selected leaf row ends in, after its end; `anchors`
+// receives the anchors it names.
 function rowActionsElement(
   anchors: Disposable[],
   anchor: DocsAnchor,
 ): HTMLElement {
   const actions = element('span', 'docs-row-actions');
   for (const [command, label] of ROW_ACTIONS) {
-    actions.append(anchoredSpan(command, label, anchors, anchor));
+    const node = element('span');
+    anchors.push(anchor(node, command, { scope: 'tree', label }));
+    actions.append(node);
   }
   return actions;
 }
 
 export function createTreeView(deps: TreeViewDeps): TreeView {
+  const { parts } = deps;
   const pane = element('div', 'docs-tree');
   pane.tabIndex = -1;
-  // The anchors the header and cursor prompt name, for the view's life.
+  // The anchors the cursor prompt names, for the view's life.
   const anchors: Disposable[] = [];
-  const header = headerElement(anchors, deps.anchor);
   const rowActions = rowActionsElement(anchors, deps.anchor);
   const status = element('div', 'docs-status');
   status.hidden = true;
@@ -250,12 +167,14 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   filterFrame.hidden = true;
   const filterBox = textBoxInput('docs-box');
   filterFrame.append(filterBox);
+  // The slot `treeLine` draws into; it takes no space while empty.
+  const lineSlot = element('div', 'docs-line-slot');
+  lineSlot.hidden = true;
   const list = element('ol', 'docs-rows');
   let shownLine: TreeLine | null = null;
-  // The anchor the shown line's hint names, disposed as the line is replaced.
-  const lineAnchors: Disposable[] = [];
-  let line = lineElement(shownLine, lineAnchors, deps.anchor);
-  pane.append(header, status, filterFrame, line, list);
+  let drawnPane: DrawnPart | null = null;
+  let drawnLine: DrawnPart | null = null;
+  let drawnRows: DrawnPart[] = [];
 
   let tree: TreeNode[] = [];
   let pathOf: (entryId: string) => string = () => '';
@@ -266,12 +185,57 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   let filterScope: PushedScope | null = null;
   let hasFocus = false;
   let isDisposed = false;
+  // True while a layout reload redraws the pane: focus moves it makes change
+  // nothing and draw nothing.
+  let isRedrawing = false;
+
+  // Draws the pane part around the app's elements, those it leaves out
+  // appended in contract order.
+  const drawPane = () => {
+    drawnPane?.dispose();
+    let placing: AppPart[] = [];
+    drawnPane = parts.draw(
+      'treePane',
+      pane,
+      { isMachine: deps.isMachine },
+      (kit) => {
+        const statusPart = appPart(status, 'treePane', 'status');
+        const filterPart = appPart(filterFrame, 'treePane', 'filterBox');
+        const linePart = appPart(lineSlot, 'treePane', 'line');
+        const rowsPart = appPart(list, 'treePane', 'rows');
+        placing = [statusPart, filterPart, linePart, rowsPart];
+        return {
+          ...kit,
+          status: statusPart.place,
+          filterBox: filterPart.place,
+          line: linePart.place,
+          rows: rowsPart.place,
+        };
+      },
+    );
+    for (const part of placing) {
+      part.appendIfLeftOut(drawnPane.element);
+    }
+  };
+
+  // Draws `shownLine` into the line slot, emptying it for no line.
+  const drawLine = () => {
+    drawnLine?.dispose();
+    drawnLine = null;
+    lineSlot.hidden = shownLine === null;
+    if (shownLine !== null) {
+      drawnLine = parts.draw('treeLine', lineSlot, shownLine, (kit) => kit);
+    }
+  };
 
   const draw = () => {
     pane.classList.toggle('is-pane-inactive', !hasFocus);
     rows = visibleRows(tree, state, pathOf);
+    for (const drawn of drawnRows) {
+      drawn.dispose();
+    }
     rowActions.remove();
-    list.replaceChildren(...rows.map(rowElement));
+    drawnRows = rows.map(drawRow);
     list.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
     showLine();
   };
@@ -293,51 +257,56 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       return;
     }
     shownLine = next;
-    disposeAnchors(lineAnchors);
-    const nextLine = lineElement(next, lineAnchors, deps.anchor);
-    line.replaceWith(nextLine);
-    line = nextLine;
+    drawLine();
   };
 
-  const rowElement = (row: TreeRow) => {
-    const caret = element('span', 'docs-row-caret');
-    const marks = row.node.type === 'entry' ? deps.leafMarks(row.node) : null;
-    if (row.node.type === 'group') {
-      caret.append(icon(row.isExpanded ? 'chevron-down' : 'chevron-right'));
-    } else if (marks?.isStarred === true) {
-      const star = icon('star-full');
-      star.classList.add('docs-row-star');
-      caret.append(star);
-    }
-    const { mark, detail } = deps.rowStatus(row.node);
-    let markDot: HTMLElement | null = null;
-    if (mark !== null) {
-      markDot = statusDot('warning');
-      markDot.title = mark;
-    }
-    const isSelected = row.node.id === state.selectedId;
-    const isSelectedLeaf = isSelected && row.node.type === 'entry';
-    const item = rowPart({
-      density: 'tree',
-      tag: 'li',
-      label: row.node.title,
-      detail,
+  const rowInput = (row: TreeRow): TreeRowInput => {
+    const { node } = row;
+    const marks = node.type === 'entry' ? deps.leafMarks(node) : null;
+    const { mark, detail } = deps.rowStatus(node);
+    return {
+      id: node.id,
+      type: node.type,
+      title: node.title,
       depth: row.depth,
-      leading: caret,
-      trailing: rowEnd(marks?.time ?? null, markDot),
-      onClick: () => {
-        state = { ...state, selectedId: row.node.id };
-        pane.focus();
-        view.open();
-      },
+      isExpanded: row.isExpanded,
+      detail,
+      mark,
+      time: marks?.time ?? null,
+      isStarred: marks?.isStarred === true,
+      isPrompted: node.id === state.selectedId && node.type === 'entry',
+    };
+  };
+
+  // Draws the row part, then sets the app's cursor classes and click on its
+  // root, which keeps the mouse from taking focus.
+  const drawRow = (row: TreeRow): DrawnPart => {
+    const input = rowInput(row);
+    let placing: AppPart[] = [];
+    const drawn = parts.draw('treeRow', list, input, (kit) => {
+      const prompt = appPart(rowActions, 'treeRow', 'cursorPrompt');
+      placing = input.isPrompted ? [prompt] : [];
+      return {
+        ...kit,
+        cursorPrompt: (parent) =>
+          input.isPrompted ? prompt.place(parent) : null,
+      };
     });
-    if (isSelectedLeaf) {
-      item.classList.add('docs-row--prompted');
-      item.append(rowActions);
+    const item = drawn.element;
+    for (const part of placing) {
+      part.appendIfLeftOut(item);
     }
+    item.classList.add('ui-row--action');
+    item.addEventListener('mousedown', (event) => event.preventDefault());
+    item.addEventListener('click', () => {
+      state = { ...state, selectedId: row.node.id };
+      pane.focus();
+      view.open();
+    });
+    const isSelected = row.node.id === state.selectedId;
     item.classList.toggle('is-selected', isSelected);
     item.classList.toggle('is-cursor', isSelected && hasFocus);
-    return item;
+    return drawn;
   };
 
   const setExpanded = (id: string, isExpanded: boolean) => {
@@ -499,15 +468,36 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       }
     },
     statusesChanged: () => draw(),
+    redraw() {
+      if (isDisposed || !parts.picksChanged()) {
+        return;
+      }
+      parts.markDrawn();
+      isRedrawing = true;
+      try {
+        keepingFocusAndScroll(pane, [list], () => {
+          drawPane();
+          drawLine();
+          draw();
+        });
+      } finally {
+        isRedrawing = false;
+      }
+    },
     dispose() {
       isDisposed = true;
       disposeAnchors(anchors);
-      disposeAnchors(lineAnchors);
+      for (const drawn of [drawnPane, drawnLine, ...drawnRows]) {
+        drawn?.dispose();
+      }
+      drawnPane = null;
+      drawnLine = null;
+      drawnRows = [];
     },
   };
 
   pane.addEventListener('focusin', () => {
-    if (!hasFocus) {
+    if (!hasFocus && !isRedrawing) {
       hasFocus = true;
       draw();
     }
@@ -515,7 +505,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   pane.addEventListener('focusout', (event) => {
     const next = event.relatedTarget;
     const isLeavingPane = !(next instanceof Node && pane.contains(next));
-    if (hasFocus && isLeavingPane) {
+    if (hasFocus && isLeavingPane && !isRedrawing) {
       hasFocus = false;
       draw();
     }
@@ -526,5 +516,6 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     draw();
   });
 
+  drawPane();
   return view;
 }

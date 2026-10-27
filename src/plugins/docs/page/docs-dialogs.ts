@@ -1,4 +1,3 @@
-import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type {
@@ -11,12 +10,11 @@ import { element } from '../../../shared/page/dom';
 import {
   createListPicker,
   type ListPicker,
+  type ListPickerRequest,
 } from '../../../shared/page/list-picker';
-import { textButton } from '../../../shared/page/ui/button';
+import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
-import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
-import { row } from '../../../shared/page/ui/row';
 import type {
   CreateKind,
   CreatePlace,
@@ -31,14 +29,21 @@ import {
   completionQuery,
   completions,
 } from '../path-completion';
+import type { DocsKit } from '../layouts/layout';
 import {
   type DocChangeRecord,
-  type DocsAnchor,
   noPlaceText,
   provisionalEntry,
   renameRecord,
   trashQuestion,
 } from './docs-state';
+import {
+  type AppPart,
+  appPart,
+  type DocsParts,
+  type DrawnPart,
+  keepingFocusAndScroll,
+} from './layout/docs-parts';
 import { textBoxInput } from '../../../shared/page/text-box';
 
 // The scopes the dialogs push over the view's pane scope.
@@ -55,7 +60,9 @@ interface BoxRequest {
 }
 
 // A one-line text box in a dialog, scope `docs.box` pushed while it shows,
-// with the `⇥ complete` hint and the completion list under it for a path.
+// its body drawn by the layout's `boxDialog` around the app's input frame and
+// completion list (in `default`, with the `⇥ complete` hint between them for
+// a path), each completion a `completion` part.
 interface TextBox {
   element: HTMLElement;
   open(request: BoxRequest): void;
@@ -65,6 +72,8 @@ interface TextBox {
   cancel(): void;
   // Closes the box without hearing a cancel.
   close(): void;
+  // Draws the open box's body and completions again.
+  redraw(): void;
 }
 
 interface TextBoxDeps {
@@ -74,9 +83,7 @@ interface TextBoxDeps {
   log: Log;
   pushScope(): PushedScope;
   closed(): void;
-  anchor: DocsAnchor;
-  // Receives the anchor the box names.
-  anchors: Disposable[];
+  parts: DocsParts;
 }
 
 function createTextBox(deps: TextBoxDeps): TextBox {
@@ -84,17 +91,12 @@ function createTextBox(deps: TextBoxDeps): TextBox {
   const frame = inputFrame();
   const input = textBoxInput('docs-box');
   frame.append(input);
-  const completeHint = element('span', 'docs-box-hint');
-  deps.anchors.push(
-    deps.anchor(completeHint, 'boxComplete', {
-      scope: 'box',
-      label: 'complete',
-    }),
-  );
-  completeHint.hidden = true;
   const list = element('ol', 'docs-completion');
-  dialog.body.append(frame, completeHint, list);
   list.hidden = true;
+  let drawnBody: DrawnPart | null = null;
+  let drawnCompletions: DrawnPart[] = [];
+  // The completions shown under the box.
+  let completionTexts: string[] = [];
 
   let request: BoxRequest | null = null;
   let pushed: PushedScope | null = null;
@@ -123,6 +125,41 @@ function createTextBox(deps: TextBoxDeps): TextBox {
     return completions(await listing(query.folder), query.prefix, deps.paths);
   };
 
+  // Draws the body part around the input frame and the completion list; the
+  // frame goes first and the list last when the part leaves them out.
+  const drawBody = (shown: BoxRequest) => {
+    drawnBody?.dispose();
+    let placing: { textBox: AppPart; completions: AppPart } | null = null;
+    drawnBody = deps.parts.draw(
+      'boxDialog',
+      dialog.body,
+      { label: shown.label, completes: shown.completes },
+      (kit) => {
+        const textBox = appPart(frame, 'boxDialog', 'textBox');
+        const completions = appPart(list, 'boxDialog', 'completions');
+        placing = { textBox, completions };
+        return {
+          ...kit,
+          textBox: textBox.place,
+          completions: completions.place,
+        };
+      },
+    );
+    const placed = placing as { textBox: AppPart; completions: AppPart } | null;
+    placed?.textBox.prependIfLeftOut(drawnBody.element);
+    placed?.completions.appendIfLeftOut(drawnBody.element);
+  };
+
+  const drawCompletions = () => {
+    for (const drawn of drawnCompletions) {
+      drawn.dispose();
+    }
+    drawnCompletions = completionTexts.map((text) =>
+      deps.parts.draw('completion', list, { text }, (kit) => kit),
+    );
+    list.hidden = completionTexts.length === 0;
+  };
+
   // Draws the matches for the box's text, unless it changed meanwhile.
   const refresh = async () => {
     const shown = request;
@@ -131,11 +168,10 @@ function createTextBox(deps: TextBoxDeps): TextBox {
     if (request !== shown || input.value !== typed) {
       return;
     }
-    const texts = matches.slice(0, COMPLETION_LIMIT).map((match) => match.text);
-    list.replaceChildren(
-      ...texts.map((text) => row({ density: 'list', tag: 'li', label: text })),
-    );
-    list.hidden = texts.length === 0;
+    completionTexts = matches
+      .slice(0, COMPLETION_LIMIT)
+      .map((match) => match.text);
+    drawCompletions();
   };
 
   const refreshQuietly = () => {
@@ -148,8 +184,10 @@ function createTextBox(deps: TextBoxDeps): TextBox {
 
   const hide = () => {
     dialog.hide();
-    list.hidden = true;
-    list.replaceChildren();
+    completionTexts = [];
+    drawCompletions();
+    drawnBody?.dispose();
+    drawnBody = null;
     request = null;
     pushed?.pop();
     pushed = null;
@@ -177,10 +215,11 @@ function createTextBox(deps: TextBoxDeps): TextBox {
       listings = new Map();
       isAccepting = false;
       dialog.setTitle(next.label);
-      completeHint.hidden = !next.completes;
       input.value = next.text;
+      completionTexts = [];
+      drawCompletions();
+      drawBody(next);
       dialog.show();
-      list.hidden = true;
       input.focus();
       cursorToEnd();
       refreshQuietly();
@@ -231,12 +270,20 @@ function createTextBox(deps: TextBoxDeps): TextBox {
         hide();
       }
     },
+    redraw() {
+      if (request === null) {
+        return;
+      }
+      drawBody(request);
+      drawCompletions();
+    },
   };
   return box;
 }
 
 // A yes/no prompt in a dialog, scope `docs.confirm` pushed while it shows,
-// its Keep it and Move to the Trash buttons each holding its key; a click
+// its body and its answer buttons drawn by the layout's `confirmDialog` (in
+// `default`, Keep it and Move to the Trash, each holding its key); a click
 // answers as the key does, and the base scope changing under it answers no.
 interface Confirm {
   element: HTMLElement;
@@ -245,24 +292,48 @@ interface Confirm {
   no(): void;
   // Closes the prompt without an answer.
   close(): void;
+  // Draws the open prompt's body and buttons again.
+  redraw(): void;
+}
+
+// A Trash answer: a button whose click runs `onClick` and which holds the
+// key hint of `command`, appended to `parent`.
+function answerButton(
+  kit: DocsKit,
+  parent: HTMLElement,
+  command: 'confirmYes' | 'confirmNo',
+  label: string,
+  variant: ButtonVariant | undefined,
+  onClick: () => void,
+): HTMLButtonElement {
+  const hint = kit.keyHint(parent, command);
+  const button = textButton(label, onClick, { variant, hint });
+  parent.append(button);
+  return button;
 }
 
 function createConfirm(
   pushScope: () => PushedScope,
   closed: () => void,
-  anchor: DocsAnchor,
-  anchors: Disposable[],
+  parts: DocsParts,
 ): Confirm {
   const dialog = createDialog('Move to the Trash');
-  const text = element('p', 'docs-confirm-text');
-  dialog.body.append(text);
 
   let answers: { yes(): void; no(): void } | null = null;
   let pushed: PushedScope | null = null;
+  let question = '';
+  let drawn: DrawnPart | null = null;
+
+  const removeDrawn = () => {
+    drawn?.dispose();
+    drawn = null;
+    dialog.actions.replaceChildren();
+  };
 
   const hide = () => {
     answers = null;
     dialog.hide();
+    removeDrawn();
     pushed?.pop();
     pushed = null;
     closed();
@@ -276,27 +347,30 @@ function createConfirm(
     }
   };
 
-  const answerButton = (
-    label: string,
-    pick: 'yes' | 'no',
-    variant: 'secondary' | 'danger',
-  ) => {
-    const hint = element('span');
-    anchors.push(
-      anchor(hint, pick === 'yes' ? 'confirmYes' : 'confirmNo', {
-        scope: 'confirm',
-      }),
-    );
-    return textButton(label, () => answer(pick), { variant, hint });
+  // Each attempt starts from an empty actions row.
+  const draw = () => {
+    removeDrawn();
+    drawn = parts.draw('confirmDialog', dialog.body, { question }, (kit) => {
+      dialog.actions.replaceChildren();
+      return {
+        ...kit,
+        actions: () => dialog.actions,
+        answer: (parent, pick, label, variant) =>
+          answerButton(
+            kit,
+            parent,
+            pick === 'yes' ? 'confirmYes' : 'confirmNo',
+            label,
+            variant,
+            () => answer(pick),
+          ),
+      };
+    });
   };
-  dialog.actions.append(
-    answerButton('Keep it', 'no', 'secondary'),
-    answerButton('Move to the Trash', 'yes', 'danger'),
-  );
 
   const confirm: Confirm = {
     element: dialog.element,
-    open(question, yes, no) {
+    open(nextQuestion, yes, no) {
       confirm.close();
       const scope = pushScope();
       scope.onBaseChanged(() => {
@@ -306,7 +380,8 @@ function createConfirm(
       });
       pushed = scope;
       answers = { yes, no };
-      text.textContent = question;
+      question = nextQuestion;
+      draw();
       dialog.show();
     },
     yes: () => answer('yes'),
@@ -314,6 +389,11 @@ function createConfirm(
     close() {
       if (answers !== null) {
         hide();
+      }
+    },
+    redraw() {
+      if (answers !== null) {
+        draw();
       }
     },
   };
@@ -338,7 +418,9 @@ export interface DocsDialogsDeps {
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: Log;
-  anchor: DocsAnchor;
+  // Draws the dialogs' bodies and the list picker's rows through the docs
+  // layout.
+  parts: DocsParts;
   pushScope(scope: DialogScope): PushedScope;
   // The view's entries now.
   entries(): readonly IndexEntry[];
@@ -370,7 +452,14 @@ export interface DocsDialogs {
   confirmNo(): void;
   // Closes every dialog without hearing a cancel.
   close(): void;
-  // Disposes the dialogs' anchors.
+  // The `drawRow` of a list picker request titled `title`: each row is a
+  // `pickerRow` part, whose anchors the picker disposes.
+  pickerRow<T>(title: string): NonNullable<ListPickerRequest<T>['drawRow']>;
+  // Draws the open dialogs' parts and the open list's rows again when a
+  // layout pick changed for one of them, keeping the box's text, cursor and
+  // focus.
+  redraw(): void;
+  // Closes every dialog, which disposes their drawn parts.
   dispose(): void;
 }
 
@@ -381,8 +470,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     log,
     logSource: 'docs',
   });
-  // The anchors the box and the confirm name, for the view's life.
-  const anchors: Disposable[] = [];
+  const { parts } = deps;
   const box = createTextBox({
     channel,
     homeDir: deps.homeDir,
@@ -390,15 +478,32 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     log,
     pushScope: () => deps.pushScope('box'),
     closed: deps.dialogClosed,
-    anchor: deps.anchor,
-    anchors,
+    parts,
   });
   const confirm = createConfirm(
     () => deps.pushScope('confirm'),
     deps.dialogClosed,
-    deps.anchor,
-    anchors,
+    parts,
   );
+
+  // The picker's trailing element goes at the end of a row that left it out.
+  const pickerRow =
+    <T>(title: string): NonNullable<ListPickerRequest<T>['drawRow']> =>
+    (list, _item, { label, trailing, recordAnchor }) => {
+      const drawn = parts.draw(
+        'pickerRow',
+        list,
+        { picker: title, label },
+        (kit) => ({ ...kit, trailing: () => trailing }),
+      );
+      const isTrailingLeftOut =
+        trailing !== null && !drawn.element.contains(trailing);
+      if (isTrailingLeftOut) {
+        drawn.element.append(trailing);
+      }
+      recordAnchor({ dispose: () => drawn.dispose() });
+      return drawn.element;
+    };
 
   const createCancelled = () => log('docs', 'create cancelled');
 
@@ -416,9 +521,11 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       deps.dialogClosed();
       return;
     }
+    const title = `Place for the ${kindTitle}`;
     picker.open({
-      title: `Place for the ${kindTitle}`,
+      title,
       items: places,
+      drawRow: pickerRow(title),
       label: (place) => place.title,
       selected: 0,
       chosen: (place) => nameDoc(kind, place),
@@ -481,9 +588,11 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     elements: [picker.element, box.element, confirm.element],
     picker,
     createByKind() {
+      const title = 'New doc by kind';
       picker.open({
-        title: 'New doc by kind',
+        title,
         items: CREATE_KINDS,
+        drawRow: pickerRow(title),
         label: (kind) => CREATE_KIND_TITLES[kind],
         selected: 0,
         chosen: (kind) => {
@@ -612,8 +721,18 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       box.close();
       confirm.close();
     },
+    pickerRow,
+    redraw() {
+      if (!parts.picksChanged()) {
+        return;
+      }
+      parts.markDrawn();
+      keepingFocusAndScroll(box.element, [], () => box.redraw());
+      confirm.redraw();
+      picker.redraw();
+    },
     dispose() {
-      disposeAnchors(anchors);
+      dialogs.close();
     },
   };
   return dialogs;

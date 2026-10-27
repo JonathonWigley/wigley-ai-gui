@@ -204,6 +204,7 @@ function startDocsPart() {
     },
     dependency: () => ({}),
     drive: null,
+    layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof docsMainPart.start>[0];
   const part = docsMainPart.start(api);
   const invoke = (name: string, ...args: unknown[]) => {

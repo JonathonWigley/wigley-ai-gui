@@ -1,6 +1,6 @@
 # 08 — Settings layout
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -323,4 +323,4 @@ Commit:    one commit for the group: "Settings mode draws through the layout hos
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit c70ec1e · proof: diff read: Produces present; settings tests 66 pass; settings typecheck clean; layers and styles clean · concerns: 02's list picker drawRow rows lack ui-row--action and mousedown preventDefault (second report); FocusFakeElement in settings-view.test.ts duplicates docs' fake (shared home test-dom.ts); AGENTS.md settings/ source-tree line omits layouts/

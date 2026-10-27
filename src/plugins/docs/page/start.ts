@@ -5,9 +5,16 @@ import type {
   PageApi,
   PagePart,
   QualifiedEvents,
+  ShownLayouts,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import {
+  type BaseKitDeps,
+  createBaseKit,
+  type KitCommands,
+} from '../../../shared/page/layout-host/base-kit';
 import { sheet } from '../../../shared/page/ui/sheet';
+import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
@@ -23,6 +30,8 @@ import {
   MACHINE_SOURCE_ID,
   sessionSourceId,
 } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { Layout } from '../layouts/layout';
 import { docsManifest } from '../manifest';
 import { type DocChangeRecord, UNSAVED_TEXT } from './docs-state';
 import {
@@ -31,6 +40,8 @@ import {
   type DocsViewCommands,
 } from './docs-view';
 import { commandOfKeysIn } from './hidden-tree-keys';
+import type { DocsScope } from './layout/docs-parts';
+import { readDocsLayout } from './layout/read-layout';
 import { createStarredDocs } from './starred-docs';
 
 type DocsApi = PageApi<
@@ -118,6 +129,40 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const sessionDocs = new Map<string, SessionDocs>();
     // One star set, shared by every view.
     const starred = createStarredDocs(services.uiState, services.paths);
+    // The layouts every view draws with, read at each draw; `default` until
+    // the first set is shown.
+    let current: ShownLayouts<Layout> = {
+      layouts: new Map([['default', defaultLayout]]),
+      user: 'default',
+    };
+    const kitCommands: KitCommands = {
+      exists: (id) => api.keys.command(id) !== undefined,
+      run: (id) => api.commands.run(id),
+    };
+    const kitDeps: Omit<BaseKitDeps, 'keys' | 'scope'> = {
+      markdown: services.markdown,
+      commands: kitCommands,
+      commandNamed: (short) =>
+        Object.hasOwn(docsManifest.commands, short)
+          ? qualify(docsManifest.id, short)
+          : null,
+      platform: api.platform,
+    };
+    // A base kit whose keys fire in the docs scope `scope`, each anchor it
+    // names recorded by `rollback`.
+    const baseKit = (scope: DocsScope, rollback: RollbackDeps) =>
+      createBaseKit({
+        ...kitDeps,
+        keys: {
+          anchor(element, command, options) {
+            const anchor = keys.anchor(element, command, options);
+            rollback.recordAnchor(anchor);
+            return anchor;
+          },
+          keysFor: (command, keysScope) => keys.keysFor(command, keysScope),
+        },
+        scope: qualify(docsManifest.id, scope),
+      });
 
     const allViews = (): DocsView[] => [
       machineView,
@@ -173,6 +218,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         revealTree,
         leafOpened,
         addOverlay: (element) => api.areas.overlay.contribute(element),
+        layouts: () => current,
+        baseKit,
         changed: (change) => changedIn(view, change),
         unsavedPaths: () =>
           allViews()
@@ -206,6 +253,20 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       },
       () => mode.picked(),
     );
+
+    // Each set redraws every view's parts its pick changed for.
+    api.layouts.show<Layout>({
+      defaultLayout,
+      read: readDocsLayout,
+      userLayout: () => api.settings().layout,
+      setLayouts(shown) {
+        current = shown;
+        log('docs', `layouts shown: ${shown.user}`);
+        for (const view of allViews()) {
+          view.layoutsChanged();
+        }
+      },
+    });
 
     const docsSheet = sheet();
     docsSheet.classList.add('docs-sheet');

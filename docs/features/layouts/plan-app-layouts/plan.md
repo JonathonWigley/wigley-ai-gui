@@ -223,7 +223,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 - [x] [Primer layout and preview](05-primer-layout.md) — after 01, 02
 - [ ] [Docs layout](06-docs-layout.md) — after 02
 - [x] [Backlog layout](07-backlog-layout.md) — after 02
-- [ ] [Settings layout](08-settings-layout.md) — after 02
+- [x] [Settings layout](08-settings-layout.md) — after 02
 - [ ] [Notes layout](09-notes-layout.md) — after 02
 - [ ] [Gallery layout](11-gallery-layout.md) — after 02
 - [ ] [Keys overlays layout](12-keys-layout.md) — after 02
@@ -253,11 +253,13 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - 04 · ab26664 · diff read: Produces present (entries (parent,input,kit), ChatKit extends BaseKit with edgeCard, DotStatus re-export, chatCommandNamed); chat tests 308 pass; chat typecheck/lint clean · concerns: layout.test.ts keeps its own fake element (layer check bars chat/layouts from test-dom); chat-kit.ts copies base-kit's private appended helper
 - 07 · 4309e98 · diff read: Produces present; backlog tests 136 pass; backlog typecheck/oxlint/oxfmt clean · concerns: 02's confirm-prompt caches a keepButton a throwing confirmBody asked for, so rollback loses the Keep button; 02's list picker drawRow rows lack ui-row--action (no pointer cursor); cursorActions display:contents breaks .ui-row-trailing + .backlog-row-actions spacing (visual, task 17); detail oneLine is now a span; view test patches FakeElement focus/blur per test
 - 05 · 860a80b · diff read: Produces present, zl group renamed, zlp bound; primer tests 181 pass; primer self-test incl. layout preview group passes, every key placed; check-layers/check-styles clean · concerns: AGENTS.md still names only Space z l o (task 16); task card box order duplicated in the kit since boxes.ts was out of scope; screenshots show a blank band under the selected rail row with card focus, Unclear 2/2 count wrapping, raw markdown link in pointer — same as before, compare in task 17
+- 08 · c70ec1e · diff read: Produces present; settings tests 66 pass; settings typecheck clean; layers and styles clean · concerns: 02's list picker drawRow rows lack ui-row--action and mousedown preventDefault (second report); FocusFakeElement in settings-view.test.ts duplicates docs' fake (shared home test-dom.ts); AGENTS.md settings/ source-tree line omits layouts/
 ### Contract changes
 - LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
 - LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
 - createBacklogKit scope: BacklogBaseScope → BacklogKitScope (adds picker, confirm) · why: picker-row and confirm-body kits fire in pushed scopes · consumers: none outside 07 · group 07
 - BacklogView: gains dispose() beside setLayouts · why: release the shown layouts · consumers: none (PageStart has no dispose hook) · group 07
+- SettingsView gains dispose(); SettingsViewDeps gains markdown, keys, commands; createSectionsView deps take drawPane and drawRow · why: draw through the host · consumers: none outside 08 · group 08
 ### Rulings
 - selectedRow returns stored selection without railRows lookup — selection is the identity rows are built from — a stale selection would come back as is · group 01 · group 01
 - showTarget checks only the target's task exists, not the item — no caller builds a missing-item target — would select a row with no item · group 01 · group 01
@@ -274,5 +276,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - setLayouts redraws inside keepFocusedBox and restores both lists' scrollTop; detail redraws from the top — matches drawDetail on a new key — none · group 07 · group 07
 - talliesText removed, no caller left — none · group 05 · group 05
 - view disposed before destroyForm — layout anchors go before the form — none seen · group 05 · group 05
+- default pane roots and the rowActions slot use display:contents — settings.css stays unchanged — inline layout rule where CSS would be cleaner · group 08 · group 08
+- sections-view adds ui-row--action, mousedown preventDefault and click to each section row root — sectionRow takes no onClick — none · group 08 · group 08
 ### Review rounds
 ### Test gate
