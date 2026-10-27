@@ -42,6 +42,19 @@ export function stepTab(
   return tabIds.length < 2 ? null : stepFrom(tabIds, selectedTabId, step);
 }
 
+// Whether a session step moves anywhere, so its edge prompts show.
+export function hasOtherSession(state: SessionsState): boolean {
+  return stepSession(state, 1) !== null;
+}
+
+// Whether a tab step moves anywhere, so its edge prompts show.
+export function hasOtherTab(
+  tabIds: readonly string[],
+  selectedTabId: string | null,
+): boolean {
+  return stepTab(tabIds, selectedTabId, 1) !== null;
+}
+
 // A session's tab ids in add order, the selected one's id, and how many times
 // `tabsAfterSelect` changed the selection: a take over and its release select
 // without counting, so a release can tell whether a tab was selected since.

@@ -1,7 +1,6 @@
 import './sessions.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import { kbd } from '../../../shared/page/ui/kbd';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -77,7 +76,8 @@ function createExports(
 // The visible tab, the selected tab of the selected session while the mode
 // shows, sets the base key scope through its `shown`; with none visible the
 // scope is `idle`. A round selected while the mode is hidden toasts instead
-// of showing it.
+// of showing it. The view's key prompts are anchors that live as long as the
+// page, so none is disposed.
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -125,10 +125,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
       isModeShown: () => isModeShown,
       tabsChanged: checkVisible,
-      noSelectionHint: () => {
-        const shown = keys.keysFor(qualify(sessionsManifest.id, 'nextSession'));
-        return shown === null ? null : kbd(shown, api.platform);
-      },
+      keys,
     });
     const exports = createExports(api, view, () => state, labelOf);
 
@@ -211,15 +208,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         );
       }
     };
-
-    // A rebind redraws the hint beside the text asking for a session to be
-    // picked; before the first state there is nothing drawn to redraw. The
-    // page part lives as long as the page, so the subscription is kept.
-    keys.onChanged(() => {
-      if (published !== undefined) {
-        view.render(state);
-      }
-    });
 
     // Main sends `activated` before the state it causes, so the mode shows
     // before that state arrives and the round never toasts.

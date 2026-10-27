@@ -4,6 +4,32 @@
   height: 100%;
 }
 
+/* The side bar: the "Sessions" header over the rows. */
+.session-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.session-side > .ui-section-header {
+  padding: 0 var(--wg-space-2);
+}
+
+/* `⌥⇧I ▲ ▼ ⌥⇧O` on the list's header. */
+.session-edge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--wg-space-1);
+  font-weight: var(--wg-weight-regular);
+}
+
+/* An edge prompt with nothing to move to, or the close prompt with no
+   session, keeps its space. */
+.session-edge.is-no-target,
+.session-tabs-bar > .is-no-target {
+  visibility: hidden;
+}
+
 .session-sidebar {
   display: flex;
   flex-direction: column;
@@ -48,8 +74,8 @@
   white-space: nowrap;
 }
 
-/* The tab area: the selected session's tab strip over the sheet of session
-   bodies. */
+/* The tab area: the bar holding the selected session's tab strip over the
+   sheet of session bodies. */
 .session-area {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -58,7 +84,30 @@
   min-height: 0;
 }
 
-.session-tabs {
+/* `⌥I ‹`, the strip, `› ⌥O`, then `⌘W close` at the bar's end. The bar
+   takes the strip's margin, so the strip sits flush between its prompts. */
+.session-tabs-bar {
+  display: grid;
+  grid-template-columns:
+    max-content minmax(0, max-content) max-content 1fr
+    max-content;
+  align-items: center;
+  column-gap: var(--wg-space-1);
+  margin: var(--wg-sheet-gutter) var(--wg-sheet-gutter) 0;
+}
+
+.session-tabs-edge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--wg-space-1);
+}
+
+.session-tabs-close {
+  grid-column: 5;
+}
+
+.ui-tabs.session-tabs {
+  margin: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }

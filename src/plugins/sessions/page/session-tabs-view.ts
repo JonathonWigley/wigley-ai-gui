@@ -2,12 +2,16 @@ import { element } from '../../../shared/page/dom';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { tab as tabButton, tabStrip } from '../../../shared/page/ui/tabs';
+import { qualify } from '../../../shared/plugin-manifests';
+import type { KeysPageExports } from '../../keys/contract';
 import type {
   SessionsState,
   SessionTabHandle,
   SessionTabView,
 } from '../contract';
+import { sessionsManifest } from '../manifest';
 import {
+  hasOtherTab,
   NO_TABS,
   showsEmptyText,
   showsNoSelectionText,
@@ -34,13 +38,13 @@ interface SessionTabs {
 }
 
 // `isModeShown` reads whether Sessions mode shows; `changed` runs after any
-// change to a session's tabs, their selection or their statuses;
-// `noSelectionHint` builds the key hint shown beside the text asking for a
-// session to be picked, null for none.
+// change to a session's tabs, their selection or their statuses; `keys`
+// draws the strip's edge prompts and the key beside the text asking for a
+// session to be picked.
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
-  noSelectionHint(): HTMLElement | null;
+  keys: Pick<KeysPageExports, 'anchor'>;
 }
 
 export interface SessionTabsView {
@@ -57,22 +61,28 @@ export interface SessionTabsView {
   select(sessionId: string, tabId: string): void;
 }
 
-// The tab area of Sessions mode: the selected session's tab strip on the top
-// edge of one sheet holding a body per session, only the selected session's
-// body showing and in it only its selected tab, or the text saying why
-// nothing shows. A tab's element fills its body. A tab added for a session
-// with no row yet waits in a hidden body. Until `render` hands it main's
-// first state, it shows no text either.
+// The tab area of Sessions mode: the selected session's tab strip, between
+// its previous and next tab edge prompts and with the close prompt at the
+// bar's end, on the top edge of one sheet holding a body per session, only
+// the selected session's body showing and in it only its selected tab, or
+// the text saying why nothing shows. The tab prompts hide while the selected
+// session has no other tab, and the close prompt while none is selected. A
+// tab's element fills its body. A tab added for a session with no row yet
+// waits in a hidden body. Until `render` hands it main's first state, it
+// shows no text either.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   const area = element('div', 'session-area');
   const strip = tabStrip([]);
   strip.classList.add('session-tabs');
   strip.setAttribute('aria-label', 'Tabs');
+  const bar = buildTabsBar(strip, deps.keys);
   const bodies = sheet();
   bodies.classList.add('session-bodies');
   const text = buildText();
   bodies.append(text.element);
-  area.append(strip, bodies);
+  area.append(bar.element, bodies);
+  const pickHint = element('span', 'sessions-pick-hint');
+  deps.keys.anchor(pickHint, qualify(sessionsManifest.id, 'nextSession'));
   const sessions = new Map<string, SessionTabs>();
   let state: SessionsState | null = null;
 
@@ -111,8 +121,15 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         }),
       ),
     );
+    const isTabStepping = hasOtherTab(
+      selected?.tabs.tabIds ?? [],
+      selected?.tabs.selectedTabId ?? null,
+    );
+    bar.previous.classList.toggle('is-no-target', !isTabStepping);
+    bar.next.classList.toggle('is-no-target', !isTabStepping);
+    bar.close.classList.toggle('is-no-target', selectedSessionId === null);
     const shown = textFor(state, selectedTabs.length);
-    text.show(shown, shown?.hasHint ? deps.noSelectionHint() : null);
+    text.show(shown, shown?.hasHint ? pickHint : null);
   };
 
   const changed = () => {
@@ -282,6 +299,35 @@ function buildTab(
   entry.classList.toggle('is-active', isActive);
   entry.setAttribute('aria-current', String(isActive));
   return entry;
+}
+
+// The bar over the tab area: `⌥I ‹`, the strip, `› ⌥O`, then `⌘W close` at
+// its end. `previous` and `next` are each an anchor with its chevron, and
+// `close` the close anchor, so the view can hide each with no target.
+function buildTabsBar(
+  strip: HTMLElement,
+  keys: Pick<KeysPageExports, 'anchor'>,
+): {
+  element: HTMLElement;
+  previous: HTMLElement;
+  next: HTMLElement;
+  close: HTMLElement;
+} {
+  const previousKeys = element('span');
+  const nextKeys = element('span');
+  const close = element('span', 'session-tabs-close');
+  keys.anchor(previousKeys, qualify(sessionsManifest.id, 'prevTab'));
+  keys.anchor(nextKeys, qualify(sessionsManifest.id, 'nextTab'));
+  keys.anchor(close, qualify(sessionsManifest.id, 'closeSession'), {
+    label: 'close',
+  });
+  const previous = element('span', 'session-tabs-edge');
+  previous.append(previousKeys, element('span', 'ui-key-chevron', '‹'));
+  const next = element('span', 'session-tabs-edge');
+  next.append(element('span', 'ui-key-chevron', '›'), nextKeys);
+  const bar = element('div', 'session-tabs-bar');
+  bar.append(previous, strip, next, close);
+  return { element: bar, previous, next, close };
 }
 
 // The slot saying why the tab area shows no tab, `hint` after its text;

@@ -1,4 +1,5 @@
 import { element } from '../../../shared/page/dom';
+import type { KeysPageExports } from '../../keys/contract';
 import type { SessionsState } from '../contract';
 import {
   mountSessionTabsView,
@@ -9,17 +10,16 @@ import { rowStatus } from './tabs';
 
 // `activate` runs on a row click; `isModeShown` reads whether Sessions mode
 // shows; `tabsChanged` runs after any change to a session's tabs, their
-// selection or their statuses; `noSelectionHint` builds the key hint shown
-// while rows exist and none is selected, null for none.
+// selection or their statuses; `keys` draws the session and tab prompts.
 export interface SessionsViewDeps {
   activate(sessionId: string): void;
   isModeShown(): boolean;
   tabsChanged(): void;
-  noSelectionHint(): HTMLElement | null;
+  keys: Pick<KeysPageExports, 'anchor'>;
 }
 
 // `element` is the mode's root, the selected session's tab area; `sideBar` is
-// the mode's side bar, the list of session rows.
+// the mode's side bar, the session list's header over its rows.
 export interface SessionsView {
   element: HTMLElement;
   sideBar: HTMLElement;
@@ -32,13 +32,13 @@ export interface SessionsView {
 // area. Each row's second line follows its tabs' statuses.
 export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const root = element('div', 'sessions');
-  const sidebar = mountSidebarView(deps.activate);
+  const sidebar = mountSidebarView(deps.activate, deps.keys);
   let state: SessionsState | null = null;
   const drawSidebar = () =>
     sidebar.render(state, (sessionId) => rowStatus(tabs.statusesOf(sessionId)));
   const tabs = mountSessionTabsView({
     isModeShown: deps.isModeShown,
-    noSelectionHint: deps.noSelectionHint,
+    keys: deps.keys,
     changed() {
       drawSidebar();
       deps.tabsChanged();

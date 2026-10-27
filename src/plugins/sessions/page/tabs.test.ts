@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { SessionsState } from '../contract';
 import {
   harnessText,
+  hasOtherSession,
+  hasOtherTab,
   isRoundToast,
   isSameVisibleTab,
   mayClose,
@@ -63,6 +65,19 @@ describe('tabs', () => {
     expect(stepTab(['form', 'docs'], 'docs', 1)).toBe('form');
     expect(stepTab(['form', 'docs'], null, -1)).toBe('docs');
     expect(stepTab(['form'], 'form', 1)).toBeNull();
+  });
+
+  it('hasOtherSession is false with no rows or one selected row, and true with one unselected row or two rows', () => {
+    expect(hasOtherSession({ rows: [], selectedSessionId: null })).toBe(false);
+    expect(hasOtherSession(stateOf(['a'], 'a'))).toBe(false);
+    expect(hasOtherSession(stateOf(['a'], null))).toBe(true);
+    expect(hasOtherSession(stateOf(['a', 'b'], 'a'))).toBe(true);
+  });
+
+  it('hasOtherTab is false under two tabs and true from two', () => {
+    expect(hasOtherTab([], null)).toBe(false);
+    expect(hasOtherTab(['t1'], 't1')).toBe(false);
+    expect(hasOtherTab(['t1', 't2'], 't1')).toBe(true);
   });
 
   it('tabsAfterAdd selects the first tab added and keeps the selection after', () => {
