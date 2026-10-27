@@ -183,5 +183,6 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - With newFileRepo null, a create on a missing file writes the bare item with no header — a listed file deleted mid-edit comes back headerless · group 08 · group 08
 - Every writeDoc rejection becomes refused with its text; applyEdit sends no changed (the watch reports it) · group 08 · group 08
 - commit commits each follow-up file whose disk text differs from HEAD; fileAtHead rejection reads as empty · group 08 · group 08
+- Peer ai-dev-76 (Notes) confirmed it touches no task 09/10 file until this run closes; the Backlog design lines it committed in d3b1df9 (images, notes export) describe Notes work, so task 09 ignores them and task 11 leaves them in place — lead
 ### Review rounds
 ### Test gate
