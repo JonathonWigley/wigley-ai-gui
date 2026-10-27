@@ -1,4 +1,5 @@
 import type { PluginManifest } from '../contracts/plugin';
+import { backlogManifest } from './backlog/manifest';
 import { chatManifest } from './chat/manifest';
 import { docsManifest } from './docs/manifest';
 import { formsManifest } from './forms/manifest';
@@ -22,6 +23,7 @@ export const builtInManifests = [
   docsManifest,
   galleryManifest,
   settingsManifest,
+  backlogManifest,
 ] as const;
 
 // Every built-in plugin's manifest: main builds the served keymap, command

@@ -1,0 +1,105 @@
+import { definePlugin } from '../../shared/define-plugin';
+
+// Backlog mode: every features home's follow-ups (create, edit, delete, tags),
+// plans and primed features (read-only), grouped by repo. `tags` is the list
+// the tag picker offers; a tag a file holds that the list lacks still shows.
+export const backlogManifest = definePlugin({
+  id: 'backlog',
+  dependsOn: ['docs', 'keys'],
+  commands: {
+    showMode: {
+      label: 'backlog (again: toggle the side bar)',
+      group: 'modes',
+      runsIn: 'page',
+    },
+    listDown: { label: 'next row', group: 'list', runsIn: 'page' },
+    listUp: { label: 'previous row', group: 'list', runsIn: 'page' },
+    listTop: { label: 'first row', group: 'list', runsIn: 'page' },
+    listBottom: { label: 'last row', group: 'list', runsIn: 'page' },
+    open: { label: 'open or step in', group: 'list', runsIn: 'page' },
+    back: { label: 'go back', group: 'list', runsIn: 'page' },
+    toggle: {
+      label: 'open and focus, expand or collapse',
+      group: 'list',
+      runsIn: 'page',
+    },
+    filter: {
+      label: 'filter by title, one line or tag',
+      group: 'list',
+      runsIn: 'page',
+    },
+    rescan: { label: 'rescan the backlog', group: 'list', runsIn: 'page' },
+    create: { label: 'new follow-up', group: 'change', runsIn: 'page' },
+    edit: { label: 'edit the follow-up', group: 'change', runsIn: 'page' },
+    delete: { label: 'delete the follow-up', group: 'change', runsIn: 'page' },
+    toggleAgentReady: {
+      label: 'toggle agent-ready',
+      group: 'change',
+      runsIn: 'page',
+    },
+    pickTag: { label: 'pick a tag', group: 'change', runsIn: 'page' },
+    commit: {
+      label: "commit the home's follow-up files",
+      group: 'change',
+      runsIn: 'page',
+    },
+    toggleDone: {
+      label: 'show or hide done follow-ups',
+      group: 'view',
+      runsIn: 'page',
+    },
+    toggleAgentReadyOnly: {
+      label: 'show only agent-ready follow-ups',
+      group: 'view',
+      runsIn: 'page',
+    },
+    openInDocs: { label: 'open in Docs mode', group: 'view', runsIn: 'page' },
+    focusDetail: { label: 'focus the detail', group: 'focus', runsIn: 'page' },
+    focusList: { label: 'focus the list', group: 'focus', runsIn: 'page' },
+    lineDown: { label: 'scroll a line down', group: 'detail', runsIn: 'page' },
+    lineUp: { label: 'scroll a line up', group: 'detail', runsIn: 'page' },
+    halfPageDown: {
+      label: 'scroll half a page down',
+      group: 'detail',
+      runsIn: 'page',
+    },
+    halfPageUp: {
+      label: 'scroll half a page up',
+      group: 'detail',
+      runsIn: 'page',
+    },
+    save: { label: 'save the follow-up', group: 'editor', runsIn: 'page' },
+    cancelEdit: { label: 'cancel the edit', group: 'editor', runsIn: 'page' },
+    leaveBox: { label: 'leave the body box', group: 'editor', runsIn: 'page' },
+    nextField: { label: 'next field', group: 'editor', runsIn: 'page' },
+    previousField: { label: 'previous field', group: 'editor', runsIn: 'page' },
+    pickerDown: { label: 'next choice', group: 'picker', runsIn: 'page' },
+    pickerUp: { label: 'previous choice', group: 'picker', runsIn: 'page' },
+    pickerChoose: { label: 'choose', group: 'picker', runsIn: 'page' },
+    pickerCancel: { label: 'cancel', group: 'picker', runsIn: 'page' },
+    boxAccept: { label: 'accept', group: 'box', runsIn: 'page' },
+    boxCancel: { label: 'cancel', group: 'box', runsIn: 'page' },
+    confirmYes: {
+      label: 'yes, delete the follow-up',
+      group: 'confirm',
+      runsIn: 'page',
+    },
+    confirmNo: { label: 'keep it', group: 'confirm', runsIn: 'page' },
+  },
+  scopes: {
+    list: 'In the backlog list',
+    detail: 'In a backlog detail',
+    editor: 'In the follow-up editor',
+    box: 'In the backlog filter box',
+    confirm: 'In the delete confirmation',
+    picker: 'In a backlog list picker',
+  },
+  settings: { tags: ['agent-ready', 'needs a feature plan'] },
+  settingInfo: {
+    tags: {
+      label: 'Tags',
+      description: "The tags Backlog's tag picker offers.",
+    },
+  },
+  themeTokens: {},
+});

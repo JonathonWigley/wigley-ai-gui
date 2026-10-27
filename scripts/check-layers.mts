@@ -231,6 +231,26 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
+  'src/plugins/backlog': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/backlog/contract.ts'],
+    packages: [],
+  },
+  'src/plugins/backlog/contract.ts': {
+    layers: ['src/contracts', 'src/shared/followups'],
+    packages: [],
+  },
+  'src/plugins/backlog/main': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/followups',
+      'src/shared/paths',
+      'src/plugins/backlog',
+      'src/plugins/backlog/contract.ts',
+      'src/plugins/docs/contract.ts',
+    ],
+    packages: [],
+  },
   'src/plugins/settings': {
     layers: [
       'src/contracts',
@@ -407,6 +427,8 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/plugins/backlog',
+      'src/plugins/backlog/main',
       'src/plugins/chat',
       'src/plugins/chat/main',
       'src/plugins/docs',
@@ -426,6 +448,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/plugins/backlog',
       'src/plugins/chat',
       'src/plugins/docs',
       'src/plugins/forms',

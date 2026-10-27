@@ -1,4 +1,5 @@
 import type { MainPart } from '../contracts/plugin';
+import { backlogMainPart } from './backlog/main/start';
 import { chatMainPart } from './chat/main/start';
 import { docsMainPart } from './docs/main/start';
 import { formsMainPart } from './forms/main/start';
@@ -15,4 +16,5 @@ export const mainParts: readonly MainPart[] = [
   chatMainPart,
   docsMainPart,
   settingsMainPart,
+  backlogMainPart,
 ];
