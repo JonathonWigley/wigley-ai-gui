@@ -32,6 +32,7 @@ import { type ChatSessions, createChatSessions } from './chat-sessions';
 import { askFixturePermission } from './fixtures';
 import { createFolderChoices } from './folder-choices';
 import { requireChatHarness } from './lookups';
+import { createOpenSessions } from './open-sessions';
 import { PERMISSION_TOOLS } from './permission-tool';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript } from './selftest-script';
@@ -90,7 +91,7 @@ interface ChatDriveDeps {
 
 // Offers a drive run chat's fixtures: `chat.start` opens a chat session and
 // selects its row, `chat.askPermission` raises a permission card in one whose
-// process still runs, and `chat.permissionAnswer` reads that card's reply.
+// process runs, and `chat.permissionAnswer` reads that card's reply.
 export function addDriveActions(
   drive: DriveHost,
   deps: ChatDriveDeps,
@@ -122,7 +123,7 @@ export function addDriveActions(
     },
   });
   const askPermission = drive.add('askPermission', {
-    description: `Raises a permission card in the chat session sessionId for a call of toolName (default ${DEFAULT_PERMISSION_TOOL}) with input (default ${JSON.stringify(DEFAULT_PERMISSION_INPUT)}). Returns the call's toolUseId at once, which chat.permissionAnswer reads the reply by; the main output logs the reply once the user answers. Fails when chat holds no session sessionId, or when that session has ended.`,
+    description: `Raises a permission card in the chat session sessionId for a call of toolName (default ${DEFAULT_PERMISSION_TOOL}) with input (default ${JSON.stringify(DEFAULT_PERMISSION_INPUT)}). Returns the call's toolUseId at once, which chat.permissionAnswer reads the reply by; the main output logs the reply once the user answers. Fails when chat holds no session sessionId, or when that session has no running process.`,
     args: '{ sessionId: string; toolName?: string; input?: unknown }',
     async run(rawArgs) {
       const args = argsObject(rawArgs);
@@ -133,8 +134,8 @@ export function addDriveActions(
       if (!state) {
         throw new Error(`chat holds no session ${sessionId}`);
       }
-      if (state.ended) {
-        throw new Error(`session ${sessionId} has ended`);
+      if (!state.running) {
+        throw new Error(`session ${sessionId} has no running process`);
       }
       const toolUseId = services.randomUuid();
       permissions.set(toolUseId, { state: 'pending' });
@@ -182,8 +183,9 @@ export function addDriveActions(
   return [start, askPermission, permissionAnswer];
 }
 
-// Starts, resumes and runs the Claude Code sessions the page asks for, lists
-// and archives the saved ones, answers their permission prompts through the
+// Starts, resumes and runs the Claude Code sessions the page asks for, keeps
+// the open ones saved and restores them resting on start, lists and archives
+// the saved ones, answers their permission prompts through the
 // `permission_prompt` tool, keeps the recent project folders and serves them
 // merged with the harness's, signs profiles in and out (cancelling a running
 // sign-in when the page loads again or the part is disposed), serves the page
@@ -218,6 +220,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       send: (message, data) => api.channel.send(message, data),
       log: services.log,
     });
+    const saved = createOpenSessions(api.data);
     const chat = createChatSessions({
       harnesses: services.agentHarnesses,
       sessions,
@@ -225,6 +228,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       randomUuid: services.randomUuid,
       recent,
       archived: createArchivedSessions(api.data),
+      saved,
       send: (message, data) => api.channel.send(message, data),
       alerts: services.alerts,
       window: services.window,
@@ -244,6 +248,9 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.channel.handle('resume', (request) => chat.resume(request));
     api.channel.handle('send', (sessionId, message) =>
       chat.send(sessionId, message),
+    );
+    api.channel.handle('loadHistory', (sessionId) =>
+      chat.loadHistory(sessionId),
     );
     api.channel.handle('notice', (sessionId, text, tone) =>
       chat.notice(sessionId, text, tone),
@@ -269,8 +276,19 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.events.on('sessions.ended', ({ sessionId }) =>
       chat.sessionEnded(sessionId),
     );
+    api.events.on('sessions.selected', ({ sessionId }) =>
+      chat.selected(sessionId),
+    );
     sessions.contributeTools(PERMISSION_TOOLS, (session) =>
       chat.permissionToolSession(session),
+    );
+    saved.load().then(
+      (snapshot) => chat.restore(snapshot),
+      (error: unknown) => {
+        services.log('chat', `open sessions not read: ${errorText(error)}`);
+        // Lets saving start; the store refuses every write to the unread file.
+        chat.restore({ sessions: [], selectedHostSessionId: null });
+      },
     );
     services.selfTest?.run(
       chatSelfTestScript({

@@ -1,6 +1,6 @@
 # 02 — Sessions selected event
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -32,3 +32,5 @@ Done when: compiles; the test gate runs the test above and `session-list.test.ts
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 069fb20 · proof: diff read: selected present in SessionsMainEvents with doc comment; typecheck clean; session-list.test.ts 50 pass · concerns: three existing tests gained the selected call in exact expectations; 'activate of a marked selected row' approximated, since a selected row cannot carry a mark

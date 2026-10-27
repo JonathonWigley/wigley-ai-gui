@@ -45,9 +45,9 @@ export interface ResumeRequest {
   hostSessionId: string;
 }
 
-// `sessionId` is the sessions plugin's id for the row. A session whose process
-// ended on its own stays, `ended` true, until the user closes its row or
-// resumes its conversation; a closed session's state is dropped at once.
+// `sessionId` is the sessions plugin's id for the row. A session's state lasts
+// until the user closes its row, across a relaunch; a closed session's state
+// is dropped at once.
 export interface ChatSessionState {
   sessionId: string;
   projectDir: string;
@@ -58,7 +58,9 @@ export interface ChatSessionState {
   // The session's slash commands and skills, as typed after `/`; [] until the
   // harness reports them.
   commands: string[];
-  ended: boolean;
+  // True while the session's process runs; false while it rests, with no
+  // process yet or its process exited.
+  running: boolean;
 }
 
 export interface PermissionAnswer {
@@ -80,17 +82,23 @@ export interface ChatChannel extends ChannelShape {
     chooseFolder(): Promise<string | null>;
     // The new row's sessionId.
     start(request: StartRequest): string;
-    // Newest first; a session open in the app is left out, unless its process
-    // has ended.
+    // Newest first; a session open in the app on a row chat does not hold is
+    // left out, and one with a chat row is listed.
     pastSessions(
       projectDir: string,
       profile: string,
     ): Promise<PastSessionRow[]>;
     setArchived(hostSessionId: string, archived: boolean): Promise<void>;
-    // Resolves to the new row's sessionId; closes the row of the session
-    // first when its process has ended, and rejects when it is open otherwise.
+    // Resolves to the new row's sessionId; a session with a chat row selects
+    // that row and resolves to its sessionId, and one open in the app on any
+    // other row rejects.
     resume(request: ResumeRequest): Promise<string>;
+    // Starts a resting session's process first; rejects, leaving it resting,
+    // when its profile is missing or the start fails.
     send(sessionId: string, message: UserMessage): void;
+    // Reads a restored session's earlier conversation, arriving as `entries`;
+    // a later call, or one for a session with none pending, does nothing.
+    loadHistory(sessionId: string): Promise<void>;
     // Adds a notice entry to the session's chat, kept across a page reload.
     notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
     accountStatus(profile: string): Promise<AccountStatus>;
@@ -122,9 +130,14 @@ export interface ChatChannel extends ChannelShape {
     controls: { sessionId: string; controls: SessionControl[] };
     activity: { sessionId: string; activity: ProcessActivity };
     commands: { sessionId: string; names: string[] };
-    // The session's process ended or failed to start; one that ended on its
-    // own keeps its row until the user closes it.
-    sessionEnded: { sessionId: string; error: string | null };
+    // Replaces the session's whole entry list, as when restored history
+    // arrives.
+    entries: { sessionId: string; entries: ChatEntry[] };
+    // The session's process started, for every start.
+    sessionRunning: { sessionId: string };
+    // A started process exited, and its row rests until the user closes it;
+    // or a newly opened row's start failed, and its row is gone.
+    sessionRested: { sessionId: string; error: string | null };
     layoutChanged: LayoutSet;
     // The page the user opens to finish sign-in `id`.
     logInLink: { id: number; profile: string; url: string };
@@ -154,14 +167,11 @@ export interface ChatMainExports {
 }
 
 // The session an app slash command was sent in: `args` is the trimmed text
-// after the name, '' when none; `ended` is true when the session's agent
-// process has ended, where main takes no new entries and a notice shows
-// nowhere.
+// after the name, '' when none. A resting session takes notices.
 export interface SlashCommandContext {
   sessionId: string;
   profile: string;
   args: string;
-  ended: boolean;
 }
 
 // A `/name` the app runs itself in place of sending it to the agent. `name`

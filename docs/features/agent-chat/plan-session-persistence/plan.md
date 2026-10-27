@@ -138,7 +138,7 @@ needs no new entry (the new file sits in an existing layer).
 
 ### Wave 1
 - [x] [Open-sessions store](01-open-sessions-store.md)
-- [ ] [Sessions selected event](02-sessions-selected-event.md)
+- [x] [Sessions selected event](02-sessions-selected-event.md)
 
 ### Wave 2
 - [ ] [Chat main: resting and restored sessions](03-chat-main-resting-sessions.md) — after 01, 02
@@ -159,10 +159,13 @@ Review base: f676c293b1c5b8de5ce197b9ebf280691835f557
 
 ### Groups
 - 01 · 54aff62 · diff read: every Produces present in open-sessions.ts; typecheck clean; open-sessions.test.ts 9 cases pass · concerns: load_FileShape_ReadsOrRejects split into two it.each tables (snapshot rows, reject rows)
+- 02 · 069fb20 · diff read: selected present in SessionsMainEvents with doc comment; typecheck clean; session-list.test.ts 50 pass · concerns: three existing tests gained the selected call in exact expectations; 'activate of a marked selected row' approximated, since a selected row cannot carry a mark
 ### Contract changes
 ### Rulings
 - the most recent load() decides the save block: a later clean load lifts it — lets a repaired file be written without restart — a save after a repaired file writes (harmless) · group 01 · group 01
 - save() does not re-read the file; the unreadable flag is set by load() alone — whole-snapshot writes — a file damaged after a clean load is overwritten · group 01 · group 01
 - validation allows extra fields on snapshot and records — only named fields checked — a malformed extra field is kept silently · group 01 · group 01
+- the one selection comparison sits in sendState, emitting selected after stateChanged — the only single place that also orders after the state — a selection change that skips sendState emits late, with the next state · group 02 · group 02
+- selected fires before connected/closed/ended in the same action — follows from sendState — a consumer needing the other order sees it reversed · group 02 · group 02
 ### Review rounds
 ### Test gate

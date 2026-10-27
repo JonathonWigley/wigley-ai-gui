@@ -29,6 +29,11 @@ import {
   createChatSessions,
   TURN_FINISHED_TITLE,
 } from './chat-sessions';
+import type {
+  OpenSessions,
+  SavedSession,
+  SavedSessions,
+} from './open-sessions';
 import { CANCELLED_REASON } from './permission-tool';
 import { createRecentFolders, RECENT_FOLDERS_FILE } from './recent-folders';
 
@@ -55,6 +60,42 @@ const BASH_ARGS = {
   input: { command: 'ls' },
   tool_use_id: 'tu-1',
 };
+
+const NOTHING_SAVED: SavedSessions = {
+  sessions: [],
+  selectedHostSessionId: null,
+};
+
+// A saved record of a session in `/w/app` under `work`, no message sent and
+// no turn running, unless `fields` say otherwise.
+function record(
+  hostSessionId: string,
+  fields: Partial<SavedSession> = {},
+): SavedSession {
+  return {
+    hostSessionId,
+    projectDir: '/w/app',
+    profile: 'work',
+    sent: false,
+    busy: false,
+    ...fields,
+  };
+}
+
+// An open-sessions store holding the last snapshot saved and the save count.
+function fakeOpenSessions() {
+  let last: SavedSessions | null = null;
+  let saves = 0;
+  const store: OpenSessions = {
+    load: () => Promise.resolve(NOTHING_SAVED),
+    save: (snapshot) => {
+      saves++;
+      last = structuredClone(snapshot);
+      return Promise.resolve();
+    },
+  };
+  return { store, last: () => last, saves: () => saves };
+}
 
 // Lets the fake harness's queued emissions and the recent-folders write run.
 async function flush() {
@@ -84,12 +125,14 @@ function setUp(
   let selectedSessionId: string | null = ROW_ID;
   let uuidCalls = 0;
   const archived = createArchivedSessions(data);
+  const saved = fakeOpenSessions();
+  // Rows are numbered in open order: the first is ROW_ID.
   const sessions: ChatSessionsDeps['sessions'] = {
     open: (info, options) => {
       opened.push(info);
       openOptions.push(options);
       return {
-        session: { id: ROW_ID, info },
+        session: { id: `row-${opened.length}`, info },
         end: () => {
           ownedEnds++;
         },
@@ -114,6 +157,7 @@ function setUp(
       log,
     }),
     archived,
+    saved: saved.store,
     send: (message, data) => messages.push({ message, data } as Message),
     alerts: {
       announce: (title, body, onClick) =>
@@ -149,6 +193,7 @@ function setUp(
     messages,
     agentSession,
     archived,
+    saved,
     uuidCalls: () => uuidCalls,
     ownedEnds: () => ownedEnds,
     windowShows: () => windowShows,
@@ -250,9 +295,11 @@ describe('createChatSessions', () => {
         controls: [],
         activity: 'idle',
         commands: [],
-        ended: false,
+        running: false,
       },
     ]);
+    expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
+    expect(test.chat.sessions()[0].running).toBe(true);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
       { projectDir: PROJECT_DIR, profile: 'personal', lastUsed: 1000 },
     ]);
@@ -439,48 +486,40 @@ describe('createChatSessions', () => {
     expect(test.opened).toEqual([]);
   });
 
-  it('pastSessions_EndedSessionStillHeld_ListsIt', async () => {
+  it('pastSessions_OpenRows_ListsChatRowsOnly', async () => {
+    const test = setUp();
+    test.chat.restore({
+      sessions: [record(PAST_ONE.sessionId)],
+      selectedHostSessionId: null,
+    });
+    test.chat.sessionConnected(connected(ROW_ID, PAST_ONE.sessionId));
+    test.chat.sessionConnected(connected('row-relay', PAST_TWO.sessionId));
+
+    const rows = await test.chat.pastSessions('/w/app', 'work');
+
+    expect(rows.map((row) => row.hostSessionId)).toEqual([PAST_ONE.sessionId]);
+  });
+
+  it('resume_HostIdChatHolds_SelectsExistingRow', async () => {
     const test = setUp();
     const hostId = PAST_ONE.sessionId;
-    await test.chat.resume({
+    test.chat.restore({
+      sessions: [record(hostId)],
+      selectedHostSessionId: null,
+    });
+    test.chat.sessionConnected(connected(ROW_ID, hostId));
+
+    const sessionId = await test.chat.resume({
       projectDir: '/w/app',
       profile: 'work',
       hostSessionId: hostId,
     });
-    test.chat.sessionConnected(connected(ROW_ID, hostId));
-    await flush();
-    test.harness.processes[0].events.ended({ code: 0, error: null });
-
-    const rows = await test.chat.pastSessions('/w/app', 'work');
-
-    expect(rows.map((row) => row.hostSessionId)).toContain(hostId);
-  });
-
-  it('resume_EndedSessionStillHeld_ClosesItsRowAndOpensItFresh', async () => {
-    const test = setUp();
-    const hostId = PAST_ONE.sessionId;
-    const request = {
-      projectDir: '/w/app',
-      profile: 'work',
-      hostSessionId: hostId,
-    };
-    await test.chat.resume(request);
-    test.chat.sessionConnected(connected(ROW_ID, hostId));
-    await flush();
-    test.harness.processes[0].events.ended({ code: 0, error: null });
-
-    const sessionId = await test.chat.resume(request);
-    await flush();
 
     expect(sessionId).toBe(ROW_ID);
-    expect(test.ownedEnds()).toBe(1);
-    expect(test.opened.map((info) => info.sessionId)).toEqual([hostId, hostId]);
-    expect(test.harness.processes).toHaveLength(2);
-    expect(test.harness.processes[1].request.resume).toBe(true);
-    expect(test.chat.sessions()).toMatchObject([
-      { sessionId: ROW_ID, ended: false },
-    ]);
-    expect(test.logged).toContainEqual(expect.stringContaining(ROW_ID));
+    expect(test.activated).toEqual([ROW_ID]);
+    expect(test.opened).toHaveLength(1);
+    expect(test.harness.processes).toEqual([]);
+    expect(test.harness.pastSessionCalls).toEqual([]);
   });
 
   it('commands_StoredAndSentOnChange', async () => {
@@ -556,7 +595,7 @@ describe('createChatSessions', () => {
       test.chat.start({ projectDir: PROJECT_DIR, profile: 'work' }),
     ).toThrow('spawn failed');
     expect(test.ownedEnds()).toBe(1);
-    expect(test.sent('sessionEnded')).toEqual([
+    expect(test.sent('sessionRested')).toEqual([
       { sessionId: ROW_ID, error: 'spawn failed' },
     ]);
     expect(test.chat.sessions()).toEqual([]);
@@ -652,28 +691,37 @@ describe('createChatSessions', () => {
     expect(test.announced).toEqual([]);
   });
 
-  it('ended_ReportsAndKeepsTheSessionEnded', async () => {
-    const test = await started();
-    test.process.events.entry(assistant('a1', 'hi'));
-    const entriesBefore = test.sent('entry').length;
+  it.each([
+    { code: 0, error: null, tone: 'info', text: 'exit code 0' },
+    { code: 1, error: 'boom', tone: 'error', text: '): boom' },
+    { code: null, error: null, tone: 'error', text: 'exit code unknown' },
+  ])(
+    'processExit_RunningRow_RestsWithNotice (code $code, error $error)',
+    async ({ code, error, tone, text }) => {
+      const test = await started();
+      test.process.events.entry(assistant('a1', 'hi'));
 
-    test.process.events.ended({ code: 1, error: 'crashed' });
-    test.process.events.entry(assistant('late', 'z'));
+      test.process.events.ended({ code, error });
+      test.process.events.entry(assistant('late', 'z'));
 
-    expect(test.sent('sessionEnded')).toEqual([
-      { sessionId: ROW_ID, error: 'crashed' },
-    ]);
-    expect(test.ownedEnds()).toBe(0);
-    expect(test.chat.sessions()).toMatchObject([
-      { sessionId: ROW_ID, ended: true, entries: [assistant('a1', 'hi')] },
-    ]);
-    expect(test.sent('entry')).toHaveLength(entriesBefore);
-    expect(test.logged).toContainEqual(
-      expect.stringMatching(new RegExp(`${ROW_ID}.*crashed`)),
-    );
-  });
+      expect(test.sent('sessionRested')).toEqual([
+        { sessionId: ROW_ID, error },
+      ]);
+      expect(test.ownedEnds()).toBe(0);
+      const [state] = test.chat.sessions();
+      expect(state).toMatchObject({ sessionId: ROW_ID, running: false });
+      expect(state.entries).toEqual([
+        assistant('a1', 'hi'),
+        expect.objectContaining({
+          kind: 'notice',
+          tone,
+          text: expect.stringContaining(text),
+        }),
+      ]);
+    },
+  );
 
-  it('ended_WhileWorking_ShowsIdleAndAnnouncesNothing', async () => {
+  it('processExit_WhileWorking_ShowsIdleAndAnnouncesNothing', async () => {
     const test = await started();
     test.setFocused(false);
     test.activity('working');
@@ -685,13 +733,13 @@ describe('createChatSessions', () => {
       activity: 'idle',
     });
     expect(test.chat.sessions()).toMatchObject([
-      { sessionId: ROW_ID, ended: true, activity: 'idle' },
+      { sessionId: ROW_ID, running: false, activity: 'idle' },
     ]);
     expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
   });
 
-  it('closed_EndedSession_EndsTheOwnedSessionAtOnce', async () => {
+  it('closed_RestingSession_EndsTheOwnedSessionAtOnce', async () => {
     const test = await started();
     test.process.events.ended({ code: 0, error: null });
     const callsBefore = test.process.calls.length;
@@ -704,18 +752,21 @@ describe('createChatSessions', () => {
     expect(test.logged).toContainEqual(expect.stringContaining(ROW_ID));
   });
 
-  it('endedSession_ProcessCallsIgnored', async () => {
+  it('restingSession_ProcessCallsIgnoredAndNoticesKept', async () => {
     const test = await started();
     test.process.events.ended({ code: 0, error: null });
-    const entriesBefore = test.sent('entry').length;
+    const entriesBefore = test.chat.sessions()[0].entries.length;
 
-    test.chat.send(ROW_ID, { text: 'hi', images: [] });
-    test.chat.notice(ROW_ID, 'note', 'info');
     test.chat.interrupt(ROW_ID);
+    test.chat.answerPermission(ROW_ID, 'permission-1', {
+      allowed: true,
+      reason: null,
+    });
+    test.chat.notice(ROW_ID, 'note', 'info');
 
     expect(() => test.chat.setControl(ROW_ID, 'mode', 'plan')).toThrow(ROW_ID);
     expect(test.process.calls).toEqual([]);
-    expect(test.sent('entry')).toHaveLength(entriesBefore);
+    expect(test.chat.sessions()[0].entries).toHaveLength(entriesBefore + 1);
   });
 
   it('closed_endsTheProcessThenTheOwnedSession', async () => {
@@ -733,7 +784,7 @@ describe('createChatSessions', () => {
     await flush();
     expect(test.ownedEnds()).toBe(1);
     expect(test.sent('entry')).toEqual([]);
-    expect(test.sent('sessionEnded')).toEqual([]);
+    expect(test.sent('sessionRested')).toEqual([]);
     expect(test.logged).toContainEqual(expect.stringContaining(ROW_ID));
   });
 
@@ -784,7 +835,7 @@ describe('createChatSessions', () => {
     await flush();
 
     expect(test.ownedEnds()).toBe(1);
-    expect(test.sent('sessionEnded')).toEqual([]);
+    expect(test.sent('sessionRested')).toEqual([]);
     expect(test.chat.sessions()).toEqual([]);
   });
 
@@ -1036,15 +1087,18 @@ describe('createChatSessions', () => {
     expect(replyText(await settled(call))).toBe(
       JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
     );
-    expect(test.sent('entry').at(-1)?.entry).toMatchObject({
-      id: 'permission-1',
-      answer: { allowed: false, reason: CANCELLED_REASON },
-    });
+    expect(test.chat.sessions()[0].entries).toContainEqual(
+      expect.objectContaining({
+        id: 'permission-1',
+        answer: { allowed: false, reason: CANCELLED_REASON },
+      }),
+    );
   });
 
-  it('permission_endedSession_answersCancelledWithNoEntry', async () => {
+  it('permission_restingSession_answersCancelledWithNoEntry', async () => {
     const test = await started();
     test.process.events.ended({ code: 0, error: null });
+    const entriesBefore = test.sent('entry').length;
 
     const result = await test.chat
       .permissionToolSession(test.agentSession)
@@ -1056,7 +1110,7 @@ describe('createChatSessions', () => {
     expect(replyText(result)).toBe(
       JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
     );
-    expect(test.sent('entry')).toEqual([]);
+    expect(test.sent('entry')).toHaveLength(entriesBefore);
   });
 
   it('permission_rowCloses_answersCancelledWithNoEntry', async () => {
@@ -1166,5 +1220,274 @@ describe('createChatSessions', () => {
     });
 
     expect(await settled(call)).toBe('pending');
+  });
+});
+
+describe('createChatSessions saved sessions', () => {
+  it('restore_SavedSnapshot_OpensRestingRowsInOrder', () => {
+    const test = setUp();
+
+    test.chat.restore({
+      sessions: [record('host-a'), record('host-b'), record('host-c')],
+      selectedHostSessionId: 'host-b',
+    });
+
+    expect(test.opened.map((info) => info.sessionId)).toEqual([
+      'host-a',
+      'host-b',
+      'host-c',
+    ]);
+    expect(test.openOptions).toEqual([
+      { select: false },
+      { select: false },
+      { select: false },
+    ]);
+    expect(test.activated).toEqual(['row-2']);
+    expect(test.chat.sessions().map((state) => state.running)).toEqual([
+      false,
+      false,
+      false,
+    ]);
+    expect(test.harness.processes).toEqual([]);
+    expect(test.harness.pastSessionCalls).toEqual([]);
+  });
+
+  it.each([
+    {
+      given: 'a turn running at quit',
+      saved: record('host-a', { busy: true }),
+      entries: [{ kind: 'notice', tone: 'info' }],
+    },
+    {
+      given: 'a profile missing from settings',
+      saved: record('host-a', { profile: 'gone' }),
+      entries: [
+        {
+          kind: 'notice',
+          tone: 'error',
+          text: expect.stringContaining('gone'),
+        },
+      ],
+    },
+    { given: 'neither', saved: record('host-a'), entries: [] },
+  ])('restore_RecordFlags_AddNotices given $given', ({ saved, entries }) => {
+    const test = setUp();
+
+    test.chat.restore({ sessions: [saved], selectedHostSessionId: null });
+
+    expect(test.chat.sessions()[0].entries).toEqual(
+      entries.map((entry) => expect.objectContaining(entry)),
+    );
+  });
+
+  it.each([{ sent: true }, { sent: false }])(
+    'send_RestingRow_StartsProcessWithResumeFromSent (sent $sent)',
+    ({ sent }) => {
+      const test = setUp();
+      const hostId = PAST_ONE.sessionId;
+      test.chat.restore({
+        sessions: [record(hostId, { sent, busy: true })],
+        selectedHostSessionId: null,
+      });
+      expect(test.harness.processes).toEqual([]);
+
+      test.chat.send(ROW_ID, { text: 'hi', images: [] });
+
+      expect(test.harness.processes.map((process) => process.request)).toEqual([
+        {
+          sessionId: hostId,
+          resume: sent,
+          projectDir: '/w/app',
+          profileDir: '~/.claude',
+        },
+      ]);
+      expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
+      expect(test.harness.processes[0].calls).toEqual([
+        { method: 'send', text: 'hi', imageCount: 0 },
+      ]);
+      expect(test.logged).toContain(
+        `[chat] session ${ROW_ID} process started (resume ${sent})`,
+      );
+    },
+  );
+
+  it.each([
+    {
+      given: 'a new session then a send',
+      act: (chat: ChatSessions) => {
+        chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+        chat.send(ROW_ID, { text: 'hi', images: [] });
+      },
+      sent: true,
+    },
+    {
+      given: 'a launch',
+      act: (chat: ChatSessions) =>
+        chat.launch({
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+          message: { text: 'hi', images: [] },
+        }),
+      sent: true,
+    },
+    {
+      given: 'a new session with no send',
+      act: (chat: ChatSessions) =>
+        chat.start({ projectDir: PROJECT_DIR, profile: 'personal' }),
+      sent: false,
+    },
+  ])('send_NewSession_SavesSentTrue given $given', async ({ act, sent }) => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED);
+
+    act(test.chat);
+    await flush();
+
+    expect(test.saved.last()?.sessions).toEqual([
+      {
+        hostSessionId: 'uuid-1',
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+        sent,
+        busy: false,
+      },
+    ]);
+  });
+
+  it('save_BeforeRestore_WritesNothing', async () => {
+    const test = setUp();
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.send(ROW_ID, { text: 'hi', images: [] });
+    await flush();
+    expect(test.saved.saves()).toBe(0);
+
+    test.chat.restore({
+      sessions: [record('host-a')],
+      selectedHostSessionId: null,
+    });
+
+    expect(
+      test.saved.last()?.sessions.map((saved) => saved.hostSessionId),
+    ).toEqual(['uuid-1', 'host-a']);
+  });
+
+  it('send_RestingRowWithMissingProfile_RejectsAndStaysResting', () => {
+    const test = setUp();
+    test.chat.restore({
+      sessions: [record('host-a', { profile: 'gone', sent: true })],
+      selectedHostSessionId: null,
+    });
+
+    expect(() => test.chat.send(ROW_ID, { text: 'hi', images: [] })).toThrow(
+      'gone',
+    );
+    expect(test.harness.processes).toEqual([]);
+    expect(test.chat.sessions()[0].running).toBe(false);
+    expect(test.sent('sessionRested')).toEqual([]);
+  });
+
+  it.each([
+    {
+      given: 'a resting row',
+      open: (chat: ChatSessions) =>
+        chat.restore({
+          sessions: [record('host-a')],
+          selectedHostSessionId: null,
+        }),
+    },
+    {
+      given: 'a running row',
+      open: (chat: ChatSessions) => {
+        chat.restore(NOTHING_SAVED);
+        chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+      },
+    },
+  ])('closed_Row_DropsItsRecord given $given', async ({ open }) => {
+    const test = setUp();
+    open(test.chat);
+    await flush();
+    expect(test.saved.last()?.sessions).toHaveLength(1);
+
+    test.chat.closed(ROW_ID);
+
+    expect(test.saved.last()?.sessions).toEqual([]);
+  });
+
+  it('killAll_ThenExits_SavesNothing', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED);
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    test.harness.processes[0].events.activity('working');
+    const savesBefore = test.saved.saves();
+
+    test.chat.killAll();
+    await flush();
+
+    expect(test.chat.sessions()[0].running).toBe(false);
+    expect(test.saved.saves()).toBe(savesBefore);
+    expect(test.saved.last()?.sessions[0].busy).toBe(true);
+  });
+
+  it('activity_IdleFlip_SavesBusy', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED);
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    const { events } = test.harness.processes[0];
+
+    events.activity('working');
+    const busyWhileWorking = test.saved.last()?.sessions[0].busy;
+    events.activity('idle');
+
+    expect(busyWhileWorking).toBe(true);
+    expect(test.saved.last()?.sessions[0].busy).toBe(false);
+  });
+
+  it('loadHistory_PendingRow_PrependsOnce', async () => {
+    const test = setUp();
+    const hostId = PAST_ONE.sessionId;
+    test.chat.restore({
+      sessions: [record(hostId, { busy: true })],
+      selectedHostSessionId: null,
+    });
+
+    await test.chat.loadHistory(ROW_ID);
+    await test.chat.loadHistory(ROW_ID);
+
+    const ids = [
+      `history:${hostId}-user`,
+      `history:${hostId}-assistant`,
+      'app-notice-1',
+    ];
+    expect(test.chat.sessions()[0].entries.map((entry) => entry.id)).toEqual(
+      ids,
+    );
+    expect(
+      test
+        .sent('entries')
+        .map(({ sessionId, entries }) => [
+          sessionId,
+          entries.map((entry) => entry.id),
+        ]),
+    ).toEqual([[ROW_ID, ids]]);
+    expect(
+      test.harness.pastSessionCalls.filter((call) => call.method === 'history'),
+    ).toHaveLength(1);
+  });
+
+  it('selected_ChatRowThenOtherRow_KeepsLastChatSelection', () => {
+    const test = setUp();
+    test.chat.restore({
+      sessions: [record('host-a'), record('host-b')],
+      selectedHostSessionId: null,
+    });
+
+    test.chat.selected('row-1');
+    test.chat.selected('row-2');
+    test.chat.selected('row-relay');
+    test.chat.selected(null);
+
+    expect(test.saved.last()?.selectedHostSessionId).toBe('host-b');
   });
 });
