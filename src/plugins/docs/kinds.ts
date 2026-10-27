@@ -1,4 +1,8 @@
 import type { Paths } from '../../contracts/paths';
+import {
+  applyFollowupEdit,
+  newFollowupsFile,
+} from '../../shared/followups/followup-file';
 import type {
   CreateKind,
   CreatePlace,
@@ -40,7 +44,12 @@ interface KindRule {
   // when this entry gives no place.
   placeFolder(entry: IndexEntry, paths: Paths): string | null;
   targetPath(place: CreatePlace, name: string, paths: Paths): string;
-  contents(name: string, existing: string | null): CreateContents;
+  contents(
+    name: string,
+    existing: string | null,
+    place: CreatePlace,
+    paths: Paths,
+  ): CreateContents;
 }
 
 const SLUG_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -91,7 +100,7 @@ const KIND_RULES: Record<CreateKind, KindRule> = {
         : null,
     targetPath: (place, _name, paths) =>
       paths.join(place.folder, 'followups.md'),
-    contents: appendedFollowup,
+    contents: createdFollowup,
   },
 };
 
@@ -158,7 +167,7 @@ export function createTarget(
   return {
     path: rule.targetPath(place, trimmed, paths),
     appends: kind === 'followup',
-    contents: (existing) => rule.contents(trimmed, existing),
+    contents: (existing) => rule.contents(trimmed, existing, place, paths),
   };
 }
 
@@ -220,15 +229,25 @@ function placeTitle(
   return `${owners[source]} · ${tildeFolder}`;
 }
 
-// `existing` with `- **<name>** — ` appended as a new last line.
-function appendedFollowup(
+// `existing` with a follow-up titled `name` created in the file's own shape,
+// the editor on its heading or list item. No file, or an emptied one, starts
+// as a new follow-ups file named after the place's folder.
+function createdFollowup(
   name: string,
   existing: string | null,
+  place: CreatePlace,
+  paths: Paths,
 ): CreateContents {
-  const item = `- **${name}** — \n`;
-  if (existing === null || existing === '') {
-    return { text: item, line: 1 };
+  const isMissing = existing === null || existing === '';
+  const text = isMissing
+    ? newFollowupsFile(paths.base(place.folder))
+    : existing;
+  const result = applyFollowupEdit(text, {
+    type: 'create',
+    draft: { title: name, oneLine: '', tags: [], body: '' },
+  });
+  if (result.type !== 'applied') {
+    throw new Error(`A follow-up titled ${name} already exists`);
   }
-  const head = existing.endsWith('\n') ? existing : `${existing}\n`;
-  return { text: head + item, line: head.split('\n').length };
+  return { text: result.text, line: result.line };
 }

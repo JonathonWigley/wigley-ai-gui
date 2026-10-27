@@ -28,6 +28,15 @@ function place(folder: string, source: CreatePlace['source']): CreatePlace {
   return { title: folder, folder, source };
 }
 
+function followupTarget(name: string) {
+  return createTarget(
+    'followup',
+    place('/Users/u/wigley-features/r', 'features'),
+    name,
+    posixPaths,
+  );
+}
+
 describe('placesFor', () => {
   it('placesFor_Skill_SkillsFolderOfEachEntry', () => {
     const entries = [
@@ -269,22 +278,82 @@ describe('createTarget', () => {
     expect(repo.path).toBe('/Users/u/dev/r/web/AGENTS.md');
   });
 
-  it('createTarget_Followup_AppendsItem', () => {
-    const target = createTarget(
-      'followup',
-      place('/Users/u/wigley-features/r', 'features'),
-      'new',
-      posixPaths,
-    );
+  it('createTarget_FollowupSectionsFile_AddsContentsLineAndSection', () => {
+    const target = followupTarget('Fix the badge');
+    const existing = [
+      '# Follow-ups — r',
+      '',
+      '**Contents**',
+      '',
+      '- **Old** — one',
+      '',
+      '## Old',
+      '',
+      'one',
+      '',
+      '',
+    ].join('\n');
 
     expect(target.path).toBe('/Users/u/wigley-features/r/followups.md');
-    expect(target.contents('# F\n- **a** — x')).toEqual({
-      text: '# F\n- **a** — x\n- **new** — \n',
+    expect(target.contents(existing)).toEqual({
+      text: [
+        '# Follow-ups — r',
+        '',
+        '**Contents**',
+        '',
+        '- **Old** — one',
+        '- **Fix the badge**',
+        '',
+        '## Old',
+        '',
+        'one',
+        '',
+        '## Fix the badge',
+        '',
+      ].join('\n'),
+      line: 12,
+    });
+    expect(target.appends).toBe(true);
+  });
+
+  it('createTarget_FollowupListFile_AppendsItem', () => {
+    const target = followupTarget('new');
+
+    expect(target.contents('# F\n- **a** — x\n')).toEqual({
+      text: '# F\n- **a** — x\n- **new**\n',
       line: 3,
     });
-    expect(target.contents('')).toEqual({ text: '- **new** — \n', line: 1 });
-    expect(target.contents(null)).toEqual({ text: '- **new** — \n', line: 1 });
-    expect(target.appends).toBe(true);
+  });
+
+  it('createTarget_FollowupMissingFile_StartsNewFileNamedForFolder', () => {
+    const target = followupTarget('new');
+    const created = {
+      text: [
+        '# Follow-ups — r',
+        '',
+        '**Contents**',
+        '',
+        '- **new**',
+        '',
+        'Deferred work for the r repo. Each entry is one `##` section and stands on its own as a task brief.',
+        '',
+        '## new',
+        '',
+      ].join('\n'),
+      line: 9,
+    };
+
+    expect(target.contents(null)).toEqual(created);
+    expect(target.contents('')).toEqual(created);
+  });
+
+  it('createTarget_FollowupTitleTaken_Throws', () => {
+    const target = followupTarget('Old');
+    const existing = '# F\n\n**Contents**\n\n- **Old**\n\n## Old\n';
+
+    expect(() => target.contents(existing)).toThrow(
+      'A follow-up titled Old already exists',
+    );
   });
 });
 
