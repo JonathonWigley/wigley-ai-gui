@@ -141,7 +141,7 @@ needs no new entry (the new file sits in an existing layer).
 - [x] [Sessions selected event](02-sessions-selected-event.md)
 
 ### Wave 2
-- [ ] [Chat main: resting and restored sessions](03-chat-main-resting-sessions.md) — after 01, 02
+- [x] [Chat main: resting and restored sessions](03-chat-main-resting-sessions.md) — after 01, 02
 
 ### Wave 3
 - [ ] [Chat page: resting tabs](04-chat-page-resting-tabs.md) — after 03
@@ -160,6 +160,7 @@ Review base: f676c293b1c5b8de5ce197b9ebf280691835f557
 ### Groups
 - 01 · 54aff62 · diff read: every Produces present in open-sessions.ts; typecheck clean; open-sessions.test.ts 9 cases pass · concerns: load_FileShape_ReadsOrRejects split into two it.each tables (snapshot rows, reject rows)
 - 02 · 069fb20 · diff read: selected present in SessionsMainEvents with doc comment; typecheck clean; session-list.test.ts 50 pass · concerns: three existing tests gained the selected call in exact expectations; 'activate of a marked selected row' approximated, since a selected row cannot carry a mark
+- 03 · e04bc7f · diff read: every Produces present; typecheck errors only under src/plugins/chat/page/ (11); chat main tests 127 pass · concerns: selftest-script still expects chat.ended and an ended second session (task 05); old process controls/commands stay in state while resting (task 04 may hide); exit-with-error notice reads '(exit code 1): boom. Your next…' so test asserts contains '): boom'; fake sessions.open numbers rows row-<n>; send toast relies on sync throw, unverified end to end
 ### Contract changes
 ### Rulings
 - the most recent load() decides the save block: a later clean load lifts it — lets a repaired file be written without restart — a save after a repaired file writes (harmless) · group 01 · group 01
@@ -167,5 +168,12 @@ Review base: f676c293b1c5b8de5ce197b9ebf280691835f557
 - validation allows extra fields on snapshot and records — only named fields checked — a malformed extra field is kept silently · group 01 · group 01
 - the one selection comparison sits in sendState, emitting selected after stateChanged — the only single place that also orders after the state — a selection change that skips sendState emits late, with the next state · group 02 · group 02
 - selected fires before connected/closed/ended in the same action — follows from sendState — a consumer needing the other order sees it reversed · group 02 · group 02
+- HeldSession holds no profileName (state.profile is the name, looked up at each start) and gains hostId — one home for the name — internal only · group 03 · group 03
+- a rejected load calls restore with an empty snapshot so saving starts; the store refuses each write and it is logged — no extra ChatSessions method — one log line per change while the file is unreadable · group 03 · group 03
+- saved selection written null when it names no held row — file never points at a dropped record — closed-then-relaunched selection restores to none · group 03 · group 03
+- restore after killAll does nothing and logs 'open sessions not restored: chat is stopping' — guards a part disposed before load resolves — none seen · group 03 · group 03
+- a restore record whose sessions.open throws is logged and skipped — one bad record does not stop the rest — that record is lost from the next save · group 03 · group 03
+- restore notices go out as entry messages after sessionStarted — reuse notice path — page handles them as separate entries · group 03 · group 03
+- new/resume/launch save only after the start succeeds — a failed start never writes its record · group 03 · group 03
 ### Review rounds
 ### Test gate

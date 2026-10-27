@@ -1,6 +1,6 @@
 # 03 — Chat main: resting and restored sessions
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -149,3 +149,5 @@ Done when: `npm run typecheck` errors only under `src/plugins/chat/page/`; the t
 Commit:    one commit for the group
 
 ## Proof
+
+Commit e04bc7f · proof: diff read: every Produces present; typecheck errors only under src/plugins/chat/page/ (11); chat main tests 127 pass · concerns: selftest-script still expects chat.ended and an ended second session (task 05); old process controls/commands stay in state while resting (task 04 may hide); exit-with-error notice reads '(exit code 1): boom. Your next…' so test asserts contains '): boom'; fake sessions.open numbers rows row-<n>; send toast relies on sync throw, unverified end to end

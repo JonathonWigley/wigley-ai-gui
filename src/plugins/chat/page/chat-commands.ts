@@ -111,17 +111,17 @@ export function chatCommandHandlers(
       }
       act(session, context);
     };
-  // An ended session takes no interrupt and no control change.
-  const inLiveSession = (act: (session: ChatSession) => void): Handler =>
+  // A resting session has no process to interrupt or change a control of.
+  const inRunningSession = (act: (session: ChatSession) => void): Handler =>
     inSession((session) => {
-      if (session.ended) {
-        log('chat', `${session.name} has ended`);
+      if (!session.running) {
+        log('chat', `${session.name} has no running process`);
         return;
       }
       act(session);
     });
   const pickControlOf = (id: string) =>
-    inLiveSession((session) => {
+    inRunningSession((session) => {
       const control = session.state.controls.find((held) => held.id === id);
       if (control === undefined) {
         log('chat', `${session.name} has no ${id} control`);
@@ -144,7 +144,7 @@ export function chatCommandHandlers(
       log('chat', 'left the box');
     }),
     send: inSession((session) => send(deps, session)),
-    interrupt: inLiveSession((session) => {
+    interrupt: inRunningSession((session) => {
       if (session.state.activity === 'idle') {
         log('chat', `nothing to interrupt in ${session.name}`);
         return;
@@ -221,7 +221,7 @@ export function chatCommandHandlers(
     pickMode: pickControlOf(CONTROL_IDS.pickMode),
     pickEffort: pickControlOf(CONTROL_IDS.pickEffort),
     pickModel: pickControlOf(CONTROL_IDS.pickModel),
-    pickControl: inLiveSession((session) => {
+    pickControl: inRunningSession((session) => {
       const { controls } = session.state;
       if (controls.length === 0) {
         log('chat', `${session.name} has no controls`);
@@ -276,9 +276,9 @@ function sessionFor(
 
 // Sends the box's text as typed with the attached images, then clears the box
 // and the attachments; images send with an empty box too. A box and
-// attachments both empty, or an ended session, send nothing and keep what is
-// there. A registered app slash command runs in place of sending, an ended
-// session's included, and clears the box, leaving the images attached.
+// attachments both empty send nothing. A message to a resting session starts
+// its process in main. A registered app slash command runs in place of
+// sending and clears the box, leaving the images attached.
 function send(deps: ChatCommandDeps, session: ChatSession) {
   const { log } = deps;
   const text = session.box.text();
@@ -290,10 +290,6 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
   const matched = deps.slashCommands.match(text);
   if (matched !== null) {
     runSlashCommand(deps, session, matched.command, matched.args);
-    return;
-  }
-  if (session.ended) {
-    log('chat', `${session.name} has ended`);
     return;
   }
   void deps.channel
@@ -322,7 +318,6 @@ function runSlashCommand(
     sessionId: session.sessionId,
     profile: session.state.profile,
     args,
-    ended: session.ended,
   };
   session.box.setText('');
   log('chat', `ran /${command.name} in ${session.name}`);

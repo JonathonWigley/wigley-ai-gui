@@ -127,7 +127,6 @@ export const chatManifest = definePlugin({
   },
   scopes: {
     chat: 'In the chat',
-    ended: 'In an ended chat',
     picker: 'In a picker',
     resume: 'In the session list',
     reason: 'In the deny reason box',

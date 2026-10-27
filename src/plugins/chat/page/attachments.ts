@@ -142,11 +142,9 @@ export function buildAttachmentStrip(attachments: Attachments): HTMLElement {
   return strip;
 }
 
-// The Chat tab images attach to: its name for the log, whether its session
-// ended, and its attachments.
+// The Chat tab images attach to: its name for the log and its attachments.
 export interface ImageTab {
   readonly name: string;
-  readonly ended: boolean;
   readonly attachments: Attachments;
 }
 
@@ -161,8 +159,7 @@ export interface ImageListenerDeps {
 // reaches the editor untouched (Excel, Numbers, Word and Pages put a picture
 // beside copied text; a Finder copy or Copy Image puts only a name or URL). The
 // whole tab hears drop, so a file dropped just outside the composer attaches
-// instead of the window navigating to it. An ended tab takes no files and logs
-// it.
+// instead of the window navigating to it.
 export function listenForImages(
   tab: ImageTab,
   composer: HTMLElement,
@@ -170,15 +167,11 @@ export function listenForImages(
   deps: ImageListenerDeps,
 ) {
   const { log } = deps;
-  const take = (event: Event, files: File[], how: string) => {
+  const take = (event: Event, files: File[]) => {
     if (files.length === 0) {
       return;
     }
     event.preventDefault();
-    if (tab.ended) {
-      log('chat', `${how} files ignored: ${tab.name} has ended`);
-      return;
-    }
     void attachFiles(files, tab.attachments, {
       attached: (image) =>
         log('chat', `attached a ${image.mediaType} image in ${tab.name}`),
@@ -197,7 +190,7 @@ export function listenForImages(
     (event) => {
       const files = filesOf(event.clipboardData);
       if (!holdsPastedText(event.clipboardData, files)) {
-        take(event, files, 'pasted');
+        take(event, files);
       }
     },
     { capture: true },
@@ -208,6 +201,6 @@ export function listenForImages(
     }
   });
   root.addEventListener('drop', (event) =>
-    take(event, filesOf(event.dataTransfer), 'dropped'),
+    take(event, filesOf(event.dataTransfer)),
   );
 }

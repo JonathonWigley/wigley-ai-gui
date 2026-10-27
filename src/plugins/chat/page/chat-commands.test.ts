@@ -40,7 +40,7 @@ const jpeg: ChatImage = { mediaType: 'image/jpeg', data: 'anBn' };
 // `scrollBy` records each step and direction in `scrolls` and answers with
 // `scroll`.
 function session(
-  ended: boolean,
+  running: boolean,
   scroll: TranscriptScroll = { moved: true, atEnd: false, following: false },
 ) {
   const counts = {
@@ -54,7 +54,7 @@ function session(
     controls: [mode],
     activity: 'working',
     commands: [],
-    ended,
+    running,
   };
   const entries = {
     scrollBy(step: ScrollStep, direction: 1 | -1) {
@@ -66,7 +66,7 @@ function session(
     sessionId: 'row-1',
     name: 'app',
     state,
-    ended,
+    running,
     box: {} as TextEditor,
     attachments: createAttachments(),
     entries,
@@ -171,27 +171,28 @@ function setUp(
 
 describe('chat commands', () => {
   it.each(['interrupt', 'pickMode', 'pickControl'] as const)(
-    '%s on an ended session opens no picker and reaches no process',
+    '%s on a resting session opens no picker and reaches no process',
     (command) => {
-      const run = setUp(session(true));
+      const run = setUp(session(false));
 
       run.handlers[command]({});
 
       expect(run.opened).toEqual([]);
       expect(run.invoked).toEqual([]);
+      expect(run.logs).toEqual([expect.stringContaining('no running process')]);
     },
   );
 
-  it('interrupt_liveWorkingSession_interruptsIt', () => {
-    const run = setUp(session(false));
+  it('interrupt_runningWorkingSession_interruptsIt', () => {
+    const run = setUp(session(true));
 
     run.handlers.interrupt({});
 
     expect(run.invoked).toEqual([['interrupt', 'row-1']]);
   });
 
-  it('pickMode_liveSession_sessionBoundPickerSetsTheChoice', () => {
-    const run = setUp(session(false));
+  it('pickMode_runningSession_sessionBoundPickerSetsTheChoice', () => {
+    const run = setUp(session(true));
 
     run.handlers.pickMode({});
     const [request] = run.opened;
@@ -202,7 +203,7 @@ describe('chat commands', () => {
   });
 
   it('pickMode_mainApplies_logsTheChangeOnceMainAnswers', async () => {
-    const run = setUp(session(false));
+    const run = setUp(session(true));
 
     run.handlers.pickMode({});
     run.opened[0].picked(mode.choices[1]);
@@ -214,7 +215,7 @@ describe('chat commands', () => {
   });
 
   it('pickMode_mainRefuses_logsAndToastsTheFailureOnly', async () => {
-    const run = setUp(session(false), new Error('session row-1 has ended'));
+    const run = setUp(session(true), new Error('session row-1 has ended'));
 
     run.handlers.pickMode({});
     run.opened[0].picked(mode.choices[1]);
@@ -224,8 +225,8 @@ describe('chat commands', () => {
     expect(run.toasts).toEqual([expect.stringContaining('row-1')]);
   });
 
-  it('pickControl_liveSession_sessionBoundPickerOpensChoices', () => {
-    const run = setUp(session(false));
+  it('pickControl_runningSession_sessionBoundPickerOpensChoices', () => {
+    const run = setUp(session(true));
 
     run.handlers.pickControl({});
     const [controls] = run.opened;
@@ -239,7 +240,7 @@ describe('chat commands', () => {
 
   it('toggleEntry_userEntryWithImages_opensViewerAtFirstAndTogglesNothing', () => {
     const entries = focusedOn({ ...userEntry, images: [png, jpeg] });
-    const shown = Object.assign(session(false), { entries });
+    const shown = Object.assign(session(true), { entries });
     const run = setUp(shown);
 
     run.handlers.toggleEntry({});
@@ -250,7 +251,7 @@ describe('chat commands', () => {
 
   it('toggleEntry_userEntryWithoutImages_togglesAndOpensNoViewer', () => {
     const entries = focusedOn(userEntry);
-    const shown = Object.assign(session(false), { entries });
+    const shown = Object.assign(session(true), { entries });
     const run = setUp(shown);
 
     run.handlers.toggleEntry({});
@@ -288,7 +289,7 @@ describe('chat commands', () => {
   ] as const)(
     '$command over $scroll scrolls the transcript',
     ({ command, scroll, step }) => {
-      const shown = session(false, scroll);
+      const shown = session(true, scroll);
       const run = setUp(shown);
 
       run.handlers[command]({});
@@ -298,7 +299,7 @@ describe('chat commands', () => {
   );
 
   it('halfPageDown_noChatTabShown_scrollsNothingAndLogsIt', () => {
-    const shown = session(false);
+    const shown = session(true);
     const run = setUp(shown, undefined, false);
 
     run.handlers.halfPageDown({});
@@ -320,34 +321,14 @@ describe('chat commands', () => {
       },
     });
     const message = box('  /login  ');
-    const shown = Object.assign(session(false), { box: message });
+    const shown = Object.assign(session(true), { box: message });
     const run = setUp(shown, undefined, true, commands);
 
     run.handlers.send({});
 
-    expect(ran).toEqual([
-      { sessionId: 'row-1', profile: 'work', args: '', ended: false },
-    ]);
+    expect(ran).toEqual([{ sessionId: 'row-1', profile: 'work', args: '' }]);
     expect(run.invoked).toEqual([]);
     expect(message.held.text).toBe('');
-  });
-
-  it('send_AppCommandEndedSession_RunsWithEnded', () => {
-    const ran: SlashCommandContext[] = [];
-    const commands = createSlashCommands();
-    commands.add({
-      name: 'status',
-      description: 'Show the account',
-      run: (context) => {
-        ran.push(context);
-      },
-    });
-    const shown = Object.assign(session(true), { box: box('/status') });
-    const run = setUp(shown, undefined, true, commands);
-
-    run.handlers.send({});
-
-    expect(ran.map((context) => context.ended)).toEqual([true]);
   });
 
   it('send_AppCommandRejects_Toasts', async () => {
@@ -357,7 +338,7 @@ describe('chat commands', () => {
       description: 'Sign out',
       run: () => Promise.reject(new Error('no network')),
     });
-    const shown = Object.assign(session(false), { box: box('/logout') });
+    const shown = Object.assign(session(true), { box: box('/logout') });
     const run = setUp(shown, undefined, true, commands);
 
     run.handlers.send({});
@@ -368,7 +349,7 @@ describe('chat commands', () => {
   });
 
   it('send_UnregisteredSlash_SendsToTheAgent', () => {
-    const shown = Object.assign(session(false), { box: box('/model opus') });
+    const shown = Object.assign(session(true), { box: box('/model opus') });
     const run = setUp(shown);
 
     run.handlers.send({});
@@ -379,7 +360,7 @@ describe('chat commands', () => {
   });
 
   it('send_ImagesOnly_Sends', () => {
-    const shown = Object.assign(session(false), { box: box('') });
+    const shown = Object.assign(session(true), { box: box('') });
     shown.attachments.add(png);
     const run = setUp(shown);
 
@@ -390,24 +371,27 @@ describe('chat commands', () => {
     ]);
   });
 
-  it('send_WithImages_ClearsAttachments', () => {
-    const shown = Object.assign(session(false), { box: box('hi') });
-    shown.attachments.add(png);
-    shown.attachments.add(jpeg);
-    const run = setUp(shown);
+  it.each([{ running: true }, { running: false }])(
+    'send with images, running $running, sends to main and clears attachments',
+    ({ running }) => {
+      const shown = Object.assign(session(running), { box: box('hi') });
+      shown.attachments.add(png);
+      shown.attachments.add(jpeg);
+      const run = setUp(shown);
 
-    run.handlers.send({});
+      run.handlers.send({});
 
-    expect(run.invoked).toEqual([
-      ['send', 'row-1', { text: 'hi', images: [png, jpeg] }],
-    ]);
-    expect(shown.attachments.images()).toEqual([]);
-  });
+      expect(run.invoked).toEqual([
+        ['send', 'row-1', { text: 'hi', images: [png, jpeg] }],
+      ]);
+      expect(shown.attachments.images()).toEqual([]);
+    },
+  );
 
   it('send_AppCommand_KeepsAttachments', () => {
     const commands = createSlashCommands();
     commands.add({ name: 'status', description: 'Show', run: () => undefined });
-    const shown = Object.assign(session(false), { box: box('/status') });
+    const shown = Object.assign(session(true), { box: box('/status') });
     shown.attachments.add(png);
     const run = setUp(shown, undefined, true, commands);
 

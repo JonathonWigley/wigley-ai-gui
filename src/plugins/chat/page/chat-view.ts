@@ -69,11 +69,11 @@ export interface SessionRef {
 }
 
 // One held chat session as the commands act on it: its state as chat main
-// last sent it, whether it ended, its message box, the images attached to
-// its next message and its entries.
+// last sent it, whether its process runs, its message box, the images
+// attached to its next message and its entries.
 export interface ChatSession extends SessionRef {
   readonly state: ChatSessionState;
-  readonly ended: boolean;
+  readonly running: boolean;
   box: TextEditor;
   attachments: Attachments;
   entries: Pick<
@@ -96,9 +96,8 @@ export interface PermissionActions {
   deny(session: SessionRef, entry: PermissionEntry): void;
 }
 
-// The base scope a shown Chat tab sets: `ended` once its session has ended,
-// holding only the entry, box and send keys, else `chat`.
-export type ChatTabScope = 'chat' | 'ended';
+// The base scope a shown Chat tab sets.
+export type ChatTabScope = 'chat';
 
 // `setScope` sets the base scope; `otherSessionShown` runs when the
 // Chat tab shown is another session's than the Chat tab shown before;
@@ -129,13 +128,14 @@ export interface ChatViewDeps {
 
 // A held session's Chat tab. `handle` is null until `addTab` returns, and
 // `box` until the editor mounts into the attached tab. `composerSize` follows
-// the composer's height for as long as the tab is held.
+// the composer's height for as long as the tab is held. `historyAsked` is set
+// the first time the tab shows in this page load.
 interface HeldTab {
   sessionId: string;
   name: string;
   state: ChatSessionState;
-  ended: boolean;
   closeConfirmed: boolean;
+  historyAsked: boolean;
   handle: SessionTabHandle | null;
   status: string;
   box: TextEditor | null;
@@ -147,12 +147,10 @@ interface HeldTab {
   composerSize: ResizeObserver;
 }
 
-// `draw` shows the tab's state; `setScope` names the type hint's and Send's
-// anchors again in the tab's new scope; `dispose` disposes every anchor.
+// `draw` shows the tab's state; `dispose` disposes every anchor.
 interface ComposerBar {
   element: HTMLElement;
   draw(tab: HeldTab): void;
-  setScope(scope: ChatTabScope): void;
   dispose(): void;
 }
 
@@ -191,13 +189,12 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     const tab = createTab(state, shown, deps, {
-      // Chat keys act only on the visible Chat tab's session. Another
-      // session's Chat tab, live or ended as this one is, sets the same scope,
-      // so no pushed dialog hears a base change: `otherSessionShown` closes
-      // the session's dialogs. Between a live and an ended tab the base
-      // changes, closing every pushed chat dialog and picker.
+      // Chat keys act only on the visible Chat tab's session. Every Chat tab
+      // sets the same scope, so no pushed dialog hears a base change:
+      // `otherSessionShown` closes the session's dialogs.
       shown: (shownTab) => {
-        deps.setScope(tabScope(shownTab));
+        deps.setScope('chat');
+        askHistory(shownTab, deps);
         if (
           lastShownSessionId !== null &&
           lastShownSessionId !== shownTab.sessionId
@@ -247,7 +244,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     if (tab !== undefined) {
       tab.state = { ...tab.state, activity };
       log('chat', `${tab.name} is ${activity}`);
-      sendStatus(tab, tab.ended ? '' : tabStatus(activity));
+      sendStatus(tab, tabStatus(activity));
       tab.bar.draw(tab);
     }
   });
@@ -257,23 +254,35 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       tab.state = { ...tab.state, commands: names };
     }
   });
-  channel.on('sessionEnded', ({ sessionId, error }) => {
-    const tab = heldFor('sessionEnded', sessionId);
+  channel.on('entries', ({ sessionId, entries }) => {
+    const tab = heldFor('entries', sessionId);
+    if (tab !== undefined) {
+      tab.state = { ...tab.state, entries };
+      tab.entries.rebuild(entries);
+      log('chat', `${entries.length} entries read in ${tab.name}`);
+    }
+  });
+  channel.on('sessionRunning', ({ sessionId }) => {
+    const tab = heldFor('sessionRunning', sessionId);
+    if (tab !== undefined) {
+      tab.state = { ...tab.state, running: true };
+      tab.bar.draw(tab);
+      log('chat', `${tab.name} running`);
+    }
+  });
+  channel.on('sessionRested', ({ sessionId, error }) => {
+    const tab = heldFor('sessionRested', sessionId);
     if (tab === undefined) {
       return;
     }
-    tab.ended = true;
-    tab.bar.setScope(tabScope(tab));
-    if (tab.handle?.isVisible() === true) {
-      deps.setScope(tabScope(tab));
-    }
+    tab.state = { ...tab.state, running: false };
     tab.bar.draw(tab);
     sendStatus(tab, '');
     if (error === null) {
-      log('chat', `${tab.name} ended`);
+      log('chat', `${tab.name} rested`);
     } else {
-      log('chat', `${tab.name} ended: ${error}`);
-      deps.toast(`${tab.name} ended: ${error}`, 'error');
+      log('chat', `${tab.name} rested: ${error}`);
+      deps.toast(`${tab.name} stopped: ${error}`, 'error');
     }
   });
   deps.onSessionRemoved((sessionId) => {
@@ -330,8 +339,19 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   };
 }
 
-function tabScope(tab: Pick<HeldTab, 'ended'>): ChatTabScope {
-  return tab.ended ? 'ended' : 'chat';
+// Reads the session's earlier conversation the first time its tab shows in
+// this page load; it arrives as an `entries` message.
+function askHistory(tab: HeldTab, deps: ChatViewDeps) {
+  if (tab.historyAsked) {
+    return;
+  }
+  tab.historyAsked = true;
+  void deps.channel
+    .invoke('loadHistory', tab.sessionId)
+    .catch((error: unknown) => {
+      deps.log('chat', `history not loaded: ${errorText(error)}`);
+      deps.toast(`history not loaded: ${errorText(error)}`, 'error');
+    });
 }
 
 // The commands' view of a held tab, reading its state live.
@@ -342,8 +362,8 @@ function sessionOf(tab: HeldTab, box: TextEditor): ChatSession {
     get state() {
       return tab.state;
     },
-    get ended() {
-      return tab.ended;
+    get running() {
+      return tab.state.running;
     },
     box,
     attachments: tab.attachments,
@@ -379,7 +399,7 @@ function createTab(
   });
   const boxElement = inputFrame();
   boxElement.classList.add('chat-box');
-  const bar = buildComposerBar(deps, tabScope(state));
+  const bar = buildComposerBar(deps);
   const attachments = createAttachments();
   const strip = buildAttachmentStrip(attachments);
   const composer = floatingPanel();
@@ -391,8 +411,8 @@ function createTab(
     sessionId: state.sessionId,
     name,
     state,
-    ended: state.ended,
     closeConfirmed: false,
+    historyAsked: false,
     handle: null,
     status: '',
     box: null,
@@ -447,7 +467,7 @@ function createTab(
       },
     },
   );
-  sendStatus(tab, state.ended ? '' : tabStatus(state.activity));
+  sendStatus(tab, tabStatus(state.activity));
   tab.handle.select();
   return tab;
 }
@@ -482,7 +502,7 @@ function sendStatus(tab: HeldTab, status: string) {
 // Chat tab shows and the end-session confirmation asks first.
 function mayClose(tab: HeldTab, deps: ChatViewDeps): boolean {
   const isBusy =
-    tab.state.activity !== 'idle' && !tab.ended && !tab.closeConfirmed;
+    tab.state.running && tab.state.activity !== 'idle' && !tab.closeConfirmed;
   if (!isBusy) {
     return true;
   }
@@ -520,15 +540,13 @@ function followComposerHeight(
 // The bar's parts, built once per tab: the box's vim mode (PAGE while it has no
 // focus), the type hint (`i` and `a`, hidden while the box has focus), a chip
 // per control opening that control's picker, then at the end the running
-// indicator (shown while a turn is in progress on a live session, its space
-// kept while it hides) and send. The chips and send
-// are disabled once the session has ended. The type hint and send keys are
-// anchored in the tab's scope; the interrupt and chip keys in `chat.chat`. Each
+// indicator (shown while a turn is in progress on a running session, its
+// space kept while it hides) and send. The chips are disabled while the
+// session has no running process. Every key is anchored in `chat.chat`. Each
 // chip command's keys sit in the first chip that runs it; a command no chip
 // runs keeps its anchor element detached until a later draw places it.
 function buildComposerBar(
   deps: Pick<ChatViewDeps, 'keys' | 'run'>,
-  scope: ChatTabScope,
 ): ComposerBar {
   const bar = element('div', 'chat-composer-bar');
   const mode = element('span', 'chat-box-mode');
@@ -545,12 +563,21 @@ function buildComposerBar(
     hint: sendKey,
   });
 
-  const liveScope = { scope: chatScope('chat') };
-  const fixedAnchors = [
+  const scope = { scope: chatScope('chat') };
+  const anchors = [
     deps.keys.anchor(interruptKey, chatCommand('interrupt'), {
-      ...liveScope,
+      ...scope,
       label: 'stop',
     }),
+    deps.keys.anchor(typeKey, chatCommand('focusBox'), {
+      ...scope,
+      label: 'to type',
+    }),
+    deps.keys.anchor(appendKey, chatCommand('appendBox'), {
+      ...scope,
+      label: 'to append',
+    }),
+    deps.keys.anchor(sendKey, chatCommand('send'), scope),
   ];
   const chipKeys = new Map<ChatCommandName, HTMLElement>();
   for (const command of [
@@ -561,23 +588,8 @@ function buildComposerBar(
   ] as const) {
     const key = element('span', 'chat-chip-key');
     chipKeys.set(command, key);
-    fixedAnchors.push(deps.keys.anchor(key, chatCommand(command), liveScope));
+    anchors.push(deps.keys.anchor(key, chatCommand(command), scope));
   }
-  const nameScopedAnchors = (named: ChatTabScope) => {
-    const options = { scope: chatScope(named) };
-    return [
-      deps.keys.anchor(typeKey, chatCommand('focusBox'), {
-        ...options,
-        label: 'to type',
-      }),
-      deps.keys.anchor(appendKey, chatCommand('appendBox'), {
-        ...options,
-        label: 'to append',
-      }),
-      deps.keys.anchor(sendKey, chatCommand('send'), options),
-    ];
-  };
-  let scopedAnchors = nameScopedAnchors(scope);
 
   return {
     element: bar,
@@ -586,7 +598,7 @@ function buildComposerBar(
       typeHint.classList.toggle('is-box-focused', tab.isBoxFocused);
       running.classList.toggle(
         'is-idle',
-        tab.ended || tab.state.activity === 'idle',
+        !tab.state.running || tab.state.activity === 'idle',
       );
       const placed = new Set<ChatCommandName>();
       const chips = tab.state.controls.map((control) => {
@@ -594,7 +606,7 @@ function buildComposerBar(
         const controlChip = chip(control.label, valueLabel(control), () =>
           deps.run(chatCommand(command)),
         );
-        controlChip.toggleAttribute('disabled', tab.ended);
+        controlChip.toggleAttribute('disabled', !tab.state.running);
         const key = chipKeys.get(command);
         if (key !== undefined && !placed.has(command)) {
           controlChip.append(key);
@@ -602,16 +614,10 @@ function buildComposerBar(
         }
         return controlChip;
       });
-      send.disabled = tab.ended;
       bar.replaceChildren(mode, typeHint, ...chips, running, send);
     },
-    setScope(next) {
-      disposeAnchors(scopedAnchors);
-      scopedAnchors = nameScopedAnchors(next);
-    },
     dispose() {
-      disposeAnchors(scopedAnchors);
-      disposeAnchors(fixedAnchors);
+      disposeAnchors(anchors);
     },
   };
 }

@@ -49,9 +49,9 @@ type ChatApi = PageApi<
 // reason box, the end-session confirmation, the sign-in dialog and the image
 // viewer sit in the overlay layer, each over a scope of its own; another
 // session's Chat tab showing closes the reason box, the confirmation, a
-// control picker and the image viewer, and leaves the sign-in dialog open, and
-// the start prompt too unless one of the two sessions has ended and the other
-// has not. An ended session's Chat tab keys only its entries, box and send.
+// control picker and the image viewer, and leaves the sign-in dialog and the
+// start prompt open. A resting session's Chat tab keys as a running one's
+// does; its control chips are disabled until a message starts its process.
 export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -94,7 +94,6 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       commands: slashCommands,
       signIn,
       channel: api.channel,
-      toast: services.toast,
     });
     const picker = createPicker({
       overlay: api.areas.overlay,

@@ -72,9 +72,9 @@ function primerScrollBinds(scope: 'primer.card' | 'primer.review') {
   ];
 }
 
-// A live Chat tab and an ended one each hold the keys that read the entries
-// and focus the box.
-function chatEntryPageBinds(scope: 'chat.chat' | 'chat.ended') {
+// A Chat tab's keys that read the entries and focus the box.
+function chatEntryPageBinds() {
+  const scope = 'chat.chat' as const;
   return [
     { keys: 'i', scope, command: 'chat.focusBox' as const },
     { keys: 'a', scope, command: 'chat.appendBox' as const },
@@ -92,7 +92,8 @@ function chatEntryPageBinds(scope: 'chat.chat' | 'chat.ended') {
 
 // A box's binds are normal-mode maps: `<CR>` sends only in normal mode, so
 // Enter in insert mode adds a line.
-function chatBoxBinds(scope: 'chat.chat' | 'chat.ended') {
+function chatBoxBinds() {
+  const scope = 'chat.chat' as const;
   return [
     { keys: '<CR>', command: 'chat.send' as const },
     { keys: '<Esc>', command: 'chat.leaveBox' as const },
@@ -274,7 +275,7 @@ export const defaultKeymap = {
     },
 
     // ── Chat ───────────────────────────────────────────────────────────────
-    ...chatEntryPageBinds('chat.chat'),
+    ...chatEntryPageBinds(),
     { keys: 'y', scope: 'chat.chat', command: 'chat.allowPermission' },
     { keys: 'n', scope: 'chat.chat', command: 'chat.denyPermission' },
     { keys: '<C-c>', scope: 'chat.chat', command: 'chat.interrupt' },
@@ -283,10 +284,6 @@ export const defaultKeymap = {
     { keys: 'e', scope: 'chat.chat', command: 'chat.pickEffort' },
     { keys: 'o', scope: 'chat.chat', command: 'chat.pickModel' },
     { keys: 'c', scope: 'chat.chat', command: 'chat.pickControl' },
-    // An ended session takes no permission answer, interrupt or control
-    // change, so its tab keeps only the entry, box and send keys.
-    ...chatEntryPageBinds('chat.ended'),
-    { keys: '<D-Enter>', scope: 'chat.ended', command: 'chat.send' },
     ...chatListPageBinds('chat.picker'),
     ...chatListPageBinds('chat.resume'),
     { keys: 'x', scope: 'chat.resume', command: 'chat.toggleArchive' },
@@ -301,8 +298,7 @@ export const defaultKeymap = {
     { keys: 'h', scope: 'chat.image', command: 'chat.prevImage' },
     { keys: 'l', scope: 'chat.image', command: 'chat.nextImage' },
     { keys: '<Esc>', scope: 'chat.image', command: 'chat.closeImage' },
-    ...chatBoxBinds('chat.chat'),
-    ...chatBoxBinds('chat.ended'),
+    ...chatBoxBinds(),
     {
       keys: '<Leader>cm',
       scope: 'chat.chat',

@@ -83,7 +83,7 @@ describe('listenForImages paste', () => {
     const root = { addEventListener: () => {} } as unknown as HTMLElement;
     const toasts: string[] = [];
     listenForImages(
-      { name: 'Chat 1', ended: false, attachments: createAttachments() },
+      { name: 'Chat 1', attachments: createAttachments() },
       composer,
       root,
       { log: () => {}, toast: (message) => toasts.push(message) },
