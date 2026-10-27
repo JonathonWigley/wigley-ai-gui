@@ -364,8 +364,8 @@ describe('create', () => {
       name: 'new',
     });
 
-    expect(created).toEqual({ path: followups, line: 2 });
-    expect(await test.files.read(followups)).toBe('# F\n- **new** — \n');
+    expect(created).toEqual({ path: followups, line: 3 });
+    expect(await test.files.read(followups)).toBe('# F\n\n- **new**\n');
   });
 
   it('create_PathEndingInSlash_Rejects', async () => {
