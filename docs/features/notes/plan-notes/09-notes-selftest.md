@@ -1,6 +1,6 @@
 # 09 — Notes self-test
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -149,4 +149,4 @@ order.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 43fbe28 · proof: diff read: notesSelfTestScript, addDriveActions present; start.ts hands the script to selfTest.run, adds drive actions in drive runs and disposes them, send waiters resolve on sent; typecheck clean · concerns: send signal in start.ts has no unit test; group 5 picks the follow-up by fuzzy filter Notes selftest, which a higher-ranked open follow-up from docs or Backlog steps could beat; local markRun copy of chat script helper

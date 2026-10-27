@@ -1,6 +1,6 @@
 # 07 — Notes main part
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -226,4 +226,4 @@ here.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit dd55351 · proof: diff read: notesManifest, notesMainPart, DraftStore/createDraftStore, NoteSender/createNoteSender present; appended last in manifests.ts and main.ts; typecheck clean; worker reports full lint clean · concerns: draft-store imageOf copies draft.ts private requireImage; note-sender repeats Pick a target first to narrow target; note-sender is the only non-test Buffer use under src/plugins

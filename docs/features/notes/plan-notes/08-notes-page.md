@@ -1,6 +1,6 @@
 # 08 — Notes page part
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 04, 07
 Plan: [plan.md](plan.md)
@@ -301,4 +301,4 @@ task 11 (Final verification), each tagged by why it is there:
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 66955ed · proof: diff read: notesPagePart appended in page.ts, paste helpers moved unchanged with chat importing them, keymap gains group n; typecheck and full lint clean; worker reports 187 tests pass · concerns: png-image.ts pngDataUrl copies src/renderer/fabric/png-data-url.ts; picker stacking over the dialog is a live check; an in-flight autosave is not awaited before send/discard/close, relying on main handling invokes in order; picker closed logs only on cancel

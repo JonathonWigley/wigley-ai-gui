@@ -209,13 +209,13 @@ Boundary rules:
 - [x] [Backlog note filing](05-backlog-notes.md) — after 03
 
 ### Wave 3
-- [ ] [Notes main part](07-notes-main.md) — after 01, 04, 05, 06
+- [x] [Notes main part](07-notes-main.md) — after 01, 04, 05, 06
 
 ### Wave 4
-- [ ] [Notes page part](08-notes-page.md) — after 02, 04, 07
+- [x] [Notes page part](08-notes-page.md) — after 02, 04, 07
 
 ### Wave 5
-- [ ] [Notes self-test](09-notes-selftest.md) — after 08
+- [x] [Notes self-test](09-notes-selftest.md) — after 08
 
 ### Wave 6
 - [ ] [Doc re-read](10-doc-reread.md) — after every code task
@@ -234,11 +234,16 @@ Review base: 62cb6e9ed048d1e6aebf6629e8870abd37df98b8
 - 03 · c39ba2b · diff read: writeBytes and trashDoc in DocsMainExports and start.ts exports, DocFiles.writeBytes takes the write guard; typecheck clean except the backlog start.test.ts fake, fixed by the Backlog lead stub commit · concerns: task 03 Files missed src/plugins/backlog/main/start.test.ts, whose DocsMainExports fake needed the two members; the Backlog lead added the stubs by agreement
 - 02 · 47e4908 · diff read: markup.ts verbatim, PageServices.markup, createFabricMarkupEditor in renderer.ts, history/fit-scale/png-data-url exports present, fabric layer only in src/renderer/fabric; typecheck clean · concerns: Fabric IText already stops Escape/Tab/arrows itself, so only typed characters needed the stop; hidden textarea lives in document.body; clearing a filled text on exit still adds one history step via object:modified; dispose removes the restored <canvas> rather than the wrapper; hiddenTextarea cast in the editing-entered handler
 - 05 · 50fbdaa · diff read: NoteTarget, BacklogMainExports and exports present, every note-images export present, commitMessage takes imageFolders; typecheck clean · concerns: commit_HomeThroughSymlink test mock narrowed to answer only for docs/features once commit also asks for the images pathspec; tests use the existing /dev/r root
+- 07 · dd55351 · diff read: notesManifest, notesMainPart, DraftStore/createDraftStore, NoteSender/createNoteSender present; appended last in manifests.ts and main.ts; typecheck clean; worker reports full lint clean · concerns: draft-store imageOf copies draft.ts private requireImage; note-sender repeats Pick a target first to narrow target; note-sender is the only non-test Buffer use under src/plugins
+- 08 · 66955ed · diff read: notesPagePart appended in page.ts, paste helpers moved unchanged with chat importing them, keymap gains group n; typecheck and full lint clean; worker reports 187 tests pass · concerns: png-image.ts pngDataUrl copies src/renderer/fabric/png-data-url.ts; picker stacking over the dialog is a live check; an in-flight autosave is not awaited before send/discard/close, relying on main handling invokes in order; picker closed logs only on cancel
+- 09 · 43fbe28 · diff read: notesSelfTestScript, addDriveActions present; start.ts hands the script to selfTest.run, adds drive actions in drive runs and disposes them, send waiters resolve on sent; typecheck clean · concerns: send signal in start.ts has no unit test; group 5 picks the follow-up by fuzzy filter Notes selftest, which a higher-ranked open follow-up from docs or Backlog steps could beat; local markRun copy of chat script helper
 ### Contract changes
 - commitMessage (Backlog landed): `(changes): string | null` as task 05 assumed → landed returns `string`, the plain subject `Follow-ups edited in Backlog` when nothing changed; task 05 adds `imageFolders: readonly string[]` and keeps `string`, so `commitMessage([], [])` returns the plain subject, not null · why: landed Backlog code · consumers: 05 · group lead (preflight for 05)
 - writeFollowupEdit (Backlog landed): takes `edit: BacklogEdit`, whose `edit` variant carries `baseline: FollowupDraft`; an item on disk that differs from `baseline` returns `{ type: 'changed'; title; item }` and writes nothing → task 05 append passes the step-2 item (title, oneLine, tags, body) as `baseline`; a `changed` result trashes the images like any non-applied result and passes through · why: Backlog b804dd6 · consumers: 05, 07 · group lead (preflight for 05)
 - BacklogDeps.files (Backlog landed): `Pick<Files, 'realPath'>` → task 05 widens it to `Pick<Files, 'realPath' | 'list'>` · why: landed shape · consumers: 05 · group lead (preflight for 05)
 - LinkedImage: `{ folder; number }` → `{ folder; number; relative }`, `relative` the link target as written · why: delete and reuse resolve each link against the file's folder · consumers: none outside backlog · group 05
+- pasted-images.ts: imports IMAGE_TYPES → does not (the moved helpers never read it); popup.ts imports it for the type check · why: unused import · consumers: none · group 08
+- notesSelfTestScript result: { followups, send } → { folder, followups, send } · why: the no-session problem names the fixture folder, known only after realPath · consumers: none · group 09
 ### Rulings
 - window.capture doc comment names device pixels beside "as the user sees it", so a consumer sizing the image knows — drop the clause if unwanted · group 01 · group 01
 - ChatSessions.launch throws synchronously; the async export turns it into the rejection, so the reject tests use toThrow on ChatSessions.launch · group 04 · group 04
@@ -256,5 +261,18 @@ Review base: 62cb6e9ed048d1e6aebf6629e8870abd37df98b8
 - images pathspec is the fixed docs/features/followups-images, since landed Backlog makes an in-git home always docs/features · group 05 · group 05
 - an images-only commit goes through; Nothing to commit only when no follow-up file and no image changed · group 05 · group 05
 - toFollowup maps fileNote's landed `changed` result to refused `<request.title> changed on disk; send again`, keeping the draft — Backlog b804dd6 added the result after task 07 was written — the user re-sends once · lead
+- check-layers gains a src/plugins/chat/contract.ts layer (imports src/contracts only), listed by the chat root, chat/main and chat/page — task 06's notes/main entry named it but no such layer existed — none · lead
+- tags handler stays synchronous; MainChannel.handle accepts it and the page receives a Promise · group 07 · group 07
+- clear with a failed draft.json write logs, returns the fresh draft and leaves old images untrashed, so the on-disk record never names missing files · group 07 · group 07
+- realPath(homeDir) rejection logs and falls back to services.homeDir · group 07 · group 07
+- store memory changes only after its disk write succeeds, except clear · group 07 · group 07
+- off-screen flatten host is 50vw x 50vh at left -100vw, since notes has no length token · group 08 · group 08
+- open loads only loadDraft and homes; the Tags picker calls tags() itself · group 08 · group 08
+- picker closed: <title> logs only on cancel, as chat; a choice logs its own line, so task 09 must not wait for picker closed after a choice · group 08 · group 08
+- append and session sends refuse with No features home at <repo or ~root> when the target names no current home · group 08 · group 08
+- new lines: session none on remove, no image to mark up, No tags to pick toast; markup toolbar hides the actions row so a click cannot send mid-markup · group 08 · group 08
+- every expect line in the task doc matches the landed page, so the doc is used as written · group 09 · group 09
+- paths joined with node path as chat script does, since the deps hold no Paths · group 09 · group 09
+- scrollsItself stays empty until a fit check flags the strip · group 09 · group 09
 ### Review rounds
 ### Test gate
