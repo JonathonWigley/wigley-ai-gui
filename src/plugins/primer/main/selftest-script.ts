@@ -131,6 +131,32 @@ const REVIEW_STEPS: SelfTestStep[] = [
   },
 ];
 
+// The sample primer opens in a session of its own and its row is selected;
+// the rail, a task card and the review draw through the default layout; the
+// sample is cancelled, which closes its session.
+const PREVIEW_STEPS: SelfTestStep[] = [
+  {
+    keys: [' ', 'z', 'l', 'p'],
+    expect: '[sessions] activated Primer preview',
+    checksFit: true,
+    screenshot: 'preview',
+  },
+  { keys: ['j'], expect: '[page] j ran primer.nextRow' },
+  {
+    keys: ['<A-l>'],
+    expect: '[page] <A-l> ran primer.focusCard',
+    checksFit: true,
+    screenshot: 'preview-task-card',
+  },
+  {
+    keys: [' ', ' '],
+    expect: '[primer] review opened',
+    screenshot: 'preview-review',
+  },
+  { keys: ['C'], expect: '[page] C ran primer.askCancel' },
+  { keys: ['y'], expect: '[primer] cancelled' },
+];
+
 const EXPECTED_NEEDS = ['no', 'yes', 'unclear', 'yes'];
 
 const EXPECTED_SCREEN_ITEMS: PrimerItem[] = [
@@ -219,6 +245,11 @@ export function primerSelfTestScript(
         name: 'review and cancel',
         why: 'Esc closes the review; C in the review and closing the session each ask to cancel the primer, and n or Esc keeps it; once the primer is sent, its session closes with no prompt.',
         steps: REVIEW_STEPS,
+      },
+      {
+        name: 'layout preview',
+        why: 'Space z l p opens the sample primer in a session of its own with no agent and selects its row; cancelling it closes that session.',
+        steps: PREVIEW_STEPS,
       },
     ],
     problems: (result) => {

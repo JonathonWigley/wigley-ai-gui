@@ -10,6 +10,7 @@ import { createAgentFormChannelPresenter } from '../../../shared/agent-forms/cha
 import { addAgentFormDriveActions } from '../../../shared/agent-forms/drive-actions';
 import { createAgentFormService } from '../../../shared/agent-forms/form-service';
 import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
+import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
 import {
   DRIVE_SESSION_DEFAULTS,
@@ -18,8 +19,10 @@ import {
   type SessionsMainExports,
 } from '../../sessions/contract';
 import type { PrimerChannel } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { primerManifest } from '../manifest';
 import { SAMPLE_PRIMER_ARGS } from './fixtures';
+import { createPrimerPreview } from './preview/primer-preview';
 import { primerType } from './primer-type';
 import { primerSelfTestScript } from './selftest-script';
 import { PRIMER_TOOLS } from './tool-definitions';
@@ -59,9 +62,11 @@ export function addDriveActions(
 }
 
 // Serves open_primer and collect_last_primer to every agent session, saves
-// each primer in the primer folder and shows it on the page; in the self-test
-// it hands the driver its script, and in a drive run it adds the drive
-// actions.
+// each primer in the primer folder and shows it on the page, registers the
+// primer layouts, and opens the layout preview on the page's ask over a
+// service of its own whose store is in memory and whose primers go through the
+// presenter's quiet view; in the self-test it hands the driver its script, and
+// in a drive run it adds the drive actions.
 export const primerMainPart: MainPart<typeof primerManifest> = {
   manifest: primerManifest,
   start(api: PrimerApi) {
@@ -85,12 +90,29 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       log: services.log,
       sessions,
     });
+    const defaultDeadlineSeconds = () => api.settings().deadlineSeconds;
     const primer = createAgentFormService({
       type: primerType,
       presenter,
       store,
-      defaultDeadlineSeconds: () => api.settings().deadlineSeconds,
+      defaultDeadlineSeconds,
     });
+    const preview = createPrimerPreview({
+      sessions,
+      primer: createAgentFormService({
+        type: primerType,
+        presenter: presenter.quiet,
+        store: createMemoryFormStore(
+          services.clock,
+          services.randomHex,
+          services.paths,
+        ),
+        defaultDeadlineSeconds,
+      }),
+      log: services.log,
+    });
+    api.channel.handle('openPreview', () => preview.open());
+    const layouts = api.layouts.register({ layoutTypes });
     sessions.contributeTools(PRIMER_TOOLS, (session) =>
       createAgentFormToolSession(primer.startSession(session), primerType),
     );
@@ -107,6 +129,7 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       commands: {},
       dispose: () => {
         driveActions?.dispose();
+        layouts.dispose();
       },
     };
   },

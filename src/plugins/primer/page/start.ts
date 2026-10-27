@@ -22,8 +22,11 @@ import type {
   PrimerPageEvents,
   PrimerPageExports,
 } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { PrimerLayout } from '../layouts/layout';
 import { primerManifest } from '../manifest';
 import { focusActionFor, PRIMER_BOX_IDENTITY, type PrimerBox } from './boxes';
+import { readPrimerLayout } from './layout/read-primer-layout';
 import {
   closePrimerFromMain,
   guardClose,
@@ -117,7 +120,9 @@ function listenForPrimers(
 // While a Primer tab is the visible tab, the key scope follows the primer view.
 // A session with an open primer closes only through the cancel prompt. Every
 // store change emits the primer page events it makes, each logged as it goes;
-// other plugins read the active primer through the exports.
+// other plugins read the active primer through the exports. The tab draws
+// through the primer layout `primer.layout` names, redrawing as it or the
+// layout changes.
 export const primerPagePart: PagePart<typeof primerManifest> = {
   manifest: primerManifest,
   start(api: PrimerApi) {
@@ -148,12 +153,23 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       markdown: services.markdown,
       keys: api.dependency<KeysPageExports>('keys'),
       run: (command) => api.commands.run(command),
+      commands: {
+        exists: (command) => api.keys.command(command) !== undefined,
+        run: (command) => api.commands.run(command),
+      },
+      platform: api.platform,
       uiState: services.uiState,
       log: services.log,
     });
     api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
       view.forgetSession(sessionId),
     );
+    api.layouts.show<PrimerLayout>({
+      defaultLayout,
+      read: readPrimerLayout,
+      userLayout: () => api.settings().layout,
+      setLayouts: (shown) => view.setLayouts(shown),
+    });
     startAutosave({
       subscribe: (listener) => store.subscribe(listener),
       drafts: () => store.get().forms,
@@ -194,6 +210,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
         finish: (primerId, end) => api.channel.invoke('finish', primerId, end),
         closeSession: (sessionId) => sessions.closeSession(sessionId),
         scrollPrimer: (step, direction) => view.scrollBy(step, direction),
+        openPreview: () => api.channel.invoke('openPreview'),
         toast: services.toast,
         log: services.log,
       }),

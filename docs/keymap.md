@@ -92,7 +92,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `a`                | answer                               | in a box only: `a1`…`a9` pick the numbered choice or action header, `ac` clear                                                                          |
 | `x`                | none: forms not applicable           | in a box only: `x`                                                                                                                                      |
 | `z`                | debug                                | `zg` gallery, `zs` shell layout                                                                                                                         |
-| `zl`               | forms layouts                        | `zlo` open preview                                                                                                                                      |
+| `zl`               | layout previews                      | `zlo` forms preview, `zlp` primer preview                                                                                                               |
 
 A row named `none` is a prefix without a `groups` entry; which-key labels it from its commands'
 groups, and its description here is only for readers of this table.

@@ -142,7 +142,7 @@ export const defaultKeymap = {
     '<Leader>k': 'windows',
     '<Leader>v': 'view',
     '<Leader>z': 'debug',
-    '<Leader>zl': 'forms layouts',
+    '<Leader>zl': 'layout previews',
     '<Leader>c': 'chat controls',
     '<Leader>a': 'answer',
     '<Leader>n': 'notes',
@@ -630,6 +630,12 @@ export const defaultKeymap = {
       keys: '<Leader>zlo',
       scope: 'any',
       command: 'forms.openPreview',
+      where: 'page',
+    },
+    {
+      keys: '<Leader>zlp',
+      scope: 'any',
+      command: 'primer.openPreview',
       where: 'page',
     },
     {

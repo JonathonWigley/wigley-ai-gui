@@ -1,6 +1,6 @@
 # 07 — Backlog layout
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -354,4 +354,4 @@ Commit:    one commit for the group: "Backlog mode draws through the layout host
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 4309e98 · proof: diff read: Produces present; backlog tests 136 pass; backlog typecheck/oxlint/oxfmt clean · concerns: 02's confirm-prompt caches a keepButton a throwing confirmBody asked for, so rollback loses the Keep button; 02's list picker drawRow rows lack ui-row--action (no pointer cursor); cursorActions display:contents breaks .ui-row-trailing + .backlog-row-actions spacing (visual, task 17); detail oneLine is now a span; view test patches FakeElement focus/blur per test

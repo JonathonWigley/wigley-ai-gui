@@ -75,6 +75,7 @@ function setup(
   const toastTones: ToastTone[] = [];
   const logs: string[] = [];
   let finishFailure: Error | null = null;
+  let previewFailure: Error | null = null;
   const scrolls: [ScrollStep, 1 | -1][] = [];
   let scrollResult: ContentScroll | null = { moved: true, atEnd: false };
   const closedSessions: string[] = [];
@@ -112,6 +113,10 @@ function setup(
       scrolls.push([step, direction]);
       return scrollResult;
     },
+    openPreview: () =>
+      previewFailure === null
+        ? Promise.resolve()
+        : Promise.reject(previewFailure),
     toast,
     log,
   });
@@ -150,6 +155,10 @@ function setup(
     // Makes every later finish reject with `error`.
     failFinish: (error: Error) => {
       finishFailure = error;
+    },
+    // Makes every later preview open reject with `error`.
+    failPreview: (error: Error) => {
+      previewFailure = error;
     },
     // Main's formClosed for `primerId` reaching the page.
     closeFromMain: (primerId: string, byFinish = true) =>
@@ -577,6 +586,21 @@ describe('primerCommandHandlers', () => {
     closeFromMain('p1');
     expect(toasts).toEqual([expect.stringContaining('project · p1')]);
     expect(toastTones).toEqual(['info']);
+  });
+});
+
+describe('openPreview', () => {
+  it('logs and toasts a failed preview open', async () => {
+    const { run, failPreview, logs, toasts, toastTones } = setup();
+    failPreview(new Error('no preview session'));
+
+    run('openPreview');
+
+    await vi.waitFor(() =>
+      expect(toasts).toEqual([expect.stringContaining('no preview session')]),
+    );
+    expect(toastTones).toEqual(['error']);
+    expect(logs).toEqual([expect.stringContaining('no preview session')]);
   });
 });
 

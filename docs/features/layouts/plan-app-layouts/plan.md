@@ -222,7 +222,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 - [x] [Chat entries onto the host](04-chat-entries-host.md) — after 02
 - [ ] [Primer layout and preview](05-primer-layout.md) — after 01, 02
 - [ ] [Docs layout](06-docs-layout.md) — after 02
-- [ ] [Backlog layout](07-backlog-layout.md) — after 02
+- [x] [Backlog layout](07-backlog-layout.md) — after 02
 - [ ] [Settings layout](08-settings-layout.md) — after 02
 - [ ] [Notes layout](09-notes-layout.md) — after 02
 - [ ] [Gallery layout](11-gallery-layout.md) — after 02
@@ -251,9 +251,12 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - 02 · ba033b8 · diff read: every Produces present; typecheck, lint, npm test (3728) and selftest pass · concerns: check-layers gained src/main/plugins→src/main/layouts and src/main/layouts→src/shared/paths; test-dom FakeElement.contains added; AGENTS.md lines 159/161/532 still say keys and gallery have no main part (for task 16)
 - 03 · 99e38f4 · diff read: Produces present; forms and host tests 618/618; forms typecheck and oxlint/oxfmt clean (full lint blocked by in-flight chat test) · concerns: buildSection in card-parts.ts has no caller now, left as out of scope; drawPart's dispose ignored, round view owns cleanup as before
 - 04 · ab26664 · diff read: Produces present (entries (parent,input,kit), ChatKit extends BaseKit with edgeCard, DotStatus re-export, chatCommandNamed); chat tests 308 pass; chat typecheck/lint clean · concerns: layout.test.ts keeps its own fake element (layer check bars chat/layouts from test-dom); chat-kit.ts copies base-kit's private appended helper
+- 07 · 4309e98 · diff read: Produces present; backlog tests 136 pass; backlog typecheck/oxlint/oxfmt clean · concerns: 02's confirm-prompt caches a keepButton a throwing confirmBody asked for, so rollback loses the Keep button; 02's list picker drawRow rows lack ui-row--action (no pointer cursor); cursorActions display:contents breaks .ui-row-trailing + .backlog-row-actions spacing (visual, task 17); detail oneLine is now a span; view test patches FakeElement focus/blur per test
 ### Contract changes
 - LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
 - LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
+- createBacklogKit scope: BacklogBaseScope → BacklogKitScope (adds picker, confirm) · why: picker-row and confirm-body kits fire in pushed scopes · consumers: none outside 07 · group 07
+- BacklogView: gains dispose() beside setLayouts · why: release the shown layouts · consumers: none (PageStart has no dispose hook) · group 07
 ### Rulings
 - selectedRow returns stored selection without railRows lookup — selection is the identity rows are built from — a stale selection would come back as is · group 01 · group 01
 - showTarget checks only the target's task exists, not the item — no caller builds a missing-item target — would select a row with no item · group 01 · group 01
@@ -266,5 +269,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - new scopedAnchor in card-kit.ts — BaseKitDeps gives no scope-bound anchor — a second anchor path beside the base kit · group 03 · group 03
 - when the shown layout and the default builder both throw, chat still toasts '<kind> entries drawn with default' as before — the Toasts line read literally gives none — a misleading toast in a double failure · group 04 · group 04
 - default layout calls kit.markdown(parent, text, 'md') — keeps the old .md class — none · group 04 · group 04
+- default pane roots are div.backlog-pane with inline display:contents — keeps the grids and list scroll; backlog.css outside Files — inline style where a CSS rule would be cleaner · group 07 · group 07
+- setLayouts redraws inside keepFocusedBox and restores both lists' scrollTop; detail redraws from the top — matches drawDetail on a new key — none · group 07 · group 07
 ### Review rounds
 ### Test gate

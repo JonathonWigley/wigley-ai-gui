@@ -15,6 +15,7 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { scrollText } from '../../../shared/content-scroll';
+import { errorText } from '../../../shared/error-text';
 import { type EditorBoxes, stepBox } from '../../../shared/page/editor-boxes';
 import {
   activeForm,
@@ -58,6 +59,8 @@ export interface PrimerCommandDeps {
   // Scrolls the active primer's card or review by `step`, down for 1 and up
   // for -1; null when no primer is shown.
   scrollPrimer(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
+  // Asks main to open the layout preview; rejects with the reason it failed.
+  openPreview(): Promise<unknown>;
   toast(text: string, tone: ToastTone): void;
   log: Log;
 }
@@ -143,7 +146,16 @@ export function primerCommandHandlers(
     confirmCancel: handler(() =>
       finishActivePrimer(deps, 'confirm', 'cancelled'),
     ),
+    // Acts in any view, with or without an open primer.
+    openPreview: () => openPreview(deps),
   };
+}
+
+function openPreview(deps: PrimerCommandDeps) {
+  deps.openPreview().catch((error: unknown) => {
+    deps.log(SOURCE, `layout preview failed: ${errorText(error)}`);
+    deps.toast(`Layout preview failed: ${errorText(error)}`, 'error');
+  });
 }
 
 // The primer box the command's editor edits. A key with no editor in its

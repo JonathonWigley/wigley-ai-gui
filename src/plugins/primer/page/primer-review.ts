@@ -1,11 +1,11 @@
 import type { CommandId } from '../../../contracts/commands';
 import { element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
-import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
-import type { PrimerEntry, PrimerItem, PrimerNeed } from '../contract';
+import type { PrimerEntry, PrimerNeed } from '../contract';
 import type { KeysPageExports } from '../../keys/contract';
 import { type PrimerCommandName, primerCommand, primerScope } from '../ids';
+import type { ReviewInput, ReviewTaskInput } from '../layouts/layout';
 import {
   FEATURE_FIELDS,
   type OpenPrimer,
@@ -70,96 +70,37 @@ export function reviewTallies(primer: OpenPrimer): ReviewTallies {
   return tallies;
 }
 
-// `3 needed, 1 not needed, 0 unclear. 9 of 12 items included.`
-export function talliesText(tallies: ReviewTallies): string {
-  const { yes, no, unclear, included, items } = tallies;
-  return `${yes} needed, ${no} not needed, ${unclear} unclear. ${included} of ${items} items included.`;
-}
-
-// The review body: the tallies, what blocks a send, the feature's fields and
-// one block per task in rail order.
-export function renderReview(primer: OpenPrimer): HTMLElement {
-  const review = element('div', 'primer-review');
-  review.append(
-    element('p', 'primer-review-tallies', talliesText(reviewTallies(primer))),
-  );
-  const problems = submitProblems(primer);
-  if (problems.length > 0) {
-    review.append(problemList(problems));
-  }
-  review.append(featureBlock(primer));
+// The review body's input: the tallies, what blocks a send, the feature's
+// fields and the tasks in rail order.
+export function reviewInput(primer: OpenPrimer): ReviewInput {
   const entries = new Map(primer.entries.map((entry) => [entry.id, entry]));
-  for (const row of railRows(primer)) {
+  const tasks = railRows(primer).flatMap((row) => {
     const entry = row.kind === 'task' ? entries.get(row.entryId) : undefined;
-    if (entry !== undefined) {
-      review.append(taskBlock(entry));
-    }
-  }
-  return review;
+    return entry === undefined ? [] : [reviewTask(entry)];
+  });
+  return {
+    tallies: reviewTallies(primer),
+    problems: submitProblems(primer),
+    feature: FEATURE_FIELDS.map(([field, label]) => ({
+      label,
+      value: primer.feature[field],
+    })),
+    tasks,
+  };
 }
 
-function problemList(problems: string[]): HTMLElement {
-  const block = element('section', 'primer-review-problems');
-  const list = element('ul', 'primer-review-problem-list');
-  for (const problem of problems) {
-    list.append(element('li', 'primer-review-problem', problem));
-  }
-  block.append(sectionHeader('Before sending'), list);
-  return block;
-}
-
-function featureBlock(primer: OpenPrimer): HTMLElement {
-  const block = element('section', 'primer-review-block');
-  block.append(sectionHeader('Feature'));
-  const fields = element('dl', 'primer-review-fields');
-  for (const [field, label] of FEATURE_FIELDS) {
-    fields.append(
-      element('dt', 'primer-review-field-label', label),
-      element('dd', 'primer-review-field-value', primer.feature[field]),
-    );
-  }
-  block.append(fields);
-  return block;
-}
-
-// The task's name and need, its included items, then its left-out items each
-// tagged, every item with its comment, and the task's comment when not blank.
-function taskBlock(entry: PrimerEntry): HTMLElement {
-  const block = element('section', 'primer-review-block');
-  const head = element('div', 'primer-review-task-head');
-  head.append(
-    element('span', 'primer-review-task-name', taskName(entry)),
-    needTag(entry.need),
-  );
-  block.append(head);
-  const included = entry.items.filter((item) => item.include);
-  const leftOut = entry.items.filter((item) => !item.include);
-  if (entry.items.length > 0) {
-    const list = element('ul', 'primer-review-items');
-    list.append(
-      ...included.map((item) => reviewItem(item)),
-      ...leftOut.map((item) => reviewItem(item)),
-    );
-    block.append(list);
-  }
-  if (entry.comment.trim() !== '') {
-    block.append(element('p', 'primer-review-comment', entry.comment));
-  }
-  return block;
-}
-
-function reviewItem(item: PrimerItem): HTMLElement {
-  const node = element('li', 'primer-review-item');
-  const line = element('div', 'primer-review-item-line');
-  line.append(element('span', 'primer-review-item-text', item.text));
-  if (!item.include) {
-    line.append(tag('Left out'));
-  }
-  node.append(line);
-  if (item.comment.trim() !== '') {
-    node.append(element('p', 'primer-review-comment', item.comment));
-  }
-  return node;
+function reviewTask(entry: PrimerEntry): ReviewTaskInput {
+  return {
+    id: entry.id,
+    name: taskName(entry),
+    need: entry.need,
+    comment: entry.comment,
+    items: entry.items.map(({ text, include, comment }) => ({
+      text,
+      include,
+      comment,
+    })),
+  };
 }
 
 // The Back, Cancel primer and Send buttons, each holding an anchor for its

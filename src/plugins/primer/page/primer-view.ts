@@ -3,15 +3,29 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
+import type { Platform } from '../../../contracts/platform';
+import type {
+  PluginAreas,
+  PushedScope,
+  ShownLayouts,
+} from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { scrollContent } from '../../../shared/content-scroll';
+import { errorText } from '../../../shared/error-text';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
-import { element, markdownElement } from '../../../shared/page/dom';
+import { element } from '../../../shared/page/dom';
 import {
   type EditorBoxes,
   keepFocusedBox,
 } from '../../../shared/page/editor-boxes';
+import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
+import {
+  drawPart,
+  type PartPick,
+  requireElementIn,
+  type RollbackDeps,
+} from '../../../shared/page/layout-host/draw-part';
+import { pickLayout } from '../../../shared/page/layout-host/pick';
 import { saveLabel, saveState } from '../../../shared/page/autosave';
 import {
   createSessionFormTabs,
@@ -29,45 +43,53 @@ import {
 } from '../../../shared/page/status-line';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { textButton } from '../../../shared/page/ui/button';
-import { emptyState } from '../../../shared/page/ui/empty-state';
-import { inputFrame } from '../../../shared/page/ui/input-frame';
 import {
-  boxHint,
   disposeAnchors,
   keyChevron,
   keyEdge,
   keyStack,
   recordingAnchor,
 } from '../../../shared/page/ui/key-anchors';
-import { row } from '../../../shared/page/ui/row';
-import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { createSplit } from '../../../shared/page/ui/split';
-import { tag } from '../../../shared/page/ui/tag';
-import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
 import type { AnchorOptions, KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
-import type { PrimerEntry, PrimerItem, PrimerView } from '../contract';
+import type { PrimerEntry, PrimerView } from '../contract';
 import {
   type PrimerCommandName,
   primerCommand,
   primerScope,
   type PrimerScopeName,
 } from '../ids';
+import defaultLayout from '../layouts/default/layout.js';
+import type {
+  FeatureCardInput,
+  ItemCardInput,
+  PrimerLayout,
+  PrimerLayoutCard,
+  PrimerLayoutCards,
+  PrimerLayoutPane,
+  RailInput,
+  RailRowInput,
+  TaskCardInput,
+} from '../layouts/layout';
+import { boxKey, hasAddItemBox, type PrimerBox, shownBoxes } from './boxes';
 import {
-  boxKey,
-  boxText,
-  hasAddItemBox,
-  type PrimerBox,
-  shownBoxes,
-} from './boxes';
-import { needTag, renderReview, reviewFooter, taskName } from './primer-review';
+  type CardKit,
+  createFeatureKit,
+  createItemKit,
+  createRailKit,
+  createReviewKit,
+  createTaskKit,
+  type PrimerPartKitDeps,
+} from './layout/primer-kit';
+import { reviewFooter, reviewInput, taskName } from './primer-review';
 import {
-  FEATURE_FIELDS,
   includedCount,
   type OpenPrimer,
   type PrimerAction,
   type PrimerState,
   RAIL_GROUPS,
+  type RailRow,
   railPosition,
   railRows,
   rowName,
@@ -76,15 +98,17 @@ import {
   selectedEntry,
   selectedRow,
   sessionTitle,
-  type TextTarget,
 } from './primer-state';
 import type { PrimerStore } from './primer-store';
 
 // `beforeClose` answers whether a session may close now. `setScope` sets the
 // key scope to `scopeOf` the state while a Primer tab is the visible tab;
 // `pushConfirmScope` lays the cancel prompt's scope over it. `keys` anchors
-// each key hint the view draws. `run` runs a button's command. `uiState`
-// keeps the rail's dragged width, which every primer's rail opens at.
+// each key hint the view and its layout draw and reads the keys a layout asks
+// for. `run` runs a button's command; `commands` is what a layout's
+// `kit.command` reaches. `platform` is the OS the layouts' key hints draw for.
+// `uiState` keeps the rail's dragged width, which every primer's rail opens
+// at.
 export interface PrimerViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
@@ -94,8 +118,10 @@ export interface PrimerViewDeps {
   store: PrimerStore;
   boxes: EditorBoxes<PrimerBox>;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'anchor'>;
+  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
   run(command: CommandId): void;
+  commands: KitCommands;
+  platform: Platform;
   uiState: UiState;
   log: Log;
 }
@@ -105,16 +131,19 @@ export interface PrimerViewDeps {
 // still open for the session in a new Primer tab. `showPrimer` selects the
 // session's Primer tab, a no-op when it has none. `scrollBy` scrolls the
 // active primer's card or review, whichever shows, down for 1 and up for -1;
-// null with no primer shown.
+// null with no primer shown. `setLayouts` draws every part whose picked
+// layout changed again, keeping the focused box.
 export interface PrimerTab {
   forgetSession(sessionId: string): void;
   showPrimer(sessionId: string): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
+  setLayouts(shown: ShownLayouts<PrimerLayout>): void;
 }
 
 // One open primer's DOM in its session's Primer tab. `update` draws it for
 // the primer and the view whose pane shows: under the cancel prompt, the view
-// keeping the primer returns to. `dispose` disposes every anchor it named.
+// keeping the primer returns to. `dispose` disposes every anchor it named and
+// destroys every box its parts mounted.
 interface PrimerFormView {
   element: HTMLElement;
   update(primer: OpenPrimer, view: PrimerView): void;
@@ -122,23 +151,38 @@ interface PrimerFormView {
   dispose(): void;
 }
 
-// A built card: `update` redraws what changes without a rebuild, and
-// `dispose` disposes the anchors its build named.
-interface PrimerCard {
+// What the view's parts draw through: the kits' deps and the log a part's
+// failure goes to.
+type PartDeps = PrimerPartKitDeps & { log: Log };
+
+// A part the view drew: what its build returned, the pick it was drawn from,
+// and the dispose of the anchors and boxes it recorded.
+interface DrawnPrimerPart<R> {
+  built: R;
+  pick: PartPick<PrimerLayout>;
+  dispose(): void;
+}
+
+// The rail body a layout drew, and the row `railRow` drew at each position.
+interface DrawnRail {
+  element: HTMLElement;
+  rows: Map<number, HTMLElement>;
+}
+
+// A drawn card: the pick it was drawn from, `update` redraws what changes
+// without a rebuild, and `dispose` disposes its anchors and destroys its
+// boxes.
+interface DrawnCard {
+  pick: PartPick<PrimerLayout>;
   update(primer: OpenPrimer): void;
   dispose(): void;
 }
 
 type AnchorKeys = Pick<KeysPageExports, 'anchor'>;
 
-type CardDeps = Pick<PrimerViewDeps, 'boxes' | 'markdown' | 'keys'> & {
-  dispatch(action: PrimerAction): void;
-};
-
 // The parts of the rail a primer view builds once: the header's save state
-// and row pair, the body `drawRail` fills, the row prompt `drawRail` moves to
-// the selected row with its need, include and remove keys, and the Extra
-// tasks header's prompt.
+// and row pair, the body `drawRail` fills, and the row prompt `drawRail` moves
+// to the selected row with its need, include and remove keys.
 interface RailParts {
   statusLine: StatusLine;
   edge: HTMLElement;
@@ -147,7 +191,6 @@ interface RailParts {
   needKeys: HTMLElement[];
   includeKey: HTMLElement;
   removeKey: HTMLElement;
-  addPrompt: HTMLElement;
 }
 
 // The whole primer UI: each primer in its session's Primer tab and the cancel
@@ -155,7 +198,8 @@ interface RailParts {
 // renders it; a change a render's own dispatch makes renders again once that
 // render ends. While a Primer tab is the visible tab the key scope follows
 // the state; the cancel prompt pushes its own scope over it and is dismissed
-// when another view sets the scope.
+// when another view sets the scope. Each part draws through the layouts the
+// last `setLayouts` handed it, `default` alone until the first.
 export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
   const { areas, store, boxes } = deps;
   const tabs = createSessionFormTabs({
@@ -188,13 +232,24 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
   });
   areas.overlay.contribute(confirm.element);
   const primerViews = new Map<string, PrimerFormView>();
+  let shownLayouts: ShownLayouts<PrimerLayout> = {
+    layouts: new Map([['default', defaultLayout]]),
+    user: 'default',
+  };
 
   const renderOnce = () => {
     if (!confirm.settleOwedDismiss()) {
       return;
     }
     const state = store.get();
-    syncPrimerViews(state, primerViews, tabs, deps, dispatch);
+    syncPrimerViews(
+      state,
+      primerViews,
+      tabs,
+      deps,
+      dispatch,
+      () => shownLayouts,
+    );
     tabs.sync((sessionId) => {
       const primer = formOfSession(state, sessionId);
       return primer === undefined ? null : sessionTitle(primer);
@@ -247,6 +302,10 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
       }
     },
     showPrimer: (sessionId) => tabs.select(sessionId),
+    setLayouts(shown) {
+      shownLayouts = shown;
+      render();
+    },
     scrollBy(step, direction) {
       const state = store.get();
       const primer = state.view === 'idle' ? null : activeForm(state);
@@ -271,6 +330,7 @@ function syncPrimerViews(
   tabs: SessionFormTabs,
   deps: PrimerViewDeps,
   dispatch: (action: PrimerAction) => void,
+  shown: () => ShownLayouts<PrimerLayout>,
 ) {
   for (const primerId of primerViews.keys()) {
     if (!state.forms.some((primer) => primer.formId === primerId)) {
@@ -286,6 +346,7 @@ function syncPrimerViews(
           primer,
           deps,
           dispatch,
+          shown,
         ),
       );
       tabs.takeOver(primer.formId, primer.sessionId);
@@ -293,8 +354,8 @@ function syncPrimerViews(
   }
 }
 
-// Destroys the primer's editors, removes its view and disposes its anchors,
-// and releases its take over, giving its session back.
+// Disposes its view's anchors and destroys its editors, removes the view, and
+// releases its take over, giving its session back.
 function destroyPrimerView(
   primerId: string,
   primerViews: Map<string, PrimerFormView>,
@@ -305,8 +366,8 @@ function destroyPrimerView(
   if (primerView === undefined) {
     return;
   }
-  deps.boxes.destroyForm(primerId);
   primerView.dispose();
+  deps.boxes.destroyForm(primerId);
   primerView.element.remove();
   primerViews.delete(primerId);
   tabs.release(primerId);
@@ -314,16 +375,19 @@ function destroyPrimerView(
 
 // A split with the rail in its start pane and, in its end pane, the card edge
 // strip over the card and the review, each scrolling on its own. The rail is
-// a header, a scrolling body and a foot; its body redraws whenever the primer
-// changes. The card is rebuilt, its boxes destroyed and mounted again and its
-// anchors disposed, only when `cardKeyOf` changes; the review body is drawn again while it shows, when the primer changed, over a
-// footer built once. `attach` places the root in the page once, before any
-// editor mounts.
+// a header, a body the layout's rail draws and a foot; its body is drawn again
+// whenever the primer changes. The card is drawn again, its boxes destroyed and
+// mounted again and its anchors disposed, only when `cardKeyOf` changes or the
+// layout picked for its part changes; the review body is drawn again while it
+// shows, when the primer or the review's pick changed, over a footer built
+// once. `attach` places the root in the page once, before any editor mounts.
+// `shown` reads the layouts the parts are picked from now.
 function createPrimerFormView(
   attach: (root: HTMLElement) => void,
   primer: OpenPrimer,
   deps: PrimerViewDeps,
   dispatch: (action: PrimerAction) => void,
+  shown: () => ShownLayouts<PrimerLayout>,
 ): PrimerFormView {
   const split = createSplit({
     initial: 240,
@@ -347,26 +411,30 @@ function createPrimerFormView(
   split.end.append(cardEdge, cardPane, reviewPane);
   // Editors mount into attached elements, so they can measure themselves.
   attach(root);
-  const cardDeps: CardDeps = {
-    boxes: deps.boxes,
+  const partDeps: PartDeps = {
     markdown: deps.markdown,
     keys: deps.keys,
+    commands: deps.commands,
+    platform: deps.platform,
+    boxes: deps.boxes,
     dispatch,
+    log: deps.log,
   };
   const primerId = primer.formId;
   let cardKey = cardKeyOf(primer);
-  let card = buildCard(cardPane, primer, cardDeps);
+  let card = drawCard(cardPane, primer, shown(), partDeps);
+  let railPart: DrawnPrimerPart<DrawnRail> | null = null;
   let railPrimer: OpenPrimer | null = null;
   // The rowName of the selected row last drawn.
   let drawnRow: string | null = null;
+  let reviewPart: DrawnPrimerPart<{ element: HTMLElement }> | null = null;
   let reviewPrimer: OpenPrimer | null = null;
 
   const rebuildCard = (current: OpenPrimer) => {
     keepFocusedBox(deps.boxes, primerId, () => {
-      deps.boxes.destroyForm(primerId);
       card.dispose();
       cardPane.replaceChildren();
-      card = buildCard(cardPane, current, cardDeps);
+      card = drawCard(cardPane, current, shown(), partDeps);
     });
   };
 
@@ -378,14 +446,18 @@ function createPrimerFormView(
       split.start.classList.toggle('is-pane-inactive', current.pane === 'card');
       rail.statusLine.update(true, saveStatus(current));
       rail.edge.classList.toggle('is-no-target', railRows(current).length < 2);
+      const layouts = shown();
       const shownRow = rowName(selectedRow(current));
       const isRowChanged = shownRow !== drawnRow;
-      if (current !== railPrimer) {
+      const railPick = pickPart(layouts, RAIL_PART);
+      if (current !== railPrimer || !isSamePick(railPart?.pick, railPick)) {
         railPrimer = current;
-        drawRail(rail, current, dispatch, isRowChanged);
+        railPart?.dispose();
+        railPart = drawRail(rail, current, railPick, partDeps, isRowChanged);
       }
       const nextCardKey = cardKeyOf(current);
-      if (nextCardKey !== cardKey) {
+      const cardPick = pickPart(layouts, cardPartOf(current));
+      if (nextCardKey !== cardKey || !isSamePick(card.pick, cardPick)) {
         cardKey = nextCardKey;
         rebuildCard(current);
       }
@@ -398,9 +470,14 @@ function createPrimerFormView(
       cardEdge.hidden = isReview;
       cardPane.hidden = viewName !== 'primer';
       reviewPane.hidden = !isReview;
-      if (isReview && current !== reviewPrimer) {
+      const reviewPick = pickPart(layouts, REVIEW_PART);
+      const isReviewStale =
+        current !== reviewPrimer || !isSamePick(reviewPart?.pick, reviewPick);
+      if (isReview && isReviewStale) {
         reviewPrimer = current;
-        reviewBody.replaceChildren(renderReview(current));
+        reviewPart?.dispose();
+        reviewBody.replaceChildren();
+        reviewPart = drawReview(reviewBody, current, reviewPick, partDeps);
       }
     },
     scrollBy(step, direction) {
@@ -409,6 +486,8 @@ function createPrimerFormView(
     },
     dispose() {
       card.dispose();
+      railPart?.dispose();
+      reviewPart?.dispose();
       disposeAnchors(anchors);
     },
   };
@@ -426,8 +505,8 @@ function anchoredSpan(
   return node;
 }
 
-// Fills `rail` with its header, its body and its foot, and builds the
-// prompts `drawRail` places. The header holds the save state, the row pair
+// Fills `rail` with its header, its body and its foot, and builds the row
+// prompt `drawRail` places. The header holds the save state, the row pair
 // `⌃H ▲ ▼ ⌃L` and `⌥L card ›` at the split's edge; the foot the Review
 // button, whose keys show in the rail and the card scope alike.
 function mountRail(
@@ -472,10 +551,6 @@ function mountRail(
   });
   const prompt = element('span', 'primer-row-prompt');
   prompt.append(...needKeys, includeKey, removeKey);
-  const addPrompt = anchoredSpan(keys, 'primer-add-prompt', 'addExtraTask', {
-    scope,
-    label: 'add',
-  });
   const reviewKeys = keyStack('primer-review-keys', [
     anchoredSpan(keys, 'primer-review-key', 'openReview', { scope }),
     anchoredSpan(keys, 'primer-review-key', 'openReview', {
@@ -498,7 +573,6 @@ function mountRail(
     needKeys,
     includeKey,
     removeKey,
-    addPrompt,
   };
 }
 
@@ -526,6 +600,146 @@ function saveStatus(primer: OpenPrimer): StatusLineContent {
   };
 }
 
+// The layout part a pick tests a layout for.
+type PartOf = (layout: PrimerLayout) => unknown;
+
+const RAIL_PART = (layout: PrimerLayout) => layout.rail;
+const REVIEW_PART = (layout: PrimerLayout) => layout.review;
+const CARD_PARTS: { [P in keyof PrimerLayoutCards]: PartOf } = {
+  feature: (layout) => layout.cards?.feature,
+  task: (layout) => layout.cards?.task,
+  item: (layout) => layout.cards?.item,
+};
+
+// The part names each card draws under, in logs.
+const CARD_PART_NAMES: { [P in keyof PrimerLayoutCards]: string } = {
+  feature: 'feature card',
+  task: 'task card',
+  item: 'item card',
+};
+
+// The card update failures logged, by the layout object that drew the card.
+// The loader makes a new layout object for each revision, so a new revision
+// logs again.
+const loggedUpdateFailures = new WeakMap<object, Set<string>>();
+
+// The layout the user's setting names, then `default`, for the first that
+// defines `part`.
+function pickPart(
+  shown: ShownLayouts<PrimerLayout>,
+  part: PartOf,
+): PartPick<PrimerLayout> {
+  return pickLayout([shown.user, 'default'], shown.layouts, (layout) => {
+    return part(layout) !== undefined;
+  });
+}
+
+function isSamePick(
+  drawn: PartPick<PrimerLayout> | undefined,
+  next: PartPick<PrimerLayout>,
+): boolean {
+  return drawn?.name === next.name && drawn.layout === next.layout;
+}
+
+// The card part the selected row shows.
+function cardPartOf(primer: OpenPrimer): PartOf {
+  return CARD_PARTS[cardKindOf(primer)];
+}
+
+// The Feature card while no task is selected, else the selected row's kind.
+function cardKindOf(primer: OpenPrimer): keyof PrimerLayoutCards {
+  if (selectedEntry(primer) === null) {
+    return 'feature';
+  }
+  return selectedRow(primer).kind === 'item' ? 'item' : 'task';
+}
+
+// The rail body through the layout's rail: the rows it drew with `railRow`
+// marked `is-selected` for the selected row, which holds the row prompt, with
+// its need, include and remove keys shown as `rowPrompt` says; the prompt
+// sits at the end of the rail's element when the rail drew no row for the
+// selected row, and leaves the rail on the Feature row. The selected row
+// scrolls into view when `isRowChanged`.
+function drawRail(
+  rail: RailParts,
+  primer: OpenPrimer,
+  pick: PartPick<PrimerLayout>,
+  deps: PartDeps,
+  isRowChanged: boolean,
+): DrawnPrimerPart<DrawnRail> {
+  rail.body.replaceChildren();
+  const drawn = drawPart({
+    owner: 'primer',
+    parent: rail.body,
+    pick,
+    defaultLayout,
+    part: (layout: PrimerLayout) => layout.rail,
+    build(builder, parent, rollback) {
+      const { kit, rows } = createRailKit(deps, primer, rollback);
+      const pane = builder(parent, railInput(primer), kit);
+      return { element: paneElement(parent, pane, 'rail'), rows };
+    },
+    log: deps.log,
+    logSource: 'primer',
+    partName: 'rail',
+  });
+  const { rows, element: railElement } = drawn.built;
+  const selectedPosition = railPosition(primer);
+  const prompt = rowPrompt(primer);
+  for (const [position, node] of rows) {
+    node.classList.toggle('is-selected', position === selectedPosition);
+  }
+  const selectedNode = rows.get(selectedPosition);
+  if (prompt === null) {
+    rail.rowPrompt.remove();
+  } else {
+    (selectedNode ?? railElement).append(rail.rowPrompt);
+  }
+  for (const needKey of rail.needKeys) {
+    needKey.hidden = prompt?.need !== true;
+  }
+  rail.includeKey.hidden = prompt?.include !== true;
+  rail.removeKey.hidden = prompt?.remove !== true;
+  if (isRowChanged) {
+    selectedNode?.scrollIntoView({ block: 'nearest' });
+  }
+  return { built: drawn.built, pick, dispose: drawn.dispose };
+}
+
+// The review body through the layout's review.
+function drawReview(
+  parent: HTMLElement,
+  primer: OpenPrimer,
+  pick: PartPick<PrimerLayout>,
+  deps: PartDeps,
+): DrawnPrimerPart<{ element: HTMLElement }> {
+  const drawn = drawPart({
+    owner: 'primer',
+    parent,
+    pick,
+    defaultLayout,
+    part: (layout: PrimerLayout) => layout.review,
+    build(builder, buildParent, rollback) {
+      const kit = createReviewKit(deps, rollback);
+      const pane = builder(buildParent, reviewInput(primer), kit);
+      return { element: paneElement(buildParent, pane, 'review') };
+    },
+    log: deps.log,
+    logSource: 'primer',
+    partName: 'review',
+  });
+  return { built: drawn.built, pick, dispose: drawn.dispose };
+}
+
+// The pane's element, checked to be appended to `parent`.
+function paneElement(
+  parent: HTMLElement,
+  pane: PrimerLayoutPane | null | undefined,
+  partName: string,
+): HTMLElement {
+  return requireElementIn(parent, pane?.element, partName);
+}
+
 // What a card is built for: the Feature row; a task row and whether its card
 // holds the add-item box; or an item row.
 function cardKeyOf(primer: OpenPrimer): string {
@@ -543,385 +757,248 @@ function cardKeyOf(primer: OpenPrimer): string {
   }
 }
 
-// The rail body: the Feature row, then each group's tasks under its header,
-// the Primer and Every feature headers only over tasks and Extra tasks always,
-// holding the add prompt, with a line saying so while it holds none. The
-// selected row's task has its items as rows under its task row. The row
-// prompt sits under the selected task or item row's label and leaves the
-// Feature row, showing the include key on an item row and the remove key on
-// an extra task's rows. Each row's click selects it; the selected row scrolls
-// into view when `isRowChanged`.
-function drawRail(
-  rail: RailParts,
-  primer: OpenPrimer,
-  dispatch: (action: PrimerAction) => void,
-  isRowChanged: boolean,
-) {
-  const list = element('div', 'primer-rail-list');
-  const rows = railRows(primer);
-  const selectedPosition = railPosition(primer);
-  const prompt = rowPrompt(primer);
-  const select = (position: number) => () =>
-    dispatch({ type: 'selectRow', row: position });
-  // The row drawn at `position`, selected and holding the prompt when it is
-  // the selected row.
-  const placed = (position: number, node: HTMLElement) => {
-    const isSelected = position === selectedPosition;
-    node.classList.toggle('is-selected', isSelected);
-    if (isSelected && prompt !== null) {
-      node.append(rail.rowPrompt);
-    }
-    return node;
-  };
-  if (prompt === null) {
-    rail.rowPrompt.remove();
-  }
-  for (const needKey of rail.needKeys) {
-    needKey.hidden = prompt?.need !== true;
-  }
-  rail.includeKey.hidden = prompt?.include !== true;
-  rail.removeKey.hidden = prompt?.remove !== true;
-  list.append(
-    placed(
-      0,
-      row({
-        density: 'list',
-        label: 'Feature',
-        detail: primer.feature.name,
-        onClick: select(0),
-      }),
-    ),
-  );
-  for (const [group, header] of RAIL_GROUPS) {
-    const entries = primer.entries.filter((entry) => entry.group === group);
-    const isExtra = group === 'extra';
-    if (entries.length === 0 && !isExtra) {
-      continue;
-    }
-    list.append(sectionHeader(header, isExtra ? rail.addPrompt : null));
-    for (const entry of entries) {
-      const position = rows.findIndex(
-        (candidate) =>
-          candidate.kind === 'task' && candidate.entryId === entry.id,
-      );
-      list.append(
-        placed(
-          position,
-          row({
-            density: 'list',
-            label: taskName(entry),
-            trailing: railTrailing(entry),
-            onClick: select(position),
-          }),
-        ),
-      );
-      const isExpanded = rows[position + 1]?.kind === 'item';
-      if (isExpanded) {
-        entry.items.forEach((item, i) => {
-          const itemPosition = position + 1 + i;
-          list.append(
-            placed(
-              itemPosition,
-              railItemRow(item, i + 1, select(itemPosition), () => {
-                select(itemPosition)();
-                dispatch({ type: 'toggleInclude' });
-              }),
-            ),
-          );
-        });
-      }
-    }
-    if (entries.length === 0) {
-      list.append(emptyState('No extra tasks.'));
-    }
-  }
-  rail.body.replaceChildren(list);
-  if (isRowChanged) {
-    list
-      .querySelector('.ui-row.is-selected')
-      ?.scrollIntoView({ block: 'nearest' });
-  }
-}
-
-// A task row's need tag and `<included>/<total>` count of its items.
-function railTrailing(entry: PrimerEntry): HTMLElement {
-  const trailing = element('span', 'primer-rail-trailing');
-  trailing.append(
-    needTag(entry.need),
-    element(
-      'span',
-      'primer-count',
-      `${includedCount(entry)}/${entry.items.length}`,
-    ),
-  );
-  return trailing;
-}
-
-// An item row: its include mark and its number leading the item text.
-// `onToggle` runs on a click on the mark.
-function railItemRow(
-  item: PrimerItem,
-  number: number,
-  onSelect: () => void,
-  onToggle: () => void,
-): HTMLElement {
-  const lead = element('span', 'primer-rail-item-lead');
-  lead.append(
-    toggleMark({ isOn: item.include, label: 'Include the item', onToggle }),
-    element('span', 'primer-item-number', String(number)),
-  );
-  return row({
-    density: 'list',
-    depth: 1,
-    label: item.text,
-    leading: lead,
-    onClick: onSelect,
-  });
-}
-
 // The selected row's card, the Feature card, the task card or the item card,
-// its anchors kept for its `dispose`.
-function buildCard(
+// through the layout picked for its part.
+function drawCard(
   parent: HTMLElement,
   primer: OpenPrimer,
-  deps: CardDeps,
-): PrimerCard {
-  const anchors: Disposable[] = [];
-  const cardDeps: CardDeps = {
-    ...deps,
-    keys: { anchor: recordingAnchor(deps.keys.anchor, anchors) },
-  };
+  shown: ShownLayouts<PrimerLayout>,
+  deps: PartDeps,
+): DrawnCard {
   const selected = selectedRow(primer);
   const entry = selectedEntry(primer);
-  let update: (primer: OpenPrimer) => void;
+  const pick = pickPart(shown, cardPartOf(primer));
   if (entry === null) {
-    update = buildFeatureCard(parent, primer, cardDeps);
-  } else if (selected.kind === 'item') {
-    update = buildItemCard(parent, primer, entry, selected.item, cardDeps);
-  } else {
-    update = buildTaskCard(parent, primer, entry, cardDeps);
+    return drawCardPart(parent, primer, pick, deps, {
+      kind: 'feature',
+      part: (layout) => layout.cards?.feature,
+      kit: (rollback) => createFeatureKit(deps, primer, rollback),
+      input: featureInput,
+    });
   }
-  return { update, dispose: () => disposeAnchors(anchors) };
-}
-
-// The Feature card's fields; it redraws nothing without a rebuild.
-function buildFeatureCard(
-  parent: HTMLElement,
-  primer: OpenPrimer,
-  deps: CardDeps,
-): (primer: OpenPrimer) => void {
-  parent.append(element('h2', 'primer-card-heading', 'Feature'));
-  for (const [name, label] of FEATURE_FIELDS) {
-    appendField(
-      parent,
-      label,
-      { field: 'feature', name },
-      name === 'name' ? 'editFirstField' : null,
-      primer,
-      deps,
-    );
-  }
-  return () => undefined;
-}
-
-// The task as heading, its tags, an extra task's name box, its markdown
-// sections, the add-item box unless the task is full, and the task's comment
-// box; its items are rows in the rail, each with a card of its own. Returns
-// the redraw of what changes without a rebuild.
-function buildTaskCard(
-  parent: HTMLElement,
-  primer: OpenPrimer,
-  entry: PrimerEntry,
-  deps: CardDeps,
-): (primer: OpenPrimer) => void {
   const entryId = entry.id;
-  const heading = element('h2', 'primer-card-heading', taskName(entry));
-  const tags = element('div', 'primer-card-tags');
-  if (entry.area.trim() !== '') {
-    tags.append(tag(entry.area));
+  if (selected.kind === 'item') {
+    const number = selected.item;
+    return drawCardPart(parent, primer, pick, deps, {
+      kind: 'item',
+      part: (layout) => layout.cards?.item,
+      kit: (rollback) => createItemKit(deps, primer, entry, number, rollback),
+      input: (current) => itemInput(current, entryId, number),
+    });
   }
-  if (entry.number !== null) {
-    tags.append(tag(`#${entry.number}`));
-  }
-  let shownNeed = entry.need;
-  let need = needTag(shownNeed);
-  tags.append(need);
-  parent.append(heading, tags);
-  if (entry.group === 'extra') {
-    appendField(
-      parent,
-      'Name',
-      { field: 'taskName', entryId },
-      'editFirstField',
-      primer,
-      deps,
-    );
-  }
-  const sections: [string, string][] = [
-    ['Question', entry.question],
-    ['Evidence', entry.evidence],
-    ['Probes', entry.probes],
-    ['Pointer', entry.pointer],
-  ];
-  for (const [label, text] of sections) {
-    if (text.trim() !== '') {
-      const section = element('section', 'primer-card-section');
-      section.append(
-        sectionHeader(label),
-        markdownElement(
-          'div',
-          'primer-card-section-body md',
-          deps.markdown.block(text),
-        ),
-      );
-      parent.append(section);
-    }
-  }
-  if (hasAddItemBox(entry)) {
-    appendField(
-      parent,
-      'New item',
-      { field: 'newItem', entryId },
-      'addItem',
-      primer,
-      deps,
-    );
-  }
-  appendField(
-    parent,
-    'Comment',
-    { field: 'taskComment', entryId },
-    'editTaskComment',
-    primer,
-    deps,
-  );
-  return (current) => {
-    const shownEntry = current.entries.find(
-      (candidate) => candidate.id === entryId,
-    );
-    if (shownEntry === undefined) {
-      return;
-    }
-    heading.textContent = taskName(shownEntry);
-    if (shownEntry.need !== shownNeed) {
-      shownNeed = shownEntry.need;
-      const next = needTag(shownNeed);
-      need.replaceWith(next);
-      need = next;
-    }
-  };
-}
-
-// The item card: the `⌃H ‹ n of m › ⌃L` header, the item text as heading,
-// its include mark with its key, an Added tag on an item the user added, and
-// the item's comment box. `number` is the item's 1-based number. Returns the
-// redraw of the mark and the header's place.
-function buildItemCard(
-  parent: HTMLElement,
-  primer: OpenPrimer,
-  entry: PrimerEntry,
-  number: number,
-  deps: CardDeps,
-): (primer: OpenPrimer) => void {
-  const entryId = entry.id;
-  const item = entry.items[number - 1];
-  if (item === undefined) {
-    throw new Error(`task ${entryId} has no item ${number}`);
-  }
-  const scope = primerScope('card');
-  const place = element('span', 'primer-item-place', placeText(number, entry));
-  const step = element('div', 'primer-item-step');
-  step.append(
-    anchoredSpan(deps.keys, 'primer-item-step-key', 'prevRow', { scope }),
-    keyChevron('‹'),
-    place,
-    keyChevron('›'),
-    anchoredSpan(deps.keys, 'primer-item-step-key', 'nextRow', { scope }),
-  );
-  const mark = toggleMark({
-    isOn: item.include,
-    label: 'Include the item',
-    onToggle: () => deps.dispatch({ type: 'toggleInclude' }),
+  return drawCardPart(parent, primer, pick, deps, {
+    kind: 'task',
+    part: (layout) => layout.cards?.task,
+    kit: (rollback) => createTaskKit(deps, primer, entry, rollback),
+    input: (current) => taskInput(current, entryId),
   });
-  const include = element('div', 'primer-item-include');
-  include.append(
-    mark,
-    element('span', '', 'Include'),
-    anchoredSpan(deps.keys, 'primer-field-hint', 'toggleInclude', { scope }),
-  );
-  parent.append(step, element('h2', 'primer-card-heading', item.text), include);
-  if (item.added) {
-    const tags = element('div', 'primer-card-tags');
-    tags.append(tag('Added'));
-    parent.append(tags);
+}
+
+// One card kind's builder, kit and input. `input` is null once the card's
+// task or item is gone.
+interface CardSpec<Kit, Input> {
+  kind: keyof PrimerLayoutCards;
+  part(layout: PrimerLayout): CardBuilder<Kit, Input> | undefined;
+  kit(rollback: RollbackDeps): CardKit<Kit, Input>;
+  input(primer: OpenPrimer): Input | null;
+}
+
+type CardBuilder<Kit, Input> = (
+  parent: HTMLElement,
+  input: Input,
+  kit: Kit,
+) => PrimerLayoutCard<Input>;
+
+// The card the spec builds through `pick`: the layout's card, then each box it
+// left out at its end. `update` brings the kit's own parts up to date, then
+// runs the card's own `update`, whose throw is logged once per layout object
+// and part and keeps the card.
+function drawCardPart<Kit, Input>(
+  parent: HTMLElement,
+  primer: OpenPrimer,
+  pick: PartPick<PrimerLayout>,
+  deps: PartDeps,
+  spec: CardSpec<Kit, Input>,
+): DrawnCard {
+  const partName = CARD_PART_NAMES[spec.kind];
+  const input = spec.input(primer);
+  if (input === null) {
+    throw new Error(`primer ${primer.formId} has no ${partName} to draw`);
   }
-  appendField(
+  const drawn = drawPart({
+    owner: 'primer',
     parent,
-    'Comment',
-    { field: 'itemComment', entryId, item: number },
-    'editItemComment',
-    primer,
-    deps,
-  );
-  return (current) => {
-    const shownEntry = current.entries.find(
-      (candidate) => candidate.id === entryId,
-    );
-    const shownItem = shownEntry?.items[number - 1];
-    if (shownEntry === undefined || shownItem === undefined) {
-      return;
-    }
-    setToggleMark(mark, shownItem.include);
-    place.textContent = placeText(number, shownEntry);
+    pick,
+    defaultLayout,
+    part: spec.part,
+    build(builder, buildParent, rollback) {
+      const kit = spec.kit(rollback);
+      const card: PrimerLayoutCard<Input> | null | undefined = builder(
+        buildParent,
+        input,
+        kit.kit,
+      );
+      const element = requireElementIn(buildParent, card?.element, partName);
+      kit.appendUnmountedBoxes(element);
+      return { element, card: card as PrimerLayoutCard<Input>, kit };
+    },
+    log: deps.log,
+    logSource: 'primer',
+    partName,
+  });
+  const layout = drawn.layoutName === pick.name ? pick.layout : defaultLayout;
+  const { card, kit } = drawn.built;
+  return {
+    pick,
+    update(current) {
+      const next = spec.input(current);
+      if (next === null) {
+        return;
+      }
+      kit.update(next);
+      try {
+        card.update?.(next);
+      } catch (error) {
+        logUpdateFailureOnce(
+          deps.log,
+          layout,
+          drawn.layoutName,
+          partName,
+          error,
+        );
+      }
+    },
+    dispose: drawn.dispose,
   };
 }
 
-// An item's place among its task's items: `<n> of <m>`.
-function placeText(number: number, entry: PrimerEntry): string {
-  return `${number} of ${entry.items.length}`;
-}
-
-// A labelled box: its label over its input frame, an anchor for `command` in
-// the card scope beside the label.
-function appendField(
-  parent: HTMLElement,
-  label: string,
-  target: TextTarget,
-  command: PrimerCommandName | null,
-  primer: OpenPrimer,
-  deps: CardDeps,
-) {
-  const field = element('div', 'primer-field');
-  const hint =
-    command === null
-      ? null
-      : anchoredSpan(deps.keys, 'primer-field-hint', command, {
-          scope: primerScope('card'),
-        });
-  field.append(sectionHeader(label, hint));
-  parent.append(field);
-  mountFrame(field, target, primer, deps);
-}
-
-// The box's input frame, then its `⌃P ⌃N` keys, which show on the frame's
-// bottom edge while the box has focus.
-function mountFrame(
-  parent: HTMLElement,
-  target: TextTarget,
-  primer: OpenPrimer,
-  deps: CardDeps,
-) {
-  const frame = inputFrame();
-  frame.classList.add('primer-box');
-  const scope = primerScope('card');
-  const boxKeys = boxHint('box-keys', [
-    anchoredSpan(deps.keys, 'primer-box-key', 'prevBox', { scope }),
-    anchoredSpan(deps.keys, 'primer-box-key', 'nextBox', { scope }),
-  ]);
-  parent.append(frame, boxKeys);
-  deps.boxes.mount(
-    frame,
-    { primerId: primer.formId, target },
-    boxText(primer, target),
+function logUpdateFailureOnce(
+  log: Log,
+  layout: object,
+  layoutName: string,
+  partName: string,
+  error: unknown,
+): void {
+  const logged = loggedUpdateFailures.get(layout) ?? new Set<string>();
+  loggedUpdateFailures.set(layout, logged);
+  if (logged.has(partName)) {
+    return;
+  }
+  logged.add(partName);
+  log(
+    'primer',
+    `layout ${layoutName} ${partName} update failed: ${errorText(error)}`,
   );
+}
+
+function featureInput(primer: OpenPrimer): FeatureCardInput {
+  return { ...primer.feature };
+}
+
+// Null once the task is gone.
+function taskInput(primer: OpenPrimer, entryId: string): TaskCardInput | null {
+  const entry = entryById(primer, entryId);
+  if (entry === undefined) {
+    return null;
+  }
+  return {
+    id: entry.id,
+    group: entry.group,
+    number: entry.number,
+    area: entry.area,
+    name: taskName(entry),
+    need: entry.need,
+    question: entry.question,
+    evidence: entry.evidence,
+    probes: entry.probes,
+    pointer: entry.pointer,
+    itemCount: entry.items.length,
+    canAddItem: hasAddItemBox(entry),
+  };
+}
+
+// Item `number` (1-based) of the task; null once the task or item is gone.
+function itemInput(
+  primer: OpenPrimer,
+  entryId: string,
+  number: number,
+): ItemCardInput | null {
+  const entry = entryById(primer, entryId);
+  const item = entry?.items[number - 1];
+  if (entry === undefined || item === undefined) {
+    return null;
+  }
+  return {
+    entryId,
+    taskName: taskName(entry),
+    number,
+    count: entry.items.length,
+    text: item.text,
+    include: item.include,
+    added: item.added,
+  };
+}
+
+function entryById(
+  primer: OpenPrimer,
+  entryId: string,
+): PrimerEntry | undefined {
+  return primer.entries.find((entry) => entry.id === entryId);
+}
+
+// The Feature row, then each group's rows: Primer and Every feature only over
+// tasks, Extra tasks always.
+function railInput(primer: OpenPrimer): RailInput {
+  const rows = railRows(primer);
+  const groups = RAIL_GROUPS.flatMap(([group, header]) => {
+    const entries = primer.entries.filter((entry) => entry.group === group);
+    if (entries.length === 0 && group !== 'extra') {
+      return [];
+    }
+    return [
+      {
+        group,
+        header,
+        rows: entries.flatMap((entry) => taskRows(rows, entry)),
+      },
+    ];
+  });
+  return {
+    feature: { position: 0, kind: 'feature', name: primer.feature.name },
+    groups,
+  };
+}
+
+// The task's row, then its item rows when the rail expands it.
+function taskRows(rows: RailRow[], entry: PrimerEntry): RailRowInput[] {
+  const position = rows.findIndex(
+    (candidate) => candidate.kind === 'task' && candidate.entryId === entry.id,
+  );
+  const isExpanded = rows[position + 1]?.kind === 'item';
+  const task: RailRowInput = {
+    position,
+    kind: 'task',
+    entryId: entry.id,
+    group: entry.group,
+    name: taskName(entry),
+    need: entry.need,
+    included: includedCount(entry),
+    total: entry.items.length,
+    expanded: isExpanded,
+  };
+  if (!isExpanded) {
+    return [task];
+  }
+  return [
+    task,
+    ...entry.items.map((item, i): RailRowInput => ({
+      position: position + 1 + i,
+      kind: 'item',
+      entryId: entry.id,
+      number: i + 1,
+      text: item.text,
+      include: item.include,
+      added: item.added,
+    })),
+  ];
 }

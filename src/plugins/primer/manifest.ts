@@ -76,6 +76,11 @@ export const primerManifest = definePlugin({
       group: 'confirm',
       runsIn: 'page',
     },
+    openPreview: {
+      label: 'open the primer layout preview',
+      group: 'debug',
+      runsIn: 'page',
+    },
   },
   scopes: {
     rail: 'In the primer rail',
@@ -84,7 +89,7 @@ export const primerManifest = definePlugin({
     confirm: 'In the primer cancel confirmation',
     idle: 'With no primer open',
   },
-  settings: { autosaveDelayMs: 400, deadlineSeconds: 240 },
+  settings: { autosaveDelayMs: 400, deadlineSeconds: 240, layout: 'default' },
   settingInfo: {
     autosaveDelayMs: {
       label: 'Autosave delay',
@@ -95,6 +100,11 @@ export const primerManifest = definePlugin({
       label: 'Primer deadline',
       description:
         'How long an agent waits on a primer before it gets a draft back, in seconds, when its session names no deadline.',
+    },
+    layout: {
+      label: 'Layout',
+      description:
+        "The primer layout that draws the Primer tab: a folder name in the primer's layouts folder, or default.",
     },
   },
   themeTokens: {},

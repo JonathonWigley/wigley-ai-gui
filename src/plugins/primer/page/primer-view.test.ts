@@ -9,6 +9,7 @@ import {
 } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
 import type { EditorHost } from '../../../contracts/editor';
+import type { ShownLayouts } from '../../../contracts/plugin';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
 import {
   asFake,
@@ -18,6 +19,8 @@ import {
 } from '../../../shared/page/test-dom';
 import type { AnchorOptions } from '../../keys/contract';
 import type { PrimerEntry } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { PrimerLayout } from '../layouts/layout';
 import {
   boxKey,
   focusActionFor,
@@ -90,7 +93,7 @@ function primerTabSetup(parts: { entries?: PrimerEntry[] } = {}) {
   );
   const anchors: NamedAnchor[] = [];
   let tab: FakeElement | null = null;
-  mountPrimerTab({
+  const view = mountPrimerTab({
     areas: {
       overlay: { contribute: () => ({ dispose: () => undefined }) },
     },
@@ -130,8 +133,11 @@ function primerTabSetup(parts: { entries?: PrimerEntry[] } = {}) {
         anchors.push(anchor);
         return anchor;
       },
+      keysFor: () => null,
     },
     run: () => undefined,
+    commands: { exists: () => true, run: () => undefined },
+    platform: 'macos',
     uiState: { get: () => undefined, set: () => undefined },
     log,
   });
@@ -144,10 +150,12 @@ function primerTabSetup(parts: { entries?: PrimerEntry[] } = {}) {
     finish: () => Promise.resolve(),
     closeSession: () => undefined,
     scrollPrimer: () => null,
+    openPreview: () => Promise.resolve(),
     toast: () => undefined,
     log,
   });
   return {
+    view,
     store,
     boxes,
     logs,
@@ -464,23 +472,221 @@ describe('primer anchors', () => {
       false,
     ]);
   });
+});
 
-  it("disposes the old card's anchors on a card rebuild", () => {
-    const { store, tab, anchors } = primerTabSetup();
+// The layouts a page holds after main listed `name` and the setting named
+// it.
+function userLayouts(
+  name: string,
+  layout: PrimerLayout,
+): ShownLayouts<PrimerLayout> {
+  return {
+    layouts: new Map<string, PrimerLayout>([
+      ['default', defaultLayout],
+      [name, layout],
+    ]),
+    user: name,
+  };
+}
+
+// The element a part drew into `paneClass`'s pane: its first child.
+function partIn(tab: FakeElement, paneClass: string): FakeElement {
+  return pane(tab, paneClass).children[0];
+}
+
+const taskComment1: PrimerBox = {
+  primerId: 'p1',
+  target: { field: 'taskComment', entryId: '1' },
+};
+
+// A layout whose task card draws its heading alone.
+const BARE_TASK: PrimerLayout = {
+  cards: {
+    task(parent, input, kit) {
+      const card = kit.el(parent, 'div', 'bare-task');
+      kit.el(card, 'h2', '', input.name);
+      return { element: card };
+    },
+  },
+};
+
+describe('primer layout', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('draws every part with default and marks data-layout', () => {
+    const { store, tab } = primerTabSetup();
+    const layoutOf = (paneClass: string) => {
+      const part = partIn(tab, paneClass);
+      return [part.dataset.layout, part.dataset.layoutOwner];
+    };
+    const drawn = [layoutOf('primer-card'), layoutOf('primer-rail-body')];
     store.dispatch({ type: 'selectRow', row: 1 });
-    const cardPane = pane(tab, 'primer-card');
-    const firstCard = anchors.filter((anchor) =>
-      isInside(anchor.element, cardPane),
+    drawn.push(layoutOf('primer-card'));
+    store.dispatch({ type: 'selectRow', row: 2 });
+    drawn.push(layoutOf('primer-card'));
+    store.dispatch({ type: 'openReview' });
+    drawn.push(layoutOf('primer-review-body'));
+
+    expect(drawn).toEqual(Array(5).fill(['default', 'primer']));
+  });
+
+  it('draws a part from the user layout when it defines it, the rest from default', () => {
+    const { store, tab, view } = primerTabSetup();
+    view.setLayouts(userLayouts('bare', BARE_TASK));
+
+    store.dispatch({ type: 'selectRow', row: 1 });
+    const task = partIn(tab, 'primer-card').dataset.layout;
+    const rail = partIn(tab, 'primer-rail-body').dataset.layout;
+    store.dispatch({ type: 'selectRow', row: 2 });
+    const item = partIn(tab, 'primer-card').dataset.layout;
+
+    expect({ task, item, rail }).toEqual({
+      task: 'bare',
+      item: 'default',
+      rail: 'default',
+    });
+  });
+
+  it('falls back to default when a user card throws after mounting a box, mounting each box once', () => {
+    const { store, tab, view, boxes, logs } = primerTabSetup();
+    view.setLayouts(
+      userLayouts('broken', {
+        cards: {
+          task(parent, _input, kit) {
+            kit.textBox(parent, 'comment');
+            throw new Error('card broke');
+          },
+        },
+      }),
     );
+
+    store.dispatch({ type: 'selectRow', row: 1 });
+
+    const card = partIn(tab, 'primer-card');
+    expect(card.dataset.layout).toBe('default');
+    expect(logs).toContainEqual(
+      expect.stringContaining('layout broken task card failed: card broke'),
+    );
+    expect(boxes.isMounted(taskComment1)).toBe(true);
+    expect(boxes.isMounted(newItem1)).toBe(true);
+    expect(findAll(pane(tab, 'primer-card'), 'primer-box')).toHaveLength(2);
+  });
+
+  it('appends the boxes a user card leaves out, in shownBoxes order', () => {
+    const setup = primerTabSetup();
+    setup.view.setLayouts(userLayouts('bare', BARE_TASK));
+    setup.store.dispatch({ type: 'selectRow', row: 1 });
+
+    const card = partIn(setup.tab, 'primer-card');
+    const labels = findAll(card, 'ui-section-header-text').map(
+      (label) => label.textContent,
+    );
+    setup.run('editFirstField');
+    const first = setup.boxes.active();
+    setup.run('nextBox');
+    const second = setup.boxes.active();
+
+    expect(labels).toEqual(['New item', 'Comment']);
+    expect([first, second].map((box) => box && boxKey(box))).toEqual([
+      'p1/task/1/new-item',
+      'p1/task/1/comment',
+    ]);
+  });
+
+  it('rebuilds the shown card on setLayouts with a new pick and keeps the focused box', () => {
+    const { store, tab, view, boxes } = primerTabSetup();
+    store.dispatch({ type: 'selectRow', row: 1 });
+    boxes.focus(taskComment1);
+    const before = partIn(tab, 'primer-card');
+
+    view.setLayouts(userLayouts('bare', BARE_TASK));
+
+    const after = partIn(tab, 'primer-card');
+    expect(after).not.toBe(before);
+    expect(after.dataset.layout).toBe('bare');
+    const active = boxes.active();
+    expect(active === null ? null : boxKey(active)).toBe('p1/task/1/comment');
+  });
+
+  it("runs the item card's update on a toggle without a rebuild", () => {
+    const { store, tab, view, run } = primerTabSetup();
+    const updates: boolean[] = [];
+    view.setLayouts(
+      userLayouts('watching', {
+        cards: {
+          item(parent, input, kit) {
+            const card = kit.el(parent, 'div', 'watching-item');
+            kit.textBox(card, 'comment');
+            return {
+              element: card,
+              update: (current) => updates.push(current.include),
+            };
+          },
+        },
+      }),
+    );
+    store.dispatch({ type: 'selectRow', row: 1 });
+    store.dispatch({ type: 'selectRow', row: 2 });
+    const card = partIn(tab, 'primer-card');
+    updates.length = 0;
+
+    run('toggleInclude');
+
+    expect(partIn(tab, 'primer-card')).toBe(card);
+    expect(updates).toEqual([false]);
+  });
+
+  it("appends the row prompt at the rail pane's end when the rail never calls railRow for the selected row", () => {
+    const { store, tab, view } = primerTabSetup();
+    view.setLayouts(
+      userLayouts('plain', {
+        rail(parent, input, kit) {
+          const list = kit.el(parent, 'div', 'plain-rail');
+          kit.row(list, { density: 'list', label: input.feature.kind });
+          return { element: list };
+        },
+      }),
+    );
+
+    store.dispatch({ type: 'selectRow', row: 1 });
+
+    const [prompt] = findAll(tab, 'primer-row-prompt');
+    const rail = partIn(tab, 'primer-rail-body');
+    expect(rail.dataset.layout).toBe('plain');
+    expect(prompt.parentNode).toBe(rail);
+  });
+
+  it("disposes a part's anchors before it draws the part again and when the view goes", () => {
+    const { store, tab, view, anchors, sessionId } = primerTabSetup();
+    store.dispatch({ type: 'selectRow', row: 1 });
+    const inPane = (paneClass: string) =>
+      anchors.filter((anchor) =>
+        isInside(anchor.element, pane(tab, paneClass)),
+      );
+    const firstRail = inPane('primer-rail-body').filter(
+      (anchor) => anchor.command === 'primer.addExtraTask',
+    );
+    const firstCard = inPane('primer-card');
     const [edge] = anchorsOf(anchors, 'primer.focusRail');
-    expect(firstCard.length).toBeGreaterThan(0);
 
     store.dispatch({ type: 'selectRow', row: 2 });
+    const secondRail = inPane('primer-rail-body').filter(
+      (anchor) => anchor.command === 'primer.addExtraTask',
+    );
+    const secondCard = inPane('primer-card');
+    const disposedOnRedraw = [...firstRail, ...firstCard].map(
+      (anchor) => anchor.dispose.mock.calls.length,
+    );
+    view.forgetSession(sessionId);
 
-    for (const anchor of firstCard) {
+    expect(firstRail).toHaveLength(1);
+    expect(firstCard.length).toBeGreaterThan(0);
+    expect(disposedOnRedraw.every((calls) => calls === 1)).toBe(true);
+    for (const anchor of [...secondRail, ...secondCard, edge]) {
       expect(anchor.dispose).toHaveBeenCalledOnce();
     }
-    expect(edge.dispose).not.toHaveBeenCalled();
-    expect(isInside(edge.element, tab)).toBe(true);
   });
 });

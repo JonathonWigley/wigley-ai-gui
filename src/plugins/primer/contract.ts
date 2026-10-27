@@ -1,8 +1,9 @@
 import type {
-  AgentFormChannel,
+  AgentFormInvoke,
+  AgentFormMessages,
   PresentedAgentForm,
 } from '../../contracts/agent-forms';
-import type { EventShape } from '../../contracts/plugin';
+import type { ChannelShape, EventShape } from '../../contracts/plugin';
 
 // The feature primer's shapes: the open_primer call, the body the page sends
 // back, the payload both tools return, and the page part's events and exports.
@@ -82,7 +83,13 @@ export const MAX_PRIMER_ENTRIES = 60;
 export const MAX_PRIMER_ITEMS = 20;
 
 export type PresentedPrimer = PresentedAgentForm<Primer, PrimerBody>;
-export type PrimerChannel = AgentFormChannel<Primer, PrimerBody>;
+// The agent form channel, and `openPreview` from the preview key.
+export interface PrimerChannel extends ChannelShape {
+  invoke: AgentFormInvoke<Primer, PrimerBody> & {
+    openPreview(): void;
+  };
+  messages: AgentFormMessages<Primer, PrimerBody>;
+}
 
 // The page part's views and events, and the exports other plugins read.
 export type PrimerView = 'primer' | 'review' | 'confirm' | 'idle';
