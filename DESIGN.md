@@ -250,7 +250,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
 
 - **Kbd** (`kbd`): a key hint, chords in `font-mono`.
 - **KeyPrompt** (`keyPrompt`): a Kbd with an optional label after it in `fg-tertiary`; the one
-  thing the keys plugin draws into an anchor.
+  thing the keys plugin draws into an anchor. A view places a `ui-key-chevron` span (`‹ › ▲ ▼`)
+  beside the anchor element when the prompt points a direction; the chevron hides and shows with its
+  anchor.
 - **Button** (`textButton`): a labelled button, variants primary, secondary, ghost, danger.
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.
@@ -291,7 +293,7 @@ Conventions every primitive follows:
 
 - **Title bar:** L1, `toolbar-height`, draggable; the shown mode's context centred; actions on the
   right as `icon-button` buttons when a feature contributes one: the Keys button with its
-  `Space ?` prompt, and while a config file is broken a `status-error` badge naming it; in the dev app, a
+  `Space ?` prompt (hidden under 640px window width, where the bar's end track is too narrow for it), and while a config file is broken a `status-error` badge naming it; in the dev app, a
   neutral Dev tag at the start. The OS window buttons stay native.
 - **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
 - **Side bar:** L1 dense glass. Rows are `row-tree` or `row-list`; hover fills with

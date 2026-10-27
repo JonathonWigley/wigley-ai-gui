@@ -158,7 +158,7 @@ interview on 2026-10-23; this file is the record of both.
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows (the start
   prompt and the sign-in dialog, tied to no session, stay open). An ended session's Chat tab keys in the
   `chat.ended` scope, which holds only the entry keys, the box keys and send (an app slash command still runs there),
-  and the key bar lists those and closing the session: the tab sets it when shown, or at once when its session ends
+  and the Chat tab's key prompts show only those and closing the session: the tab sets it when shown, or at once when its session ends
   while it is shown. Moving between a live and an ended Chat tab changes the base scope, which closes every pushed
   scope's view: the start prompt closes then too, and the sign-in dialog stays.
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),

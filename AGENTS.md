@@ -264,11 +264,13 @@ round; primer: an open primer), since main, not the page, decides.
     keys and the like) — need no anchor and show in help only; a view may still anchor one, as Accept does with
     Enter. An anchor prints the command's first bind that is not one of vim's own keys, or its first bind when
     every bind is. Leader sequences show in which-key.
-  - **Every other bind has an anchor.** At the end of a self-test run the plugin logs
-    `[keys] unplaced <keys> <command> in <scope>` for each bind firing in a scope that was in force during the page
-    load and never had an anchor there, and the self-test fails on that line, so a new built-in key ships with its
-    place on screen. A target drawn only in some states (a ninth choice, a permission card) is placed by a self-test
-    fixture that builds it, shown or hidden; never by a stand-in element made only to satisfy the gate.
+  - **Every other bind has an anchor.** At the end of a self-test run (the `keys-check-placement` page event) the
+    plugin logs `[keys] unplaced <keys> <command> in <scope>`, once per scope and bind, for each bind firing in a
+    scope that was in force during the page load whose command no anchor named during the page load, in that scope or
+    in none, covered. Leader sequences and vim's own keys are left out. The self-test fails on that line, so a new
+    built-in key ships with its place on screen. A target drawn only in some states (a ninth choice, a permission
+    card, the Model and Controls chips) is placed by a self-test fixture state that builds it, shown or hidden; never
+    by a stand-in element made only to satisfy the gate.
   - A forms or chat layout's `keyHint` and `keysFor` kit calls keep their shape and route through anchors.
 
   Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
@@ -510,7 +512,7 @@ round; primer: an open primer), since main, not the page, decides.
   them. Each plugin hands at most one script, and the scripts run in plugin start order; the keys plugin has no main
   part, so its steps live in forms' script, whose fixture gives them scopes full of binds and a box to type in. The
   gallery has no main part either, so its steps live in forms' and docs' scripts. Chat's script runs its sessions
-  over the fake agent harness, its steps covering the resume list, archive and slash completion. Docs'
+  over the fake agent harness, whose controls are Mode, Effort, Model and Verbosity so every chip and its pick key draws, its steps covering the resume list, archive and slash completion. Docs'
   (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture (`selftest-fixture.ts`) that writes docs, an
   index and a stand-in `docs_index.py` into the temp home at start when the home holds none yet, and again at each
   script run, so its steps never reach the user's docs or index. Settings'

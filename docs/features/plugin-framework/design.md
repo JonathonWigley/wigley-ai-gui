@@ -7,7 +7,7 @@
 - **Shell and areas** — the permanent areas and who fills them.
 - **Sessions (plan A2)** — tabs as agent sessions, the relay, tab lifecycle.
 - **Keymap (plan A2)** — the user's new keys, from the keymap rounds.
-- **Keys plugin (plan B)** — the one page-only `keys` plugin: which-key, help on `Space ?`, the scope stack, titled scopes, the bar split.
+- **Keys plugin (plan B)** — the one page-only `keys` plugin: which-key, help on `Space ?`, the scope stack, titled scopes, the key hints that replaced the bar.
 
 The decisions the user settled in the 2026-10-18 interview rounds, kept so plans A2 and B are written from them once
 the plan before has landed. Each plan reads this file and the code as it then stands; a decision here stands unless
@@ -20,7 +20,7 @@ the user changes it.
   `plan-a1-core/`.
 - **A2 — sessions**: the `sessions` plugin, session tabs, the event bus, plugin dependencies used for real, and the
   keymap changes.
-- **B — keys**: the `keys` plugin: which-key, help on `<leader>?`, the slimmer bottom bar.
+- **B — keys**: the `keys` plugin: which-key, help on `<leader>?`, the slimmer bottom bar (replaced later by key hints in place, `docs/features/key-hints/design.md`).
 
 Each lands green on its own, the self-test passing, and is reviewed on its own.
 
@@ -95,8 +95,10 @@ Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
 
 ## Keys plugin (plan B)
 
-Landed as one page-only `keys` plugin (no main part, depends on no plugin) holding which-key, the help overlay and the
-bottom bar's key list.
+Landed as one page-only `keys` plugin (no main part, depends on no plugin) holding which-key and the help overlay. Key
+hints in place later replaced the plugin's bottom key list: the plugin now also exports `anchor`, which draws a command's
+keys into an element a view names, and the `keys.showHints` setting turns the hints off. The title bar's Keys button,
+which opens help, is the plugin's too (`docs/features/key-hints/design.md`).
 
 - Which-key opens `whichKeyDelayMs` (200 ms) after a prefix key (the leader), as a panel docked full width just above
   the status bar, listing what can follow in columns; it redraws at once on a deeper prefix and closes when the
@@ -118,7 +120,6 @@ bottom bar's key list.
   pending page sequence, and a box losing focus discards vim's unfinished command (keys, count, operator, register) by
   sending it `<Nop>`, which vim matches to nothing, rather than Esc, which would run the box's mapped Esc. The
   offscreen self-test fires no DOM focus or blur events, so those two paths are proved only in a visible run.
-- The bottom bar splits: forms and the primer keep the mode and save state (the shared `.ui-status-line`; round
-  progress stays on the session tab); the keys plugin's `.keys-bar` lists the keys that don't start with the leader
-  (page binds spell the leader as Space, whatever the editor's leader), plus a `Keys` button that opens help. Both fit
-  on one row at the 420 px minimum width; the bar takes its own row only below that.
+- The bottom bar split first: forms and the primer kept the mode and save state (the shared `.ui-status-line`; round
+  progress stayed on the session tab) and the keys plugin's own row listed the keys that don't start with the
+  leader. Key hints in place removed the key list and the mode item; the save state moved to each form's rail header.
