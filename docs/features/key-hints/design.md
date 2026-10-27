@@ -36,6 +36,14 @@ a glance.
   gets the same hints by naming anchors.
 - **Anchors are a `keys` plugin export,** beside `keysFor`. The core stays the key engine only, and
   the whole hint presentation is one plugin that can be replaced.
+- **A hint out of scope hides and keeps its space,** cursor prompts included, so rows and boxes
+  never shift when focus moves. A hint whose command has no key takes no space at all.
+- **A user's own bind shows before the default,** so a rebind reaches its prompt without the user
+  unbinding the default.
+- **The placement check counts an anchor only once it has been on the page,** so a hint built and
+  never attached cannot satisfy it.
+- **The title bar's `Space ?` prompt hides at 640px and narrower:** the title bar's end track is
+  53px at the 420px window minimum and the Keys item needs 75px.
 
 ## Rejected
 
@@ -47,3 +55,8 @@ a glance.
 - A slim status bar kept for status items, or a fallback line for unplaced keys: every item had a
   home on its own surface, and the self-test's unplaced check replaces the fallback.
 - Hints in the core keys API: moves presentation into the core, which supplies only the key engine.
+- A cursor prompt detached while its scope is out of force: the row's label and boxes changed width
+  each time focus moved.
+- The Docs doc pane's `‹ tree ⌥H` edge pinned with `position: sticky` inside the scroller: it
+  covered the first visible line, so heading jumps, block scrolls and the editor's open line landed
+  under it. It sits in its own row above the scroller instead.
