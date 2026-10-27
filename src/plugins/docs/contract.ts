@@ -3,7 +3,7 @@
 // and the docs plugin's channel between its main and page parts.
 
 import type { Disposable } from '../../contracts/disposable';
-import type { ChannelShape } from '../../contracts/plugin';
+import type { ChannelShape, EventShape } from '../../contracts/plugin';
 
 // The kinds and sources the app knows; an index entry may name others, which
 // still load (`isKnownKind`, `isKnownSource`).
@@ -159,11 +159,33 @@ export interface SourceRead extends IndexLoad {
   canRebuild: boolean;
 }
 
-// The docs main part's exports. `addSource` throws on an id already
-// registered; while the source is registered, the entries it last loaded
-// allow changes to their docs.
+// The docs main part's exports, each running the same code as the channel
+// method of its name. `addSource` throws on an id already registered; while
+// the source is registered, the entries it last loaded allow changes to their
+// docs. None of them emits `indexLoaded`.
 export interface DocsMainExports {
   addSource(source: IndexSource): Disposable;
+  // The machine index source's load, as Docs mode reads it.
+  machineIndex(): Promise<SourceRead>;
+  // The machine index source's rebuild.
+  rebuildMachineIndex(): Promise<SourceRead>;
+  readDoc(path: string): Promise<string>;
+  // Guarded as the channel's `writeDoc`: the same refusals and changed-on-disk
+  // check; `expectedText` null overwrites whatever is on disk.
+  writeDoc(
+    path: string,
+    text: string,
+    expectedText: string | null,
+  ): Promise<WriteResult>;
+  // Calls `changed` after the file at `path` changes or is replaced, until
+  // `dispose`.
+  watchDoc(path: string, changed: () => void): Promise<Disposable>;
+}
+
+// `indexLoaded`: a `loadIndex` or `rebuildIndex` channel call (the page's
+// own reads) finished reading the source `sourceId`.
+export interface DocsMainEvents extends EventShape {
+  indexLoaded: { sourceId: string };
 }
 
 // One docs view `addView` handed out: `element` holds its tree and doc in a

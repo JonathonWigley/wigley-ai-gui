@@ -25,6 +25,7 @@ import type {
 } from '../../sessions/contract';
 import {
   type DocsChannel,
+  type DocsMainEvents,
   type DocsMainExports,
   type IndexEntry,
   type IndexSource,
@@ -55,7 +56,7 @@ import { createViewWatches } from './view-watches';
 type DocsApi = MainApi<
   typeof docsManifest,
   DocsChannel,
-  Record<never, never>,
+  DocsMainEvents,
   QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
@@ -239,7 +240,8 @@ export function addDriveActions(
 // per live session, plus any a plugin adds through `addSource`), the guarded
 // doc changes, one watched file per view, external links, and the git
 // statuses of the marketplace clones among a source's entries. A source's
-// index entries stay writable while it is registered.
+// index entries stay writable while it is registered. The page's own index
+// reads emit `indexLoaded`; the exports' reads do not.
 export const docsMainPart: MainPart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
@@ -285,12 +287,24 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       async (path, changed) => (await docs).docFiles.watch(path, changed),
       (change) => channel.send('docChanged', change),
     );
-    channel.handle('loadIndex', (sourceId) => registry.load(sourceId));
-    channel.handle('rebuildIndex', (sourceId) => registry.rebuild(sourceId));
-    channel.handle('readDoc', async (path) => (await docs).docFiles.read(path));
-    channel.handle('writeDoc', async (path, text, expectedText) =>
-      (await docs).docFiles.write(path, text, expectedText),
-    );
+    const readDoc = async (path: string) => (await docs).docFiles.read(path);
+    const writeDoc = async (
+      path: string,
+      text: string,
+      expectedText: string | null,
+    ) => (await docs).docFiles.write(path, text, expectedText);
+    channel.handle('loadIndex', async (sourceId) => {
+      const read = await registry.load(sourceId);
+      api.events.emit('indexLoaded', { sourceId });
+      return read;
+    });
+    channel.handle('rebuildIndex', async (sourceId) => {
+      const read = await registry.rebuild(sourceId);
+      api.events.emit('indexLoaded', { sourceId });
+      return read;
+    });
+    channel.handle('readDoc', readDoc);
+    channel.handle('writeDoc', writeDoc);
     channel.handle('createDoc', async (request) =>
       (await docs).docFiles.create(request),
     );
@@ -358,6 +372,14 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         : null;
     const exports: DocsMainExports = {
       addSource: (source) => registry.add(source),
+      machineIndex: () => registry.load(MACHINE_SOURCE_ID),
+      rebuildMachineIndex: () => registry.rebuild(MACHINE_SOURCE_ID),
+      readDoc,
+      writeDoc,
+      watchDoc: async (path, changed) => {
+        const watch = await (await docs).docFiles.watch(path, changed);
+        return { dispose: () => watch.close() };
+      },
     };
     return {
       commands: {},

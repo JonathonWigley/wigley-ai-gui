@@ -173,11 +173,14 @@ describe('docs drive actions', () => {
 
 // Docs' main part started live over an empty home, running `/script.py`
 // through `processes`. `invoke` calls the page channel's handler for `name`;
-// `emit` fires a sessions event at docs.
+// `emit` fires a sessions event at docs; `emitted` holds each event docs
+// emitted, in order.
 function startDocsPart() {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const listeners = new Map<string, (payload: unknown) => void>();
+  const emitted: [string, unknown][] = [];
   const processes = new FakeProcesses();
+  const files = createMemoryFiles();
   const api = {
     channel: {
       handle: (name: string, handler: (...args: unknown[]) => unknown) =>
@@ -189,10 +192,11 @@ function startDocsPart() {
         listeners.set(name, listener);
         return { dispose: () => listeners.delete(name) };
       },
+      emit: (name: string, payload: unknown) => emitted.push([name, payload]),
     },
     settings: () => ({ scriptPath: '/script.py' }),
     services: {
-      files: createMemoryFiles(),
+      files,
       processes,
       log: () => undefined,
       homeDir: '/',
@@ -214,10 +218,11 @@ function startDocsPart() {
   const emit = (name: string, payload: unknown) => {
     listeners.get(name)?.(payload);
   };
-  return { part, processes, invoke, emit };
+  const exports = part.exports as DocsMainExports;
+  return { part, exports, files, processes, invoke, emit, emitted };
 }
 
-const SESSION_DOCUMENT: IndexDocument = {
+const INDEX_DOCUMENT: IndexDocument = {
   schemaVersion: 4,
   generatedAt: '2026-10-20T00:00:00Z',
   entries: [],
@@ -232,7 +237,7 @@ describe('docs main part', () => {
       ['-X', 'utf8', '/script.py', 'session', 'abc'],
       {
         code: 0,
-        stdout: JSON.stringify(SESSION_DOCUMENT),
+        stdout: JSON.stringify(INDEX_DOCUMENT),
         stderr: '',
         timedOut: false,
       },
@@ -246,7 +251,7 @@ describe('docs main part', () => {
     docs.emit('sessions.connected', { id: 'row-1', info });
 
     expect(await docs.invoke('loadIndex', 'session:row-1')).toEqual({
-      document: SESSION_DOCUMENT,
+      document: INDEX_DOCUMENT,
       message: null,
       title: 'session index',
       canRebuild: false,
@@ -276,8 +281,7 @@ describe('docs main part', () => {
 
   it('exports_AddSource_ServedOverChannel', async () => {
     const docs = startDocsPart();
-    const exports = docs.part.exports as DocsMainExports;
-    exports.addSource({
+    docs.exports.addSource({
       id: 'x',
       title: 'x index',
       load: () => Promise.resolve({ document: null, message: 'from x' }),
@@ -289,5 +293,70 @@ describe('docs main part', () => {
       title: 'x index',
       canRebuild: false,
     });
+  });
+
+  it('exports_MachineIndex_ReturnsMachineSourceLoad', async () => {
+    const docs = startDocsPart();
+    await docs.files.write(
+      `/${MACHINE_INDEX_FILE}`,
+      JSON.stringify(INDEX_DOCUMENT),
+    );
+
+    expect(await docs.exports.machineIndex()).toEqual({
+      document: INDEX_DOCUMENT,
+      message: null,
+      title: 'machine index',
+      canRebuild: true,
+    });
+  });
+
+  it('exports_WriteDocRefused_RejectsAsChannel', async () => {
+    const docs = startDocsPart();
+    const path = '/outside/notes.md';
+    const channelWrite = docs.invoke('writeDoc', path, 'text', null);
+    const channelError = (await (channelWrite as Promise<unknown>).catch(
+      (error: unknown) => error,
+    )) as Error;
+    expect(channelError.message).toMatch(/^Refused/);
+
+    await expect(docs.exports.writeDoc(path, 'text', null)).rejects.toThrow(
+      channelError.message,
+    );
+  });
+
+  it('exports_WatchDocDisposed_StopsCalls', async () => {
+    const docs = startDocsPart();
+    const path = '/notes.md';
+    await docs.files.write(path, 'one');
+    let calls = 0;
+    const watch = await docs.exports.watchDoc(path, () => {
+      calls += 1;
+    });
+    await docs.files.write(path, 'two');
+
+    watch.dispose();
+    await docs.files.write(path, 'three');
+
+    expect(calls).toBe(1);
+  });
+
+  it.each(['loadIndex', 'rebuildIndex'])(
+    '%s_EmitsIndexLoaded',
+    async (method) => {
+      const docs = startDocsPart();
+
+      await docs.invoke(method, 'machine');
+
+      expect(docs.emitted).toEqual([['indexLoaded', { sourceId: 'machine' }]]);
+    },
+  );
+
+  it('exports_MachineIndexReads_EmitNothing', async () => {
+    const docs = startDocsPart();
+
+    await docs.exports.machineIndex();
+    await docs.exports.rebuildMachineIndex();
+
+    expect(docs.emitted).toEqual([]);
   });
 });
