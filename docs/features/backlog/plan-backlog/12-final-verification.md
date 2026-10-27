@@ -1,6 +1,6 @@
 # 12 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 7 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -41,3 +41,5 @@ Done when: every check in "Checks the agent runs" passes, and the wrap-up lists 
 Commit:    none, unless a fix lands (its own commit).
 
 ## Proof
+
+Commit none · proof: typecheck, lint, npm test 3448, python unittest, check_manifests, real index build and content check pass; selftest all passed on run 2 (run 1 forms-group flake) · concerns: stray .wigley-ai-gui-build/docs/features root indexed as a features home

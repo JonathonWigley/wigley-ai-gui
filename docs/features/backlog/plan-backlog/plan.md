@@ -96,7 +96,7 @@ Decisions (all in `docs/features/backlog/design.md` unless named here):
 - A home is in git when `git rev-parse --show-toplevel` succeeds in it (agent, plan time).
 - Git runs behind one `Git` contract; Docs' plugin statuses move onto it.
 
-Out of scope: converting old follow-up files to the canonical shape; a repo's `docs/followups/*.md`; editing plans or
+Out of scope: a repo's `docs/followups/*.md`; editing plans or
 features in Backlog (Docs mode edits them).
 
 ## File Structure
@@ -147,7 +147,8 @@ docs only through `DocsMainExports` and `DocsPageExports`, typed by `src/plugins
 - [x] [Doc re-read](11-doc-reread.md) — after every code task
 
 ### Wave 7
-- [ ] [Final verification](12-final-verification.md) — after 11
+- [x] [Convert old follow-up files](13-convert-old-files.md) — after 05, 11 (added in the run by the user)
+- [x] [Final verification](12-final-verification.md) — after 11
 
 ## Run log
 
@@ -165,6 +166,8 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - 09 · 21dce15 · diff read; backlog, keymap and manifest tests pass; typecheck clean; app started in selftest · concerns: delete prompt text fixed (createConfirmPrompt body is fixed at creation); discard prompt reuses the delete confirm labels; one-line boxes accept line breaks; view/editor/keys paths need the live run
 - 10 · 317f450 · diff read; full npm run selftest passed (worker run 3, before the peer's fabric install); backlog and docs main tests 236 pass; screenshots read · concerns: typecheck fails only at backlog start.test.ts:100 from the Notes peer's uncommitted DocsMainExports change (stub handoff agreed); wrote log line shows the full real path for edits but the ~ root for creates; leaveBox label says body box whatever box is focused
 - 11 · gui bfd22bf, marketplace 6e444db · diff read; oxfmt check passes on the gui docs · concerns: the TS Contents reader stops at the first non-list line after **Contents** while the Python one reads to the first ##, so odd files can disagree
+- 13 · gui 431b668, harness 606440e · diff read; docs_index.py build then per-path count: gui followups.md 1→109 items with 69 agent-ready, agent-loop 2→9, transport 1→3, content-parts 0→1; src/shared/followups tests pass · concerns: content-parts one line written by the worker and tagged agent-ready on its settled Plan; oxfmt skips docs/features (ignore rules)
+- 12 · none · typecheck, lint, npm test 3448, python unittest, check_manifests, real index build and content check pass; selftest all passed on run 2 (run 1 forms-group flake) · concerns: stray .wigley-ai-gui-build/docs/features root indexed as a features home
 ### Contract changes
 - KindRule.contents (module-private): (name, existing) → (name, existing, place, paths) · why: the new-file title needs the place's folder · consumers: none · group 06
 - Git doc comments: unpushedPaths is files HEAD changed since the merge base with upstream; methods but fetch/lastFetch reject when git cannot start; commitPaths rejects on empty paths · why: state the error modes · consumers: 08 · group 02
@@ -196,5 +199,7 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - Fixture git identity, no signing and an empty hooks path live in the fixture repo's own config, since ProcessRunner takes no env and the app's own C commit needs them too · group 10 · group 10
 - One-line fix in backlog-view closeFilter (render(true)) so DOM focus leaves the filter box after Enter · group 10 · group 10
 - Notes lines in AGENTS.md and backlog/design.md left as written (unlanded Notes work) · group 11 · group 11
+- Task 13 added after task 11 by the user's ask to convert the old follow-up files in this run; design.md § Scope's keep-the-shape line and plan.md's out-of-scope line are reversed for the four files task 13 names.
 ### Review rounds
 ### Test gate
+- Task 12: npm run typecheck 0 errors; npm run lint clean; npm test 222 files / 3448 tests pass; docs-index python unittest OK; check_manifests --against origin/main passes; real index rebuilt from the marketplace clone and checked read-only (every features home, tags, all 7 plans, no docs/followups paths); npm run selftest: run 1 failed 11 steps in the forms preview-round group (sessions activation, after peer commits 47e4908/2a4b535; backlog groups all passed), run 2 all passed with no code change, so run 1 is recorded as a flake.
