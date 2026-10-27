@@ -1,6 +1,6 @@
 # 08 — Backlog main part
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01, 02, 04
 Plan: [plan.md](plan.md)

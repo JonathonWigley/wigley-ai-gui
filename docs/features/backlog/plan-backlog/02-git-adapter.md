@@ -1,6 +1,6 @@
 # 02 — Git contract and adapter
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01 (shares `scripts/check-layers.mts`), 04 (shares `src/plugins/docs/main/start.ts`)
 Plan: [plan.md](plan.md)
@@ -67,3 +67,5 @@ Done when: `npm test -- src/main/git src/plugins/docs/main/plugin-status` passes
 Commit:    one commit for the group
 
 ## Proof
+
+Commit dc3d5e0 · proof: diff read; typecheck clean; git and plugin-status tests pass · concerns: fileAtHead rejects on an unborn HEAD; the fake Git lives in plugin-status.test.ts
