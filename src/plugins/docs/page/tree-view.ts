@@ -1,3 +1,4 @@
+import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
 import type { PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
@@ -8,14 +9,13 @@ import { row as rowPart } from '../../../shared/page/ui/row';
 import { statusDot } from '../../../shared/page/ui/status-dot';
 import type { TreeLeaf, TreeNode } from '../tree';
 import {
-  type DocsKeysFor,
+  type DocsAnchor,
   defaultExpandedIds,
   edgeSelection,
   expandNewStarred,
   parentId,
   stepSelection,
   type TreeLine,
-  type TreeLineHintPart,
   treeLine,
   type TreeRow,
   type TreeRowKey,
@@ -36,9 +36,7 @@ export interface TreeViewDeps {
   // Runs once an accepted or cancelled filter box has closed and focus is
   // back on the tree.
   filterClosed(): void;
-  keysFor: DocsKeysFor;
-  // Draws keys `keysFor` read as a key hint.
-  kbd(keys: string): HTMLElement;
+  anchor: DocsAnchor;
   // The node's status mark and detail, as the plugin-source statuses read now.
   rowStatus(node: TreeNode): TreeRowStatus;
   // The leaf's last-loaded time and star, read at each draw.
@@ -52,14 +50,17 @@ export interface LeafMarks {
   isStarred: boolean;
 }
 
-// The tree pane: a status line, the filter box, a line for an empty index, a
-// filter matching nothing or a filter on, and the rows. `setTree` keeps the
+// The tree pane: a header of the tree's keys (`/ filter`, `a new`, `A file`,
+// `R rescan`, `c folder`) ending in the `⌥L doc ›` edge prompt, a status line,
+// the filter box, a line for an empty index, a filter matching nothing or a
+// filter on, and the rows. `setTree` keeps the
 // expanded ids, the selection and the filter; the first tree with rows expands
 // `defaultExpandedIds` and selects its first row; a later tree that first
 // shows the Starred group expands it. A row draws its status: a leaf's mark as
 // a warning StatusDot, a group's rollup as its detail. A leaf's star shows in
 // its caret slot, and its last-loaded time and status mark at its end. The
-// selected row draws as the keyboard cursor while focus is inside the pane.
+// selected row draws as the keyboard cursor while focus is inside the pane, and
+// a selected leaf ends in the `s star  r rename  d trash` cursor prompt.
 export interface TreeView {
   element: HTMLElement;
   setStatus(text: string | null): void;
@@ -99,10 +100,10 @@ export interface TreeView {
   // Closes the filter box, keeping its filter, without moving focus or
   // hearing `filterClosed`.
   dismissFilter(): void;
-  // Shows the line again with the keys bound now.
-  keysChanged(): void;
   // Redraws the rows with the statuses `rowStatus` reads now.
   statusesChanged(): void;
+  // Disposes the tree's anchors.
+  dispose(): void;
 }
 
 function isSameLine(a: TreeLine | null, b: TreeLine | null): boolean {
@@ -110,44 +111,41 @@ function isSameLine(a: TreeLine | null, b: TreeLine | null): boolean {
     return a === b;
   }
   const isSameHint =
-    a.hint.length === b.hint.length &&
-    a.hint.every((part, index) => isSamePart(part, b.hint[index]));
+    a.hint === null || b.hint === null
+      ? a.hint === b.hint
+      : a.hint.command === b.hint.command && a.hint.words === b.hint.words;
   return a.placement === b.placement && a.text === b.text && isSameHint;
 }
 
-function isSamePart(a: TreeLineHintPart, b: TreeLineHintPart): boolean {
-  return 'keys' in a
-    ? 'keys' in b && a.keys === b.keys
-    : 'words' in b && a.words === b.words;
-}
-
-// Each key part as a Kbd and each words part as text; null for no parts.
+// The line's hint, its command's keys anchored then its words; null for no
+// hint.
 function hintElement(
-  parts: readonly TreeLineHintPart[],
-  kbd: (keys: string) => HTMLElement,
+  hint: TreeLine['hint'],
+  anchors: Disposable[],
+  anchor: DocsAnchor,
 ): HTMLElement | null {
-  if (parts.length === 0) {
+  if (hint === null) {
     return null;
   }
-  const hint = element('span', 'docs-hint');
-  hint.append(
-    ...parts.map((part) =>
-      'keys' in part ? kbd(part.keys) : element('span', '', part.words),
-    ),
-  );
-  return hint;
+  const keys = element('span');
+  anchors.push(anchor(keys, hint.command, { scope: 'tree' }));
+  const node = element('span', 'docs-hint');
+  node.append(keys, element('span', '', hint.words));
+  return node;
 }
 
+// The line's element; `anchors` receives the anchor its hint names.
 function lineElement(
   line: TreeLine | null,
-  kbd: (keys: string) => HTMLElement,
+  anchors: Disposable[],
+  anchor: DocsAnchor,
 ): HTMLElement {
   if (line === null) {
     const slot = element('div');
     slot.hidden = true;
     return slot;
   }
-  const hint = hintElement(line.hint, kbd);
+  const hint = hintElement(line.hint, anchors, anchor);
   if (line.placement === 'empty') {
     return emptyState(line.text, hint);
   }
@@ -159,28 +157,100 @@ function lineElement(
   return above;
 }
 
-// A leaf's row end: its time then its status dot, or the dot alone with no
-// time.
+// A leaf's row end: its time, its status dot, then `actions`, the cursor
+// prompt; the dot alone with neither of the others.
 function rowEnd(
   time: LeafMarks['time'],
   markDot: HTMLElement | null,
+  actions: HTMLElement | null,
 ): HTMLElement | null {
-  if (time === null) {
+  if (time === null && actions === null) {
     return markDot;
   }
   const end = element('span', 'docs-row-end');
-  const shown = element('span', 'docs-row-time', time.text);
-  shown.title = time.title;
-  end.append(shown);
+  if (time !== null) {
+    const shown = element('span', 'docs-row-time', time.text);
+    shown.title = time.title;
+    end.append(shown);
+  }
   if (markDot !== null) {
     end.append(markDot);
   }
+  if (actions !== null) {
+    end.append(actions);
+  }
   return end;
+}
+
+// The header's box hints, in the order they show.
+const HEADER_HINTS = [
+  ['filter', 'filter'],
+  ['createByKind', 'new'],
+  ['createByPath', 'file'],
+  ['rescan', 'rescan'],
+  ['pickContext', 'folder'],
+] as const;
+
+// The cursor prompt's actions, in the order they show.
+const ROW_ACTIONS = [
+  ['toggleStar', 'star'],
+  ['rename', 'rename'],
+  ['trash', 'trash'],
+] as const;
+
+// A span anchoring the command's keys and label in the tree scope.
+function anchoredSpan(
+  command: Parameters<DocsAnchor>[1],
+  label: string,
+  anchors: Disposable[],
+  anchor: DocsAnchor,
+): HTMLElement {
+  const node = element('span');
+  anchors.push(anchor(node, command, { scope: 'tree', label }));
+  return node;
+}
+
+// The pane's header: the box hints, then the `⌥L doc ›` edge prompt at its
+// end.
+function headerElement(anchors: Disposable[], anchor: DocsAnchor): HTMLElement {
+  const header = element('div', 'docs-tree-header');
+  for (const [command, label] of HEADER_HINTS) {
+    header.append(anchoredSpan(command, label, anchors, anchor));
+  }
+  const edge = element('span', 'docs-edge docs-edge--end');
+  edge.append(
+    anchoredSpan('focusDoc', 'doc', anchors, anchor),
+    element('span', 'ui-key-chevron', '›'),
+  );
+  header.append(edge);
+  return header;
+}
+
+// The cursor prompt a selected leaf row ends in.
+function rowActionsElement(
+  anchors: Disposable[],
+  anchor: DocsAnchor,
+): HTMLElement {
+  const actions = element('span', 'docs-row-actions');
+  for (const [command, label] of ROW_ACTIONS) {
+    actions.append(anchoredSpan(command, label, anchors, anchor));
+  }
+  return actions;
+}
+
+function disposeAll(disposables: readonly Disposable[]): void {
+  for (const disposable of disposables) {
+    disposable.dispose();
+  }
 }
 
 export function createTreeView(deps: TreeViewDeps): TreeView {
   const pane = element('div', 'docs-tree');
   pane.tabIndex = -1;
+  // The anchors the header and cursor prompt name, for the view's life.
+  const anchors: Disposable[] = [];
+  const header = headerElement(anchors, deps.anchor);
+  const rowActions = rowActionsElement(anchors, deps.anchor);
   const status = element('div', 'docs-status');
   status.hidden = true;
   const filterFrame = inputFrame();
@@ -190,8 +260,10 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   filterFrame.append(filterBox);
   const list = element('ol', 'docs-rows');
   let shownLine: TreeLine | null = null;
-  let line = lineElement(shownLine, deps.kbd);
-  pane.append(status, filterFrame, line, list);
+  // The anchor the shown line's hint names, disposed as the line is replaced.
+  let lineAnchors: Disposable[] = [];
+  let line = lineElement(shownLine, lineAnchors, deps.anchor);
+  pane.append(header, status, filterFrame, line, list);
 
   let tree: TreeNode[] = [];
   let pathOf: (entryId: string) => string = () => '';
@@ -205,6 +277,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   const draw = () => {
     pane.classList.toggle('is-pane-inactive', !hasFocus);
     rows = visibleRows(tree, state, pathOf);
+    rowActions.remove();
     list.replaceChildren(...rows.map(rowElement));
     list.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
     showLine();
@@ -212,25 +285,20 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
 
   // Replaces the line only when it changed, so a selection move leaves it.
   const showLine = () => {
-    const next = treeLine(
-      {
-        hasTree,
-        isIndexEmpty: tree.length === 0,
-        filter: state.filter,
-        rowCount: rows.length,
-        isFilterOpen: filterScope !== null,
-      },
-      {
-        filter: deps.keysFor('filter', 'tree'),
-        clear: deps.keysFor('boxCancel', 'box'),
-        rescan: deps.keysFor('rescan', 'tree'),
-      },
-    );
+    const next = treeLine({
+      hasTree,
+      isIndexEmpty: tree.length === 0,
+      filter: state.filter,
+      rowCount: rows.length,
+      isFilterOpen: filterScope !== null,
+    });
     if (isSameLine(next, shownLine)) {
       return;
     }
     shownLine = next;
-    const nextLine = lineElement(next, deps.kbd);
+    disposeAll(lineAnchors);
+    lineAnchors = [];
+    const nextLine = lineElement(next, lineAnchors, deps.anchor);
     line.replaceWith(nextLine);
     line = nextLine;
   };
@@ -251,6 +319,8 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       markDot = statusDot('warning');
       markDot.title = mark;
     }
+    const isSelected = row.node.id === state.selectedId;
+    const isSelectedLeaf = isSelected && row.node.type === 'entry';
     const item = rowPart({
       density: 'tree',
       tag: 'li',
@@ -258,14 +328,17 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       detail,
       depth: row.depth,
       leading: caret,
-      trailing: rowEnd(marks?.time ?? null, markDot),
+      trailing: rowEnd(
+        marks?.time ?? null,
+        markDot,
+        isSelectedLeaf ? rowActions : null,
+      ),
       onClick: () => {
         state = { ...state, selectedId: row.node.id };
         pane.focus();
         view.open();
       },
     });
-    const isSelected = row.node.id === state.selectedId;
     item.classList.toggle('is-selected', isSelected);
     item.classList.toggle('is-cursor', isSelected && hasFocus);
     return item;
@@ -429,8 +502,11 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
         closeFilter(false);
       }
     },
-    keysChanged: () => showLine(),
     statusesChanged: () => draw(),
+    dispose() {
+      disposeAll(anchors);
+      disposeAll(lineAnchors);
+    },
   };
 
   pane.addEventListener('focusin', () => {

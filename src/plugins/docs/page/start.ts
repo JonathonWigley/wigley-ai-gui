@@ -7,7 +7,6 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import { kbd } from '../../../shared/page/ui/kbd';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
@@ -162,13 +161,11 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         starred,
         now: () => services.clock.now(),
         log,
-        keysFor: (command, scope) =>
-          keys.keysFor(
-            qualify(docsManifest.id, command),
-            qualify(docsManifest.id, scope),
-          ),
-        onKeysChanged: (listener) => keys.onChanged(listener),
-        kbd: (shown) => kbd(shown, api.platform),
+        anchor: (element, command, options) =>
+          keys.anchor(element, qualify(docsManifest.id, command), {
+            ...options,
+            scope: qualify(docsManifest.id, options.scope),
+          }),
         setScope: (scope) => api.keys.setScope(scope),
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,

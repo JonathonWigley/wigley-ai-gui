@@ -2,10 +2,12 @@
 // what each tree key does on a row, the load-state chips and context
 // choices, the editor's opening line, the fence a non-markdown file renders
 // in, the changes the view applies before a build lists them, which docs may
-// be renamed or trashed, the texts the view shows with their keys (the tree's
-// line among them), a hook's or plugin's detail fields, the read-only reasons,
-// the plugin-source status texts and the tree's rollups.
+// be renamed or trashed, the texts the view shows (the tree's line, with the
+// command its hint anchors, among them), a hook's or plugin's detail fields,
+// the read-only reasons, the plugin-source status texts and the tree's
+// rollups.
 
+import type { Disposable } from '../../../contracts/disposable';
 import type { Paths } from '../../../contracts/paths';
 import type {
   CloneStatus,
@@ -35,12 +37,16 @@ import {
   type TreeNode,
 } from '../tree';
 
-// The page keys bound now to a docs command in a docs scope, as the user
-// reads them; null when none is.
-export type DocsKeysFor = (
+// Names `element` as the anchor of a docs command's hint in a docs scope, as
+// the `keys` page export `anchor` does, until the Disposable's `dispose`.
+export type DocsAnchor = (
+  element: HTMLElement,
   command: keyof typeof docsManifest.commands,
-  scope: keyof typeof docsManifest.scopes,
-) => string | null;
+  options: {
+    scope: keyof typeof docsManifest.scopes;
+    label?: boolean | string;
+  },
+) => Disposable;
 
 export interface TreeRow {
   node: TreeNode;
@@ -545,82 +551,34 @@ export function changeableEntry(
   return { entry };
 }
 
-// `<keys> <what>` for each bound key, joined by `separator`; an unbound key
-// (null) drops out.
-function keyHints(
-  hints: readonly [string | null, string][],
-  separator: string,
-): string {
-  return hints
-    .filter((hint): hint is [string, string] => hint[0] !== null)
-    .map(([keys, what]) => (what === '' ? keys : `${keys} ${what}`))
-    .join(separator);
-}
-
-// The changed-on-disk prompt, each answer with its keys.
-export function conflictText(keys: {
-  reload: string | null;
-  overwrite: string | null;
-  cancel: string | null;
-}): string {
-  const hints = keyHints(
-    [
-      [keys.reload, 'reload'],
-      [keys.overwrite, 'overwrite'],
-      [keys.cancel, 'cancel'],
-    ],
-    ', ',
-  );
-  return hints === ''
-    ? 'File changed on disk'
-    : `File changed on disk — ${hints}`;
-}
-
-// The Trash question over what `trashTargets` named, its yes and no keys
-// after it: one path by its base name, else the first target and its links
-// by their paths, since they often share a name.
+// The Trash question over what `trashTargets` named: one path by its base
+// name, else the first target and its links by their paths, since they often
+// share a name.
 export function trashQuestion(
   targets: readonly string[],
   homeDir: string,
-  keys: { yes: string | null; no: string | null },
   paths: Paths,
 ): string {
-  const hints = keyHints(
-    [
-      [keys.yes, ''],
-      [keys.no, ''],
-    ],
-    '/',
-  );
   const [target, ...links] = targets;
   const linkNames = links.map((link) => paths.tilde(link, homeDir)).join(', ');
   const names =
     links.length === 0
       ? paths.base(target)
       : `${paths.tilde(target, homeDir)} and its ${links.length === 1 ? 'link' : 'links'} ${linkNames}`;
-  const question = `Move ${names} to the Trash?`;
-  return hints === '' ? question : `${question} ${hints}`;
+  return `Move ${names} to the Trash?`;
 }
 
-// The toast when no place holds a kind, pointing at create by path's keys.
-export function noPlaceText(
-  kindTitle: string,
-  createByPathKeys: string | null,
-): string {
-  const text = `No place holds a ${kindTitle} yet`;
-  return createByPathKeys === null
-    ? text
-    : `${text} — ${createByPathKeys} creates a file by path`;
+// The toast when no place holds a kind.
+export function noPlaceText(kindTitle: string): string {
+  return `No place holds a ${kindTitle} yet; create a file by path`;
 }
 
-// One piece of a key hint: keys drawn as a Kbd, or words between them.
-export type TreeLineHintPart = { keys: string } | { words: string };
-
-// A line the tree pane shows: in place of its rows (`empty`) or above them.
+// A line the tree pane shows: in place of its rows (`empty`) or above them;
+// `hint` is the tree command whose keys the line anchors, then its words.
 export interface TreeLine {
   placement: 'empty' | 'above';
   text: string;
-  hint: readonly TreeLineHintPart[];
+  hint: { command: 'filter' | 'rescan'; words: string } | null;
 }
 
 export interface TreeLineState {
@@ -631,17 +589,8 @@ export interface TreeLineState {
   isFilterOpen: boolean;
 }
 
-export interface TreeLineKeys {
-  filter: string | null;
-  clear: string | null;
-  rescan: string | null;
-}
-
-// The line the tree pane shows for its state, with its keys; null for none.
-export function treeLine(
-  state: TreeLineState,
-  keys: TreeLineKeys,
-): TreeLine | null {
+// The line the tree pane shows for its state; null for none.
+export function treeLine(state: TreeLineState): TreeLine | null {
   if (!state.hasTree) {
     return null;
   }
@@ -649,37 +598,22 @@ export function treeLine(
     return {
       placement: 'empty',
       text: 'No docs in this index',
-      hint:
-        keys.rescan === null
-          ? []
-          : [{ keys: keys.rescan }, { words: 'to rescan' }],
+      hint: { command: 'rescan', words: 'to rescan' },
     };
   }
   const isFiltered = state.filter !== '';
   if (isFiltered && state.rowCount === 0) {
-    const { filter, clear } = keys;
     return {
       placement: 'empty',
       text: `No docs match "${state.filter}"`,
-      hint:
-        filter === null || clear === null
-          ? []
-          : [
-              { keys: filter },
-              { words: 'then' },
-              { keys: clear },
-              { words: 'to clear it' },
-            ],
+      hint: { command: 'filter', words: 'to change it' },
     };
   }
   if (isFiltered && !state.isFilterOpen) {
     return {
       placement: 'above',
       text: `Filtered: ${state.filter}`,
-      hint:
-        keys.filter === null
-          ? []
-          : [{ keys: keys.filter }, { words: 'to change it' }],
+      hint: { command: 'filter', words: 'to change it' },
     };
   }
   return null;

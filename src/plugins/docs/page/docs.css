@@ -1,13 +1,49 @@
 /* The tree pane: Docs mode's side bar, or a session Docs tab's split start
-   pane, whose container draws its edge. Its tracks: the status, the filter,
-   the line between the filter and the rows, and the rows. */
+   pane, whose container draws its edge. Its tracks: the header, the status,
+   the filter, the line between the filter and the rows, and the rows. */
 .docs-tree {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   min-width: 0;
   outline: none;
+}
+
+/* The tree's box hints, wrapping in a narrow pane, then the `⌥L doc ›` edge
+   prompt at the header's end. */
+.docs-tree-header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1) var(--wg-space-3);
+  padding: var(--wg-space-1) var(--wg-space-3);
+}
+
+/* An edge prompt: an anchor and its chevron, kept together. */
+.docs-edge {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--wg-space-1);
+  white-space: nowrap;
+}
+
+.docs-edge--end {
+  margin-inline-start: auto;
+}
+
+/* The doc pane's `‹ tree ⌥H`, in its top start corner above the header. */
+.docs-edge--start {
+  inset-block-start: var(--wg-space-1);
+  inset-inline-start: var(--wg-space-3);
+  position: absolute;
+}
+
+/* The cursor prompt at a selected leaf's end. */
+.docs-row-actions {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--wg-space-2);
 }
 
 .docs-status {
@@ -151,7 +187,7 @@
   min-width: 0;
   outline: none;
   overflow-y: auto;
-  padding: var(--wg-space-3) var(--wg-space-6) var(--wg-space-6);
+  padding: var(--wg-space-6) var(--wg-space-6) var(--wg-space-6);
   position: relative;
 }
 
@@ -177,9 +213,19 @@
   min-height: 0;
 }
 
+/* The title, its line ending in the `i edit` hint, over the path and chips. */
 .docs-header {
+  align-items: baseline;
+  column-gap: var(--wg-space-3);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   margin-bottom: var(--wg-space-3);
   min-width: 0;
+}
+
+.docs-header > .docs-path,
+.docs-header > .docs-chips {
+  grid-column: 1 / -1;
 }
 
 .docs-title {
@@ -231,6 +277,10 @@
 }
 
 .docs-prompt {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1) var(--wg-space-3);
   background: var(--wg-status-attention-tint);
   box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-status-attention);
   font-weight: var(--wg-weight-medium);
@@ -259,6 +309,19 @@
   white-space: nowrap;
 }
 
+/* The changed-on-disk prompt's answers. */
+.docs-prompt-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1) var(--wg-space-3);
+  font-weight: var(--wg-weight-regular);
+}
+
+/* The path box's `⇥ complete` hint, under the box. */
+.docs-box-hint {
+  display: block;
+}
+
 /* The path box's completion list, under the box. */
 .docs-completion {
   list-style: none;
@@ -279,6 +342,6 @@
 
 @media (max-width: 800px) {
   .docs-doc {
-    padding: var(--wg-space-2) var(--wg-space-3) var(--wg-space-4);
+    padding: var(--wg-space-6) var(--wg-space-3) var(--wg-space-4);
   }
 }

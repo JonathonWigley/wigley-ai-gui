@@ -34,10 +34,9 @@ import {
   changeableEntry,
   changedPaths,
   chips,
-  conflictText,
   contextChoices,
   type DocChangeRecord,
-  type DocsKeysFor,
+  type DocsAnchor,
   detailFields,
   fileStatuses,
   readOnlyReason,
@@ -136,8 +135,8 @@ export interface DocsView {
   // The open doc's path while its editor holds unsaved edits, else null.
   unsavedPath(): string | null;
   // Closes the overlays, takes the dialogs off the window, stops the view's
-  // watch, its `docChanged` listener and its following of keymap and star
-  // changes, and destroys its editor.
+  // watch, its `docChanged` listener and its following of star changes,
+  // disposes its anchors, and destroys its editor.
   dispose(): void;
   commands: DocsViewCommands;
 }
@@ -161,11 +160,8 @@ export interface DocsViewDeps {
   starred: StarredDocs;
   // Epoch milliseconds, for the last-loaded times.
   now(): number;
-  keysFor: DocsKeysFor;
-  // Hears each change to the keys `keysFor` reads, until its `dispose`.
-  onKeysChanged(listener: () => void): Disposable;
-  // Draws keys `keysFor` read as a key hint.
-  kbd(keys: string): HTMLElement;
+  // Names the hints the tree, the doc pane and the dialogs show.
+  anchor: DocsAnchor;
   setScope(scope: DocsPaneScope): void;
   pushScope(scope: DocsPushedScope): PushedScope;
   isActive(): boolean;
@@ -407,8 +403,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       focused = 'tree';
       applyScope();
     },
-    keysFor: deps.keysFor,
-    kbd: deps.kbd,
+    anchor: deps.anchor,
     rowStatus: (node: TreeNode) =>
       treeRowStatus(
         node,
@@ -454,16 +449,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     followFile: (path, line, fragment) => followFile(path, line, fragment),
     pushConflictScope: () => deps.pushScope('conflict'),
-    conflictText: () =>
-      conflictText({
-        reload: deps.keysFor('conflictReload', 'conflict'),
-        overwrite: deps.keysFor('conflictOverwrite', 'conflict'),
-        cancel: deps.keysFor('conflictCancel', 'conflict'),
-      }),
-    emptyHint: () => {
-      const shown = deps.keysFor('focusTree', 'doc');
-      return shown === null ? null : deps.kbd(shown);
-    },
+    anchor: deps.anchor,
   });
 
   const isListed = (path: string): boolean =>
@@ -529,7 +515,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     paths: deps.paths,
     toast,
     log,
-    keysFor: deps.keysFor,
+    anchor: deps.anchor,
     pushScope: (scope) => deps.pushScope(scope),
     entries: () => document?.entries ?? [],
     changed: (record, selectPath) => applyDocChange(record, selectPath),
@@ -537,13 +523,6 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     dialogClosed: restoreFocus,
   });
   const { picker } = dialogs;
-  // A rebind reaches the empty state's key, the tree's line and the prompts
-  // that show keys while they show.
-  const keysChange = deps.onKeysChanged(() => {
-    doc.keysChanged();
-    tree.keysChanged();
-    dialogs.keysChanged();
-  });
   const overlays = dialogs.elements.map((dialog) => deps.addOverlay(dialog));
 
   for (const [pane, scope] of [
@@ -973,11 +952,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     dispose() {
       view.closeOverlays();
       listening.remove();
-      keysChange.dispose();
       starChange.dispose();
       for (const overlay of overlays) {
         overlay.dispose();
       }
+      tree.dispose();
+      dialogs.dispose();
       doc.dispose();
     },
     commands,

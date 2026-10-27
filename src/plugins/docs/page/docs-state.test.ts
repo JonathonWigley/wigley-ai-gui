@@ -15,7 +15,6 @@ import {
   changedPaths,
   chips,
   codeFence,
-  conflictText,
   contextChoices,
   defaultExpandedIds,
   detailFields,
@@ -1074,42 +1073,18 @@ describe('changeableEntry', () => {
   });
 });
 
-describe('key hint texts', () => {
-  it('conflictText_AllBound_EachAnswerWithKeys', () => {
-    expect(conflictText({ reload: 'r', overwrite: 'o', cancel: 'Esc' })).toBe(
-      'File changed on disk — r reload, o overwrite, Esc cancel',
+describe('prompt texts', () => {
+  it('trashQuestion_OneTarget_QuestionAlone', () => {
+    expect(trashQuestion(['/h/a.md'], '/h', posixPaths)).toBe(
+      'Move a.md to the Trash?',
     );
-  });
-
-  it('conflictText_UnboundAnswer_DropsOut', () => {
-    expect(conflictText({ reload: 'R', overwrite: null, cancel: 'q' })).toBe(
-      'File changed on disk — R reload, q cancel',
-    );
-    expect(conflictText({ reload: null, overwrite: null, cancel: null })).toBe(
-      'File changed on disk',
-    );
-  });
-
-  it('trashQuestion_Keys_AfterQuestion', () => {
-    const targets = ['/h/r/a.md'];
-    expect(
-      trashQuestion(targets, '/h', { yes: 'y', no: 'n' }, posixPaths),
-    ).toBe('Move a.md to the Trash? y/n');
-    expect(
-      trashQuestion(targets, '/h', { yes: 'Y', no: null }, posixPaths),
-    ).toBe('Move a.md to the Trash? Y');
-    expect(
-      trashQuestion(targets, '/h', { yes: null, no: null }, posixPaths),
-    ).toBe('Move a.md to the Trash?');
   });
 
   it('trashQuestion_TwoTargets_NamesLink', () => {
     const targets = ['/h/r/skills/s', '/h/.claude/skills/s'];
 
-    expect(
-      trashQuestion(targets, '/h', { yes: 'y', no: 'n' }, posixPaths),
-    ).toBe(
-      'Move ~/r/skills/s and its link ~/.claude/skills/s to the Trash? y/n',
+    expect(trashQuestion(targets, '/h', posixPaths)).toBe(
+      'Move ~/r/skills/s and its link ~/.claude/skills/s to the Trash?',
     );
   });
 
@@ -1120,9 +1095,7 @@ describe('key hint texts', () => {
       '/h/.codex/skills/s',
     ];
 
-    expect(
-      trashQuestion(targets, '/h', { yes: null, no: null }, posixPaths),
-    ).toBe(
+    expect(trashQuestion(targets, '/h', posixPaths)).toBe(
       'Move ~/repo/skills/s and its links ~/.claude/skills/s, ~/.codex/skills/s to the Trash?',
     );
   });
@@ -1133,29 +1106,20 @@ describe('key hint texts', () => {
       'C:\\Users\\u\\.claude\\CLAUDE.md',
     ];
 
-    expect(
-      trashQuestion(
-        targets,
-        'C:\\Users\\u',
-        { yes: null, no: null },
-        windowsPaths,
-      ),
-    ).toBe(
+    expect(trashQuestion(targets, 'C:\\Users\\u', windowsPaths)).toBe(
       'Move ~\\wigley-agents\\CLAUDE.md and its link ~\\.claude\\CLAUDE.md to the Trash?',
     );
   });
 
-  it('noPlaceText_CreateByPathBoundOrNot', () => {
-    expect(noPlaceText('learning', 'A')).toBe(
-      'No place holds a learning yet — A creates a file by path',
+  it('noPlaceText_NamesKind', () => {
+    expect(noPlaceText('learning')).toBe(
+      'No place holds a learning yet; create a file by path',
     );
-    expect(noPlaceText('learning', null)).toBe('No place holds a learning yet');
   });
 });
 
 describe('treeLine', () => {
   it('treeLine_BeforeFirstTree_Null', () => {
-    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
     const emptyIndex: TreeLineState = {
       hasTree: false,
       isIndexEmpty: true,
@@ -1171,12 +1135,11 @@ describe('treeLine', () => {
       isFilterOpen: false,
     };
 
-    expect(treeLine(emptyIndex, keys)).toBeNull();
-    expect(treeLine(filtered, keys)).toBeNull();
+    expect(treeLine(emptyIndex)).toBeNull();
+    expect(treeLine(filtered)).toBeNull();
   });
 
   it('treeLine_EmptyIndex_RescanHint', () => {
-    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
     const lineState: TreeLineState = {
       hasTree: true,
       isIndexEmpty: true,
@@ -1185,15 +1148,14 @@ describe('treeLine', () => {
       isFilterOpen: false,
     };
 
-    expect(treeLine(lineState, keys)).toEqual({
+    expect(treeLine(lineState)).toEqual({
       placement: 'empty',
       text: 'No docs in this index',
-      hint: [{ keys: 'R' }, { words: 'to rescan' }],
+      hint: { command: 'rescan', words: 'to rescan' },
     });
   });
 
-  it('treeLine_FilterMatchesNothing_ClearHint', () => {
-    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
+  it('treeLine_FilterMatchesNothing_ChangeHint', () => {
     const closed: TreeLineState = {
       hasTree: true,
       isIndexEmpty: false,
@@ -1205,20 +1167,14 @@ describe('treeLine', () => {
     const expected = {
       placement: 'empty',
       text: 'No docs match "zqzq"',
-      hint: [
-        { keys: '/' },
-        { words: 'then' },
-        { keys: '⎋' },
-        { words: 'to clear it' },
-      ],
+      hint: { command: 'filter', words: 'to change it' },
     };
 
-    expect(treeLine(closed, keys)).toEqual(expected);
-    expect(treeLine(open, keys)).toEqual(expected);
+    expect(treeLine(closed)).toEqual(expected);
+    expect(treeLine(open)).toEqual(expected);
   });
 
   it('treeLine_FilterWithRows_FilteredAbove', () => {
-    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
     const lineState: TreeLineState = {
       hasTree: true,
       isIndexEmpty: false,
@@ -1227,15 +1183,14 @@ describe('treeLine', () => {
       isFilterOpen: false,
     };
 
-    expect(treeLine(lineState, keys)).toEqual({
+    expect(treeLine(lineState)).toEqual({
       placement: 'above',
       text: 'Filtered: neat',
-      hint: [{ keys: '/' }, { words: 'to change it' }],
+      hint: { command: 'filter', words: 'to change it' },
     });
   });
 
   it('treeLine_FilterBoxOpenWithRows_Null', () => {
-    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
     const lineState: TreeLineState = {
       hasTree: true,
       isIndexEmpty: false,
@@ -1244,11 +1199,10 @@ describe('treeLine', () => {
       isFilterOpen: true,
     };
 
-    expect(treeLine(lineState, keys)).toBeNull();
+    expect(treeLine(lineState)).toBeNull();
   });
 
   it('treeLine_NoFilterWithRows_Null', () => {
-    const keys = { filter: '/', clear: '⎋', rescan: 'R' };
     const lineState: TreeLineState = {
       hasTree: true,
       isIndexEmpty: false,
@@ -1257,41 +1211,7 @@ describe('treeLine', () => {
       isFilterOpen: false,
     };
 
-    expect(treeLine(lineState, keys)).toBeNull();
-  });
-
-  it('treeLine_KeyUnbound_TextAlone', () => {
-    const noMatch: TreeLineState = {
-      hasTree: true,
-      isIndexEmpty: false,
-      filter: 'zqzq',
-      rowCount: 0,
-      isFilterOpen: false,
-    };
-    const emptyIndex: TreeLineState = {
-      hasTree: true,
-      isIndexEmpty: true,
-      filter: '',
-      rowCount: 0,
-      isFilterOpen: false,
-    };
-    const filtered: TreeLineState = {
-      hasTree: true,
-      isIndexEmpty: false,
-      filter: 'neat',
-      rowCount: 3,
-      isFilterOpen: false,
-    };
-
-    expect(
-      treeLine(noMatch, { filter: '/', clear: null, rescan: 'R' }),
-    ).toEqual({ placement: 'empty', text: 'No docs match "zqzq"', hint: [] });
-    expect(
-      treeLine(emptyIndex, { filter: '/', clear: '⎋', rescan: null }),
-    ).toEqual({ placement: 'empty', text: 'No docs in this index', hint: [] });
-    expect(
-      treeLine(filtered, { filter: null, clear: '⎋', rescan: 'R' }),
-    ).toEqual({ placement: 'above', text: 'Filtered: neat', hint: [] });
+    expect(treeLine(lineState)).toBeNull();
   });
 });
 

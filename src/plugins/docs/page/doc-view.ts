@@ -1,3 +1,4 @@
+import type { Disposable } from '../../../contracts/disposable';
 import type {
   DocumentEditor,
   DocumentEditorEvents,
@@ -25,6 +26,7 @@ import { resolveLink } from '../links';
 import {
   type Chip,
   codeFence,
+  type DocsAnchor,
   type ReadOnlyReason,
   readOnlyText,
   topVisibleLine,
@@ -32,6 +34,7 @@ import {
 } from './docs-state';
 
 const BANNER_TEXT = 'Changed on disk since you opened it';
+const CONFLICT_TEXT = 'File changed on disk';
 const EMPTY_TEXT = 'Open a doc from the tree';
 
 // The file a detail view's `i` edits, read, and the 1-based line it opens at.
@@ -84,18 +87,18 @@ export interface DocViewDeps {
   followFile(path: string, line: number | null, fragment: string | null): void;
   // Pushes `docs.conflict` while the changed-on-disk prompt shows.
   pushConflictScope(): PushedScope;
-  // The changed-on-disk prompt with the keys bound now.
-  conflictText(): string;
-  // The key hint the empty state shows, bound now; null when none is.
-  emptyHint(): HTMLElement | null;
+  anchor: DocsAnchor;
   // Hears the open doc's path each time a doc opens or the open one moves,
   // and null once the pane is emptied.
   openChanged(path: string | null): void;
 }
 
-// The doc pane: an empty state while no doc is open; then the header with its
-// chips (load states, then plugin-source statuses, then the last-loaded
-// line), the read-only line, the frontmatter table and the rendered body (a
+// The doc pane: the `‹ tree ⌥H` edge prompt at its top start corner; an empty
+// state ending in the focus-tree key while no doc is open; then the header
+// with its chips (load states, then plugin-source statuses, then the
+// last-loaded line) and the `i edit` hint at its end while the doc may be
+// edited and no editor is open, the read-only line, the changed-on-disk
+// prompt with its keys, the frontmatter table and the rendered body (a
 // detail's field table), swapped for the document editor on `edit`; the
 // editor's `:q` returns to them.
 // Opening another doc is refused while the editor holds unsaved edits.
@@ -132,9 +135,8 @@ export interface DocView {
   conflictCancel(): void;
   // Ends the changed-on-disk prompt, if it shows, without moving focus.
   closeConflict(): void;
-  // Shows the empty state's key and the changed-on-disk prompt's keys again,
-  // as the keymap now binds them.
-  keysChanged(): void;
+  // Ends the prompt, destroys the editor, stops the watch and disposes the
+  // pane's anchors.
   dispose(): void;
 }
 
@@ -249,22 +251,54 @@ function sourceBlocks(body: HTMLElement): { line: number; top: number }[] {
 export function createDocView(deps: DocViewDeps): DocView {
   const pane = element('div', 'docs-doc');
   pane.tabIndex = -1;
-  let empty = emptyState(EMPTY_TEXT, deps.emptyHint());
+  // The anchors the pane names, for the view's life.
+  const anchors: Disposable[] = [];
+  const anchored = (
+    command: Parameters<DocsAnchor>[1],
+    options: Parameters<DocsAnchor>[2],
+  ): HTMLElement => {
+    const node = element('span');
+    anchors.push(deps.anchor(node, command, options));
+    return node;
+  };
+  const edge = element('div', 'docs-edge docs-edge--start');
+  edge.append(
+    element('span', 'ui-key-chevron', '‹ tree'),
+    anchored('focusTree', { scope: 'doc' }),
+  );
+  const empty = emptyState(EMPTY_TEXT, anchored('focusTree', { scope: 'doc' }));
   const header = element('div', 'docs-header');
   const title = element('h1', 'docs-title');
+  const editHint = anchored('edit', { scope: 'doc', label: 'edit' });
   const path = element('div', 'docs-path');
   const chipRow = element('div', 'docs-chips');
-  header.append(title, path, chipRow);
+  header.append(title, editHint, path, chipRow);
   const readOnlyLine = element('div', 'docs-readonly');
   const banner = element('div', 'docs-banner', BANNER_TEXT);
   const prompt = element('div', 'docs-prompt');
+  const conflictKeys = element('span', 'docs-prompt-keys');
+  conflictKeys.append(
+    anchored('conflictReload', { scope: 'conflict', label: 'reload' }),
+    anchored('conflictOverwrite', { scope: 'conflict', label: 'overwrite' }),
+    anchored('conflictCancel', { scope: 'conflict', label: 'cancel' }),
+  );
+  prompt.append(element('span', '', CONFLICT_TEXT), conflictKeys);
   let frontmatter = frontmatterTable([]);
   let body = markdownElement('div', 'md docs-body', '');
   header.hidden = true;
   readOnlyLine.hidden = true;
   banner.hidden = true;
   prompt.hidden = true;
-  pane.append(empty, header, readOnlyLine, banner, prompt, frontmatter, body);
+  pane.append(
+    edge,
+    empty,
+    header,
+    readOnlyLine,
+    banner,
+    prompt,
+    frontmatter,
+    body,
+  );
 
   let shown: ShownDoc | null = null;
   let editor: DocumentEditor | null = null;
@@ -274,6 +308,12 @@ export function createDocView(deps: DocViewDeps): DocView {
   let writingText: string | null = null;
   let openCount = 0;
   let isDisposed = false;
+
+  // `i` refuses on a read-only doc, and inside the editor `i` is vim's.
+  const showEditHint = () => {
+    editHint.hidden =
+      shown === null || shown.target.readOnly !== null || editor !== null;
+  };
 
   const drawChips = () => {
     const target = shown?.target ?? null;
@@ -313,6 +353,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     readOnlyLine.textContent =
       target.readOnly === null ? '' : readOnlyText(target.readOnly);
     banner.hidden = true;
+    showEditHint();
   };
 
   // Of the blocks at any depth, the one whose whole-file line is the
@@ -396,7 +437,6 @@ export function createDocView(deps: DocViewDeps): DocView {
       }
     });
     conflict = { diskText, after, scope };
-    prompt.textContent = deps.conflictText();
     prompt.hidden = false;
   };
 
@@ -425,6 +465,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     editorBox = null;
     pane.classList.remove('is-editing');
     banner.hidden = true;
+    showEditHint();
   };
 
   // Destroys the editor and shows the rendered doc from the text last read
@@ -553,6 +594,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       { fileName: doc.name, readOnly: false, line },
       editorEvents,
     );
+    showEditHint();
     editor.focus();
     deps.log('docs', `editing ${doc.name}`);
   };
@@ -659,15 +701,6 @@ export function createDocView(deps: DocViewDeps): DocView {
       drawBody({ fields: [], html: '', bodyStartLine: 1 });
     },
     refreshChips: drawChips,
-    keysChanged() {
-      const nextEmpty = emptyState(EMPTY_TEXT, deps.emptyHint());
-      nextEmpty.hidden = empty.hidden;
-      empty.replaceWith(nextEmpty);
-      empty = nextEmpty;
-      if (conflict !== null) {
-        prompt.textContent = deps.conflictText();
-      }
-    },
     diskChanged(changedPath) {
       const doc = shown;
       const isWatching =
@@ -788,6 +821,9 @@ export function createDocView(deps: DocViewDeps): DocView {
       editor?.destroy();
       editor = null;
       watchFile(null, shown?.name ?? 'the doc');
+      for (const each of anchors) {
+        each.dispose();
+      }
     },
   };
   return view;

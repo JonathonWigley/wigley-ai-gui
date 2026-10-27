@@ -1,3 +1,4 @@
+import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type {
@@ -11,6 +12,7 @@ import {
   createListPicker,
   type ListPicker,
 } from '../../../shared/page/list-picker';
+import { textButton } from '../../../shared/page/ui/button';
 import { createDialog } from '../../../shared/page/ui/dialog';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { row } from '../../../shared/page/ui/row';
@@ -30,7 +32,7 @@ import {
 } from '../path-completion';
 import {
   type DocChangeRecord,
-  type DocsKeysFor,
+  type DocsAnchor,
   noPlaceText,
   provisionalEntry,
   renameRecord,
@@ -52,7 +54,7 @@ interface BoxRequest {
 }
 
 // A one-line text box in a dialog, scope `docs.box` pushed while it shows,
-// with the completion list under it for a path.
+// with the `⇥ complete` hint and the completion list under it for a path.
 interface TextBox {
   element: HTMLElement;
   open(request: BoxRequest): void;
@@ -71,6 +73,9 @@ interface TextBoxDeps {
   log: Log;
   pushScope(): PushedScope;
   closed(): void;
+  anchor: DocsAnchor;
+  // Receives the anchor the box names.
+  anchors: Disposable[];
 }
 
 function createTextBox(deps: TextBoxDeps): TextBox {
@@ -78,8 +83,16 @@ function createTextBox(deps: TextBoxDeps): TextBox {
   const frame = inputFrame();
   const input = textBoxInput('docs-box');
   frame.append(input);
+  const completeHint = element('span', 'docs-box-hint');
+  deps.anchors.push(
+    deps.anchor(completeHint, 'boxComplete', {
+      scope: 'box',
+      label: 'complete',
+    }),
+  );
+  completeHint.hidden = true;
   const list = element('ol', 'docs-completion');
-  dialog.body.append(frame, list);
+  dialog.body.append(frame, completeHint, list);
   list.hidden = true;
 
   let request: BoxRequest | null = null;
@@ -163,6 +176,7 @@ function createTextBox(deps: TextBoxDeps): TextBox {
       listings = new Map();
       isAccepting = false;
       dialog.setTitle(next.label);
+      completeHint.hidden = !next.completes;
       input.value = next.text;
       dialog.show();
       list.hidden = true;
@@ -220,13 +234,12 @@ function createTextBox(deps: TextBoxDeps): TextBox {
   return box;
 }
 
-// A yes/no prompt in a dialog, scope `docs.confirm` pushed while it shows;
-// the base scope changing under it answers no. `open` reads its question from
-// `text`, and `refreshText` reads it again while it shows.
+// A yes/no prompt in a dialog, scope `docs.confirm` pushed while it shows,
+// its Keep it and Move to the Trash buttons each holding its key; a click
+// answers as the key does, and the base scope changing under it answers no.
 interface Confirm {
   element: HTMLElement;
-  open(text: () => string, yes: () => void, no: () => void): void;
-  refreshText(): void;
+  open(question: string, yes: () => void, no: () => void): void;
   yes(): void;
   no(): void;
   // Closes the prompt without an answer.
@@ -236,6 +249,8 @@ interface Confirm {
 function createConfirm(
   pushScope: () => PushedScope,
   closed: () => void,
+  anchor: DocsAnchor,
+  anchors: Disposable[],
 ): Confirm {
   const dialog = createDialog('Move to the Trash');
   const text = element('p', 'docs-confirm-text');
@@ -243,11 +258,9 @@ function createConfirm(
 
   let answers: { yes(): void; no(): void } | null = null;
   let pushed: PushedScope | null = null;
-  let readQuestion: (() => string) | null = null;
 
   const hide = () => {
     answers = null;
-    readQuestion = null;
     dialog.hide();
     pushed?.pop();
     pushed = null;
@@ -262,6 +275,24 @@ function createConfirm(
     }
   };
 
+  const answerButton = (
+    label: string,
+    pick: 'yes' | 'no',
+    variant: 'secondary' | 'danger',
+  ) => {
+    const hint = element('span');
+    anchors.push(
+      anchor(hint, pick === 'yes' ? 'confirmYes' : 'confirmNo', {
+        scope: 'confirm',
+      }),
+    );
+    return textButton(label, () => answer(pick), { variant, hint });
+  };
+  dialog.actions.append(
+    answerButton('Keep it', 'no', 'secondary'),
+    answerButton('Move to the Trash', 'yes', 'danger'),
+  );
+
   const confirm: Confirm = {
     element: dialog.element,
     open(question, yes, no) {
@@ -274,14 +305,8 @@ function createConfirm(
       });
       pushed = scope;
       answers = { yes, no };
-      readQuestion = question;
-      text.textContent = question();
+      text.textContent = question;
       dialog.show();
-    },
-    refreshText() {
-      if (readQuestion !== null) {
-        text.textContent = readQuestion();
-      }
     },
     yes: () => answer('yes'),
     no: () => answer('no'),
@@ -312,7 +337,7 @@ export interface DocsDialogsDeps {
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: Log;
-  keysFor: DocsKeysFor;
+  anchor: DocsAnchor;
   pushScope(scope: DialogScope): PushedScope;
   // The view's entries now.
   entries(): readonly IndexEntry[];
@@ -344,8 +369,8 @@ export interface DocsDialogs {
   confirmNo(): void;
   // Closes every dialog without hearing a cancel.
   close(): void;
-  // Shows the open Trash question's keys again as the keymap now binds them.
-  keysChanged(): void;
+  // Disposes the dialogs' anchors.
+  dispose(): void;
 }
 
 export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
@@ -355,6 +380,8 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     log,
     logSource: 'docs',
   });
+  // The anchors the box and the confirm name, for the view's life.
+  const anchors: Disposable[] = [];
   const box = createTextBox({
     channel,
     homeDir: deps.homeDir,
@@ -362,10 +389,14 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     log,
     pushScope: () => deps.pushScope('box'),
     closed: deps.dialogClosed,
+    anchor: deps.anchor,
+    anchors,
   });
   const confirm = createConfirm(
     () => deps.pushScope('confirm'),
     deps.dialogClosed,
+    deps.anchor,
+    anchors,
   );
 
   const createCancelled = () => log('docs', 'create cancelled');
@@ -379,10 +410,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     const kindTitle = CREATE_KIND_TITLES[kind];
     const places = placesFor(kind, deps.entries(), deps.homeDir, paths);
     if (places.length === 0) {
-      toast(
-        noPlaceText(kindTitle, deps.keysFor('createByPath', 'tree')),
-        'info',
-      );
+      toast(noPlaceText(kindTitle), 'info');
       createCancelled();
       deps.dialogClosed();
       return;
@@ -545,16 +573,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
         .then((targets) => {
           const name = paths.base(targets[targets.length - 1]);
           confirm.open(
-            () =>
-              trashQuestion(
-                targets,
-                deps.homeDir,
-                {
-                  yes: deps.keysFor('confirmYes', 'confirm'),
-                  no: deps.keysFor('confirmNo', 'confirm'),
-                },
-                paths,
-              ),
+            trashQuestion(targets, deps.homeDir, paths),
             () => {
               channel
                 .invoke('trashDoc', entry.path)
@@ -592,7 +611,11 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       box.close();
       confirm.close();
     },
-    keysChanged: () => confirm.refreshText(),
+    dispose() {
+      for (const each of anchors) {
+        each.dispose();
+      }
+    },
   };
   return dialogs;
 }
