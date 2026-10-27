@@ -1,0 +1,234 @@
+# Notes popup — plan
+
+Feature: Notes popup · Implements: none · Ticket: none
+Target: wigley-ai-gui `main` · Written: 2026-10-27
+
+REQUIRED SUB-SKILL: Use wigley:make to implement this plan
+
+## Goal
+
+Add the `notes` plugin to wigley-ai-gui. `Space n n` opens a modal note popup over any mode. The user writes a
+nitpick, attaches images (paste, drop, or a capture of the GUI), marks the images up, and sends the note to a new
+follow-up, to an existing follow-up, or to a new background agent session. The selected session attaches as a
+reference, so a follow-up about a skill names the session it came from.
+
+## Architecture
+
+Systems touched, all in wigley-ai-gui:
+
+- core: the main `window` service gains `capture`; a new markup contract and its Fabric adapter, handed to plugins
+  as a page service.
+- `docs`: its main exports gain a guarded binary write and a guarded trash.
+- `chat`: its main part gains exports that launch a session without selecting it.
+- `backlog`: its main part gains exports (homes, and a note filed as a follow-up with its images); its delete trashes
+  an item's image folders; its commit takes the changed images.
+- `notes`: the new plugin (main and page parts).
+
+## Preconditions
+
+Re-run each before the first dispatch:
+
+- The Backlog plan is closed: `test ! -d docs/features/backlog/plan-backlog && test -f
+  src/plugins/backlog/main/start.ts && test -f src/plugins/backlog/page/start.ts` (2026-10-27: a Backlog run is in
+  progress in this tree; tasks 02 and 08–12 are open). Tasks 05, 07 and 08 build on its landed code, so this plan
+  starts only after that run closes. When the landed Backlog code differs from the names in this plan (taken from
+  its task 08), the lead records each difference as a contract change before dispatch.
+- wigley-ai-gui is on `main`, not behind origin: `git fetch -q && git status -sb` (2026-10-27: ahead 14, not
+  behind).
+- The docs below are committed: `git log --oneline -1 d3b1df9` and `git log --oneline -1 23e41de` here and `git -C ../wigley-ai-marketplace log
+  --oneline -1 b8ffb96`.
+- `fabric` is not yet a dependency: `grep -c '"fabric"' package.json` prints `0`. `npm view fabric@7.4.0 version`
+  prints `7.4.0`. The user approved installing `fabric@7.4.0` with its optional `canvas` and `jsdom` in the
+  2026-10-26 interview (round 2); no other package is approved.
+- `MainServices.window` holds `show`, `isFocused` and `chooseFolder` only (`src/contracts/plugin.ts`, measured at
+  plan time, re-verify).
+- No `FuzzyMatcher` exists yet (`test ! -d src/renderer/fzf`, measured at plan time): AGENTS.md describes it ahead
+  of the slash-completion plan. Task 08's pickers use the list picker and filter chat and docs use today; when the
+  slash-completion plan lands first, the lead records that its pickers are the ones task 08 builds on.
+- The chat main part returns no `exports` (`grep -n exports src/plugins/chat/main/start.ts`, measured at plan time:
+  none).
+
+## Docs written ahead
+
+- wigley-ai-gui `d3b1df9`: `docs/features/notes/design.md` (the settled design), `AGENTS.md` (the `notes` plugin,
+  the `fabric/` markup adapter, Backlog's image folder and exports), `docs/keymap.md` (leader group `n`),
+  `docs/features/backlog/design.md` (item images, their delete and commit, exports to notes).
+- wigley-ai-gui `23e41de`: `docs/keymap.md` (the `n` row's popup binds, settled in round 3).
+- wigley-ai-marketplace `b8ffb96`: `plugins/wigley/skills/review/triage.md` § The project's follow-ups (linked
+  images and the source-session line). Its version bump folds into the unpushed bump the Backlog run made (its task
+  07); the lead checks `plugins/wigley/.claude-plugin/plugin.json` against origin at preflight and bumps only when
+  origin already has that version.
+
+## Mandatory Reads
+
+- `AGENTS.md` and `DESIGN.md` (every task; `DESIGN.md` for page work)
+- `docs/features/notes/design.md` (every task)
+- `docs/keymap.md` (task 08)
+- `docs/features/backlog/design.md` (task 05)
+- `.agents/skills/drive/SKILL.md` (task 11)
+- No `CLAUDE*.md` or `.claude/rules/*.md` exists in the repo outside the git-ignored `.drive/` fixtures (`find .
+  -name 'CLAUDE*.md' -not -path './node_modules/*' -not -path './.drive/*'`, measured at plan time).
+
+## Design Overview
+
+```
+  Space n n ──► notes page: popup (createDialog)
+                 │  Target · Title · Body (vim box) · Tags · images strip · session chip
+                 │  image ──► markup view ── services.markup (MarkupEditor) ── src/renderer/fabric/ ── fabric
+                 │  paste / drop ──► image bytes
+                 │  capture ──► hide popup ─► channel.capture ─► main: services.window.capture() ─► reopen + attach
+                 │
+                 │ channel (notes contract)
+                 ▼
+               notes main: draft store (api.data: draft.json, images/<n>.png, images/<n>.markup.json)
+                 ├─ to follow-up ── backlog main export fileNote(homeRoot, target, text, images)
+                 │                    ├─ docs writeBytes  → <home>/followups-images/<folder>/<n>.png
+                 │                    └─ applyFollowupEdit + docs writeDoc → <home>/followups.md
+                 └─ to session ──── chat main export launch({ projectDir, profile, message })
+                                      └─ new row, not selected; page toasts its label
+```
+
+Decisions (all in `docs/features/notes/design.md` unless named here):
+
+- One kept draft, modal popup, three destinations, no global shortcut.
+- Image sources: paste, drop, GUI capture.
+- Images live beside the follow-ups file under `followups-images/<folder>/`; Backlog owns that folder.
+- Fabric.js `7.4.0` behind one markup adapter; markup stays editable (its JSON kept) until send, and send flattens.
+- The session line: `Source session: <harness label> <host session id> in <folder shown with ~>`.
+- Launched sessions run in the background; the brief comes from the `notes.launchBrief` setting.
+- `window.capture` extends the existing `window` main service rather than a new contract (agent, plan time): it is
+  the window, and that service already holds the window's calls.
+- `fileNote` is one deep Backlog export (agent, design review): Backlog names the folder, writes the images, links
+  them, writes the follow-up, and trashes the images when the follow-up write fails, so no caller learns the folder
+  or link shape.
+- The image folder is `<UTC yyyyMMdd-HHmmss>-<title slug>`, fixed when the item first gets an image; an append to an
+  item that already links a `followups-images/` folder reuses that folder and numbers on from its highest `<n>`
+  (agent, plan time): a later title edit leaves the links valid.
+
+Out of scope: a global shortcut; screen-region capture of other apps; sending into an open session; a list of saved
+notes; images in rendered docs (an existing follow-up).
+
+## File Structure
+
+Existing files modified: `src/contracts/plugin.ts` (01, 02), `src/main/window.ts` (01), `src/renderer/renderer.ts`
+(02), `package.json` and `package-lock.json` (02), `scripts/check-layers.mts` (02, 06: every notes `LAYERS` entry), `src/plugins/docs/contract.ts`
+and `src/plugins/docs/main/start.ts` (03), `src/plugins/chat/contract.ts` and `src/plugins/chat/main/*` (04),
+`src/plugins/sessions/contract.ts`, `src/plugins/sessions/main/session-list.ts` and `src/plugins/sessions/main/start.ts`
+(04: `SessionsMainExports.open` takes `OpenOptions { select: boolean }`, since `open` selects the new row today),
+`src/plugins/backlog/contract.ts` and `src/plugins/backlog/main/*` (05), `src/plugins/manifests.ts` and
+`src/plugins/main.ts` (07), `src/plugins/page.ts` and `src/plugins/keymap.ts` (08), every place that builds a
+`MainServices` or `PageServices` value for tests or the self-test (01, 02; each task greps for them).
+
+New files:
+
+- `src/contracts/markup.ts` — the markup seam; Fabric is a third-party library, so one contract and one adapter.
+- `src/renderer/fabric/` — the Fabric adapter, the only `fabric` import.
+- `src/shared/image-types.ts` (04) — the image types chat main, chat page and the notes page all accept; one list.
+- `src/plugins/notes/` — the plugin: `manifest.ts`, `contract.ts`, `main/`, `page/`.
+
+Names, signatures and types more than one task uses (every task's Consumes and Produces match these word for word):
+
+```ts
+// src/contracts/plugin.ts, MainServices.window (01)
+capture(): Promise<Uint8Array>; // PNG of the window's content, as shown
+
+// src/contracts/markup.ts (02)
+export type MarkupTool = 'select' | 'pen' | 'text' | 'arrow' | 'box';
+export interface MarkupSession {
+  setTool(tool: MarkupTool): void;
+  setColour(colour: string): void; // a CSS colour the caller read from a theme token
+  undo(): void;
+  redo(): void;
+  // The markup as JSON, to reopen with `open`'s `saved`.
+  toJson(): string;
+  // The image with its markup, flattened, at the image's own pixel size.
+  toPng(): Promise<Uint8Array>;
+  onChange(listener: () => void): Disposable;
+  dispose(): void;
+}
+export interface MarkupEditor {
+  // Draws the PNG `image` in `host`, scaled to fit, with the markup `saved` over it (null: none).
+  open(host: HTMLElement, image: Uint8Array, saved: string | null): Promise<MarkupSession>;
+}
+// src/contracts/plugin.ts, PageServices.markup: MarkupEditor (02)
+
+// src/plugins/docs/contract.ts, DocsMainExports (03)
+writeBytes(path: string, bytes: Uint8Array): Promise<WriteResult>; // the write guard writeDoc uses; no changed-on-disk check
+trashDoc(path: string): Promise<TrashResult>;                      // the channel's guarded trashDoc
+
+// src/plugins/chat/contract.ts (04)
+export interface LaunchRequest { projectDir: string; profile: string; message: UserMessage }
+export interface ChatMainExports {
+  // Starts a session and sends `message` as its first message; leaves the selected row as it was.
+  // Resolves to the new row's sessionId.
+  launch(request: LaunchRequest): Promise<string>;
+  // Chat's profile names, in settings order.
+  profileNames(): string[];
+  // The profile of a session chat owns; null for any other session id.
+  profileOf(sessionId: string): string | null;
+}
+
+// src/plugins/backlog/contract.ts (05)
+export type NoteTarget =
+  | { type: 'create'; title: string; oneLine: string; tags: string[] }
+  | { type: 'append'; path: string; title: string };
+export interface BacklogMainExports {
+  load(): Promise<BacklogRead>;
+  // The tag list Backlog's tag picker offers: the backlog `tags` setting as the user config now sets it.
+  tags(): string[];
+  // 'create' adds an item to the home's create-target file with `text` as its body; 'append' adds `text` to the
+  // end of that item's body. Each PNG in `images` is saved under the home's followups-images/ and linked after
+  // `text`. A refused or failed follow-up write trashes the images it saved.
+  fileNote(homeRoot: string, target: NoteTarget, text: string, images: readonly Uint8Array[]): Promise<BacklogWriteResult>;
+}
+```
+
+`BacklogRead`, `BacklogHome`, `BacklogWriteResult` and `FollowupItem` are the Backlog run's landed types
+(its task 08, `src/plugins/backlog/contract.ts` and `src/shared/followups/followup-file.ts`).
+
+Boundary rules:
+
+- Only `src/renderer/fabric/` imports `fabric`.
+- `notes` depends on `sessions`, `chat`, `backlog`, `keys` and `docs` only through their `contract.ts` and exports.
+- Backlog alone writes under `followups-images/`; notes never builds a follow-up path or link.
+- The notes page holds no file logic; the draft store and every write live in notes main.
+
+## Tasks
+
+> `wigley:make` ticks a box once its group is committed and proved, and sets `Status: done` in the
+> task document in the same change. The run is done when every box is ticked.
+
+### Wave 1
+- [ ] [Window capture](01-window-capture.md)
+- [ ] [Docs binary write and trash exports](03-docs-bytes.md)
+- [ ] [Chat launch export](04-chat-launch.md)
+- [ ] [Notes contract and pure modules](06-notes-core.md)
+
+### Wave 2
+- [ ] [Markup contract and Fabric adapter](02-markup-adapter.md) — after 01 (shares `src/contracts/plugin.ts`), 06 (shares `scripts/check-layers.mts`)
+- [ ] [Backlog note filing](05-backlog-notes.md) — after 03
+
+### Wave 3
+- [ ] [Notes main part](07-notes-main.md) — after 01, 04, 05, 06
+
+### Wave 4
+- [ ] [Notes page part](08-notes-page.md) — after 02, 04, 07
+
+### Wave 5
+- [ ] [Notes self-test](09-notes-selftest.md) — after 08
+
+### Wave 6
+- [ ] [Doc re-read](10-doc-reread.md) — after every code task
+
+### Wave 7
+- [ ] [Final verification](11-final-verification.md) — after 10
+
+## Run log
+
+Review base: <sha, written by wigley:make at preflight>
+
+### Groups
+### Contract changes
+### Rulings
+### Review rounds
+### Test gate
