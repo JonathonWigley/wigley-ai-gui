@@ -45,9 +45,10 @@ export interface ResumeRequest {
   hostSessionId: string;
 }
 
-// `sessionId` is the sessions plugin's id for the row. A session's state lasts
-// until the user closes its row, across a relaunch; a closed session's state
-// is dropped at once.
+// `sessionId` is the sessions plugin's id for the row. A session's row lasts
+// until the user closes it, across a relaunch, where it comes back resting
+// with its earlier conversation read again; a closed session's state is
+// dropped at once.
 export interface ChatSessionState {
   sessionId: string;
   projectDir: string;

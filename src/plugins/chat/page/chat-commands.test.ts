@@ -215,7 +215,10 @@ describe('chat commands', () => {
   });
 
   it('pickMode_mainRefuses_logsAndToastsTheFailureOnly', async () => {
-    const run = setUp(session(true), new Error('session row-1 has ended'));
+    const run = setUp(
+      session(true),
+      new Error('session row-1 has no running process'),
+    );
 
     run.handlers.pickMode({});
     run.opened[0].picked(mode.choices[1]);

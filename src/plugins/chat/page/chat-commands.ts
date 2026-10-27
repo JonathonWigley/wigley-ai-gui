@@ -356,8 +356,8 @@ function scrollTranscript(
 
 // The control's choices picker, the current value highlighted; a pick asks
 // main to set it, and logs the change only once main has made it: main
-// refuses a session it no longer holds, which logs and toasts the failure
-// instead. The control's chip changes once main reports the new value.
+// refuses a session it no longer holds or that has no running process, which
+// logs and toasts the failure instead. The control's chip changes once main reports the new value.
 function openChoices(
   deps: ChatCommandDeps,
   session: ChatSession,

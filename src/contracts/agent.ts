@@ -33,7 +33,8 @@ export interface UserMessage {
   images: ChatImage[];
 }
 
-// `id` is unique within its session; an entry sent again with the same id replaces the earlier one.
+// `id` is unique among one process's entries (one `start`): a resumed session's new process numbers its
+// entries afresh. An entry sent again with the same id replaces the earlier one.
 // `raw` holds the harness events the entry was built from, oldest first; a harness adapter may leave out
 // streaming events whose content the kept events already hold.
 export type ChatEntry =
