@@ -151,9 +151,11 @@ export function createNotePopup(
   let isSending = false;
   let isDiscarding = false;
   let isCapturing = false;
-  // While a send or a discard is in flight the draft takes no edit, image or
-  // autosave: main's clear would land before them.
-  const isLocked = () => isSending || isDiscarding;
+  let isAttaching = false;
+  // While a send, a discard or a paste or drop attach is in flight the draft
+  // takes no other edit, image or autosave: main's clear would land before
+  // them, or the attach after the send read the draft.
+  const isLocked = () => isSending || isDiscarding || isAttaching;
   // Each image's bytes and thumbnail URL, by id.
   const images = new Map<number, { bytes: Uint8Array; url: string }>();
 
@@ -275,7 +277,9 @@ export function createNotePopup(
     }
     const home = homeOf(target);
     const text = home === null ? paths.tilde(target, homeDir) : homeLabel(home);
-    slot('target').replaceChildren(element('span', 'notes-target', text));
+    const shown = element('span', 'notes-target', text);
+    shown.title = text;
+    slot('target').replaceChildren(shown);
   };
 
   const drawTags = (tags: readonly string[]) => {
@@ -330,6 +334,7 @@ export function createNotePopup(
       'sm',
     );
     const shown = chip(text, '', () => deps.run('notes.pickSession'));
+    shown.title = text;
     shown.classList.add('notes-session');
     slot('session').replaceChildren(shown, remove);
   };
@@ -464,6 +469,18 @@ export function createNotePopup(
   };
 
   const attachFiles = async (
+    files: readonly File[],
+    how: 'pasted' | 'dropped',
+  ) => {
+    isAttaching = true;
+    try {
+      await attachEach(files, how);
+    } finally {
+      isAttaching = false;
+    }
+  };
+
+  const attachEach = async (
     files: readonly File[],
     how: 'pasted' | 'dropped',
   ) => {
@@ -730,6 +747,10 @@ export function createNotePopup(
       log('notes', 'discard in flight');
       return false;
     }
+    if (isAttaching) {
+      log('notes', 'attach in flight');
+      return false;
+    }
     const refusal = sendRefusal(store.get().fields, kind);
     if (refusal !== null) {
       refuse(refusal);
@@ -789,9 +810,11 @@ export function createNotePopup(
   };
 
   // Runs one send from its first step: `prepare` returns the delivery, or
-  // null when it refused the send itself.
+  // null when it refused the send itself. A send that leaves the popup open
+  // puts focus back in the box it started from.
   const runSend = async (prepare: () => Promise<Deliver | null>) => {
     isSending = true;
+    const startedIn = focusedBox;
     blurBoxes();
     try {
       const deliver = await prepare();
@@ -805,6 +828,9 @@ export function createNotePopup(
       refuse(errorText(error));
     } finally {
       isSending = false;
+      if (startedIn !== null && mayEdit()) {
+        focusBox(startedIn);
+      }
     }
   };
 
