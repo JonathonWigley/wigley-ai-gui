@@ -1,7 +1,7 @@
 import type { BoxIdentity } from '../../../shared/page/editor-boxes';
+import { activeForm } from '../../../shared/page/session-forms';
 import type { PrimerEntry } from '../contract';
 import {
-  activePrimer,
   FEATURE_FIELDS,
   type OpenPrimer,
   type PrimerAction,
@@ -62,11 +62,11 @@ export const PRIMER_BOX_IDENTITY: BoxIdentity<PrimerBox> = {
 // The boxes the user can reach now, in Ctrl+n order: the selected row's card
 // in view 'primer', none in any other view.
 export function shownBoxes(state: PrimerState): PrimerBox[] {
-  const primer = activePrimer(state);
+  const primer = activeForm(state);
   if (primer === null || state.view !== 'primer') {
     return [];
   }
-  const { primerId } = primer;
+  const primerId = primer.formId;
   const entry = selectedEntry(primer);
   if (entry === null) {
     return FEATURE_FIELDS.map(([name]) => ({
@@ -108,7 +108,7 @@ export function boxText(primer: OpenPrimer, target: TextTarget): string {
     (candidate) => candidate.id === target.entryId,
   );
   if (entry === undefined) {
-    throw new Error(`primer ${primer.primerId} has no task ${target.entryId}`);
+    throw new Error(`primer ${primer.formId} has no task ${target.entryId}`);
   }
   switch (target.field) {
     case 'taskName':
@@ -119,7 +119,7 @@ export function boxText(primer: OpenPrimer, target: TextTarget): string {
       const item = entry.items[target.item - 1];
       if (item === undefined) {
         throw new Error(
-          `task ${entry.id} of primer ${primer.primerId} has no item ${target.item}`,
+          `task ${entry.id} of primer ${primer.formId} has no item ${target.item}`,
         );
       }
       return item.comment;
@@ -133,9 +133,9 @@ export function focusActionFor(
   state: PrimerState,
   box: PrimerBox,
 ): PrimerAction | null {
-  const isActiveBox = state.activePrimerId === box.primerId;
+  const isActiveBox = state.activeFormId === box.primerId;
   if (!isActiveBox || state.view !== 'primer') {
     return null;
   }
-  return { type: 'showTarget', primerId: box.primerId, target: box.target };
+  return { type: 'showTarget', formId: box.primerId, target: box.target };
 }

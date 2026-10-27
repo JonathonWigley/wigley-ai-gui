@@ -13,6 +13,11 @@ import {
   createSessionFormTabs,
   type SessionFormTabs,
 } from '../../../shared/page/session-form-tabs';
+import {
+  activeForm,
+  formOfSession,
+  paneView,
+} from '../../../shared/page/session-forms';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
@@ -22,12 +27,10 @@ import type { Layout } from '../layouts/layout';
 import { type BoxRef, isBoxShown } from './boxes';
 import type { FormsContributions } from './contributions';
 import {
-  activeRound,
   type FormsAction,
   type FormsState,
   type FormsStore,
   type RoundState,
-  roundOfSession,
 } from './form-state';
 import type { KitCommands } from './layout/kit-commands';
 import { createRoundView, type RoundView } from './round-view';
@@ -119,7 +122,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     platform: deps.platform,
     pushScope: () => deps.pushConfirmScope(),
     isAsked: () => store.get().view === 'confirm',
-    isSending: () => (activeRound(store.get())?.sending ?? null) !== null,
+    isSending: () => (activeForm(store.get())?.sending ?? null) !== null,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),
     // Under the pushed scope a base change reaches no onViewChanged.
     onBaseChanged: updateStatus,
@@ -143,24 +146,22 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     const state = store.get();
     syncRoundViews(state, roundViews, tabs, active, deps, dispatch);
     tabs.sync((sessionId) => {
-      const round = roundOfSession(state, sessionId);
+      const round = formOfSession(state, sessionId);
       return round === undefined ? null : sessionTitle(round);
     });
     const view = state.view;
-    const shown = view === 'idle' ? null : activeRound(state);
+    const shown = view === 'idle' ? null : activeForm(state);
     for (const [roundId, roundView] of roundViews) {
-      roundView.element.hidden = roundId !== shown?.roundId;
+      roundView.element.hidden = roundId !== shown?.formId;
     }
     if (shown !== null) {
-      roundViews.get(shown.roundId)?.update(shown, view);
+      roundViews.get(shown.formId)?.update(shown, paneView(state));
     }
-    // The prompt's scope comes off before the base changes, so forms' own view
-    // change never reaches its listener, and goes on after, over `confirm`.
-    confirm.hideIfDone();
-    if (tabs.isShown()) {
-      deps.setScope(view);
-    }
-    confirm.showIfAsked();
+    confirm.setBaseScope(() => {
+      if (tabs.isShown()) {
+        deps.setScope(view);
+      }
+    });
     status.update(state, tabs.isShown());
     const box = boxes.active();
     if (box !== null && !isBoxShown(state, box)) {
@@ -179,19 +180,19 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     showForm: (sessionId) => tabs.select(sessionId),
     setLayouts(shown) {
       active.shown = shown;
-      for (const round of store.get().rounds) {
-        roundViews.get(round.roundId)?.setLayouts(shown, round);
+      for (const round of store.get().forms) {
+        roundViews.get(round.formId)?.setLayouts(shown, round);
       }
     },
     rebuild() {
-      for (const round of store.get().rounds) {
-        roundViews.get(round.roundId)?.rebuild(round);
+      for (const round of store.get().forms) {
+        roundViews.get(round.formId)?.rebuild(round);
       }
     },
     scrollBy(step, direction) {
-      const round = activeRound(store.get());
+      const round = activeForm(store.get());
       const roundView =
-        round === null ? undefined : roundViews.get(round.roundId);
+        round === null ? undefined : roundViews.get(round.formId);
       return roundView?.scrollBy(step, direction) ?? null;
     },
   };
@@ -209,17 +210,17 @@ function syncRoundViews(
   dispatch: (action: FormsAction) => void,
 ) {
   for (const roundId of roundViews.keys()) {
-    if (!state.rounds.some((round) => round.roundId === roundId)) {
+    if (!state.forms.some((round) => round.formId === roundId)) {
       destroyRoundView(roundId, roundViews, tabs, deps);
     }
   }
-  for (const round of state.rounds) {
-    if (!roundViews.has(round.roundId)) {
+  for (const round of state.forms) {
+    if (!roundViews.has(round.formId)) {
       roundViews.set(
-        round.roundId,
+        round.formId,
         showRound(round, tabs, active, deps, dispatch),
       );
-      tabs.takeOver(round.roundId, round.sessionId);
+      tabs.takeOver(round.formId, round.sessionId);
     }
   }
 }
@@ -231,9 +232,9 @@ function destroySessionRoundViews(
   tabs: SessionFormTabs,
   deps: Pick<FormsViewDeps, 'boxes'>,
 ) {
-  for (const round of state.rounds) {
-    if (round.sessionId === sessionId && roundViews.has(round.roundId)) {
-      destroyRoundView(round.roundId, roundViews, tabs, deps);
+  for (const round of state.forms) {
+    if (round.sessionId === sessionId && roundViews.has(round.formId)) {
+      destroyRoundView(round.formId, roundViews, tabs, deps);
     }
   }
 }
@@ -295,7 +296,7 @@ function buildStatusLine(deps: FormsViewDeps): {
     update(state, isShown) {
       bar.hidden = !isShown;
       mode.textContent = modeLabel(deps.boxes.activeMode());
-      const round = activeRound(state);
+      const round = activeForm(state);
       const roundSave = round === null ? null : roundSaveState(round);
       save.textContent = round === null ? '' : roundSaveLabel(round);
       save.dataset.state = roundSave ?? '';

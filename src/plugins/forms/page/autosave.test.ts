@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { activeForm } from '../../../shared/page/session-forms';
 import type { Timers } from '../../../contracts/ambient';
 import { saveState } from '../../../shared/page/autosave';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import type { FormBody } from '../contract';
 import { startRoundAutosave } from './autosave';
-import {
-  activeRound,
-  apply,
-  type FormsStore,
-  initialState,
-} from './form-state';
+import { apply, type FormsStore, initialState } from './form-state';
 import { presentedRound } from './test-rounds';
 
 const DELAY_MS = 400;
@@ -79,19 +75,19 @@ async function settle() {
 function typeNotes(store: FormsStore, value: string) {
   store.dispatch({
     type: 'setText',
-    roundId: 'r1',
+    formId: 'r1',
     target: { field: 'notes', item: { kind: 'question', index: 1 } },
     value,
   });
 }
 
 function saveStateOf(store: FormsStore) {
-  const round = activeRound(store.get());
+  const round = activeForm(store.get());
   return round === null ? null : saveState(round);
 }
 
 function saveErrorOf(store: FormsStore) {
-  return activeRound(store.get())?.saveError;
+  return activeForm(store.get())?.saveError;
 }
 
 describe('startRoundAutosave', () => {
@@ -202,7 +198,7 @@ describe('startRoundAutosave', () => {
     });
 
     typeNotes(store, 'a');
-    store.dispatch({ type: 'roundClosed', roundId: 'r1' });
+    store.dispatch({ type: 'formClosed', formId: 'r1' });
 
     expect(scheduled.size).toBe(0);
     runDue();

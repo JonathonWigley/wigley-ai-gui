@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { activeForm } from '../../../shared/page/session-forms';
 import type { AgentFormEnd } from '../../../contracts/agent-forms';
 import type {
   ContentScroll,
@@ -13,13 +14,9 @@ import {
   closePrimerFromMain,
   guardClose,
   primerCommandHandlers,
+  startNewItemCommits,
 } from './primer-commands';
-import {
-  activePrimer,
-  buildBody,
-  initialState,
-  selectedEntry,
-} from './primer-state';
+import { buildBody, initialState, selectedEntry } from './primer-state';
 import { createPrimerStore } from './primer-store';
 import {
   presentedPrimer,
@@ -115,7 +112,7 @@ function setup(
   const run = (command: PrimerCommand, context: PageCommandContext = {}) =>
     handlers[command](context);
   const primer = () => {
-    const current = activePrimer(store.get());
+    const current = activeForm(store.get());
     if (current === null) {
       throw new Error('No primer is active');
     }
@@ -380,7 +377,7 @@ describe('primerCommandHandlers', () => {
     run('nextRow');
     store.dispatch({
       type: 'setText',
-      primerId: 'p1',
+      formId: 'p1',
       target: newItem1.target,
       value: 'Test the store',
     });
@@ -398,7 +395,7 @@ describe('primerCommandHandlers', () => {
     const { run, store, primer, logs, leaves } = setup();
     store.dispatch({
       type: 'setText',
-      primerId: 'p1',
+      formId: 'p1',
       target: newItem1.target,
       value: 'Test the store',
     });
@@ -417,7 +414,7 @@ describe('primerCommandHandlers', () => {
     const { run, store, primer, logs } = setup({ entries: [full] });
     store.dispatch({
       type: 'setText',
-      primerId: 'p1',
+      formId: 'p1',
       target: newItem1.target,
       value: 'Test the store',
     });
@@ -438,6 +435,26 @@ describe('primerCommandHandlers', () => {
 
     expect(primer().entries[0].items).toHaveLength(2);
     expect(logs).toEqual(['left the box']);
+  });
+
+  it('sends add-item text no key committed once the review opens', () => {
+    const { run, store, finished } = setup();
+    store.dispatch({
+      type: 'setText',
+      formId: 'p1',
+      target: newItem1.target,
+      value: 'Test the store',
+    });
+
+    run('openReview');
+    run('submit');
+
+    const [sent] = finished;
+    expect(sent.end.body.entries[0].items.map((item) => item.text)).toEqual([
+      'Read the store',
+      'Write the store',
+      'Test the store',
+    ]);
   });
 
   it('scrolls the primer and logs it', () => {
@@ -523,7 +540,7 @@ describe('primerCommandHandlers', () => {
     });
     closeFromMain('p1');
 
-    expect(store.get().primers).toEqual([]);
+    expect(store.get().forms).toEqual([]);
     expect(store.get().view).toBe('idle');
     expect(logs.at(-1)).toBe('submitted');
     expect(toasts).toEqual(['Primer sent: project · p1']);
@@ -589,7 +606,7 @@ describe('guardClose', () => {
 
   it("keeps a background primer's session, says why and selects it", () => {
     const { store, logs, toasts, toastTones, activated, guardClose } = setup();
-    store.dispatch({ type: 'primerShown', primer: presentedPrimer('p2') });
+    store.dispatch({ type: 'formShown', form: presentedPrimer('p2') });
     const before = store.get();
 
     expect(guardClose('p2-session')).toBe(false);
@@ -628,5 +645,77 @@ describe('guardClose', () => {
     const { guardClose } = setup();
 
     expect(guardClose('other')).toBe(true);
+  });
+});
+
+describe('startNewItemCommits', () => {
+  // Commits over boxes whose focused box the test moves; `move` reports each
+  // move as the editor boxes' onChange does.
+  function commitSetup() {
+    const store = createPrimerStore(
+      initialState([presentedPrimer('p1')], 'p1-session'),
+    );
+    const logs: string[] = [];
+    let active: PrimerBox | null = null;
+    const listeners: (() => void)[] = [];
+    startNewItemCommits({
+      store,
+      boxes: {
+        active: () => active,
+        onChange: (listener) => listeners.push(listener),
+      },
+      log: (_source, message) => logs.push(message),
+    });
+    const move = (box: PrimerBox | null) => {
+      active = box;
+      listeners.forEach((listener) => listener());
+    };
+    const type = (value: string) =>
+      store.dispatch({
+        type: 'setText',
+        formId: 'p1',
+        target: newItem1.target,
+        value,
+      });
+    const items = () =>
+      (activeForm(store.get())?.entries[0].items ?? []).map(
+        (item) => item.text,
+      );
+    return { move, type, items, logs };
+  }
+
+  it('adds the add-item text when focus leaves the box', () => {
+    const { move, type, items, logs } = commitSetup();
+    move(newItem1);
+    type('Test the store');
+
+    move(null);
+
+    expect(items()).toEqual([
+      'Read the store',
+      'Write the store',
+      'Test the store',
+    ]);
+    expect(logs).toEqual(['added item 3 on task 1']);
+  });
+
+  it('adds the add-item text when focus moves to another box', () => {
+    const { move, type, items } = commitSetup();
+    move(newItem1);
+    type('Test the store');
+
+    move({ primerId: 'p1', target: { field: 'taskComment', entryId: '1' } });
+
+    expect(items()).toHaveLength(3);
+  });
+
+  it('adds nothing while focus stays in the box', () => {
+    const { move, type, items } = commitSetup();
+    move(newItem1);
+    type('Test the store');
+
+    move({ ...newItem1 });
+
+    expect(items()).toHaveLength(2);
   });
 });

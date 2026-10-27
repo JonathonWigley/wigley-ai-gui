@@ -79,11 +79,13 @@ export interface RoundViewDeps {
   log: Log;
 }
 
-// `rebuild` rebuilds the view's children from `round` with the layouts it
-// picked, remounting every box from the round's answers; the round's focused
-// box takes focus again, and the main column keeps its scroll while the round
-// shows the same item. `setLayouts` picks
-// the round's layouts again from `shown` and rebuilds when a pick changed.
+// `update` draws the round for the view whose pane shows: under the cancel
+// prompt, the view keeping the round returns to. `rebuild` rebuilds the
+// view's children from `round` with the layouts it picked, remounting every
+// box from the round's answers; the round's focused box takes focus again,
+// and the main column keeps its scroll while the round shows the same item.
+// `setLayouts` picks the round's layouts again from `shown` and rebuilds when
+// a pick changed.
 // `scrollBy` scrolls the main column by `step`, down for 1 and up for -1.
 // `dispose` stops the view following keymap changes; its owner calls it when
 // it drops the view.
@@ -143,7 +145,7 @@ export function createRoundView(
   let shownRound: RoundState | null = null;
   let shownFocus = -1;
   const build = (current: RoundState, roundPicks: RoundPicks) =>
-    buildRoundParts(split, current, roundPicks, deps, () => shownView);
+    buildRoundParts(split, current, roundPicks, deps);
   let picks = pickRoundLayouts(round.round, shown.user, shown.layouts);
   let parts = build(round, picks);
 
@@ -156,7 +158,7 @@ export function createRoundView(
       shownView = viewName;
       shownRound = current;
       const isForms = viewName === 'forms';
-      const isReview = viewName === 'review' || viewName === 'confirm';
+      const isReview = viewName === 'review';
       if (parts.layoutHead !== null) {
         parts.layoutHead.hidden = !isForms;
       }
@@ -183,8 +185,8 @@ export function createRoundView(
     rebuild(current) {
       const showsSameItem = current.focus === shownFocus;
       const scrollTop = parts.main.scrollTop;
-      keepFocusedBox(deps.boxes, current.roundId, () => {
-        deps.boxes.destroyForm(current.roundId);
+      keepFocusedBox(deps.boxes, current.formId, () => {
+        deps.boxes.destroyForm(current.formId);
         split.start.replaceChildren();
         split.end.replaceChildren();
         parts = build(current, picks);
@@ -231,21 +233,20 @@ export function createRoundView(
 
 // Builds the rail pane into the split's start pane and the round's main
 // column into its end pane: the layout's head, the items pane of cards, and
-// the review pane, each card and pane drawn by its pick in `picks`.
-// `shownView` reads the view last shown, which decides what a rail click
-// does.
+// the review pane, each card and pane drawn by its pick in `picks`. A rail
+// click acts on the forms view the state holds as it lands, the cancel
+// prompt included.
 function buildRoundParts(
   split: Split,
   round: RoundState,
   picks: RoundPicks,
   deps: RoundViewDeps,
-  shownView: () => FormsView,
 ): RoundParts {
   const items = railItems(round.round);
   const mountBox = (parent: HTMLElement, target: TextTarget, text: string) =>
-    deps.boxes.mount(parent, { roundId: round.roundId, target }, text);
+    deps.boxes.mount(parent, { roundId: round.formId, target }, text);
   const destroyBox = (target: TextTarget) =>
-    deps.boxes.destroyBox({ roundId: round.roundId, target });
+    deps.boxes.destroyBox({ roundId: round.formId, target });
   const paneDeps: PaneDeps = {
     markdown: deps.markdown,
     platform: deps.platform,
@@ -256,7 +257,7 @@ function buildRoundParts(
     run: deps.run,
     mountBox,
     destroyBox,
-    shownView,
+    shownView: () => deps.getState().view,
     commands: deps.commands,
     contributions: deps.contributions,
   };

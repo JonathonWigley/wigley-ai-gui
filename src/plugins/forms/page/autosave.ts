@@ -20,17 +20,18 @@ export function startRoundAutosave(deps: RoundAutosaveDeps): void {
   const { store } = deps;
   startAutosave({
     subscribe: (listener) => store.subscribe(listener),
-    drafts: () => store.get().rounds,
-    idOf: (round) => round.roundId,
+    drafts: () => store.get().forms,
+    idOf: (round) => round.formId,
     bodyOf: buildBody,
     saveStarted: (roundId, revision) =>
-      store.dispatch({ type: 'saveStarted', roundId, revision }),
+      store.dispatch({ type: 'saveStarted', formId: roundId, revision }),
     saveFinished: (roundId, revision, error) =>
-      store.dispatch(
-        error === null
-          ? { type: 'saveFinished', roundId, revision, ok: true }
-          : { type: 'saveFinished', roundId, revision, ok: false, error },
-      ),
+      store.dispatch({
+        type: 'saveFinished',
+        formId: roundId,
+        revision,
+        error,
+      }),
     save: (roundId, body) => deps.save(roundId, body),
     delayMs: () => deps.delayMs(),
     timers: deps.timers,

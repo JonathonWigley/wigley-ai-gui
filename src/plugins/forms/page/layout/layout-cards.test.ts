@@ -9,7 +9,12 @@ import { apply, initialState, type RoundState } from '../form-state';
 import type { CardDeps } from '../kinds/item-format';
 import { finding, presentedRound } from '../test-rounds';
 import { buildLayoutCard } from './layout-cards';
-import { asFake, asHtml, FakeElement, installFakeDom } from './test-dom';
+import {
+  asFake,
+  asHtml,
+  FakeElement,
+  installFakeDom,
+} from '../../../../shared/page/test-dom';
 
 // A round of one finding, open and active.
 function findingRound(): RoundState {
@@ -18,9 +23,9 @@ function findingRound(): RoundState {
     findings: [finding('Delta')],
   });
   return apply(initialState([], presented.sessionId), {
-    type: 'roundShown',
-    round: presented,
-  }).rounds[0];
+    type: 'formShown',
+    form: presented,
+  }).forms[0];
 }
 
 function fakeCardDeps(contributions: FormsContributions): CardDeps {

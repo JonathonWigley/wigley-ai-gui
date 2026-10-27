@@ -1,4 +1,5 @@
 import type { Log } from '../../../contracts/log';
+import { startFormEvents } from '../../../shared/page/session-forms';
 import type { PresentedPrimer, PrimerPageEvents } from '../contract';
 import { buildBody, type OpenPrimer, type PrimerState } from './primer-state';
 import type { PrimerStore } from './primer-store';
@@ -11,7 +12,7 @@ export type PrimerPageEvent = {
 const SOURCE = 'primer';
 
 // The events one change makes, in this order: a `primerShown` per primer
-// `next` adds, in `next.primers` order; a `needChanged` per task of a primer in
+// `next` adds, in `next.forms` order; a `needChanged` per task of a primer in
 // both whose need differs, in `entries` order (a task new in `next` makes
 // none); a `primerFinished` per primer `next` drops.
 export function primerEventsBetween(
@@ -21,23 +22,23 @@ export function primerEventsBetween(
   const events: PrimerPageEvent[] = [];
   const previousPrimers = primersById(previous);
   const nextPrimers = primersById(next);
-  for (const primer of next.primers) {
-    if (!previousPrimers.has(primer.primerId)) {
+  for (const primer of next.forms) {
+    if (!previousPrimers.has(primer.formId)) {
       events.push({ name: 'primerShown', data: presentedOf(primer) });
     }
   }
-  for (const primer of next.primers) {
-    const before = previousPrimers.get(primer.primerId);
+  for (const primer of next.forms) {
+    const before = previousPrimers.get(primer.formId);
     if (before !== undefined && before !== primer) {
       events.push(...needChanges(before, primer));
     }
   }
-  for (const primer of previous.primers) {
-    if (!nextPrimers.has(primer.primerId)) {
+  for (const primer of previous.forms) {
+    if (!nextPrimers.has(primer.formId)) {
       events.push({
         name: 'primerFinished',
         data: {
-          primerId: primer.primerId,
+          primerId: primer.formId,
           outcome: primer.sending?.kind ?? 'closed',
         },
       });
@@ -46,39 +47,13 @@ export function primerEventsBetween(
   return events;
 }
 
-// Emits the events of each store change, diffed against the state the last
-// change left (the store's state at start for the first). A change a
-// listener's own dispatch makes is diffed at once but queued, and its events
-// go out after the events already queued, in change order, so the last event
-// a host hears matches the state.
+// Emits the events of each store change, queued as startFormEvents queues
+// them.
 export function startPrimerEvents(
   store: PrimerStore,
   emit: (event: PrimerPageEvent) => void,
 ): void {
-  let previous = store.get();
-  const queued: PrimerPageEvent[] = [];
-  let isEmitting = false;
-  store.subscribe(() => {
-    const next = store.get();
-    queued.push(...primerEventsBetween(previous, next));
-    previous = next;
-    if (isEmitting) {
-      return;
-    }
-    isEmitting = true;
-    try {
-      for (
-        let event = queued.shift();
-        event !== undefined;
-        event = queued.shift()
-      ) {
-        emit(event);
-      }
-    } finally {
-      queued.length = 0;
-      isEmitting = false;
-    }
-  });
+  startFormEvents(store, primerEventsBetween, emit);
 }
 
 // Logs each event's line, source `primer`: `event primerShown <primerId>`,
@@ -111,7 +86,7 @@ export function createPrimerEventLog(
 // the user's current body.
 export function presentedOf(primer: OpenPrimer): PresentedPrimer {
   return {
-    formId: primer.primerId,
+    formId: primer.formId,
     sessionId: primer.sessionId,
     label: primer.label,
     form: primer.primer,
@@ -120,7 +95,7 @@ export function presentedOf(primer: OpenPrimer): PresentedPrimer {
 }
 
 function primersById(state: PrimerState): Map<string, OpenPrimer> {
-  return new Map(state.primers.map((primer) => [primer.primerId, primer]));
+  return new Map(state.forms.map((primer) => [primer.formId, primer]));
 }
 
 // A `needChanged` per task of `after`, in `entries` order, that `before` also
@@ -136,6 +111,6 @@ function needChanges(before: OpenPrimer, after: OpenPrimer): PrimerPageEvent[] {
     })
     .map((entry) => ({
       name: 'needChanged',
-      data: { primerId: after.primerId, entryId: entry.id, need: entry.need },
+      data: { primerId: after.formId, entryId: entry.id, need: entry.need },
     }));
 }

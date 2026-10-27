@@ -10,6 +10,7 @@ import {
   createEditorBoxes,
   type EditorBoxes,
 } from '../../../shared/page/editor-boxes';
+import { activeForm, formById } from '../../../shared/page/session-forms';
 import {
   createLayoutLoader,
   showLayouts,
@@ -31,13 +32,7 @@ import { formsManifest } from '../manifest';
 import { startRoundAutosave } from './autosave';
 import { type BoxRef, FORMS_BOX_IDENTITY, focusActionFor } from './boxes';
 import { createFormsContributions } from './contributions';
-import {
-  activeRound,
-  apply,
-  buildBody,
-  type FormsStore,
-  initialState,
-} from './form-state';
+import { apply, buildBody, type FormsStore, initialState } from './form-state';
 import {
   closeRoundFromMain,
   formsCommandHandlers,
@@ -68,7 +63,7 @@ function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes<BoxRef> {
       changed: (box, value) =>
         store.dispatch({
           type: 'setText',
-          roundId: box.roundId,
+          formId: box.roundId,
           target: box.target,
           value,
         }),
@@ -95,7 +90,7 @@ function listenForRounds(
 ) {
   const { log, toast } = api.services;
   api.channel.on('formShown', (form) =>
-    store.dispatch({ type: 'roundShown', round: presentedRoundOf(form) }),
+    store.dispatch({ type: 'formShown', form: presentedRoundOf(form) }),
   );
   api.channel.on('formClosed', (closed) =>
     closeRoundFromMain(
@@ -105,7 +100,7 @@ function listenForRounds(
         toast,
         log,
       },
-      { roundId: closed.formId, byFinish: closed.byFinish },
+      closed,
     ),
   );
   api.events.on('sessions.activeChanged', ({ sessionId }) =>
@@ -115,7 +110,7 @@ function listenForRounds(
     .invoke('openForms')
     .then((forms) => {
       for (const form of forms) {
-        store.dispatch({ type: 'roundShown', round: presentedRoundOf(form) });
+        store.dispatch({ type: 'formShown', form: presentedRoundOf(form) });
       }
     })
     .catch((error) =>
@@ -209,7 +204,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       }),
       userLayout: () => api.settings().layout,
       namesInUse: () =>
-        store.get().rounds.flatMap((round) => roundLayoutNames(round.round)),
+        store.get().forms.flatMap((round) => roundLayoutNames(round.round)),
       setLayouts: (shown) => view.setLayouts(shown),
       log: services.log,
       logSource: 'forms',
@@ -219,13 +214,11 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
     store.subscribe(() => layoutShow.refresh());
     const exports: FormsPageExports = {
       activeRound() {
-        const round = activeRound(store.get());
+        const round = activeForm(store.get());
         return round === null ? null : openRoundOf(round);
       },
       answers(roundId) {
-        const round = store
-          .get()
-          .rounds.find((candidate) => candidate.roundId === roundId);
+        const round = formById(store.get(), roundId);
         return round === undefined ? null : buildBody(round);
       },
       addCardPart: (part) => contributions.addCardPart(part),

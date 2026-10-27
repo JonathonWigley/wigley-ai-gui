@@ -54,8 +54,8 @@ import type { LayoutPick } from './layout-resolver';
 
 // What a pane reaches outside itself: the markdown renderer, the platform key
 // hints are drawn for, the log, the keys bound in a forms scope, the forms
-// state and its actions, a forms command, the round's text boxes, the view
-// last shown, which decides what a rail click does, the registered commands
+// state and its actions, a forms command, the round's text boxes, the forms
+// view now, which decides what a rail click does, the registered commands
 // `kit.command` checks and runs, and the review columns other plugins added.
 export interface PaneDeps {
   markdown: MarkdownRenderer;
@@ -281,8 +281,8 @@ function buildRailEntry(
   return { element: entry, dot };
 }
 
-// The focused item's row is selected; while the review or the cancel prompt
-// shows, untouched items are flagged.
+// The focused item's row is selected; while the review shows, untouched
+// items are flagged.
 function updateRailEntry(
   entry: RailEntry,
   round: RoundState,
@@ -294,7 +294,7 @@ function updateRailEntry(
     item.kind === 'notice'
       ? 'notice'
       : answerStatus(round, { kind: item.kind, index: item.index });
-  const isReview = view === 'review' || view === 'confirm';
+  const isReview = view === 'review';
   const isFlagged = isReview && status === 'untouched';
   entry.element.dataset.status = status;
   entry.element.classList.toggle('is-selected', position === round.focus);
@@ -336,7 +336,7 @@ function drawReview(
       updaters.push(() => {
         const rows = changedRows;
         if (rows !== null) {
-          drawReviewRow(entry, rows[row], round.roundId, deps);
+          drawReviewRow(entry, rows[row], round.formId, deps);
         }
       });
       return entry;

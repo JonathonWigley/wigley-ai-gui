@@ -1,4 +1,5 @@
 import type { Log } from '../../../contracts/log';
+import { formById, startFormEvents } from '../../../shared/page/session-forms';
 import type { FormsPageEvents, OpenRound } from '../contract';
 import {
   type AnswerableItem,
@@ -18,7 +19,7 @@ export type FormsPageEvent = {
 }[keyof FormsPageEvents];
 
 // The events one change from `previous` to `next` makes, in this order: a
-// `roundShown` per round `next` adds, in `next.rounds` order; an
+// `roundShown` per round `next` adds, in `next.forms` order; an
 // `answerChanged` per question or finding, in rail order, of a round in both
 // whose answer differs in any field; a `roundFinished` per round `next`
 // drops, with the answers it left with; and one `viewChanged` when the view
@@ -30,67 +31,40 @@ export function formsEventsBetween(
   const events: FormsPageEvent[] = [];
   const previousRounds = roundsById(previous);
   const nextRounds = roundsById(next);
-  for (const round of next.rounds) {
-    if (!previousRounds.has(round.roundId)) {
+  for (const round of next.forms) {
+    if (!previousRounds.has(round.formId)) {
       events.push({ name: 'roundShown', data: openRoundOf(round) });
     }
   }
-  for (const round of next.rounds) {
-    const before = previousRounds.get(round.roundId);
+  for (const round of next.forms) {
+    const before = previousRounds.get(round.formId);
     if (before !== undefined && before !== round) {
       events.push(...answerChanges(before, round));
     }
   }
-  for (const round of previous.rounds) {
-    if (!nextRounds.has(round.roundId)) {
+  for (const round of previous.forms) {
+    if (!nextRounds.has(round.formId)) {
       events.push({ name: 'roundFinished', data: finishOf(round) });
     }
   }
   const isViewChanged =
-    previous.view !== next.view ||
-    previous.activeRoundId !== next.activeRoundId;
+    previous.view !== next.view || previous.activeFormId !== next.activeFormId;
   if (isViewChanged) {
     events.push({
       name: 'viewChanged',
-      data: { view: next.view, roundId: next.activeRoundId },
+      data: { view: next.view, roundId: next.activeFormId },
     });
   }
   return events;
 }
 
-// Emits the events of each store change, diffed against the state the last
-// change left (the store's state at start for the first). A change a
-// listener's own dispatch makes is diffed at once but queued, and its events
-// go out after the events already queued, in change order, so the last event
-// a host hears matches the state.
+// Emits the events of each store change, queued as startFormEvents queues
+// them.
 export function startFormsEvents(
   store: FormsStore,
   emit: (event: FormsPageEvent) => void,
 ): void {
-  let previous = store.get();
-  const queued: FormsPageEvent[] = [];
-  let isEmitting = false;
-  store.subscribe(() => {
-    const next = store.get();
-    queued.push(...formsEventsBetween(previous, next));
-    previous = next;
-    if (isEmitting) {
-      return;
-    }
-    isEmitting = true;
-    try {
-      for (
-        let event = queued.shift();
-        event !== undefined;
-        event = queued.shift()
-      ) {
-        emit(event);
-      }
-    } finally {
-      queued.length = 0;
-      isEmitting = false;
-    }
-  });
+  startFormEvents(store, formsEventsBetween, emit);
 }
 
 // Logs each event's line, source `forms`: `event roundShown <roundId>`,
@@ -109,10 +83,10 @@ export function createFormsEventLog(
   return (event) => {
     switch (event.name) {
       case 'roundShown': {
-        const round = heldRound(getState(), event.data.roundId);
+        const round = formById(getState(), event.data.roundId);
         if (round !== undefined) {
           for (const item of answerableItems(round.round)) {
-            shown.set(itemKey(round.roundId, item), statusAndPick(round, item));
+            shown.set(itemKey(round.formId, item), statusAndPick(round, item));
           }
         }
         log('forms', `event roundShown ${event.data.roundId}`);
@@ -120,7 +94,7 @@ export function createFormsEventLog(
       }
       case 'answerChanged': {
         const { roundId, item } = event.data;
-        const round = heldRound(getState(), roundId);
+        const round = formById(getState(), roundId);
         const key = itemKey(roundId, item);
         // Undefined only when a listener's own dispatch already closed it.
         const now =
@@ -159,17 +133,13 @@ export function createFormsEventLog(
 }
 
 function roundsById(state: FormsState): Map<string, RoundState> {
-  return new Map(state.rounds.map((round) => [round.roundId, round]));
-}
-
-function heldRound(state: FormsState, roundId: string): RoundState | undefined {
-  return state.rounds.find((round) => round.roundId === roundId);
+  return new Map(state.forms.map((round) => [round.formId, round]));
 }
 
 // The round as the forms page's exports and events name it.
 export function openRoundOf(round: RoundState): OpenRound {
   return {
-    roundId: round.roundId,
+    roundId: round.formId,
     sessionId: round.sessionId,
     label: round.label,
     round: round.round,
@@ -187,7 +157,7 @@ function answerChanges(
     .map((item) => ({
       name: 'answerChanged',
       data: {
-        roundId: after.roundId,
+        roundId: after.formId,
         item: { kind: item.kind, index: item.index },
         status: answerStatus(after, item),
       },
@@ -211,7 +181,7 @@ function answersDiffer(
 // its send failed first).
 function finishOf(round: RoundState): FormsPageEvents['roundFinished'] {
   return {
-    roundId: round.roundId,
+    roundId: round.formId,
     sessionId: round.sessionId,
     outcome: round.sending?.kind ?? 'closed',
     body: buildBody(round),

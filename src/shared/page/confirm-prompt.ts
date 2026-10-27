@@ -52,10 +52,10 @@ export interface ConfirmPrompt {
   // Call first on each render. Returns false when it dismissed a prompt whose dismiss waited on a send that has
   // ended; that dismiss renders again, so the caller stops its render.
   settleOwedDismiss(): boolean;
-  // Call before the caller sets its base scope: hides the prompt and pops its scope once it is not asked.
-  hideIfDone(): void;
-  // Call after the caller sets its base scope: shows the prompt and pushes its scope once it is asked.
-  showIfAsked(): void;
+  // Call on each render to set the caller's base scope with `setBase`: the prompt hides and pops its scope first
+  // once it is not asked, so the caller's own base change never reaches its listener, and shows and pushes its
+  // scope after once it is asked, over the new base.
+  setBaseScope(setBase: () => void): void;
 }
 
 const DISMISSED_LINE = 'cancel prompt dismissed: the view moved on';
@@ -120,14 +120,13 @@ export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
       }
       return true;
     },
-    hideIfDone() {
+    setBaseScope(setBase) {
       if (!deps.isAsked() && pushedScope !== null) {
         dialog.hide();
         pushedScope.pop();
         pushedScope = null;
       }
-    },
-    showIfAsked() {
+      setBase();
       if (deps.isAsked() && pushedScope === null) {
         dialog.show();
         pushScope();

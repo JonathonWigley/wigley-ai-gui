@@ -9,10 +9,21 @@ import type {
   PageStart,
   ToastTone,
 } from '../../../contracts/plugin';
+import type {
+  AgentFormClosed,
+  AgentFormEndKind,
+} from '../../../contracts/agent-forms';
 import { errorText } from '../../../shared/error-text';
 import { scrollText } from '../../../shared/content-scroll';
 import { type EditorBoxes, stepBox } from '../../../shared/page/editor-boxes';
-import type { FormsView, RoundClosed, RoundEnd } from '../contract';
+import {
+  activeForm,
+  closeFormFromMain,
+  finishActiveForm,
+  guardSessionClose,
+  type SessionFormWords,
+} from '../../../shared/page/session-forms';
+import type { FormsView, RoundEnd } from '../contract';
 import type { formsManifest } from '../manifest';
 import {
   type BoxField,
@@ -23,7 +34,6 @@ import {
   shownBoxes,
 } from './boxes';
 import {
-  activeRound,
   type AnswerableItem,
   buildBody,
   focusedItem,
@@ -34,7 +44,6 @@ import {
   itemAnswer,
   pickNumber,
   railPosition,
-  roundOfSession,
   unansweredItem,
 } from './form-state';
 import { itemName, jumpedToLine, jumpMoved } from './view-model';
@@ -53,6 +62,13 @@ export interface FormsCommandDeps {
   toast(text: string, tone: ToastTone): void;
   log: Log;
 }
+
+// How the forms page's log and toasts name a round.
+const ROUND_WORDS: SessionFormWords = {
+  noun: 'round',
+  sent: 'Answers sent',
+  logSource: 'forms',
+};
 
 // Main's layout method the preview key invokes; what it resolves to is unused.
 export interface LayoutCommandChannel {
@@ -210,14 +226,14 @@ function focusBoxItem(store: FormsStore, box: BoxRef | undefined) {
 
 // The number `item` holds in the active round, 0 for none or no round.
 function activePickNumber(state: FormsState, item: AnswerableItem): number {
-  const round = activeRound(state);
+  const round = activeForm(state);
   return round === null ? 0 : pickNumber(round, item);
 }
 
 function focusedAnswer(
   state: FormsState,
 ): { item: AnswerableItem; answer: ItemAnswer } | null {
-  const round = activeRound(state);
+  const round = activeForm(state);
   const focused = round === null ? null : focusedItem(round);
   if (round === null || focused === null || focused.kind === 'notice') {
     return null;
@@ -292,9 +308,9 @@ function moveItem(
 ) {
   const box = boxIn(deps, context);
   focusBoxItem(deps.store, box);
-  const before = activeRound(deps.store.get())?.focus;
+  const before = activeForm(deps.store.get())?.focus;
   deps.store.dispatch(action);
-  const after = activeRound(deps.store.get())?.focus;
+  const after = activeForm(deps.store.get())?.focus;
   if (box !== undefined && after !== before) {
     focusShownBox(deps, ANSWER_FIELDS);
   }
@@ -307,7 +323,7 @@ function jumpToUnanswered(
 ) {
   focusBoxItem(deps.store, boxIn(deps, context));
   const state = deps.store.get();
-  const round = activeRound(state);
+  const round = activeForm(state);
   if (state.view !== 'forms' || round === null) {
     return;
   }
@@ -341,62 +357,23 @@ export interface GuardCloseDeps extends Pick<
   activate(sessionId: string): void;
 }
 
-// A session closes only once its round is gone: with its round active it
-// selects the session's Form tab, so the confirm scope's keys are in force,
-// and asks to cancel the round; confirming closes the session. A round open in
-// the background keeps its session with no prompt: the guard logs the refusal,
-// toasts why, and selects the session. A round being sent, active or not,
-// keeps its session: the guard logs and toasts the send, and selects nothing.
+// A session closes only once its round is gone, as guardSessionClose keeps
+// it.
 export function guardClose(deps: GuardCloseDeps, sessionId: string): boolean {
-  const { store } = deps;
-  const round = roundOfSession(store.get(), sessionId);
-  if (round === undefined) {
-    return true;
-  }
-  if (round.sending !== null) {
-    deps.log('forms', `session close kept: ${round.label} is sending`);
-    deps.toast(`Sending ${round.label}'s round…`, 'info');
-    return false;
-  }
-  if (round.roundId !== store.get().activeRoundId) {
-    deps.log(
-      'forms',
-      `session close kept: ${round.label} is open in the background`,
-    );
-    deps.toast(`Finish or cancel ${round.label}'s round first`, 'info');
-    deps.activate(sessionId);
-    return false;
-  }
-  deps.showForm(sessionId);
-  const wasConfirm = store.get().view === 'confirm';
-  store.dispatch({ type: 'askClose', sessionId });
-  if (!wasConfirm && store.get().view === 'confirm') {
-    deps.log('forms', `closing the session asks to cancel ${round.label}`);
-  }
-  return false;
+  return guardSessionClose({ ...deps, words: ROUND_WORDS }, sessionId);
 }
 
-// Marks the round sending and hands main its body; main's `roundClosed` then
-// closes it through closeRoundFromMain. A rejected finish clears the mark,
-// keeping the round as it was, and toasts the reason.
+// Hands main the active round's finish, as finishActiveForm sends it.
 function finishActiveRound(
   deps: FormsCommandDeps,
   from: FormsView,
-  kind: RoundEnd['kind'],
+  kind: AgentFormEndKind,
 ) {
-  const state = deps.store.get();
-  const round = activeRound(state);
-  if (state.view !== from || round === null || round.sending !== null) {
-    return;
-  }
-  const { roundId } = round;
-  const body = buildBody(round);
-  deps.store.dispatch({ type: 'sendStarted', roundId, kind });
-  void deps.finish(roundId, { kind, body }).catch((error) => {
-    deps.store.dispatch({ type: 'sendFailed', roundId });
-    deps.log('forms', `round ${roundId} not finished: ${errorText(error)}`);
-    deps.toast(`Round not sent: ${errorText(error)}`, 'error');
-  });
+  finishActiveForm(
+    { ...deps, bodyOf: buildBody, words: ROUND_WORDS },
+    from,
+    kind,
+  );
 }
 
 export type CloseRoundFromMainDeps = Pick<
@@ -404,38 +381,10 @@ export type CloseRoundFromMainDeps = Pick<
   'store' | 'closeSession' | 'toast' | 'log'
 >;
 
-// Closes a round main closed. A round the page was sending closes its session
-// when the close prompt asked the cancel, whoever closed the round. Only a
-// round the page's finish closed logs and toasts its send; one main closed on
-// its own stays quiet, since main dropped those answers, and its send is
-// failed first, so its `roundFinished` says `closed`.
+// Closes a round main closed, as closeFormFromMain closes it.
 export function closeRoundFromMain(
   deps: CloseRoundFromMainDeps,
-  closed: RoundClosed,
+  closed: AgentFormClosed,
 ): void {
-  const { roundId } = closed;
-  const round = deps.store
-    .get()
-    .rounds.find((candidate) => candidate.roundId === roundId);
-  const sending = round?.sending ?? null;
-  if (!closed.byFinish && sending !== null) {
-    deps.store.dispatch({ type: 'sendFailed', roundId });
-  }
-  deps.store.dispatch({ type: 'roundClosed', roundId });
-  if (round === undefined || sending === null) {
-    return;
-  }
-  if (closed.byFinish) {
-    const isSubmit = sending.kind === 'submitted';
-    deps.log('forms', sending.kind);
-    deps.toast(
-      isSubmit
-        ? `Answers sent: ${round.label}`
-        : `Round cancelled: ${round.label}`,
-      isSubmit ? 'success' : 'info',
-    );
-  }
-  if (sending.closesSession) {
-    deps.closeSession(round.sessionId);
-  }
+  closeFormFromMain({ ...deps, words: ROUND_WORDS }, closed);
 }

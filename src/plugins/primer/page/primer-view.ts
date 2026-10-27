@@ -18,6 +18,11 @@ import {
   createSessionFormTabs,
   type SessionFormTabs,
 } from '../../../shared/page/session-form-tabs';
+import {
+  activeForm,
+  formOfSession,
+  paneView,
+} from '../../../shared/page/session-forms';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
@@ -39,12 +44,10 @@ import {
 import { boxKey, boxText, type PrimerBox, shownBoxes } from './boxes';
 import { needTag, renderReview, taskName } from './primer-review';
 import {
-  activePrimer,
   FEATURE_FIELDS,
   includedCount,
   type OpenPrimer,
   type PrimerAction,
-  primerOfSession,
   type PrimerState,
   RAIL_GROUPS,
   railRows,
@@ -93,7 +96,9 @@ export interface PrimerTab {
 }
 
 // One open primer's DOM in its session's Primer tab. `update` draws it for
-// the primer and view shown; `dispose` stops it following keymap changes.
+// the primer and the view whose pane shows: under the cancel prompt, the view
+// keeping the primer returns to. `dispose` stops it following keymap
+// changes.
 interface PrimerFormView {
   element: HTMLElement;
   update(primer: OpenPrimer, view: PrimerView): void;
@@ -150,7 +155,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     platform: deps.platform,
     pushScope: () => deps.pushConfirmScope(),
     isAsked: () => store.get().view === 'confirm',
-    isSending: () => (activePrimer(store.get())?.sending ?? null) !== null,
+    isSending: () => (activeForm(store.get())?.sending ?? null) !== null,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),
     // Under the pushed scope a base change reaches no onViewChanged.
     onBaseChanged: updateStatus,
@@ -168,24 +173,22 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     const state = store.get();
     syncPrimerViews(state, primerViews, tabs, deps, dispatch);
     tabs.sync((sessionId) => {
-      const primer = primerOfSession(state, sessionId);
+      const primer = formOfSession(state, sessionId);
       return primer === undefined ? null : sessionTitle(primer);
     });
     const view = state.view;
-    const shown = view === 'idle' ? null : activePrimer(state);
+    const shown = view === 'idle' ? null : activeForm(state);
     for (const [primerId, primerView] of primerViews) {
-      primerView.element.hidden = primerId !== shown?.primerId;
+      primerView.element.hidden = primerId !== shown?.formId;
     }
     if (shown !== null) {
-      primerViews.get(shown.primerId)?.update(shown, view);
+      primerViews.get(shown.formId)?.update(shown, paneView(state));
     }
-    // The prompt's scope comes off before the base changes, so the primer's
-    // own view change never reaches its listener, and goes on after.
-    confirm.hideIfDone();
-    if (tabs.isShown()) {
-      deps.setScope(scopeOf(state));
-    }
-    confirm.showIfAsked();
+    confirm.setBaseScope(() => {
+      if (tabs.isShown()) {
+        deps.setScope(scopeOf(state));
+      }
+    });
     status.update(state, tabs.isShown());
     const box = boxes.active();
     if (box !== null && !isBoxShown(state, box)) {
@@ -217,18 +220,18 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
   return {
     forgetSession(sessionId) {
       tabs.forget(sessionId);
-      for (const primer of store.get().primers) {
+      for (const primer of store.get().forms) {
         if (primer.sessionId === sessionId) {
-          destroyPrimerView(primer.primerId, primerViews, tabs, deps);
+          destroyPrimerView(primer.formId, primerViews, tabs, deps);
         }
       }
     },
     showPrimer: (sessionId) => tabs.select(sessionId),
     scrollBy(step, direction) {
       const state = store.get();
-      const primer = state.view === 'idle' ? null : activePrimer(state);
+      const primer = state.view === 'idle' ? null : activeForm(state);
       const primerView =
-        primer === null ? undefined : primerViews.get(primer.primerId);
+        primer === null ? undefined : primerViews.get(primer.formId);
       return primerView?.scrollBy(step, direction) ?? null;
     },
   };
@@ -250,14 +253,14 @@ function syncPrimerViews(
   dispatch: (action: PrimerAction) => void,
 ) {
   for (const primerId of primerViews.keys()) {
-    if (!state.primers.some((primer) => primer.primerId === primerId)) {
+    if (!state.forms.some((primer) => primer.formId === primerId)) {
       destroyPrimerView(primerId, primerViews, tabs, deps);
     }
   }
-  for (const primer of state.primers) {
-    if (!primerViews.has(primer.primerId)) {
+  for (const primer of state.forms) {
+    if (!primerViews.has(primer.formId)) {
       primerViews.set(
-        primer.primerId,
+        primer.formId,
         createPrimerFormView(
           (root) => tabs.mount(primer.sessionId, root),
           primer,
@@ -265,7 +268,7 @@ function syncPrimerViews(
           dispatch,
         ),
       );
-      tabs.takeOver(primer.primerId, primer.sessionId);
+      tabs.takeOver(primer.formId, primer.sessionId);
     }
   }
 }
@@ -318,7 +321,7 @@ function createPrimerFormView(
   // Editors mount into attached elements, so they can measure themselves.
   attach(root);
   const cardDeps: CardDeps = { ...deps, dispatch };
-  const { primerId } = primer;
+  const primerId = primer.formId;
   let cardKey = cardKeyOf(primer);
   let card = buildCard(cardPane, primer, cardDeps);
   let railPrimer: OpenPrimer | null = null;
@@ -368,7 +371,7 @@ function createPrimerFormView(
         }
       }
       railCursor = current.railCursor;
-      const isReview = viewName === 'review' || viewName === 'confirm';
+      const isReview = viewName === 'review';
       cardPane.hidden = viewName !== 'primer';
       reviewPane.hidden = !isReview;
       if (isReview && current !== reviewPrimer) {
@@ -704,7 +707,7 @@ function mountFrame(
   parent.append(frame);
   deps.boxes.mount(
     frame,
-    { primerId: primer.primerId, target },
+    { primerId: primer.formId, target },
     boxText(primer, target),
   );
 }
@@ -737,7 +740,7 @@ function buildStatusLine(boxes: Pick<EditorBoxes<PrimerBox>, 'activeMode'>): {
     update(state, isShown) {
       bar.hidden = !isShown;
       mode.textContent = modeLabel(boxes.activeMode());
-      const primer = activePrimer(state);
+      const primer = activeForm(state);
       if (primer === null) {
         save.textContent = '';
         save.dataset.state = '';

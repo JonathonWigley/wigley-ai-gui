@@ -31,7 +31,7 @@ function noPrimers(): PrimerState {
 
 // Primer p1 open and active; rows: the feature (0), `3` (1), `s1` (2).
 function openP1(): PrimerState {
-  return apply(noPrimers(), { type: 'primerShown', primer: presented });
+  return apply(noPrimers(), { type: 'formShown', form: presented });
 }
 
 function applyAll(state: PrimerState, actions: PrimerAction[]): PrimerState {
@@ -48,7 +48,7 @@ describe('primerEventsBetween', () => {
     const after = openP1();
 
     expect(primerEventsBetween(before, after)).toEqual([
-      { name: 'primerShown', data: presentedOf(after.primers[0]) },
+      { name: 'primerShown', data: presentedOf(after.forms[0]) },
     ]);
   });
 
@@ -68,7 +68,7 @@ describe('primerEventsBetween', () => {
     const before = openP1();
     const after = apply(before, {
       type: 'setText',
-      primerId: 'p1',
+      formId: 'p1',
       target: { field: 'taskComment', entryId: '3' },
       value: 'a comment',
     });
@@ -81,17 +81,17 @@ describe('primerEventsBetween', () => {
     const before = openP1();
     const after = apply(before, { type: 'addExtraTask' });
 
-    expect(after.primers[0].entries).toHaveLength(3);
+    expect(after.forms[0].entries).toHaveLength(3);
     expect(primerEventsBetween(before, after)).toEqual([]);
   });
 
   it('primerEventsBetween_DroppedWhileSendingSubmit_EmitsSubmitted', () => {
     const sending = apply(openP1(), {
       type: 'sendStarted',
-      primerId: 'p1',
+      formId: 'p1',
       kind: 'submitted',
     });
-    const closed = apply(sending, { type: 'primerClosed', primerId: 'p1' });
+    const closed = apply(sending, { type: 'formClosed', formId: 'p1' });
 
     expect(primerEventsBetween(sending, closed)).toEqual([
       {
@@ -103,7 +103,7 @@ describe('primerEventsBetween', () => {
 
   it('primerEventsBetween_DroppedWithNoSend_EmitsClosed', () => {
     const before = openP1();
-    const after = apply(before, { type: 'primerClosed', primerId: 'p1' });
+    const after = apply(before, { type: 'formClosed', formId: 'p1' });
 
     expect(primerEventsBetween(before, after)).toEqual([
       { name: 'primerFinished', data: { primerId: 'p1', outcome: 'closed' } },
@@ -118,7 +118,7 @@ describe('presentedOf', () => {
       { type: 'setNeed', need: 'yes' },
     ]);
 
-    const shown = presentedOf(edited.primers[0]);
+    const shown = presentedOf(edited.forms[0]);
 
     expect(shown.form).toEqual(presented.form);
     expect(shown.draft?.entries[0].need).toBe('yes');

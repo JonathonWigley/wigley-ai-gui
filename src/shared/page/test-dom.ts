@@ -1,6 +1,6 @@
-// The DOM surface the forms kits, cards and panes use, for tests that run in
-// `node`: `installFakeDom` stubs `document` and `HTMLElement` with it. A
-// string appended becomes a text node.
+// The DOM surface the page builders and plugin views use, for tests that run
+// in `node`: `installFakeDom` stubs `document` and `HTMLElement` with it. A
+// string appended becomes a text node; `click` runs the click listeners.
 export class FakeElement {
   tagName: string;
   childNodes: FakeElement[] = [];
@@ -16,6 +16,7 @@ export class FakeElement {
   innerHTML = '';
   private ownText = '';
   private classes = new Set<string>();
+  private listeners = new Map<string, ((event: unknown) => void)[]>();
 
   constructor(tagName: string) {
     this.tagName = tagName.toUpperCase();
@@ -72,6 +73,13 @@ export class FakeElement {
     }
   }
 
+  // Places `node` before `reference`, a child of this element.
+  insertBefore(node: FakeElement, reference: FakeElement) {
+    node.remove();
+    node.parentNode = this;
+    this.childNodes.splice(this.childNodes.indexOf(reference), 0, node);
+  }
+
   replaceChildren(...nodes: (FakeElement | string)[]) {
     for (const child of this.childNodes) {
       child.remove();
@@ -92,7 +100,33 @@ export class FakeElement {
     this.attributes.set(name, value);
   }
 
-  addEventListener() {}
+  addEventListener(type: string, listener: (event: unknown) => void) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  removeEventListener(type: string, listener: (event: unknown) => void) {
+    this.listeners.set(
+      type,
+      (this.listeners.get(type) ?? []).filter((held) => held !== listener),
+    );
+  }
+
+  // Takes only class selectors such as `.ui-row.is-selected`.
+  querySelector(selector: string): FakeElement | null {
+    const classes = selector.split('.').filter((name) => name !== '');
+    const [first, ...rest] = classes;
+    return (
+      findAll(this, first).find((node) =>
+        rest.every((name) => node.classList.contains(name)),
+      ) ?? null
+    );
+  }
+
+  click() {
+    for (const listener of this.listeners.get('click') ?? []) {
+      listener({ target: this, preventDefault: () => undefined });
+    }
+  }
 
   scrollIntoView() {}
 }

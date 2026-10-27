@@ -11,6 +11,7 @@ import {
   createEditorBoxes,
   type EditorBoxes,
 } from '../../../shared/page/editor-boxes';
+import { activeForm } from '../../../shared/page/session-forms';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
   SessionsPageEvents,
@@ -27,13 +28,14 @@ import {
   closePrimerFromMain,
   guardClose,
   primerCommandHandlers,
+  startNewItemCommits,
 } from './primer-commands';
 import {
   createPrimerEventLog,
   presentedOf,
   startPrimerEvents,
 } from './primer-events';
-import { activePrimer, buildBody, initialState } from './primer-state';
+import { buildBody, initialState } from './primer-state';
 import { createPrimerStore, type PrimerStore } from './primer-store';
 import { mountPrimerTab } from './primer-view';
 
@@ -56,7 +58,7 @@ function createBoxes(
       changed: (box, value) =>
         store.dispatch({
           type: 'setText',
-          primerId: box.primerId,
+          formId: box.primerId,
           target: box.target,
           value,
         }),
@@ -83,7 +85,7 @@ function listenForPrimers(
 ) {
   const { log, toast } = api.services;
   api.channel.on('formShown', (primer) =>
-    store.dispatch({ type: 'primerShown', primer }),
+    store.dispatch({ type: 'formShown', form: primer }),
   );
   api.channel.on('formClosed', (closed) =>
     closePrimerFromMain(
@@ -103,7 +105,7 @@ function listenForPrimers(
     .invoke('openForms')
     .then((primers) => {
       for (const primer of primers) {
-        store.dispatch({ type: 'primerShown', primer });
+        store.dispatch({ type: 'formShown', form: primer });
       }
     })
     .catch((error) =>
@@ -127,6 +129,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       initialState([], sessions.selectedSessionId()),
     );
     const boxes = createBoxes(api, store);
+    startNewItemCommits({ store, boxes, log: services.log });
     const view = mountPrimerTab({
       areas: api.areas,
       sessions,
@@ -161,13 +164,18 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
     );
     startAutosave({
       subscribe: (listener) => store.subscribe(listener),
-      drafts: () => store.get().primers,
-      idOf: (primer) => primer.primerId,
+      drafts: () => store.get().forms,
+      idOf: (primer) => primer.formId,
       bodyOf: buildBody,
       saveStarted: (primerId, revision) =>
-        store.dispatch({ type: 'saveStarted', primerId, revision }),
+        store.dispatch({ type: 'saveStarted', formId: primerId, revision }),
       saveFinished: (primerId, revision, error) =>
-        store.dispatch({ type: 'saveFinished', primerId, revision, error }),
+        store.dispatch({
+          type: 'saveFinished',
+          formId: primerId,
+          revision,
+          error,
+        }),
       save: (primerId, body) => api.channel.invoke('draft', primerId, body),
       delayMs: () => api.settings().autosaveDelayMs,
       timers: services.timers,
@@ -182,7 +190,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
     listenForPrimers(api, store, sessions);
     const exports: PrimerPageExports = {
       activePrimer() {
-        const primer = activePrimer(store.get());
+        const primer = activeForm(store.get());
         return primer === null ? null : presentedOf(primer);
       },
     };

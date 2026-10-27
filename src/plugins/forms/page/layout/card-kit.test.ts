@@ -21,7 +21,7 @@ import {
   FakeElement,
   findAll,
   installFakeDom,
-} from './test-dom';
+} from '../../../../shared/page/test-dom';
 
 function choice(text: string, action: FindingChoice['action']): FindingChoice {
   return { text, reason: `${text} reason`, action };
@@ -133,9 +133,9 @@ function findingRound(overrides: Partial<DefectFinding> = {}): RoundState {
     findings: [finding('Delta', overrides)],
   });
   return apply(initialState([], presented.sessionId), {
-    type: 'roundShown',
-    round: presented,
-  }).rounds[0];
+    type: 'formShown',
+    form: presented,
+  }).forms[0];
 }
 
 // Card deps over `contributions`, whose keys lookup binds only `demo.run`

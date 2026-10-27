@@ -15,8 +15,15 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { scrollText } from '../../../shared/content-scroll';
-import { errorText } from '../../../shared/error-text';
 import { type EditorBoxes, stepBox } from '../../../shared/page/editor-boxes';
+import {
+  activeForm,
+  closeFormFromMain,
+  finishActiveForm,
+  formById,
+  guardSessionClose,
+  type SessionFormWords,
+} from '../../../shared/page/session-forms';
 import {
   MAX_PRIMER_ENTRIES,
   MAX_PRIMER_ITEMS,
@@ -27,11 +34,9 @@ import {
 import type { primerManifest } from '../manifest';
 import { boxKey, focusActionFor, type PrimerBox, shownBoxes } from './boxes';
 import {
-  activePrimer,
   buildBody,
   type OpenPrimer,
   type PrimerAction,
-  primerOfSession,
   type PrimerPane,
   type PrimerState,
   rowName,
@@ -61,6 +66,13 @@ export interface PrimerCommandDeps {
 type Run = (box: PrimerBox | undefined) => void;
 
 const SOURCE = 'primer';
+
+// How the primer page's log and toasts name a primer.
+const PRIMER_WORDS: SessionFormWords = {
+  noun: 'primer',
+  sent: 'Primer sent',
+  logSource: SOURCE,
+};
 
 const APPEND: FocusOptions = { insertAtEnd: true };
 
@@ -159,7 +171,7 @@ function showBoxTarget(store: PrimerStore, box: PrimerBox | undefined) {
 
 // The active primer, or null outside view 'primer' or with none.
 function shownPrimer(state: PrimerState): OpenPrimer | null {
-  return state.view === 'primer' ? activePrimer(state) : null;
+  return state.view === 'primer' ? activeForm(state) : null;
 }
 
 function focusTarget(
@@ -167,13 +179,13 @@ function focusTarget(
   primer: OpenPrimer,
   target: TextTarget,
 ) {
-  deps.boxes.focus({ primerId: primer.primerId, target }, APPEND);
+  deps.boxes.focus({ primerId: primer.formId, target }, APPEND);
 }
 
 function moveRow(deps: PrimerCommandDeps, action: PrimerAction) {
-  const before = activePrimer(deps.store.get())?.railCursor;
+  const before = activeForm(deps.store.get())?.railCursor;
   deps.store.dispatch(action);
-  const primer = activePrimer(deps.store.get());
+  const primer = activeForm(deps.store.get());
   if (primer !== null && primer.railCursor !== before) {
     deps.log(SOURCE, `selected ${rowName(selectedRow(primer))}`);
   }
@@ -210,7 +222,7 @@ function addExtraTask(deps: PrimerCommandDeps) {
     return;
   }
   deps.store.dispatch({ type: 'addExtraTask' });
-  const added = activePrimer(deps.store.get());
+  const added = activeForm(deps.store.get());
   if (deps.store.get() === before || added === null) {
     return;
   }
@@ -240,18 +252,18 @@ function removeExtraTask(deps: PrimerCommandDeps) {
 }
 
 function focusPane(deps: PrimerCommandDeps, pane: PrimerPane, line: string) {
-  const before = activePrimer(deps.store.get())?.pane;
+  const before = activeForm(deps.store.get())?.pane;
   deps.store.dispatch({ type: 'focusPane', pane });
-  const after = activePrimer(deps.store.get())?.pane;
+  const after = activeForm(deps.store.get())?.pane;
   if (after !== undefined && after !== before) {
     deps.log(SOURCE, line);
   }
 }
 
 function moveItem(deps: PrimerCommandDeps, action: PrimerAction) {
-  const before = activePrimer(deps.store.get())?.itemCursor;
+  const before = activeForm(deps.store.get())?.itemCursor;
   deps.store.dispatch(action);
-  const primer = activePrimer(deps.store.get());
+  const primer = activeForm(deps.store.get());
   if (primer === null || primer.itemCursor === before) {
     return;
   }
@@ -364,15 +376,16 @@ function fullTaskLine(entryId: string): string {
 
 // Adds the add-item box's text as an item when `box` is an add-item box,
 // before a key that leaves it acts.
-function commitNewItem(deps: PrimerCommandDeps, box: PrimerBox | undefined) {
-  if (box === undefined || box.target.field !== 'newItem') {
+function commitNewItem(
+  deps: Pick<PrimerCommandDeps, 'store' | 'log'>,
+  box: PrimerBox | undefined | null,
+) {
+  if (box === undefined || box === null || box.target.field !== 'newItem') {
     return;
   }
   const { primerId } = box;
   const { entryId } = box.target;
-  const primer = deps.store
-    .get()
-    .primers.find((candidate) => candidate.primerId === primerId);
+  const primer = formById(deps.store.get(), primerId);
   const entry = primer?.entries.find((candidate) => candidate.id === entryId);
   const text = (primer?.newItemTexts[entryId] ?? '').trim();
   if (entry === undefined || text === '') {
@@ -383,7 +396,7 @@ function commitNewItem(deps: PrimerCommandDeps, box: PrimerBox | undefined) {
     return;
   }
   const before = deps.store.get();
-  deps.store.dispatch({ type: 'addItem', primerId, entryId });
+  deps.store.dispatch({ type: 'addItem', formId: primerId, entryId });
   if (deps.store.get() !== before) {
     deps.log(SOURCE, `added item ${entry.items.length + 1} on task ${entryId}`);
   }
@@ -434,7 +447,7 @@ function changeView(
 
 function submit(deps: PrimerCommandDeps) {
   const state = deps.store.get();
-  const primer = activePrimer(state);
+  const primer = activeForm(state);
   if (state.view !== 'review' || primer === null || primer.sending !== null) {
     return;
   }
@@ -444,6 +457,25 @@ function submit(deps: PrimerCommandDeps) {
     return;
   }
   finishActivePrimer(deps, 'review', 'submitted');
+}
+
+// Commits an add-item box's text as an item whenever focus leaves the box, by
+// a key, a click elsewhere or the box going away, so no typed item is lost.
+export function startNewItemCommits(
+  deps: Pick<PrimerCommandDeps, 'store' | 'log'> & {
+    boxes: Pick<EditorBoxes<PrimerBox>, 'active' | 'onChange'>;
+  },
+): void {
+  let focused = deps.boxes.active();
+  deps.boxes.onChange(() => {
+    const left = focused;
+    focused = deps.boxes.active();
+    const isSameBox =
+      left !== null && focused !== null && boxKey(left) === boxKey(focused);
+    if (!isSameBox) {
+      commitNewItem(deps, left);
+    }
+  });
 }
 
 // `showPrimer` selects the session's Primer tab; `activate` selects the
@@ -456,63 +488,26 @@ export interface GuardCloseDeps extends Pick<
   activate(sessionId: string): void;
 }
 
-// A session closes only once its primer is gone: with its primer active it
-// selects the session's Primer tab, so the confirm scope's keys are in force,
-// and asks to cancel the primer; confirming closes the session. A primer open
-// in the background keeps its session with no prompt: the guard logs the
-// refusal, toasts why, and selects the session. A primer being sent, active or
-// not, keeps its session: the guard logs and toasts the send, and selects
-// nothing.
+// A session closes only once its primer is gone, as guardSessionClose keeps
+// it.
 export function guardClose(deps: GuardCloseDeps, sessionId: string): boolean {
-  const { store } = deps;
-  const primer = primerOfSession(store.get(), sessionId);
-  if (primer === undefined) {
-    return true;
-  }
-  if (primer.sending !== null) {
-    deps.log(SOURCE, `session close kept: ${primer.label} is sending`);
-    deps.toast(`Sending ${primer.label}'s primer…`, 'info');
-    return false;
-  }
-  if (primer.primerId !== store.get().activePrimerId) {
-    deps.log(
-      SOURCE,
-      `session close kept: ${primer.label} is open in the background`,
-    );
-    deps.toast(`Finish or cancel ${primer.label}'s primer first`, 'info');
-    deps.activate(sessionId);
-    return false;
-  }
-  deps.showPrimer(sessionId);
-  const wasConfirm = store.get().view === 'confirm';
-  store.dispatch({ type: 'askClose', sessionId });
-  if (!wasConfirm && store.get().view === 'confirm') {
-    deps.log(SOURCE, `closing the session asks to cancel ${primer.label}`);
-  }
-  return false;
+  return guardSessionClose(
+    { ...deps, showForm: deps.showPrimer, words: PRIMER_WORDS },
+    sessionId,
+  );
 }
 
-// Marks the primer sending and hands main its body; main's `formClosed` then
-// closes it through closePrimerFromMain. A rejected finish clears the mark,
-// keeping the primer as it was, and toasts the reason.
+// Hands main the active primer's finish, as finishActiveForm sends it.
 function finishActivePrimer(
   deps: PrimerCommandDeps,
   from: PrimerView,
   kind: AgentFormEndKind,
 ) {
-  const state = deps.store.get();
-  const primer = activePrimer(state);
-  if (state.view !== from || primer === null || primer.sending !== null) {
-    return;
-  }
-  const { primerId } = primer;
-  const body = buildBody(primer);
-  deps.store.dispatch({ type: 'sendStarted', primerId, kind });
-  void deps.finish(primerId, { kind, body }).catch((error) => {
-    deps.store.dispatch({ type: 'sendFailed', primerId });
-    deps.log(SOURCE, `primer ${primerId} not finished: ${errorText(error)}`);
-    deps.toast(`Primer not sent: ${errorText(error)}`, 'error');
-  });
+  finishActiveForm(
+    { ...deps, bodyOf: buildBody, words: PRIMER_WORDS },
+    from,
+    kind,
+  );
 }
 
 export type ClosePrimerFromMainDeps = Pick<
@@ -520,38 +515,10 @@ export type ClosePrimerFromMainDeps = Pick<
   'store' | 'closeSession' | 'toast' | 'log'
 >;
 
-// Closes a primer main closed. A primer the page was sending closes its
-// session when the close prompt asked the cancel, whoever closed the primer.
-// Only a primer the page's finish closed logs and toasts its send; one main
-// closed on its own stays quiet, since main dropped those edits, and its send
-// is failed first.
+// Closes a primer main closed, as closeFormFromMain closes it.
 export function closePrimerFromMain(
   deps: ClosePrimerFromMainDeps,
   closed: AgentFormClosed,
 ): void {
-  const primerId = closed.formId;
-  const primer = deps.store
-    .get()
-    .primers.find((candidate) => candidate.primerId === primerId);
-  const sending = primer?.sending ?? null;
-  if (!closed.byFinish && sending !== null) {
-    deps.store.dispatch({ type: 'sendFailed', primerId });
-  }
-  deps.store.dispatch({ type: 'primerClosed', primerId });
-  if (primer === undefined || sending === null) {
-    return;
-  }
-  if (closed.byFinish) {
-    const isSubmit = sending.kind === 'submitted';
-    deps.log(SOURCE, sending.kind);
-    deps.toast(
-      isSubmit
-        ? `Primer sent: ${primer.label}`
-        : `Primer cancelled: ${primer.label}`,
-      isSubmit ? 'success' : 'info',
-    );
-  }
-  if (sending.closesSession) {
-    deps.closeSession(primer.sessionId);
-  }
+  closeFormFromMain({ ...deps, words: PRIMER_WORDS }, closed);
 }

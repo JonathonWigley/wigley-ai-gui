@@ -6,14 +6,20 @@ import type {
   Finding,
   FindingAnswerEntry,
   FormBody,
-  FormsView,
   ItemKind,
   PresentedRound,
   Round,
-  RoundEnd,
 } from '../contract';
-import { finishSave, startSave } from '../../../shared/page/autosave';
 import type { ReducerStore } from '../../../shared/page/reducer-store';
+import {
+  activeForm,
+  createSessionFormsReducer,
+  emptySessionForms,
+  type SessionForm,
+  type SessionFormsAction,
+  type SessionFormsState,
+  updateForm,
+} from '../../../shared/page/session-forms';
 import { actionLabel } from '../finding-origins';
 import {
   findingEntries,
@@ -26,14 +32,6 @@ import {
 export type RailItem = { kind: ItemKind; index: number };
 
 export type AnswerableItem = { kind: AnswerableKind; index: number };
-
-// A finish handed to main and not yet answered by it. `closesSession` marks a
-// cancel the close prompt asked, which closes the session once the round
-// closes.
-export interface RoundSend {
-  kind: RoundEnd['kind'];
-  closesSession: boolean;
-}
 
 // A question's or a finding's answer.
 export interface ItemAnswer {
@@ -52,11 +50,8 @@ export interface FindingAnswer extends ItemAnswer {
   action: FindingAction | '';
 }
 
-export interface RoundState {
-  roundId: string;
-  // The session whose view the round fills.
-  sessionId: string;
-  label: string;
+// `formId` is the round's id.
+export interface RoundState extends SessionForm {
   round: Round;
   // One per question, in order.
   answers: ItemAnswer[];
@@ -69,30 +64,11 @@ export interface RoundState {
   focus: number;
   // A position in answerableItems(round).
   reviewRow: number;
-  // Counts answer edits; a save carries the revision it sent.
-  revision: number;
-  savingRevision: number | null;
-  savedRevision: number;
-  // The last failed save's message; cleared when a save starts or succeeds.
-  saveError: string | null;
-  // Set from the send until the page's finish closes the round or the send
-  // fails; a round main closes on its own fails its send first.
-  sending: RoundSend | null;
 }
 
-// The active round is the round of the session the sessions plugin shows,
-// or null when that session has none.
-export interface FormsState {
-  // In the order they were shown.
-  rounds: RoundState[];
-  activeRoundId: string | null;
-  view: FormsView;
-  activeSessionId: string | null;
-  // Where keeping the round from the cancel prompt returns.
-  confirmReturnView: FormsView;
-  // Whether confirming the cancel prompt also closes the round's session.
-  confirmClosesSession: boolean;
-}
+// The open rounds and the view; the active round is the round of the session
+// the sessions plugin shows, or null when that session has none.
+export type FormsState = SessionFormsState<RoundState, 'forms'>;
 
 export interface Progress {
   answered: number;
@@ -126,15 +102,10 @@ export type ItemAction =
   | { type: 'toggleNotApplicable' }
   | { type: 'toggleDontAsk' };
 
-export type FormsAction =
+// The forms page's own actions beside the session form lifecycle's.
+type FormsOwnAction =
   | ItemAction
-  | { type: 'roundShown'; round: PresentedRound }
-  | { type: 'roundClosed'; roundId: string }
-  | { type: 'sessionActivated'; sessionId: string | null }
-  // Asks to cancel the active round before its session closes.
-  | { type: 'askClose'; sessionId: string }
   | { type: 'openReview' }
-  | { type: 'closeReview' }
   | { type: 'reviewNext' }
   | { type: 'reviewPrev' }
   // Without `row`, jumps to the review cursor's row.
@@ -142,32 +113,9 @@ export type FormsAction =
   // `item` is a rail position; the review's rail sends it for a notice, which
   // has no review row.
   | { type: 'reviewJumpItem'; item: number }
-  | { type: 'askCancel' }
-  | { type: 'dismissConfirm' }
-  // The round's finish went to main; it closes on main's roundClosed.
-  | { type: 'sendStarted'; roundId: string; kind: RoundEnd['kind'] }
-  // The finish never reached the agent: main refused it, or closed the round
-  // on its own first.
-  | { type: 'sendFailed'; roundId: string }
-  | { type: 'setText'; roundId: string; target: TextTarget; value: string }
-  | { type: 'saveStarted'; roundId: string; revision: number }
-  | { type: 'saveFinished'; roundId: string; revision: number; ok: true }
-  | {
-      type: 'saveFinished';
-      roundId: string;
-      revision: number;
-      ok: false;
-      error: string;
-    };
+  | { type: 'setText'; formId: string; target: TextTarget; value: string };
 
-const EMPTY_STATE: FormsState = {
-  rounds: [],
-  activeRoundId: null,
-  view: 'idle',
-  activeSessionId: null,
-  confirmReturnView: 'review',
-  confirmClosesSession: false,
-};
+export type FormsAction = SessionFormsAction<PresentedRound> | FormsOwnAction;
 
 const UNTOUCHED: ItemAnswer = {
   choice: 0,
@@ -232,48 +180,33 @@ export function initialState(
   activeSessionId: string | null,
 ): FormsState {
   return rounds.reduce(
-    (state, round) => apply(state, { type: 'roundShown', round }),
-    { ...EMPTY_STATE, activeSessionId },
+    (state, round) => apply(state, { type: 'formShown', form: round }),
+    emptySessionForms<RoundState, 'forms'>(activeSessionId),
   );
 }
-
-// The actions that still apply while the active round is sending: rounds
-// opening and closing, the shown session, the editors' text and saves, and
-// the send's own failure.
-const SENDING_ACTIONS: ReadonlySet<FormsAction['type']> = new Set([
-  'roundShown',
-  'roundClosed',
-  'sessionActivated',
-  'setText',
-  'saveStarted',
-  'saveFinished',
-  'sendFailed',
-]);
 
 // The forms page's store, over `apply`.
 export type FormsStore = ReducerStore<FormsState, FormsAction>;
 
 // Returns `state` itself when the action changes nothing. Item actions apply
 // only in the forms view. While the active round is sending, only the
-// actions in SENDING_ACTIONS apply.
-export function apply(state: FormsState, action: FormsAction): FormsState {
-  const isActiveSending = (activeRound(state)?.sending ?? null) !== null;
-  if (isActiveSending && !SENDING_ACTIONS.has(action.type)) {
-    return state;
-  }
+// lifecycle's sending actions and the editors' text apply.
+export const apply = createSessionFormsReducer<
+  RoundState,
+  'forms',
+  PresentedRound,
+  FormsOwnAction
+>({
+  formView: 'forms',
+  restore: restoreRound,
+  sendingActions: new Set(['setText']),
+  applyOwn,
+});
+
+function applyOwn(state: FormsState, action: FormsOwnAction): FormsState {
   switch (action.type) {
-    case 'roundShown':
-      return showRound(state, action.round);
-    case 'roundClosed':
-      return closeRound(state, action.roundId);
-    case 'sessionActivated':
-      return activateSession(state, action.sessionId);
-    case 'askClose':
-      return askClose(state, action.sessionId);
     case 'openReview':
       return openReview(state);
-    case 'closeReview':
-      return state.view === 'review' ? { ...state, view: 'forms' } : state;
     case 'reviewNext':
       return moveReviewRow(state, 1);
     case 'reviewPrev':
@@ -282,74 +215,17 @@ export function apply(state: FormsState, action: FormsAction): FormsState {
       return jumpToReviewRow(state, action.row);
     case 'reviewJumpItem':
       return jumpToRailItem(state, action.item);
-    case 'askCancel':
-      return state.view === 'review'
-        ? {
-            ...state,
-            view: 'confirm',
-            confirmReturnView: 'review',
-            confirmClosesSession: false,
-          }
-        : state;
-    case 'dismissConfirm':
-      return state.view === 'confirm'
-        ? {
-            ...state,
-            view: state.confirmReturnView,
-            confirmClosesSession: false,
-          }
-        : state;
     case 'setText':
-      return updateRound(state, action.roundId, (round) =>
+      return updateForm(state, action.formId, (round) =>
         setText(round, action.target, action.value),
-      );
-    case 'sendStarted':
-      return updateRound(state, action.roundId, (round) =>
-        round.sending === null
-          ? {
-              ...round,
-              sending: {
-                kind: action.kind,
-                closesSession:
-                  action.kind === 'cancelled' && state.confirmClosesSession,
-              },
-            }
-          : round,
-      );
-    case 'sendFailed':
-      return updateRound(state, action.roundId, (round) =>
-        round.sending === null ? round : { ...round, sending: null },
-      );
-    case 'saveStarted':
-      return updateRound(state, action.roundId, (round) =>
-        startSave(round, action.revision),
-      );
-    case 'saveFinished':
-      return updateRound(state, action.roundId, (round) =>
-        finishSave(round, action.revision, action.ok ? null : action.error),
       );
     default:
       return state.view === 'forms'
-        ? updateRound(state, state.activeRoundId, (round) =>
+        ? updateForm(state, state.activeFormId, (round) =>
             applyItemAction(round, action),
           )
         : state;
   }
-}
-
-export function activeRound(state: FormsState): RoundState | null {
-  return (
-    state.rounds.find((round) => round.roundId === state.activeRoundId) ?? null
-  );
-}
-
-// The session's round; main keeps one open round per session, so the first
-// match is the only one.
-export function roundOfSession(
-  state: FormsState,
-  sessionId: string | null,
-): RoundState | undefined {
-  return state.rounds.find((round) => round.sessionId === sessionId);
 }
 
 export function railItems(round: Round): RailItem[] {
@@ -383,7 +259,7 @@ export function itemAnswer<K extends AnswerableKind>(
   item: KindItem<K>,
 ): AnswerOf[K] {
   if (!hasItem(round, item)) {
-    throw new Error(`round ${round.roundId} has no ${item.kind} ${item.index}`);
+    throw new Error(`round ${round.formId} has no ${item.kind} ${item.index}`);
   }
   const answers: AnswerArray<AnswerOf[K]> = ANSWER_ARRAYS[item.kind];
   return answers.read(round)[item.index - 1];
@@ -538,7 +414,7 @@ function firstAnswerablePosition(round: Round): number {
 function restoreRound(presented: PresentedRound): RoundState {
   const { roundId, sessionId, label, round, draft } = presented;
   return {
-    roundId,
+    formId: roundId,
     sessionId,
     label,
     round,
@@ -617,83 +493,13 @@ function restoreAnswer(
   };
 }
 
-// A round for the session shown becomes active; any other waits in the
-// background.
-function showRound(state: FormsState, presented: PresentedRound): FormsState {
-  const isOpen = state.rounds.some(
-    (round) => round.roundId === presented.roundId,
-  );
-  if (isOpen) {
-    return state;
-  }
-  const rounds = [...state.rounds, restoreRound(presented)];
-  if (presented.sessionId !== state.activeSessionId) {
-    return { ...state, rounds };
-  }
-  return { ...state, rounds, activeRoundId: presented.roundId, view: 'forms' };
-}
-
-// The active round closing leaves its session shown with no round.
-function closeRound(state: FormsState, roundId: string | null): FormsState {
-  const rounds = state.rounds.filter((round) => round.roundId !== roundId);
-  if (rounds.length === state.rounds.length) {
-    return state;
-  }
-  if (roundId !== state.activeRoundId) {
-    return { ...state, rounds };
-  }
-  return {
-    ...state,
-    rounds,
-    activeRoundId: null,
-    view: 'idle',
-    confirmClosesSession: false,
-  };
-}
-
-// Shows the newly active session's round, or the idle view; a pending
-// prompt is dismissed.
-function activateSession(
-  state: FormsState,
-  sessionId: string | null,
-): FormsState {
-  if (sessionId === state.activeSessionId) {
-    return state;
-  }
-  const round = roundOfSession(state, sessionId);
-  return {
-    ...state,
-    activeSessionId: sessionId,
-    activeRoundId: round?.roundId ?? null,
-    view: round === undefined ? 'idle' : 'forms',
-    confirmClosesSession: false,
-  };
-}
-
-// Opens the cancel prompt for the active round of the closing session,
-// from its form or review; keeping the round returns there.
-function askClose(state: FormsState, sessionId: string): FormsState {
-  const view = state.view;
-  const isRoundOfSession = activeRound(state)?.sessionId === sessionId;
-  const isAskable = view === 'forms' || view === 'review';
-  if (!isRoundOfSession || !isAskable) {
-    return state;
-  }
-  return {
-    ...state,
-    view: 'confirm',
-    confirmReturnView: view,
-    confirmClosesSession: true,
-  };
-}
-
 function openReview(state: FormsState): FormsState {
-  if (state.view !== 'forms' || state.activeRoundId === null) {
+  if (state.view !== 'forms' || state.activeFormId === null) {
     return state;
   }
-  return updateRound(
+  return updateForm(
     { ...state, view: 'review' },
-    state.activeRoundId,
+    state.activeFormId,
     (round) => (round.reviewRow === 0 ? round : { ...round, reviewRow: 0 }),
   );
 }
@@ -702,7 +508,7 @@ function moveReviewRow(state: FormsState, step: number): FormsState {
   if (state.view !== 'review') {
     return state;
   }
-  return updateRound(state, state.activeRoundId, (round) => {
+  return updateForm(state, state.activeFormId, (round) => {
     const lastRow = Math.max(answerableItems(round.round).length - 1, 0);
     const row = Math.min(Math.max(round.reviewRow + step, 0), lastRow);
     return row === round.reviewRow ? round : { ...round, reviewRow: row };
@@ -713,7 +519,7 @@ function jumpToReviewRow(
   state: FormsState,
   row: number | undefined,
 ): FormsState {
-  const round = activeRound(state);
+  const round = activeForm(state);
   if (state.view !== 'review' || round === null) {
     return state;
   }
@@ -722,7 +528,7 @@ function jumpToReviewRow(
   if (item === undefined) {
     return state;
   }
-  const jumped = updateRound(state, round.roundId, (current) => ({
+  const jumped = updateForm(state, round.formId, (current) => ({
     ...current,
     reviewRow: target,
     focus: railPosition(current.round, item),
@@ -732,7 +538,7 @@ function jumpToReviewRow(
 
 // Shows the item's card and leaves the review cursor where it was.
 function jumpToRailItem(state: FormsState, item: number): FormsState {
-  const round = activeRound(state);
+  const round = activeForm(state);
   if (state.view !== 'review' || round === null) {
     return state;
   }
@@ -740,28 +546,10 @@ function jumpToRailItem(state: FormsState, item: number): FormsState {
   if (!isRailPosition) {
     return state;
   }
-  const jumped = updateRound(state, round.roundId, (current) =>
+  const jumped = updateForm(state, round.formId, (current) =>
     current.focus === item ? current : { ...current, focus: item },
   );
   return { ...jumped, view: 'forms' };
-}
-
-// Returns `state` itself when `change` returns the round it was given.
-function updateRound(
-  state: FormsState,
-  roundId: string | null,
-  change: (round: RoundState) => RoundState,
-): FormsState {
-  let changed = false;
-  const rounds = state.rounds.map((round) => {
-    if (round.roundId !== roundId) {
-      return round;
-    }
-    const next = change(round);
-    changed = changed || next !== round;
-    return next;
-  });
-  return changed ? { ...state, rounds } : state;
 }
 
 function applyItemAction(round: RoundState, action: ItemAction): RoundState {

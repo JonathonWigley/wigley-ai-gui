@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { activeForm } from '../../../shared/page/session-forms';
 import type { PrimerEntry } from '../contract';
 import {
-  activePrimer,
   apply,
   initialState,
   type OpenPrimer,
@@ -28,7 +28,7 @@ function stateWith(entries: PrimerEntry[] = primerEntries()): PrimerState {
 }
 
 function primerOf(state: PrimerState): OpenPrimer {
-  const primer = activePrimer(state);
+  const primer = activeForm(state);
   if (primer === null) {
     throw new Error('No primer is active');
   }
@@ -51,7 +51,7 @@ function setNewItemText(
 ): PrimerState {
   return apply(state, {
     type: 'setText',
-    primerId: 'p1',
+    formId: 'p1',
     target: { field: 'newItem', entryId },
     value,
   });
@@ -71,16 +71,14 @@ describe('primer state', () => {
     expect(primer.entries).toEqual(draftEntries);
     expect(primer.primer).toEqual(presented.form);
     expect(state.view).toBe('primer');
-    expect(apply(state, { type: 'primerShown', primer: presented })).toBe(
-      state,
-    );
+    expect(apply(state, { type: 'formShown', form: presented })).toBe(state);
   });
 
   it('keeps a primer for another session in the background', () => {
     const state = initialState([presentedPrimer('p1')], 'other-session');
 
-    expect(state.primers).toHaveLength(1);
-    expect(state.activePrimerId).toBeNull();
+    expect(state.forms).toHaveLength(1);
+    expect(state.activeFormId).toBeNull();
     expect(state.view).toBe('idle');
   });
 
@@ -143,7 +141,7 @@ describe('primer state', () => {
 
     const next = apply(state, {
       type: 'addItem',
-      primerId: 'p1',
+      formId: 'p1',
       entryId: '1',
     });
 
@@ -168,10 +166,10 @@ describe('primer state', () => {
     ];
     const full = setNewItemText(onRow(stateWith(fullEntries), 1), '1', 'More');
 
-    expect(
-      apply(blank, { type: 'addItem', primerId: 'p1', entryId: '1' }),
-    ).toBe(blank);
-    expect(apply(full, { type: 'addItem', primerId: 'p1', entryId: '1' })).toBe(
+    expect(apply(blank, { type: 'addItem', formId: 'p1', entryId: '1' })).toBe(
+      blank,
+    );
+    expect(apply(full, { type: 'addItem', formId: 'p1', entryId: '1' })).toBe(
       full,
     );
   });
@@ -261,7 +259,7 @@ describe('primer state', () => {
 
     const next = apply(state, {
       type: 'setText',
-      primerId: 'p1',
+      formId: 'p1',
       target: { field: 'itemComment', entryId: '1', item: 2 },
       value: 'Why',
     });
@@ -276,7 +274,7 @@ describe('primer state', () => {
     const primer = primerOf(
       apply(state, {
         type: 'showTarget',
-        primerId: 'p1',
+        formId: 'p1',
         target: { field: 'itemComment', entryId: '1', item: 2 },
       }),
     );
@@ -291,12 +289,12 @@ describe('primer state', () => {
   it('applies only the sending actions while the active primer sends', () => {
     const sending = applyAll(onRow(stateWith(), 1), [
       { type: 'openReview' },
-      { type: 'sendStarted', primerId: 'p1', kind: 'submitted' },
+      { type: 'sendStarted', formId: 'p1', kind: 'submitted' },
     ]);
     const blocked: PrimerAction[] = [
       { type: 'closeReview' },
       { type: 'askCancel' },
-      { type: 'addItem', primerId: 'p1', entryId: '1' },
+      { type: 'addItem', formId: 'p1', entryId: '1' },
       { type: 'askClose', sessionId: 'p1-session' },
     ];
 
@@ -305,13 +303,13 @@ describe('primer state', () => {
     }
     const edited = apply(sending, {
       type: 'setText',
-      primerId: 'p1',
+      formId: 'p1',
       target: { field: 'taskComment', entryId: '1' },
       value: 'note',
     });
     expect(edited).not.toBe(sending);
     expect(
-      primerOf(apply(sending, { type: 'sendFailed', primerId: 'p1' })).sending,
+      primerOf(apply(sending, { type: 'sendFailed', formId: 'p1' })).sending,
     ).toBeNull();
   });
 

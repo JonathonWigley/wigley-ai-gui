@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { activeForm } from '../../../../shared/page/session-forms';
 import {
-  activeRound,
   apply,
   type FormsAction,
   initialState,
@@ -27,7 +27,7 @@ function roundAfter(...actions: FormsAction[]): RoundState {
     ],
     'r1-session',
   );
-  const round = activeRound(actions.reduce(apply, start));
+  const round = activeForm(actions.reduce(apply, start));
   if (round === null) {
     throw new Error('The test round is not active');
   }

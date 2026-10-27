@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { activeForm } from '../../../shared/page/session-forms';
 import type {
   AnswerEntry,
   FindingAnswerEntry,
@@ -10,7 +11,6 @@ import type {
 } from '../contract';
 import { saveState } from '../../../shared/page/autosave';
 import {
-  activeRound,
   answerStatus,
   apply,
   buildBody,
@@ -105,7 +105,7 @@ function run(state: FormsState, ...actions: FormsAction[]): FormsState {
 }
 
 function active(state: FormsState): RoundState {
-  const round = activeRound(state);
+  const round = activeForm(state);
   if (round === null) {
     throw new Error('expected an active round');
   }
@@ -168,7 +168,7 @@ describe('initialState', () => {
   it('shows the idle view with no rounds', () => {
     const state = initialState([], 'r1-session');
     expect(state.view).toBe('idle');
-    expect(activeRound(state)).toBeNull();
+    expect(activeForm(state)).toBeNull();
   });
 
   it("makes the active session's round active", () => {
@@ -176,14 +176,14 @@ describe('initialState', () => {
       [presented('r1'), presented('r2')],
       'r2-session',
     );
-    expect(state.activeRoundId).toBe('r2');
+    expect(state.activeFormId).toBe('r2');
     expect(state.view).toBe('forms');
-    expect(state.rounds.map((round) => round.roundId)).toEqual(['r1', 'r2']);
+    expect(state.forms.map((round) => round.formId)).toEqual(['r1', 'r2']);
   });
 
   it('shows no round with no active session', () => {
     const state = initialState([presented('r1')], null);
-    expect(state.activeRoundId).toBeNull();
+    expect(state.activeFormId).toBeNull();
     expect(state.view).toBe('idle');
   });
 
@@ -586,7 +586,7 @@ describe('answerStatus', () => {
   it('answers a finding with notes alone', () => {
     const state = apply(onF1, {
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'notes', item: f1 },
       value: 'my own fix',
     });
@@ -639,7 +639,7 @@ describe('toggleDontAsk', () => {
       { type: 'toggleDontAsk' },
       {
         type: 'setText',
-        roundId: 'r1',
+        formId: 'r1',
         target: {
           field: 'dontAskReason',
           item: { kind: 'question', index: 2 },
@@ -678,7 +678,7 @@ describe('setText', () => {
     return active(
       apply(findingRound(), {
         type: 'setText',
-        roundId: 'r1',
+        formId: 'r1',
         target,
         value: 'typed',
       }),
@@ -719,7 +719,7 @@ describe('setText', () => {
     const state = mixedRound();
     const next = apply(state, {
       type: 'setText',
-      roundId: 'other',
+      formId: 'other',
       target: { field: 'note' },
       value: 'typed',
     });
@@ -730,7 +730,7 @@ describe('setText', () => {
     const state = findingRound();
     const next = apply(state, {
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'notes', item: { kind: 'finding', index: 3 } },
       value: 'typed',
     });
@@ -740,13 +740,13 @@ describe('setText', () => {
   it('ignores an edit that changes nothing', () => {
     const noted = apply(mixedRound(), {
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'note' },
       value: 'same',
     });
     const again = apply(noted, {
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'note' },
       value: 'same',
     });
@@ -786,13 +786,13 @@ describe('sessionActivated', () => {
       type: 'sessionActivated',
       sessionId: 'r2-session',
     });
-    expect(state.activeRoundId).toBe('r2');
+    expect(state.activeFormId).toBe('r2');
     expect(state.view).toBe('forms');
   });
 
   it('shows the idle view for a session with no round', () => {
     const state = apply(two, { type: 'sessionActivated', sessionId: 'other' });
-    expect(state.activeRoundId).toBeNull();
+    expect(state.activeFormId).toBeNull();
     expect(state.view).toBe('idle');
   });
 
@@ -803,7 +803,7 @@ describe('sessionActivated', () => {
       { type: 'sessionActivated', sessionId: 'r2-session' },
     );
     expect(state.view).toBe('forms');
-    expect(state.activeRoundId).toBe('r2');
+    expect(state.activeFormId).toBe('r2');
     expect(state.confirmClosesSession).toBe(false);
   });
 
@@ -988,12 +988,12 @@ describe('sending', () => {
   const two = initialState([presented('r1'), presented('r2')], 'r1-session');
   const submitting: FormsAction = {
     type: 'sendStarted',
-    roundId: 'r1',
+    formId: 'r1',
     kind: 'submitted',
   };
   const cancelling: FormsAction = {
     type: 'sendStarted',
-    roundId: 'r1',
+    formId: 'r1',
     kind: 'cancelled',
   };
   const sendingReview = run(two, { type: 'openReview' }, submitting);
@@ -1039,7 +1039,7 @@ describe('sending', () => {
   it('still takes text edits while sending', () => {
     const state = apply(sendingReview, {
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'note' },
       value: 'typed',
     });
@@ -1049,15 +1049,15 @@ describe('sending', () => {
   it('still takes saves while sending', () => {
     const edited = apply(sendingReview, {
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'note' },
       value: 'typed',
     });
     const revision = active(edited).revision;
     const state = run(
       edited,
-      { type: 'saveStarted', roundId: 'r1', revision },
-      { type: 'saveFinished', roundId: 'r1', revision, ok: true },
+      { type: 'saveStarted', formId: 'r1', revision },
+      { type: 'saveFinished', formId: 'r1', revision, error: null },
     );
     expect(saveState(active(state))).toBe('saved');
   });
@@ -1070,7 +1070,7 @@ describe('sending', () => {
       { type: 'choose', number: 2 },
       { type: 'openReview' },
     );
-    expect(state.activeRoundId).toBe('r2');
+    expect(state.activeFormId).toBe('r2');
     expect(state.view).toBe('review');
     expect(active(state).answers[0].choice).toBe(2);
   });
@@ -1097,13 +1097,13 @@ describe('sending', () => {
       { type: 'sessionActivated', sessionId: 'r2-session' },
       {
         type: 'setText',
-        roundId: 'r1',
+        formId: 'r1',
         target: { field: 'note' },
         value: 'typed',
       },
-      { type: 'sendFailed', roundId: 'r1' },
+      { type: 'sendFailed', formId: 'r1' },
     );
-    const background = state.rounds.find((round) => round.roundId === 'r1');
+    const background = state.forms.find((round) => round.formId === 'r1');
     expect(background?.note).toBe('typed');
     expect(background?.sending).toBeNull();
   });
@@ -1114,47 +1114,47 @@ describe('sending', () => {
       { type: 'choose', number: 2 },
       { type: 'openReview' },
       submitting,
-      { type: 'sendFailed', roundId: 'r1' },
+      { type: 'sendFailed', formId: 'r1' },
     );
     expect(active(state).sending).toBeNull();
     expect(state.view).toBe('review');
     expect(active(state).answers[0].choice).toBe(2);
   });
 
-  it('a sending round closes on roundClosed', () => {
-    const state = apply(sendingReview, { type: 'roundClosed', roundId: 'r1' });
-    expect(state.rounds.map((round) => round.roundId)).toEqual(['r2']);
+  it('a sending round closes on formClosed', () => {
+    const state = apply(sendingReview, { type: 'formClosed', formId: 'r1' });
+    expect(state.forms.map((round) => round.formId)).toEqual(['r2']);
     expect(state.view).toBe('idle');
   });
 });
 
-describe('roundShown', () => {
+describe('formShown', () => {
   it('appends a new round without taking over the active one', () => {
     const state = apply(initialState([presented('r1')], 'r1-session'), {
-      type: 'roundShown',
-      round: presented('r2'),
+      type: 'formShown',
+      form: presented('r2'),
     });
-    expect(state.rounds.map((round) => round.roundId)).toEqual(['r1', 'r2']);
-    expect(state.activeRoundId).toBe('r1');
+    expect(state.forms.map((round) => round.formId)).toEqual(['r1', 'r2']);
+    expect(state.activeFormId).toBe('r1');
   });
 
   it('makes a round for the active session active', () => {
     const state = apply(initialState([], 's1'), {
-      type: 'roundShown',
-      round: { ...presented('r1'), sessionId: 's1' },
+      type: 'formShown',
+      form: { ...presented('r1'), sessionId: 's1' },
     });
-    expect(state.activeRoundId).toBe('r1');
+    expect(state.activeFormId).toBe('r1');
     expect(state.view).toBe('forms');
   });
 
   it('keeps a round for another session in the background', () => {
     const state = apply(initialState([], 's1'), {
-      type: 'roundShown',
-      round: { ...presented('r1'), sessionId: 's2' },
+      type: 'formShown',
+      form: { ...presented('r1'), sessionId: 's2' },
     });
-    expect(state.activeRoundId).toBeNull();
+    expect(state.activeFormId).toBeNull();
     expect(state.view).toBe('idle');
-    expect(state.rounds).toHaveLength(1);
+    expect(state.forms).toHaveLength(1);
   });
 
   it('keeps the live state of a round already open', () => {
@@ -1163,23 +1163,23 @@ describe('roundShown', () => {
       number: 2,
     });
     const state = apply(chosen, {
-      type: 'roundShown',
-      round: presented('r1', {}, draft({ answers: [entry(1, { choice: 3 })] })),
+      type: 'formShown',
+      form: presented('r1', {}, draft({ answers: [entry(1, { choice: 3 })] })),
     });
     expect(state).toBe(chosen);
   });
 });
 
-describe('roundClosed', () => {
+describe('formClosed', () => {
   const three = initialState(
     [presented('r1'), presented('r2'), presented('r3')],
     'r1-session',
   );
 
   it('closing the active round shows the idle view', () => {
-    const state = apply(three, { type: 'roundClosed', roundId: 'r1' });
-    expect(state.rounds.map((round) => round.roundId)).toEqual(['r2', 'r3']);
-    expect(activeRound(state)).toBeNull();
+    const state = apply(three, { type: 'formClosed', formId: 'r1' });
+    expect(state.forms.map((round) => round.formId)).toEqual(['r2', 'r3']);
+    expect(activeForm(state)).toBeNull();
     expect(state.view).toBe('idle');
     expect(state.activeSessionId).toBe('r1-session');
   });
@@ -1188,15 +1188,15 @@ describe('roundClosed', () => {
     const state = run(
       three,
       { type: 'openReview' },
-      { type: 'roundClosed', roundId: 'r2' },
+      { type: 'formClosed', formId: 'r2' },
     );
-    expect(state.activeRoundId).toBe('r1');
+    expect(state.activeFormId).toBe('r1');
     expect(state.view).toBe('review');
-    expect(state.rounds.map((round) => round.roundId)).toEqual(['r1', 'r3']);
+    expect(state.forms.map((round) => round.formId)).toEqual(['r1', 'r3']);
   });
 
   it('closing a round that is not open does nothing', () => {
-    expect(apply(three, { type: 'roundClosed', roundId: 'gone' })).toBe(three);
+    expect(apply(three, { type: 'formClosed', formId: 'gone' })).toBe(three);
   });
 });
 
@@ -1293,7 +1293,7 @@ describe('unansweredItem', () => {
     const round = threeQuestions(
       ...[1, 2, 3].map((index): FormsAction => ({
         type: 'setText',
-        roundId: 'r1',
+        formId: 'r1',
         target: { field: 'notes', item: { kind: 'question', index } },
         value: 'because',
       })),
@@ -1350,7 +1350,7 @@ describe('item actions outside the forms view', () => {
   it('still update the round note text in the review', () => {
     const edited = apply(inReview, {
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'note' },
       value: 'typed',
     });
@@ -1396,7 +1396,7 @@ describe('progress', () => {
   it('counts notes text alone as an answer', () => {
     const state = apply(mixedRound(), {
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'notes', item: { kind: 'question', index: 2 } },
       value: 'because',
     });
@@ -1434,15 +1434,15 @@ describe('saveState', () => {
   it('shows saving while the latest revision is in flight, then saved', () => {
     const saving = apply(edited, {
       type: 'saveStarted',
-      roundId: 'r1',
+      formId: 'r1',
       revision,
     });
     expect(saveState(active(saving))).toBe('saving');
     const saved = apply(saving, {
       type: 'saveFinished',
-      roundId: 'r1',
+      formId: 'r1',
       revision,
-      ok: true,
+      error: null,
     });
     expect(saveState(active(saved))).toBe('saved');
   });
@@ -1450,9 +1450,9 @@ describe('saveState', () => {
   it('an edit while a save is in flight stays unsaved after that save', () => {
     const state = run(
       edited,
-      { type: 'saveStarted', roundId: 'r1', revision },
+      { type: 'saveStarted', formId: 'r1', revision },
       { type: 'choose', number: 2 },
-      { type: 'saveFinished', roundId: 'r1', revision, ok: true },
+      { type: 'saveFinished', formId: 'r1', revision, error: null },
     );
     expect(saveState(active(state))).toBe('unsaved');
   });
@@ -1460,12 +1460,11 @@ describe('saveState', () => {
   it('a failed save leaves the round unsaved', () => {
     const state = run(
       edited,
-      { type: 'saveStarted', roundId: 'r1', revision },
+      { type: 'saveStarted', formId: 'r1', revision },
       {
         type: 'saveFinished',
-        roundId: 'r1',
+        formId: 'r1',
         revision,
-        ok: false,
         error: 'disk full',
       },
     );
@@ -1476,18 +1475,17 @@ describe('saveState', () => {
   it('clears a failed save message when the next save starts', () => {
     const failed = run(
       edited,
-      { type: 'saveStarted', roundId: 'r1', revision },
+      { type: 'saveStarted', formId: 'r1', revision },
       {
         type: 'saveFinished',
-        roundId: 'r1',
+        formId: 'r1',
         revision,
-        ok: false,
         error: 'disk full',
       },
     );
     const retried = apply(failed, {
       type: 'saveStarted',
-      roundId: 'r1',
+      formId: 'r1',
       revision,
     });
     expect(active(retried).saveError).toBeNull();
@@ -1496,22 +1494,27 @@ describe('saveState', () => {
   it('a save start that changes nothing leaves state as it is', () => {
     const saving = apply(edited, {
       type: 'saveStarted',
-      roundId: 'r1',
+      formId: 'r1',
       revision,
     });
-    expect(
-      apply(saving, { type: 'saveStarted', roundId: 'r1', revision }),
-    ).toBe(saving);
+    expect(apply(saving, { type: 'saveStarted', formId: 'r1', revision })).toBe(
+      saving,
+    );
   });
 
   it('a save finish that changes nothing leaves state as it is', () => {
     const saved = run(
       edited,
-      { type: 'saveStarted', roundId: 'r1', revision },
-      { type: 'saveFinished', roundId: 'r1', revision, ok: true },
+      { type: 'saveStarted', formId: 'r1', revision },
+      { type: 'saveFinished', formId: 'r1', revision, error: null },
     );
     expect(
-      apply(saved, { type: 'saveFinished', roundId: 'r1', revision, ok: true }),
+      apply(saved, {
+        type: 'saveFinished',
+        formId: 'r1',
+        revision,
+        error: null,
+      }),
     ).toBe(saved);
   });
 
@@ -1533,13 +1536,13 @@ describe('buildBody', () => {
       { type: 'choose', number: 3 },
       {
         type: 'setText',
-        roundId: 'r1',
+        formId: 'r1',
         target: { field: 'comment', notice: 1 },
         value: 'check this',
       },
       {
         type: 'setText',
-        roundId: 'r1',
+        formId: 'r1',
         target: { field: 'note' },
         value: 'the note',
       },
@@ -1591,13 +1594,13 @@ describe('buildBody', () => {
       { type: 'toggleDontAsk' },
       {
         type: 'setText',
-        roundId: 'r1',
+        formId: 'r1',
         target: { field: 'notes', item: { kind: 'question', index: 2 } },
         value: 'reason',
       },
       {
         type: 'setText',
-        roundId: 'r1',
+        formId: 'r1',
         target: { field: 'notes', item: { kind: 'finding', index: 1 } },
         value: 'seen',
       },
@@ -1615,7 +1618,7 @@ describe('apply', () => {
     const before = structuredClone(state);
     apply(state, { type: 'choose', number: 1 });
     apply(state, { type: 'nextItem' });
-    apply(state, { type: 'roundClosed', roundId: 'r1' });
+    apply(state, { type: 'formClosed', formId: 'r1' });
     expect(state).toEqual(before);
   });
 });

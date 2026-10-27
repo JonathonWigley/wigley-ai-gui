@@ -11,9 +11,9 @@ import type {
   FindingAction,
   FormsView,
 } from '../contract';
+import { activeForm } from '../../../shared/page/session-forms';
 import { findingSolution } from '../finding-pick';
 import {
-  activeRound,
   type AnswerableItem,
   answerableItems,
   answerStatus,
@@ -205,7 +205,7 @@ export function jumpedToLine(item: RailItem): string {
 export function jumpMoved(before: FormsState, after: FormsState): boolean {
   return (
     before.view !== after.view ||
-    activeRound(before)?.focus !== activeRound(after)?.focus
+    activeForm(before)?.focus !== activeForm(after)?.focus
   );
 }
 

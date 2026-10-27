@@ -14,14 +14,14 @@ import {
   FakeElement,
   findAll,
   installFakeDom,
-} from './test-dom';
+} from '../../../../shared/page/test-dom';
 
 // Round r1, two questions, open and active.
 function openRound(): FormsState {
   const presented = presentedRound('r1');
   return apply(initialState([], presented.sessionId), {
-    type: 'roundShown',
-    round: presented,
+    type: 'formShown',
+    form: presented,
   });
 }
 
@@ -70,7 +70,7 @@ function column(id: string, cell: FormsReviewColumn['cell']) {
 // The review pane built and updated once, and its row 0.
 function drawRow(contributions: FormsContributions) {
   const state = openRound();
-  const round = state.rounds[0];
+  const round = state.forms[0];
   const { deps, log } = fakePaneDeps(contributions, state);
   const pane = buildReviewPane(
     { name: 'test', layout: oneRowReview() },
@@ -143,7 +143,7 @@ describe('review pane', () => {
         }),
       },
       asHtml(new FakeElement('div')),
-      state.rounds[0],
+      state.forms[0],
       deps,
     );
 
@@ -164,7 +164,7 @@ describe('review pane', () => {
         }),
       },
       asHtml(new FakeElement('div')),
-      state.rounds[0],
+      state.forms[0],
       deps,
     );
 
@@ -185,7 +185,7 @@ function drawPane(
   const pane = build(
     { name: 'test', layout },
     asHtml(parent),
-    state.rounds[0],
+    state.forms[0],
     deps,
   );
   return { pane, parent, deps, log };

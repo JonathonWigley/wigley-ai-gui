@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { activeForm } from '../../../shared/page/session-forms';
 import type { PrimerEntry } from '../contract';
 import { reviewTallies, talliesText } from './primer-review';
-import { activePrimer, initialState, type OpenPrimer } from './primer-state';
+import { initialState, type OpenPrimer } from './primer-state';
 import { presentedPrimer, primerEntry, primerItem } from './test-primers';
 
 function primerWith(entries: PrimerEntry[]): OpenPrimer {
-  const primer = activePrimer(
+  const primer = activeForm(
     initialState([presentedPrimer('p1', { entries })], 'p1-session'),
   );
   if (primer === null) {

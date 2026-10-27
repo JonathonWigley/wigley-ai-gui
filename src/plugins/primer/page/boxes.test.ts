@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { activeForm } from '../../../shared/page/session-forms';
 import {
   boxDescription,
   boxKey,
@@ -7,7 +8,7 @@ import {
   type PrimerBox,
   shownBoxes,
 } from './boxes';
-import { activePrimer, apply, initialState } from './primer-state';
+import { apply, initialState } from './primer-state';
 import {
   presentedPrimer,
   primerEntry,
@@ -86,7 +87,7 @@ describe('primer boxes', () => {
   });
 
   it('mounts a box with the text its target holds', () => {
-    const primer = activePrimer(setup());
+    const primer = activeForm(setup());
     if (primer === null) {
       throw new Error('No primer is active');
     }
@@ -109,7 +110,7 @@ describe('primer boxes', () => {
 
     expect(focusActionFor(state, box)).toEqual({
       type: 'showTarget',
-      primerId: 'p1',
+      formId: 'p1',
       target: box.target,
     });
     expect(

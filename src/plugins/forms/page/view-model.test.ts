@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { activeForm } from '../../../shared/page/session-forms';
 import type { Finding } from '../contract';
 import {
-  activeRound,
   apply,
   type FormsAction,
   type FormsState,
@@ -34,7 +34,7 @@ function roundAfter(...actions: FormsAction[]): RoundState {
     ],
     'r1-session',
   );
-  const round = activeRound(actions.reduce(apply, start));
+  const round = activeForm(actions.reduce(apply, start));
   if (round === null) {
     throw new Error('The test round is not active');
   }
@@ -69,7 +69,7 @@ function stateWithFinding(delta: Finding): FormsState {
 }
 
 function activeOf(state: FormsState): RoundState {
-  const round = activeRound(state);
+  const round = activeForm(state);
   if (round === null) {
     throw new Error('The test round is not active');
   }
@@ -101,7 +101,7 @@ describe('reviewRows', () => {
     const [alpha] = reviewRows(
       roundAfter({
         type: 'setText',
-        roundId: 'r1',
+        formId: 'r1',
         target: { field: 'notes', item: { kind: 'question', index: 1 } },
         value: 'my own answer',
       }),
@@ -146,14 +146,14 @@ describe('reviewRows', () => {
       roundAfter(
         {
           type: 'setText',
-          roundId: 'r1',
+          formId: 'r1',
           target: { field: 'notes', item: { kind: 'question', index: 1 } },
           value: 'my own',
         },
         { type: 'toggleDontAsk' },
         {
           type: 'setText',
-          roundId: 'r1',
+          formId: 'r1',
           target: {
             field: 'dontAskReason',
             item: { kind: 'question', index: 1 },
@@ -281,7 +281,7 @@ describe('reviewRows', () => {
     const [delta] = reviewRows(
       mixedRoundAfter({
         type: 'setText',
-        roundId: 'r1',
+        formId: 'r1',
         target: { field: 'notes', item: { kind: 'finding', index: 1 } },
         value: 'my own fix',
       }),
@@ -401,7 +401,7 @@ describe('roundSaveLabel', () => {
   it('reads Sending… while the round is sending', () => {
     const round = roundAfter(
       { type: 'openReview' },
-      { type: 'sendStarted', roundId: 'r1', kind: 'submitted' },
+      { type: 'sendStarted', formId: 'r1', kind: 'submitted' },
     );
     expect(roundSaveLabel(round)).toBe('Sending…');
   });
@@ -415,8 +415,8 @@ describe('roundSaveState', () => {
   it('is null while the round is sending, an edit unsaved', () => {
     const round = roundAfter(
       { type: 'openReview' },
-      { type: 'sendStarted', roundId: 'r1', kind: 'submitted' },
-      { type: 'setText', roundId: 'r1', target: { field: 'note' }, value: 'x' },
+      { type: 'sendStarted', formId: 'r1', kind: 'submitted' },
+      { type: 'setText', formId: 'r1', target: { field: 'note' }, value: 'x' },
     );
     expect(roundSaveState(round)).toBeNull();
   });
@@ -424,7 +424,7 @@ describe('roundSaveState', () => {
   it('is the save state while the round is not sending', () => {
     const round = roundAfter({
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'note' },
       value: 'x',
     });
@@ -437,7 +437,7 @@ describe('reviewRowsChanged', () => {
   const reviewing = stateAfter({ type: 'openReview' });
   const round = activeOf(reviewing);
   const edit = (state: FormsState, target: TextTarget, value: string) =>
-    apply(state, { type: 'setText', roundId: 'r1', target, value });
+    apply(state, { type: 'setText', formId: 'r1', target, value });
 
   it('is true with nothing drawn', () => {
     expect(reviewRowsChanged(null, round)).toBe(true);
@@ -451,8 +451,8 @@ describe('reviewRowsChanged', () => {
   it('is false after a draft save starts and finishes', () => {
     const noted = edit(reviewing, { field: 'note' }, 'checked');
     const saved = [
-      { type: 'saveStarted', roundId: 'r1', revision: 1 },
-      { type: 'saveFinished', roundId: 'r1', revision: 1, ok: true },
+      { type: 'saveStarted', formId: 'r1', revision: 1 },
+      { type: 'saveFinished', formId: 'r1', revision: 1, error: null },
     ] satisfies FormsAction[];
     const afterSave = activeOf(saved.reduce(apply, noted));
     expect(reviewRowsChanged(activeOf(noted), afterSave)).toBe(false);
@@ -517,7 +517,7 @@ describe('railPickAction', () => {
 describe('sessionTitle', () => {
   // presentedRound('r1') has two questions and no notices.
   function titleAfter(...actions: FormsAction[]): string {
-    const round = activeRound(stateAfter(...actions));
+    const round = activeForm(stateAfter(...actions));
     if (round === null) {
       throw new Error('The test round is not active');
     }
@@ -539,7 +539,7 @@ describe('sessionTitle', () => {
       [presentedRound('r1', { findings: [finding('Delta')] })],
       'r1-session',
     );
-    const round = activeRound(apply(start, { type: 'choose', number: 1 }));
+    const round = activeForm(apply(start, { type: 'choose', number: 1 }));
     if (round === null) {
       throw new Error('The test round is not active');
     }
@@ -601,7 +601,7 @@ describe('pickRailItem', () => {
     const { deps, logs } = picker(
       threeQuestionState({
         type: 'sendStarted',
-        roundId: 'r1',
+        formId: 'r1',
         kind: 'submitted',
       }),
     );

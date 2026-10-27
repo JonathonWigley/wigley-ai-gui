@@ -1,9 +1,12 @@
-import type { AgentFormEndKind } from '../../../contracts/agent-forms';
 import {
-  type DraftRevisions,
-  finishSave,
-  startSave,
-} from '../../../shared/page/autosave';
+  activeForm,
+  createSessionFormsReducer,
+  emptySessionForms,
+  type SessionForm,
+  type SessionFormsAction,
+  type SessionFormsState,
+  updateForm,
+} from '../../../shared/page/session-forms';
 import {
   MAX_PRIMER_ENTRIES,
   MAX_PRIMER_ITEMS,
@@ -15,7 +18,6 @@ import {
   type PrimerGroup,
   type PrimerItem,
   type PrimerNeed,
-  type PrimerView,
   PRIMER_SLUG_PATTERN,
 } from '../contract';
 import type { PrimerScopeName } from './ids';
@@ -34,17 +36,8 @@ export type TextTarget =
 
 export type RailRow = { kind: 'feature' } | { kind: 'task'; entryId: string };
 
-// A finish handed to main and not yet answered by it; `closesSession` marks a
-// cancel the close prompt asked.
-export interface PrimerSend {
-  kind: AgentFormEndKind;
-  closesSession: boolean;
-}
-
-export interface OpenPrimer extends DraftRevisions {
-  primerId: string;
-  sessionId: string;
-  label: string;
+// `formId` is the primer's id.
+export interface OpenPrimer extends SessionForm {
   // As the agent sent it.
   primer: Primer;
   // As the user edited it: the sent tasks in sent order, then the extra tasks
@@ -56,31 +49,17 @@ export interface OpenPrimer extends DraftRevisions {
   // A position in the selected task's items.
   itemCursor: number;
   pane: PrimerPane;
-  // Each add-item box's text, by entry id; not part of the body.
+  // Each add-item box's text, by entry id; not part of the body until the
+  // box commits it as an item.
   newItemTexts: Readonly<Record<string, string>>;
-  sending: PrimerSend | null;
 }
 
-// The active primer is the primer of the session the sessions plugin shows,
-// or null when that session has none.
-export interface PrimerState {
-  // In the order they were shown.
-  primers: OpenPrimer[];
-  activePrimerId: string | null;
-  activeSessionId: string | null;
-  view: PrimerView;
-  // Where keeping the primer from the cancel prompt returns.
-  confirmReturnView: 'primer' | 'review';
-  // Whether confirming the cancel prompt also closes the primer's session.
-  confirmClosesSession: boolean;
-}
+// The open primers and the view; the active primer is the primer of the
+// session the sessions plugin shows, or null when that session has none.
+export type PrimerState = SessionFormsState<OpenPrimer, 'primer'>;
 
-export type PrimerAction =
-  | { type: 'primerShown'; primer: PresentedPrimer }
-  | { type: 'primerClosed'; primerId: string }
-  | { type: 'sessionActivated'; sessionId: string | null }
-  // Asks to cancel the active primer before its session closes.
-  | { type: 'askClose'; sessionId: string }
+// The primer page's own actions beside the session form lifecycle's.
+type PrimerOwnAction =
   | { type: 'nextRow' }
   | { type: 'prevRow' }
   // `row` is a rail position.
@@ -95,36 +74,16 @@ export type PrimerAction =
   | { type: 'selectItem'; item: number }
   | { type: 'toggleInclude' }
   // Adds the task's add-item text as an item.
-  | { type: 'addItem'; primerId: string; entryId: string }
+  | { type: 'addItem'; formId: string; entryId: string }
   // Selects the row and item a text box edits, and focuses the card.
-  | { type: 'showTarget'; primerId: string; target: TextTarget }
-  | { type: 'setText'; primerId: string; target: TextTarget; value: string }
-  | { type: 'openReview' }
-  | { type: 'closeReview' }
-  | { type: 'askCancel' }
-  | { type: 'dismissConfirm' }
-  // The primer's finish went to main; it closes on main's formClosed.
-  | { type: 'sendStarted'; primerId: string; kind: AgentFormEndKind }
-  // The finish never reached the agent: main refused it, or closed the primer
-  // on its own first.
-  | { type: 'sendFailed'; primerId: string }
-  | { type: 'saveStarted'; primerId: string; revision: number }
-  // `error` is null for a save that succeeded.
-  | {
-      type: 'saveFinished';
-      primerId: string;
-      revision: number;
-      error: string | null;
-    };
+  | { type: 'showTarget'; formId: string; target: TextTarget }
+  | { type: 'setText'; formId: string; target: TextTarget; value: string }
+  // Commits each task's add-item text as an item, then opens the review.
+  | { type: 'openReview' };
 
-const EMPTY_STATE: PrimerState = {
-  primers: [],
-  activePrimerId: null,
-  activeSessionId: null,
-  view: 'idle',
-  confirmReturnView: 'review',
-  confirmClosesSession: false,
-};
+export type PrimerAction =
+  | SessionFormsAction<PresentedPrimer>
+  | PrimerOwnAction;
 
 const FEATURE_ROW: RailRow = { kind: 'feature' };
 
@@ -145,21 +104,8 @@ export const RAIL_GROUPS: [PrimerGroup, string][] = [
   ['extra', 'Extra tasks'],
 ];
 
-// The actions that still apply while the active primer is sending: primers
-// opening and closing, the shown session, the boxes' text and saves, and the
-// send's own failure.
-const SENDING_ACTIONS: ReadonlySet<PrimerAction['type']> = new Set([
-  'primerShown',
-  'primerClosed',
-  'sessionActivated',
-  'setText',
-  'saveStarted',
-  'saveFinished',
-  'sendFailed',
-]);
-
 // The actions that apply only in view 'primer'.
-const PRIMER_VIEW_ACTIONS: ReadonlySet<PrimerAction['type']> = new Set([
+const PRIMER_VIEW_ACTIONS: ReadonlySet<PrimerOwnAction['type']> = new Set([
   'nextRow',
   'prevRow',
   'selectRow',
@@ -180,139 +126,82 @@ export function initialState(
   activeSessionId: string | null,
 ): PrimerState {
   return primers.reduce(
-    (state, primer) => apply(state, { type: 'primerShown', primer }),
-    { ...EMPTY_STATE, activeSessionId },
+    (state, primer) => apply(state, { type: 'formShown', form: primer }),
+    emptySessionForms<OpenPrimer, 'primer'>(activeSessionId),
   );
 }
 
 // Returns `state` itself when the action changes nothing. Row, pane, item and
 // target actions and `openReview` apply only in view 'primer'. While the
-// active primer is sending, only the actions in SENDING_ACTIONS apply.
-export function apply(state: PrimerState, action: PrimerAction): PrimerState {
-  const isActiveSending = (activePrimer(state)?.sending ?? null) !== null;
-  if (isActiveSending && !SENDING_ACTIONS.has(action.type)) {
-    return state;
-  }
+// active primer is sending, only the lifecycle's sending actions and the
+// boxes' text apply.
+export const apply = createSessionFormsReducer<
+  OpenPrimer,
+  'primer',
+  PresentedPrimer,
+  PrimerOwnAction
+>({
+  formView: 'primer',
+  restore: restorePrimer,
+  sendingActions: new Set(['setText']),
+  applyOwn,
+});
+
+function applyOwn(state: PrimerState, action: PrimerOwnAction): PrimerState {
   if (PRIMER_VIEW_ACTIONS.has(action.type) && state.view !== 'primer') {
     return state;
   }
-  const active = state.activePrimerId;
+  const active = state.activeFormId;
   switch (action.type) {
-    case 'primerShown':
-      return showPrimer(state, action.primer);
-    case 'primerClosed':
-      return closePrimer(state, action.primerId);
-    case 'sessionActivated':
-      return activateSession(state, action.sessionId);
-    case 'askClose':
-      return askClose(state, action.sessionId);
     case 'nextRow':
-      return updatePrimer(state, active, (primer) => moveRow(primer, 1));
+      return updateForm(state, active, (primer) => moveRow(primer, 1));
     case 'prevRow':
-      return updatePrimer(state, active, (primer) => moveRow(primer, -1));
+      return updateForm(state, active, (primer) => moveRow(primer, -1));
     case 'selectRow':
-      return updatePrimer(state, active, (primer) =>
+      return updateForm(state, active, (primer) =>
         selectRowAt(primer, action.row),
       );
     case 'setNeed':
-      return updatePrimer(state, active, (primer) =>
+      return updateForm(state, active, (primer) =>
         setNeed(primer, action.need),
       );
     case 'addExtraTask':
-      return updatePrimer(state, active, addExtraTask);
+      return updateForm(state, active, addExtraTask);
     case 'removeExtraTask':
-      return updatePrimer(state, active, removeExtraTask);
+      return updateForm(state, active, removeExtraTask);
     case 'focusPane':
-      return updatePrimer(state, active, (primer) =>
+      return updateForm(state, active, (primer) =>
         primer.pane === action.pane ? primer : { ...primer, pane: action.pane },
       );
     case 'nextItem':
-      return updatePrimer(state, active, (primer) => moveItem(primer, 1));
+      return updateForm(state, active, (primer) => moveItem(primer, 1));
     case 'prevItem':
-      return updatePrimer(state, active, (primer) => moveItem(primer, -1));
+      return updateForm(state, active, (primer) => moveItem(primer, -1));
     case 'selectItem':
-      return updatePrimer(state, active, (primer) =>
+      return updateForm(state, active, (primer) =>
         selectItemAt(primer, action.item),
       );
     case 'toggleInclude':
-      return updatePrimer(state, active, toggleInclude);
+      return updateForm(state, active, toggleInclude);
     case 'addItem':
-      return updatePrimer(state, action.primerId, (primer) =>
+      return updateForm(state, action.formId, (primer) =>
         addItem(primer, action.entryId),
       );
     case 'showTarget':
-      return action.primerId === active
-        ? updatePrimer(state, active, (primer) =>
+      return action.formId === active
+        ? updateForm(state, active, (primer) =>
             showTarget(primer, action.target),
           )
         : state;
     case 'setText':
-      return updatePrimer(state, action.primerId, (primer) =>
+      return updateForm(state, action.formId, (primer) =>
         setText(primer, action.target, action.value),
       );
     case 'openReview':
-      return active === null ? state : { ...state, view: 'review' };
-    case 'closeReview':
-      return state.view === 'review' ? { ...state, view: 'primer' } : state;
-    case 'askCancel':
-      return state.view === 'review'
-        ? {
-            ...state,
-            view: 'confirm',
-            confirmReturnView: 'review',
-            confirmClosesSession: false,
-          }
-        : state;
-    case 'dismissConfirm':
-      return state.view === 'confirm'
-        ? {
-            ...state,
-            view: state.confirmReturnView,
-            confirmClosesSession: false,
-          }
-        : state;
-    case 'sendStarted':
-      return updatePrimer(state, action.primerId, (primer) =>
-        primer.sending === null
-          ? {
-              ...primer,
-              sending: {
-                kind: action.kind,
-                closesSession:
-                  action.kind === 'cancelled' && state.confirmClosesSession,
-              },
-            }
-          : primer,
-      );
-    case 'sendFailed':
-      return updatePrimer(state, action.primerId, (primer) =>
-        primer.sending === null ? primer : { ...primer, sending: null },
-      );
-    case 'saveStarted':
-      return updatePrimer(state, action.primerId, (primer) =>
-        startSave(primer, action.revision),
-      );
-    case 'saveFinished':
-      return updatePrimer(state, action.primerId, (primer) =>
-        finishSave(primer, action.revision, action.error),
-      );
+      return active === null
+        ? state
+        : updateForm({ ...state, view: 'review' }, active, addNewItems);
   }
-}
-
-export function activePrimer(state: PrimerState): OpenPrimer | null {
-  return (
-    state.primers.find((primer) => primer.primerId === state.activePrimerId) ??
-    null
-  );
-}
-
-// The session's primer; main keeps one open primer per session, so the first
-// match is the only one.
-export function primerOfSession(
-  state: PrimerState,
-  sessionId: string | null,
-): OpenPrimer | undefined {
-  return state.primers.find((primer) => primer.sessionId === sessionId);
 }
 
 // The Feature row, then the tasks of each group in RAIL_GROUPS order, each
@@ -373,7 +262,7 @@ export function sessionTitle(primer: OpenPrimer): string {
 // The scope the Primer tab's keys fire in for this state.
 export function scopeOf(state: PrimerState): PrimerScopeName {
   if (state.view === 'primer') {
-    return activePrimer(state)?.pane ?? 'idle';
+    return activeForm(state)?.pane ?? 'idle';
   }
   return state.view;
 }
@@ -392,7 +281,7 @@ function restorePrimer(presented: PresentedPrimer): OpenPrimer {
   const { formId, sessionId, label, form, draft } = presented;
   const edited = draft ?? form;
   return {
-    primerId: formId,
+    formId,
     sessionId,
     label,
     primer: form,
@@ -408,103 +297,6 @@ function restorePrimer(presented: PresentedPrimer): OpenPrimer {
     saveError: null,
     sending: null,
   };
-}
-
-// A primer for the session shown becomes active; any other waits in the
-// background.
-function showPrimer(
-  state: PrimerState,
-  presented: PresentedPrimer,
-): PrimerState {
-  const isOpen = state.primers.some(
-    (primer) => primer.primerId === presented.formId,
-  );
-  if (isOpen) {
-    return state;
-  }
-  const primers = [...state.primers, restorePrimer(presented)];
-  if (presented.sessionId !== state.activeSessionId) {
-    return { ...state, primers };
-  }
-  return {
-    ...state,
-    primers,
-    activePrimerId: presented.formId,
-    view: 'primer',
-  };
-}
-
-// The active primer closing leaves its session shown with no primer.
-function closePrimer(state: PrimerState, primerId: string): PrimerState {
-  const primers = state.primers.filter(
-    (primer) => primer.primerId !== primerId,
-  );
-  if (primers.length === state.primers.length) {
-    return state;
-  }
-  if (primerId !== state.activePrimerId) {
-    return { ...state, primers };
-  }
-  return {
-    ...state,
-    primers,
-    activePrimerId: null,
-    view: 'idle',
-    confirmClosesSession: false,
-  };
-}
-
-// Shows the newly active session's primer, or the idle view; a pending
-// prompt is dismissed.
-function activateSession(
-  state: PrimerState,
-  sessionId: string | null,
-): PrimerState {
-  if (sessionId === state.activeSessionId) {
-    return state;
-  }
-  const primer = primerOfSession(state, sessionId);
-  return {
-    ...state,
-    activeSessionId: sessionId,
-    activePrimerId: primer?.primerId ?? null,
-    view: primer === undefined ? 'idle' : 'primer',
-    confirmClosesSession: false,
-  };
-}
-
-// Opens the cancel prompt for the active primer of the closing session, from
-// its primer or review; keeping the primer returns there.
-function askClose(state: PrimerState, sessionId: string): PrimerState {
-  const view = state.view;
-  const isPrimerOfSession = activePrimer(state)?.sessionId === sessionId;
-  if (!isPrimerOfSession || (view !== 'primer' && view !== 'review')) {
-    return state;
-  }
-  return {
-    ...state,
-    view: 'confirm',
-    confirmReturnView: view,
-    confirmClosesSession: true,
-  };
-}
-
-// Returns `state` itself when `change` returns the primer it was given.
-function updatePrimer(
-  state: PrimerState,
-  primerId: string | null,
-  change: (primer: OpenPrimer) => OpenPrimer,
-): PrimerState {
-  let changed = false;
-  const primers = state.primers.map((primer) => {
-    if (primer.primerId !== primerId) {
-      return primer;
-    }
-    const next = change(primer);
-    changed = changed || next !== primer;
-    return next;
-  });
-  return changed ? { ...state, primers } : state;
 }
 
 // A body edit: the next revision.
@@ -637,6 +429,15 @@ function toggleInclude(primer: OpenPrimer): OpenPrimer {
       i === primer.itemCursor ? { ...item, include: !item.include } : current,
     ),
   });
+}
+
+// Adds every task's add-item text as an item, in `entries` order; a task's
+// text stays when addItem refuses it.
+function addNewItems(primer: OpenPrimer): OpenPrimer {
+  return primer.entries.reduce(
+    (current, entry) => addItem(current, entry.id),
+    primer,
+  );
 }
 
 // A no-op for blank text or a task already holding MAX_PRIMER_ITEMS items.

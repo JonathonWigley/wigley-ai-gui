@@ -1,6 +1,6 @@
 import type { BoxIdentity } from '../../../shared/page/editor-boxes';
+import { activeForm } from '../../../shared/page/session-forms';
 import {
-  activeRound,
   focusedItem,
   type FormsAction,
   type FormsState,
@@ -55,11 +55,11 @@ export const FORMS_BOX_IDENTITY: BoxIdentity<BoxRef> = {
 // The boxes the user can reach now, in Ctrl+n order: the forms view shows the
 // focused item's boxes, the review only the round note.
 export function shownBoxes(state: FormsState): BoxRef[] {
-  const round = activeRound(state);
+  const round = activeForm(state);
   if (round === null) {
     return [];
   }
-  const note: BoxRef = { roundId: round.roundId, target: { field: 'note' } };
+  const note: BoxRef = { roundId: round.formId, target: { field: 'note' } };
   switch (state.view) {
     case 'forms':
       return itemBoxes(round);
@@ -72,7 +72,7 @@ export function shownBoxes(state: FormsState): BoxRef[] {
 
 function itemBoxes(round: RoundState): BoxRef[] {
   const item = focusedItem(round);
-  const { roundId } = round;
+  const roundId = round.formId;
   if (item === null) {
     return [];
   }
@@ -108,9 +108,9 @@ export function focusActionFor(
   state: FormsState,
   box: BoxRef,
 ): FormsAction | null {
-  const round = activeRound(state);
+  const round = activeForm(state);
   const { target } = box;
-  if (round === null || round.roundId !== box.roundId) {
+  if (round === null || round.formId !== box.roundId) {
     return null;
   }
   if (target.field === 'note') {

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { activeForm } from '../../../shared/page/session-forms';
 import type {
   ContentScroll,
   FocusOptions,
@@ -9,13 +10,7 @@ import type { PageCommandContext, ToastTone } from '../../../contracts/plugin';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import type { Finding, Question, RoundEnd } from '../contract';
 import type { BoxRef } from './boxes';
-import {
-  activeRound,
-  apply,
-  buildBody,
-  focusedItem,
-  initialState,
-} from './form-state';
+import { apply, buildBody, focusedItem, initialState } from './form-state';
 import {
   closeRoundFromMain,
   formsCommandHandlers,
@@ -78,7 +73,7 @@ function setup(
   const closedSessions: { sessionId: string; roundCount: number }[] = [];
   const log = (_source: string, message: string) => logs.push(message);
   const closeSession = (sessionId: string) =>
-    closedSessions.push({ sessionId, roundCount: store.get().rounds.length });
+    closedSessions.push({ sessionId, roundCount: store.get().forms.length });
   const toast = (text: string, tone: ToastTone) => {
     toasts.push(text);
     toastTones.push(tone);
@@ -128,7 +123,7 @@ function setup(
   const run = (command: FormsCommand, context: PageCommandContext = {}) =>
     handlers[command](context);
   const round = () => {
-    const current = activeRound(store.get());
+    const current = activeForm(store.get());
     if (current === null) {
       throw new Error('No round is active');
     }
@@ -158,12 +153,12 @@ function setup(
     failFinish: (error: Error) => {
       finishFailure = error;
     },
-    // Main's roundClosed for `roundId` reaching the page; `byFinish` false is
+    // Main's formClosed for `roundId` reaching the page; `byFinish` false is
     // main closing it on its own.
     closeFromMain: (roundId: string, byFinish = true) =>
       closeRoundFromMain(
         { store, closeSession, toast, log },
-        { roundId, byFinish },
+        { formId: roundId, byFinish },
       ),
     closedSessions,
     shownForms,
@@ -544,7 +539,7 @@ describe('formsCommandHandlers', () => {
 
     closeFromMain('r1');
 
-    expect(store.get().rounds).toEqual([]);
+    expect(store.get().forms).toEqual([]);
     expect(store.get().view).toBe('idle');
     expect(logs.at(-1)).toBe('submitted');
     expect(toasts).toEqual(['Answers sent: project · r1']);
@@ -605,7 +600,7 @@ describe('formsCommandHandlers', () => {
     expect(finished.map((entry) => entry.end.kind)).toEqual(['cancelled']);
     expect(store.get().view).toBe('confirm');
     closeFromMain('r1');
-    expect(store.get().rounds).toEqual([]);
+    expect(store.get().forms).toEqual([]);
     expect(logs.at(-1)).toBe('cancelled');
     expect(toasts).toEqual(['Round cancelled: project · r1']);
     expect(toastTones).toEqual(['info']);
@@ -672,7 +667,7 @@ describe('formsCommandHandlers', () => {
       activated,
       guardClose,
     } = setup();
-    store.dispatch({ type: 'roundShown', round: presentedRound('r2') });
+    store.dispatch({ type: 'formShown', form: presentedRound('r2') });
     const before = store.get();
 
     expect(guardClose('r2-session')).toBe(false);
@@ -732,7 +727,7 @@ describe('formsCommandHandlers', () => {
 
     closeFromMain('r1', false);
 
-    expect(store.get().rounds).toEqual([]);
+    expect(store.get().forms).toEqual([]);
     expect(toasts).toEqual([]);
     expect(logs).toEqual([]);
     expect(closedSessions).toEqual([]);
@@ -754,7 +749,7 @@ describe('formsCommandHandlers', () => {
 
     closeFromMain('r1', false);
 
-    expect(store.get().rounds).toEqual([]);
+    expect(store.get().forms).toEqual([]);
     expect(toasts).toEqual([]);
     expect(logs).toEqual([]);
     expect(closedSessions).toEqual([
@@ -811,8 +806,8 @@ describe('formsCommandHandlers', () => {
 
   it('the close guard keeps the session of a background round while it sends, and says so', () => {
     const { store, logs, toasts, activated, guardClose } = setup();
-    store.dispatch({ type: 'roundShown', round: presentedRound('r2') });
-    store.dispatch({ type: 'sendStarted', roundId: 'r2', kind: 'submitted' });
+    store.dispatch({ type: 'formShown', form: presentedRound('r2') });
+    store.dispatch({ type: 'sendStarted', formId: 'r2', kind: 'submitted' });
     const before = store.get();
 
     expect(guardClose('r2-session')).toBe(false);

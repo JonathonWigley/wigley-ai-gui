@@ -9,7 +9,7 @@ import type { Layout } from '../layouts/layout';
 import { type BoxRef, FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
 import { apply, type FormsState, initialState } from './form-state';
-import { asFake, findAll, installFakeDom } from './layout/test-dom';
+import { asFake, findAll, installFakeDom } from '../../../shared/page/test-dom';
 import { createRoundView } from './round-view';
 import { presentedRound } from './test-rounds';
 
@@ -81,10 +81,10 @@ function roundViewSetup() {
   const { boxes, created } = setup();
   const presented = presentedRound('r1');
   const state: FormsState = apply(initialState([], presented.sessionId), {
-    type: 'roundShown',
-    round: presented,
+    type: 'formShown',
+    form: presented,
   });
-  const round = state.rounds[0];
+  const round = state.forms[0];
   const view = createRoundView(
     () => undefined,
     round,

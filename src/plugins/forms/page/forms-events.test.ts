@@ -23,7 +23,7 @@ function noRounds(): FormsState {
 
 // Round r1 open and active, in the forms view.
 function openR1(): FormsState {
-  return apply(noRounds(), { type: 'roundShown', round: presented });
+  return apply(noRounds(), { type: 'formShown', form: presented });
 }
 
 function names(events: FormsPageEvent[]): string[] {
@@ -51,7 +51,7 @@ describe('formsEventsBetween', () => {
   it('formsEventsBetween_NewRound_EmitsRoundShownOnly', () => {
     // Another session shows, so the new round does not change the view.
     const before = initialState([], 'other-session');
-    const after = apply(before, { type: 'roundShown', round: presented });
+    const after = apply(before, { type: 'formShown', form: presented });
 
     const events = formsEventsBetween(before, after);
 
@@ -71,7 +71,7 @@ describe('formsEventsBetween', () => {
   it('formsEventsBetween_SameRoundAgain_EmitsNothing', () => {
     const state = openR1();
 
-    const again = apply(state, { type: 'roundShown', round: presented });
+    const again = apply(state, { type: 'formShown', form: presented });
 
     expect(again).toBe(state);
     expect(formsEventsBetween(state, state)).toEqual([]);
@@ -97,7 +97,7 @@ describe('formsEventsBetween', () => {
     const before = openR1();
     const after = apply(before, {
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'notes', item: { kind: 'question', index: 1 } },
       value: '  ',
     });
@@ -120,7 +120,7 @@ describe('formsEventsBetween', () => {
     const before = openR1();
     const after = apply(before, {
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'note' },
       value: 'about the round',
     });
@@ -133,10 +133,10 @@ describe('formsEventsBetween', () => {
     const answered = apply(openR1(), { type: 'choose', number: 1 });
     const sending = apply(answered, {
       type: 'sendStarted',
-      roundId: 'r1',
+      formId: 'r1',
       kind: 'submitted',
     });
-    const closed = apply(sending, { type: 'roundClosed', roundId: 'r1' });
+    const closed = apply(sending, { type: 'formClosed', formId: 'r1' });
 
     const events = formsEventsBetween(sending, closed);
 
@@ -147,14 +147,14 @@ describe('formsEventsBetween', () => {
         roundId: 'r1',
         sessionId: presented.sessionId,
         outcome: 'submitted',
-        body: buildBody(sending.rounds[0]),
+        body: buildBody(sending.forms[0]),
       },
     });
   });
 
   it('formsEventsBetween_MainClosesRound_EmitsClosed', () => {
     const before = openR1();
-    const after = apply(before, { type: 'roundClosed', roundId: 'r1' });
+    const after = apply(before, { type: 'formClosed', formId: 'r1' });
 
     const finished = formsEventsBetween(before, after).find(
       (event) => event.name === 'roundFinished',
@@ -179,7 +179,7 @@ describe('startFormsEvents', () => {
     const emitted: FormsPageEvent[] = [];
     startFormsEvents(store, (event) => emitted.push(event));
 
-    store.dispatch({ type: 'roundShown', round: presented });
+    store.dispatch({ type: 'formShown', form: presented });
     const afterShown = emitted.length;
     store.dispatch({ type: 'choose', number: 1 });
 
@@ -199,7 +199,7 @@ describe('startFormsEvents', () => {
       }
     });
 
-    store.dispatch({ type: 'roundShown', round: presented });
+    store.dispatch({ type: 'formShown', form: presented });
 
     expect(emitted).toEqual([
       expect.objectContaining({ name: 'roundShown' }),
@@ -216,10 +216,10 @@ describe('createFormsEventLog', () => {
     const logEvent = createFormsEventLog(store.get, log);
     startFormsEvents(store, logEvent);
 
-    store.dispatch({ type: 'roundShown', round: presented });
+    store.dispatch({ type: 'formShown', form: presented });
     store.dispatch({
       type: 'setText',
-      roundId: 'r1',
+      formId: 'r1',
       target: { field: 'notes', item: { kind: 'question', index: 2 } },
       value: ' ',
     });
