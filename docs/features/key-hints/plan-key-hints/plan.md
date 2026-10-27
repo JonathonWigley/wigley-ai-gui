@@ -264,7 +264,7 @@ export interface StatusLine { element: HTMLElement; update(isShown: boolean, con
 - [x] [Backlog and Notes](09-backlog-notes.md) — after 01
 
 ### Wave 3
-- [ ] [Retire the key bar](10-retire-key-bar.md) — after 01–09
+- [x] [Retire the key bar](10-retire-key-bar.md) — after 01–09
 
 ### Wave 4
 - [ ] [Doc re-read](11-doc-reread.md) — after 10
@@ -286,6 +286,7 @@ Review base: 268c38a4a1b8e0a49c34ff796705ec6c21417894
 - 03 · 51ea834 · diff read, Produces present (hasOtherSession, hasOtherTab); typecheck clean in sessions files · concerns: check-styles not run by the worker (lint stopped on task 08's in-flight gallery layer error); the gate's lint covers it
 - 04 · eff5f37 · diff read, Produces present; whole-tree typecheck clean; forms tests 628 pass (worker run) · concerns: .box-keys on the frame's bottom edge is a guess for task 12; a layout card or pane that throws and falls back to default keeps its anchors until the next rebuild
 - 08 · aeac5ad · diff read, Produces present; whole-tree typecheck and lint clean after wave 2 · concerns: scripts/check-layers.mts edited (gallery page layer gains keys/contract.ts), outside the Files list; settings rows gain one line for the cursor prompt (task 12 visual)
+- 10 · 7754ee3 · diff read, every Produces present; typecheck and lint clean; after-edit grep's one hit is a false positive (key-hints.ts:331 'key listed'); worker self-test 683 PASS 0 FAIL, every key placed · concerns: chat selftest-script o step edited (outside Files) to expect the Model picker; gate passed with and without the c/o fixture, so it is unproven whether it flags a detached anchor; primer and backlog views' platform dep now unread (kept per Decisions); agent-chat/design.md:161 still says key bar (task 11)
 ### Contract changes
 - start.ts keeps the UnplacedLog: `const unplacedLog = startUnplacedLog(...)` → `startUnplacedLog(...)` unbound · why: oxlint no-unused-vars warns on an unread binding; scope recording still runs · consumers: 10 (binds it back when it wires checkSeen) · group 01
 - PrimerViewDeps.keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'> → Pick<KeysPageExports, 'anchor'> · why: the view reads no keys itself now · consumers: none · group 05
@@ -312,5 +313,7 @@ Review base: 268c38a4a1b8e0a49c34ff796705ec6c21417894
 - Clear click focuses the item then dispatches clearChoice directly, as Accept does, so no log line — a reviewer may want the log · group 04 · group 04
 - settings cursor prompt is one fixed element (edit, add, remove, reset, unused ones hidden), the li's last child on its own line; stays on the cursor row and hides by scope while sections have focus — hidden-keeps-space decision — row is a line taller even hidden · group 08 · group 08
 - sections pane end edge ⌥L rows › at the pane's bottom-end corner — keeps the list from moving — visual check task 12 · group 08 · group 08
+- Space ? prompt beside the Keys button hides under 640px via keys.css — the title bar's end track is 53px at the 420px minimum width and the item needs 75px; the alternative was a shell.css track change outside the files — the prompt is absent on narrow windows; check in task 12 · group 10 · group 10
+- fake agent gains model and verbosity controls so the Model (o) and Controls (c) chips draw in the self-test — fixture state per the placement rule — none · group 10 · group 10
 ### Review rounds
 ### Test gate

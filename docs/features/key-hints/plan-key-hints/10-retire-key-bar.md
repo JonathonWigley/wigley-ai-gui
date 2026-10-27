@@ -1,6 +1,6 @@
 # 10 — Retire the key bar
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09
 Plan: [plan.md](plan.md)
@@ -237,3 +237,5 @@ verification).
 One commit for the group.
 
 ## Proof
+
+Commit 7754ee3 · proof: diff read, every Produces present; typecheck and lint clean; after-edit grep's one hit is a false positive (key-hints.ts:331 'key listed'); worker self-test 683 PASS 0 FAIL, every key placed · concerns: chat selftest-script o step edited (outside Files) to expect the Model picker; gate passed with and without the c/o fixture, so it is unproven whether it flags a detached anchor; primer and backlog views' platform dep now unread (kept per Decisions); agent-chat/design.md:161 still says key bar (task 11)
