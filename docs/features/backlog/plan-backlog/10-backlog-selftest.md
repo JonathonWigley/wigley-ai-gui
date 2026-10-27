@@ -1,6 +1,6 @@
 # 10 — Backlog self-test
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 09
 Plan: [plan.md](plan.md)

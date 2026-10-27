@@ -1,6 +1,6 @@
 # 09 — Backlog page part
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -121,3 +121,5 @@ Done when: `npm test -- src/plugins/backlog` passes; `npm run lint` and `npm run
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 21dce15 · proof: diff read; backlog, keymap and manifest tests pass; typecheck clean; app started in selftest · concerns: delete prompt text fixed (createConfirmPrompt body is fixed at creation); discard prompt reuses the delete confirm labels; one-line boxes accept line breaks; view/editor/keys paths need the live run

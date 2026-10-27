@@ -138,7 +138,7 @@ docs only through `DocsMainExports` and `DocsPageExports`, typed by `src/plugins
 - [x] [Backlog main part](08-backlog-main.md) — after 01, 02, 04
 
 ### Wave 4
-- [ ] [Backlog page part](09-backlog-page.md) — after 08
+- [x] [Backlog page part](09-backlog-page.md) — after 08
 
 ### Wave 5
 - [ ] [Backlog self-test](10-backlog-selftest.md) — after 09
@@ -162,6 +162,7 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - 06 · a613926 · diff read; kinds tests pass; worker ran typecheck and lint clean · concerns: an in-repo home's new file is titled 'Follow-ups — features' (folder base name, as the plan said); a list-shaped create writes '- **name**' with no trailing dash
 - 02 · dc3d5e0 · diff read; typecheck clean; git and plugin-status tests pass · concerns: fileAtHead rejects on an unborn HEAD; the fake Git lives in plugin-status.test.ts
 - 08 · d4855da · diff read; backlog tests 44 pass; typecheck clean · concerns: homes.ts copies docs' small metaString helper (backlog main may import only docs' contract); a symlinked clone could read as not uncommitted
+- 09 · 21dce15 · diff read; backlog, keymap and manifest tests pass; typecheck clean; app started in selftest · concerns: delete prompt text fixed (createConfirmPrompt body is fixed at creation); discard prompt reuses the delete confirm labels; one-line boxes accept line breaks; view/editor/keys paths need the live run
 ### Contract changes
 - KindRule.contents (module-private): (name, existing) → (name, existing, place, paths) · why: the new-file title needs the place's folder · consumers: none · group 06
 - Git doc comments: unpushedPaths is files HEAD changed since the merge base with upstream; methods but fetch/lastFetch reject when git cannot start; commitPaths rejects on empty paths · why: state the error modes · consumers: 08 · group 02
@@ -184,5 +185,8 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - Every writeDoc rejection becomes refused with its text; applyEdit sends no changed (the watch reports it) · group 08 · group 08
 - commit commits each follow-up file whose disk text differs from HEAD; fileAtHead rejection reads as empty · group 08 · group 08
 - Peer ai-dev-76 (Notes) confirmed it touches no task 09/10 file until this run closes; the Backlog design lines it committed in d3b1df9 (images, notes export) describe Notes work, so task 09 ignores them and task 11 leaves them in place — lead
+- Editor chords carry no where (<D-Enter>, <C-n>, <C-p>): expandBind rejects a chord with where both, and a chord's page bind fires in boxes · group 09 · group 09
+- Log lines for a create's wrote, and committed/commit failed, use the ~-shown home root · group 09 · group 09
+- Empty-state text is a status line atop the side bar, as the docs tree does · group 09 · group 09
 ### Review rounds
 ### Test gate
