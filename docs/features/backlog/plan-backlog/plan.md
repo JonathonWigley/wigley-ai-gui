@@ -127,7 +127,7 @@ docs only through `DocsMainExports` and `DocsPageExports`, typed by `src/plugins
 - [ ] [Follow-up file module](01-followup-file.md)
 - [x] [Index reads follow-up tags](03-index-tags.md)
 - [x] [Docs main exports](04-docs-exports.md)
-- [ ] [Backfill agent-ready tags](05-backfill-tags.md)
+- [x] [Backfill agent-ready tags](05-backfill-tags.md)
 
 ### Wave 2
 - [ ] [Git contract and adapter](02-git-adapter.md) — after 04 (shares `docs/main/start.ts`), 01 (shares `check-layers.mts`)
@@ -157,6 +157,7 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - 03 · wigley-ai-marketplace 7c829f5 · diff read; docs-index unittest 249 OK · concerns: the README JSON example's followup meta lacks section and tags (task 11 re-read); one existing test's continuation-line title changed by design
 - 04 · 0d13dae · diff read; typecheck clean; docs start tests 24 pass · concerns: none
 - 07 · wigley-ai-marketplace db34d66 · diff read; check_manifests --against origin/main passed · concerns: none
+- 05 · harness 1416e06, marketplace 87bb3a9, gui 402c262; ~/wigley-features/new-games-prototypes not in git · diff read: first-line and Contents-line swaps only; 121 items tagged · concerns: Silent reward popup tagged though its section has two open questions; harness numbered Design issues lists may index as one entry; NGP gained one untagged Contents line for an orphan section; the marketplace forms-wait-hook item says needs a feature plan in its body only
 ### Contract changes
 ### Rulings
 - Two repos: the gui review base is 0f512f5; the marketplace review base is a139b88 — the plan targets both repos' main — lead
@@ -164,5 +165,7 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - Contents lines are the top-level items between **Contents** and the first ## heading; a sectioned file with no Contents line reads tags [] — keeps body bullets out — a Contents list placed elsewhere reads no tags · group 03 · group 03
 - indexLoaded fires only when loadIndex or rebuildIndex resolves; a rejected call emits nothing — a failed Docs rescan does not reload Backlog · group 04 · group 04
 - Formatted docs/keymap.md with the repo's oxfmt (lead tooling op; the docs-ahead commit d8f04e9 left its padding off) in 4fe32ff — lead
+- Untitled gui list items took a short coined bold title with the first line kept whole as gist, not the first sentence as title — first sentences ran past a line — titles may need rewording in Backlog · group 05 · group 05
+- Harness items judged on their own text, so three items the harness README settles stay untagged · group 05 · group 05
 ### Review rounds
 ### Test gate

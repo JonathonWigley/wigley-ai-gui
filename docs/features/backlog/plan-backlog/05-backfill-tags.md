@@ -1,6 +1,6 @@
 # 05 — Backfill agent-ready tags
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -50,3 +50,5 @@ Commit:    one commit per in-repo home that changed, message `Follow-ups: agent-
            changes instead.
 
 ## Proof
+
+Commit harness 1416e06, marketplace 87bb3a9, gui 402c262; ~/wigley-features/new-games-prototypes not in git · proof: diff read: first-line and Contents-line swaps only; 121 items tagged · concerns: Silent reward popup tagged though its section has two open questions; harness numbered Design issues lists may index as one entry; NGP gained one untagged Contents line for an orphan section; the marketplace forms-wait-hook item says needs a feature plan in its body only
