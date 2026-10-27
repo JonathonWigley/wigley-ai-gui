@@ -1,0 +1,164 @@
+# Saved chat sessions — plan
+
+Feature: agent-chat · Implements: none · Ticket: none
+Target: main · Written: 2026-10-27
+
+REQUIRED SUB-SKILL: Use wigley:make to implement this plan
+
+## Goal
+
+Every session the app's chat runs survives a quit, relaunch or `install-app` and comes back in the sidebar,
+resting until the user's next message starts its process. A session whose process exits rests the same way. Only
+the user closing a row removes it, from the app's view alone: the transcript and the start prompt's saved-session
+list keep it.
+
+## Architecture
+
+- **chat main** (`src/plugins/chat/main/`): a new `open-sessions.ts` store over chat's plugin data `Files`;
+  `chat-sessions.ts` gains restore, the resting state, start on first send, lazy history and saving; `start.ts`
+  wires the store, the restore and the sessions `selected` event.
+- **sessions main** (`src/plugins/sessions/`): a generic `selected` event when the selected row changes, so chat
+  saves the selection without polling.
+- **chat page** (`src/plugins/chat/page/`, `src/plugins/keymap.ts`, `src/plugins/chat/manifest.ts`): the `ended`
+  state and the `chat.ended` scope go; a tab reads `running`, asks for its history on first show, and takes a full
+  entries replace.
+- **chat contract** (`src/plugins/chat/contract.ts`): `ended` becomes `running`, `sessionEnded` becomes
+  `sessionRested`, `loadHistory` and the `entries` message are added, `SlashCommandContext.ended` goes.
+
+## Preconditions
+
+Re-run each before the first dispatch.
+
+- `git -C ~/Documents/ai-dev/wigley-ai-gui merge-base --is-ancestor 3ff5036 HEAD` exits 0 (the docs written ahead
+  are in the target).
+- `test -f ~/Documents/ai-dev/wigley-ai-gui/src/plugins/chat/main/archived-sessions.ts` exits 0 (the store's
+  pattern, task 01).
+- `grep -n "ended: boolean" ~/Documents/ai-dev/wigley-ai-gui/src/plugins/chat/contract.ts` prints two lines,
+  `ChatSessionState` and `SlashCommandContext` (measured at plan time, re-verify).
+- `grep -c "chat.ended" ~/Documents/ai-dev/wigley-ai-gui/src/plugins/keymap.ts` prints 5: the two helpers'
+  scope types and three bind lines (measured at plan time, re-verify).
+- `npm run typecheck` passes on the target before any task.
+
+## Docs written ahead
+
+Commit `3ff5036`:
+
+- `docs/features/agent-chat/design.md` — glossary **Owned session**, Chat plugin § Chat tab, the new § Saved
+  sessions bullet, § App slash commands, § Resume and archive.
+- `AGENTS.md` — the owned-session paragraph in Architecture.
+
+## Mandatory Reads
+
+- `AGENTS.md` (repo root) — Intent, Architecture (layers, plugins, the composition root), Running and testing.
+- `DESIGN.md` — task 04 only (the composer's chips and send state).
+- `docs/keymap.md` — task 04 only (removing the `chat.ended` binds).
+- `docs/features/agent-chat/design.md` — Chat plugin section, § Saved sessions above all.
+- `.agents/skills/drive/SKILL.md` — task 07.
+- No `CLAUDE*.md`, `AGENTS.local.md` or `.claude/rules/*.md` exist in the repo (measured at plan time:
+  `find . -name 'CLAUDE*.md' -o -name 'AGENTS*.md' -not -path './node_modules/*'` lists only `./AGENTS.md`).
+
+## Design Overview
+
+```
+ start ─► chat main start ─► openSessions.load() ─► chatSessions.restore(saved)
+                                                    │  per record: sessions.open({select:false}) → resting row
+                                                    │  notices: quit mid-turn · profile missing
+                                                    └► sessions.activate(saved selected row)
+
+ Chat tab first shown ─► loadHistory(rowId) ─► harness.history ─► entries = history ++ notices ─► `entries` msg
+
+ send in resting row ─► startProcess(resume = sent) ─► harness.start ─► process.send(message)
+ process exits ─────► running=false, notice, `sessionRested` ─► row stays, rests
+ every change (open, first send, busy flip, `selected`, close) ─► openSessions.save(snapshot)
+ user close ─► sessions `closed` ─► chat.closed ─► record dropped from snapshot (transcript untouched)
+ quit / killAll / plugin dispose ─► processes killed, records kept
+```
+
+Decisions (interview rounds 1–3, all on the recommended choice):
+
+- Rows come back resting; a process starts on the first message sent after the relaunch (round 1).
+- Closing a row is the explicit remove: gone from the sidebar for good, the end-session confirmation only while
+  Claude is working, as today (rounds 1 and 3).
+- Removing does not archive: the session stays resumable from the start prompt (round 1).
+- A process that exits while the app runs leaves its row resting, replacing `ended` and `chat.ended` (round 2).
+- Every session chat runs is saved, resumed and launched ones included; relay-connected terminal sessions are not.
+- Row order and the selected row are restored; a resting row looks idle in the sidebar.
+- Chat owns persistence; the sessions plugin stays generic and gains only the `selected` event.
+- The store follows `archived-sessions.ts`: writes one after another, an unreadable file logged and never
+  overwritten.
+- History is read the first time a restored row's Chat tab shows; start reads no transcripts.
+- Picking a session in the start prompt that already has a chat row selects that row.
+
+Out of scope:
+
+- Terminal (relay-connected) sessions: the app did not start them.
+- A quit confirmation while a turn runs: `install-app` waits only 15 s for the app to quit.
+- Restoring a turn's partial output past what the transcript holds.
+
+## File Structure
+
+Existing files modified:
+
+- `src/plugins/sessions/contract.ts`, `src/plugins/sessions/main/session-list.ts` (02; sessions' `start.ts` passes
+  `emit` through and needs no change)
+- `src/plugins/chat/contract.ts`, `src/plugins/chat/main/chat-sessions.ts`, `src/plugins/chat/main/start.ts` (03)
+- `src/plugins/chat/page/chat-view.ts`, `chat-commands.ts`, `attachments.ts`, `account-commands.ts`, `start.ts`,
+  `src/plugins/chat/manifest.ts`, `src/plugins/keymap.ts` (04)
+- `src/plugins/chat/main/selftest-script.ts` (05)
+
+New files:
+
+- `src/plugins/chat/main/open-sessions.ts` and its test (01) — the saved-session store, beside
+  `archived-sessions.ts` and `recent-folders.ts`, the two stores chat already keeps in its plugin data.
+
+Shared names (every task uses these exactly):
+
+- `export const OPEN_SESSIONS_FILE = 'open-sessions.json'` in `open-sessions.ts`
+- `export interface SavedSession { hostSessionId: string; projectDir: string; profile: string; sent: boolean; busy: boolean }`
+- `export interface SavedSessions { sessions: SavedSession[]; selectedHostSessionId: string | null }`
+- `export interface OpenSessions { load(): Promise<SavedSessions>; save(snapshot: SavedSessions): Promise<void> }`
+- `export function createOpenSessions(data: Files): OpenSessions`
+- `SessionsMainEvents.selected: { sessionId: string | null }`
+- `ChatSessionState.running: boolean` (replaces `ended`)
+- `ChatChannel.invoke.loadHistory(sessionId: string): Promise<void>`
+- `ChatChannel.messages.entries: { sessionId: string; entries: ChatEntry[] }`
+- `ChatChannel.messages.sessionRested: { sessionId: string; error: string | null }` (replaces `sessionEnded`)
+- `ChatChannel.messages.sessionRunning: { sessionId: string }`
+- the log line `session <rowId> process started (resume <true|false>)` (task 03, read by task 07)
+- `ChatSessions.restore(saved: SavedSessions): void`, `ChatSessions.loadHistory(sessionId: string): Promise<void>`,
+  `ChatSessions.selected(sessionId: string | null): void`
+
+Boundary rules: chat reaches sessions only through `SessionsMainExports` and its events; `scripts/check-layers.mts`
+needs no new entry (the new file sits in an existing layer).
+
+## Tasks
+
+> `wigley:make` ticks a box once its group is committed and proved, and sets `Status: done` in the
+> task document in the same change. The run is done when every box is ticked.
+
+### Wave 1
+- [ ] [Open-sessions store](01-open-sessions-store.md)
+- [ ] [Sessions selected event](02-sessions-selected-event.md)
+
+### Wave 2
+- [ ] [Chat main: resting and restored sessions](03-chat-main-resting-sessions.md) — after 01, 02
+
+### Wave 3
+- [ ] [Chat page: resting tabs](04-chat-page-resting-tabs.md) — after 03
+
+### Wave 4
+- [ ] [Self-test: resting session](05-selftest-resting-session.md) — after 03, 04
+
+### Wave 5
+- [ ] [Doc re-read](06-doc-re-read.md) — after 05
+- [ ] [Final verification](07-final-verification.md) — after 05
+
+## Run log
+
+Review base: <sha, written by wigley:make at preflight>
+
+### Groups
+### Contract changes
+### Rulings
+### Review rounds
+### Test gate
