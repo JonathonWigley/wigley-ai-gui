@@ -232,8 +232,8 @@ function placeTitle(
 
 // `existing` with a follow-up titled `name` created in the file's own shape,
 // its list item or Contents line written as `- **<name>** — ` and the editor
-// on that line. No file, or a blank one, starts as
-// a new follow-ups file named after the place's repo.
+// on that line. No file, or a blank one, starts as a new follow-ups file
+// named after the place's repo.
 function createdFollowup(
   name: string,
   existing: string | null,
