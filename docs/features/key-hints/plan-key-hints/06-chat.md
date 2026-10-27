@@ -1,6 +1,6 @@
 # 06 — Chat
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -176,3 +176,4 @@ Commit:    one commit for the group: "Chat names key anchors on its composer, ca
 
 ## Proof
 
+Commit 7a58a86 · proof: diff read, Produces present (layout.d.ts kit keyHint shape kept, key-hint.ts deleted); typecheck clean in chat files · concerns: fake agent declares only Mode and Effort controls, so the chat.pickControl (c) and chat.pickModel (o) chip anchors are named but never attached in the self-test

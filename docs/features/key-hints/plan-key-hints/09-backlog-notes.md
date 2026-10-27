@@ -1,6 +1,6 @@
 # 09 — Backlog and Notes
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -188,3 +188,25 @@ this task's Proof and skip this section. When it exits 0:
 
 ## Proof
 
+Commit 01e08a9 · proof: diff read, Produces present; typecheck clean in backlog and notes; notes bind table below · concerns: backlog cursor prompt is detached while the detail has focus (no is-cursor row) instead of hidden-keeping-space as the spec's scenario says; Add follow-up ⌘↩ anchor has no scope so it shows while a notes picker is open
+
+Notes binds and their anchors (step 5), for task 10's self-test:
+
+| Scope | Keys | Command | Anchor element · scope · label |
+|---|---|---|---|
+| notes.popup | `i` | notes.editBox | `span.notes-hint` in `span.notes-cursor-prompt`, moved into the cursor row's `span.notes-row-keys` (title/body rows) · notes.popup · `edit` |
+| notes.popup | `x` | notes.remove | same cursor prompt (images row with an image, session row with a session) · notes.popup · `remove` |
+| notes.popup | `t` | notes.pickTarget | Target row's `span.notes-row-keys` · notes.popup · `pick` |
+| notes.popup | `#` | notes.pickTags | Tags row's `span.notes-row-keys` · notes.popup · `pick` |
+| notes.popup | `s` | notes.pickSession | Session row's `span.notes-row-keys` · notes.popup · `pick` |
+| notes.popup | `<C-n>` `<C-p>` | notes.nextBox, notes.prevBox | `span.notes-box-hint` in the body frame, `hidden` unless the body box is focused · notes.popup · keys only |
+| notes.popup, notes.title | `<D-Enter>` | notes.sendFollowup | inside the Add follow-up button · no scope · keys only |
+| notes.popup (leader, optional) | `<Leader>nd` `<Leader>na` `<Leader>ns` | discard, appendFollowup, sendSession | inside their buttons · notes.popup · keys only |
+| notes.title | `<Tab>` `<C-n>` / `<C-p>` | notes.nextBox / notes.prevBox | `span.notes-box-hint` in the title frame · notes.title · keys only |
+| notes.markup | `s p t a b` | toolSelect, toolPen, toolText, toolArrow, toolBox | inside each tool button · notes.markup · keys only |
+| notes.markup | `c` `C` | nextColour, prevColour | `span.notes-markup-keys` after the swatches · notes.markup · keys only |
+| notes.markup | `u` `<C-r>` `<Esc>` | undo, redo, closeMarkup | inside Undo, Redo, Done · notes.markup · keys only (Esc is vim's, anchored as before) |
+| notes.picker | `/` | notes.pickerFilter | `headerEnd` (one `span.notes-hint`, the same element on every picker request) · notes.picker · `filter` |
+| notes.confirm | `y` / `n` | confirmYes / confirmNo | inside the Discard / Keep buttons · notes.confirm · keys only |
+| — | j k h l `<CR>` `<Esc>` (popup, title, picker, box) | vim | none |
+| any | `<Leader>nn`, popup `<Leader>nf` `<Leader>nc` | leader | none (nf is covered by the sendFollowup anchor) |

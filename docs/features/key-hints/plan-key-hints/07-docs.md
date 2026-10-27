@@ -1,6 +1,6 @@
 # 07 — Docs
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -188,3 +188,4 @@ Commit:    one commit for the group: "Docs names key anchors on its tree, doc pa
 
 ## Proof
 
+Commit 504589a · proof: diff read, Produces present; typecheck clean in docs files · concerns: tree pane grid auto-placement: hidden children drop out, so the rows list may miss its minmax(0,1fr) track (pre-existing)

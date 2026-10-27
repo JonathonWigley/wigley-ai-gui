@@ -1,6 +1,6 @@
 # 02 — Status bar collapse, config badge, save-state line
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -144,3 +144,5 @@ the badge in the running app are checked in task 12 (Final verification).
 One commit for the group.
 
 ## Proof
+
+Commit ae65f16 · proof: diff read, every Produces present; typecheck and lint clean once 01 landed · concerns: forms-view.test.ts and primer-view.test.ts edited per the Tests section though Files omits them

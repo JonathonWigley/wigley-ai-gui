@@ -1,6 +1,6 @@
 # 05 — Primer
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -154,3 +154,5 @@ Done when: compiles; lint passes; the test gate runs the tests above;
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 50be002 · proof: diff read, Produces present; typecheck clean in primer files · concerns: textButton doc comment in shared button.ts still says the hint is a kbd (left for 10/11); selected row label may be cut short by the prompt in the 240px rail (task 12 visual)

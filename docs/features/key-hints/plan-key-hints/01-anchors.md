@@ -1,6 +1,6 @@
 # 01 — Anchors, KeyPrompt and the hint setting
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -366,3 +366,5 @@ checks of hints are in task 12 (Final verification).
 One commit for the group.
 
 ## Proof
+
+Commit 627512e · proof: diff read, every Produces present; typecheck and lint clean with 02 · concerns: ui-confirm-hint has no CSS rule (container only); plugin-framework/design.md § Keys plugin is stale, left for task 11

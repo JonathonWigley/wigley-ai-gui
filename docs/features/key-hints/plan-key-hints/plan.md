@@ -251,17 +251,17 @@ export interface StatusLine { element: HTMLElement; update(isShown: boolean, con
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Anchors, KeyPrompt and the hint setting](01-anchors.md)
-- [ ] [Status bar collapse, config badge, save-state line](02-shell-chrome.md)
+- [x] [Anchors, KeyPrompt and the hint setting](01-anchors.md)
+- [x] [Status bar collapse, config badge, save-state line](02-shell-chrome.md)
 
 ### Wave 2
 - [ ] [Sessions: list and tab strip prompts](03-sessions.md) — after 01
 - [ ] [Form tab and review](04-forms.md) — after 01, 02
-- [ ] [Primer](05-primer.md) — after 01, 02
-- [ ] [Chat](06-chat.md) — after 01
-- [ ] [Docs](07-docs.md) — after 01
+- [x] [Primer](05-primer.md) — after 01, 02
+- [x] [Chat](06-chat.md) — after 01
+- [x] [Docs](07-docs.md) — after 01
 - [ ] [Settings and Gallery](08-settings-gallery.md) — after 01
-- [ ] [Backlog and Notes](09-backlog-notes.md) — after 01
+- [x] [Backlog and Notes](09-backlog-notes.md) — after 01
 
 ### Wave 3
 - [ ] [Retire the key bar](10-retire-key-bar.md) — after 01–09
@@ -277,7 +277,30 @@ export interface StatusLine { element: HTMLElement; update(isShown: boolean, con
 Review base: 268c38a4a1b8e0a49c34ff796705ec6c21417894
 
 ### Groups
+- 01 · 627512e · diff read, every Produces present; typecheck and lint clean with 02 · concerns: ui-confirm-hint has no CSS rule (container only); plugin-framework/design.md § Keys plugin is stale, left for task 11
+- 02 · ae65f16 · diff read, every Produces present; typecheck and lint clean once 01 landed · concerns: forms-view.test.ts and primer-view.test.ts edited per the Tests section though Files omits them
+- 06 · 7a58a86 · diff read, Produces present (layout.d.ts kit keyHint shape kept, key-hint.ts deleted); typecheck clean in chat files · concerns: fake agent declares only Mode and Effort controls, so the chat.pickControl (c) and chat.pickModel (o) chip anchors are named but never attached in the self-test
+- 07 · 504589a · diff read, Produces present; typecheck clean in docs files · concerns: tree pane grid auto-placement: hidden children drop out, so the rows list may miss its minmax(0,1fr) track (pre-existing)
+- 05 · 50be002 · diff read, Produces present; typecheck clean in primer files · concerns: textButton doc comment in shared button.ts still says the hint is a kbd (left for 10/11); selected row label may be cut short by the prompt in the 240px rail (task 12 visual)
+- 09 · 01e08a9 · diff read, Produces present; typecheck clean in backlog and notes; notes bind table below · concerns: backlog cursor prompt is detached while the detail has focus (no is-cursor row) instead of hidden-keeping-space as the spec's scenario says; Add follow-up ⌘↩ anchor has no scope so it shows while a notes picker is open
 ### Contract changes
+- start.ts keeps the UnplacedLog: `const unplacedLog = startUnplacedLog(...)` → `startUnplacedLog(...)` unbound · why: oxlint no-unused-vars warns on an unread binding; scope recording still runs · consumers: 10 (binds it back when it wires checkSeen) · group 01
+- PrimerViewDeps.keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'> → Pick<KeysPageExports, 'anchor'> · why: the view reads no keys itself now · consumers: none · group 05
 ### Rulings
+- keys-for.ts: firesIn becomes a module-level predicate shared by keysFor and promptKeysFor — one copy of the scope rule — none, keysFor tests unchanged · group 01 · group 01
+- anchors.placedIn returns a fresh Set per call — cold path, checkSeen only — allocations if a later caller polls it · group 01 · group 01
+- config badge adds config-problem-badge via classList.add on tag('', 'error'), no new tag() parameter — leaves the shared primitive alone — none · group 02 · group 02
+- running indicator and the four chip anchors are named in chat.chat, as the task's table says, not the tab scope as its prose says; an ended tab hides them by scope — the table is the finer spec — a hint shows in the wrong scope if wrong · group 06 · group 06
+- resume picker headerEnd is one span.chat-picker-keys wrapping the / filter and . archived anchors — headerEnd takes a single element — none · group 06 · group 06
+- chat c/o chip anchors detached in the self-test: per the plan's placement decision (a target placed by a fixture state that builds it, never a stand-in), task 10 adds a fake-agent fixture control so the Controls and Model chips draw, rather than counting a detached anchor — a detached anchor proves no prompt is on screen — task 10 scope grows by one fixture · lead
+- ‹ tree ⌥H edge absolutely positioned in the doc pane's top start corner, scrolling with content; doc pane top padding space-3 → space-6 (space-2 → space-6 under 800px) — room for the edge — visual check in task 12 · group 07 · group 07
+- Trash dialog builds its own two buttons rather than reusing createConfirmPrompt, whose deps are forms-shaped — none · group 07 · group 07
+- saveStatus(primer) replaces statusContent — rail header owns it — none · group 05 · group 05
+- row prompt appended to the selected row node; its D key hides via hidden — none · group 05 · group 05
+- .box-keys rules scoped to primer so forms' same-named class is untouched; box keys overlap the frame's bottom border by grid — visual check task 12 · group 05 · group 05
+- backlog detail header sticky with top: calc(space-3 * -1) and matching negative margin, not top: 0 — sticky stays inside the scroll padding, text would scroll through the band — none · group 09 · group 09
+- notes title box hint reads ⌃P ⇥, not ⌃P ⌃N — keymap order gives <CR>, <Tab>, <C-n> and the prompt takes the first non-vim bind — per the plan's prompt rule · group 09 · group 09
+- notes ⌘↩ (sendFollowup) anchored with no scope — it fires in both notes.popup and notes.title — hint shows while a picker is open · group 09 · group 09
+- leader-only buttons (Discard, Append, Start session) keep their key inside the button — none · group 09 · group 09
 ### Review rounds
 ### Test gate
