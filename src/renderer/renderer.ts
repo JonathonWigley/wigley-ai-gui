@@ -129,7 +129,7 @@ async function start() {
   toastLayer.className = 'toasts';
   areas.overlay.contribute(toastLayer);
   const toasts = createToasts(toastLayer, timers);
-  const problems = contributeConfigProblems(areas.statusBar);
+  const problems = contributeConfigProblems(areas.titleBar);
   problems.show(config.problems);
 
   const commands = new CommandRegistry<PageCommandContext>();

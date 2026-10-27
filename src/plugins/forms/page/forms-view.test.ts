@@ -81,6 +81,7 @@ function formTabSetup() {
     keys: {
       keysFor: () => null,
       onChanged: () => ({ dispose: () => undefined }),
+      anchor: () => ({ dispose: () => undefined }),
     },
     run: () => undefined,
     commands: { exists: () => false, run: vi.fn() },

@@ -69,6 +69,7 @@
 }
 
 .shell-title-bar > .shell-track-end {
+  gap: var(--wg-space-2);
   justify-content: flex-end;
 }
 
@@ -196,7 +197,8 @@
 }
 
 /* Core items first, then what plugins contribute; an item that does not fit
-   beside the others in its track takes a row of its own. */
+   beside the others in its track takes a row of its own. The bar takes no
+   height while no track holds a shown item. */
 .shell-status-bar {
   align-items: center;
   border-top: 1px solid var(--wg-material-chrome-edge);
@@ -208,20 +210,22 @@
   min-width: 0;
 }
 
+.shell-status-bar:not(:has(> .shell-track > :not([hidden]))) {
+  display: none;
+}
+
 .shell-status-bar > .shell-track {
   align-items: stretch;
   flex-wrap: wrap;
 }
 
-/* The config problem, on the status bar's material until it is fixed: it
-   fills its row when alone on it, and its text wraps inside that row. */
-.status-error {
-  align-items: center;
-  color: var(--wg-status-error);
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 0 var(--wg-space-3);
+/* The config problem badge, in the title bar's drag region: it opts out of
+   the drag so it takes the mouse and shows its tooltip. */
+.config-problem-badge {
+  max-width: calc(var(--wg-space-8) * 12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-app-region: no-drag;
 }
 
 /* Over everything, with no hit area of its own: only what is drawn in it

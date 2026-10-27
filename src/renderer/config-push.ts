@@ -7,6 +7,7 @@ import type { AppConfig, ConfigProblem } from '../contracts/settings';
 import { errorText } from '../shared/error-text';
 import { isSameJson } from '../shared/json';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
+import { tag } from '../shared/page/ui/tag';
 import { type AppliedKeys, installedConfig } from './installed-config';
 import type { ThemeApplier } from './theme';
 
@@ -26,16 +27,16 @@ function problemText(problem: ConfigProblem): string {
   return `${problem.file}: ${problem.message}`;
 }
 
-// A status-bar item over the config problems, hidden while there is none: one
-// problem reads as itself, more as their count, each listed on its own line in
-// the tooltip. `show` redraws it for a new list.
-export function contributeConfigProblems(statusBar: Area): {
+// A title bar badge over the config problems, at the end, hidden while there
+// is none: one problem reads as itself, more as their count, each listed on its
+// own line in the tooltip. `show` redraws it for a new list.
+export function contributeConfigProblems(titleBar: Area): {
   show(problems: readonly ConfigProblem[]): void;
 } {
-  const item = document.createElement('span');
-  item.className = 'status-error';
+  const item = tag('', 'error');
+  item.classList.add('config-problem-badge');
   item.hidden = true;
-  statusBar.contribute(item);
+  titleBar.contribute(item, { align: 'end' });
   return {
     show(problems) {
       item.hidden = problems.length === 0;

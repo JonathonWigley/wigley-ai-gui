@@ -21,7 +21,6 @@ import {
   createStatusLine,
   type StatusLineContent,
 } from '../../../shared/page/status-line';
-import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
 import { formsCommand, formsScope } from '../ids';
@@ -59,7 +58,7 @@ export interface FormsViewDeps {
   store: FormsStore;
   boxes: EditorBoxes<BoxRef>;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
+  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'>;
   run(command: CommandId): void;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
@@ -113,7 +112,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     shown: () => deps.setScope(deps.store.get().view),
   });
   const updateStatus = () =>
-    status.update(tabs.isShown(), statusContent(store.get(), boxes));
+    status.update(tabs.isShown(), statusContent(store.get()));
   const dispatch = (action: FormsAction) => store.dispatch(action);
   const confirm = createConfirmPrompt({
     title: 'Cancel this round?',
@@ -166,7 +165,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
         deps.setScope(view);
       }
     });
-    status.update(tabs.isShown(), statusContent(state, boxes));
+    status.update(tabs.isShown(), statusContent(state));
     const box = boxes.active();
     if (box !== null && !isBoxShown(state, box)) {
       boxes.leave();
@@ -286,19 +285,13 @@ function showRound(
   );
 }
 
-// The status line's content: the box's vim mode, then the active round's save
-// state.
-function statusContent(
-  state: FormsState,
-  boxes: Pick<EditorBoxes<BoxRef>, 'activeMode'>,
-): StatusLineContent {
-  const mode = modeLabel(boxes.activeMode());
+// The status line's content: the active round's save state.
+function statusContent(state: FormsState): StatusLineContent {
   const round = activeForm(state);
   if (round === null) {
-    return { mode, save: '', saveState: '' };
+    return { save: '', saveState: '' };
   }
   return {
-    mode,
     save: roundSaveLabel(round),
     saveState: roundSaveState(round) ?? '',
   };

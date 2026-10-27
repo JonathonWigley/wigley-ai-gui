@@ -1,20 +1,10 @@
-/* Status line: it fills the status bar's row, beside a core item when both
-   fit and on a row of its own when not, and its parts wrap onto more lines
-   when narrow. */
+/* Status line: a session form's save state, inline where the view places it;
+   that view owns its spacing. */
 .ui-status-line {
   align-items: center;
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
+  display: inline-flex;
   font-size: var(--wg-text-12);
-  gap: var(--wg-space-0_5) var(--wg-space-4);
   min-width: 0;
-  padding: 0 var(--wg-space-3);
-}
-
-.ui-status-line-mode {
-  color: var(--wg-fg);
-  font-weight: var(--wg-weight-medium);
 }
 
 .ui-status-line-save {

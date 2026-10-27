@@ -35,7 +35,6 @@ import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { createSplit } from '../../../shared/page/ui/split';
 import { tag } from '../../../shared/page/ui/tag';
 import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
-import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
 import type { PrimerEntry, PrimerView } from '../contract';
@@ -86,7 +85,7 @@ export interface PrimerViewDeps {
   store: PrimerStore;
   boxes: EditorBoxes<PrimerBox>;
   markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged'>;
+  keys: Pick<KeysPageExports, 'keysFor' | 'onChanged' | 'anchor'>;
   run(command: CommandId): void;
   platform: Platform;
   uiState: UiState;
@@ -150,7 +149,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     shown: () => deps.setScope(scopeOf(store.get())),
   });
   const updateStatus = () =>
-    status.update(tabs.isShown(), statusContent(store.get(), boxes));
+    status.update(tabs.isShown(), statusContent(store.get()));
   const dispatch = (action: PrimerAction) => store.dispatch(action);
   const confirm = createConfirmPrompt({
     title: 'Cancel this primer?',
@@ -200,7 +199,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
         deps.setScope(scopeOf(state));
       }
     });
-    status.update(tabs.isShown(), statusContent(state, boxes));
+    status.update(tabs.isShown(), statusContent(state));
     const box = boxes.active();
     if (box !== null && !isBoxShown(state, box)) {
       boxes.leave();
@@ -745,23 +744,18 @@ function cardKeyHint(
   );
 }
 
-// The status line's content: the box's vim mode, then `Sending…` while the
-// active primer sends, else its save state.
-function statusContent(
-  state: PrimerState,
-  boxes: Pick<EditorBoxes<PrimerBox>, 'activeMode'>,
-): StatusLineContent {
-  const mode = modeLabel(boxes.activeMode());
+// The status line's content: `Sending…` while the active primer sends, else
+// its save state.
+function statusContent(state: PrimerState): StatusLineContent {
   const primer = activeForm(state);
   if (primer === null) {
-    return { mode, save: '', saveState: '' };
+    return { save: '', saveState: '' };
   }
   if (primer.sending !== null) {
-    return { mode, save: 'Sending…', saveState: 'sending' };
+    return { save: 'Sending…', saveState: 'sending' };
   }
   const shownState = saveState(primer);
   return {
-    mode,
     save: saveLabel(shownState, primer.saveError),
     saveState: shownState,
   };

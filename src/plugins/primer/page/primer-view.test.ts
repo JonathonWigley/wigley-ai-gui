@@ -116,6 +116,7 @@ function primerTabSetup(
         keysListeners.push(listener);
         return { dispose: () => undefined };
       },
+      anchor: () => ({ dispose: () => undefined }),
     },
     run: () => undefined,
     platform: 'macos',
