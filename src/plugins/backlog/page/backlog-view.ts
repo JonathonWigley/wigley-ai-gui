@@ -184,7 +184,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   listHeader.append(listKeys, toDetail);
   listPane.append(listHeader, filterFrame, rowsList);
 
-  // The cursor row's prompt, moved to the end of the cursor row on each draw.
+  // The cursor prompt, moved to the end of the selected row on each draw.
   const cursorPrompt = element('span', 'backlog-row-actions');
   const cursorHints = new Map<CursorCommand, HTMLElement>([
     ['edit', anchored('edit', 'list', 'edit')],
@@ -423,27 +423,28 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
   };
 
-  // Moves the cursor prompt to the end of the cursor row, showing only the
-  // commands that act on it; detached with no cursor row.
+  // Moves the cursor prompt to the end of the selected row, showing only the
+  // commands that act on it; detached with no selected row. Its anchors hide,
+  // keeping their space, while the list's scope is not in force.
   const placeCursorPrompt = (
-    cursorRow: { shown: BacklogRow; drawn: HTMLElement } | null,
+    selectedRow: { shown: BacklogRow; drawn: HTMLElement } | null,
   ) => {
-    if (cursorRow === null) {
+    if (selectedRow === null) {
       cursorPrompt.remove();
       return;
     }
-    const shownCommands = cursorCommands(cursorRow.shown);
+    const shownCommands = cursorCommands(selectedRow.shown);
     for (const [command, hint] of cursorHints) {
       hint.hidden = !shownCommands.includes(command);
     }
-    cursorRow.drawn.append(cursorPrompt);
+    selectedRow.drawn.append(cursorPrompt);
   };
 
   const drawRows = (state: BacklogState) => {
     const rows = visibleRows(state);
     const items: HTMLElement[] = [];
     let section: BacklogRow['kind'] | null = null;
-    let cursorRow: { shown: BacklogRow; drawn: HTMLElement } | null = null;
+    let selectedRow: { shown: BacklogRow; drawn: HTMLElement } | null = null;
     for (const shown of rows) {
       if (shown.kind !== 'task' && shown.kind !== section) {
         section = shown.kind;
@@ -455,12 +456,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         isSelected && state.focus === 'items' && filterScope === null;
       drawn.classList.toggle('is-selected', isSelected);
       drawn.classList.toggle('is-cursor', isCursor);
-      if (isCursor) {
-        cursorRow = { shown, drawn };
+      if (isSelected) {
+        selectedRow = { shown, drawn };
       }
       items.push(drawn);
     }
-    placeCursorPrompt(cursorRow);
+    placeCursorPrompt(selectedRow);
     const reason = emptyReason(state);
     if (reason !== null) {
       items.push(emptyRows(reason, state.filter));

@@ -38,6 +38,15 @@ function anchorElement(): FakeElement {
   return new FakeElement('span');
 }
 
+// An anchor element appended to a connected page root.
+function placedElement(): FakeElement {
+  const page = new FakeElement('div');
+  page.isPageRoot = true;
+  const node = anchorElement();
+  page.append(node);
+  return node;
+}
+
 function isHidden(node: FakeElement): boolean {
   return node.classList.contains('is-hint-hidden');
 }
@@ -56,6 +65,7 @@ describe('anchors', () => {
 
     expect(node.textContent).toBe('d');
     expect(findAll(node, 'ui-key-prompt')).toHaveLength(1);
+    expect(node.classList.contains('ui-key-anchor')).toBe(true);
   });
 
   it('anchor_LabelTrue_DrawsTheCommandLabelAfterTheKeys', () => {
@@ -168,7 +178,7 @@ describe('anchors', () => {
   it('dispose_RemovesThePromptAndKeepsThePlacement', () => {
     const { anchors, state } = anchorsSetup();
     state.scope = 'a.detail';
-    const node = anchorElement();
+    const node = placedElement();
     const handle = anchors.anchor(asHtml(node), 'a.trash', {
       scope: 'a.list',
     });
@@ -177,6 +187,7 @@ describe('anchors', () => {
 
     expect(node.children.length).toBe(0);
     expect(isHidden(node)).toBe(false);
+    expect(node.classList.contains('ui-key-anchor')).toBe(false);
     expect(anchors.placedIn('a.list').has('a.trash')).toBe(true);
     state.keys['a.trash'] = 'x';
     anchors.redraw();
@@ -187,10 +198,45 @@ describe('anchors', () => {
   it('placedIn_ListsScopedAndUnscopedCommands', () => {
     const { anchors } = anchorsSetup();
 
-    anchors.anchor(asHtml(anchorElement()), 'a.x', { scope: 'a.s' });
-    anchors.anchor(asHtml(anchorElement()), 'a.y');
-    anchors.anchor(asHtml(anchorElement()), 'a.z', { scope: 'a.other' });
+    anchors.anchor(asHtml(placedElement()), 'a.x', { scope: 'a.s' });
+    anchors.anchor(asHtml(placedElement()), 'a.y');
+    anchors.anchor(asHtml(placedElement()), 'a.z', { scope: 'a.other' });
 
     expect(anchors.placedIn('a.s')).toEqual(new Set(['a.x', 'a.y']));
+  });
+
+  it('placedIn_NeverOnThePage_LeavesTheCommandOut', () => {
+    const { anchors } = anchorsSetup();
+
+    anchors.anchor(asHtml(anchorElement()), 'a.x', { scope: 'a.s' }).dispose();
+    anchors.anchor(asHtml(anchorElement()), 'a.y');
+
+    expect(anchors.placedIn('a.s')).toEqual(new Set());
+  });
+
+  it('placedIn_AppendedAfterTheAnchor_CountsAtTheCheck', () => {
+    const { anchors } = anchorsSetup();
+    const page = new FakeElement('div');
+    page.isPageRoot = true;
+    const node = anchorElement();
+    anchors.anchor(asHtml(node), 'a.x', { scope: 'a.s' });
+
+    page.append(node);
+
+    expect(anchors.placedIn('a.s')).toEqual(new Set(['a.x']));
+  });
+
+  it('placedIn_OnThePageThenRemoved_KeepsThePlacement', () => {
+    const { anchors } = anchorsSetup();
+    const page = new FakeElement('div');
+    page.isPageRoot = true;
+    const node = anchorElement();
+    anchors.anchor(asHtml(node), 'a.x', { scope: 'a.s' });
+    page.append(node);
+    anchors.applyVisibility();
+
+    node.remove();
+
+    expect(anchors.placedIn('a.s')).toEqual(new Set(['a.x']));
   });
 });

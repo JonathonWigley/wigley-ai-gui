@@ -14,6 +14,12 @@ import { icon } from '../../../shared/page/ui/icon';
 import { iconButton } from '../../../shared/page/ui/icon-button';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { kbd } from '../../../shared/page/ui/kbd';
+import {
+  boxHint,
+  keyChevron,
+  keyEdge,
+  keyStack,
+} from '../../../shared/page/ui/key-anchors';
 import { keyPrompt } from '../../../shared/page/ui/key-prompt';
 import { row } from '../../../shared/page/ui/row';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
@@ -72,6 +78,7 @@ export function createGalleryView(deps: GalleryViewDeps): GalleryView {
     materialsSection(),
     kbdSection(platform),
     keyPromptSection(platform),
+    keyAnchorsSection(platform),
     buttonSection(platform),
     iconButtonSection(),
     chipSection(),
@@ -183,6 +190,83 @@ function keyPromptSection(platform: Platform): HTMLElement {
       'Hidden, keeps its space',
     ),
   ]);
+}
+
+// The parts views build around anchors. Each sample anchor is a span holding
+// a KeyPrompt, as the keys plugin draws it; an unbound one is empty.
+function keyAnchorsSection(platform: Platform): HTMLElement {
+  const shown = (keys: string, label?: string) => {
+    const node = element('span', 'ui-key-anchor');
+    node.append(keyPrompt(keys, platform, label));
+    return node;
+  };
+  const hidden = (keys: string, label?: string) =>
+    withClass(shown(keys, label), 'is-hint-hidden');
+  const unbound = () => element('span', 'ui-key-anchor');
+  // `sample` between two words, so its kept or dropped space shows.
+  const between = (sample: HTMLElement) => {
+    const node = element('span', 'gallery-hint-line');
+    node.append('before', sample, 'after');
+    return node;
+  };
+  const sessionPair = () =>
+    keyEdge('', [
+      shown('<A-S-i>'),
+      keyChevron('▲'),
+      keyChevron('▼'),
+      shown('<A-S-o>'),
+    ]);
+  const onFrame = (hint: HTMLElement) => {
+    const node = inputFrame();
+    node.classList.add('gallery-box-hint-frame');
+    node.append(element('span', 'gallery-placeholder', 'Type a note'), hint);
+    return node;
+  };
+  return section(
+    'Key anchors',
+    [
+      cell(keyEdge('', [keyChevron('‹ tree'), shown('<A-h>')]), 'Chevron'),
+      cell(
+        between(keyEdge('', [keyChevron('‹ tree'), hidden('<A-h>')])),
+        'Chevron, anchor hidden',
+      ),
+      cell(between(keyEdge('', [keyChevron('›'), unbound()])), 'Unbound'),
+    ],
+    [
+      cell(sessionPair(), 'Edge prompt'),
+      cell(
+        between(withClass(sessionPair(), 'is-no-target')),
+        'Edge, no target, keeps its space',
+      ),
+    ],
+    [
+      cell(
+        onFrame(boxHint('', [shown('<C-p>'), shown('<C-n>')])),
+        'Box hint',
+        true,
+      ),
+      cell(
+        onFrame(boxHint('', [hidden('<C-p>'), hidden('<C-n>')])),
+        'Box hint, hidden, paints nothing',
+        true,
+      ),
+    ],
+    [
+      cell(
+        between(
+          keyStack('', [hidden('<D-Enter>'), shown('<D-Enter>', 'send')]),
+        ),
+        'Stack, one scope in force',
+      ),
+      cell(
+        between(
+          keyStack('', [hidden('<D-Enter>'), hidden('<D-Enter>', 'send')]),
+        ),
+        'Stack, hidden, keeps its space',
+      ),
+      cell(between(keyStack('', [unbound(), unbound()])), 'Unbound, no space'),
+    ],
+  );
 }
 
 function buttonSection(platform: Platform): HTMLElement {

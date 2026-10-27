@@ -1,10 +1,12 @@
 // The DOM surface the page builders and plugin views use, for tests that run
 // in `node`: `installFakeDom` stubs `document` and `HTMLElement` with it. A
-// string appended becomes a text node; `click` runs the click listeners.
+// string appended becomes a text node; `click` runs the click listeners. An
+// element is connected while it or an ancestor has `isPageRoot` set.
 export class FakeElement {
   tagName: string;
   childNodes: FakeElement[] = [];
   parentNode: FakeElement | null = null;
+  isPageRoot = false;
   dataset: Record<string, string> = {};
   attributes = new Map<string, string>();
   style = new FakeStyle();
@@ -47,6 +49,17 @@ export class FakeElement {
         return isOn;
       },
     };
+  }
+
+  get isConnected(): boolean {
+    if (this.isPageRoot) {
+      return true;
+    }
+    let node = this.parentNode;
+    while (node !== null && !node.isPageRoot) {
+      node = node.parentNode;
+    }
+    return node !== null;
   }
 
   get children(): FakeElement[] {

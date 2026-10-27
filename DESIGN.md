@@ -254,8 +254,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
   beside the anchor element when the prompt points a direction; the chevron hides and shows with its
   anchor. The parts around anchors are builders in `key-anchors.ts`: an edge prompt (`keyEdge`),
   which `is-no-target` hides keeping its space; a box hint (`boxHint`); and a stack of one
-  command's anchors in several scopes in one cell (`keyStack`). A box hint or a stack whose anchors
-  are all empty takes no space.
+  command's anchors in several scopes in one cell (`keyStack`). The keys plugin marks each anchor
+  element `ui-key-anchor`; an anchor, box hint or stack holding no KeyPrompt (its commands unbound)
+  takes no space, and a box hint whose prompts are all hidden paints nothing.
 - **Button** (`textButton`): a labelled button, variants primary, secondary, ghost, danger.
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.

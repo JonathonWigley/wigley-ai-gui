@@ -537,8 +537,8 @@ function cardKeyOf(primer: OpenPrimer): string {
 // The rail body: the Feature row, then each group's tasks under its header,
 // the Primer and Every feature headers only over tasks and Extra tasks always,
 // holding the add prompt, with a line saying so while it holds none. The row
-// prompt ends the selected task row and leaves the Feature row, showing its
-// remove key on an extra task only. Each row's click selects it; the selected
+// prompt sits under the selected task row's label and leaves the Feature row,
+// showing its remove key on an extra task only. Each row's click selects it; the selected
 // row scrolls into view when `isRowChanged`.
 function drawRail(
   rail: RailParts,

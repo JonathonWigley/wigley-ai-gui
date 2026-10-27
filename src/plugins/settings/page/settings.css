@@ -44,12 +44,14 @@
   font-weight: var(--wg-weight-regular);
 }
 
-/* The cursor row's action keys, at the row's end. */
+/* The cursor row's action keys, at the end of its first line; they wrap
+   onto lines of their own when the line has no room. */
 .settings-row-actions {
   display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: var(--wg-space-3);
-  margin-top: var(--wg-space-1);
+  gap: var(--wg-space-1) var(--wg-space-3);
 }
 
 .settings-section-rows,

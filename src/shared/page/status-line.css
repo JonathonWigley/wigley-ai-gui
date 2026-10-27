@@ -9,6 +9,10 @@
 
 .ui-status-line-save {
   color: var(--wg-fg-tertiary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ui-status-line-save[data-state='unsaved'] {

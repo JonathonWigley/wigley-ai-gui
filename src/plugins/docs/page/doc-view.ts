@@ -289,6 +289,8 @@ export function createDocView(deps: DocViewDeps): DocView {
   prompt.append(element('span', '', CONFLICT_TEXT), conflictKeys);
   let frontmatter = frontmatterTable([]);
   let body = markdownElement('div', 'md docs-body', '');
+  // The empty state names the tree's key, so the edge shows only with a doc.
+  edge.hidden = true;
   header.hidden = true;
   readOnlyLine.hidden = true;
   banner.hidden = true;
@@ -659,6 +661,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       };
       deps.openChanged(target.path);
       empty.hidden = true;
+      edge.hidden = false;
       drawHeader(target);
       drawChips();
       drawBody(rendered);
@@ -699,6 +702,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       shown = null;
       deps.openChanged(null);
       empty.hidden = false;
+      edge.hidden = true;
       header.hidden = true;
       readOnlyLine.hidden = true;
       drawChips();

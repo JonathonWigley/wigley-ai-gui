@@ -216,13 +216,9 @@
   display: none;
 }
 
-/* A chip's keys after its value; an unbound command leaves no gap. */
+/* A chip's keys after its value. */
 .chat-chip-key {
   display: inline-flex;
-}
-
-.chat-chip-key:empty {
-  display: none;
 }
 
 /* The picker header's keys: `/ filter`, then `. archived` in the resume

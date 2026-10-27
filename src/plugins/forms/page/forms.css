@@ -408,25 +408,25 @@
   font-weight: var(--wg-weight-regular);
 }
 
-/* A box's keys sit on its frame's bottom edge at the right end, shown while
-   the box has focus. A hidden anchor inside sets its own visibility, so it
-   stays hidden while the box shows its keys. */
+/* A box's keys sit on its frame's bottom edge at the right end, on the
+   sheet's background, shown while the box has focus and a prompt inside
+   shows. A hidden anchor inside sets its own visibility, so it stays hidden
+   while the box shows its keys. */
 :where(.form-tab) .field {
   position: relative;
 }
 
 :where(.form-tab) .box-keys {
-  background: var(--wg-input-background);
+  background: var(--wg-sheet-background);
   bottom: 0;
   padding: 0 var(--wg-space-1);
   position: absolute;
   right: var(--wg-space-3);
   transform: translateY(50%);
-  visibility: hidden;
 }
 
-:where(.form-tab) .field:focus-within .box-keys {
-  visibility: visible;
+:where(.form-tab) .field:not(:focus-within) .box-keys {
+  visibility: hidden;
 }
 
 /* A scroll container of its own, so the vim panel, which is sticky, stays at

@@ -83,11 +83,23 @@
   padding: var(--wg-space-2);
 }
 
-/* The need keys on the selected task row. */
+/* The need keys on the selected task row, on a line of their own under its
+   label, wrapping when the rail is narrow. The label takes the first line's
+   free space, so the line breaks before the prompt only. */
+.primer-rail-list .ui-row:has(> .primer-row-prompt) {
+  flex-wrap: wrap;
+}
+
+.primer-rail-list .ui-row:has(> .primer-row-prompt) > .ui-row-label {
+  flex: 1 1 0;
+}
+
 .primer-row-prompt {
-  display: inline-flex;
-  flex: none;
-  gap: var(--wg-space-2);
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  gap: 0 var(--wg-space-2);
+  padding-bottom: var(--wg-space-1);
 }
 
 .primer-rail-foot {
@@ -210,12 +222,11 @@
   margin-right: var(--wg-space-2);
   padding: 0 var(--wg-space-1);
   transform: translateY(50%);
-  visibility: hidden;
 }
 
-.primer-field:focus-within > .box-keys,
-.primer-item-comment:focus-within > .box-keys {
-  visibility: visible;
+.primer-field:not(:focus-within) > .box-keys,
+.primer-item-comment:not(:focus-within) > .box-keys {
+  visibility: hidden;
 }
 
 .primer-box .cm-editor {

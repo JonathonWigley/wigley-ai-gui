@@ -40,9 +40,8 @@
   grid-area: 1 / 1;
 }
 
-/* A box hint or a stack whose anchors are all empty, or a hidden box hint. */
-.ui-box-hint:not(:has(> :not(:empty))),
-.ui-key-stack:not(:has(> :not(:empty))),
-.ui-box-hint[hidden] {
-  display: none;
+/* A box hint whose prompts are all hidden paints nothing, its background
+   included. */
+.ui-box-hint:not(:has(> :not(.is-hint-hidden) > .ui-key-prompt)) {
+  visibility: hidden;
 }

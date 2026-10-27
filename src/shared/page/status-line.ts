@@ -13,7 +13,8 @@ export interface StatusLine {
 }
 
 // A session form's save state, for the form to place in its rail header
-// (`DESIGN.md` § Surfaces); `update` hides it while `isShown` is false.
+// (`DESIGN.md` § Surfaces), cut with an ellipsis where it has no room and
+// whole in its tooltip; `update` hides it while `isShown` is false.
 export function createStatusLine(): StatusLine {
   const line = element('span', 'ui-status-line');
   const save = element('span', 'ui-status-line-save');
@@ -23,6 +24,7 @@ export function createStatusLine(): StatusLine {
     update(isShown, content) {
       line.hidden = !isShown;
       save.textContent = content.save;
+      save.title = content.save;
       save.dataset.state = content.saveState;
     },
   };

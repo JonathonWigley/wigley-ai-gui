@@ -165,7 +165,7 @@ export type SettingsCommand =
 // first section with focus on the side bar, and each time it sets the scope
 // where focus was left. The keys show where they act: the focus moves at the
 // split edge, the filter in the rows' section header, and the row actions at
-// the cursor row's end.
+// the end of the cursor row's first line.
 export interface SettingsView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -243,8 +243,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   };
   let head = sectionHead('');
 
-  // The cursor row's action keys; `markCursor` moves the prompt to the
-  // cursor row and shows the keys of the actions that row has.
+  // The cursor row's action keys; `markCursor` moves the prompt to the end of
+  // the cursor row's first line and shows the keys of the actions that row
+  // has.
   const rowPrompt = element('span', 'settings-row-actions');
   const promptHints: Record<PromptAction, HTMLElement> = {
     edit: anchored('edit', 'rows', PROMPT_LABELS.edit),
@@ -316,7 +317,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
   };
 
-  // Puts the cursor prompt at the end of the cursor row, before an open box,
+  // Puts the cursor prompt at the end of the cursor row's first line,
   // showing the keys of the actions that row has; with no cursor row it
   // leaves the rows.
   const placeRowPrompt = (row: SettingsRow | undefined) => {
@@ -328,9 +329,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     for (const action of Object.keys(promptHints) as PromptAction[]) {
       promptHints[action].hidden = !shown.includes(action);
     }
-    const boxElement = openBox?.box.element ?? null;
-    const isBoxInRow = boxElement?.parentElement === row.element;
-    row.element.insertBefore(rowPrompt, isBoxInRow ? boxElement : null);
+    row.element.querySelector('.settings-row-head')?.append(rowPrompt);
   };
 
   // Marks the cursor row selected, and draws its focus ring while the keys

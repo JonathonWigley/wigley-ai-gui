@@ -25,11 +25,15 @@
   margin-inline-start: auto;
 }
 
-/* The doc pane's `‹ tree ⌥H`, in its top start corner above the header. */
+/* The doc pane's `‹ tree ⌥H`, above the header, pinned to the pane's top
+   edge while the doc scrolls under it. */
 .docs-edge--start {
-  inset-block-start: var(--wg-space-1);
-  inset-inline-start: var(--wg-space-3);
-  position: absolute;
+  background: var(--wg-sheet-background);
+  display: flex;
+  inset-block-start: 0;
+  position: sticky;
+  width: fit-content;
+  z-index: 1;
 }
 
 /* The cursor prompt at a selected leaf's end. */
@@ -74,9 +78,21 @@
 }
 
 /* The empty index and no-match lines wrap inside a narrow pane, a long
-   filter breaking anywhere. */
+   filter breaking anywhere and the hint between its keys and words. */
 .docs-tree > .ui-empty {
   overflow-wrap: anywhere;
+}
+
+.docs-tree > .ui-empty .docs-hint {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.docs-tree > .ui-empty .docs-hint > .ui-key-prompt {
+  flex-wrap: wrap;
+  justify-content: center;
+  min-width: 0;
+  white-space: normal;
 }
 
 .docs-filter {
@@ -171,7 +187,7 @@
   min-width: 0;
   outline: none;
   overflow-y: auto;
-  padding: var(--wg-space-6) var(--wg-space-6) var(--wg-space-6);
+  padding: var(--wg-space-3) var(--wg-space-6) var(--wg-space-6);
   position: relative;
 }
 
@@ -326,6 +342,6 @@
 
 @media (max-width: 800px) {
   .docs-doc {
-    padding: var(--wg-space-6) var(--wg-space-3) var(--wg-space-4);
+    padding: var(--wg-space-2) var(--wg-space-3) var(--wg-space-4);
   }
 }

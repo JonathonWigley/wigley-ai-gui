@@ -17,11 +17,6 @@
     border-color var(--wg-duration-fast) var(--wg-ease-out);
 }
 
-/* A hint anchor for an unbound command is empty, and leaves no gap. */
-.ui-button > :empty {
-  display: none;
-}
-
 .ui-button:disabled {
   cursor: default;
 }

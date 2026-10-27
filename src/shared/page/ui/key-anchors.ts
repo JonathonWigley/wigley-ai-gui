@@ -55,7 +55,8 @@ export function keyEdge(
 
 // A box hint, `span.ui-box-hint` of `className` holding `anchors` side by
 // side, which the view places on the box's frame; it takes no space while
-// every anchor is empty or it is `hidden`.
+// every anchor is empty or it is `hidden`, and paints nothing while every
+// prompt in it is hidden.
 export function boxHint(
   className: string,
   anchors: readonly HTMLElement[],

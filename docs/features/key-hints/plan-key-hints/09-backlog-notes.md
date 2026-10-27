@@ -70,8 +70,9 @@ Decisions: the user's rule for this task (interview 2026-10-27): read Backlog's 
            `backlog.focusDetail` anchor with label `detail`, then a `›` chevron element after it; task 01's
            rule hides each chevron while its anchor is hidden · the cursor prompt is one element
            (`span.backlog-row-actions`) holding five anchors in the order `i edit  d delete  t agent-ready
-           T tag  o docs`; each draw moves it to the end of the row that carries `is-cursor`, and sets `hidden`
-           on each anchor `cursorCommands` leaves out; with no cursor row it is detached (drafter) · the
+           T tag  o docs`; each draw moves it to the end of the selected row, and sets `hidden`
+           on each anchor `cursorCommands` leaves out; its anchors hide, keeping their space, while the list's
+           scope is not in force; with no selected row it is detached (review fix) · the
            empty states keep their keys through anchors made once: `Open a features home from the side bar.`
            with `backlog.back` (`h`, keys only) and `Nothing is planned here.` with `backlog.create` (`a`, keys
            only), as today (DESIGN.md § Surfaces, Empty states) · the editor's footer becomes
@@ -194,7 +195,7 @@ Notes binds and their anchors (step 5), for task 10's self-test:
 
 | Scope | Keys | Command | Anchor element · scope · label |
 |---|---|---|---|
-| notes.popup | `i` | notes.editBox | `span.notes-hint` in `span.notes-cursor-prompt`, moved into the cursor row's `span.notes-row-keys` (title/body rows) · notes.popup · `edit` |
+| notes.popup | `i` | notes.editBox | `span.notes-hint` in `span.notes-cursor-prompt`, moved to the selected field's row as its last cell (title/body rows; review fix) · notes.popup · `edit` |
 | notes.popup | `x` | notes.remove | same cursor prompt (images row with an image, session row with a session) · notes.popup · `remove` |
 | notes.popup | `t` | notes.pickTarget | Target row's `span.notes-row-keys` · notes.popup · `pick` |
 | notes.popup | `#` | notes.pickTags | Tags row's `span.notes-row-keys` · notes.popup · `pick` |

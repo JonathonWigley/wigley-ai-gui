@@ -21,6 +21,15 @@ describe('createStatusLine', () => {
     expect(root.hidden).toBe(false);
   });
 
+  it('createStatusLine_Update_PutsTheWholeSaveStateInTheTooltip', () => {
+    const line = createStatusLine();
+
+    line.update(true, { save: 'Unsaved — disk full', saveState: 'unsaved' });
+
+    const [save] = findAll(asFake(line.element), 'ui-status-line-save');
+    expect(save.title).toBe('Unsaved — disk full');
+  });
+
   it('createStatusLine_NotShown_Hides', () => {
     const line = createStatusLine();
 

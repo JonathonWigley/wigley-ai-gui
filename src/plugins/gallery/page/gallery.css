@@ -84,6 +84,20 @@
   color: var(--wg-input-placeholder);
 }
 
+/* Key anchors: a sample between two words, and a box hint on its frame. */
+.gallery-hint-line {
+  align-items: baseline;
+  color: var(--wg-fg-tertiary);
+  display: inline-flex;
+  gap: var(--wg-space-2);
+}
+
+.gallery-box-hint-frame {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+}
+
 .gallery-stack {
   display: flex;
   flex-direction: column;

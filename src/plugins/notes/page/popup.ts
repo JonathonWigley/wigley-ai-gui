@@ -208,7 +208,6 @@ export function createNotePopup(
   const fieldsView = element('div', 'notes-fields');
   const rows = new Map<NoteField, HTMLElement>();
   const slots = new Map<NoteField, HTMLElement>();
-  const rowKeys = new Map<NoteField, HTMLElement>();
   for (const field of NOTE_FIELDS) {
     const node = element('div', 'notes-row');
     const value = element('div', 'notes-row-value');
@@ -224,11 +223,10 @@ export function createNotePopup(
     );
     rows.set(field, node);
     slots.set(field, value);
-    rowKeys.set(field, keys);
     fieldsView.append(node);
   }
 
-  // The cursor row's prompt, moved to the cursor row's end on each draw.
+  // The cursor prompt, moved to the selected field's row on each draw.
   const cursorPrompt = element('span', 'notes-cursor-prompt');
   const editHint = anchored('editBox', 'popup', 'edit');
   const removeHint = anchored('remove', 'popup', 'remove');
@@ -430,22 +428,22 @@ export function createNotePopup(
     }
     fieldsView.classList.toggle('is-box-focused', focusedBox !== null);
     bodyHint.hidden = focusedBox !== 'body';
-    placeCursorPrompt(state, keysOnRows);
+    placeCursorPrompt(state);
   };
 
-  // Moves the cursor prompt to the cursor row's end, showing the keys that
-  // act on that field; detached while the keys are off the rows.
-  const placeCursorPrompt = (state: PopupState, keysOnRows: boolean) => {
-    if (!keysOnRows) {
-      cursorPrompt.remove();
-      return;
-    }
+  // Moves the cursor prompt to the end of the selected field's row, showing
+  // the keys that act on that field and keeping the others' space. It hides,
+  // keeping its space, while the keys are off the rows.
+  const placeCursorPrompt = (state: PopupState) => {
     const { field } = state;
     const holdsImage = field === 'images' && state.images.length > 0;
     const holdsSession = field === 'session' && state.fields.session !== null;
-    editHint.hidden = field !== 'title' && field !== 'body';
-    removeHint.hidden = !holdsImage && !holdsSession;
-    rowKeys.get(field)?.append(cursorPrompt);
+    editHint.classList.toggle(
+      'is-no-target',
+      field !== 'title' && field !== 'body',
+    );
+    removeHint.classList.toggle('is-no-target', !holdsImage && !holdsSession);
+    rows.get(field)?.append(cursorPrompt);
   };
   store.subscribe(render);
 

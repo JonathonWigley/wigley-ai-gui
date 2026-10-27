@@ -66,7 +66,7 @@ Decisions: placements the user approved (interview 2026-10-27): Settings shows `
            `settings.focusRows` anchor with label `rows`, then a `›` chevron element after it; task 01's rule
            hides each chevron while its anchor is hidden (drafter; tasks 07 and 09 do the same) · the cursor prompt is one element made once,
            holding four anchors (`i edit`, `r reset`, `a add`, `d remove`), which `markCursor` moves to the
-           cursor row's end, before an open box, and in which it sets `hidden` on each anchor
+           end of the cursor row's first line, wrapping there when the line has no room (review fix), and in which it sets `hidden` on each anchor
            `rowPromptActions` leaves out (drafter) · a row with an `addBind` action is a key row: it shows
            `a add  d remove  r reset`, and no `i edit`, since `i` on a key row runs add (drafter, from
            `commandActions` in `src/plugins/settings/page/keymap-view.ts`) · every other row shows `i edit` and

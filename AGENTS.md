@@ -270,7 +270,8 @@ round; primer: an open primer), since main, not the page, decides.
     with the line's prefix in `src/shared/placement-check.ts`, which the runner and the plugin share) the
     plugin logs `[keys] unplaced <keys> <command> in <scope>`, once per scope and bind, for each bind firing in a
     scope that was in force during the page load whose command no anchor named during the page load, in that scope or
-    with no scope. Leader sequences and vim's own keys are left out. The self-test fails on that line, so a new
+    with no scope, on an element seen on the page (connected when the anchor drew, hid or showed, was disposed, or at
+    the check). Leader sequences and vim's own keys are left out. The self-test fails on that line, so a new
     built-in key ships with its place on screen. A target drawn only in some states (a ninth choice, a permission
     card, the Model and Controls chips) is placed by a self-test fixture state that builds it, shown or hidden; never
     by a stand-in element made only to satisfy the gate.

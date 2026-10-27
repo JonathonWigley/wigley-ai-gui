@@ -82,7 +82,7 @@ Decisions:
   tab. The pair carries `is-no-target`
   (`visibility: hidden`) while `railRows(primer)` holds fewer than two rows.
 - **Row prompt.** The view makes one `span.primer-row-prompt` at mount, holding the `y`, `n`, `u` and `D` anchors,
-  each anchored once. `drawRail` appends it to the trailing end of the selected row while `rowPrompt(primer)` is not
+  each anchored once. `drawRail` appends it to the selected row, on a line of its own under the row's label (review fix), while `rowPrompt(primer)` is not
   `'none'`, which moves it, and sets `hidden` on the `D` anchor unless `rowPrompt` is `'extra'`. On the Feature row it
   is attached nowhere. It reads `y yes  n no  u unclear`, plus `D remove` on an extra task.
 - **`rowPrompt(primer)`** is `'none'` on the Feature row, `'extra'` on a task whose group is `extra`, and `'task'` on
