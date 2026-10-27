@@ -1,6 +1,6 @@
 # 10 — Backlog self-test
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -64,3 +64,5 @@ Done when: `npm run selftest` passes every group, including every other plugin's
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 317f450 · proof: diff read; full npm run selftest passed (worker run 3, before the peer's fabric install); backlog and docs main tests 236 pass; screenshots read · concerns: typecheck fails only at backlog start.test.ts:100 from the Notes peer's uncommitted DocsMainExports change (stub handoff agreed); wrote log line shows the full real path for edits but the ~ root for creates; leaveBox label says body box whatever box is focused

@@ -141,7 +141,7 @@ docs only through `DocsMainExports` and `DocsPageExports`, typed by `src/plugins
 - [x] [Backlog page part](09-backlog-page.md) — after 08
 
 ### Wave 5
-- [ ] [Backlog self-test](10-backlog-selftest.md) — after 09
+- [x] [Backlog self-test](10-backlog-selftest.md) — after 09
 
 ### Wave 6
 - [ ] [Doc re-read](11-doc-reread.md) — after every code task
@@ -163,10 +163,12 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - 02 · dc3d5e0 · diff read; typecheck clean; git and plugin-status tests pass · concerns: fileAtHead rejects on an unborn HEAD; the fake Git lives in plugin-status.test.ts
 - 08 · d4855da · diff read; backlog tests 44 pass; typecheck clean · concerns: homes.ts copies docs' small metaString helper (backlog main may import only docs' contract); a symlinked clone could read as not uncommitted
 - 09 · 21dce15 · diff read; backlog, keymap and manifest tests pass; typecheck clean; app started in selftest · concerns: delete prompt text fixed (createConfirmPrompt body is fixed at creation); discard prompt reuses the delete confirm labels; one-line boxes accept line breaks; view/editor/keys paths need the live run
+- 10 · 317f450 · diff read; full npm run selftest passed (worker run 3, before the peer's fabric install); backlog and docs main tests 236 pass; screenshots read · concerns: typecheck fails only at backlog start.test.ts:100 from the Notes peer's uncommitted DocsMainExports change (stub handoff agreed); wrote log line shows the full real path for edits but the ~ root for creates; leaveBox label says body box whatever box is focused
 ### Contract changes
 - KindRule.contents (module-private): (name, existing) → (name, existing, place, paths) · why: the new-file title needs the place's folder · consumers: none · group 06
 - Git doc comments: unpushedPaths is files HEAD changed since the merge base with upstream; methods but fetch/lastFetch reject when git cannot start; commitPaths rejects on empty paths · why: state the error modes · consumers: 08 · group 02
 - HomeShape: a type alias over BacklogHome with PlanShape; writeFollowupEdit deps typed FollowupWriteDeps = Pick<DocsMainExports,'readDoc'|'writeDoc'>, plus readFollowupText · why: concrete types · consumers: none outside 08 · group 08
+- backlogSelfTestScript deps: as planned → { files, processes, git, paths, homeDir, started, reload } · why: order the rewrite after the start-time fixture and reload once written · consumers: none · group 10
 ### Rulings
 - Two repos: the gui review base is 0f512f5; the marketplace review base is a139b88 — the plan targets both repos' main — lead
 - A peer session (ai-dev-76) is on this machine, so every commit is pathspec-scoped and the review range is an explicit commit list — lead
@@ -189,5 +191,8 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - Log lines for a create's wrote, and committed/commit failed, use the ~-shown home root · group 09 · group 09
 - Empty-state text is a status line atop the side bar, as the docs tree does · group 09 · group 09
 - Notes lead ai-dev-6b runs its Wave 1 and task 02 in this tree now (window.ts, plugin.ts, docs contract/start, chat, sessions, notes, check-layers, fabric); agreed: no shared edits, failures traced to its files are its own, review fixes into shared files are agreed first, and Backlog tells it when the plan folder is deleted — lead
+- Backlog main writes the fixture repo at start outside a live run (as docs does), so docs' entry counts do not depend on run order — drive runs also get a dev/backlog-repo · group 10 · group 10
+- Fixture git identity, no signing and an empty hooks path live in the fixture repo's own config, since ProcessRunner takes no env and the app's own C commit needs them too · group 10 · group 10
+- One-line fix in backlog-view closeFilter (render(true)) so DOM focus leaves the filter box after Enter · group 10 · group 10
 ### Review rounds
 ### Test gate
