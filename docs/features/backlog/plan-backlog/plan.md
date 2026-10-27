@@ -131,7 +131,7 @@ docs only through `DocsMainExports` and `DocsPageExports`, typed by `src/plugins
 
 ### Wave 2
 - [ ] [Git contract and adapter](02-git-adapter.md) — after 04 (shares `docs/main/start.ts`), 01 (shares `check-layers.mts`)
-- [ ] [Docs creates follow-ups through the shared module](06-docs-create.md) — after 01
+- [x] [Docs creates follow-ups through the shared module](06-docs-create.md) — after 01
 - [x] [Marketplace version bump](07-version-bump.md) — after 03
 
 ### Wave 3
@@ -159,7 +159,9 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - 07 · wigley-ai-marketplace db34d66 · diff read; check_manifests --against origin/main passed · concerns: none
 - 05 · harness 1416e06, marketplace 87bb3a9, gui 402c262; ~/wigley-features/new-games-prototypes not in git · diff read: first-line and Contents-line swaps only; 121 items tagged · concerns: Silent reward popup tagged though its section has two open questions; harness numbered Design issues lists may index as one entry; NGP gained one untagged Contents line for an orphan section; the marketplace forms-wait-hook item says needs a feature plan in its body only
 - 01 · 475e866 · diff read; followups tests 38 pass; typecheck and lint clean · concerns: no strict null checks in tsconfig; CRLF files not handled; deleting a numbered item does not renumber
+- 06 · a613926 · diff read; kinds tests pass; worker ran typecheck and lint clean · concerns: an in-repo home's new file is titled 'Follow-ups — features' (folder base name, as the plan said); a list-shaped create writes '- **name**' with no trailing dash
 ### Contract changes
+- KindRule.contents (module-private): (name, existing) → (name, existing, place, paths) · why: the new-file title needs the place's folder · consumers: none · group 06
 ### Rulings
 - Two repos: the gui review base is 0f512f5; the marketplace review base is a139b88 — the plan targets both repos' main — lead
 - A peer session (ai-dev-76) is on this machine, so every commit is pathspec-scoped and the review range is an explicit commit list — lead

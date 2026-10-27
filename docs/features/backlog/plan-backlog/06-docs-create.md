@@ -1,6 +1,6 @@
 # 06 — Docs creates follow-ups through the shared module
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -34,3 +34,5 @@ Done when: `npm test -- src/plugins/docs` passes; `npm run lint` and `npm run ty
 Commit:    one commit for the group
 
 ## Proof
+
+Commit a613926 · proof: diff read; kinds tests pass; worker ran typecheck and lint clean · concerns: an in-repo home's new file is titled 'Follow-ups — features' (folder base name, as the plan said); a list-shaped create writes '- **name**' with no trailing dash
