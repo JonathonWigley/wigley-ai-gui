@@ -1,21 +1,25 @@
 import './keys.css';
 import type { PageApi, PagePart, PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
-import { iconButton } from '../../../shared/page/ui/icon-button';
 import { PLACEMENT_CHECK_EVENT } from '../../../shared/placement-check';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { Layout } from '../layouts/layout';
 import { keysManifest } from '../manifest';
 import { createAnchors } from './anchors';
 import { helpSections } from './help-sections';
 import { mountHelpView } from './help-view';
 import { keysFor, promptKeysFor } from './keys-for';
+import { createKeysParts, type Drawn } from './layout/keys-parts';
+import { readKeysLayout } from './layout/read-keys-layout';
 import { startUnplacedLog } from './unplaced-log';
 import { whichKeyModel } from './which-key';
 import { startWhichKey } from './which-key-controller';
 import { mountWhichKeyView } from './which-key-view';
 
-// The keys plugin has no main part, so its channel carries nothing.
+// The keys plugin's main part only registers its layouts, so its channel
+// carries nothing.
 type KeysApi = PageApi<
   typeof keysManifest,
   { invoke: Record<never, never>; messages: Record<never, never> }
@@ -24,8 +28,10 @@ type KeysApi = PageApi<
 // Shows which-key over every pending key sequence, on the page and in a box;
 // the help overlay over the `help` scope while it is open, closing when the
 // scope under it changes; and the Keys button at the title bar's end, its key
-// prompt inside it, which opens help. Each reads the keymap and settings as
-// they are now, and help and every anchor redraw when the keymap changes.
+// prompt inside it, which opens help. Each draws through the `keys.layout`
+// layout: help and the Keys button draw again on a new set, which-key at its
+// next show. Each reads the keymap and settings as they are now, and help and
+// every anchor redraw when the keymap changes.
 // Exports the keys bound to a command, and when they change, and `anchor`,
 // which draws a command's keys into a view's element, shown while its scope is
 // in force and the `showHints` setting is on. Records each scope in force and every anchor
@@ -34,6 +40,31 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
     const { keys, services, platform } = api;
+    const anchors = createAnchors({
+      keysFor: (command, scope, where) =>
+        promptKeysFor(keys.keymap(), command, scope, platform, where),
+      label: keys.label,
+      scope: () => keys.scope(),
+      showHints: () => api.settings().showHints,
+      platform,
+    });
+    const parts = createKeysParts({
+      defaultLayout,
+      kit: {
+        markdown: services.markdown,
+        keys: {
+          anchor: anchors.anchor,
+          keysFor: (command, scope) =>
+            keysFor(keys.keymap(), command, scope, platform),
+        },
+        commands: {
+          exists: (id) => keys.command(id) !== undefined,
+          run: (id) => api.commands.run(id),
+        },
+        platform,
+      },
+      log: services.log,
+    });
     startWhichKey({
       onPending: (listener) => keys.onPending(listener),
       holdPending: () => keys.holdPending(),
@@ -46,7 +77,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
           keys.label,
           platform,
         ),
-      view: mountWhichKeyView(api.areas.overlay, platform),
+      view: mountWhichKeyView(api.areas.overlay, parts),
       timers: services.timers,
       delayMs: () => api.settings().whichKeyDelayMs,
       timeoutMs: () => api.settings().whichKeyTimeoutMs,
@@ -56,15 +87,6 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
     const currentHelpSections = () =>
       helpSections(keys.keymap(), keys.scopes, keys.label, platform);
     const closeHelpCommand = qualify(keysManifest.id, 'closeHelp');
-    const toggleHelpCommand = qualify(keysManifest.id, 'toggleHelp');
-    const anchors = createAnchors({
-      keysFor: (command, scope, where) =>
-        promptKeysFor(keys.keymap(), command, scope, platform, where),
-      label: keys.label,
-      scope: () => keys.scope(),
-      showHints: () => api.settings().showHints,
-      platform,
-    });
     const closeHint = element('span', 'keys-close-hint');
     anchors.anchor(closeHint, closeHelpCommand, {
       scope: qualify(keysManifest.id, 'help'),
@@ -73,8 +95,8 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       api.areas.overlay,
       currentHelpSections(),
       () => api.commands.run(closeHelpCommand),
-      platform,
       closeHint,
+      parts,
     );
     // The pushed `help` scope while help is open, `null` while it is closed.
     let helpScope: PushedScope | null = null;
@@ -94,17 +116,20 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       }
     };
 
-    const keysButton = iconButton(
-      'record-keys',
-      'Keys',
-      () => api.commands.run(toggleHelpCommand),
-      'sm',
-    );
-    keysButton.classList.add('keys-title-bar-button');
-    const keysHint = element('span', 'keys-title-bar-hint');
-    keysButton.append(keysHint);
-    anchors.anchor(keysHint, toggleHelpCommand);
-    api.areas.titleBar.contribute(keysButton, { align: 'end' });
+    const keysButtonSlot = element('span', 'keys-title-bar-slot');
+    api.areas.titleBar.contribute(keysButtonSlot, { align: 'end' });
+    let keysButton: Drawn = parts.titleBarButton(keysButtonSlot);
+    api.layouts.show<Layout>({
+      defaultLayout,
+      read: readKeysLayout,
+      userLayout: () => api.settings().layout,
+      setLayouts(shown) {
+        parts.setLayouts(shown);
+        keysButton.dispose();
+        keysButton = parts.titleBarButton(keysButtonSlot);
+        help.layoutsChanged();
+      },
+    });
 
     keys.onKeymapChanged(() => {
       help.setSections(currentHelpSections());

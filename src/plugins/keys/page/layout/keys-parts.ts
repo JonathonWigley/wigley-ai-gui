@@ -1,0 +1,188 @@
+import type { ViewScope } from '../../../../contracts/keymap';
+import type { Log } from '../../../../contracts/log';
+import type { ShownLayouts } from '../../../../contracts/plugin';
+import {
+  drawPart,
+  type PartPick,
+  type RollbackDeps,
+} from '../../../../shared/page/layout-host/draw-part';
+import { pickLayout } from '../../../../shared/page/layout-host/pick';
+import { qualify } from '../../../../shared/plugin-manifests';
+import type {
+  CompleteLayout,
+  HelpInput,
+  Layout,
+  WhichKeyInput,
+} from '../../layouts/layout';
+import { keysManifest } from '../../manifest';
+import { createKeysKit, type KeysKitDeps } from './keys-kit';
+
+// A drawn part. `dispose` removes the element and disposes every anchor the
+// part and the parts nested in it named.
+export interface Drawn {
+  element: HTMLElement;
+  dispose(): void;
+}
+
+export interface KeysPartsDeps {
+  defaultLayout: CompleteLayout;
+  kit: KeysKitDeps;
+  log: Log;
+}
+
+// Draws each keys surface's part into `parent` with the layouts last set,
+// `default` alone until the first `setLayouts`. Each part, nested ones
+// included, picks its own layout and falls back to `default` on a throw.
+// `setLayouts` only stores the set; the views draw again.
+export interface KeysParts {
+  help(parent: HTMLElement, input: HelpInput): Drawn;
+  whichKey(parent: HTMLElement, input: WhichKeyInput): Drawn;
+  titleBarButton(parent: HTMLElement): Drawn;
+  setLayouts(shown: ShownLayouts<Layout>): void;
+}
+
+type PartName = keyof Layout;
+type Builder<P extends PartName> = NonNullable<Layout[P]>;
+
+const DEFAULT_NAME = 'default';
+const HELP_SCOPE = qualify(keysManifest.id, 'help');
+
+// The scope each part's keys fire in; null anchors with no scope, so the
+// Keys button's hint shows in every scope.
+const PART_SCOPES: Record<PartName, ViewScope | null> = {
+  help: HELP_SCOPE,
+  helpSection: HELP_SCOPE,
+  helpRow: HELP_SCOPE,
+  whichKey: 'any',
+  whichKeyEntry: 'any',
+  titleBarButton: null,
+};
+
+// The layout `part` draws with from `shown`: the user's when it defines the
+// part, else `default`.
+function pickFor(
+  part: PartName,
+  shown: ShownLayouts<Layout>,
+): PartPick<Layout> {
+  return pickLayout(
+    [shown.user, DEFAULT_NAME],
+    shown.layouts,
+    (layout) => layout[part] !== undefined,
+  );
+}
+
+export function createKeysParts(deps: KeysPartsDeps): KeysParts {
+  let shown: ShownLayouts<Layout> = {
+    layouts: new Map<string, Layout>([[DEFAULT_NAME, deps.defaultLayout]]),
+    user: DEFAULT_NAME,
+  };
+
+  // Draws `part` into `parent` with its own pick; `call` runs the builder
+  // with a kit whose anchors `rollback` records.
+  const draw = <P extends PartName>(
+    part: P,
+    parent: HTMLElement,
+    call: (
+      builder: Builder<P>,
+      slot: HTMLElement,
+      rollback: RollbackDeps,
+    ) => HTMLElement,
+  ): Drawn => {
+    const drawn = drawPart<Layout, Builder<P>, { element: HTMLElement }>({
+      owner: keysManifest.id,
+      parent,
+      pick: pickFor(part, shown),
+      defaultLayout: deps.defaultLayout,
+      part: (layout) => layout[part] as Builder<P> | undefined,
+      build: (builder, slot, rollback) => ({
+        element: call(builder, slot, rollback),
+      }),
+      log: deps.log,
+      logSource: keysManifest.id,
+      partName: part,
+    });
+    const element = drawn.built.element;
+    return {
+      element,
+      dispose() {
+        element.remove();
+        drawn.dispose();
+      },
+    };
+  };
+
+  const kitFor = (part: PartName, rollback: RollbackDeps) =>
+    createKeysKit(deps.kit, PART_SCOPES[part], rollback);
+
+  // Draws a part nested in another part's draw: its dispose joins the outer
+  // draw's, so a rollback or a dispose of the outer part reaches it.
+  const nested = <P extends PartName>(
+    part: P,
+    parent: HTMLElement,
+    outer: RollbackDeps,
+    call: (
+      builder: Builder<P>,
+      slot: HTMLElement,
+      rollback: RollbackDeps,
+    ) => HTMLElement,
+  ): HTMLElement => {
+    const drawn = draw(part, parent, call);
+    outer.recordAnchor(drawn);
+    return drawn.element;
+  };
+
+  return {
+    help(parent, input) {
+      return draw('help', parent, (help, slot, helpRollback) =>
+        help(slot, input, {
+          ...kitFor('help', helpRollback),
+          section: (sectionParent, section) =>
+            nested(
+              'helpSection',
+              sectionParent,
+              helpRollback,
+              (helpSection, sectionSlot, sectionRollback) =>
+                helpSection(sectionSlot, section, {
+                  ...kitFor('helpSection', sectionRollback),
+                  hint: (rowParent, hint) =>
+                    nested(
+                      'helpRow',
+                      rowParent,
+                      sectionRollback,
+                      (helpRow, rowSlot, rowRollback) =>
+                        helpRow(rowSlot, hint, kitFor('helpRow', rowRollback)),
+                    ),
+                }),
+            ),
+        }),
+      );
+    },
+    whichKey(parent, input) {
+      return draw('whichKey', parent, (whichKey, slot, rollback) =>
+        whichKey(slot, input, {
+          ...kitFor('whichKey', rollback),
+          entry: (entryParent, entry) =>
+            nested(
+              'whichKeyEntry',
+              entryParent,
+              rollback,
+              (whichKeyEntry, entrySlot, entryRollback) =>
+                whichKeyEntry(
+                  entrySlot,
+                  entry,
+                  kitFor('whichKeyEntry', entryRollback),
+                ),
+            ),
+        }),
+      );
+    },
+    titleBarButton(parent) {
+      return draw('titleBarButton', parent, (titleBarButton, slot, rollback) =>
+        titleBarButton(slot, kitFor('titleBarButton', rollback)),
+      );
+    },
+    setLayouts(next) {
+      shown = next;
+    },
+  };
+}

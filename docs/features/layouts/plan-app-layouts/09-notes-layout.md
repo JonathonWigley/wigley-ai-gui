@@ -1,6 +1,6 @@
 # 09 — Notes layout
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -218,3 +218,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit c0bde46 · proof: diff read: Produces present; notes tests 126 pass; typecheck clean; styles, oxlint, notes layers clean · concerns: notes.css .notes-row-value > .ui-tag no longer matches inside a display:contents root; the default sets overflow-wrap and white-space inline on each tag instead

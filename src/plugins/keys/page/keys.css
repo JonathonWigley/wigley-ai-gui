@@ -33,7 +33,7 @@
 
 /* Help: every bound key, in a dialog wider than a prose one so its sections
    sit side by side. */
-.ui-dialog:has(> .ui-dialog-body > .keys-help-sections) {
+.ui-dialog.keys-help-dialog {
   width: min(100%, calc(var(--wg-space-8) * 28));
 }
 
@@ -50,6 +50,12 @@
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* The Keys button's slot draws no box, so the button sits in the title bar's
+   end track. */
+.keys-title-bar-slot {
+  display: contents;
 }
 
 /* The title bar's Keys button, its key prompt inside it after the icon. */

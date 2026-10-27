@@ -2,8 +2,9 @@ import { definePlugin } from '../../shared/define-plugin';
 
 // Key hints over the merged keymap: which-key while a sequence is pending,
 // the help overlay listing every key, the title bar's Keys button, and the
-// prompts drawn into the anchors views name. Page-only, and names no other
-// plugin.
+// prompts drawn into the anchors views name, each surface drawn through the
+// `layout` setting's keys layout. Its main part only registers that layout
+// contract, and it names no other plugin.
 // `whichKeyDelayMs` is how long a pending sequence waits before the panel
 // opens; `whichKeyTimeoutMs`, when set, ends a sequence the panel has shown
 // that long, and `null` lets it wait for the next key or Esc. `showHints`
@@ -20,6 +21,7 @@ export const keysManifest = definePlugin({
     whichKeyDelayMs: 200,
     whichKeyTimeoutMs: null as number | null,
     showHints: true,
+    layout: 'default',
   },
   optionalSettings: { whichKeyTimeoutMs: 'number' },
   settingInfo: {
@@ -37,6 +39,11 @@ export const keysManifest = definePlugin({
       label: 'Key hints',
       description:
         'Show each key beside the control or row it acts on. Which-key and the Keys dialog list every key either way.',
+    },
+    layout: {
+      label: 'Keys layout',
+      description:
+        'The layout that draws help, which-key and the Keys button: a folder in the layouts/keys folder, or default.',
     },
   },
   themeTokens: {

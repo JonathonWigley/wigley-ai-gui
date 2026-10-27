@@ -224,7 +224,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 - [x] [Docs layout](06-docs-layout.md) — after 02
 - [x] [Backlog layout](07-backlog-layout.md) — after 02
 - [x] [Settings layout](08-settings-layout.md) — after 02
-- [ ] [Notes layout](09-notes-layout.md) — after 02
+- [x] [Notes layout](09-notes-layout.md) — after 02
 - [x] [Gallery layout](11-gallery-layout.md) — after 02
 - [ ] [Keys overlays layout](12-keys-layout.md) — after 02
 - [ ] [Shell layout](13-shell-layout.md) — after 02
@@ -257,6 +257,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - 06 · ff4b9b1 · diff read: Produces present (amended below); docs tests 525 pass; lint, layers, styles clean; selftest all passed, every key placed; tree typecheck errors only in chat's in-flight files · concerns: 02's list picker drawRow rows lose the pointer cursor (third report); docs-page-fakes.ts test fake added outside Files; focus and scroll keep proved only in the fake DOM
 - 14 · 9456b81 · diff read: Produces present (amended below); chat + shared/page tests 496 pass; chat typecheck, layers, styles, oxlint clean; selftest deferred to the gate (blocked by in-flight gallery/sessions) · concerns: chat.css gained two rules (.chat-dialog-part > .ui-dialog-actions margin, image viewer frame display:contents); chat-kit.ts appended duplicates the new placed helper; AGENTS.md § A chat layout and agent-chat design § Layouts name only entry builders (task 16); list picker drawRow rows lose ui-row--action (fourth report)
 - 11 · d9421e4 · diff read: Produces present (GalleryViewDeps amended); gallery tests 15 pass; typecheck clean; layers, styles, oxlint clean · concerns: AGENTS.md lines 161 and 534 say gallery has no main part (task 16); a dropped Split sample's ResizeObserver is never disconnected (createSplit has no dispose); relayout scroll test is weak in the fake DOM; head draws twice at start
+- 09 · c0bde46 · diff read: Produces present; notes tests 126 pass; typecheck clean; styles, oxlint, notes layers clean · concerns: notes.css .notes-row-value > .ui-tag no longer matches inside a display:contents root; the default sets overflow-wrap and white-space inline on each tag instead
 ### Contract changes
 - LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
 - LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
@@ -268,6 +269,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - ChatView.setLayout removed; start.ts setLayouts calls ChatLayouts.set(shown) and chat-view rebuilds on ChatLayouts.onChange · why: one shown-layouts source for every surface · consumers: 15 · group 14
 - listenForImages(tab, composer, root, deps) → listenForImages(tab, root, deps) returning { listenForPaste(composer) }; buildAttachmentStrip removed; DialogAction and dialogActions(actions, deps) move to dialog-kits.ts; DialogDeps, PickerDeps, ImageViewerDeps extend the surface kit deps, built once in start.ts as partDeps · why: composers are redrawn and dialogs place app-built actions · consumers: none · group 14
 - GalleryViewDeps: anchor dep → extends GalleryPartsDeps (markdown, keys anchor/keysFor, commands, platform, log) plus uiState · why: the base kit needs keysFor, commands and log · consumers: none outside 11 · group 11
+- NotePopupDeps.run → commands: KitCommands plus platform, keys adds keysFor; MarkupViewDeps keys and run → parts: NotesPartsDeps · why: base kit deps · consumers: none outside 09 · group 09
 ### Rulings
 - selectedRow returns stored selection without railRows lookup — selection is the identity rows are built from — a stale selection would come back as is · group 01 · group 01
 - showTarget checks only the target's task exists, not the item — no caller builds a missing-item target — would select a row with no item · group 01 · group 01
@@ -293,5 +295,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - each dialog part draws once at creation with blank input so its anchors are placed from page load — keeps today's anchor placement — one extra draw per dialog · group 14 · group 14
 - cell draws are recorded through their section's rollback, so a section's dispose covers its cells — one dispose per part — none · group 11 · group 11
 - kit.cell with a missing row or column throws so the section falls back to default; a repeated cell is unguarded — a user layout error shows as fallback — a duplicate cell moves silently · group 11 · group 11
+- an image the images part leaves out is not appended — task names no append for images — a layout can hide images · group 09 · group 09
+- the confirm part draws into the dialog body and the app hides confirm.actions — part owns the buttons — none · group 09 · group 09
 ### Review rounds
 ### Test gate
