@@ -1739,6 +1739,70 @@ describe('createChatSessions saved sessions', () => {
     },
   );
 
+  it('send_TwoSendsOnOnePendingRead_StartOneProcessInOrder', async () => {
+    const test = setUp();
+    test.chat.restore({
+      sessions: [record(PAST_ONE.sessionId, { sent: true })],
+      selectedHostSessionId: null,
+    });
+
+    const first = test.chat.send(ROW_ID, { text: 'first', images: [] });
+    const second = test.chat.send(ROW_ID, { text: 'second', images: [] });
+    await Promise.all([first, second]);
+
+    expect(test.harness.processes).toHaveLength(1);
+    expect(test.harness.processes[0].calls).toEqual([
+      { method: 'send', text: 'first', imageCount: 0 },
+      { method: 'send', text: 'second', imageCount: 0 },
+    ]);
+  });
+
+  it.each([
+    {
+      given: 'the row closed',
+      duringRead: (test: ReturnType<typeof setUp>) => test.chat.closed(ROW_ID),
+      logged: `[chat] send for session ${ROW_ID} closed while reading ignored`,
+    },
+    {
+      given: 'killAll',
+      duringRead: (test: ReturnType<typeof setUp>) => test.chat.killAll(),
+      logged: `[chat] send for session ${ROW_ID} ignored: chat is stopping`,
+    },
+  ])(
+    'send_RowWithHistoryPending_StoppedDuringRead_StartsNothing given $given',
+    async ({ duringRead, logged }) => {
+      const test = setUp();
+      test.chat.restore({
+        sessions: [record(PAST_ONE.sessionId, { sent: true })],
+        selectedHostSessionId: null,
+      });
+
+      const sending = test.chat.send(ROW_ID, { text: 'hi', images: [] });
+      duringRead(test);
+      await sending;
+      await flush();
+
+      expect(test.harness.processes).toEqual([]);
+      expect(test.logged).toContain(logged);
+    },
+  );
+
+  it('resume_KilledWhileReading_RejectsAndOpensNothing', async () => {
+    const test = setUp();
+    const hostId = PAST_ONE.sessionId;
+
+    const resuming = test.chat.resume({
+      projectDir: '/w/app',
+      profile: 'work',
+      hostSessionId: hostId,
+    });
+    test.chat.killAll();
+
+    await expect(resuming).rejects.toThrow(hostId);
+    expect(test.opened).toEqual([]);
+    expect(test.harness.processes).toEqual([]);
+  });
+
   it('loadHistory_RowClosedWhileReading_SendsNothing', async () => {
     const test = setUp();
     test.chat.restore({

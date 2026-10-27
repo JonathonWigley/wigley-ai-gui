@@ -95,12 +95,13 @@ export interface ChatSessions {
   // Opens a row for a saved session, its earlier conversation as the first
   // entries, and resumes its process; resolves to the row's sessionId. A
   // session chat holds a row for has that row activated instead; one open in
-  // the app on any other row rejects.
+  // the app on any other row rejects, as does any after `killAll`.
   resume(request: ResumeRequest): Promise<string>;
   // Starts a resting session's process first, rejecting when its profile is
   // missing or the start fails; the row then stays resting. A restored row
   // whose earlier conversation is still pending has it read before the start,
-  // so the read holds none of this turn.
+  // so the read holds none of this turn. After `killAll` a resting session
+  // starts no process and the message is dropped.
   send(sessionId: string, message: UserMessage): Promise<void>;
   // Adds an app notice to the session's entries and sends it as harness
   // entries travel, so `sessions()` keeps it.
@@ -120,8 +121,8 @@ export interface ChatSessions {
   // resting session has its owned session ended at once.
   closed(sessionId: string): void;
   // Kills every process not yet exited, a closed session's still ending
-  // included, for an app quit, which does not wait for `end`; nothing is
-  // saved after it.
+  // included, for an app quit or a chat plugin reload, which does not wait
+  // for `end`; nothing is saved or started after it.
   killAll(): void;
   // The sessions plugin's `connected` event: records the session's host id
   // as open in the app.
@@ -595,7 +596,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Opens the row for `hostId` and starts its process; a start that throws
-  // drops the session, then ends the owned session.
+  // drops the session, then ends the owned session. After `killAll` it throws
+  // and opens nothing.
   function openAndStart(
     harness: AgentHarness,
     profile: ChatProfile,
@@ -603,6 +605,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     opening: { hostId: string; resume: boolean; entries: ChatEntry[] },
     options: OpenOptions,
   ): HeldSession {
+    if (isKilled) {
+      throw new Error(
+        `session ${opening.hostId} not started: chat is stopping`,
+      );
+    }
     const session = openRow(
       projectDir,
       profile.name,
@@ -657,6 +664,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           );
           return;
         }
+      }
+      if (isKilled) {
+        log('chat', `send for session ${sessionId} ignored: chat is stopping`);
+        return;
       }
       if (!session.state.running) {
         startProcess(session, harness, profile, session.sent);
