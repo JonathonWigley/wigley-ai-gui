@@ -1,6 +1,6 @@
 # 11 — Gallery layout
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -150,3 +150,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit d9421e4 · proof: diff read: Produces present (GalleryViewDeps amended); gallery tests 15 pass; typecheck clean; layers, styles, oxlint clean · concerns: AGENTS.md lines 161 and 534 say gallery has no main part (task 16); a dropped Split sample's ResizeObserver is never disconnected (createSplit has no dispose); relayout scroll test is weak in the fake DOM; head draws twice at start

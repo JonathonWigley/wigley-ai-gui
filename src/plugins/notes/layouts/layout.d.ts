@@ -1,0 +1,158 @@
+import type {
+  BaseKit,
+  KitRowOptions,
+} from '../../../shared/page/layout-host/kit';
+
+// The contract of a notes layout: the note popup's field rows and their values, the image entries, the action
+// buttons, the discard confirmation, the markup toolbar and the rows of the notes list picker. Each part appends its
+// root element to `parent` and returns `{ element }`; the app sets `data-layout="<name>"` and
+// `data-layout-owner="notes"` on that root. A layout's `layout.css` restyles under
+// `[data-layout-owner="notes"][data-layout="<name>"]`.
+//
+// The app keeps the dialog frames and titles, the title box and the body editor, the markup editor, the cursor
+// prompt (moved to the selected row), `is-cursor` on the rows, and the picker's panel, title, filter and cursor.
+//
+// What a part leaves out:
+// - a row's `valueSlot`: the app appends a `div.notes-row-value` at the end of the row root. The app fills each slot:
+//   the title row with the title box, the body row with the body editor, the other rows with their value part.
+// - a button of `actions`, `confirm` or `markupToolbar`, and the markup toolbar's `colourKeys`: the app appends it at
+//   the end of the part's root, in the app's order, so every command keeps a key anchor.
+// - a `pickerRow`'s `trailing`: the app appends it at the end of the row root.
+// The list picker sets `title`, `is-selected`, `is-cursor` and the click on a `pickerRow` root, so the row gives
+// `kit.row` no `onClick`.
+//
+// Kit scopes: rows, values, images and actions `notes.popup`; `confirm` `notes.confirm`; `markupToolbar`
+// `notes.markup`; `pickerRow` `notes.picker`.
+
+export type NoteField =
+  | 'target'
+  | 'title'
+  | 'body'
+  | 'tags'
+  | 'images'
+  | 'session';
+export type NoteAction =
+  | 'discard'
+  | 'appendFollowup'
+  | 'sendSession'
+  | 'sendFollowup';
+export type ConfirmAction = 'confirmNo' | 'confirmYes';
+export type MarkupTool = 'select' | 'pen' | 'text' | 'arrow' | 'box';
+export type MarkupColour = 'red' | 'yellow' | 'green' | 'blue';
+export type MarkupCommand = 'undo' | 'redo' | 'closeMarkup';
+
+export interface NoteRowInput {
+  field: NoteField;
+  label: string;
+}
+// The target's home label, or null for no target.
+export interface TargetInput {
+  text: string | null;
+}
+export interface TagsInput {
+  tags: string[];
+}
+export interface ImagesInput {
+  count: number;
+}
+// `position` counts from 1: 1 is the first image. `alt` is `Image <position>`; `isSelected` marks the image the
+// popup's keys act on.
+export interface NoteImageInput {
+  position: number;
+  src: string;
+  alt: string;
+  hasMarkup: boolean;
+  isSelected: boolean;
+}
+// The session chip's text, or null for no session.
+export interface SessionInput {
+  text: string | null;
+}
+// The open picker's title and the row's line.
+export interface PickerRowInput {
+  picker: 'Target' | 'Tags' | 'Session' | 'Follow-up';
+  label: string;
+}
+
+// A part's root, appended to `parent`.
+export interface NotesPart {
+  element: HTMLElement;
+}
+
+export interface NotesKit extends BaseKit {}
+export interface RowKit extends NotesKit {
+  // Appends the row's `div.notes-row-value`, which the app fills, and returns it.
+  valueSlot(parent: HTMLElement): HTMLElement;
+  // The key hint of the command that picks the row's value, labelled `pick`; an empty `span` for a field with none.
+  pickHint(parent: HTMLElement): HTMLElement;
+}
+export interface ImagesKit extends NotesKit {
+  // Draws the `image` part for the image at `position` (from 1) into `parent` and returns its root; throws for a
+  // position the note does not hold.
+  image(parent: HTMLElement, position: number): HTMLElement;
+}
+export interface ImageKit extends NotesKit {
+  // `button.notes-image-remove`: removes this image on click.
+  removeButton(parent: HTMLElement): HTMLButtonElement;
+}
+export interface SessionKit extends NotesKit {
+  // `button.ui-chip.notes-session` reading `text`: picks another session on click.
+  sessionChip(parent: HTMLElement, text: string): HTMLElement;
+  // An icon button that removes the session on click.
+  removeButton(parent: HTMLElement): HTMLButtonElement;
+}
+export interface ActionsKit extends NotesKit {
+  // The action's button: its label, variant and key hint; runs `notes.<action>` on click.
+  actionButton(parent: HTMLElement, action: NoteAction): HTMLButtonElement;
+}
+export interface ConfirmKit extends NotesKit {
+  // Keep (`confirmNo`) or Discard (`confirmYes`): its label, variant and key hint; runs `notes.<action>` on click.
+  actionButton(parent: HTMLElement, action: ConfirmAction): HTMLButtonElement;
+}
+export interface PickerRowKit extends NotesKit {
+  // The app's element for the end of the cursor row, or null on every other row; pass it as
+  // `KitRowOptions.trailing`.
+  trailing(): HTMLElement | null;
+}
+export interface MarkupKit extends NotesKit {
+  // The tool's button with its key hint; the app marks the tool in use `is-active`.
+  toolButton(parent: HTMLElement, tool: MarkupTool): HTMLButtonElement;
+  // `button.notes-colour` with its `span.notes-swatch`; the app marks the colour in use `is-active`.
+  colourButton(parent: HTMLElement, colour: MarkupColour): HTMLButtonElement;
+  // `span.notes-markup-keys`: the keys that step the colour.
+  colourKeys(parent: HTMLElement): HTMLElement;
+  // Undo, Redo or Done with its key hint.
+  commandButton(parent: HTMLElement, command: MarkupCommand): HTMLButtonElement;
+}
+
+// A layout defines only the parts it changes; `default` draws the rest.
+export interface Layout {
+  // One per field, top to bottom: the label, the value slot and the pick keys.
+  row?(parent: HTMLElement, input: NoteRowInput, kit: RowKit): NotesPart;
+  // The values drawn into the target, tags, images and session slots.
+  target?(parent: HTMLElement, input: TargetInput, kit: NotesKit): NotesPart;
+  tags?(parent: HTMLElement, input: TagsInput, kit: NotesKit): NotesPart;
+  images?(parent: HTMLElement, input: ImagesInput, kit: ImagesKit): NotesPart;
+  image?(parent: HTMLElement, input: NoteImageInput, kit: ImageKit): NotesPart;
+  session?(
+    parent: HTMLElement,
+    input: SessionInput,
+    kit: SessionKit,
+  ): NotesPart;
+  // The note dialog's buttons, drawn into its actions row.
+  actions?(parent: HTMLElement, kit: ActionsKit): NotesPart;
+  // The discard confirmation's text and buttons, drawn into its body.
+  confirm?(parent: HTMLElement, kit: ConfirmKit): NotesPart;
+  // The markup view's toolbar, over the image under markup.
+  markupToolbar?(parent: HTMLElement, kit: MarkupKit): NotesPart;
+  pickerRow?(
+    parent: HTMLElement,
+    input: PickerRowInput,
+    kit: PickerRowKit,
+  ): NotesPart;
+}
+
+// The built-in `default` layout defines every part.
+export interface CompleteLayout extends Required<Layout> {}
+
+export type { KitRowOptions };

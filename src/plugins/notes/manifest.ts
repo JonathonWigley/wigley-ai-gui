@@ -93,6 +93,7 @@ export const notesManifest = definePlugin({
     launchBrief:
       'A nitpick to fix, noted while working. Make the change, then report.',
     autosaveDelayMs: 400,
+    layout: 'default',
   },
   settingInfo: {
     launchBrief: {
@@ -104,6 +105,11 @@ export const notesManifest = definePlugin({
       label: 'Autosave delay',
       description:
         'Milliseconds the note popup waits after an edit before it saves the draft.',
+    },
+    layout: {
+      label: 'Layout',
+      description:
+        "The notes layout the note popup draws in: a folder name in notes' layouts folder, or default.",
     },
   },
   themeTokens: {

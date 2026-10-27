@@ -1,4 +1,3 @@
-import type { CommandId } from '../../../contracts/commands';
 import type { Log } from '../../../contracts/log';
 import type {
   MarkupEditor,
@@ -8,42 +7,25 @@ import type {
 import type {
   PageChannel,
   PushedScope,
+  ShownLayouts,
   ToastTone,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
-import { textButton } from '../../../shared/page/ui/button';
-import type { KeysPageExports } from '../../keys/contract';
 import type { NoteDraft, NotesChannel } from '../contract';
-
-// The markup colours in the order `c` steps through them, each the theme
-// token `--wg-notes-markup-<name>`.
-const COLOURS = ['red', 'yellow', 'green', 'blue'] as const;
-
-type Colour = (typeof COLOURS)[number];
-
-const COLOUR_LABELS: Record<Colour, string> = {
-  red: 'Red',
-  yellow: 'Yellow',
-  green: 'Green',
-  blue: 'Blue',
-};
-
-const TOOLS: readonly { tool: MarkupTool; label: string; command: string }[] = [
-  { tool: 'select', label: 'Select', command: 'toolSelect' },
-  { tool: 'pen', label: 'Pen', command: 'toolPen' },
-  { tool: 'text', label: 'Text', command: 'toolText' },
-  { tool: 'arrow', label: 'Arrow', command: 'toolArrow' },
-  { tool: 'box', label: 'Box', command: 'toolBox' },
-];
-
-const SCOPE = 'notes.markup';
+import type { Layout, MarkupColour } from '../layouts/layout';
+import {
+  createNotesParts,
+  type DrawnToolbar,
+  MARKUP_COLOURS,
+  type NotesPartsDeps,
+} from './layout/notes-parts';
 
 export interface MarkupViewDeps {
   channel: PageChannel<NotesChannel>;
   markup: MarkupEditor;
-  keys: Pick<KeysPageExports, 'anchor'>;
-  run(command: CommandId): void;
+  // What the toolbar part draws with.
+  parts: NotesPartsDeps;
   // Pushes the `markup` scope.
   pushScope(): PushedScope;
   // The PNG bytes of image `id`.
@@ -56,8 +38,9 @@ export interface MarkupViewDeps {
   toast(text: string, tone: ToastTone): void;
 }
 
-// One image under markup: a toolbar of the tools and colours, and the host
-// the markup editor draws in. `open` pushes the `markup` scope and shows the
+// One image under markup: a toolbar of the tools and colours, drawn through
+// the notes layout's `markupToolbar` (`default` alone until the first
+// `setLayouts`), and the host the markup editor draws in. `open` pushes the `markup` scope and shows the
 // image's saved markup with the pen and the first colour; `close` ends a text
 // still being edited, pops the scope, tells `closed`, then saves the markup
 // when it changed since `open`. The tool, colour, undo and redo calls do
@@ -74,6 +57,8 @@ export interface MarkupView {
   stepColour(step: 1 | -1): void;
   undo(): void;
   redo(): void;
+  // Draws the toolbar again with `shown`; an open markup session is kept.
+  setLayouts(shown: ShownLayouts<Layout>): void;
 }
 
 interface Shown {
@@ -86,16 +71,10 @@ interface Shown {
 
 // The colour's CSS value, read from the theme now, so a theme change reaches
 // the next stroke.
-function readColour(colour: Colour): string {
+function readColour(colour: MarkupColour): string {
   return getComputedStyle(document.documentElement)
     .getPropertyValue(`--wg-notes-markup-${colour}`)
     .trim();
-}
-
-function group(children: readonly HTMLElement[]): HTMLElement {
-  const node = element('div', 'notes-markup-group');
-  node.append(...children);
-  return node;
 }
 
 export function createMarkupView(deps: MarkupViewDeps): MarkupView {
@@ -109,53 +88,30 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
   let colourIndex = 0;
   let saves: Promise<void> = Promise.resolve();
 
-  // A new element the keys plugin draws the keys of `command` into while the
-  // markup scope is in force; made once, as the view lives as long as the
-  // page.
-  const hint = (command: string): HTMLElement => {
-    const node = element('span', 'notes-hint');
-    deps.keys.anchor(node, `notes.${command}`, { scope: SCOPE });
-    return node;
+  const parts = createNotesParts(deps.parts);
+  // The tool and colour buttons the toolbar's last draw holds.
+  let buttons: Pick<DrawnToolbar, 'tools' | 'colours'> = {
+    tools: [],
+    colours: [],
   };
-
-  const commandButton = (label: string, command: string) =>
-    textButton(label, () => deps.run(`notes.${command}`), {
-      variant: 'ghost',
-      hint: hint(command),
-    });
-
-  const tools = TOOLS.map((entry) => ({
-    tool: entry.tool,
-    node: commandButton(entry.label, entry.command),
-  }));
-  const swatches = COLOURS.map((colour, index) => {
-    const node = textButton(COLOUR_LABELS[colour], () => pickColour(index), {
-      variant: 'ghost',
-    });
-    node.classList.add('notes-colour');
-    node.prepend(element('span', `notes-swatch notes-swatch--${colour}`));
-    return node;
-  });
-  const colourKeys = element('span', 'notes-markup-keys');
-  colourKeys.append(hint('nextColour'), hint('prevColour'));
-  toolbar.append(
-    group(tools.map((entry) => entry.node)),
-    group([...swatches, colourKeys]),
-    group([
-      commandButton('Undo', 'undo'),
-      commandButton('Redo', 'redo'),
-      commandButton('Done', 'closeMarkup'),
-    ]),
-  );
+  const drawToolbar = () => {
+    buttons = parts.markupToolbar(toolbar, (colour) =>
+      pickColour(MARKUP_COLOURS.indexOf(colour)),
+    );
+    markActive();
+  };
 
   // Marks the tool and colour in use.
   const markActive = () => {
-    for (const entry of tools) {
+    for (const entry of buttons.tools) {
       entry.node.classList.toggle('is-active', entry.tool === tool);
     }
-    swatches.forEach((node, index) => {
-      node.classList.toggle('is-active', index === colourIndex);
-    });
+    for (const entry of buttons.colours) {
+      entry.node.classList.toggle(
+        'is-active',
+        entry.colour === MARKUP_COLOURS[colourIndex],
+      );
+    }
   };
 
   const sessionNow = (): MarkupSession | null => shown?.session ?? null;
@@ -166,7 +122,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
       return;
     }
     colourIndex = index;
-    const colour = COLOURS[index];
+    const colour = MARKUP_COLOURS[index];
     session.setColour(readColour(colour));
     markActive();
     deps.log('notes', `colour ${colour}`);
@@ -205,7 +161,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
         entry.changed = true;
       });
       session.setTool(tool);
-      session.setColour(readColour(COLOURS[colourIndex]));
+      session.setColour(readColour(MARKUP_COLOURS[colourIndex]));
       deps.log('notes', `markup shown for image ${entry.pos}`);
     } catch (error) {
       if (shown !== entry) {
@@ -230,7 +186,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
     }
   };
 
-  markActive();
+  drawToolbar();
   return {
     element: root,
     isShown: () => shown !== null,
@@ -279,7 +235,9 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
       deps.log('notes', `tool ${next}`);
     },
     stepColour(step) {
-      pickColour((colourIndex + step + COLOURS.length) % COLOURS.length);
+      pickColour(
+        (colourIndex + step + MARKUP_COLOURS.length) % MARKUP_COLOURS.length,
+      );
     },
     undo() {
       const session = sessionNow();
@@ -294,6 +252,10 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
         session.redo();
         deps.log('notes', 'redo');
       }
+    },
+    setLayouts(shown) {
+      parts.setLayouts(shown);
+      drawToolbar();
     },
   };
 }

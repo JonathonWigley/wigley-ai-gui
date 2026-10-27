@@ -4,6 +4,7 @@ import type { BacklogMainExports } from '../../backlog/contract';
 import type { ChatMainExports } from '../../chat/contract';
 import type { SessionsMainExports } from '../../sessions/contract';
 import type { NotesChannel } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { notesManifest } from '../manifest';
 import { addDriveActions } from './drive-actions';
 import { createDraftStore } from './draft-store';
@@ -13,10 +14,11 @@ import { notesSelfTestScript } from './selftest-script';
 
 type NotesApi = MainApi<typeof notesManifest, NotesChannel>;
 
-// Keeps the note draft in notes' data folder and serves it to the page, with
-// the window capture, Backlog's homes and tags, and the two sends: a
-// follow-up through Backlog and a new session through chat. It hands the
-// self-test its script, and in a drive run it adds the drive actions.
+// Registers notes' layouts, keeps the note draft in notes' data folder and
+// serves it to the page, with the window capture, Backlog's homes and tags,
+// and the two sends: a follow-up through Backlog and a new session through
+// chat. It hands the self-test its script, and in a drive run it adds the
+// drive actions.
 export const notesMainPart: MainPart<typeof notesManifest> = {
   manifest: notesManifest,
   start(api: NotesApi) {
@@ -88,9 +90,11 @@ export const notesMainPart: MainPart<typeof notesManifest> = {
       api.drive !== null
         ? addDriveActions(api.drive, { store, data: api.data })
         : null;
+    const layouts = api.layouts.register({ layoutTypes });
     return {
       commands: {},
       dispose: () => {
+        layouts.dispose();
         driveActions?.dispose();
       },
     };

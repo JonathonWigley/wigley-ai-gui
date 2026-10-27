@@ -77,6 +77,7 @@ function startNotesPart() {
       pluginId === 'backlog' ? backlog : pluginId === 'chat' ? chat : {},
     data,
     drive: null,
+    layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof notesMainPart.start>[0];
   notesMainPart.start(api);
   const invoke = (name: string, ...args: unknown[]) => {

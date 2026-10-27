@@ -1,28 +1,25 @@
-import type { CommandId } from '../../../contracts/commands';
 import type { TextEditor } from '../../../contracts/editor';
+import type { Platform } from '../../../contracts/platform';
 import type {
   CommandsRunIn,
   PageChannel,
   PageServices,
   PluginAreas,
   PushedScope,
+  ShownLayouts,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { IMAGE_TYPES } from '../../../shared/image-types';
 import { saveState, startAutosave } from '../../../shared/page/autosave';
 import { element } from '../../../shared/page/dom';
+import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { createListPicker } from '../../../shared/page/list-picker';
 import { filesOf, holdsPastedText } from '../../../shared/page/pasted-images';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { textBoxInput } from '../../../shared/page/text-box';
-import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
-import { chip } from '../../../shared/page/ui/chip';
 import { createDialog } from '../../../shared/page/ui/dialog';
-import { icon } from '../../../shared/page/ui/icon';
-import { iconButton } from '../../../shared/page/ui/icon-button';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
-import { boxHint, keyStack } from '../../../shared/page/ui/key-anchors';
-import { tag } from '../../../shared/page/ui/tag';
+import { boxHint } from '../../../shared/page/ui/key-anchors';
 import { pngDataUrl } from '../../../shared/png-data-url';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -38,9 +35,11 @@ import type {
   SendKind,
 } from '../contract';
 import { emptyDraft, sendRefusal } from '../draft';
+import type { Layout, PickerRowInput } from '../layouts/layout';
 import type { notesManifest } from '../manifest';
 import { launchFolder } from '../note-targets';
 import { sessionChipText } from '../session-ref';
+import { createNotesParts, type NotesPartsDeps } from './layout/notes-parts';
 import { createMarkupView } from './markup-view';
 import { toPngBytes } from './png-image';
 import {
@@ -75,44 +74,6 @@ const FIELD_LABELS: Record<NoteField, string> = {
   session: 'Session',
 };
 
-interface ActionButton {
-  label: string;
-  variant: ButtonVariant;
-  command: NotesPageCommand;
-  // The scopes its key fires in, when more than the list's own: one anchor
-  // each, stacked in one place.
-  hintScopes?: readonly NotesScope[];
-}
-
-const POPUP_ACTIONS: readonly ActionButton[] = [
-  { label: 'Discard', variant: 'ghost', command: 'discard' },
-  {
-    label: 'Append to follow-up',
-    variant: 'secondary',
-    command: 'appendFollowup',
-  },
-  { label: 'Start session', variant: 'secondary', command: 'sendSession' },
-  {
-    label: 'Add follow-up',
-    variant: 'primary',
-    command: 'sendFollowup',
-    hintScopes: ['popup', 'title'],
-  },
-];
-
-// The command each field row names at its end, acting on that field from
-// any row.
-const ROW_COMMANDS: Partial<Record<NoteField, NotesPageCommand>> = {
-  target: 'pickTarget',
-  tags: 'pickTags',
-  session: 'pickSession',
-};
-
-const CONFIRM_ACTIONS: readonly ActionButton[] = [
-  { label: 'Keep', variant: 'secondary', command: 'confirmNo' },
-  { label: 'Discard', variant: 'danger', command: 'confirmYes' },
-];
-
 // The note sends each command delivers, once the draft is saved and its
 // images flattened.
 type Deliver = (
@@ -130,9 +91,11 @@ type DraftOperation =
 export interface NotePopupDeps {
   channel: PageChannel<NotesChannel>;
   services: PageServices;
-  keys: Pick<KeysPageExports, 'anchor'>;
+  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
   overlay: PluginAreas['overlay'];
-  run(command: CommandId): void;
+  // The commands a layout's kit runs and checks.
+  commands: KitCommands;
+  platform: Platform;
   pushScope(scope: NotesScope): PushedScope;
   // Read each time autosave schedules a save.
   autosaveDelayMs(): number;
@@ -142,16 +105,30 @@ export interface NotePopupDeps {
   sessionRows(): readonly NoteSession[];
 }
 
+export interface NotePopup {
+  commands: Record<NotesPageCommand, () => void>;
+  // Draws every part again with `shown`, keeping the boxes, their text and
+  // focus, an open picker and an open markup session.
+  setLayouts(shown: ShownLayouts<Layout>): void;
+}
+
 // The note popup: a modal dialog over any mode editing the one kept draft
-// through notes main. `open` loads the draft and shows it, or closes the
-// popup while it shows; closing keeps the draft, saving an unsaved edit at
-// once. Its commands are the notes page commands, each a no-op while the
-// popup cannot take it.
-export function createNotePopup(
-  deps: NotePopupDeps,
-): Record<NotesPageCommand, () => void> {
+// through notes main, its parts drawn through the notes layout (`default`
+// alone until the first `setLayouts`). `open` loads the draft and shows it,
+// or closes the popup while it shows; closing keeps the draft, saving an
+// unsaved edit at once. Its commands are the notes page commands, each a
+// no-op while the popup cannot take it.
+export function createNotePopup(deps: NotePopupDeps): NotePopup {
   const { channel, services } = deps;
   const { log, toast, paths, homeDir, editor: editorHost } = services;
+  const partsDeps: NotesPartsDeps = {
+    markdown: services.markdown,
+    keys: deps.keys,
+    commands: deps.commands,
+    platform: deps.platform,
+    log,
+  };
+  const parts = createNotesParts(partsDeps);
 
   const dialog = createDialog('Note');
   dialog.element.classList.add('notes-popup');
@@ -204,41 +181,29 @@ export function createNotePopup(
       anchored('nextBox', scope),
     ]);
 
+  // The state the value parts last drew; null draws them all.
+  let drawn: { state: PopupState; homes: readonly NoteHome[] } | null = null;
+
   // ── Rows ──────────────────────────────────────────────────────────────────
+  // The fields container stays app-owned; each row part draws inside it, and
+  // the app fills the row's value slot.
   const fieldsView = element('div', 'notes-fields');
-  const rows = new Map<NoteField, HTMLElement>();
-  const slots = new Map<NoteField, HTMLElement>();
-  for (const field of NOTE_FIELDS) {
-    const node = element('div', 'notes-row');
-    const value = element('div', 'notes-row-value');
-    const keys = element('span', 'notes-row-keys');
-    const command = ROW_COMMANDS[field];
-    if (command !== undefined) {
-      keys.append(anchored(command, 'popup', 'pick'));
-    }
-    node.append(
-      element('span', 'notes-row-label', FIELD_LABELS[field]),
-      value,
-      keys,
-    );
-    rows.set(field, node);
-    slots.set(field, value);
-    fieldsView.append(node);
-  }
+  let rows = new Map<NoteField, HTMLElement>();
+  let slots = new Map<NoteField, HTMLElement>();
+  const slot = (field: NoteField) => slots.get(field) as HTMLElement;
 
   // The cursor prompt, moved to the selected field's row on each draw.
   const cursorPrompt = element('span', 'notes-cursor-prompt');
   const editHint = anchored('editBox', 'popup', 'edit');
   const removeHint = anchored('remove', 'popup', 'remove');
   cursorPrompt.append(editHint, removeHint);
-  const slot = (field: NoteField) => slots.get(field) as HTMLElement;
-  slot('session').classList.add('notes-row-value--one-line');
 
+  // The title and body boxes are made once; each row draw moves them into
+  // the new value slot.
   const titleFrame = inputFrame();
   const titleInput = textBoxInput('notes-title');
   titleInput.placeholder = 'Title';
   titleFrame.append(titleInput, boxMoveHint('title'));
-  slot('title').append(titleFrame);
   titleInput.addEventListener('input', () => edit({ title: titleInput.value }));
   titleInput.addEventListener('focus', () => {
     if (isLocked()) {
@@ -256,7 +221,6 @@ export function createNotePopup(
 
   const bodyFrame = inputFrame();
   bodyFrame.classList.add('notes-body');
-  slot('body').append(bodyFrame);
   const body: TextEditor = editorHost.create(bodyFrame, '', {
     changed: (text) => edit({ body: text }),
     focused: () => {
@@ -272,6 +236,34 @@ export function createNotePopup(
   const bodyHint = boxMoveHint('popup');
   bodyFrame.append(bodyHint);
 
+  const boxOf = (field: NoteField): HTMLElement | null => {
+    if (field === 'title') {
+      return titleFrame;
+    }
+    return field === 'body' ? bodyFrame : null;
+  };
+
+  // Draws every row in field order, each holding its box; the value parts
+  // draw on the next render.
+  const drawRows = () => {
+    const nextRows = new Map<NoteField, HTMLElement>();
+    const nextSlots = new Map<NoteField, HTMLElement>();
+    for (const field of NOTE_FIELDS) {
+      const row = parts.row(
+        fieldsView,
+        { field, label: FIELD_LABELS[field] },
+        boxOf(field),
+      );
+      nextRows.set(field, row.element);
+      nextSlots.set(field, row.slot);
+    }
+    nextSlots.get('session')?.classList.add('notes-row-value--one-line');
+    rows = nextRows;
+    slots = nextSlots;
+    drawn = null;
+  };
+  drawRows();
+
   const boxFocused = (box: 'title' | 'body') => {
     focusedBox = box;
     dispatch({ type: 'fieldMoved', field: box });
@@ -285,8 +277,7 @@ export function createNotePopup(
   const markupView = createMarkupView({
     channel,
     markup: services.markup,
-    keys: deps.keys,
-    run: deps.run,
+    parts: partsDeps,
     pushScope: () => deps.pushScope('markup'),
     imageBytes: (id) => imageBytes(id),
     closed: () => {
@@ -329,80 +320,51 @@ export function createNotePopup(
     return homeOf(target)?.repo ?? paths.tilde(target, homeDir);
   };
 
-  const quiet = (text: string) => element('span', 'notes-empty', text);
-
   const drawTarget = (target: string | null) => {
-    if (target === null) {
-      slot('target').replaceChildren(quiet('No target'));
-      return;
-    }
     const home = homeOf(target);
-    const text = home === null ? paths.tilde(target, homeDir) : homeLabel(home);
-    const shown = element('span', 'notes-target', text);
-    shown.title = text;
-    slot('target').replaceChildren(shown);
-  };
-
-  const drawTags = (tags: readonly string[]) => {
-    slot('tags').replaceChildren(
-      ...(tags.length === 0
-        ? [quiet('No tags')]
-        : tags.map((held) => tag(held))),
-    );
+    let text: string | null = null;
+    if (target !== null) {
+      text = home === null ? paths.tilde(target, homeDir) : homeLabel(home);
+    }
+    parts.target(slot('target'), { text });
   };
 
   const drawImages = (state: PopupState) => {
-    if (state.images.length === 0) {
-      slot('images').replaceChildren(quiet('No images'));
-      return;
-    }
-    const strip = element('div', 'notes-strip');
-    state.images.forEach((image, index) => {
-      const held = element('div', 'notes-image');
-      held.classList.toggle('is-selected', index === state.imageIndex);
-      const thumbnail = element('img', 'notes-image-thumbnail');
-      thumbnail.src = images.get(image.id)?.url ?? '';
-      thumbnail.alt = `Image ${index + 1}`;
-      held.append(thumbnail);
-      if (image.hasMarkup) {
-        const pen = icon('edit');
-        pen.classList.add('notes-image-pen');
-        held.append(pen);
-      }
-      const remove = iconButton(
-        'close',
-        'Remove the image',
-        () => void removeImageAt(index),
-        'sm',
-      );
-      remove.classList.add('notes-image-remove');
-      held.append(remove);
-      strip.append(held);
-    });
-    slot('images').replaceChildren(strip);
+    parts.images(
+      slot('images'),
+      { count: state.images.length },
+      {
+        imageAt(position) {
+          const image = state.images[position - 1];
+          if (image === undefined) {
+            return undefined;
+          }
+          return {
+            position,
+            src: images.get(image.id)?.url ?? '',
+            alt: `Image ${position}`,
+            hasMarkup: image.hasMarkup,
+            isSelected: position - 1 === state.imageIndex,
+          };
+        },
+        removeImageAt: (index) => void removeImageAt(index),
+      },
+    );
   };
 
   const drawSession = (session: NoteSession | null) => {
-    if (session === null) {
-      slot('session').replaceChildren(quiet('No session'));
-      return;
-    }
-    const text = sessionChipText(session, paths, homeDir);
-    const remove = iconButton(
-      'close',
-      'Remove the session',
+    parts.session(
+      slot('session'),
+      {
+        text:
+          session === null ? null : sessionChipText(session, paths, homeDir),
+      },
       () => removeSession(),
-      'sm',
     );
-    const shown = chip(text, '', () => deps.run('notes.pickSession'));
-    shown.title = text;
-    shown.classList.add('notes-session');
-    slot('session').replaceChildren(shown, remove);
   };
 
   // Redraws only the rows whose state changed since the last draw, so typing
   // never rebuilds the strip's thumbnails.
-  let drawn: { state: PopupState; homes: readonly NoteHome[] } | null = null;
   const render = () => {
     const state = store.get();
     const last = drawn?.state ?? null;
@@ -410,7 +372,7 @@ export function createNotePopup(
       drawTarget(state.fields.target);
     }
     if (last?.fields.tags !== state.fields.tags) {
-      drawTags(state.fields.tags);
+      parts.tags(slot('tags'), { tags: [...state.fields.tags] });
     }
     const imagesChanged =
       last?.images !== state.images || last.imageIndex !== state.imageIndex;
@@ -447,30 +409,7 @@ export function createNotePopup(
   };
   store.subscribe(render);
 
-  // The action's keys, an anchor per scope it names, else one in `scope`.
-  const actionHint = (action: ActionButton, scope: NotesScope): HTMLElement => {
-    if (action.hintScopes === undefined) {
-      return anchored(action.command, scope);
-    }
-    return keyStack(
-      'notes-hint-stack',
-      action.hintScopes.map((hintScope) => anchored(action.command, hintScope)),
-    );
-  };
-
-  // Each action's button, its key drawn inside it while a scope it fires in
-  // is in force.
-  const actionButtons = (
-    actions: readonly ActionButton[],
-    scope: NotesScope,
-  ): HTMLElement[] =>
-    actions.map((action) =>
-      textButton(action.label, () => deps.run(`notes.${action.command}`), {
-        variant: action.variant,
-        hint: actionHint(action, scope),
-      }),
-    );
-  dialog.actions.append(...actionButtons(POPUP_ACTIONS, 'popup'));
+  parts.actions(dialog.actions);
 
   // ── Saving ────────────────────────────────────────────────────────────────
   const saveFields = async (fields: NoteFields) => {
@@ -647,7 +586,7 @@ export function createNotePopup(
   const pickerFilterHint = anchored('pickerFilter', 'picker', 'filter');
 
   const pick = <T>(
-    title: string,
+    title: PickerRowInput['picker'],
     items: readonly T[],
     label: (item: T) => string,
     selected: number,
@@ -660,6 +599,12 @@ export function createNotePopup(
       label,
       selected,
       headerEnd: pickerFilterHint,
+      drawRow: (list, _item, { label, trailing, recordAnchor }) =>
+        parts.pickerRow(
+          list,
+          { picker: title, label },
+          { trailing, recordAnchor },
+        ),
       chosen: (item) => {
         render();
         chosen(item);
@@ -673,15 +618,10 @@ export function createNotePopup(
   };
 
   // ── The discard confirmation ──────────────────────────────────────────────
+  // Its text and buttons are the `confirm` part, drawn into its body.
   const confirm = createDialog('Discard this note?');
-  confirm.body.append(
-    element(
-      'p',
-      'notes-confirm-text',
-      'Its title, text and images are removed.',
-    ),
-  );
-  confirm.actions.append(...actionButtons(CONFIRM_ACTIONS, 'confirm'));
+  confirm.actions.hidden = true;
+  parts.confirm(confirm.body);
   deps.overlay.contribute(confirm.element);
   let confirmScope: PushedScope | null = null;
 
@@ -710,6 +650,15 @@ export function createNotePopup(
       titleInput.blur();
     } else if (focusedBox === 'body') {
       body.blur();
+    }
+  };
+
+  // Focuses `box` again in the mode it had.
+  const refocusBox = (box: 'title' | 'body') => {
+    if (box === 'title') {
+      titleInput.focus();
+    } else {
+      body.focus();
     }
   };
 
@@ -1213,7 +1162,23 @@ export function createNotePopup(
     }
   };
 
-  return {
+  // Reads which box has focus before the redraw moves the boxes, and
+  // focuses it again after.
+  const setLayouts = (shown: ShownLayouts<Layout>) => {
+    const box = focusedBox;
+    parts.setLayouts(shown);
+    drawRows();
+    parts.actions(dialog.actions);
+    parts.confirm(confirm.body);
+    render();
+    markupView.setLayouts(shown);
+    picker.redraw();
+    if (box !== null) {
+      refocusBox(box);
+    }
+  };
+
+  const commands: Record<NotesPageCommand, () => void> = {
     open() {
       if (phase === 'open') {
         close();
@@ -1279,4 +1244,5 @@ export function createNotePopup(
     confirmYes: () => void confirmDiscard(),
     confirmNo: keepDraft,
   };
+  return { commands, setLayouts };
 }
