@@ -1,6 +1,6 @@
 # 05 — Primer layout and preview
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -316,4 +316,4 @@ Commit:    one commit for the group: "Primer draws through its layout, with a sa
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 860a80b · proof: diff read: Produces present, zl group renamed, zlp bound; primer tests 181 pass; primer self-test incl. layout preview group passes, every key placed; check-layers/check-styles clean · concerns: AGENTS.md still names only Space z l o (task 16); task card box order duplicated in the kit since boxes.ts was out of scope; screenshots show a blank band under the selected rail row with card focus, Unclear 2/2 count wrapping, raw markdown link in pointer — same as before, compare in task 17

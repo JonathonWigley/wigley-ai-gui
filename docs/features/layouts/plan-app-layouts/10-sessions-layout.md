@@ -1,6 +1,6 @@
 # 10 — Sessions layout and preview
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 02, 05 (`src/plugins/keymap.ts`)
 Plan: [plan.md](plan.md)

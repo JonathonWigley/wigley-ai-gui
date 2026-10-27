@@ -220,7 +220,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 ### Wave 2
 - [x] [Forms onto the host](03-forms-host.md) — after 02
 - [x] [Chat entries onto the host](04-chat-entries-host.md) — after 02
-- [ ] [Primer layout and preview](05-primer-layout.md) — after 01, 02
+- [x] [Primer layout and preview](05-primer-layout.md) — after 01, 02
 - [ ] [Docs layout](06-docs-layout.md) — after 02
 - [x] [Backlog layout](07-backlog-layout.md) — after 02
 - [ ] [Settings layout](08-settings-layout.md) — after 02
@@ -252,6 +252,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - 03 · 99e38f4 · diff read: Produces present; forms and host tests 618/618; forms typecheck and oxlint/oxfmt clean (full lint blocked by in-flight chat test) · concerns: buildSection in card-parts.ts has no caller now, left as out of scope; drawPart's dispose ignored, round view owns cleanup as before
 - 04 · ab26664 · diff read: Produces present (entries (parent,input,kit), ChatKit extends BaseKit with edgeCard, DotStatus re-export, chatCommandNamed); chat tests 308 pass; chat typecheck/lint clean · concerns: layout.test.ts keeps its own fake element (layer check bars chat/layouts from test-dom); chat-kit.ts copies base-kit's private appended helper
 - 07 · 4309e98 · diff read: Produces present; backlog tests 136 pass; backlog typecheck/oxlint/oxfmt clean · concerns: 02's confirm-prompt caches a keepButton a throwing confirmBody asked for, so rollback loses the Keep button; 02's list picker drawRow rows lack ui-row--action (no pointer cursor); cursorActions display:contents breaks .ui-row-trailing + .backlog-row-actions spacing (visual, task 17); detail oneLine is now a span; view test patches FakeElement focus/blur per test
+- 05 · 860a80b · diff read: Produces present, zl group renamed, zlp bound; primer tests 181 pass; primer self-test incl. layout preview group passes, every key placed; check-layers/check-styles clean · concerns: AGENTS.md still names only Space z l o (task 16); task card box order duplicated in the kit since boxes.ts was out of scope; screenshots show a blank band under the selected rail row with card focus, Unclear 2/2 count wrapping, raw markdown link in pointer — same as before, compare in task 17
 ### Contract changes
 - LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
 - LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
@@ -271,5 +272,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - default layout calls kit.markdown(parent, text, 'md') — keeps the old .md class — none · group 04 · group 04
 - default pane roots are div.backlog-pane with inline display:contents — keeps the grids and list scroll; backlog.css outside Files — inline style where a CSS rule would be cleaner · group 07 · group 07
 - setLayouts redraws inside keepFocusedBox and restores both lists' scrollTop; detail redraws from the top — matches drawDetail on a new key — none · group 07 · group 07
+- talliesText removed, no caller left — none · group 05 · group 05
+- view disposed before destroyForm — layout anchors go before the form — none seen · group 05 · group 05
 ### Review rounds
 ### Test gate

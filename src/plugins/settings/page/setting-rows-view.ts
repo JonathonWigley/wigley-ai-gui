@@ -1,6 +1,4 @@
 import type { SettingSection } from '../../../contracts/user-config';
-import { element } from '../../../shared/page/dom';
-import { tag } from '../../../shared/page/ui/tag';
 import { matchesSetting } from './row-filter';
 import { withoutSetting, withSetting } from './setting-edits';
 import {
@@ -17,47 +15,6 @@ import type {
   SectionDrawing,
   SettingsRow,
 } from './settings-view';
-
-export interface RowLines {
-  label: string;
-  description: string;
-  // What the row's end shows: its value, or its binds.
-  end: HTMLElement;
-  // Whether the user set the row, which shows a `Set` tag and, when not
-  // null, `defaultText` after it.
-  isSet: boolean;
-  defaultText: string | null;
-}
-
-// A settings row: the label and its end on the first line, the description
-// under it, wrapping; a box opens under them.
-export function settingsRowElement(lines: RowLines): HTMLElement {
-  const node = element('li', 'settings-row');
-  const head = element('div', 'settings-row-head');
-  const end = element('div', 'settings-row-end');
-  if (lines.isSet) {
-    end.append(tag('Set'));
-  }
-  if (lines.isSet && lines.defaultText !== null) {
-    end.append(
-      element('span', 'settings-row-default', `Default: ${lines.defaultText}`),
-    );
-  }
-  end.append(lines.end);
-  head.append(element('span', 'settings-row-label', lines.label), end);
-  node.append(head);
-  if (lines.description !== '') {
-    node.append(element('div', 'settings-row-description', lines.description));
-  }
-  return node;
-}
-
-// A row's value as its end shows it, tertiary when unset.
-export function valueElement(text: string, isUnset: boolean): HTMLElement {
-  const node = element('span', 'settings-row-value', text);
-  node.classList.toggle('is-unset', isUnset);
-  return node;
-}
 
 // The value a picker offers for each item of a choice, boolean or theme row.
 function pickerItems(row: SettingRow, ctx: RowContext): readonly unknown[] {
@@ -148,22 +105,24 @@ export function settingSection(
     .map((row) => {
       const { leaf } = row;
       const fallback = leaf.fallback?.value;
-      const node = settingsRowElement({
-        label: leaf.label,
-        description: leaf.description,
-        end: valueElement(
-          valueText(row.value, leaf.control),
-          row.value === undefined || row.value === null,
-        ),
-        isSet: row.isSet,
-        defaultText: valueText(fallback, leaf.control),
-      });
       return {
         key: leaf.path,
         file: 'settings',
-        element: node,
+        draw: {
+          part: 'settingRow',
+          input: {
+            path: leaf.path,
+            label: leaf.label,
+            description: leaf.description,
+            value: valueText(row.value, leaf.control),
+            isUnset: row.value === undefined || row.value === null,
+            isSet: row.isSet,
+            defaultText: valueText(fallback, leaf.control),
+            control: leaf.control.kind,
+          },
+        },
         actions: rowActions(row, ctx),
       };
     });
-  return { items: rows.map((row) => row.element), rows };
+  return { entries: rows.map((row) => ({ type: 'row', row })), rows };
 }

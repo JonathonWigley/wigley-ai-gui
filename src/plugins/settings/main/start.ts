@@ -1,5 +1,6 @@
 import type { MainApi, MainPart } from '../../../contracts/plugin';
 import type { SettingsChannel } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { settingsManifest } from '../manifest';
 import { settingsSelfTestScript } from './selftest-script';
 
@@ -7,8 +8,9 @@ type SettingsApi = MainApi<typeof settingsManifest, SettingsChannel>;
 
 // Serves the page the user config through `services.userConfig`, tells it
 // each time the config changes, and on `settings.show` brings the window
-// forward and tells the page to show Settings mode. Hands the self-test its
-// script, which shows the mode the same way.
+// forward and tells the page to show Settings mode. Registers the settings
+// layout contract. Hands the self-test its script, which shows the mode the
+// same way.
 export const settingsMainPart: MainPart<typeof settingsManifest> = {
   manifest: settingsManifest,
   start(api: SettingsApi) {
@@ -22,6 +24,7 @@ export const settingsMainPart: MainPart<typeof settingsManifest> = {
     channel.handle('writeKeymap', (layer, expectedText) =>
       userConfig.writeKeymap(layer, expectedText),
     );
+    const layouts = api.layouts.register({ layoutTypes });
     const changed = userConfig.onChanged(() => channel.send('changed', null));
     const show = () => {
       services.window.show();
@@ -30,7 +33,10 @@ export const settingsMainPart: MainPart<typeof settingsManifest> = {
     services.selfTest?.run(settingsSelfTestScript({ userConfig, show }));
     return {
       commands: { show },
-      dispose: () => changed.dispose(),
+      dispose() {
+        layouts.dispose();
+        changed.dispose();
+      },
     };
   },
 };

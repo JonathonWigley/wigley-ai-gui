@@ -4,7 +4,10 @@ import { errorText } from '../../../shared/error-text';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SettingsChannel } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { SettingsLayout } from '../layouts/layout';
 import { settingsManifest } from '../manifest';
+import { readSettingsLayout } from './layout/read-layout';
 import { createSettingsView } from './settings-view';
 
 type SettingsApi = PageApi<typeof settingsManifest, SettingsChannel>;
@@ -12,9 +15,10 @@ type SettingsApi = PageApi<typeof settingsManifest, SettingsChannel>;
 const TITLE = 'Settings';
 
 // Settings mode: the sections in the side bar, the open section's rows in the
-// sheet. `showMode` shows the mode, or toggles its side bar while it shows;
-// main's `show` message (`Cmd+,`) only shows it. Each `changed` message reads
-// the user config again and redraws.
+// sheet, drawn through the `settings.layout` layout. `showMode` shows the
+// mode, or toggles its side bar while it shows; main's `show` message
+// (`Cmd+,`) only shows it. Each `changed` message reads the user config again
+// and redraws; each new layout set redraws in the new layouts.
 export const settingsPagePart: PagePart<typeof settingsManifest> = {
   manifest: settingsManifest,
   start(api: SettingsApi) {
@@ -25,6 +29,12 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       channel: api.channel,
       editor: services.editor,
       platform: api.platform,
+      markdown: services.markdown,
+      keys,
+      commands: {
+        exists: (id) => api.keys.command(id) !== undefined,
+        run: (id) => api.commands.run(id),
+      },
       log,
       toast: services.toast,
       setScope: (scope) => api.keys.setScope(scope),
@@ -59,6 +69,12 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       sideBarOpenedOver: () => view.sideBarOpenedOver(),
     });
 
+    api.layouts.show<SettingsLayout>({
+      defaultLayout,
+      read: readSettingsLayout,
+      userLayout: () => api.settings().layout,
+      setLayouts: (shown) => view.setLayouts(shown),
+    });
     api.channel.on('changed', () => view.reread());
     api.channel.on('show', () => mode.show());
     view.load().catch((error) => {

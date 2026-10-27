@@ -4,8 +4,6 @@ import type { CommandInfo } from '../../../contracts/plugin';
 import { capitalised } from '../../../shared/capitalised';
 import { element } from '../../../shared/page/dom';
 import { kbd } from '../../../shared/page/ui/kbd';
-import { sectionHeader } from '../../../shared/page/ui/section-header';
-import { tag } from '../../../shared/page/ui/tag';
 import {
   chordName,
   formatAccelerator,
@@ -31,11 +29,12 @@ import {
   replacedBy,
 } from './keymap-rows';
 import { matchesCommand } from './row-filter';
-import { settingsRowElement, valueElement } from './setting-rows-view';
+import type { KeyLineInput, KeyRowInput } from '../layouts/layout';
 import type {
   RowActions,
   RowContext,
   SectionDrawing,
+  SectionEntry,
   SettingsRow,
 } from './settings-view';
 
@@ -68,50 +67,47 @@ function keysKbd(ctx: RowContext, keys: string): HTMLElement {
   return kbd(formatVimKeys(keys, leader(ctx), ctx.platform), ctx.platform);
 }
 
-function lineElement(
-  keys: HTMLElement,
-  tags: HTMLElement[],
-  isStruck: boolean,
-): HTMLElement {
-  const node = element('span', 'settings-bind');
-  node.classList.toggle('is-struck', isStruck);
-  node.append(keys, ...tags);
-  return node;
-}
-
-function bindLineElement(ctx: RowContext, line: BindLine): HTMLElement {
+// A bind's line: its keys printed for the platform, then its scope, `where`,
+// `mode`, `Set` for a user bind, then what covers it; struck while it fires
+// nowhere.
+function bindLine(ctx: RowContext, line: BindLine): KeyLineInput {
   const { bind } = line;
-  const tags = [tag(scopeTitle(ctx, bind.scope))];
+  const tags = [scopeTitle(ctx, bind.scope)];
   if (bind.where !== undefined) {
-    tags.push(tag(bind.where));
+    tags.push(bind.where);
   }
   if (bind.mode !== undefined) {
-    tags.push(tag(bind.mode));
+    tags.push(bind.mode);
   }
   if (line.origin === 'user') {
-    tags.push(tag('Set'));
+    tags.push('Set');
   }
   const label = (command: CommandId) => commandLabel(ctx, command);
-  tags.push(...coverTexts(line, label).map((text) => tag(text)));
-  return lineElement(keysKbd(ctx, bind.keys), tags, !firesAnywhere(line));
+  tags.push(...coverTexts(line, label));
+  return {
+    kind: 'bind',
+    keys: formatVimKeys(bind.keys, leader(ctx), ctx.platform),
+    tags,
+    isStruck: !firesAnywhere(line),
+  };
 }
 
-function acceleratorLineElement(
-  ctx: RowContext,
-  line: AcceleratorLine,
-): HTMLElement {
-  const text =
+// An accelerator's line: its chord printed for the platform, then its kind
+// and, unless active, `Removed` or `Replaced by <label>`; struck unless
+// active.
+function acceleratorLine(ctx: RowContext, line: AcceleratorLine): KeyLineInput {
+  const keys =
     line.kind === 'intercept'
       ? chordName(line.bind, ctx.platform)
       : formatAccelerator(line.bind.accelerator, ctx.platform);
-  const tags = [tag(ACCELERATOR_TAGS[line.kind])];
+  const tags = [ACCELERATOR_TAGS[line.kind]];
   if (line.state === 'removed') {
-    tags.push(tag('Removed'));
+    tags.push('Removed');
   }
   if (line.state === 'replaced' && line.replacedBy !== null) {
-    tags.push(tag(`Replaced by ${commandLabel(ctx, line.replacedBy)}`));
+    tags.push(`Replaced by ${commandLabel(ctx, line.replacedBy)}`);
   }
-  return lineElement(kbd(text, ctx.platform), tags, line.state !== 'active');
+  return { kind: 'accelerator', keys, tags, isStruck: line.state !== 'active' };
 }
 
 // The typed keys as Kbd, and the other commands a bind of `command` on them in
@@ -265,26 +261,26 @@ function commandActions(ctx: RowContext, row: CommandRow): RowActions {
   };
 }
 
+// A command row's input: its label capitalised, its binds then its
+// accelerators.
+export function keyRowInput(ctx: RowContext, row: CommandRow): KeyRowInput {
+  const { command } = row;
+  return {
+    command: command.id,
+    label: capitalised(command.label),
+    runsIn: command.runsIn,
+    lines: [
+      ...row.binds.map((line) => bindLine(ctx, line)),
+      ...row.accelerators.map((line) => acceleratorLine(ctx, line)),
+    ],
+  };
+}
+
 function commandRow(ctx: RowContext, row: CommandRow): SettingsRow {
-  const lines = [
-    ...row.binds.map((line) => bindLineElement(ctx, line)),
-    ...row.accelerators.map((line) => acceleratorLineElement(ctx, line)),
-  ];
-  const end =
-    lines.length === 0
-      ? valueElement('Not bound', true)
-      : element('span', 'settings-binds');
-  end.append(...lines);
   return {
     key: row.command.id,
     file: 'keymap',
-    element: settingsRowElement({
-      label: capitalised(row.command.label),
-      description: '',
-      end,
-      isSet: false,
-      defaultText: null,
-    }),
+    draw: { part: 'keyRow', input: keyRowInput(ctx, row) },
     actions: commandActions(ctx, row),
   };
 }
@@ -313,13 +309,14 @@ function leaderRow(ctx: RowContext): SettingsRow {
   return {
     key: 'leader',
     file: 'keymap',
-    element: settingsRowElement({
-      label: 'Leader',
-      description: 'The key every <Leader> bind starts with',
-      end: kbd(printed(userLeader ?? defaultLeader), ctx.platform),
-      isSet: userLeader !== undefined,
-      defaultText: printed(defaultLeader),
-    }),
+    draw: {
+      part: 'leaderRow',
+      input: {
+        keys: printed(userLeader ?? defaultLeader),
+        defaultKeys: printed(defaultLeader),
+        isSet: userLeader !== undefined,
+      },
+    },
     actions: {
       open: edit,
       edit,
@@ -350,13 +347,7 @@ function advancedRow(ctx: RowContext): SettingsRow {
   return {
     key: 'advanced',
     file: 'keymap',
-    element: settingsRowElement({
-      label: 'Advanced',
-      description: 'Groups, remaps and accelerators',
-      end: element('span'),
-      isSet: text !== '{}',
-      defaultText: null,
-    }),
+    draw: { part: 'advancedRow', input: { isSet: text !== '{}' } },
     actions: { open: edit, edit },
   };
 }
@@ -364,32 +355,30 @@ function advancedRow(ctx: RowContext): SettingsRow {
 // The Keymap section's rows that match `query`: the leader, each plugin's
 // commands under its header, and, with no filter, the advanced row.
 export function keymapSection(ctx: RowContext, query: string): SectionDrawing {
-  const items: HTMLElement[] = [];
+  const entries: SectionEntry[] = [];
   const rows: SettingsRow[] = [];
+  const addRow = (row: SettingsRow) => {
+    entries.push({ type: 'row', row });
+    rows.push(row);
+  };
   const needle = query.toLowerCase();
   const isLeaderShown = ['leader', leader(ctx).toLowerCase()].some((text) =>
     text.includes(needle),
   );
   if (isLeaderShown) {
-    const row = leaderRow(ctx);
-    items.push(row.element);
-    rows.push(row);
+    addRow(leaderRow(ctx));
   }
   for (const group of keymapRows(ctx.schema, ctx.keymapLayer())) {
     const shown = group.rows
       .filter((row) => matchesCommand(row, query))
       .map((row) => commandRow(ctx, row));
     if (shown.length > 0) {
-      const header = sectionHeader(group.title);
-      header.classList.add('settings-group-header');
-      items.push(header, ...shown.map((row) => row.element));
-      rows.push(...shown);
+      entries.push({ type: 'header', input: { title: group.title } });
+      shown.forEach(addRow);
     }
   }
   if (query === '') {
-    const row = advancedRow(ctx);
-    items.push(row.element);
-    rows.push(row);
+    addRow(advancedRow(ctx));
   }
-  return { items, rows };
+  return { entries, rows };
 }

@@ -52,7 +52,13 @@ export const settingsManifest = definePlugin({
     box: 'In a settings box',
     picker: 'In a settings list',
   },
-  settings: {},
-  settingInfo: {},
+  settings: { layout: 'default' },
+  settingInfo: {
+    layout: {
+      label: 'Layout',
+      description:
+        "The Settings mode layout: a folder name in settings' layouts folder, or default.",
+    },
+  },
   themeTokens: {},
 });

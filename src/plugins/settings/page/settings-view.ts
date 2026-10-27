@@ -1,13 +1,15 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { UserKeymap } from '../../../contracts/keymap';
+import type { Log } from '../../../contracts/log';
+import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Platform } from '../../../contracts/platform';
 import type {
   PageChannel,
   PushedScope,
+  ShownLayouts,
   ToastTone,
 } from '../../../contracts/plugin';
-import type { Log } from '../../../contracts/log';
 import type {
   ConfigWriteResult,
   UserConfigRead,
@@ -16,23 +18,45 @@ import type {
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
 import { element } from '../../../shared/page/dom';
+import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
+import {
+  type DrawnPart,
+  drawPart,
+  type RollbackDeps,
+} from '../../../shared/page/layout-host/draw-part';
+import { pickLayout } from '../../../shared/page/layout-host/pick';
 import {
   createListPicker,
   type ListPicker,
 } from '../../../shared/page/list-picker';
 import { textBoxInput } from '../../../shared/page/text-box';
-import { card } from '../../../shared/page/ui/card';
-import { emptyState } from '../../../shared/page/ui/empty-state';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
-import {
-  keyChevron,
-  keyEdge,
-  keyStack,
-} from '../../../shared/page/ui/key-anchors';
-import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { sheet } from '../../../shared/page/ui/sheet';
+import type { KeysPageExports } from '../../keys/contract';
 import type { SettingsChannel } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type {
+  AdvancedRowInput,
+  GroupHeaderInput,
+  KeyRowInput,
+  LeaderRowInput,
+  ProblemInput,
+  RowKit,
+  SettingRowInput,
+  SettingsKit,
+  SettingsLayout,
+} from '../layouts/layout';
 import { keymapSection } from './keymap-view';
+import {
+  buildEntry,
+  buildPickerRow,
+  buildRow,
+  buildRowsPane,
+  buildSectionsPane,
+  type BuiltRow,
+  type BuiltRowsPane,
+  type SettingsKitDeps,
+} from './layout/settings-kit';
 import { type BoxRequest, createRowBox, type RowBox } from './row-box';
 import { type PromptAction, rowPromptActions } from './row-prompt';
 import { createSectionsView } from './sections-view';
@@ -41,12 +65,22 @@ import { settingSection } from './setting-rows-view';
 // The user config file a row edits.
 export type ConfigFile = 'settings' | 'keymap';
 
-const FILE_NAMES: Record<ConfigFile, string> = {
+const FILE_NAMES: Record<ConfigFile, ProblemInput['file']> = {
   settings: 'settings.json',
   keymap: 'keymap.json',
 };
 
 const KEYMAP_SECTION = { id: 'keymap', title: 'Keymap' };
+
+const DEFAULT_LAYOUT = 'default';
+
+// A row part's and an entry part's builder, as a layout defines it.
+type RowDraw<I> = (parent: HTMLElement, input: I, kit: RowKit) => HTMLElement;
+type EntryDraw<I> = (
+  parent: HTMLElement,
+  input: I,
+  kit: SettingsKit,
+) => HTMLElement;
 
 // What a row does on each edit command; a command the row leaves out runs
 // nothing on it.
@@ -60,18 +94,29 @@ export interface RowActions {
 
 export type RowAction = keyof RowActions;
 
-// One drawn row: `key` names it in the cursor and log lines (a setting's
-// path, a command id, `leader` or `advanced`).
+// The layout part that draws a row, and its input.
+export type RowPart =
+  | { part: 'settingRow'; input: SettingRowInput }
+  | { part: 'keyRow'; input: KeyRowInput }
+  | { part: 'leaderRow'; input: LeaderRowInput }
+  | { part: 'advancedRow'; input: AdvancedRowInput };
+
+// One row: `key` names it in the cursor and log lines (a setting's path, a
+// command id, `leader` or `advanced`); `draw` is the part that draws it.
 export interface SettingsRow {
   key: string;
   file: ConfigFile;
-  element: HTMLElement;
+  draw: RowPart;
   actions: RowActions;
 }
 
-// A section's drawing: `items` in order, headers among the rows' elements.
+export type SectionEntry =
+  | { type: 'header'; input: GroupHeaderInput }
+  | { type: 'row'; row: SettingsRow };
+
+// A section's drawing: `entries` in order, group headers among the rows.
 export interface SectionDrawing {
-  items: HTMLElement[];
+  entries: SectionEntry[];
   rows: SettingsRow[];
 }
 
@@ -113,17 +158,22 @@ export interface RowContext {
   toast(text: string, tone: ToastTone): void;
 }
 
+// `markdown`, `keys` and `commands` are what the layout's kits read.
 export interface SettingsViewDeps {
   channel: PageChannel<SettingsChannel>;
   editor: EditorHost;
   platform: Platform;
+  markdown: MarkdownRenderer;
+  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
+  commands: KitCommands;
   log: Log;
   toast(text: string, tone: ToastTone): void;
   setScope(scope: 'sections' | 'rows'): void;
   pushScope(scope: 'box' | 'picker'): PushedScope;
   addOverlay(element: HTMLElement): Disposable;
   // Keeps the keys of the settings `command` drawn in `element`, shown while
-  // `scope` is in force, followed by `label` (true: the command's label).
+  // `scope` is in force, followed by `label` (true: the command's label): the
+  // cursor prompt's keys, which the app draws in each layout.
   anchor(
     element: HTMLElement,
     command: SettingsCommand,
@@ -159,16 +209,20 @@ export type SettingsCommand =
 
 // Settings mode's view: the sections for the side bar, the open section's
 // rows in the sheet, the one box or picker open over them, and the reads and
-// writes behind them, logging under `settings`. `load` reads the schema and
-// both files; `reread` reads the files again and redraws (the channel's
-// `changed`); `shown` runs as the mode shows: the first time it opens the
-// first section with focus on the side bar, and each time it sets the scope
-// where focus was left. The keys show where they act: the focus moves at the
-// split edge, the filter in the rows' section header, and the row actions at
-// the end of the cursor row's first line.
+// writes behind them, logging under `settings`. The panes, rows and picker
+// rows draw through the settings layout; `default` draws until the first
+// `setLayouts`. `load` reads the schema and both files; `reread` reads the
+// files again and redraws (the channel's `changed`); `shown` runs as the mode
+// shows: the first time it opens the first section with focus on the side
+// bar, and each time it sets the scope where focus was left. The keys show
+// where they act: the cursor row's actions in its layout's `rowActions` slot.
+// `setLayouts` draws everything again in the new layouts, keeping the cursor,
+// the open section, the focus side, an open box or filter and an open picker.
 export interface SettingsView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
+  setLayouts(shown: ShownLayouts<SettingsLayout>): void;
+  dispose(): void;
   load(): Promise<void>;
   reread(): void;
   shown(): void;
@@ -205,14 +259,114 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     deps.anchor(hint, command, scope, label);
     return hint;
   };
+  const kitDeps: SettingsKitDeps = {
+    markdown: deps.markdown,
+    keys: deps.keys,
+    commands: deps.commands,
+    platform: deps.platform,
+  };
 
-  // `⌥L rows ›` at the side bar's end edge.
-  const endEdge = keyEdge('settings-edge settings-edge--end', [
-    anchored('focusRows', 'sections', 'rows'),
-    keyChevron('›'),
-  ]);
+  let shown: ShownLayouts<SettingsLayout> = {
+    layouts: new Map([[DEFAULT_LAYOUT, defaultLayout]]),
+    user: DEFAULT_LAYOUT,
+  };
+
+  // Draws the part `partName` with the user's layout when it defines the
+  // part, else with `default`.
+  const drawSettingsPart = <B, R extends { element: HTMLElement }>(
+    partName: keyof SettingsLayout,
+    parent: HTMLElement,
+    part: (layout: SettingsLayout) => B | undefined,
+    build: (builder: B, parent: HTMLElement, rollback: RollbackDeps) => R,
+  ): DrawnPart<R> =>
+    drawPart<SettingsLayout, B, R>({
+      owner: 'settings',
+      parent,
+      pick: pickLayout(
+        [shown.user, DEFAULT_LAYOUT],
+        shown.layouts,
+        (layout) => layout[partName] !== undefined,
+      ),
+      defaultLayout,
+      part,
+      build,
+      log: deps.log,
+      logSource: 'settings',
+      partName,
+    });
+
+  const drawRowPart = <I>(
+    partName: RowPart['part'],
+    part: (layout: SettingsLayout) => RowDraw<I> | undefined,
+    input: I,
+    parent: HTMLElement,
+  ): DrawnPart<BuiltRow> =>
+    drawSettingsPart(partName, parent, part, (draw, rowParent, rollback) =>
+      buildRow(draw, rowParent, input, kitDeps, rollback, partName),
+    );
+
+  // Draws `row` into `parent` with its part.
+  const drawSettingsRow = (
+    row: SettingsRow,
+    parent: HTMLElement,
+  ): DrawnPart<BuiltRow> => {
+    const { draw } = row;
+    switch (draw.part) {
+      case 'settingRow':
+        return drawRowPart(
+          draw.part,
+          (layout) => layout.settingRow,
+          draw.input,
+          parent,
+        );
+      case 'keyRow':
+        return drawRowPart(
+          draw.part,
+          (layout) => layout.keyRow,
+          draw.input,
+          parent,
+        );
+      case 'leaderRow':
+        return drawRowPart(
+          draw.part,
+          (layout) => layout.leaderRow,
+          draw.input,
+          parent,
+        );
+      case 'advancedRow':
+        return drawRowPart(
+          draw.part,
+          (layout) => layout.advancedRow,
+          draw.input,
+          parent,
+        );
+    }
+  };
+
   const sections = createSectionsView({
-    edge: endEdge,
+    drawPane: (container) =>
+      drawSettingsPart(
+        'sections',
+        container,
+        (layout) => layout.sections,
+        (pane, parent, rollback) =>
+          buildSectionsPane(pane, parent, kitDeps, rollback),
+      ),
+    drawRow: (parent, section) =>
+      drawSettingsPart(
+        'sectionRow',
+        parent,
+        (layout) => layout.sectionRow,
+        (sectionRow, rowParent, rollback) =>
+          buildEntry(
+            sectionRow,
+            rowParent,
+            section,
+            'sections',
+            kitDeps,
+            rollback,
+          ),
+      ),
     clicked: (index) => {
       sectionsCursor = index;
       focusSections();
@@ -224,28 +378,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   rowsSheet.classList.add('settings-sheet');
   rowsSheet.tabIndex = -1;
 
-  // The section header: `‹ sections ⌥H`, the open section's title, then
-  // `/ filter`, whose two anchors share one cell so that the one shown in
-  // the scope in force never moves.
-  const startEdge = keyEdge('settings-edge settings-edge--start', [
-    keyChevron('‹ sections'),
-    anchored('focusSections', 'rows'),
-  ]);
-  const filterHint = keyStack('settings-filter-hint', [
-    anchored('filter', 'sections', 'filter'),
-    anchored('filter', 'rows', 'filter'),
-  ]);
-  const sectionHead = (title: string) => {
-    const head = sectionHeader(title, filterHint);
-    head.classList.add('settings-head');
-    head.prepend(startEdge);
-    return head;
-  };
-  let head = sectionHead('');
-
-  // The cursor row's action keys; `markCursor` moves the prompt to the end of
-  // the cursor row's first line and shows the keys of the actions that row
-  // has.
+  // The cursor row's action keys; `markCursor` moves the prompt into the
+  // cursor row's actions slot and shows the keys of the actions that row has.
   const rowPrompt = element('span', 'settings-row-actions');
   const promptHints: Record<PromptAction, HTMLElement> = {
     edit: anchored('edit', 'rows', PROMPT_LABELS.edit),
@@ -259,16 +393,14 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     promptHints.removeBind,
     promptHints.reset,
   );
-  const clearFilterHint = anchored('clearFilter', 'rows');
 
+  // The filter frame the rows pane places; it and its input outlive every
+  // redraw.
   const filterFrame = inputFrame();
   filterFrame.classList.add('settings-filter');
   filterFrame.hidden = true;
   const filterBox = textBoxInput('settings-box-input');
   filterFrame.append(filterBox);
-  const brokenSlot = element('div', 'settings-broken');
-  const list = element('ol', 'settings-rows');
-  rowsSheet.append(head, filterFrame, brokenSlot, list);
 
   const picker: ListPicker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
@@ -288,14 +420,54 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   let readCount = 0;
   let sectionsCursor = 0;
   let openSectionId = 'core';
+  let openSectionTitle = '';
   let hasShown = false;
   let hasOpenedSection = false;
   let focus: 'sections' | 'rows' = 'sections';
   let query = '';
   let filterScope: PushedScope | null = null;
   let rows: SettingsRow[] = [];
+  // Each drawn row by its key, and the dispose of every part drawn into the
+  // rows pane's slots.
+  let drawnRows = new Map<string, BuiltRow>();
+  let entryDisposes: (() => void)[] = [];
   let cursorKey: string | null = null;
   let openBox: OpenBox | null = null;
+
+  const disposeEntries = () => {
+    const disposes = entryDisposes;
+    entryDisposes = [];
+    drawnRows = new Map();
+    for (const dispose of disposes) {
+      dispose();
+    }
+  };
+
+  const drawPane = (): DrawnPart<BuiltRowsPane> =>
+    drawSettingsPart(
+      'rows',
+      rowsSheet,
+      (layout) => layout.rows,
+      (pane, parent, rollback) =>
+        buildRowsPane(
+          pane,
+          parent,
+          { sectionId: openSectionId, title: openSectionTitle },
+          filterFrame,
+          kitDeps,
+          rollback,
+        ),
+    );
+  let rowsPane = drawPane();
+
+  // Draws the rows pane again, for a new layout or a newly opened section;
+  // the rows are drawn into it by the next `drawRows`.
+  const redrawRowsPane = () => {
+    disposeEntries();
+    rowsPane.dispose();
+    rowsPane.built.element.remove();
+    rowsPane = drawPane();
+  };
 
   const sectionList = (): { id: string; title: string }[] => [
     ...(schema?.sections ?? []).map(({ id, title }) => ({ id, title })),
@@ -317,19 +489,20 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
   };
 
-  // Puts the cursor prompt at the end of the cursor row's first line,
-  // showing the keys of the actions that row has; with no cursor row it
-  // leaves the rows.
+  // Puts the cursor prompt in the cursor row's actions slot, else at the end
+  // of its root, showing the keys of the actions that row has; with no cursor
+  // row it leaves the rows.
   const placeRowPrompt = (row: SettingsRow | undefined) => {
-    if (row === undefined) {
+    const drawn = row === undefined ? undefined : drawnRows.get(row.key);
+    if (row === undefined || drawn === undefined) {
       rowPrompt.remove();
       return;
     }
-    const shown = rowPromptActions(row.actions);
+    const shownActions = rowPromptActions(row.actions);
     for (const action of Object.keys(promptHints) as PromptAction[]) {
-      promptHints[action].hidden = !shown.includes(action);
+      promptHints[action].hidden = !shownActions.includes(action);
     }
-    row.element.querySelector('.settings-row-head')?.append(rowPrompt);
+    (drawn.actions ?? drawn.element).append(rowPrompt);
   };
 
   // Marks the cursor row selected, and draws its focus ring while the keys
@@ -341,10 +514,10 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       focus === 'rows' && openBox === null && filterScope === null;
     rowsSheet.classList.toggle('is-pane-inactive', focus !== 'rows');
     sections.element.classList.toggle('is-pane-inactive', focus !== 'sections');
-    for (const row of rows) {
-      const isCursor = row.key === cursorKey;
-      row.element.classList.toggle('is-selected', isCursor);
-      row.element.classList.toggle('is-cursor', isCursor && isRowsFocused);
+    for (const [key, drawn] of drawnRows) {
+      const isCursor = key === cursorKey;
+      drawn.element.classList.toggle('is-selected', isCursor);
+      drawn.element.classList.toggle('is-cursor', isCursor && isRowsFocused);
     }
     sections.draw(
       sectionList(),
@@ -354,13 +527,43 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     );
     const cursorRow = rows.find((row) => row.key === cursorKey);
     placeRowPrompt(cursorRow);
-    cursorRow?.element.scrollIntoView({ block: 'nearest' });
+    if (cursorKey !== null) {
+      drawnRows.get(cursorKey)?.element.scrollIntoView({ block: 'nearest' });
+    }
   };
 
-  const brokenCard = (file: ConfigFile, problem: string) => {
-    const shown = card('error');
-    shown.textContent = `${FILE_NAMES[file]} has a problem: ${problem}`;
-    return shown;
+  // Draws a group header, empty state or problem card into `parent`.
+  const drawEntry = <I>(
+    partName: 'groupHeader' | 'empty' | 'problem',
+    part: (layout: SettingsLayout) => EntryDraw<I> | undefined,
+    input: I,
+    parent: HTMLElement,
+  ) => {
+    const drawn = drawSettingsPart(
+      partName,
+      parent,
+      part,
+      (draw, entryParent, rollback) =>
+        buildEntry(draw, entryParent, input, 'rows', kitDeps, rollback),
+    );
+    entryDisposes.push(drawn.dispose);
+  };
+
+  // Draws `row` into `parent`; a click on it outside its box moves the
+  // cursor to it.
+  const drawRowEntry = (row: SettingsRow, parent: HTMLElement) => {
+    const drawn = drawSettingsRow(row, parent);
+    entryDisposes.push(drawn.dispose);
+    drawnRows.set(row.key, drawn.built);
+    drawn.built.element.addEventListener('click', (event) => {
+      const isInBox =
+        event.target instanceof Element &&
+        event.target.closest('.settings-box') !== null;
+      if (!isInBox && openBox === null) {
+        setCursor(row.key);
+        focusRows();
+      }
+    });
   };
 
   const drawRows = () => {
@@ -373,48 +576,62 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         ? keymapSection(context, query)
         : settingSection(section, context, query);
     rows = drawing.rows;
-    for (const row of rows) {
-      row.element.addEventListener('click', (event) => {
-        const isInBox =
-          event.target instanceof Element &&
-          event.target.closest('.settings-box') !== null;
-        if (!isInBox && openBox === null) {
-          setCursor(row.key);
-          focusRows();
-        }
-      });
-    }
     if (!rows.some((row) => row.key === cursorKey)) {
       setCursor(rows[0]?.key ?? null);
     }
+    disposeEntries();
+    const { problem, rowList } = rowsPane.built;
+    problem.replaceChildren();
+    rowList.replaceChildren();
     const file = sectionFile();
     const read = latest[file];
-    brokenSlot.replaceChildren(
-      ...(read.state === 'broken' ? [brokenCard(file, read.problem)] : []),
-    );
-    const items = [...drawing.items];
+    if (read.state === 'broken') {
+      drawEntry(
+        'problem',
+        (layout) => layout.problem,
+        { file: FILE_NAMES[file], problem: read.problem },
+        problem,
+      );
+    }
+    for (const entry of drawing.entries) {
+      if (entry.type === 'header') {
+        drawEntry(
+          'groupHeader',
+          (layout) => layout.groupHeader,
+          entry.input,
+          rowList,
+        );
+      } else {
+        drawRowEntry(entry.row, rowList);
+      }
+    }
     const isEmpty = query !== '' && rows.length === 0;
     if (isEmpty) {
-      items.push(emptyState(`No rows match "${query}".`, clearFilterHint));
+      drawEntry('empty', (layout) => layout.empty, { query }, rowList);
     }
-    list.replaceChildren(...items);
     markCursor();
   };
 
-  // Redraws the rows, the open box moving into its row's new element with
-  // its focus and text kept; a box whose row is no longer drawn, or whose
-  // file is now broken, closes, so it never writes over the broken file.
-  const draw = () => {
+  // Redraws the rows, and first the rows pane when `isPaneRedrawn`; the open
+  // box moves into its row's new box slot with its focus and text kept; a box
+  // whose row is no longer drawn, or whose file is now broken, closes, so it
+  // never writes over the broken file.
+  const draw = (isPaneRedrawn = false) => {
+    const drawAll = () => {
+      if (isPaneRedrawn) {
+        redrawRowsPane();
+      }
+      drawRows();
+    };
     const held = openBox;
     if (held === null) {
-      drawRows();
+      drawAll();
       return;
     }
     held.box.keepFocusAcross(() => {
-      drawRows();
-      rows
-        .find((row) => row.key === held.box.key)
-        ?.element.append(held.box.element);
+      drawAll();
+      const drawn = drawnRows.get(held.box.key);
+      (drawn?.box ?? drawn?.element)?.append(held.box.element);
     });
     const isRowGone = !rows.some((row) => row.key === held.box.key);
     if (isRowGone || isBroken(held.file)) {
@@ -545,7 +762,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     scope.onBaseChanged(() => closeBox(box));
     openBox = { box, file: request.file, scope };
     markCursor();
-    row.element.append(box.element);
+    const drawn = drawnRows.get(row.key);
+    (drawn?.box ?? drawn?.element)?.append(box.element);
     box.focus();
     log(`box open ${request.key}`);
   };
@@ -645,6 +863,27 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         items: request.items,
         label: request.label,
         selected: request.selected,
+        drawRow: (list, _item, { label, trailing, recordAnchor }) =>
+          drawSettingsPart(
+            'pickerRow',
+            list,
+            (layout) => layout.pickerRow,
+            (pickerRow, parent, rollback) =>
+              buildPickerRow(
+                pickerRow,
+                parent,
+                { picker: request.title, label },
+                trailing,
+                kitDeps,
+                {
+                  recordBox: rollback.recordBox,
+                  recordAnchor(anchor) {
+                    rollback.recordAnchor(anchor);
+                    recordAnchor(anchor);
+                  },
+                },
+              ),
+          ).built.element,
         chosen(item) {
           request.chosen(item, expectedText);
           restoreFocus();
@@ -689,13 +928,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     query = '';
     filterBox.value = '';
     filterFrame.hidden = true;
+    openSectionTitle = section.title;
     log(`section ${section.id}`);
-    const nextHead = sectionHead(section.title);
-    head.replaceWith(nextHead);
-    head = nextHead;
     deps.sectionShown(section.title);
     cursorKey = null;
-    draw();
+    draw(true);
   };
 
   // The first show opens the first section, once the schema names it.
@@ -874,6 +1111,21 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   return {
     sideBar: sections.element,
     sheet: rowsSheet,
+    setLayouts(next) {
+      shown = next;
+      sections.redrawPane();
+      draw(true);
+      if (filterScope !== null) {
+        filterBox.focus();
+      }
+      markCursor();
+      picker.redraw();
+    },
+    dispose() {
+      sections.dispose();
+      disposeEntries();
+      rowsPane.dispose();
+    },
     async load() {
       schema = await channel.invoke('schema');
       await refresh(true);
