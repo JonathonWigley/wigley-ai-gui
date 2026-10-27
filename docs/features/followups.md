@@ -267,6 +267,17 @@ now, any harness later). Each item names its sites.
 - Chat keeps the harness's slash-command list in `ChatSessionState.commands` rather than dropping it.
 - The sessions page `start` moves its seven pieces of closure state and its multi-job `apply` into a DOM-free
   `createSessionsPageModel`.
+- `src/plugins/docs/page/docs.css` keeps `.docs-tree.is-pane-inactive .ui-row.is-selected`, which the one rule in
+  `src/shared/page/ui/row.css` (`.is-pane-inactive .ui-row.is-selected`) now covers. Delete it when the docs page is
+  next touched.
+- `sessionArgs` in `src/plugins/sessions/main/start.ts` hardcodes `"claude" | "codex"`, while
+  `src/shared/agent-forms/drive-actions.ts` derives that text from `DRIVE_SESSION_DEFAULTS.harnesses`
+  (`sessionArgsText`). Reuse the derived text so the two cannot drift.
+- The forms page counts a notes-only item as `answered` (`isResponded`, `src/plugins/forms/item-response.ts`), while the
+  payload's `answered` is pick-only (`isAnswered`). User-visible text still says "answered": the progress line "N of M
+  answered" (`view-model.ts`), the card-parts labels 'Answered' and 'Not answered'
+  (`src/plugins/forms/page/kinds/card-parts.ts`), and the `p.round-progress` comment in
+  `src/plugins/forms/layouts/layout.d.ts`. Decide whether the page says "responded" there.
 
 ### Tests
 
@@ -286,3 +297,11 @@ now, any harness later). Each item names its sites.
 - Shell layout swap failure paths are untested: `mountShell`'s rollback when a layout throws or misses an area, and the generation-guarded restore after a later `setLayout` (`src/renderer/shell/shell.ts`). Plan B's gallery `Space z s` covers only a good swap and its restore; a throwing test layout and a second swap would cover the rest.
 - `titleBarOverlayProblem` blames the file at the end of a colour alias chain (`src/main/title-bar-overlay.ts`). Colour tokens accept only hex, `transparent` or an alias today, so it is right; if the colour kind widens (`rgb()`, `color-mix()`), a user alias onto a built-in token would be blamed on the built-in theme and fail start.
 - settings.json array elements are checked for the default element's top-level keys only (`checkElements`, `src/main/config/user-settings.ts`); a nested object inside an element would pass with keys missing. No setting has that shape yet.
+- `src/plugins/primer/page/primer-commands.test.ts` (the two tests at "from a task holding 20 items" and "from an add-item
+  box on a task holding 20 items") mounts an add-item box on a full task. The page no longer reaches that state, since a
+  full task shows no add-item box (`hasAddItemBox`, `src/plugins/primer/page/boxes.ts`). Retarget them at a stale box,
+  or drop them.
+- The primer self-test's last step (`src/plugins/primer/main/selftest-script.ts`) expects `[sessions] activated Layout
+  preview`. That line depends on forms' self-test running just before and leaving its preview row to the left, so a
+  change in plugin start order breaks it. Fix: a close log line of its own in the sessions page, or activate a known
+  session first.
