@@ -564,7 +564,9 @@ export interface DriveHost {
 // `git`. `agentHarnesses` lists every
 // harness adapter the app runs, found by `id`. `window.chooseFolder` opens the
 // native folder dialog over the window and resolves to null when the user
-// cancels; `window.isFocused` is true while the app's window has focus.
+// cancels; `window.isFocused` is true while the app's window has focus;
+// `window.capture` resolves to a PNG of the window's content as the user sees
+// it, at the display's device pixels, and rejects when the capture is empty.
 // `openExternal` opens an http or https URL in the user's default app,
 // and rejects with `Refused to open <url>: …` for any other scheme or a URL
 // that does not parse. `tempFolders` are the OS's temporary folders as real
@@ -590,6 +592,7 @@ export interface MainServices {
     show(): void;
     isFocused(): boolean;
     chooseFolder(): Promise<string | null>;
+    capture(): Promise<Uint8Array>; // PNG of the window's content, as shown
   };
   openExternal(url: string): Promise<void>;
   runMode: RunMode;

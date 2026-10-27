@@ -75,7 +75,9 @@ function withoutHash(url: string): string {
 // Plugins' window service: `show` shows the window and gives it focus, for a
 // user's own act such as clicking a notification; `isFocused` reads whether
 // the window has focus; `chooseFolder` opens the native folder dialog over the
-// window and resolves to the chosen folder, or null when the user cancels.
+// window and resolves to the chosen folder, or null when the user cancels;
+// `capture` resolves to a PNG of the window's content as shown, and rejects
+// when the capture is empty.
 export function windowService(window: BrowserWindow): MainServices['window'] {
   return {
     show: () => {
@@ -88,6 +90,13 @@ export function windowService(window: BrowserWindow): MainServices['window'] {
         properties: ['openDirectory', 'createDirectory'],
       });
       return chosen.canceled ? null : (chosen.filePaths[0] ?? null);
+    },
+    capture: async () => {
+      const image = await window.webContents.capturePage();
+      if (image.isEmpty()) {
+        throw new Error('Window capture is empty');
+      }
+      return image.toPNG();
     },
   };
 }
