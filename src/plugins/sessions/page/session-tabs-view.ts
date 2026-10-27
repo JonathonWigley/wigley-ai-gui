@@ -1,8 +1,6 @@
 import { element } from '../../../shared/page/dom';
-import { emptyState } from '../../../shared/page/ui/empty-state';
-import { keyChevron, keyEdge } from '../../../shared/page/ui/key-anchors';
+import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { sheet } from '../../../shared/page/ui/sheet';
-import { tab as tabButton, tabStrip } from '../../../shared/page/ui/tabs';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
@@ -10,7 +8,13 @@ import type {
   SessionTabHandle,
   SessionTabView,
 } from '../contract';
+import type { EmptyTextInput, SessionsPart } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
+import {
+  type DrawnTabBar,
+  onPartClick,
+  type SessionsParts,
+} from './layout/sessions-parts';
 import {
   hasOtherTab,
   NO_TABS,
@@ -40,17 +44,21 @@ interface SessionTabs {
 
 // `isModeShown` reads whether Sessions mode shows; `changed` runs after any
 // change to a session's tabs, their selection or their statuses; `keys`
-// draws the strip's edge prompts and the key beside the text asking for a
-// session to be picked.
+// draws the key beside the text asking for a session to be picked; `parts`
+// draws the tab bar, the tabs and that text.
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
   keys: Pick<KeysPageExports, 'anchor'>;
+  parts: SessionsParts;
 }
 
 export interface SessionTabsView {
   element: HTMLElement;
   render(state: SessionsState): void;
+  // Draws the tab bar again with the parts' current layouts, then the tabs
+  // and the text; the tab bodies and their elements stay as they are.
+  redrawPane(): void;
   add(sessionId: string, view: SessionTabView): SessionTabHandle;
   // Drops the session's tabs and their elements; their handles then do
   // nothing. Runs no `changed`.
@@ -62,30 +70,51 @@ export interface SessionTabsView {
   select(sessionId: string, tabId: string): void;
 }
 
-// The tab area of Sessions mode: the selected session's tab strip, between
-// its previous and next tab edge prompts and with the close prompt at the
-// bar's end, on the top edge of one sheet holding a body per session, only
+// The tab area of Sessions mode, its bar, tabs and text drawn through the
+// sessions layout: the `tabBar` pane (the selected session's tab strip,
+// between its previous and next tab prompts and with the close prompt at the
+// bar's end) on the top edge of one sheet holding a body per session, only
 // the selected session's body showing and in it only its selected tab, or
-// the text saying why nothing shows. The tab prompts hide while the selected
-// session has no other tab, and the close prompt while none is selected. A
-// tab's element fills its body. A tab added for a session with no row yet
-// waits in a hidden body. Until `render` hands it main's first state, it
-// shows no text either.
+// the `emptyText` saying why nothing shows. The tab prompts hide while the
+// selected session has no other tab, and the close prompt while none is
+// selected. A tab's element fills its body. A tab added for a session with no
+// row yet waits in a hidden body. Until `render` hands it main's first state,
+// it shows no text either. The view keeps each tab's click, its tooltip and
+// the active tab's mark.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
+  const { parts } = deps;
   const area = element('div', 'session-area');
-  const strip = tabStrip([]);
-  strip.classList.add('session-tabs');
-  strip.setAttribute('aria-label', 'Tabs');
-  const bar = buildTabsBar(strip, deps.keys);
+  const barHost = element('div', 'session-tabs-host');
+  barHost.style.display = 'contents';
   const bodies = sheet();
   bodies.classList.add('session-bodies');
-  const text = buildText();
-  bodies.append(text.element);
-  area.append(bar.element, bodies);
+  area.append(barHost, bodies);
   const pickHint = element('span', 'sessions-pick-hint');
   deps.keys.anchor(pickHint, qualify(sessionsManifest.id, 'nextSession'));
   const sessions = new Map<string, SessionTabs>();
   let state: SessionsState | null = null;
+
+  const drawBar = (): DrawnPart<DrawnTabBar> => {
+    barHost.replaceChildren();
+    return parts.tabBar(barHost);
+  };
+  let bar = drawBar();
+  let tabs: DrawnPart<SessionsPart>[] = [];
+  let text: DrawnPart<SessionsPart> | null = null;
+
+  const disposeTabs = () => {
+    for (const tab of tabs) {
+      tab.dispose();
+    }
+    tabs = [];
+  };
+
+  // Drops the drawn text, then draws `shown` after the bodies when not null.
+  const showText = (shown: EmptyTextInput | null) => {
+    text?.dispose();
+    text?.built.element.remove();
+    text = shown === null ? null : parts.emptyText(bodies, shown, pickHint);
+  };
 
   const sessionOf = (sessionId: string): SessionTabs => {
     const existing = sessions.get(sessionId);
@@ -98,7 +127,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       entries: new Map(),
     };
     sessions.set(sessionId, created);
-    bodies.insertBefore(created.body, text.element);
+    bodies.append(created.body);
     return created;
   };
 
@@ -113,24 +142,31 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     const selected =
       selectedSessionId === null ? undefined : sessions.get(selectedSessionId);
     const selectedTabs = [...(selected?.entries.values() ?? [])];
-    strip.replaceChildren(
-      ...selectedTabs.map((tab) =>
-        buildTab(tab.view, tab.view.id === selected?.tabs.selectedTabId, () => {
+    disposeTabs();
+    const strip = bar.built.strip;
+    strip.replaceChildren();
+    tabs = selectedTabs.map((tab) =>
+      drawTab(
+        parts,
+        strip,
+        tab.view,
+        tab.view.id === selected?.tabs.selectedTabId,
+        () => {
           if (selectedSessionId !== null) {
             select(selectedSessionId, tab.view.id);
           }
-        }),
+        },
       ),
     );
     const isTabStepping = hasOtherTab(
       selected?.tabs.tabIds ?? [],
       selected?.tabs.selectedTabId ?? null,
     );
-    bar.previous.classList.toggle('is-no-target', !isTabStepping);
-    bar.next.classList.toggle('is-no-target', !isTabStepping);
-    bar.close.classList.toggle('is-no-target', selectedSessionId === null);
-    const shown = textFor(state, selectedTabs.length);
-    text.show(shown, shown?.hasHint ? pickHint : null);
+    const { previous, next, close } = bar.built;
+    previous?.classList.toggle('is-no-target', !isTabStepping);
+    next?.classList.toggle('is-no-target', !isTabStepping);
+    close?.classList.toggle('is-no-target', selectedSessionId === null);
+    showText(textFor(state, selectedTabs.length));
   };
 
   const changed = () => {
@@ -172,6 +208,12 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     element: area,
     render(next) {
       state = next;
+      draw();
+    },
+    redrawPane() {
+      disposeTabs();
+      bar.dispose();
+      bar = drawBar();
       draw();
     },
     add(sessionId, view) {
@@ -251,22 +293,17 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   };
 }
 
-interface Text {
-  text: string;
-  hasHint: boolean;
-}
-
-const EMPTY_TEXT: Text = {
+const EMPTY_TEXT: EmptyTextInput = {
   text: "No sessions yet: one shows here when its agent's relay connects",
   hasHint: false,
 };
 
-const NO_SELECTION_TEXT: Text = {
+const NO_SELECTION_TEXT: EmptyTextInput = {
   text: 'Pick a session in the side bar',
   hasHint: true,
 };
 
-const NOTHING_OPEN_TEXT: Text = {
+const NOTHING_OPEN_TEXT: EmptyTextInput = {
   text: "Nothing open yet: this session's first round opens a Form tab here",
   hasHint: false,
 };
@@ -276,7 +313,7 @@ const NOTHING_OPEN_TEXT: Text = {
 function textFor(
   state: SessionsState | null,
   selectedTabCount: number,
-): Text | null {
+): EmptyTextInput | null {
   if (showsEmptyText(state)) {
     return EMPTY_TEXT;
   }
@@ -290,62 +327,18 @@ function textFor(
   return isNothingOpen ? NOTHING_OPEN_TEXT : null;
 }
 
-function buildTab(
+function drawTab(
+  parts: SessionsParts,
+  strip: HTMLElement,
   view: SessionTabView,
   isActive: boolean,
   select: () => void,
-): HTMLElement {
-  const entry = tabButton(view.title, select);
+): DrawnPart<SessionsPart> {
+  const drawn = parts.tab(strip, { title: view.title });
+  const entry = drawn.built.element;
+  onPartClick(entry, select);
   entry.title = view.title;
   entry.classList.toggle('is-active', isActive);
   entry.setAttribute('aria-current', String(isActive));
-  return entry;
-}
-
-// The bar over the tab area: `⌥I ‹`, the strip, `› ⌥O`, then `⌘W close` at
-// its end. `previous` and `next` are each an anchor with its chevron, and
-// `close` the close anchor, so the view can hide each with no target.
-function buildTabsBar(
-  strip: HTMLElement,
-  keys: Pick<KeysPageExports, 'anchor'>,
-): {
-  element: HTMLElement;
-  previous: HTMLElement;
-  next: HTMLElement;
-  close: HTMLElement;
-} {
-  const previousKeys = element('span');
-  const nextKeys = element('span');
-  const close = element('span', 'session-tabs-close');
-  keys.anchor(previousKeys, qualify(sessionsManifest.id, 'prevTab'));
-  keys.anchor(nextKeys, qualify(sessionsManifest.id, 'nextTab'));
-  keys.anchor(close, qualify(sessionsManifest.id, 'closeSession'), {
-    label: 'close',
-  });
-  const previous = keyEdge('session-tabs-edge', [
-    previousKeys,
-    keyChevron('‹'),
-  ]);
-  const next = keyEdge('session-tabs-edge', [keyChevron('›'), nextKeys]);
-  const bar = element('div', 'session-tabs-bar');
-  bar.append(previous, strip, next, close);
-  return { element: bar, previous, next, close };
-}
-
-// The slot saying why the tab area shows no tab, `hint` after its text;
-// `show(null, null)` hides it and empties it.
-function buildText(): {
-  element: HTMLElement;
-  show(text: Text | null, hint: HTMLElement | null): void;
-} {
-  const slot = element('div', 'sessions-empty');
-  return {
-    element: slot,
-    show(text, hint) {
-      slot.hidden = text === null;
-      slot.replaceChildren(
-        ...(text === null ? [] : [emptyState(text.text, hint)]),
-      );
-    },
-  };
+  return drawn;
 }

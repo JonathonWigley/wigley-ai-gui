@@ -3,6 +3,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // Agent sessions: the relay each one connects through, and Sessions mode, its
 // sidebar of session rows beside the selected session's tabs. Its keys act in
 // every scope; `idle` is the base scope while Sessions mode shows no tab.
+// `layout` names the layout the side bar and tab bar draw with.
 export const sessionsManifest = definePlugin({
   id: 'sessions',
   dependsOn: ['keys'],
@@ -25,9 +26,20 @@ export const sessionsManifest = definePlugin({
       group: 'sessions',
       runsIn: 'page',
     },
+    openPreview: {
+      label: 'show the layout preview rows',
+      group: 'debug',
+      runsIn: 'page',
+    },
   },
   scopes: { idle: 'Sessions' },
-  settings: {},
-  settingInfo: {},
+  settings: { layout: 'default' },
+  settingInfo: {
+    layout: {
+      label: 'Layout',
+      description:
+        "The sessions layout Sessions mode's side bar and tab bar draw in: a folder name in sessions' layouts folder, or default.",
+    },
+  },
   themeTokens: {},
 });

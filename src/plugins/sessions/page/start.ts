@@ -9,7 +9,10 @@ import type {
   SessionsPageExports,
   SessionsState,
 } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { Layout } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
+import { readSessionsLayout } from './layout/read-sessions-layout';
 import { mountSessionsView, type SessionsView } from './sessions-view';
 import {
   isRoundToast,
@@ -76,8 +79,9 @@ function createExports(
 // The visible tab, the selected tab of the selected session while the mode
 // shows, sets the base key scope through its `shown`; with none visible the
 // scope is `idle`. A round selected while the mode is hidden toasts instead
-// of showing it. The view's key prompts are anchors that live as long as the
-// page, so none is disposed.
+// of showing it. The side bar and tab bar draw with the layout the `layout`
+// setting names. `openPreview` swaps the side bar's rows for a sample of
+// every row state and back, page-only: it sends nothing to main.
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -126,6 +130,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       isModeShown: () => isModeShown,
       tabsChanged: checkVisible,
       keys,
+      markdown: api.services.markdown,
+      platform: api.platform,
+      commands: {
+        exists: (id) => api.keys.command(id) !== undefined,
+        run: (id) => api.commands.run(id),
+      },
+      log,
     });
     const exports = createExports(api, view, () => state, labelOf);
 
@@ -239,6 +250,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const stepToSession = (by: 1 | -1) => {
       mode.show();
+      if (view.isPreviewShown()) {
+        view.stepPreview(by);
+        return;
+      }
       const sessionId = stepSession(state, by);
       if (sessionId !== null) {
         exports.activate(sessionId);
@@ -267,9 +282,33 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       log('sessions', `showed ${tab.title} tab in ${labelOf(sessionId)}`);
     };
 
+    api.layouts.show<Layout>({
+      defaultLayout,
+      read: readSessionsLayout,
+      userLayout: () => api.settings().layout,
+      setLayouts: (shown) => view.setLayouts(shown),
+    });
+
+    // Shows the sample rows, opening the mode and its side bar, or puts the
+    // real rows back.
+    const openPreview = () => {
+      if (view.isPreviewShown()) {
+        view.showPreview(false);
+        log('sessions', 'preview closed');
+        return;
+      }
+      mode.show();
+      if (!mode.sideBarShown()) {
+        mode.toggleSideBar();
+      }
+      view.showPreview(true);
+      log('sessions', 'preview shown');
+    };
+
     return {
       commands: {
         showMode,
+        openPreview,
         nextSession: () => stepToSession(1),
         prevSession: () => stepToSession(-1),
         nextTab: () => stepToTab(1),

@@ -26,6 +26,7 @@ import {
   type SessionsMainEvents,
   type SessionsMainExports,
 } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { sessionsManifest } from '../manifest';
 import { serveMcp } from './mcp/mcp-server';
 import {
@@ -208,7 +209,7 @@ export function addDriveActions(
 }
 
 // Owns agent sessions: the relay they connect through, the tools other plugins
-// contribute for them, and their sidebar rows. Each contribution rewrites the
+// contribute for them, their sidebar rows, and the sessions layouts. Each contribution rewrites the
 // endpoint files, so a relay that starts the app finds every tool listed. In
 // the self-test it opens no relay and writes no file; a drive run opens it in
 // the run's own home and gets the drive actions.
@@ -245,10 +246,12 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
             ),
           )
         : null;
+    const layouts = api.layouts.register({ layoutTypes });
     return {
       commands: {},
       exports,
       dispose: () => {
+        layouts.dispose();
         driveActions?.dispose();
         opened?.relay.close();
       },

@@ -1,6 +1,6 @@
 # 12 — Keys overlays layout
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -277,4 +277,4 @@ layout".
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 56e242c · proof: diff read: Produces present (amended below); keys tests 81 pass; keys typecheck clean; layers, styles, oxlint clean; selftest all passed, every key placed · concerns: read-keys-layout.ts is the fourth copy of the reader skeleton (forms, docs, settings) that belongs in the layout host; AGENTS.md ~159 and ~532 say keys has no main part (task 16); setLayouts tests exercise the views' redraw, not start.ts's wiring

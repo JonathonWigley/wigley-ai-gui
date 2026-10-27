@@ -226,7 +226,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 - [x] [Settings layout](08-settings-layout.md) — after 02
 - [x] [Notes layout](09-notes-layout.md) — after 02
 - [x] [Gallery layout](11-gallery-layout.md) — after 02
-- [ ] [Keys overlays layout](12-keys-layout.md) — after 02
+- [x] [Keys overlays layout](12-keys-layout.md) — after 02
 - [ ] [Shell layout](13-shell-layout.md) — after 02
 
 ### Wave 3
@@ -258,6 +258,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - 14 · 9456b81 · diff read: Produces present (amended below); chat + shared/page tests 496 pass; chat typecheck, layers, styles, oxlint clean; selftest deferred to the gate (blocked by in-flight gallery/sessions) · concerns: chat.css gained two rules (.chat-dialog-part > .ui-dialog-actions margin, image viewer frame display:contents); chat-kit.ts appended duplicates the new placed helper; AGENTS.md § A chat layout and agent-chat design § Layouts name only entry builders (task 16); list picker drawRow rows lose ui-row--action (fourth report)
 - 11 · d9421e4 · diff read: Produces present (GalleryViewDeps amended); gallery tests 15 pass; typecheck clean; layers, styles, oxlint clean · concerns: AGENTS.md lines 161 and 534 say gallery has no main part (task 16); a dropped Split sample's ResizeObserver is never disconnected (createSplit has no dispose); relayout scroll test is weak in the fake DOM; head draws twice at start
 - 09 · c0bde46 · diff read: Produces present; notes tests 126 pass; typecheck clean; styles, oxlint, notes layers clean · concerns: notes.css .notes-row-value > .ui-tag no longer matches inside a display:contents root; the default sets overflow-wrap and white-space inline on each tag instead
+- 12 · 56e242c · diff read: Produces present (amended below); keys tests 81 pass; keys typecheck clean; layers, styles, oxlint clean; selftest all passed, every key placed · concerns: read-keys-layout.ts is the fourth copy of the reader skeleton (forms, docs, settings) that belongs in the layout host; AGENTS.md ~159 and ~532 say keys has no main part (task 16); setLayouts tests exercise the views' redraw, not start.ts's wiring
 ### Contract changes
 - LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
 - LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
@@ -270,6 +271,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - listenForImages(tab, composer, root, deps) → listenForImages(tab, root, deps) returning { listenForPaste(composer) }; buildAttachmentStrip removed; DialogAction and dialogActions(actions, deps) move to dialog-kits.ts; DialogDeps, PickerDeps, ImageViewerDeps extend the surface kit deps, built once in start.ts as partDeps · why: composers are redrawn and dialogs place app-built actions · consumers: none · group 14
 - GalleryViewDeps: anchor dep → extends GalleryPartsDeps (markdown, keys anchor/keysFor, commands, platform, log) plus uiState · why: the base kit needs keysFor, commands and log · consumers: none outside 11 · group 11
 - NotePopupDeps.run → commands: KitCommands plus platform, keys adds keysFor; MarkupViewDeps keys and run → parts: NotesPartsDeps · why: base kit deps · consumers: none outside 09 · group 09
+- keys CompleteLayout: interface → Required<Layout>; KeysPartsDeps = { defaultLayout, kit: KeysKitDeps, log }; createKeysKit(deps, scope, rollback); HelpView gains layoutsChanged(); mountHelpView and mountWhichKeyView drop platform · why: open fields and redraw on a layout change · consumers: keys only · group 12
 ### Rulings
 - selectedRow returns stored selection without railRows lookup — selection is the identity rows are built from — a stale selection would come back as is · group 01 · group 01
 - showTarget checks only the target's task exists, not the item — no caller builds a missing-item target — would select a row with no item · group 01 · group 01
@@ -297,5 +299,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - kit.cell with a missing row or column throws so the section falls back to default; a repeated cell is unguarded — a user layout error shows as fallback — a duplicate cell moves silently · group 11 · group 11
 - an image the images part leaves out is not appended — task names no append for images — a layout can hide images · group 09 · group 09
 - the confirm part draws into the dialog body and the app hides confirm.actions — part owns the buttons — none · group 09 · group 09
+- parts.setLayouts only stores the set; start.ts redraws the Keys button and calls help.layoutsChanged() — keeps the button in the title-bar slot — the wiring is untested · group 12 · group 12
+- nested parts record their draw through the outer draw's recordAnchor so an outer rollback disposes them — one dispose path — none · group 12 · group 12
 ### Review rounds
 ### Test gate

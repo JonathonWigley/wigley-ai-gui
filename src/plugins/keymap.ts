@@ -639,6 +639,12 @@ export const defaultKeymap = {
       where: 'page',
     },
     {
+      keys: '<Leader>zls',
+      scope: 'any',
+      command: 'sessions.openPreview',
+      where: 'page',
+    },
+    {
       keys: '<Leader>zg',
       scope: 'any',
       command: 'gallery.showMode',

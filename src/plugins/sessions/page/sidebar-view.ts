@@ -1,16 +1,21 @@
 import { element } from '../../../shared/page/dom';
-import { keyChevron, keyEdge } from '../../../shared/page/ui/key-anchors';
-import { row } from '../../../shared/page/ui/row';
-import { sectionHeader } from '../../../shared/page/ui/section-header';
-import { statusDot } from '../../../shared/page/ui/status-dot';
-import { qualify } from '../../../shared/plugin-manifests';
-import type { KeysPageExports } from '../../keys/contract';
+import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import type { SessionRow, SessionsState } from '../contract';
-import { sessionsManifest } from '../manifest';
+import type { SessionsPart } from '../layouts/layout';
+import {
+  type DrawnSideBar,
+  onPartClick,
+  type SessionsParts,
+} from './layout/sessions-parts';
 import { harnessText, hasOtherSession } from './tabs';
 
 export interface SidebarView {
+  // The side bar's host, which the shell holds; it lays out the drawn pane as
+  // its own child.
   element: HTMLElement;
+  // Draws the side bar pane again with the parts' current layouts, dropping
+  // its rows; `render` then draws them.
+  redrawPane(): void;
   // `statusOf` reads a session's second line, null for none.
   render(
     state: SessionsState | null,
@@ -18,81 +23,87 @@ export interface SidebarView {
   ): void;
 }
 
-// Sessions mode's side bar: a "Sessions" header holding the previous and
-// next session edge prompts, hidden while no other session is there to move
-// to, over one row per session in main's order, each reading its label, its
-// harness dimmed, an attention dot while a round waits unopened, all on a
-// first line that never wraps, and its status on a second line; the selected
-// row is marked, and clicking a row activates its session.
+// Sessions mode's side bar, drawn through the sessions layout: the `sideBar`
+// pane (a "Sessions" header holding the previous and next session prompts,
+// hidden while no other session is there to move to) over one `row` per
+// session in main's order. The view keeps each row's click, which activates
+// its session, its tooltip, and the selected row's mark.
 export function mountSidebarView(
   activate: (sessionId: string) => void,
-  keys: Pick<KeysPageExports, 'anchor'>,
+  parts: SessionsParts,
 ): SidebarView {
-  const side = element('div', 'session-side');
-  const pair = buildSessionPair(keys);
-  const sidebar = element('nav', 'session-sidebar');
-  sidebar.setAttribute('aria-label', 'Sessions');
-  side.append(sectionHeader('Sessions', pair), sidebar);
+  const host = element('div', 'session-side-host');
+  host.style.display = 'contents';
+  // The prompt stays hidden until `render` hands it a state.
+  const drawPane = (): DrawnPart<DrawnSideBar> => {
+    host.replaceChildren();
+    const drawn = parts.sideBar(host);
+    drawn.built.sessionEdge?.classList.add('is-no-target');
+    return drawn;
+  };
+  let pane = drawPane();
+  let rows: DrawnPart<SessionsPart>[] = [];
+
+  const disposeRows = () => {
+    for (const row of rows) {
+      row.dispose();
+    }
+    rows = [];
+  };
+
   return {
-    element: side,
+    element: host,
+    redrawPane() {
+      disposeRows();
+      pane.dispose();
+      pane = drawPane();
+    },
     render(state, statusOf) {
       const selectedSessionId = state?.selectedSessionId ?? null;
-      pair.classList.toggle(
+      pane.built.sessionEdge?.classList.toggle(
         'is-no-target',
         state === null || !hasOtherSession(state),
       );
-      sidebar.replaceChildren(
-        ...(state?.rows ?? []).map((session) =>
-          buildRow(
-            session,
-            session.sessionId === selectedSessionId,
-            statusOf(session.sessionId),
-            activate,
-          ),
+      disposeRows();
+      const list = pane.built.rows;
+      list.replaceChildren();
+      rows = (state?.rows ?? []).map((session) =>
+        drawRow(
+          parts,
+          list,
+          session,
+          session.sessionId === selectedSessionId,
+          statusOf(session.sessionId),
+          activate,
         ),
       );
     },
   };
 }
 
-// `⌥⇧I ▲ ▼ ⌥⇧O`: the previous and next session anchors, each chevron on
-// its inner side, hidden until `render` hands it main's first state.
-function buildSessionPair(keys: Pick<KeysPageExports, 'anchor'>): HTMLElement {
-  const previous = element('span');
-  const next = element('span');
-  keys.anchor(previous, qualify(sessionsManifest.id, 'prevSession'));
-  keys.anchor(next, qualify(sessionsManifest.id, 'nextSession'));
-  const pair = keyEdge('session-edge is-no-target', [
-    previous,
-    keyChevron('▲'),
-    keyChevron('▼'),
-    next,
-  ]);
-  return pair;
-}
-
-function buildRow(
+function drawRow(
+  parts: SessionsParts,
+  list: HTMLElement,
   session: SessionRow,
   isSelected: boolean,
   status: string | null,
   activate: (sessionId: string) => void,
-): HTMLElement {
-  const entry = row({
-    density: 'list',
+): DrawnPart<SessionsPart> {
+  const drawn = parts.row(list, {
+    sessionId: session.sessionId,
     label: session.label,
-    detail: harnessText(session.harness) || null,
-    trailing: session.marked ? statusDot('attention') : null,
-    onClick: () => activate(session.sessionId),
+    harness: harnessText(session.harness),
+    marked: session.marked,
+    status,
   });
-  entry.classList.add('session-row');
+  const entry = drawn.built.element;
+  entry.classList.add('ui-row--action');
+  onPartClick(entry, () => activate(session.sessionId));
   entry.title =
     status === null ? session.label : `${session.label} · ${status}`;
   entry.classList.toggle('is-selected', isSelected);
   if (isSelected) {
     entry.setAttribute('aria-current', 'true');
   }
-  if (status !== null) {
-    entry.append(element('span', 'session-row-status', status));
-  }
-  return entry;
+  return drawn;
 }
