@@ -33,9 +33,9 @@ interview on 2026-10-23; this file is the record of both.
   value): Claude declares `mode` (permission mode), `effort` and `model`.
 - **Profile** — a named Claude config folder (`work` → `~/.claude`, `personal` → `~/.claude-personal`); it sets the
   login, plugins, settings and where transcripts live. Picked with the folder when starting a session.
-- **Owned session** — a session the app started; its row exists from start and stays after its process ends on its own,
-  the Chat tab showing the ended composer (chips and send disabled), until the user closes the row or resumes the
-  session's conversation, which closes the ended row first and opens it fresh. A
+- **Owned session** — a session the app started; its row exists from start and stays, across a quit and relaunch
+  and after its process ends on its own, resting until the next message starts the process again, until the user
+  closes the row (§ Saved sessions). A
   **connected session** is one a relay connection brought (a terminal session), as today.
 - **Take over** — a session tab selecting itself and later giving the session back to the tab shown before.
 - **App slash command** — a `/name` the app runs itself when typed in the message box, instead of sending it to the
@@ -156,11 +156,25 @@ interview on 2026-10-23; this file is the record of both.
   interrupts. Tool calls show one compact line (tool name and a short input summary) that expands to the full input
   and output. These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows (the start
-  prompt and the sign-in dialog, tied to no session, stay open). An ended session's Chat tab keys in the
-  `chat.ended` scope, which holds only the entry keys, the box keys and send (an app slash command still runs there),
-  and the Chat tab's key prompts show only those and closing the session: the tab sets it when shown, or at once when its session ends
-  while it is shown. Moving between a live and an ended Chat tab changes the base scope, which closes every pushed
-  scope's view: the start prompt closes then too, and the sign-in dialog stays.
+  prompt and the sign-in dialog, tied to no session, stay open). A resting session (§ Saved sessions) keys in the
+  same `chat.chat` scope as a running one; interrupt and the control pickers log and do nothing until its process
+  runs.
+- **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
+  `open-sessions.json` in chat's plugin data: its host session id, folder and profile, in row order, with the
+  selected row, whether a message was ever sent, and whether a turn was running. Only the user closing its row
+  removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it. Plugin data is per app
+  instance, so the stable and dev apps, drive runs and the self-test each keep their own list. On start, chat opens a
+  row for each record, in order and unselected, then selects the saved row: each row **rests**, holding no process.
+  A resting row's earlier conversation is read from its transcript the first time its Chat tab shows, so start reads
+  no transcripts. The first message sent in a resting row starts its process (`--resume` when a message was ever
+  sent, else `--session-id`); app slash commands run without one, and the controls and the agent's slash commands
+  fill in once it runs. A session whose process exits while the app runs rests the same way, a notice in its chat
+  giving the exit and its reason. A restored session whose turn was running at quit gets a notice that the app quit
+  during that turn; one whose profile is no longer in the settings gets a notice naming it, and a send there toasts
+  that the profile is missing instead of starting. A resting row looks like an idle one in the sidebar. A
+  file that cannot be read is logged, restores nothing and is never overwritten: it is the user's state. Closing a
+  row asks the end-session confirmation only while Claude is working, as before; closing removes the row for good
+  but touches no transcript, so the session stays in the start prompt's saved-session list, unarchived.
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
   each opening a picker of its choices; raw `c` (`<Leader>cc` in the box) lists every control, so a control a new
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
@@ -196,7 +210,7 @@ interview on 2026-10-23; this file is the record of both.
   `run({ sessionId, profile, args, ended })` in place of sending, and clears the box; attached images stay. A registered
   name wins over the agent's command of the same name. The `/` completion offers the registered commands and the
   agent's, without repeats (§ Slash completion). A handler reports through chat's `notice` channel call, which adds a notice entry
-  main keeps, or through a toast in an ended session, which takes no new entries. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile
+  main keeps, in a resting session too. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile
   out; a notice says so) and `/status` (a notice: `<profile>: signed in as <account>` or `<profile>: not signed in`).
 - **Images**: pasting an image file into the composer, or dropping one anywhere on the Chat tab, attaches it: PNG, JPEG, GIF and WebP whose base64 text is at most
   5 MB (the API's per-image limit, which counts that text); any other file is refused with a toast. Attached images show as a strip of
@@ -228,8 +242,9 @@ interview on 2026-10-23; this file is the record of both.
   draw through the same export: the description in a dim column cut to one line, while the `completionDescriptions`
   setting is on (default on), else `false`.
 - **Resume and archive**: after the folder and profile, the start prompt offers a new session or one of the folder's
-  saved sessions (terminal and app alike, newest first, labelled by first message and time; one the app has open is
-  left out unless its process has ended, and resuming that one closes its ended row first), resumed with its earlier conversation read from the transcript. `x` archives the entry under the
+  saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
+  through the relay is left out, and picking one that has a chat row selects that row instead of opening a second),
+  resumed with its earlier conversation read from the transcript. `x` archives the entry under the
   cursor or restores an archived one; `.` shows or hides archived entries. When the transcript cannot be read, the
   chat shows one notice and the session still resumes. Archived ids live in chat's plugin data; Claude's
   transcript files stay as Claude keeps them.
