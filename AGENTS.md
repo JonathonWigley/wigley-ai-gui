@@ -72,7 +72,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   layouts/       the layout registry plugins' main parts share (forms and chat layouts)
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
                  its per-session open form, deadline, re-attach and hand-back, the saved-form folder and memory stores,
-                 and the channel and scripted presenters → main-side only
+                 the channel and scripted presenters, and the MCP tool session → main-side only
   paths/         the POSIX and Windows adapters behind `Paths`, picked by each composition root
   page/          page-only DOM builders plugins share: the layout loader, the reducer store, autosave, editor boxes,
                  key hints, the confirm prompt and the session form tab helper

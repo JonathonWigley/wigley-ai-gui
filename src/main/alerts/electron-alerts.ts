@@ -79,7 +79,12 @@ export function createElectronAlerts(window: BrowserWindow, log: Log): Alerts {
       if (process.platform === 'darwin') {
         app.setBadgeCount(total);
       } else if (process.platform === 'win32') {
-        const description = total > 0 ? `${total} open agent forms` : '';
+        const description =
+          total === 0
+            ? ''
+            : total === 1
+              ? '1 open agent form'
+              : `${total} open agent forms`;
         window.setOverlayIcon(total > 0 ? dot : null, description);
       }
     },

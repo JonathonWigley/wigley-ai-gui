@@ -234,9 +234,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.
 - **Tag** (`tag`): a small static label in a tone.
-- **ToggleMark** (`toggleMark`): a small square on/off mark beside a row's label, such as an included item, with a check when on; a click
-  calls the view's handler and the view sets the new state with `setToggleMark`, and the key that toggles it belongs to
-  the view.
+- **ToggleMark** (`toggleMark`): a small square on/off mark beside a row's label, such as an included item, with a check
+  when on; a click calls the view's handler and the view sets the new state with `setToggleMark`, and the key that
+  toggles it belongs to the view.
 - **StatusDot** (`statusDot`): a static dot for idle, running, success, warning, attention or error.
 - **InputFrame** (`inputFrame`): the frame around a text box.
 - **Row** (`row`): a list or tree row, density `list` or `tree`.

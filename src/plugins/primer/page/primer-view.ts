@@ -13,7 +13,7 @@ import {
   keepFocusedBox,
 } from '../../../shared/page/editor-boxes';
 import { saveLabel, saveState } from '../../../shared/page/autosave';
-import { appendKeyHint } from '../../../shared/page/key-hint';
+import { appendKeyHint, keyHint } from '../../../shared/page/key-hint';
 import {
   createSessionFormTabs,
   type SessionFormTabs,
@@ -29,7 +29,7 @@ import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
-import type { PrimerEntry, PrimerGroup, PrimerView } from '../contract';
+import type { PrimerEntry, PrimerView } from '../contract';
 import {
   type PrimerCommandName,
   primerCommand,
@@ -40,12 +40,13 @@ import { boxKey, boxText, type PrimerBox, shownBoxes } from './boxes';
 import { needTag, renderReview, taskName } from './primer-review';
 import {
   activePrimer,
-  type FeatureField,
+  FEATURE_FIELDS,
   includedCount,
   type OpenPrimer,
   type PrimerAction,
   primerOfSession,
   type PrimerState,
+  RAIL_GROUPS,
   railRows,
   scopeOf,
   selectedEntry,
@@ -113,20 +114,6 @@ type CardDeps = Pick<
 > & {
   dispatch(action: PrimerAction): void;
 };
-
-const FEATURE_FIELDS: [FeatureField, string][] = [
-  ['name', 'Name'],
-  ['slug', 'Slug'],
-  ['spec', 'Spec'],
-  ['summary', 'Summary'],
-  ['notes', 'Notes'],
-];
-
-const RAIL_HEADERS: [PrimerGroup, string][] = [
-  ['primer', 'Primer'],
-  ['standing', 'Every feature'],
-  ['extra', 'Extra tasks'],
-];
 
 // The whole primer UI: each primer in its session's Primer tab, the status
 // line in the status bar, the cancel prompt in the overlay layer, all serving
@@ -304,7 +291,7 @@ function destroyPrimerView(
 
 // A split with the rail in its start pane and the card and the review, each
 // scrolling on its own, in its end pane. The rail redraws whenever the primer
-// changes; the card is rebuilt, its boxes destroyed and mounted again, only
+// or the keymap changes; the card is rebuilt, its boxes destroyed and mounted again, only
 // when the selected row or its item count changes; the review is drawn again
 // while it shows, when the primer or the keymap changed. `attach` places the
 // root in the page once, before any editor mounts.
@@ -360,7 +347,7 @@ function createPrimerFormView(
       const isRowChanged = current.railCursor !== railCursor;
       if (current !== railPrimer) {
         railPrimer = current;
-        drawRail(split.start, current, dispatch, isRowChanged);
+        drawRail(split.start, current, deps, dispatch, isRowChanged);
       }
       const nextCardKey = cardKeyOf(current);
       if (nextCardKey !== cardKey) {
@@ -399,6 +386,7 @@ function createPrimerFormView(
   };
   const keysChange = deps.keys.onChanged(() => {
     card.redrawKeys();
+    railPrimer = null;
     reviewPrimer = null;
     if (shownPrimer !== null && !root.hidden) {
       view.update(shownPrimer, shownView);
@@ -419,11 +407,12 @@ function cardKeyOf(primer: OpenPrimer): string {
 
 // The Feature row, then each group's tasks under its header, the Primer and
 // Every feature headers only over tasks and Extra tasks always, with a line
-// saying how to add one while it holds none. Each row's click selects it;
-// the selected row scrolls into view when `isRowChanged`.
+// and the rail scope's keys for adding one while it holds none. Each row's
+// click selects it; the selected row scrolls into view when `isRowChanged`.
 function drawRail(
   rail: HTMLElement,
   primer: OpenPrimer,
+  deps: Pick<PrimerViewDeps, 'keys' | 'platform'>,
   dispatch: (action: PrimerAction) => void,
   isRowChanged: boolean,
 ) {
@@ -446,7 +435,7 @@ function drawRail(
     return node;
   };
   list.append(railRow(0, 'Feature', primer.feature.name, null));
-  for (const [group, header] of RAIL_HEADERS) {
+  for (const [group, header] of RAIL_GROUPS) {
     const entries = primer.entries.filter((entry) => entry.group === group);
     if (entries.length === 0 && group !== 'extra') {
       continue;
@@ -462,7 +451,11 @@ function drawRail(
       );
     }
     if (entries.length === 0) {
-      list.append(emptyState('No extra tasks. Press A to add one.'));
+      const keys = deps.keys.keysFor(
+        primerCommand('addExtraTask'),
+        primerScope('rail'),
+      );
+      list.append(emptyState('No extra tasks.', keyHint(keys, deps.platform)));
     }
   }
   rail.replaceChildren(list);

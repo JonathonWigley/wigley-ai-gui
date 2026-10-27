@@ -61,7 +61,7 @@ export interface AgentFormStore {
     owner: AgentFormOwnerRef,
     fingerprint: string,
     args: unknown,
-    body: unknown | null,
+    body: unknown,
     toolUseId: string | null,
   ): SavedAgentForm;
   // A finished form keeps the body it finished with: a late draft is dropped.
@@ -251,7 +251,7 @@ export function openRecord(
   owner: AgentFormOwnerRef,
   fingerprint: string,
   args: unknown,
-  body: unknown | null,
+  body: unknown,
   toolUseId: string | null,
   clock: Clock,
   randomHex: RandomHex,
@@ -334,11 +334,10 @@ function pruneOlderThan(
   }
 }
 
-// The saved-round folder `dir`; `logSource` names the type in its log lines.
-// A disk failure is logged and never thrown, losing
-// the copy must not cost the live form — except a draft's, which saveBody
-// throws so the page can show it unsaved. A file that does not parse is
-// skipped by every read.
+// The saved-form folder `dir`; `logSource` names the type in its log lines.
+// A disk failure is logged and never thrown, losing the copy must not cost
+// the live form — except a draft's, which saveBody throws so the page can
+// show it unsaved. A file that does not parse is skipped by every read.
 export function createFolderFormStore(deps: {
   dir: string;
   clock: Clock;

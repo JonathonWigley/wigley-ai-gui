@@ -9,7 +9,7 @@ import type { PrimerEntry, PrimerItem, PrimerNeed } from '../contract';
 import type { KeysPageExports } from '../../keys/contract';
 import { type PrimerCommandName, primerCommand, primerScope } from './ids';
 import {
-  type FeatureField,
+  FEATURE_FIELDS,
   type OpenPrimer,
   railRows,
   submitProblems,
@@ -30,14 +30,6 @@ export interface ReviewDeps {
   run(command: CommandId): void;
   platform: Platform;
 }
-
-const FEATURE_LABELS: [FeatureField, string][] = [
-  ['name', 'Name'],
-  ['slug', 'Slug'],
-  ['spec', 'Spec'],
-  ['summary', 'Summary'],
-  ['notes', 'Notes'],
-];
 
 const NEED_TAGS: Record<PrimerNeed, [string, TagTone]> = {
   yes: ['Yes', 'success'],
@@ -128,7 +120,7 @@ function featureBlock(primer: OpenPrimer): HTMLElement {
   const block = element('section', 'primer-review-block');
   block.append(sectionHeader('Feature'));
   const fields = element('dl', 'primer-review-fields');
-  for (const [field, label] of FEATURE_LABELS) {
+  for (const [field, label] of FEATURE_FIELDS) {
     fields.append(
       element('dt', 'primer-review-field-label', label),
       element('dd', 'primer-review-field-value', primer.feature[field]),

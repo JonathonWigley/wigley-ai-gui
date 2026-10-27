@@ -24,7 +24,7 @@ export interface TestPayload {
   blockingHeading?: string | null;
 }
 
-function testFormError(message: string): Error {
+export function testFormError(message: string): Error {
   const error = new Error(message);
   error.name = TEST_FORM_ERROR_NAME;
   return error;

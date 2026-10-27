@@ -111,7 +111,7 @@ let nowMs: number;
 let hexCount: number;
 let presenter: ScriptedFormPresenter<Round, FormBody>;
 let store: AgentFormStore;
-// The layouts folder's names the service reads; a test may set its own.
+// The layouts folder's names `withKnownLayouts` reads; a test may set its own.
 let layoutNames: readonly string[];
 
 function startSession(info: Partial<AgentFormOwnerInfo> = {}): FormsSession {
@@ -224,7 +224,7 @@ describe('roundType', () => {
   });
 });
 
-describe('askRound', () => {
+describe('open', () => {
   it('returns notices and their comments beside the answers', async () => {
     const pending = startSession().open(NOTICE_ARGS, null, live());
     presenter.submit(presenter.latest().formId, {

@@ -121,8 +121,8 @@ now, any harness later). Each item names its sites.
 - `MarkdownRenderer.addBlock({ opener, render })` and `addFence(language, render)` in the contract's own terms; the
   wigley `:::changes` / `:::tree` / `:::details` blocks move out of the core adapter into a contribution. One fence
   rule serves both `block` and `document` (the `diff` fence renders through two paths today).
-- `Alerts.setCount(count, description)` per plugin, qualified and summed by the core; today one global count carries
-  forms' "open review rounds" wording, and chat waiting on the user would overwrite it.
+- `Alerts.setOpenCount(source, count)` carries no per-source description: the core sums the counts, but the Windows
+  overlay names every source "open agent forms", so chat waiting on the user would read as a form.
 - Window commands (`window.summon`) move into a small `window` plugin.
 - Decide whether core services (`markdown`, `editor`, `alerts`) are replaceable by a plugin (a `provides` service
   registry) or deliberately not, and record it in `plugin-framework/design.md`.

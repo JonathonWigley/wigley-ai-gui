@@ -489,5 +489,6 @@ Review base: 87af8bb
 - scrollsItself stays [] — .primer-card and .primer-review-pane scroll in their own boxes but all three checksFit steps pass · group 08 · group 08
 - No forms or chat step needed a changed expectation · group 08 · group 08
 ### Review rounds
+- Round 1 · implementation review, 10 lanes (K1–K5, D1–D5) · GUI 87af8bb→32bbbb3, marketplace b3daa93→0617159 (explicit commit lists) · 30 findings (8 important) + 4 pre-existing · Verdict: NEEDS FIXES · report scratchpad/review-32bbbb3.md
 ### Test gate
 - Gate: full npm test (3205 pass), npm run selftest (all groups pass), marketplace Done suites (all pass) — picked whole because tasks 02 and 03 move code under every forms path and 09 deletes two marketplace suites; drive run checks 1,3,4,5 pass, 2 not reachable by drive (user check)

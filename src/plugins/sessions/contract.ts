@@ -19,7 +19,7 @@ export const DRIVE_SESSION_DEFAULTS = {
   deadlineSeconds: null;
 };
 
-// What a round source knows about the session it serves.
+// What a form source knows about the session it serves.
 export interface SessionInfo {
   sessionId: string | null;
   projectDir: string | null;
@@ -29,7 +29,7 @@ export interface SessionInfo {
   harness: Harness | null;
 }
 
-// A tool a round source exposes, as MCP `tools/list` describes it.
+// A tool a form source exposes, as MCP `tools/list` describes it.
 export interface ToolDefinition {
   name: string;
   description: string;
@@ -132,7 +132,7 @@ export interface SessionsMainEvents extends EventShape {
   closed: { sessionId: string };
 }
 
-// One connected session's sidebar row. `marked` is a round not yet opened;
+// One connected session's sidebar row. `marked` is a form not yet opened;
 // `projectDir`, `hostSessionId` and `harness` are the session's info, fixed at
 // connect.
 export interface SessionRow {

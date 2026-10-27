@@ -3,7 +3,11 @@ import type {
   AgentFormSession,
   AgentFormToolSession,
 } from '../../contracts/agent-forms';
-import { TEST_FORM_ERROR_NAME, type TestPayload } from './test-form-type';
+import {
+  TEST_FORM_ERROR_NAME,
+  type TestPayload,
+  testFormError,
+} from './test-form-type';
 import { createAgentFormToolSession } from './tool-session';
 
 const PAYLOAD: TestPayload = {
@@ -18,12 +22,6 @@ function toolSessionOver(
   session: AgentFormSession<TestPayload>,
 ): AgentFormToolSession {
   return createAgentFormToolSession(session, TOOLS, TEST_FORM_ERROR_NAME);
-}
-
-function testFormError(message: string): Error {
-  const error = new Error(message);
-  error.name = TEST_FORM_ERROR_NAME;
-  return error;
 }
 
 interface AskCall {

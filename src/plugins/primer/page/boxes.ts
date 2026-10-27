@@ -2,7 +2,7 @@ import type { BoxIdentity } from '../../../shared/page/editor-boxes';
 import type { PrimerEntry } from '../contract';
 import {
   activePrimer,
-  type FeatureField,
+  FEATURE_FIELDS,
   type OpenPrimer,
   type PrimerAction,
   type PrimerState,
@@ -15,14 +15,6 @@ export interface PrimerBox {
   primerId: string;
   target: TextTarget;
 }
-
-const FEATURE_FIELDS: FeatureField[] = [
-  'name',
-  'slug',
-  'spec',
-  'summary',
-  'notes',
-];
 
 export function boxKey(box: PrimerBox): string {
   const { primerId, target } = box;
@@ -77,7 +69,7 @@ export function shownBoxes(state: PrimerState): PrimerBox[] {
   const { primerId } = primer;
   const entry = selectedEntry(primer);
   if (entry === null) {
-    return FEATURE_FIELDS.map((name) => ({
+    return FEATURE_FIELDS.map(([name]) => ({
       primerId,
       target: { field: 'feature', name },
     }));

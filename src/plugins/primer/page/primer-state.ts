@@ -128,7 +128,22 @@ const EMPTY_STATE: PrimerState = {
 
 const FEATURE_ROW: RailRow = { kind: 'feature' };
 
-const RAIL_GROUPS: PrimerGroup[] = ['primer', 'standing', 'extra'];
+// Each feature field with its label, in the order the card and review show
+// them.
+export const FEATURE_FIELDS: [FeatureField, string][] = [
+  ['name', 'Name'],
+  ['slug', 'Slug'],
+  ['spec', 'Spec'],
+  ['summary', 'Summary'],
+  ['notes', 'Notes'],
+];
+
+// Each task group with its rail header, in rail order.
+export const RAIL_GROUPS: [PrimerGroup, string][] = [
+  ['primer', 'Primer'],
+  ['standing', 'Every feature'],
+  ['extra', 'Extra tasks'],
+];
 
 // The actions that still apply while the active primer is sending: primers
 // opening and closing, the shown session, the boxes' text and saves, and the
@@ -305,7 +320,7 @@ export function primerOfSession(
 export function railRows(primer: OpenPrimer): RailRow[] {
   return [
     FEATURE_ROW,
-    ...RAIL_GROUPS.flatMap((group) =>
+    ...RAIL_GROUPS.flatMap(([group]) =>
       primer.entries
         .filter((entry) => entry.group === group)
         .map((entry): RailRow => ({ kind: 'task', entryId: entry.id })),

@@ -410,6 +410,27 @@ describe('primerCommandHandlers', () => {
     expect(leaves()).toBe(1);
   });
 
+  it('adds nothing on leaveBox from a task holding 20 items', () => {
+    const full = primerEntry('1', 'primer', {
+      items: Array.from({ length: 20 }, (_, i) => primerItem(`Item ${i}`)),
+    });
+    const { run, store, primer, logs } = setup({ entries: [full] });
+    store.dispatch({
+      type: 'setText',
+      primerId: 'p1',
+      target: newItem1.target,
+      value: 'Test the store',
+    });
+
+    run('leaveBox', { editor: editorOf(newItem1) });
+
+    expect(primer().entries[0].items).toHaveLength(20);
+    expect(logs).toEqual([
+      'no item added: task 1 holds 20 items',
+      'left the box',
+    ]);
+  });
+
   it('adds nothing for blank add-item text', () => {
     const { run, primer, logs } = setup();
 

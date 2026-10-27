@@ -146,7 +146,7 @@ afterEach(() => {
   rmSync(formsDir, { recursive: true, force: true });
 });
 
-describe('askRound', () => {
+describe('open', () => {
   it('returns the submitted answers as the payload', async () => {
     const session = startSession();
 
@@ -158,7 +158,7 @@ describe('askRound', () => {
     );
   });
 
-  it('shows a new round labelled with its project folder and no draft', () => {
+  it('shows a new form labelled with its project folder and no draft', () => {
     void startSession().open(NAMING_ARGS, null, live());
 
     expect(presenter.latest()).toMatchObject({
@@ -168,19 +168,19 @@ describe('askRound', () => {
     });
   });
 
-  it('names its session on the round it shows', () => {
+  it('names its session on the form it shows', () => {
     void startSession().open(NAMING_ARGS, null, live());
 
     expect(presenter.latest().sessionId).toBe('app-1');
   });
 
-  it('labels a round with its heading alone when the session has no project', () => {
+  it('labels a form with its heading alone when the session has no project', () => {
     void startSession({ projectDir: null }).open(NAMING_ARGS, null, live());
 
     expect(presenter.latest().label).toBe('Naming decisions');
   });
 
-  it("saves a new round's file with its calling tool use id, or null without one", () => {
+  it("saves a new form's file with its calling tool use id, or null without one", () => {
     const session = startSession();
     void session.open(NAMING_ARGS, 'toolu_first', live());
     const first = presenter.latest().formId;
@@ -191,7 +191,7 @@ describe('askRound', () => {
     expect(savedFile(second).tool_use_id).toBeNull();
   });
 
-  it("opens a second call's round only once the user finishes the first", async () => {
+  it("opens a second call's form only once the user finishes the first", async () => {
     const session = startSession();
     const first = session.open(NAMING_ARGS, null, live());
     const second = session.open(PLACEMENT_ARGS, null, live());
@@ -223,7 +223,7 @@ describe('askRound', () => {
     expect(presenter.shown).toHaveLength(1);
   });
 
-  it('closes the round in the window once the user cancels it', async () => {
+  it('closes the form in the window once the user cancels it', async () => {
     const pending = startSession().open(NAMING_ARGS, null, live());
     const shown = presenter.latest();
     presenter.cancel(shown.formId, body(''));
@@ -234,7 +234,7 @@ describe('askRound', () => {
 });
 
 describe('the soft deadline', () => {
-  it('hands back a draft at the default deadline and leaves the round open', async () => {
+  it('hands back a draft at the default deadline and leaves the form open', async () => {
     const pending = startSession().open(NAMING_ARGS, null, live());
     const call = watch(pending);
 
@@ -294,14 +294,14 @@ describe('the soft deadline', () => {
   });
 });
 
-describe('collectLastRound', () => {
-  it('returns no_round when nothing was sent', async () => {
+describe('collect', () => {
+  it('returns no_form when nothing was sent', async () => {
     const payload = await startSession().collect(true, live());
 
     expect(payload.outcome).toBe('no_form');
   });
 
-  it('re-attaches to a draft without showing the round again', async () => {
+  it('re-attaches to a draft without showing the form again', async () => {
     const session = startSession();
     const first = session.open(NAMING_ARGS, null, live());
     const shown = presenter.latest();
@@ -315,7 +315,7 @@ describe('collectLastRound', () => {
     expect(presenter.shown).toHaveLength(1);
   });
 
-  it('wakes two calls waiting on one round with the same answers, marking the file returned once', async () => {
+  it('wakes two calls waiting on one form with the same answers, marking the file returned once', async () => {
     const markReturned = vi.spyOn(store, 'markReturned');
     const session = startSession();
     const asking = session.open(NAMING_ARGS, null, live());
@@ -354,7 +354,7 @@ describe('collectLastRound', () => {
     expect(payload.note).toBe('still checking');
   });
 
-  it('with wait false reports a round the user submitted after its draft', async () => {
+  it('with wait false reports a form the user submitted after its draft', async () => {
     const session = startSession();
     const first = session.open(NAMING_ARGS, null, live());
     const shown = presenter.latest();
@@ -383,7 +383,7 @@ describe('collectLastRound', () => {
 });
 
 describe('a call the host cancels', () => {
-  it('closes its round in the window and keeps the draft in the open file', async () => {
+  it('closes its form in the window and keeps the draft in the open file', async () => {
     const session = startSession();
     const host = new AbortController();
     const asking = session.open(NAMING_ARGS, null, host.signal);
@@ -400,7 +400,7 @@ describe('a call the host cancels', () => {
     });
   });
 
-  it("shows the session's next round at once", async () => {
+  it("shows the session's next form at once", async () => {
     const session = startSession();
     const host = new AbortController();
     const asking = session.open(NAMING_ARGS, null, host.signal);
@@ -414,7 +414,7 @@ describe('a call the host cancels', () => {
     expect(presenter.latest().form).toEqual(parse(PLACEMENT_ARGS));
   });
 
-  it('opens a different round queued behind it at once', async () => {
+  it('opens a different form queued behind it at once', async () => {
     const session = startSession();
     const host = new AbortController();
     const asking = session.open(NAMING_ARGS, null, host.signal);
@@ -429,7 +429,7 @@ describe('a call the host cancels', () => {
     expect(presenter.latest().form).toEqual(parse(PLACEMENT_ARGS));
   });
 
-  it('keeps the round open for a re-send of it queued behind the cancelled call', async () => {
+  it('keeps the form open for a re-send of it queued behind the cancelled call', async () => {
     const session = startSession();
     const host = new AbortController();
     const asking = session.open(NAMING_ARGS, null, host.signal);
@@ -446,7 +446,7 @@ describe('a call the host cancels', () => {
     expect((await resent).outcome).toBe('submitted');
   });
 
-  it('stops counting a queued re-send the host cancels, so cancelling the call ahead closes the round', async () => {
+  it('stops counting a queued re-send the host cancels, so cancelling the call ahead closes the form', async () => {
     const session = startSession();
     const host = new AbortController();
     const asking = session.open(NAMING_ARGS, null, host.signal);
@@ -465,7 +465,7 @@ describe('a call the host cancels', () => {
     expect(presenter.closed).toEqual([naming.formId]);
   });
 
-  it('closes a round left open after its deadline draft once a collect on it is cancelled', async () => {
+  it('closes a form left open after its deadline draft once a collect on it is cancelled', async () => {
     const session = startSession();
     const asking = session.open(NAMING_ARGS, null, live());
     const naming = presenter.latest();
@@ -480,7 +480,7 @@ describe('a call the host cancels', () => {
     expect(presenter.closed).toEqual([naming.formId]);
   });
 
-  it('answers a collect with no_round, whose next says to send the round again', async () => {
+  it('answers a collect with no_form and shows nothing new', async () => {
     const session = startSession();
     const host = new AbortController();
     const asking = session.open(NAMING_ARGS, null, host.signal);
@@ -494,7 +494,7 @@ describe('a call the host cancels', () => {
     expect(presenter.shown).toHaveLength(1);
   });
 
-  it('opens the round pre-filled when it is sent again', async () => {
+  it('opens the form pre-filled when it is sent again', async () => {
     const session = startSession();
     const host = new AbortController();
     const asking = session.open(NAMING_ARGS, null, host.signal);
@@ -508,7 +508,7 @@ describe('a call the host cancels', () => {
     expect(latestDraft()).toEqual(body('choice 2'));
   });
 
-  it('keeps the round open while another call still waits on it', async () => {
+  it('keeps the form open while another call still waits on it', async () => {
     const session = startSession();
     const host = new AbortController();
     const asking = session.open(NAMING_ARGS, null, host.signal);
@@ -523,7 +523,7 @@ describe('a call the host cancels', () => {
     expect((await collecting).outcome).toBe('submitted');
   });
 
-  it('returns and marks returned a round the user finished in the same tick', async () => {
+  it('returns and marks returned a form the user finished in the same tick', async () => {
     const session = startSession();
     const host = new AbortController();
     const asking = session.open(NAMING_ARGS, null, host.signal);
@@ -536,7 +536,7 @@ describe('a call the host cancels', () => {
     expect(savedFile(naming.formId).returned).toBe(true);
   });
 
-  it('leaves the open round be when a call queued behind it is cancelled', async () => {
+  it('leaves the open form be when a call queued behind it is cancelled', async () => {
     const session = startSession();
     void session.open(NAMING_ARGS, null, live());
     const host = new AbortController();
@@ -550,7 +550,7 @@ describe('a call the host cancels', () => {
     expect(presenter.closed).toEqual([]);
   });
 
-  it("leaves the round open when a queued re-send's own deadline wakes it", async () => {
+  it("leaves the form open when a queued re-send's own deadline wakes it", async () => {
     const session = startSession();
     void session.open(NAMING_ARGS, null, live());
     const naming = presenter.latest();
@@ -565,8 +565,8 @@ describe('a call the host cancels', () => {
   });
 });
 
-describe('re-sending a round', () => {
-  it('re-attaches to the open round under a reworded heading, keeping its first tool use id', async () => {
+describe('re-sending a form', () => {
+  it('re-attaches to the open form under a reworded heading, keeping its first tool use id', async () => {
     const session = startSession();
     const first = session.open(NAMING_ARGS, 'toolu_first', live());
     const shown = presenter.latest();
@@ -585,7 +585,7 @@ describe('re-sending a round', () => {
     expect(savedFile(shown.formId).tool_use_id).toBe('toolu_first');
   });
 
-  it('replays the round just submitted', async () => {
+  it('replays the form just submitted', async () => {
     const session = startSession();
     const pending = session.open(NAMING_ARGS, null, live());
     presenter.submit(presenter.latest().formId, body('choice 2'));
@@ -595,7 +595,7 @@ describe('re-sending a round', () => {
     expect(presenter.shown).toHaveLength(1);
   });
 
-  it('opens a fresh round pre-filled from the round just cancelled', async () => {
+  it('opens a fresh form pre-filled from the form just cancelled', async () => {
     const session = startSession();
     const cancelledBody = body('stop here');
     const pending = session.open(NAMING_ARGS, null, live());
@@ -624,7 +624,7 @@ describe('hand-back', () => {
     return shown;
   }
 
-  it('hands back an earlier round submitted after its draft, and opens nothing', async () => {
+  it('hands back an earlier form submitted after its draft, and opens nothing', async () => {
     const session = startSession();
     const naming = await submitAfterDraft(session, 'choice 2');
 
@@ -637,7 +637,7 @@ describe('hand-back', () => {
     expect(presenter.closed).toEqual([naming.formId]);
   });
 
-  it('opens the new round when it is sent again after the hand-back', async () => {
+  it('opens the new form when it is sent again after the hand-back', async () => {
     const session = startSession();
     await submitAfterDraft(session, 'choice 2');
     await session.open(PLACEMENT_ARGS, null, live());
@@ -651,7 +651,7 @@ describe('hand-back', () => {
     expect(payload).not.toHaveProperty('earlier_heading');
   });
 
-  it('replays the hand-back to collect_last_round', async () => {
+  it('replays the hand-back to collect_last_form', async () => {
     const session = startSession();
     await submitAfterDraft(session, 'choice 2');
     const handed = await session.open(PLACEMENT_ARGS, null, live());
@@ -662,7 +662,7 @@ describe('hand-back', () => {
     expect(replayed.earlier_heading).toBe('Naming decisions');
   });
 
-  it('hands back a cancelled earlier round with its note', async () => {
+  it('hands back a cancelled earlier form with its note', async () => {
     const session = startSession();
     const first = session.open(NAMING_ARGS, null, live());
     const shown = presenter.latest();
@@ -678,7 +678,7 @@ describe('hand-back', () => {
   });
 });
 
-describe('a call made while another round is open', () => {
+describe('a call made while another form is open', () => {
   const PLACEMENT_FINGERPRINT = fingerprintOf(PLACEMENT_ARGS);
   const SCOPE_ARGS = {
     heading: 'Scope decisions',
@@ -706,7 +706,7 @@ describe('a call made while another round is open', () => {
     return { firstDraft: await first, naming, queued };
   }
 
-  it("keeps waiting past the first call's deadline draft while the round is still open", async () => {
+  it("keeps waiting past the first call's deadline draft while the form is still open", async () => {
     const session = startSession();
     const { firstDraft, naming, queued } = await queueBehindOpenDraft(session);
 
@@ -718,7 +718,7 @@ describe('a call made while another round is open', () => {
     expect(savedFile(naming.formId).outcome).toBe('open');
   });
 
-  it('opens its round once the user submits the open one', async () => {
+  it('opens its form once the user submits the open one', async () => {
     const session = startSession();
     const { naming, queued } = await queueBehindOpenDraft(session);
 
@@ -738,7 +738,7 @@ describe('a call made while another round is open', () => {
     expect(answered.note).toBe('choice 2');
   });
 
-  it('returns a draft at its own deadline without opening its round or replacing the open one', async () => {
+  it('returns a draft at its own deadline without opening its form or replacing the open one', async () => {
     const session = startSession();
     const { naming, queued } = await queueBehindOpenDraft(session);
 
@@ -770,7 +770,7 @@ describe('a call made while another round is open', () => {
     return naming;
   }
 
-  it('makes a re-send of its refused round wait too, without closing the open round', async () => {
+  it('makes a re-send of its refused form wait too, without closing the open form', async () => {
     const session = startSession();
     const naming = await refuseBehindOpenDraft(session);
 
@@ -790,7 +790,7 @@ describe('a call made while another round is open', () => {
     expect(store.newestFor(PLACEMENT_FINGERPRINT)).toBeNull();
   });
 
-  it('opens a re-sent refused round once the user submits the open one', async () => {
+  it('opens a re-sent refused form once the user submits the open one', async () => {
     const session = startSession();
     const naming = await refuseBehindOpenDraft(session);
     const resent = session.open(PLACEMENT_ARGS, null, live());
@@ -831,7 +831,7 @@ describe('a call made while another round is open', () => {
     expect(savedFile(naming.formId).outcome).toBe('open');
   });
 
-  it("opens a fresh call's round once the user submits the open draft", async () => {
+  it("opens a fresh call's form once the user submits the open draft", async () => {
     const session = startSession();
     const naming = await leaveOpenDraft(session);
     const fresh = session.open(PLACEMENT_ARGS, null, live());
@@ -851,7 +851,7 @@ describe('a call made while another round is open', () => {
     expect(answered.note).toBe('choice 2');
   });
 
-  it('hands back the open draft to a fresh call woken by its submit, then opens the fresh round on a re-send', async () => {
+  it('hands back the open draft to a fresh call woken by its submit, then opens the fresh form on a re-send', async () => {
     const session = startSession();
     const naming = await leaveOpenDraft(session);
     const fresh = session.open(PLACEMENT_ARGS, null, live());
@@ -868,7 +868,7 @@ describe('a call made while another round is open', () => {
     expect(presenter.latest().form).toEqual(parse(PLACEMENT_ARGS));
   });
 
-  it('returns the open draft, not a not-shown draft, to a re-send of the open round whose deadline passes while queued', async () => {
+  it('returns the open draft, not a not-shown draft, to a re-send of the open form whose deadline passes while queued', async () => {
     const session = startSession();
     void session.open(NAMING_ARGS, null, live());
     const resent = session.open(NAMING_ARGS, null, live());
@@ -885,7 +885,7 @@ describe('a call made while another round is open', () => {
     expect(presenter.shown).toHaveLength(1);
   });
 
-  it('opens at most one round when one submit wakes calls queued behind aborted ones', async () => {
+  it('opens at most one form when one submit wakes calls queued behind aborted ones', async () => {
     const TESTING_ARGS = {
       heading: 'Testing decisions',
       items: ['what covers it'],
@@ -997,8 +997,8 @@ describe('a call made while another round is open', () => {
   });
 });
 
-describe('saved rounds from an earlier app run', () => {
-  it('pre-fills a re-sent round from its saved draft', () => {
+describe('saved forms from an earlier app run', () => {
+  it('pre-fills a re-sent form from its saved draft', () => {
     saveEarlier(NAMING_ARGS, 'open', HALF_BODY);
 
     void startSession().open(NAMING_ARGS, null, live());
@@ -1008,7 +1008,7 @@ describe('saved rounds from an earlier app run', () => {
     expect(savedFile(shown.formId).body).toEqual(HALF_BODY);
   });
 
-  it('pre-fills a fresh round from an older round already returned', () => {
+  it('pre-fills a fresh form from an older form already returned', () => {
     const earlier = saveEarlier(NAMING_ARGS, 'submitted', HALF_BODY);
     store.markReturned(earlier);
 
@@ -1018,7 +1018,7 @@ describe('saved rounds from an earlier app run', () => {
     expect(presenter.latest().draft).toEqual(body('finished: half done'));
   });
 
-  it('returns the saved finished round to collect_last_round and marks it returned', async () => {
+  it('returns the saved finished form to collect_last_form and marks it returned', async () => {
     const earlier = saveEarlier(NAMING_ARGS, 'submitted', HALF_BODY);
     const session = startSession();
 
@@ -1031,7 +1031,7 @@ describe('saved rounds from an earlier app run', () => {
     expect(newestSaved(earlier.fingerprint).returned).toBe(true);
   });
 
-  it('hands back the saved finished round to a new round', async () => {
+  it('hands back the saved finished form to a new form', async () => {
     saveEarlier(NAMING_ARGS, 'submitted', HALF_BODY);
 
     const handed = await startSession().open(PLACEMENT_ARGS, null, live());
@@ -1040,7 +1040,7 @@ describe('saved rounds from an earlier app run', () => {
     expect(presenter.shown).toEqual([]);
   });
 
-  it('returns the saved finished round plainly when that round is re-sent', async () => {
+  it('returns the saved finished form plainly when that form is re-sent', async () => {
     saveEarlier(NAMING_ARGS, 'submitted', HALF_BODY);
 
     const payload = await startSession().open(NAMING_ARGS, null, live());
@@ -1050,7 +1050,7 @@ describe('saved rounds from an earlier app run', () => {
     expect(presenter.shown).toEqual([]);
   });
 
-  it("never returns another session's saved round", async () => {
+  it("never returns another session's saved form", async () => {
     saveEarlier(NAMING_ARGS, 'submitted', HALF_BODY, {
       sessionId: 'session-2',
       projectDir: '/work/wigley',
@@ -1089,7 +1089,7 @@ describe('saved rounds from an earlier app run', () => {
     return record;
   }
 
-  it('reports a saved round that no longer parses to collect_last_round and leaves it unreturned', async () => {
+  it('reports a saved form that no longer parses to collect_last_form and leaves it unreturned', async () => {
     const record = saveUnparseable();
     const session = startSession();
 
@@ -1103,7 +1103,7 @@ describe('saved rounds from an earlier app run', () => {
     expect(savedFile(record.id).returned).toBe(false);
   });
 
-  it('passes over a reported unparseable round on the next call, still unreturned', async () => {
+  it('passes over a reported unparseable form on the next call, still unreturned', async () => {
     const record = saveUnparseable();
     const session = startSession();
     await session.collect(true, live()).catch(() => {});
@@ -1114,7 +1114,7 @@ describe('saved rounds from an earlier app run', () => {
     expect(savedFile(record.id).returned).toBe(false);
   });
 
-  it('returns an older readable round behind a reported unparseable one', async () => {
+  it('returns an older readable form behind a reported unparseable one', async () => {
     const older = saveEarlier(NAMING_ARGS, 'submitted', HALF_BODY);
     nowMs = 2_000_000;
     const unreadable = saveUnparseable();
@@ -1131,7 +1131,7 @@ describe('saved rounds from an earlier app run', () => {
     expect(savedFile(unreadable.id).returned).toBe(false);
   });
 
-  it('reports an unparseable saved round to a new round, which opens once re-sent', async () => {
+  it('reports an unparseable saved form to a new form, which opens once re-sent', async () => {
     const record = saveUnparseable();
     const session = startSession();
 
@@ -1234,7 +1234,7 @@ describe("the user's answers on disk", () => {
 });
 
 describe('a session that ends', () => {
-  it('closes its open round in the window and keeps its answers', async () => {
+  it('closes its open form in the window and keeps its answers', async () => {
     const session = startSession();
     const waiting = session.open(NAMING_ARGS, null, live());
     const shown = presenter.latest();
@@ -1250,7 +1250,7 @@ describe('a session that ends', () => {
     });
   });
 
-  it('lets the next session re-send the round pre-filled', () => {
+  it('lets the next session re-send the form pre-filled', () => {
     const session = startSession();
     void session.open(NAMING_ARGS, null, live());
     presenter.draft(presenter.latest().formId, body('half'));
@@ -1261,7 +1261,7 @@ describe('a session that ends', () => {
     expect(presenter.latest().draft).toEqual(body('half'));
   });
 
-  it('closes nothing when no round is open', () => {
+  it('closes nothing when no form is open', () => {
     startSession().end();
 
     expect(presenter.closed).toEqual([]);

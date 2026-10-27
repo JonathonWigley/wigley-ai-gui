@@ -102,7 +102,7 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
         '- the rail lists every item of the open round\n\n' +
         '```ts\n' +
         'interface FormsSession {\n' +
-        '  askRound(args: unknown, toolUseId: string | null, signal: AbortSignal): Promise<AnswersPayload>;\n' +
+        '  open(args: unknown, toolUseId: string | null, signal: AbortSignal): Promise<AnswersPayload>;\n' +
         '}\n' +
         '```\n\n' +
         ':::details Full text\n' +

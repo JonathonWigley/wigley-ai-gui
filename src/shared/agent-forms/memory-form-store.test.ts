@@ -56,7 +56,7 @@ describe('createMemoryFormStore', () => {
     expect(record.updated).toBe(1000);
   });
 
-  it('saveBody_Stamps_SoNewestForPicksTheDraftedRound', () => {
+  it('saveBody_Stamps_SoNewestForPicksTheDraftedForm', () => {
     const subject = store();
     const older = subject.create(MINE, 'f1', {}, null, null);
     nowMs = 2_000_000;
@@ -97,7 +97,7 @@ describe('createMemoryFormStore', () => {
     expect(record.updated).toBe(2000);
   });
 
-  it('prune_KeepsEveryRound', () => {
+  it('prune_KeepsEveryForm', () => {
     const subject = store();
     const record = subject.create(MINE, 'f1', {}, null, null);
 
