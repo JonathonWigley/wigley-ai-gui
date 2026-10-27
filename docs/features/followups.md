@@ -57,6 +57,7 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - A Codex process started from a shell Claude Code spawned inherits `CLAUDECODE=1`, so its row reads `Claude`.
 - **Probe messages that get no result** — The Claude harness counts one result per sent message (measured on 2.1.304, `agent-chat/claude-stream.md` § Queued messages); a message that gets no result would leave the session `working` and the turn alert unfired. Chosen: probe the cases that might give none (local slash commands, a rejected message) and record them in claude-stream.md before guarding.
 - Two tabs' take-overs released out of order give the session back to the first taker's tab even though its take-over has ended (pinned by `sessions/page/tabs.test.ts`); only forms takes over today, so it matters once a second plugin does.
+- **Backlog applied save closes another editor** — *agent-ready*: in `src/plugins/backlog/page/backlog-view.ts`, an `applied` save result closes whichever editor is open and selects the saved title, so leaving the editor mid-save and opening another loses that editor. Guard `closeEditor` as `moveEditorBaseline` is guarded: act only when the open editor's path and baseline title match the write.
 
 ## Extensibility review (2026-10-20)
 
