@@ -1,6 +1,6 @@
 # 07 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -40,3 +40,5 @@ Done when: every check above passes with its captures read; a failure is fixed u
 Commit:    none
 
 ## Proof
+
+Commit b3e9123 · proof: drive runs r72/r73: checks 1,2,3,6 pass; 4 passes the close/no-return half, the saved-list half not settleable on the fake (fixed two-session list) and read from code (close touches no archive or transcript); 5 failed (entry-id clash on second process) and 6 showed the start-selected row not saved — both fixed in b3e9123, re-run chk072 passes A and B · concerns: a restored row never sent to reads history anyway and shows 'Earlier conversation not read' (error) on the fake; real Claude has no transcript for an unsent session either; isLive checks the row not the process, so a late ended from an old process could touch the new one
