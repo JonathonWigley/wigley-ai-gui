@@ -6,7 +6,6 @@ import type { Platform } from '../../../contracts/platform';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
-import { element } from '../../../shared/page/dom';
 import type { EditorBoxes } from '../../../shared/page/editor-boxes';
 import type { ShownLayouts } from '../../../shared/page/layout-loader';
 import {
@@ -18,6 +17,10 @@ import {
   formOfSession,
   paneView,
 } from '../../../shared/page/session-forms';
+import {
+  createStatusLine,
+  type StatusLineContent,
+} from '../../../shared/page/status-line';
 import { modeLabel } from '../../../shared/vim-mode-label';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
@@ -99,7 +102,7 @@ export interface FormsView {
 // the default layout alone.
 export function mountFormsView(deps: FormsViewDeps): FormsView {
   const { areas, store, boxes } = deps;
-  const status = buildStatusLine(deps);
+  const status = createStatusLine();
   const tabs = createSessionFormTabs({
     addTab: (sessionId, tab) => deps.sessions.addTab(sessionId, tab),
     tabId: 'form',
@@ -109,7 +112,8 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     beforeClose: (sessionId) => deps.beforeClose(sessionId),
     shown: () => deps.setScope(deps.store.get().view),
   });
-  const updateStatus = () => status.update(store.get(), tabs.isShown());
+  const updateStatus = () =>
+    status.update(tabs.isShown(), statusContent(store.get(), boxes));
   const dispatch = (action: FormsAction) => store.dispatch(action);
   const confirm = createConfirmPrompt({
     title: 'Cancel this round?',
@@ -162,7 +166,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
         deps.setScope(view);
       }
     });
-    status.update(state, tabs.isShown());
+    status.update(tabs.isShown(), statusContent(state, boxes));
     const box = boxes.active();
     if (box !== null && !isBoxShown(state, box)) {
       boxes.leave();
@@ -282,24 +286,20 @@ function showRound(
   );
 }
 
-// The status line, hidden while no Form tab is the visible tab.
-function buildStatusLine(deps: FormsViewDeps): {
-  element: HTMLElement;
-  update(state: FormsState, isShown: boolean): void;
-} {
-  const bar = element('footer', 'status-line');
-  const mode = element('span', 'status-mode');
-  const save = element('span', 'status-save');
-  bar.append(mode, save);
+// The status line's content: the box's vim mode, then the active round's save
+// state.
+function statusContent(
+  state: FormsState,
+  boxes: Pick<EditorBoxes<BoxRef>, 'activeMode'>,
+): StatusLineContent {
+  const mode = modeLabel(boxes.activeMode());
+  const round = activeForm(state);
+  if (round === null) {
+    return { mode, save: '', saveState: '' };
+  }
   return {
-    element: bar,
-    update(state, isShown) {
-      bar.hidden = !isShown;
-      mode.textContent = modeLabel(deps.boxes.activeMode());
-      const round = activeForm(state);
-      const roundSave = round === null ? null : roundSaveState(round);
-      save.textContent = round === null ? '' : roundSaveLabel(round);
-      save.dataset.state = roundSave ?? '';
-    },
+    mode,
+    save: roundSaveLabel(round),
+    saveState: roundSaveState(round) ?? '',
   };
 }

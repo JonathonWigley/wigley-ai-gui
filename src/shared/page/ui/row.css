@@ -50,6 +50,13 @@
   color: var(--wg-list-active-foreground);
 }
 
+/* A split pane without focus marks itself `is-pane-inactive`; its selected
+   row keeps the inactive fill. */
+.is-pane-inactive .ui-row.is-selected {
+  background: var(--wg-list-inactive-selection-background);
+  color: var(--wg-fg);
+}
+
 .ui-row.is-cursor {
   box-shadow: inset 0 0 0 1px var(--wg-focus-border);
 }

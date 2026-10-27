@@ -481,30 +481,3 @@
   gap: var(--wg-space-2);
   margin-top: var(--wg-space-4);
 }
-
-/* Status line: it fills the status bar's row, beside a core item when both
-   fit and on a row of its own when not, and its parts wrap onto more lines
-   when narrow. */
-.status-line {
-  align-items: center;
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  font-size: var(--wg-text-12);
-  gap: var(--wg-space-0_5) var(--wg-space-4);
-  min-width: 0;
-  padding: 0 var(--wg-space-3);
-}
-
-.status-mode {
-  color: var(--wg-fg);
-  font-weight: var(--wg-weight-medium);
-}
-
-.status-save {
-  color: var(--wg-fg-tertiary);
-}
-
-.status-save[data-state='unsaved'] {
-  color: var(--wg-status-warning);
-}

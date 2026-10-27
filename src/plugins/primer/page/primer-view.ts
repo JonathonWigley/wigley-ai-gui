@@ -23,6 +23,10 @@ import {
   formOfSession,
   paneView,
 } from '../../../shared/page/session-forms';
+import {
+  createStatusLine,
+  type StatusLineContent,
+} from '../../../shared/page/status-line';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
@@ -129,7 +133,7 @@ type CardDeps = Pick<
 // view sets the scope.
 export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
   const { areas, store, boxes } = deps;
-  const status = buildStatusLine(boxes);
+  const status = createStatusLine();
   const tabs = createSessionFormTabs({
     addTab: (sessionId, tab) => deps.sessions.addTab(sessionId, tab),
     tabId: 'primer',
@@ -139,7 +143,8 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     beforeClose: (sessionId) => deps.beforeClose(sessionId),
     shown: () => deps.setScope(scopeOf(store.get())),
   });
-  const updateStatus = () => status.update(store.get(), tabs.isShown());
+  const updateStatus = () =>
+    status.update(tabs.isShown(), statusContent(store.get(), boxes));
   const dispatch = (action: PrimerAction) => store.dispatch(action);
   const confirm = createConfirmPrompt({
     title: 'Cancel this primer?',
@@ -189,7 +194,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
         deps.setScope(scopeOf(state));
       }
     });
-    status.update(state, tabs.isShown());
+    status.update(tabs.isShown(), statusContent(state, boxes));
     const box = boxes.active();
     if (box !== null && !isBoxShown(state, box)) {
       boxes.leave();
@@ -724,36 +729,24 @@ function cardKeyHint(
   );
 }
 
-// The status line, hidden while no Primer tab is the visible tab: the box's
-// vim mode, then `Sending…` while the active primer sends, else its save
-// state.
-function buildStatusLine(boxes: Pick<EditorBoxes<PrimerBox>, 'activeMode'>): {
-  element: HTMLElement;
-  update(state: PrimerState, isShown: boolean): void;
-} {
-  const bar = element('footer', 'primer-status-line');
-  const mode = element('span', 'primer-status-mode');
-  const save = element('span', 'primer-status-save');
-  bar.append(mode, save);
+// The status line's content: the box's vim mode, then `Sending…` while the
+// active primer sends, else its save state.
+function statusContent(
+  state: PrimerState,
+  boxes: Pick<EditorBoxes<PrimerBox>, 'activeMode'>,
+): StatusLineContent {
+  const mode = modeLabel(boxes.activeMode());
+  const primer = activeForm(state);
+  if (primer === null) {
+    return { mode, save: '', saveState: '' };
+  }
+  if (primer.sending !== null) {
+    return { mode, save: 'Sending…', saveState: 'sending' };
+  }
+  const shownState = saveState(primer);
   return {
-    element: bar,
-    update(state, isShown) {
-      bar.hidden = !isShown;
-      mode.textContent = modeLabel(boxes.activeMode());
-      const primer = activeForm(state);
-      if (primer === null) {
-        save.textContent = '';
-        save.dataset.state = '';
-        return;
-      }
-      if (primer.sending !== null) {
-        save.textContent = 'Sending…';
-        save.dataset.state = 'sending';
-        return;
-      }
-      const shownState = saveState(primer);
-      save.textContent = saveLabel(shownState, primer.saveError);
-      save.dataset.state = shownState;
-    },
+    mode,
+    save: saveLabel(shownState, primer.saveError),
+    saveState: shownState,
   };
 }

@@ -60,13 +60,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* While the card has the keys the rail keeps its selected row in the
-   inactive fill. */
-.primer-rail.is-pane-inactive .ui-row.is-selected {
-  background: var(--wg-list-inactive-selection-background);
-  color: var(--wg-fg);
-}
-
 /* Card */
 .primer-card-heading {
   font-size: var(--wg-text-20);
@@ -214,30 +207,4 @@
   flex-wrap: wrap;
   gap: var(--wg-space-2);
   margin-top: var(--wg-space-4);
-}
-
-/* Status line: it fills the status bar's row, beside a core item when both
-   fit and on a row of its own when not. */
-.primer-status-line {
-  align-items: center;
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  font-size: var(--wg-text-12);
-  gap: var(--wg-space-0_5) var(--wg-space-4);
-  min-width: 0;
-  padding: 0 var(--wg-space-3);
-}
-
-.primer-status-mode {
-  color: var(--wg-fg);
-  font-weight: var(--wg-weight-medium);
-}
-
-.primer-status-save {
-  color: var(--wg-fg-tertiary);
-}
-
-.primer-status-save[data-state='unsaved'] {
-  color: var(--wg-status-warning);
 }

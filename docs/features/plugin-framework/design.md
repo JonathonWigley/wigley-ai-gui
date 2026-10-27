@@ -118,7 +118,7 @@ bottom bar's key list.
   pending page sequence, and a box losing focus discards vim's unfinished command (keys, count, operator, register) by
   sending it `<Nop>`, which vim matches to nothing, rather than Esc, which would run the box's mapped Esc. The
   offscreen self-test fires no DOM focus or blur events, so those two paths are proved only in a visible run.
-- The bottom bar splits: forms keeps the mode and save state (`.status-line`; round progress stays on the session tab);
-  the keys plugin's `.keys-bar` lists the keys that don't start with the leader (page binds spell the leader as Space,
-  whatever the editor's leader), plus a `Keys` button that opens help. Both fit on one row at the 420 px minimum width;
-  the bar takes its own row only below that.
+- The bottom bar splits: forms and the primer keep the mode and save state (the shared `.ui-status-line`; round
+  progress stays on the session tab); the keys plugin's `.keys-bar` lists the keys that don't start with the leader
+  (page binds spell the leader as Space, whatever the editor's leader), plus a `Keys` button that opens help. Both fit
+  on one row at the 420 px minimum width; the bar takes its own row only below that.

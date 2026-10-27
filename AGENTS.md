@@ -76,8 +76,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  form type's forms in a drive run's sessions → main-side only
   paths/         the POSIX and Windows adapters behind `Paths`, picked by each composition root
   page/          page-only DOM builders plugins share: the layout loader, the reducer store, autosave, editor boxes,
-                 key hints, the confirm prompt, the session form tab helper, and the session form lifecycle (the
-                 open forms' reducer, the close guard, send and close from main, the page events queue)
+                 key hints, the confirm prompt, the session form tab helper, the session form status line, and the
+                 session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
+                 events queue)
                  → imported only by src/renderer and plugins' page/ parts
     ui/          the design primitives `DESIGN.md` lists, each a builder with its CSS beside it; `icon.ts` is the only
                  module naming the Codicons font
