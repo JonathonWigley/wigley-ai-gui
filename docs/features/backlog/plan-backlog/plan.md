@@ -124,7 +124,7 @@ docs only through `DocsMainExports` and `DocsPageExports`, typed by `src/plugins
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Follow-up file module](01-followup-file.md)
+- [x] [Follow-up file module](01-followup-file.md)
 - [x] [Index reads follow-up tags](03-index-tags.md)
 - [x] [Docs main exports](04-docs-exports.md)
 - [x] [Backfill agent-ready tags](05-backfill-tags.md)
@@ -158,6 +158,7 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - 04 · 0d13dae · diff read; typecheck clean; docs start tests 24 pass · concerns: none
 - 07 · wigley-ai-marketplace db34d66 · diff read; check_manifests --against origin/main passed · concerns: none
 - 05 · harness 1416e06, marketplace 87bb3a9, gui 402c262; ~/wigley-features/new-games-prototypes not in git · diff read: first-line and Contents-line swaps only; 121 items tagged · concerns: Silent reward popup tagged though its section has two open questions; harness numbered Design issues lists may index as one entry; NGP gained one untagged Contents line for an orphan section; the marketplace forms-wait-hook item says needs a feature plan in its body only
+- 01 · 475e866 · diff read; followups tests 38 pass; typecheck and lint clean · concerns: no strict null checks in tsconfig; CRLF files not handled; deleting a numbered item does not renumber
 ### Contract changes
 ### Rulings
 - Two repos: the gui review base is 0f512f5; the marketplace review base is a139b88 — the plan targets both repos' main — lead
@@ -167,5 +168,8 @@ Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 - Formatted docs/keymap.md with the repo's oxfmt (lead tooling op; the docs-ahead commit d8f04e9 left its padding off) in 4fe32ff — lead
 - Untitled gui list items took a short coined bold title with the first line kept whole as gist, not the first sentence as title — first sentences ran past a line — titles may need rewording in Backlog · group 05 · group 05
 - Harness items judged on their own text, so three items the harness README settles stay untagged · group 05 · group 05
+- A section item's title is its ## heading, as the index reads it; a list item's bold title keeps its backticks so edits round-trip — Backlog and the index may differ by backticks · group 01 · group 01
+- An edit keeps a struck item struck (the draft has no done field) · group 01 · group 01
+- check-layers: src/shared/followups is importable from every plugin main/page layer and src/plugins/docs; task 08 adds it to the backlog layers it creates · group 01 · group 01
 ### Review rounds
 ### Test gate

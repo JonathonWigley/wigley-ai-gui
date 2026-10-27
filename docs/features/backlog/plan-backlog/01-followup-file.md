@@ -1,6 +1,6 @@
 # 01 — Follow-up file module
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -103,3 +103,5 @@ Done when: `npm test -- src/shared/followups` passes (`npx` and `node` are denie
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 475e866 · proof: diff read; followups tests 38 pass; typecheck and lint clean · concerns: no strict null checks in tsconfig; CRLF files not handled; deleting a numbered item does not renumber

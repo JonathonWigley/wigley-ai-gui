@@ -1,6 +1,6 @@
 # 02 — Git contract and adapter
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 01 (shares `scripts/check-layers.mts`), 04 (shares `src/plugins/docs/main/start.ts`)
 Plan: [plan.md](plan.md)
