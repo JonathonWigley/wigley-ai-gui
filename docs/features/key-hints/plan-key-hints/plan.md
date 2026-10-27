@@ -318,5 +318,8 @@ Review base: 268c38a4a1b8e0a49c34ff796705ec6c21417894
 - fake agent gains model and verbosity controls so the Model (o) and Controls (c) chips draw in the self-test — fixture state per the placement rule — none · group 10 · group 10
 ### Review rounds
 - 1 · d209821 · NEEDS FIXES — 22 findings; determined 1-5, 7, 8, 22 dispatched; 6 contradiction and 9-21 open to triage
+- 2 · 37e29b7 (re-review of round-1 fixes) · NEEDS FIXES — 2 minor (stacked-hint gap repeat → one shared rule; docs empty hint wrap); fixed in 563adf8
+- 3 · 563adf8 (re-review cycle 2 of bba771a, 563adf8) · NEEDS FIXES — 1 important (sticky docs edge covers top line) + 3 determined; fixed in 2f328bc under the user's standing pick-the-recommendation; cycle cap reached, closed by the gate
 ### Test gate
 - whole vitest suite (the range touches every page plugin, the keys plugin, shared page code and the self-test runner; the suite runs in 5s) · 235 files, 3685 tests pass; npm run selftest (task 10's placement gate and every plugin script reach the changed views) · 683 PASS, 0 FAIL, every key placed, all passed; typecheck and lint clean
+- after fixes at 2f328bc: lint clean; vitest 237 files / 3697 tests pass; npm run selftest 683 PASS, 0 FAIL, every key placed, all passed
