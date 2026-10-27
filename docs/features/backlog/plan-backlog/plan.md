@@ -125,8 +125,8 @@ docs only through `DocsMainExports` and `DocsPageExports`, typed by `src/plugins
 
 ### Wave 1
 - [ ] [Follow-up file module](01-followup-file.md)
-- [ ] [Index reads follow-up tags](03-index-tags.md)
-- [ ] [Docs main exports](04-docs-exports.md)
+- [x] [Index reads follow-up tags](03-index-tags.md)
+- [x] [Docs main exports](04-docs-exports.md)
 - [ ] [Backfill agent-ready tags](05-backfill-tags.md)
 
 ### Wave 2
@@ -151,10 +151,17 @@ docs only through `DocsMainExports` and `DocsPageExports`, typed by `src/plugins
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 0f512f54537daef3d326126b6b645eb8201041d8
 
 ### Groups
+- 03 · wigley-ai-marketplace 7c829f5 · diff read; docs-index unittest 249 OK · concerns: the README JSON example's followup meta lacks section and tags (task 11 re-read); one existing test's continuation-line title changed by design
+- 04 · 0d13dae · diff read; typecheck clean; docs start tests 24 pass · concerns: none
 ### Contract changes
 ### Rulings
+- Two repos: the gui review base is 0f512f5; the marketplace review base is a139b88 — the plan targets both repos' main — lead
+- A peer session (ai-dev-76) is on this machine, so every commit is pathspec-scoped and the review range is an explicit commit list — lead
+- Contents lines are the top-level items between **Contents** and the first ## heading; a sectioned file with no Contents line reads tags [] — keeps body bullets out — a Contents list placed elsewhere reads no tags · group 03 · group 03
+- indexLoaded fires only when loadIndex or rebuildIndex resolves; a rejected call emits nothing — a failed Docs rescan does not reload Backlog · group 04 · group 04
+- Formatted docs/keymap.md with the repo's oxfmt (lead tooling op; the docs-ahead commit d8f04e9 left its padding off) in 4fe32ff — lead
 ### Review rounds
 ### Test gate

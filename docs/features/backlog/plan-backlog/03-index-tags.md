@@ -1,6 +1,6 @@
 # 03 — Index reads follow-up tags
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -45,3 +45,5 @@ Done when: `(cd plugins/wigley/scripts/docs-index && python3 -m unittest discove
 Commit:    one commit for the group, in wigley-ai-marketplace, no version bump (task 07 bumps)
 
 ## Proof
+
+Commit wigley-ai-marketplace 7c829f5 · proof: diff read; docs-index unittest 249 OK · concerns: the README JSON example's followup meta lacks section and tags (task 11 re-read); one existing test's continuation-line title changed by design

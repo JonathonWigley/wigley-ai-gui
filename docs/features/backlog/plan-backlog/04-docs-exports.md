@@ -1,6 +1,6 @@
 # 04 — Docs main exports
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -43,3 +43,5 @@ Done when: `npm test -- src/plugins/docs/main/start` passes; `npm run lint` and 
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 0d13dae · proof: diff read; typecheck clean; docs start tests 24 pass · concerns: none
